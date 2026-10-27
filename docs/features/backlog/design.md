@@ -28,8 +28,8 @@ plan is written from them. A decision here stands unless the user changes it.
 - The `backlog` plugin, with a main part and a page part, depends on `docs` and adds Backlog mode.
 - The side bar lists repos, each with its features homes. A repo normally has one home; a stray second home (an
   in-repo `docs/features/` and a `~/wigley-features/<repo>/`) shows as its own group and edits, but is never a
-  create target while the repo has a home in git. A home inside a linked git worktree (`git worktree add`) is
-  not listed: it is a second checkout of a clone's own home.
+  create target while the repo has a home in git. A home that is a linked git worktree's (`git worktree add`)
+  own `docs/features/` is not listed: it is a second checkout of a clone's own home.
 - The content sheet shows the selected home's follow-up list, plans and features, with a detail pane on the right.
 - Keys, all checked against Docs mode's keys and `docs/keymap.md`:
 
@@ -73,11 +73,14 @@ plan is written from them. A decision here stands unless the user changes it.
   removal; there is no separate mark-done command. An empty list says when a toggle hid every row: "Every follow-up
   here is done." or "No agent-ready follow-ups here."
 - A create, or an edit that renames, whose title would not read back from the file is refused with the reason, and
-  a write names one of the home's own follow-up files or none.
+  a write names one of the home's own follow-up files or none. An item whose title already in the file would not
+  read back (written by hand) cannot be rewritten: an edit or a tag change to it is refused, pointing to Docs.
 - A file changed on disk while the user edits an item: the edit is one item operation, so it re-applies to the new
   text by the item's title, rather than a whole-file conflict prompt. The save carries the item as the editor opened
-  it; when the item on disk no longer matches (an outside edit while the editor was open), nothing is written and
-  the editor stays open with the toast "<title> changed on disk; your draft is kept". When the item is gone from the
+  it; when the item on disk no longer matches (an outside edit while the editor was open), nothing is written, the
+  editor stays open with the user's draft and takes the item as it now reads on disk as its new starting point, and
+  the toast says "<title> changed on disk; save again to overwrite it". A second save then overwrites the outside
+  edit, unless the item changed on disk again in between. When the item is gone from the
   new text, the editor says so and keeps the user's draft. A second change on disk during that one retry refuses the
   write.
 - Backlog watches the follow-up files it lists, so an agent's append mid-session shows live.

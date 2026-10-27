@@ -57,32 +57,33 @@ describe('createProcessGit', () => {
     const test = setUp();
     test.processes.script(
       'git',
-      git(
-        'rev-parse',
-        '--path-format=absolute',
-        '--git-dir',
-        '--git-common-dir',
-      ),
+      git('rev-parse', '--git-dir', '--git-common-dir'),
       exited(0, '/Users/u/dev/main/.git/worktrees/m\n/Users/u/dev/main/.git\n'),
     );
 
     expect(await test.git.isLinkedWorktree(ROOT)).toBe(true);
   });
 
-  it('isLinkedWorktree_GitDirIsCommonDir_False', async () => {
+  it('isLinkedWorktree_RelativeAndAbsoluteSameFolder_False', async () => {
     const test = setUp();
     test.processes.script(
       'git',
-      git(
-        'rev-parse',
-        '--path-format=absolute',
-        '--git-dir',
-        '--git-common-dir',
-      ),
-      exited(0, `${ROOT}/.git\n${ROOT}/.git\n`),
+      git('rev-parse', '--git-dir', '--git-common-dir'),
+      exited(0, `.git\n${ROOT}/.git/\n`),
     );
 
     expect(await test.git.isLinkedWorktree(ROOT)).toBe(false);
+  });
+
+  it('isLinkedWorktree_RelativeCommonDirOutsideGitDir_True', async () => {
+    const test = setUp();
+    test.processes.script(
+      'git',
+      git('rev-parse', '--git-dir', '--git-common-dir'),
+      exited(0, '/Users/u/dev/main/.git/worktrees/m\n../main/.git\n'),
+    );
+
+    expect(await test.git.isLinkedWorktree(ROOT)).toBe(true);
   });
 
   it('hasUpstream_ExitCode_TrueOnlyOnZero', async () => {

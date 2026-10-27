@@ -205,6 +205,72 @@ describe('backlogReducer', () => {
     expect(selectedTitle(after)).toBe('One');
   });
 
+  it.each<BacklogAction>([
+    { type: 'setFilter', text: '' },
+    { type: 'toggleDone' },
+    { type: 'toggleAgentReadyOnly' },
+  ])(
+    'backlogReducer_PendingFollowupThenFilterOrToggle_LaterLoadKeepsSelection %#',
+    (change) => {
+      const homeItems = [
+        item('One', { tags: ['agent-ready'] }),
+        item('Saved', { oneLine: 'hidden' }),
+      ];
+      const filtered = run(opened(home(ROOT, homeItems)), {
+        type: 'setFilter',
+        text: 'one',
+      });
+
+      const after = run(
+        filtered,
+        { type: 'selectFollowup', title: 'Saved' },
+        change,
+        { type: 'setFilter', text: '' },
+        { type: 'loaded', read: read(home(ROOT, homeItems)) },
+      );
+
+      expect(selectedTitle(after)).toBe('One');
+    },
+  );
+
+  it('backlogReducer_MoveEditorBaseline_BaselineMovesDraftKept', () => {
+    const onDisk = {
+      title: 'One',
+      oneLine: 'moved on',
+      tags: [],
+      body: 'Agent body.',
+    };
+
+    const after = run(
+      opened(home(ROOT, [item('One')])),
+      { type: 'openEdit' },
+      { type: 'draftChanged', field: 'body', text: 'typed' },
+      { type: 'moveEditorBaseline', baseline: onDisk },
+    );
+    const { editor } = after;
+    if (editor === null) {
+      throw new Error('no editor open');
+    }
+
+    expect(editorEdit(editor)).toMatchObject({
+      type: 'edit',
+      title: 'One',
+      draft: { body: 'typed' },
+      baseline: onDisk,
+    });
+  });
+
+  it('backlogReducer_MoveEditorBaselineOnCreate_Unchanged', () => {
+    const creating = run(opened(home(ROOT, [])), { type: 'openCreate' });
+
+    const after = run(creating, {
+      type: 'moveEditorBaseline',
+      baseline: { title: 'X', oneLine: '', tags: [], body: '' },
+    });
+
+    expect(after).toBe(creating);
+  });
+
   it('backlogReducer_ReloadWithEditorOpen_KeepsEditorAndDraft', () => {
     const editing = run(
       opened(home(ROOT, [item('One')])),

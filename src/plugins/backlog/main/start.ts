@@ -110,7 +110,8 @@ async function realPathOrNull(
 }
 
 // The home with its `gitRoot`: the clone whose `docs/features` folder it is,
-// else null. Null in place of the home when its clone is a linked worktree.
+// else null. Null in place of the home when it is a linked worktree's
+// `docs/features` folder.
 async function locateHome(
   deps: BacklogDeps,
   home: HomeShape,
@@ -120,9 +121,6 @@ async function locateHome(
     if (topLevel === null) {
       return { ...home, gitRoot: null };
     }
-    if (await deps.git.isLinkedWorktree(topLevel)) {
-      return null;
-    }
     const [homeReal, featuresReal] = await Promise.all([
       realPathOrNull(deps.files, home.root),
       realPathOrNull(deps.files, deps.paths.join(topLevel, FEATURES_FOLDER)),
@@ -131,7 +129,13 @@ async function locateHome(
       homeReal !== null &&
       featuresReal !== null &&
       deps.paths.samePath(homeReal, featuresReal);
-    return { ...home, gitRoot: isClonesFeaturesFolder ? topLevel : null };
+    if (!isClonesFeaturesFolder) {
+      return { ...home, gitRoot: null };
+    }
+    if (await deps.git.isLinkedWorktree(topLevel)) {
+      return null;
+    }
+    return { ...home, gitRoot: topLevel };
   } catch (error) {
     logSkipped(deps.log, home.root, error);
     return { ...home, gitRoot: null };
@@ -291,10 +295,26 @@ async function readHomes(
   return { homes, message: read.message };
 }
 
-// Why a create's title, or an edit's new title, would not read back from the
-// file; null when it would. An edit keeping its title keeps a title the file
-// already reads.
+// Why an edited or retagged item's title, as the file already holds it, would
+// not read back once rewritten; null when it would, or for a create or delete.
+function existingTitleProblem(edit: BacklogEdit): string | null {
+  if (edit.type !== 'edit' && edit.type !== 'setTags') {
+    return null;
+  }
+  const problem = followupTitleProblem(edit.title);
+  return problem === null
+    ? null
+    : `${edit.title} cannot be rewritten as it stands: ${problem}. Edit it in Docs.`;
+}
+
+// Why the edit's item would not read back from the file once written: its
+// existing title, or a create's title or an edit's new title; null when it
+// would.
 function titleProblem(edit: BacklogEdit): string | null {
+  const existingProblem = existingTitleProblem(edit);
+  if (existingProblem !== null) {
+    return existingProblem;
+  }
   const isNewTitle =
     edit.type === 'create' ||
     (edit.type === 'edit' && edit.draft.title !== edit.title);

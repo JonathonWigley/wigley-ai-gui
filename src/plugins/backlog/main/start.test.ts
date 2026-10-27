@@ -394,6 +394,21 @@ describe('backlog main part', () => {
     expect(backlog.git.changedPaths).not.toHaveBeenCalled();
   });
 
+  it('load_HomeOutsideLinkedWorktreesFeaturesFolder_KeptNotInGit', async () => {
+    const elsewhere = '/dev/wigley-features/r';
+    const backlog = startBacklog(
+      [entry('followup', `${elsewhere}/followups.md`, {}, elsewhere)],
+      { [`${elsewhere}/followups.md`]: FOLLOWUPS_TEXT },
+    );
+    backlog.git.topLevel.mockResolvedValue('/dev');
+    backlog.git.isLinkedWorktree.mockResolvedValue(true);
+
+    const read = await backlog.invoke<BacklogRead>('load');
+
+    expect(read.homes.map((home) => home.root)).toEqual([elsewhere]);
+    expect(read.homes[0].gitRoot).toBeNull();
+  });
+
   it('load_InGitHomeSortsAfterOther_InGitHomeIsCreateTarget', async () => {
     const elsewhere = '/a/features';
     const backlog = startBacklog(
@@ -521,6 +536,28 @@ describe('backlog main part', () => {
       reason: followupTitleProblem(' '),
     });
     expect(backlog.files.get(FOLLOWUPS)).toBe(FOLLOWUPS_TEXT);
+  });
+
+  it('applyEdit_ExistingTitleWouldNotReadBack_RefusedPointingToDocs', async () => {
+    const text = '# Follow-ups — r\n\n## Wrap this:\n\nBody.\n';
+    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
+      [FOLLOWUPS]: text,
+    });
+    const read = await backlog.invoke<BacklogRead>('load');
+    const title = read.homes[0].followupFiles[0].items[0].title;
+
+    const result = await backlog.invoke('applyEdit', HOME, FOLLOWUPS, {
+      type: 'setTags',
+      title,
+      tags: ['agent-ready'],
+    });
+
+    expect(title).toBe('Wrap this:');
+    expect(result).toEqual({
+      type: 'refused',
+      reason: `Wrap this: cannot be rewritten as it stands: ${String(followupTitleProblem(title))}. Edit it in Docs.`,
+    });
+    expect(backlog.files.get(FOLLOWUPS)).toBe(text);
   });
 
   it('watch_FollowupFileChanged_SendsChangedWithHomeRoot', async () => {

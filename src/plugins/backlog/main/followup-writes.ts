@@ -42,15 +42,20 @@ function matchesBaseline(item: FollowupItem, baseline: FollowupDraft): boolean {
   );
 }
 
-// Whether `diskText` holds the edited item changed from the edit's baseline.
-function isChangedOnDisk(
+// The edited item as `diskText` holds it when it changed from the edit's
+// baseline; null when it is unchanged or gone.
+function changedOnDisk(
   edit: Extract<BacklogEdit, { type: 'edit' }>,
   diskText: string,
-): boolean {
+): FollowupDraft | null {
   const item = parseFollowups(diskText).items.find(
     (candidate) => candidate.title === edit.title,
   );
-  return item !== undefined && !matchesBaseline(item, edit.baseline);
+  if (item === undefined || matchesBaseline(item, edit.baseline)) {
+    return null;
+  }
+  const { title, oneLine, tags, body } = item;
+  return { title, oneLine, tags, body };
 }
 
 async function attempt(
@@ -64,8 +69,14 @@ async function attempt(
   if (isNewFile && newFileRepo === null && edit.type !== 'create') {
     return { type: 'done', result: { type: 'missing', title: edit.title } };
   }
-  if (edit.type === 'edit' && isChangedOnDisk(edit, diskText)) {
-    return { type: 'done', result: { type: 'changed', title: edit.title } };
+  if (edit.type === 'edit') {
+    const changed = changedOnDisk(edit, diskText);
+    if (changed !== null) {
+      return {
+        type: 'done',
+        result: { type: 'changed', title: edit.title, item: changed },
+      };
+    }
   }
   const base =
     isNewFile && newFileRepo !== null
@@ -91,7 +102,8 @@ async function attempt(
 // Applies `edit` to the follow-up file at `path` through Docs' guarded write.
 // A missing or empty file starts from `newFollowupsFile(newFileRepo)`; with
 // `newFileRepo` null, an edit, setTags or delete there is `missing`. An edit
-// whose item on disk differs from its `baseline` is `changed`. When the disk
+// whose item on disk differs from its `baseline` is `changed`, carrying the
+// item as it reads on disk. When the disk
 // changed since the read, the edit re-applies once to the new disk text; a
 // second change, or a write the guard refuses, is `refused`.
 export async function writeFollowupEdit(

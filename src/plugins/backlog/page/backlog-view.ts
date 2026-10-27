@@ -595,10 +595,11 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
       deps.toast(errorText(error), 'error');
     });
 
-  // Sends `edit`, logs and toasts its result, and reloads on `applied`.
-  // `isDraftKept`: an open editor keeps the user's draft when the write
-  // does not apply. Resolves to whether it applied, a failed reload after
-  // an applied write included.
+  // Sends `edit`, logs and toasts its result, and reloads on `applied`. On
+  // `changed` the open editor's baseline moves to the item on disk, so the
+  // next save overwrites it. `isDraftKept`: an open editor keeps the user's
+  // draft when the write does not apply. Resolves to whether it applied, a
+  // failed reload after an applied write included.
   const write = async (
     homeRoot: string,
     path: string | null,
@@ -626,10 +627,9 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
         );
         return false;
       case 'changed':
+        dispatch({ type: 'moveEditorBaseline', baseline: result.item });
         deps.toast(
-          isDraftKept
-            ? `${result.title} changed on disk; your draft is kept`
-            : `${result.title} changed on disk`,
+          `${result.title} changed on disk; save again to overwrite it`,
           'error',
         );
         return false;

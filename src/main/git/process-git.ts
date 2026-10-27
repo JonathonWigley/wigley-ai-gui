@@ -10,8 +10,7 @@ interface ProcessGitDeps {
 }
 
 // `Git` over the `git` on the PATH, one run per call (two for `fileAtHead` and
-// `commitPaths`), each as `git -C <root> …`. `isLinkedWorktree` needs git 2.31
-// or later, for `rev-parse --path-format`.
+// `commitPaths`), each as `git -C <root> …`.
 export function createProcessGit(deps: ProcessGitDeps): Git {
   const { processes } = deps;
   return {
@@ -31,12 +30,14 @@ export function createProcessGit(deps: ProcessGitDeps): Git {
         '-C',
         root,
         'rev-parse',
-        '--path-format=absolute',
         '--git-dir',
         '--git-common-dir',
       ]);
-      const [gitDir, commonDir] = output.trim().split('\n');
-      return gitDir !== commonDir;
+      const [gitDir, commonDir] = output
+        .trim()
+        .split('\n')
+        .map((gitPath) => fullGitPath(root, gitPath, deps.paths));
+      return !deps.paths.samePath(gitDir, commonDir);
     },
     hasUpstream: async (root) => {
       const result = await processes.run('git', [
@@ -211,6 +212,14 @@ function treeBlobs(output: string): Map<string, string> {
   return blobs;
 }
 
+// A path `git -C <root> rev-parse` printed, which is relative to `root`
+// unless absolute.
+function fullGitPath(root: string, gitPath: string, paths: Paths): string {
+  return paths.isAbsolute(gitPath)
+    ? paths.normalize(gitPath)
+    : paths.join(root, gitPath);
+}
+
 async function lastFetch(
   root: string,
   deps: ProcessGitDeps,
@@ -226,10 +235,7 @@ async function lastFetch(
     if (result.code !== 0) {
       return null;
     }
-    const gitPath = result.stdout.trim();
-    const fetchHead = deps.paths.isAbsolute(gitPath)
-      ? gitPath
-      : deps.paths.join(root, gitPath);
+    const fetchHead = fullGitPath(root, result.stdout.trim(), deps.paths);
     return new Date(await deps.files.modified(fetchHead)).toISOString();
   } catch {
     return null;

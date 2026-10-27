@@ -246,8 +246,40 @@ describe('writeFollowupEdit', () => {
       null,
     );
 
-    expect(result).toEqual({ type: 'changed', title: 'Alpha' });
+    expect(result).toEqual({
+      type: 'changed',
+      title: 'Alpha',
+      item: { ...ALPHA, body: 'Alpha body, by an agent.' },
+    });
     expect(docs.state.writes).toEqual([]);
+  });
+
+  it('writeFollowupEdit_SavedAgainOverTheChangedItem_Applied', async () => {
+    const docs = fakeDocs(
+      FILE.replace('Alpha body.', 'Alpha body, by an agent.'),
+    );
+    const draft = { ...ALPHA, body: 'New body.' };
+    const first = await writeFollowupEdit(
+      docs.deps,
+      PATH,
+      { type: 'edit', title: 'Alpha', draft, baseline: ALPHA },
+      null,
+    );
+    if (first.type !== 'changed') {
+      throw new Error(`expected changed, got ${first.type}`);
+    }
+
+    const second = await writeFollowupEdit(
+      docs.deps,
+      PATH,
+      { type: 'edit', title: 'Alpha', draft, baseline: first.item },
+      null,
+    );
+
+    expect(second.type).toBe('applied');
+    expect(parseFollowups(docs.state.disk ?? '').items[0].body).toBe(
+      'New body.',
+    );
   });
 
   it('writeFollowupEdit_ItemChangedDuringWrite_Changed', async () => {
@@ -272,7 +304,11 @@ describe('writeFollowupEdit', () => {
       null,
     );
 
-    expect(result).toEqual({ type: 'changed', title: 'Alpha' });
+    expect(result).toEqual({
+      type: 'changed',
+      title: 'Alpha',
+      item: { ...ALPHA, oneLine: 'moved on' },
+    });
     expect(docs.state.disk).toBe(agentText);
   });
 });

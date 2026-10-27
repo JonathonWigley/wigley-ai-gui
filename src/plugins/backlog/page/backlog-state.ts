@@ -30,8 +30,9 @@ export const EDITOR_FIELDS: readonly EditorField[] = [
 export type DraftTexts = Record<EditorField, string>;
 
 // `path` and `baseline` are null for a create, which writes to `homeRoot`'s
-// create target. `baseline` is the item as the editor opened it; `initial`
-// the text the editor opened with.
+// create target. `baseline` is the item as the editor opened it, or as it read
+// on disk when a save found it changed there; `initial` the text the editor
+// opened with.
 export interface BacklogEditor {
   kind: 'create' | 'edit';
   homeRoot: string;
@@ -55,7 +56,8 @@ export interface BacklogState {
   openRoot: string | null;
   selectedKey: string | null;
   // The title of a follow-up to select once a load holds it: a save's reload
-  // can land after the save asks for its row.
+  // can land after the save asks for its row. A filter or toggle change
+  // clears it.
   pendingSelect: string | null;
   // The plan and feature paths whose task rows show.
   expanded: readonly string[];
@@ -93,6 +95,7 @@ export type BacklogAction =
   | { type: 'openCreate' }
   | { type: 'openEdit' }
   | { type: 'draftChanged'; field: EditorField; text: string }
+  | { type: 'moveEditorBaseline'; baseline: FollowupDraft }
   | { type: 'closeEditor' }
   | { type: 'askDelete' }
   | { type: 'askDiscard' }
@@ -342,13 +345,22 @@ export function backlogReducer(
     case 'selectFollowup':
       return selectPending({ ...state, pendingSelect: action.title });
     case 'setFilter':
-      return reselect(state, { ...state, filter: action.text });
+      return reselect(state, {
+        ...state,
+        filter: action.text,
+        pendingSelect: null,
+      });
     case 'toggleDone':
-      return reselect(state, { ...state, isDoneShown: !state.isDoneShown });
+      return reselect(state, {
+        ...state,
+        isDoneShown: !state.isDoneShown,
+        pendingSelect: null,
+      });
     case 'toggleAgentReadyOnly':
       return reselect(state, {
         ...state,
         isAgentReadyOnly: !state.isAgentReadyOnly,
+        pendingSelect: null,
       });
     case 'openCreate':
       return openCreate(state);
@@ -363,6 +375,13 @@ export function backlogReducer(
               ...state.editor,
               draft: { ...state.editor.draft, [action.field]: action.text },
             },
+          };
+    case 'moveEditorBaseline':
+      return state.editor === null || state.editor.baseline === null
+        ? state
+        : {
+            ...state,
+            editor: { ...state.editor, baseline: action.baseline },
           };
     case 'closeEditor':
       return state.editor === null

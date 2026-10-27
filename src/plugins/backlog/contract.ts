@@ -48,7 +48,8 @@ export interface BacklogFollowupFile {
 // One features home. `isCreateTarget`: the one home per repo a new follow-up
 // goes to, a home in git first. `gitRoot`: the clone whose `docs/features`
 // folder the home is (compared on real paths); null for any other home, which
-// counts as not in git. A home inside a linked worktree is no home.
+// counts as not in git. A home that is a linked worktree's `docs/features`
+// folder is no home.
 // `uncommitted`: a follow-up file differs from HEAD.
 export interface BacklogHome {
   repo: string;
@@ -76,11 +77,12 @@ export type BacklogEdit =
 // `refused`: the title would not read back, the path is not one of the home's
 // follow-up files, the docs guard refused the write, or the file kept
 // changing on disk. `changed`: the item on disk no longer matches an edit's
-// `baseline`; nothing was written.
+// `baseline`; nothing was written, and `item` is the item as it now reads on
+// disk.
 export type BacklogWriteResult =
   | FollowupEditResult
   | { type: 'refused'; reason: string }
-  | { type: 'changed'; title: string };
+  | { type: 'changed'; title: string; item: FollowupDraft };
 
 // Every method rejects with main's own error text when its handler throws.
 export interface BacklogChannel extends ChannelShape {
