@@ -1,5 +1,6 @@
-// A clone's git state and the one write the app makes to it. Paths in and out
-// are relative to `root`, `/`-separated. Every method but `topLevel`,
+// A clone's git state and the one write the app makes to it. `root` is a
+// clone's top folder, as `topLevel` returns it; paths in and out are relative
+// to it, `/`-separated. Every method but `topLevel`,
 // `hasUpstream`, `fetch` and `lastFetch` rejects
 // `git <name> exited <code>: <stderr>` on a failed run; every method but
 // `fetch` and `lastFetch` rejects when git cannot start.
@@ -22,7 +23,8 @@ export interface Git {
   // The modified time of the clone's FETCH_HEAD (ISO); null when never
   // fetched or on any failure. Never rejects.
   lastFetch(root: string): Promise<string | null>;
-  // The file's text at HEAD; null when HEAD does not hold it.
+  // The file's text at HEAD; null when HEAD does not hold it. Rejects when
+  // HEAD has no commit yet.
   fileAtHead(root: string, path: string): Promise<string | null>;
   // Stages `paths` and commits only them with `message`; anything else staged
   // stays staged. Rejects on an empty `paths`, committing nothing.

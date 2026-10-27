@@ -205,7 +205,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   const deletePrompt = createConfirmPrompt({
     ...promptDeps,
     title: 'Delete this follow-up?',
-    body: 'Its section and its Contents line leave the file.',
+    body: 'The follow-up leaves its file.',
     keep: { label: 'Keep it', command: confirmCommand('confirmNo') },
     confirm: { label: 'Delete', command: confirmCommand('confirmYes') },
     isAsked: () => store.get().confirm?.kind === 'delete',
@@ -213,7 +213,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   const discardPrompt = createConfirmPrompt({
     ...promptDeps,
     title: 'Discard your changes?',
-    body: 'The follow-up keeps the text it had before the edit.',
+    body: 'Your changes are lost; the file stays as it was.',
     keep: { label: 'Keep editing', command: confirmCommand('confirmNo') },
     confirm: { label: 'Discard', command: confirmCommand('confirmYes') },
     isAsked: () => store.get().confirm?.kind === 'discard',

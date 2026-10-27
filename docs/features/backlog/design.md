@@ -67,7 +67,7 @@ plan is written from them. A decision here stands unless the user changes it.
 - Create writes to the repo's one features home. A home with no `followups.md` gets one in the canonical `##` +
   Contents shape. A file of `##` sections with no Contents list gains one, built from its headings, on its first
   write.
-- Delete removes the section, or list item, and its Contents line, after the shared y/n confirm prompt Docs uses.
+- Delete removes the section, or list item, and its Contents line, after the shared y/n confirm prompt (`createConfirmPrompt`).
 - Done items (struck through, or one line starting `shipped`) are hidden until `Space v d` shows them. Delete is the
   removal; there is no separate mark-done command.
 - A file changed on disk while the user edits an item: the edit is one item operation, so it re-applies to the new
