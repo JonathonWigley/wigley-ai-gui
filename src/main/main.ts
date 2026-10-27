@@ -75,6 +75,7 @@ import { type DriveRun, startDriveRun } from './drive/drive-run';
 import { electronDrivenWindow } from './electron-driven-window';
 import { gateExternalLinks } from './external-links';
 import { createNodeFiles } from './files/node-files';
+import { createProcessGit } from './git/process-git';
 import {
   installWindowKeybindings,
   type MainCommands,
@@ -280,6 +281,7 @@ const clock: Clock = { now: () => Date.now() };
 const randomHex: RandomHex = () => randomBytes(4).toString('hex');
 const randomUuid: RandomUuid = () => randomUUID();
 const paths: Paths = process.platform === 'win32' ? windowsPaths : posixPaths;
+const git = createProcessGit({ processes, files, paths });
 
 let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;
@@ -693,6 +695,7 @@ function createWindow(
     {
       files,
       processes,
+      git,
       log,
       clock,
       randomHex,

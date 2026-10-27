@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto';
 import type { Files } from '../../../contracts/files';
+import type { Git } from '../../../contracts/git';
 import type { Log } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
-import type { ProcessRunner } from '../../../contracts/processes';
 import { errorText } from '../../../shared/error-text';
 import type {
   CloneStatus,
@@ -21,7 +21,7 @@ import {
 const FETCH_TIMEOUT_MS = 15000;
 
 export interface PluginStatusDeps {
-  processes: ProcessRunner;
+  git: Git;
   files: Files;
   paths: Paths;
   log: Log;
@@ -99,7 +99,7 @@ async function readClone(
   }
   return {
     root: clone.root,
-    fetchedAt: await readFetchedAt(clone.root, deps),
+    fetchedAt: await deps.git.lastFetch(clone.root),
     fetchFailed,
     files: filesOf(clone.merged, marks),
   };
@@ -114,7 +114,7 @@ function sharedFetch(root: string, deps: PluginStatusDeps): Promise<boolean> {
   if (running !== undefined) {
     return running.failed;
   }
-  const record = { root, failed: runFetch(root, deps) };
+  const record = { root, failed: deps.git.fetch(root, FETCH_TIMEOUT_MS) };
   runningFetches.push(record);
   const finished = () => {
     runningFetches.splice(runningFetches.indexOf(record), 1);
@@ -123,24 +123,8 @@ function sharedFetch(root: string, deps: PluginStatusDeps): Promise<boolean> {
   return record.failed;
 }
 
-async function runFetch(
-  root: string,
-  deps: PluginStatusDeps,
-): Promise<boolean> {
-  try {
-    const result = await deps.processes.run(
-      'git',
-      ['-C', root, 'fetch', '--quiet'],
-      { timeoutMs: FETCH_TIMEOUT_MS },
-    );
-    return result.code !== 0 || result.timedOut;
-  } catch {
-    return true;
-  }
-}
-
 // Marks uncommitted files; with an upstream, then unpushed and not-installed
-// files. Throws on the first git run that cannot start or that fails.
+// files. Throws on the first git call that rejects.
 async function markStatuses(
   clone: Clone,
   entries: readonly IndexEntry[],
@@ -149,55 +133,21 @@ async function markStatuses(
 ): Promise<void> {
   const { root } = clone;
   const scope = scopeOf(clone, deps.paths);
-  const upstream = await deps.processes.run('git', [
-    '-C',
-    root,
-    'rev-parse',
-    '--abbrev-ref',
-    '--symbolic-full-name',
-    '@{u}',
-  ]);
-  const hasUpstream = upstream.code === 0;
-  const status = await gitOutput(deps, 'status', [
-    '-C',
-    root,
-    'status',
-    '--porcelain=v1',
-    '-z',
-    '--untracked-files=all',
-    '--',
-    scope,
-  ]);
-  for (const path of porcelainPaths(status)) {
+  const hasUpstream = await deps.git.hasUpstream(root);
+  for (const path of await deps.git.changedPaths(root, scope)) {
     markEntriesAt(clone, path, deps.paths, marks.uncommitted);
   }
   if (!hasUpstream) {
     return;
   }
-  const diff = await gitOutput(deps, 'diff', [
-    '-C',
-    root,
-    'diff',
-    '--name-only',
-    '-z',
-    '@{u}...HEAD',
-    '--',
-    scope,
-  ]);
-  for (const path of nulFields(diff)) {
+  for (const path of await deps.git.unpushedPaths(root, scope)) {
     markEntriesAt(clone, path, deps.paths, marks.unpushed);
   }
-  const tree = await gitOutput(deps, 'ls-tree', [
-    '-C',
-    root,
-    'ls-tree',
-    '-r',
-    '-z',
-    '@{u}',
-    '--',
-    scope,
-  ]);
-  const upstreamBlobs = upstreamBlobsOf(clone, tree, deps.paths);
+  const upstreamBlobs = upstreamBlobsOf(
+    clone,
+    await deps.git.upstreamBlobs(root, scope),
+    deps.paths,
+  );
   for (const entry of clone.merged) {
     const notInstalled = await harnessesNotInstalled(
       entry,
@@ -211,21 +161,6 @@ async function markStatuses(
   }
 }
 
-// The stdout of a git run; throws when it cannot start or exits non-zero.
-async function gitOutput(
-  deps: PluginStatusDeps,
-  name: string,
-  args: string[],
-): Promise<string> {
-  const result = await deps.processes.run('git', args);
-  if (result.code !== 0) {
-    throw new Error(
-      `git ${name} exited ${String(result.code)}: ${result.stderr.trim()}`,
-    );
-  }
-  return result.stdout;
-}
-
 // The merged entries' common folder as a pathspec below root; `.` for root
 // itself or a folder not inside it.
 function scopeOf(clone: Clone, paths: Paths): string {
@@ -233,30 +168,6 @@ function scopeOf(clone: Clone, paths: Paths): string {
   const segments =
     folder === null ? null : paths.segmentsBelow(folder, clone.root);
   return segments === null || segments.length === 0 ? '.' : segments.join('/');
-}
-
-function nulFields(output: string): string[] {
-  return output.split('\0').filter((field) => field !== '');
-}
-
-// Every path a `status --porcelain=v1 -z` output names: each record is
-// `XY <path>`, and a rename or copy (`R` or `C` in either column) is followed
-// by the original path, which is named too.
-function porcelainPaths(output: string): string[] {
-  const fields = nulFields(output);
-  const named: string[] = [];
-  let index = 0;
-  while (index < fields.length) {
-    const record = fields[index];
-    named.push(record.slice(3));
-    const isRenameOrCopy = /[RC]/.test(record.slice(0, 2));
-    if (isRenameOrCopy && index + 1 < fields.length) {
-      named.push(fields[index + 1]);
-      index += 1;
-    }
-    index += 1;
-  }
-  return named;
 }
 
 // Adds to `marked` the id of each merged entry at `gitPath` below root, so
@@ -277,24 +188,16 @@ function entriesAt(clone: Clone, gitPath: string, paths: Paths): IndexEntry[] {
   return clone.merged.filter((entry) => paths.samePath(entry.path, full));
 }
 
-// Merged entry id → its upstream blob sha, from `ls-tree -r -z` records
-// `<mode> <type> <sha>\t<path>`; only blobs count.
+// Merged entry id → its upstream blob sha, from the upstream's path → blob
+// sha map.
 function upstreamBlobsOf(
   clone: Clone,
-  output: string,
+  pathBlobs: ReadonlyMap<string, string>,
   paths: Paths,
 ): Map<string, string> {
   const blobs = new Map<string, string>();
-  for (const record of nulFields(output)) {
-    const tab = record.indexOf('\t');
-    if (tab === -1) {
-      continue;
-    }
-    const [, type, sha] = record.slice(0, tab).split(' ');
-    if (type !== 'blob') {
-      continue;
-    }
-    for (const entry of entriesAt(clone, record.slice(tab + 1), paths)) {
+  for (const [gitPath, sha] of pathBlobs) {
+    for (const entry of entriesAt(clone, gitPath, paths)) {
       blobs.set(entry.id, sha);
     }
   }
@@ -385,33 +288,6 @@ function withLfEndings(bytes: Uint8Array): Uint8Array {
   return bytes.filter(
     (byte, index) => !(byte === CR && bytes[index + 1] === LF),
   );
-}
-
-// The modified time of the clone's `FETCH_HEAD` (ISO); null when git cannot
-// say where it is or the file is absent.
-async function readFetchedAt(
-  root: string,
-  deps: PluginStatusDeps,
-): Promise<string | null> {
-  try {
-    const result = await deps.processes.run('git', [
-      '-C',
-      root,
-      'rev-parse',
-      '--git-path',
-      'FETCH_HEAD',
-    ]);
-    if (result.code !== 0) {
-      return null;
-    }
-    const gitPath = result.stdout.trim();
-    const fetchHead = deps.paths.isAbsolute(gitPath)
-      ? gitPath
-      : deps.paths.join(root, gitPath);
-    return new Date(await deps.files.modified(fetchHead)).toISOString();
-  } catch {
-    return null;
-  }
 }
 
 // Each merged entry with a status set, in merged order.

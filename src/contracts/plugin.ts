@@ -6,6 +6,7 @@ import type { CommandId } from './commands';
 import type { Disposable } from './disposable';
 import type { EditorHost, TextEditor } from './editor';
 import type { Files } from './files';
+import type { Git } from './git';
 import type {
   InterceptBind,
   KeyBind,
@@ -559,7 +560,8 @@ export interface DriveHost {
 // self-test host, null outside the self-test.
 // `files` takes absolute paths; outside a live run, `files.trash` deletes for
 // good. `paths` handles full paths by the rules of the OS main runs on.
-// `processes` runs the machine's programs. `agentHarnesses` lists every
+// `processes` runs the machine's programs; `git` is the one way a plugin runs
+// `git`. `agentHarnesses` lists every
 // harness adapter the app runs, found by `id`. `window.chooseFolder` opens the
 // native folder dialog over the window and resolves to null when the user
 // cancels; `window.isFocused` is true while the app's window has focus.
@@ -573,6 +575,7 @@ export interface DriveHost {
 export interface MainServices {
   files: Files;
   processes: ProcessRunner;
+  git: Git;
   log: Log;
   clock: Clock;
   randomHex: RandomHex;

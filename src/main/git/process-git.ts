@@ -1,0 +1,211 @@
+import type { Files } from '../../contracts/files';
+import type { Git } from '../../contracts/git';
+import type { Paths } from '../../contracts/paths';
+import type { ProcessRunner } from '../../contracts/processes';
+
+interface ProcessGitDeps {
+  processes: ProcessRunner;
+  files: Files;
+  paths: Paths;
+}
+
+// `Git` over the `git` on the PATH, one run per call (two for `fileAtHead` and
+// `commitPaths`), each as `git -C <root> …`.
+export function createProcessGit(deps: ProcessGitDeps): Git {
+  const { processes } = deps;
+  return {
+    topLevel: async (folder) => {
+      const result = await processes.run('git', [
+        '-C',
+        folder,
+        'rev-parse',
+        '--show-toplevel',
+      ]);
+      return result.code === 0
+        ? deps.paths.normalize(result.stdout.trim())
+        : null;
+    },
+    hasUpstream: async (root) => {
+      const result = await processes.run('git', [
+        '-C',
+        root,
+        'rev-parse',
+        '--abbrev-ref',
+        '--symbolic-full-name',
+        '@{u}',
+      ]);
+      return result.code === 0;
+    },
+    changedPaths: async (root, pathspec) =>
+      porcelainPaths(
+        await gitOutput(processes, 'status', [
+          '-C',
+          root,
+          'status',
+          '--porcelain=v1',
+          '-z',
+          '--untracked-files=all',
+          '--',
+          pathspec,
+        ]),
+      ),
+    unpushedPaths: async (root, pathspec) =>
+      nulFields(
+        await gitOutput(processes, 'diff', [
+          '-C',
+          root,
+          'diff',
+          '--name-only',
+          '-z',
+          '@{u}...HEAD',
+          '--',
+          pathspec,
+        ]),
+      ),
+    upstreamBlobs: async (root, pathspec) =>
+      treeBlobs(
+        await gitOutput(processes, 'ls-tree', [
+          '-C',
+          root,
+          'ls-tree',
+          '-r',
+          '-z',
+          '@{u}',
+          '--',
+          pathspec,
+        ]),
+      ),
+    fetch: async (root, timeoutMs) => {
+      try {
+        const result = await processes.run(
+          'git',
+          ['-C', root, 'fetch', '--quiet'],
+          { timeoutMs },
+        );
+        return result.code !== 0 || result.timedOut;
+      } catch {
+        return true;
+      }
+    },
+    lastFetch: (root) => lastFetch(root, deps),
+    fileAtHead: async (root, path) => {
+      const tree = await gitOutput(processes, 'ls-tree', [
+        '-C',
+        root,
+        'ls-tree',
+        '-z',
+        'HEAD',
+        '--',
+        path,
+      ]);
+      const sha = treeBlobs(tree).get(path);
+      if (sha === undefined) {
+        return null;
+      }
+      return gitOutput(processes, 'cat-file', [
+        '-C',
+        root,
+        'cat-file',
+        'blob',
+        sha,
+      ]);
+    },
+    commitPaths: async (root, paths, message) => {
+      if (paths.length === 0) {
+        throw new Error(`commitPaths in ${root}: no paths to commit`);
+      }
+      await gitOutput(processes, 'add', ['-C', root, 'add', '--', ...paths]);
+      await gitOutput(processes, 'commit', [
+        '-C',
+        root,
+        'commit',
+        '--only',
+        '-m',
+        message,
+        '--',
+        ...paths,
+      ]);
+    },
+  };
+}
+
+// The stdout of a git run; throws when it cannot start or exits non-zero.
+async function gitOutput(
+  processes: ProcessRunner,
+  name: string,
+  args: string[],
+): Promise<string> {
+  const result = await processes.run('git', args);
+  if (result.code !== 0) {
+    throw new Error(
+      `git ${name} exited ${String(result.code)}: ${result.stderr.trim()}`,
+    );
+  }
+  return result.stdout;
+}
+
+function nulFields(output: string): string[] {
+  return output.split('\0').filter((field) => field !== '');
+}
+
+// Every path a `status --porcelain=v1 -z` output names: each record is
+// `XY <path>`, and a rename or copy (`R` or `C` in either column) is followed
+// by the original path, which is named too.
+function porcelainPaths(output: string): string[] {
+  const fields = nulFields(output);
+  const named: string[] = [];
+  let index = 0;
+  while (index < fields.length) {
+    const record = fields[index];
+    named.push(record.slice(3));
+    const isRenameOrCopy = /[RC]/.test(record.slice(0, 2));
+    if (isRenameOrCopy && index + 1 < fields.length) {
+      named.push(fields[index + 1]);
+      index += 1;
+    }
+    index += 1;
+  }
+  return named;
+}
+
+// Path → blob sha, from `ls-tree -z` records `<mode> <type> <sha>\t<path>`;
+// only blobs count.
+function treeBlobs(output: string): Map<string, string> {
+  const blobs = new Map<string, string>();
+  for (const record of nulFields(output)) {
+    const tab = record.indexOf('\t');
+    if (tab === -1) {
+      continue;
+    }
+    const [, type, sha] = record.slice(0, tab).split(' ');
+    if (type === 'blob') {
+      blobs.set(record.slice(tab + 1), sha);
+    }
+  }
+  return blobs;
+}
+
+async function lastFetch(
+  root: string,
+  deps: ProcessGitDeps,
+): Promise<string | null> {
+  try {
+    const result = await deps.processes.run('git', [
+      '-C',
+      root,
+      'rev-parse',
+      '--git-path',
+      'FETCH_HEAD',
+    ]);
+    if (result.code !== 0) {
+      return null;
+    }
+    const gitPath = result.stdout.trim();
+    const fetchHead = deps.paths.isAbsolute(gitPath)
+      ? gitPath
+      : deps.paths.join(root, gitPath);
+    return new Date(await deps.files.modified(fetchHead)).toISOString();
+  } catch {
+    return null;
+  }
+}

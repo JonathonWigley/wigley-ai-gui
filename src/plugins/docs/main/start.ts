@@ -342,7 +342,7 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
       readPluginStatus(
         registry.sourceEntries(sourceId),
         {
-          processes: services.processes,
+          git: services.git,
           files: services.files,
           paths: services.paths,
           log: services.log,

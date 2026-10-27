@@ -57,6 +57,19 @@ const LAYERS: Record<string, LayerRule> = {
   'src/main/alerts': { layers: ['src/contracts'], packages: ['electron'] },
   'src/main/files': { layers: ['src/contracts'], packages: ['node:'] },
   'src/main/processes': { layers: ['src/contracts'], packages: ['node:'] },
+  'src/main/git': { layers: ['src/contracts'], packages: ['node:'] },
+  // Over the shared fakes, and a commit in a real temporary clone through the
+  // real process runner.
+  'src/main/git/process-git.test.ts': {
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/shared/paths',
+      'src/main/git',
+      'src/main/processes',
+    ],
+    packages: ['node:'],
+  },
   'src/main/data-protocol': {
     layers: ['src/contracts', 'src/shared'],
     packages: ['electron', 'node:'],
@@ -84,6 +97,7 @@ const LAYERS: Record<string, LayerRule> = {
       'src/main/alerts',
       'src/main/files',
       'src/main/processes',
+      'src/main/git',
       'src/main/data-protocol',
       'src/main/drive',
       'src/plugins/main.ts',
