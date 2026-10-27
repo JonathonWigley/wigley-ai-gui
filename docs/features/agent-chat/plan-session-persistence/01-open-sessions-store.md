@@ -1,6 +1,6 @@
 # 01 — Open-sessions store
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -41,3 +41,5 @@ Done when: compiles; the test gate runs the tests above
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 54aff62 · proof: diff read: every Produces present in open-sessions.ts; typecheck clean; open-sessions.test.ts 9 cases pass · concerns: load_FileShape_ReadsOrRejects split into two it.each tables (snapshot rows, reject rows)

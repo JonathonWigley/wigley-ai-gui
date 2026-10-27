@@ -365,6 +365,7 @@ describe('createSessionList', () => {
     expect(calls.slice(callsBefore)).toEqual([
       'activated 00000002',
       'stateChanged',
+      'emit selected',
     ]);
     expect(list.state().selectedSessionId).toBe('00000002');
     expect(list.state().rows[1].marked).toBe(false);
@@ -549,6 +550,7 @@ describe('createSessionList', () => {
     });
     expect(states).toHaveLength(1);
     expect(emitted).toEqual([
+      ['selected', { sessionId: '00000001' }],
       ['connected', { id: '00000001', info: owned('host-1') }],
     ]);
   });
@@ -741,7 +743,11 @@ describe('createSessionList', () => {
 
     expect(list.closeSession('00000001')).toBe(true);
 
-    expect(calls.slice(-2)).toEqual(['stateChanged', 'emit closed']);
+    expect(calls.slice(-3)).toEqual([
+      'stateChanged',
+      'emit selected',
+      'emit closed',
+    ]);
     expect(emitted.at(-1)).toEqual(['closed', { sessionId: '00000001' }]);
     expect(contribution.ends()).toBe(0);
 
@@ -768,4 +774,108 @@ describe('createSessionList', () => {
     expect(list.closeSession(id)).toBe(false);
     expect(closedEvents()).toHaveLength(1);
   });
+
+  // Each row runs its actions on a fresh list; ids count up from 00000001 in
+  // connect and open order.
+  it.each<{
+    name: string;
+    act: (list: ReturnType<typeof setUp>['list']) => void;
+    expected: (string | null)[];
+  }>([
+    {
+      name: 'open selecting',
+      act: (list) => list.open(owned('h1')),
+      expected: ['00000001'],
+    },
+    {
+      name: 'open with select false',
+      act: (list) => list.open(owned('h1'), { select: false }),
+      expected: [],
+    },
+    {
+      name: 'activate of another row',
+      act: (list) => {
+        list.connect(info('/work/x'));
+        list.connect(info('/work/x'));
+        list.activate('00000001');
+        list.activate('00000002');
+      },
+      expected: ['00000001', '00000002'],
+    },
+    {
+      name: 'activate of the selected row, selected by a mark',
+      act: (list) => {
+        list.connect(info('/work/x'));
+        list.mark('00000001');
+        list.activate('00000001');
+      },
+      expected: ['00000001'],
+    },
+    {
+      name: 'mark with and without a selected row',
+      act: (list) => {
+        list.connect(info('/work/x'));
+        list.connect(info('/work/x'));
+        list.mark('00000001');
+        list.mark('00000002');
+      },
+      expected: ['00000001'],
+    },
+    {
+      name: 'close of the selected row with a neighbour',
+      act: (list) => {
+        list.connect(info('/work/x'));
+        list.connect(info('/work/x'));
+        list.mark('00000001');
+        list.closeSession('00000001');
+      },
+      expected: ['00000001', '00000002'],
+    },
+    {
+      name: 'close of the last row, selected',
+      act: (list) => {
+        list.connect(info('/work/x'));
+        list.mark('00000001');
+        list.closeSession('00000001');
+      },
+      expected: ['00000001', null],
+    },
+    {
+      name: 'close of an unselected row',
+      act: (list) => {
+        list.connect(info('/work/x'));
+        list.connect(info('/work/x'));
+        list.mark('00000001');
+        list.closeSession('00000002');
+      },
+      expected: ['00000001'],
+    },
+    {
+      name: 'end of the selected row with a neighbour',
+      act: (list) => {
+        const first = list.open(owned('h1'));
+        list.open(owned('h2'), { select: false });
+        first.end();
+      },
+      expected: ['00000001', '00000002'],
+    },
+    {
+      name: 'end of the last row, selected',
+      act: (list) => list.open(owned('h1')).end(),
+      expected: ['00000001', null],
+    },
+  ])(
+    'selected_SelectionChanges_EmitsOncePerChange: $name',
+    ({ act, expected }) => {
+      const { list, emitted } = setUp();
+
+      act(list);
+
+      expect(
+        emitted
+          .filter(([event]) => event === 'selected')
+          .map(([, data]) => (data as { sessionId: string | null }).sessionId),
+      ).toEqual(expected);
+    },
+  );
 });

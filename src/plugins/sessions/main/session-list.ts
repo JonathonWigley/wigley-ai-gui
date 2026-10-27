@@ -148,6 +148,8 @@ function routeCall(
 // whole state only when it changed, and log and ignore a session they cannot
 // act on; `closeSession` logs and keeps a row a close guard refuses, returning
 // false for every row it leaves open, and emits `closed` for a row it closes.
+// Every state sent with a selection other than the last sent emits `selected`
+// after it.
 export function createSessionList(deps: SessionListDeps): SessionList {
   const contributions: Contribution[] = [];
   const closeGuards: ((sessionId: string) => boolean)[] = [];
@@ -160,7 +162,17 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     rows: rows.map((row) => ({ ...row })),
     selectedSessionId,
   });
-  const sendState = () => deps.stateChanged(state());
+  // The selected id the last `selected` carried; null before any.
+  let sentSelectedSessionId: string | null = null;
+  // Sends the state, then `selected` when the selection differs from the last sent.
+  const sendState = () => {
+    deps.stateChanged(state());
+    if (selectedSessionId === sentSelectedSessionId) {
+      return;
+    }
+    sentSelectedSessionId = selectedSessionId;
+    deps.emit('selected', { sessionId: selectedSessionId });
+  };
   const rowIndex = (sessionId: string) =>
     rows.findIndex((row) => row.sessionId === sessionId);
 

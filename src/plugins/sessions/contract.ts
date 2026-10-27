@@ -135,11 +135,14 @@ export interface SessionsMainExports {
 }
 
 // `closed` is the user closing a row every guard allowed; the session itself
-// stays until it ends.
+// stays until it ends. `selected` is the selected row changing, to another row
+// or to none, emitted after the state that carries it: an open that selects,
+// an activate or mark that selects, or the selected row closing or ending.
 export interface SessionsMainEvents extends EventShape {
   connected: AgentSession;
   ended: { sessionId: string };
   closed: { sessionId: string };
+  selected: { sessionId: string | null };
 }
 
 // One connected session's sidebar row. `marked` is a form not yet opened;
