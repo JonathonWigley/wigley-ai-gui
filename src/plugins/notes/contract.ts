@@ -72,8 +72,9 @@ export type NoteSendResult =
   | { type: 'refused'; reason: string };
 
 // Every method rejects with main's own error text when its handler throws.
-// Main handles invokes in call order (the draft store runs every call through
-// one queue), so a caller need not await an autosave before a send or discard.
+// Each draft-store call runs in call order (one queue), so a save invoked
+// before a send or discard lands before it; an invoke made during one can
+// land mid-send.
 // `flattened` holds one entry per draft image, in strip order: the PNG with
 // its markup drawn in, or null for an image with no markup.
 export interface NotesChannel extends ChannelShape {

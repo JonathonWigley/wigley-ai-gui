@@ -21,7 +21,8 @@ export interface MarkupSession {
 export interface MarkupEditor {
   // Draws the PNG `image` in `host`, scaled to fit, with the markup `saved` over it (null: none).
   // `host` must already be laid out at a non-zero size: open measures it once, and rejects with
-  // `Markup host has no size` otherwise, or with `Markup image did not load` for a bad `image`.
+  // `Markup host has no size` otherwise, with `Markup image did not load` for a bad `image`, or
+  // with Fabric's own error for a `saved` JSON Fabric cannot load.
   // The session starts on the `select` tool, coloured with the host's computed `color`.
   open(
     host: HTMLElement,

@@ -110,7 +110,8 @@ plan is written from them. A decision here stands unless the user changes it.
 ## Git
 
 - An edit to an in-repo home stays uncommitted, and the home shows an uncommitted chip. `C` commits that home's
-  follow-up files and the changed files under its `followups-images/`, never anything else in the clone, with the message `Follow-ups edited in Backlog: added …;
+  follow-up files and the changed files inside a folder of its `followups-images/` (`followups-images/<folder>/…`; a
+  file directly in `followups-images/` is left out), never anything else in the clone, with the message `Follow-ups edited in Backlog: added …;
   edited …; removed …; tagged …; images <folders>` (an empty part left out; the folders are the changed
   image folders), built by matching each file's items by title between its
   parse at HEAD and its parse on disk. A file that differs from HEAD with no item changed (a header edit, a reorder,
