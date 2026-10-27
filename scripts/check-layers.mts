@@ -156,6 +156,7 @@ const LAYERS: Record<string, LayerRule> = {
     layers: [
       'src/contracts',
       'src/shared',
+      'src/plugins/chat/contract.ts',
       'src/plugins/sessions/contract.ts',
       'src/plugins/keys/contract.ts',
     ],
@@ -168,11 +169,13 @@ const LAYERS: Record<string, LayerRule> = {
       'src/shared/followups',
       'src/shared/paths',
       'src/plugins/chat',
+      'src/plugins/chat/contract.ts',
       'src/plugins/chat/layouts',
       'src/plugins/sessions/contract.ts',
     ],
     packages: ['node:'],
   },
+  'src/plugins/chat/contract.ts': { layers: ['src/contracts'], packages: [] },
   'src/plugins/chat/layouts': { layers: [], packages: [] },
   'src/plugins/chat/page': {
     layers: [
@@ -183,6 +186,7 @@ const LAYERS: Record<string, LayerRule> = {
       'src/shared/page',
       'src/shared/page/ui',
       'src/plugins/chat',
+      'src/plugins/chat/contract.ts',
       'src/plugins/chat/layouts',
       'src/plugins/keys/contract.ts',
       'src/plugins/sessions/contract.ts',

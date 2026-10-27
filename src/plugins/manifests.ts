@@ -5,6 +5,7 @@ import { docsManifest } from './docs/manifest';
 import { formsManifest } from './forms/manifest';
 import { galleryManifest } from './gallery/manifest';
 import { keysManifest } from './keys/manifest';
+import { notesManifest } from './notes/manifest';
 import { primerManifest } from './primer/manifest';
 import { sessionsManifest } from './sessions/manifest';
 import { settingsManifest } from './settings/manifest';
@@ -24,6 +25,7 @@ export const builtInManifests = [
   galleryManifest,
   settingsManifest,
   backlogManifest,
+  notesManifest,
 ] as const;
 
 // Every built-in plugin's manifest: main builds the served keymap, command

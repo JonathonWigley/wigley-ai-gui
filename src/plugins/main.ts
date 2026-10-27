@@ -3,6 +3,7 @@ import { backlogMainPart } from './backlog/main/start';
 import { chatMainPart } from './chat/main/start';
 import { docsMainPart } from './docs/main/start';
 import { formsMainPart } from './forms/main/start';
+import { notesMainPart } from './notes/main/start';
 import { primerMainPart } from './primer/main/start';
 import { sessionsMainPart } from './sessions/main/start';
 import { settingsMainPart } from './settings/main/start';
@@ -17,4 +18,5 @@ export const mainParts: readonly MainPart[] = [
   docsMainPart,
   settingsMainPart,
   backlogMainPart,
+  notesMainPart,
 ];
