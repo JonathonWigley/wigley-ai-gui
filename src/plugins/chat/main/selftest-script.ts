@@ -392,7 +392,7 @@ const LAYOUT_PREVIEW_STEPS: SelfTestStep[] = [
   },
   {
     keys: sendKeys('hi'),
-    expect: '[chat] send failed: the chat preview sends nothing',
+    expect: '[chat] sent a message in Chat preview',
   },
   {
     keys: ['Escape', ' ', ';'],

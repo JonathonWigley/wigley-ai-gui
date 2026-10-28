@@ -90,26 +90,6 @@ describe('chat preview', () => {
     expect(started()).toHaveLength(1);
   });
 
-  it.each([
-    {
-      call: 'send',
-      refuse: (preview: ReturnType<typeof setUp>['preview']) =>
-        expect(preview.send()).rejects.toThrow('sends nothing'),
-    },
-    {
-      call: 'setControl',
-      refuse: async (preview: ReturnType<typeof setUp>['preview']) =>
-        expect(() => preview.setControl()).toThrow('changes no control'),
-    },
-  ])('refusals_PreviewSession_SendNothing: $call', async ({ refuse }) => {
-    const { preview, entries } = setUp();
-    preview.open();
-
-    await refuse(preview);
-
-    expect(entries()).toEqual([]);
-  });
-
   it('closed_PreviewRow_EndsItAndAllowsANewOne', () => {
     const { preview, opened, ends } = setUp();
     preview.open();

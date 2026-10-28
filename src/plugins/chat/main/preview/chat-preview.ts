@@ -27,8 +27,7 @@ export interface ChatPreview {
   holds(sessionId: string): boolean;
   // The preview's state while it is open; [] while closed.
   states(): ChatSessionState[];
-  send(): Promise<void>; // always rejects
-  setControl(): void; // always throws
+  // Adds a notice entry to the open preview's chat.
   notice(text: string, tone: 'info' | 'error'): void;
   closed(sessionId: string): void;
 }
@@ -77,31 +76,25 @@ export function createChatPreview(deps: ChatPreviewDeps): ChatPreview {
         running: true,
       };
       preview = { owned, state, noticeCount: 0 };
+      // `select` picks the row; only `activate` shows the sessions mode.
       sessions.activate(state.sessionId);
       send('sessionStarted', { ...state });
       log('chat', 'chat preview opened');
     },
     holds: (sessionId) => preview?.state.sessionId === sessionId,
     states: () => (preview === null ? [] : [{ ...preview.state }]),
-    send: () => Promise.reject(new Error('the chat preview sends nothing')),
-    setControl() {
-      throw new Error('the chat preview changes no control');
-    },
     notice(text, tone) {
-      if (preview === null) {
-        log('chat', 'notice for the closed chat preview ignored');
-        return;
-      }
-      preview.noticeCount += 1;
+      const shown = preview!;
+      shown.noticeCount += 1;
       const entry: ChatEntry = {
         kind: 'notice',
-        id: `preview-app-notice-${preview.noticeCount}`,
+        id: `preview-app-notice-${shown.noticeCount}`,
         text,
         tone,
         raw: [],
       };
-      preview.state.entries = [...preview.state.entries, entry];
-      send('entry', { sessionId: preview.state.sessionId, entry });
+      shown.state.entries = [...shown.state.entries, entry];
+      send('entry', { sessionId: shown.state.sessionId, entry });
     },
     closed(sessionId) {
       if (preview === null || preview.state.sessionId !== sessionId) {

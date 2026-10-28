@@ -218,7 +218,8 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       send: (message, data) => api.channel.send(message, data),
       log: services.log,
     });
-    // The preview holds no process or history: a call there does nothing.
+    // The preview holds no process or history: a call there does nothing and
+    // raises no error, so the page shows no toast.
     const ignoredInPreview = (method: string, sessionId: string) => {
       const inPreview = preview.holds(sessionId);
       if (inPreview) {
@@ -241,9 +242,11 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       chat.setArchived(hostSessionId, archived),
     );
     api.channel.handle('resume', (request) => chat.resume(request));
-    api.channel.handle('send', (sessionId, message) =>
-      preview.holds(sessionId) ? preview.send() : chat.send(sessionId, message),
-    );
+    api.channel.handle('send', async (sessionId, message) => {
+      if (!ignoredInPreview('send', sessionId)) {
+        await chat.send(sessionId, message);
+      }
+    });
     api.channel.handle('loadHistory', async (sessionId) => {
       if (!ignoredInPreview('loadHistory', sessionId)) {
         await chat.loadHistory(sessionId);
@@ -264,11 +267,11 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
         chat.interrupt(sessionId);
       }
     });
-    api.channel.handle('setControl', (sessionId, controlId, value) =>
-      preview.holds(sessionId)
-        ? preview.setControl()
-        : chat.setControl(sessionId, controlId, value),
-    );
+    api.channel.handle('setControl', (sessionId, controlId, value) => {
+      if (!ignoredInPreview('setControl', sessionId)) {
+        chat.setControl(sessionId, controlId, value);
+      }
+    });
     api.channel.handle('answerPermission', (sessionId, entryId, answer) => {
       if (!ignoredInPreview('answerPermission', sessionId)) {
         chat.answerPermission(sessionId, entryId, answer);

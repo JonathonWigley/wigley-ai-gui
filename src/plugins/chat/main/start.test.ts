@@ -120,11 +120,14 @@ describe('chat drive actions', () => {
 // Chat's main part started on a harness whose sign-ins record their cancel
 // and whose processes record each message sent, with one profile, `work`, and
 // a data folder that cannot be read; sessions open rows `row-1`, `row-2`, ….
-// `invoke` calls the page channel's handler for `name`.
+// `invoke` calls the page channel's handler for `name`; `sent` holds each
+// channel message and `logged` each log line.
 function startChatPart() {
   const handlers = new Map<string, (...args: unknown[]) => unknown>();
   const cancelLogIn = vi.fn<() => void>();
   const processSends = vi.fn<(message: unknown) => void>();
+  const sent: { message: string; data: unknown }[] = [];
+  const logged: string[] = [];
   const harness = {
     id: 'claude',
     logIn: () => ({ sendCode: () => undefined, cancel: cancelLogIn }),
@@ -143,12 +146,12 @@ function startChatPart() {
     channel: {
       handle: (name: string, handler: (...args: unknown[]) => unknown) =>
         handlers.set(name, handler),
-      send: () => undefined,
+      send: (message: string, data: unknown) => sent.push({ message, data }),
     },
     events: { on: () => ({ dispose: () => undefined }) },
     settings: () => ({ profiles: [{ name: 'work', configDir: '/work' }] }),
     services: {
-      log: () => undefined,
+      log: (_plugin: string, line: string) => logged.push(line),
       agentHarnesses: [harness],
       randomUuid: () => 'host-1',
       selfTest: null,
@@ -170,7 +173,7 @@ function startChatPart() {
     }
     return handler(...args);
   };
-  return { part, invoke, cancelLogIn, processSends };
+  return { part, invoke, cancelLogIn, processSends, sent, logged };
 }
 
 describe('chat main part', () => {
@@ -202,14 +205,46 @@ describe('chat main part', () => {
     expect(listed.map((state) => state.sessionId)).toEqual(['row-1', 'row-2']);
   });
 
-  it('send_PreviewSession_RejectsAndSkipsChat', async () => {
+  it.each([
+    { method: 'send', args: [{ text: 'hi', images: [] }] },
+    { method: 'setControl', args: ['mode', 'plan'] },
+    { method: 'interrupt', args: [] },
+    {
+      method: 'answerPermission',
+      args: ['preview-7', { allowed: true, reason: null }],
+    },
+    { method: 'loadHistory', args: [] },
+  ])(
+    'calls_PreviewSession_AreIgnoredWithNoError: $method',
+    async ({ method, args }) => {
+      const chat = startChatPart();
+      chat.invoke('openPreview');
+
+      await chat.invoke(method, 'row-1', ...args);
+
+      expect(chat.logged).toContain(`${method} in the chat preview ignored`);
+      expect(chat.processSends).not.toHaveBeenCalled();
+    },
+  );
+
+  it('notice_PreviewSession_AddsAnEntryToItsRow', () => {
     const chat = startChatPart();
     chat.invoke('openPreview');
 
-    const sent = chat.invoke('send', 'row-1', { text: 'hi', images: [] });
+    chat.invoke('notice', 'row-1', 'Signed in.', 'info');
 
-    await expect(sent).rejects.toThrow('sends nothing');
-    expect(chat.processSends).not.toHaveBeenCalled();
+    expect(chat.sent.filter((held) => held.message === 'entry')).toEqual([
+      {
+        message: 'entry',
+        data: {
+          sessionId: 'row-1',
+          entry: expect.objectContaining({
+            kind: 'notice',
+            text: 'Signed in.',
+          }),
+        },
+      },
+    ]);
   });
 
   it('dispose_SignInRunning_CancelsIt', async () => {
