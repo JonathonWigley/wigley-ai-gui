@@ -70,7 +70,9 @@ hjkl is the direction in every layer; the modifier picks the verb.
   pane it squeezes reaches its least width, and stacked panes do not resize. `Alt+Shift+j`/`Alt+Shift+k`
   are kept for vertical dividers, which the app does not have, and stay unbound. The commands are the
   core's `panes.resizePaneLeft`, `panes.resizePaneRight`, `panes.resizePaneUp` and
-  `panes.resizePaneDown`, rebound in `keymap.json` like any other.
+  `panes.resizePaneDown`, rebound in `keymap.json` like any other. Each divider shows the prompt
+  `⌥⇧H ◂ ▸ ⌥⇧L` while the pointer is over it, while it is dragged, and for a moment after each
+  keyboard resize.
 - Reserved for when the app has them: `Ctrl+Alt+hjkl` swap, `Alt+'` / `Alt+;` split, `Alt+w` close
   a pane.
 - **Alt+o / Alt+i** next and previous tab; **Alt+Shift+o / Alt+Shift+i** next and previous

@@ -219,7 +219,8 @@ The keyboard is first; the mouse works everywhere.
   - **Edge prompt:** a navigation chord at the edges of what it moves through, with a chevron
     toward its direction: `⌥I ‹` and `› ⌥O` at the tab strip's ends, `⌥⇧I ▲ ▼ ⌥⇧O` on the session
     list's header, `⌃H ‹ F1 of 6 › ⌃L` on a card's header, `⌥L doc ›` at a split's edge. A pair
-    hides when there is nothing else to move to.
+    hides when there is nothing else to move to. A split handle's resize prompt `⌥⇧H ◂ ▸ ⌥⇧L`
+    shows only on hover, during a drag and for a moment after a keyboard resize (Split, below).
   - **Cursor prompt:** an action on the selected row, with its label, on the cursor row only
     (`s star  r rename  d trash`): at the row's end in Docs, and in Settings and Backlog, where it
     wraps when the row has no room; on a line of its own under the label in Primer; in a column of
@@ -278,7 +279,9 @@ The primitives, each a builder in `src/shared/page/ui/`:
 - **Split** (`createSplit`): two panes with a drag handle, each pane with a least width and no most
   width; the start pane's width lives in `uiState`, written on each drag and each keyboard resize. The
   shell's side bar resizes through the same split core. Three columns are two nested splits, the
-  outer end pane's least width the sum of the inner two.
+  outer end pane's least width the sum of the inner two. Each handle draws the resize prompt
+  `⌥⇧H ◂ ▸ ⌥⇧L`, centred on it and taking no space, while the pointer is over it, while a drag runs
+  and for a moment after each keyboard resize. A view that drops a split calls its `dispose`.
 - **Card** (`card`, with an `attention` or `error` edge) and the collapsible card
   (`createCollapsibleCard`).
 - **FloatingPanel** (`floatingPanel`, opened with `openFloatingPanel`): the L3 glass panel.
