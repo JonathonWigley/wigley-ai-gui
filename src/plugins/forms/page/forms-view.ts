@@ -9,6 +9,7 @@ import type {
   ShownLayouts,
 } from '../../../contracts/plugin';
 import type { UiState } from '../../../contracts/ui-state';
+import { callEach } from '../../../shared/call-each';
 import { createConfirmPrompt } from '../../../shared/page/confirm-prompt';
 import type { EditorBoxes } from '../../../shared/page/editor-boxes';
 import {
@@ -71,7 +72,8 @@ interface ActiveLayouts {
 // still open for the session in a new Form tab. `showForm` selects the
 // session's Form tab, a no-op when it has none. `setLayouts` hands `shown` to
 // every open round view, which rebuilds when a layout it draws with changed,
-// and rounds that open later are built with it. `rebuild` rebuilds every open
+// and rounds that open later are built with it. A round view's throw does not
+// skip the rest; the first is rethrown once all have run. `rebuild` rebuilds every open
 // round view with the layouts it holds, keeping its answers, as after a card
 // part or review column is added or removed.
 // `scrollBy` scrolls the active round's main column by `step`, down for 1 and
@@ -166,9 +168,9 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
     showForm: (sessionId) => tabs.select(sessionId),
     setLayouts(shown) {
       active.shown = shown;
-      for (const round of store.get().forms) {
-        roundViews.get(round.formId)?.setLayouts(shown, round);
-      }
+      callEach(store.get().forms, (round) =>
+        roundViews.get(round.formId)?.setLayouts(shown, round),
+      );
     },
     rebuild() {
       for (const round of store.get().forms) {
