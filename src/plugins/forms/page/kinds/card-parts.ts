@@ -51,26 +51,6 @@ export function buildItemHead(
   return { header, status };
 }
 
-// A block of markdown under its section header; nothing and null for blank
-// text.
-export function buildSection(
-  parent: HTMLElement,
-  label: string,
-  text: string,
-  markdown: MarkdownRenderer,
-): HTMLElement | null {
-  if (text.trim() === '') {
-    return null;
-  }
-  const section = element('section', 'context');
-  section.append(
-    sectionHeader(label),
-    markdownElement('div', 'context-body md', markdown.block(text)),
-  );
-  parent.append(section);
-  return section;
-}
-
 // The labelled reason under a choice: why one would pick it, or why it is
 // recommended.
 export function buildChoiceReason(

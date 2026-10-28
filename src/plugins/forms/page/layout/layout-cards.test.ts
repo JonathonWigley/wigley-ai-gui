@@ -13,6 +13,7 @@ import {
 } from '../form-state';
 import type { CardDeps } from '../kinds/item-format';
 import { finding, presentedRound } from '../test-rounds';
+import { recordingAnchors } from '../../../../shared/page/layout-host/test-layouts';
 import { buildLayoutCard } from './layout-cards';
 import {
   asFake,
@@ -137,7 +138,7 @@ describe('buildLayoutCard', () => {
     // the editor boxes do.
     const mounted = new Set<string>();
     const mounts: string[] = [];
-    const anchors: { disposed: boolean }[] = [];
+    const { anchors, keys } = recordingAnchors();
     let anchorsAtThrow = 0;
     const deps: CardDeps = {
       ...fakeCardDeps(createFormsContributions()),
@@ -150,14 +151,7 @@ describe('buildLayoutCard', () => {
         mounts.push(key);
       },
       destroyBox: (target) => mounted.delete(JSON.stringify(target)),
-      keys: {
-        keysFor: () => null,
-        anchor() {
-          const anchor = { disposed: false };
-          anchors.push(anchor);
-          return { dispose: () => (anchor.disposed = true) };
-        },
-      },
+      keys,
     };
     const fancy: Layout = {
       cards: {
@@ -184,7 +178,7 @@ describe('buildLayoutCard', () => {
     expect(mounted.has(notesMounts[0])).toBe(true);
     expect(anchorsAtThrow).toBeGreaterThan(0);
     expect(
-      anchors.slice(0, anchorsAtThrow).every((anchor) => anchor.disposed),
+      anchors.slice(0, anchorsAtThrow).every((anchor) => anchor.isDisposed),
     ).toBe(true);
     expect(deps.log).toHaveBeenCalledWith(
       'forms',

@@ -5,7 +5,7 @@ import type {
   SessionInfo,
   ToolResult,
 } from '../../sessions/contract';
-import { addDriveActions } from './start';
+import { addDriveActions, registerLayoutsAfter } from './start';
 
 // Sessions whose `ask_round` calls wait until the test answers them.
 function fakeSessions() {
@@ -130,5 +130,81 @@ describe('forms drive actions', () => {
 
     expect(sessions.ended).toEqual(['row-a', 'row-b']);
     expect([...drive.actions.keys()]).toEqual([]);
+  });
+});
+
+// A write the test lands or fails, a register that records each registration
+// and its dispose (or throws when `failure` is set), and the log.
+function registrationSetup(failure: Error | null = null) {
+  let land: () => void = () => undefined;
+  let fail: (error: Error) => void = () => undefined;
+  const written = new Promise<void>((resolve, reject) => {
+    land = resolve;
+    fail = reject;
+  });
+  const events: string[] = [];
+  const logLines: string[] = [];
+  const layouts = registerLayoutsAfter(
+    written,
+    () => {
+      if (failure !== null) {
+        throw failure;
+      }
+      events.push('registered');
+      return { dispose: () => events.push('disposed') };
+    },
+    (message) => logLines.push(message),
+  );
+  return { land, fail, layouts, events, logLines };
+}
+
+// Lets the settled promises' handlers run.
+function flush(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+describe('forms layouts registration', () => {
+  it('writeLands_ThenDispose_RegistersThenDisposesIt', async () => {
+    const { land, layouts, events } = registrationSetup();
+
+    land();
+    await flush();
+    await layouts.dispose();
+
+    expect(events).toEqual(['registered', 'disposed']);
+  });
+
+  it('disposeBeforeTheWriteLands_RegistersNothing', async () => {
+    const { land, layouts, events } = registrationSetup();
+
+    const disposed = layouts.dispose();
+    land();
+    await disposed;
+
+    expect(events).toEqual([]);
+  });
+
+  it.each([
+    {
+      case: 'the register throws',
+      setup: () => registrationSetup(new Error('bad types')),
+      settle: (setup: ReturnType<typeof registrationSetup>) => setup.land(),
+      reason: 'bad types',
+    },
+    {
+      case: 'the write fails',
+      setup: () => registrationSetup(),
+      settle: (setup: ReturnType<typeof registrationSetup>) =>
+        setup.fail(new Error('disk full')),
+      reason: 'disk full',
+    },
+  ])('logsAndDisposeSettles when $case', async ({ setup, settle, reason }) => {
+    const subject = setup();
+
+    settle(subject);
+    await flush();
+
+    expect(subject.logLines).toEqual([expect.stringContaining(reason)]);
+    await expect(subject.layouts.dispose()).resolves.toBeUndefined();
   });
 });

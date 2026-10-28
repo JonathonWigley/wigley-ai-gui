@@ -17,10 +17,9 @@ import {
   keepFocusedBox,
 } from '../../../shared/page/editor-boxes';
 import type { ShownLayouts } from '../../../contracts/plugin';
-import {
-  type BaseKitDeps,
-  createBaseKit,
-  type KitCommands,
+import type {
+  BaseKitDeps,
+  KitCommands,
 } from '../../../shared/page/layout-host/base-kit';
 import { createStatusLine } from '../../../shared/page/status-line';
 import { textLineHeightPx } from '../../../shared/page/text-line';
@@ -44,7 +43,7 @@ import {
 } from './form-state';
 import { roundInfo } from './kinds/card-parts';
 import type { CardDeps, ItemCard } from './kinds/item-format';
-import { headKitDepsFor } from './layout/card-kit';
+import { baseKitDepsFor, createFormsBaseKit } from './layout/card-kit';
 import { buildLayoutCard } from './layout/layout-cards';
 import {
   buildRailPane,
@@ -309,7 +308,7 @@ function buildRoundParts(
   const main = split.end;
 
   const headDeps: HeadDeps = {
-    ...headKitDepsFor(
+    ...baseKitDepsFor(
       { ...deps, keys: recordingKeys(deps.keys, headAnchors) },
       formsScope('forms'),
     ),
@@ -490,7 +489,7 @@ function drawLayoutHead(
 ) {
   slot.replaceChildren();
   try {
-    pick.layout.head?.(slot, roundInfo(round.round), createBaseKit(deps));
+    pick.layout.head?.(slot, roundInfo(round.round), createFormsBaseKit(deps));
   } catch (error) {
     disposeAnchors(anchors);
     slot.replaceChildren();

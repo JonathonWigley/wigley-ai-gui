@@ -392,6 +392,22 @@ describe('card kit', () => {
     });
   });
 
+  it.each([
+    { case: 'a string', options: 'hint wide', className: 'hint wide' },
+    { case: 'its options', options: { className: 'hint' }, className: 'hint' },
+  ])('kitKeyHint takes the className from $case', ({ options, className }) => {
+    const { deps } = fakeCardDeps(createFormsContributions());
+    const { kit } = findingKit(deps);
+
+    const span = kit.keyHint(
+      asHtml(new FakeElement('div')),
+      'toggleDontAsk',
+      options,
+    );
+
+    expect(span.className).toBe(className);
+  });
+
   it('answerControls_AnchorsNotApplicableAndDontAsk', () => {
     const { deps, anchor } = fakeCardDeps(createFormsContributions());
     const { kit } = findingKit(deps);

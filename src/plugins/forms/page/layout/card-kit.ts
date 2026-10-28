@@ -22,6 +22,7 @@ import type {
   FindingAction,
   FindingCard,
   FindingKit,
+  FormsBaseKit,
   Kit,
   LayoutAction,
   QuestionKit,
@@ -59,9 +60,8 @@ interface ItemTextBox {
 
 // What every part of one card's kit shares: the item and its round, its
 // deps, the base kit's deps and the anchor over the forms view's keys, its
-// boxes, the
-// updaters the parts that show answer state register, and the contributed
-// parts once placed, null before.
+// boxes, the updaters the parts that show answer state register, and the
+// contributed parts once placed, null before.
 interface CardContext {
   roundId: string;
   item: RailItem;
@@ -256,7 +256,7 @@ export function answerableOf(item: RailItem): AnswerableItem | null {
 
 // The base kit's deps for a card or pane whose keys fire in `scope`, its short
 // command names being forms commands.
-export function headKitDepsFor(
+export function baseKitDepsFor(
   deps: Pick<CardDeps, 'markdown' | 'platform' | 'commands' | 'keys'>,
   scope: ViewScope,
 ): BaseKitDeps {
@@ -267,6 +267,21 @@ export function headKitDepsFor(
     scope,
     commandNamed: formsCommandNamed,
     platform: deps.platform,
+  };
+}
+
+// The base kit over `deps`, its `keyHint` also taking a string as the hint's
+// className.
+export function createFormsBaseKit(deps: BaseKitDeps): FormsBaseKit {
+  const base = createBaseKit(deps);
+  return {
+    ...base,
+    keyHint: (parent, command, options = {}) =>
+      base.keyHint(
+        parent,
+        command,
+        typeof options === 'string' ? { className: options } : options,
+      ),
   };
 }
 
@@ -304,7 +319,7 @@ export function createCardKit<K extends ItemKind>(
     item,
     position,
     deps,
-    kitDeps: headKitDepsFor(deps, formsScope('forms')),
+    kitDeps: baseKitDepsFor(deps, formsScope('forms')),
     anchor: scopedAnchor(deps.keys, formsScope('forms')),
     boxes: itemTextBoxes(round, item),
     mounted: new Set(),
@@ -492,7 +507,7 @@ function runLayoutAction(card: CardContext, action: LayoutAction) {
 
 function buildBaseKit(card: CardContext): Kit {
   return {
-    ...createBaseKit(card.kitDeps),
+    ...createFormsBaseKit(card.kitDeps),
     itemHead(parent, kind) {
       const { header, status } = buildItemHead(parent, kind);
       const answerable = answerableOf(card.item);

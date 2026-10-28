@@ -34,8 +34,6 @@ const NAMING_GONE = { ...FIRST_SAVED, layout: 'gone' };
 
 let connects: SessionInfo[];
 let activated: string[];
-let connectedEnds: number;
-let formsEnds: number;
 let calls: Call[];
 let logLines: string[];
 let saved: unknown[];
@@ -71,9 +69,7 @@ function record(
 const fakeFormsSession: FormsSession = {
   open: (args, _toolUseId, signal) => record('open', args, signal),
   collect: (_wait, signal) => record('collect', undefined, signal),
-  end: () => {
-    formsEnds++;
-  },
+  end: () => undefined,
 };
 
 const fakeForms: FormsService = { startSession: () => fakeFormsSession };
@@ -84,9 +80,7 @@ function connect(info: SessionInfo): ConnectedSession {
   return {
     session,
     call: () => Promise.reject(new Error('the preview calls no tool')),
-    end: () => {
-      connectedEnds++;
-    },
+    end: () => undefined,
   };
 }
 
@@ -111,8 +105,6 @@ function flush(): Promise<void> {
 beforeEach(() => {
   connects = [];
   activated = [];
-  connectedEnds = 0;
-  formsEnds = 0;
   calls = [];
   logLines = [];
   saved = [FIRST_SAVED, SECOND_SAVED];
@@ -214,16 +206,6 @@ describe('open', () => {
 });
 
 describe('settle', () => {
-  it('submit_EndsSession', async () => {
-    preview().open();
-
-    calls[0].settle('submitted');
-    await flush();
-
-    expect(formsEnds).toBe(1);
-    expect(connectedEnds).toBe(1);
-  });
-
   it('submit_ThenOpen_ConnectsAgainWithSample', async () => {
     const subject = preview();
     subject.open();
@@ -235,56 +217,5 @@ describe('settle', () => {
 
     expect(connects).toHaveLength(2);
     expect(calls.at(-1)?.args).toBe(PREVIEW_ROUND_ARGS);
-  });
-
-  it('abortedAsk_Settles_IsIgnored', async () => {
-    const subject = preview();
-    subject.open();
-    subject.open();
-
-    calls[0].settle('cancelled');
-    await flush();
-
-    expect(connectedEnds).toBe(0);
-  });
-
-  it('askRejects_LogsAndEndsSession', async () => {
-    preview().open();
-
-    calls[0].fail(new Error('store write failed'));
-    await flush();
-
-    expect(logLines).toEqual([expect.stringContaining('store write failed')]);
-    expect(formsEnds).toBe(1);
-    expect(connectedEnds).toBe(1);
-  });
-
-  it('abortedAsk_Rejects_IsIgnored', async () => {
-    const subject = preview();
-    subject.open();
-    subject.open();
-
-    calls[0].fail(new Error('aborted'));
-    await flush();
-
-    expect(logLines).toEqual([]);
-    expect(formsEnds).toBe(0);
-    expect(connectedEnds).toBe(0);
-  });
-
-  it('draftOutcome_RewaitsWithCollectLastRound', async () => {
-    preview().open();
-
-    calls[0].settle('draft');
-    await flush();
-
-    expect(calls[1].method).toBe('collect');
-    expect(calls[1].signal).toBe(calls[0].signal);
-    expect(connectedEnds).toBe(0);
-
-    calls[1].settle('submitted');
-    await flush();
-
-    expect(connectedEnds).toBe(1);
   });
 });

@@ -1,4 +1,8 @@
-import type { BaseKit, TagTone } from '../../../shared/page/layout-host/kit';
+import type {
+  BaseKit,
+  KeyHintOptions,
+  TagTone,
+} from '../../../shared/page/layout-host/kit';
 
 // The tag tone, for a layout's JSDoc to import from here.
 export type { TagTone };
@@ -79,7 +83,17 @@ export type LayoutAction =
   | { type: 'accept' }
   | { type: 'focus' };
 
-export interface Kit extends BaseKit {
+// The base kit every forms card and pane, and the head, draws with.
+export interface FormsBaseKit extends BaseKit {
+  // As the base kit's `keyHint`; a string `options` is the span's `className`.
+  keyHint(
+    parent: HTMLElement,
+    command: string,
+    options?: KeyHintOptions | string,
+  ): HTMLElement;
+}
+
+export interface Kit extends FormsBaseKit {
   // `header.item-head` holding the kind tag and the status label, which updates itself; returns the header.
   // A card that leaves it out still gets `data-status` on its element.
   itemHead(parent: HTMLElement, kind: string): HTMLElement;
@@ -182,7 +196,7 @@ export interface LayoutPane {
 }
 
 // The rail's parts, each keeping itself up to date while the round shows.
-export interface RailKit extends BaseKit {
+export interface RailKit extends FormsBaseKit {
   // `li.rail-entry` for the item at rail `position`: a list row leading with the item's status dot and rail number,
   // its title as label and tooltip. It carries `data-status`, marks the focused item `is-selected` and an untouched
   // item `is-flagged` while the review or the cancel prompt shows, and a click jumps to its item. The app scrolls the
@@ -192,7 +206,7 @@ export interface RailKit extends BaseKit {
 
 // The review's parts, each keeping itself up to date while the review shows. Its `row` draws a review row in place of
 // the base kit's list row.
-export interface ReviewKit extends Omit<BaseKit, 'row'> {
+export interface ReviewKit extends Omit<FormsBaseKit, 'row'> {
   // `li.review-row` for review row `row`: the item's label and title, then its pick (action word, entry number and
   // choice text, the Recommended tag) or its status, the jump keys on the cursor row, the Notes and Don't ask lines,
   // and last one `span.review-cell` (`data-column="<id>"`) per column other plugins added, holding its text, with the
@@ -218,7 +232,7 @@ export interface Layout {
   cards?: Partial<LayoutCards>;
   // Drawn above the cards in the forms view, once per round and again after each keymap change, into a slot carrying
   // `data-layout-owner="forms"` and `data-layout="<name>"`.
-  head?(parent: HTMLElement, round: RoundInfo, kit: BaseKit): void;
+  head?(parent: HTMLElement, round: RoundInfo, kit: FormsBaseKit): void;
   // The rail beside the cards, under the app's rail header and over its Review button, built once per round.
   rail?(parent: HTMLElement, input: RailInput, kit: RailKit): LayoutPane;
   // Shown in place of the cards while the user reviews the round or confirms a cancel, built once per round.

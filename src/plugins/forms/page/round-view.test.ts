@@ -5,6 +5,11 @@ import type {
   FocusOptions,
 } from '../../../contracts/editor';
 import { createEditorBoxes } from '../../../shared/page/editor-boxes';
+import {
+  recordingAnchors,
+  withUser,
+} from '../../../shared/page/layout-host/test-layouts';
+import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
 import { type BoxRef, FORMS_BOX_IDENTITY } from './boxes';
 import { createFormsContributions } from './contributions';
@@ -77,10 +82,10 @@ const bareLayout: Layout = {
 
 // Round r1, two questions, open and active, shown in the forms view by a round
 // view over editor boxes; `main` is the scrolled main column, and `anchors`
-// holds every Disposable the keys' `anchor` returned, in call order.
+// holds every anchor the keys named, in call order.
 function roundViewSetup() {
   const { boxes, created } = setup();
-  const anchors: { dispose: ReturnType<typeof vi.fn> }[] = [];
+  const { anchors, keys } = recordingAnchors();
   const presented = presentedRound('r1');
   const state: FormsState = apply(initialState([], presented.sessionId), {
     type: 'formShown',
@@ -90,7 +95,7 @@ function roundViewSetup() {
   const view = createRoundView(
     () => undefined,
     round,
-    { layouts: new Map([['default', bareLayout]]), user: 'default' },
+    withUser(defaultLayout, bareLayout),
     {
       markdown: {
         block: (text) => text,
@@ -98,15 +103,7 @@ function roundViewSetup() {
         document: async (text) => text,
       },
       boxes,
-      keys: {
-        keysFor: () => null,
-        onChanged: () => ({ dispose: () => undefined }),
-        anchor: () => {
-          const anchor = { dispose: vi.fn() };
-          anchors.push(anchor);
-          return anchor;
-        },
-      },
+      keys: { ...keys, onChanged: () => ({ dispose: () => undefined }) },
       dispatch: vi.fn(),
       getState: () => state,
       run: vi.fn(),
@@ -171,9 +168,7 @@ describe('round view rebuild', () => {
     view.rebuild(round);
 
     expect(firstBuild.length).toBeGreaterThan(0);
-    expect(
-      firstBuild.every((anchor) => anchor.dispose.mock.calls.length === 1),
-    ).toBe(true);
+    expect(firstBuild.every((anchor) => anchor.isDisposed)).toBe(true);
   });
 
   it('dispose_DisposesEveryAnchor', () => {
@@ -182,8 +177,6 @@ describe('round view rebuild', () => {
     view.dispose();
 
     expect(anchors.length).toBeGreaterThan(0);
-    expect(
-      anchors.every((anchor) => anchor.dispose.mock.calls.length === 1),
-    ).toBe(true);
+    expect(anchors.every((anchor) => anchor.isDisposed)).toBe(true);
   });
 });

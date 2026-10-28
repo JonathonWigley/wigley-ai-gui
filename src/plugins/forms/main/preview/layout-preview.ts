@@ -1,15 +1,11 @@
 import type { Log } from '../../../../contracts/log';
 import { errorText } from '../../../../shared/error-text';
+import { createAgentFormPreview } from '../../../../shared/agent-forms/agent-form-preview';
 import type {
-  ConnectedSession,
   SessionInfo,
   SessionsMainExports,
 } from '../../../sessions/contract';
-import type {
-  AnswersPayload,
-  FormsService,
-  FormsSession,
-} from '../../contract';
+import type { FormsService } from '../../contract';
 import { parseRound, requireKnownLayouts } from '../round';
 import { PREVIEW_ROUND_ARGS } from './preview-round';
 
@@ -23,13 +19,6 @@ const PREVIEW_SESSION: SessionInfo = {
 
 // What `cursor` holds while the sample shows.
 const SAMPLE = -1;
-
-interface OpenPreview {
-  connected: ConnectedSession;
-  forms: FormsSession;
-  // Aborting it closes the round the preview shows.
-  asking: AbortController;
-}
 
 // The sample when `cursor` is past the last saved round, else the first saved
 // round after `cursor` that parses and names only layouts in `layoutNames`,
@@ -63,66 +52,30 @@ export function createLayoutPreview(deps: {
   layoutNames(): readonly string[];
   log: Log;
 }): { open(): void } {
-  const { log } = deps;
-  let preview: OpenPreview | null = null;
+  const preview = createAgentFormPreview({
+    session: PREVIEW_SESSION,
+    sessions: deps.sessions,
+    forms: deps.forms,
+    log: deps.log,
+    logSource: 'forms',
+    noun: 'round',
+  });
   let cursor = SAMPLE;
-
-  const end = (ended: OpenPreview) => {
-    if (preview === ended) {
-      preview = null;
-    }
-    ended.forms.end();
-    ended.connected.end();
-  };
-
-  // A draft (the deadline passed) waits on; any other outcome ends the
-  // session. An answer to an ask the next open aborted is ignored.
-  const settle = (shown: OpenPreview, answer: Promise<AnswersPayload>) => {
-    answer.then(
-      (payload) => {
-        if (shown.asking.signal.aborted) {
-          return;
-        }
-        if (payload.outcome === 'draft') {
-          settle(shown, shown.forms.collect(true, shown.asking.signal));
-          return;
-        }
-        end(shown);
-      },
-      (error: unknown) => {
-        if (shown.asking.signal.aborted) {
-          return;
-        }
-        log('forms', `preview round failed: ${errorText(error)}`);
-        end(shown);
-      },
-    );
-  };
-
-  const ask = (shown: OpenPreview, args: unknown) => {
-    settle(shown, shown.forms.open(args, null, shown.asking.signal));
-  };
-
   return {
     open() {
-      if (preview === null) {
-        const connected = deps.sessions.connect(PREVIEW_SESSION);
-        preview = {
-          connected,
-          forms: deps.forms.startSession(connected.session),
-          asking: new AbortController(),
-        };
+      if (preview.show()) {
         cursor = SAMPLE;
-        deps.sessions.activate(connected.session.id);
-        ask(preview, PREVIEW_ROUND_ARGS);
+        preview.ask(PREVIEW_ROUND_ARGS);
         return;
       }
-      preview.asking.abort();
-      preview = { ...preview, asking: new AbortController() };
-      const next = nextRound(cursor, deps.savedArgs(), deps.layoutNames(), log);
+      const next = nextRound(
+        cursor,
+        deps.savedArgs(),
+        deps.layoutNames(),
+        deps.log,
+      );
       cursor = next.cursor;
-      deps.sessions.activate(preview.connected.session.id);
-      ask(preview, next.args);
+      preview.ask(next.args);
     },
   };
 }

@@ -4,10 +4,7 @@ import type { MarkdownRenderer } from '../../../../contracts/markdown';
 import type { Platform } from '../../../../contracts/platform';
 import { errorText } from '../../../../shared/error-text';
 import { button, element, markdownElement } from '../../../../shared/page/dom';
-import {
-  createBaseKit,
-  type KitCommands,
-} from '../../../../shared/page/layout-host/base-kit';
+import type { KitCommands } from '../../../../shared/page/layout-host/base-kit';
 import {
   drawPart,
   requireElementIn,
@@ -60,7 +57,12 @@ import {
   reviewSummaryText,
 } from '../view-model';
 import type { FormsContributions } from '../contributions';
-import { headKitDepsFor, type ScopedAnchor, scopedAnchor } from './card-kit';
+import {
+  baseKitDepsFor,
+  createFormsBaseKit,
+  type ScopedAnchor,
+  scopedAnchor,
+} from './card-kit';
 import { recordingDeps } from './layout-cards';
 import type { LayoutPick } from './layout-resolver';
 
@@ -170,7 +172,7 @@ function drawRail(
   const entries = new Map<number, HTMLElement>();
   let shownView: FormsView = 'forms';
   const kit: RailKit = {
-    ...createBaseKit(headKitDepsFor(deps, formsScope('forms'))),
+    ...createFormsBaseKit(baseKitDepsFor(deps, formsScope('forms'))),
     entry(entryParent, position) {
       requireIndexIn(
         position,
@@ -309,7 +311,7 @@ function drawReview(
     })),
   };
   const kit: ReviewKit = {
-    ...createBaseKit(headKitDepsFor(deps, formsScope('review'))),
+    ...createFormsBaseKit(baseKitDepsFor(deps, formsScope('review'))),
     row(rowParent, row) {
       requireIndexIn(row, input.rows.length, `review has no row ${row}`);
       const entry = element('li', 'review-row');

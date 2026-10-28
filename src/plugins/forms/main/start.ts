@@ -103,15 +103,28 @@ function createForms(
   return { forms, preview };
 }
 
-// Registers forms' layouts once `written` settles; null when `isDisposed`
-// by then.
-async function registerLayouts(
-  api: FormsApi,
+// Registers the layouts through `register` once `written` settles, and
+// logs a write or register that throws. Disposing before then registers
+// nothing; `dispose` settles once a registration made is disposed.
+export function registerLayoutsAfter(
   written: Promise<void>,
-  isDisposed: () => boolean,
-): Promise<Disposable | null> {
-  await written;
-  return isDisposed() ? null : api.layouts.register({ layoutTypes });
+  register: () => Disposable,
+  log: (message: string) => void,
+): { dispose(): Promise<void> } {
+  let isDisposed = false;
+  const registration = written.then(() => (isDisposed ? null : register()));
+  registration.catch((error: unknown) =>
+    log(`layouts not registered: ${errorText(error)}`),
+  );
+  return {
+    dispose() {
+      isDisposed = true;
+      return registration.then(
+        (registered) => registered?.dispose(),
+        () => undefined,
+      );
+    },
+  };
 }
 
 // Writes the self-test layouts into forms' layouts folder under the home.
@@ -175,10 +188,10 @@ export const formsMainPart: MainPart<typeof formsManifest> = {
       api.services.runMode === 'selfTest'
         ? writeSelfTestLayouts(api)
         : Promise.resolve();
-    let isDisposed = false;
-    const registration = registerLayouts(api, fixtureWritten, () => isDisposed);
-    registration.catch((error: unknown) =>
-      api.services.log('forms', `layouts not registered: ${errorText(error)}`),
+    const layouts = registerLayoutsAfter(
+      fixtureWritten,
+      () => api.layouts.register({ layoutTypes }),
+      (message) => api.services.log('forms', message),
     );
     selfTest?.run(formsSelfTestScript(sessions, api.services.userConfig));
     const driveActions =
@@ -193,11 +206,7 @@ export const formsMainPart: MainPart<typeof formsManifest> = {
       commands: {},
       dispose: () => {
         driveActions?.dispose();
-        isDisposed = true;
-        return registration.then(
-          (registered) => registered?.dispose(),
-          () => undefined,
-        );
+        return layouts.dispose();
       },
     };
   },
