@@ -1,6 +1,6 @@
 # 06 — Final verification
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 01, 02, 03, 04
 Plan: [plan.md](plan.md)
@@ -100,3 +100,4 @@ No commit: this task changes no repo file.
 
 ## Proof
 
+Commit 8a45130 · proof: live run 06-1: 9 checks pass, check 4 proved by reading (bundled default logs no revision line), check 8 premise wrong (inner split stays beside at 900px per 03 decision 1); stopgap columns layout removed and the primer setting dropped, backups in scratchpad/stopgap-backup · concerns: none
