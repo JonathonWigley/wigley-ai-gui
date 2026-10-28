@@ -99,15 +99,19 @@ export function nextInTrack<Entry extends { placement: Placement }>(
 // chrome areas' elements (`data-layout`, with `data-layout-owner="shell"`),
 // kept across every later mount, so the layout's CSS restyles their frames.
 // `sideBarDivider` is the side bar's resize divider, which moves only while
-// the side bar is beside the content. `setKeys` anchors its handle's resize
-// prompt through `keys`, again on each call. `dispose` disposes the divider,
-// stops watching the root's width and removes the handle.
+// the side bar is beside the content. `reloadSideBarOpenWidth` reads the
+// `sidebar-width` token again, after a theme is applied, and redraws the side
+// bar at it while the user has stored no width. `setKeys` anchors its
+// handle's resize prompt through `keys`, again on each call. `dispose`
+// disposes the divider, stops watching the root's width and removes the
+// handle.
 export interface Shell {
   areas: Record<AreaName, Area>;
   setLayout(layout: ShellLayout): Disposable;
   layOutSideBar(layout: SideBarLayout): void;
   setChromeLayout(name: string): void;
   sideBarDivider: ResizeTarget;
+  reloadSideBarOpenWidth(): void;
   setKeys(keys: BaseKitDeps['keys']): void;
   dispose(): void;
 }
@@ -294,8 +298,10 @@ function createStatusBarHeight(): { observe(statusBar: HTMLElement): void } {
 // unitless pixels, which its resize handle `div.shell-side-bar-handle`, a
 // child of `root` shown only while the side bar is beside, drags and stores in
 // `uiState` under `side-bar-width`; `timers` runs the handle prompt's linger.
-// Beside, the side bar draws no wider than leaves the main area its least
-// width, kept as `root` resizes, while `uiState` keeps the user's width.
+// With no width stored, it opens at the `sidebar-width` token as `root`
+// computes it. Beside, the side bar draws no wider than leaves the main area
+// its least width; over the content, no wider than reaches the window's
+// edge; each kept as `root` resizes, while `uiState` keeps the user's width.
 export function mountShell(
   root: HTMLElement,
   layout: ShellLayout,
@@ -307,7 +313,7 @@ export function mountShell(
   // Counts layout replacements, so a restore knows whether its layout is
   // still the one mounted.
   let generation = 0;
-  const sideBarOpen = sideBarOpenWidth(root);
+  let sideBarOpen = sideBarOpenWidth(root);
   let mounted = mountLayout(root, layout);
   let sideBarLayout: SideBarLayout = 'hidden';
   let chromeLayout = 'default';
@@ -406,20 +412,33 @@ export function mountShell(
     const { right } = mounted.main.element.getBoundingClientRect();
     return { left, span: right - left };
   };
-  // The last width the divider showed; an overlay squeezes no main area, so
-  // only a side bar beside is drawn clamped.
+  // The last width the divider showed; beside, it is drawn leaving main its
+  // least width; over the content, which it squeezes none of, no wider than
+  // the span to main's end, the window's edge.
   let sideBarWidth = sideBarOpen;
   const drawSideBarWidth = () => {
+    const { span } = measureSideBar();
     const drawn =
       sideBarLayout === 'beside'
-        ? clampSplitWidth(sideBarWidth, sideBarLimits, measureSideBar().span)
-        : sideBarWidth;
+        ? clampSplitWidth(sideBarWidth, sideBarLimits, span)
+        : sideBarLayout === 'over'
+          ? Math.min(sideBarWidth, span)
+          : sideBarWidth;
     root.style.setProperty('--shell-side-bar-width', String(drawn));
+  };
+  // The divider reads a missing or non-finite stored width as the current
+  // open width, so `reloadWidth` takes up a reloaded token; writes go through.
+  const sideBarState: UiState = {
+    get(key) {
+      const stored = uiState.get(key);
+      return Number.isFinite(stored) ? stored : sideBarOpen;
+    },
+    set: (key, value) => uiState.set(key, value),
   };
   const promptAnchor = createForwardingAnchor();
   const sideBarDivider = createSplitDivider({
     ...sideBarLimits,
-    uiState,
+    uiState: sideBarState,
     stateKey: 'side-bar-width',
     handle: sideBarHandle,
     measure: measureSideBar,
@@ -476,6 +495,10 @@ export function mountShell(
       applyChromeLayout();
     },
     sideBarDivider,
+    reloadSideBarOpenWidth() {
+      sideBarOpen = sideBarOpenWidth(root);
+      sideBarDivider.reloadWidth();
+    },
     setKeys: (keys) => promptAnchor.setKeys(keys),
     dispose() {
       sideBarDivider.dispose();

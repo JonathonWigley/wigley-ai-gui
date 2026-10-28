@@ -286,7 +286,13 @@ async function start() {
     },
     {
       live,
-      applier: themeApplier,
+      // The side bar's open width is the theme's `sidebar-width` token.
+      applier: {
+        apply(theme, applied) {
+          themeApplier.apply(theme, applied);
+          shell.reloadSideBarOpenWidth();
+        },
+      },
       editor,
       commands,
       pageKeys: installed,

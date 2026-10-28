@@ -127,15 +127,20 @@ interface FakeObserver {
   observed: unknown[];
 }
 
+// Stubs the computed `--wg-sidebar-width` token as `token`.
+function stubSideBarToken(token: string): void {
+  vi.stubGlobal('getComputedStyle', () => ({
+    getPropertyValue: (name: string) =>
+      name === '--wg-sidebar-width' ? token : '',
+  }));
+}
+
 // Stubs what mountShell reads beyond the fake DOM: the computed
 // `--wg-sidebar-width` token, `token`, and ResizeObservers that report only
 // when a test runs their callback; returns every observer made.
 function stubShellGlobals(token = '256px'): FakeObserver[] {
   const observers: FakeObserver[] = [];
-  vi.stubGlobal('getComputedStyle', () => ({
-    getPropertyValue: (name: string) =>
-      name === '--wg-sidebar-width' ? token : '',
-  }));
+  stubSideBarToken(token);
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -469,6 +474,23 @@ describe('mountShell', () => {
       drawn: '400',
     },
     {
+      row: 'over, main ending at 300',
+      steps: (shell: NarrowingShell) => {
+        shell.shell.layOutSideBar('over');
+        resizeTo(shell, 300);
+      },
+      drawn: '300',
+    },
+    {
+      row: 'over, main ending at 300 then 1200',
+      steps: (shell: NarrowingShell) => {
+        shell.shell.layOutSideBar('over');
+        resizeTo(shell, 300);
+        resizeTo(shell, 1200);
+      },
+      drawn: '400',
+    },
+    {
       row: 'hidden, then beside at main ending at 600 with no resize seen',
       steps: (shell: NarrowingShell) => {
         shell.shell.layOutSideBar('hidden');
@@ -510,6 +532,33 @@ describe('mountShell', () => {
 
       expect(shell.drawnWidth()).toBe(drawn);
       expect(shell.values.get('side-bar-width')).toBe(stored);
+    },
+  );
+
+  it.each([
+    { row: 'no stored width', stored: undefined, drawn: '300' },
+    { row: 'a stored width', stored: 320, drawn: '320' },
+    {
+      row: 'no stored width, nudged right after',
+      stored: undefined,
+      nudged: true,
+      drawn: '324',
+      storedAfter: 324,
+    },
+  ])(
+    'redraws the side bar at a reloaded token only with no stored width: $row',
+    ({ stored, nudged = false, drawn, storedAfter = stored }) => {
+      const shell = mountMeasuredShell({ token: '256px', stored });
+      shell.shell.layOutSideBar('beside');
+      stubSideBarToken('300px');
+
+      shell.shell.reloadSideBarOpenWidth();
+      if (nudged) {
+        nudge(shell, 'right');
+      }
+
+      expect(shell.drawnWidth()).toBe(drawn);
+      expect(shell.values.get('side-bar-width')).toBe(storedAfter);
     },
   );
 
