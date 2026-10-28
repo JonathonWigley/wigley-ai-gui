@@ -91,11 +91,13 @@ export interface EntryList {
 // One entry as drawn into its slot: the view the layout returned (null for
 // the bare line), the kit made for it, and the dispose of what the draw
 // recorded, which disposes the kit. `isDefaultView` holds while the view is
-// the default layout's (or the bare line).
+// the default layout's or the bare line; `isBareLine` while it is the bare
+// line.
 interface DrawnEntry {
   view: EntryView | null;
   kit: EntryKit;
   isDefaultView: boolean;
+  isBareLine: boolean;
   dispose(): void;
 }
 
@@ -265,16 +267,16 @@ function buildSlot(entry: ChatEntry, deps: EntryListDeps): Slot {
   return {
     element: slot,
     entry,
-    ...buildEntry(slot, entry, deps, false),
+    ...drawEntry(slot, entry, deps, false),
     drawsWithDefault: false,
   };
 }
 
 // A view with an update runs it after the kit's own parts updated; a view
 // with none is drawn again, its new expanders opening as the old ones were.
-// A user layout's update that throws is logged and toasted as a failed
-// draw, and the slot is drawn with the default layout from then on; the
-// default layout's is logged and the entry drawn again.
+// A user layout's update that throws is logged, and the slot is drawn with
+// the default layout from then on; the default layout's is logged and the
+// entry drawn again.
 function redrawSlot(slot: Slot, entry: ChatEntry, deps: EntryListDeps) {
   slot.entry = entry;
   slot.kit.update(entry);
@@ -295,7 +297,6 @@ function redrawSlot(slot: Slot, entry: ChatEntry, deps: EntryListDeps) {
           'chat',
           `layout ${name} ${entry.kind} entry update failed: ${errorText(error)}`,
         );
-        toastKindOnce(entry.kind, deps, drawnWithDefaultText(name, entry.kind));
         slot.drawsWithDefault = true;
       }
     }
@@ -303,19 +304,47 @@ function redrawSlot(slot: Slot, entry: ChatEntry, deps: EntryListDeps) {
   const openStates = slot.kit.expanders.openStates();
   slot.dispose();
   slot.element.replaceChildren();
-  const drawn = buildEntry(slot.element, entry, deps, slot.drawsWithDefault);
+  const drawn = drawEntry(slot.element, entry, deps, slot.drawsWithDefault);
   drawn.kit.expanders.restore(openStates);
   slot.view = drawn.view;
   slot.kit = drawn.kit;
   slot.isDefaultView = drawn.isDefaultView;
+  slot.isBareLine = drawn.isBareLine;
   slot.dispose = drawn.dispose;
+}
+
+// The entry drawn into `slot`, and, when the kind's shown layout did not draw
+// it, a toast once per kind naming what drew it: the default layout, or a
+// bare line.
+function drawEntry(
+  slot: HTMLElement,
+  entry: ChatEntry,
+  deps: EntryListDeps,
+  drawsWithDefault: boolean,
+): DrawnEntry {
+  const drawn = buildEntry(slot, entry, deps, drawsWithDefault);
+  const { name } = pickEntry(deps.layouts.shown(), entry.kind);
+  const isFallback = name !== DEFAULT_ENTRY_PICK.name && drawn.isDefaultView;
+  if (drawn.isBareLine) {
+    toastKindOnce(
+      entry.kind,
+      deps,
+      `Chat layout ${name}: ${entry.kind} entries drawn as bare lines`,
+    );
+  } else if (isFallback) {
+    toastKindOnce(
+      entry.kind,
+      deps,
+      `Chat layout ${name}: ${entry.kind} entries drawn with default`,
+    );
+  }
+  return drawn;
 }
 
 // The entry drawn into `slot` through the page host, with the user's layout
 // when it defines the kind, unless `drawsWithDefault`; the host logs a user
-// builder's failure and draws with the default layout, and chat toasts the
-// first such fallback per kind. A default builder that fails leaves a bare
-// line naming the kind, toasted once per kind.
+// builder's failure and draws with the default layout. A default builder that
+// fails is logged and leaves a bare line naming the kind.
 function buildEntry(
   slot: HTMLElement,
   entry: ChatEntry,
@@ -343,18 +372,11 @@ function buildEntry(
       logSource: 'chat',
       partName: `${entry.kind} entry`,
     });
-    const isDefaultView = drawn.layoutName === DEFAULT_ENTRY_PICK.name;
-    if (isDefaultView && pick.name !== DEFAULT_ENTRY_PICK.name) {
-      toastKindOnce(
-        entry.kind,
-        deps,
-        drawnWithDefaultText(pick.name, entry.kind),
-      );
-    }
     return {
       view: drawn.built.view,
       kit: drawn.built.kit,
-      isDefaultView,
+      isDefaultView: drawn.layoutName === DEFAULT_ENTRY_PICK.name,
+      isBareLine: false,
       dispose: drawn.dispose,
     };
   } catch (error) {
@@ -362,24 +384,16 @@ function buildEntry(
       'chat',
       `default layout ${entry.kind} entry failed: ${errorText(error)}`,
     );
-    toastKindOnce(
-      entry.kind,
-      deps,
-      `Chat layout ${pick.name}: ${entry.kind} entries drawn as bare lines`,
-    );
     slot.append(element('div', 'chat-entry chat-raw', entry.kind));
     const kit = createEntryKit(entry, deps.kit);
     return {
       view: null,
       kit,
       isDefaultView: true,
+      isBareLine: true,
       dispose: () => kit.dispose(),
     };
   }
-}
-
-function drawnWithDefaultText(name: string, kind: ChatEntryKind): string {
-  return `Chat layout ${name}: ${kind} entries drawn with default`;
 }
 
 function toastKindOnce(

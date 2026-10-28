@@ -177,6 +177,21 @@ const rows: Row[] = [
     toasts: ['Chat layout fancy: assistant entries drawn with default'],
     disposedAnchors: [],
   },
+  {
+    name: 'update throws, default breaks',
+    shown: 'fancy',
+    fancy: { assistant: updateThrows },
+    breakDefault: 'assistant',
+    puts: [assistant('one'), assistant('two'), assistant('three')],
+    slots: [['chat-entry chat-raw@']],
+    logs: [
+      '[chat] layout fancy assistant entry update failed: broken update',
+      '[chat] default layout assistant entry failed: broken default',
+      '[chat] default layout assistant entry failed: broken default',
+    ],
+    toasts: ['Chat layout fancy: assistant entries drawn as bare lines'],
+    disposedAnchors: [],
+  },
 ];
 
 describe('entry list', () => {

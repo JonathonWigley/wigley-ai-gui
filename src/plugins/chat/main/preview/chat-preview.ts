@@ -27,7 +27,7 @@ export interface ChatPreview {
   holds(sessionId: string): boolean;
   // The preview's state while it is open; [] while closed.
   states(): ChatSessionState[];
-  // Adds a notice entry to the open preview's chat.
+  // Adds a notice entry to the open preview's chat; throws while it is closed.
   notice(text: string, tone: 'info' | 'error'): void;
   closed(sessionId: string): void;
 }

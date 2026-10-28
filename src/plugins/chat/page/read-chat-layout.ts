@@ -19,10 +19,6 @@ const KIND_SET: Record<ChatEntryKind, true> = {
   raw: true,
 };
 
-export const ENTRY_KINDS: readonly ChatEntryKind[] = Object.keys(
-  KIND_SET,
-) as ChatEntryKind[];
-
 // Compile-time checks: each chat entry variant is assignable to its layout
 // input, and the contract's kinds and the layout's kinds are one set. A
 // variant missing or renaming an input's field, or a drifted kind, makes a

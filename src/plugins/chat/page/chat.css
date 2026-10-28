@@ -222,9 +222,10 @@
 }
 
 /* A chat dialog's body part holds its actions, which keep the gap the dialog
-   puts above its own actions row. */
+   puts above its own actions row. Padding, not margin, so the gap adds to the
+   bottom margin of the text above instead of collapsing into it. */
 .chat-dialog-part > .ui-dialog-actions {
-  margin-top: var(--wg-space-3);
+  padding-top: var(--wg-space-3);
 }
 
 /* The dialogs' text and the deny reason box. */
