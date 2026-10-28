@@ -543,8 +543,8 @@ function addNewItems(primer: OpenPrimer): OpenPrimer {
 }
 
 // A no-op for blank text or a task already holding MAX_PRIMER_ITEMS items.
-// The selection stays where it is, except that the selected task's first item
-// becomes its selected item.
+// The selection stays where it is, except that an item added as the selected
+// task's first becomes its selected item.
 function addItem(primer: OpenPrimer, entryId: string): OpenPrimer {
   const entry = entryOf(primer, entryId);
   const text = (primer.newItemTexts[entryId] ?? '').trim();

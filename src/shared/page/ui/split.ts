@@ -51,7 +51,8 @@ export interface SplitDividerOptions extends SplitLimits {
   handle: HTMLElement;
   measure(): { left: number; span: number };
   show(width: number): void;
-  // Places the handle's `⌥⇧H ◂ ▸ ⌥⇧L` prompt; the view's or shell's own anchor function.
+  // Places the handle's `⌥⇧H ◂ ▸ ⌥⇧L` prompt; the view's or shell's own
+  // anchor function.
   anchor: AnchorNamer<never>;
   // Runs the prompt's linger after a nudge; the page's Timers seam.
   timers: Timers;

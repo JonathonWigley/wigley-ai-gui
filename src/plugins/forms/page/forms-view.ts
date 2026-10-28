@@ -43,11 +43,11 @@ import { sessionTitle } from './view-model';
 // `beforeClose` answers whether a session may close now. `setScope` sets the
 // key scope to the forms view while a Form tab is the visible tab, and
 // `setResizeTarget` then sets the divider the resize keys move: the shown
-// round's split, or null while idle. `pushConfirmScope` lays the cancel prompt's scope over it. `platform` is the
-// OS key hints are drawn for; `uiState` keeps the rail's dragged width, which
-// every round's rail opens at; `timers` runs each round's split resize prompt
-// linger. `commands` and `contributions` reach every round view's kits and
-// cards.
+// round's split, or null while idle. `pushConfirmScope` lays the cancel
+// prompt's scope over it. `platform` is the OS key hints are drawn for;
+// `uiState` keeps the rail's dragged width, which every round's rail opens at;
+// `timers` runs each round's split resize prompt linger. `commands` and
+// `contributions` reach every round view's kits and cards.
 export interface FormsViewDeps {
   areas: Pick<PluginAreas, 'overlay'>;
   sessions: Pick<SessionsPageExports, 'addTab'>;
@@ -130,7 +130,8 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
   areas.overlay.contribute(confirm.element);
   const roundViews = new Map<string, RoundView>();
   // Sets the key scope to the state's view, then the resize target to the
-  // shown round's split; the core drops the target on each scope change.
+  // shown round's split; the core drops the target on each change of the base
+  // scope.
   const setBaseScope = (state: FormsState) => {
     deps.setScope(state.view);
     const round = state.view === 'idle' ? null : activeForm(state);

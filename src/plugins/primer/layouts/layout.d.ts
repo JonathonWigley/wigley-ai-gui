@@ -25,8 +25,8 @@ export interface FeatureCardInput {
   notes: string;
 }
 
-// One task as the user edited it. `name` is the name the tasks column shows (`Unnamed task` for an extra task with a blank
-// name); `itemCount` is how many items it holds; `canAddItem` is false once it holds the most items a task takes.
+// One task as the user edited it. `name` is the name the tasks column shows (`Unnamed task` for an extra task with a
+// blank name); `itemCount` is how many items it holds; `canAddItem` is false once it holds the most items a task takes.
 export interface TaskCardInput {
   id: string;
   group: PrimerGroup;

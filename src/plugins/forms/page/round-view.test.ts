@@ -170,13 +170,9 @@ describe('round view rebuild', () => {
 
   it('rebuild_DisposesTheFirstBuildsAnchors', () => {
     const { round, view, anchors } = roundViewSetup();
-    const splitCommands: string[] = [
-      PANE_RESIZE_COMMANDS.left,
-      PANE_RESIZE_COMMANDS.right,
-    ];
     // A rebuild keeps the split, and with it the split's resize prompt.
     const firstBuild = anchors.filter(
-      (anchor) => !splitCommands.includes(anchor.command),
+      (anchor) => !isPaneResizeCommand(anchor.command),
     );
 
     view.rebuild(round);

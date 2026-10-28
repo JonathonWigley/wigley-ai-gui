@@ -21,13 +21,12 @@ type GalleryApi = PageApi<
 
 // Adds Gallery mode, drawn through the `gallery.layout` layout, which sets the
 // `gallery` scope when it shows, with the split sample as the resize keys'
-// target; each new layout set redraws it. `t` there
-// switches the page's transparency override between reduced and full, which
-// lasts until the page loads again and writes no settings; `g g` and `G`
-// scroll the gallery's sheet to its top and end, and the line and half-page
-// scrolls step it, logging whether they reached the end or the top. `Space z s` swaps
-// the whole shell to the test layout and, pressed again, back; leaving the
-// gallery keeps the swap.
+// target; each new layout set redraws it. `t` there switches the page's
+// transparency override between reduced and full, which lasts until the page
+// loads again and writes no settings; `g g` and `G` scroll the gallery's sheet
+// to its top and end, and the line and half-page scrolls step it, logging
+// whether they reached the end or the top. `Space z s` swaps the whole shell to
+// the test layout and, pressed again, back; leaving the gallery keeps the swap.
 export const galleryPagePart: PagePart<typeof galleryManifest> = {
   manifest: galleryManifest,
   start(api: GalleryApi) {

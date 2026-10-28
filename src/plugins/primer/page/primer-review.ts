@@ -46,8 +46,8 @@ export function needTag(need: PrimerNeed): HTMLElement {
   return tag(text, tone);
 }
 
-// The task's name as the tasks column, the card and the review show it; an extra task
-// with a blank name reads `Unnamed task`.
+// The task's name as the tasks column, the card and the review show it; an
+// extra task with a blank name reads `Unnamed task`.
 export function taskName(entry: PrimerEntry): string {
   const isUnnamed = entry.group === 'extra' && entry.task.trim() === '';
   return isUnnamed ? 'Unnamed task' : entry.task;
