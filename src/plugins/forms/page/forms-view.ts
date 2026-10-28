@@ -67,15 +67,15 @@ interface ActiveLayouts {
   shown: ShownLayouts<Layout>;
 }
 
-// `forgetSession` drops a session's Form tab entry and destroys its round
-// views once sessions dropped the tab, so the next render rebuilds a round
-// still open for the session in a new Form tab. `showForm` selects the
-// session's Form tab, a no-op when it has none. `setLayouts` hands `shown` to
-// every open round view, which rebuilds when a layout it draws with changed,
-// and rounds that open later are built with it. A round view's throw does not
-// skip the rest; the first is rethrown once all have run. `rebuild` rebuilds every open
-// round view with the layouts it holds, keeping its answers, as after a card
-// part or review column is added or removed.
+// `forgetSession` drops a session's Form tab entry and destroys its round views
+// once sessions dropped the tab, so the next render rebuilds a round still open
+// for the session in a new Form tab. `showForm` selects the session's Form tab,
+// a no-op when it has none. `setLayouts` hands `shown` to every open round
+// view, which rebuilds when a layout it draws with changed, and rounds that
+// open later are built with it. A round view's throw does not skip the rest;
+// the first is rethrown once all have run. `rebuild` rebuilds every open round
+// view with the layouts it holds, keeping its answers, as after a card part or
+// review column is added or removed.
 // `scrollBy` scrolls the active round's main column by `step`, down for 1 and
 // up for -1; null when no round is active or it has no view yet.
 export interface FormsView {
