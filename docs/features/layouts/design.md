@@ -9,6 +9,7 @@
 - **Adopters** — every surface, its setting and its parts.
 - **Previews** — the `Space z l` samples for views that need agent data.
 - **The primer's item cards** — the nested rail and the card per item.
+- **Decisions** — why the layout system has this shape.
 - **Out of scope** — what this work leaves alone.
 
 ## Intent
@@ -112,6 +113,23 @@ can be iterated in place. The sample sends nothing and raises no notification or
 - **Item card** (an item row selected): the header `⌃H ‹ 2 of 3 › ⌃L`, the item text as heading, the include mark,
   an Added tag on an item the user added, and the item's comment box.
 - The review pane does not change.
+
+## Decisions
+
+- **Core, not per plugin.** The layouts folder is core-owned and the shell is an owner with no plugin data folder, so
+  layouts load on their own `wigley-layout:` scheme, not as a host on `wigley-data:`. A plugin never reaches the folder
+  through `api.data`.
+- **One setting per owner, no app-wide layout.** A user mixes looks: a chat layout beside the default primer. Only
+  forms resolves a longer chain, `item layout → round layout → setting → default`, because an agent names layouts per
+  round and per item; its resolver stays in forms. Every other owner's chain is `setting → default`.
+- **One kit source.** The core writes `layouts/kit.d.ts`, and each owner's contract imports the shared types from it.
+  A member an owner adds must not clash with `BaseKit`; `layout-contracts.test.ts` type-checks every contract against
+  it.
+- **A dialog follows its opener.** A dialog or prompt draws with the layout of the owner that opens it. The shared
+  list picker and confirm prompt expose hooks (`drawRow`, `drawBody`) that each owner fills, so shared code names no
+  owner.
+- **CSS stays inside the layout's root.** Restyling a primitive app-wide from a layout is out of scope: themes carry
+  the app-wide look, and a layout rule selects under its own `data-layout` root.
 
 ## Out of scope
 
