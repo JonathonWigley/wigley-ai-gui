@@ -6,7 +6,7 @@ import {
   findAll,
   installFakeDom,
   installFocusFakeDom,
-  ScrollerFakeElement,
+  ShrinkingScrollerFakeElement,
 } from '../../../../shared/page/test-dom';
 import {
   recordingAnchors,
@@ -56,18 +56,6 @@ function sampleCell(caption: string): SampleCell {
 const fail = (): never => {
   throw new Error('broken part');
 };
-
-// A scroller fake whose scroll, and that of every element over it, also goes
-// back to 0 as a node under it leaves, as a browser clamps a scroller's
-// scroll when its content shrinks.
-class ShrinkingScrollerFakeElement extends ScrollerFakeElement {
-  override remove() {
-    for (let node = this.parentNode; node !== null; node = node.parentNode) {
-      node.scrollTop = 0;
-    }
-    super.remove();
-  }
-}
 
 beforeEach(() => installFakeDom(vi.stubGlobal));
 afterEach(() => vi.unstubAllGlobals());

@@ -31,8 +31,6 @@ export interface DrawnPart {
   // Removes the element and disposes every anchor the draw named. App parts
   // inside it are detached, not destroyed.
   dispose(): void;
-  // `dispose`, leaving the element where it is.
-  disposeKeepingElement(): void;
 }
 
 // The short names of the scopes a docs part's keys fire in.
@@ -128,7 +126,6 @@ export function createDocsParts(deps: DocsPartsDeps): DocsParts {
           drawnElement.remove();
           drawn.dispose();
         },
-        disposeKeepingElement: () => drawn.dispose(),
       };
     },
     redrawIfChanged(redraw) {

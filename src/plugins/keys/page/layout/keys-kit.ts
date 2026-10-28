@@ -18,11 +18,14 @@ export function createKeysKit(
   scope: ViewScope | null,
   rollback: RollbackDeps,
 ): KeysKit {
-  // `scope` is set after the deps, as which-key's `any` takes no plugin id.
-  const base = createBaseKit({
-    ...ownerBaseKitDeps(keysManifest, services, null, rollback),
-    scope,
-  });
+  const base = createBaseKit(
+    ownerBaseKitDeps(
+      keysManifest,
+      services,
+      scope === null ? null : { qualified: scope },
+      rollback,
+    ),
+  );
   return {
     ...base,
     iconButton(parent, icon, label, onClick) {

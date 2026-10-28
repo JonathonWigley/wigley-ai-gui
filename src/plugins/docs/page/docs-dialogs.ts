@@ -489,18 +489,11 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
   // and disposes the draw.
   const pickerRow =
     <T>(title: string): NonNullable<ListPickerRequest<T>['drawRow']> =>
-    (list, _item, { label, trailing }) => {
-      const drawn = parts.draw(
-        'pickerRow',
-        list,
-        { picker: title, label },
-        (kit) => ({ ...kit, trailing: () => trailing }),
-      );
-      return {
-        element: drawn.element,
-        dispose: () => drawn.disposeKeepingElement(),
-      };
-    };
+    (list, _item, { label, trailing }) =>
+      parts.draw('pickerRow', list, { picker: title, label }, (kit) => ({
+        ...kit,
+        trailing: () => trailing,
+      }));
 
   const createCancelled = () => log('docs', 'create cancelled');
 

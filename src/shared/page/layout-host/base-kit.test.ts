@@ -142,42 +142,48 @@ describe('createBaseKit', () => {
     }
   });
 
-  it('ownerBaseKitDeps_KeyHint_NamesTheQualifiedCommandAndRecordsItsAnchor', () => {
-    const { keys, anchors } = recordingAnchors();
-    const recorded: unknown[] = [];
-    const manifest = {
-      id: 'docs',
-      commands: { open: { label: 'Open', group: 'Docs', runsIn: 'page' } },
-    } as const;
-    const kit = createBaseKit(
-      ownerBaseKitDeps(
-        manifest,
-        {
-          markdown: kitOver(null).deps.markdown,
-          keys,
-          commands: { exists: () => true, run: () => undefined },
-          platform: 'macos',
-        },
-        'tree',
-        { recordAnchor: (anchor) => recorded.push(anchor) },
-      ),
-    );
-    const parent = asHtml(new FakeElement('div'));
+  it.each([
+    { scope: 'tree', anchoredIn: 'docs.tree' },
+    { scope: { qualified: 'any' }, anchoredIn: 'any' },
+  ] as const)(
+    'ownerBaseKitDeps_KeyHint_NamesTheQualifiedCommandAndRecordsItsAnchor: $anchoredIn',
+    ({ scope, anchoredIn }) => {
+      const { keys, anchors } = recordingAnchors();
+      const recorded: unknown[] = [];
+      const manifest = {
+        id: 'docs',
+        commands: { open: { label: 'Open', group: 'Docs', runsIn: 'page' } },
+      } as const;
+      const kit = createBaseKit(
+        ownerBaseKitDeps(
+          manifest,
+          {
+            markdown: kitOver(null).deps.markdown,
+            keys,
+            commands: { exists: () => true, run: () => undefined },
+            platform: 'macos',
+          },
+          scope,
+          { recordAnchor: (anchor) => recorded.push(anchor) },
+        ),
+      );
+      const parent = asHtml(new FakeElement('div'));
 
-    kit.keyHint(parent, 'open');
-    kit.keyHint(parent, 'nope');
+      kit.keyHint(parent, 'open');
+      kit.keyHint(parent, 'nope');
 
-    expect(
-      anchors.map(({ command, scope, isDisposed }) => [
-        command,
-        scope,
-        isDisposed,
-      ]),
-    ).toEqual([['docs.open', 'docs.tree', false]]);
-    expect(recorded).toHaveLength(1);
-    (recorded[0] as { dispose(): void }).dispose();
-    expect(anchors[0].isDisposed).toBe(true);
-  });
+      expect(
+        anchors.map(({ command, scope, isDisposed }) => [
+          command,
+          scope,
+          isDisposed,
+        ]),
+      ).toEqual([['docs.open', anchoredIn, false]]);
+      expect(recorded).toHaveLength(1);
+      (recorded[0] as { dispose(): void }).dispose();
+      expect(anchors[0].isDisposed).toBe(true);
+    },
+  );
 
   it.each([
     { className: undefined, classes: ['codicon', 'codicon-book'] },

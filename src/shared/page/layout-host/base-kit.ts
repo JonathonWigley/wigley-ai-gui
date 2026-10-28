@@ -26,7 +26,8 @@ import type { BaseKit } from './kit';
 // scope, and reads keys in any scope. `commandNamed` turns the owner's short
 // command name into its qualified id, null for a name the owner lacks.
 // `recordAnchor`, the drawing attempt's, takes each anchor the kit names;
-// left out, recording them is the `keys`' job.
+// left out, recording them is the `keys`' job, as forms' recording `keys`
+// does for its own anchors too.
 export interface BaseKitDeps {
   markdown: MarkdownRenderer;
   keys: {
@@ -64,14 +65,18 @@ export function commandNamedIn(
       : null;
 }
 
+// The scope an owner's part keys fire in: a short scope of the owner's,
+// qualified with its plugin id, or one already qualified, such as `any`.
+export type OwnerScope = string | { qualified: ViewScope };
+
 // The base-kit deps of one part draw by the plugin of `manifest`: its keys in
-// the plugin's scope `scope` (qualified; null for no scope), its short command
-// names read from the manifest, and each anchor it names recorded through
-// `rollback`, the drawing attempt's.
+// `scope` (null for no scope), its short command names read from the
+// manifest, and each anchor it names recorded through `rollback`, the drawing
+// attempt's.
 export function ownerBaseKitDeps(
   manifest: Pick<PluginManifest, 'id' | 'commands'>,
   services: OwnerKitServices,
-  scope: string | null,
+  scope: OwnerScope | null,
   rollback: Pick<RollbackDeps, 'recordAnchor'>,
 ): BaseKitDeps {
   return {
@@ -79,10 +84,20 @@ export function ownerBaseKitDeps(
     keys: services.keys,
     commands: services.commands,
     platform: services.platform,
-    scope: scope === null ? null : qualify(manifest.id, scope),
+    scope: qualifiedScope(manifest.id, scope),
     commandNamed: commandNamedIn(manifest),
     recordAnchor: (anchor) => rollback.recordAnchor(anchor),
   };
+}
+
+function qualifiedScope(
+  pluginId: string,
+  scope: OwnerScope | null,
+): ViewScope | null {
+  if (scope === null) {
+    return null;
+  }
+  return typeof scope === 'string' ? qualify(pluginId, scope) : scope.qualified;
 }
 
 // The commands a kit's `command` reaches: whether a plugin registers an id,

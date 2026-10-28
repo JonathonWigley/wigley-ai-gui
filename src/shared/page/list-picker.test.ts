@@ -51,11 +51,10 @@ function filteredPickerSetup() {
 
 // A `drawRow` drawing each item as `li.owned-row` holding its label, and its
 // trailing unless `leavesTrailingOut`. Each draw is named `<item>#<n>` for the
-// n-th draw made; `made` lists every draw and `disposed` each dispose, heard
-// through one recorded anchor per row, or through the returned dispose when
-// `returnsDispose`.
+// n-th draw made; `made` lists every draw and `disposed` each dispose. The
+// dispose removes the row when `disposeRemoves`, as a layout host draw's does.
 function owningRows(
-  options: { leavesTrailingOut?: boolean; returnsDispose?: boolean } = {},
+  options: { leavesTrailingOut?: boolean; disposeRemoves?: boolean } = {},
 ) {
   const made: string[] = [];
   const disposed: string[] = [];
@@ -73,12 +72,13 @@ function owningRows(
     parent.append(asHtml(owned));
     const name = `${item}#${made.length + 1}`;
     made.push(name);
-    const dispose = () => disposed.push(name);
-    if (options.returnsDispose === true) {
-      return { element: asHtml(owned), dispose };
-    }
-    input.recordAnchor({ dispose });
-    return asHtml(owned);
+    const dispose = () => {
+      disposed.push(name);
+      if (options.disposeRemoves === true) {
+        owned.remove();
+      }
+    };
+    return { element: asHtml(owned), dispose };
   };
   return { drawRow, made, disposed };
 }
@@ -199,11 +199,27 @@ describe('list picker', () => {
     expect(second.children).toEqual([]);
   });
 
-  it.each([{ returnsDispose: false }, { returnsDispose: true }])(
-    'drawRow_RowDraws_DisposedBeforeTheyDrawAgainAndOnClose: returnsDispose $returnsDispose',
-    ({ returnsDispose }) => {
+  it('drawRow_CursorReachesTheLastRow_RowRemovedOnDisposeStaysLast', () => {
+    const { picker, layer } = pickerSetup();
+    const { drawRow } = owningRows({ disposeRemoves: true });
+    picker.open(request({ drawRow, selected: 1 }));
+
+    picker.down();
+
+    const drawn = findAll(layer, 'owned-row');
+    expect(drawn.map((row) => row.textContent)).toEqual([
+      'one',
+      'two',
+      'three',
+    ]);
+    expect(drawn[2].classList.contains('is-cursor')).toBe(true);
+  });
+
+  it.each([{ disposeRemoves: false }, { disposeRemoves: true }])(
+    'drawRow_RowDraws_DisposedBeforeTheyDrawAgainInPlaceAndOnClose: disposeRemoves $disposeRemoves',
+    ({ disposeRemoves }) => {
       const { picker, layer, type } = filteredPickerSetup();
-      const { drawRow, made, disposed } = owningRows({ returnsDispose });
+      const { drawRow, made, disposed } = owningRows({ disposeRemoves });
       picker.open(request({ drawRow }));
       expect(disposed).toEqual([]);
 

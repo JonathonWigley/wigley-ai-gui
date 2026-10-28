@@ -67,6 +67,11 @@ export class FakeElement {
     return this.childNodes.filter((node) => node.tagName !== '#TEXT');
   }
 
+  get nextElementSibling(): FakeElement | null {
+    const siblings = this.parentNode?.children ?? [];
+    return siblings[siblings.indexOf(this) + 1] ?? null;
+  }
+
   get textContent(): string {
     return (
       this.ownText + this.childNodes.map((node) => node.textContent).join('')
@@ -109,8 +114,13 @@ export class FakeElement {
     }
   }
 
-  // Places `node` before `reference`, a child of this element.
-  insertBefore(node: FakeElement, reference: FakeElement) {
+  // Places `node` before `reference`, a child of this element; at the end
+  // when `reference` is null.
+  insertBefore(node: FakeElement, reference: FakeElement | null) {
+    if (reference === null) {
+      this.append(node);
+      return;
+    }
     node.remove();
     node.parentNode = this;
     this.childNodes.splice(this.childNodes.indexOf(reference), 0, node);
@@ -324,6 +334,18 @@ export class ScrollerFakeElement extends FocusFakeElement {
   }
 }
 
+// A ScrollerFakeElement whose leaving also sets the scroll of every element
+// over it back to 0, as a browser clamps a scroller's scroll when its content
+// shrinks; it catches a scroll lost while the scroller itself stays attached.
+export class ShrinkingScrollerFakeElement extends ScrollerFakeElement {
+  override remove() {
+    for (let node = this.parentNode; node !== null; node = node.parentNode) {
+      node.scrollTop = 0;
+    }
+    super.remove();
+  }
+}
+
 function resetScroll(root: FakeElement): void {
   const pending = [root];
   while (pending.length > 0) {
@@ -336,8 +358,8 @@ function resetScroll(root: FakeElement): void {
 }
 
 // Stubs the DOM globals as `installFakeDom` does, with `document` making
-// `Element`s (FocusFakeElement unless given; pass ScrollerFakeElement for
-// scroll resets) and holding the `activeElement` they set.
+// `Element`s (FocusFakeElement unless given; pass ScrollerFakeElement or
+// ShrinkingScrollerFakeElement for scroll resets) and holding the `activeElement` they set.
 export function installFocusFakeDom(
   stubGlobal: (name: string, value: unknown) => void,
   Element: new (tag: string) => FocusFakeElement = FocusFakeElement,

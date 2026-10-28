@@ -1,4 +1,3 @@
-import type { Disposable } from '../../contracts/disposable';
 import type { EditorHost } from '../../contracts/editor';
 import type { Log } from '../../contracts/log';
 import type { PushedScope } from '../../contracts/plugin';
@@ -34,28 +33,22 @@ export interface ListPickerRequest<T> {
   // Drawn at the trailing end of the cursor row, on each draw.
   cursorEnd?(item: T): HTMLElement | null;
   // Draws the row for `item` into `parent` (the picker's list) and returns
-  // it, appended to `parent`, bare or with the dispose of its draw; the picker
-  // draws its built-in row when left out. The picker sets `is-cursor` on the
+  // it, appended to `parent`, with the dispose of its draw; the picker draws
+  // its built-in row when left out. The picker sets `is-cursor` on the
   // returned row, and a layout styles the cursor row through that class. It
   // appends `trailing` to the row when the row does not hold it, and makes the
-  // row clickable as a `.ui-row` with `onClick` is. The owner hands each key
-  // anchor its row part names to `recordAnchor`. The picker owns a row draw's
-  // lifetime: it runs the row's dispose and disposes every anchor the row
-  // recorded before it draws that row again (every row on a filter change or
+  // row clickable as a `.ui-row` with `onClick` is. The picker owns a row
+  // draw's lifetime: it runs the row's dispose, which may remove the row,
+  // before it draws that row again (every row on a filter change or
   // `redraw()`, the old and new cursor rows on a cursor move) and when it
   // closes.
-  drawRow?(
-    parent: HTMLElement,
-    item: T,
-    input: DrawRowInput,
-  ): HTMLElement | DrawnPickerRow;
+  drawRow?(parent: HTMLElement, item: T, input: DrawRowInput): DrawnPickerRow;
 }
 
 // What a request's `drawRow` draws one row with.
 export interface DrawRowInput {
   label: string;
   trailing: HTMLElement | null;
-  recordAnchor(anchor: Disposable): void;
 }
 
 // A row `drawRow` drew and the dispose of its draw: a layout host
@@ -121,7 +114,7 @@ interface OpenRequest {
     parent: HTMLElement,
     index: number,
     input: DrawRowInput,
-  ): HTMLElement | DrawnPickerRow | null;
+  ): DrawnPickerRow | null;
 }
 
 const NO_DISPOSE = () => undefined;
@@ -151,8 +144,7 @@ export function createListPicker(deps: ListPickerDeps): ListPicker {
   let state: PickerState = openPicker([], 0);
   let pushed: PushedScope | null = null;
 
-  // Each drawn row by its item index, with the dispose of its draw and of
-  // the anchors it recorded.
+  // Each drawn row by its item index, with the dispose of its draw.
   const drawnRows = new Map<number, DrawnPickerRow>();
   const disposeRows = () => {
     const rows = [...drawnRows.values()];
@@ -171,49 +163,29 @@ export function createListPicker(deps: ListPickerDeps): ListPicker {
       state = { ...state, cursor: index };
       picker.choose();
     };
-    const anchors: Disposable[] = [];
-    const drawn =
-      request?.drawRowAt(list, index, {
-        label,
-        trailing,
-        recordAnchor: (anchor) => anchors.push(anchor),
-      }) ?? null;
-    let item: HTMLElement;
-    let disposeDraw: () => void = NO_DISPOSE;
+    let drawn = request?.drawRowAt(list, index, { label, trailing }) ?? null;
     if (drawn === null) {
-      item = row({
+      const builtIn = row({
         density: 'list',
         label,
         trailing,
         tag: 'li',
         onClick: choose,
       });
-      list.append(item);
+      list.append(builtIn);
+      drawn = { element: builtIn, dispose: NO_DISPOSE };
     } else {
-      if (drawn instanceof HTMLElement) {
-        item = drawn;
-      } else {
-        item = drawn.element;
-        disposeDraw = () => drawn.dispose();
+      if (trailing !== null && !drawn.element.contains(trailing)) {
+        drawn.element.append(trailing);
       }
-      if (trailing !== null && !item.contains(trailing)) {
-        item.append(trailing);
-      }
-      rowAction(item, choose);
+      rowAction(drawn.element, choose);
     }
+    const item = drawn.element;
     // The row ends in an ellipsis; the tooltip shows the whole label.
     item.title = label;
     item.classList.toggle('is-selected', atCursor);
     item.classList.toggle('is-cursor', atCursor);
-    return {
-      element: item,
-      dispose() {
-        disposeDraw();
-        for (const anchor of anchors) {
-          anchor.dispose();
-        }
-      },
-    };
+    return drawn;
   };
 
   const scrollToCursor = () =>
@@ -228,15 +200,18 @@ export function createListPicker(deps: ListPickerDeps): ListPicker {
     scrollToCursor();
   };
 
-  // Draws the drawn row at `index` again in its place.
+  // Draws the drawn row at `index` again in its place, whether or not its
+  // dispose removed it.
   const redrawRow = (index: number) => {
     const last = drawnRows.get(index);
     if (last === undefined) {
       return;
     }
+    const after = last.element.nextElementSibling;
     last.dispose();
+    last.element.remove();
     const next = drawRowAt(index);
-    last.element.replaceWith(next.element);
+    list.insertBefore(next.element, after);
     drawnRows.set(index, next);
   };
 
