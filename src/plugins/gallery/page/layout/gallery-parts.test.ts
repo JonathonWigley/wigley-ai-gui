@@ -1,38 +1,29 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ShownLayouts } from '../../../../contracts/plugin';
 import {
   asFake,
   asHtml,
   FakeElement,
   findAll,
   installFakeDom,
+  installFocusFakeDom,
+  ScrollerFakeElement,
 } from '../../../../shared/page/test-dom';
+import {
+  recordingAnchors,
+  withUser,
+} from '../../../../shared/page/layout-host/test-layouts';
 import defaultLayout from '../../layouts/default/layout.js';
 import type { Layout } from '../../layouts/layout';
 import { createGalleryView } from '../gallery-view';
 import {
   createGalleryParts,
+  type GalleryParts,
   type GalleryPartsDeps,
   type SampleCell,
 } from './gallery-parts';
 
-// The live anchors the kits named, each by its command.
-function recordingAnchors() {
-  const live = new Set<{ command: string }>();
-  const anchor = (_element: HTMLElement, command: string) => {
-    const entry = { command };
-    live.add(entry);
-    return { dispose: () => live.delete(entry) };
-  };
-  const liveFor = (command: string) =>
-    [...live].filter((entry) => entry.command === command).length;
-  return { anchor, liveFor };
-}
-
 function fakeDeps(
-  anchor: GalleryPartsDeps['keys']['anchor'] = () => ({
-    dispose: () => undefined,
-  }),
+  keys: GalleryPartsDeps['keys'] = recordingAnchors().keys,
 ): GalleryPartsDeps {
   return {
     markdown: {
@@ -40,21 +31,18 @@ function fakeDeps(
       inline: (text) => text,
       document: async (text) => text,
     },
-    keys: { anchor, keysFor: () => null },
+    keys,
     commands: { exists: () => true, run: vi.fn() },
     platform: 'macos',
     log: vi.fn(),
   };
 }
 
-function shownWith(mine: Layout): ShownLayouts<Layout> {
-  return {
-    layouts: new Map<string, Layout>([
-      ['default', defaultLayout],
-      ['mine', mine],
-    ]),
-    user: 'mine',
-  };
+// The gallery's parts showing `mine` as the user's layout.
+function partsShowing(mine: Layout): GalleryParts {
+  const parts = createGalleryParts(fakeDeps());
+  parts.setLayouts(withUser<Layout>(defaultLayout, mine));
+  return parts;
 }
 
 function sampleCell(caption: string): SampleCell {
@@ -69,24 +57,19 @@ const fail = (): never => {
   throw new Error('broken part');
 };
 
-// The fake DOM of `test-dom` with `replaceWith`, which the collapsible card
-// sample's chevron uses.
-class GalleryFakeElement extends FakeElement {
-  replaceWith(node: FakeElement) {
-    const parent = this.parentNode;
-    if (parent !== null) {
-      parent.insertBefore(node, this);
-      this.remove();
+// A scroller fake whose scroll, and that of every element over it, also goes
+// back to 0 as a node under it leaves, as a browser clamps a scroller's
+// scroll when its content shrinks.
+class ShrinkingScrollerFakeElement extends ScrollerFakeElement {
+  override remove() {
+    for (let node = this.parentNode; node !== null; node = node.parentNode) {
+      node.scrollTop = 0;
     }
+    super.remove();
   }
 }
 
-beforeEach(() => {
-  installFakeDom(vi.stubGlobal);
-  vi.stubGlobal('document', {
-    createElement: (tag: string) => new GalleryFakeElement(tag),
-  });
-});
+beforeEach(() => installFakeDom(vi.stubGlobal));
 afterEach(() => vi.unstubAllGlobals());
 
 describe('galleryParts', () => {
@@ -95,25 +78,43 @@ describe('galleryParts', () => {
     {
       case: 'a section that throws',
       mine: { section: fail } as Layout,
-      roots: (parent: HTMLElement, shown: ShownLayouts<Layout>) => [
-        createGalleryParts(fakeDeps()).drawSection(
-          parent,
-          'Kbd',
-          [[sampleCell('a')]],
-          shown,
-        ).built.element,
+      roots: (parent: HTMLElement, parts: GalleryParts) => [
+        parts.drawSection(parent, 'Kbd', [[sampleCell('a')]]).built.element,
+      ],
+    },
+    {
+      case: 'a section asking for a cell its rows lack',
+      mine: {
+        section: (parent, _input, kit) => {
+          const root = kit.el(parent, 'section');
+          kit.cell(root, 5, 0);
+          return { element: root };
+        },
+      } as Layout,
+      roots: (parent: HTMLElement, parts: GalleryParts) => [
+        parts.drawSection(parent, 'Kbd', [[sampleCell('a')]]).built.element,
+      ],
+    },
+    {
+      case: 'a section drawing a cell beside its root',
+      mine: {
+        section: (parent, _input, kit) => {
+          kit.cell(parent, 0, 0);
+          return { element: kit.el(parent, 'section') };
+        },
+      } as Layout,
+      roots: (parent: HTMLElement, parts: GalleryParts) => [
+        parts.drawSection(parent, 'Kbd', [[sampleCell('a')]]).built.element,
       ],
     },
     {
       case: 'a cell that throws',
       mine: { cell: fail } as Layout,
-      roots: (parent: HTMLElement, shown: ShownLayouts<Layout>) => {
-        createGalleryParts(fakeDeps()).drawSection(
-          parent,
-          'Kbd',
-          [[sampleCell('a'), sampleCell('b')], [sampleCell('c')]],
-          shown,
-        );
+      roots: (parent: HTMLElement, parts: GalleryParts) => {
+        parts.drawSection(parent, 'Kbd', [
+          [sampleCell('a'), sampleCell('b')],
+          [sampleCell('c')],
+        ]);
         return findAll(asFake(parent), 'gallery-cell').map(asHtml);
       },
     },
@@ -124,19 +125,18 @@ describe('galleryParts', () => {
           element: kit.el(kit.el(parent, 'div'), 'section'),
         }),
       } as Layout,
-      roots: (parent: HTMLElement, shown: ShownLayouts<Layout>) => [
-        createGalleryParts(fakeDeps()).drawFramedSection(
+      roots: (parent: HTMLElement, parts: GalleryParts) => [
+        parts.drawFramedSection(
           parent,
           { name: 'Split', isDialog: false },
           asHtml(new FakeElement('div')),
-          shown,
         ).built.element,
       ],
     },
   ])('draws $case with default', ({ mine, roots }) => {
     const parent = asHtml(new FakeElement('div'));
 
-    const drawn = roots(parent, shownWith(mine));
+    const drawn = roots(parent, partsShowing(mine));
 
     expect(drawn.length).toBeGreaterThan(0);
     for (const root of drawn) {
@@ -157,14 +157,9 @@ describe('galleryParts', () => {
           element: kit.el(parent, 'div', 'mine-cell'),
         }),
       } as Layout,
-      draw(parent: HTMLElement, shown: ShownLayouts<Layout>) {
+      draw(parent: HTMLElement, parts: GalleryParts) {
         const cells = [sampleCell('a'), sampleCell('b')];
-        createGalleryParts(fakeDeps()).drawSection(
-          parent,
-          'Tag',
-          [cells],
-          shown,
-        );
+        parts.drawSection(parent, 'Tag', [cells]);
         return {
           // The sample ends each cell.
           landed: findAll(asFake(parent), 'mine-cell').map((cell) =>
@@ -183,14 +178,9 @@ describe('galleryParts', () => {
           return { element: root };
         },
       } as Layout,
-      draw(parent: HTMLElement, shown: ShownLayouts<Layout>) {
+      draw(parent: HTMLElement, parts: GalleryParts) {
         const rows = [[sampleCell('a'), sampleCell('b')], [sampleCell('c')]];
-        const section = createGalleryParts(fakeDeps()).drawSection(
-          parent,
-          'Tag',
-          rows,
-          shown,
-        ).built.element;
+        const section = parts.drawSection(parent, 'Tag', rows).built.element;
         const [header, ...cells] = asFake(section).children;
         return {
           // The header, then each default cell holding its sample first.
@@ -211,13 +201,12 @@ describe('galleryParts', () => {
           return { element: root };
         },
       } as Layout,
-      draw(parent: HTMLElement, shown: ShownLayouts<Layout>) {
+      draw(parent: HTMLElement, parts: GalleryParts) {
         const sample = asHtml(new FakeElement('div'));
-        const section = createGalleryParts(fakeDeps()).drawFramedSection(
+        const section = parts.drawFramedSection(
           parent,
           { name: 'Split', isDialog: false },
           sample,
-          shown,
         ).built.element;
         return {
           landed: [asFake(section).childNodes.at(-1)],
@@ -228,7 +217,7 @@ describe('galleryParts', () => {
   ])('appends the piece $case leaves out', ({ mine, draw }) => {
     const parent = asHtml(new FakeElement('div'));
 
-    const { landed, samples } = draw(parent, shownWith(mine));
+    const { landed, samples } = draw(parent, partsShowing(mine));
 
     expect(landed).toEqual(samples);
   });
@@ -236,27 +225,40 @@ describe('galleryParts', () => {
 
 describe('galleryView', () => {
   const view = (deps: GalleryPartsDeps) =>
-    createGalleryView({
-      ...deps,
-      uiState: { get: () => undefined, set: () => undefined },
-    });
+    createGalleryView(
+      { ...deps, uiState: { get: () => undefined, set: () => undefined } },
+      'reduced',
+    );
 
   it('leaves one transparency anchor however often the head draws', () => {
-    const anchors = recordingAnchors();
-    const gallery = view(fakeDeps(anchors.anchor));
+    const recorded = recordingAnchors();
+    const gallery = view(fakeDeps(recorded.keys));
 
-    gallery.showTransparency('reduced');
     gallery.showTransparency('full');
-    gallery.setLayouts(shownWith({}));
+    gallery.showTransparency(null);
+    gallery.setLayouts(withUser<Layout>(defaultLayout, {}));
 
-    expect(anchors.liveFor('gallery.toggleTransparency')).toBe(1);
+    const live = recorded.anchors.filter(
+      (anchor) =>
+        anchor.command === 'gallery.toggleTransparency' && !anchor.isDisposed,
+    );
+    expect(live).toHaveLength(1);
+  });
+
+  it('draws the head with the starting transparency', () => {
+    const gallery = view(fakeDeps());
+
+    const [status] = findAll(asFake(gallery.element), 'gallery-status');
+
+    expect(status.textContent).toContain('reduced');
   });
 
   it('keeps the scroll through a relayout', () => {
+    installFocusFakeDom(vi.stubGlobal, ShrinkingScrollerFakeElement);
     const gallery = view(fakeDeps());
     gallery.sheet.scrollTop = 480;
 
-    gallery.setLayouts(shownWith({}));
+    gallery.setLayouts(withUser<Layout>(defaultLayout, {}));
 
     expect(gallery.sheet.scrollTop).toBe(480);
   });

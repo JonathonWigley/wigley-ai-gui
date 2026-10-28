@@ -41,17 +41,19 @@ export interface HeadKit extends GalleryKit {
 }
 export interface SectionKit extends GalleryKit {
   // Draws the cell at `row` and `column` of `input.rows` with the `cell` part into `parent`, and returns its root.
-  // A cell the section leaves out, the app draws at the end of the section's root, in row order.
+  // Throws for a row or column `input.rows` lacks, so the section draws with default. A cell the section leaves
+  // out, the app draws at the end of the section's root, in row order.
   cell(parent: HTMLElement, row: number, column: number): HTMLElement;
 }
 export interface SampleKit extends GalleryKit {
-  // Appends the app's sample to `parent` and returns it. Left out: the sample goes at the end of the part's root.
+  // Appends the app's sample to `parent` and returns it; throws on a second call, so the part draws with default.
+  // Left out: the sample goes at the end of the part's root.
   sample(parent: HTMLElement): HTMLElement;
 }
 
-// A layout defines only the parts it changes; each part comes from the `gallery.layout` setting's layout when it
-// defines the part, else from `default`. A part that throws, or returns no element appended to `parent`, is drawn by
-// `default` instead.
+// A layout defines only the parts it changes, a part set to undefined left out; each part comes from the
+// `gallery.layout` setting's layout when it defines the part, else from `default`. A part that throws, returns no
+// element appended to `parent`, or appends any other node to `parent`, is drawn by `default` instead.
 export interface Layout {
   // The status line over the tab strip, drawn again on each transparency switch.
   head?(

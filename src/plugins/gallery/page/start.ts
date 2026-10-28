@@ -32,18 +32,20 @@ export const galleryPagePart: PagePart<typeof galleryManifest> = {
   start(api: GalleryApi) {
     const { log } = api.services;
     const keys = api.dependency<KeysPageExports>('keys');
-    const view = createGalleryView({
-      platform: api.platform,
-      uiState: api.services.uiState,
-      markdown: api.services.markdown,
-      keys,
-      commands: {
-        exists: (id) => api.keys.command(id) !== undefined,
-        run: (id) => api.commands.run(id),
+    const view = createGalleryView(
+      {
+        platform: api.platform,
+        uiState: api.services.uiState,
+        markdown: api.services.markdown,
+        keys,
+        commands: {
+          exists: (id) => api.keys.command(id) !== undefined,
+          run: (id) => api.commands.run(id),
+        },
+        log,
       },
-      log,
-    });
-    view.showTransparency(api.transparency.overridden());
+      api.transparency.overridden(),
+    );
     api.layouts.show<Layout>({
       defaultLayout,
       read: readGalleryLayout,

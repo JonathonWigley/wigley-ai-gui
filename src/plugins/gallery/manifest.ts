@@ -40,7 +40,7 @@ export const galleryManifest = definePlugin({
     layout: {
       label: 'Layout',
       description:
-        "The gallery layout Gallery mode's sample blocks draw in: a folder name in gallery's layouts folder, or default.",
+        "The gallery layout Gallery mode draws in: a folder name in gallery's layouts folder, or default.",
     },
   },
   themeTokens: {},

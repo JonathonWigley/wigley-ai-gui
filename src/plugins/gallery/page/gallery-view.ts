@@ -4,7 +4,6 @@ import type { ShownLayouts } from '../../../contracts/plugin';
 import type { UiState } from '../../../contracts/ui-state';
 import { capitalised } from '../../../shared/capitalised';
 import { element } from '../../../shared/page/dom';
-import type { DrawnPart } from '../../../shared/page/layout-host/draw-part';
 import { type ButtonVariant, textButton } from '../../../shared/page/ui/button';
 import { card, createCollapsibleCard } from '../../../shared/page/ui/card';
 import { chip } from '../../../shared/page/ui/chip';
@@ -30,8 +29,7 @@ import { type DotStatus, statusDot } from '../../../shared/page/ui/status-dot';
 import { tab, tabStrip } from '../../../shared/page/ui/tabs';
 import { tag, type TagTone } from '../../../shared/page/ui/tag';
 import { setToggleMark, toggleMark } from '../../../shared/page/ui/toggle-mark';
-import defaultLayout from '../layouts/default/layout.js';
-import type { GalleryPart, Layout } from '../layouts/layout';
+import type { GalleryHeadInput, Layout } from '../layouts/layout';
 import {
   createGalleryParts,
   type GalleryPartsDeps,
@@ -53,9 +51,12 @@ export interface GalleryViewDeps extends GalleryPartsDeps {
 export interface GalleryView {
   element: HTMLElement;
   sheet: HTMLElement;
-  showTransparency(overridden: 'full' | 'reduced' | null): void;
+  showTransparency(overridden: Transparency): void;
   setLayouts(shown: ShownLayouts<Layout>): void;
 }
+
+// The transparency override in force, null when the setting decides.
+type Transparency = GalleryHeadInput['transparency'];
 
 // A primitive's block: its name, and either rows of state cells or one
 // framed sample, built fresh on each draw.
@@ -63,12 +64,15 @@ type SectionSpec =
   | { kind: 'section'; name: string; cells(): SampleCell[][] }
   | { kind: 'framed'; name: string; isDialog: boolean; sample(): HTMLElement };
 
-const DEFAULT_LAYOUT = 'default';
-
 // A live sample takes clicks and does nothing with them.
 const ignore = () => {};
 
-export function createGalleryView(deps: GalleryViewDeps): GalleryView {
+// The view, its head drawn with `transparency`, the override in force at the
+// start.
+export function createGalleryView(
+  deps: GalleryViewDeps,
+  transparency: Transparency,
+): GalleryView {
   const parts = createGalleryParts(deps);
   const root = element('div', 'gallery');
   // The head's slot draws no box, so the head lays out as the root's child.
@@ -84,34 +88,21 @@ export function createGalleryView(deps: GalleryViewDeps): GalleryView {
   root.append(headSlot, strip, gallerySheet);
 
   const specs = sectionSpecs(deps.platform, deps.uiState);
-  let shown: ShownLayouts<Layout> = {
-    layouts: new Map([[DEFAULT_LAYOUT, defaultLayout]]),
-    user: DEFAULT_LAYOUT,
-  };
-  let transparency: 'full' | 'reduced' | null = null;
-  let head: DrawnPart<GalleryPart> | null = null;
-  let drawnSections: DrawnPart<GalleryPart>[] = [];
+  let headInput: GalleryHeadInput = { transparency };
 
-  const drawHead = () => {
-    if (head !== null) {
-      dropPart(head);
-    }
-    head = parts.drawHead(headSlot, { transparency }, shown);
-  };
+  const drawHead = () => parts.drawHead(headSlot, headInput);
   const drawSections = () => {
-    for (const part of drawnSections) {
-      dropPart(part);
+    for (const spec of specs) {
+      if (spec.kind === 'section') {
+        parts.drawSection(sections, spec.name, spec.cells());
+      } else {
+        parts.drawFramedSection(
+          sections,
+          { name: spec.name, isDialog: spec.isDialog },
+          spec.sample(),
+        );
+      }
     }
-    drawnSections = specs.map((spec) =>
-      spec.kind === 'section'
-        ? parts.drawSection(sections, spec.name, spec.cells(), shown)
-        : parts.drawFramedSection(
-            sections,
-            { name: spec.name, isDialog: spec.isDialog },
-            spec.sample(),
-            shown,
-          ),
-    );
   };
   drawHead();
   drawSections();
@@ -120,23 +111,17 @@ export function createGalleryView(deps: GalleryViewDeps): GalleryView {
     element: root,
     sheet: gallerySheet,
     showTransparency(overridden) {
-      transparency = overridden;
+      headInput = { transparency: overridden };
       drawHead();
     },
     setLayouts(next) {
-      shown = next;
+      parts.setLayouts(next);
       const scrollTop = gallerySheet.scrollTop;
       drawHead();
       drawSections();
       gallerySheet.scrollTop = scrollTop;
     },
   };
-}
-
-// Releases a drawn part's anchors and removes its root.
-function dropPart(part: DrawnPart<GalleryPart>): void {
-  part.dispose();
-  part.built.element.remove();
 }
 
 // Every primitive's block, in the order the sheet shows them.
