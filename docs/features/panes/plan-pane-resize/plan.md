@@ -471,7 +471,7 @@ export function cardRow(primer: OpenPrimer): PrimerRow;
 
 ### Wave 3
 - [ ] [Primer columns](03-primer-columns.md) — after 01, 02
-- [ ] [Views set the resize target](04-views-resize-target.md) — after 01, 02
+- [x] [Views set the resize target](04-views-resize-target.md) — after 01, 02
 
 ### Wave 4
 - [ ] [Doc re-read](05-doc-re-read.md) — after 01–04
@@ -501,6 +501,7 @@ Review base: 5997110
 ### Groups
 - 01 · c174a1a · diff read: every Produces present in panes.ts, split-width.ts, split.ts; typecheck and lint pass; 7 changed test files pass (worker) · concerns: a right nudge on a stored width wider than the window snaps it to span - endMin and writes it; a nudge during a drag is not blocked
 - 02 · fe29dbe · diff read: PageApi.panes, ScopeStack.onBaseChange, createPaneResize, Shell.sideBarDivider/setKeys/dispose, mountShell(root, layout, uiState, timers), four coreCommands and two binds present; typecheck passes; worker: lint, 167 tests in 9 files, selftest pass · concerns: the side bar laid over draws its stored width unclamped, so a stored width wider than a narrow window runs past its edge; the forms self-test resize steps nudge the side bar until 04 sets the forms split as target
+- 04 · 2694625 · diff read: RoundView.resizeTarget, setResizeTarget deps in forms/backlog, docs and gallery wiring present; worker typecheck and lint pass, 22 tests in 3 files; lead typecheck deferred to after 03 lands (03 mid-edit in tree) · concerns: forms Form tab shown can set null for a moment before the round view exists, then confirm.setBaseScope sets the split; task doc's askCancel row did not hold (askCancel only from review), test dispatches openReview first; forms-view deps comment has an over-long line
 ### Contract changes
 ### Rulings
 - dispose mid-drag ends the drag through endDrag, which writes a changed dragged width — the decision names the endDrag path — a dropped split may store an unreleased width (harmless) · group 01
@@ -508,5 +509,8 @@ Review base: 5997110
 - prompt CSS: sheet background, border-default, radius-sm, z-index 1; show selectors written against the parent (:hover/.is-hover/.is-active/.is-nudged > .ui-split-prompt) so 02's side bar handle reuses them — styling only · group 01
 - the side bar prompt anchors through a forwarding anchor that re-anchors on each shell.setKeys, anchoring nothing before the first — the shell mounts before the keys plugin starts — no prompt keys before plugins start (none shown then anyway) · group 02
 - test names are prose sentences, as 01's and the vitest guide, not the task's Method_Condition_Result names — naming only · group 02
+- gallery resizeTarget() returns non-null and throws 'the gallery drew no split sample' when none was drawn — createGalleryView draws before returning, so unreachable — a deferred first draw would throw in Gallery shown instead of falling back to the side bar · group 04
+- kept lifted from sectionSpecs into createGalleryView as KeptSplit, passed to sectionSpecs — one copy — rename only · group 04
+- forms setBaseScope takes the FormsState, not the view — needs activeForm — none · group 04
 ### Review rounds
 ### Test gate

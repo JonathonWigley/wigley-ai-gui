@@ -1,6 +1,6 @@
 # 04 — Views set the resize target
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 3 · Depends on: 01, 02
 Plan: [plan.md](plan.md)
@@ -150,3 +150,4 @@ One commit for the group.
 
 ## Proof
 
+Commit 2694625 · proof: diff read: RoundView.resizeTarget, setResizeTarget deps in forms/backlog, docs and gallery wiring present; worker typecheck and lint pass, 22 tests in 3 files; lead typecheck deferred to after 03 lands (03 mid-edit in tree) · concerns: forms Form tab shown can set null for a moment before the round view exists, then confirm.setBaseScope sets the split; task doc's askCancel row did not hold (askCancel only from review), test dispatches openReview first; forms-view deps comment has an over-long line
