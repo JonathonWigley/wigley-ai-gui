@@ -41,7 +41,7 @@ export interface KeysKit extends BaseKit {
 }
 export interface HelpKit extends KeysKit {
   // Draws `section` through the `helpSection` part the layouts pick, appended to `parent`.
-  section(parent: HTMLElement, section: HelpSectionInput): HTMLElement;
+  helpSection(parent: HTMLElement, section: HelpSectionInput): HTMLElement;
 }
 export interface HelpSectionKit extends KeysKit {
   // Draws `hint` through the `helpRow` part the layouts pick, appended to `parent`.

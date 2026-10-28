@@ -136,7 +136,7 @@ export function createKeysParts(deps: KeysPartsDeps): KeysParts {
       return draw('help', parent, (help, slot, helpRollback) =>
         help(slot, input, {
           ...kitFor('help', helpRollback),
-          section: (sectionParent, section) =>
+          helpSection: (sectionParent, section) =>
             nested(
               'helpSection',
               sectionParent,

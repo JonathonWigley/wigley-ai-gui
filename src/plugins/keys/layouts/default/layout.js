@@ -8,7 +8,7 @@ const layout = {
   help(parent, input, kit) {
     const grid = kit.el(parent, 'div', 'keys-help-sections');
     for (const section of input.sections) {
-      kit.section(grid, section);
+      kit.helpSection(grid, section);
     }
     return grid;
   },
