@@ -52,16 +52,27 @@ hjkl is the direction in every layer; the modifier picks the verb.
   `Ctrl+e`/`Ctrl+y` do, and the half page moves it with the scroll in visual mode, as vim's
   `Ctrl+d`/`Ctrl+u` do; in visual mode the selection grows or shrinks with the cursor. Other list
   views with a cursor (settings, the pickers, the chat session list) move with `j`/`k` and bind
-  neither pair yet. `Ctrl+h`/`Ctrl+l` move to the previous and next unit (forms items, primer rows). A chord
+  neither pair yet. `Ctrl+h`/`Ctrl+l` move to the previous and next unit (forms items, the rows of the focused
+  primer column, and on the primer card the rows of the column the card came from). A chord
   bind takes the key from vim inside a box too, in every vim mode: in a form box, the chat box and
   the doc editor, vim's `Ctrl+j` and `Ctrl+k` (insert-mode digraph) do not reach vim, by design.
 - **Ctrl+n / Ctrl+p** move to the next and previous text box, from the page or inside a box in
   every vim mode (forms' notes, reason and comment boxes). Every view with more than one box
   takes them, so the keys that move between boxes are the same on every page. Inside a box they
   take the key from vim's insert-mode completion.
-- **Alt+hjkl** moves focus between panes (`Alt+h`/`Alt+l` between the docs tree and the doc, and the Backlog list and detail).
-  Reserved for when the app has them: `Alt+Shift+hjkl` resize, `Ctrl+Alt+hjkl` swap,
-  `Alt+'` / `Alt+;` split, `Alt+w` close a pane.
+- **Alt+hjkl** moves focus between panes: `Alt+h`/`Alt+l` to the pane on the left or right (the docs
+  tree and the doc, the Backlog list and detail, the Settings sections and rows, and the Primer tab's
+  tasks, items and card columns).
+- **Alt+Shift+hjkl** resizes the focused pane, as tmux's `resize-pane` does: `Alt+Shift+h` moves the
+  pane's right divider 24px left, `Alt+Shift+l` moves it 24px right, and a pane with no right divider
+  moves its left one. Key repeat supplies the speed. With no split pane focused (a Chat tab,
+  Settings mode, Docs mode's tree, the Backlog homes) the keys resize the side bar. A divider stops where the
+  pane it squeezes reaches its least width, and stacked panes do not resize. `Alt+Shift+j`/`Alt+Shift+k`
+  are kept for vertical dividers, which the app does not have, and stay unbound. The commands are the
+  core's `panes.resizePaneLeft`, `panes.resizePaneRight`, `panes.resizePaneUp` and
+  `panes.resizePaneDown`, rebound in `keymap.json` like any other.
+- Reserved for when the app has them: `Ctrl+Alt+hjkl` swap, `Alt+'` / `Alt+;` split, `Alt+w` close
+  a pane.
 - **Alt+o / Alt+i** next and previous tab; **Alt+Shift+o / Alt+Shift+i** next and previous
   session, Shift being the bigger scope. **Alt+n / Alt+p** next and previous thing waiting on the
   user (forms' unanswered items).

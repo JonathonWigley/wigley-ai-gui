@@ -152,8 +152,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  round), page/ (the Form tab), layouts/ (the Layout contract and the built-in `default` layout)
   primer/        manifest.ts, contract.ts, main/ (the feature primer form type, its MCP tools, fixtures,
                  preview/: the layout preview's sample primer in a session of its own),
-                 page/ (the Primer tab: the rail of tasks and the selected task's items, the feature, task and item
-                 cards, and the review pane), layouts/ (the primer Layout contract and the built-in `default` layout)
+                 page/ (the Primer tab: the tasks, items and card columns, the feature, task and item cards, and
+                 the review pane), layouts/ (the primer Layout contract and the built-in `default` layout)
   docs/          manifest.ts, contract.ts, main/ (the index source registry, docs index runs, file changes inside
                  the indexed folders only and never to a third-party doc, watching the open file, the git statuses
                  of marketplace clone plugin files), page/ (one docs view per source — tree under Starred, Mine and
@@ -228,7 +228,9 @@ round; primer: an open primer), since main, not the page, decides.
   out by one `ShellLayout` module in `src/renderer/shell/`. A page plugin may replace the layout through the shell
   API (`shell.setLayout`); every contribution it makes returns a `Disposable`, and so does replacing the layout. The
   areas are the fixed set `AreaName` names, and a contribution carries an order and an alignment. Reworking the window's structure is
-  editing the default layout or adding a plugin; track sizes are theme tokens.
+  editing the default layout or adding a plugin; track sizes are theme tokens, except the side bar's width, which
+  opens at its token and then is the user's, resized through the split core and kept in `uiState`
+  (`shell.side-bar-width`).
 - **A mode** fills the content sheet, and the core shows one at a time: a plugin registers its mode, with its icon,
   title and an optional side bar element, through the page plugin API, and binds the command that shows it
   (Sessions on `Space k s`, Docs on `Space k d`; pressed while its mode already shows, the same command toggles the
@@ -279,6 +281,12 @@ round; primer: an open primer), since main, not the page, decides.
   scope (forms' view), and `api.keys.pushScope` lays a scope over it until its `pop` (help's `keys.help`), so a
   modal view never fights the plugin under it for the scope. The pushed scope's `onBaseChanged` hears the set scope
   change under it, so a modal view can close when the view beneath it moves on (help closes on it).
+- **A resize target** is the divider the core's resize commands (`panes.resizePaneLeft` / `panes.resizePaneRight`,
+  `Alt+Shift+h` / `Alt+Shift+l`) move. A view hands the core its focused pane's divider with
+  `api.panes.setResizeTarget(target)` each time it sets its key scope, after `keys.setScope`: the right divider of
+  the focused pane when it has one, else its left one, as tmux picks, and `null` when no split pane has focus. Every
+  base scope change drops the target, so a view that sets none leaves the keys on the side bar. A `ResizeTarget`
+  (`src/contracts/panes.ts`) is one `nudge(direction)`; every `Split` is one.
 - **Key hints** belong to the `keys` plugin, which reads the merged keymap: which-key after a pending prefix, help on
   `Space ?` (`<Leader>?` in a box, and the title bar's Keys button), and every hint drawn in place. The app has no
   bottom key list: a key shows where it acts, as a game puts a button prompt beside the thing it moves

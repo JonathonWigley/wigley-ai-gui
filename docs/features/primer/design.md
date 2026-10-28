@@ -5,7 +5,7 @@
 - **Intent** — what the port is for and what a good outcome looks like.
 - **Shape** — the shared agent form lifecycle, the primer plugin, and the flow between them.
 - **Saved primers** — the file format and why it changed.
-- **The Primer tab** — the rail, the card, the review pane, page events and exports.
+- **The Primer tab** — the tasks, items and card columns, the review pane, page events and exports.
 - **Keys** — every primer bind and its scope.
 - **Alerts** — the per-source open count.
 - **Out of scope** — what this work leaves alone.
@@ -36,7 +36,7 @@ The tool contract, the payload and the outcomes are stated once, in wigley-ai-ma
                          ┌─────────────┴──────────────┐
                 folder store                    channel presenter
      ~/.agents/wigley-primer/primers/      formShown / formClosed ──▶ primer page: Primer tab
-                                           openForms / draft / finish ◀── (rail, card, review)
+                                           openForms / draft / finish ◀── (tasks, items, card, review)
 ```
 
 - **One lifecycle.** Forms' session lifecycle, record store and presenter move from `src/plugins/forms/main/` into
@@ -69,23 +69,37 @@ does.
 ## The Primer tab
 
 The tab draws through the primer's layout (`src/plugins/primer/layouts/`, the `primer.layout` setting;
-`docs/features/layouts/design.md`): the layout draws the feature, task and item cards and the rail and review panes,
-and the app keeps the selection, keys, boxes, split and scrolling. `Space z l p` opens a sample primer for
+`docs/features/layouts/design.md`): the layout draws the feature, task and item cards and the tasks, items and review panes,
+and the app keeps the selection, keys, boxes, splits and scrolling. `Space z l p` opens a sample primer for
 iterating a layout in place.
 
-- **Rail** (the start pane of a Split with its own `uiState` key): a Feature row first, then the tasks under
-  SectionHeaders Primer, Every feature and Extra tasks. Each task row shows its need as a Tag (yes, no, unclear)
-  and its included items as a count (included of total). The selected task expands: its items show as rows under
-  it, each with its include mark (a ToggleMark), its number and its text. Selecting another task collapses the first.
-- **Card** for the selected row, one at a time, as forms shows one card per rail row.
+- **Three columns**, tasks | items | card, built as two nested Splits: tasks | (items | card). The tasks and items
+  columns open `240px` wide and keep their widths in `uiState` (`primer.tasks-width`, `primer.items-width`; the
+  tasks column opens from the old `primer.primer-rail-width` when only that is stored). Each column's least width
+  is `160px`, the card's `320px`, so the outer split's end pane holds at least `480px`. The focused column's
+  selected row reads as selected; the other column's marks itself `is-pane-inactive`. A click on a row selects it
+  and focuses its column.
+- **Tasks column**: a Feature row first, then the tasks under SectionHeaders Primer, Every feature and Extra tasks,
+  with the `A add` prompt in the Extra tasks header. Each task row shows its need as a Tag (yes, no, unclear) and
+  its included items as a count (included of total). Its header holds the save state, `⌃H ▲ ▼ ⌃L` and
+  `⌥L items ›`; its foot holds the Review button.
+- **Items column**: the selected task's items as rows, each with its include mark (a ToggleMark), its number and
+  its text. Its header holds `‹ tasks ⌥H`, `⌃H ▲ ▼ ⌃L` and `⌥L card ›`. On the Feature row it shows the empty
+  state "Select a task to see its items."; on a task with no items, "No items. Press `a` on the task card to add
+  one." Selecting another task selects that task's first item.
+- **Card** for the focused column's selection, one at a time: the task card (the feature card on the Feature row)
+  while the tasks column has focus, the selected item's card while the items column has focus. An items column with
+  no item to select keeps the task card (the feature card on the Feature row). Focusing the card keeps the card of the column it came from, and the
+  card's edge strip shows `‹ items ⌥H`.
   - The Feature row's card holds the name, slug, spec, summary and notes boxes.
   - A task row's card holds its heading, tags and need; its question, evidence, probes and pointer when not blank;
-    an extra task's name box; the add-item box; and the task's own comment box. It lists no items: the rail does.
+    an extra task's name box; the add-item box; and the task's own comment box. It lists no items: the items
+    column does.
     The add-item box's text becomes an item when a key leaves the box or the review opens; a click or window switch
     that moves focus leaves the text in the box. A task holding 20 items, the item limit, shows no add-item box.
   - An item row's card holds the header `⌃H ‹ 2 of 3 › ⌃L` (its place among its task's items), the item text as
     heading, its include mark, an Added tag on an item the user added, and the item's comment box. The header's
-    step keys follow the focused pane: the rail binds `k`/`⌃H` and `j`/`⌃L`, the card `⌃H` and `⌃L`.
+    step keys follow the focused pane: the items column binds `k`/`⌃H` and `j`/`⌃L`, the card `⌃H` and `⌃L`.
 - **Review pane** before send: every task's need, its items (the left-out ones tagged) and every comment, with the
   tallies; submit from there checks that the slug matches the slug rule and every extra task is named, and shows what
   failed.
@@ -97,17 +111,21 @@ iterating a layout in place.
 
 ## Keys
 
-Scopes `primer.rail`, `primer.card`, `primer.review`, `primer.confirm`. Every bind follows `docs/keymap.md`.
+Scopes `primer.tasks`, `primer.items`, `primer.card`, `primer.review`, `primer.confirm`. Every bind follows
+`docs/keymap.md`; `Alt+Shift+h`/`Alt+Shift+l` resize the columns there (tasks moves its right divider, items its
+right divider, the card its left one).
 
 | Keys | Scope | Action |
 | --- | --- | --- |
-| `j` / `k`, `<C-l>` / `<C-h>` | rail | next / previous row (task rows and the selected task's item rows) |
-| `y` / `n` / `u` | rail | set the selected task's need to yes / no / unclear, on its task row or an item row |
-| `x` | rail, card | toggle the selected item's include mark (an item row or an item card) |
-| `A` | rail | add an extra task |
-| `D` | rail | remove the selected extra task |
-| `<A-l>` / `<A-h>` | rail / card | focus the card / the rail |
-| `<C-l>` / `<C-h>` | card | next / previous row, its card replacing this one |
+| `j` / `k`, `<C-l>` / `<C-h>` | tasks | next / previous row of the tasks column (the Feature row and the tasks) |
+| `j` / `k`, `<C-l>` / `<C-h>` | items | next / previous item of the selected task |
+| `y` / `n` / `u` | tasks, items | set the selected task's need to yes / no / unclear |
+| `x` | items, card | toggle the selected item's include mark (an item row or an item card) |
+| `A` | tasks | add an extra task |
+| `D` | tasks | remove the selected extra task |
+| `<A-l>` | tasks / items | focus the items column / the card |
+| `<A-h>` | items / card | focus the tasks column / the items column |
+| `<C-l>` / `<C-h>` | card | next / previous row of the column the card came from, its card replacing this one |
 | `c` | card | edit the item's comment (item card) |
 | `C` | card | edit the task's comment (task card; from an item card, its task's card) |
 | `a` | card | add an item (task card; from an item card, its task's card) |
@@ -115,7 +133,7 @@ Scopes `primer.rail`, `primer.card`, `primer.review`, `primer.confirm`. Every bi
 | `<C-n>` / `<C-p>` | card, box | next / previous box |
 | `<Esc>` | box | leave the box |
 | `<C-j>` / `<C-k>`, `<C-S-j>` / `<C-S-k>` | card, review | scroll a line / half a page |
-| `<Leader><Leader>` | rail, card, box | open the review |
+| `<Leader><Leader>` | tasks, items, card, box | open the review |
 | `<D-Enter>` | review | submit |
 | `<Esc>` | review | close the review |
 | `C` | review | ask to cancel the primer |

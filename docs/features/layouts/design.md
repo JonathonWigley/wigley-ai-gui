@@ -8,7 +8,7 @@
 - **What a layout draws** — the parts a layout owns and the pieces the app keeps.
 - **Adopters** — every surface, its setting and its parts.
 - **Previews** — the `Space z l` samples for views that need agent data.
-- **The primer's item cards** — the nested rail and the card per item.
+- **The primer's columns** — the tasks and items parts and the card per row.
 - **Decisions** — why the layout system has this shape.
 - **Out of scope** — what this work leaves alone.
 
@@ -79,7 +79,7 @@ them. The app-wide look of the primitives stays in themes.
 | `shell` | `shell.layout` | the title bar's context, dev tag and config problems; each mode's activity bar item; the four chrome frames take the layout's CSS |
 | `forms` | `forms.layout` | question, finding and notice cards; head, rail and review panes |
 | `chat` | `chat.layout` | chat entries; the composer and its bar, the attachments, the picker rows (start prompt and pickers), the sign-in, deny-reason and end-session dialogs, the image viewer |
-| `primer` | `primer.layout` | feature, task and item cards; rail and review panes |
+| `primer` | `primer.layout` | feature, task and item cards; tasks, items and review panes |
 | `docs` | `docs.layout` | the tree and its rows, the rendered doc, its header, disk banner and editor frame, the box and confirm dialogs, the create dialog's completion and picker rows |
 | `backlog` | `backlog.layout` | the repo and home side bar, the follow-up list and its rows, the detail and editor panes, plans and features, the picker rows and the confirm body |
 | `settings` | `settings.layout` | the section list, the setting, key, leader and advanced rows, the problem line, the picker rows |
@@ -102,15 +102,17 @@ can be iterated in place. The sample sends nothing and raises no notification or
 | `Space z l c` | chat: a session of every entry kind |
 | `Space z l s` | sessions: rows in every state |
 
-## The primer's item cards
+## The primer's columns
 
-- **Rail:** the Feature row, then the tasks under their group headers. The selected task expands: its items show as
-  rows under it, each with its include mark, its number and its text. `j` / `k` walk the task row, then its items,
-  then the next task, which then expands. `x` on an item row toggles its include mark; `y` / `n` / `u` on an item
-  row set its task's need.
-- **Task card** (the task row selected): heading, tags and need; Question, Evidence, Probes and Pointer when not
+- **Tasks part** (`tasks`): the Feature row, then the tasks under their group headers, with the `A add` prompt;
+  `TasksKit.taskRow` gives each row. `j` / `k` walk these rows only.
+- **Items part** (`items`): the selected task's items, each with its include mark, its number and its text, or the
+  empty state when the Feature row or a task with no items is selected; `ItemsKit.itemRow` gives each row. `j` / `k`
+  walk these rows only. `x` on an item row toggles its include mark; `y` / `n` / `u` set its task's need.
+- The app keeps the two nested splits and their widths, each column's header strip and the card's edge strip.
+- **Task card** (the tasks column focused on a task row): heading, tags and need; Question, Evidence, Probes and Pointer when not
   blank; an extra task's name box; the add-item box; the task comment. It lists no items.
-- **Item card** (an item row selected): the header `⌃H ‹ 2 of 3 › ⌃L`, the item text as heading, the include mark,
+- **Item card** (the items column focused on an item row): the header `⌃H ‹ 2 of 3 › ⌃L`, the item text as heading, the include mark,
   an Added tag on an item the user added, and the item's comment box.
 - The review pane does not change.
 

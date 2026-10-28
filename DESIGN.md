@@ -166,7 +166,7 @@ means something.
 - **Spacing** is the `space-*` scale only (2, 4, 6, 8, 12, 16, 24, 32 in Mocha).
 - **Density:** tree rows `row-tree`, list and menu rows `row-list`, tabs `tab-height`, the title
   bar `toolbar-height`, the status bar `statusbar-height`, the activity bar `activitybar-width`,
-  the side bar `sidebar-width`, icon buttons `icon-button-sm` and `icon-button`, icons
+  the side bar's opening width `sidebar-width` (until the user resizes it), icon buttons `icon-button-sm` and `icon-button`, icons
   `icon-size`. The title bar leaves `traffic-light-inset` at its left for macOS's window
   buttons.
 - **Radii by hierarchy:** `radius-sm` for rows, tags and inline code; `radius-md` for buttons,
@@ -175,9 +175,9 @@ means something.
 - **Separation:** gutters between sheets, hairlines on L1 edges, and shadows only on L3. A shadow on
   content makes it float when it should sit.
 - **Breakpoints** (raw in `@media`): `800px` tightens content padding; `680px` lays the side bar
-  over the sheet instead of beside it; `640px` stacks a sheet's split panes. A split whose end
-  pane has a least width (the Form tab's card column) gives up its start pane's width down to its
-  minimum first, then stacks at any window width.
+  over the sheet instead of beside it; `640px` stacks a sheet's split panes. Every split pane has a
+  least width (the Primer tab's card column `320px`, every other pane `160px` or more): a narrowing
+  split gives up its start pane's width down to its least width first, then stacks at any window width.
 
 ## Motion
 
@@ -275,7 +275,10 @@ The primitives, each a builder in `src/shared/page/ui/`:
 - **Row** (`row`): a list or tree row, density `list` or `tree`.
 - **Tabs** (`tabStrip`, `tab`): the strip on a sheet's top edge, and one tab.
 - **Sheet** (`sheet`): the solid L2 content sheet.
-- **Split** (`createSplit`): two panes with a drag handle; the start pane's width lives in `uiState`.
+- **Split** (`createSplit`): two panes with a drag handle, each pane with a least width and no most
+  width; the start pane's width lives in `uiState`, written on each drag and each keyboard resize. The
+  shell's side bar resizes through the same split core. Three columns are two nested splits, the
+  outer end pane's least width the sum of the inner two.
 - **Card** (`card`, with an `attention` or `error` edge) and the collapsible card
   (`createCollapsibleCard`).
 - **FloatingPanel** (`floatingPanel`, opened with `openFloatingPanel`): the L3 glass panel.
@@ -314,7 +317,7 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
 - **Side bar:** L1 dense glass. Rows are `row-tree` or `row-list`; hover fills with
   `list-hover-background`; the selected row takes `list-active-background` and `fg`; the keyboard
   cursor adds the focus ring. In a split whose panes each keep a selection (Settings mode, the docs
-  tree, the Primer tab's rail), the pane without focus marks itself `is-pane-inactive` and its selected
+  tree, the Primer tab's tasks and items columns), the pane without focus marks itself `is-pane-inactive` and its selected
   row takes `list-inactive-selection-background` instead, so the pane the keys act on reads at a glance.
 - **Tabs:** sit on the top edge of their sheet. The active tab is solid sheet colour with a 2px
   accent top mark; others are transparent in `fg-secondary`.
@@ -324,11 +327,13 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
 - **Forms:** the rail is the start pane of a split in the Form tab's sheet, on the sheet colour with no fill of its own. Its header holds the
   open count, the saved state and the `⌥P ◂ ▸ ⌥N` edge prompt. Cards are `card-background` with
   `radius-md`. The recommended choice carries the accent, since Enter accepts it.
-- **Primer:** the Primer tab is built like the Form tab: a rail of the feature row and the tasks, grouped under
-  section headers (Primer, Every feature, Extra tasks), each task row carrying its need as a Tag and its included
-  items as a count. The selected task expands in the rail, its items as rows with a ToggleMark; the card pane shows
-  one card for the selected row, a task card (context, add-item and task comment) or an item card (the item, its
-  ToggleMark and its comment box). A review pane of every answer opens before it sends.
+- **Primer:** the Primer tab is three columns, tasks | items | card: tasks and items open `240px` wide and the card takes the rest. The
+  tasks column holds the feature row and the tasks, grouped under section headers (Primer, Every feature, Extra
+  tasks), each task row carrying its need as a Tag and its included items as a count. The items column lists the
+  selected task's items as rows with a ToggleMark, or an empty state on the feature row and on a task with no items.
+  The card column shows one card for the focused column's selection: a task card (context, add-item and task
+  comment) or the feature card while the tasks column has focus, an item card (the item, its ToggleMark and its
+  comment box) while the items column has focus. A review pane of every answer opens before it sends.
 - **Chat:** user turns are a `card-background` block, not a bubble. Assistant prose is markdown on
   the sheet. Tool calls are collapsible cards: a mono head with the tool and its summary, a status
   dot (running, success, error), built closed; a result changes only the dot. Permission prompts are cards with a
@@ -348,7 +353,8 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   and key hints right-aligned in `fg-tertiary`; dialogs, and chat's full-size image viewer, sit over the `scrim`.
 - **Empty states:** one line saying what to do, and the key or action that does it. No
   illustrations.
-- **Splits** resize by drag, and the app keeps the widths.
+- **Splits** resize by drag and by `Alt+Shift+h`/`Alt+Shift+l` (`docs/keymap.md`), the side bar too, and the
+  app keeps the widths.
 
 ## Icons and copy
 
