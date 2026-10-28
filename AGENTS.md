@@ -75,6 +75,8 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  theme variables, `errorText`, the fake agent harness)
   layouts/       the layout registry behind the core LayoutService (main side)
   layout-url.ts  the `wigley-layout:` URLs that serve layout files to the page
+  file-url.ts    what `layout-url.ts` and `data-url.ts` share: per-segment encoding, scheme and revision checks,
+                 and per-segment decoding that refuses an encoded `/`
   agent-forms/   the agent form lifecycle every agent form type shares (forms' rounds, the primer): the service with
                  its per-session open form, deadline, re-attach and hand-back, the saved-form folder and memory stores,
                  the channel and scripted presenters, the MCP tool session, and the drive actions that open a
@@ -142,7 +144,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  contract and the built-in `default` layout)
   forms/         manifest.ts, contract.ts, main/ (the round form type, its MCP tools, the preview
                  round), page/ (the Form tab), layouts/ (the Layout contract and the built-in `default` layout)
-  primer/        manifest.ts, contract.ts, main/ (the feature primer form type, its MCP tools, fixtures),
+  primer/        manifest.ts, contract.ts, main/ (the feature primer form type, its MCP tools, fixtures,
+                 preview/: the layout preview's sample primer in a session of its own),
                  page/ (the Primer tab: the rail of tasks and the selected task's items, the feature, task and item
                  cards, and the review pane), layouts/ (the primer Layout contract and the built-in `default` layout)
   docs/          manifest.ts, contract.ts, main/ (the index source registry, docs index runs, file changes inside
@@ -159,7 +162,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  follow-up list with its editor, read-only plans and features, `docs/features/backlog/design.md`),
                  layouts/ (the backlog Layout contract and the built-in `default` layout)
   chat/          manifest.ts, contract.ts, main/ (owned sessions' agent processes and chat entries, the
-                 permission_prompt MCP tool, recent folders, archived sessions, resume, sign-in), page/ (the
+                 permission_prompt MCP tool, recent folders, archived sessions, resume, sign-in, preview/: the
+                 layout preview's sample session, held with no process), page/ (the
                  Chat tab with its attached images and image viewer, app slash commands and the sign-in dialog,
                  the start prompt with its folder, profile, sign-in and session steps), layouts/ (the chat Layout contract
                  and the built-in `default` chat layout); `image-rules.ts` at the root holds the attach rules both
@@ -423,7 +427,7 @@ round; primer: an open primer), since main, not the page, decides.
   core LayoutService watches that folder and announces each owner's set of layouts, each with its own revision, so
   saving one reloads only that one. A plugin's main part registers its contract text with
   `api.layouts.register` and its page part draws with `api.layouts.show`, handing over its built-in `default` layout,
-  its reader and its setting; the shell registers with the core (`layoutService.register('shell', …)` in `main.ts`) and
+  its reader and its setting; the shell registers with the core (`layouts.register('shell', shellLayoutTypes)` in `main.ts`) and
   shows through the page host in `renderer.ts`. Each app writes `layouts/kit.d.ts` (the shared kit types) and
   `layouts/<owner>/layout.d.ts` at start. The page's layout host (`src/shared/page/layout-host/`) picks the layout (the owner's setting — `<plugin>.layout`, or the core
   `shell.layout` — and `default` when unset), checks it with the owner's reader, draws each part, rolls back a part

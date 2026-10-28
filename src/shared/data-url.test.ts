@@ -15,43 +15,24 @@ describe('dataFilePath', () => {
   it('dataFilePath_RoundTripsDataUrl', () => {
     expect(
       dataFilePath(
-        'wigley-data://forms/~3/layouts/a%20b/layout.js',
+        dataUrl('forms', 3, 'layouts/a b/layout.js'),
         '/d',
         posixPaths,
       ),
     ).toBe('/d/forms/layouts/a b/layout.js');
   });
 
-  it('dataFilePath_ParentHost_ReturnsNull', () => {
-    expect(dataFilePath('wigley-data://../~1/x', '/d', posixPaths)).toBe(null);
-  });
-
-  it('dataFilePath_DotHost_ReturnsNull', () => {
-    expect(dataFilePath('wigley-data://./~1/x', '/d', posixPaths)).toBe(null);
-  });
-
-  it('dataFilePath_EncodedBackslash_ReturnsNull', () => {
-    expect(
-      dataFilePath('wigley-data://forms/~1/..%5C..%5C..%5Cx', '/d', posixPaths),
-    ).toBe(null);
-  });
-
-  it('dataFilePath_EncodedSlash_ReturnsNull', () => {
-    expect(
-      dataFilePath('wigley-data://forms/~1/a%2f..%2f..%2fx', '/d', posixPaths),
-    ).toBe(null);
-  });
-
-  it('dataFilePath_MissingRevision_ReturnsNull', () => {
-    expect(
-      dataFilePath('wigley-data://forms/layouts/x.js', '/d', posixPaths),
-    ).toBe(null);
-  });
-
-  it('dataFilePath_OtherScheme_ReturnsNull', () => {
-    expect(dataFilePath('file:///d/forms/~1/x.js', '/d', posixPaths)).toBe(
-      null,
-    );
+  it.each([
+    ['.. host', 'wigley-data://../~1/x'],
+    ['. host', 'wigley-data://./~1/x'],
+    ['encoded \\ in a segment', 'wigley-data://forms/~1/..%5C..%5C..%5Cx'],
+    ['encoded / in a segment', 'wigley-data://forms/~1/layouts%2Fx.js'],
+    ['no revision segment', 'wigley-data://forms/layouts/x.js'],
+    ['no path after the revision', 'wigley-data://forms/~1/'],
+    ['malformed escape', 'wigley-data://forms/~1/%'],
+    ['other scheme', 'file:///d/forms/~1/x.js'],
+  ])('dataFilePath_Refused_ReturnsNull: %s', (_case, url) => {
+    expect(dataFilePath(url, '/d', posixPaths)).toBe(null);
   });
 
   it('dataFilePath_WindowsRoot_JoinsWithBackslash', () => {

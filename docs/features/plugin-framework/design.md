@@ -7,7 +7,7 @@
 - **Shell and areas** — the permanent areas and who fills them.
 - **Sessions (plan A2)** — tabs as agent sessions, the relay, tab lifecycle.
 - **Keymap (plan A2)** — the user's new keys, from the keymap rounds.
-- **Keys plugin (plan B)** — the one page-only `keys` plugin: which-key, help on `Space ?`, the scope stack, titled scopes, the key hints that replaced the bar.
+- **Keys plugin (plan B)** — the `keys` plugin, all page but a main part that registers its layouts: which-key, help on `Space ?`, the scope stack, titled scopes, the key hints that replaced the bar.
 
 The decisions the user settled in the 2026-10-18 interview rounds, kept so plans A2 and B are written from them once
 the plan before has landed. Each plan reads this file and the code as it then stands; a decision here stands unless
@@ -95,7 +95,8 @@ Compared against the user's Neovim, tmux/Ghostty and IdeaVim configs:
 
 ## Keys plugin (plan B)
 
-Landed as one page-only `keys` plugin (no main part, depends on no plugin) holding which-key and the help overlay. Key
+Landed as one page-only `keys` plugin (depends on no plugin) holding which-key and the help overlay; it has since gained a
+main part that only registers its layouts (`src/plugins/keys/main/start.ts`). Key
 hints in place later replaced the plugin's bottom key list: the plugin now also exports `anchor`, which draws a command's
 keys into an element a view names, and the plugin's `showHints` setting (`"keys": { "showHints": false }` in
 `settings.json`) turns the hints off. The title bar's Keys button, which opens help, is the plugin's too

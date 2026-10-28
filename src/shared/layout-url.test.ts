@@ -27,11 +27,17 @@ describe('layoutFilePath', () => {
     ['no revision segment', 'wigley-layout://forms/x/layout.js'],
     ['no path after the revision', 'wigley-layout://forms/x/~1/'],
     ['.. host', 'wigley-layout://../x/~1/layout.js'],
-    ['.. name', 'wigley-layout://forms/%2E%2E/~1/layout.js'],
+    [
+      'encoded .. name folded by the parser, leaving no revision',
+      'wigley-layout://forms/%2E%2E/~1/layout.js',
+    ],
     ['encoded / in the name', 'wigley-layout://forms/a%2Fb/~1/layout.js'],
-    ['encoded / in a segment', 'wigley-layout://forms/x/~1/a%2F..%2F..%2Fy'],
+    ['encoded / in a segment', 'wigley-layout://forms/x/~1/a%2Fb.js'],
     ['encoded \\ in a segment', 'wigley-layout://forms/x/~1/..%5C..%5Cy'],
-    ['.. climbing out of the folder', 'wigley-layout://forms/x/~1/../../y.js'],
+    [
+      '.. folded by the parser past the revision',
+      'wigley-layout://forms/x/~1/../../y.js',
+    ],
     ['malformed escape', 'wigley-layout://forms/x/~1/%'],
   ])('layoutFilePath_Refused_ReturnsNull: %s', (_case, url) => {
     expect(layoutFilePath(url, '/c/layouts', posixPaths)).toBe(null);

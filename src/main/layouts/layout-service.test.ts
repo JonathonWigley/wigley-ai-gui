@@ -117,12 +117,39 @@ describe('createLayoutService', () => {
   });
 
   it.each([
-    { state: 'never registered', registration: 'none' },
-    { state: 'registered but not listed', registration: 'unlisted' },
-    { state: 'registration disposed', registration: 'disposed' },
+    {
+      state: 'never registered',
+      registration: 'none',
+      names: ['default'],
+      set: null,
+    },
+    {
+      state: 'registered but not listed',
+      registration: 'unlisted',
+      names: ['default'],
+      set: null,
+    },
+    {
+      state: 'registration disposed',
+      registration: 'disposed',
+      names: ['default'],
+      set: null,
+    },
+    {
+      state: 'listed',
+      registration: 'listed',
+      names: ['default', 'f'],
+      set: {
+        layouts: [
+          { name: 'default', revision: 1, hasCss: false, builtIn: true },
+          { name: 'f', revision: 1, hasCss: false, builtIn: false },
+        ],
+        changed: null,
+      },
+    },
   ] as const)(
-    'names_UnregisteredOrUnlisted_IsDefault and read_UnregisteredOrUnlisted_IsNull: $state',
-    async ({ registration }) => {
+    'names_And_read_FollowTheOwnersRegistration: $state',
+    async ({ registration, names, set }) => {
       await files.write(`${FOLDER}/forms/f/layout.js`, '// f');
       const service = createService();
       if (registration === 'unlisted') {
@@ -131,9 +158,12 @@ describe('createLayoutService', () => {
       if (registration === 'disposed') {
         (await registered(service, 'forms')).dispose();
       }
+      if (registration === 'listed') {
+        await registered(service, 'forms');
+      }
 
-      expect(service.names('forms')).toEqual(['default']);
-      expect(await service.read('forms')).toBe(null);
+      expect(service.names('forms')).toEqual(names);
+      expect(await service.read('forms')).toEqual(set);
     },
   );
 
