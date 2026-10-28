@@ -175,7 +175,8 @@ means something.
 - **Separation:** gutters between sheets, hairlines on L1 edges, and shadows only on L3. A shadow on
   content makes it float when it should sit.
 - **Breakpoints** (raw in `@media`): `800px` tightens content padding; `680px` lays the side bar
-  over the sheet instead of beside it; `640px` stacks a sheet's split panes. Every split pane has a
+  over the sheet instead of beside it, drawn no wider than reaches the window's edge while the
+  user's width is kept; `640px` stacks a sheet's split panes. Every split pane has a
   least width (the Primer tab's card column `320px`, every other pane `160px` or more): a narrowing
   split gives up its start pane's width down to its least width first, then stacks at any window width.
 
