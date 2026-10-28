@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { withUser as withUserLayout } from '../../../../shared/page/layout-host/test-layouts';
 import {
   asHtml,
   FakeElement,
@@ -6,14 +7,17 @@ import {
   installFakeDom,
 } from '../../../../shared/page/test-dom';
 import type { SessionTabView } from '../../contract';
+import defaultLayout from '../../layouts/default/layout.js';
 import type { Layout } from '../../layouts/layout';
 import {
   drawnRows,
   rowNamed,
   sessionsViewSetup,
   stateOf,
-  withUser,
 } from '../sessions-view-fakes';
+
+const withUser = (layout: Layout) =>
+  withUserLayout<Layout>(defaultLayout, layout);
 
 type Setup = ReturnType<typeof sessionsViewSetup>;
 

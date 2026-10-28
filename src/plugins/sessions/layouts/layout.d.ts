@@ -12,7 +12,8 @@ import type { BaseKit } from '../../../shared/page/layout-host/kit';
 // whose `rows` or `strip` is not a child of its `element` is drawn by `default` instead.
 //
 // The app keeps:
-// - the click on each row (activate its session) and each tab (select it), set on the element the part returns;
+// - the click on each row (activate its session) and each tab (select it), set on the element the part returns with
+//   `ui-row--action` and a mousedown that takes no focus, and dropped while that element is `is-disabled`;
 // - `is-selected` and `aria-current="true"` on the selected row, `is-active` and `aria-current` on the active tab;
 // - the `title` tooltip on each row (`label`, or `label · status`) and each tab (`title`);
 // - `is-no-target` on the elements `sessionEdge`, `prevTabEdge`, `nextTabEdge` and `closeHint` return, which hides

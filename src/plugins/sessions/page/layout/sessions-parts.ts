@@ -1,22 +1,18 @@
 import type { Log } from '../../../../contracts/log';
-import type { MarkdownRenderer } from '../../../../contracts/markdown';
-import type { Platform } from '../../../../contracts/platform';
 import type { ShownLayouts } from '../../../../contracts/plugin';
+import { appSlot } from '../../../../shared/page/layout-host/app-slot';
 import {
-  type BaseKitDeps,
   createBaseKit,
-  type KitCommands,
+  type OwnerKitServices,
+  ownerBaseKitDeps,
 } from '../../../../shared/page/layout-host/base-kit';
 import {
   type DrawnPart,
-  drawPart,
   type RollbackDeps,
   requireElementIn,
 } from '../../../../shared/page/layout-host/draw-part';
-import { pickLayout } from '../../../../shared/page/layout-host/pick';
-import { keyChevron, keyEdge } from '../../../../shared/page/ui/key-anchors';
+import { createLayoutParts } from '../../../../shared/page/layout-host/layout-parts';
 import '../../../../shared/page/ui/tabs.css';
-import { qualify } from '../../../../shared/plugin-manifests';
 import defaultLayout from '../../layouts/default/layout.js';
 import type {
   CompleteLayout,
@@ -34,15 +30,8 @@ import type {
 } from '../../layouts/layout';
 import { sessionsManifest } from '../../manifest';
 
-const OWNER = 'sessions';
-const DEFAULT_LAYOUT = 'default';
-
 // What every sessions kit reads: the page services and the keys export.
-export interface SessionsPartsDeps {
-  markdown: MarkdownRenderer;
-  keys: BaseKitDeps['keys'];
-  commands: KitCommands;
-  platform: Platform;
+export interface SessionsPartsDeps extends OwnerKitServices {
   log: Log;
 }
 
@@ -78,51 +67,33 @@ export interface SessionsParts {
 }
 
 export function createSessionsParts(deps: SessionsPartsDeps): SessionsParts {
-  let shown: ShownLayouts<Layout> = {
-    layouts: new Map([[DEFAULT_LAYOUT, defaultLayout]]),
-    user: DEFAULT_LAYOUT,
-  };
-
-  const draw = <P extends keyof CompleteLayout, R extends SessionsPart>(
-    part: P,
-    parent: HTMLElement,
-    build: (
-      builder: CompleteLayout[P],
-      into: HTMLElement,
-      rollback: RollbackDeps,
-    ) => R,
-  ): DrawnPart<R> =>
-    drawPart<Layout, CompleteLayout[P], R>({
-      owner: OWNER,
-      parent,
-      pick: pickLayout(
-        [shown.user, DEFAULT_LAYOUT],
-        shown.layouts,
-        (layout) => layout[part] !== undefined,
-      ),
-      defaultLayout,
-      // TypeScript cannot relate a `Partial` layout's part to the complete one's.
-      part: (layout) => layout[part] as CompleteLayout[P] | undefined,
-      build,
-      log: deps.log,
-      logSource: OWNER,
-      partName: part,
-    });
+  const parts = createLayoutParts<Layout, CompleteLayout>({
+    owner: sessionsManifest.id,
+    defaultLayout,
+    log: deps.log,
+  });
+  // The kit one part draw builds with. Every sessions prompt has no scope, so
+  // it shows in every scope.
+  const sessionsKit = (rollback: RollbackDeps): SessionsKit =>
+    createBaseKit(ownerBaseKitDeps(sessionsManifest, deps, null, rollback));
 
   return {
-    setLayouts(next) {
-      shown = next;
-    },
+    setLayouts: (shown) => parts.setLayouts(shown),
     sideBar: (parent) =>
-      draw('sideBar', parent, (builder, into, rollback) => {
+      parts.draw('sideBar', parent, (builder, into, rollback) => {
         let sessionEdge: HTMLElement | null = null;
-        const base = sessionsKit(deps, rollback);
+        const base = sessionsKit(rollback);
         const kit: SideBarKit = {
           ...base,
           sessionEdge(edgeParent) {
-            sessionEdge = appended(edgeParent, keyEdge('session-edge', []));
+            sessionEdge = base.el(
+              edgeParent,
+              'span',
+              'ui-key-edge session-edge',
+            );
             base.keyHint(sessionEdge, 'prevSession');
-            sessionEdge.append(keyChevron('▲'), keyChevron('▼'));
+            base.chevron(sessionEdge, '▲');
+            base.chevron(sessionEdge, '▼');
             base.keyHint(sessionEdge, 'nextSession');
             return sessionEdge;
           },
@@ -132,30 +103,34 @@ export function createSessionsParts(deps: SessionsPartsDeps): SessionsParts {
         return { element: pane.element, rows: pane.rows, sessionEdge };
       }),
     row: (parent, input) =>
-      draw('row', parent, (builder, into, rollback) =>
-        builder(into, input, sessionsKit(deps, rollback)),
+      parts.draw('row', parent, (builder, into, rollback) =>
+        builder(into, input, sessionsKit(rollback)),
       ),
     tabBar: (parent) =>
-      draw('tabBar', parent, (builder, into, rollback) => {
+      parts.draw('tabBar', parent, (builder, into, rollback) => {
         const placed: Omit<DrawnTabBar, keyof TabBarPane> = {
           previous: null,
           next: null,
           close: null,
         };
-        const base = sessionsKit(deps, rollback);
+        const base = sessionsKit(rollback);
         const kit: TabBarKit = {
           ...base,
           prevTabEdge(edgeParent) {
-            const edge = appended(edgeParent, keyEdge('session-tabs-edge', []));
-            base.keyHint(edge, 'prevTab');
-            edge.append(keyChevron('‹'));
+            const edge = base.edge(edgeParent, 'prevTab', {
+              side: 'end',
+              chevron: '‹',
+            });
+            edge.classList.add('session-tabs-edge');
             placed.previous = edge;
             return edge;
           },
           nextTabEdge(edgeParent) {
-            const edge = appended(edgeParent, keyEdge('session-tabs-edge', []));
-            edge.append(keyChevron('›'));
-            base.keyHint(edge, 'nextTab');
+            const edge = base.edge(edgeParent, 'nextTab', {
+              side: 'start',
+              chevron: '›',
+            });
+            edge.classList.add('session-tabs-edge');
             placed.next = edge;
             return edge;
           },
@@ -172,55 +147,17 @@ export function createSessionsParts(deps: SessionsPartsDeps): SessionsParts {
         return { element: pane.element, strip: pane.strip, ...placed };
       }),
     tab: (parent, input) =>
-      draw('tab', parent, (builder, into, rollback) =>
-        builder(into, input, sessionsKit(deps, rollback)),
+      parts.draw('tab', parent, (builder, into, rollback) =>
+        builder(into, input, sessionsKit(rollback)),
       ),
     emptyText: (parent, input, pickHint) =>
-      draw('emptyText', parent, (builder, into, rollback) => {
+      parts.draw('emptyText', parent, (builder, into, rollback) => {
+        const slot = appSlot(pickHint, 'pickHint', rollback);
         const kit: EmptyTextKit = {
-          ...sessionsKit(deps, rollback),
-          pickHint: (hintParent) => appended(hintParent, pickHint),
+          ...sessionsKit(rollback),
+          pickHint: (hintParent) => slot.place(hintParent),
         };
         return builder(into, input, kit);
       }),
   };
-}
-
-// Makes a part's root run `onClick` on a click without taking focus, as a
-// clickable `.ui-row` or a `.ui-tab` does.
-export function onPartClick(root: HTMLElement, onClick: () => void): void {
-  root.addEventListener('mousedown', (event) => event.preventDefault());
-  root.addEventListener('click', onClick);
-}
-
-// The kit one part draw builds with. Every sessions prompt has no scope, so it
-// shows in every scope; each key anchor it names is recorded through
-// `rollback`, so the draw's dispose disposes it.
-function sessionsKit(
-  deps: SessionsPartsDeps,
-  rollback: RollbackDeps,
-): SessionsKit {
-  return createBaseKit({
-    markdown: deps.markdown,
-    keys: {
-      anchor(target, command, options) {
-        const anchor = deps.keys.anchor(target, command, options);
-        rollback.recordAnchor(anchor);
-        return anchor;
-      },
-      keysFor: (command, scope) => deps.keys.keysFor(command, scope),
-    },
-    commands: deps.commands,
-    scope: null,
-    commandNamed: (short) =>
-      Object.hasOwn(sessionsManifest.commands, short)
-        ? qualify(OWNER, short)
-        : null,
-    platform: deps.platform,
-  });
-}
-
-function appended<E extends HTMLElement>(parent: HTMLElement, node: E): E {
-  parent.append(node);
-  return node;
 }

@@ -23,7 +23,7 @@ const layout = {
     });
     element.classList.add('session-row');
     if (input.marked) {
-      kit.statusDot(kit.el(element, 'span', 'ui-row-trailing'), 'attention');
+      kit.statusDot(kit.rowTrailing(element), 'attention');
     }
     if (input.status !== null) {
       kit.el(element, 'span', 'session-row-status', input.status);

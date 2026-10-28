@@ -13,6 +13,7 @@ import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
 import { sessionsManifest } from '../manifest';
 import { readSessionsLayout } from './layout/read-sessions-layout';
+import { previewToggle } from './preview';
 import { mountSessionsView, type SessionsView } from './sessions-view';
 import {
   isRoundToast,
@@ -289,21 +290,9 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       setLayouts: (shown) => view.setLayouts(shown),
     });
 
-    // Shows the sample rows, opening the mode and its side bar, or puts the
-    // real rows back.
-    const openPreview = () => {
-      if (view.isPreviewShown()) {
-        view.showPreview(false);
-        log('sessions', 'preview closed');
-        return;
-      }
-      mode.show();
-      if (!mode.sideBarShown()) {
-        mode.toggleSideBar();
-      }
-      view.showPreview(true);
-      log('sessions', 'preview shown');
-    };
+    const openPreview = previewToggle(mode, view, (message) =>
+      log('sessions', message),
+    );
 
     return {
       commands: {

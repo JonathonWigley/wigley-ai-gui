@@ -1,5 +1,6 @@
 import { element } from '../../../shared/page/dom';
 import type { DrawnPart } from '../../../shared/page/layout-host/draw-part';
+import { rowAction } from '../../../shared/page/ui/row';
 import { sheet } from '../../../shared/page/ui/sheet';
 import { qualify } from '../../../shared/plugin-manifests';
 import type { KeysPageExports } from '../../keys/contract';
@@ -10,11 +11,7 @@ import type {
 } from '../contract';
 import type { EmptyTextInput, SessionsPart } from '../layouts/layout';
 import { sessionsManifest } from '../manifest';
-import {
-  type DrawnTabBar,
-  onPartClick,
-  type SessionsParts,
-} from './layout/sessions-parts';
+import type { DrawnTabBar, SessionsParts } from './layout/sessions-parts';
 import {
   hasOtherTab,
   NO_TABS,
@@ -336,7 +333,7 @@ function drawTab(
 ): DrawnPart<SessionsPart> {
   const drawn = parts.tab(strip, { title: view.title });
   const entry = drawn.built.element;
-  onPartClick(entry, select);
+  rowAction(entry, select);
   entry.title = view.title;
   entry.classList.toggle('is-active', isActive);
   entry.setAttribute('aria-current', String(isActive));

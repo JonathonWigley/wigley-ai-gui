@@ -1,12 +1,9 @@
 import { element } from '../../../shared/page/dom';
 import type { DrawnPart } from '../../../shared/page/layout-host/draw-part';
+import { rowAction } from '../../../shared/page/ui/row';
 import type { SessionRow, SessionsState } from '../contract';
 import type { SessionsPart } from '../layouts/layout';
-import {
-  type DrawnSideBar,
-  onPartClick,
-  type SessionsParts,
-} from './layout/sessions-parts';
+import type { DrawnSideBar, SessionsParts } from './layout/sessions-parts';
 import { harnessText, hasOtherSession } from './tabs';
 
 export interface SidebarView {
@@ -97,8 +94,7 @@ function drawRow(
     status,
   });
   const entry = drawn.built.element;
-  entry.classList.add('ui-row--action');
-  onPartClick(entry, () => activate(session.sessionId));
+  rowAction(entry, () => activate(session.sessionId));
   entry.title =
     status === null ? session.label : `${session.label} · ${status}`;
   entry.classList.toggle('is-selected', isSelected);

@@ -1,3 +1,4 @@
+import type { ModeHandle } from '../../../contracts/plugin';
 import type { SessionRow, SessionsState } from '../contract';
 
 function sampleRow(
@@ -43,3 +44,38 @@ export const PREVIEW_STATUSES: Readonly<Record<string, string | null>> = {
   'preview-4': null,
   'preview-5': null,
 };
+
+// The view the preview toggle swaps the side bar's rows in.
+export interface PreviewView {
+  isPreviewShown(): boolean;
+  showPreview(isShown: boolean): void;
+}
+
+// `Space z l s`: shows the sample rows, opening the mode and its side bar, or
+// puts the real rows back, closing the side bar again when the press that
+// showed them opened it.
+export function previewToggle(
+  mode: Pick<ModeHandle, 'show' | 'sideBarShown' | 'toggleSideBar'>,
+  view: PreviewView,
+  log: (message: string) => void,
+): () => void {
+  let hasOpenedSideBar = false;
+  return () => {
+    if (view.isPreviewShown()) {
+      view.showPreview(false);
+      if (hasOpenedSideBar && mode.sideBarShown()) {
+        mode.toggleSideBar();
+      }
+      hasOpenedSideBar = false;
+      log('preview closed');
+      return;
+    }
+    mode.show();
+    hasOpenedSideBar = !mode.sideBarShown();
+    if (hasOpenedSideBar) {
+      mode.toggleSideBar();
+    }
+    view.showPreview(true);
+    log('preview shown');
+  };
+}

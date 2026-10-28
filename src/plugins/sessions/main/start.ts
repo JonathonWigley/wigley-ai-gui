@@ -208,11 +208,12 @@ export function addDriveActions(
   };
 }
 
-// Owns agent sessions: the relay they connect through, the tools other plugins
-// contribute for them, their sidebar rows, and the sessions layouts. Each contribution rewrites the
-// endpoint files, so a relay that starts the app finds every tool listed. In
-// the self-test it opens no relay and writes no file; a drive run opens it in
-// the run's own home and gets the drive actions.
+// Owns agent sessions: the relay they connect through, the tools other
+// plugins contribute for them, their sidebar rows, and the sessions layouts.
+// Each contribution rewrites the endpoint files, so a relay that starts the
+// app finds every tool listed. In the self-test it opens no relay and writes
+// no file; a drive run opens it in the run's own home and gets the drive
+// actions.
 export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
   manifest: sessionsManifest,
   start(api: SessionsApi) {

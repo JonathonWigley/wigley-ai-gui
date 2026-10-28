@@ -1,17 +1,7 @@
-import type { ShownLayouts } from '../../../contracts/plugin';
+import { recordingAnchors } from '../../../shared/page/layout-host/test-layouts';
 import { asFake, FakeElement, findAll } from '../../../shared/page/test-dom';
 import type { SessionRow, SessionsState } from '../contract';
-import defaultLayout from '../layouts/default/layout.js';
-import type { Layout } from '../layouts/layout';
 import { mountSessionsView } from './sessions-view';
-
-export const USER_LAYOUT = 'mine';
-
-// A key anchor the fake keys export made, and whether it was disposed.
-export interface MadeAnchor {
-  command: string;
-  isDisposed: boolean;
-}
 
 export function sessionRow(sessionId: string): SessionRow {
   return {
@@ -31,40 +21,18 @@ export function stateOf(
   return { rows: sessionIds.map(sessionRow), selectedSessionId };
 }
 
-// The shown layouts with `layout` as the user's, beside `default`.
-export function withUser(layout: Layout): ShownLayouts<Layout> {
-  return {
-    layouts: new Map<string, Layout>([
-      ['default', defaultLayout],
-      [USER_LAYOUT, layout],
-    ]),
-    user: USER_LAYOUT,
-  };
-}
-
 // A sessions view over fake keys that record each anchor, a log that records
 // each line as `[source] message`, and `activated` recording each session a
 // row click activates. Runs under `installFakeDom`.
 export function sessionsViewSetup() {
-  const anchors: MadeAnchor[] = [];
+  const { anchors, keys } = recordingAnchors();
   const logged: string[] = [];
   const activated: string[] = [];
   const view = mountSessionsView({
     activate: (sessionId) => activated.push(sessionId),
     isModeShown: () => true,
     tabsChanged: () => undefined,
-    keys: {
-      keysFor: () => null,
-      anchor: (_element, command) => {
-        const anchor: MadeAnchor = { command, isDisposed: false };
-        anchors.push(anchor);
-        return {
-          dispose: () => {
-            anchor.isDisposed = true;
-          },
-        };
-      },
-    },
+    keys,
     markdown: {
       block: (text) => text,
       inline: (text) => text,
