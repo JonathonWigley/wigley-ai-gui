@@ -1,11 +1,19 @@
-/* Backlog mode's side bar: the load's status line, then each repo's header
-   over its homes. */
+/* Backlog mode's side bar, which holds the layout's homes pane. */
 .backlog-homes {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
   height: 100%;
   min-height: 0;
   outline: none;
+}
+
+/* The default homes pane's tracks: the load's status line, then each repo's
+   header over its homes. */
+.backlog-homes > .backlog-pane {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  min-width: 0;
 }
 
 .backlog-status {
@@ -58,13 +66,22 @@
   }
 }
 
-/* The list: its header of keys, the filter, then the rows. */
+/* The list, which holds the layout's list pane. */
 .backlog-list {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
   height: 100%;
   min-height: 0;
   outline: none;
+}
+
+/* The default list pane's tracks: its header of keys, the filter, then the
+   rows. */
+.backlog-list > .backlog-pane {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-height: 0;
+  min-width: 0;
 }
 
 /* The keys that act on the open home, then the edge prompt to the detail. */
@@ -90,6 +107,11 @@
   margin-left: auto;
 }
 
+/* A row's slot for the cursor prompt adds no box of its own. */
+.backlog-row-actions-slot {
+  display: contents;
+}
+
 /* The cursor row's actions, at its trailing end; they wrap onto lines of
    their own when the row has no room. */
 .backlog-row-actions {
@@ -101,7 +123,7 @@
   margin-left: auto;
 }
 
-.ui-row-trailing + .backlog-row-actions {
+.ui-row-trailing + .backlog-row-actions-slot > .backlog-row-actions {
   margin-left: 0;
 }
 
@@ -170,8 +192,14 @@
 .backlog-editor {
   display: flex;
   flex-direction: column;
-  gap: var(--wg-space-3);
   outline: none;
+}
+
+/* The default editor pane: its heading, the fields, then the keys. */
+.backlog-editor > .backlog-pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-3);
 }
 
 .backlog-editor-fields {

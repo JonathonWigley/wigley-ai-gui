@@ -866,10 +866,11 @@ async function startFixture(
 
 // Registers backlog's layouts, and serves the page every features home on the
 // machine, from the docs machine index, Docs' guarded follow-up writes and the
-// home's follow-up commit, and exports the load, the tag list and note filing to dependent plugins;
-// watches each listed follow-up file and hears the machine index reload, each
-// sending `changed`. Outside a live run it writes the self-test's fixture repo
-// at start, before Docs' self-test counts the files the index lists.
+// home's follow-up commit, and exports the load, the tag list and note filing
+// to dependent plugins; watches each listed follow-up file and hears the
+// machine index reload, each sending `changed`. Outside a live run it writes
+// the self-test's fixture repo at start, before Docs' self-test counts the
+// files the index lists.
 export const backlogMainPart: MainPart<typeof backlogManifest> = {
   manifest: backlogManifest,
   start(api: BacklogApi) {

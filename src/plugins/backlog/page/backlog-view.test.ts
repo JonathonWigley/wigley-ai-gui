@@ -1,13 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EditorEvents, EditorHost } from '../../../contracts/editor';
 import type { Paths } from '../../../contracts/paths';
-import type { PageChannel, ShownLayouts } from '../../../contracts/plugin';
+import type { PageChannel } from '../../../contracts/plugin';
 import type { FollowupItem } from '../../../shared/followups/followup-file';
 import {
+  type RecordedAnchor,
+  recordingAnchors,
+  USER_LAYOUT,
+  withUser as withLayouts,
+} from '../../../shared/page/layout-host/test-layouts';
+import {
   asFake,
-  FakeElement,
+  type FakeElement,
+  type FocusFakeDocument,
+  type FocusFakeElement,
   findAll,
-  installFakeDom,
+  installFocusFakeDom,
 } from '../../../shared/page/test-dom';
 import type { KeysPageExports } from '../../keys/contract';
 import type { BacklogChannel, BacklogRead } from '../contract';
@@ -16,7 +24,6 @@ import type { BacklogLayout } from '../layouts/layout';
 import { createBacklogView } from './backlog-view';
 
 const ROOT = '/home/repo/docs/features';
-const USER = 'mine';
 
 interface CreatedEditor {
   parent: FakeElement;
@@ -24,11 +31,6 @@ interface CreatedEditor {
   events: EditorEvents;
   isDestroyed: boolean;
   focusOptions: unknown[];
-}
-
-interface MadeAnchor {
-  command: string;
-  isDisposed: boolean;
 }
 
 function item(title: string): FollowupItem {
@@ -106,17 +108,6 @@ function fakeEditorHost() {
   return { host, created };
 }
 
-// The DOM focus the view moves, which the fake DOM lacks: each element
-// focused, in order.
-const focusedElements: FakeElement[] = [];
-const FOCUS_MEMBERS = {
-  focus(this: FakeElement) {
-    focusedElements.push(this);
-  },
-  blur() {},
-  select() {},
-};
-
 async function settle() {
   await new Promise((resolve) => setTimeout(resolve, 0));
 }
@@ -125,20 +116,12 @@ async function settle() {
 // open and its first follow-up selected.
 async function backlogSetup() {
   const { host, created } = fakeEditorHost();
-  const anchors: MadeAnchor[] = [];
   const overlays: FakeElement[] = [];
+  const recorded = recordingAnchors();
+  const anchors = recorded.anchors;
   const keys: KeysPageExports = {
-    keysFor: () => null,
+    ...recorded.keys,
     onChanged: () => ({ dispose: () => undefined }),
-    anchor: (_element, command) => {
-      const anchor: MadeAnchor = { command, isDisposed: false };
-      anchors.push(anchor);
-      return {
-        dispose: () => {
-          anchor.isDisposed = true;
-        },
-      };
-    },
   };
   const channel = {
     invoke: async (method: string) => (method === 'load' ? READ : ''),
@@ -182,14 +165,8 @@ async function backlogSetup() {
   return { view, created, anchors, overlays, sheet };
 }
 
-function withUser(layout: BacklogLayout): ShownLayouts<BacklogLayout> {
-  return {
-    layouts: new Map<string, BacklogLayout>([
-      ['default', defaultLayout],
-      [USER, layout],
-    ]),
-    user: USER,
-  };
+function withUser(layout: BacklogLayout) {
+  return withLayouts<BacklogLayout>(defaultLayout, layout);
 }
 
 // The live editors mounted for `field`.
@@ -211,17 +188,14 @@ const titleOnlyEditor: BacklogLayout = {
 };
 
 describe('backlog view layouts', () => {
+  let fakeDocument: FocusFakeDocument;
+
   beforeEach(() => {
-    installFakeDom((name, value) => vi.stubGlobal(name, value));
-    Object.assign(FakeElement.prototype, FOCUS_MEMBERS);
-    focusedElements.length = 0;
+    fakeDocument = installFocusFakeDom((name, value) =>
+      vi.stubGlobal(name, value),
+    );
   });
   afterEach(() => {
-    for (const name of Object.keys(FOCUS_MEMBERS)) {
-      delete (FakeElement.prototype as unknown as Record<string, unknown>)[
-        name
-      ];
-    }
     vi.unstubAllGlobals();
   });
 
@@ -239,7 +213,7 @@ describe('backlog view layouts', () => {
     expect(remounted.doc).toBe('Changed title');
     expect(remounted.focusOptions).toEqual([{ insertAtEnd: true }]);
     const [pane] = findAll(sheet, 'mine-editor');
-    expect(pane.dataset.layout).toBe(USER);
+    expect(pane.dataset.layout).toBe(USER_LAYOUT);
   });
 
   it('a box the editor pane leaves out is appended', async () => {
@@ -272,19 +246,54 @@ describe('backlog view layouts', () => {
     const planRows = rows.children.filter((row) =>
       row.classList.contains('ui-row'),
     );
-    expect(followupRows.map((row) => row.dataset.layout)).toEqual([USER, USER]);
+    expect(followupRows.map((row) => row.dataset.layout)).toEqual([
+      USER_LAYOUT,
+      USER_LAYOUT,
+    ]);
     expect(planRows.map((row) => row.dataset.layout)).toEqual(['default']);
     const [prompt] = findAll(rows, 'backlog-row-actions');
     const slot = prompt.parentNode!;
+    expect(slot.classList.contains('backlog-row-actions-slot')).toBe(true);
     expect(slot.parentNode).toBe(followupRows[0]);
     expect(followupRows[0].classList.contains('is-selected')).toBe(true);
   });
+
+  it.each([
+    { case: 'a follow-up', select: () => undefined },
+    {
+      case: 'a plan',
+      select: (view: Awaited<ReturnType<typeof backlogSetup>>['view']) =>
+        view.commands.listBottom(),
+    },
+  ])(
+    "a reload draws $case's detail again at its scroll",
+    async ({ select }) => {
+      const { view, sheet } = await backlogSetup();
+      select(view);
+      await settle();
+      const [detail] = findAll(sheet, 'backlog-detail');
+      detail.scrollTop = 120;
+
+      view.setLayouts(
+        withUser({
+          followupDetail: (parent, _input, kit) =>
+            kit.el(parent, 'div', 'mine-detail'),
+          docDetail: (parent, _input, kit) =>
+            kit.el(parent, 'div', 'mine-detail'),
+        }),
+      );
+      await settle();
+
+      expect(findAll(detail, 'mine-detail')).toHaveLength(1);
+      expect(detail.scrollTop).toBe(120);
+    },
+  );
 
   it('a reload keeps the open filter text and focus', async () => {
     const { view, sheet } = await backlogSetup();
     view.commands.filter();
     const [input] = findAll(sheet, 'backlog-filter-input');
-    (input as unknown as { value: string }).value = 'fir';
+    (input as FocusFakeElement).value = 'fir';
 
     view.setLayouts(
       withUser({
@@ -300,8 +309,8 @@ describe('backlog view layouts', () => {
     const [pane] = findAll(sheet, 'mine-list');
     const [moved] = findAll(pane, 'backlog-filter-input');
     expect(moved).toBe(input);
-    expect((moved as unknown as { value: string }).value).toBe('fir');
-    expect(focusedElements.at(-1)).toBe(input);
+    expect((moved as FocusFakeElement).value).toBe('fir');
+    expect(fakeDocument.activeElement).toBe(input);
   });
 
   it.each([
@@ -324,8 +333,8 @@ describe('backlog view layouts', () => {
         const [list] = findAll(layer, 'ui-picker-list');
         expect(layer.hidden).toBe(false);
         expect(list.children.map((row) => row.dataset.layout)).toEqual([
-          USER,
-          USER,
+          USER_LAYOUT,
+          USER_LAYOUT,
         ]);
       },
     },
@@ -340,12 +349,12 @@ describe('backlog view layouts', () => {
       } satisfies BacklogLayout,
       open: (view: Awaited<ReturnType<typeof backlogSetup>>['view']) =>
         view.commands.delete(),
-      check(overlays: FakeElement[], anchors: MadeAnchor[]) {
+      check(overlays: FakeElement[], anchors: RecordedAnchor[]) {
         const deleteScrim = overlays[1];
         const [body] = findAll(deleteScrim, 'mine-body');
         const [actions] = findAll(deleteScrim, 'ui-dialog-actions');
         expect(deleteScrim.hidden).toBe(false);
-        expect(body.dataset.layout).toBe(USER);
+        expect(body.dataset.layout).toBe(USER_LAYOUT);
         expect(actions.textContent).toContain('Delete');
         const liveConfirms = anchors.filter(
           (anchor) =>

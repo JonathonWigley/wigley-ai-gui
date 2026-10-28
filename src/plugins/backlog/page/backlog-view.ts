@@ -19,23 +19,29 @@ import {
   type ConfirmBodyParts,
   createConfirmPrompt,
 } from '../../../shared/page/confirm-prompt';
-import { element, markdownElement } from '../../../shared/page/dom';
+import { appended, element, markdownElement } from '../../../shared/page/dom';
 import { keepFocusedBox } from '../../../shared/page/editor-boxes';
-import type { KitCommands } from '../../../shared/page/layout-host/base-kit';
-import {
-  type DrawnPart,
-  drawPart,
-  type RollbackDeps,
+import { appSlot } from '../../../shared/page/layout-host/app-slot';
+import type {
+  KitCommands,
+  OwnerKitServices,
+} from '../../../shared/page/layout-host/base-kit';
+import type {
+  DrawnPart,
+  RollbackDeps,
 } from '../../../shared/page/layout-host/draw-part';
-import { pickLayout } from '../../../shared/page/layout-host/pick';
+import { createLayoutParts } from '../../../shared/page/layout-host/layout-parts';
 import {
   createListPicker,
+  type DrawnPickerRow,
+  type DrawRowInput,
   type ListPicker,
 } from '../../../shared/page/list-picker';
 import { createReducerStore } from '../../../shared/page/reducer-store';
 import { textBoxInput } from '../../../shared/page/text-box';
 import { textLineHeightPx } from '../../../shared/page/text-line';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
+import { rowAction } from '../../../shared/page/ui/row';
 import { sheet } from '../../../shared/page/ui/sheet';
 import { createSplit } from '../../../shared/page/ui/split';
 import { qualify } from '../../../shared/plugin-manifests';
@@ -82,14 +88,12 @@ import {
   FOLLOWUP_FORM_ID,
 } from './followup-editor';
 import {
-  type BacklogKitDeps,
+  type BacklogBaseScope,
   type BacklogKitScope,
   createBacklogKit,
 } from './layout/backlog-kit';
 
 const PLUGIN_ID = 'backlog';
-
-const DEFAULT_LAYOUT = 'default';
 
 // The tag picker's title, which its rows' input carries.
 const TAGS_PICKER = 'Tags';
@@ -97,10 +101,6 @@ const TAGS_PICKER = 'Tags';
 // A drawn part whose root the view keeps, and the dispose of its anchors and
 // boxes.
 type DrawnRoot = DrawnPart<{ element: HTMLElement }>;
-
-// The base scopes the view sets; the box, confirm and picker scopes are
-// pushed over them.
-export type BacklogBaseScope = 'list' | 'detail' | 'editor';
 
 type BacklogPushedScope = 'box' | 'confirm' | 'picker';
 
@@ -170,8 +170,6 @@ export interface BacklogView {
   // again with `shown`, keeping an open editor's draft and focused box, an
   // open filter, the scroll, the selection and the focus.
   setLayouts(shown: ShownLayouts<BacklogLayout>): void;
-  // Disposes every drawn part's anchors and boxes.
-  dispose(): void;
   commands: Record<BacklogCommand, () => void>;
 }
 
@@ -199,50 +197,19 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   const dispatch = store.dispatch;
 
   // ── Layouts ────────────────────────────────────────────────────────────
-  let shown: ShownLayouts<BacklogLayout> = {
-    layouts: new Map([[DEFAULT_LAYOUT, defaultLayout]]),
-    user: DEFAULT_LAYOUT,
-  };
-  const kitDeps: BacklogKitDeps = {
+  const parts = createLayoutParts<BacklogLayout, CompleteBacklogLayout>({
+    owner: PLUGIN_ID,
+    defaultLayout,
+    log: deps.log,
+  });
+  const kitServices: OwnerKitServices = {
     markdown: deps.markdown,
     keys: deps.keys,
     commands: deps.commands,
     platform: deps.platform,
   };
-  // Draws `part` into `parent` with the first of the user's layout and
-  // `default` that defines it; `build` draws the picked builder and returns
-  // its root.
-  const drawLayoutPart = <P extends keyof CompleteBacklogLayout>(
-    part: P,
-    parent: HTMLElement,
-    build: (
-      builder: CompleteBacklogLayout[P],
-      into: HTMLElement,
-      rollback: RollbackDeps,
-    ) => HTMLElement,
-  ): DrawnRoot =>
-    drawPart<BacklogLayout, CompleteBacklogLayout[P], { element: HTMLElement }>(
-      {
-        owner: PLUGIN_ID,
-        parent,
-        pick: pickLayout(
-          [shown.user, DEFAULT_LAYOUT],
-          shown.layouts,
-          (layout) => layout[part] !== undefined,
-        ),
-        defaultLayout,
-        // TypeScript cannot relate a `Partial` layout's part to the complete one's.
-        part: (layout) => layout[part] as CompleteBacklogLayout[P] | undefined,
-        build: (builder, into, rollback) => ({
-          element: build(builder, into, rollback),
-        }),
-        log: deps.log,
-        logSource: PLUGIN_ID,
-        partName: part,
-      },
-    );
   const kitFor = (scope: BacklogKitScope, rollback: RollbackDeps) =>
-    createBacklogKit(kitDeps, scope, rollback);
+    createBacklogKit(kitServices, scope, rollback);
 
   // ── Elements ───────────────────────────────────────────────────────────
   // The containers stay app-owned; each pane part draws inside its own, and
@@ -313,27 +280,27 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   });
   deps.addOverlay(picker.element);
 
-  // Each prompt's last body draw, disposed as the prompt draws its body again.
-  const confirmBodyDraws = new Map<BacklogConfirm['kind'], DrawnRoot>();
   // A prompt's `drawBody`: the layout's `confirmBody` for `kind`, with the
-  // prompt's own buttons.
+  // prompt's own buttons; each kind's last body draw is disposed as it draws
+  // again.
   const drawConfirmBody =
     (kind: BacklogConfirm['kind']) =>
-    (body: HTMLElement, parts: ConfirmBodyParts) => {
-      confirmBodyDraws.get(kind)?.dispose();
-      confirmBodyDraws.set(
-        kind,
-        drawLayoutPart('confirmBody', body, (confirmBody, into, rollback) =>
-          confirmBody(
+    (body: HTMLElement, prompt: ConfirmBodyParts) => {
+      parts.redraw(
+        'confirmBody',
+        body,
+        (confirmBody, into, rollback) => ({
+          element: confirmBody(
             into,
-            { kind, body: parts.body },
+            { kind, body: prompt.body },
             {
               ...kitFor('confirm', rollback),
-              keepButton: parts.keepButton,
-              confirmButton: parts.confirmButton,
+              keepButton: prompt.keepButton,
+              confirmButton: prompt.confirmButton,
             },
           ),
-        ),
+        }),
+        `confirmBody:${kind}`,
       );
     };
   const confirmCommand = (command: BacklogCommand) =>
@@ -378,12 +345,12 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   let shownOpenRoot: string | null = null;
   let shownFocus: string | null = null;
   let shownDetailKey: string | null = null;
+  // The detail's scroll as the last pane draw found it, which the detail body
+  // draws again at; null once that draw is done.
+  let keptDetailScroll: number | null = null;
   let detailRequest = 0;
-  // The last draw of each pane and of the detail body, and each row slot's
-  // draws; each is disposed before its part draws again.
-  let homesDraw: DrawnRoot | null = null;
-  let listDraw: DrawnRoot | null = null;
-  let detailDraw: DrawnRoot | null = null;
+  // The last draw of the editor pane and of the detail body, and each row
+  // slot's draws; each is disposed before its part draws again.
   // Null while no editor is open.
   let editorDraw: DrawnRoot | null = null;
   let detailBodyDraw: DrawnRoot | null = null;
@@ -397,52 +364,50 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     return state.focus === 'detail' ? 'detail' : 'list';
   };
 
+  // Draws the three panes again. The lists move to the new panes and keep
+  // their scroll; the detail body draws again at the detail's scroll.
   const drawPanes = () => {
-    // The lists move to the new panes; their scroll is kept across the move.
     const homesScroll = homesList.scrollTop;
     const rowsScroll = rowsList.scrollTop;
-    homesDraw?.dispose();
-    homesPane.replaceChildren();
-    homesDraw = drawLayoutPart('homes', homesPane, (homes, into, rollback) =>
-      withSlots(
-        homes(into, {
-          ...kitFor('list', rollback),
-          status: placed(status),
-          homeRows: placed(homesList),
-        }).element,
-        [status, homesList],
-      ),
-    );
-    listDraw?.dispose();
-    listPane.replaceChildren();
-    listDraw = drawLayoutPart('list', listPane, (list, into, rollback) =>
-      withSlots(
-        list(into, {
-          ...kitFor('list', rollback),
-          filterBox: placed(filterFrame),
-          rows: placed(rowsList),
-        }).element,
-        [filterFrame, rowsList],
-      ),
-    );
-    detailDraw?.dispose();
-    detailPane.replaceChildren();
-    detailDraw = drawLayoutPart(
-      'detail',
-      detailPane,
-      (detail, into, rollback) =>
-        withSlots(
-          detail(into, {
-            ...kitFor('detail', rollback),
-            body: placed(detailBody),
-            editor: placed(editorSlot),
-          }).element,
-          [detailBody, editorSlot],
-        ),
-    );
+    keptDetailScroll = detailPane.scrollTop;
+    parts.redraw('homes', homesPane, (homes, into, rollback) => {
+      const statusSlot = appSlot(status, 'status', rollback);
+      const rowsSlot = appSlot(homesList, 'homeRows', rollback);
+      const pane = homes(into, {
+        ...kitFor('list', rollback),
+        status: statusSlot.place,
+        homeRows: rowsSlot.place,
+      });
+      statusSlot.placeIfLeftOut(pane.element);
+      rowsSlot.placeIfLeftOut(pane.element);
+      return pane;
+    });
+    parts.redraw('list', listPane, (list, into, rollback) => {
+      const filterSlot = appSlot(filterFrame, 'filterBox', rollback);
+      const rowsSlot = appSlot(rowsList, 'rows', rollback);
+      const pane = list(into, {
+        ...kitFor('list', rollback),
+        filterBox: filterSlot.place,
+        rows: rowsSlot.place,
+      });
+      filterSlot.placeIfLeftOut(pane.element);
+      rowsSlot.placeIfLeftOut(pane.element);
+      return pane;
+    });
+    parts.redraw('detail', detailPane, (detail, into, rollback) => {
+      const bodySlot = appSlot(detailBody, 'body', rollback);
+      const editorPaneSlot = appSlot(editorSlot, 'editor', rollback);
+      const pane = detail(into, {
+        ...kitFor('detail', rollback),
+        body: bodySlot.place,
+        editor: editorPaneSlot.place,
+      });
+      bodySlot.placeIfLeftOut(pane.element);
+      editorPaneSlot.placeIfLeftOut(pane.element);
+      return pane;
+    });
     homesList.scrollTop = homesScroll;
     rowsList.scrollTop = rowsScroll;
-    shownDetailKey = null;
   };
 
   // `textBox` for one editor pane draw: frames `field`'s box in `parent` and
@@ -450,9 +415,8 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   const textBoxFor =
     (texts: DraftTexts, rollback: RollbackDeps) =>
     (parent: HTMLElement, field: EditorField): HTMLElement => {
-      const frame = inputFrame();
+      const frame = appended(parent, inputFrame());
       frame.classList.add('backlog-editor-box', `backlog-editor-box--${field}`);
-      parent.append(frame);
       followupEditor.mount(field, frame, texts[field]);
       rollback.recordBox(() => {
         if (followupEditor.isMounted(field)) {
@@ -468,12 +432,12 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     editorDraw?.dispose();
     followupEditor.destroy();
     editorSlot.replaceChildren();
-    editorDraw = drawLayoutPart(
+    editorDraw = parts.draw(
       'editor',
       editorSlot,
       (editorPane, into, rollback) => {
         const textBox = textBoxFor(editor.draft, rollback);
-        const root = editorPane(
+        const pane = editorPane(
           into,
           {
             kind: editor.kind,
@@ -481,20 +445,20 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
               editor.kind === 'create' ? 'New follow-up' : 'Edit follow-up',
           },
           { ...kitFor('editor', rollback), textBox },
-        ).element;
+        );
         for (const field of EDITOR_FIELDS) {
           if (!followupEditor.isMounted(field)) {
-            root.append(
+            pane.element.append(
               element(
                 'label',
                 'backlog-editor-label',
                 EDITOR_FIELD_LABELS[field],
               ),
             );
-            textBox(root, field);
+            textBox(pane.element, field);
           }
         }
-        return root;
+        return pane;
       },
     );
     editorSlot.hidden = false;
@@ -523,19 +487,20 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
       if (home.repo !== repo) {
         repo = home.repo;
         homeRowDraws.push(
-          drawLayoutPart(
-            'repoHeader',
-            homesList,
-            (repoHeader, into, rollback) =>
-              repoHeader(into, { repo: home.repo }, kitFor('list', rollback)),
-          ),
+          parts.draw('repoHeader', homesList, (repoHeader, into, rollback) => ({
+            element: repoHeader(
+              into,
+              { repo: home.repo },
+              kitFor('list', rollback),
+            ),
+          })),
         );
       }
-      const drawn = drawLayoutPart(
+      const drawn = parts.draw(
         'homeRow',
         homesList,
-        (homeRow, into, rollback) =>
-          homeRow(
+        (homeRow, into, rollback) => ({
+          element: homeRow(
             into,
             {
               repo: home.repo,
@@ -546,10 +511,11 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
             },
             kitFor('list', rollback),
           ),
+        }),
       );
       homeRowDraws.push(drawn);
       const root = drawn.built.element;
-      onRowClick(root, () => {
+      rowAction(root, () => {
         dispatch({ type: 'openHome', root: home.root });
         deps.homePicked();
       });
@@ -566,14 +532,23 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   // Draws `shown`'s row into the rows slot; its `cursorActions` slot is
   // `actions`, appended at the row's end when the row leaves it out.
   const drawRow = (shown: BacklogRow, actions: HTMLElement): DrawnRoot => {
-    const rowKit = (rollback: RollbackDeps): RowKit => ({
-      ...kitFor('list', rollback),
-      cursorActions: placed(actions),
-    });
+    // One attempt's row, which `draw` builds with the row kit.
+    const withActions = (
+      rollback: RollbackDeps,
+      draw: (kit: RowKit) => HTMLElement,
+    ) => {
+      const actionsSlot = appSlot(actions, 'cursorActions', rollback);
+      const root = draw({
+        ...kitFor('list', rollback),
+        cursorActions: actionsSlot.place,
+      });
+      actionsSlot.placeIfLeftOut(root);
+      return { element: root };
+    };
     switch (shown.kind) {
       case 'followup':
-        return drawLayoutPart('followupRow', rowsList, (row, into, rollback) =>
-          withSlots(
+        return parts.draw('followupRow', rowsList, (row, into, rollback) =>
+          withActions(rollback, (kit) =>
             row(
               into,
               {
@@ -582,14 +557,13 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
                 tags: shown.item.tags,
                 done: shown.item.done,
               },
-              rowKit(rollback),
+              kit,
             ),
-            [actions],
           ),
         );
       case 'plan':
-        return drawLayoutPart('planRow', rowsList, (row, into, rollback) =>
-          withSlots(
+        return parts.draw('planRow', rowsList, (row, into, rollback) =>
+          withActions(rollback, (kit) =>
             row(
               into,
               {
@@ -601,14 +575,13 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
                 written: shown.plan.written,
                 isExpanded: shown.isExpanded,
               },
-              rowKit(rollback),
+              kit,
             ),
-            [actions],
           ),
         );
       case 'feature':
-        return drawLayoutPart('featureRow', rowsList, (row, into, rollback) =>
-          withSlots(
+        return parts.draw('featureRow', rowsList, (row, into, rollback) =>
+          withActions(rollback, (kit) =>
             row(
               into,
               {
@@ -617,20 +590,18 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
                 total: shown.feature.total,
                 isExpanded: shown.isExpanded,
               },
-              rowKit(rollback),
+              kit,
             ),
-            [actions],
           ),
         );
       case 'task':
-        return drawLayoutPart('taskRow', rowsList, (row, into, rollback) =>
-          withSlots(
+        return parts.draw('taskRow', rowsList, (row, into, rollback) =>
+          withActions(rollback, (kit) =>
             row(
               into,
               { title: shown.task.title, status: shown.task.status },
-              rowKit(rollback),
+              kit,
             ),
-            [actions],
           ),
         );
     }
@@ -665,15 +636,16 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
         const shownSection: GroupHeaderInput['section'] = shown.kind;
         section = shownSection;
         rowDraws.push(
-          drawLayoutPart(
+          parts.draw(
             'groupHeader',
             rowsList,
-            (groupHeader, into, rollback) =>
-              groupHeader(
+            (groupHeader, into, rollback) => ({
+              element: groupHeader(
                 into,
                 { section: shownSection, title: SECTION_TITLES[shownSection] },
                 kitFor('list', rollback),
               ),
+            }),
           ),
         );
       }
@@ -681,7 +653,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
       const drawn = drawRow(shown, actions);
       rowDraws.push(drawn);
       const root = drawn.built.element;
-      onRowClick(root, () => {
+      rowAction(root, () => {
         dispatch({ type: 'select', key: shown.key });
         dispatch({ type: 'focus', focus: 'items' });
       });
@@ -698,13 +670,13 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     const reason = emptyReason(state);
     if (reason !== null) {
       rowDraws.push(
-        drawLayoutPart('empty', rowsList, (empty, into, rollback) =>
-          empty(
+        parts.draw('empty', rowsList, (empty, into, rollback) => ({
+          element: empty(
             into,
             { reason, filter: state.filter },
             kitFor('list', rollback),
           ),
-        ),
+        })),
       );
     }
     listPane.classList.toggle('is-pane-inactive', state.focus !== 'items');
@@ -728,11 +700,11 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   ) => {
     const { item } = shown;
     clearDetailBody();
-    detailBodyDraw = drawLayoutPart(
+    detailBodyDraw = parts.draw(
       'followupDetail',
       detailBody,
-      (followupDetail, into, rollback) =>
-        followupDetail(
+      (followupDetail, into, rollback) => ({
+        element: followupDetail(
           into,
           {
             title: item.title,
@@ -742,6 +714,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
           },
           kitFor('detail', rollback),
         ),
+      }),
     );
   };
 
@@ -752,12 +725,12 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     problem: string | null,
   ) => {
     clearDetailBody();
-    detailBodyDraw = drawLayoutPart(
+    detailBodyDraw = parts.draw(
       'docDetail',
       detailBody,
       (docDetail, into, rollback) => {
         const kit = kitFor('detail', rollback);
-        return docDetail(
+        const root = docDetail(
           into,
           { path, shownPath: tilde(path), problem },
           {
@@ -766,12 +739,11 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
               if (problem !== null) {
                 return kit.emptyState(parent, problem);
               }
-              const doc = markdownElement('div', 'md', html);
-              parent.append(doc);
-              return doc;
+              return appended(parent, markdownElement('div', 'md', html));
             },
           },
         );
+        return { element: root };
       },
     );
   };
@@ -789,9 +761,9 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     }
   };
 
-  // Reads and renders a plan, feature or task file; a read overtaken by a
-  // later selection draws nothing.
-  const showDoc = (path: string) => {
+  // Reads and renders a plan, feature or task file, then scrolls the detail
+  // to `scrollTop`; a read overtaken by a later selection draws nothing.
+  const showDoc = (path: string, scrollTop: number) => {
     const request = ++detailRequest;
     channel
       .invoke('readDoc', path)
@@ -799,7 +771,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
       .then((html) => {
         if (request === detailRequest) {
           drawDocDetail(path, html, null);
-          detailPane.scrollTop = 0;
+          detailPane.scrollTop = scrollTop;
         }
       })
       .catch((error) => {
@@ -811,7 +783,8 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   };
 
   // Draws the selected row's detail when the row, its text or the load it
-  // came from changed since the last draw.
+  // came from changed since the last draw, at the top; draws it again at the
+  // kept scroll when only the panes drew again.
   const drawDetail = (state: BacklogState) => {
     const shown = selectedRow(state);
     detailBody.hidden = state.editor !== null;
@@ -822,19 +795,22 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
           ? `${shown.key}\n${JSON.stringify(shown.item)}`
           : `${shown.key}\n${String(loadedCount)}`;
     }
-    if (key === shownDetailKey) {
+    const isSameDetail = key === shownDetailKey;
+    if (isSameDetail && keptDetailScroll === null) {
       return;
     }
+    const scrollTop = isSameDetail ? (keptDetailScroll ?? 0) : 0;
     shownDetailKey = key;
+    keptDetailScroll = null;
     detailRequest += 1;
-    detailPane.scrollTop = 0;
     if (shown === null) {
       clearDetailBody();
     } else if (shown.kind === 'followup') {
       drawFollowupDetail(shown);
     } else {
-      showDoc(docPathOf(shown));
+      showDoc(docPathOf(shown), scrollTop);
     }
+    detailPane.scrollTop = scrollTop;
   };
 
   const syncEditor = (state: BacklogState) => {
@@ -1082,32 +1058,26 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   // Gives the focus back to the pane the keys act on once the picker closed.
   const pickerClosed = () => render(true);
 
-  // The tag picker's `drawRow`: the layout's `pickerRow`, whose key anchors
-  // the picker disposes.
+  // The tag picker's `drawRow`: the layout's `pickerRow`, whose draw the
+  // picker disposes.
   const drawPickerRow = (
     list: HTMLElement,
     _item: string,
-    input: {
-      label: string;
-      trailing: HTMLElement | null;
-      recordAnchor(anchor: Disposable): void;
-    },
-  ): HTMLElement =>
-    drawLayoutPart('pickerRow', list, (pickerRow, into, rollback) => {
-      const kit = kitFor('picker', {
-        recordBox: rollback.recordBox,
-        recordAnchor(anchor) {
-          rollback.recordAnchor(anchor);
-          input.recordAnchor(anchor);
-        },
-      });
-      const root = pickerRow(
-        into,
-        { picker: TAGS_PICKER, label: input.label },
-        { ...kit, trailing: () => input.trailing },
-      );
-      return input.trailing === null ? root : withSlots(root, [input.trailing]);
-    }).built.element;
+    input: DrawRowInput,
+  ): DrawnPickerRow => {
+    const drawn = parts.draw(
+      'pickerRow',
+      list,
+      (pickerRow, into, rollback) => ({
+        element: pickerRow(
+          into,
+          { picker: TAGS_PICKER, label: input.label },
+          { ...kitFor('picker', rollback), trailing: () => input.trailing },
+        ),
+      }),
+    );
+    return { element: drawn.built.element, dispose: drawn.dispose };
+  };
 
   const pickTag = () => {
     const state = store.get();
@@ -1299,7 +1269,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
       }
     },
     setLayouts(next) {
-      shown = next;
+      parts.setLayouts(next);
       keepFocusedBox(followupEditor.boxes, FOLLOWUP_FORM_ID, () => {
         drawPanes();
         const { editor } = store.get();
@@ -1315,58 +1285,13 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
       deletePrompt.redraw();
       discardPrompt.redraw();
     },
-    dispose() {
-      const draws = [
-        homesDraw,
-        listDraw,
-        detailDraw,
-        editorDraw,
-        detailBodyDraw,
-        ...homeRowDraws,
-        ...rowDraws,
-        ...confirmBodyDraws.values(),
-      ];
-      for (const draw of draws) {
-        draw?.dispose();
-      }
-    },
     commands,
   };
 }
 
-// `parent.append(slot)` as a kit's slot member: places the app's `slot` and
-// returns it.
-function placed(slot: HTMLElement): (parent: HTMLElement) => HTMLElement {
-  return (parent) => {
-    parent.append(slot);
-    return slot;
-  };
-}
-
-// Appends each of `slots` that a part left out to the end of its `root`.
-function withSlots(root: HTMLElement, slots: readonly HTMLElement[]) {
-  for (const slot of slots) {
-    if (!root.contains(slot)) {
-      root.append(slot);
-    }
-  }
-  return root;
-}
-
-// A row's `cursorActions` slot; it takes no box of its own, so the cursor
-// prompt in it lays out as a child of the row.
+// A row's `cursorActions` slot, which the cursor prompt moves into.
 function cursorActionsSlot(): HTMLElement {
-  const slot = element('span');
-  slot.style.display = 'contents';
-  return slot;
-}
-
-// Makes a row root run `onClick` on a click without taking focus, as a
-// clickable `.ui-row` does.
-function onRowClick(root: HTMLElement, onClick: () => void): void {
-  root.classList.add('ui-row--action');
-  root.addEventListener('mousedown', (event) => event.preventDefault());
-  root.addEventListener('click', onClick);
+  return element('span', 'backlog-row-actions-slot');
 }
 
 // Disposes each of `draws`; returns the empty list that replaces them.

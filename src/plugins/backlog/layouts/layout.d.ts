@@ -17,7 +17,8 @@ import type {
 //   into it on open.
 // - `textBox` appends the field's frame (`ui-input backlog-editor-box backlog-editor-box--<field>`) to `parent`,
 //   mounts the field's vim box in it with the draft text, and returns the frame. Each field mounts once per draw.
-// - `cursorActions` → a `span` the app fills with the cursor prompt while the row is the selected row.
+// - `cursorActions` → `span.backlog-row-actions-slot`, which takes no box of its own; the app fills it with the cursor
+//   prompt `span.backlog-row-actions` while the row is the selected row.
 // - `document` → `div.md` holding the rendered doc, or the `emptyState` of `problem` when `problem` is not null.
 // - `trailing` → the picker's element for the end of the cursor row; pass it as `KitRowOptions.trailing`.
 // What a part leaves out:
@@ -30,7 +31,9 @@ import type {
 // The app sets the click on each row root and toggles `is-selected` and `is-cursor` there, so a row gives `kit.row`
 // no `onClick`. The list picker sets `title`, `is-selected`, `is-cursor` and the click on a `pickerRow` root.
 
-// A pane's root, appended to `parent`.
+// A pane's root, appended to `parent`. The `homes` and `list` roots fill `parent`, a grid of one `minmax(0, 1fr)` cell,
+// and lay out their own children; the `detail` root sits in the pane that scrolls, and the `editor` root is the one
+// item of a flex column. `default` lays out its roots through their `backlog-pane` class.
 export interface BacklogPane {
   element: HTMLElement;
 }
@@ -115,19 +118,8 @@ export interface ConfirmBodyInput {
   body: string;
 }
 
-// The parts Backlog's look needs beyond the base kit.
-export interface BacklogKit extends BaseKit {
-  // `span.ui-row-trailing`, appended to `row`.
-  rowTrailing(row: HTMLElement): HTMLElement;
-  // `span.ui-key-edge.backlog-edge.backlog-edge--<side>` for the owner's command `command`: 'end' draws
-  // `<keys> <label> ›`, 'start' draws `‹ <label> <keys>`.
-  edgePrompt(
-    parent: HTMLElement,
-    side: 'start' | 'end',
-    command: string,
-    label: string,
-  ): HTMLElement;
-}
+// The kit every Backlog part draws with: the base kit, its keys in the part's scope.
+export interface BacklogKit extends BaseKit {}
 export interface HomesKit extends BacklogKit {
   status(parent: HTMLElement): HTMLElement;
   homeRows(parent: HTMLElement): HTMLElement;
@@ -163,65 +155,67 @@ export interface ConfirmBodyKit extends BacklogKit {
   confirmButton(parent: HTMLElement): HTMLButtonElement;
 }
 
-// Panes are drawn into app-owned containers once per layout set; rows and entries on every render, one call per
-// item. Kit scopes: `homes` and `list` and their rows `backlog.list`, `detail` and its entries `backlog.detail`,
-// `editor` `backlog.editor`, `pickerRow` `backlog.picker`, `confirmBody` `backlog.confirm`.
-export interface CompleteBacklogLayout {
-  homes(parent: HTMLElement, kit: HomesKit): BacklogPane;
-  list(parent: HTMLElement, kit: ListKit): BacklogPane;
-  detail(parent: HTMLElement, kit: DetailKit): BacklogPane;
-  editor(parent: HTMLElement, input: EditorInput, kit: EditorKit): BacklogPane;
-  repoHeader(
+// A user layout defines only the parts it changes; `default` draws the rest. The `homes`, `list` and `detail` panes are
+// drawn into app-owned containers once per layout set, the `editor` pane on each editor open and again on a layout
+// set while it is open; rows and entries on every render, one call per item. Kit scopes: `homes` and `list` and
+// their rows `backlog.list`, `detail` and its entries `backlog.detail`, `editor` `backlog.editor`, `pickerRow`
+// `backlog.picker`, `confirmBody` `backlog.confirm`.
+export interface BacklogLayout {
+  homes?(parent: HTMLElement, kit: HomesKit): BacklogPane;
+  list?(parent: HTMLElement, kit: ListKit): BacklogPane;
+  detail?(parent: HTMLElement, kit: DetailKit): BacklogPane;
+  editor?(parent: HTMLElement, input: EditorInput, kit: EditorKit): BacklogPane;
+  repoHeader?(
     parent: HTMLElement,
     input: RepoHeaderInput,
     kit: BacklogKit,
   ): HTMLElement;
-  homeRow(
+  homeRow?(
     parent: HTMLElement,
     input: HomeRowInput,
     kit: BacklogKit,
   ): HTMLElement;
-  groupHeader(
+  groupHeader?(
     parent: HTMLElement,
     input: GroupHeaderInput,
     kit: BacklogKit,
   ): HTMLElement;
-  followupRow(
+  followupRow?(
     parent: HTMLElement,
     input: FollowupRowInput,
     kit: RowKit,
   ): HTMLElement;
-  planRow(parent: HTMLElement, input: PlanRowInput, kit: RowKit): HTMLElement;
-  featureRow(
+  planRow?(parent: HTMLElement, input: PlanRowInput, kit: RowKit): HTMLElement;
+  featureRow?(
     parent: HTMLElement,
     input: FeatureRowInput,
     kit: RowKit,
   ): HTMLElement;
-  taskRow(parent: HTMLElement, input: TaskRowInput, kit: RowKit): HTMLElement;
-  empty(parent: HTMLElement, input: EmptyInput, kit: BacklogKit): HTMLElement;
-  followupDetail(
+  taskRow?(parent: HTMLElement, input: TaskRowInput, kit: RowKit): HTMLElement;
+  empty?(parent: HTMLElement, input: EmptyInput, kit: BacklogKit): HTMLElement;
+  followupDetail?(
     parent: HTMLElement,
     input: FollowupDetailInput,
     kit: BacklogKit,
   ): HTMLElement;
-  docDetail(
+  docDetail?(
     parent: HTMLElement,
     input: DocDetailInput,
     kit: DocKit,
   ): HTMLElement;
-  pickerRow(
+  pickerRow?(
     parent: HTMLElement,
     input: PickerRowInput,
     kit: PickerRowKit,
   ): HTMLElement;
-  confirmBody(
+  confirmBody?(
     parent: HTMLElement,
     input: ConfirmBodyInput,
     kit: ConfirmBodyKit,
   ): HTMLElement;
 }
 
-// A user layout: it defines only the parts it changes; `default` draws the rest.
-export interface BacklogLayout extends Partial<CompleteBacklogLayout> {}
+// A layout with every part defined, as `default` is.
+export interface CompleteBacklogLayout extends Required<BacklogLayout> {}
 
 export type { KitRowOptions };

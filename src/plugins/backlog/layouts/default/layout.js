@@ -1,8 +1,7 @@
 // @ts-check
 
-// The built-in Backlog look. Each pane's root is `display: contents`, so the
-// app's container lays out the pane's children as its own and `backlog.css`
-// applies unchanged.
+// The built-in Backlog look. Each pane's root is `div.backlog-pane`, whose
+// tracks `backlog.css` sets by the container it fills.
 
 const FIELD_LABELS = /** @type {const} */ ([
   ['title', 'Title'],
@@ -30,9 +29,26 @@ const EMPTY_COMMANDS = { noHome: 'back', nothing: 'create' };
  * @param {import('../layout').BacklogKit} kit
  */
 function paneRoot(parent, kit) {
-  const root = kit.el(parent, 'div', 'backlog-pane');
-  root.style.display = 'contents';
-  return root;
+  return kit.el(parent, 'div', 'backlog-pane');
+}
+
+/**
+ * A pane header's edge prompt for `command`: `<keys> <label> ›` at the end,
+ * `‹ <label> <keys>` at the start.
+ * @param {HTMLElement} parent
+ * @param {import('../layout').BacklogKit} kit
+ * @param {'start' | 'end'} side
+ * @param {string} command
+ * @param {string} label
+ */
+function edge(parent, kit, side, command, label) {
+  const shown = kit.edge(
+    parent,
+    command,
+    side === 'end' ? { side, label } : { side, chevron: `‹ ${label}` },
+  );
+  shown.classList.add('backlog-edge', `backlog-edge--${side}`);
+  return shown;
 }
 
 /**
@@ -97,7 +113,7 @@ const layout = {
     hint(keys, kit, 'create', 'new');
     hint(keys, kit, 'rescan', 'rescan');
     hint(keys, kit, 'commit', 'commit');
-    kit.edgePrompt(header, 'end', 'focusDetail', 'detail');
+    edge(header, kit, 'end', 'focusDetail', 'detail');
     kit.filterBox(root);
     kit.rows(root);
     return { element: root };
@@ -105,7 +121,7 @@ const layout = {
   detail(parent, kit) {
     const root = paneRoot(parent, kit);
     const head = kit.el(root, 'div', 'backlog-detail-head');
-    kit.edgePrompt(head, 'start', 'focusList', 'list');
+    edge(head, kit, 'start', 'focusList', 'list');
     hint(head, kit, 'openInDocs', 'docs');
     kit.body(root);
     kit.editor(root);
