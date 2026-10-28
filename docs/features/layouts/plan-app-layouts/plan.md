@@ -240,7 +240,7 @@ under `<Leader>zl`: `p` primer (task 05), `s` sessions (task 10), `c` chat (task
 - [x] [Doc re-read](16-doc-re-read.md)
 
 ### Wave 6
-- [ ] [Final verification](17-final-verification.md)
+- [x] [Final verification](17-final-verification.md)
 
 ## Run log
 
@@ -263,6 +263,7 @@ Review base: efe64ec38d6a802e539ab917ad27c20037a321ae
 - 13 · 49878e5 · diff read: Produces present; typecheck, layers, styles, oxlint clean; renderer/main/config/settings/shared tests 1276 pass; selftest all passed · concerns: read-shell-layout.ts is the fifth copy of the reader loop; title-bar.ts and activity-bar.ts deleted (folded into shell-chrome.ts); no doc names shell.layout yet (task 16); focus across redraw proved only in the fake DOM
 - 15 · 2809b26 · diff read: Produces present; typecheck and lint clean; chat tests 342 pass; selftest passes incl. every chat group, layout preview group, every key placed · concerns: chat main's dispose does not end an open preview row; AGENTS.md debug keys name only zlo (task 16)
 - 16 · 03740cc · docs only; every listed file read in full; fixes in AGENTS.md, DESIGN.md, layouts, agent-chat, ui-design designs, followups, master-plan; primer design and keymap.md no change; marketplace README fixed in its own commit 61e467c · concerns: marketplace tree holds a peer's uncommitted 1.13.0 version bump and an untracked skills/feature-spec/, left out of this run's commit
+- 17 · 31ee78d · playtests A (16/17) and B (27/27 parts): check 6 failed (keys HelpKit.section clashed with BaseKit.section under skipLibCheck off), fixed in 31ee78d and swept over all 11 contracts; for the user: real Cmd+V image paste after a chat layout reload, and the previews in a visible npm start show no notification · concerns: check 8 baseline did not cover chat dialogs, image viewer, gallery, keys help; check 23 notes/backlog pickers untested; side findings: primer rail overflows at 160px (187px content), notes markup toolbar carries no data-layout, docs reopens at top after :wq, Space z s twice resets side bar scroll, item card header shows only n of m with the rail focused, drive setting writes a flat key config rejects
 ### Contract changes
 - LayoutLoaderDeps: dataUrl → layoutUrl(name, revision, path), plus owner: LayoutOwner · why: the loader marks each link's data-layout-owner · consumers: none outside show-layouts.ts · group 02
 - LayoutLoader: gains dispose() removing its links · why: LayoutShow.dispose() removes the show's stylesheet links · consumers: none outside show-layouts.ts · group 02
@@ -278,6 +279,7 @@ Review base: efe64ec38d6a802e539ab917ad27c20037a321ae
 - keys CompleteLayout: interface → Required<Layout>; KeysPartsDeps = { defaultLayout, kit: KeysKitDeps, log }; createKeysKit(deps, scope, rollback); HelpView gains layoutsChanged(); mountHelpView and mountWhichKeyView drop platform · why: open fields and redraw on a layout change · consumers: keys only · group 12
 - SessionsView: setLayouts, showPreview → also isPreviewShown() and stepPreview(by); SessionsViewDeps gains kit deps; SidebarView and SessionTabsView gain redrawPane(); mountSidebarView(activate, parts) · why: page start steps the sample while the preview shows · consumers: none outside 10 · group 10
 - shell-chrome.ts also exports createShellKit(base): ShellKit; ShellKit.icon builds span.codicon.codicon-<name> · why: the kit's icon member had no home · consumers: none outside 13 · group 13
+- keys HelpKit.section(parent, HelpSectionInput) → HelpKit.helpSection · why: clashed with BaseKit.section (TS2430 in the user's folder) · consumers: keys user layouts · group 17 fix
 ### Rulings
 - selectedRow returns stored selection without railRows lookup — selection is the identity rows are built from — a stale selection would come back as is · group 01 · group 01
 - showTarget checks only the target's task exists, not the item — no caller builds a missing-item target — would select a row with no item · group 01 · group 01
@@ -316,3 +318,4 @@ Review base: efe64ec38d6a802e539ab917ad27c20037a321ae
 - followups hot-reload entry narrowed to forms, not removed — forms rebuild still remounts every box and LayoutSet.changed is unread — none · group 16 · group 16
 ### Review rounds
 ### Test gate
+- full vitest suite (3877 tests, 7s — every module the range touches, cheaper whole than picked) and npm run selftest (every owner's self-test groups, the layout previews and the placement check) · PASS: 3877/3877, selftest all passed, every key placed, at 1237045

@@ -1,6 +1,6 @@
 # 17 — Final verification
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 6 · Depends on: 01–16
 Plan: [plan.md](plan.md)
@@ -136,4 +136,4 @@ the code, and the check runs again.
 
 ## Proof
 
-<written by wigley:make>
+Commit 31ee78d · proof: playtests A (16/17) and B (27/27 parts): check 6 failed (keys HelpKit.section clashed with BaseKit.section under skipLibCheck off), fixed in 31ee78d and swept over all 11 contracts; for the user: real Cmd+V image paste after a chat layout reload, and the previews in a visible npm start show no notification · concerns: check 8 baseline did not cover chat dialogs, image viewer, gallery, keys help; check 23 notes/backlog pickers untested; side findings: primer rail overflows at 160px (187px content), notes markup toolbar carries no data-layout, docs reopens at top after :wq, Space z s twice resets side bar scroll, item card header shows only n of m with the rail focused, drive setting writes a flat key config rejects
