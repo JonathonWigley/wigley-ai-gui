@@ -5,12 +5,15 @@ import type { PushedScope } from '../contracts/plugin';
 // modal views push over it. `current` is the scope pushed last and not yet
 // popped, else the base. `onChange` listeners run each time `current` changes;
 // a pushed scope's `onBaseChanged` listeners run each time the base changes
-// while it is pushed, after the `onChange` listeners.
+// while it is pushed, after the `onChange` listeners. `onBaseChange` listeners
+// run each time `setBase` moves the base to another scope, after both; a push
+// or a pop runs none.
 export interface ScopeStack {
   setBase(scope: ViewScope): void;
   push(scope: ViewScope): PushedScope;
   current(): ViewScope;
   onChange(listener: (scope: ViewScope) => void): void;
+  onBaseChange(listener: (base: ViewScope) => void): void;
 }
 
 interface PushedEntry {
@@ -24,6 +27,7 @@ export function createScopeStack(initial: ViewScope): ScopeStack {
   // entry holds the same scope.
   const pushed: PushedEntry[] = [];
   const listeners: ((scope: ViewScope) => void)[] = [];
+  const baseListeners: ((base: ViewScope) => void)[] = [];
   const current = () => pushed.at(-1)?.scope ?? base;
 
   // Runs `change`, then tells the listeners when it moved `current`.
@@ -61,6 +65,9 @@ export function createScopeStack(initial: ViewScope): ScopeStack {
         base = scope;
       });
       tellPushedOfBase();
+      for (const listener of baseListeners) {
+        listener(base);
+      }
     },
     push(scope) {
       const entry: PushedEntry = { scope, baseListeners: [] };
@@ -81,6 +88,9 @@ export function createScopeStack(initial: ViewScope): ScopeStack {
     current,
     onChange(listener) {
       listeners.push(listener);
+    },
+    onBaseChange(listener) {
+      baseListeners.push(listener);
     },
   };
 }

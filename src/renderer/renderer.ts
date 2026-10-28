@@ -8,6 +8,7 @@ import '../shared/page/ui/materials.css';
 import './shell/shell.css';
 import type { Clock, Timers } from '../contracts/ambient';
 import type { CommandId } from '../contracts/commands';
+import { PANE_RESIZE_COMMANDS } from '../contracts/panes';
 import type { PageCommandContext, PageServices } from '../contracts/plugin';
 import type { AppConfig } from '../contracts/settings';
 import { manifests } from '../plugins/manifests';
@@ -34,6 +35,7 @@ import { createLogView } from './log-view';
 import { createMarkdownItRenderer } from './markdown-it/markdown-it-renderer';
 import { createScopeStack } from './key-scope';
 import { installPageKeys } from './page-keys';
+import { createPaneResize } from './pane-resize';
 import { createPendingKeys } from './pending-keys';
 import { createPageApi } from './plugins/page-api';
 import defaultChromeLayout from './shell/layouts/default/layout.js';
@@ -105,6 +107,8 @@ async function start() {
   const shell = mountShell(
     document.getElementById('app') as HTMLElement,
     defaultShellLayout,
+    uiState.scoped('shell'),
+    timers,
   );
   const { areas } = shell;
   const commands = new CommandRegistry<PageCommandContext>();
@@ -148,6 +152,18 @@ async function start() {
   chrome.showProblems(config.problems);
 
   const scopeStack = createScopeStack(INITIAL_SCOPE);
+  const paneResize = createPaneResize(shell.sideBarDivider);
+  // A target set under the previous base belongs to a view no longer in force.
+  scopeStack.onBaseChange(() => paneResize.dropTarget());
+  commands.register(PANE_RESIZE_COMMANDS.left, () => paneResize.resize('left'));
+  commands.register(PANE_RESIZE_COMMANDS.right, () =>
+    paneResize.resize('right'),
+  );
+  for (const vertical of [PANE_RESIZE_COMMANDS.up, PANE_RESIZE_COMMANDS.down]) {
+    commands.register(vertical, () =>
+      log('page', 'no pane divider runs up or down'),
+    );
+  }
   // Rejects editor binds vim could not tell apart, before any is mapped.
   requireUnambiguousEditorBinds(keymap.editor.binds, keymap.editor.leader);
   // An insert-mode key with no bind in force types as it would unbound, so
@@ -228,6 +244,7 @@ async function start() {
           dependency,
           bus,
           layouts,
+          paneResize,
         }),
       );
       const handlers: Record<string, (context: PageCommandContext) => void> =
@@ -242,6 +259,7 @@ async function start() {
   const keysExports = started.get(KEYS_PLUGIN_ID)?.exports;
   if (keysExports !== undefined) {
     chrome.setKeys(keysExports as BaseKitDeps['keys']);
+    shell.setKeys(keysExports as BaseKitDeps['keys']);
   }
   commands.requireRegistered(
     [...keymap.editor.binds, ...keymap.page].map((bind) => bind.command),

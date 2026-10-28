@@ -1,4 +1,7 @@
+import type { Timers } from '../../contracts/ambient';
+import type { CommandId } from '../../contracts/commands';
 import type { Disposable } from '../../contracts/disposable';
+import type { ResizeTarget } from '../../contracts/panes';
 import type {
   AlignedArea,
   Alignment,
@@ -7,6 +10,11 @@ import type {
   ContributeOptions,
   ShellLayout,
 } from '../../contracts/plugin';
+import type { UiState } from '../../contracts/ui-state';
+import type { BaseKitDeps } from '../../shared/page/layout-host/base-kit';
+import type { AnchorNamer } from '../../shared/page/ui/key-anchors';
+import { createSplitDivider } from '../../shared/page/ui/split';
+import { clampSplitWidth } from '../../shared/page/ui/split-width';
 import type { SideBarLayout } from './modes';
 
 const AREA_NAMES: readonly AreaName[] = [
@@ -90,11 +98,74 @@ export function nextInTrack<Entry extends { placement: Placement }>(
 // `data-side-bar`. `setChromeLayout` names the user's shell layout on the four
 // chrome areas' elements (`data-layout`, with `data-layout-owner="shell"`),
 // kept across every later mount, so the layout's CSS restyles their frames.
+// `sideBarDivider` is the side bar's resize divider, which moves only while
+// the side bar is beside the content. `setKeys` anchors its handle's resize
+// prompt through `keys`, again on each call. `dispose` disposes the divider,
+// stops watching the root's width and removes the handle.
 export interface Shell {
   areas: Record<AreaName, Area>;
   setLayout(layout: ShellLayout): Disposable;
   layOutSideBar(layout: SideBarLayout): void;
   setChromeLayout(name: string): void;
+  sideBarDivider: ResizeTarget;
+  setKeys(keys: BaseKitDeps['keys']): void;
+  dispose(): void;
+}
+
+// The side bar's least width, and the least width it leaves the main area.
+const SIDE_BAR_MIN = 160;
+const MAIN_MIN = 320;
+
+// The side bar's open width when the `sidebar-width` token is no pixel length.
+const SIDE_BAR_FALLBACK_WIDTH = 256;
+
+// The side bar's open width: the `sidebar-width` theme token's pixels as
+// `root` computes it.
+function sideBarOpenWidth(root: HTMLElement): number {
+  const token = parseFloat(
+    getComputedStyle(root).getPropertyValue('--wg-sidebar-width'),
+  );
+  return Number.isFinite(token) ? token : SIDE_BAR_FALLBACK_WIDTH;
+}
+
+// An anchor function that anchors through the keys `setKeys` hands it, nothing
+// before the first; each `setKeys` disposes every live anchor and anchors it
+// again through the new keys.
+function createForwardingAnchor(): {
+  anchor: AnchorNamer<never>;
+  setKeys(keys: BaseKitDeps['keys']): void;
+} {
+  interface Forwarded {
+    element: HTMLElement;
+    command: CommandId;
+    live: Disposable | null;
+  }
+  const forwarded = new Set<Forwarded>();
+  let keys: BaseKitDeps['keys'] | null = null;
+  return {
+    anchor(element, command) {
+      const entry: Forwarded = {
+        element,
+        command,
+        live: keys?.anchor(element, command) ?? null,
+      };
+      forwarded.add(entry);
+      return {
+        dispose() {
+          entry.live?.dispose();
+          entry.live = null;
+          forwarded.delete(entry);
+        },
+      };
+    },
+    setKeys(next) {
+      keys = next;
+      for (const entry of forwarded) {
+        entry.live?.dispose();
+        entry.live = next.anchor(entry.element, entry.command);
+      }
+    },
+  };
 }
 
 // The areas whose frames a user shell layout restyles.
@@ -216,18 +287,31 @@ function createStatusBarHeight(): { observe(statusBar: HTMLElement): void } {
 // element when the layout gave the area no tracks) with its alignment as
 // `data-align`, and hides the area's element while it holds none;
 // the side bar's element shows or hides only by `layOutSideBar`, hidden until
-// the first call.
-export function mountShell(root: HTMLElement, layout: ShellLayout): Shell {
+// the first call. The side bar's width is `--shell-side-bar-width` on `root`,
+// unitless pixels, which its resize handle `div.shell-side-bar-handle`, a
+// child of `root` shown only while the side bar is beside, drags and stores in
+// `uiState` under `side-bar-width`; `timers` runs the handle prompt's linger.
+// Beside, the side bar draws no wider than leaves the main area its least
+// width, kept as `root` resizes, while `uiState` keeps the user's width.
+export function mountShell(
+  root: HTMLElement,
+  layout: ShellLayout,
+  uiState: UiState,
+  timers: Timers,
+): Shell {
   const initialLayout = layout;
   let currentLayout = layout;
   // Counts layout replacements, so a restore knows whether its layout is
   // still the one mounted.
   let generation = 0;
+  const sideBarOpen = sideBarOpenWidth(root);
   let mounted = mountLayout(root, layout);
   let sideBarLayout: SideBarLayout = 'hidden';
   let chromeLayout = 'default';
   const contributions = {} as Record<AreaName, Contribution[]>;
   const statusBarHeight = createStatusBarHeight();
+  const sideBarHandle = document.createElement('div');
+  sideBarHandle.className = 'shell-side-bar-handle';
 
   const applyHidden = (name: AreaName) => {
     mounted[name].element.hidden =
@@ -239,6 +323,7 @@ export function mountShell(root: HTMLElement, layout: ShellLayout): Shell {
   const applySideBar = () => {
     mounted.sideBar.element.dataset.sideBar = sideBarLayout;
     applyHidden('sideBar');
+    sideBarHandle.hidden = sideBarLayout !== 'beside';
   };
 
   const applyChromeLayout = () => {
@@ -258,6 +343,7 @@ export function mountShell(root: HTMLElement, layout: ShellLayout): Shell {
       }
       applyHidden(name);
     }
+    root.append(sideBarHandle);
     applySideBar();
     applyChromeLayout();
     statusBarHeight.observe(mounted.statusBar.element);
@@ -306,6 +392,44 @@ export function mountShell(root: HTMLElement, layout: ShellLayout): Shell {
   }
   fillElements();
 
+  const sideBarLimits = {
+    initial: sideBarOpen,
+    min: SIDE_BAR_MIN,
+    endMin: MAIN_MIN,
+  };
+  // The span the side bar and main share; the handle takes no layout space.
+  const measureSideBar = () => {
+    const { left } = mounted.sideBar.element.getBoundingClientRect();
+    const { right } = mounted.main.element.getBoundingClientRect();
+    return { left, span: right - left };
+  };
+  // The last width the divider showed; an overlay squeezes no main area, so
+  // only a side bar beside is drawn clamped.
+  let sideBarWidth = sideBarOpen;
+  const drawSideBarWidth = () => {
+    const drawn =
+      sideBarLayout === 'beside'
+        ? clampSplitWidth(sideBarWidth, sideBarLimits, measureSideBar().span)
+        : sideBarWidth;
+    root.style.setProperty('--shell-side-bar-width', String(drawn));
+  };
+  const promptAnchor = createForwardingAnchor();
+  const sideBarDivider = createSplitDivider({
+    ...sideBarLimits,
+    uiState,
+    stateKey: 'side-bar-width',
+    handle: sideBarHandle,
+    measure: measureSideBar,
+    show(width) {
+      sideBarWidth = width;
+      drawSideBarWidth();
+    },
+    anchor: promptAnchor.anchor,
+    timers,
+  });
+  const rootWidth = new ResizeObserver(() => drawSideBarWidth());
+  rootWidth.observe(root);
+
   // Each area's scroll is read before the remount detaches its element, and
   // set on the new element once its contributions are back in it, an area at
   // its end kept at the end.
@@ -342,10 +466,18 @@ export function mountShell(root: HTMLElement, layout: ShellLayout): Shell {
     layOutSideBar(next) {
       sideBarLayout = next;
       applySideBar();
+      drawSideBarWidth();
     },
     setChromeLayout(name) {
       chromeLayout = name;
       applyChromeLayout();
+    },
+    sideBarDivider,
+    setKeys: (keys) => promptAnchor.setKeys(keys),
+    dispose() {
+      sideBarDivider.dispose();
+      rootWidth.disconnect();
+      sideBarHandle.remove();
     },
   };
 }

@@ -530,6 +530,11 @@ const CHOICES_STEPS: SelfTestStep[] = [
   { keys: ['Escape'], expect: '[keys] which-key closed' },
 ];
 
+const PANE_RESIZE_STEPS: SelfTestStep[] = [
+  { keys: ['<A-S-l>'], expect: '[page] <A-S-l> ran panes.resizePaneRight' },
+  { keys: ['<A-S-h>'], expect: '[page] <A-S-h> ran panes.resizePaneLeft' },
+];
+
 const SECOND_SESSION_STEPS: SelfTestStep[] = [
   {
     keys: ['<A-S-o>'],
@@ -1169,6 +1174,11 @@ export function formsSelfTestScript(
         name: 'choices',
         why: "Question 1's choice clears and re-picks by key and Enter replaces the pick with the recommendation; Option+n finds no unanswered item, and which-key enters and cancels the Space z group.",
         steps: CHOICES_STEPS,
+      },
+      {
+        name: 'pane resize',
+        why: "The core's resize commands run from their default binds Option+Shift+l and Option+Shift+h on the Form tab.",
+        steps: PANE_RESIZE_STEPS,
       },
       {
         name: 'second session',

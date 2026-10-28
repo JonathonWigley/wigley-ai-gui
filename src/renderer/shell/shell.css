@@ -171,7 +171,36 @@
   min-height: 0;
   overflow-y: auto;
   padding: var(--wg-space-1);
-  width: var(--wg-sidebar-width);
+  width: calc(var(--shell-side-bar-width) * 1px);
+}
+
+/* The side bar's resize handle lies centred on its end edge in the grid's
+   side area, taking no track space: its negative margins cancel its width.
+   Its 1px line covers the side bar's hairline. */
+.shell-side-bar-handle {
+  cursor: col-resize;
+  grid-area: side;
+  justify-self: end;
+  margin-inline: calc(var(--wg-space-1) / -2);
+  position: relative;
+  width: var(--wg-space-1);
+  z-index: 1;
+}
+
+.shell-side-bar-handle::after {
+  background: var(--wg-border-default);
+  bottom: 0;
+  content: '';
+  left: calc(50% - 1px);
+  position: absolute;
+  top: 0;
+  transition: background-color var(--wg-duration-fast) var(--wg-ease-out);
+  width: 1px;
+}
+
+.shell-side-bar-handle:hover::after,
+.shell-side-bar-handle.is-active::after {
+  background: var(--wg-focus-border);
 }
 
 /* Over the content, the side bar lies on the main and panel cell while its

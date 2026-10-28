@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Bridge } from '../../contracts/bridge';
 import type { Keymap } from '../../contracts/keymap';
+import type { ResizeTarget } from '../../contracts/panes';
 import type {
   Area,
   Mode,
@@ -106,6 +107,7 @@ function deps(overrides: Partial<PageApiDeps>): PageApiDeps {
     dependency: <E>() => undefined as E,
     bus: createEventBus(),
     layouts: {} as PageLayouts,
+    paneResize: { setTarget: () => {} },
     ...overrides,
   };
 }
@@ -140,6 +142,20 @@ describe('createPageApi', () => {
     api.keys.setScope('review');
 
     expect(heard).toEqual(['p.review']);
+  });
+
+  it('hands the resize target to the pane resize', () => {
+    const handed: (ResizeTarget | null)[] = [];
+    const api = createPageApi(
+      manifest,
+      deps({ paneResize: { setTarget: (target) => handed.push(target) } }),
+    );
+    const target: ResizeTarget = { nudge: () => {} };
+
+    api.panes.setResizeTarget(target);
+    api.panes.setResizeTarget(null);
+
+    expect(handed).toEqual([target, null]);
   });
 
   it("routes channel calls under the plugin's id", async () => {

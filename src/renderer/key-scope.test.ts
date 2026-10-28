@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createScopeStack } from './key-scope';
+import { createScopeStack, type ScopeStack } from './key-scope';
 
 describe('createScopeStack', () => {
   it('keeps a pushed scope on top while the base changes under it', () => {
@@ -59,6 +59,64 @@ describe('createScopeStack', () => {
     stack.setBase('forms.forms');
 
     expect(heard).toEqual(['forms.confirm']);
+  });
+
+  it.each([
+    {
+      action: 'setBase to another scope',
+      run: (stack: ScopeStack) => stack.setBase('other'),
+      heard: ['other'],
+    },
+    {
+      action: 'setBase to the same base',
+      run: (stack: ScopeStack) => stack.setBase('forms.forms'),
+      heard: [],
+    },
+    {
+      action: 'a push',
+      run: (stack: ScopeStack) => stack.push('keys.help'),
+      heard: [],
+    },
+    {
+      action: 'a pop',
+      run: (stack: ScopeStack) => stack.push('keys.help').pop(),
+      heard: [],
+    },
+    {
+      action: 'setBase under a pushed scope',
+      run: (stack: ScopeStack) => {
+        stack.push('keys.help');
+        stack.setBase('other');
+      },
+      heard: ['other'],
+    },
+  ])(
+    'tells onBaseChange only when the base moves: $action',
+    ({ run, heard }) => {
+      const stack = createScopeStack('forms.forms');
+      const told: string[] = [];
+      stack.onBaseChange((base) => told.push(base));
+
+      run(stack);
+
+      expect(told).toEqual(heard);
+    },
+  );
+
+  it('tells onBaseChange after a pushed scope closed itself', () => {
+    const stack = createScopeStack('forms.forms');
+    const help = stack.push('keys.help');
+    const order: string[] = [];
+    stack.onBaseChange(() => order.push('onBaseChange'));
+    stack.onChange(() => order.push('onChange'));
+    help.onBaseChanged(() => {
+      help.pop();
+      order.push('onBaseChanged');
+    });
+
+    stack.setBase('other');
+
+    expect(order).toEqual(['onChange', 'onBaseChanged', 'onBaseChange']);
   });
 
   it('lets a pushed scope pop itself when the base changes', () => {

@@ -257,7 +257,7 @@
 
 .gallery-test-side-bar {
   grid-area: side;
-  width: var(--wg-sidebar-width);
+  width: calc(var(--shell-side-bar-width) * 1px);
   min-height: 0;
   overflow-y: auto;
   border-right: 1px solid var(--wg-border-default);

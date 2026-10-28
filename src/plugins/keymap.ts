@@ -6,10 +6,15 @@ import type {
   InterceptBind,
   KeyBind,
 } from '../contracts/keymap';
+import type { PANE_RESIZE_COMMANDS } from '../contracts/panes';
 import type { QualifiedCommandId, QualifiedScopeId } from '../contracts/plugin';
 import { type builtInManifests, DIGITS } from './manifests';
 
 type BuiltInManifest = (typeof builtInManifests)[number];
+
+// A page command of the core's own.
+type CorePageCommand =
+  (typeof PANE_RESIZE_COMMANDS)[keyof typeof PANE_RESIZE_COMMANDS];
 
 // A main-process command of a built-in plugin, or the core's.
 type BuiltInMainCommand =
@@ -28,7 +33,7 @@ type BuiltInKeymap = Omit<
 > & {
   binds: (Omit<KeyBind, 'scope' | 'command'> & {
     scope: QualifiedScopeId<BuiltInManifest> | 'any';
-    command: QualifiedCommandId<BuiltInManifest, 'page'>;
+    command: QualifiedCommandId<BuiltInManifest, 'page'> | CorePageCommand;
   })[];
   app: BuiltInAcceleratorBind[];
   intercept: (Omit<InterceptBind, 'command'> & {
@@ -169,6 +174,10 @@ export const defaultKeymap = {
     { keys: '<A-i>', scope: 'any', command: 'sessions.prevTab' },
     { keys: '<D-w>', scope: 'any', command: 'sessions.closeSession' },
     { keys: '<Leader>;', scope: 'any', command: 'sessions.closeSession' },
+
+    // ── Panes ──────────────────────────────────────────────────────────────
+    { keys: '<A-S-h>', scope: 'any', command: 'panes.resizePaneLeft' },
+    { keys: '<A-S-l>', scope: 'any', command: 'panes.resizePaneRight' },
 
     // ── Help ───────────────────────────────────────────────────────────────
     { keys: '<Leader>?', scope: 'any', command: 'keys.toggleHelp' },

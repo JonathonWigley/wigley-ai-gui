@@ -19,6 +19,7 @@ import type {
 import type { Log } from './log';
 import type { MarkdownRenderer } from './markdown';
 import type { MarkupEditor } from './markup';
+import type { ResizeTarget } from './panes';
 import type { Paths } from './paths';
 import type { Platform } from './platform';
 import type { ProcessRunner } from './processes';
@@ -446,6 +447,10 @@ export interface PageTransparency {
 // `setLayout` replaced the layout.
 // `transparency` is the page's one transparency override, shared by every
 // plugin (see `PageTransparency`).
+// `panes.setResizeTarget` hands the core the divider its resize commands move,
+// null for none, which moves the side bar; a view calls it after each
+// `keys.setScope`, since every change of the set scope drops the target and a
+// pushed scope keeps it.
 // `dependency` returns the exports of a plugin the manifest lists in
 // `dependsOn`, typed by the caller from that plugin's contract. `Ev` is the
 // plugin's own events and `Heard` the other plugins' events it hears, as
@@ -482,6 +487,7 @@ export interface PageApi<
   modes: Modes;
   shell: { setLayout(layout: ShellLayout): Disposable };
   transparency: PageTransparency;
+  panes: { setResizeTarget(target: ResizeTarget | null): void };
   settings(): M['settings'];
   onSettingsChanged(listener: (settings: M['settings']) => void): Disposable;
   platform: Platform;

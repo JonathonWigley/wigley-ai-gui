@@ -1,10 +1,31 @@
 import type { CommandId } from '../contracts/commands';
+import { PANE_RESIZE_COMMANDS } from '../contracts/panes';
 import type { CommandDecl, ScopeInfo } from '../contracts/plugin';
 
 // The core's own commands and scopes; its default keys sit with every
 // plugin's in `src/plugins/keymap.ts`.
 export const coreCommands: Record<CommandId, CommandDecl> = {
   'window.summon': { label: 'show the app', group: 'window', runsIn: 'main' },
+  [PANE_RESIZE_COMMANDS.left]: {
+    label: 'move the pane divider left',
+    group: 'panes',
+    runsIn: 'page',
+  },
+  [PANE_RESIZE_COMMANDS.right]: {
+    label: 'move the pane divider right',
+    group: 'panes',
+    runsIn: 'page',
+  },
+  [PANE_RESIZE_COMMANDS.up]: {
+    label: 'move the pane divider up',
+    group: 'panes',
+    runsIn: 'page',
+  },
+  [PANE_RESIZE_COMMANDS.down]: {
+    label: 'move the pane divider down',
+    group: 'panes',
+    runsIn: 'page',
+  },
 };
 
 export const coreScopes: ScopeInfo[] = [
