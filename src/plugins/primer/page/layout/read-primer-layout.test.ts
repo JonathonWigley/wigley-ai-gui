@@ -28,11 +28,6 @@ describe('readPrimerLayout', () => {
       key: 'cards.question',
     },
     {
-      case: 'a layout that defines rail',
-      module: { default: { rail: part } },
-      key: 'rail',
-    },
-    {
       case: 'a pane that is no function',
       module: { default: { tasks: 1 } },
       key: 'tasks',
@@ -53,7 +48,7 @@ describe('readPrimerLayout', () => {
 
   it('readPrimerLayout_LayoutDefinesRail_NamesTasksAndItemsAsItsReplacement', () => {
     expect(() => readPrimerLayout({ default: { rail: part } }, 'mine')).toThrow(
-      /rail.*tasks.*items/,
+      /^layout mine: rail.*tasks.*items/,
     );
   });
 

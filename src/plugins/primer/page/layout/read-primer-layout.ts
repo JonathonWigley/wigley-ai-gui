@@ -19,9 +19,10 @@ const CARD_PARTS: Record<keyof PrimerLayoutCards, true> = {
 };
 
 // The primer layout a user's `layout.js` module exports as its default. A
-// layout defines only the parts it changes; throws naming the first key that
-// is no part (a `rail` pane also names the `tasks` and `items` parts it became), the first pane that is not a function, then the first `cards`
-// key that is no card or not a function.
+// layout defines only the parts it changes; throws naming `rail`, with the
+// `tasks` and `items` parts it became, then the first key that is no part,
+// the first pane that is not a function, then the first `cards` key that is
+// no card or not a function.
 export function readPrimerLayout(module: unknown, name: string): PrimerLayout {
   const layout = readLayoutModule(module, name);
   const { cards, ...panes } = layout;
