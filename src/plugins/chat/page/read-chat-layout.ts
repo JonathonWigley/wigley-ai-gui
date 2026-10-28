@@ -2,6 +2,7 @@ import type { ChatEntry, ChatEntryKind } from '../../../contracts/agent';
 import {
   isRecord,
   readLayoutModule,
+  requireLayoutParts,
 } from '../../../shared/page/layout-host/read-layout-module';
 import type { ChatLayout, EntryInput, EntryKind } from '../layouts/layout';
 import type { ChatPartName } from './chat-layouts';
@@ -57,26 +58,20 @@ const PART_SET: Record<ChatPartName, true> = {
   closeConfirm: true,
   imageViewer: true,
 };
-const PART_NAMES = Object.keys(PART_SET) as ChatPartName[];
 
-// The chat layout a user's `layout.js` module exports as its default; throws
-// naming the first entry builder it lacks, or the first part it holds that is
-// not a function. Every part beside the entries may be left out.
+// The chat layout a user's `layout.js` module exports as its default. Every
+// part and every entry builder may be left out. Throws naming the first key
+// that is no part (`entries.<key>` for an entry kind), then the first part or
+// builder that is not a function, or `entries` when it is not an object.
 export function readChatLayout(module: unknown, name: string): ChatLayout {
   const layout = readLayoutModule(module, name);
-  const entries = isRecord(layout.entries) ? layout.entries : {};
-  for (const kind of ENTRY_KINDS) {
-    if (typeof entries[kind] !== 'function') {
-      throw new Error(
-        `layout ${name}: entries.${kind} is missing or not a function`,
-      );
+  const { entries, ...parts } = layout;
+  requireLayoutParts(parts, name, PART_SET);
+  if (entries !== undefined) {
+    if (!isRecord(entries)) {
+      throw new Error(`layout ${name}: entries is not an object`);
     }
+    requireLayoutParts(entries, name, KIND_SET, 'entries.');
   }
-  for (const part of PART_NAMES) {
-    const isPresent = layout[part] !== undefined;
-    if (isPresent && typeof layout[part] !== 'function') {
-      throw new Error(`layout ${name}: ${part} is not a function`);
-    }
-  }
-  return layout as unknown as ChatLayout;
+  return layout as ChatLayout;
 }

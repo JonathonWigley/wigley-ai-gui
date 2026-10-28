@@ -5,35 +5,25 @@ import type {
   TextEditor,
   VimMode,
 } from '../../../contracts/editor';
+import type { ChatEntryKind } from '../../../contracts/agent';
 import type { Log } from '../../../contracts/log';
-import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { Paths } from '../../../contracts/paths';
-import type { Platform } from '../../../contracts/platform';
-import type {
-  PageChannel,
-  ShownLayouts,
-  ToastTone,
-} from '../../../contracts/plugin';
+import type { PageChannel, ToastTone } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { element } from '../../../shared/page/dom';
-import type { KitCommands } from '../../../shared/page/layout-host/base-kit';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
-import type { KeysPageExports } from '../../keys/contract';
 import type {
   SessionsPageExports,
   SessionTabHandle,
 } from '../../sessions/contract';
 import type { ChatChannel, ChatSessionState } from '../contract';
-import defaultLayout from '../layouts/default/layout.js';
-import type { ChatLayout } from '../layouts/layout';
 import {
   type Attachments,
   createAttachments,
   listenForImages,
-  type PasteListener,
 } from './attachments';
 import { blurFocusedElement, type CloseConfirm } from './chat-dialogs';
-import type { ChatLayouts } from './chat-layouts';
+import type { ChatLayouts, SurfaceKitDeps } from './chat-layouts';
 import {
   applyEntry,
   changedControls,
@@ -44,11 +34,7 @@ import {
 } from './chat-state';
 import { composerInputOf } from './composer-input';
 import { type ComposerSurface, createComposerSurface } from './composer-kit';
-import {
-  createEntryList,
-  type EntryList,
-  type ShownLayout,
-} from './entry-list';
+import { createEntryList, type EntryList } from './entry-list';
 import type { ImageViewer } from './image-viewer';
 import { completionWords } from './slash-commands';
 
@@ -103,24 +89,19 @@ export type ChatTabScope = 'chat';
 // Chat tab shown is another session's than the Chat tab shown before;
 // `visibleSessionRested` runs when the visible Chat tab's process exits;
 // `onSessionRemoved` hears the sessions plugin drop a row's tabs. `run` runs
-// a command, as the composer's chips and send button do; `keys` anchors the
-// composer's key hints; `commands`, `platform` and `keys` serve each part's
-// layout kit; `layouts` holds the chat layouts the entries and the composer
-// draw with; `paths` names each tab by its project folder.
+// a command, as the composer's chips and send button do; `keys` also anchors
+// the composer's key hints; `layouts` holds the chat layouts the entries and
+// the composer draw with; `paths` names each tab by its project folder.
 // `slashCommandNames` reads the app slash commands registered now, which the
 // `/` completion offers ahead of the agent's. `viewer` opens a sent message's
 // images full size.
-export interface ChatViewDeps {
+export interface ChatViewDeps extends SurfaceKitDeps {
   channel: PageChannel<ChatChannel>;
   paths: Paths;
   sessions: Pick<SessionsPageExports, 'addTab' | 'activate' | 'closeSession'>;
   onSessionRemoved(listener: (sessionId: string) => void): void;
   editor: EditorHost;
-  markdown: MarkdownRenderer;
-  keys: Pick<KeysPageExports, 'anchor' | 'keysFor'>;
   run(command: CommandId): void;
-  commands: KitCommands;
-  platform: Platform;
   layouts: ChatLayouts;
   permissions: PermissionActions;
   confirm: CloseConfirm;
@@ -135,8 +116,7 @@ export interface ChatViewDeps {
 
 // A held session's Chat tab. `handle` is null until `addTab` returns, and
 // `box` until the editor mounts into the attached tab. `composerSize` follows
-// the drawn composer's height for as long as the tab is held, and `images`
-// hears paste on each drawn composer.
+// the drawn composer's height for as long as the tab is held.
 interface HeldTab {
   sessionId: string;
   name: string;
@@ -152,7 +132,6 @@ interface HeldTab {
   attachments: Attachments;
   composer: ComposerSurface;
   composerSize: ResizeObserver;
-  images: PasteListener;
 }
 
 const STARTING_MODE: VimMode = { mode: 'normal', subMode: '' };
@@ -165,9 +144,10 @@ const STARTING_MODE: VimMode = { mode: 'normal', subMode: '' };
 export function mountChatView(deps: ChatViewDeps): ChatTabs {
   const { log } = deps;
   const tabs = new Map<string, HeldTab>();
-  const shown: ShownLayout = shownLayoutOf(deps.layouts.current());
+  // The kinds whose failed draw has toasted since the layouts were shown.
+  const toastedKinds = new Set<ChatEntryKind>();
   deps.layouts.onChange(() => {
-    Object.assign(shown, shownLayoutOf(deps.layouts.current()));
+    toastedKinds.clear();
     for (const tab of tabs.values()) {
       tab.entries.rebuild(tab.state.entries);
       drawComposer(tab);
@@ -193,7 +173,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     if (tabs.has(state.sessionId)) {
       return;
     }
-    const tab = createTab(state, shown, deps, {
+    const tab = createTab(state, toastedKinds, deps, {
       // Chat keys act only on the visible Chat tab's session. Every Chat tab
       // sets the same scope, so no pushed dialog hears a base change:
       // `otherSessionShown` closes the session's dialogs.
@@ -339,31 +319,24 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
   };
 }
 
-// The entries' layout: the user's, else `default`, with no kind toasted yet.
-function shownLayoutOf(shown: ShownLayouts<ChatLayout>): ShownLayout {
-  return {
-    layout: shown.layouts.get(shown.user) ?? defaultLayout,
-    name: shown.layouts.has(shown.user) ? shown.user : 'default',
-    toastedKinds: new Set(),
-  };
-}
-
 // Draws the tab's composer through the chat layout in place of its last draw,
 // moving the box into it and focusing the box again when it held focus; the
-// height observer and the paste listener follow the new composer.
+// height observer follows the new composer.
 function drawComposer(tab: HeldTab) {
   const hadFocus = tab.isBoxFocused;
   const composer = tab.composer.drawComposer(tab.root, composerInputOf(tab));
   tab.composerSize.disconnect();
   tab.composerSize.observe(composer);
-  tab.images.listenForPaste(composer);
   if (hadFocus) {
     tab.box?.focus();
   }
 }
 
+// Draws the bar, or the whole composer again when its update threw.
 function drawBar(tab: HeldTab) {
-  tab.composer.drawBar(composerInputOf(tab));
+  if (!tab.composer.drawBar(composerInputOf(tab))) {
+    drawComposer(tab);
+  }
 }
 
 // Asks main for the session's earlier conversation each time its tab shows;
@@ -402,14 +375,15 @@ function sessionOf(tab: HeldTab, box: TextEditor): ChatSession {
 // before the handle and box are set.
 function createTab(
   state: ChatSessionState,
-  shown: ShownLayout,
+  toastedKinds: Set<ChatEntryKind>,
   deps: ChatViewDeps,
   view: { shown(tab: HeldTab): void; beforeClose(tab: HeldTab): boolean },
 ): HeldTab {
   const name = folderName(state.projectDir, deps.paths);
   const ref: SessionRef = { sessionId: state.sessionId, name };
   const entries = createEntryList({
-    shown,
+    layouts: deps.layouts,
+    toastedKinds,
     kit: {
       markdown: deps.markdown,
       keys: deps.keys,
@@ -458,8 +432,8 @@ function createTab(
     attachments,
     composer,
     composerSize: followComposerHeight(root, entries),
-    images: listenForImages({ name, attachments }, root, deps),
   };
+  listenForImages({ name, attachments }, { root, box: boxElement }, deps);
   entries.rebuild(state.entries);
   drawComposer(tab);
   tab.handle = deps.sessions.addTab(state.sessionId, {

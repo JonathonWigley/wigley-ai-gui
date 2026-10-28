@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatEntry } from '../../../contracts/agent';
 import type { CommandId } from '../../../contracts/commands';
+import { withUser } from '../../../shared/page/layout-host/test-layouts';
 import {
   asFake,
   FakeElement,
@@ -35,17 +36,20 @@ const KINDS: EntryKind[] = [
 ];
 
 // Draws `div.fancy` for every kind, with the builders in `overrides` in
-// place of it.
+// place of it; a kind `overrides` sets to undefined is left out.
 function fancyLayout(
-  overrides: Partial<Record<EntryKind, AnyBuilder>>,
+  overrides: Partial<Record<EntryKind, AnyBuilder | undefined>>,
 ): ChatLayout {
   const drawsFancy: AnyBuilder = (parent, _input, kit) => ({
     element: kit.el(parent, 'div', 'fancy'),
   });
   const entries = Object.fromEntries(
-    KINDS.map((kind) => [kind, overrides[kind] ?? drawsFancy]),
+    KINDS.filter(
+      (kind) =>
+        !Object.hasOwn(overrides, kind) || overrides[kind] !== undefined,
+    ).map((kind) => [kind, overrides[kind] ?? drawsFancy]),
   );
-  return { entries } as unknown as ChatLayout;
+  return { entries };
 }
 
 // Names a key hint and draws a card through the kit, then throws.
@@ -91,7 +95,7 @@ const assistant = (text: string): ChatEntry => ({
 interface Row {
   name: string;
   shown: 'fancy' | 'default';
-  fancy?: Partial<Record<EntryKind, AnyBuilder>>;
+  fancy?: Partial<Record<EntryKind, AnyBuilder | undefined>>;
   // The kind whose default builder throws.
   breakDefault?: EntryKind;
   // Put in order; an entry whose id was put before redraws its slot.
@@ -109,6 +113,16 @@ const rows: Row[] = [
     shown: 'fancy',
     puts: [tool('t1')],
     slots: [['fancy@fancy']],
+    logs: [],
+    toasts: [],
+    disposedAnchors: [],
+  },
+  {
+    name: 'shown layout leaves the kind out',
+    shown: 'fancy',
+    fancy: { tool: undefined },
+    puts: [tool('t1'), notice('n1')],
+    slots: [['chat-entry chat-tool@default'], ['fancy@fancy']],
     logs: [],
     toasts: [],
     disposedAnchors: [],
@@ -150,7 +164,7 @@ const rows: Row[] = [
       '[chat] layout fancy notice entry failed: boom',
       '[chat] default layout notice entry failed: broken default',
     ],
-    toasts: ['Chat layout fancy: notice entries drawn with default'],
+    toasts: ['Chat layout fancy: notice entries drawn as bare lines'],
     disposedAnchors: [chatCommand('allowPermission')],
   },
   {
@@ -183,15 +197,20 @@ describe('entry list', () => {
     const logs: string[] = [];
     const toasts: string[] = [];
     const disposed: CommandId[] = [];
+    const shown =
+      row.shown === 'default'
+        ? {
+            layouts: new Map<string, ChatLayout>([['default', defaultLayout]]),
+            user: 'default',
+          }
+        : withUser<ChatLayout>(
+            defaultLayout,
+            fancyLayout(row.fancy ?? {}),
+            'fancy',
+          );
     const list = createEntryList({
-      shown: {
-        name: row.shown,
-        layout:
-          row.shown === 'default'
-            ? defaultLayout
-            : fancyLayout(row.fancy ?? {}),
-        toastedKinds: new Set(),
-      },
+      layouts: { shown: () => shown },
+      toastedKinds: new Set(),
       kit: {
         markdown: {
           block: (text) => text,

@@ -123,24 +123,25 @@ export interface ImageListenerDeps {
   toast(text: string, tone: ToastTone): void;
 }
 
-// Where pasted images are heard: each composer root the tab draws.
-export interface PasteListener {
-  listenForPaste(composer: HTMLElement): void;
+// The Chat tab's elements that hear images: `root` the whole tab, `box` the
+// message box frame.
+export interface ImageTargets {
+  root: HTMLElement;
+  box: HTMLElement;
 }
 
-// Attaches the image files pasted into the composer or dropped on the tab.
-// The composer hears paste in the capture phase, ahead of the editor; a paste
+// Attaches the image files pasted into the message box or dropped on the tab.
+// The box frame hears paste in the capture phase, ahead of its editor; a paste
 // with no files, or one whose text is more than a file name or a link,
 // reaches the editor untouched (Excel, Numbers, Word and Pages put a picture
 // beside copied text; a Finder copy or Copy Image puts only a name or URL). The
 // whole tab hears drop, so a file dropped just outside the composer attaches
-// instead of the window navigating to it. The tab hands each composer root it
-// draws to `listenForPaste`.
+// instead of the window navigating to it.
 export function listenForImages(
   tab: ImageTab,
-  root: HTMLElement,
+  targets: ImageTargets,
   deps: ImageListenerDeps,
-): PasteListener {
+): void {
   const { log } = deps;
   const take = (event: Event, files: File[]) => {
     if (files.length === 0) {
@@ -160,6 +161,7 @@ export function listenForImages(
       },
     });
   };
+  const { root, box } = targets;
   root.addEventListener('dragover', (event) => {
     if (event.dataTransfer?.types.includes('Files') === true) {
       event.preventDefault();
@@ -168,18 +170,14 @@ export function listenForImages(
   root.addEventListener('drop', (event) =>
     take(event, filesOf(event.dataTransfer)),
   );
-  return {
-    listenForPaste(composer) {
-      composer.addEventListener(
-        'paste',
-        (event) => {
-          const files = filesOf(event.clipboardData);
-          if (!holdsPastedText(event.clipboardData, files)) {
-            take(event, files);
-          }
-        },
-        { capture: true },
-      );
+  box.addEventListener(
+    'paste',
+    (event) => {
+      const files = filesOf(event.clipboardData);
+      if (!holdsPastedText(event.clipboardData, files)) {
+        take(event, files);
+      }
     },
-  };
+    { capture: true },
+  );
 }

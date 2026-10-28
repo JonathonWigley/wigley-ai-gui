@@ -278,19 +278,19 @@ export interface ImageViewerInput {
   count: number;
 }
 
-// The complete chat layout: a builder for every entry kind, and the other surfaces' parts, which a user layout
-// defines only where it changes them. A dialog part draws into the dialog's body; the app keeps the dialog's frame and
-// title.
+// Builds one entry into `parent` from the entry and a kit made for that entry: the builder appends its element to
+// `parent` and returns it in `element`.
+export type EntryBuilder<K extends EntryKind> = (
+  parent: HTMLElement,
+  input: EntryInput<K>,
+  kit: ChatKit,
+) => EntryView<K>;
+
+// The chat layout a user writes: a builder for each entry kind it changes, and the other surfaces' parts it changes;
+// a part or entry kind left out draws with `default`. A dialog part draws into the dialog's body; the app keeps the
+// dialog's frame and title.
 export interface ChatLayout {
-  // Builds one entry into `parent` from the entry and a kit made for that entry: the builder appends its element to
-  // `parent` and returns it in `element`.
-  entries: {
-    [K in EntryKind]: (
-      parent: HTMLElement,
-      input: EntryInput<K>,
-      kit: ChatKit,
-    ) => EntryView<K>;
-  };
+  entries?: { [K in EntryKind]?: EntryBuilder<K> };
   // The floating composer, appended to the Chat tab under the entries.
   composer?(
     parent: HTMLElement,
@@ -336,4 +336,9 @@ export interface ChatLayout {
     input: ImageViewerInput,
     kit: BaseKit,
   ): PartView<ImageViewerInput>;
+}
+
+// The built-in layout: a builder for every entry kind and every part.
+export interface CompleteChatLayout extends Required<ChatLayout> {
+  entries: { [K in EntryKind]: EntryBuilder<K> };
 }

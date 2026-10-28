@@ -3,52 +3,38 @@ import { readChatLayout } from './read-chat-layout';
 
 const builder = () => ({ element: {} as HTMLElement });
 
-function entriesWithout(missing: string | null): Record<string, unknown> {
-  const kinds = [
-    'user',
-    'assistant',
-    'thinking',
-    'tool',
-    'permission',
-    'result',
-    'notice',
-    'raw',
-  ].filter((kind) => kind !== missing);
-  return Object.fromEntries(kinds.map((kind) => [kind, builder]));
-}
-
 describe('readChatLayout', () => {
-  it('readChatLayout_MissingKind_ThrowsNamingIt', () => {
-    const module = { default: { entries: entriesWithout('tool') } };
-
-    expect(() => readChatLayout(module, 'mine')).toThrow(
-      'layout mine: entries.tool is missing or not a function',
-    );
-  });
-
-  it('readChatLayout_NotAnObject_Throws', () => {
-    expect(() => readChatLayout({ default: 3 }, 'mine')).toThrow(
-      'layout mine: the default export is missing or not an object',
-    );
-  });
-
   it.each([
-    { parts: {} },
-    { parts: { composer: builder, imageViewer: builder } },
+    { layout: {} },
+    { layout: { entries: { tool: builder } } },
+    { layout: { entries: { tool: undefined }, composer: builder } },
+    { layout: { composer: builder, imageViewer: builder } },
   ])(
-    'readChatLayout_EveryKind_ReturnsTheDefaultExport ($parts)',
-    ({ parts }) => {
-      const layout = { entries: entriesWithout(null), ...parts };
-
+    'readChatLayout_PartsItChanges_ReturnsTheDefaultExport ($layout)',
+    ({ layout }) => {
       expect(readChatLayout({ default: layout }, 'mine')).toBe(layout);
     },
   );
 
-  it('readChatLayout_PartNotAFunction_ThrowsNamingIt', () => {
-    const layout = { entries: entriesWithout(null), composer: 'panel' };
-
-    expect(() => readChatLayout({ default: layout }, 'mine')).toThrow(
-      'layout mine: composer is not a function',
-    );
-  });
+  it.each([
+    { layout: 3, error: 'the default export is missing or not an object' },
+    { layout: { entries: 'cards' }, error: 'entries is not an object' },
+    {
+      layout: { entries: { tool: 'card' } },
+      error: 'entries.tool is not a function',
+    },
+    {
+      layout: { entries: { toast: builder } },
+      error: 'entries.toast is not a layout part',
+    },
+    { layout: { composer: 'panel' }, error: 'composer is not a function' },
+    { layout: { compose: builder }, error: 'compose is not a layout part' },
+  ])(
+    'readChatLayout_Malformed_ThrowsNamingIt ($error)',
+    ({ layout, error }) => {
+      expect(() => readChatLayout({ default: layout }, 'mine')).toThrow(
+        `layout mine: ${error}`,
+      );
+    },
+  );
 });

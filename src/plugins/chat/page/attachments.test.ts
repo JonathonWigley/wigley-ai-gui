@@ -73,7 +73,7 @@ describe('listenForImages paste', () => {
 
   function pasteWith(text: string) {
     let onPaste: (event: Event) => void = () => {};
-    const composer = {
+    const box = {
       addEventListener: (type: string, listener: (event: Event) => void) => {
         if (type === 'paste') {
           onPaste = listener;
@@ -84,12 +84,12 @@ describe('listenForImages paste', () => {
     const toasts: string[] = [];
     listenForImages(
       { name: 'Chat 1', attachments: createAttachments() },
-      root,
+      { root, box },
       {
         log: () => {},
         toast: (message) => toasts.push(message),
       },
-    ).listenForPaste(composer);
+    );
     let prevented = false;
     onPaste({
       clipboardData: {

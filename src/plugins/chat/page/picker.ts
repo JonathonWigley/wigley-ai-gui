@@ -1,24 +1,22 @@
-import type { Disposable } from '../../../contracts/disposable';
 import type { EditorHost } from '../../../contracts/editor';
 import type { Log } from '../../../contracts/log';
 import type { PluginAreas, PushedScope } from '../../../contracts/plugin';
 import { element } from '../../../shared/page/dom';
-import { createListPicker } from '../../../shared/page/list-picker';
+import {
+  createListPicker,
+  type DrawnPickerRow,
+  type DrawRowInput,
+} from '../../../shared/page/list-picker';
 import {
   type ChatCommandName,
   type ChatScopeName,
   chatCommand,
   chatScope,
 } from '../ids';
-import type {
-  PickerItemInput,
-  PickerRowInput,
-  PickerRowKit,
-} from '../layouts/layout';
+import type { PickerItemInput, PickerRowKit } from '../layouts/layout';
 import { blurFocusedElement } from './chat-dialogs';
 import {
   type ChatLayouts,
-  drawChatPart,
   type SurfaceKitDeps,
   surfaceBaseKit,
 } from './chat-layouts';
@@ -171,11 +169,7 @@ export function createPicker(deps: PickerDeps): Picker {
           deps.log('chat', `picker closed: ${next.title}`);
         },
         drawRow: (parent, item, row) =>
-          drawPickerRow(deps, nextScope, parent, {
-            input: { item: next.rowInput(item), label: row.label },
-            trailing: row.trailing,
-            recordAnchor: row.recordAnchor,
-          }),
+          drawPickerRow(deps, nextScope, parent, next.rowInput(item), row),
       });
       return handle;
     },
@@ -197,35 +191,25 @@ export function createPicker(deps: PickerDeps): Picker {
 }
 
 // One row drawn through the `pickerRow` part into the list, its kit's anchors
-// in `scope` handed to the list picker, which disposes them; the row's draw is
-// never disposed here.
+// in `scope`; the list picker disposes the draw.
 function drawPickerRow(
   deps: PickerDeps,
   scope: PickerScope,
   parent: HTMLElement,
-  row: {
-    input: PickerRowInput;
-    trailing: HTMLElement | null;
-    recordAnchor(anchor: Disposable): void;
-  },
-): HTMLElement {
-  const drawn = drawChatPart({
-    layouts: deps.layouts,
+  item: PickerItemInput,
+  row: DrawRowInput,
+): DrawnPickerRow {
+  const drawn = deps.layouts.draw(
+    'pickerRow',
     parent,
-    partName: 'pickerRow',
-    part: (layout) => layout.pickerRow,
-    build(builder, at, rollback) {
+    (builder, at, rollback) => {
       const kit: PickerRowKit = {
-        ...surfaceBaseKit(deps, scope, (anchor) => {
-          rollback.recordAnchor(anchor);
-          row.recordAnchor(anchor);
-        }),
+        ...surfaceBaseKit(deps, scope, rollback),
         cursorEnd: () => row.trailing,
       };
-      const view = builder(at, row.input, kit);
+      const view = builder(at, { item, label: row.label }, kit);
       return { element: view.element };
     },
-    log: deps.log,
-  });
-  return drawn.built.element;
+  );
+  return { element: drawn.built.element, dispose: drawn.dispose };
 }

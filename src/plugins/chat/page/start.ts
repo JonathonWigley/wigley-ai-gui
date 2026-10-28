@@ -37,9 +37,10 @@ type ChatApi = PageApi<
 // Shows each chat session main holds in its session's Chat tab: the entries
 // under a floating composer holding the message box, the controls as chips
 // and send. The entries, the composer, the picker rows, the dialogs and the
-// image viewer draw through the chat layout the `chat.layout` setting names. The new-session prompt
-// asks for a folder, a profile and a new or saved session in the picker and
-// starts or resumes a session there, signing a signed-out profile in first.
+// image viewer draw through the chat layout the `chat.layout` setting names.
+// The new-session prompt asks for a folder, a profile and a new or saved
+// session in the picker and starts or resumes a session there, signing a
+// signed-out profile in first.
 // Sending `/login`, `/logout`, `/status` or another app slash command runs it
 // in the page in place of sending it; the exports register more. Images
 // pasted or dropped into a Chat tab attach to its next message, and a sent
@@ -62,7 +63,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
     const sessions = api.dependency<SessionsPageExports>('sessions');
     const keys = api.dependency<KeysPageExports>('keys');
     const run = (command: string) => api.commands.run(command);
-    const layouts = createChatLayouts();
+    const layouts = createChatLayouts(services.log);
     // What every surface's layout kit reads.
     const partDeps = {
       layouts,

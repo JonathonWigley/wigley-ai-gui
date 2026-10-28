@@ -16,11 +16,3 @@ export function chatCommand(short: ChatCommandName): CommandId {
 export function chatScope(short: ChatScopeName): ViewScope {
   return qualify(chatManifest.id, short);
 }
-
-// A chat command's qualified id by its short name; null when the manifest
-// declares no command of that name.
-export function chatCommandNamed(short: string): CommandId | null {
-  return Object.hasOwn(chatManifest.commands, short)
-    ? chatCommand(short as ChatCommandName)
-    : null;
-}

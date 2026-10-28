@@ -138,7 +138,7 @@ function draw<K extends EntryKind>(
   kit: ChatKit,
 ): EntryView<K> {
   const parent = new FakeElement('li');
-  const builder = (layout as ChatLayout).entries[input.kind] as AnyBuilder;
+  const builder = layout.entries[input.kind] as AnyBuilder;
   const view = builder(asHtml(parent), input, kit);
   expect(parent.children).toEqual([asFake(view.element)]);
   return view as EntryView<K>;
@@ -395,6 +395,18 @@ function fakeSurfaceKit() {
 
 type SurfacePart = Exclude<keyof ChatLayout, 'entries'>;
 
+// Every part beside the entries; a part left out fails to compile.
+const SURFACE_PARTS: Record<SurfacePart, true> = {
+  composer: true,
+  composerBar: true,
+  attachments: true,
+  pickerRow: true,
+  signIn: true,
+  reasonBox: true,
+  closeConfirm: true,
+  imageViewer: true,
+};
+
 // Draws `input` with the default layout's `name` part into a fresh parent,
 // and checks the element it returned is the parent's one child.
 function drawSurface<I>(
@@ -403,7 +415,7 @@ function drawSurface<I>(
   kit: ReturnType<typeof fakeSurfaceKit>['kit'],
 ): PartView<I> {
   const parent = new FakeElement('div');
-  const builder = (layout as ChatLayout)[name] as unknown as (
+  const builder = layout[name] as unknown as (
     parent: HTMLElement,
     input: I,
     kit: unknown,
@@ -414,6 +426,13 @@ function drawSurface<I>(
 }
 
 describe('default chat layout surfaces', () => {
+  it.each(Object.keys(SURFACE_PARTS) as SurfacePart[])(
+    'default_DefinesEveryPart (%s)',
+    (name) => {
+      expect(typeof (layout as ChatLayout)[name]).toBe('function');
+    },
+  );
+
   beforeEach(() => {
     vi.stubGlobal('document', {
       createElement: (tag: string) => new FakeElement(tag),

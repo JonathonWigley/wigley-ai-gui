@@ -4,21 +4,22 @@ import type { ContentScroll, ScrollStep } from '../../../contracts/editor';
 import type { ToastTone } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { element } from '../../../shared/page/dom';
-import {
-  drawPart,
-  type PartPick,
-} from '../../../shared/page/layout-host/draw-part';
+import { drawPart } from '../../../shared/page/layout-host/draw-part';
 import { textLineHeightPx } from '../../../shared/page/text-line';
 import { isScrolledToEnd, scrollContent } from '../../../shared/content-scroll';
 import defaultLayout from '../layouts/default/layout.js';
 import type {
-  ChatKit,
   ChatLayout,
-  EntryInput,
+  EntryBuilder,
   EntryKind,
   EntryView,
 } from '../layouts/layout';
 import { createEntryKit, type EntryKit, type KitDeps } from './chat-kit';
+import {
+  type ChatLayouts,
+  DEFAULT_ENTRY_PICK,
+  pickEntry,
+} from './chat-layouts';
 import {
   type EntryFocus,
   focusAfterChange,
@@ -29,17 +30,12 @@ import {
   START_FOCUS,
 } from './entry-focus';
 
-// The layout every session's entries are built with, and the kinds whose
-// fallback to the default layout has toasted since it was shown; shared by
-// every session's list.
-export interface ShownLayout {
-  layout: ChatLayout;
-  name: string;
-  toastedKinds: Set<ChatEntryKind>;
-}
-
+// `layouts` are the ones every session's entries are built with;
+// `toastedKinds` the kinds whose failed draw has toasted since they were
+// shown, shared by every session's list.
 export interface EntryListDeps {
-  shown: ShownLayout;
+  layouts: Pick<ChatLayouts, 'shown'>;
+  toastedKinds: Set<ChatEntryKind>;
   kit: KitDeps;
   log: Log;
   toast(text: string, tone: ToastTone): void;
@@ -62,7 +58,7 @@ export interface EntryList {
   // Builds an entry new to the list, or redraws the one holding its id;
   // `entries` is the session's list after the change.
   put(entry: ChatEntry, entries: readonly ChatEntry[]): void;
-  // Builds every entry again with the shown layout, keeping the focus and each
+  // Builds every entry again with the shown layouts, keeping the focus and each
   // entry's open expanders by id.
   rebuild(entries: readonly ChatEntry[]): void;
   // The focused entry after the move; null with no entries.
@@ -103,7 +99,7 @@ interface DrawnEntry {
   dispose(): void;
 }
 
-// One drawn entry and its slot. `drawsWithDefault` holds once the shown
+// One drawn entry and its slot. `drawsWithDefault` holds once a user
 // layout's update has thrown, and the slot is drawn with the default layout
 // from then on.
 interface Slot extends DrawnEntry {
@@ -119,16 +115,7 @@ interface BuiltEntry {
   kit: EntryKit;
 }
 
-type AnyBuilder = (
-  parent: HTMLElement,
-  input: EntryInput<EntryKind>,
-  kit: ChatKit,
-) => EntryView;
-
-const DEFAULT_PICK: PartPick<ChatLayout> = {
-  name: 'default',
-  layout: defaultLayout,
-};
+type AnyBuilder = EntryBuilder<EntryKind>;
 
 export function createEntryList(deps: EntryListDeps): EntryList {
   const list = element('ol', 'chat-entries');
@@ -285,7 +272,7 @@ function buildSlot(entry: ChatEntry, deps: EntryListDeps): Slot {
 
 // A view with an update runs it after the kit's own parts updated; a view
 // with none is drawn again, its new expanders opening as the old ones were.
-// A shown layout's update that throws is logged and toasted as a failed
+// A user layout's update that throws is logged and toasted as a failed
 // draw, and the slot is drawn with the default layout from then on; the
 // default layout's is logged and the entry drawn again.
 function redrawSlot(slot: Slot, entry: ChatEntry, deps: EntryListDeps) {
@@ -303,11 +290,12 @@ function redrawSlot(slot: Slot, entry: ChatEntry, deps: EntryListDeps) {
           `default layout ${entry.kind} entry update failed: ${errorText(error)}`,
         );
       } else {
+        const { name } = pickEntry(deps.layouts.shown(), entry.kind);
         deps.log(
           'chat',
-          `layout ${deps.shown.name} ${entry.kind} entry update failed: ${errorText(error)}`,
+          `layout ${name} ${entry.kind} entry update failed: ${errorText(error)}`,
         );
-        toastDrawnWithDefault(entry.kind, deps);
+        toastKindOnce(entry.kind, deps, drawnWithDefaultText(name, entry.kind));
         slot.drawsWithDefault = true;
       }
     }
@@ -323,29 +311,28 @@ function redrawSlot(slot: Slot, entry: ChatEntry, deps: EntryListDeps) {
   slot.dispose = drawn.dispose;
 }
 
-// The entry drawn into `slot` through the page host, with the shown layout
-// unless `drawsWithDefault`; the host logs a shown layout's failure and draws
-// with the default layout, and chat toasts the first such fallback per kind.
-// A default builder that fails leaves a bare line naming the kind; when the
-// shown layout failed first, its fallback is toasted, else the bare line is,
-// once per kind, when the default layout is the shown one.
+// The entry drawn into `slot` through the page host, with the user's layout
+// when it defines the kind, unless `drawsWithDefault`; the host logs a user
+// builder's failure and draws with the default layout, and chat toasts the
+// first such fallback per kind. A default builder that fails leaves a bare
+// line naming the kind, toasted once per kind.
 function buildEntry(
   slot: HTMLElement,
   entry: ChatEntry,
   deps: EntryListDeps,
   drawsWithDefault: boolean,
 ): DrawnEntry {
-  const { shown } = deps;
   const pick = drawsWithDefault
-    ? DEFAULT_PICK
-    : { name: shown.name, layout: shown.layout };
+    ? DEFAULT_ENTRY_PICK
+    : pickEntry(deps.layouts.shown(), entry.kind);
   try {
     const drawn = drawPart<ChatLayout, AnyBuilder, BuiltEntry>({
       owner: 'chat',
       parent: slot,
       pick,
       defaultLayout,
-      part: (layout) => layout.entries[entry.kind] as AnyBuilder,
+      // TypeScript cannot narrow the builder to the entry's own kind.
+      part: (layout) => layout.entries?.[entry.kind] as AnyBuilder | undefined,
       build(builder, parent, rollback) {
         const kit = createEntryKit(entry, deps.kit);
         rollback.recordBox(() => kit.dispose());
@@ -356,9 +343,13 @@ function buildEntry(
       logSource: 'chat',
       partName: `${entry.kind} entry`,
     });
-    const isDefaultView = drawn.layoutName === DEFAULT_PICK.name;
-    if (isDefaultView && pick.name !== DEFAULT_PICK.name) {
-      toastDrawnWithDefault(entry.kind, deps);
+    const isDefaultView = drawn.layoutName === DEFAULT_ENTRY_PICK.name;
+    if (isDefaultView && pick.name !== DEFAULT_ENTRY_PICK.name) {
+      toastKindOnce(
+        entry.kind,
+        deps,
+        drawnWithDefaultText(pick.name, entry.kind),
+      );
     }
     return {
       view: drawn.built.view,
@@ -371,15 +362,11 @@ function buildEntry(
       'chat',
       `default layout ${entry.kind} entry failed: ${errorText(error)}`,
     );
-    if (pick.name !== DEFAULT_PICK.name) {
-      toastDrawnWithDefault(entry.kind, deps);
-    } else if (shown.name === DEFAULT_PICK.name) {
-      toastKindOnce(
-        entry.kind,
-        deps,
-        `Chat layout default: ${entry.kind} entries drawn as bare lines`,
-      );
-    }
+    toastKindOnce(
+      entry.kind,
+      deps,
+      `Chat layout ${pick.name}: ${entry.kind} entries drawn as bare lines`,
+    );
     slot.append(element('div', 'chat-entry chat-raw', entry.kind));
     const kit = createEntryKit(entry, deps.kit);
     return {
@@ -391,17 +378,17 @@ function buildEntry(
   }
 }
 
-function toastDrawnWithDefault(kind: ChatEntryKind, deps: EntryListDeps) {
-  toastKindOnce(
-    kind,
-    deps,
-    `Chat layout ${deps.shown.name}: ${kind} entries drawn with default`,
-  );
+function drawnWithDefaultText(name: string, kind: ChatEntryKind): string {
+  return `Chat layout ${name}: ${kind} entries drawn with default`;
 }
 
-function toastKindOnce(kind: ChatEntryKind, deps: EntryListDeps, text: string) {
-  if (!deps.shown.toastedKinds.has(kind)) {
-    deps.shown.toastedKinds.add(kind);
+function toastKindOnce(
+  kind: ChatEntryKind,
+  deps: Pick<EntryListDeps, 'toastedKinds' | 'toast'>,
+  text: string,
+) {
+  if (!deps.toastedKinds.has(kind)) {
+    deps.toastedKinds.add(kind);
     deps.toast(text, 'error');
   }
 }

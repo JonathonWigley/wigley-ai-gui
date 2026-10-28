@@ -1,9 +1,9 @@
 // @ts-check
 
 // The built-in chat look: the entries, the composer, the list rows, the
-// dialogs' bodies and the image viewer. Every expander's and collapsible card's body is
-// built on its first open and kept, so an update refills it in place whether
-// it is open or closed.
+// dialogs' bodies and the image viewer. Every expander's and collapsible
+// card's body is built on its first open and kept, so an update refills it in
+// place whether it is open or closed.
 
 /**
  * @param {string} tag
@@ -117,7 +117,7 @@ function showImage(picture, counter, input) {
   counter.hidden = input.count < 2;
 }
 
-/** @type {import('../layout').ChatLayout} */
+/** @type {import('../layout').CompleteChatLayout} */
 const layout = {
   entries: {
     user(parent, input, kit) {

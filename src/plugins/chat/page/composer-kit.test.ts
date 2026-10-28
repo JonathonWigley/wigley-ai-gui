@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CommandId } from '../../../contracts/commands';
 import {
+  recordingAnchors,
+  USER_LAYOUT,
+  withUser,
+} from '../../../shared/page/layout-host/test-layouts';
+import {
   asFake,
   asHtml,
   FakeElement,
@@ -13,25 +18,17 @@ import { createChatLayouts } from './chat-layouts';
 import { createComposerSurface } from './composer-kit';
 import { createSignInPart } from './dialog-kits';
 
-// A key anchor the double made, live until disposed.
-interface MadeAnchor {
-  command: CommandId;
-  isLive: boolean;
-}
-
-// The deps every surface takes, drawing with `user` as the user's layout;
-// each anchor is kept in `anchors` and each log line in `logs`.
-function surfaceDeps(user: Partial<ChatLayout>) {
-  const layouts = createChatLayouts();
-  layouts.set({
-    layouts: new Map<string, ChatLayout>([
-      ['default', defaultLayout],
-      ['mine', { entries: defaultLayout.entries, ...user }],
-    ]),
-    user: 'mine',
-  });
-  const anchors: MadeAnchor[] = [];
+// The deps every surface takes, drawing with `user` as the user's layout,
+// or with `default` alone when `user` is null; each anchor is kept in
+// `anchors` and each log line in `logs`.
+function surfaceDeps(user: ChatLayout | null) {
   const logs: string[] = [];
+  const log = (_source: string, line: string) => logs.push(line);
+  const layouts = createChatLayouts(log);
+  if (user !== null) {
+    layouts.set(withUser<ChatLayout>(defaultLayout, user));
+  }
+  const { anchors, keys } = recordingAnchors();
   const deps = {
     layouts,
     markdown: {
@@ -39,18 +36,11 @@ function surfaceDeps(user: Partial<ChatLayout>) {
       inline: (text: string) => text,
       document: (text: string) => Promise.resolve(text),
     },
-    keys: {
-      anchor(_node: HTMLElement, command: CommandId) {
-        const made = { command, isLive: true };
-        anchors.push(made);
-        return { dispose: () => (made.isLive = false) };
-      },
-      keysFor: () => null,
-    },
+    keys,
     commands: { exists: () => true, run: () => undefined },
     platform: 'macos' as const,
     run: () => undefined,
-    log: (_source: string, line: string) => logs.push(line),
+    log,
   };
   return { deps, anchors, logs };
 }
@@ -87,7 +77,7 @@ describe('composer surface parts', () => {
   });
 
   // Draws the composer with `user` into a fresh tab root.
-  function drawComposer(user: Partial<ChatLayout>) {
+  function drawComposer(user: ChatLayout) {
     const { deps, logs } = surfaceDeps(user);
     const box = boxWithEditor();
     const surface = createComposerSurface(deps, {
@@ -102,7 +92,7 @@ describe('composer surface parts', () => {
   }
 
   // Draws the sign-in dialog's part with `user` into a fresh body.
-  function drawSignIn(user: Partial<ChatLayout>) {
+  function drawSignIn(user: ChatLayout) {
     const { deps, logs } = surfaceDeps(user);
     const body = new FakeElement('div');
     const codeBox = boxWithEditor();
@@ -193,8 +183,99 @@ describe('composer surface parts', () => {
     const madeFor = (command: CommandId) =>
       anchors.filter((anchor) => anchor.command === command);
     expect(
-      madeFor(chatCommand('newSession')).filter((anchor) => anchor.isLive),
+      madeFor(chatCommand('newSession')).filter((anchor) => !anchor.isDisposed),
     ).toHaveLength(1);
     expect(madeFor(chatCommand('send'))).toHaveLength(1);
+  });
+
+  it('composer_UpdateThrows_DrawsWithDefaultUntilTheLayoutsChange', () => {
+    const throwsOnUpdate: ChatLayout = {
+      composer(parent, _input, kit) {
+        const panel = kit.floatingPanel(parent);
+        kit.box(panel);
+        return {
+          element: panel,
+          update() {
+            throw new Error('broken update');
+          },
+        };
+      },
+    };
+    const { deps, logs } = surfaceDeps(throwsOnUpdate);
+    const surface = createComposerSurface(deps, {
+      box: asHtml(boxWithEditor()),
+      removeImage: () => undefined,
+    });
+    const tab = asHtml(new FakeElement('div'));
+    const drawnWith = () =>
+      asFake(surface.drawComposer(tab, composerInput(false))).dataset.layout;
+
+    const firstLayout = drawnWith();
+    const barOnThrow = surface.drawBar(composerInput(true));
+    const afterThrow = drawnWith();
+    const barsAfterThrow = [true, false].map((working) =>
+      surface.drawBar(composerInput(working)),
+    );
+    deps.layouts.set(withUser<ChatLayout>(defaultLayout, throwsOnUpdate));
+    const afterChange = drawnWith();
+
+    expect([firstLayout, afterThrow, afterChange]).toEqual([
+      USER_LAYOUT,
+      'default',
+      USER_LAYOUT,
+    ]);
+    expect([barOnThrow, ...barsAfterThrow]).toEqual([false, true, true]);
+    expect(logs.filter((line) => line.includes('update failed'))).toEqual([
+      `layout ${USER_LAYOUT} composer update failed: broken update`,
+    ]);
+  });
+
+  it.each([
+    {
+      name: 'composer box',
+      draw(deps: ReturnType<typeof surfaceDeps>['deps'], box: FakeElement) {
+        const surface = createComposerSurface(deps, {
+          box: asHtml(box),
+          removeImage: () => undefined,
+        });
+        const tab = asHtml(new FakeElement('div'));
+        return () => asFake(surface.drawComposer(tab, composerInput(false)));
+      },
+    },
+    {
+      name: 'sign-in code box',
+      draw(deps: ReturnType<typeof surfaceDeps>['deps'], box: FakeElement) {
+        const body = new FakeElement('div');
+        const part = createSignInPart(deps, asHtml(body), {
+          codeBox: asHtml(box),
+          copy: asHtml(new FakeElement('button')) as HTMLButtonElement,
+          actions: asHtml(new FakeElement('div')),
+        });
+        part.draw({ profile: 'work', link: null });
+        return () => {
+          part.redraw();
+          return body.children[0];
+        };
+      },
+    },
+  ])('layoutChange_MovesTheSameBoxIntoTheNewRoot ($name)', ({ draw }) => {
+    const { deps } = surfaceDeps(null);
+    const box = boxWithEditor();
+    const redraw = draw(deps, box);
+    const oldRoot = redraw();
+
+    deps.layouts.set(
+      withUser<ChatLayout>(defaultLayout, {
+        composer: (parent, _input, kit) => ({
+          element: kit.floatingPanel(parent),
+        }),
+        signIn: (parent) => ({ element: rootIn(parent) }),
+      }),
+    );
+    const newRoot = redraw();
+
+    expect(newRoot.dataset.layout).toBe(USER_LAYOUT);
+    expect(newRoot.children.filter((child) => child === box)).toEqual([box]);
+    expect(oldRoot.contains(box)).toBe(false);
   });
 });

@@ -193,8 +193,7 @@ export function createChatDialog(
   title: string,
   deps: Pick<DialogDeps, 'overlay'>,
 ): Dialog {
-  const dialog = createDialog(title);
-  dialog.actions.remove();
+  const dialog = createDialog(title, { hasActions: false });
   deps.overlay.contribute(dialog.element);
   return dialog;
 }

@@ -142,16 +142,11 @@
   right: var(--wg-space-3);
 }
 
-/* `display` would override `hidden`, so the empty strip is hidden here. */
 .chat-attachments {
   display: flex;
   flex-shrink: 0;
   flex-wrap: wrap;
   gap: var(--wg-space-2);
-}
-
-.chat-attachments[hidden] {
-  display: none;
 }
 
 .chat-attachment {

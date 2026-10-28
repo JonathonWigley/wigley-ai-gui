@@ -1,6 +1,7 @@
 import type { CommandId } from '../../../contracts/commands';
 import type { Log } from '../../../contracts/log';
-import { element } from '../../../shared/page/dom';
+import { appended, element } from '../../../shared/page/dom';
+import { appSlot } from '../../../shared/page/layout-host/app-slot';
 import {
   type DrawnPart,
   type RollbackDeps,
@@ -16,9 +17,9 @@ import {
   chatScope,
 } from '../ids';
 import type {
-  ChatLayout,
   CloseConfirmInput,
   CloseConfirmKit,
+  CompleteChatLayout,
   ImageViewerInput,
   PartView,
   ReasonBoxInput,
@@ -29,12 +30,9 @@ import type {
 import {
   type ChatLayouts,
   type ChatPartName,
-  drawChatPart,
-  partSlot,
-  placed,
+  chatPartDraws,
   type SurfaceKitDeps,
   surfaceBaseKit,
-  updateView,
 } from './chat-layouts';
 
 // One action button of a dialog: its label, look, and the command it runs,
@@ -80,16 +78,15 @@ export interface DialogPartDeps extends SurfaceKitDeps {
 
 // One dialog's part, drawn into `parent` (the dialog's body, or the image
 // viewer's scrim). `draw` replaces the last draw, disposing it; `update` runs
-// the drawn view's update, else draws again; `redraw` draws the last input
-// again while a draw is held; `clear` disposes the draw and empties `parent`.
+// the drawn view's update, else draws again, with `default` once the update
+// threw until the layouts change; `redraw` draws the last input again while a
+// draw is held; `clear` disposes the draw and empties `parent`.
 export interface DialogPart<I> {
   draw(input: I): void;
   update(input: I): void;
   redraw(): void;
   clear(): void;
 }
-
-type Builder<I, K> = (parent: HTMLElement, input: I, kit: K) => PartView<I>;
 
 // Builds the part's kit for one attempt; `finish` runs on the part's root
 // once the builder returned it.
@@ -98,13 +95,25 @@ interface PartKit<K> {
   finish(root: HTMLElement): void;
 }
 
+// The dialog part `partName` of the chat layout, its builder taking input `I`
+// and kit `K`.
+type DialogPartName<I, K> = {
+  [P in ChatPartName]: CompleteChatLayout[P] extends (
+    parent: HTMLElement,
+    input: I,
+    kit: K,
+  ) => PartView<I>
+    ? P
+    : never;
+}[ChatPartName];
+
 function createDialogPart<I, K>(
   deps: DialogPartDeps,
   parent: HTMLElement,
-  partName: ChatPartName,
-  part: (layout: ChatLayout) => Builder<I, K> | undefined,
+  partName: DialogPartName<I, K>,
   kitFor: (rollback: RollbackDeps) => PartKit<K>,
 ): DialogPart<I> {
+  const draws = chatPartDraws(deps.layouts, partName, deps.log);
   let drawn: DrawnPart<{ element: HTMLElement; view: PartView<I> }> | null =
     null;
   let current: I | null = null;
@@ -116,26 +125,25 @@ function createDialogPart<I, K>(
   const draw = (input: I) => {
     clear();
     current = input;
-    drawn = drawChatPart({
-      layouts: deps.layouts,
-      parent,
-      partName,
-      part,
-      build(builder, at, rollback) {
-        const { kit, finish } = kitFor(rollback);
-        const view = builder(at, input, kit);
-        const root = requireElementIn(at, view.element, partName);
-        finish(root);
-        return { element: root, view };
-      },
-      log: deps.log,
+    drawn = draws.draw(parent, (builder, at, rollback) => {
+      const { kit, finish } = kitFor(rollback);
+      // TypeScript cannot resolve the builder of a generic part name.
+      const build = builder as (
+        parent: HTMLElement,
+        input: I,
+        kit: K,
+      ) => PartView<I>;
+      const view = build(at, input, kit);
+      const root = requireElementIn(at, view.element, partName);
+      finish(root);
+      return { element: root, view };
     });
   };
   return {
     draw,
     update(input) {
       current = input;
-      if (drawn === null || !updateView(drawn, input, partName, deps.log)) {
+      if (drawn === null || draws.update(drawn, input) !== 'ran') {
         draw(input);
       }
     },
@@ -165,14 +173,13 @@ export function createSignInPart(
     deps,
     body,
     'signIn',
-    (layout) => layout.signIn,
     (rollback) => {
-      const codeBox = partSlot(pieces.codeBox, 'codeBox', rollback);
-      const actions = partSlot(pieces.actions, 'actions', rollback);
+      const codeBox = appSlot(pieces.codeBox, 'codeBox', rollback);
+      const actions = appSlot(pieces.actions, 'actions', rollback);
       return {
         kit: {
-          ...surfaceBaseKit(deps, 'signIn', rollback.recordAnchor),
-          copyButton: (parent) => placed(parent, pieces.copy),
+          ...surfaceBaseKit(deps, 'signIn', rollback),
+          copyButton: (parent) => appended(parent, pieces.copy),
           codeBox: (parent) => codeBox.place(parent),
           actions: (parent) => actions.place(parent),
         },
@@ -201,13 +208,12 @@ export function createReasonBoxPart(
     deps,
     body,
     'reasonBox',
-    (layout) => layout.reasonBox,
     (rollback) => {
-      const reasonBox = partSlot(pieces.reasonBox, 'reasonBox', rollback);
-      const actions = partSlot(pieces.actions, 'actions', rollback);
+      const reasonBox = appSlot(pieces.reasonBox, 'reasonBox', rollback);
+      const actions = appSlot(pieces.actions, 'actions', rollback);
       return {
         kit: {
-          ...surfaceBaseKit(deps, 'reason', rollback.recordAnchor),
+          ...surfaceBaseKit(deps, 'reason', rollback),
           reasonBox: (parent) => reasonBox.place(parent),
           actions: (parent) => actions.place(parent),
         },
@@ -229,12 +235,11 @@ export function createCloseConfirmPart(
     deps,
     body,
     'closeConfirm',
-    (layout) => layout.closeConfirm,
     (rollback) => {
-      const actions = partSlot(pieces.actions, 'actions', rollback);
+      const actions = appSlot(pieces.actions, 'actions', rollback);
       return {
         kit: {
-          ...surfaceBaseKit(deps, 'confirm', rollback.recordAnchor),
+          ...surfaceBaseKit(deps, 'confirm', rollback),
           actions: (parent) => actions.place(parent),
         },
         finish: (root) => actions.placeIfLeftOut(root),
@@ -251,9 +256,8 @@ export function createImageViewerPart(
     deps,
     scrim,
     'imageViewer',
-    (layout) => layout.imageViewer,
     (rollback) => ({
-      kit: surfaceBaseKit(deps, 'image', rollback.recordAnchor),
+      kit: surfaceBaseKit(deps, 'image', rollback),
       finish: () => undefined,
     }),
   );

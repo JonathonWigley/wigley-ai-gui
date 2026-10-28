@@ -2,7 +2,8 @@ import type { ChatImage } from '../../../contracts/agent';
 import type { CommandId } from '../../../contracts/commands';
 import type { Disposable } from '../../../contracts/disposable';
 import type { Log } from '../../../contracts/log';
-import { element } from '../../../shared/page/dom';
+import { appended, element } from '../../../shared/page/dom';
+import { appSlot } from '../../../shared/page/layout-host/app-slot';
 import {
   type DrawnPart,
   requireElementIn,
@@ -26,12 +27,9 @@ import type {
 import { imageUrl } from './attachments';
 import {
   type ChatLayouts,
-  drawChatPart,
-  partSlot,
-  placed,
+  chatPartDraws,
   type SurfaceKitDeps,
   surfaceBaseKit,
-  updateView,
 } from './chat-layouts';
 import { chipKeyCommands } from './composer-input';
 import { controlCommand } from './control-commands';
@@ -57,9 +55,11 @@ export interface ComposerSurface {
   // Draws the composer into `parent` in place of its last draw, then the bar
   // with `input` and the last attached images; returns the composer's root.
   drawComposer(parent: HTMLElement, input: ComposerInput): HTMLElement;
-  // Draws the bar with `input` in place of its last draw, after running the
-  // composer's update.
-  drawBar(input: ComposerInput): void;
+  // Runs the composer's update with `input`, then draws the bar with it in
+  // place of its last draw. Returns false, drawing no bar, when the update
+  // threw: the composer then draws with `default` until the layouts change,
+  // and the caller draws it again.
+  drawBar(input: ComposerInput): boolean;
   // Draws the attachments in place of their last draw; the slot hides while
   // `images` is empty.
   drawAttachments(images: readonly ChatImage[]): void;
@@ -98,6 +98,9 @@ export function createComposerSurface(
   attachmentsSlot.hidden = true;
   const barSlot = element('div', 'chat-composer-bar-slot');
   const parts = createBarParts(deps);
+  const composerDraws = chatPartDraws(deps.layouts, 'composer', deps.log);
+  const barDraws = chatPartDraws(deps.layouts, 'composerBar', deps.log);
+  const attachmentsDraws = chatPartDraws(deps.layouts, 'attachments', deps.log);
   let composer: DrawnPart<BuiltPart<ComposerInput>> | null = null;
   let bar: DrawnPart<BuiltPart<ComposerInput>> | null = null;
   let attachments: DrawnPart<BuiltPart<AttachmentsInput>> | null = null;
@@ -107,43 +110,35 @@ export function createComposerSurface(
     drawComposer(parent, input) {
       composer?.dispose();
       composer?.built.element.remove();
-      composer = drawChatPart({
-        layouts: deps.layouts,
-        parent,
-        partName: 'composer',
-        part: (layout) => layout.composer,
-        build(builder, at, rollback) {
-          const box = partSlot(pieces.box, 'box', rollback);
-          const attachmentsAt = partSlot(
-            attachmentsSlot,
-            'attachments',
-            rollback,
-          );
-          const barAt = partSlot(barSlot, 'bar', rollback);
-          const kit: ComposerKit = {
-            ...surfaceBaseKit(deps, 'chat', rollback.recordAnchor),
-            floatingPanel: (panelParent) =>
-              placed(panelParent, floatingPanel()),
-            box: (boxParent) => box.place(boxParent),
-            attachments: (slotParent) => attachmentsAt.place(slotParent),
-            bar: (slotParent) => barAt.place(slotParent),
-          };
-          const view = builder(at, input, kit);
-          const root = requireElementIn(at, view.element, 'composer');
-          box.placeIfLeftOut(root);
-          return { element: root, view };
-        },
-        log: deps.log,
+      composer = composerDraws.draw(parent, (builder, at, rollback) => {
+        const box = appSlot(pieces.box, 'box', rollback);
+        const attachmentsAt = appSlot(attachmentsSlot, 'attachments', rollback);
+        const barAt = appSlot(barSlot, 'bar', rollback);
+        const kit: ComposerKit = {
+          ...surfaceBaseKit(deps, 'chat', rollback),
+          floatingPanel: (panelParent) =>
+            appended(panelParent, floatingPanel()),
+          box: (boxParent) => box.place(boxParent),
+          attachments: (slotParent) => attachmentsAt.place(slotParent),
+          bar: (slotParent) => barAt.place(slotParent),
+        };
+        const view = builder(at, input, kit);
+        const root = requireElementIn(at, view.element, 'composer');
+        box.placeIfLeftOut(root);
+        return { element: root, view };
       });
       drawBarPart(input);
       surface.drawAttachments(images);
       return composer.built.element;
     },
     drawBar(input) {
-      if (composer !== null) {
-        updateView(composer, input, 'composer', deps.log);
+      const isComposerStale =
+        composer !== null && composerDraws.update(composer, input) === 'threw';
+      if (isComposerStale) {
+        return false;
       }
       drawBarPart(input);
+      return true;
     },
     drawAttachments(next) {
       images = next;
@@ -157,14 +152,11 @@ export function createComposerSurface(
           count: next.length,
         })),
       };
-      attachments = drawChatPart({
-        layouts: deps.layouts,
-        parent: attachmentsSlot,
-        partName: 'attachments',
-        part: (layout) => layout.attachments,
-        build(builder, at, rollback) {
+      attachments = attachmentsDraws.draw(
+        attachmentsSlot,
+        (builder, at, rollback) => {
           const kit: AttachmentsKit = {
-            ...surfaceBaseKit(deps, 'chat', rollback.recordAnchor),
+            ...surfaceBaseKit(deps, 'chat', rollback),
             removeButton(buttonParent, index) {
               const remove = iconButton(
                 'close',
@@ -173,14 +165,13 @@ export function createComposerSurface(
                 'sm',
               );
               remove.classList.add('chat-attachment-remove');
-              return placed(buttonParent, remove);
+              return appended(buttonParent, remove);
             },
           };
           const view = builder(at, input, kit);
           return { element: view.element, view };
         },
-        log: deps.log,
-      });
+      );
     },
     dispose() {
       composer?.dispose();
@@ -193,22 +184,15 @@ export function createComposerSurface(
   const drawBarPart = (input: ComposerInput) => {
     bar?.dispose();
     barSlot.replaceChildren();
-    bar = drawChatPart({
-      layouts: deps.layouts,
-      parent: barSlot,
-      partName: 'composerBar',
-      part: (layout) => layout.composerBar,
-      build(builder, at, rollback) {
-        const kit = composerBarKit(
-          surfaceBaseKit(deps, 'chat', rollback.recordAnchor),
-          parts,
-          input,
-          deps.run,
-        );
-        const view = builder(at, input, kit);
-        return { element: view.element, view };
-      },
-      log: deps.log,
+    bar = barDraws.draw(barSlot, (builder, at, rollback) => {
+      const kit = composerBarKit(
+        surfaceBaseKit(deps, 'chat', rollback),
+        parts,
+        input,
+        deps.run,
+      );
+      const view = builder(at, input, kit);
+      return { element: view.element, view };
     });
   };
 
@@ -270,7 +254,7 @@ function composerBarKit(
     ...base,
     typeHint(parent) {
       parts.typeHint.classList.toggle('is-box-focused', input.isBoxFocused);
-      return placed(parent, parts.typeHint);
+      return appended(parent, parts.typeHint);
     },
     controlChip(parent, control) {
       const command = controlCommand(control.id);
@@ -284,12 +268,12 @@ function composerBarKit(
       if (key !== undefined) {
         controlChip.append(key);
       }
-      return placed(parent, controlChip);
+      return appended(parent, controlChip);
     },
     running(parent) {
       parts.running.classList.toggle('is-idle', !input.working);
-      return placed(parent, parts.running);
+      return appended(parent, parts.running);
     },
-    sendButton: (parent) => placed(parent, parts.send),
+    sendButton: (parent) => appended(parent, parts.send),
   };
 }
