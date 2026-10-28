@@ -4,6 +4,7 @@ import type { Disposable } from '../../../contracts/disposable';
 import type { ContentScroll, ScrollStep } from '../../../contracts/editor';
 import type { Log } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
+import type { ResizeTarget } from '../../../contracts/panes';
 import type { Platform } from '../../../contracts/platform';
 import type { UiState } from '../../../contracts/ui-state';
 import { errorText } from '../../../shared/error-text';
@@ -105,6 +106,8 @@ export interface RoundViewDeps {
 // `setLayouts` picks the round's layouts again from `shown` and rebuilds when
 // a pick changed.
 // `scrollBy` scrolls the main column by `step`, down for 1 and up for -1.
+// `resizeTarget` is the view's rail | main split, which the resize keys move
+// while the round shows.
 // `dispose` disposes every anchor the view named and its split, and stops it
 // following keymap changes; its owner calls it when it drops the view.
 export interface RoundView {
@@ -113,6 +116,7 @@ export interface RoundView {
   rebuild(round: RoundState): void;
   setLayouts(shown: ShownLayouts<Layout>, round: RoundState): void;
   scrollBy(step: ScrollStep, direction: 1 | -1): ContentScroll;
+  resizeTarget: ResizeTarget;
   dispose(): void;
 }
 
@@ -253,6 +257,7 @@ export function createRoundView(
         textLineHeightPx(parts.main),
       );
     },
+    resizeTarget: split,
     dispose() {
       parts.dispose();
       split.dispose();

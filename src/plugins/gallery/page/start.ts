@@ -20,7 +20,8 @@ type GalleryApi = PageApi<
 >;
 
 // Adds Gallery mode, drawn through the `gallery.layout` layout, which sets the
-// `gallery` scope when it shows; each new layout set redraws it. `t` there
+// `gallery` scope when it shows, with the split sample as the resize keys'
+// target; each new layout set redraws it. `t` there
 // switches the page's transparency override between reduced and full, which
 // lasts until the page loads again and writes no settings; `g g` and `G`
 // scroll the gallery's sheet to its top and end, and the line and half-page
@@ -47,19 +48,33 @@ export const galleryPagePart: PagePart<typeof galleryManifest> = {
       },
       api.transparency.overridden(),
     );
+    // While the mode shows, the split sample is the resize keys' target; each
+    // layout set draws a new sample, so the target is set again after it.
+    let isShown = false;
     api.layouts.show<Layout>({
       defaultLayout,
       read: readGalleryLayout,
       userLayout: () => api.settings().layout,
-      setLayouts: (shown) => view.setLayouts(shown),
+      setLayouts(shown) {
+        view.setLayouts(shown);
+        if (isShown) {
+          api.panes.setResizeTarget(view.resizeTarget());
+        }
+      },
     });
     const mode = api.modes.add({
       id: 'gallery',
       title: 'Gallery',
       icon: 'symbol-color',
       element: view.element,
-      shown: () => api.keys.setScope('gallery'),
-      hidden: () => undefined,
+      shown() {
+        isShown = true;
+        api.keys.setScope('gallery');
+        api.panes.setResizeTarget(view.resizeTarget());
+      },
+      hidden() {
+        isShown = false;
+      },
     });
     mode.setContext({
       title: 'Gallery',

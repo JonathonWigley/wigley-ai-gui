@@ -3,6 +3,7 @@ import type { CommandId } from '../../../contracts/commands';
 import type { ContentScroll, ScrollStep } from '../../../contracts/editor';
 import type { Log } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
+import type { ResizeTarget } from '../../../contracts/panes';
 import type { Platform } from '../../../contracts/platform';
 import type {
   PluginAreas,
@@ -40,8 +41,9 @@ import { createRoundView, type RoundView } from './round-view';
 import { sessionTitle } from './view-model';
 
 // `beforeClose` answers whether a session may close now. `setScope` sets the
-// key scope to the forms view while a Form tab is the visible tab;
-// `pushConfirmScope` lays the cancel prompt's scope over it. `platform` is the
+// key scope to the forms view while a Form tab is the visible tab, and
+// `setResizeTarget` then sets the divider the resize keys move: the shown
+// round's split, or null while idle. `pushConfirmScope` lays the cancel prompt's scope over it. `platform` is the
 // OS key hints are drawn for; `uiState` keeps the rail's dragged width, which
 // every round's rail opens at; `timers` runs each round's split resize prompt
 // linger. `commands` and `contributions` reach every round view's kits and
@@ -51,6 +53,7 @@ export interface FormsViewDeps {
   sessions: Pick<SessionsPageExports, 'addTab'>;
   beforeClose(sessionId: string): boolean;
   setScope(view: FormsState['view']): void;
+  setResizeTarget(target: ResizeTarget | null): void;
   pushConfirmScope(): PushedScope;
   store: FormsStore;
   boxes: EditorBoxes<BoxRef>;
@@ -106,7 +109,7 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
     className: 'form-tab',
     idleText: "No round open. The agent's next round opens here.",
     beforeClose: (sessionId) => deps.beforeClose(sessionId),
-    shown: () => deps.setScope(deps.store.get().view),
+    shown: () => setBaseScope(deps.store.get()),
   });
   const dispatch = (action: FormsAction) => store.dispatch(action);
   const confirm = createConfirmPrompt({
@@ -126,6 +129,14 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
   });
   areas.overlay.contribute(confirm.element);
   const roundViews = new Map<string, RoundView>();
+  // Sets the key scope to the state's view, then the resize target to the
+  // shown round's split; the core drops the target on each scope change.
+  const setBaseScope = (state: FormsState) => {
+    deps.setScope(state.view);
+    const round = state.view === 'idle' ? null : activeForm(state);
+    const roundView = round === null ? undefined : roundViews.get(round.formId);
+    deps.setResizeTarget(roundView?.resizeTarget ?? null);
+  };
   const active: ActiveLayouts = {
     shown: {
       layouts: new Map<string, Layout>([['default', defaultLayout]]),
@@ -153,7 +164,7 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
     }
     confirm.setBaseScope(() => {
       if (tabs.isShown()) {
-        deps.setScope(view);
+        setBaseScope(state);
       }
     });
     const box = boxes.active();

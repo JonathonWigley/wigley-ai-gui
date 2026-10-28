@@ -21,7 +21,7 @@ import type { KeysPageExports } from '../../keys/contract';
 import type { BacklogChannel, BacklogRead } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type { BacklogLayout } from '../layouts/layout';
-import { createBacklogView } from './backlog-view';
+import { type BacklogView, createBacklogView } from './backlog-view';
 
 const ROOT = '/home/repo/docs/features';
 
@@ -112,9 +112,15 @@ async function settle() {
   await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+// One call to the view's `setScope` or `setResizeTarget`; a target is
+// `'target'` when one was set, else null.
+type ScopeCall = ['setScope', string] | ['setResizeTarget', 'target' | null];
+
 // A Backlog view, shown, over a channel that loads `READ`, with its home
-// open and its first follow-up selected.
+// open and its first follow-up selected. `calls` logs every `setScope` and
+// `setResizeTarget` call, in call order.
 async function backlogSetup() {
+  const calls: ScopeCall[] = [];
   const { host, created } = fakeEditorHost();
   const overlays: FakeElement[] = [];
   const recorded = recordingAnchors();
@@ -145,7 +151,9 @@ async function backlogSetup() {
     commands: { exists: () => true, run: () => undefined },
     tags: () => ['agent-ready', 'later'],
     openDoc: () => undefined,
-    setScope: () => undefined,
+    setScope: (scope) => calls.push(['setScope', scope]),
+    setResizeTarget: (target) =>
+      calls.push(['setResizeTarget', target === null ? null : 'target']),
     pushScope: () => ({ pop: () => undefined, onBaseChanged: () => undefined }),
     addOverlay: (element) => {
       overlays.push(asFake(element));
@@ -163,7 +171,7 @@ async function backlogSetup() {
   await settle();
   view.commands.open();
   await settle();
-  return { view, created, anchors, overlays, sheet };
+  return { view, created, anchors, overlays, sheet, calls };
 }
 
 function withUser(layout: BacklogLayout) {
@@ -373,6 +381,55 @@ describe('backlog view layouts', () => {
       view.setLayouts(withUser(layout as BacklogLayout));
 
       check(overlays, anchors);
+    },
+  );
+});
+
+describe('backlog resize target', () => {
+  beforeEach(() => {
+    installFocusFakeDom((name, value) => vi.stubGlobal(name, value));
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it.each<{
+    command: string;
+    run(view: BacklogView): void;
+    last: ScopeCall[];
+  }>([
+    {
+      command: 'focusList',
+      run: (view) => view.commands.focusList(),
+      last: [
+        ['setScope', 'list'],
+        ['setResizeTarget', 'target'],
+      ],
+    },
+    {
+      command: 'focusDetail',
+      run: (view) => view.commands.focusDetail(),
+      last: [
+        ['setScope', 'detail'],
+        ['setResizeTarget', 'target'],
+      ],
+    },
+    {
+      command: 'sideBarOpenedOver',
+      run: (view) => view.sideBarOpenedOver(),
+      last: [
+        ['setScope', 'list'],
+        ['setResizeTarget', null],
+      ],
+    },
+  ])(
+    '$command sets the scope, then the resize target',
+    async ({ run, last }) => {
+      const { view, calls } = await backlogSetup();
+
+      run(view);
+
+      expect(calls.slice(-2)).toEqual(last);
     },
   );
 });

@@ -1,5 +1,6 @@
 import './gallery.css';
 import type { Timers } from '../../../contracts/ambient';
+import type { ResizeTarget } from '../../../contracts/panes';
 import type { Platform } from '../../../contracts/platform';
 import type { ShownLayouts } from '../../../contracts/plugin';
 import type { UiState } from '../../../contracts/ui-state';
@@ -53,17 +54,25 @@ interface SplitSampleDeps {
   timers: Timers;
 }
 
+// The split the split sample made last; null until the first draw.
+interface KeptSplit {
+  split: Split | null;
+}
+
 // `element` is the mode's root: the transparency status line (the layout's
 // `head`), a one-tab strip and `sheet`, the scrolling sheet holding a section
 // per primitive with each of its states. `showTransparency` draws the head
 // again with the override in force, null for none. `setLayouts` draws the head
 // and every section again in the new layouts, with fresh samples, at the same
-// scroll position.
+// scroll position. `resizeTarget` is the split sample the last draw made,
+// which the resize keys move while the mode shows; each `setLayouts` makes a
+// new one, so the caller reads it again after.
 export interface GalleryView {
   element: HTMLElement;
   sheet: HTMLElement;
   showTransparency(overridden: Transparency): void;
   setLayouts(shown: ShownLayouts<Layout>): void;
+  resizeTarget(): ResizeTarget;
 }
 
 // The transparency override in force, null when the setting decides.
@@ -98,11 +107,16 @@ export function createGalleryView(
   gallerySheet.append(sections);
   root.append(headSlot, strip, gallerySheet);
 
-  const specs = sectionSpecs(deps.platform, {
-    uiState: deps.uiState,
-    anchor: deps.keys.anchor,
-    timers: deps.timers,
-  });
+  const kept: KeptSplit = { split: null };
+  const specs = sectionSpecs(
+    deps.platform,
+    {
+      uiState: deps.uiState,
+      anchor: deps.keys.anchor,
+      timers: deps.timers,
+    },
+    kept,
+  );
   let headInput: GalleryHeadInput = { transparency };
 
   const drawHead = () => parts.drawHead(headSlot, headInput);
@@ -136,6 +150,13 @@ export function createGalleryView(
       drawSections();
       gallerySheet.scrollTop = scrollTop;
     },
+    resizeTarget() {
+      // The view draws its sections as it is made, so a split is kept.
+      if (kept.split === null) {
+        throw new Error('the gallery drew no split sample');
+      }
+      return kept.split;
+    },
   };
 }
 
@@ -144,8 +165,8 @@ export function createGalleryView(
 function sectionSpecs(
   platform: Platform,
   splitDeps: SplitSampleDeps,
+  kept: KeptSplit,
 ): SectionSpec[] {
-  const kept: { split: Split | null } = { split: null };
   return [
     section('Materials', materialsCells),
     section('Kbd', () => kbdCells(platform)),
@@ -521,10 +542,7 @@ function tabsCells(): SampleCell[][] {
 
 // A fresh split sample; it disposes the split `kept` holds, and keeps its own
 // there.
-function splitSample(
-  deps: SplitSampleDeps,
-  kept: { split: Split | null },
-): HTMLElement {
+function splitSample(deps: SplitSampleDeps, kept: KeptSplit): HTMLElement {
   kept.split?.dispose();
   const split = createSplit({
     ...deps,

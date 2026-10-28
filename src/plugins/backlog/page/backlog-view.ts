@@ -4,6 +4,7 @@ import type { Disposable } from '../../../contracts/disposable';
 import type { EditorHost, ScrollStep } from '../../../contracts/editor';
 import type { Log } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
+import type { ResizeTarget } from '../../../contracts/panes';
 import type { Paths } from '../../../contracts/paths';
 import type { Platform } from '../../../contracts/platform';
 import type {
@@ -140,6 +141,9 @@ export interface BacklogViewDeps {
   tags(): readonly string[];
   openDoc(path: string, line?: number): void;
   setScope(scope: BacklogBaseScope): void;
+  // Sets the divider the resize keys move, after each `setScope`: the list |
+  // detail split, or null while the homes have focus, which moves the side bar.
+  setResizeTarget(target: ResizeTarget | null): void;
   pushScope(scope: BacklogPushedScope): PushedScope;
   addOverlay(element: HTMLElement): Disposable;
   run(command: CommandId): void;
@@ -886,6 +890,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
       discardPrompt.setBaseScope(() => {
         if (deps.isShown()) {
           deps.setScope(scopeOf(state));
+          deps.setResizeTarget(state.focus === 'homes' ? null : split);
         }
       }),
     );

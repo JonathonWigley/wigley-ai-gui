@@ -45,6 +45,7 @@ export const backlogPagePart: PagePart<typeof backlogManifest> = {
       tags: () => api.settings().tags,
       openDoc: (path, line) => docs.openDoc(path, line),
       setScope: (scope) => api.keys.setScope(scope),
+      setResizeTarget: (target) => api.panes.setResizeTarget(target),
       pushScope: (scope) => api.keys.pushScope(scope),
       addOverlay: (element) => api.areas.overlay.contribute(element),
       run: (command) => api.commands.run(command),

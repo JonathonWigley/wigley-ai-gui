@@ -1,6 +1,7 @@
 import '../../../shared/page/markdown.css';
 import './docs.css';
 import type { CommandId } from '../../../contracts/commands';
+import type { ResizeTarget } from '../../../contracts/panes';
 import type {
   PageApi,
   PagePart,
@@ -175,6 +176,8 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     };
 
     // `changed` reads the view only once a change is made, after creation.
+    // Each scope the view sets is followed by `resizeTarget`, the divider the
+    // resize keys move while the view has the keys; null moves the side bar.
     const createView = (
       viewId: string,
       sourceId: string,
@@ -182,6 +185,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       openChanged: (path: string | null) => void,
       revealTree: () => void,
       leafOpened: () => void,
+      resizeTarget: ResizeTarget | null,
     ): DocsView => {
       const view: DocsView = createDocsView({
         viewId,
@@ -200,7 +204,10 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
             ...options,
             scope: qualify(docsManifest.id, options.scope),
           }),
-        setScope: (scope) => api.keys.setScope(scope),
+        setScope: (scope) => {
+          api.keys.setScope(scope);
+          api.panes.setResizeTarget(resizeTarget);
+        },
         pushScope: (scope) => api.keys.pushScope(scope),
         isActive,
         openChanged,
@@ -241,6 +248,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         }
       },
       () => mode.picked(),
+      null,
     );
 
     // Each set redraws every view's parts its pick changed for.
@@ -295,6 +303,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         isDocsModeShown = true;
         closeOverlaysBesides(machineView);
         api.keys.setScope(machineView.focusScope());
+        api.panes.setResizeTarget(null);
         machineView.showFirstTime();
       },
       hidden: () => undefined,
@@ -344,6 +353,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
             }
           },
           () => undefined,
+          split,
         ),
         split,
         isTreeHidden: false,
@@ -361,6 +371,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
           split.reloadWidth();
           closeOverlaysBesides(added.view);
           api.keys.setScope(added.view.focusScope());
+          api.panes.setResizeTarget(split);
           log('docs', 'Docs tab shown');
           added.view.showFirstTime();
         },

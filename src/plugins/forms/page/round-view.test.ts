@@ -54,6 +54,11 @@ function fakeHost() {
   return { host, created };
 }
 
+// Whether `command` is one of the resize commands a split's prompt anchors.
+function isPaneResizeCommand(command: string): boolean {
+  return Object.values<string>(PANE_RESIZE_COMMANDS).includes(command);
+}
+
 function setup() {
   const { host, created } = fakeHost();
   const boxes = createEditorBoxes(
@@ -180,12 +185,27 @@ describe('round view rebuild', () => {
     expect(firstBuild.every((anchor) => anchor.isDisposed)).toBe(true);
   });
 
+  it('rebuild_KeepsTheSplitPrompt', () => {
+    const { round, view, anchors } = roundViewSetup();
+
+    view.rebuild(round);
+
+    const splitPrompt = anchors.filter((anchor) =>
+      isPaneResizeCommand(anchor.command),
+    );
+    expect(splitPrompt.length).toBeGreaterThan(0);
+    expect(splitPrompt.some((anchor) => anchor.isDisposed)).toBe(false);
+  });
+
   it('dispose_DisposesEveryAnchor', () => {
     const { view, anchors } = roundViewSetup();
 
     view.dispose();
 
     expect(anchors.length).toBeGreaterThan(0);
+    expect(anchors.some((anchor) => isPaneResizeCommand(anchor.command))).toBe(
+      true,
+    );
     expect(anchors.every((anchor) => anchor.isDisposed)).toBe(true);
   });
 });

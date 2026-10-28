@@ -149,6 +149,7 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
           sessionId,
         ),
       setScope: (formsView) => api.keys.setScope(formsView),
+      setResizeTarget: (target) => api.panes.setResizeTarget(target),
       pushConfirmScope: () => api.keys.pushScope('confirm'),
       store,
       boxes,

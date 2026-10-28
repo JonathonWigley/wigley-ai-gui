@@ -10,7 +10,7 @@ import {
 } from '../../../shared/page/test-dom';
 import { FORMS_BOX_IDENTITY } from './boxes';
 import { createFormsContributions } from './contributions';
-import { apply, initialState } from './form-state';
+import { apply, type FormsAction, initialState } from './form-state';
 import { mountFormsView } from './forms-view';
 import { presentedRound } from './test-rounds';
 
@@ -32,9 +32,15 @@ const host: EditorHost = {
   setKeymap: () => {},
 };
 
+// One call to the view's `setScope` or `setResizeTarget`; a target is
+// `'target'` when one was set, else null.
+type ScopeCall = ['setScope', string] | ['setResizeTarget', 'target' | null];
+
 // Round r1 open and active in its session's Form tab, the visible tab; `tab`
-// is the tab's element.
+// is the tab's element, and `calls` logs every `setScope` and
+// `setResizeTarget` call, in call order.
 function formTabSetup() {
+  const calls: ScopeCall[] = [];
   const presented = presentedRound('r1');
   const store = createReducerStore(
     initialState([presented], presented.sessionId),
@@ -64,7 +70,9 @@ function formTabSetup() {
       },
     },
     beforeClose: () => true,
-    setScope: () => undefined,
+    setScope: (view) => calls.push(['setScope', view]),
+    setResizeTarget: (target) =>
+      calls.push(['setResizeTarget', target === null ? null : 'target']),
     pushConfirmScope: () => ({
       pop: () => undefined,
       onBaseChanged: () => undefined,
@@ -92,7 +100,12 @@ function formTabSetup() {
   if (tab === null) {
     throw new Error('forms mounted no tab');
   }
-  return { store, sessionId: presented.sessionId, tab: tab as FakeElement };
+  return {
+    store,
+    sessionId: presented.sessionId,
+    tab: tab as FakeElement,
+    calls,
+  };
 }
 
 // The round's items pane, which holds its cards.
@@ -131,5 +144,48 @@ describe('form tab under the cancel prompt', () => {
     expect(store.get().view).toBe('confirm');
     expect(itemsPane(tab).hidden).toBe(true);
     expect(reviewPane(tab).hidden).toBe(false);
+  });
+});
+
+describe('form tab resize target', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it.each<{ action: string; actions: FormsAction[]; last: ScopeCall[] }>([
+    {
+      action: 'none, the round shows',
+      actions: [],
+      last: [
+        ['setScope', 'forms'],
+        ['setResizeTarget', 'target'],
+      ],
+    },
+    {
+      // The cancel prompt is asked from the review.
+      action: 'askCancel',
+      actions: [{ type: 'openReview' }, { type: 'askCancel' }],
+      last: [
+        ['setScope', 'confirm'],
+        ['setResizeTarget', 'target'],
+      ],
+    },
+    {
+      action: 'formClosed for the round',
+      actions: [{ type: 'formClosed', formId: 'r1' }],
+      last: [
+        ['setScope', 'idle'],
+        ['setResizeTarget', null],
+      ],
+    },
+  ])('$action sets the scope, then the resize target', ({ actions, last }) => {
+    const { store, calls } = formTabSetup();
+
+    for (const action of actions) {
+      store.dispatch(action);
+    }
+
+    expect(calls.slice(-2)).toEqual(last);
   });
 });
