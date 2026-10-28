@@ -8,7 +8,8 @@ import type { PrimerLayout, PrimerLayoutCards } from '../../layouts/layout';
 // Every pane a primer layout may define besides its `cards`, and every card
 // its `cards` may.
 const PANE_PARTS: Record<Exclude<keyof PrimerLayout, 'cards'>, true> = {
-  rail: true,
+  tasks: true,
+  items: true,
   review: true,
 };
 const CARD_PARTS: Record<keyof PrimerLayoutCards, true> = {

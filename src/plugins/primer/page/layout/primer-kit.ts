@@ -26,11 +26,12 @@ import type {
   FeatureKit,
   ItemCardInput,
   ItemKit,
+  ItemsKit,
   PrimerKit,
-  RailKit,
   ReviewKit,
   TaskCardInput,
   TaskKit,
+  TasksKit,
 } from '../../layouts/layout';
 import { primerManifest } from '../../manifest';
 import {
@@ -45,7 +46,9 @@ import {
   includedCount,
   type OpenPrimer,
   type PrimerAction,
-  railRows,
+  selectedEntry,
+  type TaskRow,
+  taskRows,
   type TextTarget,
 } from '../primer-state';
 
@@ -53,7 +56,7 @@ import {
 // commands a kit's `command` reaches, and the platform its key hints draw for.
 export type PrimerKitDeps = OwnerKitServices;
 
-// What the card and rail kits act through besides: the text boxes and the
+// What the card and column kits act through besides: the text boxes and the
 // store.
 export interface PrimerPartKitDeps extends PrimerKitDeps {
   boxes: Pick<EditorBoxes<PrimerBox>, 'mount' | 'destroyBox'>;
@@ -69,9 +72,15 @@ export interface CardKit<K, Input> {
   update(input: Input): void;
 }
 
-// The rail's kit and the row element `railRow` drew at each position.
-export interface DrawnRailKit {
-  kit: RailKit;
+// The tasks column's kit and the row element `taskRow` drew at each position.
+export interface DrawnTasksKit {
+  kit: TasksKit;
+  rows: Map<number, HTMLElement>;
+}
+
+// The items column's kit and the row element `itemRow` drew at each position.
+export interface DrawnItemsKit {
+  kit: ItemsKit;
   rows: Map<number, HTMLElement>;
 }
 
@@ -202,7 +211,7 @@ export function createItemKit(
               rollback,
               'primer-item-step-key',
               command,
-              'rail',
+              'items',
             ),
             anchoredSpan(
               deps,
@@ -224,26 +233,22 @@ export function createItemKit(
   };
 }
 
-// The rail's kit over the primer's rail rows: each row `railRow` draws
-// selects its row on a click, and an item row's mark selects and toggles its
-// item.
-export function createRailKit(
+// The tasks column's kit over the primer's task rows: each row `taskRow`
+// draws selects its task on a click.
+export function createTasksKit(
   deps: PrimerPartKitDeps,
   primer: OpenPrimer,
   rollback: RollbackDeps,
-): DrawnRailKit {
-  const base = createPrimerKit(deps, 'rail', rollback);
+): DrawnTasksKit {
+  const base = createPrimerKit(deps, 'tasks', rollback);
   const rows = new Map<number, HTMLElement>();
-  const railRowsNow = railRows(primer);
-  const select = (position: number) => () =>
-    deps.dispatch({ type: 'selectRow', row: position });
-  const kit: RailKit = {
+  const taskRowsNow = taskRows(primer);
+  const kit: TasksKit = {
     ...base,
-    railRow(parent, position) {
-      const node = railRowElement(primer, railRowsNow, position, select, () => {
-        select(position)();
-        deps.dispatch({ type: 'toggleInclude' });
-      });
+    taskRow(parent, position) {
+      const node = taskRowElement(primer, taskRowsNow, position, () =>
+        deps.dispatch({ type: 'selectTask', row: position }),
+      );
       rows.set(position, node);
       return appended(parent, node);
     },
@@ -257,6 +262,36 @@ export function createRailKit(
   return { kit, rows };
 }
 
+// The items column's kit over the selected task's items: each row `itemRow`
+// draws selects its item on a click, and its mark selects and toggles it.
+export function createItemsKit(
+  deps: PrimerPartKitDeps,
+  primer: OpenPrimer,
+  rollback: RollbackDeps,
+): DrawnItemsKit {
+  const base = createPrimerKit(deps, 'items', rollback);
+  const rows = new Map<number, HTMLElement>();
+  const items = selectedEntry(primer)?.items ?? [];
+  const kit: ItemsKit = {
+    ...base,
+    itemRow(parent, position) {
+      const item = items[position];
+      if (item === undefined) {
+        throw new Error(`the items column has no row ${position}`);
+      }
+      const select = () =>
+        deps.dispatch({ type: 'selectItem', item: position + 1 });
+      const node = itemRowElement(item, position + 1, select, () => {
+        select();
+        deps.dispatch({ type: 'toggleInclude' });
+      });
+      rows.set(position, node);
+      return appended(parent, node);
+    },
+  };
+  return { kit, rows };
+}
+
 export function createReviewKit(
   deps: PrimerKitDeps,
   rollback: RollbackDeps,
@@ -264,53 +299,43 @@ export function createReviewKit(
   return createPrimerKit(deps, 'review', rollback);
 }
 
-// The list row for rail `position`: the Feature row, a task row with its need
-// tag and count, or an item row led by its mark and number. Throws for a
-// position `rows` lacks.
-function railRowElement(
+// The list row for tasks column `position`: the Feature row, or a task row
+// with its need tag and count. Throws for a position `rows` lacks.
+function taskRowElement(
   primer: OpenPrimer,
-  rows: ReturnType<typeof railRows>,
+  rows: TaskRow[],
   position: number,
-  select: (position: number) => () => void,
-  toggle: () => void,
+  onSelect: () => void,
 ): HTMLElement {
-  const railRow = rows[position];
-  if (railRow === undefined) {
-    throw new Error(`the rail has no row ${position}`);
+  const taskRow = rows[position];
+  if (taskRow === undefined) {
+    throw new Error(`the tasks column has no row ${position}`);
   }
-  if (railRow.kind === 'feature') {
+  if (taskRow.kind === 'feature') {
     return row({
       density: 'list',
       label: 'Feature',
       detail: primer.feature.name,
-      onClick: select(position),
+      onClick: onSelect,
     });
   }
   const entry = primer.entries.find(
-    (candidate) => candidate.id === railRow.entryId,
+    (candidate) => candidate.id === taskRow.entryId,
   );
   if (entry === undefined) {
-    throw new Error(`primer ${primer.formId} has no task ${railRow.entryId}`);
+    throw new Error(`primer ${primer.formId} has no task ${taskRow.entryId}`);
   }
-  if (railRow.kind === 'task') {
-    return row({
-      density: 'list',
-      label: taskName(entry),
-      trailing: railTrailing(entry),
-      onClick: select(position),
-    });
-  }
-  return railItemRow(
-    itemOf(entry, railRow.item),
-    railRow.item,
-    select(position),
-    toggle,
-  );
+  return row({
+    density: 'list',
+    label: taskName(entry),
+    trailing: taskTrailing(entry),
+    onClick: onSelect,
+  });
 }
 
 // A task row's need tag and `<included>/<total>` count of its items.
-function railTrailing(entry: PrimerEntry): HTMLElement {
-  const trailing = element('span', 'primer-rail-trailing');
+function taskTrailing(entry: PrimerEntry): HTMLElement {
+  const trailing = element('span', 'primer-task-trailing');
   trailing.append(
     needTag(entry.need),
     element(
@@ -324,20 +349,19 @@ function railTrailing(entry: PrimerEntry): HTMLElement {
 
 // An item row: its include mark and its number leading the item text.
 // `onToggle` runs on a click on the mark.
-function railItemRow(
+function itemRowElement(
   item: PrimerItem,
   number: number,
   onSelect: () => void,
   onToggle: () => void,
 ): HTMLElement {
-  const lead = element('span', 'primer-rail-item-lead');
+  const lead = element('span', 'primer-item-lead');
   lead.append(
     toggleMark({ isOn: item.include, label: 'Include the item', onToggle }),
     element('span', 'primer-item-number', String(number)),
   );
   return row({
     density: 'list',
-    depth: 1,
     label: item.text,
     leading: lead,
     onClick: onSelect,

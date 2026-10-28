@@ -36,6 +36,7 @@ import type { primerManifest } from '../manifest';
 import { boxKey, focusActionFor, type PrimerBox, shownBoxes } from './boxes';
 import {
   buildBody,
+  cardRow,
   type OpenPrimer,
   type PrimerAction,
   type PrimerPane,
@@ -43,7 +44,6 @@ import {
   rowName,
   selectedEntry,
   selectedItem,
-  selectedRow,
   submitProblems,
   type TextTarget,
 } from './primer-state';
@@ -104,12 +104,17 @@ export function primerCommandHandlers(
     needUnclear: handler(() => setNeed(deps, 'unclear')),
     addExtraTask: handler(() => addExtraTask(deps)),
     removeExtraTask: handler(() => removeExtraTask(deps)),
-    focusCard: handler(() => focusPane(deps, 'card', 'focused the card')),
-    focusRail: handler((box) => {
+    focusTasks: handler((box) => {
       commitNewItem(deps, box);
       boxes.leave();
-      focusPane(deps, 'rail', 'focused the rail');
+      focusPane(deps, 'tasks', 'focused the tasks');
     }),
+    focusItems: handler((box) => {
+      commitNewItem(deps, box);
+      boxes.leave();
+      focusPane(deps, 'items', 'focused the items');
+    }),
+    focusCard: handler(() => focusPane(deps, 'card', 'focused the card')),
     toggleInclude: handler(() => toggleInclude(deps)),
     addItem: handler(() => focusAddItem(deps)),
     editItemComment: handler(() => focusItemComment(deps)),
@@ -196,7 +201,8 @@ function focusTarget(
   deps.boxes.focus({ primerId: primer.formId, target }, APPEND);
 }
 
-// Adds an add-item box's text first, since the move leaves the box.
+// Adds an add-item box's text first, since the move leaves the box. Logs the
+// card row's name when the move changed it.
 function moveRow(
   deps: PrimerCommandDeps,
   box: PrimerBox | undefined,
@@ -205,7 +211,7 @@ function moveRow(
   commitNewItem(deps, box);
   const selectedName = (state: PrimerState) => {
     const primer = activeForm(state);
-    return primer === null ? null : rowName(selectedRow(primer));
+    return primer === null ? null : rowName(cardRow(primer));
   };
   const before = selectedName(deps.store.get());
   deps.store.dispatch(action);
@@ -284,14 +290,13 @@ function focusPane(deps: PrimerCommandDeps, pane: PrimerPane, line: string) {
   }
 }
 
-// The shown primer's selected item row and its item; null when no item row
-// is selected.
+// The shown primer's card row and its item; null when the card shows no item.
 function cursorItem(state: PrimerState) {
   const primer = shownPrimer(state);
   if (primer === null) {
     return null;
   }
-  const row = selectedRow(primer);
+  const row = cardRow(primer);
   const item = selectedItem(primer);
   return row.kind === 'item' && item !== null ? { primer, row, item } : null;
 }

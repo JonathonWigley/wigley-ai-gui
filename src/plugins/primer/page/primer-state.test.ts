@@ -3,19 +3,22 @@ import { activeForm } from '../../../shared/page/session-forms';
 import type { PrimerEntry } from '../contract';
 import {
   apply,
+  cardRow,
   initialState,
   type OpenPrimer,
   type PrimerAction,
+  type PrimerColumn,
+  type PrimerPane,
+  type PrimerRow,
   type PrimerState,
-  type RailRow,
-  railRows,
   type RowPrompt,
   rowPrompt,
   scopeOf,
   selectedEntry,
-  selectedRow,
   sessionTitle,
   submitProblems,
+  type TaskRow,
+  taskRows,
   type TextTarget,
 } from './primer-state';
 import {
@@ -26,9 +29,9 @@ import {
   primerItem,
 } from './test-primers';
 
-// One primer, `p1`, active in view 'primer'; with the Feature row selected,
-// rows: the feature (0), `1` (1), `s1` (2), `extra-1` (3) unless `entries`
-// says otherwise. Selecting `1` draws its two items as rows 2 and 3.
+// One primer, `p1`, active in view 'primer' on the Feature row; tasks column
+// rows: the feature (0), `1` with two items (1), `s1` (2), `extra-1` (3)
+// unless `entries` says otherwise.
 function stateWith(entries: PrimerEntry[] = primerEntries()): PrimerState {
   return initialState([presentedPrimer('p1', { entries })], 'p1-session');
 }
@@ -45,15 +48,32 @@ function applyAll(state: PrimerState, actions: PrimerAction[]): PrimerState {
   return actions.reduce(apply, state);
 }
 
-// Selects row `row` of the active primer, a position in the rows drawn now.
-function onRow(state: PrimerState, row: number): PrimerState {
-  return apply(state, { type: 'selectRow', row });
+// Clicks tasks column row `row` of the active primer.
+function onTask(state: PrimerState, row: number): PrimerState {
+  return apply(state, { type: 'selectTask', row });
 }
 
-// Selects item `item` of task `1`: its task row, then its item row.
-function onItemOf1(state: PrimerState, item: number): PrimerState {
-  return onRow(onRow(state, 1), 1 + item);
+// Clicks item `item` (1-based) of the selected task.
+function onItem(state: PrimerState, item: number): PrimerState {
+  return apply(state, { type: 'selectItem', item });
 }
+
+// Clicks task `1`'s row, then its item `item`.
+function onItemOf1(state: PrimerState, item: number): PrimerState {
+  return onItem(onTask(state, 1), item);
+}
+
+function focus(state: PrimerState, pane: PrimerPane): PrimerState {
+  return apply(state, { type: 'focusPane', pane });
+}
+
+// The selection a primer holds.
+function selectionOf(state: PrimerState) {
+  const { selectedTask, selectedItem } = primerOf(state);
+  return { selectedTask, selectedItem };
+}
+
+const TASK_1: TaskRow = { kind: 'task', entryId: '1' };
 
 function setNewItemText(
   state: PrimerState,
@@ -81,7 +101,12 @@ describe('primer state', () => {
     expect(primer.feature).toEqual(draftFeature);
     expect(primer.entries).toEqual(draftEntries);
     expect(primer.primer).toEqual(presented.form);
-    expect(primer.selected).toEqual({ kind: 'feature' });
+    expect(primer).toMatchObject({
+      selectedTask: { kind: 'feature' },
+      selectedItem: null,
+      pane: 'tasks',
+      cardColumn: 'tasks',
+    });
     expect(state.view).toBe('primer');
     expect(apply(state, { type: 'formShown', form: presented })).toBe(state);
   });
@@ -94,7 +119,7 @@ describe('primer state', () => {
     expect(state.view).toBe('idle');
   });
 
-  it('orders the rail rows feature, primer, standing, extra', () => {
+  it('orders the tasks column rows feature, primer, standing, extra', () => {
     const state = stateWith([
       primerEntry('x', 'extra'),
       primerEntry('s1', 'standing', { items: [primerItem('Standing')] }),
@@ -103,70 +128,309 @@ describe('primer state', () => {
       }),
     ]);
 
-    expect(railRows(primerOf(onRow(state, 1)))).toEqual([
+    expect(taskRows(primerOf(onTask(state, 1)))).toEqual([
       { kind: 'feature' },
       { kind: 'task', entryId: '1' },
-      { kind: 'item', entryId: '1', item: 1 },
-      { kind: 'item', entryId: '1', item: 2 },
       { kind: 'task', entryId: 's1' },
       { kind: 'task', entryId: 'x' },
     ]);
   });
 
-  it.each<[string, (state: PrimerState) => PrimerState, RowPrompt | null]>([
-    ['the Feature row', (state) => state, null],
+  it.each<
+    [
+      string,
+      PrimerColumn,
+      (state: PrimerState) => PrimerState,
+      RowPrompt | null,
+    ]
+  >([
+    ['the Feature row', 'tasks', (state) => state, null],
     [
       'a task row',
-      (state) => onRow(state, 1),
+      'tasks',
+      (state) => onTask(state, 1),
       { need: true, include: false, remove: false },
     ],
     [
       'an extra task row',
-      (state) => onRow(state, 3),
+      'tasks',
+      (state) => onTask(state, 3),
       { need: true, include: false, remove: true },
     ],
     [
       'an item row of task 1',
-      (state) => onItemOf1(state, 1),
+      'items',
+      (state) => onItemOf1(state, 2),
       { need: true, include: true, remove: false },
     ],
     [
       "an extra task's item row",
-      (state) => onRow(onRow(state, 3), 4),
-      { need: true, include: true, remove: true },
+      'items',
+      (state) => onItem(onTask(state, 3), 1),
+      { need: true, include: true, remove: false },
     ],
-  ])('gives the row prompt on %s', (_name, select, expected) => {
-    const entries = [
-      ...primerEntries().slice(0, 2),
-      primerEntry('extra-1', 'extra', { items: [primerItem('Extra item')] }),
-    ];
+    ['the Feature row', 'items', (state) => focus(state, 'items'), null],
+    [
+      'a task with no items',
+      'items',
+      (state) => focus(onTask(state, 2), 'items'),
+      null,
+    ],
+  ])(
+    'gives the row prompt on %s in the %s column',
+    (_name, column, select, expected) => {
+      const entries = [
+        ...primerEntries().slice(0, 2),
+        primerEntry('extra-1', 'extra', { items: [primerItem('Extra item')] }),
+      ];
 
-    expect(rowPrompt(primerOf(select(stateWith(entries))))).toEqual(expected);
-  });
+      expect(rowPrompt(primerOf(select(stateWith(entries))), column)).toEqual(
+        expected,
+      );
+    },
+  );
 
-  it('walks the rail rows and expands only the selected task', () => {
-    const selected = (state: PrimerState) => selectedRow(primerOf(state));
-    let state = stateWith();
-    const walked: RailRow[] = [];
-    for (let i = 0; i < 4; i++) {
-      state = apply(state, { type: 'nextRow' });
-      walked.push(selected(state));
-    }
+  // Tasks column rows: the feature (0), `1` with two items (1), `s1` with
+  // none (2), `extra-1` with one (3).
+  it.each<{
+    from: string;
+    start: (state: PrimerState) => PrimerState;
+    action: 'nextRow' | 'prevRow';
+    expected: { selectedTask: TaskRow; selectedItem: number | null } | 'same';
+  }>([
+    {
+      from: 'tasks, Feature row',
+      start: (state) => state,
+      action: 'nextRow',
+      expected: { selectedTask: TASK_1, selectedItem: 1 },
+    },
+    {
+      from: 'tasks, Feature row',
+      start: (state) => state,
+      action: 'prevRow',
+      expected: 'same',
+    },
+    {
+      from: 'tasks, last task',
+      start: (state) => onTask(state, 3),
+      action: 'nextRow',
+      expected: 'same',
+    },
+    {
+      from: 'tasks, task 1',
+      start: (state) => onTask(state, 1),
+      action: 'nextRow',
+      expected: {
+        selectedTask: { kind: 'task', entryId: 's1' },
+        selectedItem: null,
+      },
+    },
+    {
+      from: 'items, task 1 item 1',
+      start: (state) => onItemOf1(state, 1),
+      action: 'nextRow',
+      expected: { selectedTask: TASK_1, selectedItem: 2 },
+    },
+    {
+      from: 'items, task 1 last item',
+      start: (state) => onItemOf1(state, 2),
+      action: 'nextRow',
+      expected: 'same',
+    },
+    {
+      from: 'items, task 1 item 1',
+      start: (state) => onItemOf1(state, 1),
+      action: 'prevRow',
+      expected: 'same',
+    },
+    {
+      from: 'items, Feature row',
+      start: (state) => focus(state, 'items'),
+      action: 'nextRow',
+      expected: 'same',
+    },
+    {
+      from: 'card from tasks, task s1',
+      start: (state) => focus(onTask(state, 2), 'card'),
+      action: 'nextRow',
+      expected: {
+        selectedTask: { kind: 'task', entryId: 'extra-1' },
+        selectedItem: 1,
+      },
+    },
+    {
+      from: 'card from items, task 1 item 1',
+      start: (state) => focus(onItemOf1(state, 1), 'card'),
+      action: 'nextRow',
+      expected: { selectedTask: TASK_1, selectedItem: 2 },
+    },
+  ])(
+    "steps the stepped column's rows: $from, $action",
+    ({ start, action, expected }) => {
+      const entries = [
+        ...primerEntries().slice(0, 2),
+        primerEntry('extra-1', 'extra', { items: [primerItem('Extra item')] }),
+      ];
+      const state = start(stateWith(entries));
 
-    expect(walked).toEqual([
-      { kind: 'task', entryId: '1' },
-      { kind: 'item', entryId: '1', item: 1 },
+      const next = apply(state, { type: action });
+
+      if (expected === 'same') {
+        expect(next).toBe(state);
+      } else {
+        expect(selectionOf(next)).toEqual(expected);
+      }
+    },
+  );
+
+  it.each<[string, (state: PrimerState) => PrimerState, PrimerRow]>([
+    ['tasks on the Feature row', (state) => state, { kind: 'feature' }],
+    ['tasks on task 1', (state) => onTask(state, 1), TASK_1],
+    [
+      'items on item 2',
+      (state) => onItemOf1(state, 2),
       { kind: 'item', entryId: '1', item: 2 },
+    ],
+    [
+      'items on a task with no items',
+      (state) => focus(onTask(state, 2), 'items'),
       { kind: 'task', entryId: 's1' },
-    ]);
-    expect(railRows(primerOf(state))).toHaveLength(4);
-    state = apply(state, { type: 'prevRow' });
-    expect(selected(state)).toEqual({ kind: 'task', entryId: '1' });
-    const first = stateWith();
-    expect(apply(first, { type: 'prevRow' })).toBe(first);
-    const last = onRow(first, 3);
-    expect(apply(last, { type: 'nextRow' })).toBe(last);
-  });
+    ],
+    [
+      'items on the Feature row',
+      (state) => focus(state, 'items'),
+      { kind: 'feature' },
+    ],
+    [
+      'card from tasks on task 1',
+      (state) => focus(onTask(state, 1), 'card'),
+      TASK_1,
+    ],
+    [
+      'card from items on item 2',
+      (state) => focus(onItemOf1(state, 2), 'card'),
+      { kind: 'item', entryId: '1', item: 2 },
+    ],
+  ])(
+    'chooses the card row for the focused column: %s',
+    (_name, select, expected) => {
+      expect(cardRow(primerOf(select(stateWith())))).toEqual(expected);
+    },
+  );
+
+  it.each<{
+    from: string;
+    start: (state: PrimerState) => PrimerState;
+    pane: PrimerPane;
+    cardColumn: PrimerColumn;
+  }>([
+    {
+      from: 'items',
+      start: (state) => onItemOf1(state, 1),
+      pane: 'tasks',
+      cardColumn: 'tasks',
+    },
+    {
+      from: 'tasks',
+      start: (state) => onTask(state, 1),
+      pane: 'items',
+      cardColumn: 'items',
+    },
+    {
+      from: 'items',
+      start: (state) => onItemOf1(state, 1),
+      pane: 'card',
+      cardColumn: 'items',
+    },
+    {
+      from: 'tasks',
+      start: (state) => onTask(state, 1),
+      pane: 'card',
+      cardColumn: 'tasks',
+    },
+  ])(
+    "moves focus and keeps the card's column on focusCard: $from to $pane",
+    ({ start, pane, cardColumn }) => {
+      const primer = primerOf(focus(start(stateWith()), pane));
+
+      expect({ pane: primer.pane, cardColumn: primer.cardColumn }).toEqual({
+        pane,
+        cardColumn,
+      });
+    },
+  );
+
+  it.each<{
+    name: string;
+    start: (state: PrimerState) => PrimerState;
+    action: PrimerAction;
+    expected: Partial<OpenPrimer> | 'same';
+  }>([
+    {
+      name: 'a task row from the card',
+      start: (state) => focus(state, 'card'),
+      action: { type: 'selectTask', row: 1 },
+      expected: {
+        selectedTask: TASK_1,
+        selectedItem: 1,
+        pane: 'tasks',
+        cardColumn: 'tasks',
+      },
+    },
+    {
+      name: 'a task row with no items from the items column',
+      start: (state) => onItemOf1(state, 1),
+      action: { type: 'selectTask', row: 2 },
+      expected: {
+        selectedTask: { kind: 'task', entryId: 's1' },
+        selectedItem: null,
+        pane: 'tasks',
+        cardColumn: 'tasks',
+      },
+    },
+    {
+      name: 'an item row from the tasks column',
+      start: (state) => onTask(state, 1),
+      action: { type: 'selectItem', item: 2 },
+      expected: {
+        selectedTask: TASK_1,
+        selectedItem: 2,
+        pane: 'items',
+        cardColumn: 'items',
+      },
+    },
+    {
+      name: 'a task row past the last',
+      start: (state) => state,
+      action: { type: 'selectTask', row: 4 },
+      expected: 'same',
+    },
+    {
+      name: 'an item past the last',
+      start: (state) => onTask(state, 1),
+      action: { type: 'selectItem', item: 3 },
+      expected: 'same',
+    },
+    {
+      name: 'item 0',
+      start: (state) => onTask(state, 1),
+      action: { type: 'selectItem', item: 0 },
+      expected: 'same',
+    },
+  ])(
+    'selects a clicked row and focuses its column: $name',
+    ({ start, action, expected }) => {
+      const state = start(stateWith());
+
+      const next = apply(state, action);
+
+      if (expected === 'same') {
+        expect(next).toBe(state);
+      } else {
+        expect(primerOf(next)).toMatchObject(expected);
+      }
+    },
+  );
 
   it('changes nothing when setNeed applies on the Feature row', () => {
     const state = stateWith();
@@ -175,7 +439,7 @@ describe('primer state', () => {
   });
 
   it.each([
-    ['its task row', (state: PrimerState) => onRow(state, 1)],
+    ['its task row', (state: PrimerState) => onTask(state, 1)],
     ['an item row', (state: PrimerState) => onItemOf1(state, 2)],
   ])(
     'sets the need on the selected task from %s and grows the revision by one',
@@ -189,39 +453,66 @@ describe('primer state', () => {
     },
   );
 
-  it('adds the trimmed add-item text as an item and clears the text', () => {
-    const state = setNewItemText(
-      onRow(stateWith(), 1),
-      '1',
-      '  Write the store ',
-    );
-
-    const next = apply(state, {
-      type: 'addItem',
-      formId: 'p1',
+  it.each<{
+    name: string;
+    select: (state: PrimerState) => PrimerState;
+    entryId: string;
+    selectedItem: number | null;
+  }>([
+    {
+      name: 'onto the selected task on item 2, keeping item 2',
+      select: (state) => onItemOf1(state, 2),
       entryId: '1',
-    });
+      selectedItem: 2,
+    },
+    {
+      name: 'onto the selected task with no items, selecting the new item',
+      select: (state) => onTask(state, 2),
+      entryId: 's1',
+      selectedItem: 1,
+    },
+    {
+      name: 'onto another task with no items, keeping no item',
+      select: (state) => state,
+      entryId: 's1',
+      selectedItem: null,
+    },
+  ])(
+    'adds the trimmed add-item text as an item and clears the text: $name',
+    ({ select, entryId, selectedItem }) => {
+      const state = setNewItemText(
+        select(stateWith()),
+        entryId,
+        '  Write the store ',
+      );
 
-    const primer = primerOf(next);
-    expect(selectedEntry(primer)?.items.at(-1)).toEqual({
-      text: 'Write the store',
-      include: true,
-      comment: '',
-      added: true,
-    });
-    expect(primer.newItemTexts['1']).toBe('');
-    expect(primer.selected).toEqual({ kind: 'task', entryId: '1' });
-    expect(primer.revision).toBe(primerOf(state).revision + 1);
-  });
+      const next = apply(state, { type: 'addItem', formId: 'p1', entryId });
+
+      const primer = primerOf(next);
+      const entry = primer.entries.find(
+        (candidate) => candidate.id === entryId,
+      );
+      expect(entry?.items.at(-1)).toEqual({
+        text: 'Write the store',
+        include: true,
+        comment: '',
+        added: true,
+      });
+      expect(primer.newItemTexts[entryId]).toBe('');
+      expect(primer.selectedTask).toEqual(primerOf(state).selectedTask);
+      expect(primer.selectedItem).toBe(selectedItem);
+      expect(primer.revision).toBe(primerOf(state).revision + 1);
+    },
+  );
 
   it('adds no item from blank text or onto a task holding 20 items', () => {
-    const blank = setNewItemText(onRow(stateWith(), 1), '1', '   ');
+    const blank = setNewItemText(onTask(stateWith(), 1), '1', '   ');
     const fullEntries = [
       primerEntry('1', 'primer', {
         items: Array.from({ length: 20 }, (_, i) => primerItem(`Item ${i}`)),
       }),
     ];
-    const full = setNewItemText(onRow(stateWith(fullEntries), 1), '1', 'More');
+    const full = setNewItemText(onTask(stateWith(fullEntries), 1), '1', 'More');
 
     expect(apply(blank, { type: 'addItem', formId: 'p1', entryId: '1' })).toBe(
       blank,
@@ -267,14 +558,14 @@ describe('primer state', () => {
   });
 
   it('refuses to remove a standing task', () => {
-    const state = onRow(stateWith(), 2);
+    const state = onTask(stateWith(), 2);
 
     expect(apply(state, { type: 'removeExtraTask' })).toBe(state);
   });
 
   it.each([
-    ['its task row', (state: PrimerState) => onRow(state, 3)],
-    ['an item row', (state: PrimerState) => onRow(onRow(state, 3), 5)],
+    ['its task row', (state: PrimerState) => onTask(state, 3)],
+    ['its item row', (state: PrimerState) => onItem(onTask(state, 3), 2)],
   ])(
     'removes the last extra task from %s and clamps the selection to the last row',
     (_name, select) => {
@@ -289,10 +580,9 @@ describe('primer state', () => {
           items: [primerItem('Five'), primerItem('Six')],
         }),
       ];
-      // Rows: the feature (0), `s1` (1), `extra-1` (2), `extra-2` (3); on
-      // `extra-2`, its items at 4 and 5, so a selection kept at an item row's
-      // position, or one counting the removed task's item rows, lands past
-      // the last row.
+      // Tasks column rows: the feature (0), `s1` (1), `extra-1` (2),
+      // `extra-2` (3), so a selection kept at the removed task's position
+      // lands past the last row.
       const state = select(
         setNewItemText(stateWith(entries), 'extra-2', 'draft'),
       );
@@ -303,7 +593,11 @@ describe('primer state', () => {
         's1',
         'extra-1',
       ]);
-      expect(primer.selected).toEqual({ kind: 'task', entryId: 'extra-1' });
+      expect(primer.selectedTask).toEqual({
+        kind: 'task',
+        entryId: 'extra-1',
+      });
+      expect(primer.selectedItem).toBe(1);
       expect(primer.newItemTexts).toEqual({});
     },
   );
@@ -314,9 +608,9 @@ describe('primer state', () => {
     expect(apply(state, { type: 'toggleInclude' })).toBe(state);
   });
 
-  it('toggles the include mark on the selected item row only', () => {
+  it("toggles the include mark of the card's item only", () => {
     const state = onItemOf1(stateWith(), 2);
-    const onTask = onRow(stateWith(), 1);
+    const onTaskCard = focus(onTask(stateWith(), 1), 'card');
 
     const primer = primerOf(apply(state, { type: 'toggleInclude' }));
 
@@ -324,7 +618,7 @@ describe('primer state', () => {
       true,
       false,
     ]);
-    expect(apply(onTask, { type: 'toggleInclude' })).toBe(onTask);
+    expect(apply(onTaskCard, { type: 'toggleInclude' })).toBe(onTaskCard);
   });
 
   it('leaves the revision when setText changes add-item text', () => {
@@ -350,41 +644,52 @@ describe('primer state', () => {
     expect(primerOf(next).revision).toBe(primerOf(state).revision + 1);
   });
 
-  it.each<[TextTarget, RailRow]>([
+  it.each<[TextTarget, Partial<OpenPrimer>]>([
     [
       { field: 'itemComment', entryId: '1', item: 2 },
-      { kind: 'item', entryId: '1', item: 2 },
+      { selectedTask: TASK_1, selectedItem: 2, cardColumn: 'items' },
     ],
     [
       { field: 'newItem', entryId: '1' },
-      { kind: 'task', entryId: '1' },
+      { selectedTask: TASK_1, selectedItem: 1, cardColumn: 'tasks' },
     ],
     [
       { field: 'taskComment', entryId: '1' },
-      { kind: 'task', entryId: '1' },
+      { selectedTask: TASK_1, selectedItem: 1, cardColumn: 'tasks' },
     ],
     [
       { field: 'taskName', entryId: 'extra-1' },
-      { kind: 'task', entryId: 'extra-1' },
+      {
+        selectedTask: { kind: 'task', entryId: 'extra-1' },
+        selectedItem: null,
+        cardColumn: 'tasks',
+      },
     ],
-    [{ field: 'feature', name: 'slug' }, { kind: 'feature' }],
+    [
+      { field: 'feature', name: 'slug' },
+      {
+        selectedTask: { kind: 'feature' },
+        selectedItem: null,
+        cardColumn: 'tasks',
+      },
+    ],
   ])(
     'shows the %o target by selecting its row and focusing the card',
-    (target, row) => {
-      // From item 1 of `1`, so every target moves the selection or the pane.
+    (target, selection) => {
+      // From item 1 of `1` in the items column, so every target moves the
+      // selection, the card's column or the pane.
       const state = onItemOf1(stateWith(), 1);
 
       const primer = primerOf(
         apply(state, { type: 'showTarget', formId: 'p1', target }),
       );
 
-      expect(primer.selected).toEqual(row);
-      expect(primer.pane).toBe('card');
+      expect(primer).toMatchObject({ ...selection, pane: 'card' });
     },
   );
 
   it('applies only the sending actions while the active primer sends', () => {
-    const sending = applyAll(onRow(stateWith(), 1), [
+    const sending = applyAll(onTask(stateWith(), 1), [
       { type: 'openReview' },
       { type: 'sendStarted', formId: 'p1', kind: 'submitted' },
     ]);
@@ -487,10 +792,13 @@ describe('primer state', () => {
     expect(sessionTitle(primerOf(state))).toMatch(/port.*2\/3/);
   });
 
-  it('gives the card scope in view primer with the card pane focused', () => {
-    const state = apply(stateWith(), { type: 'focusPane', pane: 'card' });
+  it.each<PrimerPane>(['tasks', 'items', 'card'])(
+    'gives the %s scope in view primer with that pane focused',
+    (pane) => {
+      const state = focus(onTask(stateWith(), 1), pane);
 
-    expect(scopeOf(state)).toBe('card');
-    expect(scopeOf(apply(state, { type: 'openReview' }))).toBe('review');
-  });
+      expect(scopeOf(state)).toBe(pane);
+      expect(scopeOf(apply(state, { type: 'openReview' }))).toBe('review');
+    },
+  );
 });

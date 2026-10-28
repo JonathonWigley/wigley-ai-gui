@@ -28,9 +28,14 @@ describe('readPrimerLayout', () => {
       key: 'cards.question',
     },
     {
-      case: 'a pane that is no function',
-      module: { default: { rail: 1 } },
+      case: 'a layout that defines rail',
+      module: { default: { rail: part } },
       key: 'rail',
+    },
+    {
+      case: 'a pane that is no function',
+      module: { default: { tasks: 1 } },
+      key: 'tasks',
     },
     {
       case: 'a card that is no function',

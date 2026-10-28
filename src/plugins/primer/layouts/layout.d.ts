@@ -6,9 +6,11 @@ import type { BaseKit } from '../../../shared/page/layout-host/kit';
 // `data-layout="<name>"` on the element each part returns, `<name>` being the layout that drew it, so
 // `[data-layout-owner="primer"][data-layout="<name>"] …` in a layout's CSS selects only its own parts.
 //
-// The app keeps the split and its width, the rail header (save state, `⌃H ▲ ▼ ⌃L`, `⌥L card ›`), the rail foot's
-// Review button, the card edge strip (`‹ rail ⌥H`), the review footer (Back, Cancel primer, Send), the cancel prompt,
-// selection, the selected row's prompt, the text boxes and scrolling.
+// The app keeps the two nested splits (tasks | (items | card)), their widths and their handles' resize prompt
+// (`⌥⇧H ◂ ▸ ⌥⇧L`); the tasks column header (save state, `⌃H ▲ ▼ ⌃L`, `⌥L items ›`) and foot (the Review button); the
+// items column header (`‹ tasks ⌥H`, `⌃H ▲ ▼ ⌃L`, `⌥L card ›`); the card edge strip (`‹ items ⌥H`); the review footer
+// (Back, Cancel primer, Send), the cancel prompt, selection, each column's selected row prompt, the text boxes and
+// scrolling.
 
 export type PrimerNeed = 'yes' | 'no' | 'unclear';
 // `extra` is a task the user added; an agent sends only `primer` and `standing`.
@@ -23,7 +25,7 @@ export interface FeatureCardInput {
   notes: string;
 }
 
-// One task as the user edited it. `name` is the name the rail shows (`Unnamed task` for an extra task with a blank
+// One task as the user edited it. `name` is the name the tasks column shows (`Unnamed task` for an extra task with a blank
 // name); `itemCount` is how many items it holds; `canAddItem` is false once it holds the most items a task takes.
 export interface TaskCardInput {
   id: string;
@@ -54,13 +56,14 @@ export interface ItemCardInput {
 
 // `element` is the card's own node, appended to `parent` before the card mounts a text box. `update` runs with the
 // card's current input on each primer change while the card shows; a throw from it is logged once and the card stays.
-// The app rebuilds the card when another row is selected, and a task card when its add-item box comes or goes.
+// The app rebuilds the card when it shows another row, and a task card when its add-item box comes or goes.
 export interface PrimerLayoutCard<Input> {
   element: HTMLElement;
   update?(input: Input): void;
 }
 
-// A card per rail row kind: the Feature row's, a task row's and an item row's.
+// A card per row kind: the Feature row's and a task row's, from the tasks column, and an item row's, from the items
+// column.
 export interface PrimerLayoutCards {
   feature(
     parent: HTMLElement,
@@ -79,9 +82,9 @@ export interface PrimerLayoutCards {
   ): PrimerLayoutCard<ItemCardInput>;
 }
 
-// One rail row. `position` is its 0-based place in the rail, which `RailKit.railRow` takes. A task row counts its
-// included items of `total` and is `expanded` while its item rows show under it; an item row's `number` is 1-based.
-export type RailRowInput =
+// One tasks column row. `position` is its 0-based place in the tasks column, which `TasksKit.taskRow` takes. A task
+// row counts its included items of `total`.
+export type TaskRowInput =
   | { position: number; kind: 'feature'; name: string }
   | {
       position: number;
@@ -92,30 +95,39 @@ export type RailRowInput =
       need: PrimerNeed;
       included: number;
       total: number;
-      expanded: boolean;
-    }
-  | {
-      position: number;
-      kind: 'item';
-      entryId: string;
-      number: number;
-      text: string;
-      include: boolean;
-      added: boolean;
     };
 
-// A group of tasks under its header: each task row, then its item rows while it is expanded.
-export interface RailGroupInput {
+// A group of tasks under its header.
+export interface TaskGroupInput {
   group: PrimerGroup;
   header: string;
-  rows: RailRowInput[];
+  rows: TaskRowInput[];
 }
 
-// The Feature row, then the groups in rail order: Primer and Every feature only while they hold a task, Extra tasks
-// always.
-export interface RailInput {
-  feature: RailRowInput;
-  groups: RailGroupInput[];
+// The Feature row, then the groups in tasks column order: Primer and Every feature only while they hold a task, Extra
+// tasks always.
+export interface TasksInput {
+  feature: TaskRowInput;
+  groups: TaskGroupInput[];
+}
+
+// One item of the selected task. `position` is its 0-based place in the items column, which `ItemsKit.itemRow`
+// takes; `number` is position + 1; `added` marks an item the user added.
+export interface ItemRowInput {
+  position: number;
+  entryId: string;
+  number: number;
+  text: string;
+  include: boolean;
+  added: boolean;
+}
+
+// The selected task's items. `task` is null on the Feature row. `empty` is the empty state copy, null while rows
+// show.
+export interface ItemsInput {
+  task: { entryId: string; name: string } | null;
+  rows: ItemRowInput[];
+  empty: string | null;
 }
 
 export interface ReviewTaskInput {
@@ -127,7 +139,7 @@ export interface ReviewTaskInput {
 }
 
 // The tallies of every task's need and every item, what blocks a send (empty when the primer may send), the feature's
-// fields in card order, and the tasks in rail order.
+// fields in card order, and the tasks in tasks column order.
 export interface ReviewInput {
   tallies: {
     yes: number;
@@ -147,7 +159,8 @@ export interface PrimerLayoutPane {
 }
 
 // Every part appends itself to `parent` and returns what it appended. `keyHint`, `keys` and `keysFor` read the scope
-// of the part drawing: `primer.card` for the cards, `primer.rail` for the rail, `primer.review` for the review.
+// of the part drawing: `primer.card` for the cards, `primer.tasks` for the tasks part, `primer.items` for the items
+// part, `primer.review` for the review.
 export interface PrimerKit extends BaseKit {
   // The need's Tag: Yes (success), No (neutral) or Unclear (warning).
   needTag(parent: HTMLElement, need: PrimerNeed): HTMLElement;
@@ -177,30 +190,47 @@ export interface ItemKit extends PrimerKit {
   // The item's ToggleMark: a click toggles the item, and it shows the item's include on each change while the card
   // shows.
   includeMark(parent: HTMLElement): HTMLElement;
-  // The key hint of the row step `command` (`span.ui-key-stack.primer-item-step-keys`): both panes step through the
-  // rows, so it shows the focused pane's key (the rail binds `k`/`<C-h>` and `j`/`<C-l>`, the card `<C-h>` and
-  // `<C-l>`).
+  // The key hint of the row step `command` (`span.ui-key-stack.primer-item-step-keys`): the items column and the card
+  // both step through the items, so it shows the focused pane's key (the items column binds `k`/`<C-h>` and
+  // `j`/`<C-l>`, the card `<C-h>` and `<C-l>`).
   stepKey(parent: HTMLElement, command: 'prevRow' | 'nextRow'): HTMLElement;
 }
 
-export interface RailKit extends PrimerKit {
-  // The list row for rail `position`: the Feature row with the feature's name; a task row with its need tag and
-  // included count; an item row led by its include mark and number. The app keeps on it the click that selects it,
-  // `is-selected` while it is the selected row, the selected row's prompt (its need, include and remove keys) and an
-  // item row's mark click. The app knows rows only by the elements `railRow` returns: a row drawn otherwise gets no
-  // click and no selection, and when the rail never calls `railRow` for the selected row, the row prompt is appended
-  // at the end of the rail's element. Throws for a position the rail does not hold.
-  railRow(parent: HTMLElement, position: number): HTMLElement;
+// The app knows rows only by the elements a column's row function returns: it keeps on each the click that selects it
+// and focuses its column, `is-selected` while it is the column's selected row, and the selected row's prompt. A row
+// drawn otherwise gets no click and no selection, and when a part never calls its row function for the selected row,
+// the row prompt is appended at the end of the part's element. A row function throws for a position its column does
+// not hold.
+export interface TasksKit extends PrimerKit {
+  // The list row for tasks column `position`: the Feature row with the feature's name, or a task row with its need tag
+  // and included count. Its prompt holds the need keys and, on an extra task, the remove key.
+  taskRow(parent: HTMLElement, position: number): HTMLElement;
   // The `A add` key hint for adding an extra task.
   addPrompt(parent: HTMLElement): HTMLElement;
+}
+
+export interface ItemsKit extends PrimerKit {
+  // The list row for items column `position`, led by its include mark and number. Its prompt holds the need keys and
+  // the include key; a click on its mark selects the item and toggles it.
+  itemRow(parent: HTMLElement, position: number): HTMLElement;
 }
 
 export type ReviewKit = PrimerKit;
 
 export interface PrimerLayout {
   cards?: Partial<PrimerLayoutCards>;
-  // The rail's body, under the app's rail header and over its Review button, drawn again on each primer change.
-  rail?(parent: HTMLElement, input: RailInput, kit: RailKit): PrimerLayoutPane;
+  // The tasks column's body, under the app's header and over its Review button, drawn again on each primer change.
+  tasks?(
+    parent: HTMLElement,
+    input: TasksInput,
+    kit: TasksKit,
+  ): PrimerLayoutPane;
+  // The items column's body, under the app's header, drawn again on each primer change.
+  items?(
+    parent: HTMLElement,
+    input: ItemsInput,
+    kit: ItemsKit,
+  ): PrimerLayoutPane;
   // The review's body, over the app's Back, Cancel primer and Send buttons, drawn again on each primer change while
   // the review shows.
   review?(
@@ -213,7 +243,16 @@ export interface PrimerLayout {
 // The built-in `default` layout, which defines every part.
 export interface CompletePrimerLayout extends PrimerLayout {
   cards: PrimerLayoutCards;
-  rail(parent: HTMLElement, input: RailInput, kit: RailKit): PrimerLayoutPane;
+  tasks(
+    parent: HTMLElement,
+    input: TasksInput,
+    kit: TasksKit,
+  ): PrimerLayoutPane;
+  items(
+    parent: HTMLElement,
+    input: ItemsInput,
+    kit: ItemsKit,
+  ): PrimerLayoutPane;
   review(
     parent: HTMLElement,
     input: ReviewInput,

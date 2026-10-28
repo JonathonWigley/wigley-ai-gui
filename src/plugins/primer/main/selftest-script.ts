@@ -20,78 +20,80 @@ function selfTestPrimer(run: number) {
   };
 }
 
-// From the Feature row: task 1 needs no; the rail walks task 1's items into
-// task 2, whose need is set to yes from its first item row and whose second
-// item is left out from the rail; task 3 is unclear. On task 2's card, ⌃L
-// steps to its item cards, the second item is toggled back and forth, and its
-// comment and its task's comment boxes are reached; `a` from an item card adds
-// `Polish` on the task card, and ⌃H steps to task 1 before focus returns to
-// the rail.
+// From the Feature row in the tasks column: task 1 needs no; task 2 is
+// selected, and from the items column it needs yes and its second item is left
+// out; back in the tasks column task 3 is unclear. On task 2's second item
+// card, the item is toggled back and forth and its comment box reached; ⌃H
+// steps the items column; `a` adds `Polish` on the task card, `C` reaches the
+// task's comment, and ⌃H then steps the tasks column to task 1 before focus
+// returns to the items and the tasks column.
 const PRIMER_STEPS: SelfTestStep[] = [
   {
     keys: ['j'],
     expect: '[page] j ran primer.nextRow',
     checksFit: true,
-    screenshot: 'rail',
+    screenshot: 'tasks',
   },
   { keys: ['n'], expect: '[page] n ran primer.needNo' },
-  { keys: ['j'], expect: '[primer] selected item 1 on task 1' },
-  { keys: ['j'], expect: '[primer] selected item 2 on task 1' },
   { keys: ['j'], expect: '[primer] selected task 2' },
   {
-    keys: ['j'],
-    expect: '[primer] selected item 1 on task 2',
-    screenshot: 'rail-item',
+    keys: ['<A-l>'],
+    expect: '[page] <A-l> ran primer.focusItems',
+    checksFit: true,
+    screenshot: 'items',
   },
   {
     keys: ['y'],
     expect: '[primer] need yes on task 2',
-    why: "A need key on an item row sets its task's need.",
+    why: "A need key in the items column sets its task's need.",
   },
   { keys: ['j'], expect: '[primer] selected item 2 on task 2' },
   { keys: ['x'], expect: '[primer] left out item 2 on task 2' },
+  { keys: ['<A-h>'], expect: '[page] <A-h> ran primer.focusTasks' },
   { keys: ['j'], expect: '[primer] selected task 3' },
   { keys: ['u'], expect: '[page] u ran primer.needUnclear' },
-  { keys: ['k'], expect: '[primer] selected task 2' },
+  {
+    keys: ['k'],
+    expect: '[primer] selected task 2',
+    why: 'Selecting a task selects its first item.',
+  },
+  { keys: ['<A-l>'], expect: '[page] <A-l> ran primer.focusItems' },
+  { keys: ['j'], expect: '[primer] selected item 2 on task 2' },
   {
     keys: ['<A-l>'],
     expect: '[page] <A-l> ran primer.focusCard',
     checksFit: true,
-    screenshot: 'task-card',
-  },
-  {
-    keys: ['<C-l>'],
-    expect: '[primer] selected item 1 on task 2',
-    checksFit: true,
     screenshot: 'item-card',
   },
-  { keys: ['<C-l>'], expect: '[primer] selected item 2 on task 2' },
   { keys: ['x'], expect: '[primer] included item 2 on task 2' },
   { keys: ['x'], expect: '[primer] left out item 2 on task 2' },
   { keys: ['c'], expect: '[primer] focused comment on item 2 of task 2' },
   { keys: ['Escape', 'Escape'], expect: '[primer] left the box' },
   {
-    keys: ['C'],
-    expect: '[primer] focused comment on task 2',
-    why: "C on an item card shows its task's card and focuses the task's comment box.",
+    keys: ['<C-h>'],
+    expect: '[primer] selected item 1 on task 2',
+    why: 'The card steps the column it came from.',
   },
-  { keys: ['Escape', 'Escape'], expect: '[primer] left the box' },
-  { keys: ['<C-l>'], expect: '[primer] selected item 1 on task 2' },
   {
     keys: ['a', 'P', 'o', 'l', 'i', 's', 'h', 'Escape', 'Escape'],
     expect: '[primer] added item 3 on task 2',
     why: "a on an item card shows its task's card and focuses the add-item box; leaving the box adds the item.",
   },
+  { keys: ['C'], expect: '[primer] focused comment on task 2' },
+  { keys: ['Escape', 'Escape'], expect: '[primer] left the box' },
   {
     keys: ['<C-h>'],
     expect: '[primer] selected task 1',
-    why: "From task 2's card, ⌃H steps to the row drawn above it, task 1's row.",
+    checksFit: true,
+    screenshot: 'task-card',
+    why: 'The task card steps the tasks column.',
   },
-  { keys: ['<A-h>'], expect: '[page] <A-h> ran primer.focusRail' },
+  { keys: ['<A-h>'], expect: '[page] <A-h> ran primer.focusItems' },
+  { keys: ['<A-h>'], expect: '[page] <A-h> ran primer.focusTasks' },
 ];
 
-// An extra task added from the rail and removed again, so the submitted
-// payload holds only the sent tasks.
+// An extra task added from the tasks column and removed again, so the
+// submitted payload holds only the sent tasks.
 const EXTRA_TASK_STEPS: SelfTestStep[] = [
   {
     keys: ['A'],
@@ -99,7 +101,8 @@ const EXTRA_TASK_STEPS: SelfTestStep[] = [
     checksFit: true,
   },
   { keys: ['Escape', 'Escape'], expect: '[primer] left the box' },
-  { keys: ['<A-h>'], expect: '[page] <A-h> ran primer.focusRail' },
+  { keys: ['<A-h>'], expect: '[page] <A-h> ran primer.focusItems' },
+  { keys: ['<A-h>'], expect: '[page] <A-h> ran primer.focusTasks' },
   { keys: ['D'], expect: '[primer] removed extra task extra-1' },
 ];
 
@@ -132,8 +135,8 @@ const REVIEW_STEPS: SelfTestStep[] = [
 ];
 
 // The sample primer opens in a session of its own and its row is selected;
-// the rail, a task card and the review draw through the default layout; the
-// sample is cancelled, which closes its session.
+// the tasks and items columns, a task card and the review draw through the
+// default layout; the sample is cancelled, which closes its session.
 const PREVIEW_STEPS: SelfTestStep[] = [
   {
     keys: [' ', 'z', 'l', 'p'],
@@ -141,12 +144,12 @@ const PREVIEW_STEPS: SelfTestStep[] = [
     checksFit: true,
     screenshot: 'preview',
   },
-  { keys: ['j'], expect: '[page] j ran primer.nextRow' },
   {
-    keys: ['<A-l>'],
-    expect: '[page] <A-l> ran primer.focusCard',
+    keys: ['j'],
+    expect: '[page] j ran primer.nextRow',
     checksFit: true,
     screenshot: 'preview-task-card',
+    why: 'The task card shows while the tasks column has focus.',
   },
   {
     keys: [' ', ' '],
@@ -233,12 +236,12 @@ export function primerSelfTestScript(
     groups: [
       {
         name: 'primer',
-        why: "The Primer tab expands the selected task's items in the rail, sets needs and toggles items from task and item rows, steps rows on the card with ⌃L and ⌃H, and reaches the task's boxes from an item card; the agent gets every change back once the review submits.",
+        why: "The Primer tab's tasks column selects a task and its items column lists that task's items; needs are set and items toggled from both columns and the item card, ⌃H on the card steps the column it came from, ⌥H and ⌥L move focus between the columns and the card, and the task's boxes are reached from an item card; the agent gets every change back once the review submits.",
         steps: PRIMER_STEPS,
       },
       {
         name: 'extra task',
-        why: 'A on the rail adds an extra task and focuses its name box; D on the rail removes it.',
+        why: 'A in the tasks column adds an extra task and focuses its name box; D in the tasks column removes it.',
         steps: EXTRA_TASK_STEPS,
       },
       {

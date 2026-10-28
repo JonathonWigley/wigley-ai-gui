@@ -29,7 +29,8 @@ function noPrimers(): PrimerState {
   return initialState([], presented.sessionId);
 }
 
-// Primer p1 open and active; rows: the feature (0), `3` (1), `s1` (2).
+// Primer p1 open and active; tasks column rows: the feature (0), `3` (1),
+// `s1` (2).
 function openP1(): PrimerState {
   return apply(noPrimers(), { type: 'formShown', form: presented });
 }
@@ -53,7 +54,7 @@ describe('primerEventsBetween', () => {
   });
 
   it('primerEventsBetween_NeedNoToYes_EmitsNeedChanged', () => {
-    const before = apply(openP1(), { type: 'selectRow', row: 1 });
+    const before = apply(openP1(), { type: 'selectTask', row: 1 });
     const after = apply(before, { type: 'setNeed', need: 'yes' });
 
     expect(primerEventsBetween(before, after)).toEqual([
@@ -114,7 +115,7 @@ describe('primerEventsBetween', () => {
 describe('presentedOf', () => {
   it('presentedOf_EditedPrimer_DraftIsTheCurrentBody', () => {
     const edited = applyAll(openP1(), [
-      { type: 'selectRow', row: 1 },
+      { type: 'selectTask', row: 1 },
       { type: 'setNeed', need: 'yes' },
     ]);
 
@@ -128,7 +129,7 @@ describe('presentedOf', () => {
 describe('startPrimerEvents', () => {
   it('startPrimerEvents_ListenerDispatches_EmitsItsEventsAfterTheOuterChange', () => {
     const store = createPrimerStore(
-      apply(openP1(), { type: 'selectRow', row: 1 }),
+      apply(openP1(), { type: 'selectTask', row: 1 }),
     );
     const emitted: PrimerPageEvent[] = [];
     // Records each event once its own dispatch returned, so an event emitted

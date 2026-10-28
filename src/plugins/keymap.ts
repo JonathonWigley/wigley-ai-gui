@@ -77,6 +77,26 @@ function primerScrollBinds(scope: 'primer.card' | 'primer.review') {
   ];
 }
 
+// The primer's tasks and items columns each step their own rows, set the
+// selected task's need and open the review from the page.
+function primerColumnBinds(scope: 'primer.tasks' | 'primer.items') {
+  return [
+    { keys: 'j', scope, command: 'primer.nextRow' as const },
+    { keys: '<C-l>', scope, command: 'primer.nextRow' as const },
+    { keys: 'k', scope, command: 'primer.prevRow' as const },
+    { keys: '<C-h>', scope, command: 'primer.prevRow' as const },
+    { keys: 'y', scope, command: 'primer.needYes' as const },
+    { keys: 'n', scope, command: 'primer.needNo' as const },
+    { keys: 'u', scope, command: 'primer.needUnclear' as const },
+    {
+      keys: '<Leader><Leader>',
+      scope,
+      command: 'primer.openReview' as const,
+      where: 'page' as const,
+    },
+  ];
+}
+
 // A Chat tab's keys that read the entries and focus the box.
 function chatEntryPageBinds() {
   const scope = 'chat.chat' as const;
@@ -232,23 +252,14 @@ export const defaultKeymap = {
     ...formsBoxBinds('forms.review'),
 
     // ── Primer ─────────────────────────────────────────────────────────────
-    { keys: 'j', scope: 'primer.rail', command: 'primer.nextRow' },
-    { keys: '<C-l>', scope: 'primer.rail', command: 'primer.nextRow' },
-    { keys: 'k', scope: 'primer.rail', command: 'primer.prevRow' },
-    { keys: '<C-h>', scope: 'primer.rail', command: 'primer.prevRow' },
-    { keys: 'y', scope: 'primer.rail', command: 'primer.needYes' },
-    { keys: 'n', scope: 'primer.rail', command: 'primer.needNo' },
-    { keys: 'u', scope: 'primer.rail', command: 'primer.needUnclear' },
-    { keys: 'A', scope: 'primer.rail', command: 'primer.addExtraTask' },
-    { keys: 'D', scope: 'primer.rail', command: 'primer.removeExtraTask' },
-    { keys: '<A-l>', scope: 'primer.rail', command: 'primer.focusCard' },
-    { keys: 'x', scope: 'primer.rail', command: 'primer.toggleInclude' },
-    {
-      keys: '<Leader><Leader>',
-      scope: 'primer.rail',
-      command: 'primer.openReview',
-      where: 'page',
-    },
+    ...primerColumnBinds('primer.tasks'),
+    ...primerColumnBinds('primer.items'),
+    { keys: 'A', scope: 'primer.tasks', command: 'primer.addExtraTask' },
+    { keys: 'D', scope: 'primer.tasks', command: 'primer.removeExtraTask' },
+    { keys: '<A-l>', scope: 'primer.tasks', command: 'primer.focusItems' },
+    { keys: 'x', scope: 'primer.items', command: 'primer.toggleInclude' },
+    { keys: '<A-h>', scope: 'primer.items', command: 'primer.focusTasks' },
+    { keys: '<A-l>', scope: 'primer.items', command: 'primer.focusCard' },
     { keys: '<C-l>', scope: 'primer.card', command: 'primer.nextRow' },
     { keys: '<C-h>', scope: 'primer.card', command: 'primer.prevRow' },
     { keys: 'x', scope: 'primer.card', command: 'primer.toggleInclude' },
@@ -256,7 +267,7 @@ export const defaultKeymap = {
     { keys: 'C', scope: 'primer.card', command: 'primer.editTaskComment' },
     { keys: 'a', scope: 'primer.card', command: 'primer.addItem' },
     { keys: 'i', scope: 'primer.card', command: 'primer.editFirstField' },
-    { keys: '<A-h>', scope: 'primer.card', command: 'primer.focusRail' },
+    { keys: '<A-h>', scope: 'primer.card', command: 'primer.focusItems' },
     { keys: '<C-n>', scope: 'primer.card', command: 'primer.nextBox' },
     { keys: '<C-p>', scope: 'primer.card', command: 'primer.prevBox' },
     ...primerScrollBinds('primer.card'),

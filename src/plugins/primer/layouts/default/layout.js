@@ -8,8 +8,9 @@
 // - feature, task and item cards: `textBox` (each box left out is appended at
 //   the end of the card, in its field) and, on the item card, `includeMark`
 //   (`x` still toggles the item)
-// - rail: `railRow` (a row drawn otherwise selects nothing on a click; the
-//   selected row's prompt is appended at the end of the rail) and `addPrompt`
+// - tasks: `taskRow` (a row drawn otherwise selects nothing on a click; the
+//   selected row's prompt is appended at the end of the part) and `addPrompt`
+// - items: `itemRow` (the same as `taskRow`)
 // - review: every part, which then draws nothing
 
 /** @typedef {import('../layout').PrimerKit} PrimerKit */
@@ -153,9 +154,9 @@ const layout = {
       };
     },
   },
-  rail(parent, input, kit) {
-    const list = kit.el(parent, 'div', 'primer-rail-list');
-    kit.railRow(list, input.feature.position);
+  tasks(parent, input, kit) {
+    const list = kit.el(parent, 'div', 'primer-tasks-list');
+    kit.taskRow(list, input.feature.position);
     for (const group of input.groups) {
       const header = kit.sectionHeader(list, group.header);
       const isExtra = group.group === 'extra';
@@ -163,11 +164,21 @@ const layout = {
         kit.addPrompt(header);
       }
       for (const row of group.rows) {
-        kit.railRow(list, row.position);
+        kit.taskRow(list, row.position);
       }
       if (isExtra && group.rows.length === 0) {
         kit.emptyState(list, 'No extra tasks.');
       }
+    }
+    return { element: list };
+  },
+  items(parent, input, kit) {
+    const list = kit.el(parent, 'div', 'primer-items-list');
+    if (input.empty !== null) {
+      kit.emptyState(list, input.empty);
+    }
+    for (const row of input.rows) {
+      kit.itemRow(list, row.position);
     }
     return { element: list };
   },

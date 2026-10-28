@@ -16,8 +16,7 @@ import {
   primerItem,
 } from './test-primers';
 
-// Rows: the feature (0), then `extra-1` with two items (1); selecting
-// `extra-1` draws its items as rows 2 and 3.
+// Tasks column rows: the feature (0), then `extra-1` with two items (1).
 function setup() {
   return initialState(
     [
@@ -58,10 +57,10 @@ describe('primer boxes', () => {
     ]);
   });
 
-  it("shows the item's comment box only on an item row", () => {
+  it("shows the item's comment box only on an item card", () => {
     const state = apply(apply(setup(), { type: 'nextRow' }), {
-      type: 'selectRow',
-      row: 3,
+      type: 'selectItem',
+      item: 2,
     });
 
     expect(shownBoxes(state).map(boxKey)).toEqual([

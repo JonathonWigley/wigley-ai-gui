@@ -9,8 +9,8 @@ import type { ReviewInput, ReviewTaskInput } from '../layouts/layout';
 import {
   FEATURE_FIELDS,
   type OpenPrimer,
-  railRows,
   submitProblems,
+  taskRows,
 } from './primer-state';
 
 export interface ReviewTallies {
@@ -40,13 +40,13 @@ const FOOTER: [PrimerCommandName, string, ButtonVariant][] = [
   ['submit', 'Send', 'primary'],
 ];
 
-// The tag a task's need shows as, in the rail, the card and the review.
+// The tag a task's need shows as, in the tasks column, the card and the review.
 export function needTag(need: PrimerNeed): HTMLElement {
   const [text, tone] = NEED_TAGS[need];
   return tag(text, tone);
 }
 
-// The task's name as the rail, the card and the review show it; an extra task
+// The task's name as the tasks column, the card and the review show it; an extra task
 // with a blank name reads `Unnamed task`.
 export function taskName(entry: PrimerEntry): string {
   const isUnnamed = entry.group === 'extra' && entry.task.trim() === '';
@@ -71,10 +71,10 @@ export function reviewTallies(primer: OpenPrimer): ReviewTallies {
 }
 
 // The review body's input: the tallies, what blocks a send, the feature's
-// fields and the tasks in rail order.
+// fields and the tasks in tasks column order.
 export function reviewInput(primer: OpenPrimer): ReviewInput {
   const entries = new Map(primer.entries.map((entry) => [entry.id, entry]));
-  const tasks = railRows(primer).flatMap((row) => {
+  const tasks = taskRows(primer).flatMap((row) => {
     const entry = row.kind === 'task' ? entries.get(row.entryId) : undefined;
     return entry === undefined ? [] : [reviewTask(entry)];
   });

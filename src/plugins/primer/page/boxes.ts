@@ -2,12 +2,12 @@ import type { BoxIdentity } from '../../../shared/page/editor-boxes';
 import { activeForm } from '../../../shared/page/session-forms';
 import { MAX_PRIMER_ITEMS, type PrimerEntry } from '../contract';
 import {
+  cardRow,
   FEATURE_FIELDS,
   type OpenPrimer,
   type PrimerAction,
   type PrimerState,
   selectedEntry,
-  selectedRow,
   type TextTarget,
 } from './primer-state';
 
@@ -61,14 +61,14 @@ export const PRIMER_BOX_IDENTITY: BoxIdentity<PrimerBox> = {
 };
 
 // The boxes the user can reach now, in Ctrl+n order: the boxes of the card
-// the selected row shows in view 'primer', none in any other view.
+// the card row shows in view 'primer', none in any other view.
 export function shownBoxes(state: PrimerState): PrimerBox[] {
   const primer = activeForm(state);
   if (primer === null || state.view !== 'primer') {
     return [];
   }
   const primerId = primer.formId;
-  const row = selectedRow(primer);
+  const row = cardRow(primer);
   const entry = selectedEntry(primer);
   if (row.kind === 'item') {
     const { entryId, item } = row;

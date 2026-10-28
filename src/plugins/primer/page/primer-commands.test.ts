@@ -17,10 +17,11 @@ import {
 } from './primer-commands';
 import {
   buildBody,
+  cardRow,
   initialState,
+  type PrimerPane,
   rowName,
   selectedEntry,
-  selectedRow,
 } from './primer-state';
 import { createPrimerStore } from './primer-store';
 import {
@@ -48,9 +49,9 @@ function editorOf(box: PrimerBox): TextEditor {
   return editor;
 }
 
-// Primer `p1`, active; with the Feature row selected, rows: the feature (0),
+// Primer `p1`, active on the Feature row; tasks column rows: the feature (0),
 // `1` with two items (1), `s1` (2), `extra-1` (3) unless `entries` says
-// otherwise. `focusedRows` holds the selected row's name at each focus.
+// otherwise. `focusedRows` holds the card row's name at each focus.
 function setup(
   parts: { entries?: PrimerEntry[]; feature?: PrimerFeature } = {},
 ) {
@@ -91,7 +92,7 @@ function setup(
       focus: (box, options) => {
         focused.push(box);
         const shown = activeForm(store.get());
-        focusedRows.push(shown === null ? '' : rowName(selectedRow(shown)));
+        focusedRows.push(shown === null ? '' : rowName(cardRow(shown)));
         focusOptions.push(options);
         active = box;
       },
@@ -195,9 +196,11 @@ describe('primerCommandHandlers', () => {
 
     run('prevRow');
     run('nextRow');
+    run('focusItems');
+    logs.length = 0;
     run('nextRow');
 
-    expect(logs).toEqual(['selected task 1', 'selected item 1 on task 1']);
+    expect(logs).toEqual(['selected item 2 on task 1']);
   });
 
   it('says no task is selected when a need key fires on the Feature row', () => {
@@ -254,7 +257,7 @@ describe('primerCommandHandlers', () => {
 
   it('removes an extra task and logs it', () => {
     const { run, store, primer, logs } = setup();
-    store.dispatch({ type: 'selectRow', row: 3 });
+    store.dispatch({ type: 'selectTask', row: 3 });
 
     run('removeExtraTask');
 
@@ -273,16 +276,44 @@ describe('primerCommandHandlers', () => {
     expect(logs).toHaveLength(1);
   });
 
-  it('logs focusing the card once, then the rail, leaving any box', () => {
-    const { run, logs, leaves } = setup();
+  it.each<{
+    command: 'focusTasks' | 'focusItems' | 'focusCard';
+    from: PrimerPane;
+    log: string;
+    leaves: number;
+  }>([
+    {
+      command: 'focusItems',
+      from: 'tasks',
+      log: 'focused the items',
+      leaves: 2,
+    },
+    {
+      command: 'focusItems',
+      from: 'card',
+      log: 'focused the items',
+      leaves: 2,
+    },
+    {
+      command: 'focusTasks',
+      from: 'items',
+      log: 'focused the tasks',
+      leaves: 2,
+    },
+    { command: 'focusCard', from: 'items', log: 'focused the card', leaves: 0 },
+  ])(
+    'logs each focus move once, and leaves any box on focusTasks and focusItems: $command from $from',
+    ({ command, from, log, leaves: expectedLeaves }) => {
+      const { run, store, logs, leaves } = setup();
+      store.dispatch({ type: 'focusPane', pane: from });
 
-    run('focusCard');
-    run('focusCard');
-    run('focusRail');
+      run(command);
+      run(command);
 
-    expect(logs).toHaveLength(2);
-    expect(leaves()).toBe(1);
-  });
+      expect(logs).toEqual([log]);
+      expect(leaves()).toBe(expectedLeaves);
+    },
+  );
 
   it('steps rows from a box, committing add-item text first', () => {
     const { run, store, primer, logs } = setup();
@@ -296,16 +327,14 @@ describe('primerCommandHandlers', () => {
     run('nextRow', { editor: editorOf(newItem1) });
 
     expect(primer().entries[0].items.at(-1)?.text).toBe('Test the store');
-    expect(logs).toEqual([
-      'added item 3 on task 1',
-      'selected item 1 on task 1',
-    ]);
+    // The box's card shows from the tasks column, so the step moves there.
+    expect(logs).toEqual(['added item 3 on task 1', 'selected task s1']);
   });
 
   it('toggles the include mark and logs each way', () => {
-    const { run, logs } = setup();
-    run('nextRow');
-    run('nextRow');
+    const { run, store, logs } = setup();
+    store.dispatch({ type: 'selectTask', row: 1 });
+    store.dispatch({ type: 'focusPane', pane: 'items' });
     logs.length = 0;
 
     run('toggleInclude');
@@ -318,8 +347,8 @@ describe('primerCommandHandlers', () => {
   });
 
   it('says no item is selected for the item keys on a task row', () => {
-    const { run, logs, focused } = setup();
-    run('nextRow');
+    const { run, store, logs, focused } = setup();
+    store.dispatch({ type: 'selectTask', row: 1 });
     logs.length = 0;
 
     run('toggleInclude');
@@ -332,8 +361,8 @@ describe('primerCommandHandlers', () => {
   it("focuses the item's comment box, and from its item card the task's boxes once the task card shows", () => {
     const { run, store, focused, focusedRows, focusOptions } = setup();
     const onItem2 = () => {
-      store.dispatch({ type: 'selectRow', row: 1 });
-      store.dispatch({ type: 'selectRow', row: 3 });
+      store.dispatch({ type: 'selectTask', row: 1 });
+      store.dispatch({ type: 'selectItem', item: 2 });
     };
     onItem2();
 
@@ -397,14 +426,14 @@ describe('primerCommandHandlers', () => {
   // `i` edits the first field of the Feature card and of an extra task; on
   // any other card it edits the box `a`, `C` or `c` would.
   it.each([
-    { card: 'the Feature card', steps: 0, box: 'p1/feature/name' },
+    { card: 'the Feature card', steps: [], box: 'p1/feature/name' },
     {
       card: 'an extra task',
       entries: [primerEntry('extra-1', 'extra')],
-      steps: 1,
+      steps: ['nextRow'],
       box: 'p1/task/extra-1/name',
     },
-    { card: 'a task, as a', steps: 1, box: 'p1/task/1/new-item' },
+    { card: 'a task, as a', steps: ['nextRow'], box: 'p1/task/1/new-item' },
     {
       card: 'a full task, as C',
       entries: [
@@ -412,14 +441,18 @@ describe('primerCommandHandlers', () => {
           items: Array.from({ length: 20 }, (_, i) => primerItem(`Item ${i}`)),
         }),
       ],
-      steps: 1,
+      steps: ['nextRow'],
       box: 'p1/task/1/comment',
     },
-    { card: 'an item, as c', steps: 2, box: 'p1/task/1/item/1/comment' },
+    {
+      card: 'an item, as c',
+      steps: ['nextRow', 'focusItems'],
+      box: 'p1/task/1/item/1/comment',
+    },
   ])('focuses $box on $card for editFirstField', ({ entries, steps, box }) => {
     const { run, focused } = setup({ entries });
-    for (let step = 0; step < steps; step++) {
-      run('nextRow');
+    for (const step of steps as PrimerCommand[]) {
+      run(step);
     }
 
     run('editFirstField');
