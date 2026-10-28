@@ -1,21 +1,19 @@
 import type { Log } from '../../../../contracts/log';
-import type { MarkdownRenderer } from '../../../../contracts/markdown';
-import type { Platform } from '../../../../contracts/platform';
 import type { ShownLayouts } from '../../../../contracts/plugin';
-import { element } from '../../../../shared/page/dom';
+import { appended, element } from '../../../../shared/page/dom';
+import type { DrawnPickerRow } from '../../../../shared/page/list-picker';
+import { appSlot } from '../../../../shared/page/layout-host/app-slot';
 import {
-  type BaseKitDeps,
   createBaseKit,
-  type KitCommands,
+  type OwnerKitServices,
+  ownerBaseKitDeps,
 } from '../../../../shared/page/layout-host/base-kit';
 import {
-  type DrawnPart,
-  drawPart,
   requireElementIn,
   type RollbackDeps,
 } from '../../../../shared/page/layout-host/draw-part';
 import type { BaseKit } from '../../../../shared/page/layout-host/kit';
-import { pickLayout } from '../../../../shared/page/layout-host/pick';
+import { createLayoutParts } from '../../../../shared/page/layout-host/layout-parts';
 import {
   type ButtonVariant,
   textButton,
@@ -24,7 +22,6 @@ import { chip } from '../../../../shared/page/ui/chip';
 import { iconButton } from '../../../../shared/page/ui/icon-button';
 import { keyStack } from '../../../../shared/page/ui/key-anchors';
 import { qualify } from '../../../../shared/plugin-manifests';
-import type { KeysPageExports } from '../../../keys/contract';
 import defaultLayout from '../../layouts/default/layout.js';
 import type {
   CompleteLayout,
@@ -49,7 +46,6 @@ import type {
 import { notesManifest } from '../../manifest';
 
 const PLUGIN_ID = 'notes';
-const DEFAULT_LAYOUT = 'default';
 
 type NotesScope = keyof typeof notesManifest.scopes & string;
 type NotesCommand = keyof typeof notesManifest.commands & string;
@@ -127,11 +123,7 @@ const MARKUP_COMMANDS: readonly { command: MarkupCommand; label: string }[] = [
 ];
 
 // What every notes part draw reads: the page services and the keys export.
-export interface NotesPartsDeps {
-  markdown: MarkdownRenderer;
-  keys: Pick<KeysPageExports, 'anchor' | 'keysFor'>;
-  commands: KitCommands;
-  platform: Platform;
+export interface NotesPartsDeps extends OwnerKitServices {
   log: Log;
 }
 
@@ -156,19 +148,12 @@ export interface DrawnToolbar {
   colours: { colour: MarkupColour; node: HTMLElement }[];
 }
 
-// The list picker's row of one item: the app's trailing element and where
-// the row's key anchors go.
-export interface PickerRowSlot {
-  trailing: HTMLElement | null;
-  recordAnchor: RollbackDeps['recordAnchor'];
-}
-
 // The notes parts drawn over the layout host, with `default` alone until the
-// first `setLayouts`. Every draw but `pickerRow` keeps the dispose of the
-// part's last draw, and disposes it and removes that draw's root before it
-// draws the same part again, so a part holds one set of key anchors however
-// often it draws. A `pickerRow` draw hands its anchors to the picker, which
-// disposes them.
+// first `setLayouts`; the popup and its markup view draw through one. Every
+// draw but `pickerRow` keeps the dispose of the part's last draw, and disposes
+// it and removes that draw's root before it draws the same part again, so a
+// part holds one set of key anchors however often it draws. A `pickerRow`
+// draw hands its dispose to the picker.
 export interface NotesParts {
   setLayouts(shown: ShownLayouts<Layout>): void;
   // The field's row, appended to `parent`, with `box` (the title or body
@@ -180,6 +165,7 @@ export interface NotesParts {
   ): DrawnRow;
   target(slot: HTMLElement, input: TargetInput): HTMLElement;
   tags(slot: HTMLElement, input: TagsInput): HTMLElement;
+  // Draws each image the layout's `images` left out at the end of its root.
   images(
     slot: HTMLElement,
     input: ImagesInput,
@@ -196,63 +182,20 @@ export interface NotesParts {
     parent: HTMLElement,
     pickColour: (colour: MarkupColour) => void,
   ): DrawnToolbar;
+  // `trailing` is the picker's element for the cursor row, else null.
   pickerRow(
     list: HTMLElement,
     input: PickerRowInput,
-    row: PickerRowSlot,
-  ): HTMLElement;
+    trailing: HTMLElement | null,
+  ): DrawnPickerRow;
 }
 
 export function createNotesParts(deps: NotesPartsDeps): NotesParts {
-  let shown: ShownLayouts<Layout> = {
-    layouts: new Map<string, Layout>([[DEFAULT_LAYOUT, defaultLayout]]),
-    user: DEFAULT_LAYOUT,
-  };
-  // The last draw of each part, by part key.
-  const draws = new Map<string, DrawnPart<{ element: HTMLElement }>>();
-
-  const redraw = <R extends { element: HTMLElement }>(
-    key: string,
-    draw: () => DrawnPart<R>,
-  ): R => {
-    const last = draws.get(key);
-    last?.dispose();
-    last?.built.element.remove();
-    const next = draw();
-    draws.set(key, next);
-    return next.built;
-  };
-
-  // Draws `part` into `parent` with the first of the user's layout and
-  // `default` that defines it.
-  const drawLayoutPart = <
-    P extends keyof CompleteLayout,
-    R extends { element: HTMLElement },
-  >(
-    part: P,
-    parent: HTMLElement,
-    build: (
-      builder: CompleteLayout[P],
-      into: HTMLElement,
-      rollback: RollbackDeps,
-    ) => R,
-  ): DrawnPart<R> =>
-    drawPart<Layout, CompleteLayout[P], R>({
-      owner: PLUGIN_ID,
-      parent,
-      pick: pickLayout(
-        [shown.user, DEFAULT_LAYOUT],
-        shown.layouts,
-        (layout) => layout[part] !== undefined,
-      ),
-      defaultLayout,
-      // TypeScript cannot relate an optional part to the complete one.
-      part: (layout) => layout[part] as CompleteLayout[P] | undefined,
-      build,
-      log: deps.log,
-      logSource: PLUGIN_ID,
-      partName: part,
-    });
+  const parts = createLayoutParts<Layout, CompleteLayout>({
+    owner: PLUGIN_ID,
+    defaultLayout,
+    log: deps.log,
+  });
 
   const valuePart = <P extends 'target' | 'tags' | 'images' | 'session'>(
     part: P,
@@ -264,31 +207,26 @@ export function createNotesParts(deps: NotesPartsDeps): NotesParts {
       rollback: RollbackDeps,
     ) => NotesPart,
   ): HTMLElement =>
-    redraw(part, () =>
-      drawLayoutPart(part, slot, (builder, into, rollback) =>
-        build(builder, into, kitFor(deps, 'popup', rollback), rollback),
-      ),
-    ).element;
+    parts.redraw(part, slot, (builder, into, rollback) =>
+      build(builder, into, kitFor(deps, 'popup', rollback), rollback),
+    ).built.element;
 
   return {
-    setLayouts(next) {
-      shown = next;
-    },
-    row(parent, input, box) {
-      return redraw(`row:${input.field}`, () =>
-        drawLayoutPart('row', parent, (row, into, rollback) => {
+    setLayouts: (shown) => parts.setLayouts(shown),
+    row: (parent, input, box) =>
+      parts.redraw(
+        'row',
+        parent,
+        (row, into, rollback) => {
           const base = kitFor(deps, 'popup', rollback);
-          const slots: HTMLElement[] = [];
+          const slot = element('div', 'notes-row-value');
+          const valueSlot = appSlot(slot, 'valueSlot', rollback);
           const command = ROW_COMMANDS[input.field];
           const root = partRoot(
             into,
             row(into, input, {
               ...base,
-              valueSlot(slotParent) {
-                const slot = base.el(slotParent, 'div', 'notes-row-value');
-                slots.push(slot);
-                return slot;
-              },
+              valueSlot: (slotParent) => valueSlot.place(slotParent),
               pickHint: (hintParent) =>
                 command === undefined
                   ? base.el(hintParent, 'span')
@@ -299,14 +237,14 @@ export function createNotesParts(deps: NotesPartsDeps): NotesParts {
             }),
             'row',
           );
-          const slot = slots[0] ?? base.el(root, 'div', 'notes-row-value');
+          valueSlot.placeIfLeftOut(root);
           if (box !== null) {
             slot.append(box);
           }
           return { element: root, slot };
-        }),
-      );
-    },
+        },
+        `row:${input.field}`,
+      ).built,
     target: (slot, input) =>
       valuePart('target', slot, (target, into, kit) =>
         target(into, input, kit),
@@ -314,38 +252,44 @@ export function createNotesParts(deps: NotesPartsDeps): NotesParts {
     tags: (slot, input) =>
       valuePart('tags', slot, (tags, into, kit) => tags(into, input, kit)),
     images: (slot, input, entries) =>
-      valuePart('images', slot, (images, into, kit, rollback) =>
-        images(into, input, {
-          ...kit,
-          image(parent, position) {
-            const held = entries.imageAt(position);
-            if (held === undefined) {
-              throw new Error(`no image ${position}`);
-            }
-            const drawn = drawLayoutPart(
-              'image',
-              parent,
-              (image, imageInto, imageRollback) => {
-                const imageKit = kitFor(deps, 'popup', imageRollback);
-                return image(imageInto, held, {
-                  ...imageKit,
-                  removeButton: (buttonParent) =>
-                    appended(
-                      buttonParent,
-                      removeButton(
-                        'Remove the image',
-                        'notes-image-remove',
-                        () => entries.removeImageAt(position - 1),
-                      ),
+      valuePart('images', slot, (images, into, kit, rollback) => {
+        const drawnPositions = new Set<number>();
+        const image = (parent: HTMLElement, position: number) => {
+          const held = entries.imageAt(position);
+          if (held === undefined) {
+            throw new Error(`no image ${position}`);
+          }
+          const drawn = parts.draw(
+            'image',
+            parent,
+            (imageBuilder, imageInto, imageRollback) =>
+              imageBuilder(imageInto, held, {
+                ...kitFor(deps, 'popup', imageRollback),
+                removeButton: (buttonParent) =>
+                  appended(
+                    buttonParent,
+                    removeButton('Remove the image', 'notes-image-remove', () =>
+                      entries.removeImageAt(position - 1),
                     ),
-                });
-              },
-            );
-            rollback.recordBox(drawn.dispose);
-            return drawn.built.element;
-          },
-        }),
-      ),
+                  ),
+              }),
+          );
+          rollback.recordBox(drawn.dispose);
+          drawnPositions.add(position);
+          return drawn.built.element;
+        };
+        const root = partRoot(
+          into,
+          images(into, input, { ...kit, image }),
+          'images',
+        );
+        for (let position = 1; position <= input.count; position += 1) {
+          if (!drawnPositions.has(position)) {
+            image(root, position);
+          }
+        }
+        return { element: root };
+      }),
     session: (slot, input, removeSession) =>
       valuePart('session', slot, (session, into, kit) =>
         session(into, input, {
@@ -366,96 +310,55 @@ export function createNotesParts(deps: NotesPartsDeps): NotesParts {
         }),
       ),
     actions: (parent) =>
-      redraw('actions', () =>
-        drawLayoutPart('actions', parent, (actions, into, rollback) =>
-          withActionButtons(
-            deps,
-            'popup',
-            POPUP_ACTIONS,
-            rollback,
-            into,
-            'actions',
-            (kit, button) => actions(into, { ...kit, actionButton: button }),
-          ),
-        ),
-      ).element,
-    confirm: (parent) =>
-      redraw('confirm', () =>
-        drawLayoutPart('confirm', parent, (confirm, into, rollback) =>
-          withActionButtons(
-            deps,
-            'confirm',
-            CONFIRM_ACTIONS,
-            rollback,
-            into,
-            'confirm',
-            (kit, button) => confirm(into, { ...kit, actionButton: button }),
-          ),
-        ),
-      ).element,
-    markupToolbar: (parent, pickColour) =>
-      redraw('markupToolbar', () =>
-        drawLayoutPart('markupToolbar', parent, (toolbar, into, rollback) =>
-          drawToolbar(deps, rollback, into, pickColour, (kit) =>
-            toolbar(into, kit),
-          ),
-        ),
-      ),
-    pickerRow: (list, input, row) =>
-      drawLayoutPart('pickerRow', list, (pickerRow, into, rollback) => {
-        const kit = kitFor(deps, 'picker', {
-          recordBox: rollback.recordBox,
-          recordAnchor(anchor) {
-            rollback.recordAnchor(anchor);
-            row.recordAnchor(anchor);
-          },
-        });
-        const root = partRoot(
+      parts.redraw('actions', parent, (actions, into, rollback) =>
+        withActionButtons(
+          deps,
+          'popup',
+          POPUP_ACTIONS,
+          rollback,
           into,
-          pickerRow(into, input, { ...kit, trailing: () => row.trailing }),
-          'pickerRow',
-        );
-        if (row.trailing !== null && !root.contains(row.trailing)) {
-          root.append(row.trailing);
-        }
-        return { element: root };
-      }).built.element,
-  };
-}
-
-// The keys a part draw names its anchors through: each anchor is recorded
-// through `rollback`, so the draw's dispose disposes it.
-function recordingKeys(
-  keys: NotesPartsDeps['keys'],
-  rollback: RollbackDeps,
-): BaseKitDeps['keys'] {
-  return {
-    anchor(target, command, options) {
-      const anchor = keys.anchor(target, command, options);
-      rollback.recordAnchor(anchor);
-      return anchor;
+          'actions',
+          (kit, button) => actions(into, { ...kit, actionButton: button }),
+        ),
+      ).built.element,
+    confirm: (parent) =>
+      parts.redraw('confirm', parent, (confirm, into, rollback) =>
+        withActionButtons(
+          deps,
+          'confirm',
+          CONFIRM_ACTIONS,
+          rollback,
+          into,
+          'confirm',
+          (kit, button) => confirm(into, { ...kit, actionButton: button }),
+        ),
+      ).built.element,
+    markupToolbar: (parent, pickColour) =>
+      parts.redraw('markupToolbar', parent, (toolbar, into, rollback) =>
+        drawToolbar(deps, rollback, into, pickColour, (kit) =>
+          toolbar(into, kit),
+        ),
+      ).built,
+    pickerRow(list, input, trailing) {
+      const drawn = parts.draw('pickerRow', list, (pickerRow, into, rollback) =>
+        pickerRow(into, input, {
+          ...kitFor(deps, 'picker', rollback),
+          trailing: () => trailing,
+        }),
+      );
+      return { element: drawn.built.element, dispose: drawn.dispose };
     },
-    keysFor: (command, scope) => keys.keysFor(command, scope),
   };
 }
 
-// The base kit of one part draw, its keys in `notes.<scope>`.
+// The base kit of one part draw, its keys in `notes.<scope>` and each anchor
+// recorded through `rollback`.
 function kitFor(
   deps: NotesPartsDeps,
   scope: NotesScope,
   rollback: RollbackDeps,
 ): BaseKit {
-  return createBaseKit({
-    markdown: deps.markdown,
-    keys: recordingKeys(deps.keys, rollback),
-    commands: deps.commands,
-    scope: qualify(PLUGIN_ID, scope),
-    commandNamed: (short) =>
-      Object.hasOwn(notesManifest.commands, short)
-        ? qualify(PLUGIN_ID, short)
-        : null,
-    platform: deps.platform,
-  });
+  return createBaseKit(ownerBaseKitDeps(notesManifest, deps, scope, rollback));
 }
 
 // `span.notes-hint`: the anchor of `command`'s keys in `notes.<scope>`,
@@ -467,9 +370,11 @@ function hint(
   scope: NotesScope,
 ): HTMLElement {
   const node = element('span', 'notes-hint');
-  recordingKeys(deps.keys, rollback).anchor(node, qualify(PLUGIN_ID, command), {
-    scope: qualify(PLUGIN_ID, scope),
-  });
+  rollback.recordAnchor(
+    deps.keys.anchor(node, qualify(PLUGIN_ID, command), {
+      scope: qualify(PLUGIN_ID, scope),
+    }),
+  );
   return node;
 }
 
@@ -485,11 +390,6 @@ function partRoot(
     (part as Partial<NotesPart> | null | undefined)?.element,
     partName,
   );
-}
-
-function appended<E extends HTMLElement>(parent: HTMLElement, node: E): E {
-  parent.append(node);
-  return node;
 }
 
 function removeButton(

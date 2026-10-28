@@ -1,12 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { asFake, asHtml, findAll } from '../../../../shared/page/test-dom';
-import type { Layout } from '../../layouts/layout';
 import {
-  installNotesFakeDom,
-  notesPartsDeps,
   USER_LAYOUT as USER,
   withUser,
-} from '../notes-page-fakes';
+} from '../../../../shared/page/layout-host/test-layouts';
+import {
+  asFake,
+  asHtml,
+  type FakeElement,
+  findAll,
+  installFocusFakeDom,
+} from '../../../../shared/page/test-dom';
+import defaultLayout from '../../layouts/default/layout.js';
+import type { Layout } from '../../layouts/layout';
+import { notesPartsDeps } from '../notes-page-fakes';
 import { createNotesParts, type NotesParts } from './notes-parts';
 
 function container(): HTMLElement {
@@ -34,13 +40,20 @@ const imageEntries = {
   removeImageAt: () => undefined,
 };
 
+// The alt text of each thumbnail under `root`, in order.
+function imageAlts(root: HTMLElement): string[] {
+  return findAll(asFake(root), 'notes-image-thumbnail').map(
+    (image: FakeElement) => (image as unknown as HTMLImageElement).alt,
+  );
+}
+
 const failing = () => {
   throw new Error('broken');
 };
 
 describe('notes parts', () => {
   beforeEach(() =>
-    installNotesFakeDom((name, value) => vi.stubGlobal(name, value)),
+    installFocusFakeDom((name, value) => vi.stubGlobal(name, value)),
   );
   afterEach(() => vi.unstubAllGlobals());
 
@@ -74,8 +87,8 @@ describe('notes parts', () => {
         parts.pickerRow(
           parent,
           { picker: 'Target', label: 'repo — ~/repo' },
-          { trailing: null, recordAnchor: () => undefined },
-        ),
+          null,
+        ).element,
       ],
     },
   ])(
@@ -83,7 +96,7 @@ describe('notes parts', () => {
     ({ part, layout, draw }) => {
       const { deps, logged } = notesPartsDeps();
       const parts = createNotesParts(deps);
-      parts.setLayouts(withUser(layout));
+      parts.setLayouts(withUser<Layout>(defaultLayout, layout));
 
       const roots = draw(parts, container());
 
@@ -115,6 +128,32 @@ describe('notes parts', () => {
       read: (root: HTMLElement) =>
         asFake(root).children.map((child) => child.className),
       expected: ['notes-hint', 'notes-row-value'],
+    },
+    {
+      case: 'images drawing none',
+      layout: {
+        images: (parent, _input, kit) => ({
+          element: kit.el(parent, 'div', 'mine-strip'),
+        }),
+      } satisfies Layout,
+      draw: (parts: NotesParts, parent: HTMLElement) =>
+        parts.images(parent, { count: 2 }, imageEntries),
+      read: imageAlts,
+      expected: ['Image 1', 'Image 2'],
+    },
+    {
+      case: 'images drawing only the second',
+      layout: {
+        images(parent, _input, kit) {
+          const root = kit.el(parent, 'div', 'mine-strip');
+          kit.image(root, 2);
+          return { element: root };
+        },
+      } satisfies Layout,
+      draw: (parts: NotesParts, parent: HTMLElement) =>
+        parts.images(parent, { count: 2 }, imageEntries),
+      read: imageAlts,
+      expected: ['Image 2', 'Image 1'],
     },
     {
       case: 'actions with only discard',
@@ -175,7 +214,7 @@ describe('notes parts', () => {
     ({ layout, draw, read, expected }) => {
       const { deps } = notesPartsDeps();
       const parts = createNotesParts(deps);
-      parts.setLayouts(withUser(layout));
+      parts.setLayouts(withUser<Layout>(defaultLayout, layout));
 
       const root = draw(parts, container());
 
@@ -187,7 +226,7 @@ describe('notes parts', () => {
   it('notesParts_Redraw_LeavesOneAnchorPerHint', () => {
     const { deps, anchors } = notesPartsDeps();
     const parts = createNotesParts(deps);
-    const shown = withUser({
+    const shown = withUser<Layout>(defaultLayout, {
       target(parent, input, kit) {
         const root = kit.el(parent, 'span', 'mine-target', input.text ?? '');
         kit.keyHint(root, 'pickTarget');
@@ -220,6 +259,31 @@ describe('notes parts', () => {
     expect(asFake(actions).children).toHaveLength(1);
   });
 
+  it('notesParts_PickerRowDispose_DisposesItsAnchors', () => {
+    const { deps, anchors } = notesPartsDeps();
+    const parts = createNotesParts(deps);
+    parts.setLayouts(
+      withUser<Layout>(defaultLayout, {
+        pickerRow(parent, input, kit) {
+          const root = kit.el(parent, 'li', 'mine-row', input.label);
+          kit.keyHint(root, 'pickerChoose');
+          return { element: root };
+        },
+      }),
+    );
+    const drawn = parts.pickerRow(
+      container(),
+      { picker: 'Tags', label: 'Add ui' },
+      null,
+    );
+
+    drawn.dispose();
+
+    expect(
+      anchors.map((anchor) => `${anchor.command} ${anchor.isDisposed}`),
+    ).toEqual(['notes.pickerChoose true']);
+  });
+
   it('notesParts_Relayout_MovesTheSameBoxes', () => {
     const { deps } = notesPartsDeps();
     const parts = createNotesParts(deps);
@@ -233,7 +297,7 @@ describe('notes parts', () => {
     const [firstTitle, firstBody] = drawRows();
 
     parts.setLayouts(
-      withUser({
+      withUser<Layout>(defaultLayout, {
         row(parent, input, kit) {
           const root = kit.el(parent, 'section', 'mine-row');
           kit.valueSlot(root);

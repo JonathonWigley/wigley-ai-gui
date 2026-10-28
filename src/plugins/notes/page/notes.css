@@ -79,10 +79,24 @@
   color: var(--wg-fg-tertiary);
 }
 
+/* Roots of the default layout that only group what the app's container lays
+   out: the container lays out their children as its own. */
+.notes-tags,
+.notes-session-value,
+.notes-actions,
+.notes-markup-groups {
+  display: contents;
+}
+
 /* A long tag wraps anywhere, so it never widens the popup. */
-.notes-row-value > .ui-tag {
+.notes-tags > .ui-tag {
   overflow-wrap: anywhere;
   white-space: normal;
+}
+
+/* An action button's label stays on one line, as in any dialog's actions. */
+.notes-actions > .ui-button {
+  white-space: nowrap;
 }
 
 /* A long path stays on one line, cut with an ellipsis. */
@@ -158,6 +172,12 @@
   position: absolute;
   right: var(--wg-space-0_5);
   top: var(--wg-space-0_5);
+}
+
+.notes-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-3);
 }
 
 .notes-confirm-text {

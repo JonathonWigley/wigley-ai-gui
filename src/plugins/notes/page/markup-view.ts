@@ -7,25 +7,23 @@ import type {
 import type {
   PageChannel,
   PushedScope,
-  ShownLayouts,
   ToastTone,
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { element } from '../../../shared/page/dom';
 import type { NoteDraft, NotesChannel } from '../contract';
-import type { Layout, MarkupColour } from '../layouts/layout';
+import type { MarkupColour } from '../layouts/layout';
 import {
-  createNotesParts,
   type DrawnToolbar,
   MARKUP_COLOURS,
-  type NotesPartsDeps,
+  type NotesParts,
 } from './layout/notes-parts';
 
 export interface MarkupViewDeps {
   channel: PageChannel<NotesChannel>;
   markup: MarkupEditor;
-  // What the toolbar part draws with.
-  parts: NotesPartsDeps;
+  // The popup's parts, which the toolbar draws through.
+  parts: NotesParts;
   // Pushes the `markup` scope.
   pushScope(): PushedScope;
   // The PNG bytes of image `id`.
@@ -39,12 +37,12 @@ export interface MarkupViewDeps {
 }
 
 // One image under markup: a toolbar of the tools and colours, drawn through
-// the notes layout's `markupToolbar` (`default` alone until the first
-// `setLayouts`), and the host the markup editor draws in. `open` pushes the `markup` scope and shows the
-// image's saved markup with the pen and the first colour; `close` ends a text
-// still being edited, pops the scope, tells `closed`, then saves the markup
-// when it changed since `open`. The tool, colour, undo and redo calls do
-// nothing until the editor has opened.
+// the parts' `markupToolbar`, and the host the markup editor draws in. `open`
+// pushes the `markup` scope and shows the image's saved markup with the pen
+// and the first colour; `close` ends a text still being edited, pops the
+// scope, tells `closed`, then saves the markup when it changed since `open`.
+// The tool, colour, undo and redo calls do nothing until the editor has
+// opened.
 export interface MarkupView {
   element: HTMLElement;
   isShown(): boolean;
@@ -57,8 +55,9 @@ export interface MarkupView {
   stepColour(step: 1 | -1): void;
   undo(): void;
   redo(): void;
-  // Draws the toolbar again with `shown`; an open markup session is kept.
-  setLayouts(shown: ShownLayouts<Layout>): void;
+  // Draws the toolbar again with the parts' shown layouts; an open markup
+  // session is kept.
+  redrawToolbar(): void;
 }
 
 interface Shown {
@@ -88,7 +87,7 @@ export function createMarkupView(deps: MarkupViewDeps): MarkupView {
   let colourIndex = 0;
   let saves: Promise<void> = Promise.resolve();
 
-  const parts = createNotesParts(deps.parts);
+  const { parts } = deps;
   // The tool and colour buttons the toolbar's last draw holds.
   let buttons: Pick<DrawnToolbar, 'tools' | 'colours'> = {
     tools: [],
@@ -253,9 +252,6 @@ export function createMarkupView(deps: MarkupViewDeps): MarkupView {
         deps.log('notes', 'redo');
       }
     },
-    setLayouts(shown) {
-      parts.setLayouts(shown);
-      drawToolbar();
-    },
+    redrawToolbar: drawToolbar,
   };
 }

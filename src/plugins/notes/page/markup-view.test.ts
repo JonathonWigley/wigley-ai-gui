@@ -1,15 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MarkupEditor, MarkupSession } from '../../../contracts/markup';
 import type { PageChannel, PushedScope } from '../../../contracts/plugin';
-import { asFake, findAll } from '../../../shared/page/test-dom';
-import type { NotesChannel } from '../contract';
-import type { MarkupTool } from '../layouts/layout';
-import { createMarkupView } from './markup-view';
+import { withUser } from '../../../shared/page/layout-host/test-layouts';
 import {
-  installNotesFakeDom,
-  notesPartsDeps,
-  withUser,
-} from './notes-page-fakes';
+  asFake,
+  findAll,
+  installFocusFakeDom,
+} from '../../../shared/page/test-dom';
+import type { NotesChannel } from '../contract';
+import defaultLayout from '../layouts/default/layout.js';
+import type { Layout, MarkupTool } from '../layouts/layout';
+import { createNotesParts } from './layout/notes-parts';
+import { createMarkupView } from './markup-view';
+import { notesPartsDeps } from './notes-page-fakes';
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
@@ -31,7 +34,7 @@ const markup: MarkupEditor = {
 
 describe('markup view', () => {
   beforeEach(() => {
-    installNotesFakeDom((name, value) => vi.stubGlobal(name, value));
+    installFocusFakeDom((name, value) => vi.stubGlobal(name, value));
     vi.stubGlobal('getComputedStyle', () => ({
       getPropertyValue: () => 'red',
     }));
@@ -39,13 +42,13 @@ describe('markup view', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it('markupView_ToolButtonFromLayout_MarksTheToolInUse', async () => {
-    const { deps } = notesPartsDeps();
+    const parts = createNotesParts(notesPartsDeps().deps);
     const view = createMarkupView({
       channel: {
         invoke: () => Promise.resolve(null),
       } as unknown as PageChannel<NotesChannel>,
       markup,
-      parts: deps,
+      parts,
       pushScope: () =>
         ({
           pop: () => undefined,
@@ -58,8 +61,8 @@ describe('markup view', () => {
       toast: () => undefined,
     });
     const order: MarkupTool[] = ['box', 'arrow', 'text', 'pen', 'select'];
-    view.setLayouts(
-      withUser({
+    parts.setLayouts(
+      withUser<Layout>(defaultLayout, {
         markupToolbar(parent, kit) {
           const root = kit.el(parent, 'div', 'mine-tools');
           for (const tool of order) {
@@ -69,6 +72,7 @@ describe('markup view', () => {
         },
       }),
     );
+    view.redrawToolbar();
     view.open(1, 1);
     await settle();
 

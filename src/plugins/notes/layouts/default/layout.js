@@ -1,21 +1,10 @@
 // @ts-check
 
-// The built-in notes look, with the class names `notes.css` styles. A root that
-// only groups what the app's container lays out is `display: contents`, so the
-// container lays out its children as its own.
-
-/**
- * A root laid out by its container.
- * @param {HTMLElement} parent
- * @param {string} tag
- * @param {string} className
- * @param {import('../layout').NotesKit} kit
- */
-function groupRoot(parent, tag, className, kit) {
-  const root = kit.el(parent, tag, className);
-  root.style.display = 'contents';
-  return root;
-}
+// The built-in notes look, with the class names `notes.css` styles. A root
+// that only groups what the app's container lays out (`notes-tags`,
+// `notes-session-value`, `notes-actions`, `notes-markup-groups`) is
+// `display: contents` there, so the container lays out its children as its
+// own.
 
 /**
  * The quiet text of an empty value.
@@ -48,12 +37,9 @@ const layout = {
     if (input.tags.length === 0) {
       return quiet(parent, 'No tags', kit);
     }
-    const root = groupRoot(parent, 'span', 'notes-tags', kit);
+    const root = kit.el(parent, 'span', 'notes-tags');
     for (const held of input.tags) {
-      // A long tag wraps anywhere, so it never widens the popup.
-      const shown = kit.tag(root, held);
-      shown.style.overflowWrap = 'anywhere';
-      shown.style.whiteSpace = 'normal';
+      kit.tag(root, held);
     }
     return { element: root };
   },
@@ -76,8 +62,7 @@ const layout = {
     thumbnail.src = input.src;
     thumbnail.alt = input.alt;
     if (input.hasMarkup) {
-      const pen = kit.el(held, 'span', 'codicon codicon-edit notes-image-pen');
-      pen.setAttribute('aria-hidden', 'true');
+      kit.icon(held, 'edit', 'notes-image-pen');
     }
     kit.removeButton(held);
     return { element: held };
@@ -86,13 +71,13 @@ const layout = {
     if (input.text === null) {
       return quiet(parent, 'No session', kit);
     }
-    const root = groupRoot(parent, 'span', 'notes-session-value', kit);
+    const root = kit.el(parent, 'span', 'notes-session-value');
     kit.sessionChip(root, input.text);
     kit.removeButton(root);
     return { element: root };
   },
   actions(parent, kit) {
-    const root = groupRoot(parent, 'div', 'notes-actions', kit);
+    const root = kit.el(parent, 'div', 'notes-actions');
     kit.actionButton(root, 'discard');
     kit.actionButton(root, 'appendFollowup');
     kit.actionButton(root, 'sendSession');
@@ -101,9 +86,6 @@ const layout = {
   },
   confirm(parent, kit) {
     const root = kit.el(parent, 'div', 'notes-confirm');
-    root.style.display = 'flex';
-    root.style.flexDirection = 'column';
-    root.style.gap = 'var(--wg-space-3)';
     kit.el(
       root,
       'p',
@@ -116,7 +98,7 @@ const layout = {
     return { element: root };
   },
   markupToolbar(parent, kit) {
-    const root = groupRoot(parent, 'div', 'notes-markup-groups', kit);
+    const root = kit.el(parent, 'div', 'notes-markup-groups');
     const tools = kit.el(root, 'div', 'notes-markup-group');
     kit.toolButton(tools, 'select');
     kit.toolButton(tools, 'pen');

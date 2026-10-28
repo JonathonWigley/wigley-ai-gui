@@ -12,14 +12,23 @@ import type {
 // The app keeps the dialog frames and titles, the title box and the body editor, the markup editor, the cursor
 // prompt (moved to the selected row), `is-cursor` on the rows, and the picker's panel, title, filter and cursor.
 //
+// The app's container lays out each part's root as one item: the fields grid a `row`, the row's value slot (a
+// wrapping flex line) a value part, the dialog's actions row `actions`, the confirmation's body `confirm`, and the
+// markup view's wrapping flex toolbar `markupToolbar`. `default`'s roots that only group (`.notes-tags`,
+// `.notes-session-value`, `.notes-actions`, `.notes-markup-groups`) are `display: contents` in the app's stylesheet,
+// so the container lays out their children; a layout's own root that should do the same sets `display: contents` in
+// its `layout.css`.
+//
 // What a part leaves out:
 // - a row's `valueSlot`: the app appends a `div.notes-row-value` at the end of the row root. The app fills each slot:
 //   the title row with the title box, the body row with the body editor, the other rows with their value part.
+// - an image of `images`: the app draws it with `image` at the end of the part's root, in position order, so each
+//   image the popup's keys select is shown.
 // - a button of `actions`, `confirm` or `markupToolbar`, and the markup toolbar's `colourKeys`: the app appends it at
 //   the end of the part's root, in the app's order, so every command keeps a key anchor.
 // - a `pickerRow`'s `trailing`: the app appends it at the end of the row root.
-// The list picker sets `title`, `is-selected`, `is-cursor` and the click on a `pickerRow` root, so the row gives
-// `kit.row` no `onClick`.
+// The list picker sets `title`, `is-selected`, `is-cursor`, `ui-row--action` and the click on a `pickerRow` root, so
+// the row gives `kit.row` no `onClick`.
 //
 // Kit scopes: rows, values, images and actions `notes.popup`; `confirm` `notes.confirm`; `markupToolbar`
 // `notes.markup`; `pickerRow` `notes.picker`.
@@ -81,14 +90,15 @@ export interface NotesPart {
 
 export interface NotesKit extends BaseKit {}
 export interface RowKit extends NotesKit {
-  // Appends the row's `div.notes-row-value`, which the app fills, and returns it.
+  // Appends the row's `div.notes-row-value`, which the app fills, and returns it; a second call throws
+  // `valueSlot placed twice`, so the row draws with `default`.
   valueSlot(parent: HTMLElement): HTMLElement;
   // The key hint of the command that picks the row's value, labelled `pick`; an empty `span` for a field with none.
   pickHint(parent: HTMLElement): HTMLElement;
 }
 export interface ImagesKit extends NotesKit {
   // Draws the `image` part for the image at `position` (from 1) into `parent` and returns its root; throws for a
-  // position the note does not hold.
+  // position the note does not hold. The app draws each position the part leaves out at the end of its root.
   image(parent: HTMLElement, position: number): HTMLElement;
 }
 export interface ImageKit extends NotesKit {

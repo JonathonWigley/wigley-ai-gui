@@ -277,7 +277,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
   const markupView = createMarkupView({
     channel,
     markup: services.markup,
-    parts: partsDeps,
+    parts,
     pushScope: () => deps.pushScope('markup'),
     imageBytes: (id) => imageBytes(id),
     closed: () => {
@@ -599,12 +599,8 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
       label,
       selected,
       headerEnd: pickerFilterHint,
-      drawRow: (list, _item, { label, trailing, recordAnchor }) =>
-        parts.pickerRow(
-          list,
-          { picker: title, label },
-          { trailing, recordAnchor },
-        ),
+      drawRow: (list, _item, { label, trailing }) =>
+        parts.pickerRow(list, { picker: title, label }, trailing),
       chosen: (item) => {
         render();
         chosen(item);
@@ -619,8 +615,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
 
   // ── The discard confirmation ──────────────────────────────────────────────
   // Its text and buttons are the `confirm` part, drawn into its body.
-  const confirm = createDialog('Discard this note?');
-  confirm.actions.hidden = true;
+  const confirm = createDialog('Discard this note?', { hasActions: false });
   parts.confirm(confirm.body);
   deps.overlay.contribute(confirm.element);
   let confirmScope: PushedScope | null = null;
@@ -1171,7 +1166,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     parts.actions(dialog.actions);
     parts.confirm(confirm.body);
     render();
-    markupView.setLayouts(shown);
+    markupView.redrawToolbar();
     picker.redraw();
     if (box !== null) {
       refocusBox(box);
