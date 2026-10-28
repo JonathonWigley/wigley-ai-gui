@@ -24,13 +24,11 @@ export interface ActivityItemInput {
   icon: string;
 }
 
-// The shell's kit. The chrome binds no page key and reaches no plugin's keys, since the core cannot reach the keys
-// plugin's exports before the plugins start: `keyHint` anchors nothing and `keysFor` reads null. `command` runs any
-// registered page command.
-export interface ShellKit extends BaseKit {
-  // `span.codicon.codicon-<name>` for the Codicon `name`, hidden from assistive technology.
-  icon(parent: HTMLElement, name: string): HTMLElement;
-}
+// The shell's kit. The shell owns no command, so `keys`, `keyHint` and `edge` take any plugin's command by its
+// qualified id (as `docs.openDoc`), and a hint anchors in every scope. The keys plugin's keys reach the chrome once the
+// plugins start: until then a hint draws empty and `keys` and `keysFor` read null, and every part draws again then.
+// `command` runs any registered page command.
+export interface ShellKit extends BaseKit {}
 
 // A layout defines only the parts it changes: each part comes from the first layout that defines it among the
 // `shell.layout` setting's layout and `default`. A part that throws, or returns no element appended to `parent`, is
@@ -61,21 +59,4 @@ export interface Layout {
 }
 
 // The built-in `default` layout, which defines every part.
-export interface CompleteLayout extends Layout {
-  titleContext(
-    parent: HTMLElement,
-    input: ContextInput,
-    kit: ShellKit,
-  ): HTMLElement;
-  devTag(parent: HTMLElement, kit: ShellKit): HTMLElement;
-  configProblems(
-    parent: HTMLElement,
-    input: ProblemsInput,
-    kit: ShellKit,
-  ): HTMLElement;
-  activityItem(
-    parent: HTMLElement,
-    input: ActivityItemInput,
-    kit: ShellKit,
-  ): HTMLElement;
-}
+export interface CompleteLayout extends Required<Layout> {}

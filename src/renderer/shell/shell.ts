@@ -84,8 +84,9 @@ export function nextInTrack<Entry extends { placement: Placement }>(
 // layouts. `setLayout` places them by `layout`, moving every contribution into
 // it, and returns the `Disposable` that restores the layout the shell was
 // mounted with, which does nothing once another `setLayout` replaced `layout`;
-// a layout that throws or misses an area leaves the previous one mounted and
-// rethrows. `layOutSideBar` shows or hides the side bar area and sets its
+// each area's element keeps its scroll across the swap; a layout that throws
+// or misses an area leaves the previous one mounted and rethrows.
+// `layOutSideBar` shows or hides the side bar area and sets its
 // `data-side-bar`. `setChromeLayout` names the user's shell layout on the four
 // chrome areas' elements (`data-layout`, with `data-layout-owner="shell"`),
 // kept across every later mount, so the layout's CSS restyles their frames.
@@ -154,6 +155,25 @@ function mountedArea(
     }
   }
   return returned;
+}
+
+function areaScrolls(
+  mounted: Record<AreaName, MountedArea>,
+): Record<AreaName, number> {
+  const scrolls = {} as Record<AreaName, number>;
+  for (const name of AREA_NAMES) {
+    scrolls[name] = mounted[name].element.scrollTop;
+  }
+  return scrolls;
+}
+
+function restoreAreaScrolls(
+  mounted: Record<AreaName, MountedArea>,
+  scrolls: Record<AreaName, number>,
+): void {
+  for (const name of AREA_NAMES) {
+    mounted[name].element.scrollTop = scrolls[name];
+  }
 }
 
 // Keeps `--wg-status-bar-height` on the document root equal to the status
@@ -272,18 +292,23 @@ export function mountShell(root: HTMLElement, layout: ShellLayout): Shell {
   }
   fillElements();
 
+  // Each area's scroll is read before the remount detaches its element, and
+  // set on the new element once its contributions are back in it.
   const replaceLayout = (next: ShellLayout) => {
     const previous = currentLayout;
+    const scrolls = areaScrolls(mounted);
     try {
       mounted = mountLayout(root, next);
     } catch (error) {
       mounted = mountLayout(root, previous);
       fillElements();
+      restoreAreaScrolls(mounted, scrolls);
       throw error;
     }
     currentLayout = next;
     generation += 1;
     fillElements();
+    restoreAreaScrolls(mounted, scrolls);
   };
 
   return {

@@ -3,6 +3,8 @@ import {
   asHtml,
   FakeElement,
   installFakeDom,
+  installFocusFakeDom,
+  ScrollerFakeElement,
 } from '../../shared/page/test-dom';
 import {
   comparePlacements,
@@ -149,5 +151,32 @@ describe('mountShell', () => {
 
     expect(swapped).toEqual(mine);
     expect(chromeLayouts(root)).toEqual(mine);
+  });
+
+  it('mountShell_SetLayoutThenDispose_KeepsEachAreaScroll', () => {
+    const doc = installFocusFakeDom(
+      (name, value) => vi.stubGlobal(name, value),
+      ScrollerFakeElement,
+    );
+    Object.assign(doc, {
+      documentElement: { style: { setProperty: () => undefined } },
+    });
+    const root = new ScrollerFakeElement('div');
+    const shell = mountShell(asHtml(root), defaultShellLayout);
+    const scrolled = { 'shell-side-bar': 120, 'shell-main': 45 };
+    const scrollTops = () =>
+      Object.keys(scrolled).map(
+        (className) => root.querySelector(`.${className}`)?.scrollTop,
+      );
+    for (const [className, scrollTop] of Object.entries(scrolled)) {
+      root.querySelector(`.${className}`)!.scrollTop = scrollTop;
+    }
+
+    const swap = shell.setLayout(defaultShellLayout);
+    const swapped = scrollTops();
+    swap.dispose();
+
+    expect(swapped).toEqual([120, 45]);
+    expect(scrollTops()).toEqual([120, 45]);
   });
 });

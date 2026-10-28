@@ -17,7 +17,7 @@ import { errorText } from '../shared/error-text';
 import { createEventBus } from '../shared/event-bus';
 import { editorBindMode } from '../shared/key-hints';
 import { requireUnambiguousEditorBinds } from '../shared/keymap-checks';
-import { createBaseKit } from '../shared/page/layout-host/base-kit';
+import type { BaseKitDeps } from '../shared/page/layout-host/base-kit';
 import { createPageLayouts } from '../shared/page/layout-host/show-layouts';
 import { startPlugins } from '../shared/plugin-host';
 import { posixPaths } from '../shared/paths/posix-paths';
@@ -41,7 +41,7 @@ import type { Layout as ChromeLayout } from './shell/layouts/layout';
 import { createModes, SIDE_BAR_OVER_QUERY } from './shell/modes';
 import { readShellLayout } from './shell/read-shell-layout';
 import { mountShell } from './shell/shell';
-import { createShellKit, mountShellChrome } from './shell/shell-chrome';
+import { mountShellChrome } from './shell/shell-chrome';
 import { defaultShellLayout } from './shell/shell-layout';
 import { createThemeApplier } from './theme';
 import { createToasts } from './toasts';
@@ -50,6 +50,9 @@ import { createPageUiState } from './ui-state';
 
 // The scope page keys fire in until a plugin sets one: only `any` binds match.
 const INITIAL_SCOPE = 'any';
+
+// The plugin whose exports anchor the shell chrome's key hints.
+const KEYS_PLUGIN_ID = 'keys';
 
 const timers: Timers = {
   set: (run, ms) => window.setTimeout(run, ms),
@@ -106,28 +109,17 @@ async function start() {
   const { areas } = shell;
   const commands = new CommandRegistry<PageCommandContext>();
   const markdown = createMarkdownItRenderer(createCodeMirrorHighlighter());
-  // The core binds no page key and cannot reach the keys plugin's exports
-  // before the plugins start, so the chrome's anchors draw nothing.
-  const chromeKit = createShellKit(
-    createBaseKit({
+  const chrome = mountShellChrome({
+    areas,
+    defaultLayout: defaultChromeLayout,
+    services: {
       markdown,
       platform: config.platform,
-      scope: null,
       commands: {
         exists: (id) => commands.has(id),
         run: (id) => commands.run(id, {}),
       },
-      commandNamed: () => null,
-      keys: {
-        anchor: () => ({ dispose: () => undefined }),
-        keysFor: () => null,
-      },
-    }),
-  );
-  const chrome = mountShellChrome({
-    areas,
-    defaultLayout: defaultChromeLayout,
-    kit: chromeKit,
+    },
     instance: config.appInstance,
     log,
   });
@@ -215,7 +207,7 @@ async function start() {
       shell.setChromeLayout(shown.user);
     },
   });
-  startPlugins(
+  const started = startPlugins(
     pageParts,
     (part, dependency) => {
       const { id } = part.manifest;
@@ -247,6 +239,10 @@ async function start() {
     },
     manifests,
   );
+  const keysExports = started.get(KEYS_PLUGIN_ID)?.exports;
+  if (keysExports !== undefined) {
+    chrome.setKeys(keysExports as BaseKitDeps['keys']);
+  }
   commands.requireRegistered(
     [...keymap.editor.binds, ...keymap.page].map((bind) => bind.command),
   );

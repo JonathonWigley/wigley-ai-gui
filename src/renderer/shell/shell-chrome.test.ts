@@ -7,23 +7,23 @@ import {
   type Mock,
   vi,
 } from 'vitest';
-import type {
-  Area,
-  Mode,
-  ModeHandle,
-  ShownLayouts,
-} from '../../contracts/plugin';
+import type { Area, Mode, ModeHandle } from '../../contracts/plugin';
 import type { ConfigProblem } from '../../contracts/settings';
-import { createBaseKit } from '../../shared/page/layout-host/base-kit';
+import {
+  recordingAnchors,
+  withUser,
+} from '../../shared/page/layout-host/test-layouts';
 import {
   asFake,
   asHtml,
   FakeElement,
-  installFakeDom,
+  type FocusFakeDocument,
+  FocusFakeElement,
+  installFocusFakeDom,
 } from '../../shared/page/test-dom';
 import defaultLayout from './layouts/default/layout.js';
 import type { Layout } from './layouts/layout';
-import { createShellKit, mountShellChrome } from './shell-chrome';
+import { mountShellChrome } from './shell-chrome';
 
 // An area that appends each contribution to `root`, its alignment as
 // `data-align`, in the order contributed.
@@ -39,21 +39,21 @@ function fakeArea() {
   return { area, root };
 }
 
-// A user layout `mine` that defines only `activityItem`.
+// The command the chrome's commands register, which `mine` hints.
+const REGISTERED = 'docs.openDoc';
+
+// A user layout `mine` that defines only `activityItem`, ending each item
+// with a hint for REGISTERED.
 const mine: Layout = {
   activityItem(parent, input, kit) {
-    return kit.el(parent, 'button', 'mine-item', input.title);
+    const item = kit.el(parent, 'button', 'mine-item', input.title);
+    kit.keyHint(item, REGISTERED);
+    return item;
   },
 };
 
-function shownMine(): ShownLayouts<Layout> {
-  return {
-    layouts: new Map<string, Layout>([
-      ['default', defaultLayout],
-      ['mine', mine],
-    ]),
-    user: 'mine',
-  };
+function shownMine() {
+  return withUser(defaultLayout, mine);
 }
 
 function mode(id: string, title: string): Mode {
@@ -82,31 +82,27 @@ function handle(): ModeHandle & { show: Mock<() => void> } {
 function mountChrome() {
   const titleBar = fakeArea();
   const activityBar = fakeArea();
-  const kit = createShellKit(
-    createBaseKit({
+  const chrome = mountShellChrome({
+    areas: { titleBar: titleBar.area, activityBar: activityBar.area },
+    defaultLayout,
+    services: {
       markdown: {
         block: (text) => text,
         inline: (text) => text,
         document: async (text) => text,
       },
-      keys: {
-        anchor: () => ({ dispose: () => undefined }),
-        keysFor: () => null,
-      },
-      commands: { exists: () => false, run: () => undefined },
-      scope: null,
-      commandNamed: () => null,
+      commands: { exists: (id) => id === REGISTERED, run: () => undefined },
       platform: 'macos',
-    }),
-  );
-  const chrome = mountShellChrome({
-    areas: { titleBar: titleBar.area, activityBar: activityBar.area },
-    defaultLayout,
-    kit,
+    },
     instance: { id: 'wigley-ai-gui-dev', displayName: 'Auri Dev', isDev: true },
     log: () => undefined,
   });
-  return { chrome, titleBar: titleBar.root, activityBar: activityBar.root };
+  return {
+    chrome,
+    titleBar: titleBar.area,
+    titleBarRoot: titleBar.root,
+    activityBar: activityBar.root,
+  };
 }
 
 // The part drawn in each slot of `area`, in slot order.
@@ -119,13 +115,16 @@ function slotAligned(area: FakeElement, align: string): FakeElement {
 }
 
 describe('mountShellChrome', () => {
-  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  let doc: FocusFakeDocument;
+  beforeEach(() => {
+    doc = installFocusFakeDom((name, value) => vi.stubGlobal(name, value));
+  });
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
   it('setLayouts_UserDefinesActivityItem_ItemsFromUserContextFromDefault', () => {
-    const { chrome, titleBar, activityBar } = mountChrome();
+    const { chrome, titleBarRoot: titleBar, activityBar } = mountChrome();
     chrome.addMode(mode('sessions', 'Sessions'), handle());
     chrome.addMode(mode('docs', 'Docs'), handle());
     chrome.showContext({ title: 'Docs', detail: 'AGENTS.md' });
@@ -148,22 +147,22 @@ describe('mountShellChrome', () => {
   });
 
   it('setLayouts_Redraw_KeepsSlotOrderShownMarkAndFocus', () => {
-    const { chrome, titleBar, activityBar } = mountChrome();
-    const main = fakeArea();
-    const focused = asHtml(new FakeElement('input'));
-    main.area.contribute(focused);
+    const { chrome, titleBar, titleBarRoot, activityBar } = mountChrome();
+    const focused = new FocusFakeElement('input');
+    titleBar.contribute(asHtml(focused), { align: 'end' });
+    focused.focus();
     chrome.addMode(mode('sessions', 'Sessions'), handle());
     chrome.addMode(mode('docs', 'Docs'), handle());
     chrome.showContext({ title: 'Sessions', detail: null });
     chrome.showProblems([{ file: 'settings.json', message: 'bad' }]);
     chrome.markMode('sessions');
-    const titleSlots = [...titleBar.children];
+    const titleChildren = [...titleBarRoot.children];
     const activitySlots = [...activityBar.children];
     const itemsBefore = parts(activityBar);
 
     chrome.setLayouts(shownMine());
 
-    expect(titleBar.children).toEqual(titleSlots);
+    expect(titleBarRoot.children).toEqual(titleChildren);
     expect(activityBar.children).toEqual(activitySlots);
     const items = parts(activityBar);
     expect(items[0]).not.toBe(itemsBefore[0]);
@@ -176,7 +175,30 @@ describe('mountShellChrome', () => {
       [true, 'true'],
       [false, undefined],
     ]);
-    expect(main.root.children).toEqual([asFake(focused)]);
+    expect(focused.parentNode).toBe(titleBarRoot);
+    expect(doc.activeElement).toBe(focused);
+  });
+
+  it('setKeys_UserItemHint_AnchorsTheRegisteredCommandAndDisposesTheLastDraw', () => {
+    const { chrome } = mountChrome();
+    chrome.addMode(mode('docs', 'Docs'), handle());
+    chrome.setLayouts(shownMine());
+    const first = recordingAnchors();
+    const second = recordingAnchors();
+
+    chrome.setKeys(first.keys);
+    chrome.setKeys(second.keys);
+
+    expect(
+      [...first.anchors, ...second.anchors].map((anchor) => [
+        anchor.command,
+        anchor.scope,
+        anchor.isDisposed,
+      ]),
+    ).toEqual([
+      [REGISTERED, undefined, true],
+      [REGISTERED, undefined, false],
+    ]);
   });
 
   it('activityItem_Click_ShowsItsMode', () => {
@@ -228,7 +250,7 @@ describe('mountShellChrome', () => {
   }[])(
     'showProblems_Counts_DefaultBadgeTextAndHidden: $case',
     ({ shows, text, title }) => {
-      const { chrome, titleBar } = mountChrome();
+      const { chrome, titleBarRoot: titleBar } = mountChrome();
 
       for (const problems of shows) {
         chrome.showProblems(problems);

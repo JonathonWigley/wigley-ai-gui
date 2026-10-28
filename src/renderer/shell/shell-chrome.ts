@@ -11,43 +11,62 @@ import type {
 } from '../../contracts/plugin';
 import type { ConfigProblem } from '../../contracts/settings';
 import { element } from '../../shared/page/dom';
-import { drawPart } from '../../shared/page/layout-host/draw-part';
-import type { BaseKit } from '../../shared/page/layout-host/kit';
-import { pickLayout } from '../../shared/page/layout-host/pick';
-import { icon } from '../../shared/page/ui/icon';
+import {
+  type BaseKitDeps,
+  createBaseKit,
+  type OwnerKitServices,
+} from '../../shared/page/layout-host/base-kit';
+import type { RollbackDeps } from '../../shared/page/layout-host/draw-part';
+import { createLayoutParts } from '../../shared/page/layout-host/layout-parts';
 import type { CompleteLayout, Layout, ShellKit } from './layouts/layout';
 
+// `services` are what the shell kit reads besides the keys.
 export interface ShellChromeDeps {
   areas: Pick<Record<AreaName, Area>, 'titleBar' | 'activityBar'>;
   defaultLayout: CompleteLayout;
-  kit: ShellKit;
+  services: Omit<OwnerKitServices, 'keys'>;
   instance: AppInstance;
   log: Log;
 }
+
+type ShellKeys = BaseKitDeps['keys'];
 
 // The chrome the core draws through the shell layout. `showContext` and
 // `showProblems` draw the title bar's context and config problems again for
 // a new value; `addMode` adds the mode's activity item, which shows the mode
 // on a click; `markMode` marks the shown mode's item, logging only when the
-// marked mode changed; `setLayouts` draws every part again with new layouts.
+// marked mode changed; `setLayouts` draws every part again with new layouts;
+// `setKeys` draws every part again with the keys plugin's keys.
 export interface ShellChrome {
   showContext(context: ModeContext | null): void;
   showProblems(problems: readonly ConfigProblem[]): void;
   addMode(mode: Mode, handle: ModeHandle): void;
   markMode(modeId: string): void;
   setLayouts(shown: ShownLayouts<Layout>): void;
+  setKeys(keys: ShellKeys): void;
 }
 
-// The shell kit over `base`: the base kit's parts and the Codicon.
-export function createShellKit(base: BaseKit): ShellKit {
-  return {
-    ...base,
-    icon(parent, name) {
-      const node = icon(name);
-      parent.append(node);
-      return node;
-    },
-  };
+// The keys before `setKeys`: no anchor draws and no command is bound.
+const NO_KEYS: ShellKeys = {
+  anchor: () => ({ dispose: () => undefined }),
+  keysFor: () => null,
+};
+
+// The shell kit of one drawing attempt. The shell owns no command, so a
+// command name is any plugin's qualified id, null while no plugin registers
+// it; anchors take no scope.
+function createShellKit(
+  services: Omit<OwnerKitServices, 'keys'>,
+  keys: ShellKeys,
+  rollback: Pick<RollbackDeps, 'recordAnchor'>,
+): ShellKit {
+  return createBaseKit({
+    ...services,
+    keys,
+    scope: null,
+    commandNamed: (name) => (services.commands.exists(name) ? name : null),
+    recordAnchor: (anchor) => rollback.recordAnchor(anchor),
+  });
 }
 
 // A part's place in its area: the app-owned `span.shell-part-slot`, which
@@ -71,16 +90,19 @@ const NO_DRAWN = () => undefined;
 // Contributes one slot per part, once: the context at the title bar's
 // centre, the Dev tag at its start in the dev app, the problems at its end,
 // and each mode's item to the activity bar in add order. Every part draws
-// with `default` until the first `setLayouts`. A redraw replaces only a
-// slot's children, so the modes, plugin contributions and focus stay. The
+// with `default` until the first `setLayouts`, and anchors no key until the
+// first `setKeys`. A redraw replaces only a slot's children, so the modes,
+// plugin contributions and focus stay. The
 // context slot hides while the context is null, and the problems slot while
 // the list is empty; neither draws a part then.
 export function mountShellChrome(deps: ShellChromeDeps): ShellChrome {
-  const { areas, defaultLayout, kit, log } = deps;
-  let shown: ShownLayouts<Layout> = {
-    layouts: new Map([['default', defaultLayout]]),
-    user: 'default',
-  };
+  const { areas, defaultLayout, services, log } = deps;
+  const parts = createLayoutParts<Layout, CompleteLayout>({
+    owner: 'shell',
+    defaultLayout,
+    log,
+  });
+  let keys = NO_KEYS;
   let context: ModeContext | null = null;
   let problems: readonly ConfigProblem[] = [];
   let markedId: string | null = null;
@@ -88,32 +110,27 @@ export function mountShellChrome(deps: ShellChromeDeps): ShellChrome {
 
   // Draws the part `partName` into `slot`, its children replaced, with the
   // first layout that defines it among the user's and `default`.
-  const drawSlot = <K extends keyof Layout>(
+  const drawSlot = <K extends keyof CompleteLayout & string>(
     slot: Slot,
     partName: K,
     build: (
-      builder: NonNullable<Layout[K]>,
+      builder: CompleteLayout[K],
       parent: HTMLElement,
+      kit: ShellKit,
     ) => HTMLElement,
   ): HTMLElement => {
     clearSlot(slot);
-    const pick = pickLayout(
-      [shown.user],
-      shown.layouts,
-      (layout) => layout[partName] !== undefined,
-    );
-    const drawn = drawPart({
-      owner: 'shell',
-      parent: slot.element,
-      pick,
-      defaultLayout,
-      part: (layout: Layout) =>
-        layout[partName] as NonNullable<Layout[K]> | undefined,
-      build: (builder, parent) => ({ element: build(builder, parent) }),
-      log,
-      logSource: 'shell',
+    const drawn = parts.draw(
       partName,
-    });
+      slot.element,
+      (builder, parent, rollback) => ({
+        element: build(
+          builder,
+          parent,
+          createShellKit(services, keys, rollback),
+        ),
+      }),
+    );
     slot.disposeDrawn = drawn.dispose;
     return drawn.built.element;
   };
@@ -126,7 +143,7 @@ export function mountShellChrome(deps: ShellChromeDeps): ShellChrome {
       return;
     }
     const input = { title: context.title, detail: context.detail };
-    drawSlot(contextSlot, 'titleContext', (builder, parent) =>
+    drawSlot(contextSlot, 'titleContext', (builder, parent, kit) =>
       builder(parent, input, kit),
     );
   };
@@ -136,7 +153,9 @@ export function mountShellChrome(deps: ShellChromeDeps): ShellChrome {
     : null;
   const drawDevTag = () => {
     if (devSlot !== null) {
-      drawSlot(devSlot, 'devTag', (builder, parent) => builder(parent, kit));
+      drawSlot(devSlot, 'devTag', (builder, parent, kit) =>
+        builder(parent, kit),
+      );
     }
   };
 
@@ -148,7 +167,7 @@ export function mountShellChrome(deps: ShellChromeDeps): ShellChrome {
       return;
     }
     const input = { problems };
-    drawSlot(problemsSlot, 'configProblems', (builder, parent) =>
+    drawSlot(problemsSlot, 'configProblems', (builder, parent, kit) =>
       builder(parent, input, kit),
     );
   };
@@ -166,7 +185,7 @@ export function mountShellChrome(deps: ShellChromeDeps): ShellChrome {
   const drawItem = (item: ModeItem) => {
     const { mode } = item;
     const input = { id: mode.id, title: mode.title, icon: mode.icon };
-    const root = drawSlot(item.slot, 'activityItem', (builder, parent) =>
+    const root = drawSlot(item.slot, 'activityItem', (builder, parent, kit) =>
       builder(parent, input, kit),
     );
     root.addEventListener('click', () => item.handle.show());
@@ -174,9 +193,16 @@ export function mountShellChrome(deps: ShellChromeDeps): ShellChrome {
     applyMark(item);
   };
 
-  drawContext();
-  drawDevTag();
-  drawProblems();
+  const drawAll = () => {
+    drawContext();
+    drawDevTag();
+    drawProblems();
+    for (const item of items.values()) {
+      drawItem(item);
+    }
+  };
+
+  drawAll();
 
   return {
     showContext(next) {
@@ -209,13 +235,12 @@ export function mountShellChrome(deps: ShellChromeDeps): ShellChrome {
       }
     },
     setLayouts(next) {
-      shown = next;
-      drawContext();
-      drawDevTag();
-      drawProblems();
-      for (const item of items.values()) {
-        drawItem(item);
-      }
+      parts.setLayouts(next);
+      drawAll();
+    },
+    setKeys(next) {
+      keys = next;
+      drawAll();
     },
   };
 }
