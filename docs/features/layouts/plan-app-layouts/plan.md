@@ -317,5 +317,6 @@ Review base: efe64ec38d6a802e539ab917ad27c20037a321ae
 - preview snapshots are a shallow { ...state }, not chat-sessions' private copyState — chat-sessions.ts outside Files — a nested mutation could leak between snapshots · group 15 · group 15
 - followups hot-reload entry narrowed to forms, not removed — forms rebuild still remounts every box and LayoutSet.changed is unread — none · group 16 · group 16
 ### Review rounds
+- Round 1 at 0175fae: 16 lanes, NEEDS FIXES — 74 caused (16 important, 58 minor, 0 critical), 5 pre-existing; report scratchpad review-0175fae….md. User standing instruction: take every recommendation (no triage round).
 ### Test gate
 - full vitest suite (3877 tests, 7s — every module the range touches, cheaper whole than picked) and npm run selftest (every owner's self-test groups, the layout previews and the placement check) · PASS: 3877/3877, selftest all passed, every key placed, at 1237045
