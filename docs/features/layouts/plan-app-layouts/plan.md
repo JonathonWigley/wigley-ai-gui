@@ -318,5 +318,6 @@ Review base: efe64ec38d6a802e539ab917ad27c20037a321ae
 - followups hot-reload entry narrowed to forms, not removed — forms rebuild still remounts every box and LayoutSet.changed is unread — none · group 16 · group 16
 ### Review rounds
 - Round 1 at 0175fae: 16 lanes, NEEDS FIXES — 74 caused (16 important, 58 minor, 0 critical), 5 pre-existing; report scratchpad review-0175fae….md. User standing instruction: take every recommendation (no triage round).
+- Round 2 (re-review of fix range 0175fae..3d0ed9d, 6 correctness lanes + live drive): NEEDS FIXES — 1 important (primer step-key stack breaks chevron hiding), 2 drive FAILs (chat end-session confirm spacing; primer 160px count/Review wrap), CSP blocks layout JSON, ~15 minor doc/style/test items, 1 repeat (#30 chat toast, stepped back to toast from the final draw outcome). Every round-1 finding closed. Report scratchpad review-3d0ed9d.md.
 ### Test gate
 - full vitest suite (3877 tests, 7s — every module the range touches, cheaper whole than picked) and npm run selftest (every owner's self-test groups, the layout previews and the placement check) · PASS: 3877/3877, selftest all passed, every key placed, at 1237045
