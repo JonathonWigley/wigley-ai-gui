@@ -470,7 +470,7 @@ export function cardRow(primer: OpenPrimer): PrimerRow;
 - [x] [Resize commands, plugin API and side bar](02-resize-commands.md) — after 01
 
 ### Wave 3
-- [ ] [Primer columns](03-primer-columns.md) — after 01, 02
+- [x] [Primer columns](03-primer-columns.md) — after 01, 02
 - [x] [Views set the resize target](04-views-resize-target.md) — after 01, 02
 
 ### Wave 4
@@ -502,6 +502,7 @@ Review base: 5997110
 - 01 · c174a1a · diff read: every Produces present in panes.ts, split-width.ts, split.ts; typecheck and lint pass; 7 changed test files pass (worker) · concerns: a right nudge on a stored width wider than the window snaps it to span - endMin and writes it; a nudge during a drag is not blocked
 - 02 · fe29dbe · diff read: PageApi.panes, ScopeStack.onBaseChange, createPaneResize, Shell.sideBarDivider/setKeys/dispose, mountShell(root, layout, uiState, timers), four coreCommands and two binds present; typecheck passes; worker: lint, 167 tests in 9 files, selftest pass · concerns: the side bar laid over draws its stored width unclamped, so a stored width wider than a narrow window runs past its edge; the forms self-test resize steps nudge the side bar until 04 sets the forms split as target
 - 04 · 2694625 · diff read: RoundView.resizeTarget, setResizeTarget deps in forms/backlog, docs and gallery wiring present; worker typecheck and lint pass, 22 tests in 3 files; lead typecheck deferred to after 03 lands (03 mid-edit in tree) · concerns: forms Form tab shown can set null for a moment before the round view exists, then confirm.setBaseScope sets the split; task doc's askCancel row did not hold (askCancel only from review), test dispatches openReview first; forms-view deps comment has an over-long line
+- 03 · 1245740 · diff read: PrimerPane, PrimerColumn, TaskRow, PrimerRow, cardRow, selectTask/selectItem, focusTasks/focusItems, tasks/items scopes, TasksKit/ItemsKit/ItemsInput, setResizeTarget wiring, rail width migration present; no rail names left in src/plugins/primer or keymap; lead typecheck and lint pass on the whole tree with 04; worker: full suite 4083 pass, selftest pass · concerns: a step from an add-item box now moves through the tasks column, since showTarget for a newItem target shows the card from the tasks column (test 'steps rows from a box' re-pinned to 'selected task s1')
 ### Contract changes
 ### Rulings
 - dispose mid-drag ends the drag through endDrag, which writes a changed dragged width — the decision names the endDrag path — a dropped split may store an unreleased width (harmless) · group 01
@@ -512,5 +513,9 @@ Review base: 5997110
 - gallery resizeTarget() returns non-null and throws 'the gallery drew no split sample' when none was drawn — createGalleryView draws before returning, so unreachable — a deferred first draw would throw in Gallery shown instead of falling back to the side bar · group 04
 - kept lifted from sectionSpecs into createGalleryView as KeptSplit, passed to sectionSpecs — one copy — rename only · group 04
 - forms setBaseScope takes the FormsState, not the view — needs activeForm — none · group 04
+- primerColumnBinds(scope) helper beside primerScrollBinds, spread into primer.tasks and primer.items — the two columns share every row bind — inline rows are mechanical if wanted · group 03
+- outer end pane styled as .primer-tab .primer-form > .ui-split-end { overflow: hidden }, inner split .primer-inner { height: 100% } — no class pinned by the plan — a nested scroll or height bug shows only in the running app · group 03
+- columns scroll into view only when their selection name changes — a redraw that keeps the selection does not scroll — a row selected by a path keeping the name may not scroll · group 03
+- focusCard keeps today's handler (no add-item commit, no box leave); focusTasks/focusItems commit and leave as focusRail did — decision 12 names only those two — one line and one test row · group 03
 ### Review rounds
 ### Test gate

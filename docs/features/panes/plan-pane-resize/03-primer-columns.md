@@ -1,6 +1,6 @@
 # 03 — Primer columns: tasks | (items | card)
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 01, 02
 Plan: [plan.md](plan.md)
@@ -398,3 +398,4 @@ One commit for the group.
 
 ## Proof
 
+Commit 1245740 · proof: diff read: PrimerPane, PrimerColumn, TaskRow, PrimerRow, cardRow, selectTask/selectItem, focusTasks/focusItems, tasks/items scopes, TasksKit/ItemsKit/ItemsInput, setResizeTarget wiring, rail width migration present; no rail names left in src/plugins/primer or keymap; lead typecheck and lint pass on the whole tree with 04; worker: full suite 4083 pass, selftest pass · concerns: a step from an add-item box now moves through the tasks column, since showTarget for a newItem target shows the card from the tasks column (test 'steps rows from a box' re-pinned to 'selected task s1')
