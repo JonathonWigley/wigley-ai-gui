@@ -1,6 +1,7 @@
 import type { Disposable } from '../../../contracts/disposable';
 import type { LayoutOwner } from '../../../contracts/layouts';
 import type { Log } from '../../../contracts/log';
+import { callEach } from '../../call-each';
 import { errorText } from '../../error-text';
 
 // The layout picked to draw a part, and its name.
@@ -180,17 +181,7 @@ function createRecorder(): { rollback: RollbackDeps; dispose(): void } {
       ];
       boxes = [];
       anchors = [];
-      const errors: unknown[] = [];
-      for (const undo of undos) {
-        try {
-          undo();
-        } catch (error) {
-          errors.push(error);
-        }
-      }
-      if (errors.length > 0) {
-        throw errors[0];
-      }
+      callEach(undos, (undo) => undo());
     },
   };
 }

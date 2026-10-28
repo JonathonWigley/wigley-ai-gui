@@ -7,6 +7,7 @@ import type {
   QualifiedEvents,
   ShownLayouts,
 } from '../../../contracts/plugin';
+import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import {
   createBaseKit,
@@ -35,7 +36,6 @@ import type { Layout } from '../layouts/layout';
 import { docsManifest } from '../manifest';
 import { type DocChangeRecord, UNSAVED_TEXT } from './docs-state';
 import {
-  callEach,
   createDocsView,
   type DocsView,
   type DocsViewCommands,

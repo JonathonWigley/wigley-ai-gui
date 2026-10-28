@@ -5,8 +5,9 @@
 }
 
 /* A chevron beside a hidden anchor, or beside a key stack none of whose
-   shown anchors holds a prompt, hides and keeps its space. `:has()` cannot nest inside
-   `:has()`, so a chevron before a stack tests it with `:not(:has(...))`. */
+   shown anchors holds a prompt, hides and keeps its space. `:has()` cannot
+   nest inside `:has()`, so a chevron before a stack tests it with
+   `:not(:has(...))`. */
 .ui-key-chevron:has(+ .is-hint-hidden),
 .is-hint-hidden + .ui-key-chevron,
 .ui-key-chevron:has(+ .ui-key-stack):not(

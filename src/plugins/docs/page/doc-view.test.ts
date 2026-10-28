@@ -96,7 +96,7 @@ function docViewOver(
     parts,
     openChanged: () => undefined,
   } as unknown as DocViewDeps;
-  return { view: createDocView(deps), editors };
+  return { view: createDocView(deps), editors, deps };
 }
 
 function target(entryId: string | null): DocTarget {
@@ -205,14 +205,15 @@ describe('createDocView', () => {
   });
 
   it.each([
-    ['quit', 'File'],
-    ['writeQuit', 'File'],
-    ['quit', 'Detail'],
-    ['writeQuit', 'Detail'],
+    ['quit', 'File', 'Renders'],
+    ['writeQuit', 'File', 'Renders'],
+    ['quit', 'Detail', 'Renders'],
+    ['writeQuit', 'Detail', 'Renders'],
+    ['quit', 'File', 'FailsToRender'],
   ] as const)(
-    '%s_AfterEditFromAScrolled%s_ShowsItAtThatScroll',
-    async (command, shows) => {
-      const { view, editors } = docViewOver(() =>
+    '%s_AfterEditFromAScrolled%sThat%s_ShowsItAtThatScroll',
+    async (command, shows, render) => {
+      const { view, editors, deps } = docViewOver(() =>
         withUser(defaultLayout, paneLayout('pane')),
       );
       await view.open(
@@ -224,6 +225,12 @@ describe('createDocView', () => {
       pane.scrollTop = 120;
       view.edit(1);
       await settled();
+      pane.scrollTop = 0;
+      if (render === 'FailsToRender') {
+        deps.markdown.document = async () => {
+          throw new Error('render broke');
+        };
+      }
 
       if (command === 'quit') {
         editors[0].events.quit(false);

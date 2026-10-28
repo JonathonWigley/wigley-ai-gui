@@ -9,6 +9,7 @@ import type {
   ShownLayouts,
   ToastTone,
 } from '../../../contracts/plugin';
+import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import type { RollbackDeps } from '../../../shared/page/layout-host/draw-part';
 import type { BaseKit } from '../../../shared/page/layout-host/kit';
@@ -243,25 +244,6 @@ function hookLine(text: string, command: string): number {
   const written = JSON.stringify(command).slice(1, -1);
   const index = text.split('\n').findIndex((line) => line.includes(written));
   return index === -1 ? 1 : index + 1;
-}
-
-// Calls `call` on each of `items`, a throw not skipping the rest, and throws
-// the first error once every call has run.
-export function callEach<T>(
-  items: readonly T[],
-  call: (item: T) => void,
-): void {
-  const errors: unknown[] = [];
-  for (const item of items) {
-    try {
-      call(item);
-    } catch (error) {
-      errors.push(error);
-    }
-  }
-  if (errors.length > 0) {
-    throw errors[0];
-  }
 }
 
 interface AppliedChange {

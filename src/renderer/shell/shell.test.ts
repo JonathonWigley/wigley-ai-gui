@@ -185,19 +185,28 @@ describe('mountShell', () => {
   it.each([
     {
       row: 'offsets inside both ranges',
+      sideBarRanges: { first: 248, swapped: 240 },
       scrolled: { sideBar: 120, main: 45 },
       swapped: [120, 45],
       restored: [120, 45],
     },
     {
       row: 'the side bar at its end',
+      sideBarRanges: { first: 248, swapped: 240 },
       scrolled: { sideBar: 248, main: 45 },
       swapped: [240, 45],
       restored: [248, 45],
     },
+    {
+      row: 'a side bar with no range at the top',
+      sideBarRanges: { first: 0, swapped: 240 },
+      scrolled: { sideBar: 0, main: 45 },
+      swapped: [0, 45],
+      restored: [0, 45],
+    },
   ])(
     'mountShell_SetLayoutThenDispose_KeepsEachAreaScroll: $row',
-    ({ scrolled, swapped, restored }) => {
+    ({ sideBarRanges, scrolled, swapped, restored }) => {
       const doc = installFocusFakeDom(
         (name, value) => vi.stubGlobal(name, value),
         ScrollerFakeElement,
@@ -208,7 +217,7 @@ describe('mountShell', () => {
       const root = new ScrollerFakeElement('div');
       const shell = mountShell(
         asHtml(root),
-        rangedLayout({ sideBar: 248, main: 400 }),
+        rangedLayout({ sideBar: sideBarRanges.first, main: 400 }),
       );
       const scrollTops = () =>
         ['shell-side-bar', 'shell-main'].map(
@@ -217,7 +226,9 @@ describe('mountShell', () => {
       root.querySelector('.shell-side-bar')!.scrollTop = scrolled.sideBar;
       root.querySelector('.shell-main')!.scrollTop = scrolled.main;
 
-      const swap = shell.setLayout(rangedLayout({ sideBar: 240, main: 400 }));
+      const swap = shell.setLayout(
+        rangedLayout({ sideBar: sideBarRanges.swapped, main: 400 }),
+      );
       const swappedTops = scrollTops();
       swap.dispose();
 

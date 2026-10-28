@@ -1,5 +1,6 @@
 import './keys.css';
 import type { PageApi, PagePart, PushedScope } from '../../../contracts/plugin';
+import { callEach } from '../../../shared/call-each';
 import { element } from '../../../shared/page/dom';
 import { PLACEMENT_CHECK_EVENT } from '../../../shared/placement-check';
 import { qualify } from '../../../shared/plugin-manifests';
@@ -125,12 +126,17 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
       userLayout: () => api.settings().layout,
       setLayouts(shown) {
         parts.setLayouts(shown);
-        try {
-          keysButton.dispose();
-          keysButton = parts.titleBarButton(keysButtonSlot);
-        } finally {
-          help.layoutsChanged();
-        }
+        const lastKeysButton = keysButton;
+        callEach<() => void>(
+          [
+            () => lastKeysButton.dispose(),
+            () => {
+              keysButton = parts.titleBarButton(keysButtonSlot);
+            },
+            () => help.layoutsChanged(),
+          ],
+          (step) => step(),
+        );
       },
     });
 

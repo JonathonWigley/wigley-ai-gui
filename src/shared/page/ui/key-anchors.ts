@@ -35,8 +35,8 @@ export function disposeAnchors(anchors: Disposable[]): void {
 }
 
 // A `span.ui-key-chevron` reading `text` (`‹ › ▲ ▼ ◂ ▸`, with words after or
-// before it), placed beside an anchor element; it hides and shows with that
-// anchor.
+// before it), placed beside an anchor element or a key stack; it hides beside
+// a hidden anchor, or a key stack none of whose shown anchors holds a prompt.
 export function keyChevron(text: string): HTMLElement {
   return element('span', 'ui-key-chevron', text);
 }

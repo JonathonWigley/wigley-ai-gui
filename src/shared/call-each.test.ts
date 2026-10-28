@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { callEach } from './docs-view';
+import { callEach } from './call-each';
 
 describe('callEach', () => {
   it('callEach_TwoItemsThrow_CallsEveryItemAndThrowsTheFirstError', () => {
