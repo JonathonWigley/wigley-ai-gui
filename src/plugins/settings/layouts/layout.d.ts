@@ -6,12 +6,15 @@ import type {
 // The row options, for a layout's JSDoc to import from here.
 export type { KitRowOptions };
 
-// Settings mode's layout contract. Every part appends its root element to `parent` and returns it; the app sets
-// `data-layout="<name>"` and `data-layout-owner="settings"` on that root. The app keeps the reads and writes, the
-// cursor (`is-selected`, `is-cursor`, `is-pane-inactive`), the keys, the scrolling, the filter box, a row's open box
-// and the list picker's panel.
+// Settings mode's layout contract. Every part appends its root element to `parent`; a pane part returns
+// `{ element }` holding it, every other part returns it. The app sets `data-layout="<name>"` and
+// `data-layout-owner="settings"` on that root. The app keeps the reads and writes, the cursor (`is-selected`,
+// `is-cursor`, `is-pane-inactive`), the keys, the scrolling, the filter box, a row's open box and the list picker's
+// panel.
 
-// What a pane part returns: its root element.
+// What a pane part returns: its root element. The root sits in the app's container, a flex column; `default`'s is
+// `div.settings-pane`, which draws no box (`display: contents`), so its parts lay out as the container's children. A
+// user pane root takes that class for the same flow.
 export interface SettingsPane {
   element: HTMLElement;
 }
@@ -86,22 +89,12 @@ export interface PickerRowInput {
   label: string;
 }
 
-// The settings parts every kit holds, beside the base kit's.
-export interface SettingsKit extends BaseKit {
-  // `span.ui-row-trailing`, appended to `row`.
-  rowTrailing(row: HTMLElement): HTMLElement;
-  // `span.ui-key-edge.settings-edge.settings-edge--<side>`: a focus move's keys for the settings `command`. `end`
-  // draws `<keys> <label> ›`, `start` draws `‹ <label> <keys>`.
-  edgePrompt(
-    parent: HTMLElement,
-    side: 'start' | 'end',
-    command: string,
-    label: string,
-  ): HTMLElement;
-}
+// The kit every settings part draws with: the base kit, naming settings' commands by their short names. `default`
+// adds `settings-edge settings-edge--<side>` to each `edge` it draws.
+export interface SettingsKit extends BaseKit {}
 
 // Slots: each appends an element the app fills and returns it. A slot the part leaves out, the app appends at the end
-// of the part's root.
+// of the part's root; a slot called twice fails the part.
 
 export interface SectionsKit extends SettingsKit {
   // `ol.settings-section-rows`: the app replaces its children with a `sectionRow` per section on each draw.
@@ -121,17 +114,17 @@ export interface RowsKit extends SettingsKit {
   rowList(parent: HTMLElement): HTMLElement;
 }
 export interface RowKit extends SettingsKit {
-  // A `span` the app fills with the cursor prompt (`span.settings-row-actions`) while the row is the cursor row. Left
-  // out: the prompt goes at the end of the row's root.
+  // `span.settings-row-actions-slot`, which draws no box (`display: contents`): the app fills it with the cursor
+  // prompt (`span.settings-row-actions`) while the row is the cursor row.
   rowActions(parent: HTMLElement): HTMLElement;
-  // A `div` the app fills with the row's open box. Left out: the box goes at the end of the row's root.
+  // A `div` the app fills with the row's open box.
   box(parent: HTMLElement): HTMLElement;
 }
 export interface PickerRowKit extends SettingsKit {
   // The app's element for the end of the cursor row, or null on every other row; pass it as
-  // `KitRowOptions.trailing`. One the part leaves out, the app appends in a `rowTrailing` at the end of the row's
-  // root. The picker sets `title`, `is-selected`, `is-cursor` and the click on the root, so the row takes no
-  // `onClick`.
+  // `KitRowOptions.trailing`. One the row's root does not hold, the app appends in a `rowTrailing` at the end of the
+  // root. The picker sets `title`, `is-selected`, `is-cursor`, `ui-row--action`, a mousedown that takes no focus and
+  // the click on the root, so the row takes no `onClick`.
   trailing(): HTMLElement | null;
 }
 
@@ -143,7 +136,8 @@ export interface SettingsLayout {
   sections?(parent: HTMLElement, kit: SectionsKit): SettingsPane;
   // The open section, drawn into the rows sheet once per layout set and per opened section.
   rows?(parent: HTMLElement, input: RowsInput, kit: RowsKit): SettingsPane;
-  // One per section, into `sectionRows`, on each draw of the side bar.
+  // One per section, into `sectionRows`, on each draw of the side bar. The app adds `ui-row--action`, a mousedown that
+  // takes no focus and the click that opens the section to its root, so the row takes no `onClick`.
   sectionRow?(
     parent: HTMLElement,
     input: SectionRowInput,
@@ -192,44 +186,4 @@ export interface SettingsLayout {
 }
 
 // The built-in `default` layout, which defines every part.
-export interface CompleteSettingsLayout extends SettingsLayout {
-  sections(parent: HTMLElement, kit: SectionsKit): SettingsPane;
-  rows(parent: HTMLElement, input: RowsInput, kit: RowsKit): SettingsPane;
-  sectionRow(
-    parent: HTMLElement,
-    input: SectionRowInput,
-    kit: SettingsKit,
-  ): HTMLElement;
-  settingRow(
-    parent: HTMLElement,
-    input: SettingRowInput,
-    kit: RowKit,
-  ): HTMLElement;
-  keyRow(parent: HTMLElement, input: KeyRowInput, kit: RowKit): HTMLElement;
-  leaderRow(
-    parent: HTMLElement,
-    input: LeaderRowInput,
-    kit: RowKit,
-  ): HTMLElement;
-  advancedRow(
-    parent: HTMLElement,
-    input: AdvancedRowInput,
-    kit: RowKit,
-  ): HTMLElement;
-  groupHeader(
-    parent: HTMLElement,
-    input: GroupHeaderInput,
-    kit: SettingsKit,
-  ): HTMLElement;
-  empty(parent: HTMLElement, input: EmptyInput, kit: SettingsKit): HTMLElement;
-  problem(
-    parent: HTMLElement,
-    input: ProblemInput,
-    kit: SettingsKit,
-  ): HTMLElement;
-  pickerRow(
-    parent: HTMLElement,
-    input: PickerRowInput,
-    kit: PickerRowKit,
-  ): HTMLElement;
-}
+export interface CompleteSettingsLayout extends Required<SettingsLayout> {}

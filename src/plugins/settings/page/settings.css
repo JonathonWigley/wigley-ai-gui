@@ -14,6 +14,14 @@
   flex: 1 0 auto;
 }
 
+/* The default pane roots and the row's cursor prompt slot draw no box of
+   their own: a pane's parts lay out as its container's children, and an
+   empty prompt slot adds no gap to its row's line. */
+.settings-pane,
+.settings-row-actions-slot {
+  display: contents;
+}
+
 /* An edge prompt: a focus move's keys beside the chevron toward the pane it
    moves to. */
 .settings-edge {

@@ -6,66 +6,21 @@ import type {
   UserConfigSchema,
 } from '../../../contracts/user-config';
 import {
+  recordingAnchors,
+  withUser,
+} from '../../../shared/page/layout-host/test-layouts';
+import {
   asFake,
-  FakeElement,
+  type FakeElement,
+  type FocusFakeDocument,
+  type FocusFakeElement,
   findAll,
-  installFakeDom,
+  installFocusFakeDom,
 } from '../../../shared/page/test-dom';
 import type { SettingsChannel } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type { SettingsLayout } from '../layouts/layout';
 import { createSettingsView, type SettingsView } from './settings-view';
-
-// The fake DOM of `test-dom` with what the view's focus and boxes use: an
-// `activeElement` that `focus` sets and that leaves an element as it or an
-// ancestor is removed (as a browser blurs a detached element), an input's
-// value and selection, and `prepend`.
-class FocusFakeElement extends FakeElement {
-  value = '';
-  selectionStart: number | null = null;
-  selectionEnd: number | null = null;
-  selectionDirection: string | null = null;
-
-  focus() {
-    fakeDocument().activeElement = this;
-  }
-
-  blur() {
-    if (fakeDocument().activeElement === this) {
-      fakeDocument().activeElement = null;
-    }
-  }
-
-  select() {}
-
-  setSelectionRange(start: number, end: number) {
-    this.selectionStart = start;
-    this.selectionEnd = end;
-  }
-
-  prepend(node: FakeElement) {
-    node.remove();
-    node.parentNode = this;
-    this.childNodes.unshift(node);
-  }
-
-  override remove() {
-    const doc = fakeDocument();
-    if (doc.activeElement !== null && this.contains(doc.activeElement)) {
-      doc.activeElement = null;
-    }
-    super.remove();
-  }
-}
-
-interface FakeDocument {
-  activeElement: FakeElement | null;
-  createElement(tag: string): FakeElement;
-}
-
-function fakeDocument(): FakeDocument {
-  return (globalThis as unknown as { document: FakeDocument }).document;
-}
 
 // One plugin section: a string leaf, then a choice leaf defaulting to `a`.
 const SCHEMA: UserConfigSchema = {
@@ -127,11 +82,13 @@ function fakeChannel() {
 }
 
 // A view over the fake channel, shown with its first section open and focus
-// on the rows, and the overlay its picker draws in.
+// on the rows, the overlay its picker draws in, and every anchor its layout
+// parts named.
 async function shownView() {
   const { channel, written } = fakeChannel();
-  const overlay = new FocusFakeElement('div');
+  const overlay = asFake(document.createElement('div'));
   const anchor = () => ({ dispose: () => undefined });
+  const { anchors, keys } = recordingAnchors();
   const view = createSettingsView({
     channel,
     editor: {} as EditorHost,
@@ -141,7 +98,7 @@ async function shownView() {
       inline: (text) => text,
       document: async (text) => text,
     },
-    keys: { anchor, keysFor: () => null },
+    keys,
     commands: { exists: () => true, run: () => undefined },
     log: () => undefined,
     toast: () => undefined,
@@ -158,7 +115,7 @@ async function shownView() {
   await view.load();
   view.shown();
   view.commands.focusRows();
-  return { view, overlay, written, sheet: asFake(view.sheet) };
+  return { view, overlay, written, anchors, sheet: asFake(view.sheet) };
 }
 
 // Lets the row actions, which read the files first, run.
@@ -167,13 +124,7 @@ async function settle() {
 }
 
 function setUserLayout(view: SettingsView, layout: SettingsLayout) {
-  view.setLayouts({
-    layouts: new Map<string, SettingsLayout>([
-      ['default', defaultLayout],
-      ['mine', layout],
-    ]),
-    user: 'mine',
-  });
+  view.setLayouts(withUser<SettingsLayout>(defaultLayout, layout));
 }
 
 function only(root: FakeElement, className: string): FakeElement {
@@ -184,12 +135,12 @@ function only(root: FakeElement, className: string): FakeElement {
 }
 
 describe('createSettingsView', () => {
+  let fakeDocument: FocusFakeDocument;
+
   beforeEach(() => {
-    installFakeDom((name, value) => vi.stubGlobal(name, value));
-    vi.stubGlobal('document', {
-      activeElement: null,
-      createElement: (tag: string) => new FocusFakeElement(tag),
-    });
+    fakeDocument = installFocusFakeDom((name, value) =>
+      vi.stubGlobal(name, value),
+    );
   });
 
   afterEach(() => {
@@ -216,7 +167,7 @@ describe('createSettingsView', () => {
     expect(row.dataset.layout).toBe('mine');
     expect(box.parentNode).toBe(only(row, 'mine-box'));
     expect(input.value).toBe('typed');
-    expect(fakeDocument().activeElement).toBe(input);
+    expect(fakeDocument.activeElement).toBe(input);
   });
 
   it('a row that leaves out its slots still gets the prompt and the box', async () => {
@@ -227,12 +178,12 @@ describe('createSettingsView', () => {
     });
 
     const row = findAll(sheet, 'bare-row')[0];
-    expect(only(sheet, 'settings-row-actions').parentNode).toBe(row);
+    expect(row.contains(only(sheet, 'settings-row-actions'))).toBe(true);
 
     view.commands.edit();
     await settle();
 
-    expect(only(sheet, 'settings-box').parentNode).toBe(row);
+    expect(row.contains(only(sheet, 'settings-box'))).toBe(true);
   });
 
   it("the picker's rows draw through pickerRow and redraw on a reload", async () => {
@@ -265,5 +216,26 @@ describe('createSettingsView', () => {
     await settle();
 
     expect(written).toEqual([{ p: { mode: 'b' } }]);
+  });
+
+  it("a picker row's anchors are disposed as the picker closes", async () => {
+    const { view, anchors } = await shownView();
+    setUserLayout(view, {
+      pickerRow(parent, input, kit) {
+        const row = kit.el(parent, 'li', 'mine-pick', input.label);
+        kit.keyHint(row, 'pickerChoose');
+        return row;
+      },
+    });
+    view.commands.down();
+    view.commands.edit();
+    await settle();
+    const rowAnchors = () =>
+      anchors.filter((anchor) => anchor.command === 'settings.pickerChoose');
+    expect(rowAnchors().length).toBeGreaterThan(0);
+
+    view.commands.pickerCancel();
+
+    expect(rowAnchors().every((anchor) => anchor.isDisposed)).toBe(true);
   });
 });

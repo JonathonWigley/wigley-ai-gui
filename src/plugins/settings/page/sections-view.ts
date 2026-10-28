@@ -1,5 +1,6 @@
 import { element } from '../../../shared/page/dom';
 import type { DrawnPart } from '../../../shared/page/layout-host/draw-part';
+import { rowAction } from '../../../shared/page/ui/row';
 
 export interface SectionItem {
   id: string;
@@ -34,7 +35,6 @@ export interface SectionsView {
     hasFocus: boolean,
   ): void;
   redrawPane(): void;
-  dispose(): void;
 }
 
 export function createSectionsView(deps: SectionsViewDeps): SectionsView {
@@ -51,12 +51,6 @@ export function createSectionsView(deps: SectionsViewDeps): SectionsView {
     }
   };
 
-  const disposePane = () => {
-    disposeRows();
-    pane.dispose();
-    pane.built.element.remove();
-  };
-
   return {
     element: container,
     draw(sections, cursor, openId, hasFocus) {
@@ -67,17 +61,16 @@ export function createSectionsView(deps: SectionsViewDeps): SectionsView {
         const drawn = deps.drawRow(list, section);
         rowDisposes.push(drawn.dispose);
         const item = drawn.built.element;
-        item.classList.add('ui-row--action');
-        item.addEventListener('mousedown', (event) => event.preventDefault());
-        item.addEventListener('click', () => deps.clicked(index));
+        rowAction(item, () => deps.clicked(index));
         item.classList.toggle('is-selected', section.id === openId);
         item.classList.toggle('is-cursor', hasFocus && index === cursor);
       });
     },
     redrawPane() {
-      disposePane();
+      disposeRows();
+      pane.dispose();
+      pane.built.element.remove();
       pane = deps.drawPane(container);
     },
-    dispose: disposePane,
   };
 }

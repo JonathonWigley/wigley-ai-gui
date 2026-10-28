@@ -1,9 +1,9 @@
 // @ts-check
 
 // The built-in Settings mode look. Every pane and row appends its root to
-// `parent` first and returns it. A pane's root draws no box of its own
-// (`display: contents`), so its parts lay out in the app's container as the
-// container's own children.
+// `parent` first. A pane's root is `div.settings-pane`, which draws no box of
+// its own, so its parts lay out in the app's container as the container's own
+// children.
 
 /**
  * A setting, key, leader or advanced row: the label and its end on the first
@@ -38,30 +38,25 @@ function settingsRow(parent, kit, lines) {
   return row;
 }
 
-/**
- * A pane's root, which lays its parts out in the app's container.
- * @param {HTMLElement} parent
- * @param {import('../layout').SettingsKit} kit
- */
-function paneRoot(parent, kit) {
-  const root = kit.el(parent, 'div');
-  root.style.display = 'contents';
-  return root;
-}
-
 /** @type {import('../layout').CompleteSettingsLayout} */
 const layout = {
   sections(parent, kit) {
-    const root = paneRoot(parent, kit);
+    const root = kit.el(parent, 'div', 'settings-pane');
     kit.sectionRows(root);
-    kit.edgePrompt(root, 'end', 'focusRows', 'rows');
+    const edge = kit.edge(root, 'focusRows', { side: 'end', label: 'rows' });
+    edge.classList.add('settings-edge', 'settings-edge--end');
     return { element: root };
   },
   rows(parent, input, kit) {
-    const root = paneRoot(parent, kit);
+    const root = kit.el(parent, 'div', 'settings-pane');
     const head = kit.sectionHeader(root, input.title);
     head.classList.add('settings-head');
-    head.prepend(kit.edgePrompt(head, 'start', 'focusSections', 'sections'));
+    const edge = kit.edge(head, 'focusSections', {
+      side: 'start',
+      chevron: '‹ sections',
+    });
+    edge.classList.add('settings-edge', 'settings-edge--start');
+    head.prepend(edge);
     kit.filterHint(head);
     kit.filterBox(root);
     kit.problem(root);

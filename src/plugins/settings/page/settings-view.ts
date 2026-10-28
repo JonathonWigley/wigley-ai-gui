@@ -18,13 +18,15 @@ import type {
 import { errorText } from '../../../shared/error-text';
 import { isSameJson } from '../../../shared/json';
 import { element } from '../../../shared/page/dom';
-import type { KitCommands } from '../../../shared/page/layout-host/base-kit';
-import {
-  type DrawnPart,
-  drawPart,
-  type RollbackDeps,
+import type {
+  KitCommands,
+  OwnerKitServices,
+} from '../../../shared/page/layout-host/base-kit';
+import type {
+  DrawnPart,
+  RollbackDeps,
 } from '../../../shared/page/layout-host/draw-part';
-import { pickLayout } from '../../../shared/page/layout-host/pick';
+import { createLayoutParts } from '../../../shared/page/layout-host/layout-parts';
 import {
   createListPicker,
   type ListPicker,
@@ -37,6 +39,7 @@ import type { SettingsChannel } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type {
   AdvancedRowInput,
+  CompleteSettingsLayout,
   GroupHeaderInput,
   KeyRowInput,
   LeaderRowInput,
@@ -55,7 +58,6 @@ import {
   buildSectionsPane,
   type BuiltRow,
   type BuiltRowsPane,
-  type SettingsKitDeps,
 } from './layout/settings-kit';
 import { type BoxRequest, createRowBox, type RowBox } from './row-box';
 import { type PromptAction, rowPromptActions } from './row-prompt';
@@ -71,8 +73,6 @@ const FILE_NAMES: Record<ConfigFile, ProblemInput['file']> = {
 };
 
 const KEYMAP_SECTION = { id: 'keymap', title: 'Keymap' };
-
-const DEFAULT_LAYOUT = 'default';
 
 // A row part's and an entry part's builder, as a layout defines it.
 type RowDraw<I> = (parent: HTMLElement, input: I, kit: RowKit) => HTMLElement;
@@ -222,7 +222,6 @@ export interface SettingsView {
   sideBar: HTMLElement;
   sheet: HTMLElement;
   setLayouts(shown: ShownLayouts<SettingsLayout>): void;
-  dispose(): void;
   load(): Promise<void>;
   reread(): void;
   shown(): void;
@@ -259,51 +258,23 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     deps.anchor(hint, command, scope, label);
     return hint;
   };
-  const kitDeps: SettingsKitDeps = {
+  const services: OwnerKitServices = {
     markdown: deps.markdown,
     keys: deps.keys,
     commands: deps.commands,
     platform: deps.platform,
   };
+  const parts = createLayoutParts<SettingsLayout, CompleteSettingsLayout>({
+    owner: 'settings',
+    defaultLayout,
+    log: deps.log,
+  });
 
-  let shown: ShownLayouts<SettingsLayout> = {
-    layouts: new Map([[DEFAULT_LAYOUT, defaultLayout]]),
-    user: DEFAULT_LAYOUT,
-  };
-
-  // Draws the part `partName` with the user's layout when it defines the
-  // part, else with `default`.
-  const drawSettingsPart = <B, R extends { element: HTMLElement }>(
-    partName: keyof SettingsLayout,
-    parent: HTMLElement,
-    part: (layout: SettingsLayout) => B | undefined,
-    build: (builder: B, parent: HTMLElement, rollback: RollbackDeps) => R,
-  ): DrawnPart<R> =>
-    drawPart<SettingsLayout, B, R>({
-      owner: 'settings',
-      parent,
-      pick: pickLayout(
-        [shown.user, DEFAULT_LAYOUT],
-        shown.layouts,
-        (layout) => layout[partName] !== undefined,
-      ),
-      defaultLayout,
-      part,
-      build,
-      log: deps.log,
-      logSource: 'settings',
-      partName,
-    });
-
-  const drawRowPart = <I>(
-    partName: RowPart['part'],
-    part: (layout: SettingsLayout) => RowDraw<I> | undefined,
-    input: I,
-    parent: HTMLElement,
-  ): DrawnPart<BuiltRow> =>
-    drawSettingsPart(partName, parent, part, (draw, rowParent, rollback) =>
-      buildRow(draw, rowParent, input, kitDeps, rollback, partName),
-    );
+  // The build of the row part `partName` for `input`.
+  const rowBuild =
+    <I>(partName: RowPart['part'], input: I) =>
+    (draw: RowDraw<I>, parent: HTMLElement, rollback: RollbackDeps) =>
+      buildRow(draw, parent, input, services, rollback, partName);
 
   // Draws `row` into `parent` with its part.
   const drawSettingsRow = (
@@ -313,59 +284,31 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     const { draw } = row;
     switch (draw.part) {
       case 'settingRow':
-        return drawRowPart(
-          draw.part,
-          (layout) => layout.settingRow,
-          draw.input,
-          parent,
-        );
+        return parts.draw(draw.part, parent, rowBuild(draw.part, draw.input));
       case 'keyRow':
-        return drawRowPart(
-          draw.part,
-          (layout) => layout.keyRow,
-          draw.input,
-          parent,
-        );
+        return parts.draw(draw.part, parent, rowBuild(draw.part, draw.input));
       case 'leaderRow':
-        return drawRowPart(
-          draw.part,
-          (layout) => layout.leaderRow,
-          draw.input,
-          parent,
-        );
+        return parts.draw(draw.part, parent, rowBuild(draw.part, draw.input));
       case 'advancedRow':
-        return drawRowPart(
-          draw.part,
-          (layout) => layout.advancedRow,
-          draw.input,
-          parent,
-        );
+        return parts.draw(draw.part, parent, rowBuild(draw.part, draw.input));
     }
   };
 
   const sections = createSectionsView({
     drawPane: (container) =>
-      drawSettingsPart(
-        'sections',
-        container,
-        (layout) => layout.sections,
-        (pane, parent, rollback) =>
-          buildSectionsPane(pane, parent, kitDeps, rollback),
+      parts.draw('sections', container, (pane, parent, rollback) =>
+        buildSectionsPane(pane, parent, services, rollback),
       ),
     drawRow: (parent, section) =>
-      drawSettingsPart(
-        'sectionRow',
-        parent,
-        (layout) => layout.sectionRow,
-        (sectionRow, rowParent, rollback) =>
-          buildEntry(
-            sectionRow,
-            rowParent,
-            section,
-            'sections',
-            kitDeps,
-            rollback,
-          ),
+      parts.draw('sectionRow', parent, (sectionRow, rowParent, rollback) =>
+        buildEntry(
+          sectionRow,
+          rowParent,
+          section,
+          'sections',
+          services,
+          rollback,
+        ),
       ),
     clicked: (index) => {
       sectionsCursor = index;
@@ -444,19 +387,15 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
   };
 
   const drawPane = (): DrawnPart<BuiltRowsPane> =>
-    drawSettingsPart(
-      'rows',
-      rowsSheet,
-      (layout) => layout.rows,
-      (pane, parent, rollback) =>
-        buildRowsPane(
-          pane,
-          parent,
-          { sectionId: openSectionId, title: openSectionTitle },
-          filterFrame,
-          kitDeps,
-          rollback,
-        ),
+    parts.draw('rows', rowsSheet, (pane, parent, rollback) =>
+      buildRowsPane(
+        pane,
+        parent,
+        { sectionId: openSectionId, title: openSectionTitle },
+        filterFrame,
+        services,
+        rollback,
+      ),
     );
   let rowsPane = drawPane();
 
@@ -489,9 +428,8 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     }
   };
 
-  // Puts the cursor prompt in the cursor row's actions slot, else at the end
-  // of its root, showing the keys of the actions that row has; with no cursor
-  // row it leaves the rows.
+  // Puts the cursor prompt in the cursor row's actions slot, showing the keys
+  // of the actions that row has; with no cursor row it leaves the rows.
   const placeRowPrompt = (row: SettingsRow | undefined) => {
     const drawn = row === undefined ? undefined : drawnRows.get(row.key);
     if (row === undefined || drawn === undefined) {
@@ -502,7 +440,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     for (const action of Object.keys(promptHints) as PromptAction[]) {
       promptHints[action].hidden = !shownActions.includes(action);
     }
-    (drawn.actions ?? drawn.element).append(rowPrompt);
+    drawn.actions.append(rowPrompt);
   };
 
   // Marks the cursor row selected, and draws its focus ring while the keys
@@ -532,22 +470,11 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     }
   };
 
-  // Draws a group header, empty state or problem card into `parent`.
-  const drawEntry = <I>(
-    partName: 'groupHeader' | 'empty' | 'problem',
-    part: (layout: SettingsLayout) => EntryDraw<I> | undefined,
-    input: I,
-    parent: HTMLElement,
-  ) => {
-    const drawn = drawSettingsPart(
-      partName,
-      parent,
-      part,
-      (draw, entryParent, rollback) =>
-        buildEntry(draw, entryParent, input, 'rows', kitDeps, rollback),
-    );
-    entryDisposes.push(drawn.dispose);
-  };
+  // The build of a group header, empty state or problem card for `input`.
+  const entryBuild =
+    <I>(input: I) =>
+    (draw: EntryDraw<I>, parent: HTMLElement, rollback: RollbackDeps) =>
+      buildEntry(draw, parent, input, 'rows', services, rollback);
 
   // Draws `row` into `parent`; a click on it outside its box moves the
   // cursor to it.
@@ -586,28 +513,26 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     const file = sectionFile();
     const read = latest[file];
     if (read.state === 'broken') {
-      drawEntry(
-        'problem',
-        (layout) => layout.problem,
-        { file: FILE_NAMES[file], problem: read.problem },
-        problem,
-      );
+      const input = { file: FILE_NAMES[file], problem: read.problem };
+      const drawn = parts.draw('problem', problem, entryBuild(input));
+      entryDisposes.push(drawn.dispose);
     }
     for (const entry of drawing.entries) {
       if (entry.type === 'header') {
-        drawEntry(
+        const drawn = parts.draw(
           'groupHeader',
-          (layout) => layout.groupHeader,
-          entry.input,
           rowList,
+          entryBuild(entry.input),
         );
+        entryDisposes.push(drawn.dispose);
       } else {
         drawRowEntry(entry.row, rowList);
       }
     }
     const isEmpty = query !== '' && rows.length === 0;
     if (isEmpty) {
-      drawEntry('empty', (layout) => layout.empty, { query }, rowList);
+      const drawn = parts.draw('empty', rowList, entryBuild({ query }));
+      entryDisposes.push(drawn.dispose);
     }
     markCursor();
   };
@@ -631,7 +556,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     held.box.keepFocusAcross(() => {
       drawAll();
       const drawn = drawnRows.get(held.box.key);
-      (drawn?.box ?? drawn?.element)?.append(held.box.element);
+      drawn?.box.append(held.box.element);
     });
     const isRowGone = !rows.some((row) => row.key === held.box.key);
     if (isRowGone || isBroken(held.file)) {
@@ -863,27 +788,22 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
         items: request.items,
         label: request.label,
         selected: request.selected,
-        drawRow: (list, _item, { label, trailing, recordAnchor }) =>
-          drawSettingsPart(
+        drawRow(list, _item, { label, trailing }) {
+          const drawn = parts.draw(
             'pickerRow',
             list,
-            (layout) => layout.pickerRow,
             (pickerRow, parent, rollback) =>
               buildPickerRow(
                 pickerRow,
                 parent,
                 { picker: request.title, label },
                 trailing,
-                kitDeps,
-                {
-                  recordBox: rollback.recordBox,
-                  recordAnchor(anchor) {
-                    rollback.recordAnchor(anchor);
-                    recordAnchor(anchor);
-                  },
-                },
+                services,
+                rollback,
               ),
-          ).built.element,
+          );
+          return { element: drawn.built.element, dispose: drawn.dispose };
+        },
         chosen(item) {
           request.chosen(item, expectedText);
           restoreFocus();
@@ -1112,7 +1032,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     sideBar: sections.element,
     sheet: rowsSheet,
     setLayouts(next) {
-      shown = next;
+      parts.setLayouts(next);
       sections.redrawPane();
       draw(true);
       if (filterScope !== null) {
@@ -1120,11 +1040,6 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       }
       markCursor();
       picker.redraw();
-    },
-    dispose() {
-      sections.dispose();
-      disposeEntries();
-      rowsPane.dispose();
     },
     async load() {
       schema = await channel.invoke('schema');
