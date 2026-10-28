@@ -91,13 +91,12 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
   image-types.ts the image media types the app attaches and pastes (chat and notes share it)
   page/          page-only DOM builders plugins share: the paste and drop helpers (`pasted-images.ts`), the layout host
                  (`layout-host/`: showing layouts, the pick chain, drawing a part, rollback, `BaseKit` (the kit every
-                 owner's kit extends, with the shared `icon`, `chevron`, `edge` and `rowTrailing`) and `ownerBaseKitDeps` (the deps an
-                 owner's base kit is built from),
-                 `layout-parts.ts` (`createLayoutParts`: an owner's shown layouts and its draws, kept by slot),
-                 `app-slot.ts` (where an app element sits in a part), `read-layout-module.ts` (`readLayoutParts` and
-                 `requireLayoutParts`, the reader skeleton) and `test-layouts.ts` (the test helpers owners share)),
-                 the reducer store, autosave, editor boxes,
-                 the confirm prompt, the session form tab helper, the session form status line, and the
+                 owner's kit extends, with the shared `icon`, `chevron`, `edge` and `rowTrailing`) and
+                 `ownerBaseKitDeps` (the deps an owner's base kit is built from), `layout-parts.ts`
+                 (`createLayoutParts`: an owner's shown layouts and its draws, kept by slot), `app-slot.ts` (where an
+                 app element sits in a part), `read-layout-module.ts` (`readLayoutParts` and `requireLayoutParts`, the
+                 reader skeleton) and `test-layouts.ts` (the test helpers owners share)), the reducer store, autosave,
+                 editor boxes, the confirm prompt, the session form tab helper, the session form status line, and the
                  session form lifecycle (the open forms' reducer, the close guard, send and close from main, the page
                  events queue)
                  → imported only by src/renderer and plugins' page/ parts
@@ -433,19 +432,20 @@ round; primer: an open primer), since main, not the page, decides.
 - **A layout** is an owner's user-editable look; the owner is a plugin or the shell. Layouts live in the user config
   folder, `layouts/<owner>/<name>/layout.js` with an optional `layout.css`, shared by the stable and dev apps. Main's
   core LayoutService watches that folder and announces each owner's set of layouts, each with its own revision, so
-  saving one reloads only that one. A plugin's main part registers its contract text with
-  `api.layouts.register` and its page part draws with `api.layouts.show`, handing over its built-in `default` layout,
-  its reader and its setting; the shell registers with the core (`layouts.register('shell', shellLayoutTypes)` in `main.ts`) and
-  shows through the page host in `renderer.ts`. Each app writes `layouts/kit.d.ts` (the shared kit types) and
-  `layouts/<owner>/layout.d.ts` at start. The page's layout host (`src/shared/page/layout-host/`) picks the layout (the owner's setting — `<plugin>.layout`, or the core
-  `shell.layout` — and `default` when unset), checks it with the owner's reader, draws each part, rolls back a part
-  that throws and draws it with `default`, redraws on a reload, and refreshes every show on each config change. A layout draws every pane and every repeated
-  row, card or entry; the app keeps selection, keys, scrolling, split widths, text boxes and editors. The root of every
-  part a layout draws carries `data-layout="<name>"` and `data-layout-owner="<owner>"`, and each loaded layout gets its own stylesheet link, so a
-  layout's CSS selects under its own name and restyles nothing another layout drew. A loaded layout stays available
-  while its revision is current, so a round naming one another round loaded draws with it at once. A view that needs
-  agent data to show anything has a preview sample under `Space z l` for iterating its layout in place.
-  `docs/features/layouts/design.md` lists every owner and its surfaces.
+  saving one reloads only that one. A plugin's main part registers its contract text with `api.layouts.register` and its
+  page part draws with `api.layouts.show`, handing over its built-in `default` layout, its reader and its setting; the
+  shell registers with the core (`layouts.register('shell', shellLayoutTypes)` in `main.ts`) and shows through the page
+  host in `renderer.ts`. Each app writes `layouts/kit.d.ts` (the shared kit types) and `layouts/<owner>/layout.d.ts` at
+  start. The page's layout host (`src/shared/page/layout-host/`) picks the layout (the owner's setting —
+  `<plugin>.layout`, or the core `shell.layout` — and `default` when unset), checks it with the owner's reader, draws
+  each part, rolls back a part that throws and draws it with `default`, redraws on a reload, and refreshes every show on
+  each config change. A layout draws every pane and every repeated row, card or entry; the app keeps selection, keys,
+  scrolling, split widths, text boxes and editors. The root of every part a layout draws carries `data-layout="<name>"`
+  and `data-layout-owner="<owner>"`, and each loaded layout gets its own stylesheet link, so a layout's CSS selects
+  under its own name and restyles nothing another layout drew. A loaded layout stays available while its revision is
+  current, so a round naming one another round loaded draws with it at once. A view that needs agent data to show
+  anything has a preview sample under `Space z l` for iterating its layout in place. `docs/features/layouts/design.md`
+  lists every owner and its surfaces.
   - **A part a layout leaves out** (not defined, or set to `undefined`) draws with `default`. A part may add only its
     root to its parent: one that leaves another node beside it falls back like one that throws.
   - **A list picker draws a layout's rows** (`drawRow`): the picker owns a drawn row's click, its `ui-row--action`
@@ -462,8 +462,8 @@ round; primer: an open primer), since main, not the page, decides.
   through parts that take `(parent, input, kit)` and return a `PartView`: `composer`, `composerBar`, `attachments`,
   `pickerRow`, `signIn`, `reasonBox`, `closeConfirm` and `imageViewer`, each with a kit that extends the base kit.
   A user chat layout defines only the entry builders and the parts it changes: a kind or part it leaves out draws with
-  `default`, with no toast. A user builder that throws draws with `default` and toasts once per kind; when `default`
-  throws too, the entry draws as a bare line and toasts that.
+  `default`, with no toast. A user builder that throws draws with `default`; the entry toasts once per kind, naming what
+  drew it: `default`, or a bare line when `default` throws too.
 - **A forms layout** draws the forms view: a card per item kind (`question`, `finding`, `notice`) and the `head`,
   `rail` and `review` panes. Its contract is `src/plugins/forms/layouts/layout.d.ts`: the input for each card and
   pane, and the kit of ready-made parts (sections, grouped choices, answer controls, verdict, rail entry, review row,

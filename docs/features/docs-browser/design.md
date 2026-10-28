@@ -117,10 +117,10 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
   `R` to rescan; while a filter is on and rows show, one muted line above them reads `Filtered: <filter>` with `/` to
   change it. Each key shows as a Kbd and follows a rebind. No line shows until a read returns an index, or after one
   that returns none; the read's message shows instead.
-- **Viewing and editing**: a doc opens rendered; `i` swaps the pane to the vim document editor at the line shown;
-  `:w` saves, `:q` or Esc in normal mode returns to the rendered view (refused with unsaved edits; `:q!` drops
-  them), `:wq` both, back to the scroll the doc had when `i` opened the editor. YAML frontmatter shows as a field table above the rendered body. The editor highlights
-  markdown, JSON, TOML and YAML by file extension.
+- **Viewing and editing**: a doc opens rendered; `i` swaps the pane to the vim document editor at the line shown; `:w`
+  saves; `:q`, `:wq` and Esc in normal mode each return to the rendered view at the scroll the doc had when `i` opened
+  the editor (`:q` and Esc are refused with unsaved edits; `:q!` drops them). YAML frontmatter shows as a field table
+  above the rendered body. The editor highlights markdown, JSON, TOML and YAML by file extension.
 - **Load states**: a Claude and a Codex chip on each doc (state; reason on hover), judged for a folder the user picks
   from the index's contexts (`c`), the home folder by default. A session's Docs tab uses that session's own states.
 - **Create**: `a` new doc by kind, `A` new file by path. By kind covers instructions, rule, skill, subagent, command,
