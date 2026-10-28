@@ -109,7 +109,8 @@ can be iterated in place. The sample sends nothing and raises no notification or
 - **Items part** (`items`): the selected task's items, each with its include mark, its number and its text, or the
   empty state when the Feature row or a task with no items is selected; `ItemsKit.itemRow` gives each row. `j` / `k`
   walk these rows only. `x` on an item row toggles its include mark; `y` / `n` / `u` set its task's need.
-- The app keeps the two nested splits and their widths, each column's header strip and the card's edge strip.
+- The app keeps the two nested splits, their widths and their handles' resize prompt, each column's header strip and
+  the card's edge strip.
 - **Task card** (the tasks column focused on a task row): heading, tags and need; Question, Evidence, Probes and Pointer when not
   blank; an extra task's name box; the add-item box; the task comment. It lists no items.
 - **Item card** (the items column focused on an item row): the header `⌃H ‹ 2 of 3 › ⌃L`, the item text as heading, the include mark,

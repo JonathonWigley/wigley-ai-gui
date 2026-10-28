@@ -76,9 +76,12 @@ iterating a layout in place.
 - **Three columns**, tasks | items | card, built as two nested Splits: tasks | (items | card). The tasks and items
   columns open `240px` wide and keep their widths in `uiState` (`primer.tasks-width`, `primer.items-width`; the
   tasks column opens from the old `primer.primer-rail-width` when only that is stored). Each column's least width
-  is `160px`, the card's `320px`, so the outer split's end pane holds at least `480px`. The focused column's
-  selected row reads as selected; the other column's marks itself `is-pane-inactive`. A click on a row selects it
-  and focuses its column.
+  is `160px`, the card's `320px`, so the outer split's end pane holds at least `480px`. A tab narrower than
+  `640px` (about a `950px` window with the side bar beside it) stacks the tasks column over the items and card; an
+  end pane narrower than `480px` stacks the items column over the card. There is no other narrow layout. Each
+  split's handle shows the resize prompt `⌥⇧H ◂ ▸ ⌥⇧L` while the pointer is over it, while a drag runs and for a
+  short moment after each resize key. The focused column's selected row reads as selected; each column without
+  focus marks itself `is-pane-inactive`. A click on a row selects it and focuses its column.
 - **Tasks column**: a Feature row first, then the tasks under SectionHeaders Primer, Every feature and Extra tasks,
   with the `A add` prompt in the Extra tasks header. Each task row shows its need as a Tag (yes, no, unclear) and
   its included items as a count (included of total). Its header holds the save state, `⌃H ▲ ▼ ⌃L` and
