@@ -1,7 +1,8 @@
 // The DOM surface the page builders and plugin views use, for tests that run
 // in `node`: `installFakeDom` stubs `document` and `HTMLElement` with it. A
-// string appended becomes a text node; `click` runs the click listeners. An
-// element is connected while it or an ancestor has `isPageRoot` set.
+// string appended becomes a text node; `click` and `fire` run the listeners.
+// An element is connected while it or an ancestor has `isPageRoot` set.
+// `installFocusFakeDom` opts into focus, text selection and scroll resets.
 export class FakeElement {
   tagName: string;
   childNodes: FakeElement[] = [];
@@ -86,6 +87,28 @@ export class FakeElement {
     }
   }
 
+  prepend(...nodes: (FakeElement | string)[]) {
+    const made = nodes.map((node) =>
+      typeof node === 'string' ? textNode(node) : node,
+    );
+    for (const node of made) {
+      node.remove();
+    }
+    const rest = this.childNodes;
+    this.childNodes = [];
+    this.append(...made);
+    this.childNodes.push(...rest);
+  }
+
+  // Puts `node` in this element's place in its parent.
+  replaceWith(node: FakeElement) {
+    const parent = this.parentNode;
+    if (parent !== null) {
+      parent.insertBefore(node, this);
+      this.remove();
+    }
+  }
+
   // Places `node` before `reference`, a child of this element.
   insertBefore(node: FakeElement, reference: FakeElement) {
     node.remove();
@@ -149,12 +172,33 @@ export class FakeElement {
   }
 
   click() {
-    for (const listener of this.listeners.get('click') ?? []) {
-      listener({ target: this, preventDefault: () => undefined });
+    this.fire('click');
+  }
+
+  // Runs the `type` listeners with one event and returns it, so a test reads
+  // whether a listener called `preventDefault`.
+  fire(type: string): FakeEvent {
+    const event: FakeEvent = {
+      target: this,
+      defaultPrevented: false,
+      preventDefault() {
+        event.defaultPrevented = true;
+      },
+    };
+    for (const listener of this.listeners.get(type) ?? []) {
+      listener(event);
     }
+    return event;
   }
 
   scrollIntoView() {}
+}
+
+// The event `fire` hands each listener.
+export interface FakeEvent {
+  target: FakeElement;
+  defaultPrevented: boolean;
+  preventDefault(): void;
 }
 
 // An element's inline style; `setProperty` sets a custom property too.
@@ -211,4 +255,98 @@ export function findAll(root: FakeElement, className: string): FakeElement[] {
     pending.push(...[...node.children].reverse());
   }
   return found;
+}
+
+// The fake document `installFocusFakeDom` stubs.
+export interface FocusFakeDocument {
+  activeElement: FakeElement | null;
+  createElement(tag: string): FakeElement;
+}
+
+function focusDocument(): FocusFakeDocument {
+  return (globalThis as unknown as { document: FocusFakeDocument }).document;
+}
+
+// The fake DOM with what focus and text boxes use: an `activeElement` that
+// `focus` sets, and that leaves an element as it or an ancestor is removed (as
+// a browser blurs a detached element); an input's value and selection; and a
+// client rect whose `top` is `rectTop`.
+export class FocusFakeElement extends FakeElement {
+  value = '';
+  selectionStart: number | null = null;
+  selectionEnd: number | null = null;
+  selectionDirection: string | null = null;
+  rectTop = 0;
+
+  focus() {
+    focusDocument().activeElement = this;
+  }
+
+  blur() {
+    const doc = focusDocument();
+    if (doc.activeElement === this) {
+      doc.activeElement = null;
+    }
+  }
+
+  select() {
+    this.setSelectionRange(0, this.value.length);
+  }
+
+  setSelectionRange(start: number, end: number) {
+    this.selectionStart = start;
+    this.selectionEnd = end;
+  }
+
+  getBoundingClientRect() {
+    return { top: this.rectTop };
+  }
+
+  override remove() {
+    const doc = focusDocument();
+    if (doc.activeElement !== null && this.contains(doc.activeElement)) {
+      doc.activeElement = null;
+    }
+    super.remove();
+  }
+}
+
+// A FocusFakeElement whose `scrollTop`, and that of every scroller under it,
+// goes back to 0 as it is detached, as a browser drops a removed box's
+// scroll.
+export class ScrollerFakeElement extends FocusFakeElement {
+  override remove() {
+    const wasAttached = this.parentNode !== null;
+    super.remove();
+    if (wasAttached) {
+      resetScroll(this);
+    }
+  }
+}
+
+function resetScroll(root: FakeElement): void {
+  const pending = [root];
+  while (pending.length > 0) {
+    const node = pending.pop()!;
+    if (node instanceof ScrollerFakeElement) {
+      node.scrollTop = 0;
+    }
+    pending.push(...node.children);
+  }
+}
+
+// Stubs the DOM globals as `installFakeDom` does, with `document` making
+// `Element`s (FocusFakeElement unless given; pass ScrollerFakeElement for
+// scroll resets) and holding the `activeElement` they set.
+export function installFocusFakeDom(
+  stubGlobal: (name: string, value: unknown) => void,
+  Element: new (tag: string) => FocusFakeElement = FocusFakeElement,
+): FocusFakeDocument {
+  installFakeDom(stubGlobal);
+  const doc: FocusFakeDocument = {
+    activeElement: null,
+    createElement: (tag) => new Element(tag),
+  };
+  stubGlobal('document', doc);
+  return doc;
 }

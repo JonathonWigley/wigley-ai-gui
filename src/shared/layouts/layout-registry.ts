@@ -40,6 +40,12 @@ const USER_KIT_SPECIFIER = "'../kit'";
 const LAYOUT_FILE =
   /\.(js|mjs|css|json|svg|png|jpg|jpeg|gif|webp|woff|woff2|ttf|otf)$/;
 
+// An owner's repo `layout.d.ts` text as the user's folder holds it: its kit
+// specifier rewritten to name `layouts/kit.d.ts`.
+export function userLayoutTypes(layoutTypes: string): string {
+  return layoutTypes.replaceAll(REPO_KIT_SPECIFIER, USER_KIT_SPECIFIER);
+}
+
 interface ListedLayout {
   name: string;
   hasCss: boolean;
@@ -90,10 +96,7 @@ export async function startLayoutRegistry(
     return layouts;
   };
 
-  await folder.write(
-    'layout.d.ts',
-    deps.layoutTypes.replaceAll(REPO_KIT_SPECIFIER, USER_KIT_SPECIFIER),
-  );
+  await folder.write('layout.d.ts', userLayoutTypes(deps.layoutTypes));
   let listed = holdListing(await listLayouts());
 
   const entry = (layout: ListedLayout): LayoutEntry => {

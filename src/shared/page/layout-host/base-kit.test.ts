@@ -6,7 +6,9 @@ import {
   commandRunner,
   createBaseKit,
   type KitCommands,
+  ownerBaseKitDeps,
 } from './base-kit';
+import { recordingAnchors } from './test-layouts';
 
 const BOUND: Record<string, string> = { 'docs.open': 'Mod+O' };
 
@@ -40,7 +42,7 @@ function kitOver(scope: ViewScope | null) {
       short === 'open' || short === 'close' ? `docs.${short}` : null,
     platform: 'macos',
   };
-  return { kit: createBaseKit(deps), anchors, reads };
+  return { kit: createBaseKit(deps), deps, anchors, reads };
 }
 
 describe('createBaseKit', () => {
@@ -139,6 +141,101 @@ describe('createBaseKit', () => {
       expect(readScope).toBe(scope ?? undefined);
     }
   });
+
+  it('ownerBaseKitDeps_KeyHint_NamesTheQualifiedCommandAndRecordsItsAnchor', () => {
+    const { keys, anchors } = recordingAnchors();
+    const recorded: unknown[] = [];
+    const manifest = {
+      id: 'docs',
+      commands: { open: { label: 'Open', group: 'Docs', runsIn: 'page' } },
+    } as const;
+    const kit = createBaseKit(
+      ownerBaseKitDeps(
+        manifest,
+        {
+          markdown: kitOver(null).deps.markdown,
+          keys,
+          commands: { exists: () => true, run: () => undefined },
+          platform: 'macos',
+        },
+        'tree',
+        { recordAnchor: (anchor) => recorded.push(anchor) },
+      ),
+    );
+    const parent = asHtml(new FakeElement('div'));
+
+    kit.keyHint(parent, 'open');
+    kit.keyHint(parent, 'nope');
+
+    expect(
+      anchors.map(({ command, scope, isDisposed }) => [
+        command,
+        scope,
+        isDisposed,
+      ]),
+    ).toEqual([['docs.open', 'docs.tree', false]]);
+    expect(recorded).toHaveLength(1);
+    (recorded[0] as { dispose(): void }).dispose();
+    expect(anchors[0].isDisposed).toBe(true);
+  });
+
+  it.each([
+    { className: undefined, classes: ['codicon', 'codicon-book'] },
+    {
+      className: ' wide  bold ',
+      classes: ['codicon', 'codicon-book', 'wide', 'bold'],
+    },
+  ])('icon_ClassName_AddsEachClass: $className', ({ className, classes }) => {
+    const { kit } = kitOver(null);
+    const parent = new FakeElement('div');
+
+    const node = asFake(kit.icon(asHtml(parent), 'book', className));
+
+    expect(parent.childNodes).toEqual([node]);
+    expect(node.className.split(' ')).toEqual(classes);
+  });
+
+  it.each([
+    {
+      side: 'start',
+      chevron: undefined,
+      label: undefined,
+      texts: ['‹', ''],
+      hintAt: 1,
+      anchored: { scope: 'docs.tree' },
+    },
+    {
+      side: 'end',
+      chevron: undefined,
+      label: 'open',
+      texts: ['', '›'],
+      hintAt: 0,
+      anchored: { scope: 'docs.tree', label: 'open' },
+    },
+    {
+      side: 'start',
+      chevron: '‹ Tree',
+      label: undefined,
+      texts: ['‹ Tree', ''],
+      hintAt: 1,
+      anchored: { scope: 'docs.tree' },
+    },
+  ] as const)(
+    'edge_PlacesTheChevronAtItsSide: $side $chevron',
+    ({ side, chevron, label, texts, hintAt, anchored }) => {
+      const { kit, anchors } = kitOver('docs.tree');
+      const parent = new FakeElement('div');
+
+      const edge = asFake(
+        kit.edge(asHtml(parent), 'open', { side, chevron, label }),
+      );
+
+      expect(parent.childNodes).toEqual([edge]);
+      expect(edge.className).toBe('ui-key-edge');
+      expect(edge.children.map((child) => child.textContent)).toEqual(texts);
+      expect(anchors).toEqual([[edge.children[hintAt], 'docs.open', anchored]]);
+    },
+  );
 
   it('section_BlankText_DrawsNothing', () => {
     const { kit } = kitOver('docs.tree');

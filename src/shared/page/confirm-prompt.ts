@@ -3,7 +3,7 @@ import type { Disposable } from '../../contracts/disposable';
 import type { ViewScope } from '../../contracts/keymap';
 import type { Log } from '../../contracts/log';
 import type { PushedScope } from '../../contracts/plugin';
-import { element } from './dom';
+import { appended, element } from './dom';
 import { type ButtonVariant, textButton } from './ui/button';
 import { createDialog } from './ui/dialog';
 
@@ -81,8 +81,9 @@ const DISMISSED_LINE = 'cancel prompt dismissed: the view moved on';
 // button's hint is an anchor for its command in the prompt's pushed scope,
 // held until the next draw; the page keeps the last draw's for as long as it
 // lives, as the prompt does. A `drawBody` places the body and buttons; a
-// button it leaves out is appended to the actions, so both commands always
-// hold an anchor.
+// button not in the dialog once it returns (left out, or placed by a layout
+// attempt that rolled back) is appended to the actions, so both commands
+// always hold an anchor.
 export function createConfirmPrompt(deps: ConfirmPromptDeps): ConfirmPrompt {
   const dialog = createDialog(deps.title);
   // The anchors of the buttons the last draw made.
@@ -119,11 +120,11 @@ export function createConfirmPrompt(deps: ConfirmPromptDeps): ConfirmPrompt {
       confirmButton: (parent) =>
         appended(parent, (confirm ??= confirmButton())),
     });
-    if (keep === null) {
-      dialog.actions.append(keepButton());
+    if (keep === null || !dialog.element.contains(keep)) {
+      dialog.actions.append(keep ?? keepButton());
     }
-    if (confirm === null) {
-      dialog.actions.append(confirmButton());
+    if (confirm === null || !dialog.element.contains(confirm)) {
+      dialog.actions.append(confirm ?? confirmButton());
     }
   };
   draw();
@@ -176,9 +177,4 @@ export function createConfirmPrompt(deps: ConfirmPromptDeps): ConfirmPrompt {
     },
     redraw: draw,
   };
-}
-
-function appended<E extends HTMLElement>(parent: HTMLElement, node: E): E {
-  parent.append(node);
-  return node;
 }

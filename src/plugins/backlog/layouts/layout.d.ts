@@ -127,8 +127,6 @@ export interface BacklogKit extends BaseKit {
     command: string,
     label: string,
   ): HTMLElement;
-  // A detached Codicon element (`chevron-right` draws `codicon-chevron-right`) for `KitRowOptions.leading`.
-  icon(name: string): HTMLElement;
 }
 export interface HomesKit extends BacklogKit {
   status(parent: HTMLElement): HTMLElement;

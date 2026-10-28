@@ -217,27 +217,46 @@ describe('confirm prompt', () => {
     expect(log).not.toHaveBeenCalled();
   });
 
-  it('drawBody_ButtonLeftOut_AppendedToActions', () => {
-    const { scrim, anchors } = promptSetup(true, (parent, parts) => {
+  it.each([
+    {
+      row: 'left out',
+      rollsBack: false,
+      ownButtons: ['Keepn'],
+      actionButtons: ['Cancel formy'],
+    },
+    {
+      row: 'requested then rolled back',
+      rollsBack: true,
+      ownButtons: [],
+      actionButtons: ['Keepn', 'Cancel formy'],
+    },
+  ])(
+    'drawBody_ButtonNotInTheDialog_AppendedToActions: $row',
+    ({ rollsBack, ownButtons, actionButtons }) => {
       const own = new FakeElement('section');
-      own.className = 'own-body';
-      own.append(parts.body);
-      parent.append(asHtml(own));
-      parts.keepButton(asHtml(own));
-    });
+      const { scrim, anchors } = promptSetup(true, (parent, parts) => {
+        own.append(parts.body);
+        parent.append(asHtml(own));
+        parts.keepButton(asHtml(own));
+        if (rollsBack) {
+          own.remove();
+        }
+      });
 
-    const [own] = findAll(scrim, 'own-body');
-    const [actions] = findAll(scrim, 'ui-dialog-actions');
-    expect(own.textContent).toBe('The agent is told.Keepn');
-    expect(buttons(own).map((button) => button.textContent)).toEqual(['Keepn']);
-    expect(buttons(actions).map((button) => button.textContent)).toEqual([
-      'Cancel formy',
-    ]);
-    expect(anchors.map(([command]) => command)).toEqual([
-      'test.keep',
-      'test.confirm',
-    ]);
-  });
+      const [actions] = findAll(scrim, 'ui-dialog-actions');
+      expect(own.childNodes[0].textContent).toBe('The agent is told.');
+      expect(buttons(own).map((button) => button.textContent)).toEqual(
+        ownButtons,
+      );
+      expect(buttons(actions).map((button) => button.textContent)).toEqual(
+        actionButtons,
+      );
+      expect(anchors.map(([command]) => command)).toEqual([
+        'test.keep',
+        'test.confirm',
+      ]);
+    },
+  );
 
   it('redraw_DisposesTheEarlierButtonsAnchors', () => {
     const { prompt, scrim, anchors, disposed } = promptSetup();

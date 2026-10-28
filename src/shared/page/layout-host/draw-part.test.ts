@@ -129,6 +129,51 @@ describe('drawPart', () => {
     });
   });
 
+  it('drawPart_PickedAddsANodeBesideItsElement_RemovedLoggedAndDefaultDraws', () => {
+    const rail = drawRail({
+      name: 'spill',
+      layout: {
+        rail: (parent, rollback) => {
+          parent.append(asHtml(new FakeElement('aside')));
+          return drawsArticle('spill')(parent, rollback);
+        },
+      },
+    });
+
+    const drawn = rail.call();
+
+    expect(rail.logLines).toEqual([
+      '[forms] layout spill rail failed: rail added nodes beside its element',
+    ]);
+    expect(rail.parent.children).toEqual([asFake(drawn.built.element)]);
+    expect(drawn.layoutName).toBe('default');
+  });
+
+  it('drawPart_RollbackUndoThrows_UndoesTheRestAndRemovesTheAppended', () => {
+    const record = recorded();
+    const rail = drawRail({
+      name: 'fancy',
+      layout: {
+        rail: (parent, rollback) => {
+          rollback.recordBox(() => {
+            throw new Error('stuck');
+          });
+          rollback.recordAnchor(record.anchor('next'));
+          parent.append(asHtml(new FakeElement('section')));
+          throw new Error('boom');
+        },
+      },
+    });
+
+    const drawn = rail.call();
+
+    expect(record.undone).toEqual(['anchor next']);
+    expect(rail.parent.children).toEqual([asFake(drawn.built.element)]);
+    expect(rail.logLines).toEqual([
+      '[forms] layout fancy rail failed: boom; rollback failed: stuck',
+    ]);
+  });
+
   it('drawPart_PickedReturnsAnElementNotInParent_LoggedAndDefaultDraws', () => {
     const rail = drawRail({
       name: 'stray',
@@ -198,7 +243,7 @@ describe('drawPart', () => {
         return drawsArticle('default')(parent, rollback);
       }) satisfies Rail,
       undoneByDraw: ['anchor picked'],
-      undoneByDispose: [],
+      undoneByDispose: ['anchor default'],
     },
   ])(
     'drawPart_Dispose_DisposesOnlyTheSuccessfulAttempt: $row',
@@ -228,10 +273,7 @@ describe('drawPart', () => {
       drawn.dispose();
       drawn.dispose();
 
-      const defaultDrew = drawn.layoutName === 'default';
-      expect(record.undone).toEqual(
-        defaultDrew ? ['anchor default'] : undoneByDispose,
-      );
+      expect(record.undone).toEqual(undoneByDispose);
       expect(rail.parent.children).toEqual([asFake(drawn.built.element)]);
     },
   );

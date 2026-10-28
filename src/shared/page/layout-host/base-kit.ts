@@ -3,16 +3,21 @@ import type { Disposable } from '../../../contracts/disposable';
 import type { ViewScope } from '../../../contracts/keymap';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { Platform } from '../../../contracts/platform';
-import { element, markdownElement } from '../dom';
+import type { PluginManifest } from '../../../contracts/plugin';
+import { qualify } from '../../plugin-manifests';
+import { appended, element, markdownElement } from '../dom';
 import { textButton } from '../ui/button';
 import { card as cardPart } from '../ui/card';
 import { emptyState } from '../ui/empty-state';
+import { icon } from '../ui/icon';
 import { kbd } from '../ui/kbd';
+import { keyChevron } from '../ui/key-anchors';
 import { keyPrompt } from '../ui/key-prompt';
 import { row } from '../ui/row';
 import { sectionHeader } from '../ui/section-header';
 import { setDotStatus, statusDot } from '../ui/status-dot';
 import { tag as tagPart } from '../ui/tag';
+import type { RollbackDeps } from './draw-part';
 import type { BaseKit } from './kit';
 
 // What the base kit reads. `keys` restates the keys plugin's page exports,
@@ -20,6 +25,8 @@ import type { BaseKit } from './kit';
 // part's keys fire in; null anchors with no scope, so a hint shows in every
 // scope, and reads keys in any scope. `commandNamed` turns the owner's short
 // command name into its qualified id, null for a name the owner lacks.
+// `recordAnchor`, the drawing attempt's, takes each anchor the kit names;
+// left out, recording them is the `keys`' job.
 export interface BaseKitDeps {
   markdown: MarkdownRenderer;
   keys: {
@@ -34,6 +41,48 @@ export interface BaseKitDeps {
   scope: ViewScope | null;
   commandNamed(short: string): CommandId | null;
   platform: Platform;
+  recordAnchor?(anchor: Disposable): void;
+}
+
+// The page services an owner's base kit reads beside its manifest, its scope
+// and the drawing attempt.
+export interface OwnerKitServices {
+  markdown: MarkdownRenderer;
+  keys: BaseKitDeps['keys'];
+  commands: KitCommands;
+  platform: Platform;
+}
+
+// The qualified id of the short command name `short` of the plugin of
+// `manifest`; null for a name its manifest lacks.
+export function commandNamedIn(
+  manifest: Pick<PluginManifest, 'id' | 'commands'>,
+): (short: string) => CommandId | null {
+  return (short) =>
+    Object.hasOwn(manifest.commands, short)
+      ? qualify(manifest.id, short)
+      : null;
+}
+
+// The base-kit deps of one part draw by the plugin of `manifest`: its keys in
+// the plugin's scope `scope` (qualified; null for no scope), its short command
+// names read from the manifest, and each anchor it names recorded through
+// `rollback`, the drawing attempt's.
+export function ownerBaseKitDeps(
+  manifest: Pick<PluginManifest, 'id' | 'commands'>,
+  services: OwnerKitServices,
+  scope: string | null,
+  rollback: Pick<RollbackDeps, 'recordAnchor'>,
+): BaseKitDeps {
+  return {
+    markdown: services.markdown,
+    keys: services.keys,
+    commands: services.commands,
+    platform: services.platform,
+    scope: scope === null ? null : qualify(manifest.id, scope),
+    commandNamed: commandNamedIn(manifest),
+    recordAnchor: (anchor) => rollback.recordAnchor(anchor),
+  };
 }
 
 // The commands a kit's `command` reaches: whether a plugin registers an id,
@@ -63,7 +112,7 @@ export function createBaseKit(deps: BaseKitDeps): BaseKit {
     deps.scope === null
       ? deps.keys.keysFor(id)
       : deps.keys.keysFor(id, deps.scope);
-  return {
+  const kit: BaseKit = {
     el(parent, tagName, className = '', text) {
       return appended(
         parent,
@@ -101,7 +150,12 @@ export function createBaseKit(deps: BaseKitDeps): BaseKit {
       const node = appended(parent, element('span', options.className ?? ''));
       const id = deps.commandNamed(command);
       if (id !== null) {
-        deps.keys.anchor(node, id, anchorOptions(deps.scope, options.label));
+        const anchor = deps.keys.anchor(
+          node,
+          id,
+          anchorOptions(deps.scope, options.label),
+        );
+        deps.recordAnchor?.(anchor);
       }
       return node;
     },
@@ -134,12 +188,31 @@ export function createBaseKit(deps: BaseKitDeps): BaseKit {
       appended(parent, emptyState(text, hint)),
     keyPrompt: (parent, keys, label) =>
       appended(parent, keyPrompt(keys, deps.platform, label)),
+    icon(parent, name, className = '') {
+      const node = icon(name);
+      const classes = className.split(/\s+/).filter((each) => each !== '');
+      node.classList.add(...classes);
+      return appended(parent, node);
+    },
+    chevron: (parent, text) => appended(parent, keyChevron(text)),
+    edge(parent, command, options) {
+      const edge = appended(parent, element('span', 'ui-key-edge'));
+      const chevron = options.chevron ?? (options.side === 'start' ? '‹' : '›');
+      const hintOptions =
+        options.label === undefined ? {} : { label: options.label };
+      if (options.side === 'start') {
+        kit.chevron(edge, chevron);
+      }
+      kit.keyHint(edge, command, hintOptions);
+      if (options.side === 'end') {
+        kit.chevron(edge, chevron);
+      }
+      return edge;
+    },
+    rowTrailing: (parentRow) =>
+      appended(parentRow, element('span', 'ui-row-trailing')),
   };
-}
-
-function appended<E extends HTMLElement>(parent: HTMLElement, node: E): E {
-  parent.append(node);
-  return node;
+  return kit;
 }
 
 // The anchor options for `scope`: no scope option when null, and no label

@@ -58,8 +58,9 @@ const loggedFailures = new WeakMap<object, Set<string>>();
 // back (each recorded box destroyed, each recorded anchor disposed, each node
 // it appended to `parent` removed), `layout <name> <partName> failed: <error>`
 // is logged under `logSource` once per layout object and part name, and
-// `default` draws in its place. A throw from the `default` attempt rolls back
-// the same way and is rethrown, with no log. Throws
+// `default` draws in its place. An attempt that leaves `parent` holding a new
+// node beside its element fails the same way. A throw from the `default`
+// attempt rolls back the same way and is rethrown, with no log. Throws
 // `layout default has no <partName>` when `default` must draw a part it lacks.
 // `built.element` carries `data-layout="<layoutName>"` and
 // `data-layout-owner="<owner>"`. `dispose` disposes every anchor and runs every
@@ -106,6 +107,8 @@ export function requireElementIn(
 
 // One build of `builder` into the parent with a fresh recorder, checked and
 // marked with `layoutName` and the owner; rolled back and rethrown on a throw.
+// A rollback whose undo throws still undoes the rest and removes what the
+// attempt appended; the build's error is rethrown with the undo's appended.
 function attempt<L extends object, B, R extends { element: HTMLElement }>(
   options: DrawPartOptions<L, B, R>,
   builder: B,
@@ -121,18 +124,47 @@ function attempt<L extends object, B, R extends { element: HTMLElement }>(
       (built as Partial<R> | null | undefined)?.element,
       partName,
     );
+    requireOnlyRootAdded(parent, existing, element, partName);
     element.dataset.layout = layoutName;
     element.dataset.layoutOwner = options.owner;
     return { built, layoutName, dispose: recorder.dispose };
   } catch (error) {
-    recorder.dispose();
-    removeAppended(parent, existing);
+    let undoError: unknown = null;
+    try {
+      recorder.dispose();
+    } catch (thrown) {
+      undoError = thrown;
+    } finally {
+      removeAppended(parent, existing);
+    }
+    if (undoError !== null) {
+      throw new Error(
+        `${errorText(error)}; rollback failed: ${errorText(undoError)}`,
+      );
+    }
     throw error;
   }
 }
 
+// Throws `<partName> added nodes beside its element` when `parent` holds a
+// node `existing` lacks other than `element`.
+function requireOnlyRootAdded(
+  parent: HTMLElement,
+  existing: Set<ChildNode>,
+  element: HTMLElement,
+  partName: string,
+): void {
+  const hasStray = Array.from(parent.childNodes).some(
+    (node) => node !== element && !existing.has(node),
+  );
+  if (hasStray) {
+    throw new Error(`${partName} added nodes beside its element`);
+  }
+}
+
 // The recorder one attempt builds with, and the dispose that undoes what it
-// recorded, once.
+// recorded, once. The dispose runs every undo even when one throws, then
+// throws the first undo's error.
 function createRecorder(): { rollback: RollbackDeps; dispose(): void } {
   let boxes: (() => void)[] = [];
   let anchors: Disposable[] = [];
@@ -142,14 +174,22 @@ function createRecorder(): { rollback: RollbackDeps; dispose(): void } {
       recordAnchor: (anchor) => anchors.push(anchor),
     },
     dispose() {
-      const [destroys, disposables] = [boxes, anchors];
+      const undos = [
+        ...boxes,
+        ...anchors.map((anchor) => () => anchor.dispose()),
+      ];
       boxes = [];
       anchors = [];
-      for (const destroy of destroys) {
-        destroy();
+      const errors: unknown[] = [];
+      for (const undo of undos) {
+        try {
+          undo();
+        } catch (error) {
+          errors.push(error);
+        }
       }
-      for (const anchor of disposables) {
-        anchor.dispose();
+      if (errors.length > 0) {
+        throw errors[0];
       }
     },
   };

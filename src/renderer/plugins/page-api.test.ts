@@ -339,8 +339,7 @@ describe('createPageApi', () => {
     expect(writes).toEqual([['forms.rail', 300]]);
   });
 
-  it('createPageApi_LayoutsShow_RunsUnderThePluginIdAndRefreshesOnItsSettings', () => {
-    const config = liveConfig();
+  it('createPageApi_LayoutsShow_RunsUnderThePluginId', () => {
     const calls: string[] = [];
     const layouts: PageLayouts = {
       show: (owner) => {
@@ -351,7 +350,7 @@ describe('createPageApi', () => {
         };
       },
     };
-    const api = createPageApi(manifest, deps({ config, layouts }));
+    const api = createPageApi(manifest, deps({ layouts }));
 
     const show = api.layouts.show({
       defaultLayout: {},
@@ -359,17 +358,8 @@ describe('createPageApi', () => {
       userLayout: () => 'default',
       setLayouts: () => undefined,
     });
-    config.replace(
-      appConfig({ pluginSettings: { p: { delayMs: 1 }, q: { delayMs: 9 } } }),
-    );
-    config.replace(
-      appConfig({ pluginSettings: { p: { delayMs: 2 }, q: { delayMs: 9 } } }),
-    );
     show.dispose();
-    config.replace(
-      appConfig({ pluginSettings: { p: { delayMs: 3 }, q: { delayMs: 9 } } }),
-    );
 
-    expect(calls).toEqual(['show p', 'refresh', 'dispose']);
+    expect(calls).toEqual(['show p', 'dispose']);
   });
 });

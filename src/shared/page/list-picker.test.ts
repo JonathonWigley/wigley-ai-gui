@@ -49,10 +49,14 @@ function filteredPickerSetup() {
   };
 }
 
-// A `drawRow` drawing each item as `li.owned-row` holding its label and
-// trailing, recording one anchor per row, named `<item>#<n>` for the n-th
-// anchor made; `made` lists every anchor made and `disposed` each dispose.
-function owningRows() {
+// A `drawRow` drawing each item as `li.owned-row` holding its label, and its
+// trailing unless `leavesTrailingOut`. Each draw is named `<item>#<n>` for the
+// n-th draw made; `made` lists every draw and `disposed` each dispose, heard
+// through one recorded anchor per row, or through the returned dispose when
+// `returnsDispose`.
+function owningRows(
+  options: { leavesTrailingOut?: boolean; returnsDispose?: boolean } = {},
+) {
   const made: string[] = [];
   const disposed: string[] = [];
   const drawRow: ListPickerRequest<string>['drawRow'] = (
@@ -63,13 +67,17 @@ function owningRows() {
     const owned = new FakeElement('li');
     owned.className = 'owned-row';
     owned.append(input.label);
-    if (input.trailing !== null) {
+    if (input.trailing !== null && options.leavesTrailingOut !== true) {
       owned.append(asFake(input.trailing));
     }
     parent.append(asHtml(owned));
     const name = `${item}#${made.length + 1}`;
     made.push(name);
-    input.recordAnchor({ dispose: () => disposed.push(name) });
+    const dispose = () => disposed.push(name);
+    if (options.returnsDispose === true) {
+      return { element: asHtml(owned), dispose };
+    }
+    input.recordAnchor({ dispose });
     return asHtml(owned);
   };
   return { drawRow, made, disposed };
@@ -168,26 +176,63 @@ describe('list picker', () => {
       false,
     ]);
     expect(drawn[1].childNodes.at(-1)).toBe(end);
+    expect(
+      drawn.map((row) => row.classList.contains('ui-row--action')),
+    ).toEqual([true, true, true]);
+    expect(drawn[0].fire('mousedown').defaultPrevented).toBe(true);
+    drawn[0].classList.add('is-disabled');
+    drawn[0].click();
+    expect(chosen).not.toHaveBeenCalled();
     drawn[2].click();
     expect(chosen).toHaveBeenCalledWith('three');
   });
 
-  it('drawRow_AnchorsRecordedInARowDraw_DisposedOnNextDrawAndOnClose', () => {
-    const { picker, type } = filteredPickerSetup();
-    const { drawRow, made, disposed } = owningRows();
-    picker.open(request({ drawRow }));
-    expect(disposed).toEqual([]);
+  it('drawRow_TrailingLeftOut_AppendedToTheRow', () => {
+    const { picker, layer } = pickerSetup();
+    const end = new FakeElement('span');
+    const { drawRow } = owningRows({ leavesTrailingOut: true });
 
-    type('t');
-    expect(disposed).toEqual(['one#1', 'two#2', 'three#3']);
-    expect(made.slice(3)).toEqual(['two#4', 'three#5']);
+    picker.open(request({ drawRow, cursorEnd: () => asHtml(end) }));
 
-    picker.redraw();
-    expect(disposed.slice(3)).toEqual(['two#4', 'three#5']);
-
-    picker.close();
-    picker.redraw();
-    expect(disposed.slice(5)).toEqual(['two#6', 'three#7']);
-    expect(made).toHaveLength(7);
+    const [first, second] = findAll(layer, 'owned-row');
+    expect(first.childNodes.at(-1)).toBe(end);
+    expect(second.children).toEqual([]);
   });
+
+  it.each([{ returnsDispose: false }, { returnsDispose: true }])(
+    'drawRow_RowDraws_DisposedBeforeTheyDrawAgainAndOnClose: returnsDispose $returnsDispose',
+    ({ returnsDispose }) => {
+      const { picker, layer, type } = filteredPickerSetup();
+      const { drawRow, made, disposed } = owningRows({ returnsDispose });
+      picker.open(request({ drawRow }));
+      expect(disposed).toEqual([]);
+
+      picker.down();
+      expect(disposed).toEqual(['one#1', 'two#2']);
+      expect(made.slice(3)).toEqual(['one#4', 'two#5']);
+      const drawn = findAll(layer, 'owned-row');
+      expect(drawn.map((row) => row.textContent)).toEqual([
+        'one',
+        'two',
+        'three',
+      ]);
+      expect(drawn.map((row) => row.classList.contains('is-cursor'))).toEqual([
+        false,
+        true,
+        false,
+      ]);
+
+      type('t');
+      expect(disposed.slice(2).sort()).toEqual(['one#4', 'three#3', 'two#5']);
+      expect(made.slice(5)).toEqual(['two#6', 'three#7']);
+
+      picker.redraw();
+      expect(disposed.slice(5)).toEqual(['two#6', 'three#7']);
+
+      picker.close();
+      picker.redraw();
+      expect(disposed.slice(7)).toEqual(['two#8', 'three#9']);
+      expect(made).toHaveLength(9);
+    },
+  );
 });

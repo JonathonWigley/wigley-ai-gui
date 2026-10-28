@@ -45,6 +45,14 @@ export interface KitRowOptions {
   onClick?: () => void;
 }
 
+// An edge prompt's side: `start` draws `<chevron> <keys> <label>`, `end` draws `<keys> <label> <chevron>`. `chevron`
+// is `‹` at the start and `›` at the end when left out.
+export interface KitEdgeOptions {
+  side: 'start' | 'end';
+  chevron?: string;
+  label?: string;
+}
+
 // Every part appends itself to `parent` and returns what it appended, except where its comment says otherwise.
 export interface BaseKit {
   el(
@@ -110,4 +118,17 @@ export interface BaseKit {
   ): HTMLElement;
   // `span.ui-key-prompt`: a static key hint for `keys`, drawn for the platform, with `label` after it.
   keyPrompt(parent: HTMLElement, keys: string, label?: string): HTMLElement;
+  // A Codicon named `name` (`chevron-right` draws `codicon-chevron-right`), with each class of `className` added.
+  icon(parent: HTMLElement, name: string, className?: string): HTMLElement;
+  // `span.ui-key-chevron` reading `text`, placed beside a key hint; it hides and shows with that hint.
+  chevron(parent: HTMLElement, text: string): HTMLElement;
+  // `span.ui-key-edge`: a focus move's prompt for the owner's command `command`, its hint and chevron as `options`
+  // places them.
+  edge(
+    parent: HTMLElement,
+    command: string,
+    options: KitEdgeOptions,
+  ): HTMLElement;
+  // `span.ui-row-trailing` at the end of `row`, for what the row ends with.
+  rowTrailing(row: HTMLElement): HTMLElement;
 }

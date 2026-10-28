@@ -7,7 +7,6 @@ import {
 } from '../../../../shared/page/layout-host/base-kit';
 import type { RollbackDeps } from '../../../../shared/page/layout-host/draw-part';
 import { element } from '../../../../shared/page/dom';
-import { icon } from '../../../../shared/page/ui/icon';
 import { keyChevron, keyEdge } from '../../../../shared/page/ui/key-anchors';
 import { qualify } from '../../../../shared/plugin-manifests';
 import type { BacklogKit } from '../../layouts/layout';
@@ -73,6 +72,5 @@ export function createBacklogKit(
       }
       return edge;
     },
-    icon: (name) => icon(name),
   };
 }

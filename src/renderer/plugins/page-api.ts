@@ -58,8 +58,7 @@ export interface PageApiDeps {
 // it. Its areas leave out `main`, which only the mode registry fills, and the
 // activity bar and side bar, which the core draws from the modes. Its
 // settings are its own entry in the config's plugin settings, and its ui state
-// is scoped to its id. Its layout shows run under its id and refresh on each
-// change of its settings, until their dispose.
+// is scoped to its id. Its layout shows run under its id.
 export function createPageApi(
   manifest: PluginManifest,
   deps: PageApiDeps,
@@ -103,21 +102,7 @@ export function createPageApi(
     services: { ...deps.services, uiState: deps.uiState.scoped(manifest.id) },
     dependency: deps.dependency,
     dataUrl: (path, revision) => dataUrl(manifest.id, revision, path),
-    layouts: {
-      show(options) {
-        const show = deps.layouts.show(manifest.id, options);
-        const onSettings = onChangedPart(config, settingsOf, () =>
-          show.refresh(),
-        );
-        return {
-          refresh: () => show.refresh(),
-          dispose() {
-            onSettings.dispose();
-            show.dispose();
-          },
-        };
-      },
-    },
+    layouts: { show: (options) => deps.layouts.show(manifest.id, options) },
   };
 }
 

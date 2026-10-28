@@ -356,10 +356,11 @@ export interface ShowLayoutOptions<L> {
   // The owner's reader: the layout a user's `layout.js` module holds, or a
   // throw naming the first part it gets wrong.
   read(module: unknown, name: string): L;
-  // The setting's layout name, read again on each set and each `refresh()`.
+  // The setting's layout name, read again on each set, each config change and
+  // each `refresh()`.
   userLayout(): string;
   // The names the owner's content names beside the user's, read again on each
-  // set and each `refresh()`. Left out: no names (`[]`).
+  // set, each config change and each `refresh()`. Left out: no names (`[]`).
   namesInUse?(): readonly string[];
   setLayouts(shown: ShownLayouts<L>): void;
 }
@@ -373,11 +374,11 @@ export interface ShownLayouts<L> {
 }
 
 export interface LayoutShow {
-  // Reads the setting and the names in use again, after either may have
-  // changed.
+  // Reads the setting and the names in use again, after the names in use
+  // may have changed outside a config change.
   refresh(): void;
-  // Stops the show hearing sets, removes its stylesheet links, and calls
-  // `setLayouts` no more.
+  // Stops the show hearing sets and config changes, removes its stylesheet
+  // links, and calls `setLayouts` no more.
   dispose(): void;
 }
 

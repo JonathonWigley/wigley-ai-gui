@@ -72,12 +72,13 @@ function progress(checked, total) {
 }
 
 /**
- * The chevron of a plan or feature row.
+ * Puts the chevron of a plan or feature row at the row's start.
+ * @param {HTMLElement} row
  * @param {boolean} isExpanded
  * @param {import('../layout').BacklogKit} kit
  */
-function chevron(isExpanded, kit) {
-  return kit.icon(isExpanded ? 'chevron-down' : 'chevron-right');
+function chevron(row, isExpanded, kit) {
+  row.prepend(kit.icon(row, isExpanded ? 'chevron-down' : 'chevron-right'));
 }
 
 /** @type {import('../layout').CompleteBacklogLayout} */
@@ -161,7 +162,6 @@ const layout = {
     const row = kit.row(parent, {
       density: 'list',
       tag: 'li',
-      leading: chevron(input.isExpanded, kit),
       label: input.title,
       detail: [
         input.feature,
@@ -171,6 +171,7 @@ const layout = {
         .filter((part) => part !== null)
         .join(' · '),
     });
+    chevron(row, input.isExpanded, kit);
     kit.cursorActions(row);
     return row;
   },
@@ -178,10 +179,10 @@ const layout = {
     const row = kit.row(parent, {
       density: 'list',
       tag: 'li',
-      leading: chevron(input.isExpanded, kit),
       label: input.slug,
       detail: progress(input.checked, input.total),
     });
+    chevron(row, input.isExpanded, kit);
     kit.cursorActions(row);
     return row;
   },

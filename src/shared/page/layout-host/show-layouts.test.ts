@@ -60,7 +60,7 @@ function fakeHead() {
 // Page layouts over a fake bridge whose `layouts` answer for each owner waits
 // on `answers`, and whose imports go to `importModule` (by default a module
 // whose layout is tagged `<name>@<revision>`), recording every URL imported,
-// each log line and each toast.
+// each log line and each toast. `changeConfig` tells each config listener.
 function pageLayoutsWith(
   importModule: (url: string) => Promise<unknown> = async (url) => ({
     default: { tag: tagOf(url) },
@@ -73,8 +73,11 @@ function pageLayoutsWith(
     return answer;
   };
   let listener: (owner: string, set: LayoutSet) => void = () => undefined;
+  const configListeners = new Set<() => void>();
   const { head, appended } = fakeHead();
   const page = {
+    configListeners,
+    changeConfig: () => configListeners.forEach((heard) => heard()),
     imports: [] as string[],
     logLines: [] as string[],
     toasts: [] as string[],
@@ -95,6 +98,10 @@ function pageLayoutsWith(
       head,
       log: (source, message) => page.logLines.push(`[${source}] ${message}`),
       toast: (text, tone) => page.toasts.push(`${tone}: ${text}`),
+      onConfigChanged: (heard) => {
+        configListeners.add(heard);
+        return { dispose: () => configListeners.delete(heard) };
+      },
     }),
   };
   return page;
@@ -187,6 +194,20 @@ describe('createPageLayouts', () => {
     );
     expect(page.imports).toEqual([]);
     expect(show.shown).toHaveLength(1);
+  });
+
+  it('showLayouts_ConfigChange_ReadsTheSettingAgain', async () => {
+    const page = pageLayoutsWith();
+    const show = showing(page, 'default');
+    show.answer.resolve(setOf(entry('mine', 3)));
+    await vi.waitFor(() => expect(show.shown).toHaveLength(1));
+
+    show.setting = 'mine';
+    page.changeConfig();
+
+    await vi.waitFor(() => expect(show.shown).toHaveLength(2));
+    expect(show.shown[1].user).toBe('mine');
+    expect(page.imports).toEqual([script('mine', 3)]);
   });
 
   it('showLayouts_ChangeHeardBeforeAnswer_DropsAnswer', async () => {
@@ -352,6 +373,7 @@ describe('createPageLayouts', () => {
     show.refresh();
     await settle();
 
+    expect(page.configListeners.size).toBe(0);
     expect(page.appended.map((link) => link.removed)).toEqual([true]);
     expect(page.imports).toEqual([script('mine', 3)]);
     expect(show.shown).toHaveLength(1);

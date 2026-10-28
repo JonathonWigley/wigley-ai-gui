@@ -204,10 +204,9 @@ async function start() {
     head: document.head,
     log,
     toast: (text, tone) => toasts.show(text, tone),
+    onConfigChanged: (listener) => live.onChanged(() => listener()),
   });
-  // The shell show has no plugin settings wrapper, so it refreshes on every
-  // config change itself.
-  const chromeLayouts = layouts.show<ChromeLayout>('shell', {
+  layouts.show<ChromeLayout>('shell', {
     defaultLayout: defaultChromeLayout,
     read: readShellLayout,
     userLayout: () => live.current().settings.shell.layout,
@@ -216,7 +215,6 @@ async function start() {
       shell.setChromeLayout(shown.user);
     },
   });
-  live.onChanged(() => chromeLayouts.refresh());
   startPlugins(
     pageParts,
     (part, dependency) => {

@@ -14,6 +14,15 @@ export function element<Tag extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
+// Appends `node` to `parent` and returns it, as every kit part does.
+export function appended<E extends HTMLElement>(
+  parent: HTMLElement,
+  node: E,
+): E {
+  parent.append(node);
+  return node;
+}
+
 // `html` comes from the MarkdownRenderer, which escapes everything it is given.
 export function markdownElement(
   tag: 'div' | 'span',

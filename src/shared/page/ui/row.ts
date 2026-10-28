@@ -35,15 +35,21 @@ export function row(options: RowOptions): HTMLElement {
     trailing.append(options.trailing);
     node.append(trailing);
   }
-  const onClick = options.onClick;
-  if (onClick !== undefined) {
-    node.classList.add('ui-row--action');
-    node.addEventListener('mousedown', (event) => event.preventDefault());
-    node.addEventListener('click', () => {
-      if (!node.classList.contains('is-disabled')) {
-        onClick();
-      }
-    });
+  if (options.onClick !== undefined) {
+    rowAction(node, options.onClick);
   }
   return node;
+}
+
+// Makes `root` clickable the way a row with `onClick` is: `ui-row--action`,
+// a mousedown that takes no focus, and a click that runs `onClick` unless the
+// root is `is-disabled`.
+export function rowAction(root: HTMLElement, onClick: () => void): void {
+  root.classList.add('ui-row--action');
+  root.addEventListener('mousedown', (event) => event.preventDefault());
+  root.addEventListener('click', () => {
+    if (!root.classList.contains('is-disabled')) {
+      onClick();
+    }
+  });
 }

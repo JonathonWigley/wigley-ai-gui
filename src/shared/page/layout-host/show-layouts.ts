@@ -1,4 +1,5 @@
 import type { Bridge } from '../../../contracts/bridge';
+import type { Disposable } from '../../../contracts/disposable';
 import type { LayoutOwner, LayoutSet } from '../../../contracts/layouts';
 import type { Log } from '../../../contracts/log';
 import type {
@@ -12,13 +13,15 @@ import { layoutUrl } from '../../layout-url';
 import { createLayoutLoader, type LayoutLoader } from './layout-loader';
 
 // `importModule` imports a layout's script by URL; `head` holds the layouts'
-// stylesheet links.
+// stylesheet links; `onConfigChanged` hears each new config until its
+// dispose.
 export interface PageLayoutsDeps {
   bridge: Pick<Bridge, 'layouts' | 'onLayouts'>;
   importModule(url: string): Promise<unknown>;
   head: HTMLElement;
   log: Log;
   toast(text: string, tone: ToastTone): void;
+  onConfigChanged(listener: () => void): Disposable;
 }
 
 // Shows each owner's layouts on the page, from main's sets for that owner.
@@ -58,7 +61,8 @@ export function createPageLayouts(deps: PageLayoutsDeps): PageLayouts {
 
 // Loads the user's layout and the layouts in use from main's latest set for
 // `owner`, and hands the owner the loaded layouts whenever a load changes them.
-// Every set and every `refresh()` that changes what to load queues a load;
+// Every set, every config change and every `refresh()` that changes what to
+// load queues a load;
 // loads run one at a time in order. A setting naming a layout the set lacks
 // draws `default` and is logged once, until the setting changes or a set lists
 // it. A set heard before main answers `layouts` is newer, so the answer is then
@@ -160,6 +164,7 @@ function showLayouts<L>(
     latest = set;
     update();
   });
+  const configHeard = deps.onConfigChanged(update);
   deps.bridge
     .layouts(owner)
     .then((set) => {
@@ -176,6 +181,7 @@ function showLayouts<L>(
     dispose() {
       isDisposed = true;
       stopHearing();
+      configHeard.dispose();
       loader.dispose();
     },
   };

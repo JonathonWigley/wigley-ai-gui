@@ -26,13 +26,13 @@ const LAYERS: Record<string, LayerRule> = {
     packages: ['node:'],
   },
   'src/shared/page': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/shared/page/ui',
-      'src/shared/page/layout-host',
-    ],
+    layers: ['src/contracts', 'src/shared', 'src/shared/page/ui'],
     packages: [],
+  },
+  // Type-checks every owner's layout contract with the TypeScript compiler.
+  'src/shared/layouts/layout-contracts.test.ts': {
+    layers: ['src/contracts', 'src/shared'],
+    packages: ['node:', 'typescript'],
   },
   'src/shared/page/layout-host': {
     layers: [
