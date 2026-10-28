@@ -297,7 +297,7 @@ round; primer: an open primer), since main, not the page, decides.
     card, the Model and Controls chips) is placed by a self-test fixture state that builds it, shown or hidden; never
     by a stand-in element made only to satisfy the gate.
   - Every layout's `keyHint` and `keysFor` kit calls (`BaseKit`) keep their shape and route through anchors; the shell's
-  kit anchors nothing, since the core cannot reach the keys plugin before the plugins start.
+    kit anchors nothing, since the core cannot reach the keys plugin before the plugins start.
 
   Every hint is drawn by the Kbd primitive through `formatChord` (`formatVimToken` for a text box's keys),
   which prints a chord for the platform the served config names: on macOS the modifiers and Return, Tab, Esc,
