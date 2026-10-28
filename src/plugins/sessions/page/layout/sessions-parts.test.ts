@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { withUser as withUserLayout } from '../../../../shared/page/layout-host/test-layouts';
+import { withUser } from '../../../../shared/page/layout-host/test-layouts';
 import {
   asHtml,
   FakeElement,
@@ -15,9 +15,6 @@ import {
   sessionsViewSetup,
   stateOf,
 } from '../sessions-view-fakes';
-
-const withUser = (layout: Layout) =>
-  withUserLayout<Layout>(defaultLayout, layout);
 
 type Setup = ReturnType<typeof sessionsViewSetup>;
 
@@ -88,7 +85,7 @@ describe('sessions parts', () => {
     'sessionsParts_PartFails_DrawsWithDefault ($case)',
     ({ layout, partName, roots }) => {
       const setup = sessionsViewSetup();
-      setup.view.setLayouts(withUser(layout));
+      setup.view.setLayouts(withUser<Layout>(defaultLayout, layout));
       setup.view.tabs.add('a', tabView('t1'));
       setup.view.tabs.add('a', tabView('t2'));
 
@@ -114,7 +111,7 @@ describe('sessions parts', () => {
   it('sessionsParts_RowDrawnByUserLayout_KeepsClickAndSelection', () => {
     const { view, sideBar, activated } = sessionsViewSetup();
     view.setLayouts(
-      withUser({
+      withUser<Layout>(defaultLayout, {
         row: (parent, input, kit) => ({
           element: kit.el(parent, 'div', 'bare', input.label),
         }),
@@ -144,13 +141,13 @@ describe('sessions parts', () => {
         return { element };
       },
     };
-    view.setLayouts(withUser(layout));
+    view.setLayouts(withUser<Layout>(defaultLayout, layout));
 
     // No row selected: the empty text asks for a pick, with its hint.
     for (let draw = 0; draw < 3; draw++) {
       view.render(stateOf(['first', 'second'], null));
     }
-    view.setLayouts(withUser(layout));
+    view.setLayouts(withUser<Layout>(defaultLayout, layout));
 
     const live: Record<string, number> = {};
     for (const anchor of anchors.filter((made) => !made.isDisposed)) {
@@ -173,7 +170,7 @@ describe('sessions parts', () => {
     view.render(stateOf(['a'], 'a'));
     const body = (chat.element as unknown as FakeElement).parentNode;
 
-    view.setLayouts(withUser({ tab: fail }));
+    view.setLayouts(withUser<Layout>(defaultLayout, { tab: fail }));
 
     expect((chat.element as unknown as FakeElement).parentNode).toBe(body);
     expect(view.tabs.selectedTabOf('a')).toBe(chat);

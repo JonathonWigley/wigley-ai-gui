@@ -84,7 +84,8 @@ iterating a layout in place.
     The add-item box's text becomes an item when a key leaves the box or the review opens; a click or window switch
     that moves focus leaves the text in the box. A task holding 20 items, the item limit, shows no add-item box.
   - An item row's card holds the header `⌃H ‹ 2 of 3 › ⌃L` (its place among its task's items), the item text as
-    heading, its include mark, an Added tag on an item the user added, and the item's comment box.
+    heading, its include mark, an Added tag on an item the user added, and the item's comment box. The header's
+    step keys follow the focused pane: the rail binds `k`/`⌃H` and `j`/`⌃L`, the card `⌃H` and `⌃L`.
 - **Review pane** before send: every task's need, its items (the left-out ones tagged) and every comment, with the
   tallies; submit from there checks that the slug matches the slug rule and every extra task is named, and shows what
   failed.

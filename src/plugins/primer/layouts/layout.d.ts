@@ -177,8 +177,9 @@ export interface ItemKit extends PrimerKit {
   // The item's ToggleMark: a click toggles the item, and it shows the item's include on each change while the card
   // shows.
   includeMark(parent: HTMLElement): HTMLElement;
-  // The key hint of the row step `command` (`span.ui-key-stack.primer-item-step-keys`), which shows while the card or
-  // the rail has focus, since both step through the rows.
+  // The key hint of the row step `command` (`span.ui-key-stack.primer-item-step-keys`): both panes step through the
+  // rows, so it shows the focused pane's key (the rail binds `k`/`<C-h>` and `j`/`<C-l>`, the card `<C-h>` and
+  // `<C-l>`).
   stepKey(parent: HTMLElement, command: 'prevRow' | 'nextRow'): HTMLElement;
 }
 

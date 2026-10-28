@@ -27,8 +27,9 @@ import type {
 // - a button of `actions`, `confirm` or `markupToolbar`, and the markup toolbar's `colourKeys`: the app appends it at
 //   the end of the part's root, in the app's order, so every command keeps a key anchor.
 // - a `pickerRow`'s `trailing`: the app appends it at the end of the row root.
-// The list picker sets `title`, `is-selected`, `is-cursor`, `ui-row--action` and the click on a `pickerRow` root, so
-// the row gives `kit.row` no `onClick`.
+// The list picker sets `title`, `is-selected`, `is-cursor`, `ui-row--action`, a mousedown that takes no focus and the
+// click on a `pickerRow` root, the click dropped while the root is `is-disabled`, so the row gives `kit.row` no
+// `onClick`.
 //
 // Kit scopes: rows, values, images and actions `notes.popup`; `confirm` `notes.confirm`; `markupToolbar`
 // `notes.markup`; `pickerRow` `notes.picker`.

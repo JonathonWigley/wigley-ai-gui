@@ -21,6 +21,8 @@ import type {
 //   prompt `span.backlog-row-actions` while the row is the selected row.
 // - `document` → `div.md` holding the rendered doc, or the `emptyState` of `problem` when `problem` is not null.
 // - `trailing` → the picker's element for the end of the cursor row; pass it as `KitRowOptions.trailing`.
+// `status`, `homeRows`, `rows`, `filterBox`, `body`, `editor` and `cursorActions` each place once per draw: a slot
+// called twice throws `<slot> placed twice`, which fails the part, so it draws with `default`.
 // What a part leaves out:
 // - a slot: the app appends it at the end of the part's root; the cursor prompt with no `cursorActions` goes at the
 //   end of the row root.

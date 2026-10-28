@@ -26,7 +26,10 @@ import type {
   DrawnPart,
   RollbackDeps,
 } from '../../../shared/page/layout-host/draw-part';
-import { createLayoutParts } from '../../../shared/page/layout-host/layout-parts';
+import {
+  createLayoutParts,
+  type LayoutParts,
+} from '../../../shared/page/layout-host/layout-parts';
 import {
   createListPicker,
   type ListPicker,
@@ -94,12 +97,18 @@ export interface RowActions {
 
 export type RowAction = keyof RowActions;
 
-// The layout part that draws a row, and its input.
-export type RowPart =
-  | { part: 'settingRow'; input: SettingRowInput }
-  | { part: 'keyRow'; input: KeyRowInput }
-  | { part: 'leaderRow'; input: LeaderRowInput }
-  | { part: 'advancedRow'; input: AdvancedRowInput };
+// Each row part's input, by part name.
+interface RowInputs {
+  settingRow: SettingRowInput;
+  keyRow: KeyRowInput;
+  leaderRow: LeaderRowInput;
+  advancedRow: AdvancedRowInput;
+}
+
+// The layout part `P` that draws a row, and its input.
+type RowPartOf<P extends keyof RowInputs> = { part: P; input: RowInputs[P] };
+
+export type RowPart = { [P in keyof RowInputs]: RowPartOf<P> }[keyof RowInputs];
 
 // One row: `key` names it in the cursor and log lines (a setting's path, a
 // command id, `leader` or `advanced`); `draw` is the part that draws it.
@@ -270,29 +279,21 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     log: deps.log,
   });
 
-  // The build of the row part `partName` for `input`.
-  const rowBuild =
-    <I>(partName: RowPart['part'], input: I) =>
-    (draw: RowDraw<I>, parent: HTMLElement, rollback: RollbackDeps) =>
-      buildRow(draw, parent, input, services, rollback, partName);
+  // `parts` seen through the row parts alone, each keyed to its input, so a
+  // row's part name and input stay paired in one generic draw.
+  const rowParts: LayoutParts<
+    SettingsLayout,
+    { [P in keyof RowInputs]: RowDraw<RowInputs[P]> }
+  > = parts;
 
-  // Draws `row` into `parent` with its part.
-  const drawSettingsRow = (
-    row: SettingsRow,
+  // Draws a row's `part` with its `input` into `parent`.
+  const drawSettingsRow = <P extends keyof RowInputs>(
+    { part, input }: RowPartOf<P>,
     parent: HTMLElement,
-  ): DrawnPart<BuiltRow> => {
-    const { draw } = row;
-    switch (draw.part) {
-      case 'settingRow':
-        return parts.draw(draw.part, parent, rowBuild(draw.part, draw.input));
-      case 'keyRow':
-        return parts.draw(draw.part, parent, rowBuild(draw.part, draw.input));
-      case 'leaderRow':
-        return parts.draw(draw.part, parent, rowBuild(draw.part, draw.input));
-      case 'advancedRow':
-        return parts.draw(draw.part, parent, rowBuild(draw.part, draw.input));
-    }
-  };
+  ): DrawnPart<BuiltRow> =>
+    rowParts.draw(part, parent, (draw, rowParent, rollback) =>
+      buildRow(draw, rowParent, input, services, rollback, part),
+    );
 
   const sections = createSectionsView({
     drawPane: (container) =>
@@ -479,7 +480,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
   // Draws `row` into `parent`; a click on it outside its box moves the
   // cursor to it.
   const drawRowEntry = (row: SettingsRow, parent: HTMLElement) => {
-    const drawn = drawSettingsRow(row, parent);
+    const drawn = drawSettingsRow(row.draw, parent);
     entryDisposes.push(drawn.dispose);
     drawnRows.set(row.key, drawn.built);
     drawn.built.element.addEventListener('click', (event) => {

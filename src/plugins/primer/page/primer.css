@@ -118,6 +118,22 @@
   padding: var(--wg-space-2);
 }
 
+/* The Review label stays whole however narrow the rail; its keys clip at
+   the rail's edge instead. */
+.primer-rail-foot > .ui-button {
+  max-width: 100%;
+}
+
+.primer-rail-foot .ui-button-label {
+  flex: none;
+  white-space: nowrap;
+}
+
+.primer-review-keys {
+  min-width: 0;
+  overflow: hidden;
+}
+
 .primer-rail-list > .ui-section-header {
   margin-top: var(--wg-space-3);
 }
@@ -128,10 +144,13 @@
   gap: var(--wg-space-2);
 }
 
+/* `2/2` stays on one line; the row's label gives up the width, ending in an
+   ellipsis. */
 .primer-count {
   color: var(--wg-fg-tertiary);
   font-size: var(--wg-text-12);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 /* An item row's include mark and its number, before the item text. */

@@ -1,11 +1,11 @@
 import type { BaseKit } from '../../../shared/page/layout-host/kit';
 
 // The sessions layout contract: what a layout in `layouts/sessions/<name>/layout.js` draws Sessions mode's side bar
-// and tab bar with. A layout defines only the parts it changes; every part it leaves out, and every part that throws
-// or returns no element appended to `parent`, is drawn by `default` instead. The app sets
-// `data-layout-owner="sessions"` and `data-layout="<name>"` on the element each part returns, `<name>` being the
-// layout that drew it, so `[data-layout-owner="sessions"][data-layout="<name>"] …` in a layout's CSS selects only its
-// own parts.
+// and tab bar with. A layout defines only the parts it changes; every part it leaves out, and every part that throws,
+// returns no element appended to `parent`, or appends any other node to `parent`, is drawn by `default` instead. The
+// app sets `data-layout-owner="sessions"` and `data-layout="<name>"` on the element each part returns, `<name>` being
+// the layout that drew it, so `[data-layout-owner="sessions"][data-layout="<name>"] …` in a layout's CSS selects only
+// its own parts.
 //
 // Panes. `sideBar` and `tabBar` draw once per layout set. The app fills the pane's `rows` with one `row` per session
 // and its `strip` with one `tab` per tab of the selected session, replacing their children on each draw. A pane
@@ -77,7 +77,8 @@ export interface TabBarKit extends SessionsKit {
 }
 
 export interface EmptyTextKit extends SessionsKit {
-  // The key that picks the next session, `span.sessions-pick-hint`; the app makes it once, so each draw moves it.
+  // The key that picks the next session, `span.sessions-pick-hint`; the app makes it once, so each draw moves it. A
+  // second call throws `pickHint placed twice`, so the part draws with `default`.
   pickHint(parent: HTMLElement): HTMLElement;
 }
 
