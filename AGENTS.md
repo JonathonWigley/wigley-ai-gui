@@ -79,8 +79,10 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  and per-segment decoding that refuses an encoded `/`
   agent-forms/   the agent form lifecycle every agent form type shares (forms' rounds, the primer): the service with
                  its per-session open form, deadline, re-attach and hand-back, the saved-form folder and memory stores,
-                 the channel and scripted presenters, the MCP tool session, and the drive actions that open a
-                 form type's forms in a drive run's sessions → main-side only
+                 the channel and scripted presenters, the MCP tool session, the drive actions that open a
+                 form type's forms in a drive run's sessions, and the layout preview helper
+                 (`agent-form-preview.ts`: a form type's sample in a session of its own, its form asked again and a
+                 draft waited on; forms and the primer build their previews on it) → main-side only
   paths/         the POSIX and Windows adapters behind `Paths`, picked by each composition root
   followups/     the follow-up file module: parses a features home's follow-ups file into items (title, one line,
                  tags, body, line span, done) and turns a create, edit, tag change or delete into the file's new
@@ -88,8 +90,13 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  pure, no I/O; Backlog and Docs' create dialog both write follow-ups through it
   image-types.ts the image media types the app attaches and pastes (chat and notes share it)
   page/          page-only DOM builders plugins share: the paste and drop helpers (`pasted-images.ts`), the layout host
-                 (`layout-host/`: showing layouts, the pick chain, drawing a part, rollback and `BaseKit`, the kit every
-                 owner's kit extends), the reducer store, autosave, editor boxes,
+                 (`layout-host/`: showing layouts, the pick chain, drawing a part, rollback, `BaseKit` (the kit every
+                 owner's kit extends, with the shared `icon`, `chevron`, `edge` and `rowTrailing`) and `ownerBaseKitDeps` (the deps an
+                 owner's base kit is built from),
+                 `layout-parts.ts` (`createLayoutParts`: an owner's shown layouts and its draws, kept by slot),
+                 `app-slot.ts` (where an app element sits in a part), `read-layout-module.ts` (`readLayoutParts` and
+                 `requireLayoutParts`, the reader skeleton) and `test-layouts.ts` (the test helpers owners share)),
+                 the reducer store, autosave, editor boxes,
                  the confirm prompt, the session form tab helper, the session form status line, and the
                  session form lifecycle (the open forms' reducer, the close guard, send and close from main, the page
                  events queue)
@@ -300,8 +307,9 @@ round; primer: an open primer), since main, not the page, decides.
     built-in key ships with its place on screen. A target drawn only in some states (a ninth choice, a permission
     card, the Model and Controls chips) is placed by a self-test fixture state that builds it, shown or hidden; never
     by a stand-in element made only to satisfy the gate.
-  - Every layout's `keyHint` and `keysFor` kit calls (`BaseKit`) keep their shape and route through anchors; the shell's
-    kit anchors nothing, since the core cannot reach the keys plugin before the plugins start.
+  - Every layout's `keyHint` and `keysFor` kit calls (`BaseKit`) keep their shape and route through anchors. The
+    shell's kit takes any plugin's qualified command id; the core cannot reach the keys plugin before the plugins
+    start, so the shell's anchors draw when the chrome draws again once they have (`setKeys` in `renderer.ts`).
 
   Every hint is drawn by the Kbd primitive through `formatChord` (`formatVimToken` for a text box's keys),
   which prints a chord for the platform the served config names: on macOS the modifiers and Return, Tab, Esc,
@@ -431,13 +439,20 @@ round; primer: an open primer), since main, not the page, decides.
   shows through the page host in `renderer.ts`. Each app writes `layouts/kit.d.ts` (the shared kit types) and
   `layouts/<owner>/layout.d.ts` at start. The page's layout host (`src/shared/page/layout-host/`) picks the layout (the owner's setting — `<plugin>.layout`, or the core
   `shell.layout` — and `default` when unset), checks it with the owner's reader, draws each part, rolls back a part
-  that throws and draws it with `default`, and redraws on a reload. A layout draws every pane and every repeated row,
-  card or entry; the app keeps selection, keys, scrolling, split widths, text boxes and editors. The root of every
+  that throws and draws it with `default`, redraws on a reload, and refreshes every show on each config change. A layout draws every pane and every repeated
+  row, card or entry; the app keeps selection, keys, scrolling, split widths, text boxes and editors. The root of every
   part a layout draws carries `data-layout="<name>"` and `data-layout-owner="<owner>"`, and each loaded layout gets its own stylesheet link, so a
   layout's CSS selects under its own name and restyles nothing another layout drew. A loaded layout stays available
   while its revision is current, so a round naming one another round loaded draws with it at once. A view that needs
   agent data to show anything has a preview sample under `Space z l` for iterating its layout in place.
   `docs/features/layouts/design.md` lists every owner and its surfaces.
+  - **A part a layout leaves out** (not defined, or set to `undefined`) draws with `default`. A part may add only its
+    root to its parent: one that leaves another node beside it falls back like one that throws.
+  - **A list picker draws a layout's rows** (`drawRow`): the picker owns a drawn row's click, its `ui-row--action`
+    class and mousedown handling, appends `trailing` when the row left it out, and runs the row's dispose before the
+    row draws again and on close.
+  - `src/shared/layouts/layout-contracts.test.ts` type-checks every owner's `layout.d.ts` against the shared kit, so a
+    member that clashes with `BaseKit` fails the suite.
 - **A chat layout** draws each entry kind through a builder that takes `(parent, entry, kit)`, appends its element
   to `parent` and returns it (`src/plugins/chat/layouts/layout.d.ts`). `ChatKit` extends the shared base kit
   (`markdown`, `card`, `statusDot` with `setDotStatus`, `sectionHeader`, `keyHint` and the rest) with chat's parts:
@@ -446,7 +461,9 @@ round; primer: an open primer), since main, not the page, decides.
   image viewer). Every part takes its parent first. Beside the entries, the layout draws the other Chat tab surfaces
   through parts that take `(parent, input, kit)` and return a `PartView`: `composer`, `composerBar`, `attachments`,
   `pickerRow`, `signIn`, `reasonBox`, `closeConfirm` and `imageViewer`, each with a kit that extends the base kit.
-  A user layout defines only the parts it changes.
+  A user chat layout defines only the entry builders and the parts it changes: a kind or part it leaves out draws with
+  `default`, with no toast. A user builder that throws draws with `default` and toasts once per kind; when `default`
+  throws too, the entry draws as a bare line and toasts that.
 - **A forms layout** draws the forms view: a card per item kind (`question`, `finding`, `notice`) and the `head`,
   `rail` and `review` panes. Its contract is `src/plugins/forms/layouts/layout.d.ts`: the input for each card and
   pane, and the kit of ready-made parts (sections, grouped choices, answer controls, verdict, rail entry, review row,

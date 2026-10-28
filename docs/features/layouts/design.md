@@ -37,9 +37,10 @@ app and shown in the stable app with no copy.
   `LayoutService` watches it and a plugin registers with `api.layouts`. The shell registers with the core directly.
   The registry and loader that forms and chat used over their own plugin data folders move behind this service.
 - **One page host.** Everything forms and chat each held a copy of — serving and showing layouts, the reader
-  skeleton, the pick chain, rolling back a part that throws and drawing it with `default`, the command runner and the
-  head kit's generic half — is one module, `src/shared/page/layout-host/`. An owner adds only its contract, its
-  `default` layout, its reader and its kit parts. Every owner's kit extends the host's `BaseKit` (`kit.d.ts`), whose
+  skeleton (`readLayoutParts`), the pick chain, the parts factory (`createLayoutParts`), the app-element slot,
+  rolling back a part that throws and drawing it with `default`, the command runner and the head kit's generic half —
+  is one module, `src/shared/page/layout-host/`. An owner adds only its contract, its `default` layout, its reader
+  and its kit parts. Every owner's kit extends the host's `BaseKit` (`kit.d.ts`), whose
   members every layout can use.
 - **The owner's contract** is its `layouts/layout.d.ts`; its built-in `default` is `layouts/default/layout.js`,
   plain JS under `// @ts-check`. A user layout defines only the parts it changes.
