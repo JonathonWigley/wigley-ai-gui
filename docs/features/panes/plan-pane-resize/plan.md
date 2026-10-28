@@ -519,5 +519,6 @@ Review base: 5997110
 - columns scroll into view only when their selection name changes — a redraw that keeps the selection does not scroll — a row selected by a path keeping the name may not scroll · group 03
 - focusCard keeps today's handler (no add-item commit, no box leave); focusTasks/focusItems commit and leave as focusRail did — decision 12 names only those two — one line and one test row · group 03
 ### Review rounds
+- 1 · e5cba07 · NEEDS FIXES — 1 important, 5 minor, 1 pre-existing; 8 lead-applied in 320d579; report scratchpad/review-e5cba07.md
 ### Test gate
 - 21 files: every test the run added or edited (16), plus shell-chrome (mountShell signature), keymap and plugin-manifests (new core commands, binds, primer scopes/commands), user-config and config-store (default keymap validation) · 445 passed

@@ -371,6 +371,8 @@ describe('mountShell', () => {
     { token: '300px', stored: undefined, drawn: '300' },
     { token: '', stored: undefined, drawn: '256' },
     { token: 'auto', stored: undefined, drawn: '256' },
+    { token: '20rem', stored: undefined, drawn: '256' },
+    { token: ' 300px ', stored: undefined, drawn: '300' },
     { token: '256px', stored: 320, drawn: '320' },
   ])(
     'opens the side bar at the token or the stored width: token $token, stored $stored',
@@ -421,11 +423,16 @@ describe('mountShell', () => {
   });
 
   // Steps over a shell whose stored side bar width is 400 and whose side bar
-  // starts at the client's left edge.
+  // starts at the client's left edge; the stored width stays 400 unless a row
+  // names the width a nudge writes.
   type NarrowingShell = ReturnType<typeof mountMeasuredShell>;
   const resizeTo = (shell: NarrowingShell, mainRight: number) => {
     shell.edges.mainRight = mainRight;
     shell.resizeRoot();
+  };
+  const nudge = (shell: NarrowingShell, direction: 'left' | 'right') => {
+    Object.assign(shell.handle()!, { getClientRects: () => [{}] });
+    shell.shell.sideBarDivider.nudge(direction);
   };
   it.each([
     {
@@ -470,15 +477,39 @@ describe('mountShell', () => {
       },
       drawn: '280',
     },
-  ])(
+    {
+      row: 'beside, main ending at 600, nudged right at the drawn limit',
+      steps: (shell: NarrowingShell) => {
+        shell.shell.layOutSideBar('beside');
+        resizeTo(shell, 600);
+        nudge(shell, 'right');
+      },
+      drawn: '280',
+    },
+    {
+      row: 'beside, main ending at 600, nudged left from the drawn width',
+      steps: (shell: NarrowingShell) => {
+        shell.shell.layOutSideBar('beside');
+        resizeTo(shell, 600);
+        nudge(shell, 'left');
+      },
+      drawn: '256',
+      stored: 256,
+    },
+  ] satisfies {
+    row: string;
+    steps: (shell: NarrowingShell) => void;
+    drawn: string;
+    stored?: number;
+  }[])(
     'clamps only the drawn side bar width as the window narrows: $row',
-    ({ steps, drawn }) => {
+    ({ steps, drawn, stored = 400 }) => {
       const shell = mountMeasuredShell({ stored: 400 });
 
       steps(shell);
 
       expect(shell.drawnWidth()).toBe(drawn);
-      expect(shell.values.get('side-bar-width')).toBe(400);
+      expect(shell.values.get('side-bar-width')).toBe(stored);
     },
   );
 

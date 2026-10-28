@@ -120,12 +120,15 @@ const MAIN_MIN = 320;
 const SIDE_BAR_FALLBACK_WIDTH = 256;
 
 // The side bar's open width: the `sidebar-width` theme token's pixels as
-// `root` computes it.
+// `root` computes it. The computed value is the token as written, so a length
+// in any other unit (`20rem`) takes the fallback.
 function sideBarOpenWidth(root: HTMLElement): number {
-  const token = parseFloat(
-    getComputedStyle(root).getPropertyValue('--wg-sidebar-width'),
-  );
-  return Number.isFinite(token) ? token : SIDE_BAR_FALLBACK_WIDTH;
+  const token = getComputedStyle(root)
+    .getPropertyValue('--wg-sidebar-width')
+    .trim();
+  return /^\d+(\.\d+)?px$/.test(token)
+    ? parseFloat(token)
+    : SIDE_BAR_FALLBACK_WIDTH;
 }
 
 // An anchor function that anchors through the keys `setKeys` hands it, nothing

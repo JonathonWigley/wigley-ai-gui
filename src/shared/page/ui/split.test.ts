@@ -144,8 +144,10 @@ function splitWithHandle(saved: Map<string, unknown>) {
   return { split, handle, timers, anchor };
 }
 
-function press(handle: FakeElement, pointerId: number) {
-  handle.fire('pointerdown', { button: 0, pointerId });
+// Presses at `clientX`; each split test presses on the start pane's edge, the
+// drawn width from the root's left edge at 0.
+function press(handle: FakeElement, pointerId: number, clientX: number) {
+  handle.fire('pointerdown', { button: 0, pointerId, clientX });
 }
 
 function move(handle: FakeElement, pointerId: number, clientX: number) {
@@ -227,7 +229,7 @@ describe('createSplit drag', () => {
   it('saves the dragged width when capture is lost', () => {
     const saved = new Map<string, unknown>();
     const { split, handle } = splitWithHandle(saved);
-    press(handle, 1);
+    press(handle, 1, 240);
     expect(handle.classes.has('is-active')).toBe(true);
     move(handle, 1, 300);
     loseCapture(handle, 1);
@@ -239,8 +241,8 @@ describe('createSplit drag', () => {
   it('keeps the first drag when a second pointer loses capture', () => {
     const saved = new Map<string, unknown>();
     const { split, handle } = splitWithHandle(saved);
-    press(handle, 1);
-    press(handle, 2);
+    press(handle, 1, 240);
+    press(handle, 2, 240);
     handle.fire('lostpointercapture', { pointerId: 2 });
     expect(handle.classes.has('is-active')).toBe(true);
     move(handle, 1, 320);
@@ -251,10 +253,10 @@ describe('createSplit drag', () => {
   it('drags again after capture was lost without reaching the handle', () => {
     const saved = new Map<string, unknown>();
     const { split, handle } = splitWithHandle(saved);
-    press(handle, 1);
+    press(handle, 1, 240);
     move(handle, 1, 300);
     handle.captured.delete(1);
-    press(handle, 5);
+    press(handle, 5, 300);
     expect(saved.get('side')).toBe(300);
     expect(handle.classes.has('is-active')).toBe(true);
     move(handle, 5, 200);
@@ -267,7 +269,7 @@ describe('createSplit drag', () => {
   it('saves the dragged width when the pointer is released off the handle', () => {
     const saved = new Map<string, unknown>();
     const { handle } = splitWithHandle(saved);
-    press(handle, 1);
+    press(handle, 1, 240);
     move(handle, 1, 300);
     fakeWin.fire('pointerup', { pointerId: 1 });
     expect(saved.get('side')).toBe(300);
@@ -277,7 +279,7 @@ describe('createSplit drag', () => {
   it('saves the dragged width when the pointer is cancelled', () => {
     const saved = new Map<string, unknown>();
     const { handle } = splitWithHandle(saved);
-    press(handle, 1);
+    press(handle, 1, 240);
     move(handle, 1, 300);
     fakeWin.fire('pointercancel', { pointerId: 1 });
     expect(saved.get('side')).toBe(300);
@@ -286,7 +288,7 @@ describe('createSplit drag', () => {
   it('keeps the drag when another pointer is released', () => {
     const saved = new Map<string, unknown>();
     const { split, handle } = splitWithHandle(saved);
-    press(handle, 1);
+    press(handle, 1, 240);
     move(handle, 1, 300);
     fakeWin.fire('pointerup', { pointerId: 2 });
     expect(handle.classes.has('is-active')).toBe(true);
@@ -298,7 +300,7 @@ describe('createSplit drag', () => {
   it('stops listening on the window once the drag ends', () => {
     const saved = new Map<string, unknown>();
     const { handle } = splitWithHandle(saved);
-    press(handle, 1);
+    press(handle, 1, 240);
     loseCapture(handle, 1);
     expect(fakeWin.listeners.get('pointerup') ?? []).toEqual([]);
     expect(fakeWin.listeners.get('pointercancel') ?? []).toEqual([]);
@@ -317,7 +319,7 @@ describe('createSplit reloadWidth', () => {
   it('keeps the width of a drag in progress', () => {
     const saved = new Map<string, unknown>();
     const { split, handle } = splitWithHandle(saved);
-    press(handle, 1);
+    press(handle, 1, 240);
     move(handle, 1, 300);
     saved.set('side', 350);
     split.reloadWidth();
@@ -342,11 +344,15 @@ describe('createSplit nudge', () => {
     { stored: 240, direction: 'right', width: 264, written: 264 },
     { stored: 240, direction: 'left', width: 216, written: 216 },
     { stored: 160, direction: 'left', width: 160, written: undefined },
+    { stored: 700, direction: 'left', width: 572, written: 572 },
+    { stored: 700, direction: 'right', width: 700, written: undefined },
   ] as const)(
-    'nudges one step and stores only a changed width: $stored $direction',
+    'nudges one step from the drawn width and stores only a changed width: $stored $direction',
     ({ stored, direction, width, written }) => {
       const saved = new Map<string, unknown>([['side', stored]]);
       const { split, handle, timers } = splitWithHandle(saved);
+      // A 4px handle leaves a 796px span, the start pane drawn at most 596.
+      handle.rect = { left: 0, width: 4 };
       saved.delete('side');
 
       split.nudge(direction);
@@ -357,6 +363,19 @@ describe('createSplit nudge', () => {
       expect([...timers.armed.values()].map(({ ms }) => ms)).toEqual([1000]);
     },
   );
+
+  it('does nothing while a drag is running', () => {
+    const saved = new Map<string, unknown>();
+    const { split, handle } = splitWithHandle(saved);
+    press(handle, 1, 240);
+    move(handle, 1, 300);
+
+    split.nudge('right');
+
+    expect(split.width()).toBe(300);
+    expect(saved.has('side')).toBe(false);
+    expect(handle.classes.has('is-nudged')).toBe(false);
+  });
 
   it('does nothing while the handle has no layout box', () => {
     const saved = new Map<string, unknown>();
@@ -412,7 +431,7 @@ describe('createSplit dispose', () => {
     const { split, handle, timers, anchor } = splitWithHandle(saved);
     split.nudge('right');
     const [lingering] = [...timers.armed.keys()];
-    press(handle, 1);
+    press(handle, 1, 264);
     move(handle, 1, 300);
 
     split.dispose();
@@ -433,26 +452,35 @@ describe('createSplit dispose', () => {
 });
 
 describe('createSplitDivider', () => {
-  it('drags a handle it did not build', () => {
-    const handle = fakeElement();
-    const shown: number[] = [];
-    createSplitDivider({
-      ...limits,
-      uiState: stateOver(new Map()),
-      stateKey: 'side',
-      handle: handle as unknown as HTMLElement,
-      measure: () => ({ left: 100, span: 800 }),
-      show: (width) => shown.push(width),
-      anchor: fakeAnchor().anchor,
-      timers: fakeTimers().timers,
-    });
-    press(handle, 1);
+  // The start pane's left edge at 100 with an 800px span draws at most 600.
+  it.each([
+    { stored: 240, pressAt: 340, moves: [400, 900], shown: [300, 600] },
+    { stored: 240, pressAt: 342, moves: [342, 402], shown: [240, 300] },
+    { stored: 700, pressAt: 702, moves: [652], shown: [550] },
+  ])(
+    'drags a handle it did not build, keeping the grab offset: $stored at $pressAt',
+    ({ stored, pressAt, moves, shown: expected }) => {
+      const handle = fakeElement();
+      const shown: number[] = [];
+      createSplitDivider({
+        ...limits,
+        uiState: stateOver(new Map([['side', stored]])),
+        stateKey: 'side',
+        handle: handle as unknown as HTMLElement,
+        measure: () => ({ left: 100, span: 800 }),
+        show: (width) => shown.push(width),
+        anchor: fakeAnchor().anchor,
+        timers: fakeTimers().timers,
+      });
+      press(handle, 1, pressAt);
 
-    move(handle, 1, 400);
-    move(handle, 1, 900);
+      for (const clientX of moves) {
+        move(handle, 1, clientX);
+      }
 
-    expect(shown.slice(1)).toEqual([300, 600]);
-  });
+      expect(shown.slice(1)).toEqual(expected);
+    },
+  );
 });
 
 function asFakeElement(node: HTMLElement): FakeElement {

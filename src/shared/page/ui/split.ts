@@ -44,7 +44,9 @@ export interface Split extends ResizeTarget {
 // both panes share; `show` draws a width. The divider owns the drag on
 // `handle`, the stored width under `stateKey` and `nudge`; a drag writes
 // uiState once at its end, a nudge on each press, each only when the width
-// changed; nudge does nothing while `handle` has no layout box.
+// changed. A nudge steps from the drawn width, the stored one clamped to the
+// span, so a press at a limit writes nothing and keeps a wider stored width;
+// nudge does nothing while `handle` has no layout box or a drag is running.
 export interface SplitDividerOptions extends SplitLimits {
   uiState: UiState;
   stateKey: string;
@@ -88,6 +90,9 @@ export function createSplitDivider(options: SplitDividerOptions): SplitDivider {
 
   let width = storedSplitWidth(options.uiState, options.stateKey, options);
   let widthAtDragStart = width;
+  // The pointer's distance from the drawn width's edge at the press, kept
+  // through the drag so the edge stays under the same point of the handle.
+  let grabOffset = 0;
   let isDisposed = false;
   let promptTimer: number | null = null;
   const showWidth = (next: number) => {
@@ -132,13 +137,17 @@ export function createSplitDivider(options: SplitDividerOptions): SplitDivider {
     window.addEventListener('pointercancel', endDragOnRelease);
     handle.classList.add('is-active');
     widthAtDragStart = width;
+    const { left, span } = options.measure();
+    grabOffset = event.clientX - left - clampSplitWidth(width, options, span);
   };
   const drag = (event: PointerEvent) => {
     if (!handle.hasPointerCapture(event.pointerId)) {
       return;
     }
     const { left, span } = options.measure();
-    showWidth(clampSplitWidth(event.clientX - left, options, span));
+    showWidth(
+      clampSplitWidth(event.clientX - left - grabOffset, options, span),
+    );
   };
   // The browser fires lostpointercapture after pointerup and pointercancel
   // release capture, and on every other loss of it while the handle is in the
@@ -172,14 +181,15 @@ export function createSplitDivider(options: SplitDividerOptions): SplitDivider {
     },
     nudge(direction: ResizeDirection) {
       const hasLayoutBox = handle.getClientRects().length > 0;
-      if (isDisposed || !hasLayoutBox) {
+      if (isDisposed || !hasLayoutBox || isDragging()) {
         return;
       }
       const { span } = options.measure();
-      const next = nudgedSplitWidth(width, direction, options, span);
-      if (next !== width) {
+      const drawn = clampSplitWidth(width, options, span);
+      const next = nudgedSplitWidth(drawn, direction, options, span);
+      if (next !== drawn) {
         showWidth(next);
-        options.uiState.set(options.stateKey, width);
+        options.uiState.set(options.stateKey, next);
       }
       showPromptAfterNudge();
     },
@@ -208,8 +218,9 @@ export function createSplitDivider(options: SplitDividerOptions): SplitDivider {
 // Two panes side by side with a drag handle between them, stacked
 // (`is-stacked`) while the split is narrower than `min` plus `endMin`. The
 // start pane's width opens from `uiState` under `stateKey` and is written back
-// at the end of a drag and on each nudge, when either changed it;
-// `reloadWidth` reads it again. Its owner calls `dispose` when it drops the
+// at the end of a drag and on each nudge, when either changed it; a nudge
+// steps from the drawn width and is ignored mid-drag. `reloadWidth` reads it
+// again. Its owner calls `dispose` when it drops the
 // split.
 export function createSplit(options: SplitOptions): Split {
   const root = element('div', 'ui-split');
