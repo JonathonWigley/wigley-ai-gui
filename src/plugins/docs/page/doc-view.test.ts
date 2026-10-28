@@ -13,7 +13,12 @@ import {
 } from '../../../shared/page/test-dom';
 import defaultLayout from '../layouts/default/layout.js';
 import type { DocHeaderInput, Layout } from '../layouts/layout';
-import { createDocView, type DocTarget, type DocViewDeps } from './doc-view';
+import {
+  createDocView,
+  type DocDetail,
+  type DocTarget,
+  type DocViewDeps,
+} from './doc-view';
 import {
   fakeDocsParts,
   fakePushedScope,
@@ -106,6 +111,12 @@ function target(entryId: string | null): DocTarget {
   };
 }
 
+// A hook entry's detail view, its `i` editing `/home/hook.md`.
+const hookDetail: DocDetail = {
+  fields: [['Event', 'Stop']],
+  editFile: async () => ({ path: '/home/hook.md', text: '# Hook', line: 1 }),
+};
+
 describe('createDocView', () => {
   beforeEach(() =>
     installFocusFakeDom(
@@ -159,6 +170,7 @@ describe('createDocView', () => {
       [{ chips: [], statuses: [] }],
     );
   });
+
   it('redraw_NoEditor_KeepsThePaneScrollAndFocus', async () => {
     let shown = withUser(defaultLayout, paneLayout('pane-1'));
     const { view } = docViewOver(() => shown);
@@ -192,16 +204,26 @@ describe('createDocView', () => {
     expect(editors.map(({ line }) => line)).toEqual([7]);
   });
 
-  it.each(['quit', 'writeQuit'] as const)(
-    '%s_AfterEditFromAScrolledPane_ShowsTheDocAtThatScroll',
-    async (command) => {
+  it.each([
+    ['quit', 'File'],
+    ['writeQuit', 'File'],
+    ['quit', 'Detail'],
+    ['writeQuit', 'Detail'],
+  ] as const)(
+    '%s_AfterEditFromAScrolled%s_ShowsItAtThatScroll',
+    async (command, shows) => {
       const { view, editors } = docViewOver(() =>
         withUser(defaultLayout, paneLayout('pane')),
       );
-      await view.open(target(null));
+      await view.open(
+        shows === 'File'
+          ? target(null)
+          : { ...target(null), detail: hookDetail },
+      );
       const pane = scroller(view.element);
       pane.scrollTop = 120;
       view.edit(1);
+      await settled();
 
       if (command === 'quit') {
         editors[0].events.quit(false);

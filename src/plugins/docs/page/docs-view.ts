@@ -141,7 +141,8 @@ export interface DocsView {
   // The open doc's path while its editor holds unsaved edits, else null.
   unsavedPath(): string | null;
   // A new set of layouts is shown: each part whose pick changed draws again,
-  // keeping the open doc, the editor, scroll, selection, filter and focus.
+  // keeping the open doc, the editor, scroll, selection, filter and focus. A
+  // throw from the tree, the doc pane or the dialogs skips none of the others.
   layoutsChanged(): void;
   // Closes the overlays, takes the dialogs off the window, stops the view's
   // watch, its `docChanged` listener and its following of star changes,
@@ -242,6 +243,25 @@ function hookLine(text: string, command: string): number {
   const written = JSON.stringify(command).slice(1, -1);
   const index = text.split('\n').findIndex((line) => line.includes(written));
   return index === -1 ? 1 : index + 1;
+}
+
+// Calls `call` on each of `items`, a throw not skipping the rest, and throws
+// the first error once every call has run.
+export function callEach<T>(
+  items: readonly T[],
+  call: (item: T) => void,
+): void {
+  const errors: unknown[] = [];
+  for (const item of items) {
+    try {
+      call(item);
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+  if (errors.length > 0) {
+    throw errors[0];
+  }
 }
 
 interface AppliedChange {
@@ -985,9 +1005,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     layoutsChanged() {
       isRedrawing = true;
       try {
-        tree.redraw();
-        doc.redraw();
-        dialogs.redraw();
+        callEach([tree, doc, dialogs], (part) => part.redraw());
       } finally {
         isRedrawing = false;
       }

@@ -125,9 +125,12 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
       userLayout: () => api.settings().layout,
       setLayouts(shown) {
         parts.setLayouts(shown);
-        keysButton.dispose();
-        keysButton = parts.titleBarButton(keysButtonSlot);
-        help.layoutsChanged();
+        try {
+          keysButton.dispose();
+          keysButton = parts.titleBarButton(keysButtonSlot);
+        } finally {
+          help.layoutsChanged();
+        }
       },
     });
 

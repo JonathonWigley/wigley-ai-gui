@@ -593,12 +593,13 @@ export function createDocView(deps: DocViewDeps): DocView {
 
   // Destroys the editor and shows the rendered doc from the text last read
   // or written, or the detail view it was opened from, at the scroll the
-  // pane had as the editor opened.
+  // pane had as the editor opened, set again once the body draws.
   const closeEditor = (doc: ShownDoc) => {
     dropEditor();
     deps.log('docs', `closed the editor on ${doc.name}`);
     pane.focus();
     const scrollTop = scrollTopBeforeEdit;
+    pane.scrollTop = scrollTop;
     if (doc.target.detail !== null) {
       showDetail(doc, doc.target.detail);
       pane.scrollTop = scrollTop;

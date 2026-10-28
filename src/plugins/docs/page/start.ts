@@ -35,6 +35,7 @@ import type { Layout } from '../layouts/layout';
 import { docsManifest } from '../manifest';
 import { type DocChangeRecord, UNSAVED_TEXT } from './docs-state';
 import {
+  callEach,
   createDocsView,
   type DocsView,
   type DocsViewCommands,
@@ -249,9 +250,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       setLayouts(shown) {
         current = shown;
         log('docs', `layouts shown: ${shown.user}`);
-        for (const view of allViews()) {
-          view.layoutsChanged();
-        }
+        callEach(allViews(), (view) => view.layoutsChanged());
       },
     });
 
