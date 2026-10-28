@@ -474,7 +474,7 @@ export function cardRow(primer: OpenPrimer): PrimerRow;
 - [x] [Views set the resize target](04-views-resize-target.md) — after 01, 02
 
 ### Wave 4
-- [ ] [Doc re-read](05-doc-re-read.md) — after 01–04
+- [x] [Doc re-read](05-doc-re-read.md) — after 01–04
 - [ ] [Final verification](06-final-verification.md) — after 01–04
 
 Wave notes: 01 changes `SplitLimits`, so it updates the five callers in the same group to keep the tree compiling.
@@ -503,6 +503,7 @@ Review base: 5997110
 - 02 · fe29dbe · diff read: PageApi.panes, ScopeStack.onBaseChange, createPaneResize, Shell.sideBarDivider/setKeys/dispose, mountShell(root, layout, uiState, timers), four coreCommands and two binds present; typecheck passes; worker: lint, 167 tests in 9 files, selftest pass · concerns: the side bar laid over draws its stored width unclamped, so a stored width wider than a narrow window runs past its edge; the forms self-test resize steps nudge the side bar until 04 sets the forms split as target
 - 04 · 2694625 · diff read: RoundView.resizeTarget, setResizeTarget deps in forms/backlog, docs and gallery wiring present; worker typecheck and lint pass, 22 tests in 3 files; lead typecheck deferred to after 03 lands (03 mid-edit in tree) · concerns: forms Form tab shown can set null for a moment before the round view exists, then confirm.setBaseScope sets the split; task doc's askCancel row did not hold (askCancel only from review), test dispatches openReview first; forms-view deps comment has an over-long line
 - 03 · 1245740 · diff read: PrimerPane, PrimerColumn, TaskRow, PrimerRow, cardRow, selectTask/selectItem, focusTasks/focusItems, tasks/items scopes, TasksKit/ItemsKit/ItemsInput, setResizeTarget wiring, rail width migration present; no rail names left in src/plugins/primer or keymap; lead typecheck and lint pass on the whole tree with 04; worker: full suite 4083 pass, selftest pass · concerns: a step from an add-item box now moves through the tasks column, since showTarget for a newItem target shows the card from the tasks column (test 'steps rows from a box' re-pinned to 'selected task s1')
+- 05 · e2bb8df · diff read: 4 doc fixes, follow-up removed after confirming Split.dispose and its gallery call; keymap.md and layouts/design.md needed none · concerns: none
 ### Contract changes
 ### Rulings
 - dispose mid-drag ends the drag through endDrag, which writes a changed dragged width — the decision names the endDrag path — a dropped split may store an unreleased width (harmless) · group 01
@@ -519,3 +520,4 @@ Review base: 5997110
 - focusCard keeps today's handler (no add-item commit, no box leave); focusTasks/focusItems commit and leave as focusRail did — decision 12 names only those two — one line and one test row · group 03
 ### Review rounds
 ### Test gate
+- 21 files: every test the run added or edited (16), plus shell-chrome (mountShell signature), keymap and plugin-manifests (new core commands, binds, primer scopes/commands), user-config and config-store (default keymap validation) · 445 passed

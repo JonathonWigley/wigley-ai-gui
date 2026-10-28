@@ -1,6 +1,6 @@
 # 05 — Doc re-read against the landed code
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 01, 02, 03, 04
 Plan: [plan.md](plan.md)
@@ -78,3 +78,4 @@ removal, and the report says that no line was stale.
 
 ## Proof
 
+Commit e2bb8df · proof: diff read: 4 doc fixes, follow-up removed after confirming Split.dispose and its gallery call; keymap.md and layouts/design.md needed none · concerns: none
