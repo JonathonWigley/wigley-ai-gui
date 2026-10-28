@@ -17,18 +17,8 @@ export interface LayoutPart {
   element: HTMLElement;
 }
 
-// The kit every docs part gets: BaseKit in the part's own scope, plus these owner-only parts.
-export interface DocsKit extends BaseKit {
-  // An edge prompt: the KeyEdge primitive holding the command's anchor and a KeyChevron. `start` draws the chevron
-  // first, `end` the anchor first. `label` draws after the keys. Returns the edge.
-  edge(
-    parent: HTMLElement,
-    command: string,
-    options: { side: 'start' | 'end'; chevron: string; label?: string },
-  ): HTMLElement;
-  // A Codicon icon named `name`, with `className` added.
-  icon(parent: HTMLElement, name: string, className?: string): HTMLElement;
-}
+// The kit every docs part gets: BaseKit in the part's own scope.
+export interface DocsKit extends BaseKit {}
 
 // The tree pane, scope `docs.tree`. Each app part mounts once per draw. One the pane leaves out the app appends at
 // the end of the pane's element, in the order status, filterBox, line, rows.
@@ -138,7 +128,8 @@ export interface DocBodyKit extends DocsKit {
   // open, so a layout's CSS does not set `display` on that element.
   body(parent: HTMLElement): HTMLElement;
 }
-// The editor's frame: the file's name and full path.
+// The editor's frame: the file's name and full path as the editor opened. The editor never moves while open, so a
+// file moved meanwhile keeps the frame's name and path until the editor closes and the next edit draws it again.
 export interface EditorFrameInput {
   name: string;
   path: string;
@@ -268,4 +259,4 @@ export interface Layout {
     kit: PickerRowKit,
   ): LayoutPart;
 }
-export type CompleteLayout = Required<Layout>;
+export interface CompleteLayout extends Required<Layout> {}

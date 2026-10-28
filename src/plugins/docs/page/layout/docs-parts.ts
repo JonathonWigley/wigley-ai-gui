@@ -1,14 +1,15 @@
 import type { Log } from '../../../../contracts/log';
 import type { ShownLayouts } from '../../../../contracts/plugin';
 import {
-  drawPart,
-  type PartPick,
-  type RollbackDeps,
+  type AppSlot,
+  appSlot,
+} from '../../../../shared/page/layout-host/app-slot';
+import type {
+  PartPick,
+  RollbackDeps,
 } from '../../../../shared/page/layout-host/draw-part';
 import type { BaseKit } from '../../../../shared/page/layout-host/kit';
-import { pickLayout } from '../../../../shared/page/layout-host/pick';
-import { icon } from '../../../../shared/page/ui/icon';
-import { keyChevron } from '../../../../shared/page/ui/key-anchors';
+import { createLayoutParts } from '../../../../shared/page/layout-host/layout-parts';
 import type {
   CompleteLayout,
   DocsKit,
@@ -30,6 +31,8 @@ export interface DrawnPart {
   // Removes the element and disposes every anchor the draw named. App parts
   // inside it are detached, not destroyed.
   dispose(): void;
+  // `dispose`, leaving the element where it is.
+  disposeKeepingElement(): void;
 }
 
 // The short names of the scopes a docs part's keys fire in.
@@ -41,6 +44,7 @@ export type DocsScope =
   | 'confirm'
   | 'picker';
 
+// `layouts` is read when the parts are made and at each `redrawIfChanged`.
 export interface DocsPartsDeps {
   layouts(): ShownLayouts<Layout>;
   defaultLayout: CompleteLayout;
@@ -49,21 +53,26 @@ export interface DocsPartsDeps {
   log: Log;
 }
 
+// The slot of an app element a kit member named `member` places, for one
+// drawing attempt; it throws `<part>: <member> placed twice`.
+export type SlotFor = (element: HTMLElement, member: string) => AppSlot;
+
 // One view's part drawer.
 export interface DocsParts {
   // Draws `part` into `slot` with the layout the pick chain names, falling
   // back to `default` on a throw; `kit` adds the part's members to the draw's
-  // DocsKit, once per attempt. Records the pick it drew with.
+  // DocsKit, once per attempt, making its app slots with `slotFor`. Records
+  // the pick it drew with.
   draw<P extends DocsPartName>(
     part: P,
     slot: HTMLElement,
     input: PartInput<P>,
-    kit: (docsKit: DocsKit) => PartKit<P>,
+    kit: (docsKit: DocsKit, slotFor: SlotFor) => PartKit<P>,
   ): DrawnPart;
-  // True when a part drawn since the last `markDrawn` would now pick another
-  // layout name or another layout object.
-  picksChanged(): boolean;
-  markDrawn(): void;
+  // Reads the layouts shown now and runs `redraw` when a part drawn since the
+  // last run would now pick another layout name or another layout object;
+  // the picks `redraw` draws are the ones the next call compares.
+  redrawIfChanged(redraw: () => void): void;
 }
 
 const PART_SCOPES: Record<DocsPartName, DocsScope> = {
@@ -83,52 +92,34 @@ const PART_SCOPES: Record<DocsPartName, DocsScope> = {
   pickerRow: 'picker',
 };
 
-const DEFAULT_NAME = 'default';
-
 type PartBuilder<P extends DocsPartName> = (
   parent: HTMLElement,
   input: PartInput<P>,
   kit: PartKit<P>,
 ) => LayoutPart;
 
-// The layout `part` draws with from `shown`: the user's when it defines the
-// part, else `default`.
-function pickFor(
-  part: DocsPartName,
-  shown: ShownLayouts<Layout>,
-): PartPick<Layout> {
-  const chain =
-    shown.user === DEFAULT_NAME ? [DEFAULT_NAME] : [shown.user, DEFAULT_NAME];
-  return pickLayout(
-    chain,
-    shown.layouts,
-    (layout) => layout[part] !== undefined,
-  );
-}
-
 export function createDocsParts(deps: DocsPartsDeps): DocsParts {
+  const host = createLayoutParts<Layout, CompleteLayout>({
+    owner: 'docs',
+    defaultLayout: deps.defaultLayout,
+    log: deps.log,
+  });
+  host.setLayouts(deps.layouts());
   let drawnPicks = new Map<DocsPartName, PartPick<Layout>>();
   return {
     draw(part, slot, input, kit) {
-      const pick = pickFor(part, deps.layouts());
-      drawnPicks.set(part, pick);
+      drawnPicks.set(part, host.pick(part));
       const scope = PART_SCOPES[part];
-      const drawn = drawPart<Layout, PartBuilder<typeof part>, LayoutPart>({
-        owner: 'docs',
-        parent: slot,
-        pick,
-        defaultLayout: deps.defaultLayout,
-        part: (layout) => layout[part] as PartBuilder<typeof part> | undefined,
-        build: (builder, parent, rollback) =>
-          builder(
-            parent,
-            input,
-            kit(createDocsKit(deps.baseKit(scope, rollback))),
+      const drawn = host.draw(part, slot, (builder, parent, rollback) =>
+        // TypeScript cannot relate the generic part's builder to its kit.
+        (builder as PartBuilder<typeof part>)(
+          parent,
+          input,
+          kit(deps.baseKit(scope, rollback), (element, member) =>
+            appSlot(element, `${part}: ${member}`, rollback),
           ),
-        log: deps.log,
-        logSource: 'docs',
-        partName: part,
-      });
+        ),
+      );
       const drawnElement = drawn.built.element;
       return {
         element: drawnElement,
@@ -137,90 +128,20 @@ export function createDocsParts(deps: DocsPartsDeps): DocsParts {
           drawnElement.remove();
           drawn.dispose();
         },
+        disposeKeepingElement: () => drawn.dispose(),
       };
     },
-    picksChanged() {
-      const shown = deps.layouts();
-      for (const [part, pick] of drawnPicks) {
-        const now = pickFor(part, shown);
-        if (now.name !== pick.name || now.layout !== pick.layout) {
-          return true;
-        }
+    redrawIfChanged(redraw) {
+      host.setLayouts(deps.layouts());
+      const isChanged = [...drawnPicks].some(([part, pick]) => {
+        const now = host.pick(part);
+        return now.name !== pick.name || now.layout !== pick.layout;
+      });
+      if (!isChanged) {
+        return;
       }
-      return false;
-    },
-    markDrawn() {
       drawnPicks = new Map();
-    },
-  };
-}
-
-// The DocsKit over `base`: its key hints are `base.keyHint`'s, so an edge's
-// anchor rolls back and disposes with the draw's other anchors.
-export function createDocsKit(base: BaseKit): DocsKit {
-  return {
-    ...base,
-    edge(parent, command, options) {
-      const edge = base.el(parent, 'span', 'ui-key-edge');
-      if (options.side === 'start') {
-        edge.append(keyChevron(options.chevron));
-      }
-      base.keyHint(edge, command, anchorLabel(options.label));
-      if (options.side === 'end') {
-        edge.append(keyChevron(options.chevron));
-      }
-      return edge;
-    },
-    icon(parent, name, className = '') {
-      const node = icon(name);
-      if (className !== '') {
-        node.classList.add(...className.split(' '));
-      }
-      parent.append(node);
-      return node;
-    },
-  };
-}
-
-// The keyHint options that draw `label` after the keys, or none.
-function anchorLabel(label: string | undefined): { label?: string } {
-  return label === undefined ? {} : { label };
-}
-
-// One app element a kit member places. `place` throws
-// `<part>: <member> placed twice` on a second call in one draw;
-// `appendIfLeftOut` appends it at the end of `root` when no call placed it,
-// and `prependIfLeftOut` at its start.
-export interface AppPart {
-  place(parent: HTMLElement): HTMLElement;
-  appendIfLeftOut(root: HTMLElement): void;
-  prependIfLeftOut(root: HTMLElement): void;
-}
-
-export function appPart(
-  appElement: HTMLElement,
-  partName: string,
-  member: string,
-): AppPart {
-  let isPlaced = false;
-  return {
-    place(parent) {
-      if (isPlaced) {
-        throw new Error(`${partName}: ${member} placed twice`);
-      }
-      isPlaced = true;
-      parent.append(appElement);
-      return appElement;
-    },
-    appendIfLeftOut(root) {
-      if (!isPlaced) {
-        root.append(appElement);
-      }
-    },
-    prependIfLeftOut(root) {
-      if (!isPlaced) {
-        root.prepend(appElement);
-      }
+      redraw();
     },
   };
 }

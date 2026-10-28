@@ -32,9 +32,8 @@ import {
   topVisibleLine,
   UNSAVED_TEXT,
 } from './docs-state';
+import type { AppSlot } from '../../../shared/page/layout-host/app-slot';
 import {
-  type AppPart,
-  appPart,
   type DocsParts,
   type DrawnPart,
   keepingFocusAndScroll,
@@ -119,7 +118,8 @@ export interface DocView {
   open(target: DocTarget): Promise<boolean>;
   openPath(): string | null;
   // The open doc's file moved: the pane, its editor included, follows it to
-  // `target`, watching the new path.
+  // `target`, watching the new path. An open editor's frame keeps the name
+  // and path it opened with, since the editor never moves while open.
   retarget(target: DocTarget): void;
   // Empties the pane, its editor dropped and its watch stopped.
   clear(): void;
@@ -226,12 +226,14 @@ function editorScrollText(
 }
 
 // A block's top in the scroller's content, measured from the scroller, so a
-// positioned wrapper a layout draws around it does not change it.
+// positioned wrapper a layout draws around it does not change it. Rounded,
+// as the browser rounds `scrollTop`: a block at a fractional top a scroll
+// reached counts as at the top of sight.
 function topIn(scroller: HTMLElement, block: HTMLElement): number {
-  return (
+  return Math.round(
     block.getBoundingClientRect().top -
-    scroller.getBoundingClientRect().top +
-    scroller.scrollTop
+      scroller.getBoundingClientRect().top +
+      scroller.scrollTop,
   );
 }
 
@@ -294,6 +296,8 @@ export function createDocView(deps: DocViewDeps): DocView {
   // A layout reload while the editor was open left the pane's frame to draw
   // once the editor closes.
   let isPaneRedrawDeferred = false;
+  // The pane's scroll as the editor opened, set back once it closes.
+  let scrollTopBeforeEdit = 0;
 
   let shown: ShownDoc | null = null;
   let editor: DocumentEditor | null = null;
@@ -305,14 +309,14 @@ export function createDocView(deps: DocViewDeps): DocView {
 
   const drawPane = () => {
     drawnPane?.dispose();
-    let placing: AppPart[] = [];
-    drawnPane = parts.draw('docPane', root, {}, (kit) => {
-      const scroller = appPart(pane, 'docPane', 'scroller');
+    let placing: AppSlot[] = [];
+    drawnPane = parts.draw('docPane', root, {}, (kit, slotFor) => {
+      const scroller = slotFor(pane, 'scroller');
       placing = [scroller];
       return { ...kit, scroller: scroller.place };
     });
     for (const part of placing) {
-      part.appendIfLeftOut(drawnPane.element);
+      part.placeIfLeftOut(drawnPane.element);
     }
   };
 
@@ -372,19 +376,19 @@ export function createDocView(deps: DocViewDeps): DocView {
     if (shown === null) {
       return;
     }
-    let placing: AppPart[] = [];
+    let placing: AppSlot[] = [];
     drawnHeader = parts.draw(
       'docHeader',
       headerSlot,
       headerInput(shown.target),
-      (kit) => {
-        const hint = appPart(editHint, 'docHeader', 'editHint');
+      (kit, slotFor) => {
+        const hint = slotFor(editHint, 'editHint');
         placing = [hint];
         return { ...kit, editHint: hint.place };
       },
     );
     for (const part of placing) {
-      part.appendIfLeftOut(drawnHeader.element);
+      part.placeIfLeftOut(drawnHeader.element);
     }
     showEditHint();
   };
@@ -422,19 +426,19 @@ export function createDocView(deps: DocViewDeps): DocView {
   // is open.
   const drawBodyPart = () => {
     drawnBody?.dispose();
-    let placing: AppPart[] = [];
+    let placing: AppSlot[] = [];
     drawnBody = parts.draw(
       'docBody',
       bodySlot,
       { fields: bodyFields },
-      (kit) => {
-        const placed = appPart(body, 'docBody', 'body');
+      (kit, slotFor) => {
+        const placed = slotFor(body, 'body');
         placing = [placed];
         return { ...kit, body: placed.place };
       },
     );
     for (const part of placing) {
-      part.appendIfLeftOut(drawnBody.element);
+      part.placeIfLeftOut(drawnBody.element);
     }
     drawnBody.element.hidden = editor !== null;
   };
@@ -447,19 +451,19 @@ export function createDocView(deps: DocViewDeps): DocView {
 
   const drawEditorFrame = (doc: ShownDoc) => {
     drawnEditorFrame?.dispose();
-    let placing: AppPart[] = [];
+    let placing: AppSlot[] = [];
     drawnEditorFrame = parts.draw(
       'editorFrame',
       editorSlot,
       { name: doc.name, path: doc.filePath },
-      (kit) => {
-        const placed = appPart(editorBox, 'editorFrame', 'editor');
+      (kit, slotFor) => {
+        const placed = slotFor(editorBox, 'editor');
         placing = [placed];
         return { ...kit, editor: placed.place };
       },
     );
     for (const part of placing) {
-      part.appendIfLeftOut(drawnEditorFrame.element);
+      part.placeIfLeftOut(drawnEditorFrame.element);
     }
   };
 
@@ -588,13 +592,16 @@ export function createDocView(deps: DocViewDeps): DocView {
   };
 
   // Destroys the editor and shows the rendered doc from the text last read
-  // or written, or the detail view it was opened from.
+  // or written, or the detail view it was opened from, at the scroll the
+  // pane had as the editor opened.
   const closeEditor = (doc: ShownDoc) => {
     dropEditor();
     deps.log('docs', `closed the editor on ${doc.name}`);
     pane.focus();
+    const scrollTop = scrollTopBeforeEdit;
     if (doc.target.detail !== null) {
       showDetail(doc, doc.target.detail);
+      pane.scrollTop = scrollTop;
       return;
     }
     renderText(deps.markdown, doc.filePath, doc.text, deps.paths)
@@ -602,6 +609,7 @@ export function createDocView(deps: DocViewDeps): DocView {
         if (shown === doc && editor === null) {
           doc.bodyStartLine = rendered.bodyStartLine;
           drawBody(rendered);
+          pane.scrollTop = scrollTop;
         }
       })
       .catch((error) => deps.log('docs', `not rendered: ${errorText(error)}`));
@@ -705,6 +713,7 @@ export function createDocView(deps: DocViewDeps): DocView {
   // The frame draws first, so the editor mounts into an attached host.
   const openEditor = (doc: ShownDoc, line: number) => {
     pane.classList.add('is-editing');
+    scrollTopBeforeEdit = pane.scrollTop;
     pane.scrollTop = 0;
     drawEditorFrame(doc);
     editor = deps.editor.createDocument(
@@ -968,11 +977,16 @@ export function createDocView(deps: DocViewDeps): DocView {
       endConflict(false);
     },
     redraw() {
-      if (isDisposed || !parts.picksChanged()) {
+      if (isDisposed) {
         return;
       }
-      parts.markDrawn();
-      keepingFocusAndScroll(root, [pane], redrawParts);
+      // While the editor is open, `redrawParts` leaves the pane's frame and
+      // the editor's undrawn, so their picks leave the compared set: the
+      // pane's frame draws once the editor closes, the editor's at the next
+      // edit.
+      parts.redrawIfChanged(() =>
+        keepingFocusAndScroll(root, [pane], redrawParts),
+      );
     },
     dispose() {
       isDisposed = true;

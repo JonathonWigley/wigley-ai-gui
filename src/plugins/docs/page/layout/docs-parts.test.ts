@@ -1,16 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ShownLayouts } from '../../../../contracts/plugin';
 import { element } from '../../../../shared/page/dom';
-import { asFake } from '../../../../shared/page/test-dom';
-import type { Layout } from '../../layouts/layout';
 import {
-  fakeDocsParts,
-  installDocsFakeDom,
-  noAnchor,
-  shownLayouts,
-} from '../docs-page-fakes';
+  USER_LAYOUT,
+  withUser,
+} from '../../../../shared/page/layout-host/test-layouts';
+import { asFake, installFocusFakeDom } from '../../../../shared/page/test-dom';
+import defaultLayout from '../../layouts/default/layout.js';
+import type { Layout } from '../../layouts/layout';
+import { fakeDocsParts, noAnchor } from '../docs-page-fakes';
 import { createTreeView } from '../tree-view';
-import { appPart } from './docs-parts';
 
 // A layout whose `diskBanner` draws `div.<marker>`.
 function bannerLayout(marker: string): Layout {
@@ -27,20 +25,20 @@ function slotElement(): HTMLElement {
 
 describe('createDocsParts', () => {
   beforeEach(() =>
-    installDocsFakeDom((name, value) => vi.stubGlobal(name, value)),
+    installFocusFakeDom((name, value) => vi.stubGlobal(name, value)),
   );
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
   it.each([
-    { part: 'diskBanner', layoutName: 'slim' },
+    { part: 'diskBanner', layoutName: USER_LAYOUT },
     { part: 'emptyDoc', layoutName: 'default' },
   ] as const)(
     'draw_UserLayoutDefinesSomeParts_DrawsThoseFromItAndTheRestFromDefault $part',
     ({ part, layoutName }) => {
       const { parts } = fakeDocsParts(() =>
-        shownLayouts('slim', { slim: bannerLayout('slim-banner') }),
+        withUser(defaultLayout, bannerLayout('slim-banner')),
       );
       const slot = slotElement();
 
@@ -54,40 +52,40 @@ describe('createDocsParts', () => {
   );
 
   it.each([
-    { next: 'same set', changed: false },
-    { next: 'new object for the drawn part', changed: true },
-    { next: 'new object for a layout no drawn part picks', changed: false },
-  ])('picksChanged_After_$next_Is_$changed', ({ next, changed }) => {
-    const slim = bannerLayout('slim-banner');
-    let shown: ShownLayouts<Layout> = shownLayouts('slim', { slim });
-    const { parts } = fakeDocsParts(() => shown);
-    parts.draw('diskBanner', slotElement(), { text: 'x' }, (kit) => kit);
-
-    if (next === 'new object for the drawn part') {
-      shown = shownLayouts('slim', { slim: bannerLayout('slim-banner') });
-    } else if (next === 'new object for a layout no drawn part picks') {
-      shown = {
-        layouts: new Map([
-          ...shown.layouts,
-          ['default', { ...defaultOf(shown) }],
-        ]),
-        user: 'slim',
+    { next: 'same set', redraws: 1 },
+    { next: 'new object for the drawn part', redraws: 2 },
+    { next: 'new object for a layout no drawn part picks', redraws: 1 },
+  ])(
+    'redrawIfChanged_After_$next_Redraws_$redraws_Times',
+    ({ next, redraws }) => {
+      let shown = withUser(defaultLayout, bannerLayout('a'));
+      const { parts } = fakeDocsParts(() => shown);
+      let redrawn = 0;
+      const drawBanner = () => {
+        redrawn += 1;
+        parts.draw('diskBanner', slotElement(), { text: 'x' }, (kit) => kit);
       };
-    }
+      drawBanner();
+      redrawn = 0;
+      shown = withUser(defaultLayout, bannerLayout('b'));
+      parts.redrawIfChanged(drawBanner);
 
-    expect(parts.picksChanged()).toBe(changed);
-  });
+      if (next === 'new object for the drawn part') {
+        shown = withUser(defaultLayout, bannerLayout('c'));
+      } else if (next === 'new object for a layout no drawn part picks') {
+        shown = {
+          layouts: new Map([
+            ...shown.layouts,
+            ['default', { ...defaultLayout }],
+          ]),
+          user: shown.user,
+        };
+      }
+      parts.redrawIfChanged(drawBanner);
 
-  it('markDrawn_ThenANewSet_ReportsNoChangeUntilAPartDraws', () => {
-    let shown = shownLayouts('slim', { slim: bannerLayout('a') });
-    const { parts } = fakeDocsParts(() => shown);
-    parts.draw('diskBanner', slotElement(), { text: 'x' }, (kit) => kit);
-
-    parts.markDrawn();
-    shown = shownLayouts('slim', { slim: bannerLayout('b') });
-
-    expect(parts.picksChanged()).toBe(false);
-  });
+      expect(redrawn).toBe(redraws);
+    },
+  );
 
   it('treePane_PlacingNoAppPart_AppendsThemInContractOrder', () => {
     const bare: Layout = {
@@ -95,7 +93,7 @@ describe('createDocsParts', () => {
         return { element: kit.el(parent, 'div', 'bare-pane') };
       },
     };
-    const { parts } = fakeDocsParts(() => shownLayouts('bare', { bare }));
+    const { parts } = fakeDocsParts(() => withUser(defaultLayout, bare));
 
     const tree = createTreeView(treeDeps(parts));
 
@@ -118,25 +116,23 @@ describe('createDocsParts', () => {
         return { element: frame };
       },
     };
-    const { parts, logs } = fakeDocsParts(() =>
-      shownLayouts('twice', { twice }),
-    );
+    const { parts, logs } = fakeDocsParts(() => withUser(defaultLayout, twice));
     const editorBox = element('div', 'docs-editor');
 
     const drawn = parts.draw(
       'editorFrame',
       slotElement(),
       { name: 'a.md', path: '/a.md' },
-      (kit) => ({
+      (kit, slotFor) => ({
         ...kit,
-        editor: appPart(editorBox, 'editorFrame', 'editor').place,
+        editor: slotFor(editorBox, 'editor').place,
       }),
     );
 
     expect(drawn.layoutName).toBe('default');
     expect(asFake(editorBox).parentNode).toBe(asFake(drawn.element));
     expect(logs).toEqual([
-      'layout twice editorFrame failed: editorFrame: editor placed twice',
+      `layout ${USER_LAYOUT} editorFrame failed: editorFrame: editor placed twice`,
     ]);
   });
 
@@ -150,30 +146,29 @@ describe('createDocsParts', () => {
       },
     };
     const { parts, anchors } = fakeDocsParts(() =>
-      shownLayouts('hinted', { hinted }),
+      withUser(defaultLayout, hinted),
     );
     const editHint = element('span');
     const slot = slotElement();
-    const drawn = parts.draw('docHeader', slot, headerInput(), (kit) => ({
-      ...kit,
-      editHint: appPart(editHint, 'docHeader', 'editHint').place,
-    }));
+    const drawn = parts.draw(
+      'docHeader',
+      slot,
+      headerInput(),
+      (kit, slotFor) => ({
+        ...kit,
+        editHint: slotFor(editHint, 'editHint').place,
+      }),
+    );
 
     drawn.dispose();
 
     expect(asFake(slot).children).toEqual([]);
-    expect(anchors).toEqual([{ command: 'docs.focusTree', isDisposed: true }]);
+    expect(
+      anchors.map(({ command, isDisposed }) => ({ command, isDisposed })),
+    ).toEqual([{ command: 'docs.focusTree', isDisposed: true }]);
     expect(asFake(slot).contains(asFake(editHint))).toBe(false);
   });
 });
-
-function defaultOf(shown: ShownLayouts<Layout>): Layout {
-  const layout = shown.layouts.get('default');
-  if (layout === undefined) {
-    throw new Error('no default');
-  }
-  return layout;
-}
 
 function headerInput() {
   return {

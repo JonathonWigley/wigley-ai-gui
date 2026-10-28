@@ -1,16 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ShownLayouts } from '../../../contracts/plugin';
 import { posixPaths } from '../../../shared/paths/posix-paths';
-import { asFake, findAll } from '../../../shared/page/test-dom';
+import {
+  USER_LAYOUT,
+  withUser,
+} from '../../../shared/page/layout-host/test-layouts';
+import {
+  asFake,
+  type FocusFakeElement,
+  findAll,
+  installFocusFakeDom,
+} from '../../../shared/page/test-dom';
+import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
 import { createDocsDialogs, type DocsDialogsDeps } from './docs-dialogs';
-import {
-  type DocsFakeElement,
-  fakeDocsParts,
-  fakePushedScope,
-  installDocsFakeDom,
-  shownLayouts,
-} from './docs-page-fakes';
+import { fakeDocsParts, fakePushedScope } from './docs-page-fakes';
 
 // A layout whose picker rows and box body are marked `marker`.
 function markedLayout(marker: string): Layout {
@@ -55,14 +59,14 @@ function dialogsOver(layouts: () => ShownLayouts<Layout>) {
 
 describe('createDocsDialogs', () => {
   beforeEach(() =>
-    installDocsFakeDom((name, value) => vi.stubGlobal(name, value)),
+    installFocusFakeDom((name, value) => vi.stubGlobal(name, value)),
   );
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
   it('createByKind_PickerRows_DrawThroughPickerRowAndRedrawOnAReload', () => {
-    let shown = shownLayouts('slim', { slim: markedLayout('row-1') });
+    let shown = withUser(defaultLayout, markedLayout('row-1'));
     const dialogs = dialogsOver(() => shown);
     dialogs.createByKind();
     const list = asFake(dialogs.picker.element);
@@ -71,12 +75,12 @@ describe('createDocsDialogs', () => {
       isMarked: row.classList.contains('row-1'),
     }));
 
-    shown = shownLayouts('slim', { slim: markedLayout('row-2') });
+    shown = withUser(defaultLayout, markedLayout('row-2'));
     dialogs.redraw();
 
     expect(before.length).toBeGreaterThan(0);
     expect(before).toEqual(
-      before.map(() => ({ layout: 'slim', isMarked: true })),
+      before.map(() => ({ layout: USER_LAYOUT, isMarked: true })),
     );
     expect(findAll(list, 'row-1')).toEqual([]);
     expect(findAll(list, 'row-2')).toHaveLength(before.length);
@@ -84,14 +88,14 @@ describe('createDocsDialogs', () => {
   });
 
   it('redraw_BoxOpenWithText_KeepsTheInputItsTextAndFocus', () => {
-    let shown = shownLayouts('slim', { slim: markedLayout('box-1') });
+    let shown = withUser(defaultLayout, markedLayout('box-1'));
     const dialogs = dialogsOver(() => shown);
     dialogs.createByPath(null);
     const box = asFake(dialogs.elements[1]);
-    const input = findAll(box, 'docs-box')[0] as DocsFakeElement;
+    const input = findAll(box, 'docs-box')[0] as FocusFakeElement;
     input.value = 'notes';
 
-    shown = shownLayouts('slim', { slim: markedLayout('box-2') });
+    shown = withUser(defaultLayout, markedLayout('box-2'));
     dialogs.redraw();
 
     expect(findAll(box, 'box-2')).toHaveLength(1);

@@ -9,9 +9,9 @@ import type {
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import {
-  type BaseKitDeps,
   createBaseKit,
-  type KitCommands,
+  type OwnerKitServices,
+  ownerBaseKitDeps,
 } from '../../../shared/page/layout-host/base-kit';
 import { sheet } from '../../../shared/page/ui/sheet';
 import type { RollbackDeps } from '../../../shared/page/layout-host/draw-part';
@@ -129,40 +129,27 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     const sessionDocs = new Map<string, SessionDocs>();
     // One star set, shared by every view.
     const starred = createStarredDocs(services.uiState, services.paths);
-    // The layouts every view draws with, read at each draw; `default` until
-    // the first set is shown.
+    // The layouts every view draws with, read as a view's parts are made and
+    // at each set; `default` until the first set is shown.
     let current: ShownLayouts<Layout> = {
       layouts: new Map([['default', defaultLayout]]),
       user: 'default',
     };
-    const kitCommands: KitCommands = {
-      exists: (id) => api.keys.command(id) !== undefined,
-      run: (id) => api.commands.run(id),
-    };
-    const kitDeps: Omit<BaseKitDeps, 'keys' | 'scope'> = {
+    const kitServices: OwnerKitServices = {
       markdown: services.markdown,
-      commands: kitCommands,
-      commandNamed: (short) =>
-        Object.hasOwn(docsManifest.commands, short)
-          ? qualify(docsManifest.id, short)
-          : null,
+      keys,
+      commands: {
+        exists: (id) => api.keys.command(id) !== undefined,
+        run: (id) => api.commands.run(id),
+      },
       platform: api.platform,
     };
     // A base kit whose keys fire in the docs scope `scope`, each anchor it
     // names recorded by `rollback`.
     const baseKit = (scope: DocsScope, rollback: RollbackDeps) =>
-      createBaseKit({
-        ...kitDeps,
-        keys: {
-          anchor(element, command, options) {
-            const anchor = keys.anchor(element, command, options);
-            rollback.recordAnchor(anchor);
-            return anchor;
-          },
-          keysFor: (command, keysScope) => keys.keysFor(command, keysScope),
-        },
-        scope: qualify(docsManifest.id, scope),
-      });
+      createBaseKit(
+        ownerBaseKitDeps(docsManifest, kitServices, scope, rollback),
+      );
 
     const allViews = (): DocsView[] => [
       machineView,

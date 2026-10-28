@@ -37,9 +37,8 @@ import {
   renameRecord,
   trashQuestion,
 } from './docs-state';
+import type { AppSlot } from '../../../shared/page/layout-host/app-slot';
 import {
-  type AppPart,
-  appPart,
   type DocsParts,
   type DrawnPart,
   keepingFocusAndScroll,
@@ -129,14 +128,14 @@ function createTextBox(deps: TextBoxDeps): TextBox {
   // frame goes first and the list last when the part leaves them out.
   const drawBody = (shown: BoxRequest) => {
     drawnBody?.dispose();
-    let placing: { textBox: AppPart; completions: AppPart } | null = null;
+    let placing: { textBox: AppSlot; completions: AppSlot } | null = null;
     drawnBody = deps.parts.draw(
       'boxDialog',
       dialog.body,
       { label: shown.label, completes: shown.completes },
-      (kit) => {
-        const textBox = appPart(frame, 'boxDialog', 'textBox');
-        const completions = appPart(list, 'boxDialog', 'completions');
+      (kit, slotFor) => {
+        const textBox = slotFor(frame, 'textBox');
+        const completions = slotFor(list, 'completions');
         placing = { textBox, completions };
         return {
           ...kit,
@@ -145,9 +144,9 @@ function createTextBox(deps: TextBoxDeps): TextBox {
         };
       },
     );
-    const placed = placing as { textBox: AppPart; completions: AppPart } | null;
-    placed?.textBox.prependIfLeftOut(drawnBody.element);
-    placed?.completions.appendIfLeftOut(drawnBody.element);
+    const placed = placing as { textBox: AppSlot; completions: AppSlot } | null;
+    placed?.textBox.placeIfLeftOut(drawnBody.element, 'start');
+    placed?.completions.placeIfLeftOut(drawnBody.element);
   };
 
   const drawCompletions = () => {
@@ -486,23 +485,21 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
     parts,
   );
 
-  // The picker's trailing element goes at the end of a row that left it out.
+  // The picker places the row, appends a trailing element the row left out,
+  // and disposes the draw.
   const pickerRow =
     <T>(title: string): NonNullable<ListPickerRequest<T>['drawRow']> =>
-    (list, _item, { label, trailing, recordAnchor }) => {
+    (list, _item, { label, trailing }) => {
       const drawn = parts.draw(
         'pickerRow',
         list,
         { picker: title, label },
         (kit) => ({ ...kit, trailing: () => trailing }),
       );
-      const isTrailingLeftOut =
-        trailing !== null && !drawn.element.contains(trailing);
-      if (isTrailingLeftOut) {
-        drawn.element.append(trailing);
-      }
-      recordAnchor({ dispose: () => drawn.dispose() });
-      return drawn.element;
+      return {
+        element: drawn.element,
+        dispose: () => drawn.disposeKeepingElement(),
+      };
     };
 
   const createCancelled = () => log('docs', 'create cancelled');
@@ -723,13 +720,11 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
     },
     pickerRow,
     redraw() {
-      if (!parts.picksChanged()) {
-        return;
-      }
-      parts.markDrawn();
-      keepingFocusAndScroll(box.element, [], () => box.redraw());
-      confirm.redraw();
-      picker.redraw();
+      parts.redrawIfChanged(() => {
+        keepingFocusAndScroll(box.element, [], () => box.redraw());
+        confirm.redraw();
+        picker.redraw();
+      });
     },
     dispose() {
       dialogs.close();

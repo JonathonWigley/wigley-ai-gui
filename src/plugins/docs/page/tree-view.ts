@@ -2,8 +2,10 @@ import type { Disposable } from '../../../contracts/disposable';
 import type { Log } from '../../../contracts/log';
 import type { PushedScope } from '../../../contracts/plugin';
 import { element } from '../../../shared/page/dom';
+import type { AppSlot } from '../../../shared/page/layout-host/app-slot';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
 import { disposeAnchors } from '../../../shared/page/ui/key-anchors';
+import { rowAction } from '../../../shared/page/ui/row';
 import { textBoxInput } from '../../../shared/page/text-box';
 import type { TreeRowInput } from '../layouts/layout';
 import type { TreeLeaf, TreeNode } from '../tree';
@@ -24,8 +26,6 @@ import {
   visibleRows,
 } from './docs-state';
 import {
-  type AppPart,
-  appPart,
   type DocsParts,
   type DrawnPart,
   keepingFocusAndScroll,
@@ -193,16 +193,16 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
   // appended in contract order.
   const drawPane = () => {
     drawnPane?.dispose();
-    let placing: AppPart[] = [];
+    let placing: AppSlot[] = [];
     drawnPane = parts.draw(
       'treePane',
       pane,
       { isMachine: deps.isMachine },
-      (kit) => {
-        const statusPart = appPart(status, 'treePane', 'status');
-        const filterPart = appPart(filterFrame, 'treePane', 'filterBox');
-        const linePart = appPart(lineSlot, 'treePane', 'line');
-        const rowsPart = appPart(list, 'treePane', 'rows');
+      (kit, slotFor) => {
+        const statusPart = slotFor(status, 'status');
+        const filterPart = slotFor(filterFrame, 'filterBox');
+        const linePart = slotFor(lineSlot, 'line');
+        const rowsPart = slotFor(list, 'rows');
         placing = [statusPart, filterPart, linePart, rowsPart];
         return {
           ...kit,
@@ -214,7 +214,7 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
       },
     );
     for (const part of placing) {
-      part.appendIfLeftOut(drawnPane.element);
+      part.placeIfLeftOut(drawnPane.element);
     }
   };
 
@@ -234,7 +234,6 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
     for (const drawn of drawnRows) {
       drawn.dispose();
     }
-    rowActions.remove();
     drawnRows = rows.map(drawRow);
     list.querySelector('.is-selected')?.scrollIntoView({ block: 'nearest' });
     showLine();
@@ -282,9 +281,9 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
   // root, which keeps the mouse from taking focus.
   const drawRow = (row: TreeRow): DrawnPart => {
     const input = rowInput(row);
-    let placing: AppPart[] = [];
-    const drawn = parts.draw('treeRow', list, input, (kit) => {
-      const prompt = appPart(rowActions, 'treeRow', 'cursorPrompt');
+    let placing: AppSlot[] = [];
+    const drawn = parts.draw('treeRow', list, input, (kit, slotFor) => {
+      const prompt = slotFor(rowActions, 'cursorPrompt');
       placing = input.isPrompted ? [prompt] : [];
       return {
         ...kit,
@@ -294,11 +293,9 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
     });
     const item = drawn.element;
     for (const part of placing) {
-      part.appendIfLeftOut(item);
+      part.placeIfLeftOut(item);
     }
-    item.classList.add('ui-row--action');
-    item.addEventListener('mousedown', (event) => event.preventDefault());
-    item.addEventListener('click', () => {
+    rowAction(item, () => {
       state = { ...state, selectedId: row.node.id };
       pane.focus();
       view.open();
@@ -469,20 +466,21 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
     },
     statusesChanged: () => draw(),
     redraw() {
-      if (isDisposed || !parts.picksChanged()) {
+      if (isDisposed) {
         return;
       }
-      parts.markDrawn();
-      isRedrawing = true;
-      try {
-        keepingFocusAndScroll(pane, [list], () => {
-          drawPane();
-          drawLine();
-          draw();
-        });
-      } finally {
-        isRedrawing = false;
-      }
+      parts.redrawIfChanged(() => {
+        isRedrawing = true;
+        try {
+          keepingFocusAndScroll(pane, [list], () => {
+            drawPane();
+            drawLine();
+            draw();
+          });
+        } finally {
+          isRedrawing = false;
+        }
+      });
     },
     dispose() {
       isDisposed = true;

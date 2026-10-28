@@ -187,7 +187,8 @@ export interface DocsViewDeps {
   leafOpened(): void;
   // Places a dialog element over the window, until the handle's `dispose`.
   addOverlay(element: HTMLElement): Disposable;
-  // The layouts shown now, read at each part draw.
+  // The layouts shown now, read as the view's parts are made and at each
+  // `layoutsChanged`.
   layouts(): ShownLayouts<Layout>;
   // The base kit for one part draw whose keys fire in `scope`, its anchors
   // recorded by `rollback`.

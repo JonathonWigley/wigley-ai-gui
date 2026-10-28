@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { asFake, findAll } from '../../../shared/page/test-dom';
-import type { Layout } from '../layouts/layout';
+import { withUser } from '../../../shared/page/layout-host/test-layouts';
 import {
-  type DocsFakeElement,
-  fakeDocsParts,
-  fakePushedScope,
-  installDocsFakeDom,
-  noAnchor,
-  shownLayouts,
-} from './docs-page-fakes';
+  asFake,
+  type FocusFakeElement,
+  findAll,
+  installFocusFakeDom,
+} from '../../../shared/page/test-dom';
+import defaultLayout from '../layouts/default/layout.js';
+import type { Layout } from '../layouts/layout';
+import { fakeDocsParts, fakePushedScope, noAnchor } from './docs-page-fakes';
 import { createTreeView } from './tree-view';
 
 // A tree pane marked `marker` that places every app part.
@@ -27,14 +27,14 @@ function paneLayout(marker: string): Layout {
 
 describe('createTreeView', () => {
   beforeEach(() =>
-    installDocsFakeDom((name, value) => vi.stubGlobal(name, value)),
+    installFocusFakeDom((name, value) => vi.stubGlobal(name, value)),
   );
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
   it('redraw_FilterOpenWithText_KeepsTheInputItsTextAndFocus', () => {
-    let shown = shownLayouts('slim', { slim: paneLayout('pane-1') });
+    let shown = withUser(defaultLayout, paneLayout('pane-1'));
     const { parts } = fakeDocsParts(() => shown);
     const tree = createTreeView({
       log: () => undefined,
@@ -49,11 +49,11 @@ describe('createTreeView', () => {
     });
     const root = asFake(tree.element);
     tree.openFilter();
-    const input = findAll(root, 'docs-box')[0] as DocsFakeElement;
+    const input = findAll(root, 'docs-box')[0] as FocusFakeElement;
     input.value = 'plan';
-    input.dispatch('input');
+    input.fire('input');
 
-    shown = shownLayouts('slim', { slim: paneLayout('pane-2') });
+    shown = withUser(defaultLayout, paneLayout('pane-2'));
     tree.redraw();
 
     expect(findAll(root, 'pane-2')).toHaveLength(1);
