@@ -1,6 +1,6 @@
 # 02 — Resize commands, plugin API and side bar
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -199,3 +199,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit fe29dbe · proof: diff read: PageApi.panes, ScopeStack.onBaseChange, createPaneResize, Shell.sideBarDivider/setKeys/dispose, mountShell(root, layout, uiState, timers), four coreCommands and two binds present; typecheck passes; worker: lint, 167 tests in 9 files, selftest pass · concerns: the side bar laid over draws its stored width unclamped, so a stored width wider than a narrow window runs past its edge; the forms self-test resize steps nudge the side bar until 04 sets the forms split as target
