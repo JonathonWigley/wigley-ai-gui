@@ -83,13 +83,19 @@ export function shownBoxes(state: PrimerState): PrimerBox[] {
   return taskTargets(entry).map((target) => ({ primerId, target }));
 }
 
-// A task card's boxes: an extra task's name, the add-item box unless the
-// task is full, then the task's comment.
-function taskTargets(entry: PrimerEntry): TextTarget[] {
+// What a task card's box edits.
+export type TaskTarget = Extract<
+  TextTarget,
+  { field: 'taskName' | 'newItem' | 'taskComment' }
+>;
+
+// A task card's boxes, in card order: an extra task's name, the add-item box
+// unless the task is full, then the task's comment.
+export function taskTargets(entry: PrimerEntry): TaskTarget[] {
   const entryId = entry.id;
-  const name: TextTarget[] =
+  const name: TaskTarget[] =
     entry.group === 'extra' ? [{ field: 'taskName', entryId }] : [];
-  const newItem: TextTarget[] = hasAddItemBox(entry)
+  const newItem: TaskTarget[] = hasAddItemBox(entry)
     ? [{ field: 'newItem', entryId }]
     : [];
   return [...name, ...newItem, { field: 'taskComment', entryId }];

@@ -394,6 +394,39 @@ describe('primerCommandHandlers', () => {
     expect(logs).toEqual(['review opened', expect.any(String)]);
   });
 
+  // `i` edits the first field of the Feature card and of an extra task; on
+  // any other card it edits the box `a`, `C` or `c` would.
+  it.each([
+    { card: 'the Feature card', steps: 0, box: 'p1/feature/name' },
+    {
+      card: 'an extra task',
+      entries: [primerEntry('extra-1', 'extra')],
+      steps: 1,
+      box: 'p1/task/extra-1/name',
+    },
+    { card: 'a task, as a', steps: 1, box: 'p1/task/1/new-item' },
+    {
+      card: 'a full task, as C',
+      entries: [
+        primerEntry('1', 'primer', {
+          items: Array.from({ length: 20 }, (_, i) => primerItem(`Item ${i}`)),
+        }),
+      ],
+      steps: 1,
+      box: 'p1/task/1/comment',
+    },
+    { card: 'an item, as c', steps: 2, box: 'p1/task/1/item/1/comment' },
+  ])('focuses $box on $card for editFirstField', ({ entries, steps, box }) => {
+    const { run, focused } = setup({ entries });
+    for (let step = 0; step < steps; step++) {
+      run('nextRow');
+    }
+
+    run('editFirstField');
+
+    expect(focused.map(boxKey)).toEqual([box]);
+  });
+
   it('steps to the next box with no focus options', () => {
     const { run, focused, focusOptions, setActive } = setup();
     setActive({ primerId: 'p1', target: { field: 'feature', name: 'name' } });

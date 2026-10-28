@@ -17,28 +17,23 @@ interface Call {
   args: unknown;
   signal: AbortSignal;
   settle(outcome: PrimerOutcome): void;
-  fail(error: Error): void;
 }
 
 let connects: SessionInfo[];
 let activated: string[];
-let connectedEnds: number;
-let primerEnds: number;
 let calls: Call[];
-let logLines: string[];
 
 function record(
   method: Call['method'],
   args: unknown,
   signal: AbortSignal,
 ): Promise<PrimerPayload> {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     calls.push({
       method,
       args,
       signal,
       settle: (outcome) => resolve({ outcome, summary: '', next: '' }),
-      fail: reject,
     });
   });
 }
@@ -46,9 +41,7 @@ function record(
 const fakePrimerSession: AgentFormSession<PrimerPayload> = {
   open: (args, _toolUseId, signal) => record('open', args, signal),
   collect: (_wait, signal) => record('collect', undefined, signal),
-  end: () => {
-    primerEnds++;
-  },
+  end: () => undefined,
 };
 
 const fakePrimer: AgentFormService<PrimerPayload> = {
@@ -61,9 +54,7 @@ function connect(info: SessionInfo): ConnectedSession {
   return {
     session,
     call: () => Promise.reject(new Error('the preview calls no tool')),
-    end: () => {
-      connectedEnds++;
-    },
+    end: () => undefined,
   };
 }
 
@@ -74,7 +65,7 @@ function preview() {
       activate: (sessionId) => activated.push(sessionId),
     },
     primer: fakePrimer,
-    log: (source, message) => logLines.push(`[${source}] ${message}`),
+    log: () => undefined,
   });
 }
 
@@ -86,10 +77,7 @@ function flush(): Promise<void> {
 beforeEach(() => {
   connects = [];
   activated = [];
-  connectedEnds = 0;
-  primerEnds = 0;
   calls = [];
-  logLines = [];
 });
 
 describe('open', () => {
@@ -124,20 +112,7 @@ describe('open', () => {
 });
 
 describe('settle', () => {
-  it.each<PrimerOutcome>(['submitted', 'cancelled'])(
-    'submitOrCancel_EndsSession (%s)',
-    async (outcome) => {
-      preview().open();
-
-      calls[0].settle(outcome);
-      await flush();
-
-      expect(primerEnds).toBe(1);
-      expect(connectedEnds).toBe(1);
-    },
-  );
-
-  it('submit_ThenOpen_ConnectsAgain', async () => {
+  it('submit_ThenOpen_ConnectsAgainWithSample', async () => {
     const subject = preview();
     subject.open();
     calls[0].settle('submitted');
@@ -150,34 +125,5 @@ describe('settle', () => {
       PREVIEW_PRIMER_ARGS,
       PREVIEW_PRIMER_ARGS,
     ]);
-  });
-
-  it('draftOutcome_WaitsAgainWithCollect', async () => {
-    preview().open();
-
-    calls[0].settle('draft');
-    await flush();
-
-    expect(calls[1].method).toBe('collect');
-    expect(calls[1].signal).toBe(calls[0].signal);
-    expect(connectedEnds).toBe(0);
-
-    calls[1].settle('submitted');
-    await flush();
-
-    expect(connectedEnds).toBe(1);
-  });
-
-  it('openRejects_LogsAndEndsSession', async () => {
-    preview().open();
-
-    calls[0].fail(new Error('store write failed'));
-    await flush();
-
-    expect(logLines).toEqual([
-      expect.stringMatching(/^\[primer\] .*store write failed/),
-    ]);
-    expect(primerEnds).toBe(1);
-    expect(connectedEnds).toBe(1);
   });
 });

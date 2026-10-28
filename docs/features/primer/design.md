@@ -110,7 +110,7 @@ Scopes `primer.rail`, `primer.card`, `primer.review`, `primer.confirm`. Every bi
 | `c` | card | edit the item's comment (item card) |
 | `C` | card | edit the task's comment (task card; from an item card, its task's card) |
 | `a` | card | add an item (task card; from an item card, its task's card) |
-| `i` | card | edit the first field (Feature card: name; extra task: its name) |
+| `i` | card | edit the card's first box: the Feature card's name, an extra task's name; on any other task card the add-item box (the comment once the task is full), as `a` (`C`); on an item card its comment, as `c` |
 | `<C-n>` / `<C-p>` | card, box | next / previous box |
 | `<Esc>` | box | leave the box |
 | `<C-j>` / `<C-k>`, `<C-S-j>` / `<C-S-k>` | card, review | scroll a line / half a page |

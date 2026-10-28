@@ -9,8 +9,11 @@ import {
 } from 'vitest';
 import type { CommandId } from '../../../contracts/commands';
 import type { EditorHost } from '../../../contracts/editor';
-import type { ShownLayouts } from '../../../contracts/plugin';
 import { createEditorBoxes } from '../../../shared/page/editor-boxes';
+import {
+  USER_LAYOUT,
+  withUser,
+} from '../../../shared/page/layout-host/test-layouts';
 import {
   asFake,
   type FakeElement,
@@ -421,6 +424,23 @@ describe('primer anchors', () => {
     expect(adds[0].options).toEqual({ scope: 'primer.rail', label: 'add' });
   });
 
+  it("anchors the item card's step keys in the rail and the card scope, so they show while either has focus", () => {
+    const { store, tab, anchors } = primerTabSetup();
+    store.dispatch({ type: 'selectRow', row: 1 });
+    store.dispatch({ type: 'selectRow', row: 2 });
+
+    const [step] = findAll(tab, 'primer-item-step');
+    const stepAnchors = anchors
+      .filter((anchor) => isInside(anchor.element, step))
+      .map((anchor) => [anchor.command, anchor.options?.scope]);
+    expect(stepAnchors).toEqual([
+      ['primer.prevRow', 'primer.rail'],
+      ['primer.prevRow', 'primer.card'],
+      ['primer.nextRow', 'primer.rail'],
+      ['primer.nextRow', 'primer.card'],
+    ]);
+  });
+
   it('moves the row prompt to the selected row and shows include only on an item row and remove only on an extra task', () => {
     // Rows: the feature (0), `1` (1), `s1` (2), `extra-1` (3); on `1`, its
     // items at 2 and 3.
@@ -474,21 +494,6 @@ describe('primer anchors', () => {
   });
 });
 
-// The layouts a page holds after main listed `name` and the setting named
-// it.
-function userLayouts(
-  name: string,
-  layout: PrimerLayout,
-): ShownLayouts<PrimerLayout> {
-  return {
-    layouts: new Map<string, PrimerLayout>([
-      ['default', defaultLayout],
-      [name, layout],
-    ]),
-    user: name,
-  };
-}
-
 // The element a part drew into `paneClass`'s pane: its first child.
 function partIn(tab: FakeElement, paneClass: string): FakeElement {
   return pane(tab, paneClass).children[0];
@@ -535,7 +540,7 @@ describe('primer layout', () => {
 
   it('draws a part from the user layout when it defines it, the rest from default', () => {
     const { store, tab, view } = primerTabSetup();
-    view.setLayouts(userLayouts('bare', BARE_TASK));
+    view.setLayouts(withUser<PrimerLayout>(defaultLayout, BARE_TASK));
 
     store.dispatch({ type: 'selectRow', row: 1 });
     const task = partIn(tab, 'primer-card').dataset.layout;
@@ -544,7 +549,7 @@ describe('primer layout', () => {
     const item = partIn(tab, 'primer-card').dataset.layout;
 
     expect({ task, item, rail }).toEqual({
-      task: 'bare',
+      task: USER_LAYOUT,
       item: 'default',
       rail: 'default',
     });
@@ -553,7 +558,7 @@ describe('primer layout', () => {
   it('falls back to default when a user card throws after mounting a box, mounting each box once', () => {
     const { store, tab, view, boxes, logs } = primerTabSetup();
     view.setLayouts(
-      userLayouts('broken', {
+      withUser<PrimerLayout>(defaultLayout, {
         cards: {
           task(parent, _input, kit) {
             kit.textBox(parent, 'comment');
@@ -568,7 +573,9 @@ describe('primer layout', () => {
     const card = partIn(tab, 'primer-card');
     expect(card.dataset.layout).toBe('default');
     expect(logs).toContainEqual(
-      expect.stringContaining('layout broken task card failed: card broke'),
+      expect.stringContaining(
+        `layout ${USER_LAYOUT} task card failed: card broke`,
+      ),
     );
     expect(boxes.isMounted(taskComment1)).toBe(true);
     expect(boxes.isMounted(newItem1)).toBe(true);
@@ -577,7 +584,7 @@ describe('primer layout', () => {
 
   it('appends the boxes a user card leaves out, in shownBoxes order', () => {
     const setup = primerTabSetup();
-    setup.view.setLayouts(userLayouts('bare', BARE_TASK));
+    setup.view.setLayouts(withUser<PrimerLayout>(defaultLayout, BARE_TASK));
     setup.store.dispatch({ type: 'selectRow', row: 1 });
 
     const card = partIn(setup.tab, 'primer-card');
@@ -602,11 +609,11 @@ describe('primer layout', () => {
     boxes.focus(taskComment1);
     const before = partIn(tab, 'primer-card');
 
-    view.setLayouts(userLayouts('bare', BARE_TASK));
+    view.setLayouts(withUser<PrimerLayout>(defaultLayout, BARE_TASK));
 
     const after = partIn(tab, 'primer-card');
     expect(after).not.toBe(before);
-    expect(after.dataset.layout).toBe('bare');
+    expect(after.dataset.layout).toBe(USER_LAYOUT);
     const active = boxes.active();
     expect(active === null ? null : boxKey(active)).toBe('p1/task/1/comment');
   });
@@ -615,7 +622,7 @@ describe('primer layout', () => {
     const { store, tab, view, run } = primerTabSetup();
     const updates: boolean[] = [];
     view.setLayouts(
-      userLayouts('watching', {
+      withUser<PrimerLayout>(defaultLayout, {
         cards: {
           item(parent, input, kit) {
             const card = kit.el(parent, 'div', 'watching-item');
@@ -642,7 +649,7 @@ describe('primer layout', () => {
   it("appends the row prompt at the rail pane's end when the rail never calls railRow for the selected row", () => {
     const { store, tab, view } = primerTabSetup();
     view.setLayouts(
-      userLayouts('plain', {
+      withUser<PrimerLayout>(defaultLayout, {
         rail(parent, input, kit) {
           const list = kit.el(parent, 'div', 'plain-rail');
           kit.row(list, { density: 'list', label: input.feature.kind });
@@ -655,7 +662,7 @@ describe('primer layout', () => {
 
     const [prompt] = findAll(tab, 'primer-row-prompt');
     const rail = partIn(tab, 'primer-rail-body');
-    expect(rail.dataset.layout).toBe('plain');
+    expect(rail.dataset.layout).toBe(USER_LAYOUT);
     expect(prompt.parentNode).toBe(rail);
   });
 

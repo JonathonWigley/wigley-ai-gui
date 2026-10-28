@@ -130,11 +130,11 @@ const layout = {
     item(parent, input, kit) {
       const card = kit.el(parent, 'div', 'primer-card-body');
       const step = kit.el(card, 'div', 'primer-item-step');
-      kit.keyHint(step, 'prevRow', { className: 'primer-item-step-key' });
-      kit.el(step, 'span', 'ui-key-chevron', '‹');
+      kit.stepKey(step, 'prevRow');
+      kit.chevron(step, '‹');
       const place = kit.el(step, 'span', 'primer-item-place', placeText(input));
-      kit.el(step, 'span', 'ui-key-chevron', '›');
-      kit.keyHint(step, 'nextRow', { className: 'primer-item-step-key' });
+      kit.chevron(step, '›');
+      kit.stepKey(step, 'nextRow');
       kit.el(card, 'h2', 'primer-card-heading', input.text);
       const include = kit.el(card, 'div', 'primer-item-include');
       kit.includeMark(include);

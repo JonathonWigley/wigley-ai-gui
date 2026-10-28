@@ -18,6 +18,11 @@ describe('readPrimerLayout', () => {
       key: 'head',
     },
     {
+      case: 'cards that is no object',
+      module: { default: { cards: 1 } },
+      key: 'cards',
+    },
+    {
       case: 'a cards key that is no card',
       module: { default: { cards: { question: part } } },
       key: 'cards.question',

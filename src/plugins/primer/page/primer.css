@@ -51,17 +51,22 @@
   }
 }
 
-/* Rail: a header, the body that scrolls, and a foot. */
+/* Rail: a header, the body that scrolls, and a foot, as wide as the pane
+   however narrow it is dragged. */
 .primer-tab .primer-rail {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) auto;
   overflow: hidden;
 }
 
+/* Keys that do not fit beside the save state wrap to a second line; a save
+   state wider than the rail ends in an ellipsis. */
 .primer-rail-head {
   align-items: baseline;
   display: flex;
-  gap: var(--wg-space-1);
+  flex-wrap: wrap;
+  gap: 0 var(--wg-space-1);
   padding: var(--wg-space-2) var(--wg-space-3) 0;
 }
 
@@ -100,6 +105,12 @@
   flex-wrap: wrap;
   gap: 0 var(--wg-space-2);
   padding-bottom: var(--wg-space-1);
+}
+
+/* The rail's keys fire only while it has focus, so the prompt leaves with
+   it, taking its line under the selected row along. */
+.is-pane-inactive .primer-row-prompt {
+  display: none;
 }
 
 .primer-rail-foot {

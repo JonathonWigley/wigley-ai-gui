@@ -16,11 +16,3 @@ export function primerCommand(short: PrimerCommandName): CommandId {
 export function primerScope(short: PrimerScopeName): ViewScope {
   return qualify(primerManifest.id, short);
 }
-
-// The qualified id of the primer command `short`; null for a name the
-// manifest does not declare.
-export function primerCommandNamed(short: string): CommandId | null {
-  return Object.hasOwn(primerManifest.commands, short)
-    ? primerCommand(short as PrimerCommandName)
-    : null;
-}

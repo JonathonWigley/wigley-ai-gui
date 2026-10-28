@@ -1,15 +1,12 @@
-import type { CommandId } from '../../../../contracts/commands';
-import type { Disposable } from '../../../../contracts/disposable';
-import type { MarkdownRenderer } from '../../../../contracts/markdown';
-import type { Platform } from '../../../../contracts/platform';
-import { element } from '../../../../shared/page/dom';
+import { appended, element } from '../../../../shared/page/dom';
 import type { EditorBoxes } from '../../../../shared/page/editor-boxes';
 import {
   createBaseKit,
-  type KitCommands,
+  type OwnerKitServices,
+  ownerBaseKitDeps,
 } from '../../../../shared/page/layout-host/base-kit';
 import type { RollbackDeps } from '../../../../shared/page/layout-host/draw-part';
-import { boxHint } from '../../../../shared/page/ui/key-anchors';
+import { boxHint, keyStack } from '../../../../shared/page/ui/key-anchors';
 import { inputFrame } from '../../../../shared/page/ui/input-frame';
 import { row } from '../../../../shared/page/ui/row';
 import { sectionHeader } from '../../../../shared/page/ui/section-header';
@@ -17,12 +14,10 @@ import {
   setToggleMark,
   toggleMark,
 } from '../../../../shared/page/ui/toggle-mark';
-import type { AnchorOptions, KeysPageExports } from '../../../keys/contract';
 import type { PrimerEntry, PrimerItem } from '../../contract';
 import {
   type PrimerCommandName,
   primerCommand,
-  primerCommandNamed,
   primerScope,
   type PrimerScopeName,
 } from '../../ids';
@@ -37,7 +32,13 @@ import type {
   TaskCardInput,
   TaskKit,
 } from '../../layouts/layout';
-import { boxText, hasAddItemBox, type PrimerBox } from '../boxes';
+import { primerManifest } from '../../manifest';
+import {
+  boxText,
+  type PrimerBox,
+  type TaskTarget,
+  taskTargets,
+} from '../boxes';
 import { needTag, taskName } from '../primer-review';
 import {
   FEATURE_FIELDS,
@@ -50,12 +51,7 @@ import {
 
 // What every primer kit reads: the keys plugin's `anchor` and `keysFor`, the
 // commands a kit's `command` reaches, and the platform its key hints draw for.
-export interface PrimerKitDeps {
-  markdown: MarkdownRenderer;
-  keys: Pick<KeysPageExports, 'anchor' | 'keysFor'>;
-  commands: KitCommands;
-  platform: Platform;
-}
+export type PrimerKitDeps = OwnerKitServices;
 
 // What the card and rail kits act through besides: the text boxes and the
 // store.
@@ -88,6 +84,22 @@ interface CardBox<Field extends string> {
   command: PrimerCommandName | null;
 }
 
+// The task card's box for each target `taskTargets` lists, but its target.
+const TASK_BOXES: {
+  [F in TaskTarget['field']]: Omit<
+    CardBox<Parameters<TaskKit['textBox']>[1]>,
+    'target'
+  >;
+} = {
+  taskName: { field: 'name', label: 'Name', command: 'editFirstField' },
+  newItem: { field: 'newItem', label: 'New item', command: 'addItem' },
+  taskComment: {
+    field: 'comment',
+    label: 'Comment',
+    command: 'editTaskComment',
+  },
+};
+
 // The base kit for one part draw in the primer `scope`, each anchor it names
 // recorded in `rollback`, with the need tag.
 export function createPrimerKit(
@@ -95,17 +107,9 @@ export function createPrimerKit(
   scope: PrimerScopeName,
   rollback: RollbackDeps,
 ): PrimerKit {
-  const base = createBaseKit({
-    markdown: deps.markdown,
-    keys: {
-      anchor: recordedAnchor(deps.keys, rollback),
-      keysFor: (command, keysScope) => deps.keys.keysFor(command, keysScope),
-    },
-    commands: deps.commands,
-    scope: primerScope(scope),
-    commandNamed: primerCommandNamed,
-    platform: deps.platform,
-  });
+  const base = createBaseKit(
+    ownerBaseKitDeps(primerManifest, deps, scope, rollback),
+  );
   return {
     ...base,
     needTag: (parent, need) => appended(parent, needTag(need)),
@@ -141,42 +145,14 @@ export function createTaskKit(
   entry: PrimerEntry,
   rollback: RollbackDeps,
 ): CardKit<TaskKit, TaskCardInput> {
-  const entryId = entry.id;
-  const name: CardBox<'name'>[] =
-    entry.group === 'extra'
-      ? [
-          {
-            field: 'name',
-            target: { field: 'taskName', entryId },
-            label: 'Name',
-            command: 'editFirstField',
-          },
-        ]
-      : [];
-  const newItem: CardBox<'newItem'>[] = hasAddItemBox(entry)
-    ? [
-        {
-          field: 'newItem',
-          target: { field: 'newItem', entryId },
-          label: 'New item',
-          command: 'addItem',
-        },
-      ]
-    : [];
-  const boxes = createCardBoxes<'name' | 'newItem' | 'comment'>(
+  const boxes = createCardBoxes(
     deps,
     primer,
     rollback,
-    [
-      ...name,
-      ...newItem,
-      {
-        field: 'comment',
-        target: { field: 'taskComment', entryId },
-        label: 'Comment',
-        command: 'editTaskComment',
-      },
-    ],
+    taskTargets(entry).map((target) => ({
+      ...TASK_BOXES[target.field],
+      target,
+    })),
   );
   return {
     kit: { ...createPrimerKit(deps, 'card', rollback), textBox: boxes.mount },
@@ -216,6 +192,27 @@ export function createItemKit(
         });
         marks.push(mark);
         return appended(parent, mark);
+      },
+      stepKey(parent, command) {
+        return appended(
+          parent,
+          keyStack('primer-item-step-keys', [
+            anchoredSpan(
+              deps,
+              rollback,
+              'primer-item-step-key',
+              command,
+              'rail',
+            ),
+            anchoredSpan(
+              deps,
+              rollback,
+              'primer-item-step-key',
+              command,
+              'card',
+            ),
+          ]),
+        );
       },
     },
     appendUnmountedBoxes: boxes.appendUnmounted,
@@ -394,13 +391,8 @@ function appendField(
   parent: HTMLElement,
   box: CardBox<string>,
 ): HTMLElement {
-  const anchor = recordedAnchor(deps.keys, rollback);
-  const scope = primerScope('card');
-  const anchored = (className: string, command: PrimerCommandName) => {
-    const node = element('span', className);
-    anchor(node, primerCommand(command), { scope });
-    return node;
-  };
+  const anchored = (className: string, command: PrimerCommandName) =>
+    anchoredSpan(deps, rollback, className, command, 'card');
   const hint =
     box.command === null ? null : anchored('primer-field-hint', box.command);
   const field = element('div', 'primer-field');
@@ -421,20 +413,22 @@ function appendField(
   return field;
 }
 
-// The keys plugin's `anchor`, recording each anchor it names in `rollback`.
-function recordedAnchor(
-  keys: Pick<KeysPageExports, 'anchor'>,
+// A `span` of `className` anchored to the primer `command` in the primer
+// `scope`, its anchor recorded in `rollback`.
+function anchoredSpan(
+  deps: PrimerKitDeps,
   rollback: RollbackDeps,
-): (
-  node: HTMLElement,
-  command: CommandId,
-  options?: AnchorOptions,
-) => Disposable {
-  return (node, command, options) => {
-    const anchor = keys.anchor(node, command, options);
-    rollback.recordAnchor(anchor);
-    return anchor;
-  };
+  className: string,
+  command: PrimerCommandName,
+  scope: PrimerScopeName,
+): HTMLElement {
+  const node = element('span', className);
+  rollback.recordAnchor(
+    deps.keys.anchor(node, primerCommand(command), {
+      scope: primerScope(scope),
+    }),
+  );
+  return node;
 }
 
 // Item `number` (1-based) of `entry`; throws when the task has no such item.
@@ -444,9 +438,4 @@ function itemOf(entry: PrimerEntry, number: number): PrimerItem {
     throw new Error(`task ${entry.id} has no item ${number}`);
   }
   return item;
-}
-
-function appended<E extends HTMLElement>(parent: HTMLElement, node: E): E {
-  parent.append(node);
-  return node;
 }
