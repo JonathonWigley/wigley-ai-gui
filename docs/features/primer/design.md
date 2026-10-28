@@ -93,7 +93,8 @@ iterating a layout in place.
 - **Card** for the focused column's selection, one at a time: the task card (the feature card on the Feature row)
   while the tasks column has focus, the selected item's card while the items column has focus. An items column with
   no item to select keeps the task card (the feature card on the Feature row). Focusing the card keeps the card of the column it came from, and the
-  card's edge strip shows `‹ items ⌥H`.
+  card's edge strip shows `‹ items ⌥H`. A box focused from the card shows its card from the tasks column (an item
+  comment's, from the items column), so a row step from an add-item box steps the tasks column.
   - The Feature row's card holds the name, slug, spec, summary and notes boxes.
   - A task row's card holds its heading, tags and need; its question, evidence, probes and pointer when not blank;
     an extra task's name box; the add-item box; and the task's own comment box. It lists no items: the items

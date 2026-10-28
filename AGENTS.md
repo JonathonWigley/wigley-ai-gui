@@ -289,7 +289,7 @@ round; primer: an open primer), since main, not the page, decides.
   (`src/contracts/panes.ts`) is one `nudge(direction)`; every `Split` is one. The split core draws each handle's
   resize prompt (`⌥⇧H ◂ ▸ ⌥⇧L`, shown on hover, during a drag and for a moment after a nudge) through the anchor
   function it is given: a view passes its `keys.anchor`, the shell anchors the side bar handle's prompt through the
-  chrome keys. A `Split` and the side bar's `SplitDivider` have `dispose`, which disconnects the observer, removes
+  keys `shell.setKeys` is given. A `Split` and the side bar's `SplitDivider` have `dispose`, which disconnects the observer, removes
   the drag listeners and disposes the prompt's anchors; a view that drops a split calls it.
 - **Key hints** belong to the `keys` plugin, which reads the merged keymap: which-key after a pending prefix, help on
   `Space ?` (`<Leader>?` in a box, and the title bar's Keys button), and every hint drawn in place. The app has no

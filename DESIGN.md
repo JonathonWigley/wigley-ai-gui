@@ -277,7 +277,7 @@ The primitives, each a builder in `src/shared/page/ui/`:
 - **Tabs** (`tabStrip`, `tab`): the strip on a sheet's top edge, and one tab.
 - **Sheet** (`sheet`): the solid L2 content sheet.
 - **Split** (`createSplit`): two panes with a drag handle, each pane with a least width and no most
-  width; the start pane's width lives in `uiState`, written on each drag and each keyboard resize. The
+  width; the start pane's width lives in `uiState`, written when a drag ends and on each keyboard resize. The
   shell's side bar resizes through the same split core. Three columns are two nested splits, the
   outer end pane's least width the sum of the inner two. Each handle draws the resize prompt
   `⌥⇧H ◂ ▸ ⌥⇧L`, centred on it and taking no space, while the pointer is over it, while a drag runs
