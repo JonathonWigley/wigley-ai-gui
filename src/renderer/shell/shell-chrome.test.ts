@@ -39,20 +39,20 @@ function fakeArea() {
   return { area, root };
 }
 
-// The command the chrome's commands register, which `mine` hints.
+// The command the chrome's commands register, which `mine` hints unless told
+// otherwise.
 const REGISTERED = 'docs.openDoc';
 
 // A user layout `mine` that defines only `activityItem`, ending each item
-// with a hint for REGISTERED.
-const mine: Layout = {
-  activityItem(parent, input, kit) {
-    const item = kit.el(parent, 'button', 'mine-item', input.title);
-    kit.keyHint(item, REGISTERED);
-    return item;
-  },
-};
-
-function shownMine() {
+// with a hint for `hinted`.
+function shownMine(hinted = REGISTERED) {
+  const mine: Layout = {
+    activityItem(parent, input, kit) {
+      const item = kit.el(parent, 'button', 'mine-item', input.title);
+      kit.keyHint(item, hinted);
+      return item;
+    },
+  };
   return withUser(defaultLayout, mine);
 }
 
@@ -179,27 +179,37 @@ describe('mountShellChrome', () => {
     expect(doc.activeElement).toBe(focused);
   });
 
-  it('setKeys_UserItemHint_AnchorsTheRegisteredCommandAndDisposesTheLastDraw', () => {
-    const { chrome } = mountChrome();
-    chrome.addMode(mode('docs', 'Docs'), handle());
-    chrome.setLayouts(shownMine());
-    const first = recordingAnchors();
-    const second = recordingAnchors();
+  it.each([
+    {
+      row: 'a registered command',
+      hinted: REGISTERED,
+      anchors: [
+        [REGISTERED, undefined, true],
+        [REGISTERED, undefined, false],
+      ],
+    },
+    { row: 'an unregistered command', hinted: 'docs.missing', anchors: [] },
+  ])(
+    'setKeys_UserItemHint_AnchorsOnlyARegisteredCommandAndDisposesTheLastDraw: $row',
+    ({ hinted, anchors }) => {
+      const { chrome } = mountChrome();
+      chrome.addMode(mode('docs', 'Docs'), handle());
+      chrome.setLayouts(shownMine(hinted));
+      const first = recordingAnchors();
+      const second = recordingAnchors();
 
-    chrome.setKeys(first.keys);
-    chrome.setKeys(second.keys);
+      chrome.setKeys(first.keys);
+      chrome.setKeys(second.keys);
 
-    expect(
-      [...first.anchors, ...second.anchors].map((anchor) => [
-        anchor.command,
-        anchor.scope,
-        anchor.isDisposed,
-      ]),
-    ).toEqual([
-      [REGISTERED, undefined, true],
-      [REGISTERED, undefined, false],
-    ]);
-  });
+      expect(
+        [...first.anchors, ...second.anchors].map((anchor) => [
+          anchor.command,
+          anchor.scope,
+          anchor.isDisposed,
+        ]),
+      ).toEqual(anchors);
+    },
+  );
 
   it('activityItem_Click_ShowsItsMode', () => {
     const { chrome, activityBar } = mountChrome();

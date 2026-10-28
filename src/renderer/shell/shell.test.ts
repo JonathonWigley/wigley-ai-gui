@@ -153,30 +153,76 @@ describe('mountShell', () => {
     expect(chromeLayouts(root)).toEqual(mine);
   });
 
-  it('mountShell_SetLayoutThenDispose_KeepsEachAreaScroll', () => {
-    const doc = installFocusFakeDom(
-      (name, value) => vi.stubGlobal(name, value),
-      ScrollerFakeElement,
-    );
-    Object.assign(doc, {
-      documentElement: { style: { setProperty: () => undefined } },
+  // Gives `area` a client height of 300 and a scroll range of `range`
+  // pixels, clamping its scrollTop to the range as a browser does.
+  function withScrollRange(area: HTMLElement, range: number): void {
+    let top = 0;
+    Object.defineProperties(area, {
+      clientHeight: { value: 300 },
+      scrollHeight: { value: 300 + range },
+      scrollTop: {
+        get: () => top,
+        set: (next: number) => {
+          top = Math.min(Math.max(next, 0), range);
+        },
+      },
     });
-    const root = new ScrollerFakeElement('div');
-    const shell = mountShell(asHtml(root), defaultShellLayout);
-    const scrolled = { 'shell-side-bar': 120, 'shell-main': 45 };
-    const scrollTops = () =>
-      Object.keys(scrolled).map(
-        (className) => root.querySelector(`.${className}`)?.scrollTop,
+  }
+
+  // The default layout with the side bar and main scrolling over the given
+  // ranges.
+  function rangedLayout(ranges: { sideBar: number; main: number }) {
+    return {
+      mount(root: HTMLElement) {
+        const areas = defaultShellLayout.mount(root);
+        withScrollRange(areas.sideBar as HTMLElement, ranges.sideBar);
+        withScrollRange(areas.main as HTMLElement, ranges.main);
+        return areas;
+      },
+    };
+  }
+
+  it.each([
+    {
+      row: 'offsets inside both ranges',
+      scrolled: { sideBar: 120, main: 45 },
+      swapped: [120, 45],
+      restored: [120, 45],
+    },
+    {
+      row: 'the side bar at its end',
+      scrolled: { sideBar: 248, main: 45 },
+      swapped: [240, 45],
+      restored: [248, 45],
+    },
+  ])(
+    'mountShell_SetLayoutThenDispose_KeepsEachAreaScroll: $row',
+    ({ scrolled, swapped, restored }) => {
+      const doc = installFocusFakeDom(
+        (name, value) => vi.stubGlobal(name, value),
+        ScrollerFakeElement,
       );
-    for (const [className, scrollTop] of Object.entries(scrolled)) {
-      root.querySelector(`.${className}`)!.scrollTop = scrollTop;
-    }
+      Object.assign(doc, {
+        documentElement: { style: { setProperty: () => undefined } },
+      });
+      const root = new ScrollerFakeElement('div');
+      const shell = mountShell(
+        asHtml(root),
+        rangedLayout({ sideBar: 248, main: 400 }),
+      );
+      const scrollTops = () =>
+        ['shell-side-bar', 'shell-main'].map(
+          (className) => root.querySelector(`.${className}`)?.scrollTop,
+        );
+      root.querySelector('.shell-side-bar')!.scrollTop = scrolled.sideBar;
+      root.querySelector('.shell-main')!.scrollTop = scrolled.main;
 
-    const swap = shell.setLayout(defaultShellLayout);
-    const swapped = scrollTops();
-    swap.dispose();
+      const swap = shell.setLayout(rangedLayout({ sideBar: 240, main: 400 }));
+      const swappedTops = scrollTops();
+      swap.dispose();
 
-    expect(swapped).toEqual([120, 45]);
-    expect(scrollTops()).toEqual([120, 45]);
-  });
+      expect(swappedTops).toEqual(swapped);
+      expect(scrollTops()).toEqual(restored);
+    },
+  );
 });

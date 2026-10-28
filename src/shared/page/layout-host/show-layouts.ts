@@ -62,12 +62,11 @@ export function createPageLayouts(deps: PageLayoutsDeps): PageLayouts {
 // Loads the user's layout and the layouts in use from main's latest set for
 // `owner`, and hands the owner the loaded layouts whenever a load changes them.
 // Every set, every config change and every `refresh()` that changes what to
-// load queues a load;
-// loads run one at a time in order. A setting naming a layout the set lacks
-// draws `default` and is logged once, until the setting changes or a set lists
-// it. A set heard before main answers `layouts` is newer, so the answer is then
-// dropped; an answer of null waits for the owner's first set. Each log line
-// carries the owner as its source.
+// load queues a load; loads run one at a time in order. A setting naming a
+// layout the set lacks draws `default` and is logged once, until the setting
+// changes or a set lists it. A set heard before main answers `layouts` is
+// newer, so the answer is then dropped; an answer of null waits for the
+// owner's first set. Each log line carries the owner as its source.
 function showLayouts<L>(
   owner: LayoutOwner,
   options: ShowLayoutOptions<L>,

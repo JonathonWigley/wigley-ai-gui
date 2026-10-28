@@ -188,27 +188,45 @@ describe('drawPart', () => {
     expect(drawn.layoutName).toBe('default');
   });
 
-  it('drawPart_DefaultThrows_RolledBackAndRethrownWithNoLog', () => {
-    const record = recorded();
-    const rail = drawRail(
-      { name: 'default', layout: {} },
-      {
-        defaultLayout: {
-          rail: (parent, rollback) => {
-            rollback.recordAnchor(record.anchor('next'));
-            parent.append(asHtml(new FakeElement('section')));
-            throw new Error('default broke');
-          },
+  it.each([
+    {
+      row: 'default throws',
+      defaultRail:
+        (record: ReturnType<typeof recorded>): Rail =>
+        (parent, rollback) => {
+          rollback.recordAnchor(record.anchor('next'));
+          parent.append(asHtml(new FakeElement('section')));
+          throw new Error('default broke');
         },
-      },
-    );
+      error: 'default broke',
+    },
+    {
+      row: 'default adds a node beside its element',
+      defaultRail:
+        (record: ReturnType<typeof recorded>): Rail =>
+        (parent, rollback) => {
+          rollback.recordAnchor(record.anchor('next'));
+          parent.append(asHtml(new FakeElement('aside')));
+          return drawsArticle('default')(parent, rollback);
+        },
+      error: 'rail added nodes beside its element',
+    },
+  ])(
+    'drawPart_DefaultFails_RolledBackAndRethrownWithNoLog: $row',
+    ({ defaultRail, error }) => {
+      const record = recorded();
+      const rail = drawRail(
+        { name: 'default', layout: {} },
+        { defaultLayout: { rail: defaultRail(record) } },
+      );
 
-    expect(() => rail.call()).toThrow('default broke');
-    expect(record.undone).toEqual(['anchor next']);
-    expect(rail.parent.children).toEqual([]);
-    expect(rail.logLines).toEqual([]);
-    expect(rail.build).toHaveBeenCalledOnce();
-  });
+      expect(() => rail.call()).toThrow(error);
+      expect(record.undone).toEqual(['anchor next']);
+      expect(rail.parent.children).toEqual([]);
+      expect(rail.logLines).toEqual([]);
+      expect(rail.build).toHaveBeenCalledOnce();
+    },
+  );
 
   it('drawPart_DefaultLacksThePart_Throws', () => {
     const rail = drawRail({ name: 'bare', layout: {} }, { defaultLayout: {} });

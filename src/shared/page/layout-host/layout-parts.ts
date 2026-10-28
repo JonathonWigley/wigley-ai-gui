@@ -40,7 +40,9 @@ export interface LayoutParts<L, C> {
   ): DrawnPart<R>;
   // `draw`, keeping the draw under `slot` (`key` when left out): the draw kept
   // there before is disposed and its element removed first, so a slot holds
-  // one draw's anchors and boxes however often it draws.
+  // one draw's anchors and boxes however often it draws. When that dispose
+  // throws, the element is still removed, the slot left empty and the error
+  // rethrown with no new draw.
   redraw<K extends keyof C & string, R extends { element: HTMLElement }>(
     key: K,
     parent: HTMLElement,
@@ -77,7 +79,8 @@ export function createLayoutParts<L extends object, C extends L>(
       parent,
       pick: pick(key),
       defaultLayout: deps.defaultLayout,
-      // TypeScript cannot relate a user layout's optional part to the complete one's.
+      // TypeScript cannot relate a user layout's optional part to the
+      // complete one's.
       part: (layout) => partOf(layout, key) as C[K] | undefined,
       build,
       log: deps.log,
@@ -94,8 +97,11 @@ export function createLayoutParts<L extends object, C extends L>(
     redraw(key, parent, build, slot = key) {
       const last = kept.get(slot);
       kept.delete(slot);
-      last?.dispose();
-      last?.built.element.remove();
+      try {
+        last?.dispose();
+      } finally {
+        last?.built.element.remove();
+      }
       const next = draw(key, parent, build);
       kept.set(slot, next);
       return next;

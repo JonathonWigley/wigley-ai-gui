@@ -359,7 +359,8 @@ function resetScroll(root: FakeElement): void {
 
 // Stubs the DOM globals as `installFakeDom` does, with `document` making
 // `Element`s (FocusFakeElement unless given; pass ScrollerFakeElement or
-// ShrinkingScrollerFakeElement for scroll resets) and holding the `activeElement` they set.
+// ShrinkingScrollerFakeElement for scroll resets) and holding the
+// `activeElement` they set.
 export function installFocusFakeDom(
   stubGlobal: (name: string, value: unknown) => void,
   Element: new (tag: string) => FocusFakeElement = FocusFakeElement,

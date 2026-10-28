@@ -113,4 +113,25 @@ describe('createLayoutParts', () => {
       'default rail disposed',
     ]);
   });
+
+  it('redraw_LastDrawsDisposeThrows_ItsElementRemovedAndRethrown', () => {
+    const { parts, defaultLayout } = partsSetup();
+    parts.setLayouts(
+      withUser<TestLayout>(defaultLayout, {
+        rail: (parent, rollback) => {
+          rollback.recordAnchor({
+            dispose: () => {
+              throw new Error('stuck');
+            },
+          });
+          return drawsArticle('mine rail')(parent, rollback);
+        },
+      }),
+    );
+    const parent = new FakeElement('div');
+    parts.redraw('rail', asHtml(parent), build);
+
+    expect(() => parts.redraw('rail', asHtml(parent), build)).toThrow('stuck');
+    expect(parent.children).toEqual([]);
+  });
 });

@@ -157,22 +157,36 @@ function mountedArea(
   return returned;
 }
 
+// An area's scroll: its offset, and whether it was scrolled to its end.
+interface AreaScroll {
+  top: number;
+  isAtEnd: boolean;
+}
+
 function areaScrolls(
   mounted: Record<AreaName, MountedArea>,
-): Record<AreaName, number> {
-  const scrolls = {} as Record<AreaName, number>;
+): Record<AreaName, AreaScroll> {
+  const scrolls = {} as Record<AreaName, AreaScroll>;
   for (const name of AREA_NAMES) {
-    scrolls[name] = mounted[name].element.scrollTop;
+    const { scrollTop, scrollHeight, clientHeight } = mounted[name].element;
+    // A scroller at its end can report a fractional scrollTop a pixel short.
+    const isAtEnd =
+      scrollTop > 0 && scrollTop + clientHeight >= scrollHeight - 1;
+    scrolls[name] = { top: scrollTop, isAtEnd };
   }
   return scrolls;
 }
 
+// An area scrolled to its end goes to the new element's end, whose range can
+// differ; any other keeps its offset.
 function restoreAreaScrolls(
   mounted: Record<AreaName, MountedArea>,
-  scrolls: Record<AreaName, number>,
+  scrolls: Record<AreaName, AreaScroll>,
 ): void {
   for (const name of AREA_NAMES) {
-    mounted[name].element.scrollTop = scrolls[name];
+    const { element } = mounted[name];
+    const scroll = scrolls[name];
+    element.scrollTop = scroll.isAtEnd ? element.scrollHeight : scroll.top;
   }
 }
 
@@ -293,7 +307,8 @@ export function mountShell(root: HTMLElement, layout: ShellLayout): Shell {
   fillElements();
 
   // Each area's scroll is read before the remount detaches its element, and
-  // set on the new element once its contributions are back in it.
+  // set on the new element once its contributions are back in it, an area at
+  // its end kept at the end.
   const replaceLayout = (next: ShellLayout) => {
     const previous = currentLayout;
     const scrolls = areaScrolls(mounted);

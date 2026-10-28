@@ -12,8 +12,8 @@ export interface LayoutLoaderDeps<L> {
   layoutUrl(name: string, revision: number, path: string): string;
   defaultLayout: L;
   head: HTMLElement;
-  // The owner's reader: the layout a user's `layout.js` module
-  // holds, or a throw naming the first part it gets wrong.
+  // The owner's reader: the layout a user's `layout.js` module holds, or a
+  // throw naming the first part it gets wrong.
   read(module: unknown, name: string): L;
 }
 
