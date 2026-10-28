@@ -38,6 +38,29 @@
   background: var(--wg-focus-border);
 }
 
+/* The resize prompt sits centred on its handle, over both panes, taking no
+   space; it shows while its handle is hovered, dragged or just nudged. */
+.ui-split-prompt {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 1;
+  transform: translate(-50%, -50%);
+  padding: var(--wg-space-1) var(--wg-space-2);
+  border: 1px solid var(--wg-border-default);
+  border-radius: var(--wg-radius-sm);
+  background: var(--wg-sheet-background);
+  pointer-events: none;
+  visibility: hidden;
+}
+
+:hover > .ui-split-prompt,
+.is-hover > .ui-split-prompt,
+.is-active > .ui-split-prompt,
+.is-nudged > .ui-split-prompt {
+  visibility: visible;
+}
+
 .ui-split.is-start-hidden {
   grid-template-columns: 1fr;
 }

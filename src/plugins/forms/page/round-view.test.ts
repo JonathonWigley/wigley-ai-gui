@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { PANE_RESIZE_COMMANDS } from '../../../contracts/panes';
 import type {
   EditorEvents,
   EditorHost,
@@ -111,6 +112,7 @@ function roundViewSetup() {
       contributions: createFormsContributions(),
       platform: 'macos',
       uiState: { get: () => undefined, set: () => undefined },
+      timers: { set: () => 0, clear: () => undefined },
       log: vi.fn(),
     },
   );
@@ -163,7 +165,14 @@ describe('round view rebuild', () => {
 
   it('rebuild_DisposesTheFirstBuildsAnchors', () => {
     const { round, view, anchors } = roundViewSetup();
-    const firstBuild = [...anchors];
+    const splitCommands: string[] = [
+      PANE_RESIZE_COMMANDS.left,
+      PANE_RESIZE_COMMANDS.right,
+    ];
+    // A rebuild keeps the split, and with it the split's resize prompt.
+    const firstBuild = anchors.filter(
+      (anchor) => !splitCommands.includes(anchor.command),
+    );
 
     view.rebuild(round);
 

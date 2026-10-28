@@ -159,6 +159,7 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
       },
       platform: api.platform,
       uiState: services.uiState,
+      timers: services.timers,
       log: services.log,
     });
     api.events.on('sessions.sessionRemoved', ({ sessionId }) =>

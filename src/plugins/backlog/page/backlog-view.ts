@@ -1,3 +1,4 @@
+import type { Timers } from '../../../contracts/ambient';
 import type { CommandId } from '../../../contracts/commands';
 import type { Disposable } from '../../../contracts/disposable';
 import type { EditorHost, ScrollStep } from '../../../contracts/editor';
@@ -110,8 +111,9 @@ export type BacklogCommand = Exclude<
   'showMode'
 >;
 
-// The list's start pane width limits in CSS pixels.
-const LIST_SPLIT = { initial: 380, min: 240, max: 720 };
+// The list split's limits in CSS pixels: the list's opening and least widths,
+// and the detail's least width.
+const LIST_SPLIT = { initial: 380, min: 240, endMin: 240 };
 
 const SECTION_TITLES: Record<GroupHeaderInput['section'], string> = {
   followup: 'Follow-ups',
@@ -126,6 +128,8 @@ export interface BacklogViewDeps {
   paths: Paths;
   homeDir: string;
   uiState: UiState;
+  // Runs the list split's resize prompt linger.
+  timers: Timers;
   log: Log;
   toast(text: string, tone: ToastTone): void;
   keys: KeysPageExports;
@@ -265,6 +269,8 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     ...LIST_SPLIT,
     uiState: deps.uiState,
     stateKey: 'listWidth',
+    anchor: deps.keys.anchor,
+    timers: deps.timers,
   });
   split.element.classList.add('backlog-split');
   split.start.append(listPane);

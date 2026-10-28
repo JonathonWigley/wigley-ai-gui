@@ -142,6 +142,7 @@ function primerTabSetup(parts: { entries?: PrimerEntry[] } = {}) {
     commands: { exists: () => true, run: () => undefined },
     platform: 'macos',
     uiState: { get: () => undefined, set: () => undefined },
+    timers: { set: () => 0, clear: () => undefined },
     log,
   });
   if (tab === null) {

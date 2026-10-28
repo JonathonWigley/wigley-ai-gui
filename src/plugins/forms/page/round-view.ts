@@ -1,3 +1,4 @@
+import type { Timers } from '../../../contracts/ambient';
 import type { CommandId } from '../../../contracts/commands';
 import type { Disposable } from '../../../contracts/disposable';
 import type { ContentScroll, ScrollStep } from '../../../contracts/editor';
@@ -68,9 +69,9 @@ import {
 
 // `getState` reads the forms state, so a rail click logs only a jump that
 // moved. `platform` is the OS key hints are drawn for; `uiState` keeps the
-// rail's dragged width. `commands` is what every kit's `command` checks and
-// runs; `contributions` holds the card parts and review columns other plugins
-// added.
+// rail's dragged width; `timers` runs the split's resize prompt linger.
+// `commands` is what every kit's `command` checks and runs; `contributions`
+// holds the card parts and review columns other plugins added.
 export interface RoundViewDeps {
   markdown: MarkdownRenderer;
   boxes: Pick<
@@ -92,6 +93,7 @@ export interface RoundViewDeps {
   contributions: Pick<FormsContributions, 'cardParts' | 'reviewColumns'>;
   platform: Platform;
   uiState: UiState;
+  timers: Timers;
   log: Log;
 }
 
@@ -103,8 +105,8 @@ export interface RoundViewDeps {
 // `setLayouts` picks the round's layouts again from `shown` and rebuilds when
 // a pick changed.
 // `scrollBy` scrolls the main column by `step`, down for 1 and up for -1.
-// `dispose` disposes every anchor the view named and stops it following
-// keymap changes; its owner calls it when it drops the view.
+// `dispose` disposes every anchor the view named and its split, and stops it
+// following keymap changes; its owner calls it when it drops the view.
 export interface RoundView {
   element: HTMLElement;
   update(round: RoundState, view: FormsView): void;
@@ -162,10 +164,11 @@ export function createRoundView(
   const split = createSplit({
     initial: 240,
     min: 160,
-    max: 400,
     endMin: 224,
     uiState: deps.uiState,
     stateKey: 'rail-width',
+    anchor: deps.keys.anchor,
+    timers: deps.timers,
   });
   const root = split.element;
   root.classList.add('round');
@@ -252,6 +255,7 @@ export function createRoundView(
     },
     dispose() {
       parts.dispose();
+      split.dispose();
       keysChange.dispose();
     },
   };

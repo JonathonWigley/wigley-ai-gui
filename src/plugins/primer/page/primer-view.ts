@@ -1,3 +1,4 @@
+import type { Timers } from '../../../contracts/ambient';
 import type { CommandId } from '../../../contracts/commands';
 import type { Disposable } from '../../../contracts/disposable';
 import type { ContentScroll, ScrollStep } from '../../../contracts/editor';
@@ -108,7 +109,7 @@ import type { PrimerStore } from './primer-store';
 // for. `run` runs a button's command; `commands` is what a layout's
 // `kit.command` reaches. `platform` is the OS the layouts' key hints draw for.
 // `uiState` keeps the rail's dragged width, which every primer's rail opens
-// at.
+// at. `timers` runs the split's resize prompt linger.
 export interface PrimerViewDeps {
   areas: Pick<PluginAreas, 'overlay'>;
   sessions: Pick<SessionsPageExports, 'addTab'>;
@@ -123,6 +124,7 @@ export interface PrimerViewDeps {
   commands: KitCommands;
   platform: Platform;
   uiState: UiState;
+  timers: Timers;
   log: Log;
 }
 
@@ -143,7 +145,7 @@ export interface PrimerTab {
 // One open primer's DOM in its session's Primer tab. `update` draws it for
 // the primer and the view whose pane shows: under the cancel prompt, the view
 // keeping the primer returns to. `dispose` disposes every anchor it named and
-// destroys every box its parts mounted.
+// its split, and destroys every box its parts mounted.
 interface PrimerFormView {
   element: HTMLElement;
   update(primer: OpenPrimer, view: PrimerView): void;
@@ -392,9 +394,11 @@ function createPrimerFormView(
   const split = createSplit({
     initial: 240,
     min: 160,
-    max: 400,
+    endMin: 320,
     uiState: deps.uiState,
     stateKey: 'primer-rail-width',
+    anchor: deps.keys.anchor,
+    timers: deps.timers,
   });
   const root = split.element;
   root.classList.add('primer-form');
@@ -489,6 +493,7 @@ function createPrimerFormView(
       railPart?.dispose();
       reviewPart?.dispose();
       disposeAnchors(anchors);
+      split.dispose();
     },
   };
 }

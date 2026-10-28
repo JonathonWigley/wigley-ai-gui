@@ -162,6 +162,7 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
       contributions,
       platform: api.platform,
       uiState: services.uiState,
+      timers: services.timers,
       log: services.log,
     });
     api.events.on('sessions.sessionRemoved', ({ sessionId }) =>

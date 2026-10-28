@@ -137,6 +137,7 @@ async function backlogSetup() {
     paths: { tilde: (path: string) => path } as unknown as Paths,
     homeDir: '/home',
     uiState: { get: () => undefined, set: () => undefined },
+    timers: { set: () => 0, clear: () => undefined },
     log: () => undefined,
     toast: () => undefined,
     keys,

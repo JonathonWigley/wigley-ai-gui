@@ -1,3 +1,4 @@
+import type { Timers } from '../../../contracts/ambient';
 import type { CommandId } from '../../../contracts/commands';
 import type { ContentScroll, ScrollStep } from '../../../contracts/editor';
 import type { Log } from '../../../contracts/log';
@@ -42,8 +43,9 @@ import { sessionTitle } from './view-model';
 // key scope to the forms view while a Form tab is the visible tab;
 // `pushConfirmScope` lays the cancel prompt's scope over it. `platform` is the
 // OS key hints are drawn for; `uiState` keeps the rail's dragged width, which
-// every round's rail opens at. `commands` and `contributions` reach every
-// round view's kits and cards.
+// every round's rail opens at; `timers` runs each round's split resize prompt
+// linger. `commands` and `contributions` reach every round view's kits and
+// cards.
 export interface FormsViewDeps {
   areas: Pick<PluginAreas, 'overlay'>;
   sessions: Pick<SessionsPageExports, 'addTab'>;
@@ -59,6 +61,7 @@ export interface FormsViewDeps {
   contributions: Pick<FormsContributions, 'cardParts' | 'reviewColumns'>;
   platform: Platform;
   uiState: UiState;
+  timers: Timers;
   log: Log;
 }
 
@@ -266,6 +269,7 @@ function showRound(
       contributions: deps.contributions,
       platform: deps.platform,
       uiState: deps.uiState,
+      timers: deps.timers,
       log: deps.log,
     },
   );

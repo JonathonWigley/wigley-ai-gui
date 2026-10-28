@@ -96,9 +96,10 @@ const TREE_COMMAND_IDS: ReadonlySet<CommandId> = new Set(
   ),
 );
 
-// An added view's tree width limits in CSS pixels; every added view reads and
-// writes the one stored width.
-const SESSION_TREE_SPLIT = { initial: 288, min: 160, max: 480 };
+// An added view's split limits in CSS pixels: the tree's opening and least
+// widths, and the doc's least width; every added view reads and writes the one
+// stored width.
+const SESSION_TREE_SPLIT = { initial: 288, min: 160, endMin: 240 };
 
 // Docs mode over the machine's index, its tree in the side bar and its doc in
 // the sheet, and the views `addView` hands out, each its tree and doc side by
@@ -328,6 +329,8 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         ...SESSION_TREE_SPLIT,
         uiState: services.uiState,
         stateKey: 'sessionTree',
+        anchor: keys.anchor,
+        timers: services.timers,
       });
       const added: AddedView = {
         view: createView(
@@ -365,6 +368,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         dispose() {
           addedViews.delete(viewId);
           added.view.dispose();
+          split.dispose();
         },
       };
     };

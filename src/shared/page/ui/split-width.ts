@@ -1,22 +1,45 @@
+import type { ResizeDirection } from '../../../contracts/panes';
 import type { UiState } from '../../../contracts/ui-state';
 
-// A split's start pane width in CSS pixels: `initial` when nothing is known,
-// held inside `[min, max]`.
+// A split's start pane width in CSS pixels, `initial` when nothing is known:
+// `min` is the start pane's least width, `endMin` the end pane's; no most
+// width.
 export interface SplitLimits {
   initial: number;
   min: number;
-  max: number;
+  endMin: number;
 }
 
-// `width` rounded to a whole pixel and held inside the limits; a width that is
-// not finite takes `initial`.
-export function clampSplitWidth(width: number, limits: SplitLimits): number {
+// The pixels one keyboard resize moves a divider.
+export const SPLIT_NUDGE_STEP = 24;
+
+// `span` is the width both panes share: the split's width less the handle's.
+// Non-finite `width` takes `initial`; the result is rounded, then held in
+// [min, span - endMin], `min` winning when the span is too small.
+export function clampSplitWidth(
+  width: number,
+  limits: SplitLimits,
+  span: number,
+): number {
   const wanted = Number.isFinite(width) ? width : limits.initial;
-  return Math.min(Math.max(Math.round(wanted), limits.min), limits.max);
+  const most = span - limits.endMin;
+  return Math.max(Math.min(Math.round(wanted), most), limits.min);
 }
 
-// The width stored under `key`, clamped; `initial` when the stored value is
-// not a finite number.
+// `width` moved SPLIT_NUDGE_STEP left (smaller) or right (larger), then
+// clamped.
+export function nudgedSplitWidth(
+  width: number,
+  direction: ResizeDirection,
+  limits: SplitLimits,
+  span: number,
+): number {
+  const step = direction === 'left' ? -SPLIT_NUDGE_STEP : SPLIT_NUDGE_STEP;
+  return clampSplitWidth(width + step, limits, span);
+}
+
+// The width stored under `key`, clamped with span Infinity; `initial` when the
+// stored value is not a finite number.
 export function storedSplitWidth(
   state: UiState,
   key: string,
@@ -26,5 +49,6 @@ export function storedSplitWidth(
   return clampSplitWidth(
     typeof stored === 'number' ? stored : limits.initial,
     limits,
+    Infinity,
   );
 }

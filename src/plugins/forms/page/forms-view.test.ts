@@ -86,6 +86,7 @@ function formTabSetup() {
     contributions: createFormsContributions(),
     platform: 'macos',
     uiState: { get: () => undefined, set: () => undefined },
+    timers: { set: () => 0, clear: () => undefined },
     log: () => undefined,
   });
   if (tab === null) {

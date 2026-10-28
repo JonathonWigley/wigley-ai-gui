@@ -1,26 +1,37 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Timers } from '../../../contracts/ambient';
 import type { UiState } from '../../../contracts/ui-state';
-import { createSplit } from './split';
+import type { AnchorNamer } from './key-anchors';
+import { createSplit, createSplitDivider } from './split';
 
 type Listener = (event: Event) => void;
 
 // The DOM surface the split uses. Pointer capture is a set of pointer ids the
-// test adds to through setPointerCapture and removes from by hand.
+// test adds to through setPointerCapture and removes from by hand; `rect` is
+// what getBoundingClientRect reports and `clientRects` what getClientRects
+// does.
 interface FakeElement {
   className: string;
   classes: Set<string>;
   captured: Set<number>;
+  children: FakeElement[];
+  rect: { left: number; width: number };
+  clientRects: unknown[];
   fire(type: string, fields?: Record<string, unknown>): Record<string, unknown>;
 }
 
 function fakeElement(): FakeElement {
   const classes = new Set<string>();
   const captured = new Set<number>();
+  const children: FakeElement[] = [];
   const listeners = new Map<string, Listener[]>();
   const node: FakeElement & Record<string, unknown> = {
     className: '',
     classes,
     captured,
+    children,
+    rect: { left: 0, width: 0 },
+    clientRects: [{}],
     classList: {
       add: (name: string) => classes.add(name),
       remove: (name: string) => classes.delete(name),
@@ -29,12 +40,19 @@ function fakeElement(): FakeElement {
         force ? classes.add(name) : classes.delete(name),
     },
     style: { setProperty: () => undefined },
-    append: () => undefined,
-    getBoundingClientRect: () => ({ left: 0 }),
+    append: (...nodes: FakeElement[]) => children.push(...nodes),
+    getBoundingClientRect: () => node.rect,
+    getClientRects: () => node.clientRects,
     setPointerCapture: (id: number) => captured.add(id),
     hasPointerCapture: (id: number) => captured.has(id),
     addEventListener: (type: string, listener: Listener) => {
       listeners.set(type, [...(listeners.get(type) ?? []), listener]);
+    },
+    removeEventListener: (type: string, listener: Listener) => {
+      listeners.set(
+        type,
+        (listeners.get(type) ?? []).filter((held) => held !== listener),
+      );
     },
     fire(type, fields = {}) {
       const event = { type, preventDefault: () => undefined, ...fields };
@@ -47,7 +65,7 @@ function fakeElement(): FakeElement {
   return node;
 }
 
-const limits = { initial: 240, min: 160, max: 400 };
+const limits = { initial: 240, min: 160, endMin: 200 };
 let created: FakeElement[];
 
 function stateOver(values: Map<string, unknown>): UiState {
@@ -57,15 +75,73 @@ function stateOver(values: Map<string, unknown>): UiState {
   };
 }
 
-// The handle is the element createSplit gives the `ui-split-handle` class.
+// Every armed run with its delay, by handle; a clear removes it and is
+// recorded.
+function fakeTimers() {
+  let nextHandle = 1;
+  const armed = new Map<number, { run: () => void; ms: number }>();
+  const cleared: number[] = [];
+  const timers: Timers = {
+    set: (run, ms) => {
+      armed.set(nextHandle, { run, ms });
+      return nextHandle++;
+    },
+    clear: (handle) => {
+      cleared.push(handle);
+      armed.delete(handle);
+    },
+  };
+  const fireAll = () => {
+    const runs = [...armed.values()];
+    armed.clear();
+    for (const { run } of runs) {
+      run();
+    }
+  };
+  return { timers, armed, cleared, fireAll };
+}
+
+// Each anchor named, with its command and options, and whether it was
+// disposed.
+function fakeAnchor() {
+  const named: {
+    element: FakeElement;
+    command: string;
+    options: unknown;
+    isDisposed: boolean;
+  }[] = [];
+  const anchor: AnchorNamer<never> = (node, command, options) => {
+    const entry = {
+      element: node as unknown as FakeElement,
+      command,
+      options,
+      isDisposed: false,
+    };
+    named.push(entry);
+    return {
+      dispose: () => {
+        entry.isDisposed = true;
+      },
+    };
+  };
+  return { anchor, named };
+}
+
+// The split's root reports an 800px wide rect at the client's left edge; the
+// handle is the element createSplit gives the `ui-split-handle` class.
 function splitWithHandle(saved: Map<string, unknown>) {
+  const timers = fakeTimers();
+  const anchor = fakeAnchor();
   const split = createSplit({
     ...limits,
     uiState: stateOver(saved),
     stateKey: 'side',
+    anchor: anchor.anchor,
+    timers: timers.timers,
   });
+  asFakeElement(split.element).rect = { left: 0, width: 800 };
   const handle = created.find((node) => node.className === 'ui-split-handle')!;
-  return { split, handle };
+  return { split, handle, timers, anchor };
 }
 
 function press(handle: FakeElement, pointerId: number) {
@@ -111,10 +187,16 @@ function fakeWindow(): FakeWindow & Record<string, unknown> {
 }
 
 let fakeWin: FakeWindow;
+// The callback the last ResizeObserver was built with, and whether it was
+// disconnected.
+let resized: (entries: { contentRect: { width: number } }[]) => void;
+let isObserverDisconnected: boolean;
 
 beforeEach(() => {
   created = [];
   fakeWin = fakeWindow();
+  resized = () => undefined;
+  isObserverDisconnected = false;
   vi.stubGlobal('window', fakeWin);
   vi.stubGlobal('document', {
     createElement: () => {
@@ -123,6 +205,18 @@ beforeEach(() => {
       return node;
     },
   });
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      constructor(callback: typeof resized) {
+        resized = callback;
+      }
+      observe() {}
+      disconnect() {
+        isObserverDisconnected = true;
+      }
+    },
+  );
 });
 
 afterEach(() => {
@@ -233,29 +327,131 @@ describe('createSplit reloadWidth', () => {
 
 describe('createSplit endMin', () => {
   it('stacks while narrower than min plus endMin, side by side at it', () => {
-    let resized: (entries: { contentRect: { width: number } }[]) => void = () =>
-      undefined;
-    vi.stubGlobal(
-      'ResizeObserver',
-      class {
-        constructor(callback: typeof resized) {
-          resized = callback;
-        }
-        observe() {}
-      },
-    );
-    const split = createSplit({
-      ...limits,
-      endMin: 200,
-      uiState: stateOver(new Map()),
-      stateKey: 'side',
-    });
+    const { split } = splitWithHandle(new Map());
     const root = asFakeElement(split.element);
 
     resized([{ contentRect: { width: 359 } }]);
     expect(root.classes.has('is-stacked')).toBe(true);
     resized([{ contentRect: { width: 360 } }]);
     expect(root.classes.has('is-stacked')).toBe(false);
+  });
+});
+
+describe('createSplit nudge', () => {
+  it.each([
+    { stored: 240, direction: 'right', width: 264, written: 264 },
+    { stored: 240, direction: 'left', width: 216, written: 216 },
+    { stored: 160, direction: 'left', width: 160, written: undefined },
+  ] as const)(
+    'nudges one step and stores only a changed width: $stored $direction',
+    ({ stored, direction, width, written }) => {
+      const saved = new Map<string, unknown>([['side', stored]]);
+      const { split, handle, timers } = splitWithHandle(saved);
+      saved.delete('side');
+
+      split.nudge(direction);
+
+      expect(split.width()).toBe(width);
+      expect(saved.get('side')).toBe(written);
+      expect(handle.classes.has('is-nudged')).toBe(true);
+      expect([...timers.armed.values()].map(({ ms }) => ms)).toEqual([1000]);
+    },
+  );
+
+  it('does nothing while the handle has no layout box', () => {
+    const saved = new Map<string, unknown>();
+    const { split, handle } = splitWithHandle(saved);
+    handle.clientRects = [];
+
+    split.nudge('right');
+
+    expect(split.width()).toBe(240);
+    expect(saved.has('side')).toBe(false);
+    expect(handle.classes.has('is-nudged')).toBe(false);
+  });
+
+  it('shows the prompt for 1000ms after a nudge', () => {
+    const { split, handle, timers } = splitWithHandle(new Map());
+
+    split.nudge('right');
+    expect(handle.classes.has('is-nudged')).toBe(true);
+    const [first] = [...timers.armed.keys()];
+    expect(timers.armed.get(first)?.ms).toBe(1000);
+
+    split.nudge('right');
+    expect(timers.cleared).toEqual([first]);
+    expect([...timers.armed.values()].map(({ ms }) => ms)).toEqual([1000]);
+
+    timers.fireAll();
+    expect(handle.classes.has('is-nudged')).toBe(false);
+  });
+});
+
+describe('createSplit prompt', () => {
+  it('anchors the resize prompt in the handle', () => {
+    const { handle, anchor } = splitWithHandle(new Map());
+    const prompt = handle.children.find((child) =>
+      child.className.split(' ').includes('ui-split-prompt'),
+    );
+
+    expect(
+      anchor.named.map(({ command, options }) => ({ command, options })),
+    ).toEqual([
+      { command: 'panes.resizePaneLeft', options: undefined },
+      { command: 'panes.resizePaneRight', options: undefined },
+    ]);
+    for (const { element } of anchor.named) {
+      expect(prompt?.children).toContain(element);
+    }
+  });
+});
+
+describe('createSplit dispose', () => {
+  it('dispose stops the split', () => {
+    const saved = new Map<string, unknown>();
+    const { split, handle, timers, anchor } = splitWithHandle(saved);
+    split.nudge('right');
+    const [lingering] = [...timers.armed.keys()];
+    press(handle, 1);
+    move(handle, 1, 300);
+
+    split.dispose();
+
+    expect(fakeWin.listeners.get('pointerup') ?? []).toEqual([]);
+    expect(fakeWin.listeners.get('pointercancel') ?? []).toEqual([]);
+    expect(isObserverDisconnected).toBe(true);
+    expect(anchor.named.map(({ isDisposed }) => isDisposed)).toEqual([
+      true,
+      true,
+    ]);
+    expect(timers.cleared).toContain(lingering);
+    expect(timers.armed.size).toBe(0);
+    move(handle, 1, 400);
+    split.nudge('right');
+    expect(split.width()).toBe(300);
+  });
+});
+
+describe('createSplitDivider', () => {
+  it('drags a handle it did not build', () => {
+    const handle = fakeElement();
+    const shown: number[] = [];
+    createSplitDivider({
+      ...limits,
+      uiState: stateOver(new Map()),
+      stateKey: 'side',
+      handle: handle as unknown as HTMLElement,
+      measure: () => ({ left: 100, span: 800 }),
+      show: (width) => shown.push(width),
+      anchor: fakeAnchor().anchor,
+      timers: fakeTimers().timers,
+    });
+    press(handle, 1);
+
+    move(handle, 1, 400);
+    move(handle, 1, 900);
+
+    expect(shown.slice(1)).toEqual([300, 600]);
   });
 });
 

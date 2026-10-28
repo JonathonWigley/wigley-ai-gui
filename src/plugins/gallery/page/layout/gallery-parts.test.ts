@@ -214,7 +214,11 @@ describe('galleryParts', () => {
 describe('galleryView', () => {
   const view = (deps: GalleryPartsDeps) =>
     createGalleryView(
-      { ...deps, uiState: { get: () => undefined, set: () => undefined } },
+      {
+        ...deps,
+        uiState: { get: () => undefined, set: () => undefined },
+        timers: { set: () => 0, clear: () => undefined },
+      },
       'reduced',
     );
 

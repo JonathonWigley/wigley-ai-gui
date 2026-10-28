@@ -1,4 +1,5 @@
 import './gallery.css';
+import type { Timers } from '../../../contracts/ambient';
 import type { Platform } from '../../../contracts/platform';
 import type { ShownLayouts } from '../../../contracts/plugin';
 import type { UiState } from '../../../contracts/ui-state';
@@ -15,6 +16,7 @@ import { iconButton } from '../../../shared/page/ui/icon-button';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
 import { kbd } from '../../../shared/page/ui/kbd';
 import {
+  type AnchorNamer,
   boxHint,
   keyChevron,
   keyEdge,
@@ -24,7 +26,7 @@ import { keyPrompt } from '../../../shared/page/ui/key-prompt';
 import { row } from '../../../shared/page/ui/row';
 import { sectionHeader } from '../../../shared/page/ui/section-header';
 import { sheet } from '../../../shared/page/ui/sheet';
-import { createSplit } from '../../../shared/page/ui/split';
+import { createSplit, type Split } from '../../../shared/page/ui/split';
 import { type DotStatus, statusDot } from '../../../shared/page/ui/status-dot';
 import { tab, tabStrip } from '../../../shared/page/ui/tabs';
 import { tag, type TagTone } from '../../../shared/page/ui/tag';
@@ -36,10 +38,19 @@ import {
   type SampleCell,
 } from './layout/gallery-parts';
 
-// What the view reads: the sample primitives' platform and the split
-// sample's saved width, and what the gallery's layout parts read.
+// What the view reads: the sample primitives' platform, the split sample's
+// saved width and the timers its resize prompt lingers on, and what the
+// gallery's layout parts read.
 export interface GalleryViewDeps extends GalleryPartsDeps {
   uiState: UiState;
+  timers: Timers;
+}
+
+// What the split sample builds its split with.
+interface SplitSampleDeps {
+  uiState: UiState;
+  anchor: AnchorNamer<never>;
+  timers: Timers;
 }
 
 // `element` is the mode's root: the transparency status line (the layout's
@@ -87,7 +98,11 @@ export function createGalleryView(
   gallerySheet.append(sections);
   root.append(headSlot, strip, gallerySheet);
 
-  const specs = sectionSpecs(deps.platform, deps.uiState);
+  const specs = sectionSpecs(deps.platform, {
+    uiState: deps.uiState,
+    anchor: deps.keys.anchor,
+    timers: deps.timers,
+  });
   let headInput: GalleryHeadInput = { transparency };
 
   const drawHead = () => parts.drawHead(headSlot, headInput);
@@ -124,8 +139,13 @@ export function createGalleryView(
   };
 }
 
-// Every primitive's block, in the order the sheet shows them.
-function sectionSpecs(platform: Platform, uiState: UiState): SectionSpec[] {
+// Every primitive's block, in the order the sheet shows them. `kept` holds the
+// split the split sample made last.
+function sectionSpecs(
+  platform: Platform,
+  splitDeps: SplitSampleDeps,
+): SectionSpec[] {
+  const kept: { split: Split | null } = { split: null };
   return [
     section('Materials', materialsCells),
     section('Kbd', () => kbdCells(platform)),
@@ -141,7 +161,7 @@ function sectionSpecs(platform: Platform, uiState: UiState): SectionSpec[] {
     section('Row, list', listRowCells),
     section('Row, tree', treeRowCells),
     section('Tabs', tabsCells),
-    framed('Split', () => splitSample(uiState)),
+    framed('Split', () => splitSample(splitDeps, kept)),
     section('Card', cardCells),
     section('Collapsible card', collapsibleCells),
     framed('FloatingPanel', () => floatingPanelSample(platform)),
@@ -499,14 +519,21 @@ function tabsCells(): SampleCell[][] {
   ];
 }
 
-function splitSample(uiState: UiState): HTMLElement {
+// A fresh split sample; it disposes the split `kept` holds, and keeps its own
+// there.
+function splitSample(
+  deps: SplitSampleDeps,
+  kept: { split: Split | null },
+): HTMLElement {
+  kept.split?.dispose();
   const split = createSplit({
-    uiState,
+    ...deps,
     stateKey: 'split',
     initial: 240,
     min: 160,
-    max: 400,
+    endMin: 160,
   });
+  kept.split = split;
   for (const label of ['First session', 'Second session', 'Third session']) {
     split.start.append(row({ density: 'list', label }));
   }

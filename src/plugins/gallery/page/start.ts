@@ -36,6 +36,7 @@ export const galleryPagePart: PagePart<typeof galleryManifest> = {
       {
         platform: api.platform,
         uiState: api.services.uiState,
+        timers: api.services.timers,
         markdown: api.services.markdown,
         keys,
         commands: {
