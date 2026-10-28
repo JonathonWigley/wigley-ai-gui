@@ -220,8 +220,7 @@ export function createSplitDivider(options: SplitDividerOptions): SplitDivider {
 // start pane's width opens from `uiState` under `stateKey` and is written back
 // at the end of a drag and on each nudge, when either changed it; a nudge
 // steps from the drawn width and is ignored mid-drag. `reloadWidth` reads it
-// again. Its owner calls `dispose` when it drops the
-// split.
+// again. Its owner calls `dispose` when it drops the split.
 export function createSplit(options: SplitOptions): Split {
   const root = element('div', 'ui-split');
   const start = element('div', 'ui-split-start');
