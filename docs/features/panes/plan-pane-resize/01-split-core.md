@@ -1,6 +1,6 @@
 # 01 — Split core: nudge, least widths, shared divider
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -206,3 +206,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit c174a1a · proof: diff read: every Produces present in panes.ts, split-width.ts, split.ts; typecheck and lint pass; 7 changed test files pass (worker) · concerns: a right nudge on a stored width wider than the window snaps it to span - endMin and writes it; a nudge during a drag is not blocked

@@ -464,7 +464,7 @@ export function cardRow(primer: OpenPrimer): PrimerRow;
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Split core: nudge, least widths, shared divider](01-split-core.md)
+- [x] [Split core: nudge, least widths, shared divider](01-split-core.md)
 
 ### Wave 2
 - [ ] [Resize commands, plugin API and side bar](02-resize-commands.md) — after 01
@@ -496,10 +496,14 @@ Seams between parts: `ResizeTarget`, `PANE_RESIZE_COMMANDS`, `Split`, `SplitLimi
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 5997110
 
 ### Groups
+- 01 · c174a1a · diff read: every Produces present in panes.ts, split-width.ts, split.ts; typecheck and lint pass; 7 changed test files pass (worker) · concerns: a right nudge on a stored width wider than the window snaps it to span - endMin and writes it; a nudge during a drag is not blocked
 ### Contract changes
 ### Rulings
+- dispose mid-drag ends the drag through endDrag, which writes a changed dragged width — the decision names the endDrag path — a dropped split may store an unreleased width (harmless) · group 01
+- gallery keeps its last split in a closure-local kept.split inside sectionSpecs, not exposed yet — task 04 reads it for the resize target — task 04 lifts kept into createGalleryView · group 01
+- prompt CSS: sheet background, border-default, radius-sm, z-index 1; show selectors written against the parent (:hover/.is-hover/.is-active/.is-nudged > .ui-split-prompt) so 02's side bar handle reuses them — styling only · group 01
 ### Review rounds
 ### Test gate
