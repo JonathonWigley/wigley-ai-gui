@@ -51,6 +51,12 @@ describe('readPrimerLayout', () => {
     },
   );
 
+  it('readPrimerLayout_LayoutDefinesRail_NamesTasksAndItemsAsItsReplacement', () => {
+    expect(() => readPrimerLayout({ default: { rail: part } }, 'mine')).toThrow(
+      /rail.*tasks.*items/,
+    );
+  });
+
   it('readPrimerLayout_PartialLayout_ReturnsIt', () => {
     const layout = { cards: { item: part } };
 
