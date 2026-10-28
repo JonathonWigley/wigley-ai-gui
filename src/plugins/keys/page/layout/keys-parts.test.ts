@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ViewScope } from '../../../../contracts/keymap';
-import type { ShownLayouts } from '../../../../contracts/plugin';
+import {
+  recordingAnchors,
+  withUser,
+} from '../../../../shared/page/layout-host/test-layouts';
 import {
   asFake,
   asHtml,
@@ -14,16 +16,9 @@ import { mountHelpView } from '../help-view';
 import { mountWhichKeyView } from '../which-key-view';
 import { createKeysParts } from './keys-parts';
 
-// One key anchor a kit named.
-interface FakeAnchor {
-  command: string;
-  scope: ViewScope | undefined;
-  isDisposed: boolean;
-}
-
 // A part drawer whose kits record each anchor they name in `anchors`.
 function fakeKeysParts() {
-  const anchors: FakeAnchor[] = [];
+  const { anchors, keys } = recordingAnchors();
   const parts = createKeysParts({
     defaultLayout,
     kit: {
@@ -32,22 +27,7 @@ function fakeKeysParts() {
         inline: (text) => text,
         document: async (text) => text,
       },
-      keys: {
-        anchor(_element, command, options) {
-          const named: FakeAnchor = {
-            command,
-            scope: options?.scope,
-            isDisposed: false,
-          };
-          anchors.push(named);
-          return {
-            dispose: () => {
-              named.isDisposed = true;
-            },
-          };
-        },
-        keysFor: () => null,
-      },
+      keys,
       commands: { exists: () => true, run: () => undefined },
       platform: 'macos',
     },
@@ -56,16 +36,9 @@ function fakeKeysParts() {
   return { parts, anchors };
 }
 
-// The set shown with `user` as the setting's layout, holding `default` and
-// `user`'s layout.
-function shownLayouts(user: string, layout: Layout): ShownLayouts<Layout> {
-  return {
-    layouts: new Map<string, Layout>([
-      ['default', defaultLayout],
-      [user, layout],
-    ]),
-    user,
-  };
+// The set shown with `name`'s `layout` as the setting's layout.
+function shownLayouts(name: string, layout: Layout) {
+  return withUser<Layout>(defaultLayout, layout, name);
 }
 
 // An overlay area appending each contribution under `root`.
@@ -154,6 +127,33 @@ describe('createKeysParts', () => {
     expect(scrim.hidden).toBe(false);
   });
 
+  it('setLayouts_HelpHidden_NextShowDrawsNewBody', () => {
+    const { parts } = fakeKeysParts();
+    const overlay = fakeOverlay();
+    const help = mountHelpView(
+      overlay.area,
+      SECTIONS,
+      () => undefined,
+      asHtml(new FakeElement('span')),
+      parts,
+    );
+
+    parts.setLayouts(
+      shownLayouts('slim', {
+        help: (parent, _input, kit) => kit.el(parent, 'div', 'slim-help'),
+      }),
+    );
+    help.layoutsChanged();
+    const [body] = findAll(overlay.root, 'ui-dialog-body');
+    const whileHidden = body.children.map((child) => child.className);
+    help.show();
+
+    expect(whileHidden).toEqual(['keys-help-sections']);
+    expect(body.children.map((child) => child.className)).toEqual([
+      'slim-help',
+    ]);
+  });
+
   it('setLayouts_WhichKeyShown_PanelUnchangedNextShowUsesNewSet', () => {
     const { parts } = fakeKeysParts();
     const overlay = fakeOverlay();
@@ -195,7 +195,13 @@ describe('createKeysParts', () => {
 
     parts.titleBarButton(asHtml(new FakeElement('span')));
 
-    expect(anchors).toEqual([
+    expect(
+      anchors.map(({ command, scope, isDisposed }) => ({
+        command,
+        scope,
+        isDisposed,
+      })),
+    ).toEqual([
       { command: 'keys.toggleHelp', scope: undefined, isDisposed: false },
     ]);
   });

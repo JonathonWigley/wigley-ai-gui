@@ -25,7 +25,7 @@ export function mountHelpView(
   parts: KeysParts,
 ): HelpView {
   const dialog = createDialog('Keys');
-  dialog.body.parentElement?.classList.add('keys-help-dialog');
+  dialog.panel.classList.add('keys-help-dialog');
   dialog.actions.append(
     textButton('Close', close, { variant: 'secondary', hint: closeHint }),
   );

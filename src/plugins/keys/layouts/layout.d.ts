@@ -53,8 +53,8 @@ export interface WhichKeyKit extends KeysKit {
 }
 
 // Each part comes from the first layout that defines it among the `keys.layout` setting and `default`; a part that
-// throws or returns no element appended to `parent` is drawn by `default` instead. Every part appends its element to
-// `parent` and returns it. `help` draws the help dialog's body, `whichKey` the which-key panel's contents, and
+// throws, returns no element appended to `parent`, or appends other nodes beside it is drawn by `default` instead.
+// Every part appends one element to `parent` and returns it. `help` draws the help dialog's body, `whichKey` the which-key panel's contents, and
 // `titleBarButton` the Keys button in its title bar slot.
 export interface Layout {
   help?(parent: HTMLElement, input: HelpInput, kit: HelpKit): HTMLElement;
@@ -77,4 +77,4 @@ export interface Layout {
   titleBarButton?(parent: HTMLElement, kit: KeysKit): HTMLElement;
 }
 // Every member of Layout, required: the built-in `default` defines them all.
-export type CompleteLayout = Required<Layout>;
+export interface CompleteLayout extends Required<Layout> {}

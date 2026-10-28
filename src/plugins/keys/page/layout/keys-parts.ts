@@ -1,12 +1,9 @@
 import type { ViewScope } from '../../../../contracts/keymap';
 import type { Log } from '../../../../contracts/log';
 import type { ShownLayouts } from '../../../../contracts/plugin';
-import {
-  drawPart,
-  type PartPick,
-  type RollbackDeps,
-} from '../../../../shared/page/layout-host/draw-part';
-import { pickLayout } from '../../../../shared/page/layout-host/pick';
+import type { OwnerKitServices } from '../../../../shared/page/layout-host/base-kit';
+import type { RollbackDeps } from '../../../../shared/page/layout-host/draw-part';
+import { createLayoutParts } from '../../../../shared/page/layout-host/layout-parts';
 import { qualify } from '../../../../shared/plugin-manifests';
 import type {
   CompleteLayout,
@@ -15,7 +12,7 @@ import type {
   WhichKeyInput,
 } from '../../layouts/layout';
 import { keysManifest } from '../../manifest';
-import { createKeysKit, type KeysKitDeps } from './keys-kit';
+import { createKeysKit } from './keys-kit';
 
 // A drawn part. `dispose` removes the element and disposes every anchor the
 // part and the parts nested in it named.
@@ -26,7 +23,7 @@ export interface Drawn {
 
 export interface KeysPartsDeps {
   defaultLayout: CompleteLayout;
-  kit: KeysKitDeps;
+  kit: OwnerKitServices;
   log: Log;
 }
 
@@ -41,10 +38,8 @@ export interface KeysParts {
   setLayouts(shown: ShownLayouts<Layout>): void;
 }
 
-type PartName = keyof Layout;
-type Builder<P extends PartName> = NonNullable<Layout[P]>;
+type PartName = keyof CompleteLayout;
 
-const DEFAULT_NAME = 'default';
 const HELP_SCOPE = qualify(keysManifest.id, 'help');
 
 // The scope each part's keys fire in; null anchors with no scope, so the
@@ -58,24 +53,12 @@ const PART_SCOPES: Record<PartName, ViewScope | null> = {
   titleBarButton: null,
 };
 
-// The layout `part` draws with from `shown`: the user's when it defines the
-// part, else `default`.
-function pickFor(
-  part: PartName,
-  shown: ShownLayouts<Layout>,
-): PartPick<Layout> {
-  return pickLayout(
-    [shown.user, DEFAULT_NAME],
-    shown.layouts,
-    (layout) => layout[part] !== undefined,
-  );
-}
-
 export function createKeysParts(deps: KeysPartsDeps): KeysParts {
-  let shown: ShownLayouts<Layout> = {
-    layouts: new Map<string, Layout>([[DEFAULT_NAME, deps.defaultLayout]]),
-    user: DEFAULT_NAME,
-  };
+  const layoutParts = createLayoutParts<Layout, CompleteLayout>({
+    owner: keysManifest.id,
+    defaultLayout: deps.defaultLayout,
+    log: deps.log,
+  });
 
   // Draws `part` into `parent` with its own pick; `call` runs the builder
   // with a kit whose anchors `rollback` records.
@@ -83,24 +66,14 @@ export function createKeysParts(deps: KeysPartsDeps): KeysParts {
     part: P,
     parent: HTMLElement,
     call: (
-      builder: Builder<P>,
+      builder: CompleteLayout[P],
       slot: HTMLElement,
       rollback: RollbackDeps,
     ) => HTMLElement,
   ): Drawn => {
-    const drawn = drawPart<Layout, Builder<P>, { element: HTMLElement }>({
-      owner: keysManifest.id,
-      parent,
-      pick: pickFor(part, shown),
-      defaultLayout: deps.defaultLayout,
-      part: (layout) => layout[part] as Builder<P> | undefined,
-      build: (builder, slot, rollback) => ({
-        element: call(builder, slot, rollback),
-      }),
-      log: deps.log,
-      logSource: keysManifest.id,
-      partName: part,
-    });
+    const drawn = layoutParts.draw(part, parent, (builder, slot, rollback) => ({
+      element: call(builder, slot, rollback),
+    }));
     const element = drawn.built.element;
     return {
       element,
@@ -121,7 +94,7 @@ export function createKeysParts(deps: KeysPartsDeps): KeysParts {
     parent: HTMLElement,
     outer: RollbackDeps,
     call: (
-      builder: Builder<P>,
+      builder: CompleteLayout[P],
       slot: HTMLElement,
       rollback: RollbackDeps,
     ) => HTMLElement,
@@ -181,8 +154,6 @@ export function createKeysParts(deps: KeysPartsDeps): KeysParts {
         titleBarButton(slot, kitFor('titleBarButton', rollback)),
       );
     },
-    setLayouts(next) {
-      shown = next;
-    },
+    setLayouts: layoutParts.setLayouts,
   };
 }
