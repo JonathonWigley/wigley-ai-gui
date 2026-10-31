@@ -97,6 +97,74 @@
   color: var(--wg-status-error);
 }
 
+/* Activity lines: a live run's header (dot, current action, step count,
+   time) over its shortlist of the latest steps, or a finished run's one dim
+   summary. Opened, the step rows sit indented under the line as its list. */
+.chat-activity-slot {
+  cursor: pointer;
+}
+
+.chat-step-slot {
+  margin: 0;
+  padding-left: var(--wg-space-4);
+}
+
+.chat-activity {
+  font-family: var(--wg-font-ui);
+  font-size: var(--wg-text-ui);
+  font-variant-numeric: tabular-nums;
+}
+
+.chat-activity-head {
+  align-items: center;
+  color: var(--wg-fg);
+  display: flex;
+  gap: var(--wg-space-2);
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.chat-activity-summary {
+  color: var(--wg-fg-tertiary);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-1);
+}
+
+.chat-activity-failed {
+  color: var(--wg-status-error);
+}
+
+.chat-activity-time {
+  color: var(--wg-fg-tertiary);
+}
+
+.chat-activity-action,
+.chat-activity-step {
+  font-family: var(--wg-font-mono);
+  font-size: var(--wg-text-mono);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-activity-shortlist {
+  padding-left: var(--wg-space-4);
+}
+
+.chat-activity-step {
+  color: var(--wg-fg-tertiary);
+}
+
+.chat-activity-step.is-current {
+  color: var(--wg-fg);
+}
+
+.chat-activity-step.is-failed {
+  color: var(--wg-status-error);
+}
+
 /* Permissions: the tool and its input, then Allow once / Deny or the
    answer. */
 .chat-permission-head {

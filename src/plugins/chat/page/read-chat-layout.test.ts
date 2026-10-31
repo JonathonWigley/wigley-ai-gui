@@ -9,6 +9,7 @@ describe('readChatLayout', () => {
     { layout: { entries: { tool: builder } } },
     { layout: { entries: { tool: undefined }, composer: builder } },
     { layout: { composer: builder, imageViewer: builder } },
+    { layout: { activity: builder } },
   ])(
     'readChatLayout_PartsItChanges_ReturnsTheDefaultExport ($layout)',
     ({ layout }) => {
@@ -29,6 +30,7 @@ describe('readChatLayout', () => {
     },
     { layout: { composer: 'panel' }, error: 'composer is not a function' },
     { layout: { compose: builder }, error: 'compose is not a layout part' },
+    { layout: { activity: 'line' }, error: 'activity is not a function' },
   ])(
     'readChatLayout_Malformed_ThrowsNamingIt ($error)',
     ({ layout, error }) => {

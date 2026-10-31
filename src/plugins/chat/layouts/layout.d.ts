@@ -1,7 +1,7 @@
 import type { BaseKit, DotStatus } from '../../../shared/page/layout-host/kit';
 
-// The status dot's states, for a layout's JSDoc to import from here.
-export type { DotStatus };
+// The status dot's states and the base kit, for a layout's JSDoc to import from here.
+export type { BaseKit, DotStatus };
 
 export type EntryKind =
   | 'user'
@@ -86,6 +86,28 @@ export interface EntryInputs {
 }
 export type EntryInput<K extends EntryKind> = EntryInputs[K];
 
+// The entry kinds an activity line groups.
+export type StepInput = ToolInput | ThinkingInput | RawInput;
+
+// One run of the agent's steps. Times are epoch ms.
+export interface ActivityInput {
+  // In entry order, each the step's entry input.
+  steps: StepInput[];
+  // The last step.
+  current: StepInput;
+  // The session works on this run, and it is the last entry.
+  live: boolean;
+  // The user has the line open: the part draws only its header, and the app places the step rows under it.
+  open: boolean;
+  // When the run began: the entry before it.
+  startedAt: number;
+  // When the run ended; null while live.
+  endedAt: number | null;
+  // The time of this draw or update; the app sends it again once a second while the run is live. A live line's time
+  // is `now - startedAt`, a finished one's `endedAt - startedAt`.
+  now: number;
+}
+
 export interface EntryView<K extends EntryKind = EntryKind> {
   element: HTMLElement;
   // Runs with each later version of the entry (same id) while it shows. A view with no update is built again and its element replaced.
@@ -126,6 +148,12 @@ export interface ChatKit extends BaseKit {
   // A card whose head toggles its body, built closed unless `open`; Enter on the focused entry toggles it with the
   // entry's expanders. Its `element` is appended to `parent`; `leading` moves into its head.
   collapsibleCard(
+    parent: HTMLElement,
+    options: CollapsibleCardOptions,
+  ): CollapsibleCard;
+  // A plain one-line row, no card, that opens `body()` in place under it; Enter on the focused entry toggles it with
+  // the entry's expanders. Its `element` is appended to `parent`; `leading` moves into its head.
+  collapsibleRow(
     parent: HTMLElement,
     options: CollapsibleCardOptions,
   ): CollapsibleCard;
@@ -291,6 +319,13 @@ export type EntryBuilder<K extends EntryKind> = (
 // dialog's frame and title.
 export interface ChatLayout {
   entries?: { [K in EntryKind]?: EntryBuilder<K> };
+  // One run of the agent's steps (tool, thinking, raw entries between two other entries), drawn into its slot; the
+  // app keeps the cursor, the click that opens it and the step rows.
+  activity?(
+    parent: HTMLElement,
+    input: ActivityInput,
+    kit: BaseKit,
+  ): PartView<ActivityInput>;
   // The floating composer, appended to the Chat tab under the entries.
   composer?(
     parent: HTMLElement,

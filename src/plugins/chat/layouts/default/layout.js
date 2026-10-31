@@ -1,9 +1,13 @@
 // @ts-check
 
-// The built-in chat look: the entries, the composer, the list rows, the
-// dialogs' bodies and the image viewer. Every expander's and collapsible
-// card's body is built on its first open and kept, so an update refills it in
-// place whether it is open or closed.
+// The built-in chat look: the entries, the activity lines, the composer, the
+// list rows, the dialogs' bodies and the image viewer. Every collapsible row's
+// body is built on its first open and kept, so an update refills it in place
+// whether it is open or closed.
+
+// The steps a live, closed activity line lists under its header; a user
+// layout sets its own shortlist's length.
+const LIVE_STEP_LINES = 5;
 
 /**
  * @param {string} tag
@@ -96,6 +100,129 @@ function root(parent, className, text) {
   return element;
 }
 
+/** @param {import('../layout').StepInput} step */
+function stepAction(step) {
+  if (step.kind === 'tool') {
+    return toolLine(step);
+  }
+  return step.kind === 'thinking' ? 'Thinking' : 'Raw event';
+}
+
+/** @param {import('../layout').StepInput} step */
+function isFailedStep(step) {
+  return step.kind === 'tool' && step.result !== null && step.result.isError;
+}
+
+/** @param {number} count */
+function stepCount(count) {
+  return count === 1 ? '1 step' : `${count} steps`;
+}
+
+/** @param {number} value */
+function twoDigits(value) {
+  return String(value).padStart(2, '0');
+}
+
+// A run's time in whole seconds, rounded down: `42s`, `1m 05s`, `1h 02m`; a
+// negative span reads `0s`.
+/** @param {number} ms */
+function spanText(ms) {
+  const seconds = Math.max(0, Math.floor(ms / 1000));
+  if (seconds < 60) {
+    return `${seconds}s`;
+  }
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) {
+    return `${minutes}m ${twoDigits(seconds % 60)}s`;
+  }
+  return `${Math.floor(minutes / 60)}h ${twoDigits(minutes % 60)}m`;
+}
+
+// Each tool's name with its count, most used first, ties in order of first
+// use; a tool used once is named alone.
+/** @param {import('../layout').StepInput[]} steps */
+function toolTally(steps) {
+  /** @type {Map<string, number>} */
+  const counts = new Map();
+  for (const step of steps) {
+    if (step.kind === 'tool') {
+      counts.set(step.name, (counts.get(step.name) ?? 0) + 1);
+    }
+  }
+  return [...counts]
+    .sort((left, right) => right[1] - left[1])
+    .map(([name, count]) => (count === 1 ? name : `${name} ${count}`));
+}
+
+// The finished line: the step count and the tools, then the failed count,
+// then the time.
+/**
+ * @param {import('../layout').ActivityInput} input
+ * @param {HTMLElement} time
+ */
+function activitySummary(input, time) {
+  const summary = el('div', 'chat-activity-summary');
+  summary.append(
+    el(
+      'span',
+      'chat-activity-steps',
+      [stepCount(input.steps.length), ...toolTally(input.steps)].join(' · '),
+    ),
+  );
+  const failed = input.steps.filter(isFailedStep).length;
+  if (failed > 0) {
+    summary.append(el('span', 'chat-activity-failed', `· ${failed} failed`));
+  }
+  summary.append(time);
+  return summary;
+}
+
+// The latest steps, oldest first, the last one current.
+/** @param {import('../layout').StepInput[]} steps */
+function activityShortlist(steps) {
+  const shortlist = el('div', 'chat-activity-shortlist');
+  const shown = steps.slice(-LIVE_STEP_LINES);
+  shown.forEach((step, index) => {
+    const line = el('div', 'chat-activity-step', stepAction(step));
+    line.classList.toggle('is-current', index === shown.length - 1);
+    line.classList.toggle('is-failed', isFailedStep(step));
+    shortlist.append(line);
+  });
+  return shortlist;
+}
+
+// A live run: its header, over the shortlist while closed. A finished run:
+// the summary line, open or closed.
+/**
+ * @param {HTMLElement} line
+ * @param {import('../layout').ActivityInput} input
+ * @param {import('../layout').BaseKit} kit
+ */
+function fillActivity(line, input, kit) {
+  line.replaceChildren();
+  line.classList.toggle('is-live', input.live);
+  const time = el(
+    'span',
+    'chat-activity-time',
+    `· ${spanText((input.endedAt ?? input.now) - input.startedAt)}`,
+  );
+  if (!input.live) {
+    line.append(activitySummary(input, time));
+    return;
+  }
+  const head = el('div', 'chat-activity-head');
+  line.append(head);
+  kit.statusDot(head, 'running');
+  head.append(
+    el('span', 'chat-activity-action', stepAction(input.current)),
+    el('span', 'chat-activity-count', `· ${stepCount(input.steps.length)}`),
+    time,
+  );
+  if (!input.open) {
+    line.append(activityShortlist(input.steps));
+  }
+}
+
 const WAITING_TEXT = 'Waiting for the sign-in link…';
 
 /** @param {string | null} link */
@@ -149,12 +276,15 @@ const layout = {
       /** @type {HTMLElement | null} */
       let body = null;
       const entry = root(parent, 'chat-entry chat-thinking');
-      kit.expander(entry, 'Thinking', () => {
-        if (body === null) {
-          body = el('div', 'chat-thinking-body');
-          kit.markdown(body, current.text, 'md');
-        }
-        return body;
+      kit.collapsibleRow(entry, {
+        summary: 'Thinking',
+        body: () => {
+          if (body === null) {
+            body = el('div', 'chat-thinking-body');
+            kit.markdown(body, current.text, 'md');
+          }
+          return body;
+        },
       });
       entry.classList.toggle('chat-streaming', input.streaming);
       return {
@@ -170,14 +300,14 @@ const layout = {
       };
     },
     // Built closed; the result arriving sets the dot and refills the body,
-    // leaving the card open or closed as it was.
+    // leaving the row open or closed as it was.
     tool(parent, input, kit) {
       let current = input;
       /** @type {HTMLElement | null} */
       let body = null;
       const entry = root(parent, 'chat-entry chat-tool');
       const dot = kit.statusDot(entry, toolStatus(input));
-      kit.collapsibleCard(entry, {
+      kit.collapsibleRow(entry, {
         summary: toolLine(input),
         mono: true,
         leading: dot,
@@ -243,12 +373,15 @@ const layout = {
       /** @type {HTMLElement | null} */
       let body = null;
       const entry = root(parent, 'chat-entry chat-raw');
-      kit.expander(entry, 'Raw event', () => {
-        if (body === null) {
-          body = el('div', 'chat-raw-body');
-          kit.json(body, current.raw);
-        }
-        return body;
+      kit.collapsibleRow(entry, {
+        summary: 'Raw event',
+        body: () => {
+          if (body === null) {
+            body = el('div', 'chat-raw-body');
+            kit.json(body, current.raw);
+          }
+          return body;
+        },
       });
       return {
         element: entry,
@@ -261,6 +394,18 @@ const layout = {
         },
       };
     },
+  },
+  // Every update draws the line afresh, so a run turning finished or a tick
+  // moving `now` redraws only this line.
+  activity(parent, input, kit) {
+    const line = root(parent, 'chat-activity');
+    fillActivity(line, input, kit);
+    return {
+      element: line,
+      update(next) {
+        fillActivity(line, next, kit);
+      },
+    };
   },
   // The glass panel: the attached images, the box, then the bar.
   composer(parent, _input, kit) {

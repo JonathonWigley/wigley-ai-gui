@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
+  ActivityInput,
   ChatKit,
   ChatLayout,
   CollapsibleCardOptions,
@@ -11,6 +12,7 @@ import type {
   PartView,
   PickerRowKit,
   SignInKit,
+  StepInput,
 } from '../layout';
 import type { KitRowOptions } from '../../../../shared/page/layout-host/kit';
 import layout from './layout.js';
@@ -85,12 +87,10 @@ function part(parent: HTMLElement, tag: string, name: string): HTMLElement {
 }
 
 // A kit whose parts append tagged fake elements and record each call; each
-// expander keeps its line and `body`, and each collapsible card its options,
-// so a test opens it by calling `body()`.
+// collapsible row keeps its options, so a test opens it by calling `body()`.
 function fakeKit() {
   const calls = {
-    expanders: [] as { line: string; body: () => HTMLElement }[],
-    collapsibleCards: [] as CollapsibleCardOptions[],
+    collapsibleRows: [] as CollapsibleCardOptions[],
     setOpen: [] as boolean[],
     setDotStatus: [] as [string | undefined, string][],
   };
@@ -98,14 +98,10 @@ function fakeKit() {
     markdown: (parent, text) => part(parent, 'div', `markdown:${text}`),
     json: (parent, value) =>
       part(parent, 'pre', `json:${JSON.stringify(value)}`),
-    expander(parent, summary, body) {
-      calls.expanders.push({ line: summary, body });
-      return part(parent, 'div', `expander:${summary}`);
-    },
-    collapsibleCard(parent, options) {
-      calls.collapsibleCards.push(options);
+    collapsibleRow(parent, options) {
+      calls.collapsibleRows.push(options);
       return {
-        element: part(parent, 'div', `collapsibleCard:${options.summary}`),
+        element: part(parent, 'div', `collapsibleRow:${options.summary}`),
         isOpen: () => false,
         setOpen(open) {
           calls.setOpen.push(open);
@@ -229,7 +225,7 @@ describe('default chat layout', () => {
     expect(describeChildren(root)).toEqual(['markdown:Hi there']);
   });
 
-  it('thinking_expanderBodyRefilledInPlace', () => {
+  it('thinking_rowBodyRefilledInPlace', () => {
     const { kit, calls } = fakeKit();
     const entry = {
       kind: 'thinking' as const,
@@ -240,16 +236,16 @@ describe('default chat layout', () => {
     };
 
     const view = draw(entry, kit);
-    expect(calls.expanders.map((expander) => expander.line)).toEqual([
+    expect(calls.collapsibleRows.map((row) => row.summary)).toEqual([
       'Thinking',
     ]);
-    const body = asFake(calls.expanders[0].body());
+    const body = asFake(calls.collapsibleRows[0].body());
     expect(describeChildren(body)).toEqual(['markdown:step 1']);
 
     view.update?.({ ...entry, text: 'step 1 step 2' });
-    expect(asFake(calls.expanders[0].body())).toBe(body);
+    expect(asFake(calls.collapsibleRows[0].body())).toBe(body);
     expect(describeChildren(body)).toEqual(['markdown:step 1 step 2']);
-    expect(calls.expanders).toHaveLength(1);
+    expect(calls.collapsibleRows).toHaveLength(1);
   });
 
   const toolEntry = {
@@ -271,7 +267,12 @@ describe('default chat layout', () => {
     const { kit, calls } = fakeKit();
 
     draw({ ...toolEntry, summary }, kit);
-    expect(calls.collapsibleCards[0].summary).toBe(line);
+    const options = calls.collapsibleRows[0];
+    expect([
+      options.summary,
+      options.mono,
+      options.leading?.dataset.part,
+    ]).toEqual([line, true, 'dot:running']);
   });
 
   it.each([
@@ -282,7 +283,7 @@ describe('default chat layout', () => {
     ({ isError, label, status, text }) => {
       const { kit, calls } = fakeKit();
       const view = draw(toolEntry, kit);
-      const options = calls.collapsibleCards[0];
+      const options = calls.collapsibleRows[0];
       const body = asFake(options.body());
 
       view.update?.({ ...toolEntry, result: { text, isError } });
@@ -349,15 +350,227 @@ describe('default chat layout', () => {
     expect(asFake(view.element).textContent).toBe(line);
   });
 
-  it('raw_expanderShowsTheEvents', () => {
+  it('raw_rowShowsTheEvents', () => {
     const { kit, calls } = fakeKit();
     const raw: unknown[] = [{ type: 'x' }];
 
     draw({ kind: 'raw', id: 'x1', raw }, kit);
-    const body = asFake(calls.expanders[0].body());
+    expect(calls.collapsibleRows[0].summary).toBe('Raw event');
+    const body = asFake(calls.collapsibleRows[0].body());
     expect(describeChildren(body)).toEqual([
       `json:${JSON.stringify([{ type: 'x' }])}`,
     ]);
+  });
+});
+
+// A tool step named `name`, its result failed when `isError`; null leaves it
+// running.
+function toolStep(
+  name: string,
+  summary: string,
+  isError: boolean | null = false,
+): StepInput {
+  return {
+    kind: 'tool',
+    id: `${name}-${summary}`,
+    toolUseId: `toolu-${name}-${summary}`,
+    name,
+    input: {},
+    summary,
+    result: isError === null ? null : { text: '', isError },
+    raw: [],
+  };
+}
+
+function thinkingStep(id: string): StepInput {
+  return { kind: 'thinking', id, text: '', streaming: false, raw: [] };
+}
+
+// A finished, closed run of `steps` from 0 to `endedAt`.
+function finishedRun(steps: StepInput[], endedAt: number): ActivityInput {
+  return {
+    steps,
+    current: steps[steps.length - 1],
+    live: false,
+    open: false,
+    startedAt: 0,
+    endedAt,
+    now: endedAt,
+  };
+}
+
+// A live run of `steps`, started at 0, drawn at `now`.
+function liveRun(
+  steps: StepInput[],
+  open: boolean,
+  now: number,
+): ActivityInput {
+  return {
+    steps,
+    current: steps[steps.length - 1],
+    live: true,
+    open,
+    startedAt: 0,
+    endedAt: null,
+    now,
+  };
+}
+
+const sevenSteps = [
+  toolStep('Read', 'a.ts'),
+  toolStep('Read', 'b.ts'),
+  thinkingStep('t1'),
+  toolStep('Grep', 'todo', true),
+  toolStep('Edit', 'a.ts'),
+  { kind: 'raw', id: 'x1', raw: [] } as StepInput,
+  toolStep('Bash', 'npm test', null),
+];
+const sevenStepHead =
+  'dot:running span.chat-activity-action:Bash · npm test span.chat-activity-count:· 7 steps span.chat-activity-time:· 12s';
+
+function drawActivity(input: ActivityInput): PartView<ActivityInput> {
+  const parent = new FakeElement('div');
+  const view = layout.activity(asHtml(parent), input, fakeKit().kit);
+  expect(parent.children).toEqual([asFake(view.element)]);
+  return view;
+}
+
+// The part's root classes, then each line: the header or the summary as its
+// pieces, each shortlist step as its classes and text.
+function activityLines(view: PartView<ActivityInput>): string[] {
+  const line = asFake(view.element);
+  return [
+    line.className,
+    ...line.children.flatMap((child) =>
+      child.className === 'chat-activity-shortlist'
+        ? describeChildren(child)
+        : [describeChildren(child).join(' ')],
+    ),
+  ];
+}
+
+describe('default chat layout activity', () => {
+  beforeEach(() => {
+    vi.stubGlobal('document', {
+      createElement: (tag: string) => new FakeElement(tag),
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it.each([
+    {
+      state: 'Finished',
+      input: finishedRun(
+        [
+          toolStep('Read', 'a.ts'),
+          toolStep('Bash', 'ls'),
+          toolStep('Read', 'b.ts'),
+          toolStep('Edit', 'a.ts'),
+          toolStep('Bash', 'npm test', true),
+          toolStep('Read', 'c.ts'),
+        ],
+        42000,
+      ),
+      lines: [
+        'chat-activity',
+        'span.chat-activity-steps:6 steps · Read 3 · Bash 2 · Edit span.chat-activity-failed:· 1 failed span.chat-activity-time:· 42s',
+      ],
+    },
+    {
+      state: 'FinishedOneStep',
+      input: finishedRun([toolStep('Read', 'a.ts')], 8000),
+      lines: [
+        'chat-activity',
+        'span.chat-activity-steps:1 step · Read span.chat-activity-time:· 8s',
+      ],
+    },
+    {
+      state: 'FinishedThinkingOnly',
+      input: finishedRun([thinkingStep('t1'), thinkingStep('t2')], 8000),
+      lines: [
+        'chat-activity',
+        'span.chat-activity-steps:2 steps span.chat-activity-time:· 8s',
+      ],
+    },
+    {
+      state: 'LiveClosed',
+      input: liveRun(sevenSteps, false, 12000),
+      lines: [
+        'chat-activity is-live',
+        sevenStepHead,
+        'div.chat-activity-step:Thinking',
+        'div.chat-activity-step is-failed:Grep · todo',
+        'div.chat-activity-step:Edit · a.ts',
+        'div.chat-activity-step:Raw event',
+        'div.chat-activity-step is-current:Bash · npm test',
+      ],
+    },
+    {
+      state: 'LiveClosedOneStep',
+      input: liveRun([toolStep('Read', 'a.ts', null)], false, 3000),
+      lines: [
+        'chat-activity is-live',
+        'dot:running span.chat-activity-action:Read · a.ts span.chat-activity-count:· 1 step span.chat-activity-time:· 3s',
+        'div.chat-activity-step is-current:Read · a.ts',
+      ],
+    },
+    {
+      state: 'LiveOpen',
+      input: liveRun(sevenSteps, true, 12000),
+      lines: ['chat-activity is-live', sevenStepHead],
+    },
+    {
+      state: 'UpdatedFromLiveToFinished',
+      input: liveRun(sevenSteps, false, 12000),
+      next: finishedRun(sevenSteps, 20000),
+      lines: [
+        'chat-activity',
+        'span.chat-activity-steps:7 steps · Read 2 · Grep · Edit · Bash span.chat-activity-failed:· 1 failed span.chat-activity-time:· 20s',
+      ],
+    },
+  ] as {
+    state: string;
+    input: ActivityInput;
+    next?: ActivityInput;
+    lines: string[];
+  }[])('activity_Default_$state', ({ input, next, lines }) => {
+    const view = drawActivity(input);
+    const line = view.element;
+
+    if (next !== undefined) {
+      view.update?.(next);
+    }
+
+    expect(view.element).toBe(line);
+    expect(activityLines(view)).toEqual(lines);
+  });
+
+  const oneStep = [toolStep('Read', 'a.ts')];
+
+  it.each([
+    { ms: 0, text: '0s' },
+    { ms: 8000, text: '8s' },
+    { ms: 42999, text: '42s' },
+    { ms: 65000, text: '1m 05s' },
+    { ms: 3599000, text: '59m 59s' },
+    { ms: 3720000, text: '1h 02m' },
+    { ms: -500, text: '0s' },
+    { ms: 'tick 12000 → 13000', text: '13s' },
+  ])('activity_Default_TimeFormat ($ms → $text)', ({ ms, text }) => {
+    const isTick = typeof ms === 'string';
+    const view = drawActivity(
+      isTick ? liveRun(oneStep, false, 12000) : finishedRun(oneStep, ms),
+    );
+
+    if (isTick) {
+      view.update?.(liveRun(oneStep, false, 13000));
+    }
+
+    const timeLine = asFake(view.element).children[0];
+    expect(timeLine.children.at(-1)?.textContent).toBe(`· ${text}`);
   });
 });
 
@@ -397,6 +610,7 @@ type SurfacePart = Exclude<keyof ChatLayout, 'entries'>;
 
 // Every part beside the entries; a part left out fails to compile.
 const SURFACE_PARTS: Record<SurfacePart, true> = {
+  activity: true,
   composer: true,
   composerBar: true,
   attachments: true,

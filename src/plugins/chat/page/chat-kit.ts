@@ -4,6 +4,7 @@ import { appended, element } from '../../../shared/page/dom';
 import { type ButtonVariant, textButton } from '../../../shared/page/ui/button';
 import {
   type CollapsibleCard,
+  type CollapsibleCardOptions,
   card,
   createCollapsibleCard,
 } from '../../../shared/page/ui/card';
@@ -23,7 +24,7 @@ export interface KitDeps extends SurfaceKitDeps {
   openImages(images: readonly ChatImage[], index: number): void;
 }
 
-// The expanders one kit made (its expanders and collapsible cards), in
+// The expanders one kit made (its expanders, collapsible cards and rows), in
 // creation order.
 export interface Expanders {
   count(): number;
@@ -54,6 +55,16 @@ export function createEntryKit(entry: ChatEntry, deps: KitDeps): EntryKit {
   const expanders: Expander[] = [];
   const permissionParts: PermissionPart[] = [];
   const anchors: Disposable[] = [];
+  // Builds a collapsible into `parent`, one of the kit's expanders.
+  const addCollapsible = (
+    parent: HTMLElement,
+    options: CollapsibleCardOptions,
+  ): CollapsibleCard => {
+    const built = createCollapsibleCard(options);
+    expanders.push(built);
+    parent.append(built.element);
+    return built;
+  };
   const kit: ChatKit = {
     ...surfaceBaseKit(deps, 'chat', {
       recordAnchor: (anchor) => anchors.push(anchor),
@@ -66,12 +77,9 @@ export function createEntryKit(entry: ChatEntry, deps: KitDeps): EntryKit {
     expander(parent, summary, body) {
       return kit.collapsibleCard(parent, { summary, body }).element;
     },
-    collapsibleCard(parent, options) {
-      const built = createCollapsibleCard(options);
-      expanders.push(built);
-      parent.append(built.element);
-      return built;
-    },
+    collapsibleCard: (parent, options) => addCollapsible(parent, options),
+    collapsibleRow: (parent, options) =>
+      addCollapsible(parent, { ...options, plain: true }),
     edgeCard: (parent, edge) => appended(parent, card(edge)),
     permissionActions(parent) {
       if (current.kind !== 'permission') {

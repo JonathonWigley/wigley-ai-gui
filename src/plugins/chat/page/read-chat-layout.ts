@@ -45,6 +45,7 @@ void [
 // A `Record` over every part beside the entries, so a part left out fails to
 // compile.
 const PART_SET: Record<ChatPartName, true> = {
+  activity: true,
   composer: true,
   composerBar: true,
   attachments: true,
