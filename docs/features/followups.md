@@ -154,10 +154,9 @@ now, any harness later). Each item names its sites.
   action words, chip, theme token), the single source for the parser, tool text and card input.
   One `Finding` type with `severity: Severity | null` replaces the per-origin types; each saved round carries its
   origin action words so retro reads data rather than keeping `ORIGIN_ACTION_LABELS`.
-- **Partial chat user layouts** — *agent-ready*: Chat user layouts define only the entries they change: chat's `entries` becomes a partial record that falls back
-  per kind to `default`, as forms' cards and panes already do, and `origin` / `card` / `FindingAction` in forms'
-  `layout.d.ts` become strings. Today a missing entry rejects the whole chat layout, so adding an entry kind breaks
-  every user chat layout.
+- **Open forms layout unions** — *agent-ready*: `origin` / `card` / `FindingAction` in forms' `layout.d.ts` become
+  strings, so a new finding origin, card or action does not break a user forms layout typed against the closed
+  unions.
 - **Open ChatEntry kinds** — *agent-ready*: `ChatEntry.kind` opens for harness-specific kinds carrying only `raw`, drawn by the `raw` builder unless a layout
   names them.
 - **Derived layer rules** — *agent-ready*: `check-layers.mts` derives each plugin's rules from the folder convention and its manifest's `dependsOn`, and checks
