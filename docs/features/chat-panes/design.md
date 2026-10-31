@@ -49,12 +49,16 @@ so the same hands work in both tools.
 - A split opens the shared list picker. It lists the sessions that no pane shows, then a
   "New session" row when chat's new-session command exists. A pick loads that session into the new
   pane. "New session" starts the chat start prompt, whose session then loads into the new pane.
-- Esc in the picker closes the new pane, which undoes the split. A pane that holds no session when
-  its picker closes closes too.
+- Esc in the picker closes the new pane, which undoes the split, and so does the picker closing any
+  other way but a pick while the pane still holds no session. After "New session" the pane waits
+  for the started session; when the start prompt starts nothing, the pane stays empty with the
+  "Pick a session" text, and `Alt+w` closes it.
 - `Alt+w` closes the focused pane only. Its session stays in the side bar, and the sibling pane
   takes the space. `Cmd+w` still closes the session.
 - A pane whose session leaves the side bar (closed or ended) closes, as a tmux pane closes when its
-  process exits. The last pane never closes: it shows today's empty text.
+  process exits. The panes left keep their sessions: main's pick of the next row is not loaded
+  into them. The last pane never closes: it shows the next row, as the single view does today, or
+  today's empty text when no row is left.
 
 ## Keys
 
