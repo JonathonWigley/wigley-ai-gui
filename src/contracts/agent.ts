@@ -35,12 +35,15 @@ export interface UserMessage {
 
 // `id` is unique among one process's entries (one `start`): a resumed session's new process numbers its
 // entries afresh. An entry sent again with the same id replaces the earlier one.
+// `at` is when the entry first appeared, epoch milliseconds; a later version of the entry (same id) keeps its first
+// `at`.
 // `raw` holds the harness events the entry was built from, oldest first; a harness adapter may leave out
 // streaming events whose content the kept events already hold.
 export type ChatEntry =
   | {
       kind: 'user';
       id: string;
+      at: number;
       text: string;
       images: ChatImage[];
       raw: unknown[];
@@ -48,6 +51,7 @@ export type ChatEntry =
   | {
       kind: 'assistant';
       id: string;
+      at: number;
       text: string;
       streaming: boolean;
       raw: unknown[];
@@ -55,6 +59,7 @@ export type ChatEntry =
   | {
       kind: 'thinking';
       id: string;
+      at: number;
       text: string;
       streaming: boolean;
       raw: unknown[];
@@ -62,6 +67,7 @@ export type ChatEntry =
   | {
       kind: 'tool';
       id: string;
+      at: number;
       toolUseId: string;
       name: string;
       input: unknown;
@@ -72,6 +78,7 @@ export type ChatEntry =
   | {
       kind: 'permission';
       id: string;
+      at: number;
       toolName: string;
       input: unknown;
       answer: { allowed: boolean; reason: string | null } | null;
@@ -80,6 +87,7 @@ export type ChatEntry =
   | {
       kind: 'result';
       id: string;
+      at: number;
       stopReason: string;
       costUsd: number | null;
       durationMs: number | null;
@@ -88,11 +96,12 @@ export type ChatEntry =
   | {
       kind: 'notice';
       id: string;
+      at: number;
       text: string;
       tone: 'info' | 'error';
       raw: unknown[];
     }
-  | { kind: 'raw'; id: string; raw: unknown[] };
+  | { kind: 'raw'; id: string; at: number; raw: unknown[] };
 
 export type ChatEntryKind = ChatEntry['kind'];
 

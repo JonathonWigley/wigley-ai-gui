@@ -193,6 +193,7 @@ function claudeHarness(
     files,
     homeDir,
     paths,
+    clock,
   });
 }
 
@@ -261,7 +262,7 @@ function driveHarness(
   { store, homeDir, log }: ModeServicesContext,
 ): AgentHarness {
   if (name === 'fake') {
-    return createFakeAgentHarness();
+    return createFakeAgentHarness(clock);
   }
   return claudeHarness(store, os.homedir(), endpointEnv(homeDir), log);
 }
@@ -272,7 +273,7 @@ function modeServicesOf(environment: RunEnvironment): ModeServices {
       return liveServices();
     case 'selfTest':
       return offscreenRunServices('the self-test', () =>
-        createFakeAgentHarness(),
+        createFakeAgentHarness(clock),
       );
     case 'drive':
       return offscreenRunServices('a drive run', (context) =>
@@ -280,11 +281,11 @@ function modeServicesOf(environment: RunEnvironment): ModeServices {
       );
   }
 }
+const clock: Clock = { now: () => Date.now() };
 const modeServices = modeServicesOf(runEnvironment);
 
 const files = createNodeFiles({ trashItem: modeServices.trashItem });
 const processes = createNodeProcesses();
-const clock: Clock = { now: () => Date.now() };
 const randomHex: RandomHex = () => randomBytes(4).toString('hex');
 const randomUuid: RandomUuid = () => randomUUID();
 const paths: Paths = process.platform === 'win32' ? windowsPaths : posixPaths;

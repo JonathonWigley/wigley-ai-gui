@@ -17,7 +17,14 @@ describe('createEntryKit', () => {
   it('dispose_DisposesBaseKitAnchors', () => {
     const disposed: CommandId[] = [];
     const entryKit = createEntryKit(
-      { kind: 'assistant', id: 'a1', text: 'hi', streaming: false, raw: [] },
+      {
+        kind: 'assistant',
+        id: 'a1',
+        at: 1000,
+        text: 'hi',
+        streaming: false,
+        raw: [],
+      },
       {
         markdown: {
           block: (text) => text,

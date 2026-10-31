@@ -107,7 +107,8 @@ async function flush() {
 function setUp(
   options: { harnesses?: FakeAgentHarness[]; clockNow?: number } = {},
 ) {
-  const harness = createFakeAgentHarness();
+  const clock = { now: () => options.clockNow ?? 1000 };
+  const harness = createFakeAgentHarness(clock);
   const harnesses = options.harnesses ?? [harness];
   const data = createMemoryFiles();
   const logged: string[] = [];
@@ -160,7 +161,7 @@ function setUp(
     },
     recent: createRecentFolders({
       data,
-      clock: { now: () => options.clockNow ?? 1000 },
+      clock,
       paths: posixPaths,
       log,
     }),
@@ -178,6 +179,7 @@ function setUp(
       isFocused: () => isFocused,
     },
     log,
+    clock,
   });
   const agentSession: AgentSession = {
     id: ROW_ID,
@@ -248,7 +250,7 @@ function connected(id: string, hostId: string): AgentSession {
 }
 
 function assistant(id: string, text: string): ChatEntry {
-  return { kind: 'assistant', id, text, streaming: false, raw: [] };
+  return { kind: 'assistant', id, at: 1000, text, streaming: false, raw: [] };
 }
 
 function signal(): AbortController {
@@ -474,6 +476,7 @@ describe('createChatSessions', () => {
       {
         kind: 'notice',
         id: 'history:unread',
+        at: 1000,
         text: 'Earlier conversation not read: cannot read',
         tone: 'error',
         raw: [],
@@ -888,7 +891,7 @@ describe('createChatSessions', () => {
   });
 
   it('closed_processExitsWithAnError_endsTheOwnedSessionAndReportsNoEnd', async () => {
-    const fake = createFakeAgentHarness();
+    const fake = createFakeAgentHarness({ now: () => 1000 });
     const failingExit: FakeAgentHarness = {
       ...fake,
       start: (request, events) => ({
@@ -912,7 +915,7 @@ describe('createChatSessions', () => {
   });
 
   it('closed_processEndRejects_logsAndEndsTheOwnedSession', async () => {
-    const fake = createFakeAgentHarness();
+    const fake = createFakeAgentHarness({ now: () => 1000 });
     const failingEnd: FakeAgentHarness = {
       ...fake,
       start: (request, events) => ({
@@ -982,6 +985,7 @@ describe('createChatSessions', () => {
       {
         kind: 'notice',
         id: 'app-notice-1',
+        at: 1000,
         text: 'Signed out of work',
         tone: 'info',
         raw: [],
@@ -989,6 +993,7 @@ describe('createChatSessions', () => {
       {
         kind: 'notice',
         id: 'app-notice-2',
+        at: 1000,
         text: 'Status not read',
         tone: 'error',
         raw: [],
@@ -1041,6 +1046,7 @@ describe('createChatSessions', () => {
         entry: {
           kind: 'permission',
           id: 'permission-1',
+          at: 1000,
           toolName: 'Bash',
           input: { command: 'ls' },
           answer: null,

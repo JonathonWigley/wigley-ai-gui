@@ -8,7 +8,7 @@ import type {
   UserMessage,
 } from '../../../contracts/agent';
 import type { Alerts } from '../../../contracts/alerts';
-import type { RandomUuid } from '../../../contracts/ambient';
+import type { Clock, RandomUuid } from '../../../contracts/ambient';
 import type { Log } from '../../../contracts/log';
 import type { MainChannel } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
@@ -66,6 +66,8 @@ export interface ChatSessionsDeps {
   alerts: Pick<Alerts, 'announce'>;
   window: { show(): void; isFocused(): boolean };
   log: Log;
+  // Stamps the `at` of the notices and permission entries chat makes itself.
+  clock: Clock;
 }
 
 export interface ChatSessions {
@@ -318,6 +320,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     sendEntry(session, {
       kind: 'notice',
       id: `app-notice-${session.noticeCount}`,
+      at: deps.clock.now(),
       text,
       tone,
       raw: [],
@@ -786,6 +789,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         {
           kind: 'notice',
           id: 'history:unread',
+          at: deps.clock.now(),
           text: `Earlier conversation not read: ${reason}`,
           tone: 'error',
           raw: [],
@@ -915,6 +919,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     const entry: PermissionEntry = {
       kind: 'permission',
       id: `permission-${session.permissionCount}`,
+      at: deps.clock.now(),
       toolName: request.toolName,
       input: request.input,
       answer: null,

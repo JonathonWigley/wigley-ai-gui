@@ -12,10 +12,13 @@ import type {
   ProjectFolder,
   SessionControl,
 } from '../contracts/agent';
+import type { Clock } from '../contracts/ambient';
 
 // A scripted harness behind `AgentHarness`, for the tests and the self-test.
 // Every emission runs in a microtask the causing call queues, never inside the
-// call, so a caller's state is in place before its events arrive.
+// call, so a caller's state is in place before its events arrive. Each emitted
+// entry carries the clock's time when its id first arrived; `history` entries
+// carry fixed times one second apart.
 
 // A send of this text opens a turn that stays open until `interrupt` or `end`.
 export const FAKE_HOLD_TEXT = 'fake: hold';
@@ -29,6 +32,8 @@ export const FAKE_SIGN_IN_CODE = 'fake-code';
 // The account every profile is signed in as until `logOut`.
 const FAKE_ACCOUNT = 'fake@example.invalid';
 const SIGNED_OUT: AccountStatus = { signedIn: false, account: null };
+// The `at` of a fake past session's first history entry.
+const FAKE_HISTORY_AT = 1767236645000;
 
 export type FakeAgentCall =
   | { method: 'send'; text: string; imageCount: number }
@@ -160,9 +165,19 @@ function startingControls(): SessionControl[] {
   ];
 }
 
+type WithoutAt<E> = E extends unknown ? Omit<E, 'at'> : never;
+type EntryDraft = WithoutAt<ChatEntry>;
+
+// Emits one entry, stamped with its `at`.
+type EmitEntry = (draft: EntryDraft) => void;
+
 // The entries and activity that close turn `turn`.
-function emitTurnEnd(events: AgentProcessEvents, turn: number) {
-  events.entry({
+function emitTurnEnd(
+  events: AgentProcessEvents,
+  emitEntry: EmitEntry,
+  turn: number,
+) {
+  emitEntry({
     kind: 'result',
     id: `result-${turn}`,
     stopReason: 'end_turn',
@@ -173,7 +188,11 @@ function emitTurnEnd(events: AgentProcessEvents, turn: number) {
   events.activity('idle');
 }
 
-function emitToolTurn(events: AgentProcessEvents, turn: number) {
+function emitToolTurn(
+  events: AgentProcessEvents,
+  emitEntry: EmitEntry,
+  turn: number,
+) {
   const tool = {
     kind: 'tool' as const,
     id: `tool-${turn}`,
@@ -182,41 +201,46 @@ function emitToolTurn(events: AgentProcessEvents, turn: number) {
     input: { command: 'echo fake' },
     summary: 'echo fake',
   };
-  events.entry({ ...tool, result: null, raw: [{ fake: 'tool' }] });
-  events.entry({
+  emitEntry({ ...tool, result: null, raw: [{ fake: 'tool' }] });
+  emitEntry({
     ...tool,
     result: { text: 'fake', isError: false },
     raw: [{ fake: 'tool' }, { fake: 'tool-result' }],
   });
   const reply = 'fake agent ran a tool';
-  events.entry({
+  emitEntry({
     kind: 'assistant',
     id: `assistant-${turn}`,
     text: reply,
     streaming: false,
     raw: [{ fake: 'assistant', text: reply }],
   });
-  emitTurnEnd(events, turn);
+  emitTurnEnd(events, emitEntry, turn);
 }
 
-function emitEchoTurn(events: AgentProcessEvents, turn: number, text: string) {
+function emitEchoTurn(
+  events: AgentProcessEvents,
+  emitEntry: EmitEntry,
+  turn: number,
+  text: string,
+) {
   const prefix = 'fake agent heard: ';
   const first = { fake: 'assistant', text: prefix };
-  events.entry({
+  emitEntry({
     kind: 'assistant',
     id: `assistant-${turn}`,
     text: prefix,
     streaming: true,
     raw: [first],
   });
-  events.entry({
+  emitEntry({
     kind: 'assistant',
     id: `assistant-${turn}`,
     text: `${prefix}${text}`,
     streaming: false,
     raw: [first, { fake: 'assistant', text }],
   });
-  emitTurnEnd(events, turn);
+  emitTurnEnd(events, emitEntry, turn);
 }
 
 // The images on a fake past session's user message: a red and a blue 16×16
@@ -239,6 +263,7 @@ function fakeHistory(sessionId: string): ChatEntry[] {
     {
       kind: 'user',
       id: `history:${sessionId}-user`,
+      at: FAKE_HISTORY_AT,
       text: 'fake earlier message',
       images: FAKE_HISTORY_IMAGES.map((image) => ({ ...image })),
       raw: [{ fake: 'history-user' }],
@@ -246,6 +271,7 @@ function fakeHistory(sessionId: string): ChatEntry[] {
     {
       kind: 'assistant',
       id: `history:${sessionId}-assistant`,
+      at: FAKE_HISTORY_AT + 1000,
       text: 'fake earlier reply',
       streaming: false,
       raw: [{ fake: 'history-assistant' }],
@@ -253,7 +279,7 @@ function fakeHistory(sessionId: string): ChatEntry[] {
   ];
 }
 
-export function createFakeAgentHarness(): FakeAgentHarness {
+export function createFakeAgentHarness(clock: Clock): FakeAgentHarness {
   const processes: FakeAgentProcessRecord[] = [];
   const pastSessionCalls: FakePastSessionCall[] = [];
   let nextStartFailure: string | null = null;
@@ -319,6 +345,12 @@ export function createFakeAgentHarness(): FakeAgentHarness {
     let turn = 0;
     let isTurnOpen = false;
     let endPromise: Promise<void> | null = null;
+    const firstAt = new Map<string, number>();
+    const emitEntry: EmitEntry = (draft) => {
+      const at = firstAt.get(draft.id) ?? clock.now();
+      firstAt.set(draft.id, at);
+      events.entry({ ...draft, at } as ChatEntry);
+    };
     const requireRunning = () => {
       if (record.ended) {
         throw new Error('fake agent process has ended');
@@ -337,7 +369,7 @@ export function createFakeAgentHarness(): FakeAgentHarness {
         turn += 1;
         const sentTurn = turn;
         const emitUserEntry = () => {
-          events.entry({
+          emitEntry({
             kind: 'user',
             id: `user-${sentTurn}`,
             text,
@@ -366,9 +398,9 @@ export function createFakeAgentHarness(): FakeAgentHarness {
             return;
           }
           if (text === FAKE_TOOL_TEXT) {
-            emitToolTurn(events, sentTurn);
+            emitToolTurn(events, emitEntry, sentTurn);
           } else {
-            emitEchoTurn(events, sentTurn, text);
+            emitEchoTurn(events, emitEntry, sentTurn, text);
           }
         });
       },
@@ -381,7 +413,7 @@ export function createFakeAgentHarness(): FakeAgentHarness {
         isTurnOpen = false;
         const interruptedTurn = turn;
         queueMicrotask(() => {
-          events.entry({
+          emitEntry({
             kind: 'notice',
             id: `notice-${interruptedTurn}`,
             text: 'Interrupted',

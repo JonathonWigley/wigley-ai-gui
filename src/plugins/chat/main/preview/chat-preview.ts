@@ -1,4 +1,5 @@
 import type { ChatEntry } from '../../../../contracts/agent';
+import type { Clock } from '../../../../contracts/ambient';
 import type { Log } from '../../../../contracts/log';
 import type { MainChannel } from '../../../../contracts/plugin';
 import type {
@@ -15,11 +16,13 @@ import {
 } from './preview-session';
 
 // Holds no alerts, window or mark, so the preview cannot raise a
-// notification, a Dock bounce, a badge or an attention mark.
+// notification, a Dock bounce, a badge or an attention mark. `clock` stamps
+// the `at` of each notice the preview adds.
 export interface ChatPreviewDeps {
   sessions: Pick<SessionsMainExports, 'open' | 'activate'>;
   send: MainChannel<ChatChannel>['send'];
   log: Log;
+  clock: Clock;
 }
 
 export interface ChatPreview {
@@ -89,6 +92,7 @@ export function createChatPreview(deps: ChatPreviewDeps): ChatPreview {
       const entry: ChatEntry = {
         kind: 'notice',
         id: `preview-app-notice-${shown.noticeCount}`,
+        at: deps.clock.now(),
         text,
         tone,
         raw: [],

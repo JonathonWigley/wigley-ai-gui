@@ -154,6 +154,7 @@ function startChatPart() {
       log: (_plugin: string, line: string) => logged.push(line),
       agentHarnesses: [harness],
       randomUuid: () => 'host-1',
+      clock: { now: () => 5000 },
       selfTest: null,
     },
     dependency: () => sessions,
@@ -240,6 +241,7 @@ describe('chat main part', () => {
           sessionId: 'row-1',
           entry: expect.objectContaining({
             kind: 'notice',
+            at: 5000,
             text: 'Signed in.',
           }),
         },

@@ -70,6 +70,7 @@ const updateThrows: AnyBuilder = (parent, _input, kit) => ({
 const tool = (id: string): ChatEntry => ({
   kind: 'tool',
   id,
+  at: 1000,
   toolUseId: `use-${id}`,
   name: 'Bash',
   input: {},
@@ -80,6 +81,7 @@ const tool = (id: string): ChatEntry => ({
 const notice = (id: string): ChatEntry => ({
   kind: 'notice',
   id,
+  at: 1000,
   text: 'hi',
   tone: 'info',
   raw: [],
@@ -87,6 +89,7 @@ const notice = (id: string): ChatEntry => ({
 const assistant = (text: string): ChatEntry => ({
   kind: 'assistant',
   id: 'a1',
+  at: 1000,
   text,
   streaming: false,
   raw: [],

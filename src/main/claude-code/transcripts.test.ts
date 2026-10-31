@@ -25,7 +25,7 @@ function userLine(uuid: string, content: unknown, extra: object = {}) {
   };
 }
 
-function assistantLine(uuid: string, block: object) {
+function assistantLine(uuid: string, block: object, timestamp?: string) {
   return {
     type: 'assistant',
     uuid,
@@ -33,8 +33,15 @@ function assistantLine(uuid: string, block: object) {
     sessionId: 's',
     isSidechain: false,
     message: { role: 'assistant', content: [block] },
+    ...(timestamp === undefined ? {} : { timestamp }),
   };
 }
+
+// Two transcript `timestamp`s and their epoch milliseconds.
+const AT_ONE_TEXT = '2026-10-27T16:07:09.193Z';
+const AT_ONE = 1793117229193;
+const AT_TWO_TEXT = '2026-10-27T16:07:12.500Z';
+const AT_TWO = 1793117232500;
 
 describe('projectFolderName', () => {
   it('projectFolderName_ReplacesEveryNonAlphanumeric', () => {
@@ -221,10 +228,18 @@ describe('transcriptEntries', () => {
     ]);
 
     expect(transcriptEntries(text)).toEqual([
-      { kind: 'user', id: 'history:u1', text: 'hi', images: [], raw: [u1] },
+      {
+        kind: 'user',
+        id: 'history:u1',
+        at: 0,
+        text: 'hi',
+        images: [],
+        raw: [u1],
+      },
       {
         kind: 'assistant',
         id: 'history:a2-0',
+        at: 0,
         text: 'hello',
         streaming: false,
         raw: [a2],
@@ -232,6 +247,7 @@ describe('transcriptEntries', () => {
       {
         kind: 'tool',
         id: 'history:a3-0',
+        at: 0,
         toolUseId: 't1',
         name: 'Bash',
         input: { command: 'ls' },
@@ -239,9 +255,9 @@ describe('transcriptEntries', () => {
         result: { text: 'out', isError: false },
         raw: [a3, u2],
       },
-      { kind: 'raw', id: 'history:u3-0', raw: [u3] },
-      { kind: 'raw', id: 'history:line-7', raw: ['not json'] },
-      { kind: 'raw', id: 'history:line-9', raw: [brandNew] },
+      { kind: 'raw', id: 'history:u3-0', at: 0, raw: [u3] },
+      { kind: 'raw', id: 'history:line-7', at: 0, raw: ['not json'] },
+      { kind: 'raw', id: 'history:line-9', at: 0, raw: [brandNew] },
     ]);
   });
 
@@ -257,6 +273,7 @@ describe('transcriptEntries', () => {
       {
         kind: 'notice',
         id: 'history:s1',
+        at: 0,
         text: 'Set model to opus',
         tone: 'info',
         raw: [s1],
@@ -275,6 +292,7 @@ describe('transcriptEntries', () => {
       {
         kind: 'notice',
         id: 'history:line-2',
+        at: 0,
         text: 'Set model to opus',
         tone: 'info',
         raw: [s1],
@@ -315,7 +333,7 @@ describe('transcriptEntries', () => {
     const u1 = userLine('u1', content, extra);
 
     expect(transcriptEntries(jsonl([u1]))).toEqual([
-      { kind: 'raw', id: 'history:u1', raw: [u1] },
+      { kind: 'raw', id: 'history:u1', at: 0, raw: [u1] },
     ]);
   });
 
@@ -327,8 +345,15 @@ describe('transcriptEntries', () => {
     );
 
     expect(transcriptEntries(jsonl([u1, u2]))).toEqual([
-      { kind: 'user', id: 'history:u1', text: '!ls', images: [], raw: [u1] },
-      { kind: 'raw', id: 'history:u2', raw: [u2] },
+      {
+        kind: 'user',
+        id: 'history:u1',
+        at: 0,
+        text: '!ls',
+        images: [],
+        raw: [u1],
+      },
+      { kind: 'raw', id: 'history:u2', at: 0, raw: [u2] },
     ]);
   });
 
@@ -337,7 +362,14 @@ describe('transcriptEntries', () => {
     const u1 = userLine('u1', typed);
 
     expect(transcriptEntries(jsonl([u1]))).toEqual([
-      { kind: 'user', id: 'history:u1', text: typed, images: [], raw: [u1] },
+      {
+        kind: 'user',
+        id: 'history:u1',
+        at: 0,
+        text: typed,
+        images: [],
+        raw: [u1],
+      },
     ]);
   });
 
@@ -350,6 +382,7 @@ describe('transcriptEntries', () => {
       {
         kind: 'user',
         id: 'history:u1',
+        at: 0,
         text: 'why did I see [Request interrupted by user]?',
         images: [],
         raw: [u1],
@@ -376,6 +409,7 @@ describe('transcriptEntries', () => {
       {
         kind: 'user',
         id: 'history:u1',
+        at: 0,
         text: 'What colour is this?',
         images: [{ mediaType: 'image/png', data: 'iVBORw0K' }],
         raw: [u1],
@@ -383,6 +417,7 @@ describe('transcriptEntries', () => {
       {
         kind: 'user',
         id: 'history:u2',
+        at: 0,
         text: '',
         images: [{ mediaType: 'image/jpeg', data: '/9j/4AAQ' }],
         raw: [u2],
@@ -403,5 +438,66 @@ describe('transcriptEntries', () => {
     );
 
     expect(transcriptEntries(jsonl([u1]))).toEqual([]);
+  });
+
+  it.each([
+    {
+      name: 'OwnTimestamp',
+      lines: [assistantLine('a1', { type: 'text', text: 'hi' }, AT_ONE_TEXT)],
+      expected: [['history:a1-0', AT_ONE]],
+    },
+    {
+      name: 'NoTimestampTakesTheOneBefore',
+      lines: [
+        assistantLine('a1', { type: 'text', text: 'hi' }, AT_ONE_TEXT),
+        userLine('u1', 'next'),
+        userLine('u2', 'then', { timestamp: 'not a time' }),
+      ],
+      expected: [
+        ['history:a1-0', AT_ONE],
+        ['history:u1', AT_ONE],
+        ['history:u2', AT_ONE],
+      ],
+    },
+    {
+      name: 'FirstLineWithNoneTakesZero',
+      lines: [
+        userLine('u1', 'first'),
+        userLine('u2', 'second', { timestamp: AT_TWO_TEXT }),
+      ],
+      expected: [
+        ['history:u1', 0],
+        ['history:u2', AT_TWO],
+      ],
+    },
+    {
+      name: 'ToolResultKeepsToolUseTime',
+      lines: [
+        assistantLine(
+          'a1',
+          {
+            type: 'tool_use',
+            id: 't1',
+            name: 'Bash',
+            input: { command: 'ls' },
+          },
+          AT_ONE_TEXT,
+        ),
+        userLine(
+          'u1',
+          [{ type: 'tool_result', tool_use_id: 't1', content: 'out' }],
+          { timestamp: AT_TWO_TEXT },
+        ),
+        userLine('u2', 'after', { timestamp: AT_TWO_TEXT }),
+      ],
+      expected: [
+        ['history:a1-0', AT_ONE],
+        ['history:u2', AT_TWO],
+      ],
+    },
+  ])('transcriptEntries_At_$name', ({ lines, expected }) => {
+    const entries = transcriptEntries(jsonl(lines));
+
+    expect(entries.map((entry) => [entry.id, entry.at])).toEqual(expected);
   });
 });

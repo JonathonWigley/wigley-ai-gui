@@ -17,6 +17,8 @@ import {
   isFakeAgentHarness,
 } from './fake-agent-harness';
 
+const clock = { now: () => 1000 };
+
 const request: AgentStart = {
   sessionId: 's-1',
   resume: false,
@@ -44,7 +46,7 @@ const flush = async () => {
 
 // A started process with its start events flushed and cleared.
 async function startedProcess() {
-  const harness = createFakeAgentHarness();
+  const harness = createFakeAgentHarness(clock);
   const { heard, events } = recordingEvents();
   const agent = harness.start(request, events);
   await flush();
@@ -54,7 +56,7 @@ async function startedProcess() {
 
 describe('createFakeAgentHarness', () => {
   it('start_RecordsRequestAndEvents_ThenControlsCommandsIdle', async () => {
-    const harness = createFakeAgentHarness();
+    const harness = createFakeAgentHarness(clock);
     const { heard, events } = recordingEvents();
 
     harness.start(request, events);
@@ -81,7 +83,7 @@ describe('createFakeAgentHarness', () => {
   });
 
   it('failNextStart_ThrowsOnce', () => {
-    const harness = createFakeAgentHarness();
+    const harness = createFakeAgentHarness(clock);
     harness.failNextStart('no claude');
 
     expect(() => harness.start(request, recordingEvents().events)).toThrow(
@@ -104,6 +106,7 @@ describe('createFakeAgentHarness', () => {
         {
           kind: 'user',
           id: 'user-1',
+          at: 1000,
           text: 'hi',
           images: [],
           raw: [{ fake: 'user', text: 'hi' }],
@@ -115,6 +118,7 @@ describe('createFakeAgentHarness', () => {
         {
           kind: 'assistant',
           id: 'assistant-1',
+          at: 1000,
           text: 'fake agent heard: ',
           streaming: true,
           raw: [{ fake: 'assistant', text: 'fake agent heard: ' }],
@@ -125,6 +129,7 @@ describe('createFakeAgentHarness', () => {
         {
           kind: 'assistant',
           id: 'assistant-1',
+          at: 1000,
           text: 'fake agent heard: hi',
           streaming: false,
           raw: [
@@ -138,6 +143,7 @@ describe('createFakeAgentHarness', () => {
         {
           kind: 'result',
           id: 'result-1',
+          at: 1000,
           stopReason: 'end_turn',
           costUsd: null,
           durationMs: null,
@@ -160,6 +166,7 @@ describe('createFakeAgentHarness', () => {
     const tool = {
       kind: 'tool',
       id: 'tool-1',
+      at: 1000,
       toolUseId: 'fake-tool-1',
       name: 'Bash',
       input: { command: 'echo fake' },
@@ -180,6 +187,7 @@ describe('createFakeAgentHarness', () => {
         {
           kind: 'assistant',
           id: 'assistant-1',
+          at: 1000,
           text: 'fake agent ran a tool',
           streaming: false,
           raw: [{ fake: 'assistant', text: 'fake agent ran a tool' }],
@@ -190,6 +198,7 @@ describe('createFakeAgentHarness', () => {
         {
           kind: 'result',
           id: 'result-1',
+          at: 1000,
           stopReason: 'end_turn',
           costUsd: null,
           durationMs: null,
@@ -204,6 +213,7 @@ describe('createFakeAgentHarness', () => {
         {
           kind: 'user',
           id: 'user-1',
+          at: 1000,
           text: FAKE_TOOL_TEXT,
           images: [],
           raw: [{ fake: 'user', text: FAKE_TOOL_TEXT }],
@@ -225,6 +235,7 @@ describe('createFakeAgentHarness', () => {
         {
           kind: 'user',
           id: 'user-1',
+          at: 1000,
           text: FAKE_HOLD_TEXT,
           images: [],
           raw: [{ fake: 'user', text: FAKE_HOLD_TEXT }],
@@ -249,6 +260,7 @@ describe('createFakeAgentHarness', () => {
         {
           kind: 'notice',
           id: 'notice-1',
+          at: 1000,
           text: 'Interrupted',
           tone: 'info',
           raw: [{ fake: 'interrupt' }],
@@ -324,6 +336,7 @@ describe('createFakeAgentHarness', () => {
         {
           kind: 'user',
           id: 'user-1',
+          at: 1000,
           text: FAKE_END_TEXT,
           images: [],
           raw: [{ fake: 'user', text: FAKE_END_TEXT }],
@@ -392,7 +405,7 @@ describe('createFakeAgentHarness', () => {
   });
 
   it('listSessions_ReturnsTheFakeSessionsAndRecords', async () => {
-    const harness = createFakeAgentHarness();
+    const harness = createFakeAgentHarness(clock);
 
     const sessions = await harness.listSessions('/a', '/p');
 
@@ -409,13 +422,14 @@ describe('createFakeAgentHarness', () => {
   });
 
   it('history_KnownUnknownAndFailNext', async () => {
-    const harness = createFakeAgentHarness();
+    const harness = createFakeAgentHarness(clock);
     const known = '00000000-0000-4000-8000-000000000001';
 
     expect(await harness.history(known, '/a', null)).toEqual([
       {
         kind: 'user',
         id: `history:${known}-user`,
+        at: 1767236645000,
         text: 'fake earlier message',
         images: FAKE_HISTORY_IMAGES,
         raw: [{ fake: 'history-user' }],
@@ -423,6 +437,7 @@ describe('createFakeAgentHarness', () => {
       {
         kind: 'assistant',
         id: `history:${known}-assistant`,
+        at: 1767236646000,
         text: 'fake earlier reply',
         streaming: false,
         raw: [{ fake: 'history-assistant' }],
@@ -464,9 +479,9 @@ describe('createFakeAgentHarness', () => {
 
   it('isFakeAgentHarness_TellsTheFakeFromAnother', () => {
     // A copy has every member of the fake but is not the object it made.
-    const other: AgentHarness = { ...createFakeAgentHarness() };
+    const other: AgentHarness = { ...createFakeAgentHarness(clock) };
 
-    expect(isFakeAgentHarness(createFakeAgentHarness())).toBe(true);
+    expect(isFakeAgentHarness(createFakeAgentHarness(clock))).toBe(true);
     expect(isFakeAgentHarness(other)).toBe(false);
   });
 });
@@ -483,7 +498,7 @@ describe('createFakeAgentHarness accounts and projects', () => {
   }
 
   it('logIn_RightCode_SignsIn', async () => {
-    const harness = createFakeAgentHarness();
+    const harness = createFakeAgentHarness(clock);
     await harness.logOut('/p');
     const { heard, events } = recordingLogIn();
 
@@ -501,7 +516,7 @@ describe('createFakeAgentHarness accounts and projects', () => {
   });
 
   it('logIn_WrongCodeThenCancel_EndsOnceWithStatusUnchanged', async () => {
-    const harness = createFakeAgentHarness();
+    const harness = createFakeAgentHarness(clock);
     const { heard, events } = recordingLogIn();
 
     const login = harness.logIn(null, events);
@@ -522,7 +537,7 @@ describe('createFakeAgentHarness accounts and projects', () => {
   });
 
   it('logOut_ThenStatus_SignedOut', async () => {
-    const harness = createFakeAgentHarness();
+    const harness = createFakeAgentHarness(clock);
     expect(await harness.accountStatus(null)).toEqual({
       signedIn: true,
       account: 'fake@example.invalid',
@@ -538,7 +553,7 @@ describe('createFakeAgentHarness accounts and projects', () => {
   });
 
   it('listProjects_StartedFolders_NewestFirst', async () => {
-    const harness = createFakeAgentHarness();
+    const harness = createFakeAgentHarness(clock);
     const { events } = recordingEvents();
     harness.start({ ...request, projectDir: '/a', profileDir: '/p' }, events);
     harness.start({ ...request, projectDir: '/b', profileDir: '/p' }, events);

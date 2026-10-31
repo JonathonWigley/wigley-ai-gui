@@ -18,6 +18,14 @@ const ASSISTANT_TEXT = [
   '```',
 ].join('\n');
 
+// The `at` of the preview's first entry; each entry after it is two seconds
+// later, so the finished lines read stable times.
+const PREVIEW_START_AT = 1767225600000;
+const PREVIEW_ENTRY_STEP_MS = 2000;
+
+const previewAt = (index: number) =>
+  PREVIEW_START_AT + index * PREVIEW_ENTRY_STEP_MS;
+
 // One entry of every kind, a tool and a permission in each of their states,
 // both notice tones, and a streaming reply last.
 export function previewEntries(): ChatEntry[] {
@@ -25,6 +33,7 @@ export function previewEntries(): ChatEntry[] {
     {
       kind: 'user',
       id: 'preview-1',
+      at: previewAt(0),
       text: 'Draw this chat in your layout.',
       images: FAKE_HISTORY_IMAGES.map((image) => ({ ...image })),
       raw: [{ preview: 'user' }],
@@ -32,6 +41,7 @@ export function previewEntries(): ChatEntry[] {
     {
       kind: 'thinking',
       id: 'preview-2',
+      at: previewAt(1),
       text: 'Weighing how the entries should look.',
       streaming: false,
       raw: [{ preview: 'thinking' }],
@@ -39,6 +49,7 @@ export function previewEntries(): ChatEntry[] {
     {
       kind: 'assistant',
       id: 'preview-3',
+      at: previewAt(2),
       text: ASSISTANT_TEXT,
       streaming: false,
       raw: [{ preview: 'assistant' }],
@@ -46,6 +57,7 @@ export function previewEntries(): ChatEntry[] {
     {
       kind: 'tool',
       id: 'preview-4',
+      at: previewAt(3),
       toolUseId: 'preview-tool-4',
       name: 'Read',
       input: { file_path: 'src/app.ts' },
@@ -56,6 +68,7 @@ export function previewEntries(): ChatEntry[] {
     {
       kind: 'tool',
       id: 'preview-5',
+      at: previewAt(4),
       toolUseId: 'preview-tool-5',
       name: 'Bash',
       input: { command: 'false' },
@@ -66,6 +79,7 @@ export function previewEntries(): ChatEntry[] {
     {
       kind: 'tool',
       id: 'preview-6',
+      at: previewAt(5),
       toolUseId: 'preview-tool-6',
       name: 'Bash',
       input: { command: 'npm test' },
@@ -76,6 +90,7 @@ export function previewEntries(): ChatEntry[] {
     {
       kind: 'permission',
       id: 'preview-7',
+      at: previewAt(6),
       toolName: 'Edit',
       input: { file_path: 'src/app.ts' },
       answer: { allowed: true, reason: null },
@@ -84,6 +99,7 @@ export function previewEntries(): ChatEntry[] {
     {
       kind: 'permission',
       id: 'preview-8',
+      at: previewAt(7),
       toolName: 'Bash',
       input: { command: 'rm -rf build' },
       answer: { allowed: false, reason: 'Keep the build folder.' },
@@ -92,6 +108,7 @@ export function previewEntries(): ChatEntry[] {
     {
       kind: 'permission',
       id: 'preview-9',
+      at: previewAt(8),
       toolName: 'Write',
       input: { file_path: 'notes.md' },
       answer: null,
@@ -100,6 +117,7 @@ export function previewEntries(): ChatEntry[] {
     {
       kind: 'result',
       id: 'preview-10',
+      at: previewAt(9),
       stopReason: 'end_turn',
       costUsd: 0.0123,
       durationMs: 4200,
@@ -108,6 +126,7 @@ export function previewEntries(): ChatEntry[] {
     {
       kind: 'notice',
       id: 'preview-11',
+      at: previewAt(10),
       text: 'A notice in the info tone.',
       tone: 'info',
       raw: [{ preview: 'notice' }],
@@ -115,14 +134,21 @@ export function previewEntries(): ChatEntry[] {
     {
       kind: 'notice',
       id: 'preview-12',
+      at: previewAt(11),
       text: 'A notice in the error tone.',
       tone: 'error',
       raw: [{ preview: 'notice' }],
     },
-    { kind: 'raw', id: 'preview-13', raw: [{ preview: 'raw' }] },
+    {
+      kind: 'raw',
+      id: 'preview-13',
+      at: previewAt(12),
+      raw: [{ preview: 'raw' }],
+    },
     {
       kind: 'assistant',
       id: 'preview-14',
+      at: previewAt(13),
       text: 'Still writing…',
       streaming: true,
       raw: [{ preview: 'assistant' }],

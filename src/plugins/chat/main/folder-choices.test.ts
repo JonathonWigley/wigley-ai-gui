@@ -21,7 +21,7 @@ function harnessListing(
   listed: Record<string, ProjectFolder[] | Error>,
 ): AgentHarness {
   return {
-    ...createFakeAgentHarness(),
+    ...createFakeAgentHarness({ now: () => 1000 }),
     async listProjects(profileDir) {
       const answer = listed[profileDir ?? ''] ?? [];
       if (answer instanceof Error) {

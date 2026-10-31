@@ -60,6 +60,8 @@ function fakeChild() {
   };
 }
 
+const clock = { now: () => 1000 };
+
 // Every event the process emits, as `[event name, payload]`, in emit order.
 function recordingEvents() {
   const heard: [string, unknown][] = [];
@@ -87,6 +89,7 @@ function started(fake = fakeChild()) {
     files: createMemoryFiles(),
     homeDir: '/Users/u',
     paths: posixPaths,
+    clock,
   });
   const { heard, events } = recordingEvents();
   const agent = harness.start(request, events);
@@ -174,7 +177,14 @@ describe('createClaudeCodeHarness', () => {
     expect(run.heard).toEqual([
       [
         'entry',
-        { kind: 'user', id: 'user-1', text: 'hi', images: [], raw: [message] },
+        {
+          kind: 'user',
+          id: 'user-1',
+          at: 1000,
+          text: 'hi',
+          images: [],
+          raw: [message],
+        },
       ],
       ['activity', 'working'],
     ]);
@@ -425,6 +435,7 @@ describe('createClaudeCodeHarness past sessions', () => {
       files,
       homeDir: '/Users/u',
       paths: posixPaths,
+      clock,
     });
     const sessions = await harness.listSessions('/w/app', profileDir);
     return sessions.map((session) => session.sessionId);
@@ -513,6 +524,7 @@ describe('createClaudeCodeHarness accounts', () => {
       files: createMemoryFiles(),
       homeDir: '/Users/u',
       paths: posixPaths,
+      clock,
     });
     return { harness, spawned };
   }

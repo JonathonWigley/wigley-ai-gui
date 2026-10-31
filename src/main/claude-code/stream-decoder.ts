@@ -1,14 +1,15 @@
-import type { ChatEntry } from '../../contracts/agent';
 import type { ClaudeControlId } from './claude-controls';
+import type { EntryDraft } from './entry-stamp';
 import { asArray, asJson, asString, type Json, parsed } from './json-fields';
 import { pairToolResult, type ToolEntry, toolUseEntry } from './tool-entries';
 
 // What one stdout line of `claude` in stream-json mode means to the chat.
-// `entries` are whole entries, each replacing an earlier one with its id;
-// `reported` holds control values as Claude names them (`controlValue` maps
-// them); `turnFailed` is true on a turn-ending line that reports an error.
+// `entries` are whole entries, not yet stamped with `at`, each replacing an
+// earlier one with its id; `reported` holds control values as Claude names
+// them (`controlValue` maps them); `turnFailed` is true on a turn-ending line
+// that reports an error.
 export interface DecodedLine {
-  entries: ChatEntry[];
+  entries: EntryDraft[];
   reported: Partial<Record<ClaudeControlId, string>>;
   commands: string[] | null;
   turnEnded: boolean;
@@ -21,8 +22,8 @@ export interface StreamDecoder {
   decode(line: string): DecodedLine;
 }
 
-type TextEntry = Extract<ChatEntry, { kind: 'assistant' | 'thinking' }>;
-type RawEntry = Extract<ChatEntry, { kind: 'raw' }>;
+type TextEntry = Extract<EntryDraft, { kind: 'assistant' | 'thinking' }>;
+type RawEntry = Extract<EntryDraft, { kind: 'raw' }>;
 
 // Local slash commands answer with an assistant event of this model.
 const SYNTHETIC_MODEL = '<synthetic>';
@@ -61,7 +62,7 @@ function emptyLine(): DecodedLine {
 }
 
 // A copy the decoder's later changes cannot reach.
-function snapshot<E extends ChatEntry>(entry: E): E {
+function snapshot<E extends EntryDraft>(entry: E): E {
   return { ...entry, raw: [...entry.raw] };
 }
 
@@ -127,13 +128,13 @@ export function createStreamDecoder(): StreamDecoder {
   let lastTotalCost = 0;
 
   // An event of a type the decoder does not know, alone in its entry.
-  function rawEntry(raw: unknown): ChatEntry {
+  function rawEntry(raw: unknown): EntryDraft {
     rawCount += 1;
     return { kind: 'raw', id: `raw-${rawCount}`, raw: [raw] };
   }
 
   // The events entry with `event` added; `startsTurn` marks a turn's init.
-  function gathered(event: unknown, startsTurn = false): ChatEntry {
+  function gathered(event: unknown, startsTurn = false): EntryDraft {
     let entry = turnEvents;
     if (entry === null || (startsTurn && betweenTurns)) {
       turnCount += 1;
@@ -163,7 +164,7 @@ export function createStreamDecoder(): StreamDecoder {
     text: string,
     tone: 'info' | 'error',
     raw: unknown,
-  ): ChatEntry {
+  ): EntryDraft {
     noticeCount += 1;
     return {
       kind: 'notice',
@@ -352,7 +353,7 @@ export function createStreamDecoder(): StreamDecoder {
     }
   }
 
-  function decodeToolResult(block: Json, event: Json): ChatEntry {
+  function decodeToolResult(block: Json, event: Json): EntryDraft {
     const entry = pairToolResult(toolEntries, block, event);
     return entry === undefined ? rawEntry(event) : snapshot(entry);
   }

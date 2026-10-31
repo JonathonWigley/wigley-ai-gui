@@ -27,6 +27,7 @@ function setUp() {
     },
     send: (message, data) => sent.push({ message, data }),
     log: () => undefined,
+    clock: { now: () => 5000 },
   });
   const started = () =>
     sent
@@ -114,6 +115,7 @@ describe('chat preview', () => {
     expect(entries()).toEqual([
       expect.objectContaining({
         kind: 'notice',
+        at: 5000,
         text: 'Signed in.',
         tone: 'error',
       }),

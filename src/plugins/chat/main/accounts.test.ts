@@ -27,7 +27,7 @@ async function flush() {
 }
 
 function setUp() {
-  const harness = createFakeAgentHarness();
+  const harness = createFakeAgentHarness({ now: () => 1000 });
   const messages: Message[] = [];
   const logged: string[] = [];
   let logIns = 0;

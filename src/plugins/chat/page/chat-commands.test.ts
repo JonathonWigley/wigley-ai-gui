@@ -28,6 +28,7 @@ const mode: SessionControl = {
 
 const userEntry: ChatEntry = {
   id: 'entry-1',
+  at: 1000,
   kind: 'user',
   text: 'hi',
   images: [],

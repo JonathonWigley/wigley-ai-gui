@@ -11,13 +11,14 @@ import {
 } from './chat-state';
 
 function user(id: string, text: string): ChatEntry {
-  return { kind: 'user', id, text, images: [], raw: [] };
+  return { kind: 'user', id, at: 1000, text, images: [], raw: [] };
 }
 
 function permission(id: string, answered: boolean): ChatEntry {
   return {
     kind: 'permission',
     id,
+    at: 1000,
     toolName: 'Bash',
     input: {},
     answer: answered ? { allowed: true, reason: null } : null,

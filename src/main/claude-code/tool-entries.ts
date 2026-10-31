@@ -1,8 +1,8 @@
-import type { ChatEntry } from '../../contracts/agent';
+import type { EntryDraft } from './entry-stamp';
 import { asArray, asJson, asString, type Json } from './json-fields';
 import { toolSummary } from './tool-summary';
 
-export type ToolEntry = Extract<ChatEntry, { kind: 'tool' }>;
+export type ToolEntry = Extract<EntryDraft, { kind: 'tool' }>;
 
 // The entry for a `tool_use` block, with no result yet.
 export function toolUseEntry(id: string, block: Json, raw: unknown): ToolEntry {
@@ -21,11 +21,11 @@ export function toolUseEntry(id: string, block: Json, raw: unknown): ToolEntry {
 
 // Joins a `tool_result` block to the entry of the call it answers, keyed in
 // `toolEntries` by tool use id: the entry, or undefined when no call matches.
-export function pairToolResult(
-  toolEntries: ReadonlyMap<string, ToolEntry>,
+export function pairToolResult<E extends ToolEntry>(
+  toolEntries: ReadonlyMap<string, E>,
   block: Json,
   raw: unknown,
-): ToolEntry | undefined {
+): E | undefined {
   const entry = toolEntries.get(asString(block.tool_use_id));
   if (entry === undefined) {
     return undefined;

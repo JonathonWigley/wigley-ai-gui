@@ -6,12 +6,12 @@ import type {
   AgentProcess,
   AgentProcessEvents,
   AgentStart,
-  ChatEntry,
   LogInEvents,
   LogInProcess,
   ProcessActivity,
   SessionControl,
 } from '../../contracts/agent';
+import type { Clock } from '../../contracts/ambient';
 import type { Files } from '../../contracts/files';
 import type { Log } from '../../contracts/log';
 import type { Paths } from '../../contracts/paths';
@@ -25,6 +25,7 @@ import {
   controlValue,
   userMessage,
 } from './claude-controls';
+import { createEntryStamp, type EntryDraft } from './entry-stamp';
 import {
   listPastSessions,
   listProjectFolders,
@@ -44,7 +45,8 @@ export type ClaudeSpawn = (
 // `env` the environment the process inherits; `files` reads saved transcripts,
 // `homeDir` holds the default config folder `.claude`, is what a `~` profile
 // folder resolves against and is where `claude auth` runs, and `paths` joins
-// and compares paths by the rules of the OS `claude` runs on.
+// and compares paths by the rules of the OS `claude` runs on; `clock` stamps
+// each live entry's `at`.
 export interface ClaudeCodeHarnessDeps {
   command(): string;
   permissionTool: string;
@@ -54,6 +56,7 @@ export interface ClaudeCodeHarnessDeps {
   files: Files;
   homeDir: string;
   paths: Paths;
+  clock: Clock;
 }
 
 // How long `end` waits after closing stdin before SIGTERM, and again before
@@ -120,6 +123,7 @@ function startClaudeProcess(
     env: launch.env,
   });
   const decoder = createStreamDecoder();
+  const stamp = createEntryStamp(deps.clock);
   let controls: SessionControl[] = CLAUDE_CONTROLS.map((control) => ({
     ...control,
     value: null,
@@ -156,7 +160,8 @@ function startClaudeProcess(
     emit(() => events.activity(next));
   };
 
-  const emitEntry = (entry: ChatEntry) => {
+  const emitEntry = (draft: EntryDraft) => {
+    const entry = stamp(draft);
     emit(() => events.entry(entry));
   };
 

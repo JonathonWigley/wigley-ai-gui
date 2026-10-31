@@ -1,6 +1,6 @@
 import type { ChatEntry, ChatImage } from '../../contracts/agent';
 import { asArray, asJson, asString, type Json, parsed } from './json-fields';
-import { pairToolResult, type ToolEntry, toolUseEntry } from './tool-entries';
+import { pairToolResult, toolUseEntry } from './tool-entries';
 
 // Claude's saved session transcripts: one JSON object per line in
 // `<config>/projects/<projectFolderName>/<session id>.jsonl`. The format is
@@ -49,6 +49,8 @@ const INTERRUPT_MARKER = /^\[Request interrupted by user( for tool use)?\]$/;
 const COMMAND_NAME = /<command-name>([\s\S]*?)<\/command-name>/;
 const COMMAND_ARGS = /<command-args>([\s\S]*?)<\/command-args>/;
 const ID_PREFIX = 'history:';
+
+type StampedToolEntry = Extract<ChatEntry, { kind: 'tool' }>;
 
 // What a transcript's opening bytes hold: its folder, its first typed user
 // message, and whether any `user` line in them parsed whole.
@@ -111,39 +113,52 @@ export function sessionTitle(message: string | null): string {
 // A transcript as chat entries, oldest first, every id starting `history:`.
 // A line this reader does not know, and a `user` line the CLI wrote, becomes a
 // raw entry; a sidechain line (a subagent's) and the CLI's bookkeeping lines
-// become nothing.
+// become nothing. Each entry's `at` is its line's `timestamp`, or the `at` of
+// the entry before it when the line has none (`0` for the first); a tool
+// entry keeps its `tool_use` line's time when its result pairs.
 export function transcriptEntries(text: string): ChatEntry[] {
   const entries: ChatEntry[] = [];
-  const toolEntries = new Map<string, ToolEntry>();
+  const toolEntries = new Map<string, StampedToolEntry>();
   const lines = text.split('\n');
   for (const [index, lineText] of lines.entries()) {
     if (lineText.trim() === '') {
       continue;
     }
     const lineNumber = index + 1;
+    const previousAt = entries.at(-1)?.at ?? 0;
     const json = parsed(lineText);
     if (!json.ok) {
-      entries.push(lineRaw(lineNumber, lineText));
+      entries.push(lineRaw(lineNumber, lineText, previousAt));
       continue;
     }
-    addLineEntries(json.value, lineNumber, entries, toolEntries);
+    addLineEntries(json.value, lineNumber, previousAt, entries, toolEntries);
   }
   return entries;
+}
+
+// A line's top-level `timestamp` (ISO 8601) in epoch milliseconds, or
+// `fallback` when it has none that parses.
+function lineAt(line: Json, fallback: number): number {
+  const at =
+    typeof line.timestamp === 'string' ? Date.parse(line.timestamp) : NaN;
+  return Number.isNaN(at) ? fallback : at;
 }
 
 function addLineEntries(
   value: unknown,
   lineNumber: number,
+  previousAt: number,
   entries: ChatEntry[],
-  toolEntries: Map<string, ToolEntry>,
+  toolEntries: Map<string, StampedToolEntry>,
 ) {
   const line = asJson(value);
   const type = asString(line.type);
   if (line.isSidechain === true || SKIPPED_LINE_TYPES.has(type)) {
     return;
   }
+  const at = lineAt(line, previousAt);
   if (type === 'system') {
-    entries.push(...systemEntries(line, lineNumber));
+    entries.push(...systemEntries(line, lineNumber, at));
     return;
   }
   const content = asJson(line.message).content;
@@ -152,18 +167,22 @@ function addLineEntries(
     (typeof content === 'string' || Array.isArray(content)) &&
     typeof line.uuid === 'string';
   if (!isConversationLine || !isReadable) {
-    entries.push(lineRaw(lineNumber, line));
+    entries.push(lineRaw(lineNumber, line, at));
     return;
   }
   if (type === 'user') {
-    addUserEntries(line, entries, toolEntries);
+    addUserEntries(line, at, entries, toolEntries);
   } else {
-    addAssistantEntries(line, entries, toolEntries);
+    addAssistantEntries(line, at, entries, toolEntries);
   }
 }
 
 // A local command's output is a notice; every other system line is nothing.
-function systemEntries(line: Json, lineNumber: number): ChatEntry[] {
+function systemEntries(
+  line: Json,
+  lineNumber: number,
+  at: number,
+): ChatEntry[] {
   const content = line.content;
   const isLocalOutput =
     line.subtype === 'local_command' &&
@@ -184,6 +203,7 @@ function systemEntries(line: Json, lineNumber: number): ChatEntry[] {
     {
       kind: 'notice',
       id: `${ID_PREFIX}${id}`,
+      at,
       text,
       tone: 'info',
       raw: [line],
@@ -195,17 +215,19 @@ function systemEntries(line: Json, lineNumber: number): ChatEntry[] {
 // each tool result joined to its tool entry.
 function addUserEntries(
   line: Json,
+  at: number,
   entries: ChatEntry[],
-  toolEntries: Map<string, ToolEntry>,
+  toolEntries: Map<string, StampedToolEntry>,
 ) {
   const id = `${ID_PREFIX}${asString(line.uuid)}`;
   const text = userText(line);
   if (isCliWrittenUserLine(line)) {
-    entries.push({ kind: 'raw', id, raw: [line] });
+    entries.push({ kind: 'raw', id, at, raw: [line] });
   } else if (text !== null) {
     entries.push({
       kind: 'user',
       id,
+      at,
       text,
       images: userImages(line),
       raw: [line],
@@ -217,15 +239,16 @@ function addUserEntries(
       continue;
     }
     if (pairToolResult(toolEntries, block, line) === undefined) {
-      entries.push({ kind: 'raw', id: `${id}-${index}`, raw: [line] });
+      entries.push({ kind: 'raw', id: `${id}-${index}`, at, raw: [line] });
     }
   }
 }
 
 function addAssistantEntries(
   line: Json,
+  at: number,
   entries: ChatEntry[],
-  toolEntries: Map<string, ToolEntry>,
+  toolEntries: Map<string, StampedToolEntry>,
 ) {
   const uuid = asString(line.uuid);
   for (const [index, item] of asArray(asJson(line.message).content).entries()) {
@@ -235,6 +258,7 @@ function addAssistantEntries(
       entries.push({
         kind: 'assistant',
         id,
+        at,
         text: asString(block.text),
         streaming: false,
         raw: [line],
@@ -245,23 +269,29 @@ function addAssistantEntries(
         entries.push({
           kind: 'thinking',
           id,
+          at,
           text: thinking,
           streaming: false,
           raw: [line],
         });
       }
     } else if (block.type === 'tool_use') {
-      const entry = toolUseEntry(id, block, line);
+      const entry = { ...toolUseEntry(id, block, line), at };
       toolEntries.set(entry.toolUseId, entry);
       entries.push(entry);
     } else {
-      entries.push({ kind: 'raw', id, raw: [line] });
+      entries.push({ kind: 'raw', id, at, raw: [line] });
     }
   }
 }
 
-function lineRaw(lineNumber: number, raw: unknown): ChatEntry {
-  return { kind: 'raw', id: `${ID_PREFIX}line-${lineNumber}`, raw: [raw] };
+function lineRaw(lineNumber: number, raw: unknown, at: number): ChatEntry {
+  return {
+    kind: 'raw',
+    id: `${ID_PREFIX}line-${lineNumber}`,
+    at,
+    raw: [raw],
+  };
 }
 
 // A `user` line the CLI wrote in the user's place: a compaction summary, a

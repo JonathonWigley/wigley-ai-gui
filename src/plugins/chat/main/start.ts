@@ -212,11 +212,13 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       alerts: services.alerts,
       window: services.window,
       log: services.log,
+      clock: services.clock,
     });
     const preview = createChatPreview({
       sessions,
       send: (message, data) => api.channel.send(message, data),
       log: services.log,
+      clock: services.clock,
     });
     // The preview holds no process or history: a call there does nothing and
     // raises no error, so the page shows no toast.
