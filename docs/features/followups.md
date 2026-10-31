@@ -15,8 +15,8 @@ tokens, the platform chord formatter, the active-line band, and the sessions and
   this is a theme file, its `DESIGN.md` light rules, and a light/dark choice.
 - Native window vibrancy (macOS `vibrancy`, Windows 11 mica) behind a window adapter, in place of the CSS backdrop
   under L1 glass (`docs/features/ui-design/design.md`).
-- Per-tool-call duration on chat tool cards: the harness reports duration per turn result only, so the adapter would
-  time each tool call.
+- Per-step duration inside an open chat activity line: every chat entry now carries `at` (plan E), so a step row can
+  show the time from its `at` to the next entry's; the activity line itself already shows its run's time.
 - Design skills in wigley-ai-marketplace: tailor ui-skills' baseline-ui, fixing-accessibility and
   fixing-motion-performance (MIT) and Impeccable's critique, audit, polish and quieter guidance (Apache-2.0; keep
   notices) into wigley skills that read a project's `DESIGN.md`, dropping the detector CLI. Plan it with

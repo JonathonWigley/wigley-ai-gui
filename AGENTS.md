@@ -400,7 +400,8 @@ round; primer: an open primer), since main, not the page, decides.
 - **An agent harness** — Claude Code today, Codex and wigley-harness next — is an adapter behind `AgentHarness` in
   `src/contracts/agent.ts`, handed to plugins as a main service; the fake in `src/shared/` drives the tests and the
   self-test. The adapter alone reads its harness's output and turns it into chat entries, each carrying the raw
-  events, so a chat layout can show any field and the chat never parses a harness's JSON. The Claude adapter's
+  events and `at`, the time it first appeared (stamped through the injected `Clock`, or read from the transcript for
+  history), so a chat layout can show any field and the chat never parses a harness's JSON. The Claude adapter's
   readings of the CLI (`docs/features/agent-chat/claude-stream.md`): it reports permission mode `manual` as
   `default`, no event reports effort, `total_cost_usd` is cumulative per process, and only a `control_request`
   interrupt keeps the process alive (SIGINT ends it). Listing a folder's saved sessions and reading one into chat

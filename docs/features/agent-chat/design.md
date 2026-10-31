@@ -28,7 +28,10 @@ interview on 2026-10-23; this file is the record of both.
   thinking, a tool call (with its result), a permission request, a turn result, a notice, or a raw entry. Every entry
   carries the raw harness events it was built from. Of Claude's stream events it keeps only a text or thinking block's
   `content_block_start`; every other stream event is left out, since the entry's start event or the final `assistant`
-  event already holds what it carries.
+  event already holds what it carries. Every entry carries `at`, the epoch milliseconds it first appeared; a later
+  version of the entry (same id) keeps it. The Claude adapter stamps a live entry through its injected clock and a
+  history entry from its transcript line's `timestamp` (a line with none takes the time of the entry before it); chat
+  main's own notices and permission entries, the layout preview and the fake take their clock's time.
 - **Step** — a `tool`, `thinking` or `raw` chat entry. A **run** is the steps between two other entries (user,
   assistant, permission, notice, result): any other entry ends it. The **live run** is the run that is the last entry
   while the session is working (`running` and activity `working`); every other run is finished.
@@ -168,13 +171,19 @@ interview on 2026-10-23; this file is the record of both.
   runs.
 - **Activity line**: the entry list groups each run into one slot, a cursor stop, drawn by the layout's `activity`
   part.
-  - **Live run**: a header (a running dot, the current step's action such as `Bash · npm test`, and `· N steps`)
+  - **Time**: each line ends with how long its run took, from the entry before the run (the user message or mid-turn
+    assistant text; a run that opens the list starts at its first step) to the entry after it, compact in tabular
+    numerals: `8s`, `42s`, `1m 05s`, `1h 02m`. A live line's time ticks once a second to now, so it covers the
+    thinking before the first step; only that line redraws. A finished run that is the last entry ends at its last
+    step.
+  - **Live run**: a header (a running dot, the current step's action such as `Bash · npm test`, `· N steps` or
+    `· 1 step`, and its time, dim)
     over a shortlist of the latest steps, the newest at the bottom and highlighted as current, the oldest dropping
     off. The built-in layout shows 5 lines; that number is the layout's own, so a user layout changes it, and no
     setting does.
-  - **Finished run**: one dim line, the step count and the tools used, such as `6 steps · Read 3 · Bash 2 · Edit`
-    (most used first, a single use named alone); a failed tool step adds `· 1 failed` in the error colour. No
-    duration: entries carry no timestamps.
+  - **Finished run**: one dim line, the step count, the tools used and the time, such as
+    `6 steps · Read 3 · Bash 2 · Edit · 42s` (most used first, a single use named alone); a failed tool step adds
+    `· 1 failed` in the error colour before the time.
   - **Open**: Enter on the focused activity line, or a click on it, opens it, and again closes it. The open line keeps
     its header and lists one plain row per step under it, each drawn by the `tool`, `thinking` or `raw` entry builder;
     each step row is a cursor stop, `j` / `k` walk into them, and Enter on a step row opens its input and result in
@@ -294,8 +303,9 @@ interview on 2026-10-23; this file is the record of both.
   and return a `PartView`: `activity` (a run of steps, § Activity line), `composer`, `composerBar`, `attachments` (the
   strip of attached images), `pickerRow` (a row of the start prompt and the pickers), `signIn`, `reasonBox` (the deny
   reason), `closeConfirm` (the end-session confirm) and `imageViewer`. The `activity` part's input is the run's steps
-  (each the step's entry input), the current step (the last), whether the run is live and whether it is open; while
-  open it draws only its header, and the app places the step rows under it. The built-in step builders draw a plain
+  (each the step's entry input), the current step (the last), whether the run is live, whether it is open, and its times:
+  `startedAt`, `endedAt` (null while live) and `now`, which the app sends again each second while the run is live, so a
+  user layout formats its own time; while open it draws only its header, and the app places the step rows under it. The built-in step builders draw a plain
   one-line row through the kit's `collapsibleRow`; a user layout that redraws `tool`, `thinking` or `raw` draws the
   open line's rows. Each part's kit extends the base kit with the app parts it places (the editor frame, the
   dialog actions). The app keeps the composer's box and its draft, the dialogs' frames and titles, the keys and the

@@ -348,10 +348,11 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
 - **Chat:** user turns are a `card-background` block, not a bubble. Assistant prose is markdown on
   the sheet. The agent's steps (tool calls, thinking, raw events) between two other entries form
   one **activity line**. While the session works on it, the line is a header (a running StatusDot,
-  the current action in mono, such as `Bash · npm test`, and `· N steps`) over a shortlist of the
+  the current action in mono, such as `Bash · npm test`, `· N steps` and the time) over a shortlist of the
   latest five steps, the newest at the bottom in `fg` and the older ones in `fg-tertiary`. Once
   finished it is one dim `fg-tertiary` line: the step count and the tools used, such as
-  `6 steps · Read 3 · Bash 2 · Edit`, and `· 1 failed` in `status-error` when a step failed. Opened,
+  `6 steps · Read 3 · Bash 2 · Edit · 42s`, with `· 1 failed` in `status-error` before the time when a step failed.
+  The time is compact in tabular numerals (`8s`, `1m 05s`, `1h 02m`) and dim; a live line's ticks once a second. Opened,
   it lists one plain row per step (the plain collapsible: a tool's status dot and its mono
   summary, `Thinking`, `Raw event`), and a step row opens its input and result in place under it,
   with no card. Permission prompts are cards with a
