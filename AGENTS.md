@@ -194,6 +194,10 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  popup over any mode: fields, images, markup, target, session and follow-up pickers,
                  `docs/features/notes/design.md`), layouts/ (the notes Layout contract and the built-in `default`
                  layout)
+  usage/         manifest.ts, contract.ts, main/ (polls each chat profile's plan usage through the Claude harness, folds
+                 `chat.planUsage` and `chat.agentEvent`), page/ (the status-bar line and the right-bar details),
+                 layouts/ (the usage Layout contract and the built-in `default` layout),
+                 `docs/features/usage/design.md`
 ```
 
 Each Claude Code or Codex session runs the marketplace's `relay.py` (`plugins/wigley/scripts/forms/` in
@@ -229,13 +233,14 @@ round; primer: an open primer), since main, not the page, decides.
   `sessions` is `sessions.activeChanged`) and heard with `api.events.on` by any plugin; its payload type lives in
   the publisher's `contract.ts`. Each process has its own bus, and nothing crosses processes on it: a plugin's own
   channel does that.
-- **The shell** is a registry of areas — title bar, activity bar, side bar, main, panel, status bar, overlay — laid
+- **The shell** is a registry of areas — title bar, activity bar, side bar, main, right bar, panel, status bar, overlay — laid
   out by one `ShellLayout` module in `src/renderer/shell/`. A page plugin may replace the layout through the shell
   API (`shell.setLayout`); every contribution it makes returns a `Disposable`, and so does replacing the layout. The
   areas are the fixed set `AreaName` names, and a contribution carries an order and an alignment. Reworking the window's structure is
-  editing the default layout or adding a plugin; track sizes are theme tokens, except the side bar's width, which
-  opens at its token and then is the user's, resized through the split core and kept in `uiState`
-  (`shell.side-bar-width`).
+  editing the default layout or adding a plugin; track sizes are theme tokens, except the side and right bars' widths, which
+  open at their tokens and then are the user's, resized through the split core and kept in `uiState`
+  (`shell.side-bar-width`, `shell.right-bar-width`). The right bar sits beside `main` across every mode, stays hidden
+  while empty, and takes contributions through `api.areas.rightBar`.
 - **A mode** fills the content sheet, and the core shows one at a time: a plugin registers its mode, with its icon,
   title and an optional side bar element, through the page plugin API, and binds the command that shows it
   (Sessions on `Space k s`, Docs on `Space k d`; pressed while its mode already shows, the same command toggles the
@@ -435,7 +440,7 @@ round; primer: an open primer), since main, not the page, decides.
 - **An MCP tool** is contributed to the `sessions` plugin by the plugin that runs it, with a handler per session;
   sessions writes every contributed tool into `tools.json` and routes each call by tool name, so its MCP adapter
   names no tool.
-- **An ambient service** — the clock, ids, the home folder, files (with watching), processes, git (main only), opening a link in the default browser, how the app was started (`runMode`: live, self-test or drive) — reaches a plugin
+- **An ambient service** — the clock, timers, ids, the home folder, files (with watching), processes, git (main only), opening a link in the default browser, how the app was started (`runMode`: live, self-test or drive) — reaches a plugin
   through `api.services`, filled in by the composition root, so a test hands the plugin a fake. The page's home folder
   is the real path of main's, served in the config, so every view shows a folder under it as `~` through
   `services.homeDir`.

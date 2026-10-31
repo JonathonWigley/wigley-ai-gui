@@ -87,6 +87,7 @@ them. The app-wide look of the primitives stays in themes.
 | `sessions` | `sessions.layout` | the session rows in the side bar, each session's tab strip |
 | `agents` | `agents.layout` | the running subagent lines under each session row |
 | `gallery` | `gallery.layout` | each primitive's sample block |
+| `usage` | `usage.layout` | the status-bar line (context bar, cache countdown, spend, plan rows) and the right-bar details |
 | `keys` | `keys.layout` | the help overlay, the which-key panel, the title bar's Keys button |
 
 Each owner's `layout.d.ts` names its parts exactly.

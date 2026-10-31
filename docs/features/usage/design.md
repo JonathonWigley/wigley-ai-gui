@@ -1,0 +1,163 @@
+# Usage — settled design
+
+**Contents**
+
+- **Intent** — what the user watches and why.
+- **Vocabulary** — plan usage, plan row, session usage, autocompact limit, cache expiry, session spend.
+- **Sources** — where each number comes from, measured on Claude Code 2.1.314.
+- **Flow** — adapter to bus to the usage plugin to the screen.
+- **Records** — the harness-neutral shapes that cross the seam.
+- **The usage plugin** — the poller, the status-bar line and the details bar.
+- **The right bar** — the new shell area.
+- **Decisions** — what the user settled, with the reason for each.
+- **Rejected** — the alternatives weighed and why each lost.
+
+The decisions from the 2026-10-30 interview, kept so a later change does not reopen them. How the shell areas work
+is in AGENTS.md § Architecture (The shell); how the line and the bar look is in `DESIGN.md`.
+
+## Intent
+
+The user runs long sessions on a plan with a 5-hour window, a weekly window and a Fable weekly window, with
+autocompact set to fire well before the model's window. The user wants, always on screen: how much of each plan
+window is used, how much context the shown session holds against the autocompact limit, how long its prompt cache
+stays warm, and what the session has spent; and, one key away, every profile's windows with reset times and the
+extra-usage credits.
+
+## Vocabulary
+
+- **Plan usage** — one profile's plan windows and extra-usage credits: an account fact, not a session's.
+- **Plan row** — one plan window as the server reports it: a kind (`session`, `weekly_all`, `weekly_scoped`), a
+  label, the percent used, the reset time and the server's severity. The app renders rows in the server's order and
+  never grades one itself, so a meter the server adds shows with no app change.
+- **Extra usage** — the plan's overage credits: on or off, spent and monthly limit in minor units of a currency.
+- **Session usage** — one session's context tokens, its window, its autocompact limit, its cache expiry and its
+  spend. It rides the agent event `usage` (`agent-tower/design.md` § Agent events).
+- **Autocompact limit** — the token count the context bar measures against: the profile's configured limit when one
+  is set, otherwise the limit Claude reports. The configured limit is `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` from the
+  profile's `settings.json` `env`, as a percent of the context window (30 → 300,000 on a 1,000,000 window).
+- **Cache expiry** — when the session's prompt cache goes cold: its last model reply plus the TTL that reply wrote
+  (1 hour for `ephemeral_1h_input_tokens`, 5 minutes for `ephemeral_5m_input_tokens`). After it, the next message
+  re-reads the whole context at full price.
+- **Session spend** — the session process's `total_cost_usd`, cumulative. On a subscription it is priced at API list
+  rates (`modelUsage.<model>.costBasis: "list"`), not money billed.
+
+## Sources
+
+Only `src/main/claude-code/` knows any of these shapes.
+
+| Number | Source | When |
+| --- | --- | --- |
+| Plan rows, extra usage | `claude -p /usage --output-format stream-json --verbose`: the `assistant` line's `usage_report.rate_limits` (`limits[]`, `extra_usage`) | every poll, per profile; 0 tokens, about 3 s |
+| Session and weekly rows between polls | `rate_limit_event.rate_limit_info.unifiedWindows` (`five_hour` → `session`, `seven_day` → `weekly_all`; `status` `allowed` / `allowed_warning` / `rejected` → `normal` / `warning` / `critical`) | after every model message |
+| Context tokens | each `assistant` message's `usage`: `input_tokens + cache_read_input_tokens + cache_creation_input_tokens + output_tokens` | every reply |
+| Context window, session spend | the `result` line: `modelUsage.<model>.contextWindow`, `total_cost_usd` | every turn |
+| Reported autocompact limit | the `get_context_usage` control request's `autoCompactThreshold` | after every turn |
+| Configured autocompact limit | the profile's `settings.json` `env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE`, read when a session starts | session start |
+| Cache expiry | the reply's `usage.cache_creation` bucket and the adapter's clock | every reply |
+
+Measured 2026-10-30 on 2.1.314: `get_context_usage` reported `autoCompactThreshold: 967000`,
+`autocompactSource: "model-default"` on Opus, Sonnet and Haiku with the override at 30 in both the environment and
+`settings.json`. Claude applies the override only under conditions its code does not expose, so the details bar
+shows both limits and marks a session whose two differ.
+
+The launch strips `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` from the child's environment (`claude-launch.ts`,
+`NESTED_SESSION_ENV`) because a parent Claude session sets it for its own children; Claude still reads it from the
+profile's `settings.json`, which is why the configured limit is read there.
+
+## Flow
+
+```
+ claude -p /usage (per profile, every pollIntervalSeconds)
+        │ usage_report
+        ▼
+ ClaudeCodeHarness.planUsage(profileDir) ──▶ PlanUsage ─────────────┐
+                                                                    │
+ session process stdout                                             │
+   rate_limit_event ──▶ AgentProcessEvents.planUsage(PlanRowUpdate)─┤
+   assistant usage, result,                                          │
+   get_context_usage reply ──▶ AgentProcessEvents.agentEvent(usage) │
+        │                                                           │
+        ▼                                                           │
+ chat main ──▶ bus: chat.agentEvent {sessionId, profile, event}     │
+           ──▶ bus: chat.planUsage {profile, update}                │
+        │                                                           │
+        ▼                                                           ▼
+ usage main: per-profile PlanUsage (poll, then live updates folded in), per-session usage
+        │ channel: snapshot
+        ▼
+ usage page ──▶ status bar line (shown session + its profile)
+            ──▶ right bar details (every profile, the shown session)   toggled by Space v u
+```
+
+## Records
+
+In `src/contracts/agent.ts`, beside `AgentHarness`:
+
+- `PlanUsage` — `rows: readonly PlanRow[]`, `extraUsage: ExtraUsage | null`, `at` (epoch ms).
+- `PlanRow` — `kind`, `group`, `label` (the server's model or surface name for a scoped row, otherwise the
+  adapter's name for the kind), `percent` (0–100), `resetsAt` (epoch ms or null), `severity`
+  (`'normal' | 'warning' | 'critical'`), `isActive`.
+- `ExtraUsage` — `enabled`, `usedMinor`, `limitMinor`, `currency` (each null when the server sends none).
+- `PlanRowUpdate` — the live rows a session saw: `rows` of `{ kind, percent, resetsAt, severity }`, `at`. Folded into
+  the profile's last `PlanUsage` by `kind`; a kind the poll has not reported yet is held until it does.
+- `AgentHarness.planUsage(profileDir)` — runs one poll and resolves its `PlanUsage`, or rejects with the reason.
+- `AgentProcessEvents.planUsage(update)` and `AgentProcessEvents.agentEvent(event)`.
+- `AgentEvent` — the agent-tower union, built here with its first member, `usage`: `agentId` (`main`), `at`,
+  `contextTokens`, `contextWindow` (null until the first result), `autocompact` (`configured` and `reported`, each
+  tokens or null), `cacheExpiresAt` (epoch ms or null), `spendUsd` (null until the first result).
+
+## The usage plugin
+
+`src/plugins/usage/` depends on `chat` and `sessions`.
+
+- **Main** polls every chat profile at start and then every `usage.pollIntervalSeconds` (default 300, read at each
+  reschedule and rescheduled on a settings change) through the injected main `timers`. It folds each
+  `chat.planUsage` update into that profile's plan usage and keeps each session's last `usage` agent event from
+  `chat.agentEvent`, dropping a session when it closes. It sends one snapshot over its channel on every change.
+- A failed poll keeps the profile's last plan usage, marks it stale with the time of the last good poll, and carries
+  the reason, which the details bar shows. A poll still running when the next one is due is not doubled.
+- **Page** draws, through the `usage` layout:
+  - a status-bar line, always on, aligned to the end: the shown session's context bar (`used/limit`), its cache
+    countdown and its spend, a divider, then the shown session's profile's plan rows (the default profile while no
+    session shows). Each meter is tinted by its severity; the context bar by its share of the limit. With no session
+    shown, the session half is left out.
+  - the details bar in the right bar, toggled by `usage.toggleDetails` (`Space v u`), its open state kept in
+    `uiState`: every profile's rows with reset times, extra usage as `spent / limit` in its currency (or `off`), the
+    poll's staleness and error, and the shown session's context, both autocompact limits and the marker when they
+    differ, cache expiry and spend.
+- Countdowns redraw once a minute through the page `timers` and `clock`.
+
+## The right bar
+
+A new shell area, `rightBar`, beside `main` on the right across every mode, filled by plugin contributions and hidden
+while empty, like the status bar. Its width opens at the `rightbar-width` theme token and is then the user's,
+resized through the split core and kept in `uiState` (`shell.right-bar-width`), as the side bar's is. Any plugin
+contributes to it through `api.areas.rightBar`.
+
+## Decisions
+
+- **The GUI shows it, as a plugin.** The app runs the sessions and already decodes the stream; a terminal status line
+  would be a second reader.
+- **Poll `/usage` plus live events.** `/usage` is the only source with the Fable window and the credits, and it costs
+  no tokens; the live `rate_limit_event` keeps the session and weekly rows current between polls.
+- **The structured `usage_report`, not the text.** The server's rows, severities and order render verbatim.
+- **Credits:** spend against the monthly limit when the plan has it; `off` when extra usage is disabled.
+- **Always-on status-bar line, details one key away in a right bar.**
+- **A new right bar shell area** rather than a floating panel or a Sessions-only pane: it serves the next plugin and
+  covers nothing.
+- **The agent-tower agent event seam is built now,** with `usage` as its first member grown to carry the autocompact
+  limits, cache expiry and spend, so there is one forwarding path from adapter to plugins.
+- **Profiles:** the status bar shows the shown session's profile; the details bar lists every profile.
+- **Autocompact limit:** the configured override wins, the reported limit shows beside it, and a difference is marked.
+- **Cache time** is the prompt-cache expiry, not an autocompact timer: autocompact fires on tokens alone.
+- **Main gains injected `timers`,** matching the page's, since the poller is main's first periodic work.
+
+## Rejected
+
+- **Parsing the `/usage` text** — the structured twin rides the same run.
+- **The OAuth usage endpoint called directly** — an undocumented API behind a Keychain credential the app would have
+  to hold.
+- **A `get_usage` control request to an open session instead of a spawn** — no session may be open for a profile,
+  and one path for every profile is simpler.
+- **App-side severity thresholds** — the server already grades each row.
+- **A separate `sessionUsage` event** — a second forwarding path agent-tower would then have to merge.

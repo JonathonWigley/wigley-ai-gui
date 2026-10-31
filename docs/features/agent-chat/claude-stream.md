@@ -644,7 +644,10 @@ Event types and subtypes seen in the logs that the sections above do not cover:
 - **`system/thinking_tokens`**: paired with each `thinking_delta`.
   `{"type":"system","subtype":"thinking_tokens","estimated_tokens":50,"estimated_tokens_delta":50,"session_id":…,"uuid":…}`
 - **`rate_limit_event`**: after each model message's `message_stop`.
-  `{"type":"rate_limit_event","rate_limit_info":{"status":"allowed","resetsAt":1792527600,"rateLimitType":"five_hour","overageStatus":"rejected","overageDisabledReason":"out_of_credits","isUsingOverage":false,"unifiedWindows":{"five_hour":{"utilization":0.48,…},"seven_day":{"utilization":0.14,…}}},…}`
+  Measured 2026-10-30 on `2.1.314`: `status` is `allowed`, `allowed_warning` or `rejected`; `utilization` is 0–1 here
+  (`usage_report` below uses 0–100); `unifiedWindows` holds `five_hour` and `seven_day`, each with `utilization`,
+  `resetsAt` (epoch seconds), `status` and, past a threshold, `surpassedThreshold`.
+  `{"type":"rate_limit_event","rate_limit_info":{"status":"allowed_warning","resetsAt":1793426400,"rateLimitType":"seven_day","utilization":0.95,"overageStatus":"rejected","overageDisabledReason":"org_level_disabled","isUsingOverage":false,"surpassedThreshold":0.75,"unifiedWindows":{"five_hour":{"utilization":0.12,"resetsAt":1793434200,"status":"allowed"},"seven_day":{"utilization":0.95,"resetsAt":1793426400,"status":"allowed_warning","surpassedThreshold":0.75}},"overageEnabled":false},"uuid":…,"session_id":…}`
 - **`tool_progress`**: a heartbeat every 30 s while a tool call is pending. Its `tool_use_id` is the call id with a
   `-heartbeat-<n>` suffix, and `parent_tool_use_id` is the real call id.
   `{"type":"tool_progress","tool_use_id":"toolu_01YMhg2Ys1DtwHhK2R3A62ji-heartbeat-0","tool_name":"mcp__plugin_wigley_wigley-forms__ask_round","parent_tool_use_id":"toolu_01YMhg2Ys1DtwHhK2R3A62ji","elapsed_time_seconds":30,"heartbeat":true,…}`
@@ -655,6 +658,37 @@ Event types and subtypes seen in the logs that the sections above do not cover:
 Expected but not observed: `ping` stream events, `system/api_retry`, `system/permission_denied`, any
 `control_request` sent by Claude to the host (none arrived, even with `--permission-prompt-tool`), and non-JSON
 stdout lines (every stdout line in every probe parsed as JSON).
+
+## Usage
+
+Measured 2026-10-30 on `2.1.314`. Excerpts trimmed as above.
+
+**`/usage` in `-p` mode.** `claude -p /usage --output-format stream-json --verbose` costs no tokens and emits an
+`assistant` line whose message carries a `usage_report` beside the text. `percent` is 0–100. `resets_at` is an
+ISO-8601 string. `severity` is the server's grade. `extra_usage` amounts are minor units (cents) of `currency`.
+
+`"usage_report":{"session":{"total_cost_usd":0,…,"model_usage":{}},"rate_limits":{"limits":[{"kind":"session","group":"session","percent":35,"resets_at":"2026-10-31T08:09:59.607264+00:00","scope":null,"severity":"normal","is_active":false},{"kind":"weekly_all","group":"weekly","percent":97,"resets_at":"2026-10-31T05:59:59.607290+00:00","scope":null,"severity":"critical","is_active":true},{"kind":"weekly_scoped","group":"weekly","percent":0,"resets_at":"2026-10-31T06:00:00+00:00","scope":{"model":{"display_name":"Fable"},"surface":null},"severity":"normal","is_active":false}],"extra_usage":{"is_enabled":false,"monthly_limit":null,"used_credits":null,"utilization":null,"currency":null}}}`
+
+**Control requests.** `get_usage`, `get_context_usage` and `get_session_cost` are answered over stdin before any
+message. The request is
+`{"type":"control_request","request_id":"r1","request":{"subtype":"get_context_usage"}}`; the reply is a
+`control_response` whose `response.response` holds the data.
+
+- `get_context_usage` keys: `agents`, `apiUsage`, `autoCompactThreshold`, `autocompactSource`, `categories` (each
+  `name`, `kind` of `used`, `free`, `buffer` or `deferred`, and `tokens`), `gridRows`, `isAutoCompactEnabled`,
+  `maxTokens`, `mcpInstructions`, `mcpTools`, `memoryFiles`, `messageBreakdown`, `model`, `percentage`,
+  `rawMaxTokens`, `skills`, `slashCommands`, `totalTokens`. On Opus, Sonnet and Haiku with
+  `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE=30` set in both the environment and `settings.json`, it reported
+  `maxTokens: 1000000`, `rawMaxTokens: 1000000`, `autoCompactThreshold: 967000`, `autocompactSource: "model-default"`:
+  the override does not show in this reply.
+- `get_usage` keys: `session`, `subscription_type` (`"max"`), `rate_limits_available`, and `rate_limits` with
+  `five_hour` and `seven_day` (each `utilization` 0–100 and `resets_at`), `extra_usage` (the `usage_report` fields
+  plus `disabled_reason`, `user_disabled`, `spend_limit_reached`, …) and the same `limits[]`.
+- `get_session_cost` replies text only: `{"text":"Total cost: $0.0000\n…"}`.
+
+**Other usage fields.** The `result` line's `modelUsage.<model>` carries `contextWindow` (`1000000`),
+`maxOutputTokens`, `costUSD` and `costBasis` (`"list"`: API list rates, not money billed). An `assistant` message's
+`usage.cache_creation` splits `ephemeral_1h_input_tokens` from `ephemeral_5m_input_tokens`, the prompt cache's two TTLs.
 
 ## Queued messages
 

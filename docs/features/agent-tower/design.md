@@ -15,16 +15,15 @@ running subagents in the Sessions side bar.
 
 ## Status
 
-Built first (plan `plan-subagent-lines/`):
+Built by the usage feature (`docs/features/usage/design.md`):
 
-- the agent event record in `src/contracts/agent.ts`, emitted by the Claude adapter and the fake harness
+- the agent event record in `src/contracts/agent.ts`, with its first member, `usage`, emitted by the Claude adapter
 - chat main forwarding each owned session's events as `chat.agentEvent`
-- the `agents` plugin: each session's roster, one JSON-lines event log per host session, and one line per running
-  subagent under its session's row, drawn through the `agents` layout
-- sessions' `addRowPart`, the hook any plugin uses to draw under a session row
-- the `Space z l a` layout preview: a sample session with two running subagents
 
-Waits for a producer or for the tower itself: plan, plan step, retry and watcher events; replay; the tower view.
+Waits: the `agents` plugin (each session's roster, one JSON-lines event log per host session, one line per running
+subagent under its session's row), sessions' `addRowPart`, the `Space z l a` layout preview, and the other events.
+Of those, plan, plan step, retry and watcher events wait for a producer; replay and the tower view wait for the tower
+itself.
 
 ## Vocabulary
 
@@ -50,7 +49,7 @@ unchanged. Each event carries `at`, epoch milliseconds from the adapter's inject
 | `agentSpawned` | agent id, parent agent id, agent type, description | a party member joins |
 | `agentFinished` | agent id, done or failed | the member steps back |
 | `toolStarted` / `toolFinished` | agent id, tool call id, tool name, success or failure | attack / player hurt |
-| `usage` | agent id, context tokens used, context window size (null when unknown) | fatigue bar (context fill) |
+| `usage` | agent id, context tokens used, context window size (null until the first result), autocompact limit (configured and reported, each tokens or null), cache expiry (null when unknown), session spend in USD (null until the first result) | fatigue bar (context fill) |
 | `compacted` | tokens before and after | rest / heal |
 | `userMessage` | — | "message from HQ" |
 

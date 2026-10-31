@@ -56,6 +56,8 @@ Everything on screen belongs to exactly one layer, and the layer decides its mat
 │ │    │              │ │        │ composer, picker    │   │ │ │
 │ │    │              │ └────────┴─────────────────────┴───┘ │ │
 │ └────┴──────────────┴──────────────────────────────────────┘ │
+│ L1 right bar (glass, dense) sits beside the sheet, hidden    │
+│   while empty (usage details)                                │
 │ L1 status bar (glass; only while a plugin contributes to it) │
 └──────────────────────────────────────────────────────────────┘
   L0 backdrop: crust with two faint washes, seen only through L1
@@ -64,7 +66,7 @@ Everything on screen belongs to exactly one layer, and the layer decides its mat
 | Layer       | What lives here                                                         | Material                                                                                              |
 | ----------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | L0 backdrop | The window itself                                                       | `--wg-window-background` with `--wg-window-ambient`                                                   |
-| L1 chrome   | Title bar, activity bar, side bar, tab strips, status bar, panel header | The `material-chrome` class (`material-chrome--dense` for the side bar)                               |
+| L1 chrome   | Title bar, activity bar, side bar, right bar, tab strips, status bar, panel header | The `material-chrome` class (`material-chrome--dense` for the side and right bars)                               |
 | L2 content  | Form tab, chat transcript, docs, editors, the forms rail, diffs         | Solid `--wg-sheet-background`, as inset sheets with a `--wg-sheet-gutter` gutter and `--wg-radius-lg` |
 | L3 floating | Composer, pickers, which-key, help, dialogs, menus, toasts              | The `material-floating` class                                                                         |
 
@@ -168,7 +170,7 @@ means something.
 - **Spacing** is the `space-*` scale only (2, 4, 6, 8, 12, 16, 24, 32 in Mocha).
 - **Density:** tree rows `row-tree`, list and menu rows `row-list`, tabs `tab-height`, the title
   bar `toolbar-height`, the status bar `statusbar-height`, the activity bar `activitybar-width`,
-  the side bar's opening width `sidebar-width` (until the user resizes it), icon buttons `icon-button-sm` and `icon-button`, icons
+  the side bar's opening width `sidebar-width` and the right bar's `rightbar-width` (until the user resizes them), icon buttons `icon-button-sm` and `icon-button`, icons
   `icon-size`. The title bar leaves `traffic-light-inset` at its left for macOS's window
   buttons.
 - **Radii by hierarchy:** `radius-sm` for rows, tags and inline code; `radius-md` for buttons,
@@ -330,11 +332,20 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   cursor adds the focus ring. In a split whose panes each keep a selection (Settings mode, the docs
   tree, the Primer tab's tasks and items columns), the pane without focus marks itself `is-pane-inactive` and its selected
   row takes `list-inactive-selection-background` instead, so the pane the keys act on reads at a glance.
+- **Right bar:** L1 dense glass beside the content sheet in every mode, opening at `rightbar-width` and then the
+  user's width; hidden while no plugin contributes to it. Rows and hover follow the side bar.
 - **Tabs:** sit on the top edge of their sheet. The active tab is solid sheet colour with a 2px
   accent top mark; others are transparent in `fg-secondary`.
 - **Status bar:** L1, `statusbar-height`, `text-12`, shown only while a plugin contributes to it;
-  no built-in plugin does. Status colours only on status items. A status belongs on the surface it
+  the usage plugin does (below). Status colours only on status items. A status belongs on the surface it
   describes: a form's saved state on its rail header, a config problem on the title bar.
+- **Usage:** the status-bar line is always on and aligned to the end, in `text-12`: the shown session's context bar
+  (`used/limit` against the autocompact limit), its cache countdown and its spend, a divider, then the plan rows of the
+  session's profile, each a meter with its percent in the server's order. A meter takes the existing status colours by
+  the server's severity (`normal`, `warning`, `critical`); the context bar by its share of the limit. With no session
+  shown, the session half is left out. The details bar (right bar, `Space v u`) lists every profile's rows with reset
+  times, extra usage as `spent / limit` in its currency or `off`, the poll's staleness and error, and the shown
+  session's context, both autocompact limits (marked when they differ), cache expiry and spend.
 - **Forms:** the rail is the start pane of a split in the Form tab's sheet, on the sheet colour with no fill of its own. Its header holds the
   open count, the saved state and the `⌥P ◂ ▸ ⌥N` edge prompt. Cards are `card-background` with
   `radius-md`. The recommended choice carries the accent, since Enter accepts it.
