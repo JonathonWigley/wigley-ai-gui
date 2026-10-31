@@ -249,7 +249,13 @@ round; primer: an open primer), since main, not the page, decides.
   needs the user now takes over its session (`takeOver()`), and its release gives the session back to the tab shown
   before only if no tab was selected since, even back to the taking tab: forms takes over for a round and releases on submit or cancel. A session's tabs drop when its row leaves, closed by the user or ended, and
   `sessions.sessionRemoved` tells each plugin to forget the session; the user moves between tabs with `Option+o` /
-  `Option+i` and between sessions with `Option+Shift+o` / `Option+Shift+i`.
+  `Option+i` and between sessions with `Option+Shift+o` / `Option+Shift+i`. A tab names its Codicon (`icon`), and
+  the tab bar draws it with the title as its tooltip.
+- **A chat pane** is one pane of Sessions mode's pane tree (`src/shared/page/pane-tree/`, the sessions plugin its
+  owner): it shows one whole session, tab bar included, and a session shows in at most one pane. The side bar drives
+  the focused pane, and the visible tab, whose `shown` sets the key scope and whose `isVisible` reads true, is the
+  focused pane's selected tab; a tab in an unfocused pane is on screen but holds no keys
+  (`docs/features/chat-panes/design.md`).
 - **A key** is a default bind in `src/plugins/keymap.ts`, the one file holding every built-in key (core and
   built-in plugins), naming its command and scope in full: `forms.nextItem` in scope `forms.review`. A bind is one
   vim-notation entry (`<Leader>ks`, `gg`, `<A-o>`) written once; the merge expands it into the page bind and the box
@@ -281,12 +287,22 @@ round; primer: an open primer), since main, not the page, decides.
   scope (forms' view), and `api.keys.pushScope` lays a scope over it until its `pop` (help's `keys.help`), so a
   modal view never fights the plugin under it for the scope. The pushed scope's `onBaseChanged` hears the set scope
   change under it, so a modal view can close when the view beneath it moves on (help closes on it).
-- **A resize target** is the divider the core's resize commands (`panes.resizePaneLeft` / `panes.resizePaneRight`,
-  `Alt+Shift+h` / `Alt+Shift+l`) move. A view hands the core its focused pane's divider with
+- **A resize target** is the divider the core's resize commands (`panes.resizePaneLeft` / `Right` / `Up` / `Down`,
+  `Alt+Shift+hjkl`) move. A view hands the core its focused pane's divider with
   `api.panes.setResizeTarget(target)` each time it sets its key scope, after `keys.setScope`: the right divider of
   the focused pane when it has one, else its left one, as tmux picks, and `null` when no split pane has focus. Every
-  base scope change drops the target, so a view that sets none leaves the keys on the side bar. A `ResizeTarget`
-  (`src/contracts/panes.ts`) is one `nudge(direction)`; every `Split` is one. The split core draws each handle's
+  base scope change drops the target. A `ResizeTarget` (`src/contracts/panes.ts`) is one `nudge(direction)`, which
+  returns false when the direction's axis is not its own (a side-by-side `Split` given up or down); every `Split` is
+  one. A press goes to the view's target, then, when it returns false or none is set, to the outer panes' target, then
+  to the side bar.
+- **A focus target** is how the core's focus commands (`panes.focusLeft` / `Right` / `Up` / `Down`, `Alt+hjkl`) move
+  inside a view, as smart-splits does between Neovim and tmux. A view hands it over with
+  `api.panes.setFocusTarget(target)` beside its resize target, and every base scope change drops it too. Its
+  `move(direction)` moves focus to the view's own pane that way and returns true, or returns false at the view's edge;
+  the core then moves to the outer pane that way, and does nothing at the outer edge. **The outer panes** are the
+  panes around the view, handed over by the mode that tiles them with `api.panes.setOuterPanes({ focus, resize })`
+  and kept across scope changes until that mode sets null (Sessions mode's chat panes, set while the mode shows). A
+  view never binds `Alt+hjkl` itself: the key engine cannot hold a key in one scope and in `any` both. The split core draws each handle's
   resize prompt (`⌥⇧H ◂ ▸ ⌥⇧L`, shown on hover, during a drag and for a moment after a nudge) through the anchor
   function it is given: a view passes its `keys.anchor`, the shell anchors the side bar handle's prompt through the
   keys `shell.setKeys` is given. A `Split` and the side bar's `SplitDivider` have `dispose`, which disconnects the observer, removes

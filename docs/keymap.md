@@ -60,21 +60,27 @@ hjkl is the direction in every layer; the modifier picks the verb.
   every vim mode (forms' notes, reason and comment boxes). Every view with more than one box
   takes them, so the keys that move between boxes are the same on every page. Inside a box they
   take the key from vim's insert-mode completion.
-- **Alt+hjkl** moves focus between panes: `Alt+h`/`Alt+l` to the pane on the left or right (the docs
-  tree and the doc, the Backlog list and detail, the Settings sections and rows, and the Primer tab's
-  tasks, items and card columns).
+- **Alt+hjkl** moves focus to the pane that way, as smart-splits does between Neovim and tmux: first
+  between a view's own panes (the docs tree and the doc, the Backlog list and detail, the Settings
+  sections and rows, and the Primer tab's tasks, items and card columns), then, at the view's edge,
+  to the neighbouring chat pane in Sessions mode. Focus stops at the outer edge. The commands are the
+  core's `panes.focusLeft`, `panes.focusRight`, `panes.focusUp` and `panes.focusDown`, bound in every
+  scope; a view takes part through its focus target (AGENTS.md § Architecture), never a bind of its own.
 - **Alt+Shift+hjkl** resizes the focused pane, as tmux's `resize-pane` does: `Alt+Shift+h` moves the
   pane's right divider 24px left, `Alt+Shift+l` moves it 24px right, and a pane with no right divider
-  moves its left one. Key repeat supplies the speed. With no split pane focused (a Chat tab,
-  Settings mode, Docs mode's tree, the Backlog homes) the keys resize the side bar. A divider stops where the
-  pane it squeezes reaches its least width, and stacked panes do not resize. `Alt+Shift+j`/`Alt+Shift+k`
-  are kept for vertical dividers, which the app does not have, and stay unbound. The commands are the
+  moves its left one; `Alt+Shift+j`/`Alt+Shift+k` move the pane's lower divider down and up, else its
+  upper one. Key repeat supplies the speed. A press resizes the view's own focused pane first, then
+  the focused chat pane, then the side bar (left and right only): with no split pane focused and one
+  chat pane (a Chat tab, Settings mode, Docs mode's tree, the Backlog homes) the keys resize the side
+  bar. A divider stops where the pane it squeezes reaches its least width. The commands are the
   core's `panes.resizePaneLeft`, `panes.resizePaneRight`, `panes.resizePaneUp` and
   `panes.resizePaneDown`, rebound in `keymap.json` like any other. Each divider shows the prompt
-  `⌥⇧H ◂ ▸ ⌥⇧L` while the pointer is over it, while it is dragged, and for a moment after each
-  keyboard resize.
-- Reserved for when the app has them: `Ctrl+Alt+hjkl` swap, `Alt+'` / `Alt+;` split, `Alt+w` close
-  a pane.
+  `⌥⇧H ◂ ▸ ⌥⇧L` (`⌥⇧K ▴ ▾ ⌥⇧J` on a divider between stacked panes) while the pointer is over it,
+  while it is dragged, and for a moment after each keyboard resize.
+- **Alt+' / Alt+;** split the focused chat pane, the new pane below or to the right, as tmux's
+  `split-window -v` / `-h` do; **Ctrl+Alt+hjkl** swaps the focused chat pane with the one that way;
+  **Alt+w** closes the focused chat pane and leaves its session in the side bar
+  (`docs/features/chat-panes/design.md`).
 - **Alt+o / Alt+i** next and previous tab; **Alt+Shift+o / Alt+Shift+i** next and previous
   session, Shift being the bigger scope. **Alt+n / Alt+p** next and previous thing waiting on the
   user (forms' unanswered items).
