@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   type EntryFocus,
   focusAfterChange,
+  focusAfterClose,
   focusAfterScroll,
   focusFirst,
   moveFocus,
@@ -86,4 +87,23 @@ describe('entry focus', () => {
       expect(focusAfterScroll(focus, direction, atEnd)).toEqual(expected);
     },
   );
+
+  it.each([
+    {
+      given: 'a closed step, following',
+      focus: { entryId: 's2', following: true },
+      expected: { entryId: 'activity:s1', following: true },
+    },
+    {
+      given: 'a closed step, not following',
+      focus: { entryId: 's1', following: false },
+      expected: { entryId: 'activity:s1', following: false },
+    },
+    { given: 'another entry', focus: onB, expected: onB },
+    { given: 'no entry', focus: START_FOCUS, expected: START_FOCUS },
+  ])('focusAfterClose on $given → $expected', ({ focus, expected }) => {
+    expect(focusAfterClose(focus, 'activity:s1', ['s1', 's2'])).toEqual(
+      expected,
+    );
+  });
 });

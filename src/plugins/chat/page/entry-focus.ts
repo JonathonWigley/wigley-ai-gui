@@ -62,3 +62,14 @@ export function focusAfterChange(
     !focus.following && focus.entryId !== null && ids.includes(focus.entryId);
   return isKept ? focus : focusLatest(ids);
 }
+
+// After run `runId` closed: a focus on one of its `stepIds` moves to the run's
+// line, keeping whether it follows; any other focus stays.
+export function focusAfterClose(
+  focus: EntryFocus,
+  runId: string,
+  stepIds: readonly string[],
+): EntryFocus {
+  const isOnStep = focus.entryId !== null && stepIds.includes(focus.entryId);
+  return isOnStep ? { entryId: runId, following: focus.following } : focus;
+}
