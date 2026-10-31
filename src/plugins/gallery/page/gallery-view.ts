@@ -622,6 +622,31 @@ function collapsibleCells(): SampleCell[][] {
         true,
       ),
     ],
+    [
+      cell(
+        createCollapsibleCard({
+          summary: 'Bash  npm test',
+          mono: true,
+          plain: true,
+          leading: statusDot('success'),
+          body,
+        }).element,
+        'Plain, closed',
+        true,
+      ),
+      cell(
+        createCollapsibleCard({
+          summary: 'Bash  npm test',
+          mono: true,
+          plain: true,
+          leading: statusDot('success'),
+          open: true,
+          body,
+        }).element,
+        'Plain, open',
+        true,
+      ),
+    ],
   ];
 }
 

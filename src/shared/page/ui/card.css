@@ -64,3 +64,17 @@
 .ui-collapsible-body {
   padding: 0 var(--wg-space-3) var(--wg-space-3);
 }
+
+.ui-collapsible--plain {
+  background: transparent;
+  border: 0;
+}
+
+.ui-collapsible--plain .ui-collapsible-head {
+  padding: 0 var(--wg-space-2);
+}
+
+.ui-collapsible--plain .ui-collapsible-body {
+  padding: 0 var(--wg-space-2) var(--wg-space-2);
+  padding-left: calc(var(--wg-space-2) * 2 + var(--wg-icon-size));
+}

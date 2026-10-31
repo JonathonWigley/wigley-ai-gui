@@ -18,6 +18,8 @@ export function card(edge?: CardEdge | null): HTMLElement {
 export interface CollapsibleCardOptions {
   summary: string;
   mono?: boolean;
+  // A one-line row with no card chrome in place of a card.
+  plain?: boolean;
   leading?: HTMLElement | null;
   open?: boolean;
   body(): HTMLElement;
@@ -29,15 +31,18 @@ export interface CollapsibleCard {
   setOpen(open: boolean): void;
 }
 
-// A card whose head toggles its body. Each opening builds the body afresh
-// from `body()`; closing drops it.
+// A card, or a plain row, whose head toggles its body. Each opening builds the
+// body afresh from `body()`; closing drops it.
 export function createCollapsibleCard(
   options: CollapsibleCardOptions,
 ): CollapsibleCard {
   let open = false;
   let shownBody: HTMLElement | null = null;
-  const root = card();
+  const root = options.plain === true ? element('div') : card();
   root.classList.add('ui-collapsible');
+  if (options.plain === true) {
+    root.classList.add('ui-collapsible--plain');
+  }
   const head = button('ui-collapsible-head', '', () =>
     collapsible.setOpen(!open),
   );
