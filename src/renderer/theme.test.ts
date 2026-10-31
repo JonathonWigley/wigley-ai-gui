@@ -41,6 +41,7 @@ const theme: Theme = {
     'font-mono': 'Mono',
     'text-ui': '13px',
     'text-mono': '13px',
+    'text-prose': '14px',
   },
   reduced: { 'material-chrome-bg': '#222222' },
 };
@@ -101,15 +102,20 @@ describe('createThemeApplier', () => {
     const { root, properties } = fakeRoot();
     const applier = createThemeApplier(root, fakeQuery(false));
 
-    applier.apply(theme, settings('full', { ui: 'Inter', uiSize: 15 }));
+    applier.apply(
+      theme,
+      settings('full', { ui: 'Inter', uiSize: 15, proseSize: 18 }),
+    );
 
     expect(properties.get('--wg-font-ui')).toBe('Inter');
     expect(properties.get('--wg-text-ui')).toBe('15px');
+    expect(properties.get('--wg-text-prose')).toBe('18px');
     expect(properties.get('--wg-font-mono')).toBe('Mono');
 
     applier.apply(theme, settings('full'));
 
     expect(properties.get('--wg-font-ui')).toBe('System');
     expect(properties.get('--wg-text-ui')).toBe('13px');
+    expect(properties.get('--wg-text-prose')).toBe('14px');
   });
 });

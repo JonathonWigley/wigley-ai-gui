@@ -113,6 +113,7 @@ export const coreThemeTokens: Readonly<Record<string, TokenKind>> = {
   'text-20': 'length',
   'text-ui': 'length',
   'text-mono': 'length',
+  'text-prose': 'length',
   'leading-tight': 'number',
   'leading-ui': 'number',
   'leading-prose': 'number',

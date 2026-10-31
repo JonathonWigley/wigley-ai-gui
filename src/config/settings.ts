@@ -20,6 +20,7 @@ export const optionalSettings: Readonly<
   'fonts.mono': 'string',
   'fonts.uiSize': 'number',
   'fonts.monoSize': 'number',
+  'fonts.proseSize': 'number',
 };
 
 // The only strings a core setting takes, by its dotted path.
@@ -74,6 +75,10 @@ export const settingInfo: SettingInfos<Settings> = {
   'fonts.monoSize': {
     label: 'Code font size',
     description: 'The code text size, in pixels.',
+  },
+  'fonts.proseSize': {
+    label: 'Prose font size',
+    description: 'The size of rendered markdown text, in pixels.',
   },
   keySequenceTimeoutMs: {
     label: 'Key sequence timeout',

@@ -51,7 +51,7 @@ export function createThemeApplier(
 }
 
 function applyFonts(root: HTMLElement, fonts: Settings['fonts']) {
-  const { ui, mono, uiSize, monoSize } = fonts;
+  const { ui, mono, uiSize, monoSize, proseSize } = fonts;
   if (ui !== undefined) {
     root.style.setProperty(themeVariable(FONT_TOKENS.ui), ui);
   }
@@ -65,6 +65,12 @@ function applyFonts(root: HTMLElement, fonts: Settings['fonts']) {
     root.style.setProperty(
       themeVariable(FONT_TOKENS.monoSize),
       `${monoSize}px`,
+    );
+  }
+  if (proseSize !== undefined) {
+    root.style.setProperty(
+      themeVariable(FONT_TOKENS.proseSize),
+      `${proseSize}px`,
     );
   }
 }

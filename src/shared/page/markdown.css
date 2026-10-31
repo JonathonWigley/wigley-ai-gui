@@ -1,6 +1,6 @@
 /* Markdown (class names from markdown-it-renderer.ts) */
 .md {
-  font-size: var(--wg-text-14);
+  font-size: var(--wg-text-prose);
   line-height: var(--wg-leading-prose);
   max-width: var(--wg-prose-measure);
 }
@@ -39,7 +39,7 @@
 }
 
 .md-h3 {
-  font-size: var(--wg-text-14);
+  font-size: var(--wg-text-prose);
 }
 
 .md-h4,

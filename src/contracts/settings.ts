@@ -22,8 +22,14 @@ export interface Settings {
   // `reduced` overrides.
   transparency: Transparency;
   // Each member, when set, overrides the theme token `FONT_TOKENS` names;
-  // `uiSize` and `monoSize` are CSS pixels.
-  fonts: { ui?: string; mono?: string; uiSize?: number; monoSize?: number };
+  // `uiSize`, `monoSize` and `proseSize` are CSS pixels.
+  fonts: {
+    ui?: string;
+    mono?: string;
+    uiSize?: number;
+    monoSize?: number;
+    proseSize?: number;
+  };
   // How long a page key sequence waits for its next key.
   keySequenceTimeoutMs: number;
   // `command` is the `claude` executable a session runs; `~` alone, or a

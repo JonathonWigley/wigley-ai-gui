@@ -12,4 +12,5 @@ export const FONT_TOKENS = {
   mono: 'font-mono',
   uiSize: 'text-ui',
   monoSize: 'text-mono',
+  proseSize: 'text-prose',
 } as const satisfies Record<keyof Settings['fonts'], string>;
