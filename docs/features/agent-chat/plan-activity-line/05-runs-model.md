@@ -1,6 +1,6 @@
 # 05 — Runs model, run times and focus on close
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 2 · Depends on: 04
 Plan: [plan.md](plan.md)
@@ -35,3 +35,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit e49d51c · proof: diff read: every Produces present in activity-runs.ts and entry-focus.ts; typecheck clean; 34 tests pass per worker (gate reruns) · concerns: lint's oxfmt flags DESIGN.md and docs/keymap.md, from a peer session's commits, not this run

@@ -1,6 +1,6 @@
 # 07 — Entry list draws activity lines; commands and the view wired to it
 
-Status: not started
+Status: in progress
 Type: Batch
 Wave: 3 · Depends on: 02, 05, 06
 Plan: [plan.md](plan.md)

@@ -235,8 +235,8 @@ Boundary rules:
 - [x] [Entries carry their time](04-entry-times.md)
 
 ### Wave 2
-- [ ] [Runs model, run times and focus on close](05-runs-model.md) — after 04
-- [ ] [Activity part, collapsibleRow and the built-in layout](06-activity-contract-and-layout.md) — after 02, 03, 04
+- [x] [Runs model, run times and focus on close](05-runs-model.md) — after 04
+- [x] [Activity part, collapsibleRow and the built-in layout](06-activity-contract-and-layout.md) — after 02, 03, 04
 
 ### Wave 3
 - [ ] [Entry list draws activity lines; commands and the view wired to it](07-entry-list-and-wiring.md) — after 02, 05, 06
@@ -259,13 +259,21 @@ Review base: e2dbd6596bdd144fcd436c37ef19db140c258f9a
 - 02 · 7255717 · diff read matches Produces and Decisions; lint passes; tsc clean in group files · concerns: is-box-focused follows the same focused/blurred callbacks as isBoxFocused, so a redraw that destroys the editor without blurred would leave both set
 - 03 · cff8715 · diff read matches Produces; lint passes; tsc clean in group files · concerns: body left edge lines up past the chevron, not past a leading status dot; the live look in 10 settles it
 - 04 · 9ee97fa · diff read: every Produces present (at on every variant, EntryDraft + createEntryStamp, clock deps on harness/sessions/preview, createFakeAgentHarness(clock)); tsc and lint clean · concerns: stamp spreads use an as ChatEntry cast (TS cannot see Omit-union + at as ChatEntry)
+- 05 · e49d51c · diff read: every Produces present in activity-runs.ts and entry-focus.ts; typecheck clean; 34 tests pass per worker (gate reruns) · concerns: lint's oxfmt flags DESIGN.md and docs/keymap.md, from a peer session's commits, not this run
+- 06 · 21d87f4 · diff read: every Produces present (StepInput, ActivityInput, collapsibleRow, ChatLayout.activity, PART_SET activity, kit collapsibleRow, layout.js activity and steps on collapsibleRow); typecheck clean · concerns: .chat-step-slot overrides .chat-entry-slot margin/padding only by source order, so it holds only while step slots also carry chat-entry-slot
 ### Contract changes
 - pairToolResult: (Map<string, ToolEntry>) → ToolEntry → generic <E extends ToolEntry>(Map<string, E>) → E, and ToolEntry is now Extract<EntryDraft, {kind:'tool'}> · why: the decoder pairs drafts and transcripts pairs stamped entries · consumers: none outside 04 · group 04
+- layout.d.ts re-export: export type { DotStatus } → export type { BaseKit, DotStatus } · why: layout.js imports types only from ../layout and the activity part's JSDoc names BaseKit · consumers: none beyond 06 · group 06
 ### Rulings
 - the chat-exception comment sits above .chat-entry-slot and .ui-input.chat-box:focus-within beside .chat-box in the composer section — placement only — a wording tweak · group 02
 - plain body keeps the given padding and adds padding-left calc(space-2*2 + icon-size) to meet the align-with-summary clause — the spec gave both — with a leading dot the body sits under the dot, not the text · group 03
 - the fake harness keeps its own id-to-first-at map and EntryDraft alias, since check-layers forbids src/shared importing src/main — two copies of a small rule; moving entry-stamp to src/shared would fix it · group 04
 - transcript fallback reads the entry before as the last entry pushed, so a timestamped line that yields no entry does not carry its time forward — a slightly early at after a dropped line · group 04
 - start.test and chat-preview.test assert at: 5000 on their notice, proving the clock reaches it — none · group 04
+- test tables named in prose (vitest naming) rather than listRows_RunTimes_<case> — a rename if wanted · group 05
+- a run ended by a non-step entry is never live whatever working is — matches the Live decision · group 05
+- summary line is spans (chat-activity-steps, -failed, -time) in a flex row with a space-1 gap — the spans need separation — copied text loses the spaces · group 06
+- renamed thinking_expanderBodyRefilledInPlace and raw_expanderShowsTheEvents to thinking_rowBodyRefilledInPlace and raw_rowShowsTheEvents — names fit the code — a gate filter on old names finds nothing · group 06
+- a step both current and failed shows status-error (is-failed after is-current) — none · group 06
 ### Review rounds
 ### Test gate

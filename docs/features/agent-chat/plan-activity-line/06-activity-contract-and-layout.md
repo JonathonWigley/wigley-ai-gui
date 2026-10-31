@@ -1,6 +1,6 @@
 # 06 — Activity part, collapsibleRow and the built-in layout
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 2 · Depends on: 02, 03, 04
 Plan: [plan.md](plan.md)
@@ -41,3 +41,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 21d87f4 · proof: diff read: every Produces present (StepInput, ActivityInput, collapsibleRow, ChatLayout.activity, PART_SET activity, kit collapsibleRow, layout.js activity and steps on collapsibleRow); typecheck clean · concerns: .chat-step-slot overrides .chat-entry-slot margin/padding only by source order, so it holds only while step slots also carry chat-entry-slot
