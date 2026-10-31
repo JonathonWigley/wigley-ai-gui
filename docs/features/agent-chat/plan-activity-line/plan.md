@@ -9,7 +9,8 @@ REQUIRED SUB-SKILL: Use wigley:make to implement this plan
 
 The Chat tab groups the agent's steps (`tool`, `thinking` and `raw` entries) between two other entries into one
 **activity line**: a live header with a 5-line shortlist while the session works on it, one dim summary line once it
-is finished, and a plain list of step rows when the user opens it. The chat's focus outlines change: the focused
+is finished, and a plain list of step rows when the user opens it. Each line shows how long its run took, ticking
+once a second while live; for that, every chat entry carries `at`, the time it first appeared. The chat's focus outlines change: the focused
 message box draws no frame and marks no entry, and the focused entry shows a thin left bar once the box loses focus.
 Prose reads a new `text-prose` token that a new `fonts.proseSize` setting overrides.
 
@@ -17,6 +18,9 @@ Prose reads a new `text-prose` token that a new `fonts.proseSize` setting overri
 
 Systems touched:
 
+- **Agent harness seam and its producers** (`src/contracts/agent.ts`, `src/main/claude-code/`, chat main's
+  `chat-sessions.ts` and preview, the fake harness): `ChatEntry.at`, stamped through the injected `Clock` live and
+  read from each transcript line's `timestamp` for history.
 - **Theme and settings** (`src/config/`, `src/contracts/settings.ts`, `src/shared/theme-variables.ts`,
   `src/renderer/theme.ts`, `src/shared/page/markdown.css`): one new token and one new font setting, on the same path
   as `fonts.uiSize` → `text-ui`.
@@ -25,8 +29,8 @@ Systems touched:
   built-in `layouts/default/layout.js`): a new `activity` part and a new `collapsibleRow` kit member.
 - **Chat entry list** (`src/plugins/chat/page/entry-list.ts`) over a new pure module, `activity-runs.ts`, that turns
   the session's entries into list rows and cursor stops; `entry-focus.ts` stays the pure focus model over stop ids.
-- **Chat view and commands** (`chat-view.ts`, `chat-state.ts`, `chat-commands.ts`): the working flag into the list,
-  the box-focus class, and the stop-aware key logs.
+- **Chat view and commands** (`chat-view.ts`, `chat-state.ts`, `chat-commands.ts`, page `start.ts`): the working
+  flag, the page `Timers` and `Clock` into the list, the box-focus class, and the stop-aware key logs.
 - **Fake harness and self-test** (`src/shared/fake-agent-harness.ts`, `src/plugins/chat/main/selftest-script.ts`): a
   held turn of steps, and the self-test steps that walk and capture the activity line.
 
@@ -45,6 +49,10 @@ again before the first dispatch.
 | The layout preview session is idle, so it has no live run | `grep -n "activity: 'idle'" src/plugins/chat/main/preview/chat-preview.ts` | line 74 |
 | The fake harness holds a turn open only for `fake: hold` | `grep -n 'isHold' src/shared/fake-agent-harness.ts` | `const isHold = text === FAKE_HOLD_TEXT;` |
 | `ProcessActivity` is `'idle' \| 'working' \| 'waiting'` | `grep -n 'ProcessActivity =' src/contracts/agent.ts` | line 20 |
+| Transcript `user`, `assistant` and `system` lines carry a top-level ISO `timestamp`; bookkeeping lines do not | `python3 -I` over one `.jsonl` under `~/.claude-personal/projects/`, counting lines per `type` with and without `timestamp` (or `command grep -a -o '"timestamp":"[^"]*"' <file> \| head`) | 248 of 382 lines; every user (60), assistant (70) and system (20) line has it |
+| The composition root injects `Clock` and the page gets `Timers` and `Clock` | `grep -n 'const clock' src/main/main.ts; grep -n 'timers: Timers\|clock: Clock' src/contracts/plugin.ts` | `main.ts:287`; `PageServices.timers`, `PageServices.clock`, `MainServices.clock` |
+| `Timers.set` is one-shot (`setTimeout`) | `sed -n 59,62p src/renderer/renderer.ts` | `window.setTimeout` |
+| `read-chat-layout.test.ts` has an accepted-parts table and a malformed table | `grep -n 'it.each' src/plugins/chat/page/read-chat-layout.test.ts` | two tables |
 
 ## Docs written ahead
 
@@ -54,6 +62,11 @@ exception; Primitives: the plain collapsible; Surfaces, Chat: the activity line;
 § Activity line; Layouts: the `activity` part and `collapsibleRow`; Plans: plan E), `docs/features/layouts/design.md`
 (the chat adopter row and the `Space z l c` preview row), `AGENTS.md` (§ Architecture, the chat layout paragraph),
 `docs/features/ui-design/design.md` (Mocha's prose size).
+
+Commit `fc51bc8` (on `main`), the timer:
+`docs/features/agent-chat/design.md` (Vocabulary: `at` on a chat entry; § Activity line: the run's time;
+§ Layouts: the part's time fields), `DESIGN.md` (Surfaces, Chat: the time on the line), `AGENTS.md` (§ Architecture,
+the agent harness paragraph: `at`), `docs/features/followups.md` (the per-step duration item).
 
 ## Mandatory Reads
 
@@ -79,7 +92,7 @@ exception; Primitives: the plain collapsible; Surfaces, Chat: the activity line;
         │
         ├─ entry row ─► li.chat-entry-slot ─► entry builder (user, assistant, permission, result, notice)
         └─ run row   ─► li.chat-entry-slot.chat-activity-slot ─► layout part `activity`
-                          (input: steps, current, live, open; kit: BaseKit; click toggles open)
+                          (input: steps, current, live, open, startedAt, endedAt, now; kit: BaseKit; click toggles open; a 1 s page timer updates only the live run's now)
                         then one li.chat-entry-slot.chat-step-slot per step, `hidden` while the run is closed
                           ─► entry builder tool / thinking / raw ─► kit.collapsibleRow (plain one-line row)
 
@@ -136,13 +149,25 @@ exception; Primitives: the plain collapsible; Surfaces, Chat: the activity line;
 - **Prose `h3`**: both `text-14` uses in `markdown.css` (the body and `.md-h3`) take `text-prose`, per the user's
   "in place of `text-14`"; `h1`/`h2` keep `text-16` and `h4`–`h6` keep `text-13` (design review).
 - **Plain step rows** draw through a new `ChatKit.collapsibleRow(parent, options)`, backed by a `plain` option on the
-  shared `createCollapsibleCard` (open question 1 in the hand-off; this plan takes its recommendation).
+  shared `createCollapsibleCard` (the user's answer, round 3).
 - **The preview stays idle** and shows finished activity lines only; the live look is captured from the fake's held
-  steps turn in the self-test (open question 2 in the hand-off; this plan takes its recommendation).
+  steps turn (the user's answer, round 3).
+- **Entry time** (the user's requirement): every `ChatEntry` carries `at`, epoch ms of its first appearance; a later
+  version of an entry keeps it. The Claude adapter stamps live entries through an injected `Clock`
+  (`entry-stamp.ts`); the decoder builds `EntryDraft`s without `at`. History reads each transcript line's
+  `timestamp`; a line without one takes the time of the entry before it. Chat main's own notices and permission
+  entries, the preview and the fake take their clock's time. Layout entry inputs do not gain `at` (design review).
+- **Run time** (the user's requirement): from the entry before the run (or the first step's `at` when the run opens
+  the list) to the entry after it; live, to now; a finished run that is the last row ends at its last step's `at`
+  (design review). `ActivityInput` carries `startedAt`, `endedAt` (null while live) and `now`; the built-in layout
+  formats `8s`, `42s`, `1m 05s`, `1h 02m` in tabular numerals, the time last on the line, after `· 1 failed`.
+- **The tick**: the entry list holds one pending page timer while a live run is drawn; each second it updates only the
+  live run's part with a new `now`. `now` is not part of the update comparison; every other input field is, each step
+  compared by identity (design review: an earlier parallel tool's result changes the summary).
 
 ### Out of scope
 
-- Per-step duration: tracked in `docs/features/followups.md` ("Per-tool-call duration on chat tool cards").
+- Per-step duration inside an open line: still a follow-up in `docs/features/followups.md`, now resting on `at`.
 - Grouping permission prompts, notices or the turn result into a run (the user's answer: they stay entries).
 - Any change to other views' focus ring.
 
@@ -150,35 +175,45 @@ exception; Primitives: the plain collapsible; Surfaces, Chat: the activity line;
 
 Modified:
 
+- `src/contracts/agent.ts`, `src/main/claude-code/{claude-code-harness,stream-decoder,tool-entries,transcripts}.ts`,
+  `src/main/main.ts`, `src/plugins/chat/main/{chat-sessions,start}.ts`, `src/plugins/chat/main/preview/{chat-preview,preview-session}.ts`,
+  their tests, and every test file whose `ChatEntry` literals gain `at` — 04 (`src/shared/fake-agent-harness.ts` and
+  its test also 08)
 - `src/config/theme-tokens.ts`, `src/config/themes/catppuccin-mocha.json`, `src/contracts/settings.ts`,
   `src/shared/theme-variables.ts`, `src/renderer/theme.ts`, `src/renderer/theme.test.ts`, `src/config/settings.ts`,
   `src/shared/page/markdown.css` — 01
-- `src/plugins/chat/page/chat.css` — 02, 05
+- `src/plugins/chat/page/chat.css` — 02, 06
 - `src/plugins/chat/page/chat-view.ts` — 02, 07
 - `src/shared/page/ui/card.ts`, `src/shared/page/ui/card.css`, `src/plugins/gallery/page/gallery-view.ts` — 03
-- `src/plugins/chat/page/entry-focus.ts`, `entry-focus.test.ts` — 04
+- `src/plugins/chat/page/entry-focus.ts`, `entry-focus.test.ts` — 05
 - `src/plugins/chat/layouts/layout.d.ts`, `src/plugins/chat/layouts/default/layout.js`, `layout.test.ts`,
-  `src/plugins/chat/page/read-chat-layout.ts`, `read-chat-layout.test.ts`, `chat-kit.ts`, `chat-kit.test.ts` — 05
-- `src/plugins/chat/page/entry-list.ts`, `entry-list.test.ts`, `chat-commands.ts`, `chat-commands.test.ts` — 06
-- `src/plugins/chat/page/chat-state.ts`, `chat-state.test.ts` — 07
+  `src/plugins/chat/page/read-chat-layout.ts`, `read-chat-layout.test.ts`, `chat-kit.ts`, `chat-kit.test.ts` — 06
+  (`layout.test.ts` and `chat-kit.test.ts` also 04)
+- `src/plugins/chat/page/entry-list.ts`, `entry-list.test.ts`, `chat-commands.ts`, `chat-commands.test.ts`,
+  `chat-state.ts`, `chat-state.test.ts`, `src/plugins/chat/page/start.ts` — 07 (the tests also 04)
 - `src/shared/fake-agent-harness.ts`, `src/shared/fake-agent-harness.test.ts`,
   `src/plugins/chat/main/selftest-script.ts` — 08
 
 Created:
 
-- `src/plugins/chat/page/activity-runs.ts` and `activity-runs.test.ts` — 04. Justification: the grouping and the
+- `src/main/claude-code/entry-stamp.ts` and `entry-stamp.test.ts` — 04. Justification: the first-arrival `at` per id is
+  a rule with its own test, apart from the process plumbing.
+- `src/plugins/chat/page/activity-runs.ts` and `activity-runs.test.ts` — 05. Justification: the grouping and the
   stop list are pure rules over entries with their own tests; inside `entry-list.ts` they would be reachable only
   through a fake DOM.
 
 Shared names (more than one task uses them):
 
-- `type StepEntry = Extract<ChatEntry, { kind: 'tool' | 'thinking' | 'raw' }>` — `activity-runs.ts` (04)
-- `type ListRow = { kind: 'entry'; entry: ChatEntry } | { kind: 'run'; runId: string; steps: StepEntry[]; live: boolean }`
-  — `activity-runs.ts` (04)
+- `ChatEntry.at: number` — `src/contracts/agent.ts` (04)
+- `type StepEntry = Extract<ChatEntry, { kind: 'tool' | 'thinking' | 'raw' }>` — `activity-runs.ts` (05)
+- `type ListRow = { kind: 'entry'; entry: ChatEntry } | { kind: 'run'; runId: string; steps: StepEntry[]; live: boolean; startedAt: number; endedAt: number | null }`
+  — `activity-runs.ts` (05)
 - `type ListStop = { kind: 'entry'; entry: ChatEntry } | { kind: 'activity'; runId: string; steps: readonly StepEntry[] }`
-  — `activity-runs.ts` (04)
-- `type StepInput = ToolInput | ThinkingInput | RawInput` and `interface ActivityInput` — `layout.d.ts` (05)
-- `ChatKit.collapsibleRow(parent: HTMLElement, options: CollapsibleCardOptions): CollapsibleCard` — `layout.d.ts` (05)
+  — `activity-runs.ts` (05)
+- `type StepInput = ToolInput | ThinkingInput | RawInput` and `interface ActivityInput { steps; current; live; open;
+  startedAt: number; endedAt: number | null; now: number }` — `layout.d.ts` (06)
+- `ChatKit.collapsibleRow(parent: HTMLElement, options: CollapsibleCardOptions): CollapsibleCard` — `layout.d.ts` (06)
+- `createFakeAgentHarness(clock: Clock)` — `src/shared/fake-agent-harness.ts` (04)
 - `FAKE_STEPS_TEXT = 'fake: steps'` — `src/shared/fake-agent-harness.ts` (08)
 
 Boundary rules:
@@ -197,17 +232,17 @@ Boundary rules:
 - [ ] [Prose size token and setting](01-prose-size.md)
 - [ ] [Chat focus outlines](02-chat-focus-outlines.md)
 - [ ] [Plain collapsible primitive](03-plain-collapsible.md)
-- [ ] [Runs model and focus on close](04-runs-model.md)
+- [ ] [Entries carry their time](04-entry-times.md)
 
 ### Wave 2
-- [ ] [Activity part, collapsibleRow and the built-in layout](05-activity-contract-and-layout.md) — after 02, 03
+- [ ] [Runs model, run times and focus on close](05-runs-model.md) — after 04
+- [ ] [Activity part, collapsibleRow and the built-in layout](06-activity-contract-and-layout.md) — after 02, 03, 04
 
 ### Wave 3
-- [ ] [Entry list draws activity lines, commands read stops](06-entry-list-runs.md) — after 04, 05
+- [ ] [Entry list draws activity lines; commands and the view wired to it](07-entry-list-and-wiring.md) — after 02, 05, 06
 
 ### Wave 4
-- [ ] [Chat view feeds the working flag](07-view-working.md) — after 02, 06
-- [ ] [Fake steps turn and self-test steps](08-fake-steps-and-selftest.md) — after 06
+- [ ] [Fake steps turn and self-test steps](08-fake-steps-and-selftest.md) — after 04, 07
 
 ### Wave 5
 - [ ] [Doc re-read](09-doc-re-read.md)
