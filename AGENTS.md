@@ -146,8 +146,13 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  every built-in default key, main.ts and page.ts the parts each root starts
   sessions/      manifest.ts, contract.ts, main/ (the session list — rows, the selected session, tool routing — relay,
                  endpoint files, MCP adapter → the only @modelcontextprotocol import), page/ (Sessions mode: the
-                 sidebar and each session's tabs, and the layout preview rows), layouts/ (the sessions Layout
-                 contract and the built-in `default` layout)
+                 sidebar and each session's tabs, the row parts other plugins add, and the layout preview rows),
+                 layouts/ (the sessions Layout contract and the built-in `default` layout)
+  agents/        manifest.ts, contract.ts, roster.ts (the pure reducer folding agent events into a session's roster),
+                 main/ (hears `chat.agentEvent`, keeps each session's roster, appends each event to
+                 `logs/<host session id>.jsonl` in its plugin data, the layout preview), page/ (the running subagent
+                 lines under each session row, through sessions' `addRowPart`), layouts/ (the agents Layout contract
+                 and the built-in `default` layout); `docs/features/agent-tower/design.md`
   forms/         manifest.ts, contract.ts, main/ (the round form type, its MCP tools, the preview
                  round), page/ (the Form tab), layouts/ (the Layout contract and the built-in `default` layout)
   primer/        manifest.ts, contract.ts, main/ (the feature primer form type, its MCP tools, fixtures,
@@ -251,6 +256,9 @@ round; primer: an open primer), since main, not the page, decides.
   `sessions.sessionRemoved` tells each plugin to forget the session; the user moves between tabs with `Option+o` /
   `Option+i` and between sessions with `Option+Shift+o` / `Option+Shift+i`. A tab names its Codicon (`icon`), and
   the tab bar draws it with the title as its tooltip.
+- **A row part** is what a plugin draws under every session row in the side bar, through the `sessions` page export
+  `addRowPart`, the same shape as forms' `addCardPart`: sessions hands each row's part a wrapper and the session id,
+  and the part draws through its own plugin's layout. The agents plugin's subagent lines are one.
 - **A chat pane** is one pane of Sessions mode's pane tree (`src/shared/page/pane-tree/`, the sessions plugin its
   owner): it shows one whole session, tab bar included, and a session shows in at most one pane. The side bar drives
   the focused pane, and the visible tab, whose `shown` sets the key scope and whose `isVisible` reads true, is the
@@ -400,6 +408,12 @@ round; primer: an open primer), since main, not the page, decides.
   `src/main/claude-code/transcripts.ts`. That format is undocumented and was measured on the installed CLI, so a
   resume that lists nothing or draws raw entries starts with `transcripts.ts` and a fresh look at a transcript's line
   shapes.
+- **An agent event** — a subagent spawned or finished, a tool call, context usage, a compaction, a user message — is
+  the harness-neutral record (`AgentEvent` in `src/contracts/agent.ts`) the adapter sends through
+  `AgentProcessEvents.agentEvent` beside the chat entries, naming its agent (`main` or a subagent's id). Chat main
+  forwards each owned session's as `chat.agentEvent`; the agents plugin and the Agent Tower read only these, never a
+  harness's JSON (`docs/features/agent-tower/design.md`). A new kind of event is a new member of the union, added
+  when a producer emits it.
 - **A session control** — Claude's permission mode, effort and model — is declared by the harness adapter (id,
   label, choices, current value), and the Chat tab draws whatever its adapter declares. A control gets its key as a
   command in chat's manifest (raw `m`, `e`, `o` in the chat scope; `<Leader>cm`, `<Leader>ce`, `<Leader>co` in the

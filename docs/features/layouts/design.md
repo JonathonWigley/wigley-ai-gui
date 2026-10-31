@@ -85,6 +85,7 @@ them. The app-wide look of the primitives stays in themes.
 | `settings` | `settings.layout` | the section list, the setting, key, leader and advanced rows, the problem line, the picker rows |
 | `notes` | `notes.layout` | the note popup: fields, tags, images, target, session, actions, markup toolbar, the confirm and picker rows |
 | `sessions` | `sessions.layout` | the session rows in the side bar, each session's tab strip |
+| `agents` | `agents.layout` | the running subagent lines under each session row |
 | `gallery` | `gallery.layout` | each primitive's sample block |
 | `keys` | `keys.layout` | the help overlay, the which-key panel, the title bar's Keys button |
 
@@ -101,6 +102,7 @@ can be iterated in place. The sample sends nothing and raises no notification or
 | `Space z l p` | primer: a sample primer holding every field and need |
 | `Space z l c` | chat: a session of every entry kind, its steps grouped into finished activity lines |
 | `Space z l s` | sessions: rows in every state |
+| `Space z l a` | agents: a sample session with two running subagents |
 
 ## The primer's columns
 
