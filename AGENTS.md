@@ -468,11 +468,13 @@ round; primer: an open primer), since main, not the page, decides.
 - **A chat layout** draws each entry kind through a builder that takes `(parent, entry, kit)`, appends its element
   to `parent` and returns it (`src/plugins/chat/layouts/layout.d.ts`). `ChatKit` extends the shared base kit
   (`markdown`, `card`, `statusDot` with `setDotStatus`, `sectionHeader`, `keyHint` and the rest) with chat's parts:
-  `json`, `expander` (a collapsible card), `collapsibleCard`, `edgeCard` (a card with a status edge),
+  `json`, `expander` (a collapsible card), `collapsibleCard`, `collapsibleRow` (the plain one-line collapsible a
+  step row draws with), `edgeCard` (a card with a status edge),
   `permissionActions` (Allow once / Deny with their keys), and `images` (a user entry's thumbnails, which open the
   image viewer). Every part takes its parent first. Beside the entries, the layout draws the other Chat tab surfaces
-  through parts that take `(parent, input, kit)` and return a `PartView`: `composer`, `composerBar`, `attachments`,
-  `pickerRow`, `signIn`, `reasonBox`, `closeConfirm` and `imageViewer`, each with a kit that extends the base kit.
+  through parts that take `(parent, input, kit)` and return a `PartView`: `activity` (one run of the agent's steps,
+  `docs/features/agent-chat/design.md` § Activity line), `composer`, `composerBar`, `attachments`, `pickerRow`,
+  `signIn`, `reasonBox`, `closeConfirm` and `imageViewer`, each with a kit that extends the base kit.
   A user chat layout defines only the entry builders and the parts it changes: a kind or part it leaves out draws with
   `default`, with no toast. A user builder that throws draws with `default`; the entry toasts once per kind, naming what
   drew it: `default`, or a bare line when `default` throws too.

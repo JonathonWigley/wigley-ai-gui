@@ -7,9 +7,9 @@
 - **Flow** — a session from start to end, with a form swapping in and back.
 - **Agent harness seam** — the contract, the Claude adapter, the fake, chat entries, controls, images, accounts.
 - **Sessions and tabs** — owned sessions, joining the relay, take over and give back, the attention mark.
-- **Chat plugin** — the Chat tab, the start prompt, sign-in, app slash commands, images, permission cards, alerts, keys.
+- **Chat plugin** — the Chat tab, activity lines, the start prompt, sign-in, app slash commands, images, permission cards, alerts, keys.
 - **Layouts** — chat layouts on the core layout service and the page host.
-- **Plans** — what plans A, B and C each land.
+- **Plans** — what plans A to E each land.
 - **Out of scope** — follow-ups.
 
 ## Intent
@@ -29,6 +29,11 @@ interview on 2026-10-23; this file is the record of both.
   carries the raw harness events it was built from. Of Claude's stream events it keeps only a text or thinking block's
   `content_block_start`; every other stream event is left out, since the entry's start event or the final `assistant`
   event already holds what it carries.
+- **Step** — a `tool`, `thinking` or `raw` chat entry. A **run** is the steps between two other entries (user,
+  assistant, permission, notice, result): any other entry ends it. The **live run** is the run that is the last entry
+  while the session is working (`running` and activity `working`); every other run is finished.
+- **Activity line** — a run as the Chat tab draws it: one slot and one cursor stop, drawn by the chat layout's
+  `activity` part (§ Activity line).
 - **Session control** — a setting of a running session the harness adapter declares (id, label, choices, current
   value): Claude declares `mode` (permission mode), `effort` and `model`.
 - **Profile** — a named Claude config folder (`work` → `~/.claude`, `personal` → `~/.claude-personal`); it sets the
@@ -152,14 +157,32 @@ interview on 2026-10-23; this file is the record of both.
   reload redraws the chat whole (the dev server reloads twice at start).
 - **Chat tab**: the entries under a floating composer: a vim message box, the box's vim mode, each control's value
   as a chip, and send (changed by ui-design plan C). Enter in normal mode sends, Enter in insert mode adds a line, Cmd+Enter sends from any mode. `i` /
-  `a` focus the box, `j` / `k` move between entries, `Enter` expands a tool call, `G` jumps to the latest, Ctrl+C
-  interrupts. Tool calls show one compact line (tool name and a short input summary) that expands to the full input
-  and output. These keys act only on the Chat tab on screen and its session: on any other tab or mode they do
+  `a` focus the box, `j` / `k` move between entries, `Enter` opens or closes the focused entry or activity line, `G`
+  jumps to the latest, Ctrl+C interrupts. The agent's steps show as activity lines (§ Activity line). While the box
+  has focus no entry is marked and the box draws no focused frame; once it loses focus (Esc) the focused entry shows a
+  thin left bar (DESIGN.md § Keys and focus). These keys act only on the Chat tab on screen and its session: on any other tab or mode they do
   nothing, and the control pickers and the chat's dialogs close when another session's Chat tab shows, or when the
   shown session's process exits (the image viewer stays open then; the start prompt and the sign-in dialog, tied to
   no session, stay open). A resting session (§ Saved sessions) keys in the
   same `chat.chat` scope as a running one; interrupt and the control pickers log and do nothing until its process
   runs.
+- **Activity line**: the entry list groups each run into one slot, a cursor stop, drawn by the layout's `activity`
+  part.
+  - **Live run**: a header (a running dot, the current step's action such as `Bash · npm test`, and `· N steps`)
+    over a shortlist of the latest steps, the newest at the bottom and highlighted as current, the oldest dropping
+    off. The built-in layout shows 5 lines; that number is the layout's own, so a user layout changes it, and no
+    setting does.
+  - **Finished run**: one dim line, the step count and the tools used, such as `6 steps · Read 3 · Bash 2 · Edit`
+    (most used first, a single use named alone); a failed tool step adds `· 1 failed` in the error colour. No
+    duration: entries carry no timestamps.
+  - **Open**: Enter on the focused activity line, or a click on it, opens it, and again closes it. The open line keeps
+    its header and lists one plain row per step under it, each drawn by the `tool`, `thinking` or `raw` entry builder;
+    each step row is a cursor stop, `j` / `k` walk into them, and Enter on a step row opens its input and result in
+    place. Closing the line makes it one stop again; a cursor on one of its steps moves to the line. A line stays open
+    or closed by itself across a layout reload, a history read and the live run finishing.
+  - Permission prompts, notices and the turn result stay entries of their own, and each ends the run before it.
+  - The key log lines are `focused activity line`, `expanded activity line` and `collapsed activity line`; a step row
+    logs as its entry kind does (`focused tool entry`).
 - **Saved sessions**: every session chat runs — started, resumed, or launched by another plugin — is saved in
   `open-sessions.json` in chat's plugin data: its host session id, folder and profile, in row order, with the
   selected row (null when it names no row chat still holds), whether a message was ever sent, and whether a turn was
@@ -268,9 +291,13 @@ interview on 2026-10-23; this file is the record of both.
   layouts are folders in `~/.config/wigley-ai-gui/layouts/chat/`, reloaded on save; an entry that throws is rolled
   back and drawn with the default layout. The `chat.layout` setting names the user's layout.
 - Besides the entries, a layout draws the Chat tab's other surfaces through parts that take `(parent, input, kit)`
-  and return a `PartView`: `composer`, `composerBar`, `attachments` (the strip of attached images), `pickerRow` (a row
-  of the start prompt and the pickers), `signIn`, `reasonBox` (the deny reason), `closeConfirm` (the end-session
-  confirm) and `imageViewer`. Each part's kit extends the base kit with the app parts it places (the editor frame, the
+  and return a `PartView`: `activity` (a run of steps, § Activity line), `composer`, `composerBar`, `attachments` (the
+  strip of attached images), `pickerRow` (a row of the start prompt and the pickers), `signIn`, `reasonBox` (the deny
+  reason), `closeConfirm` (the end-session confirm) and `imageViewer`. The `activity` part's input is the run's steps
+  (each the step's entry input), the current step (the last), whether the run is live and whether it is open; while
+  open it draws only its header, and the app places the step rows under it. The built-in step builders draw a plain
+  one-line row through the kit's `collapsibleRow`; a user layout that redraws `tool`, `thinking` or `raw` draws the
+  open line's rows. Each part's kit extends the base kit with the app parts it places (the editor frame, the
   dialog actions). The app keeps the composer's box and its draft, the dialogs' frames and titles, the keys and the
   focus; a part a user layout leaves out draws with `default`.
 
@@ -286,6 +313,8 @@ interview on 2026-10-23; this file is the record of both.
 - **Plan D — slash completion** (`plan-slash-completion/`, settled in a four-round interview on 2026-10-23): the
   command list from `initialize` at start, alias and fuzzy matching on the fzf matcher (shared with every list picker
   and the Settings, keymap and Docs filters), descriptions behind a setting, and the completion row hook.
+- **Plan E — activity line** (`plan-activity-line/`, settled in an interview on 2026-10-30): the activity line, the
+  chat focus outlines, and the `text-prose` token with its `fonts.proseSize` setting.
 
 ## Out of scope
 

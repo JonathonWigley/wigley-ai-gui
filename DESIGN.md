@@ -144,20 +144,22 @@ means something.
   inside a Kbd (the label beside a Kbd stays in the UI font). A label is never mono for
   decoration. `font-mono` is JetBrains Mono from `@fontsource/jetbrains-mono`, weights 400, 500 and
   600, bundled into the app.
-- **Scale:** `text-11`, `text-12`, `text-13`, `text-14` (prose), `text-16`, `text-20`. Nothing
-  larger inside the app. `text-ui` is the UI base size and `text-mono` the code size; the UI
-  default and code read these two, and `text-13` stays a fixed step of the scale.
+- **Scale:** `text-11`, `text-12`, `text-13`, `text-14`, `text-16`, `text-20`. Nothing
+  larger inside the app. `text-ui` is the UI base size, `text-mono` the code size and `text-prose`
+  the prose size (14px in every theme); the UI default, code and prose read these three, and
+  `text-13` and `text-14` stay fixed steps of the scale.
 - **Weights:** `weight-regular` (400), `weight-medium` (500) for labels and active items,
   `weight-semibold` (600) for headings. Nothing heavier.
 - **Sentence case everywhere.** A section header is `text-12`, semibold, `fg-secondary`. Capitals
   shout, and a calm tool does not shout.
-- **Prose** (rendered markdown wherever it renders: chat, docs, forms cards): `text-14`,
-  `leading-prose`, at most `prose-measure` wide. No surface overrides it.
+- **Prose** (rendered markdown wherever it renders: chat, docs, forms cards): `text-prose`,
+  `leading-prose`, at most `prose-measure` wide. A markdown `h3` is `text-prose` too. No surface
+  overrides it.
 - **Numbers that change** (counts, timers, costs, line numbers) use tabular numerals, so they do
   not jitter.
 - The user's `fonts` settings, when set, override the theme's font families and base sizes:
-  `fonts.ui` sets `font-ui`, `fonts.mono` `font-mono`, `fonts.uiSize` `text-ui` and
-  `fonts.monoSize` `text-mono`.
+  `fonts.ui` sets `font-ui`, `fonts.mono` `font-mono`, `fonts.uiSize` `text-ui`,
+  `fonts.monoSize` `text-mono` and `fonts.proseSize` `text-prose`.
 - **The active-line band** (`editor-active-line`) shows only in the docs document editor and only
   while it has focus. A text box never draws it; a box's focused frame marks it.
 
@@ -186,7 +188,7 @@ means something.
   closing), `duration-slow` (panels, sheets, the composer).
 - **Easing:** `ease-out` entering, `ease-in` leaving. No bounce and no overshoot.
 - **What moves:** motion answers a user action or reports agent state (the streaming indicator, a
-  tool card settling from running to done). Content does not animate in, and nothing moves on its
+  tool step settling from running to done). Content does not animate in, and nothing moves on its
   own.
 - **Reduced motion:** under `prefers-reduced-motion` `duration-fast`, `duration-base` and
   `duration-slow` all take `duration-instant` (`1ms` in Mocha) and the streaming indicator is
@@ -209,6 +211,10 @@ The keyboard is first; the mouse works everywhere.
 - **The keyboard cursor always shows:** the selected row, the focused box, the focused card, each
   drawn with the one focus ring (`focus-border`, 1px, inside: an inset ring on a row, the border
   colour on a card or an input frame). The user must always see where the keys go.
+  - **Chat is the one exception.** While the chat's message box has focus, the caret is the
+    cursor: the box draws no focused frame and no entry is marked. Once the box loses focus (Esc),
+    the focused entry shows a thin left bar (`indicator-width`, `focus-border`) in place of the
+    ring.
 - **Buttons never take focus**, so Enter and Space stay with the page keys; a click runs them.
 - **Key hints** draw through the Kbd primitive, which prints chords through `formatChord` for the
   platform. On macOS the modifiers and Return, Tab, Esc, Backspace, Delete and the arrows print
@@ -284,7 +290,8 @@ The primitives, each a builder in `src/shared/page/ui/`:
   `⌥⇧H ◂ ▸ ⌥⇧L`, centred on it and taking no space, while the pointer is over it, while a drag runs
   and for a moment after each keyboard resize. A view that drops a split calls its `dispose`.
 - **Card** (`card`, with an `attention` or `error` edge) and the collapsible card
-  (`createCollapsibleCard`).
+  (`createCollapsibleCard`), whose `plain` variant is a one-line row with no card chrome that opens
+  its body in place under it.
 - **FloatingPanel** (`floatingPanel`, opened with `openFloatingPanel`): the L3 glass panel.
 - **Dialog** (`createDialog`): a modal over the `scrim`.
 - **EmptyState** (`emptyState`): one line saying what to do, then the key that does it.
@@ -339,8 +346,15 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   comment) or the feature card while the tasks column has focus, an item card (the item, its ToggleMark and its
   comment box) while the items column has focus. A review pane of every answer opens before it sends.
 - **Chat:** user turns are a `card-background` block, not a bubble. Assistant prose is markdown on
-  the sheet. Tool calls are collapsible cards: a mono head with the tool and its summary, a status
-  dot (running, success, error), built closed; a result changes only the dot. Permission prompts are cards with a
+  the sheet. The agent's steps (tool calls, thinking, raw events) between two other entries form
+  one **activity line**. While the session works on it, the line is a header (a running StatusDot,
+  the current action in mono, such as `Bash · npm test`, and `· N steps`) over a shortlist of the
+  latest five steps, the newest at the bottom in `fg` and the older ones in `fg-tertiary`. Once
+  finished it is one dim `fg-tertiary` line: the step count and the tools used, such as
+  `6 steps · Read 3 · Bash 2 · Edit`, and `· 1 failed` in `status-error` when a step failed. Opened,
+  it lists one plain row per step (the plain collapsible: a tool's status dot and its mono
+  summary, `Thinking`, `Raw event`), and a step row opens its input and result in place under it,
+  with no card. Permission prompts are cards with a
   `status-attention` edge and plain verbs (Allow once, Deny). The composer floats (L3,
   `radius-xl`, inset `space-3`) with the transcript scrolling beneath it, and holds the strip of attached images'
   thumbnails above the box, the box, the session controls as chips, and send. A user turn shows its sent images as

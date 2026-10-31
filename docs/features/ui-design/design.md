@@ -80,7 +80,7 @@ wigley-ai-marketplace, tailored to read a project's `DESIGN.md`. These plans do 
 - **Colour scheme** is the theme's `colorScheme` (`dark` for Mocha), so a Latte theme later needs no
   model change.
 - **Font settings win over the theme** when set: `fonts` in `settings.json` are optional overrides of
-  the theme's font family and base-size tokens. Mocha gives UI 13px and mono 13px.
+  the theme's font family and base-size tokens. Mocha gives UI 13px, mono 13px and prose 14px.
 - **Code colours** are the Catppuccin Mocha highlight style (the user's choice over theme-driven
   syntax tokens), in the editors and in rendered markdown code blocks. `@catppuccin/codemirror`
   exports only whole editor extensions, which would also override the editor's token-driven

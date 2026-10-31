@@ -78,7 +78,7 @@ them. The app-wide look of the primitives stays in themes.
 | --- | --- | --- |
 | `shell` | `shell.layout` | the title bar's context, dev tag and config problems; each mode's activity bar item; the four chrome frames take the layout's CSS |
 | `forms` | `forms.layout` | question, finding and notice cards; head, rail and review panes |
-| `chat` | `chat.layout` | chat entries; the composer and its bar, the attachments, the picker rows (start prompt and pickers), the sign-in, deny-reason and end-session dialogs, the image viewer |
+| `chat` | `chat.layout` | chat entries; the activity line (a run of the agent's steps); the composer and its bar, the attachments, the picker rows (start prompt and pickers), the sign-in, deny-reason and end-session dialogs, the image viewer |
 | `primer` | `primer.layout` | feature, task and item cards; tasks, items and review panes |
 | `docs` | `docs.layout` | the tree and its rows, the rendered doc, its header, disk banner and editor frame, the box and confirm dialogs, the create dialog's completion and picker rows |
 | `backlog` | `backlog.layout` | the repo and home side bar, the follow-up list and its rows, the detail and editor panes, plans and features, the picker rows and the confirm body |
@@ -99,7 +99,7 @@ can be iterated in place. The sample sends nothing and raises no notification or
 | --- | --- |
 | `Space z l o` | forms: the preview round, then each saved real round |
 | `Space z l p` | primer: a sample primer holding every field and need |
-| `Space z l c` | chat: a session of every entry kind |
+| `Space z l c` | chat: a session of every entry kind, its steps grouped into finished activity lines |
 | `Space z l s` | sessions: rows in every state |
 
 ## The primer's columns
