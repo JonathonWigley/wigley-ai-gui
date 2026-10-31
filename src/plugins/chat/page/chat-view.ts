@@ -450,10 +450,12 @@ function createTab(
       changed: () => undefined,
       focused: () => {
         tab.isBoxFocused = true;
+        tab.root.classList.add('is-box-focused');
         drawBar(tab);
       },
       blurred: () => {
         tab.isBoxFocused = false;
+        tab.root.classList.remove('is-box-focused');
         drawBar(tab);
       },
       modeChanged: (mode) => {

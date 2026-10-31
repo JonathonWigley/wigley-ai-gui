@@ -21,14 +21,19 @@
   );
 }
 
+/* The chat's focus exception: the focused entry draws a left bar, not the
+   ring, and while the box has focus no entry and no box frame is marked. */
 .chat-entry-slot {
   margin: var(--wg-space-1) 0;
   padding: var(--wg-space-1) var(--wg-space-2);
 }
 
 .chat-entry-slot.is-cursor {
-  border-radius: var(--wg-radius-md);
-  box-shadow: inset 0 0 0 1px var(--wg-focus-border);
+  box-shadow: inset var(--wg-indicator-width) 0 0 var(--wg-focus-border);
+}
+
+.chat-tab.is-box-focused .chat-entry-slot.is-cursor {
+  box-shadow: none;
 }
 
 @media (max-width: 800px) {
@@ -170,6 +175,10 @@
 .chat-box {
   min-height: 0;
   overflow-y: auto;
+}
+
+.ui-input.chat-box:focus-within {
+  border-color: var(--wg-input-border);
 }
 
 .chat-composer-bar {
