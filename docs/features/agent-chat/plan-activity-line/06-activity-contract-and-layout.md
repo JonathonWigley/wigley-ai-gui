@@ -1,6 +1,6 @@
 # 06 — Activity part, collapsibleRow and the built-in layout
 
-Status: not started
+Status: in progress
 Type: Batch
 Wave: 2 · Depends on: 02, 03, 04
 Plan: [plan.md](plan.md)

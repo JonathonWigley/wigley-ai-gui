@@ -1,6 +1,6 @@
 # 05 — Runs model, run times and focus on close
 
-Status: not started
+Status: in progress
 Type: Batch
 Wave: 2 · Depends on: 04
 Plan: [plan.md](plan.md)

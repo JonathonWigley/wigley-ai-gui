@@ -1,6 +1,6 @@
 # 02 — Chat focus outlines
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -21,3 +21,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 7255717 · proof: diff read matches Produces and Decisions; lint passes; tsc clean in group files · concerns: is-box-focused follows the same focused/blurred callbacks as isBoxFocused, so a redraw that destroys the editor without blurred would leave both set

@@ -229,10 +229,10 @@ Boundary rules:
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Prose size token and setting](01-prose-size.md)
-- [ ] [Chat focus outlines](02-chat-focus-outlines.md)
-- [ ] [Plain collapsible primitive](03-plain-collapsible.md)
-- [ ] [Entries carry their time](04-entry-times.md)
+- [x] [Prose size token and setting](01-prose-size.md)
+- [x] [Chat focus outlines](02-chat-focus-outlines.md)
+- [x] [Plain collapsible primitive](03-plain-collapsible.md)
+- [x] [Entries carry their time](04-entry-times.md)
 
 ### Wave 2
 - [ ] [Runs model, run times and focus on close](05-runs-model.md) — after 04
@@ -252,10 +252,20 @@ Boundary rules:
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: e2dbd6596bdd144fcd436c37ef19db140c258f9a
 
 ### Groups
+- 01 · faa0754 · diff read matches every Produces; lint and theme.test.ts pass; tsc clean in group files (repo-wide errors only from 04's in-progress at field) · concerns: none beyond the in-progress 04 typecheck noise
+- 02 · 7255717 · diff read matches Produces and Decisions; lint passes; tsc clean in group files · concerns: is-box-focused follows the same focused/blurred callbacks as isBoxFocused, so a redraw that destroys the editor without blurred would leave both set
+- 03 · cff8715 · diff read matches Produces; lint passes; tsc clean in group files · concerns: body left edge lines up past the chevron, not past a leading status dot; the live look in 10 settles it
+- 04 · 9ee97fa · diff read: every Produces present (at on every variant, EntryDraft + createEntryStamp, clock deps on harness/sessions/preview, createFakeAgentHarness(clock)); tsc and lint clean · concerns: stamp spreads use an as ChatEntry cast (TS cannot see Omit-union + at as ChatEntry)
 ### Contract changes
+- pairToolResult: (Map<string, ToolEntry>) → ToolEntry → generic <E extends ToolEntry>(Map<string, E>) → E, and ToolEntry is now Extract<EntryDraft, {kind:'tool'}> · why: the decoder pairs drafts and transcripts pairs stamped entries · consumers: none outside 04 · group 04
 ### Rulings
+- the chat-exception comment sits above .chat-entry-slot and .ui-input.chat-box:focus-within beside .chat-box in the composer section — placement only — a wording tweak · group 02
+- plain body keeps the given padding and adds padding-left calc(space-2*2 + icon-size) to meet the align-with-summary clause — the spec gave both — with a leading dot the body sits under the dot, not the text · group 03
+- the fake harness keeps its own id-to-first-at map and EntryDraft alias, since check-layers forbids src/shared importing src/main — two copies of a small rule; moving entry-stamp to src/shared would fix it · group 04
+- transcript fallback reads the entry before as the last entry pushed, so a timestamped line that yields no entry does not carry its time forward — a slightly early at after a dropped line · group 04
+- start.test and chat-preview.test assert at: 5000 on their notice, proving the clock reaches it — none · group 04
 ### Review rounds
 ### Test gate

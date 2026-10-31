@@ -1,6 +1,6 @@
 # 04 — Entries carry their time
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -32,3 +32,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 9ee97fa · proof: diff read: every Produces present (at on every variant, EntryDraft + createEntryStamp, clock deps on harness/sessions/preview, createFakeAgentHarness(clock)); tsc and lint clean · concerns: stamp spreads use an as ChatEntry cast (TS cannot see Omit-union + at as ChatEntry)

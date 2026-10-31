@@ -1,6 +1,6 @@
 # 03 — Plain collapsible primitive
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -19,3 +19,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit cff8715 · proof: diff read matches Produces; lint passes; tsc clean in group files · concerns: body left edge lines up past the chevron, not past a leading status dot; the live look in 10 settles it

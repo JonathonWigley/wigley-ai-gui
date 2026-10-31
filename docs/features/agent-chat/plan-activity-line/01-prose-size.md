@@ -1,6 +1,6 @@
 # 01 — Prose size token and setting
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -21,3 +21,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit faa0754 · proof: diff read matches every Produces; lint and theme.test.ts pass; tsc clean in group files (repo-wide errors only from 04's in-progress at field) · concerns: none beyond the in-progress 04 typecheck noise
