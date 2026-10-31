@@ -160,8 +160,9 @@ interview on 2026-10-23; this file is the record of both.
   reload redraws the chat whole (the dev server reloads twice at start).
 - **Chat tab**: the entries under a floating composer: a vim message box, the box's vim mode, each control's value
   as a chip, and send (changed by ui-design plan C). Enter in normal mode sends, Enter in insert mode adds a line, Cmd+Enter sends from any mode. `i` /
-  `a` focus the box, `j` / `k` move between entries, `Enter` opens or closes the focused entry or activity line, `G`
-  jumps to the latest, Ctrl+C interrupts. The agent's steps show as activity lines (§ Activity line). While the box
+  `a` focus the box, `j` / `k` move between entries, `Enter` opens or closes the focused entry or activity line and pulls
+  back a focused pending message, `G` jumps to the latest, Ctrl+C interrupts and pulls back every pending message
+  (§ Pending messages). The agent's steps show as activity lines (§ Activity line). While the box
   has focus no entry is marked and the box draws no focused frame; once it loses focus (Esc) the focused entry shows a
   thin left bar (DESIGN.md § Keys and focus). These keys act only on the Chat tab on screen and its session: on any other tab or mode they do
   nothing, and the control pickers and the chat's dialogs close when another session's Chat tab shows, or when the
@@ -192,6 +193,26 @@ interview on 2026-10-23; this file is the record of both.
   - Permission prompts, notices and the turn result stay entries of their own, and each ends the run before it.
   - The key log lines are `focused activity line`, `expanded activity line` and `collapsed activity line`; a step row
     logs as its entry kind does (`focused tool entry`).
+- **Pending messages**: a message sent while the session's turn runs (activity `working` or `waiting`) is not
+  written to the agent. Chat main holds it in the session's queue (`ChatSessionState.queued`, oldest first, each with
+  an id of its own; kept across a page reload, dropped on quit), and the Chat tab shows it as a pending row after the
+  last entry, drawn by the layout's `queuedMessage` part: dim, labelled `pending`. The code names these **queued**
+  messages, after claude-stream.md § Queued messages, since `pending` already names chat main's permission calls and a
+  restored session's unread history.
+  - **Sending**: when the harness reports the turn ended (activity `idle`), chat main writes the oldest queued message
+    to the agent, and it joins the transcript as its user entry then, at the place it really ran. Each queued message
+    runs as its own turn, in the order sent. The session keeps showing `working` until the queue is empty, so the
+    turn-finished alert fires once, after the last one.
+  - **Pulling back**: a pending row is a cursor stop after the last entry: `j` / `k` reach it, and Enter or a click on
+    it pulls it back; `<Leader>cp` in the box pulls back the newest. Pulling back takes the message out of the queue
+    and puts it into the box the way a refused message goes back: its text on its own line above anything typed, its
+    images ahead of any attached. A pull-back for a message already written to the agent does nothing and logs
+    `queued message <id> already sent`.
+  - **Interrupt and exit**: Ctrl+C interrupts the running turn and pulls back every queued message, oldest at the top
+    of the box. A process that exits pulls them all back the same way, so nothing is written to a process started
+    later without the user sending it again.
+  - App slash commands run at once, working or not, and never queue; the agent's slash commands queue like any
+    message.
 - **Saved sessions**: every session chat runs — started, resumed, or launched by another plugin — is saved in
   `open-sessions.json` in chat's plugin data: its host session id, folder and profile, in row order, with the
   selected row (null when it names no row chat still holds), whether a message was ever sent, and whether a turn was
@@ -300,7 +321,8 @@ interview on 2026-10-23; this file is the record of both.
   layouts are folders in `~/.config/wigley-ai-gui/layouts/chat/`, reloaded on save; an entry that throws is rolled
   back and drawn with the default layout. The `chat.layout` setting names the user's layout.
 - Besides the entries, a layout draws the Chat tab's other surfaces through parts that take `(parent, input, kit)`
-  and return a `PartView`: `activity` (a run of steps, § Activity line), `composer`, `composerBar`, `attachments` (the
+  and return a `PartView`: `activity` (a run of steps, § Activity line), `queuedMessage` (one pending message, § Pending
+  messages: its text and how many images it carries), `composer`, `composerBar`, `attachments` (the
   strip of attached images), `pickerRow` (a row of the start prompt and the pickers), `signIn`, `reasonBox` (the deny
   reason), `closeConfirm` (the end-session confirm) and `imageViewer`. The `activity` part's input is the run's steps
   (each the step's entry input), the current step (the last), whether the run is live, whether it is open, and its times:
