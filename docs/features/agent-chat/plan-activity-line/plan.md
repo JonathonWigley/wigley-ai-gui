@@ -239,7 +239,7 @@ Boundary rules:
 - [x] [Activity part, collapsibleRow and the built-in layout](06-activity-contract-and-layout.md) — after 02, 03, 04
 
 ### Wave 3
-- [ ] [Entry list draws activity lines; commands and the view wired to it](07-entry-list-and-wiring.md) — after 02, 05, 06
+- [x] [Entry list draws activity lines; commands and the view wired to it](07-entry-list-and-wiring.md) — after 02, 05, 06
 
 ### Wave 4
 - [ ] [Fake steps turn and self-test steps](08-fake-steps-and-selftest.md) — after 04, 07
@@ -261,6 +261,7 @@ Review base: e2dbd6596bdd144fcd436c37ef19db140c258f9a
 - 04 · 9ee97fa · diff read: every Produces present (at on every variant, EntryDraft + createEntryStamp, clock deps on harness/sessions/preview, createFakeAgentHarness(clock)); tsc and lint clean · concerns: stamp spreads use an as ChatEntry cast (TS cannot see Omit-union + at as ChatEntry)
 - 05 · e49d51c · diff read: every Produces present in activity-runs.ts and entry-focus.ts; typecheck clean; 34 tests pass per worker (gate reruns) · concerns: lint's oxfmt flags DESIGN.md and docs/keymap.md, from a peer session's commits, not this run
 - 06 · 21d87f4 · diff read: every Produces present (StepInput, ActivityInput, collapsibleRow, ChatLayout.activity, PART_SET activity, kit collapsibleRow, layout.js activity and steps on collapsibleRow); typecheck clean · concerns: .chat-step-slot overrides .chat-entry-slot margin/padding only by source order, so it holds only while step slots also carry chat-entry-slot
+- 07 · 928abc4 · diff read: every Produces present (EntryListDeps layouts/timers/clock, setWorking, move/first/focused ListStop, toggleFocused {stop,result}, isWorking, ChatViewDeps timers/clock); typecheck clean; worker ran the 3 named test files · concerns: opening the last run while the focus follows recomputes via focusAfterChange and jumps the cursor to the run's last step, so a second Enter toggles that step, not the run; the START_FOCUS case of GIVEN 1 is unreachable through EntryList (focus is never null with entries)
 ### Contract changes
 - pairToolResult: (Map<string, ToolEntry>) → ToolEntry → generic <E extends ToolEntry>(Map<string, E>) → E, and ToolEntry is now Extract<EntryDraft, {kind:'tool'}> · why: the decoder pairs drafts and transcripts pairs stamped entries · consumers: none outside 04 · group 04
 - layout.d.ts re-export: export type { DotStatus } → export type { BaseKit, DotStatus } · why: layout.js imports types only from ../layout and the activity part's JSDoc names BaseKit · consumers: none beyond 06 · group 06
@@ -275,5 +276,8 @@ Review base: e2dbd6596bdd144fcd436c37ef19db140c258f9a
 - summary line is spans (chat-activity-steps, -failed, -time) in a flex row with a space-1 gap — the spans need separation — copied text loses the spaces · group 06
 - renamed thinking_expanderBodyRefilledInPlace and raw_expanderShowsTheEvents to thinking_rowBodyRefilledInPlace and raw_rowShowsTheEvents — names fit the code — a gate filter on old names finds nothing · group 06
 - a step both current and failed shows status-error (is-failed after is-current) — none · group 06
+- a click on the run slot runs the same toggle as Enter, focusAfterClose included (GIVEN 3 needs it); it does not put the cursor on the clicked line — none · group 07
+- a bare-line run slot redraws on a recompute where the run changed but not on a tick, so a broken default does not log every second — none · group 07
+- put never removes a run slot (entries only append or replace same-kind); rebuild disposes and redraws every run slot — a stale slot if that invariant ever breaks · group 07
 ### Review rounds
 ### Test gate

@@ -1,6 +1,6 @@
 # 07 — Entry list draws activity lines; commands and the view wired to it
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 3 · Depends on: 02, 05, 06
 Plan: [plan.md](plan.md)
@@ -52,3 +52,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 928abc4 · proof: diff read: every Produces present (EntryListDeps layouts/timers/clock, setWorking, move/first/focused ListStop, toggleFocused {stop,result}, isWorking, ChatViewDeps timers/clock); typecheck clean; worker ran the 3 named test files · concerns: opening the last run while the focus follows recomputes via focusAfterChange and jumps the cursor to the run's last step, so a second Enter toggles that step, not the run; the START_FOCUS case of GIVEN 1 is unreachable through EntryList (focus is never null with entries)

@@ -1,6 +1,6 @@
 # 08 — Fake steps turn and self-test steps
 
-Status: not started
+Status: in progress
 Type: Batch
 Wave: 4 · Depends on: 04, 07
 Plan: [plan.md](plan.md)
