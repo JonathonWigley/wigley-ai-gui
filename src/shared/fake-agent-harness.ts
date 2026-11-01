@@ -24,6 +24,9 @@ import type { Clock } from '../contracts/ambient';
 export const FAKE_HOLD_TEXT = 'fake: hold';
 // A send of this text runs one tool before the reply.
 export const FAKE_TOOL_TEXT = 'fake: tool';
+// A send of this text runs six finished tools, one failed, and a thought, then
+// stays open as `FAKE_HOLD_TEXT`'s turn does.
+export const FAKE_STEPS_TEXT = 'fake: steps';
 // A send of this text ends the process on its own, as a CLI that exits.
 export const FAKE_END_TEXT = 'fake: end';
 // The link every `logIn` reports, and the one code that finishes it.
@@ -218,6 +221,51 @@ function emitToolTurn(
   emitTurnEnd(events, emitEntry, turn);
 }
 
+// The tools `FAKE_STEPS_TEXT`'s turn runs, in order, each with its result.
+const FAKE_STEP_TOOLS = [
+  { name: 'Read', input: { file_path: 'src/app.ts' }, summary: 'src/app.ts' },
+  { name: 'Read', input: { file_path: 'src/view.ts' }, summary: 'src/view.ts' },
+  {
+    name: 'Read',
+    input: { file_path: 'src/state.ts' },
+    summary: 'src/state.ts',
+  },
+  {
+    name: 'Bash',
+    input: { command: 'false' },
+    summary: 'false',
+    result: { text: 'exit code 1', isError: true },
+  },
+  { name: 'Edit', input: { file_path: 'src/app.ts' }, summary: 'src/app.ts' },
+  { name: 'Bash', input: { command: 'npm test' }, summary: 'npm test' },
+];
+
+// The steps of turn `turn`, ids `step-<turn>-<n>`: the tools, then one
+// finished thought. The turn stays open.
+function emitStepsTurn(emitEntry: EmitEntry, turn: number) {
+  FAKE_STEP_TOOLS.forEach((tool, index) => {
+    const n = index + 1;
+    emitEntry({
+      kind: 'tool',
+      id: `step-${turn}-${n}`,
+      toolUseId: `fake-step-${turn}-${n}`,
+      name: tool.name,
+      input: tool.input,
+      summary: tool.summary,
+      result: tool.result ?? { text: 'ok', isError: false },
+      raw: [{ fake: 'step' }],
+    });
+  });
+  const thought = 'Checking the test output.';
+  emitEntry({
+    kind: 'thinking',
+    id: `step-${turn}-${FAKE_STEP_TOOLS.length + 1}`,
+    text: thought,
+    streaming: false,
+    raw: [{ fake: 'thinking', text: thought }],
+  });
+}
+
 function emitEchoTurn(
   events: AgentProcessEvents,
   emitEntry: EmitEntry,
@@ -391,13 +439,16 @@ export function createFakeAgentHarness(clock: Clock): FakeAgentHarness {
           return;
         }
         const isHold = text === FAKE_HOLD_TEXT;
-        isTurnOpen = isHold;
+        const isSteps = text === FAKE_STEPS_TEXT;
+        isTurnOpen = isHold || isSteps;
         queueMicrotask(() => {
           emitUserEntry();
           if (isHold) {
             return;
           }
-          if (text === FAKE_TOOL_TEXT) {
+          if (isSteps) {
+            emitStepsTurn(emitEntry, sentTurn);
+          } else if (text === FAKE_TOOL_TEXT) {
             emitToolTurn(events, emitEntry, sentTurn);
           } else {
             emitEchoTurn(events, emitEntry, sentTurn, text);

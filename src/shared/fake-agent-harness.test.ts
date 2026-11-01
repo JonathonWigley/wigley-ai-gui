@@ -3,6 +3,7 @@ import type {
   AgentHarness,
   AgentProcessEvents,
   AgentStart,
+  ChatEntry,
   LogInEvents,
 } from '../contracts/agent';
 import {
@@ -13,6 +14,7 @@ import {
   FAKE_PAST_SESSIONS,
   FAKE_SIGN_IN_CODE,
   FAKE_SIGN_IN_URL,
+  FAKE_STEPS_TEXT,
   FAKE_TOOL_TEXT,
   isFakeAgentHarness,
 } from './fake-agent-harness';
@@ -269,6 +271,68 @@ describe('createFakeAgentHarness', () => {
       ['activity', 'idle'],
     ]);
     expect(record.calls.at(-1)).toEqual({ method: 'interrupt' });
+  });
+
+  it('send_StepsText_EmitsStepsAndHoldsTurnOpen', async () => {
+    const { agent, heard } = await startedProcess();
+
+    agent.send({ text: FAKE_STEPS_TEXT, images: [] });
+    await flush();
+
+    // Each event as `[kind, id]` for an entry, `[event name, payload]` else.
+    expect(
+      heard.map(([name, payload]) =>
+        name === 'entry'
+          ? [(payload as ChatEntry).kind, (payload as ChatEntry).id]
+          : [name, payload],
+      ),
+    ).toEqual([
+      ['user', 'user-1'],
+      ['activity', 'working'],
+      ['tool', 'step-1-1'],
+      ['tool', 'step-1-2'],
+      ['tool', 'step-1-3'],
+      ['tool', 'step-1-4'],
+      ['tool', 'step-1-5'],
+      ['tool', 'step-1-6'],
+      ['thinking', 'step-1-7'],
+    ]);
+    const steps = heard.slice(2).map(([, payload]) => payload as ChatEntry);
+    expect(steps.every((step) => step.at === 1000)).toBe(true);
+    expect(
+      steps.map((step) =>
+        step.kind === 'tool'
+          ? [step.name, step.summary, step.result?.isError]
+          : step.kind,
+      ),
+    ).toEqual([
+      ['Read', 'src/app.ts', false],
+      ['Read', 'src/view.ts', false],
+      ['Read', 'src/state.ts', false],
+      ['Bash', 'false', true],
+      ['Edit', 'src/app.ts', false],
+      ['Bash', 'npm test', false],
+      'thinking',
+    ]);
+    heard.length = 0;
+
+    agent.interrupt();
+    await flush();
+
+    expect(heard).toEqual([
+      [
+        'entry',
+        {
+          kind: 'notice',
+          id: 'notice-1',
+          at: 1000,
+          text: 'Interrupted',
+          tone: 'info',
+          raw: [{ fake: 'interrupt' }],
+        },
+      ],
+      ['activity', 'idle'],
+    ]);
   });
 
   it('interrupt_NoTurn_EmitsNothing', async () => {

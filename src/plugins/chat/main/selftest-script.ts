@@ -12,6 +12,7 @@ import {
   FAKE_HOLD_TEXT,
   FAKE_PAST_SESSIONS,
   FAKE_SIGN_IN_CODE,
+  FAKE_STEPS_TEXT,
   FAKE_TOOL_TEXT,
   type FakeAgentCall,
   type FakeAgentProcessRecord,
@@ -188,12 +189,43 @@ const TRANSCRIPT_FOCUS_STEPS: SelfTestStep[] = [
   },
   { keys: ['Escape'], expect: '[chat] left the box' },
   { keys: ['k'], expect: '[chat] focused assistant entry' },
-  { keys: ['k'], expect: '[chat] focused tool entry' },
+  { keys: ['k'], expect: '[chat] focused activity line' },
   { keys: ['j'], expect: '[chat] focused assistant entry' },
-  { keys: ['k'], expect: '[chat] focused tool entry' },
-  { keys: ['Enter'], expect: '[chat] expanded tool entry', checksFit: true },
+  { keys: ['k'], expect: '[chat] focused activity line' },
+  {
+    keys: ['Enter'],
+    expect: '[chat] expanded activity line',
+    checksFit: true,
+    screenshot: 'activity-open',
+  },
+  { keys: ['j'], expect: '[chat] focused tool entry' },
+  {
+    keys: ['Enter'],
+    expect: '[chat] expanded tool entry',
+    checksFit: true,
+    screenshot: 'step-open',
+  },
+  { keys: ['k'], expect: '[chat] focused activity line' },
+  { keys: ['Enter'], expect: '[chat] collapsed activity line' },
   { keys: ['g', 'g'], expect: '[chat] focused the first entry' },
   { keys: ['G'], expect: '[chat] following the latest entry' },
+];
+
+// The steps turn's last step is its one thought, so the thought's line marks
+// the whole run arrived.
+const ACTIVITY_LINE_STEPS: SelfTestStep[] = [
+  {
+    keys: sendKeys(FAKE_STEPS_TEXT),
+    expect: '[chat] thinking entry added in chat-selftest',
+    screenshot: 'activity-live',
+  },
+  { keys: ['<C-c>'], expect: NOTICE_LINE },
+  { keys: ['Escape'], expect: '[chat] left the box' },
+  {
+    keys: ['k'],
+    expect: '[chat] focused activity line',
+    screenshot: 'activity-finished',
+  },
 ];
 
 const TRANSCRIPT_SCROLL_STEPS: SelfTestStep[] = [
@@ -424,8 +456,13 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'transcript focus',
-    why: "A tool turn's entries are user, tool, assistant and result, focus following the result: k and j walk them, Enter opens the tool entry, gg focuses the first entry and G follows the latest.",
+    why: "A tool turn's entries are user, tool, assistant and result, focus following the result, the tool sitting in an activity line: k and j walk them, Enter opens the line into its step rows, opens the tool's step and closes the line again, gg focuses the first entry and G follows the latest.",
     steps: TRANSCRIPT_FOCUS_STEPS,
+  },
+  {
+    name: 'activity line',
+    why: "A held steps turn draws the live header and shortlist with the box focused (no frame, no marked entry); Ctrl+C ends it into the finished line with its failed count; Esc shows the focused entry's left bar.",
+    steps: ACTIVITY_LINE_STEPS,
   },
   {
     name: 'transcript scroll',
@@ -501,6 +538,8 @@ const EXPECTED_CALLS: FakeAgentCall[] = [
   { method: 'send', text: 'one\ntwo', imageCount: 0 },
   { method: 'send', text: 'hello', imageCount: 0 },
   { method: 'send', text: FAKE_TOOL_TEXT, imageCount: 0 },
+  { method: 'send', text: FAKE_STEPS_TEXT, imageCount: 0 },
+  { method: 'interrupt' },
   { method: 'send', text: LONG_TEXT, imageCount: 0 },
   { method: 'setControl', id: 'effort', value: 'high' },
   { method: 'setControl', id: 'effort', value: 'low' },
