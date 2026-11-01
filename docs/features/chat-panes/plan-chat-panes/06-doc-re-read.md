@@ -1,6 +1,6 @@
 # 06 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 05b
 Plan: [plan.md](plan.md)
@@ -28,3 +28,5 @@ Done when: every listed doc line agrees with the code; the fixes are committed.
 Commit:    one commit for the group, holding only the listed docs
 
 ## Proof
+
+Commit 2b44679 · proof: Diff read: AGENTS.md 4 hunks (sessions folder line, least sizes, chord keys, resize/focus edge logs), docs/keymap.md 2 lines, chat-panes design.md 2 bullets; oxfmt clean on AGENTS.md and design.md, keymap.md fails identically at HEAD (pre-existing) · concerns: DESIGN.md ~388 omits Alt+Shift+j/k; keymap.md Raw key bullet does not name docs.backToTree; design.md key table misaligned (pre-existing)

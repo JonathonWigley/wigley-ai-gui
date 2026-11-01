@@ -190,11 +190,11 @@ Boundary rules:
 
 ### Wave 4
 
-- [ ] [Doc re-read](06-doc-re-read.md) — after 05b
+- [x] [Doc re-read](06-doc-re-read.md) — after 05b
 
 ### Wave 5
 
-- [ ] [Final verification](07-final-verification.md) — after 06
+- [x] [Final verification](07-final-verification.md) — after 06
 
 ## Run log
 
@@ -207,6 +207,8 @@ Review base: 6562c495f9c5949743e50df7b963f344c3ee6d31
 - 03 · 83cebe9 · diff read (every Produces in pane-tree.ts and pane-tree-view.ts present; split.ts prompt output unchanged) + typecheck clean in its files; pane-tree and split tests pass per the worker (79) · concerns: a slot moved in the DOM loses keyboard focus (focused slot on split, both on swap, sibling's on close) so 05b must restore editor focus; swap calls changed but not focused
 - 02 · 9c84f9d · diff read (four any focus binds; each view hands a FocusTarget beside its resize target; kit resolves dotted names) + whole-tree typecheck clean; Done-when grep prints nothing; view tests pass per the workers (707 + 167, primer-view's 3 base-failing rows aside); self-test passes every step but the pane binds' unplaced lines (see ruling) · concerns: backlog-view.ts: paneTo was inserted between cursorActionsSlot's comment and its function, orphaning that comment; a pushed scope (backlog filter, picker, confirm) keeps the view's targets and any-scope Alt+h/l fire there, moving list/detail behind the overlay (the scoped binds did not); self-test unplaced lines for panes.focus* and resizePaneUp/Down until 05b
 - 05b · 6090d0d + c1dcc6b (chord fix) · diff read + typecheck clean; selftest all passed, every key placed · concerns: up/down focus edges overlay the tab bar's buttons in a stacked pane
+- 06 · 2b44679 · Diff read: AGENTS.md 4 hunks (sessions folder line, least sizes, chord keys, resize/focus edge logs), docs/keymap.md 2 lines, chat-panes design.md 2 bullets; oxfmt clean on AGENTS.md and design.md, keymap.md fails identically at HEAD (pre-existing) · concerns: DESIGN.md ~388 omits Alt+Shift+j/k; keymap.md Raw key bullet does not name docs.backToTree; design.md key table misaligned (pre-existing)
+- 07 · none · typecheck pass; npm test 4284/4284; selftest all passed; lint only pre-existing DESIGN.md + docs/keymap.md format. Screenshots: frame on focused pane only, rings on unfocused rows; stacked right-column tab icons clipped to '[', bottom-right frame short of the right edge, resize prompt overlaps swap prompt. Drive (reports/07-drive-1.md): 1 PASS, 2 PASS, 3 PASS (draft survives swap and cancelled split), 4 PASS, 5 PASS via eval location.reload() (Cmd+r key does not reload under drive), 6 FAIL partly — focus stays, attention dot right, but .form-tab .round is hidden while its pane is unfocused so the round is not drawn until focused, 7 PASS at 320px and 187px. Also: tab icon clipped at ~280-300px; in a 700px window panes were 213/187px (under the 280px least) and the right pane's close button cut off. · concerns: Findings for review: check 6 round hidden in unfocused pane; tab icon clipping in narrow panes; panes below least size in narrow window; stacked prompt overlap
 ### Contract changes
 - pane-tree.ts: also exports clampedRatio(ratio, least) and withSplitRatio(tree, split, ratio) · why: the view's drag clamps and sets a ratio with nudgeFocused's own functions · consumers: none · group 03
 - split.ts: exports NUDGE_PROMPT_MS and splitResizePrompt(anchor, start: ResizePromptEnd, end: ResizePromptEnd): { element, anchors } (the helper the task named) · why: the pane tree view shares the prompt and its linger · consumers: none · group 03
@@ -228,5 +230,8 @@ Review base: 6562c495f9c5949743e50df7b963f344c3ee6d31
 - peer commit 22dfcf9 (workflow design) landed between this run's commits, so the review takes an explicit commit list rather than the review-base range · lead
 - main's fallback pick reads 'two panes or more remain' as two or more before the close, matching the p1/p2 behaviour line; a pending echo is recorded only when the session differs from the selection main ends on; the pick hint shows only in an empty focused pane; the self-test adds an <A-k> step, expects the <A-S-j> resize log line, widens the window to 1800 for the cancel split, and ends its three fixture sessions — the fallback reading, if wrong, keeps a removed pane's neighbour unfocused · group 05b
 - the chord fix maps ; and ' by US-layout codes; Electron's sendInputEvent takes them as keyCodes (per its accelerator docs, confirmed by the passing self-test) — another layout's physical keys differ · group 05b fix
+- Test gate failure in shell-chrome traced to 9c84f9d; fixed by re-dispatch 02-fix-1 (opus-medium), committed 2aafb86 before the review.
 ### Review rounds
 ### Test gate
+- Picks: full suite (07 names npm test), typecheck, lint, selftest. Round 1: typecheck pass; npm test 4282/4283 — shell-chrome 'an unregistered command' fails, caused by 9c84f9d (base kit passes dotted names unchecked), fix dispatched as 02-fix-1; lint fails only on DESIGN.md and docs/keymap.md formatting, both pre-existing (neither file's format touched by this run); primer-view base failure no longer fails.
+- Round 2 after 2aafb86 (02-fix-1, base kit dotted names checked against commands.exists): typecheck pass; npm test 4284/4284 pass; selftest all passed incl. every key placed; lint only the DESIGN.md + docs/keymap.md format failures, both failing at review base 6562c49 (pre-existing).

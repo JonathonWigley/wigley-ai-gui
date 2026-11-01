@@ -1,6 +1,6 @@
 # 07 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 5 · Depends on: 06
 Plan: [plan.md](plan.md)
@@ -42,3 +42,5 @@ Done when: every command passes and each live check above has a result in Proof.
 Commit:    none
 
 ## Proof
+
+Commit none · proof: typecheck pass; npm test 4284/4284; selftest all passed; lint only pre-existing DESIGN.md + docs/keymap.md format. Screenshots: frame on focused pane only, rings on unfocused rows; stacked right-column tab icons clipped to '[', bottom-right frame short of the right edge, resize prompt overlaps swap prompt. Drive (reports/07-drive-1.md): 1 PASS, 2 PASS, 3 PASS (draft survives swap and cancelled split), 4 PASS, 5 PASS via eval location.reload() (Cmd+r key does not reload under drive), 6 FAIL partly — focus stays, attention dot right, but .form-tab .round is hidden while its pane is unfocused so the round is not drawn until focused, 7 PASS at 320px and 187px. Also: tab icon clipped at ~280-300px; in a 700px window panes were 213/187px (under the 280px least) and the right pane's close button cut off. · concerns: Findings for review: check 6 round hidden in unfocused pane; tab icon clipping in narrow panes; panes below least size in narrow window; stacked prompt overlap
