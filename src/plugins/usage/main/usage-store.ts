@@ -1,0 +1,273 @@
+import type {
+  PlanRow,
+  PlanRowPatch,
+  PlanRowUpdate,
+  PlanUsage,
+  UsageAgentEvent,
+} from '../../../contracts/agent';
+import type { ChatProfile } from '../../chat/contract';
+import type { ProfilePlan, SessionUsage, UsageSnapshot } from '../contract';
+
+// The pure fold behind usage main: each `with…` returns the same state object
+// when it changes nothing, and keeps the same `snapshot` object when only
+// `held` changes, so a caller sends the snapshot when its object is new.
+
+// A live row of a kind the profile's poll has not reported yet, with its
+// update's `at`.
+export interface HeldPatch {
+  profileDir: string | null;
+  patch: PlanRowPatch;
+  at: number;
+}
+
+export interface UsageState {
+  snapshot: UsageSnapshot;
+  held: readonly HeldPatch[];
+}
+
+export type PollResult =
+  | { ok: true; usage: PlanUsage }
+  | { ok: false; error: string };
+
+export const EMPTY_USAGE_STATE: UsageState = {
+  snapshot: { plans: [], sessions: [] },
+  held: [],
+};
+
+// One plan per profile in `profiles` order, each matched plan keeping its
+// poll state; a removed profile's held patches go with it.
+export function withProfiles(
+  state: UsageState,
+  profiles: readonly ChatProfile[],
+): UsageState {
+  const { plans } = state.snapshot;
+  const unchanged =
+    plans.length === profiles.length &&
+    profiles.every(
+      (profile, index) =>
+        plans[index].name === profile.name &&
+        plans[index].profileDir === profile.configDir,
+    );
+  if (unchanged) {
+    return state;
+  }
+  const nextPlans = profiles.map((profile, index) =>
+    planFor(plans, profile, index === 0),
+  );
+  return {
+    snapshot: { ...state.snapshot, plans: nextPlans },
+    held: state.held.filter((held) =>
+      profiles.some((profile) => profile.configDir === held.profileDir),
+    ),
+  };
+}
+
+// On success the plan takes the poll, then folds that profile's held patches
+// the poll reports and is older than; on failure it keeps its last usage and
+// is marked stale with the reason.
+export function withPollResult(
+  state: UsageState,
+  profileDir: string | null,
+  result: PollResult,
+): UsageState {
+  const plan = state.snapshot.plans.find(
+    (held) => held.profileDir === profileDir,
+  );
+  if (plan === undefined) {
+    return state;
+  }
+  if (!result.ok) {
+    const alreadyFailed = plan.stale && plan.error === result.error;
+    if (alreadyFailed) {
+      return state;
+    }
+    return withPlan(
+      state,
+      { ...plan, error: result.error, stale: true },
+      state.held,
+    );
+  }
+  const { usage } = result;
+  const kinds = kindsOf(usage.rows);
+  const foldable: PlanRowPatch[] = [];
+  const held = state.held.filter((entry) => {
+    const ownedHere =
+      entry.profileDir === profileDir && kinds.has(entry.patch.kind);
+    if (ownedHere && entry.at > usage.at) {
+      foldable.push(entry.patch);
+    }
+    return !ownedHere;
+  });
+  const rows = patchedRows(usage.rows, foldable);
+  return withPlan(
+    state,
+    {
+      ...plan,
+      usage: rows === usage.rows ? usage : { ...usage, rows },
+      lastGoodAt: usage.at,
+      error: null,
+      stale: false,
+    },
+    held.length === state.held.length ? state.held : held,
+  );
+}
+
+// Patches every row of each update row's kind the plan's usage holds; holds
+// the rest until a poll reports their kind.
+export function withLiveRows(
+  state: UsageState,
+  profileDir: string | null,
+  update: PlanRowUpdate,
+): UsageState {
+  const plan = state.snapshot.plans.find(
+    (held) => held.profileDir === profileDir,
+  );
+  if (plan === undefined) {
+    return state;
+  }
+  const { usage } = plan;
+  const kinds = usage === null ? new Set<string>() : kindsOf(usage.rows);
+  const foldable = update.rows.filter((patch) => kinds.has(patch.kind));
+  const toHold = update.rows.filter((patch) => !kinds.has(patch.kind));
+  const held = withHeldPatches(state.held, profileDir, toHold, update.at);
+  const rows = patchedRows(usage?.rows ?? [], foldable);
+  if (usage !== null && rows !== usage.rows) {
+    return withPlan(state, { ...plan, usage: { ...usage, rows } }, held);
+  }
+  return held === state.held ? state : { ...state, held };
+}
+
+// Replaces the session's entry, or appends one for a new id; `usage` null
+// records only the session's profile.
+export function withSessionUsage(
+  state: UsageState,
+  sessionId: string,
+  profileDir: string | null,
+  usage: UsageAgentEvent | null,
+): UsageState {
+  const { sessions } = state.snapshot;
+  const entry: SessionUsage = { sessionId, profileDir, usage };
+  const index = sessions.findIndex((held) => held.sessionId === sessionId);
+  if (index === -1) {
+    return withSessions(state, [...sessions, entry]);
+  }
+  const known = sessions[index];
+  if (known.profileDir === profileDir && known.usage === usage) {
+    return state;
+  }
+  return withSessions(state, sessions.with(index, entry));
+}
+
+export function withoutSession(
+  state: UsageState,
+  sessionId: string,
+): UsageState {
+  const { sessions } = state.snapshot;
+  const remaining = sessions.filter((held) => held.sessionId !== sessionId);
+  return remaining.length === sessions.length
+    ? state
+    : withSessions(state, remaining);
+}
+
+function planFor(
+  plans: readonly ProfilePlan[],
+  profile: ChatProfile,
+  isDefault: boolean,
+): ProfilePlan {
+  const matched = plans.find((plan) => plan.profileDir === profile.configDir);
+  if (matched !== undefined) {
+    return { ...matched, name: profile.name, isDefault };
+  }
+  return {
+    name: profile.name,
+    profileDir: profile.configDir,
+    isDefault,
+    usage: null,
+    lastGoodAt: null,
+    error: null,
+    stale: false,
+  };
+}
+
+function kindsOf(rows: readonly PlanRow[]): Set<string> {
+  return new Set(rows.map((row) => row.kind));
+}
+
+// `rows` with each patch's `percent`, `resetsAt` and `severity` on every row
+// of its kind; the same array when no row's values change.
+function patchedRows(
+  rows: readonly PlanRow[],
+  patches: readonly PlanRowPatch[],
+): readonly PlanRow[] {
+  let changed = false;
+  const next = rows.map((row) => {
+    const patch = patches.find((candidate) => candidate.kind === row.kind);
+    const differs =
+      patch !== undefined &&
+      (patch.percent !== row.percent ||
+        patch.resetsAt !== row.resetsAt ||
+        patch.severity !== row.severity);
+    if (!differs) {
+      return row;
+    }
+    changed = true;
+    return {
+      ...row,
+      percent: patch.percent,
+      resetsAt: patch.resetsAt,
+      severity: patch.severity,
+    };
+  });
+  return changed ? next : rows;
+}
+
+// `held` with each of `patches` replacing that profile's held patch of its
+// kind; the same array when every patch is already held as it is.
+function withHeldPatches(
+  held: readonly HeldPatch[],
+  profileDir: string | null,
+  patches: readonly PlanRowPatch[],
+  at: number,
+): readonly HeldPatch[] {
+  let next = held;
+  for (const patch of patches) {
+    const index = next.findIndex(
+      (entry) =>
+        entry.profileDir === profileDir && entry.patch.kind === patch.kind,
+    );
+    const entry: HeldPatch = { profileDir, patch, at };
+    if (index === -1) {
+      next = [...next, entry];
+    } else if (!sameHeldPatch(next[index], entry)) {
+      next = next.with(index, entry);
+    }
+  }
+  return next;
+}
+
+function sameHeldPatch(a: HeldPatch, b: HeldPatch): boolean {
+  return (
+    a.at === b.at &&
+    a.patch.percent === b.patch.percent &&
+    a.patch.resetsAt === b.patch.resetsAt &&
+    a.patch.severity === b.patch.severity
+  );
+}
+
+function withPlan(
+  state: UsageState,
+  plan: ProfilePlan,
+  held: readonly HeldPatch[],
+): UsageState {
+  const plans = state.snapshot.plans.map((current) =>
+    current.profileDir === plan.profileDir ? plan : current,
+  );
+  return { snapshot: { ...state.snapshot, plans }, held };
+}
+
+function withSessions(
+  state: UsageState,
+  sessions: readonly SessionUsage[],
+): UsageState {
+  return { ...state, snapshot: { ...state.snapshot, sessions } };
+}

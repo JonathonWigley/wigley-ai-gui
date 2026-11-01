@@ -1,6 +1,6 @@
 # 04 — Chat forwards agent events and plan usage
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 03
 Plan: [plan.md](plan.md)
@@ -35,3 +35,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit e6b295a · proof: diff read: ChatMainEvents, profiles() export, emit dep present; forwarding gated on isLive; typecheck clean; worker ran chat-sessions tests 100/100 · concerns: worker formatted its files via npm exec --offline oxfmt (local binary, no download); oxfmt --check still flags DESIGN.md and docs/keymap.md (pre-existing)

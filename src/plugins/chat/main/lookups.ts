@@ -1,7 +1,5 @@
 import type { AgentHarness } from '../../../contracts/agent';
-import type { ChatProfile } from '../contract';
-
-export const CHAT_HARNESS_ID = 'claude';
+import { CHAT_HARNESS_ID, type ChatProfile } from '../contract';
 
 // The profile named `name`; throws naming it when chat has none.
 export function requireProfile(

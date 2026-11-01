@@ -185,7 +185,7 @@ chat's bus events and exports. New folders get their `scripts/check-layers.mts` 
 
 ### Wave 2
 - [x] [Main timers](02-main-timers.md) — after 01 (shares `plugin.ts`)
-- [ ] [Chat forwards agent events and plan usage](04-chat-forwarding.md) — after 03
+- [x] [Chat forwards agent events and plan usage](04-chat-forwarding.md) — after 03
 
 ### Wave 3
 - [ ] [Usage main: poller and store](05-usage-main.md) — after 02, 03, 04
@@ -210,6 +210,7 @@ Review base: 951296f231ed299e8ca9a12bf918bf1f5e9462cc
 - 01 · fef2080 · diff read: every Produces present; typecheck clean in 01 files (only errors were 03's in-flight harness tests); worker ran shell/split/page-api tests, 106 pass · concerns: stale prose outside Files: settings.ts:96 shell.layout description and layouts/design.md:72,79 'four chrome areas'; side bar may not regrow in the same pass the right bar shrinks (real-DOM only); grid/handle/gallery layout not checked live; three shell test names undersell their two-handle assertions
 - 03 · 356bd8a · diff read: every Produces present; typecheck clean; worker ran 249 tests across adapter, fake harness and chat users, all pass · concerns: oxfmt --check fails on DESIGN.md and docs/keymap.md (committed in 444f673, predate this run); AGENTS.md claude-code row omits claude -p /usage; harness test checks plan-usage row labels only
 - 02 · eb3464b · diff read: MainServices.timers after clock, live adapter in main.ts passed to startMainParts; typecheck clean; no tests picked (no test changed) · concerns: oxfmt --check flags DESIGN.md and docs/keymap.md, unmodified since 444f673 (pre-existing)
+- 04 · e6b295a · diff read: ChatMainEvents, profiles() export, emit dep present; forwarding gated on isLive; typecheck clean; worker ran chat-sessions tests 100/100 · concerns: worker formatted its files via npm exec --offline oxfmt (local binary, no download); oxfmt --check still flags DESIGN.md and docs/keymap.md (pre-existing)
 ### Contract changes
 ### Rulings
 - right bar redraws both bars only when its hidden state flips (updateHidden wrapper); a layout swap keeps plain applyHidden — a swap needing a redraw waits for the next resize · group 01 · group 01
@@ -218,5 +219,6 @@ Review base: 951296f231ed299e8ca9a12bf918bf1f5e9462cc
 - runCli timeout message is built from the args; reads exactly 'claude -p /usage gave no answer in 20 s' · group 03 · group 03
 - turnUsageOf falls back to the largest window when the model key exists but has no numeric contextWindow · group 03 · group 03
 - get_context_usage is written after every result line, even with a queued turn pending · group 03 · group 03
+- a restored row whose profile is missing from chat's profiles emits no sessionOpened (openRow takes profileDir | null); usage learns of it only from its first agentEvent · group 04 · group 04
 ### Review rounds
 ### Test gate

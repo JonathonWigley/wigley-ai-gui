@@ -10,6 +10,10 @@ import type {
 import type { Disposable } from '../../contracts/disposable';
 import type { ChannelShape, EventShape } from '../../contracts/plugin';
 
+// The `id` of the agent harness chat runs its sessions on: chat's profiles are
+// that harness's config folders.
+export const CHAT_HARNESS_ID = 'claude';
+
 export interface ChatProfile {
   name: string;
   configDir: string;

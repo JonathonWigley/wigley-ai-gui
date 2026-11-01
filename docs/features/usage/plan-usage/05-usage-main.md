@@ -1,6 +1,6 @@
 # 05 — Usage main: poller and store
 
-Status: not started
+Status: in progress
 Type: Batch
 Wave: 3 · Depends on: 02, 03, 04
 Plan: [plan.md](plan.md)

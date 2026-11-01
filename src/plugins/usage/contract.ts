@@ -1,0 +1,41 @@
+// The usage plugin's records and its channel between its main and page parts.
+
+import type { PlanUsage, UsageAgentEvent } from '../../contracts/agent';
+import type { ChannelShape } from '../../contracts/plugin';
+
+// One chat profile's plan usage. `profileDir` is the profile's `configDir` as
+// chat's `profiles` setting writes it; `isDefault` is true for the first
+// profile only. `usage` is the last good poll with the live rows folded in,
+// null before the first good poll; `lastGoodAt` is that poll's `at`. `error`
+// is the last poll's failure, null once a poll succeeds; `stale` is true
+// while it stands.
+export interface ProfilePlan {
+  name: string;
+  profileDir: string | null;
+  isDefault: boolean;
+  usage: PlanUsage | null;
+  lastGoodAt: number | null;
+  error: string | null;
+  stale: boolean;
+}
+
+// One session's profile and its last main-agent `usage` event; `usage` is
+// null until its first one.
+export interface SessionUsage {
+  sessionId: string;
+  profileDir: string | null;
+  usage: UsageAgentEvent | null;
+}
+
+// `plans` in chat's profile order; `sessions` in the order each was first
+// reported.
+export interface UsageSnapshot {
+  plans: readonly ProfilePlan[];
+  sessions: readonly SessionUsage[];
+}
+
+// `changed` carries the whole snapshot after every change.
+export interface UsageChannel extends ChannelShape {
+  invoke: { snapshot(): UsageSnapshot };
+  messages: { changed: UsageSnapshot };
+}

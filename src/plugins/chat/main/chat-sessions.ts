@@ -21,19 +21,20 @@ import type {
   ToolResult,
   ToolSession,
 } from '../../sessions/contract';
-import type {
-  ChatChannel,
-  ChatMainEvents,
-  ChatProfile,
-  ChatSessionState,
-  LaunchRequest,
-  PastSessionRow,
-  PermissionAnswer,
-  ResumeRequest,
-  StartRequest,
+import {
+  CHAT_HARNESS_ID,
+  type ChatChannel,
+  type ChatMainEvents,
+  type ChatProfile,
+  type ChatSessionState,
+  type LaunchRequest,
+  type PastSessionRow,
+  type PermissionAnswer,
+  type ResumeRequest,
+  type StartRequest,
 } from '../contract';
 import type { ArchivedSessions } from './archived-sessions';
-import { CHAT_HARNESS_ID, requireChatHarness, requireProfile } from './lookups';
+import { requireChatHarness, requireProfile } from './lookups';
 import type {
   OpenSessions,
   SavedSession,
