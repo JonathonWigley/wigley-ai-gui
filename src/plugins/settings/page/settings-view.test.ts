@@ -85,8 +85,8 @@ function fakeChannel() {
 // A view over the fake channel, shown with its first section open and focus
 // on the rows, the overlay its picker draws in, every anchor its layout parts
 // named, and `handed`: each scope set and each focus target handed over, in
-// order.
-async function shownView() {
+// order. The side bar shows unless `isSideBarShown` is false.
+async function shownView(isSideBarShown = true) {
   const { channel, written } = fakeChannel();
   const overlay = asFake(document.createElement('div'));
   const anchor = () => ({ dispose: () => undefined });
@@ -107,6 +107,7 @@ async function shownView() {
     toast: () => undefined,
     setScope: (scope) => handed.push(scope),
     setFocusTarget: (target) => handed.push(target),
+    isSideBarShown: () => isSideBarShown,
     pushScope: () => ({ pop: () => undefined, onBaseChanged: () => undefined }),
     addOverlay(element) {
       overlay.append(asFake(element));
@@ -167,16 +168,53 @@ describe('createSettingsView', () => {
   });
 
   it.each([
-    { from: 'rows', direction: 'left', after: 'sections', moved: true },
-    { from: 'sections', direction: 'right', after: 'rows', moved: true },
-    { from: 'rows', direction: 'right', after: 'rows', moved: false },
-    { from: 'sections', direction: 'left', after: 'sections', moved: false },
-    { from: 'rows', direction: 'up', after: 'rows', moved: false },
-    { from: 'sections', direction: 'down', after: 'sections', moved: false },
+    {
+      from: 'rows',
+      direction: 'left',
+      bar: true,
+      after: 'sections',
+      moved: true,
+    },
+    {
+      from: 'rows',
+      direction: 'left',
+      bar: false,
+      after: 'rows',
+      moved: false,
+    },
+    {
+      from: 'sections',
+      direction: 'right',
+      bar: true,
+      after: 'rows',
+      moved: true,
+    },
+    {
+      from: 'rows',
+      direction: 'right',
+      bar: true,
+      after: 'rows',
+      moved: false,
+    },
+    {
+      from: 'sections',
+      direction: 'left',
+      bar: true,
+      after: 'sections',
+      moved: false,
+    },
+    { from: 'rows', direction: 'up', bar: true, after: 'rows', moved: false },
+    {
+      from: 'sections',
+      direction: 'down',
+      bar: true,
+      after: 'sections',
+      moved: false,
+    },
   ] as const)(
-    'focusTarget_MovesBetweenSectionsAndRows: $from $direction',
-    async ({ from, direction, after, moved }) => {
-      const { view, handed, move } = await shownView();
+    'focusTarget_MovesBetweenSectionsAndRows: $from $direction, side bar $bar',
+    async ({ from, direction, bar, after, moved }) => {
+      const { view, handed, move } = await shownView(bar);
       if (from === 'sections') {
         move('left');
       }

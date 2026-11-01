@@ -183,6 +183,9 @@ export interface SettingsViewDeps {
   // rows; the view calls it after each `setScope`, since a change of the set
   // scope drops it.
   setFocusTarget(target: FocusTarget): void;
+  // True while the side bar lies beside or over the rows: the focus keys
+  // move to the sections only then.
+  isSideBarShown(): boolean;
   pushScope(scope: 'box' | 'picker'): PushedScope;
   addOverlay(element: HTMLElement): Disposable;
   // Keeps the keys of the settings `command` drawn in `element`, shown while
@@ -614,14 +617,15 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     });
 
   // `right` from the sections focuses the rows and `left` from the rows the
-  // sections; every other move leaves focus where it is.
+  // sections while the side bar shows; every other move leaves focus where it
+  // is.
   const focusTarget: FocusTarget = {
     move(direction) {
       if (focus === 'sections' && direction === 'right') {
         focusRows();
         return true;
       }
-      if (focus === 'rows' && direction === 'left') {
+      if (focus === 'rows' && direction === 'left' && deps.isSideBarShown()) {
         focusSections();
         return true;
       }
