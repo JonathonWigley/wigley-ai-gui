@@ -55,7 +55,8 @@ so the same hands work in both tools.
 - Esc in the picker closes the new pane, which undoes the split, and so does the picker closing any
   other way but a pick while the pane still holds no session. After "New session" the pane waits
   for the started session; when the start prompt starts nothing, the pane stays empty with the
-  "Pick a session" text, and `Alt+w` closes it.
+  "Pick a session" text, and `Alt+w` closes it. While the picker is open, the split keys and
+  `Alt+w` do nothing.
 - `Alt+w` closes the focused pane only. Its session stays in the side bar, and the sibling pane
   takes the space. `Cmd+w` still closes the session.
 - A pane whose session leaves the side bar (closed or ended) closes, as a tmux pane closes when its
@@ -102,8 +103,10 @@ does not wrap, as the user's tmux binds stop at `pane_at_left` and the other edg
 
 The pane tree, its proportions, the focused pane and each pane's session are kept in uiState and
 come back after a relaunch. A pane names its session by the host session id, since the app's own
-session id is new each run. A pane whose session is not in main's first state after the relaunch
-closes.
+session id is new each run. Main resumes chat sessions after the page's first state, so a pane
+whose session that state lacks stays empty and waits for it, loading it when a later state brings
+it; the layout is saved with the session it waits for. The first split, pane close or swap ends
+the wait, and the panes still waiting close.
 
 ## Rejected
 

@@ -89,3 +89,54 @@ export function restorePanes(
     ]),
   );
 }
+
+// An activation the page sent main whose state has not come back yet.
+export interface PendingEcho {
+  sessionId: string;
+}
+
+// A state's selection change, against the echoes the page still waits for.
+export interface SelectionChange {
+  before: string | null;
+  next: string | null;
+  removed: readonly string[];
+  // Two panes or more showed before the removed sessions' panes closed.
+  wasSplit: boolean;
+  // Oldest first.
+  pendingEchoes: readonly PendingEcho[];
+}
+
+// What a state's selection does to the panes: nothing, place the session, or
+// tell main the focused pane's session.
+export type SelectionAction =
+  | { kind: 'keep' }
+  | { kind: 'place'; sessionId: string }
+  | { kind: 'tellFocused' };
+
+// A selection that answers a pending echo keeps the panes and drops that echo
+// with every older one, since main answers activations in order. Otherwise a
+// changed selection is placed, except main's pick after the selected session
+// left a split: main is told the focused pane's session instead, so the panes
+// left keep theirs.
+export function selectionAction(change: SelectionChange): {
+  action: SelectionAction;
+  echoes: PendingEcho[];
+} {
+  const { before, next, removed, wasSplit, pendingEchoes } = change;
+  const answered = pendingEchoes.findIndex((echo) => echo.sessionId === next);
+  if (next !== null && answered !== -1) {
+    return {
+      action: { kind: 'keep' },
+      echoes: pendingEchoes.slice(answered + 1),
+    };
+  }
+  const echoes = [...pendingEchoes];
+  if (next === null || next === before) {
+    return { action: { kind: 'keep' }, echoes };
+  }
+  const isFallbackPick = before !== null && removed.includes(before);
+  if (isFallbackPick && wasSplit) {
+    return { action: { kind: 'tellFocused' }, echoes };
+  }
+  return { action: { kind: 'place', sessionId: next }, echoes };
+}

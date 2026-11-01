@@ -7,6 +7,7 @@ import {
   panesToClose,
   pickerRows,
   restorePanes,
+  selectionAction,
   shownElsewhere,
 } from './pane-sessions';
 
@@ -111,5 +112,65 @@ describe('pane-sessions', () => {
         ['p3', null],
       ]),
     );
+  });
+
+  const echoes = (...sessionIds: string[]) =>
+    sessionIds.map((sessionId) => ({ sessionId }));
+
+  it.each([
+    {
+      name: "activate(s2) then activate(s3): main's s2 state keeps the panes",
+      change: { before: 's1', next: 's2', removed: [], wasSplit: true },
+      pending: echoes('s2', 's3'),
+      action: { kind: 'keep' },
+      left: echoes('s3'),
+    },
+    {
+      name: 'an echo main never answered is dropped with the answered one',
+      change: { before: 's1', next: 's3', removed: [], wasSplit: true },
+      pending: echoes('s4', 's3', 's2'),
+      action: { kind: 'keep' },
+      left: echoes('s2'),
+    },
+    {
+      name: "s1's row closes in a split and main selects s3: main hears the focused session",
+      change: { before: 's1', next: 's3', removed: ['s1'], wasSplit: true },
+      pending: [],
+      action: { kind: 'tellFocused' },
+      left: [],
+    },
+    {
+      name: "s1's row closes in one pane and main selects s2: the pane shows s2",
+      change: { before: 's1', next: 's2', removed: ['s1'], wasSplit: false },
+      pending: [],
+      action: { kind: 'place', sessionId: 's2' },
+      left: [],
+    },
+    {
+      name: "main's own selection is placed, the echoes kept",
+      change: { before: 's1', next: 's4', removed: ['s2'], wasSplit: true },
+      pending: echoes('s3'),
+      action: { kind: 'place', sessionId: 's4' },
+      left: echoes('s3'),
+    },
+    {
+      name: 'an unchanged selection keeps the panes',
+      change: { before: 's1', next: 's1', removed: [], wasSplit: true },
+      pending: echoes('s3'),
+      action: { kind: 'keep' },
+      left: echoes('s3'),
+    },
+    {
+      name: 'no selection keeps the panes',
+      change: { before: 's1', next: null, removed: ['s1'], wasSplit: false },
+      pending: [],
+      action: { kind: 'keep' },
+      left: [],
+    },
+  ])('selectionAction: $name', ({ change, pending, action, left }) => {
+    expect(selectionAction({ ...change, pendingEchoes: pending })).toEqual({
+      action,
+      echoes: left,
+    });
   });
 });

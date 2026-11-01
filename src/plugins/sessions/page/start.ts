@@ -25,9 +25,12 @@ import { readSessionsLayout } from './layout/read-sessions-layout';
 import {
   activationTarget,
   type PaneSessions,
+  type PendingEcho,
+  paneOf,
   panesToClose,
   pickerRows,
   restorePanes,
+  selectionAction,
   shownElsewhere,
 } from './pane-sessions';
 import { previewToggle } from './preview';
@@ -128,11 +131,13 @@ function createExports(
 // shows, sets the base key scope through its `shown`; with none visible the
 // scope is `idle`. A round selected while the mode is hidden toasts instead
 // of showing it. The pane keys split, close and swap panes, a split asking
-// which session the new pane shows; the pane tree and each pane's session
-// persist in uiState `panes`. The side bar, panes and tab bars draw with the
-// layout the `layout` setting names. `openPreview` swaps the side bar's rows
-// for a sample of every row state and back, page-only: it sends nothing to
-// main.
+// which session the new pane shows; a split or pane close does nothing while
+// that picker is open. The pane tree and each pane's session persist in
+// uiState `panes`; a restored pane whose session main does not hold yet waits
+// for it until the first pane key that changes the panes. The side bar, panes
+// and tab bars draw with the layout the `layout` setting names. `openPreview`
+// swaps the side bar's rows for a sample of every row state and back,
+// page-only: it sends nothing to main.
 export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
   manifest: sessionsManifest,
   start(api: SessionsApi) {
@@ -146,10 +151,14 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
     let lastVisible: VisibleTab = null;
     // The sessions the page asked main to activate whose state has not come
     // back yet, oldest first.
-    const pendingEchoes: string[] = [];
+    let pendingEchoes: PendingEcho[] = [];
     // Read once; the first state places it.
     const saved = readSavedPanes(uiState.get(PANES_KEY));
     let hasRestored = false;
+    // Each restored pane, by pane id, whose saved host session main does not
+    // hold yet: it stays empty and loads that session when a state brings it,
+    // until the first pane key closes the panes still waiting.
+    const waiting = new Map<string, string>();
     // True while `activate` places a session, so the focus change it makes
     // does not ask main a second time; true while `apply` runs, so the panes
     // publish once its state is in.
@@ -232,29 +241,53 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       }
     };
 
+    // Forgets the waits of panes that closed or took a session.
+    const pruneWaiting = () => {
+      const panes = view.panes.sessions();
+      for (const paneId of waiting.keys()) {
+        const isEmptyPane = panes.has(paneId) && panes.get(paneId) === null;
+        if (!isEmptyPane) {
+          waiting.delete(paneId);
+        }
+      }
+    };
+
+    // A waiting pane saves the host session it waits for, so a relaunch
+    // before its session comes back keeps it.
     const savePanes = () => {
       const sessions: Record<string, string | null> = {};
       for (const [paneId, sessionId] of view.panes.sessions()) {
         sessions[paneId] =
-          sessionId === null ? null : (rowOf(sessionId)?.hostSessionId ?? null);
+          sessionId === null
+            ? (waiting.get(paneId) ?? null)
+            : (rowOf(sessionId)?.hostSessionId ?? null);
       }
       const panes: SavedPanes = { tree: view.panes.tree(), sessions };
       uiState.set(PANES_KEY, panes);
     };
 
     // The selection main will hold once the activations it was sent land.
-    const mainSelection = () => pendingEchoes.at(-1) ?? state.selectedSessionId;
+    const mainSelection = () =>
+      pendingEchoes.at(-1)?.sessionId ?? state.selectedSessionId;
 
     // Asks main to select `sessionId`, recording the echo its state will
-    // carry when that differs from the selection main will hold.
+    // carry when that differs from the selection main will hold. Main sends
+    // that state before the invoke resolves, so an echo still pending then
+    // is one main never answers (an unknown session), and is dropped.
     const tellMain = (sessionId: string) => {
-      if (sessionId !== mainSelection()) {
-        pendingEchoes.push(sessionId);
+      const echo = sessionId === mainSelection() ? null : { sessionId };
+      if (echo !== null) {
+        pendingEchoes.push(echo);
       }
-      api.channel.invoke('activate', sessionId).catch((error) => {
-        pendingEchoes.length = 0;
-        log('sessions', `session not activated: ${errorText(error)}`);
-      });
+      api.channel
+        .invoke('activate', sessionId)
+        .then(() => {
+          pendingEchoes = pendingEchoes.filter((pending) => pending !== echo);
+        })
+        .catch((error) => {
+          pendingEchoes = [];
+          log('sessions', `session not activated: ${errorText(error)}`);
+        });
     };
 
     // Focuses the pane showing `sessionId`, or loads it into the focused pane.
@@ -301,6 +334,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       keys,
       timers: api.services.timers,
       panesChanged() {
+        pruneWaiting();
         savePanes();
         if (!isApplying) {
           publishFocused();
@@ -344,15 +378,24 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       },
     });
 
-    // The first state's panes: the saved ones whose sessions came back, or
-    // one pane holding main's selected session when none did.
+    // The first state's panes: the saved tree, each pane holding its session
+    // when main has it and waiting for it when not, a pane saved empty
+    // closing; one pane holding main's selected session when nothing valid
+    // was saved or no saved pane names a session.
     const restoreSavedPanes = (first: SessionsState) => {
       const restored =
-        saved === null ? null : restorePanes(saved.hostIds, first.rows);
-      const hasSession =
-        restored !== null &&
-        [...restored.values()].some((sessionId) => sessionId !== null);
-      if (saved === null || restored === null || !hasSession) {
+        saved === null
+          ? new Map<string, string | null>()
+          : restorePanes(saved.hostIds, first.rows);
+      for (const [paneId, hostId] of saved?.hostIds ?? []) {
+        if (hostId !== null && restored.get(paneId) === null) {
+          waiting.set(paneId, hostId);
+        }
+      }
+      const hasSession = [...restored.values()].some(
+        (sessionId) => sessionId !== null,
+      );
+      if (saved === null || (!hasSession && waiting.size === 0)) {
         if (first.selectedSessionId !== null) {
           view.panes.load(view.panes.focusedPaneId(), first.selectedSessionId);
         }
@@ -360,45 +403,68 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       }
       view.panes.restore(saved.tree, restored);
       for (const [paneId, sessionId] of restored) {
-        if (sessionId === null) {
+        if (sessionId === null && !waiting.has(paneId)) {
           view.panes.close(paneId);
         }
       }
       const focused = view.panes.focusedSessionId();
       if (focused !== null && focused !== first.selectedSessionId) {
-        exports.activate(focused);
+        activate(focused);
       }
     };
 
-    // Places main's selection when it changed and is not the page's own echo.
-    // When the selected session left a split and main picked the next row,
-    // main is told the focused pane's session instead, so the panes left keep
-    // theirs.
+    // Loads each waiting pane whose session `rows` now hold, unless another
+    // pane shows it already.
+    const fillWaiting = (rows: readonly SessionRow[]) => {
+      for (const [paneId, sessionId] of restorePanes(waiting, rows)) {
+        if (sessionId === null) {
+          continue;
+        }
+        waiting.delete(paneId);
+        if (paneOf(view.panes.sessions(), sessionId) === null) {
+          view.panes.load(paneId, sessionId);
+          log('sessions', `pane restored ${labelOf(sessionId)}`);
+        }
+      }
+    };
+
+    // Ends the restore: the panes still waiting close, the last pane staying.
+    const closeWaiting = () => {
+      if (waiting.size === 0) {
+        return;
+      }
+      const paneIds = [...waiting.keys()];
+      waiting.clear();
+      for (const paneId of paneIds) {
+        view.panes.close(paneId);
+      }
+      log('sessions', 'waiting panes closed');
+    };
+
+    // Applies the selection rules (`selectionAction`) to the state `apply`
+    // took in.
     const placeSelection = (
       before: SessionsState,
       next: SessionsState,
       removed: readonly string[],
       wasSplit: boolean,
     ) => {
-      const selected = next.selectedSessionId;
-      if (selected !== null && selected === pendingEchoes[0]) {
-        pendingEchoes.shift();
-        return;
-      }
-      if (selected === before.selectedSessionId || selected === null) {
-        return;
-      }
-      const isFallbackPick =
-        before.selectedSessionId !== null &&
-        removed.includes(before.selectedSessionId);
-      if (isFallbackPick && wasSplit) {
+      const { action, echoes } = selectionAction({
+        before: before.selectedSessionId,
+        next: next.selectedSessionId,
+        removed,
+        wasSplit,
+        pendingEchoes,
+      });
+      pendingEchoes = echoes;
+      if (action.kind === 'place') {
+        placeSession(action.sessionId);
+      } else if (action.kind === 'tellFocused') {
         const focused = view.panes.focusedSessionId();
         if (focused !== null) {
-          exports.activate(focused);
+          activate(focused);
         }
-        return;
       }
-      placeSession(selected);
     };
 
     const apply = (next: SessionsState) => {
@@ -419,6 +485,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
           view.tabs.drop(sessionId);
         }
         if (hasRestored) {
+          fillWaiting(next.rows);
           placeSelection(before, next, changes.removed, wasSplit);
         } else {
           hasRestored = true;
@@ -582,6 +649,18 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       run();
     };
 
+    // Runs a split or pane close unless the split picker is open: a split
+    // would replace the picker's request and leave its empty pane open, and a
+    // close could leave the picker over a closed pane.
+    const unlessPicking = (run: () => void) => () => {
+      if (picker.isOpen()) {
+        log('sessions', 'pane keys ignored: the split picker is open');
+        return;
+      }
+      run();
+    };
+
+    // Each pane key that changes the panes ends the restore (`closeWaiting`).
     const split = (axis: SplitAxis) => {
       const paneId = view.panes.split(axis);
       if (paneId === null) {
@@ -589,6 +668,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         return;
       }
       log('sessions', `pane split ${axis === 'column' ? 'down' : 'right'}`);
+      closeWaiting();
       openSplitPicker(paneId);
     };
 
@@ -598,6 +678,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         return;
       }
       log('sessions', 'pane closed');
+      closeWaiting();
       checkVisible(true);
     };
 
@@ -607,6 +688,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         return;
       }
       log('sessions', 'panes swapped');
+      closeWaiting();
       checkVisible(true);
     };
 
@@ -630,9 +712,9 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
             exports.closeSession(sessionId);
           }
         },
-        splitDown: paneKey(() => split('column')),
-        splitRight: paneKey(() => split('row')),
-        closePane: paneKey(closePane),
+        splitDown: paneKey(unlessPicking(() => split('column'))),
+        splitRight: paneKey(unlessPicking(() => split('row'))),
+        closePane: paneKey(unlessPicking(closePane)),
         swapPaneLeft: paneKey(() => swapPane('left')),
         swapPaneRight: paneKey(() => swapPane('right')),
         swapPaneUp: paneKey(() => swapPane('up')),
