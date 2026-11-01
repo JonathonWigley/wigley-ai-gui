@@ -61,7 +61,7 @@ hjkl is the direction in every layer; the modifier picks the verb.
   takes them, so the keys that move between boxes are the same on every page. Inside a box they
   take the key from vim's insert-mode completion.
 - **Alt+hjkl** moves focus to the pane that way, as smart-splits does between Neovim and tmux: first
-  between a view's own panes (the docs tree and the doc, the Backlog list and detail, the Settings
+  between a view's own panes (the docs tree and the doc, while the tree shows; the Backlog list and detail, the Settings
   sections and rows, and the Primer tab's tasks, items and card columns), then, at the view's edge,
   to the neighbouring chat pane in Sessions mode. Focus stops at the outer edge. The commands are the
   core's `panes.focusLeft`, `panes.focusRight`, `panes.focusUp` and `panes.focusDown`, bound in every
@@ -72,7 +72,7 @@ hjkl is the direction in every layer; the modifier picks the verb.
   upper one. Key repeat supplies the speed. A press resizes the view's own focused pane first, then
   the focused chat pane, then the side bar (left and right only): with no split pane focused and one
   chat pane (a Chat tab, Settings mode, Docs mode's tree, the Backlog homes) the keys resize the side
-  bar. A divider stops where the pane it squeezes reaches its least width. The commands are the
+  bar. A divider stops where the pane it squeezes reaches its least size (280 px wide, 160 px tall). The commands are the
   core's `panes.resizePaneLeft`, `panes.resizePaneRight`, `panes.resizePaneUp` and
   `panes.resizePaneDown`, rebound in `keymap.json` like any other. Each divider shows the prompt
   `⌥⇧H ◂ ▸ ⌥⇧L` (`⌥⇧K ▴ ▾ ⌥⇧J` on a divider between stacked panes) while the pointer is over it,

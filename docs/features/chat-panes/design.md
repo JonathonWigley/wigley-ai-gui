@@ -28,6 +28,9 @@ so the same hands work in both tools.
 - Splitting halves the focused pane, as tmux does. Splits nest in both directions, so the panes are
   a tree. The tree is a shared page module, and Sessions mode is its first owner.
 - Pane sizes are proportions of their parent, so panes scale with the window, as tmux's do.
+- A pane keeps at least 280 px of width beside another pane and 160 px of height above or below
+  one (at most half its parent when the parent is smaller). A split that would leave either half
+  under its least is refused; a divider stops where it reaches the least.
 
 ## The side bar and the focused pane
 
@@ -89,6 +92,9 @@ does not wrap, as the user's tmux binds stop at `pane_at_left` and the other edg
 - Tabs draw as icons, with the tab's title as its tooltip, so tab bars stay short in narrow panes.
   Each tab plugin names its Codicon: Chat `comment`, Form `checklist`, Docs `book`, Primer
   `lightbulb`. A user layout can bring the titles back.
+- The focused pane shows a key prompt on each side that has a pane that way (`‹ ⌥H ⌃⌥H swap`),
+  so the user sees where focus and swap would go. The up and down prompts sit on the pane's top
+  and bottom edge and overlay the pane's tab bar buttons in a stacked pane.
 - A side bar row whose session shows in an unfocused pane carries a quieter on-screen mark, so the
   user sees which picks jump to a pane and which load into the focused one.
 

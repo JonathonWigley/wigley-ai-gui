@@ -150,7 +150,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  every built-in default key, main.ts and page.ts the parts each root starts
   sessions/      manifest.ts, contract.ts, main/ (the session list — rows, the selected session, tool routing — relay,
                  endpoint files, MCP adapter → the only @modelcontextprotocol import), page/ (Sessions mode: the
-                 sidebar and each session's tabs, the row parts other plugins add, and the layout preview rows),
+                 sidebar, the pane tree of whole sessions with its split, swap and close commands and the shared list picker's `picker` scope, each session's tabs, the row parts other plugins add, and the layout preview rows),
                  layouts/ (the sessions Layout contract and the built-in `default` layout)
   agents/        manifest.ts, contract.ts, roster.ts (the pure reducer folding agent events into a session's roster),
                  main/ (hears `chat.agentEvent`, keeps each session's roster, appends each event to
@@ -281,8 +281,8 @@ round; primer: an open primer), since main, not the page, decides.
 - **A chat pane** is one pane of Sessions mode's pane tree (`src/shared/page/pane-tree/`, the sessions plugin its
   owner): it shows one whole session, tab bar included, and a session shows in at most one pane. The side bar drives
   the focused pane, and the visible tab, whose `shown` sets the key scope and whose `isVisible` reads true, is the
-  focused pane's selected tab; a tab in an unfocused pane is on screen but holds no keys
-  (`docs/features/chat-panes/design.md`).
+  focused pane's selected tab; a tab in an unfocused pane is on screen but holds no keys. A pane keeps at least 280 px
+  of width beside another pane and 160 px of height above or below one (`docs/features/chat-panes/design.md`).
 - **A key** is a default bind in `src/plugins/keymap.ts`, the one file holding every built-in key (core and
   built-in plugins), naming its command and scope in full: `forms.nextItem` in scope `forms.review`. A bind is one
   vim-notation entry (`<Leader>ks`, `gg`, `<A-o>`) written once; the merge expands it into the page bind and the box
@@ -296,7 +296,7 @@ round; primer: an open primer), since main, not the page, decides.
   leader group is named in the file's `groups` for which-key (layered the same way, by prefix). Each process checks every keymap it installs, at startup and on
   each config change, for a key that names no registered
   command, and main and the page both reject a key bound twice in one scope. A page key may be a chord in vim notation (`<C-h>`, `<A-o>`,
-  `<D-w>`), matched on the physical key, since macOS turns Option+o into `ø`; a chord bind fires inside a text box
+  `<D-w>`; its key is a lowercase letter, a digit, `;`, `'` or Enter, as in `<A-'>`), matched on the physical key, since macOS turns Option+o into `ø`; a chord bind fires inside a text box
   too, in every vim mode, ahead of the editor. A plugin's own text box may keep typed keys from the page keys while
   Tab, Enter, Escape and chords still reach its scope's binds (`textBoxInput`, `src/shared/page/text-box.ts`, which docs and settings share). An editor key carries a scope as a page key does and runs only while
   that scope is in force, so two plugins' editors may bind one vim key in different scopes. It fires in normal mode,
@@ -321,12 +321,12 @@ round; primer: an open primer), since main, not the page, decides.
   base scope change drops the target. A `ResizeTarget` (`src/contracts/panes.ts`) is one `nudge(direction)`, which
   returns false when the direction's axis is not its own (a side-by-side `Split` given up or down); every `Split` is
   one. A press goes to the view's target, then, when it returns false or none is set, to the outer panes' target, then
-  to the side bar.
+  to the side bar (left and right only); a press nothing takes logs `no pane divider runs <direction>`.
 - **A focus target** is how the core's focus commands (`panes.focusLeft` / `Right` / `Up` / `Down`, `Alt+hjkl`) move
   inside a view, as smart-splits does between Neovim and tmux. A view hands it over with
   `api.panes.setFocusTarget(target)` beside its resize target, and every base scope change drops it too. Its
   `move(direction)` moves focus to the view's own pane that way and returns true, or returns false at the view's edge;
-  the core then moves to the outer pane that way, and does nothing at the outer edge. **The outer panes** are the
+  the core then moves to the outer pane that way, and does nothing at the outer edge but log `no pane <direction>`. **The outer panes** are the
   panes around the view, handed over by the mode that tiles them with `api.panes.setOuterPanes({ focus, resize })`
   and kept across scope changes until that mode sets null (Sessions mode's chat panes, set while the mode shows). A
   view never binds `Alt+hjkl` itself: the key engine cannot hold a key in one scope and in `any` both. The split core draws each handle's
