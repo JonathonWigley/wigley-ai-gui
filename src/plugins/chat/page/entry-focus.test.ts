@@ -33,29 +33,65 @@ describe('entry focus', () => {
     },
   );
 
+  const onLine: EntryFocus = { entryId: 'activity:s1', following: true };
+  const openRun = ['a', 'activity:s1', 's1', 's2', 's3'];
+
   it.each([
     {
       given: 'following',
       focus: onC,
       next: ['a', 'b', 'c', 'd'],
+      lastRow: 'd',
       expected: { entryId: 'd', following: true },
     },
     {
       given: 'not following',
       focus: onB,
       next: ['a', 'b', 'c', 'd'],
+      lastRow: 'd',
       expected: onB,
     },
     {
       given: 'a gone entry',
       focus: { entryId: 'x', following: false },
       next: ['a', 'b', 'c', 'd'],
+      lastRow: 'd',
       expected: { entryId: 'd', following: true },
     },
-    { given: 'no entries left', focus: onB, next: [], expected: START_FOCUS },
-  ])('focusAfterChange on $given → $expected', ({ focus, next, expected }) => {
-    expect(focusAfterChange(focus, next)).toEqual(expected);
-  });
+    {
+      given: 'following on the open last run line',
+      focus: onLine,
+      next: openRun,
+      lastRow: 'activity:s1',
+      expected: onLine,
+    },
+    {
+      given: 'following on an open last run step',
+      focus: { entryId: 's2', following: true },
+      next: openRun,
+      lastRow: 'activity:s1',
+      expected: { entryId: 's3', following: true },
+    },
+    {
+      given: 'following on a run line no longer last',
+      focus: onLine,
+      next: [...openRun, 'b'],
+      lastRow: 'b',
+      expected: { entryId: 'b', following: true },
+    },
+    {
+      given: 'no entries left',
+      focus: onB,
+      next: [],
+      lastRow: null,
+      expected: START_FOCUS,
+    },
+  ])(
+    'focusAfterChange on $given → $expected',
+    ({ focus, next, lastRow, expected }) => {
+      expect(focusAfterChange(focus, next, lastRow)).toEqual(expected);
+    },
+  );
 
   it.each([
     { entries: ['a', 'b', 'c'], expected: { entryId: 'a', following: false } },

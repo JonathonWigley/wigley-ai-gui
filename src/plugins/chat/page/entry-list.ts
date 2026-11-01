@@ -25,6 +25,7 @@ import {
   type ListRow,
   type ListStop,
   listRows,
+  rowId,
 } from './activity-runs';
 import { createEntryKit, type EntryKit, type KitDeps } from './chat-kit';
 import {
@@ -71,10 +72,12 @@ export interface TranscriptScroll extends ContentScroll {
 // of steps also drawn as one activity line slot right before its first step's
 // slot; a closed run's step slots are hidden. The cursor stops on each entry
 // and activity line, and on each step of an open run; the focused stop's slot
-// is marked `is-cursor`. After every change, and whenever the list's own box
-// resizes, a following focus scrolls the list to its bottom; a hidden list
-// does not scroll, so its tab calls `scrollToFocus` each time it shows. While
-// a live run is drawn its line's time ticks once a second.
+// is marked `is-cursor`. A following focus moves to the latest stop as the
+// list changes, except one on the last row's activity line, which stays on
+// it while the run is open and grows. After every change, and whenever the
+// list's own box resizes, a following focus scrolls the list to its bottom; a
+// hidden list does not scroll, so its tab calls `scrollToFocus` each time it
+// shows. While a live run is drawn its line's time ticks once a second.
 export interface EntryList {
   element: HTMLOListElement;
   // Builds an entry new to the list, or redraws the one holding its id;
@@ -87,7 +90,8 @@ export interface EntryList {
   setWorking(working: boolean): void;
   // The focused stop after the move; null with no entries.
   move(step: 1 | -1): ListStop | null;
-  // Follows the latest stop and scrolls to the bottom.
+  // Follows the last row, an entry or a run's line whether the run is open
+  // or not, and scrolls to the bottom.
   latest(): void;
   // Focuses the first stop and scrolls to the top; the focused stop, null
   // with no entries.
@@ -232,7 +236,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       }
     }
     order = cursorStops(rows, openRuns);
-    focus = focusAfterChange(focus, order);
+    focus = focusAfterChange(focus, order, lastRowId(rows));
     drawFocus('follow');
     followLiveRun();
   };
@@ -344,7 +348,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       return focusedStop();
     },
     latest() {
-      focus = focusLatest(order);
+      focus = focusLatest(lastRowId(rows));
       drawFocus('bottom');
     },
     first() {
@@ -423,6 +427,11 @@ function disposeRunSlots(runSlots: Map<string, RunSlot>) {
   for (const run of runSlots.values()) {
     run.drawn?.dispose();
   }
+}
+
+function lastRowId(rows: readonly ListRow[]): string | null {
+  const last = rows.at(-1);
+  return last === undefined ? null : rowId(last);
 }
 
 function liveRunSlot(runSlots: Map<string, RunSlot>): RunSlot | undefined {

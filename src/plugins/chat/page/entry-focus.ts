@@ -1,5 +1,5 @@
 // Which entry of a session's list the entry keys act on. A following focus
-// stays on the latest entry as entries arrive.
+// stays on the latest entry as entries arrive, or on the last row's own stop.
 export interface EntryFocus {
   entryId: string | null;
   following: boolean;
@@ -31,9 +31,11 @@ export function focusFirst(ids: readonly string[]): EntryFocus {
     : { entryId: first, following: ids.length === 1 };
 }
 
-export function focusLatest(ids: readonly string[]): EntryFocus {
-  const last = ids.at(-1);
-  return last === undefined ? START_FOCUS : { entryId: last, following: true };
+// Following on `latestId`; from no id, the start.
+export function focusLatest(latestId: string | null): EntryFocus {
+  return latestId === null
+    ? START_FOCUS
+    : { entryId: latestId, following: true };
 }
 
 // After the list scrolled by `direction` and came to rest `isAtBottom` or not:
@@ -51,16 +53,18 @@ export function focusAfterScroll(
   return { entryId: focus.entryId, following };
 }
 
-// After the list changed: a following focus moves to the new last entry, a
-// focus on an entry still listed stays, and one whose entry is gone follows
-// the latest.
+// After the list changed: a focus on an entry still listed stays, and a
+// following one only while it sits on `lastRowId`, the last row's stop (an
+// open last run's line); any other following focus, and one whose entry is
+// gone, follows the last of `ids`.
 export function focusAfterChange(
   focus: EntryFocus,
   ids: readonly string[],
+  lastRowId: string | null,
 ): EntryFocus {
-  const isKept =
-    !focus.following && focus.entryId !== null && ids.includes(focus.entryId);
-  return isKept ? focus : focusLatest(ids);
+  const isListed = focus.entryId !== null && ids.includes(focus.entryId);
+  const isKept = isListed && (!focus.following || focus.entryId === lastRowId);
+  return isKept ? focus : focusLatest(ids.at(-1) ?? null);
 }
 
 // After run `runId` closed: a focus on one of its `stepIds` moves to the run's

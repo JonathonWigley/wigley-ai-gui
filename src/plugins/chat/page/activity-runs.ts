@@ -37,6 +37,11 @@ export function runIdOf(firstStepId: string): string {
   return `activity:${firstStepId}`;
 }
 
+// The cursor stop a row is drawn as: its entry's id, or its run's.
+export function rowId(row: ListRow): string {
+  return row.kind === 'entry' ? row.entry.id : row.runId;
+}
+
 // The entries in order, each run of steps folded into one row. Only a run
 // that is the last row while the session is `working` is live.
 export function listRows(
@@ -82,12 +87,8 @@ export function cursorStops(
 ): string[] {
   const stops: string[] = [];
   for (const row of rows) {
-    if (row.kind === 'entry') {
-      stops.push(row.entry.id);
-      continue;
-    }
-    stops.push(row.runId);
-    if (openRuns.has(row.runId)) {
+    stops.push(rowId(row));
+    if (row.kind === 'run' && openRuns.has(row.runId)) {
       for (const step of row.steps) {
         stops.push(step.id);
       }

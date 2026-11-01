@@ -435,6 +435,21 @@ describe('activity lines', () => {
     expect(slotOf(list.element, 'chat-step-slot', 1).hidden).toBe(true);
   });
 
+  it('runs_LastRunFollowedToggleTwiceWithAStepBetween_StaysOnTheLine', () => {
+    const { list, put } = setUpList(defaultShown());
+    [user('u1'), tool('t1'), tool('t2')].forEach(put);
+
+    expect(list.toggleFocused()?.result).toBe('expanded');
+    put(tool('t3'));
+    expect(list.focused()).toEqual(
+      runStop([tool('t1'), tool('t2'), tool('t3')]),
+    );
+    list.latest();
+    expect(list.toggleFocused()?.result).toBe('collapsed');
+    put(assistant('done'));
+    expect(list.focused()).toEqual({ kind: 'entry', entry: assistant('done') });
+  });
+
   it('runs_ClickClosesWithFocusOnStep_FocusMovesToTheRun', () => {
     const { list, put } = setUpList(defaultShown());
     userToolToolAssistant.forEach(put);
