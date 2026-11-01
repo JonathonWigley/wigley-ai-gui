@@ -63,12 +63,12 @@ would emit the same events into `chat.agentEvent`'s payload shape.
 
 ## The agents plugin
 
-`src/plugins/agents/` depends on `sessions` and `chat`.
+`src/plugins/agents/` depends on `sessions`, `chat` and `keys` (its layout kit's key prompts).
 
 - **Main** hears `chat.agentEvent`, folds each event into its session's roster with a pure reducer, appends the event
   as one JSON line to `logs/<host session id>.jsonl` in its plugin data, and sends each changed roster to the page
-  over its channel. A session's `sessionEnded` finishes every subagent still listed, since an interrupt or a crash
-  sends no `agentFinished`. A resumed session keeps its host session id, so it appends to the same log. Logs are never
+  over its channel. A session's `sessionEnded` finishes every subagent still listed: a process that exits or crashes
+  mid-subagent sends no `agentFinished` (an interrupt's turn result finishes them in the adapter). A resumed session keeps its host session id, so it appends to the same log. Logs are never
   pruned.
 - **Page** adds a row part through sessions' `addRowPart` and draws, under each session row, one line per running
   subagent through the `agents` layout: a working dot, the agent type, the description, the elapsed time and the
