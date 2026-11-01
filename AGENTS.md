@@ -328,7 +328,10 @@ round; primer: an open primer), since main, not the page, decides.
   inside a view, as smart-splits does between Neovim and tmux. A view hands it over with
   `api.panes.setFocusTarget(target)` beside its resize target, and every base scope change drops it too. Its
   `move(direction)` moves focus to the view's own pane that way and returns true, or returns false at the view's edge;
-  the core then moves to the outer pane that way, and does nothing at the outer edge but log `no pane <direction>`. **The outer panes** are the
+  the core then moves to the outer pane that way, and does nothing at the outer edge but log `no pane <direction>`.
+  While a scope is pushed (a dialog, a confirm, a picker, help) the core asks neither and logs
+  `no pane <direction> while a scope is pushed`: a move would change the set scope, whose `onBaseChanged` dismisses
+  the pushed scope, or move focus behind it. **The outer panes** are the
   panes around the view, handed over by the mode that tiles them with `api.panes.setOuterPanes({ focus, resize })`
   and kept across scope changes until that mode sets null (Sessions mode's chat panes, set while the mode shows). A
   view never binds `Alt+hjkl` itself: the key engine cannot hold a key in one scope and in `any` both. The split core draws each handle's

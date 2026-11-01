@@ -453,7 +453,8 @@ export interface PageTransparency {
 // every change of the set scope drops both targets and a pushed scope keeps
 // them. A resize asks the view's target, then the outer panes', then the side
 // bar, stopping at the first that returns true; a focus asks the view's
-// target, then the outer panes'. `panes.setOuterPanes` hands over the panes
+// target, then the outer panes', and does neither while a scope is pushed,
+// since a move would dismiss it. `panes.setOuterPanes` hands over the panes
 // around the view, kept across scope changes until their owner sets null.
 // `dependency` returns the exports of a plugin the manifest lists in
 // `dependsOn`, typed by the caller from that plugin's contract. `Ev` is the

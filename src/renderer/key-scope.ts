@@ -3,7 +3,8 @@ import type { PushedScope } from '../contracts/plugin';
 
 // The scope page keys fire in: the base a plugin's view sets, under the scopes
 // modal views push over it. `current` is the scope pushed last and not yet
-// popped, else the base. `onChange` listeners run each time `current` changes;
+// popped, else the base. `anyPushed` is true while any pushed scope is not
+// yet popped. `onChange` listeners run each time `current` changes;
 // a pushed scope's `onBaseChanged` listeners run each time the base changes
 // while it is pushed, after the `onChange` listeners. `onBaseChange` listeners
 // run each time `setBase` moves the base to another scope, after both; a push
@@ -12,6 +13,7 @@ export interface ScopeStack {
   setBase(scope: ViewScope): void;
   push(scope: ViewScope): PushedScope;
   current(): ViewScope;
+  anyPushed(): boolean;
   onChange(listener: (scope: ViewScope) => void): void;
   onBaseChange(listener: (base: ViewScope) => void): void;
 }
@@ -86,6 +88,7 @@ export function createScopeStack(initial: ViewScope): ScopeStack {
       };
     },
     current,
+    anyPushed: () => pushed.length > 0,
     onChange(listener) {
       listeners.push(listener);
     },

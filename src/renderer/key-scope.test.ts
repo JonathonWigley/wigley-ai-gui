@@ -14,6 +14,18 @@ describe('createScopeStack', () => {
     expect(stack.current()).toBe('forms.forms');
   });
 
+  it('reports a scope pushed until the last pop, one equal to the base included', () => {
+    const stack = createScopeStack('forms.forms');
+    const first = stack.push('forms.forms');
+    const second = stack.push('keys.help');
+
+    second.pop();
+    expect(stack.anyPushed()).toBe(true);
+
+    first.pop();
+    expect(stack.anyPushed()).toBe(false);
+  });
+
   it('pops an entry under the top and keeps the top', () => {
     const stack = createScopeStack('forms.forms');
     const first = stack.push('a.first');

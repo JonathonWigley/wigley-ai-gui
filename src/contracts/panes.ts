@@ -16,14 +16,16 @@ export interface ResizeTarget {
 }
 
 // A view's own panes that the focus keys move between. `move` focuses the pane
-// that way and returns true, or returns false at the view's edge.
+// that way and returns true, or returns false at the view's edge. The core
+// calls it only while no scope is pushed.
 export interface FocusTarget {
   move(direction: PaneDirection): boolean;
 }
 
 // The panes around the view, set by the mode that tiles them and kept across
 // scope changes until it sets null. A press the view's own target turns down
-// goes to these, and a resize they turn down goes on to the side bar.
+// goes to these, a focus press only while no scope is pushed, and a resize
+// they turn down goes on to the side bar.
 export interface OuterPanes {
   focus: FocusTarget;
   resize: ResizeTarget;

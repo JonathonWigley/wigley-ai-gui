@@ -8,8 +8,9 @@ import type {
 // The targets the core's pane commands go to. A resize asks the view's
 // resize target, then the outer panes', then `sideBar`; a focus asks the
 // view's focus target, then the outer panes'. Each stops at the first that
-// returns true and logs when none does. `dropViewTargets` forgets the view's
-// two targets and keeps the outer panes, which stay until
+// returns true and logs when none does. A focus while `isScopePushed()`
+// asks no target and logs; a resize goes through. `dropViewTargets` forgets
+// the view's two targets and keeps the outer panes, which stay until
 // `setOuterPanes(null)`.
 export interface PaneTargets {
   setResizeTarget(target: ResizeTarget | null): void;
@@ -22,6 +23,7 @@ export interface PaneTargets {
 
 export function createPaneTargets(
   sideBar: ResizeTarget,
+  isScopePushed: () => boolean,
   log: (message: string) => void,
 ): PaneTargets {
   let resizeTarget: ResizeTarget | null = null;
@@ -51,6 +53,10 @@ export function createPaneTargets(
       }
     },
     focus(direction) {
+      if (isScopePushed()) {
+        log(`no pane ${direction} while a scope is pushed`);
+        return;
+      }
       const moved =
         (focusTarget?.move(direction) ?? false) ||
         (outerPanes?.focus.move(direction) ?? false);

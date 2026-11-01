@@ -63,7 +63,8 @@ hjkl is the direction in every layer; the modifier picks the verb.
 - **Alt+hjkl** moves focus to the pane that way, as smart-splits does between Neovim and tmux: first
   between a view's own panes (the docs tree and the doc, while the tree shows; the Backlog list and detail, the Settings
   sections and rows, and the Primer tab's tasks, items and card columns), then, at the view's edge,
-  to the neighbouring chat pane in Sessions mode. Focus stops at the outer edge. The commands are the
+  to the neighbouring chat pane in Sessions mode. Focus stops at the outer edge, and stays put while
+  any scope is pushed over the view (a dialog, a confirm, a picker, a filter box, help). The commands are the
   core's `panes.focusLeft`, `panes.focusRight`, `panes.focusUp` and `panes.focusDown`, bound in every
   scope; a view takes part through its focus target (AGENTS.md § Architecture), never a bind of its own.
 - **Alt+Shift+hjkl** resizes the focused pane, as tmux's `resize-pane` does: `Alt+Shift+h` moves the

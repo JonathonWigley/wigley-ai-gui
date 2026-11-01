@@ -156,8 +156,10 @@ async function start() {
   chrome.showProblems(config.problems);
 
   const scopeStack = createScopeStack(INITIAL_SCOPE);
-  const paneTargets = createPaneTargets(shell.sideBarDivider, (message) =>
-    log('page', message),
+  const paneTargets = createPaneTargets(
+    shell.sideBarDivider,
+    () => scopeStack.anyPushed(),
+    (message) => log('page', message),
   );
   // Targets a view set under the previous base belong to a view no longer in
   // force.

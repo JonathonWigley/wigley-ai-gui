@@ -90,6 +90,7 @@ describe('createPaneTargets', () => {
       const fakes = recordingTargets();
       const targets = createPaneTargets(
         fakes.resizer('side bar', sideBar),
+        () => false,
         fakes.log,
       );
       if (view !== null) {
@@ -113,6 +114,7 @@ describe('createPaneTargets', () => {
     row: string;
     view: Answer;
     outer: Answer;
+    pushed?: boolean;
     direction: PaneDirection;
     asked: string[];
     logged: string[];
@@ -157,12 +159,22 @@ describe('createPaneTargets', () => {
       asked: ['view down', 'outer down'],
       logged: ['no pane down'],
     },
+    {
+      row: 'scope pushed, view and outer true',
+      view: true,
+      outer: true,
+      pushed: true,
+      direction: 'right',
+      asked: [],
+      logged: ['no pane right while a scope is pushed'],
+    },
   ])(
     'moves focus through the first target that takes it: $row',
-    ({ view, outer, direction, asked, logged }) => {
+    ({ view, outer, pushed = false, direction, asked, logged }) => {
       const fakes = recordingTargets();
       const targets = createPaneTargets(
         fakes.resizer('side bar', true),
+        () => pushed,
         fakes.log,
       );
       if (view !== null) {
@@ -186,6 +198,7 @@ describe('createPaneTargets', () => {
     const fakes = recordingTargets();
     const targets = createPaneTargets(
       fakes.resizer('side bar', true),
+      () => false,
       fakes.log,
     );
     targets.setResizeTarget(fakes.resizer('view resize', true));
