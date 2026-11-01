@@ -1,6 +1,6 @@
 # 05b — Sessions panes
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 01, 02, 03, 04, 05a
 Plan: [plan.md](plan.md)
@@ -153,3 +153,4 @@ tests above.
 Commit:    one commit for the group
 
 ## Proof
+Commits 6090d0d and c1dcc6b (chord fix) · diff read (commands, binds, layout pane part and hints, onScreen, uiState panes present) + whole-tree typecheck clean; sessions and keymap tests pass per the workers (205, 456); npm run selftest all passed, every key placed · concerns: up/down focus edges overlay the tab bar's buttons in a stacked pane (cosmetic)

@@ -186,7 +186,7 @@ Boundary rules:
 
 ### Wave 3
 
-- [ ] [Sessions panes](05b-sessions-panes.md) — after 01, 02, 03, 04, 05a
+- [x] [Sessions panes](05b-sessions-panes.md) — after 01, 02, 03, 04, 05a
 
 ### Wave 4
 
@@ -206,9 +206,12 @@ Review base: 6562c495f9c5949743e50df7b963f344c3ee6d31
 - 01 · e5a3813 · diff read (PaneDirection, ResizeTarget boolean, FocusTarget, OuterPanes, PANE_FOCUS_COMMANDS, PageApi.panes, PaneTargets, createPaneTargets present) + whole-tree typecheck clean; named tests pass per the worker, primer-view's base-failing rows aside · concerns: docs/features/usage/plan-usage/01-right-bar-area.md:28 still names createPaneResize (another plan's doc); Alt+Shift+j/k show no key-hint prompt until a vertical divider exists
 - 03 · 83cebe9 · diff read (every Produces in pane-tree.ts and pane-tree-view.ts present; split.ts prompt output unchanged) + typecheck clean in its files; pane-tree and split tests pass per the worker (79) · concerns: a slot moved in the DOM loses keyboard focus (focused slot on split, both on swap, sibling's on close) so 05b must restore editor focus; swap calls changed but not focused
 - 02 · 9c84f9d · diff read (four any focus binds; each view hands a FocusTarget beside its resize target; kit resolves dotted names) + whole-tree typecheck clean; Done-when grep prints nothing; view tests pass per the workers (707 + 167, primer-view's 3 base-failing rows aside); self-test passes every step but the pane binds' unplaced lines (see ruling) · concerns: backlog-view.ts: paneTo was inserted between cursorActionsSlot's comment and its function, orphaning that comment; a pushed scope (backlog filter, picker, confirm) keeps the view's targets and any-scope Alt+h/l fire there, moving list/detail behind the overlay (the scoped binds did not); self-test unplaced lines for panes.focus* and resizePaneUp/Down until 05b
+- 05b · 6090d0d + c1dcc6b (chord fix) · diff read + typecheck clean; selftest all passed, every key placed · concerns: up/down focus edges overlay the tab bar's buttons in a stacked pane
 ### Contract changes
 - pane-tree.ts: also exports clampedRatio(ratio, least) and withSplitRatio(tree, split, ratio) · why: the view's drag clamps and sets a ratio with nudgeFocused's own functions · consumers: none · group 03
 - split.ts: exports NUDGE_PROMPT_MS and splitResizePrompt(anchor, start: ResizePromptEnd, end: ResizePromptEnd): { element, anchors } (the helper the task named) · why: the pane tree view shares the prompt and its linger · consumers: none · group 03
+- sessions manifest: adds a picker scope and four picker commands (down, up, choose, cancel) bound j, k, Enter, Esc there · why: the shared list picker pushes an owner scope · consumers: none · group 05b
+- tab bar hints: is-no-target sits on the key inside each split/close button, not the button · why: on the button it hides it, and a click in an unfocused pane must focus it and run the command · consumers: none · group 05b
 ### Rulings
 - plan.py matches only NN- task prefixes, so 05a and 05b's Status, box and Proof edits are made by hand in the same shape — none — a mis-shaped hand edit, caught at the final gate · lead
 - peer ai-dev-e8's uncommitted chat-view.ts hunk (turn-end latest, ~lines 233-240) stays in the tree; 04 edits the file and commits only its own hunk through a cached patch, checked with git diff --cached — settled with the peer — a swept peer hunk, caught by the cached-diff check · lead
@@ -221,5 +224,9 @@ Review base: 6562c495f9c5949743e50df7b963f344c3ee6d31
 - 02's npm run selftest Done-when moves to 05b and 07: the any-scope panes.focus* and panes.resizePaneUp/Down binds stay unplaced until 05b's pane edges (focusEdge, anchored with no scope) and the pane tree's column-divider prompt reach the page; every other self-test step passes at 02A — if 05b's self-test never shows a column divider or a pane edge in some scope, the lines persist and 05b must anchor them · lead
 - Docs: Alt+h no longer reveals a hidden tree (item 2's focus target returns false there); Esc (docs.backToTree) still does, and the docs-browser design says so — none · group 02 · group 02
 - primer hands its focus target only while the primer view shows a primer's panes, else null; backlog's target also returns false with the editor open — none · group 02 · group 02
+- 05b BLOCKED: the page chord notation admits only a letter, digit or Enter after modifiers, so <A-'> and <A-;> cannot bind; the user's tmux keys stand, and a fix group widens src/shared/chord-notation.ts and key-sequences.ts chordCode (Semicolon, Quote) and binds both, outside 05b's file list — keeps the decided keys — a chord the matcher reads by code mismatching on another layout · lead
+- peer commit 22dfcf9 (workflow design) landed between this run's commits, so the review takes an explicit commit list rather than the review-base range · lead
+- main's fallback pick reads 'two panes or more remain' as two or more before the close, matching the p1/p2 behaviour line; a pending echo is recorded only when the session differs from the selection main ends on; the pick hint shows only in an empty focused pane; the self-test adds an <A-k> step, expects the <A-S-j> resize log line, widens the window to 1800 for the cancel split, and ends its three fixture sessions — the fallback reading, if wrong, keeps a removed pane's neighbour unfocused · group 05b
+- the chord fix maps ; and ' by US-layout codes; Electron's sendInputEvent takes them as keyCodes (per its accelerator docs, confirmed by the passing self-test) — another layout's physical keys differ · group 05b fix
 ### Review rounds
 ### Test gate
