@@ -9,8 +9,11 @@ import type {
   LogInEvents,
   LogInProcess,
   PastSession,
+  PlanRowUpdate,
+  PlanUsage,
   ProjectFolder,
   SessionControl,
+  UsageAgentEvent,
 } from '../contracts/agent';
 import type { Clock } from '../contracts/ambient';
 import { createEntryStamp, type EntryDraft } from './entry-stamp';
@@ -19,7 +22,9 @@ import { createEntryStamp, type EntryDraft } from './entry-stamp';
 // Every emission runs in a microtask the causing call queues, never inside the
 // call, so a caller's state is in place before its events arrive. Each emitted
 // entry carries the clock's time when its id first arrived; `history` entries
-// carry fixed times one second apart.
+// carry fixed times one second apart. Every finished turn reports a `usage`
+// agent event and a plan row update after its result, and `planUsage` answers
+// every profile with `fakePlanUsage`.
 
 // A send of this text opens a turn that stays open until `interrupt` or `end`.
 export const FAKE_HOLD_TEXT = 'fake: hold';
@@ -92,12 +97,14 @@ export interface FakePastSessionCall {
 // reject `message`. Every profile starts signed in as `fake@example.invalid`;
 // `logOut` signs it out and a `logIn` given `FAKE_SIGN_IN_CODE` signs it back
 // in. `listProjects` lists the folders `start` ran under the profile, the last
-// started first.
+// started first. `planUsage` resolves `fakePlanUsage` at the clock's time in a
+// later microtask; `failNextPlanUsage` makes the next one reject `message`.
 export interface FakeAgentHarness extends AgentHarness {
   readonly processes: readonly FakeAgentProcessRecord[];
   readonly pastSessionCalls: readonly FakePastSessionCall[];
   failNextStart(message: string): void;
   failNextHistory(message: string): void;
+  failNextPlanUsage(message: string): void;
   holdEnd(): void;
   releaseEnd(): void;
 }
@@ -169,13 +176,93 @@ function startingControls(): SessionControl[] {
   ];
 }
 
+// Every profile's plan usage at `at`: a 5-hour row, a critical active weekly
+// row and a scoped weekly row, with extra usage on.
+export function fakePlanUsage(at: number): PlanUsage {
+  return {
+    rows: [
+      {
+        kind: 'session',
+        group: 'session',
+        label: '5h',
+        percent: 35,
+        resetsAt: at + 7_200_000,
+        severity: 'normal',
+        isActive: false,
+      },
+      {
+        kind: 'weekly_all',
+        group: 'weekly',
+        label: 'Week',
+        percent: 97,
+        resetsAt: at + 259_200_000,
+        severity: 'critical',
+        isActive: true,
+      },
+      {
+        kind: 'weekly_scoped',
+        group: 'weekly',
+        label: 'Fable',
+        percent: 0,
+        resetsAt: at + 259_200_000,
+        severity: 'normal',
+        isActive: false,
+      },
+    ],
+    extraUsage: {
+      enabled: true,
+      usedMinor: 1250,
+      limitMinor: 5000,
+      currency: 'USD',
+    },
+    at,
+  };
+}
+
+// The `usage` event turn `turn` ends with; its two autocompact limits differ.
+export function fakeUsageEvent(turn: number, at: number): UsageAgentEvent {
+  return {
+    type: 'usage',
+    agentId: 'main',
+    at,
+    contextTokens: 42_000 * turn,
+    contextWindow: 1_000_000,
+    autocompact: { configured: 300_000, reported: 967_000 },
+    cacheExpiresAt: at + 3_600_000,
+    spendUsd: 0.25 * turn,
+  };
+}
+
+// The plan rows turn `turn` saw: the 5-hour row one point past the poll's per
+// turn.
+export function fakePlanRowUpdate(turn: number, at: number): PlanRowUpdate {
+  return {
+    rows: [
+      {
+        kind: 'session',
+        percent: 35 + turn,
+        resetsAt: at + 7_200_000,
+        severity: 'normal',
+      },
+      {
+        kind: 'weekly_all',
+        percent: 97,
+        resetsAt: at + 259_200_000,
+        severity: 'critical',
+      },
+    ],
+    at,
+  };
+}
+
 // Emits one entry, stamped with its `at`.
 type EmitEntry = (draft: EntryDraft) => void;
 
-// The entries and activity that close turn `turn`.
+// The entries, usage and activity that close turn `turn`.
 function emitTurnEnd(
   events: AgentProcessEvents,
   emitEntry: EmitEntry,
+  clock: Clock,
   turn: number,
 ) {
   emitEntry({
@@ -186,12 +273,15 @@ function emitTurnEnd(
     durationMs: null,
     raw: [{ fake: 'result' }],
   });
+  events.agentEvent(fakeUsageEvent(turn, clock.now()));
+  events.planUsage(fakePlanRowUpdate(turn, clock.now()));
   events.activity('idle');
 }
 
 function emitToolTurn(
   events: AgentProcessEvents,
   emitEntry: EmitEntry,
+  clock: Clock,
   turn: number,
 ) {
   const tool = {
@@ -216,7 +306,7 @@ function emitToolTurn(
     streaming: false,
     raw: [{ fake: 'assistant', text: reply }],
   });
-  emitTurnEnd(events, emitEntry, turn);
+  emitTurnEnd(events, emitEntry, clock, turn);
 }
 
 // The tools `FAKE_STEPS_TEXT`'s turn runs, in order, each with its result.
@@ -267,6 +357,7 @@ function emitStepsTurn(emitEntry: EmitEntry, turn: number) {
 function emitEchoTurn(
   events: AgentProcessEvents,
   emitEntry: EmitEntry,
+  clock: Clock,
   turn: number,
   text: string,
 ) {
@@ -286,7 +377,7 @@ function emitEchoTurn(
     streaming: false,
     raw: [first, { fake: 'assistant', text }],
   });
-  emitTurnEnd(events, emitEntry, turn);
+  emitTurnEnd(events, emitEntry, clock, turn);
 }
 
 // The images on a fake past session's user message: a red and a blue 16×16
@@ -330,6 +421,7 @@ export function createFakeAgentHarness(clock: Clock): FakeAgentHarness {
   const pastSessionCalls: FakePastSessionCall[] = [];
   let nextStartFailure: string | null = null;
   let nextHistoryFailure: string | null = null;
+  let nextPlanUsageFailure: string | null = null;
   let isEndHeld = false;
   const heldEnds: (() => void)[] = [];
   // Profiles `logOut` signed out and no sign-in has signed in since.
@@ -445,9 +537,9 @@ export function createFakeAgentHarness(clock: Clock): FakeAgentHarness {
           if (isSteps) {
             emitStepsTurn(emitEntry, sentTurn);
           } else if (text === FAKE_TOOL_TEXT) {
-            emitToolTurn(events, emitEntry, sentTurn);
+            emitToolTurn(events, emitEntry, clock, sentTurn);
           } else {
-            emitEchoTurn(events, emitEntry, sentTurn, text);
+            emitEchoTurn(events, emitEntry, clock, sentTurn, text);
           }
         });
       },
@@ -593,6 +685,17 @@ export function createFakeAgentHarness(clock: Clock): FakeAgentHarness {
         ([projectDir, modified]) => ({ projectDir, modified }),
       );
       return projects.sort((a, b) => b.modified - a.modified);
+    },
+    async planUsage() {
+      if (nextPlanUsageFailure !== null) {
+        const message = nextPlanUsageFailure;
+        nextPlanUsageFailure = null;
+        throw new Error(message);
+      }
+      return fakePlanUsage(clock.now());
+    },
+    failNextPlanUsage(message) {
+      nextPlanUsageFailure = message;
     },
     holdEnd() {
       isEndHeld = true;

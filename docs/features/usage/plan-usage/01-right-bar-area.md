@@ -1,6 +1,6 @@
 # 01 — Right bar shell area
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -50,3 +50,5 @@ Done when: compiles; `npm run lint` passes; the test gate runs the tests above
 Commit:    one commit for the group
 
 ## Proof
+
+Commit fef2080 · proof: diff read: every Produces present; typecheck clean in 01 files (only errors were 03's in-flight harness tests); worker ran shell/split/page-api tests, 106 pass · concerns: stale prose outside Files: settings.ts:96 shell.layout description and layouts/design.md:72,79 'four chrome areas'; side bar may not regrow in the same pass the right bar shrinks (real-DOM only); grid/handle/gallery layout not checked live; three shell test names undersell their two-handle assertions

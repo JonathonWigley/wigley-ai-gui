@@ -465,6 +465,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         session.state.commands = [...names];
         send('commands', { sessionId, names: [...names] });
       },
+      // Chat main forwards no plan rows or agent events yet.
+      planUsage() {},
+      agentEvent() {},
       ended({ code, error }) {
         // A close drops the row before its process ends, so the exit is
         // recorded for the row's latest process whether or not it is live.

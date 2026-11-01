@@ -1,21 +1,40 @@
+import type { PlanRowPatch } from '../../contracts/agent';
 import type { ClaudeControlId } from './claude-controls';
 import type { EntryDraft } from '../../shared/entry-stamp';
+import { isJsonObject } from '../../shared/json';
 import { asArray, asJson, asString, type Json, parsed } from './json-fields';
+import { rateLimitRows } from './plan-usage';
+import {
+  type ReplyUsage,
+  replyUsageOf,
+  type TurnUsage,
+  turnUsageOf,
+} from './session-usage';
 import { pairToolResult, type ToolEntry, toolUseEntry } from './tool-entries';
 
 // What one stdout line of `claude` in stream-json mode means to the chat.
 // `entries` are whole entries, not yet stamped with `at`, each replacing an
 // earlier one with its id; `reported` holds control values as Claude names
 // them (`controlValue` maps them); `turnFailed` is true on a turn-ending line
-// that reports an error.
+// that reports an error. The usage side channels: `planRows` from a
+// `rate_limit_event`, `replyUsage` from a main-conversation reply, `turnUsage`
+// from every `result`; `controlResponse.response` is the reply's data, `{}`
+// when it carries none.
 export interface DecodedLine {
   entries: EntryDraft[];
   reported: Partial<Record<ClaudeControlId, string>>;
   commands: string[] | null;
   turnEnded: boolean;
   turnFailed: boolean;
-  controlResponse: { requestId: string; error: string | null } | null;
+  controlResponse: {
+    requestId: string;
+    error: string | null;
+    response: Json;
+  } | null;
   hostRequest: { requestId: string; subtype: string } | null;
+  planRows: PlanRowPatch[] | null;
+  replyUsage: ReplyUsage | null;
+  turnUsage: TurnUsage | null;
 }
 
 export interface StreamDecoder {
@@ -58,6 +77,9 @@ function emptyLine(): DecodedLine {
     turnFailed: false,
     controlResponse: null,
     hostRequest: null,
+    planRows: null,
+    replyUsage: null,
+    turnUsage: null,
   };
 }
 
@@ -126,6 +148,9 @@ export function createStreamDecoder(): StreamDecoder {
   let resultCount = 0;
   // `total_cost_usd` is the process's cost so far.
   let lastTotalCost = 0;
+  // The model of the main conversation's last reply, whose context window a
+  // result reports.
+  let lastMainModel: string | null = null;
 
   // An event of a type the decoder does not know, alone in its entry.
   function rawEntry(raw: unknown): EntryDraft {
@@ -330,8 +355,22 @@ export function createStreamDecoder(): StreamDecoder {
     return entry;
   }
 
+  // A subagent's reply is out of scope, and a synthetic reply's zero usage
+  // would reset the context, so only a main model reply reports usage.
+  function readReplyUsage(event: Json, message: Json, out: DecodedLine) {
+    const isMainReply =
+      typeof event.parent_tool_use_id !== 'string' &&
+      message.model !== SYNTHETIC_MODEL;
+    if (!isMainReply || !isJsonObject(message.usage)) {
+      return;
+    }
+    out.replyUsage = replyUsageOf(message.usage);
+    lastMainModel = typeof message.model === 'string' ? message.model : null;
+  }
+
   function decodeAssistant(event: Json, out: DecodedLine) {
     const message = asJson(event.message);
+    readReplyUsage(event, message, out);
     if (message.model === SYNTHETIC_MODEL) {
       const text = messageText(message.content).trim();
       out.entries.push(
@@ -393,6 +432,7 @@ export function createStreamDecoder(): StreamDecoder {
     closeOpenBlocks(out);
     const isError = event.is_error === true;
     out.turnEnded = true;
+    out.turnUsage = turnUsageOf(event, lastMainModel);
     out.turnFailed = isError;
     const errorText = asString(event.result);
     if (isError && errorText !== '') {
@@ -428,6 +468,7 @@ export function createStreamDecoder(): StreamDecoder {
     out.controlResponse = {
       requestId: asString(response.request_id),
       error: isError ? asString(response.error) || 'unknown error' : null,
+      response: asJson(response.response),
     };
     out.entries.push(gathered(event));
   }
@@ -453,6 +494,7 @@ export function createStreamDecoder(): StreamDecoder {
   }
 
   function decodeRateLimit(event: Json, out: DecodedLine) {
+    out.planRows = rateLimitRows(asJson(event.rate_limit_info));
     out.entries.push(gathered(event));
   }
 

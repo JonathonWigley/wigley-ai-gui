@@ -43,6 +43,14 @@ const assistantEvent = (id: string, content: object[]) => ({
   parent_tool_use_id: null,
 });
 
+// Measured lines, docs/features/agent-chat/claude-stream.md § Usage and § Other events.
+const RATE_LIMIT_LINE =
+  '{"type":"rate_limit_event","rate_limit_info":{"status":"allowed_warning","resetsAt":1793426400,"rateLimitType":"seven_day","utilization":0.95,"overageStatus":"rejected","overageDisabledReason":"org_level_disabled","isUsingOverage":false,"surpassedThreshold":0.75,"unifiedWindows":{"five_hour":{"utilization":0.12,"resetsAt":1793434200,"status":"allowed"},"seven_day":{"utilization":0.95,"resetsAt":1793426400,"status":"allowed_warning","surpassedThreshold":0.75}},"overageEnabled":false}}';
+const REPLY_LINE =
+  '{"type":"assistant","message":{"model":"claude-opus-5-5","id":"msg_1","type":"message","role":"assistant","content":[{"type":"text","text":"ok"}],"stop_reason":null,"usage":{"input_tokens":3,"cache_creation_input_tokens":2000,"cache_read_input_tokens":40000,"output_tokens":120,"cache_creation":{"ephemeral_1h_input_tokens":2000,"ephemeral_5m_input_tokens":0}}},"parent_tool_use_id":null}';
+const RESULT_LINE =
+  '{"type":"result","subtype":"success","is_error":false,"result":"ok","stop_reason":"end_turn","total_cost_usd":0.25,"duration_ms":1850,"num_turns":1,"modelUsage":{"claude-opus-5-5":{"contextWindow":1000000,"maxOutputTokens":64000,"costUSD":0.25,"costBasis":"list"}}}';
+
 const toolUseEvent = assistantEvent('m2', [
   {
     type: 'tool_use',
@@ -558,10 +566,12 @@ describe('createStreamDecoder', () => {
     expect(success.controlResponse).toEqual({
       requestId: 'wigley-1',
       error: null,
+      response: { mode: 'plan' },
     });
     expect(failure.controlResponse).toEqual({
       requestId: 'wigley-2',
       error: 'Cannot set permission mode',
+      response: {},
     });
     expect(
       failure.entries.map((entry) => [entry.id, entry.raw.length]),
@@ -627,5 +637,118 @@ describe('createStreamDecoder', () => {
       id: 'turn-events-2',
       raw: [nextInit, requesting],
     });
+  });
+
+  it('decode_RateLimitEvent_ReportsPlanRowsAndGathers', () => {
+    const decoder = createStreamDecoder();
+    decoder.decode(line({ type: 'system', subtype: 'init' }));
+
+    const decoded = decoder.decode(RATE_LIMIT_LINE);
+
+    expect(decoded.planRows).toEqual([
+      {
+        kind: 'session',
+        percent: 12,
+        resetsAt: 1793434200000,
+        severity: 'normal',
+      },
+      {
+        kind: 'weekly_all',
+        percent: 95,
+        resetsAt: 1793426400000,
+        severity: 'warning',
+      },
+    ]);
+    const [entry] = decoded.entries;
+    expect(entry.id).toBe('turn-events-1');
+    expect(entry.raw.at(-1)).toEqual(JSON.parse(RATE_LIMIT_LINE));
+  });
+
+  // REPLY_LINE with `change` applied to its parsed event.
+  type ReplyEvent = {
+    parent_tool_use_id: unknown;
+    message: Record<string, unknown>;
+  };
+  const replyWith = (change: (event: ReplyEvent) => void) => {
+    const event: ReplyEvent = JSON.parse(REPLY_LINE);
+    change(event);
+    return JSON.stringify(event);
+  };
+
+  it.each([
+    {
+      name: 'MainReply',
+      text: REPLY_LINE,
+      expected: {
+        contextTokens: 42123,
+        cacheTtlMs: 3_600_000,
+        readsCache: true,
+      },
+    },
+    {
+      name: 'SubagentReply',
+      text: replyWith((event) => {
+        event.parent_tool_use_id = 'toolu_1';
+      }),
+      expected: null,
+    },
+    {
+      name: 'SyntheticReply',
+      text: replyWith((event) => {
+        event.message.model = '<synthetic>';
+      }),
+      expected: null,
+    },
+    {
+      name: 'NoUsage',
+      text: replyWith((event) => {
+        delete event.message.usage;
+      }),
+      expected: null,
+    },
+  ])('decode_Assistant_ReplyUsage_$name', ({ text, expected }) => {
+    expect(createStreamDecoder().decode(text).replyUsage).toEqual(expected);
+  });
+
+  it.each([
+    {
+      name: 'ModelOwnWindow',
+      lines: [REPLY_LINE, RESULT_LINE],
+      expected: { contextWindow: 1000000, spendUsd: 0.25 },
+    },
+    {
+      name: 'ModelNotAKey_LargestWindow',
+      lines: [
+        REPLY_LINE,
+        line({
+          type: 'result',
+          subtype: 'success',
+          total_cost_usd: 0.5,
+          modelUsage: {
+            'claude-haiku-5-5': { contextWindow: 200000 },
+            'claude-opus-5-5[1m]': { contextWindow: 1000000 },
+          },
+        }),
+      ],
+      expected: { contextWindow: 1000000, spendUsd: 0.5 },
+    },
+    {
+      name: 'NoReplyNoModelUsage',
+      lines: [
+        line({
+          type: 'result',
+          subtype: 'success',
+          total_cost_usd: 0.25,
+          modelUsage: {},
+        }),
+      ],
+      expected: { contextWindow: null, spendUsd: 0.25 },
+    },
+  ])('decode_Result_TurnUsage_$name', ({ lines, expected }) => {
+    const decoder = createStreamDecoder();
+
+    const decoded = lines.map((text) => decoder.decode(text));
+
+    expect(decoded.at(-1)?.turnUsage).toEqual(expected);
   });
 });

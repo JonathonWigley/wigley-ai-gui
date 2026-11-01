@@ -9,9 +9,11 @@ import type {
 } from '../../contracts/agent';
 import { createMemoryFiles } from '../../shared/memory-files';
 import { posixPaths } from '../../shared/paths/posix-paths';
+import type { Files } from '../../contracts/files';
 import {
   createClaudeCodeHarness,
   type ClaudeSpawn,
+  PLAN_USAGE_TIMEOUT_MS,
 } from './claude-code-harness';
 import { controlMessage, userMessage } from './claude-controls';
 
@@ -70,14 +72,34 @@ function recordingEvents() {
     controls: (controls) => heard.push(['controls', controls]),
     activity: (activity) => heard.push(['activity', activity]),
     commands: (names) => heard.push(['commands', names]),
+    planUsage: (update) => heard.push(['planUsage', update]),
+    agentEvent: (event) => heard.push(['agentEvent', event]),
     ended: (end) => heard.push(['ended', end]),
   };
   return { heard, events };
 }
 
+// Measured lines, docs/features/agent-chat/claude-stream.md § Usage and § Other events.
+const REPORT_LINE =
+  '{"type":"assistant","message":{"id":"msg_usage","type":"message","role":"assistant","content":[{"type":"text","text":"usage"}]},"usage_report":{"session":{"total_cost_usd":0,"model_usage":{}},"rate_limits":{"limits":[{"kind":"session","group":"session","percent":35,"resets_at":"2026-10-31T08:09:59.607264+00:00","scope":null,"severity":"normal","is_active":false},{"kind":"weekly_all","group":"weekly","percent":97,"resets_at":"2026-10-31T05:59:59.607290+00:00","scope":null,"severity":"critical","is_active":true},{"kind":"weekly_scoped","group":"weekly","percent":0,"resets_at":"2026-10-31T06:00:00+00:00","scope":{"model":{"display_name":"Fable"},"surface":null},"severity":"normal","is_active":false}],"extra_usage":{"is_enabled":false,"monthly_limit":null,"used_credits":null,"utilization":null,"currency":null}}}}';
+const RATE_LIMIT_LINE =
+  '{"type":"rate_limit_event","rate_limit_info":{"status":"allowed_warning","resetsAt":1793426400,"rateLimitType":"seven_day","utilization":0.95,"overageStatus":"rejected","overageDisabledReason":"org_level_disabled","isUsingOverage":false,"surpassedThreshold":0.75,"unifiedWindows":{"five_hour":{"utilization":0.12,"resetsAt":1793434200,"status":"allowed"},"seven_day":{"utilization":0.95,"resetsAt":1793426400,"status":"allowed_warning","surpassedThreshold":0.75}},"overageEnabled":false}}';
+const REPLY_LINE =
+  '{"type":"assistant","message":{"model":"claude-opus-5-5","id":"msg_1","type":"message","role":"assistant","content":[{"type":"text","text":"ok"}],"stop_reason":null,"usage":{"input_tokens":3,"cache_creation_input_tokens":2000,"cache_read_input_tokens":40000,"output_tokens":120,"cache_creation":{"ephemeral_1h_input_tokens":2000,"ephemeral_5m_input_tokens":0}}},"parent_tool_use_id":null}';
+const RESULT_LINE =
+  '{"type":"result","subtype":"success","is_error":false,"result":"ok","stop_reason":"end_turn","total_cost_usd":0.25,"duration_ms":1850,"num_turns":1,"modelUsage":{"claude-opus-5-5":{"contextWindow":1000000,"maxOutputTokens":64000,"costUSD":0.25,"costBasis":"list"}}}';
+const CONTEXT_REPLY_LINE =
+  '{"type":"control_response","response":{"subtype":"success","request_id":"wigley-1","response":{"autoCompactThreshold":967000,"autocompactSource":"model-default","maxTokens":1000000,"rawMaxTokens":1000000,"isAutoCompactEnabled":true}}}';
+
+const contextUsageRequest = (requestId: string) => ({
+  type: 'control_request',
+  request_id: requestId,
+  request: { subtype: 'get_context_usage' },
+});
+
 const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
 
-function started(fake = fakeChild()) {
+function started(fake = fakeChild(), files: Files = createMemoryFiles()) {
   const logged: [string, string][] = [];
   const spawn: ClaudeSpawn = () => fake.child;
   const harness = createClaudeCodeHarness({
@@ -86,7 +108,7 @@ function started(fake = fakeChild()) {
     env: {},
     log: (source, message) => logged.push([source, message]),
     spawn,
-    files: createMemoryFiles(),
+    files,
     homeDir: '/Users/u',
     paths: posixPaths,
     clock,
@@ -235,7 +257,10 @@ describe('createClaudeCodeHarness', () => {
     });
     await settle();
 
-    expect(run.written).toEqual([controlMessage('effort', 'high', '')]);
+    expect(run.written).toEqual([
+      controlMessage('effort', 'high', ''),
+      contextUsageRequest('wigley-1'),
+    ]);
     expect(
       run.heard.some(
         ([, payload]) => (payload as { kind?: string }).kind === 'result',
@@ -263,11 +288,84 @@ describe('createClaudeCodeHarness', () => {
       .filter((entry) => entry.kind === 'notice')
       .map((entry) => entry.id);
     expect(noticeIds).toEqual(['notice-1', 'control-notice-1']);
-    expect(run.written[2]).toEqual({
+    expect(run.written[3]).toEqual({
       type: 'control_request',
-      request_id: 'wigley-1',
+      request_id: 'wigley-2',
       request: { subtype: 'interrupt' },
     });
+  });
+
+  it('start_Turn_EmitsUsageEventsAndAsksContextUsage', async () => {
+    const files = createMemoryFiles();
+    await files.write(
+      '/Users/u/.claude/settings.json',
+      '{"env":{"CLAUDE_AUTOCOMPACT_PCT_OVERRIDE":"30"}}',
+    );
+    const run = started(fakeChild(), files);
+    await settle();
+    run.agent.send({ text: 'hi', images: [] });
+
+    for (const text of [REPLY_LINE, RESULT_LINE, CONTEXT_REPLY_LINE]) {
+      run.stdout.write(`${text}\n`);
+    }
+    await settle();
+
+    const first = {
+      type: 'usage',
+      agentId: 'main',
+      at: 1000,
+      contextTokens: 42123,
+      contextWindow: null,
+      autocompact: { configured: null, reported: null },
+      cacheExpiresAt: 3601000,
+      spendUsd: null,
+    };
+    const second = {
+      ...first,
+      contextWindow: 1000000,
+      autocompact: { configured: 300000, reported: null },
+      spendUsd: 0.25,
+    };
+    const third = {
+      ...second,
+      autocompact: { configured: 300000, reported: 967000 },
+    };
+    expect(
+      run.heard
+        .filter(([name]) => name === 'agentEvent')
+        .map(([, event]) => event),
+    ).toEqual([first, second, third]);
+    expect(run.written[1]).toEqual(contextUsageRequest('wigley-1'));
+  });
+
+  it('start_RateLimitEvent_EmitsPlanUsage', async () => {
+    const run = await startedQuiet();
+
+    run.stdout.write(`${RATE_LIMIT_LINE}\n`);
+    await settle();
+
+    expect(run.heard.filter(([name]) => name === 'planUsage')).toEqual([
+      [
+        'planUsage',
+        {
+          rows: [
+            {
+              kind: 'session',
+              percent: 12,
+              resetsAt: 1793434200000,
+              severity: 'normal',
+            },
+            {
+              kind: 'weekly_all',
+              percent: 95,
+              resetsAt: 1793426400000,
+              severity: 'warning',
+            },
+          ],
+          at: 1000,
+        },
+      ],
+    ]);
   });
 
   it('send_TwoMessages_StaysWorkingUntilTheSecondResult', async () => {
@@ -293,9 +391,9 @@ describe('createClaudeCodeHarness', () => {
 
     run.agent.interrupt();
 
-    expect(run.written[2]).toEqual({
+    expect(run.written[3]).toEqual({
       type: 'control_request',
-      request_id: 'wigley-1',
+      request_id: 'wigley-2',
       request: { subtype: 'interrupt' },
     });
   });
@@ -786,6 +884,104 @@ describe('createClaudeCodeHarness accounts', () => {
     await exitWith(child, '', 2);
 
     await rejected;
+  });
+
+  it('planUsage_MeasuredReport_ResolvesWithProfileEnv', async () => {
+    const child = authChild();
+    const { harness, spawned } = authHarness([child]);
+    let isStdinEnded = false;
+    child.child.stdin.on('finish', () => {
+      isStdinEnded = true;
+    });
+
+    const usage = harness.planUsage('~/.claude-personal');
+    await exitWith(child, `${REPORT_LINE}\n`, 0);
+
+    const resolved = await usage;
+    expect(resolved.rows.map((row) => row.label)).toEqual([
+      '5h',
+      'Week',
+      'Fable',
+    ]);
+    expect(resolved.at).toBe(1000);
+    expect(isStdinEnded).toBe(true);
+    expect(spawned).toEqual([
+      {
+        args: [
+          '-p',
+          '/usage',
+          '--output-format',
+          'stream-json',
+          '--verbose',
+          '--no-session-persistence',
+        ],
+        options: {
+          cwd: '/Users/u',
+          env: {
+            HOME: '/Users/u',
+            CLAUDE_CONFIG_DIR: '/Users/u/.claude-personal',
+          },
+        },
+      },
+    ]);
+  });
+
+  it.each([
+    {
+      name: 'SpawnNotFound',
+      finish: async (child: ReturnType<typeof authChild>) => {
+        child.setPid(undefined);
+        child.emitter.emit(
+          'error',
+          Object.assign(new Error('spawn /bin/claude ENOENT'), {
+            code: 'ENOENT',
+          }),
+        );
+      },
+      reason: 'claude was not found at /bin/claude; set claude.command',
+    },
+    {
+      name: 'NotSignedIn',
+      finish: async (child: ReturnType<typeof authChild>) => {
+        child.stderr.write('Not logged in\n');
+        await exitWith(child, '', 1);
+      },
+      reason: 'exited with code 1: Not logged in',
+    },
+    {
+      name: 'NoReport',
+      finish: (child: ReturnType<typeof authChild>) =>
+        exitWith(child, '{}\n', 0),
+      reason: 'printed no usage report',
+    },
+  ])('planUsage_Fails_$name', async ({ finish, reason }) => {
+    const child = authChild();
+    const { harness } = authHarness([child]);
+
+    const rejected = expect(harness.planUsage(null)).rejects.toThrow(reason);
+    await finish(child);
+
+    await rejected;
+  });
+
+  it('planUsage_NoAnswer_KillsAndRejectsAfterTimeout', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const child = authChild();
+    const { harness } = authHarness([child]);
+    let failure: unknown = null;
+
+    harness.planUsage(null).catch((error: unknown) => {
+      failure = error;
+    });
+    vi.advanceTimersByTime(PLAN_USAGE_TIMEOUT_MS - 1);
+    await settle();
+    expect(child.signals).toEqual([]);
+    expect(failure).toBeNull();
+    vi.advanceTimersByTime(1);
+    await settle();
+
+    expect(child.signals).toEqual(['SIGKILL']);
+    expect(String(failure)).toContain('20 s');
   });
 
   it('accountStatus_NonZeroExit_RejectsWithStderr', async () => {

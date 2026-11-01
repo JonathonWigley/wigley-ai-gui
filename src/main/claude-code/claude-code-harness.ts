@@ -8,14 +8,17 @@ import type {
   AgentStart,
   LogInEvents,
   LogInProcess,
+  PlanUsage,
   ProcessActivity,
   SessionControl,
+  UsageAgentEvent,
 } from '../../contracts/agent';
 import type { Clock } from '../../contracts/ambient';
-import type { Files } from '../../contracts/files';
+import { type Files, readIfPresent } from '../../contracts/files';
 import type { Log } from '../../contracts/log';
 import type { Paths } from '../../contracts/paths';
 import { errorText } from '../../shared/error-text';
+import { isSameJson } from '../../shared/json';
 import { readAccountStatus, signInLink } from './claude-auth';
 import { claudeConfigFolder, claudeEnv, claudeLaunch } from './claude-launch';
 import {
@@ -31,6 +34,17 @@ import {
   listProjectFolders,
   readHistory,
 } from './past-sessions';
+import { readPlanUsage } from './plan-usage';
+import {
+  configuredPercent,
+  EMPTY_SESSION_USAGE,
+  foldReply,
+  foldTurn,
+  reportedLimit,
+  usageEvent,
+  withConfiguredPercent,
+  withReported,
+} from './session-usage';
 import { createStreamDecoder, type DecodedLine } from './stream-decoder';
 import { projectFolderName } from './transcripts';
 
@@ -44,9 +58,10 @@ export type ClaudeSpawn = (
 // `permissionTool` the MCP tool Claude asks what auto mode would still prompt;
 // `env` the environment the process inherits; `files` reads saved transcripts,
 // `homeDir` holds the default config folder `.claude`, is what a `~` profile
-// folder resolves against and is where `claude auth` runs, and `paths` joins
-// and compares paths by the rules of the OS `claude` runs on; `clock` stamps
-// each live entry's `at`.
+// folder resolves against and is where `claude auth` and `claude -p /usage`
+// run, and `paths` joins and compares paths by the rules of the OS `claude`
+// runs on; `clock` stamps each live entry's and agent event's `at`. `files`
+// also reads the profile's `settings.json` at each session start.
 export interface ClaudeCodeHarnessDeps {
   command(): string;
   permissionTool: string;
@@ -64,8 +79,21 @@ export interface ClaudeCodeHarnessDeps {
 const END_GRACE_MS = 3000;
 // A typed `/effort <value>` or `/model <value>` sets that control.
 const CONTROL_COMMAND = /^\/(effort|model) (\S+)$/;
+// How long a `claude -p /usage` poll may run before it is killed.
+export const PLAN_USAGE_TIMEOUT_MS = 20_000;
+const PLAN_USAGE_ARGS = [
+  '-p',
+  '/usage',
+  '--output-format',
+  'stream-json',
+  '--verbose',
+  '--no-session-persistence',
+];
 
-type PendingRequest = { kind: 'mode'; value: string } | { kind: 'interrupt' };
+type PendingRequest =
+  | { kind: 'mode'; value: string }
+  | { kind: 'interrupt' }
+  | { kind: 'contextUsage' };
 interface ControlCommand {
   id: 'effort' | 'model';
   value: string;
@@ -145,6 +173,8 @@ function startClaudeProcess(
   let endPromise: Promise<void> | null = null;
   const closeWaiters: (() => void)[] = [];
   const timers: ReturnType<typeof setTimeout>[] = [];
+  let usage = EMPTY_SESSION_USAGE;
+  let lastUsageEvent: UsageAgentEvent | null = null;
 
   // Every emission goes through the microtask queue, so events keep the
   // order of the calls and lines that caused them.
@@ -163,6 +193,21 @@ function startClaudeProcess(
   const emitEntry = (draft: EntryDraft) => {
     const entry = stamp(draft);
     emit(() => events.entry(entry));
+  };
+
+  // Emits the usage event when it differs from the last one in any field but
+  // `at`.
+  const emitUsage = () => {
+    const event = usageEvent(usage, deps.clock.now());
+    const isRepeat =
+      event !== null &&
+      lastUsageEvent !== null &&
+      isSameJson({ ...event, at: 0 }, { ...lastUsageEvent, at: 0 });
+    if (event === null || isRepeat) {
+      return;
+    }
+    lastUsageEvent = event;
+    emit(() => events.agentEvent(event));
   };
 
   const harnessNotice = (
@@ -237,6 +282,15 @@ function startClaudeProcess(
       return;
     }
     pendingRequests.delete(response.requestId);
+    if (pending.kind === 'contextUsage') {
+      if (response.error !== null) {
+        deps.log('claude', `get_context_usage failed: ${response.error}`);
+        return;
+      }
+      usage = withReported(usage, reportedLimit(response.response));
+      emitUsage();
+      return;
+    }
     if (pending.kind === 'interrupt') {
       if (response.error !== null) {
         harnessNotice(
@@ -273,6 +327,34 @@ function startClaudeProcess(
     });
   };
 
+  // A control command's result asks too: `/model` changes the window and the
+  // limit.
+  const requestContextUsage = () => {
+    const requestId = nextRequestId();
+    pendingRequests.set(requestId, { kind: 'contextUsage' });
+    write({
+      type: 'control_request',
+      request_id: requestId,
+      request: { subtype: 'get_context_usage' },
+    });
+  };
+
+  const foldUsage = (decoded: DecodedLine) => {
+    const { planRows, replyUsage, turnUsage } = decoded;
+    if (planRows !== null) {
+      emit(() => events.planUsage({ rows: planRows, at: deps.clock.now() }));
+    }
+    if (replyUsage !== null) {
+      usage = foldReply(usage, replyUsage, deps.clock.now());
+    }
+    if (turnUsage !== null) {
+      usage = foldTurn(usage, turnUsage);
+    }
+    if (replyUsage !== null || turnUsage !== null) {
+      emitUsage();
+    }
+  };
+
   // A control command's own result entry is not shown; its success sets the
   // control, since the turn's init still reports the value from before. A
   // value that is not among the control's choices leaves the control unknown.
@@ -303,11 +385,16 @@ function startClaudeProcess(
     if (commands !== null) {
       emit(() => events.commands(commands));
     }
+    foldUsage(decoded);
     if (decoded.controlResponse !== null) {
       answerControlResponse(decoded.controlResponse);
     }
     if (decoded.hostRequest !== null) {
       refuseHostRequest(decoded.hostRequest);
+    }
+    const isRunning = !isEndCalled && !hasClosed;
+    if (decoded.turnEnded && isRunning) {
+      requestContextUsage();
     }
     if (decoded.turnEnded && pendingTurns.length === 0) {
       setActivity('idle');
@@ -345,6 +432,20 @@ function startClaudeProcess(
 
   emitControls();
   setActivity('idle');
+  // The profile's autocompact override, read once: a change applies to the
+  // next session.
+  const settingsPath = deps.paths.join(
+    claudeConfigFolder(request.profileDir, deps.env, deps.homeDir, deps.paths),
+    'settings.json',
+  );
+  void readIfPresent(deps.files, settingsPath).then(
+    (text) => {
+      usage = withConfiguredPercent(usage, configuredPercent(text));
+      emitUsage();
+    },
+    (error: unknown) =>
+      deps.log('claude', `settings.json not read: ${errorText(error)}`),
+  );
 
   return {
     send(userInput) {
@@ -436,16 +537,16 @@ function startClaudeProcess(
   };
 }
 
-// A finished `claude auth` run: its exit code and what it printed, stderr
-// trimmed.
-interface AuthRun {
+// A finished `claude` run: its exit code and what it printed, stderr trimmed.
+interface CliRun {
   code: number | null;
   stdout: string;
   stderr: string;
 }
 
-// The auth commands run in the home folder, so ENOENT names the binary alone.
-function authSpawnError(error: Error, command: string): string {
+// The one-shot commands run in the home folder, so ENOENT names the binary
+// alone.
+function cliSpawnError(error: Error, command: string): string {
   const isMissing = (error as NodeJS.ErrnoException).code === 'ENOENT';
   return isMissing
     ? `claude was not found at ${command}; set claude.command`
@@ -456,15 +557,21 @@ function withStderr(message: string, stderr: string): string {
   return stderr === '' ? message : `${message}: ${stderr}`;
 }
 
-// `claude auth <args>` for `profileDir`, in the home folder with the session
+// The command `args` run, without its `--` options, as a message names it.
+function commandLabel(args: readonly string[]): string {
+  const words = args.filter((arg) => !arg.startsWith('--'));
+  return ['claude', ...words].join(' ');
+}
+
+// `claude <args>` for `profileDir`, in the home folder with the session
 // launch's environment.
-function spawnAuth(
+function spawnCli(
   deps: ClaudeCodeHarnessDeps,
   args: readonly string[],
   profileDir: string | null,
 ): { command: string; child: ChildProcessWithoutNullStreams } {
   const command = deps.command();
-  const child = deps.spawn(command, ['auth', ...args], {
+  const child = deps.spawn(command, args, {
     cwd: deps.homeDir,
     env: claudeEnv(deps.env, profileDir, deps.homeDir, deps.paths),
   });
@@ -474,14 +581,16 @@ function spawnAuth(
   return { command, child };
 }
 
-// Runs `claude auth <args>` to its exit, stdin closed. Rejects with the
-// `claude.command` hint when the process cannot start.
-function runAuth(
+// Runs `claude <args>` to its exit, stdin closed. Rejects with the
+// `claude.command` hint when the process cannot start, and, given `timeoutMs`,
+// kills the child and rejects when it has not exited by then.
+function runCli(
   deps: ClaudeCodeHarnessDeps,
   args: readonly string[],
   profileDir: string | null,
-): Promise<AuthRun> {
-  const { command, child } = spawnAuth(deps, args, profileDir);
+  timeoutMs: number | null,
+): Promise<CliRun> {
+  const { command, child } = spawnCli(deps, args, profileDir);
   let stdout = '';
   let stderr = '';
   child.stdout.on('data', (chunk: string) => {
@@ -492,12 +601,30 @@ function runAuth(
   });
   child.stdin.end();
   return new Promise((resolve, reject) => {
-    child.on('error', (error: Error) =>
-      reject(new Error(authSpawnError(error, command))),
-    );
-    child.on('close', (code: number | null) =>
-      resolve({ code, stdout, stderr: stderr.trim() }),
-    );
+    const timer =
+      timeoutMs === null
+        ? null
+        : setTimeout(() => {
+            child.kill('SIGKILL');
+            reject(
+              new Error(
+                `${commandLabel(args)} gave no answer in ${timeoutMs / 1000} s`,
+              ),
+            );
+          }, timeoutMs);
+    const stopTimer = () => {
+      if (timer !== null) {
+        clearTimeout(timer);
+      }
+    };
+    child.on('error', (error: Error) => {
+      stopTimer();
+      reject(new Error(cliSpawnError(error, command)));
+    });
+    child.on('close', (code: number | null) => {
+      stopTimer();
+      resolve({ code, stdout, stderr: stderr.trim() });
+    });
   });
 }
 
@@ -505,7 +632,12 @@ async function readAuthStatus(
   deps: ClaudeCodeHarnessDeps,
   profileDir: string | null,
 ): Promise<AccountStatus> {
-  const run = await runAuth(deps, ['status', '--json'], profileDir);
+  const run = await runCli(
+    deps,
+    ['auth', 'status', '--json'],
+    profileDir,
+    null,
+  );
   if (run.code !== 0) {
     throw new Error(
       withStderr(`claude auth status exited with code ${run.code}`, run.stderr),
@@ -518,11 +650,35 @@ async function readAuthStatus(
   }
 }
 
+// One `claude -p /usage` poll of `profileDir`. `--no-session-persistence`
+// keeps the poll from saving a transcript of the home folder.
+async function readProfilePlanUsage(
+  deps: ClaudeCodeHarnessDeps,
+  profileDir: string | null,
+): Promise<PlanUsage> {
+  const run = await runCli(
+    deps,
+    PLAN_USAGE_ARGS,
+    profileDir,
+    PLAN_USAGE_TIMEOUT_MS,
+  );
+  if (run.code !== 0) {
+    throw new Error(
+      withStderr(`claude -p /usage exited with code ${run.code}`, run.stderr),
+    );
+  }
+  try {
+    return readPlanUsage(run.stdout, deps.clock.now());
+  } catch (error) {
+    throw new Error(withStderr(errorText(error), run.stderr));
+  }
+}
+
 async function logOut(
   deps: ClaudeCodeHarnessDeps,
   profileDir: string | null,
 ): Promise<void> {
-  const run = await runAuth(deps, ['logout'], profileDir);
+  const run = await runCli(deps, ['auth', 'logout'], profileDir, null);
   if (run.code !== 0) {
     throw new Error(
       withStderr(`claude auth logout exited with code ${run.code}`, run.stderr),
@@ -554,7 +710,7 @@ function startLogIn(
 ): LogInProcess {
   // A failed read leaves the earlier status unknown, read as signed out.
   const statusBefore = readAuthStatus(deps, profileDir).catch(() => null);
-  const { command, child } = spawnAuth(deps, ['login'], profileDir);
+  const { command, child } = spawnCli(deps, ['auth', 'login'], profileDir);
   let stdout = '';
   let stderr = '';
   let hasLink = false;
@@ -604,9 +760,7 @@ function startLogIn(
       (error: unknown) => end(null, errorText(error)),
     );
   });
-  child.on('error', (error: Error) =>
-    end(null, authSpawnError(error, command)),
-  );
+  child.on('error', (error: Error) => end(null, cliSpawnError(error, command)));
 
   return {
     sendCode(code) {
@@ -651,7 +805,7 @@ function projectsFolder(
 
 // The Claude Code CLI behind `AgentHarness`: one `claude` process per
 // session, the only place the app spawns it, the sessions and project folders
-// it saved, and its `claude auth` sign-in.
+// it saved, its `claude auth` sign-in, and each profile's `/usage` poll.
 export function createClaudeCodeHarness(
   deps: ClaudeCodeHarnessDeps,
 ): AgentHarness {
@@ -679,5 +833,6 @@ export function createClaudeCodeHarness(
         { files: deps.files, paths: deps.paths, log: deps.log },
         projectsRoot(deps, profileDir),
       ),
+    planUsage: (profileDir) => readProfilePlanUsage(deps, profileDir),
   };
 }

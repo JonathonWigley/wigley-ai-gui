@@ -115,6 +115,68 @@ export interface AgentStart {
   profileDir: string | null;
 }
 
+export type PlanSeverity = 'normal' | 'warning' | 'critical';
+
+// One plan window as the server reports it. `percent` is 0–100; `resetsAt` is epoch ms, null when unknown;
+// `label` is the server's model or surface name for a scoped row, else the adapter's name for the kind.
+export interface PlanRow {
+  kind: string;
+  group: string;
+  label: string;
+  percent: number;
+  resetsAt: number | null;
+  severity: PlanSeverity;
+  isActive: boolean;
+}
+
+// The plan's overage credits, amounts in minor units of `currency`; each null when the server sends none.
+export interface ExtraUsage {
+  enabled: boolean;
+  usedMinor: number | null;
+  limitMinor: number | null;
+  currency: string | null;
+}
+
+// One profile's plan usage from one poll: `rows` in the server's order, `at` epoch ms.
+export interface PlanUsage {
+  rows: readonly PlanRow[];
+  extraUsage: ExtraUsage | null;
+  at: number;
+}
+
+export type PlanRowPatch = Pick<
+  PlanRow,
+  'kind' | 'percent' | 'resetsAt' | 'severity'
+>;
+
+// The rows one session saw between polls; the caller folds them into the poll's rows by `kind`.
+export interface PlanRowUpdate {
+  rows: readonly PlanRowPatch[];
+  at: number;
+}
+
+// `configured` is the profile's own autocompact limit, `reported` the harness's; tokens, each null when unknown.
+export interface AutocompactLimits {
+  configured: number | null;
+  reported: number | null;
+}
+
+// One agent's context and spend. `agentId` is `main` for the session's own agent; `contextWindow` and `spendUsd`
+// are null until the first turn ends; `cacheExpiresAt` is epoch ms, null when unknown.
+export interface UsageAgentEvent {
+  type: 'usage';
+  agentId: string;
+  at: number;
+  contextTokens: number;
+  contextWindow: number | null;
+  autocompact: AutocompactLimits;
+  cacheExpiresAt: number | null;
+  spendUsd: number | null;
+}
+
+// The harness-neutral record of what an agent did, `docs/features/agent-tower/design.md` § Agent events.
+export type AgentEvent = UsageAgentEvent;
+
 // An event caused by `start` or by a call on the process arrives in a later
 // microtask, never inside that call.
 export interface AgentProcessEvents {
@@ -124,6 +186,9 @@ export interface AgentProcessEvents {
   // The slash commands and skills the session offers, as typed after `/`.
   // Chat main stores them and the Chat tab's message box offers them after `/`.
   commands(names: string[]): void;
+  // Plan rows the session saw between polls.
+  planUsage(update: PlanRowUpdate): void;
+  agentEvent(event: AgentEvent): void;
   ended(end: { code: number | null; error: string | null }): void;
 }
 
@@ -207,4 +272,6 @@ export interface AgentHarness {
   // Every folder with saved sessions under `profileDir`, newest `modified`
   // first; [] when none.
   listProjects(profileDir: string | null): Promise<ProjectFolder[]>;
+  // Runs one poll of `profileDir`'s plan usage, or rejects with the reason.
+  planUsage(profileDir: string | null): Promise<PlanUsage>;
 }

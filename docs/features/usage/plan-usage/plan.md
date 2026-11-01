@@ -180,7 +180,7 @@ chat's bus events and exports. New folders get their `scripts/check-layers.mts` 
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Right bar shell area](01-right-bar-area.md)
+- [x] [Right bar shell area](01-right-bar-area.md)
 - [ ] [Plan usage and agent events from the Claude adapter](03-adapter-usage.md)
 
 ### Wave 2
@@ -207,7 +207,10 @@ chat's bus events and exports. New folders get their `scripts/check-layers.mts` 
 Review base: 951296f231ed299e8ca9a12bf918bf1f5e9462cc
 
 ### Groups
+- 01 · fef2080 · diff read: every Produces present; typecheck clean in 01 files (only errors were 03's in-flight harness tests); worker ran shell/split/page-api tests, 106 pass · concerns: stale prose outside Files: settings.ts:96 shell.layout description and layouts/design.md:72,79 'four chrome areas'; side bar may not regrow in the same pass the right bar shrinks (real-DOM only); grid/handle/gallery layout not checked live; three shell test names undersell their two-handle assertions
 ### Contract changes
 ### Rulings
+- right bar redraws both bars only when its hidden state flips (updateHidden wrapper); a layout swap keeps plain applyHidden — a swap needing a redraw waits for the next resize · group 01 · group 01
+- sizedPane 'end' lives in two private mappings inside createSplitDivider plus a flipped nudge direction; createDividerHandle unchanged · group 01 · group 01
 ### Review rounds
 ### Test gate

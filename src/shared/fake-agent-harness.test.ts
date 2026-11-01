@@ -16,6 +16,9 @@ import {
   FAKE_SIGN_IN_URL,
   FAKE_STEPS_TEXT,
   FAKE_TOOL_TEXT,
+  fakePlanRowUpdate,
+  fakePlanUsage,
+  fakeUsageEvent,
   isFakeAgentHarness,
 } from './fake-agent-harness';
 
@@ -36,6 +39,8 @@ function recordingEvents() {
     controls: (controls) => heard.push(['controls', controls]),
     activity: (activity) => heard.push(['activity', activity]),
     commands: (names) => heard.push(['commands', names]),
+    planUsage: (update) => heard.push(['planUsage', update]),
+    agentEvent: (event) => heard.push(['agentEvent', event]),
     ended: (end) => heard.push(['ended', end]),
   };
   return { heard, events };
@@ -152,6 +157,8 @@ describe('createFakeAgentHarness', () => {
           raw: [{ fake: 'result' }],
         },
       ],
+      ['agentEvent', fakeUsageEvent(1, 1000)],
+      ['planUsage', fakePlanRowUpdate(1, 1000)],
       ['activity', 'idle'],
     ]);
     expect(record.calls).toEqual([
@@ -207,6 +214,8 @@ describe('createFakeAgentHarness', () => {
           raw: [{ fake: 'result' }],
         },
       ],
+      ['agentEvent', fakeUsageEvent(1, 1000)],
+      ['planUsage', fakePlanRowUpdate(1, 1000)],
       ['activity', 'idle'],
     ]);
     expect(heard.slice(0, 2)).toEqual([
@@ -539,6 +548,15 @@ describe('createFakeAgentHarness', () => {
         profileDir: null,
       },
     ]);
+  });
+
+  it('planUsage_ResolvesFakeRows_FailNextRejectsOnce', async () => {
+    const harness = createFakeAgentHarness(clock);
+
+    expect(await harness.planUsage('/p')).toEqual(fakePlanUsage(1000));
+    harness.failNextPlanUsage('offline');
+    await expect(harness.planUsage('/p')).rejects.toThrow('offline');
+    expect(await harness.planUsage(null)).toEqual(fakePlanUsage(1000));
   });
 
   it('isFakeAgentHarness_TellsTheFakeFromAnother', () => {
