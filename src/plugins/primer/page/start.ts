@@ -78,7 +78,7 @@ function createBoxes(
 
 // Listeners first: a primer shown while openForms is in flight arrives in
 // both, and showing an open primer again changes nothing. The active primer
-// follows the session the sessions plugin shows, and a primer leaves only
+// follows the session the sessions plugin focuses, and a primer leaves only
 // when main closes it.
 function listenForPrimers(
   api: PrimerApi,

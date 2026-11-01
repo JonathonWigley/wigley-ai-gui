@@ -21,7 +21,7 @@ import {
 import {
   activeForm,
   formOfSession,
-  paneView,
+  sessionPaneView,
 } from '../../../shared/page/session-forms';
 import type { KeysPageExports } from '../../keys/contract';
 import type { SessionsPageExports } from '../../sessions/contract';
@@ -92,9 +92,9 @@ export interface FormsView {
   scrollBy(step: ScrollStep, direction: 1 | -1): ContentScroll | null;
 }
 
-// The whole forms UI: each round in its session's Form tab and the cancel
-// prompt in the overlay layer, both serving the active round. Every store
-// change re-renders it; editors live in the round views and survive every
+// The whole forms UI: each round drawn in its session's Form tab, focused or
+// not, and the cancel prompt in the overlay layer, serving the active round,
+// which alone takes keys. Every store change re-renders it; editors live in the round views and survive every
 // render. While a Form tab is the visible tab the key scope follows the view;
 // the cancel prompt pushes its own scope over it and is dismissed when another
 // view sets the scope. While the round sends, that dismiss waits: a failed
@@ -156,13 +156,10 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
       const round = formOfSession(state, sessionId);
       return round === undefined ? null : sessionTitle(round);
     });
-    const view = state.view;
-    const shown = view === 'idle' ? null : activeForm(state);
-    for (const [roundId, roundView] of roundViews) {
-      roundView.element.hidden = roundId !== shown?.formId;
-    }
-    if (shown !== null) {
-      roundViews.get(shown.formId)?.update(shown, paneView(state));
+    for (const round of state.forms) {
+      roundViews
+        .get(round.formId)
+        ?.update(round, sessionPaneView(state, round.sessionId, 'forms'));
     }
     confirm.setBaseScope(() => {
       if (tabs.isShown()) {

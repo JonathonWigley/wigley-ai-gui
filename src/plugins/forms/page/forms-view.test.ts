@@ -36,14 +36,18 @@ const host: EditorHost = {
 // `'target'` when one was set, else null.
 type ScopeCall = ['setScope', string] | ['setResizeTarget', 'target' | null];
 
-// Round r1 open and active in its session's Form tab, the visible tab; `tab`
-// is the tab's element, and `calls` logs every `setScope` and
+// Round r1 open and active in its session's Form tab, the visible tab, and
+// each of `others` open in its own session's tab; `tab` is r1's tab element,
+// `tabs` every tab element by session, and `calls` logs every `setScope` and
 // `setResizeTarget` call, in call order.
-function formTabSetup() {
+function formTabSetup(others: string[] = []) {
   const calls: ScopeCall[] = [];
   const presented = presentedRound('r1');
   const store = createReducerStore(
-    initialState([presented], presented.sessionId),
+    initialState(
+      [presented, ...others.map((roundId) => presentedRound(roundId))],
+      presented.sessionId,
+    ),
     apply,
   );
   const boxes = createEditorBoxes(
@@ -52,14 +56,14 @@ function formTabSetup() {
     () => undefined,
     FORMS_BOX_IDENTITY,
   );
-  let tab: FakeElement | null = null;
+  const tabs = new Map<string, FakeElement>();
   mountFormsView({
     areas: {
       overlay: { contribute: () => ({ dispose: () => undefined }) },
     },
     sessions: {
-      addTab: (_sessionId, view) => {
-        tab = asFake(view.element);
+      addTab: (sessionId, view) => {
+        tabs.set(sessionId, asFake(view.element));
         return {
           setStatus: () => undefined,
           select: () => undefined,
@@ -97,21 +101,23 @@ function formTabSetup() {
     timers: { set: () => 0, clear: () => undefined },
     log: () => undefined,
   });
-  if (tab === null) {
-    throw new Error('forms mounted no tab');
+  const tab = tabs.get(presented.sessionId);
+  if (tab === undefined) {
+    throw new Error('forms mounted no tab for r1');
   }
-  return {
-    store,
-    sessionId: presented.sessionId,
-    tab: tab as FakeElement,
-    calls,
-  };
+  return { store, sessionId: presented.sessionId, tab, tabs, calls };
 }
 
 // The round's items pane, which holds its cards.
 function itemsPane(tab: FakeElement): FakeElement {
   const [items] = findAll(tab, 'items');
   return items;
+}
+
+// Whether the tab draws its round.
+function roundShown(tab: FakeElement): boolean {
+  const [round] = findAll(tab, 'round');
+  return round.hidden !== true;
 }
 
 // The round's review pane.
@@ -144,6 +150,35 @@ describe('form tab under the cancel prompt', () => {
     expect(store.get().view).toBe('confirm');
     expect(itemsPane(tab).hidden).toBe(true);
     expect(reviewPane(tab).hidden).toBe(false);
+  });
+});
+
+describe('form tabs of several sessions', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("draws an unfocused session's round in its tab while the focused round takes the keys", () => {
+    const { store, tabs, calls } = formTabSetup(['r2']);
+    const unfocused = tabs.get('r2-session') as FakeElement;
+
+    store.dispatch({ type: 'openReview' });
+
+    expect(roundShown(unfocused)).toBe(true);
+    expect(itemsPane(unfocused).hidden).toBe(false);
+    expect(calls.at(-2)).toEqual(['setScope', 'review']);
+    expect(store.get().activeFormId).toBe('r1');
+  });
+
+  it('draws a round that arrives for an unfocused session', () => {
+    const { store, tabs } = formTabSetup();
+
+    store.dispatch({ type: 'formShown', form: presentedRound('r2') });
+
+    const unfocused = tabs.get('r2-session') as FakeElement;
+    expect(roundShown(unfocused)).toBe(true);
+    expect(itemsPane(unfocused).hidden).toBe(false);
   });
 });
 

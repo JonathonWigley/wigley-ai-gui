@@ -69,7 +69,7 @@ export interface OpenPrimer extends SessionForm {
 }
 
 // The open primers and the view; the active primer is the primer of the
-// session the sessions plugin shows, or null when that session has none.
+// session the sessions plugin focuses, or null when that session has none.
 export type PrimerState = SessionFormsState<OpenPrimer, 'primer'>;
 
 // The primer page's own actions beside the session form lifecycle's.

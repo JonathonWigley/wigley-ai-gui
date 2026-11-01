@@ -35,8 +35,8 @@ export type SessionFormsView<FormView extends string> =
   | 'confirm'
   | 'idle';
 
-// The active form is the form of the session the sessions plugin shows, or
-// null when that session has none.
+// The active form is the form of the session the sessions plugin focuses, or
+// null when that session has none; keys and `view` act on it alone.
 export interface SessionFormsState<
   Form extends SessionForm,
   FormView extends string,
@@ -111,7 +111,7 @@ const LIFECYCLE_ACTIONS: ReadonlySet<string> = new Set<
 ]);
 
 // The lifecycle actions that still apply while the active form is sending:
-// forms opening and closing, the shown session, saves, and the send's own
+// forms opening and closing, the focused session, saves, and the send's own
 // failure.
 const SENDING_LIFECYCLE_ACTIONS: ReadonlySet<string> = new Set<
   SessionFormsAction<unknown>['type']
@@ -198,6 +198,20 @@ export function paneView<FormView extends string>(
 ): FormView | 'review' | 'idle' {
   const { view } = state;
   return view === 'confirm' ? state.confirmReturnView : view;
+}
+
+// The view the session's tab draws its form in, focused or not: the active
+// session's in `paneView`, every other session's in `formView`, the view it
+// opens in once its session is active; 'idle' for a session with no form.
+export function sessionPaneView<FormView extends string>(
+  state: SessionFormsState<SessionForm, FormView>,
+  sessionId: string,
+  formView: FormView,
+): FormView | 'review' | 'idle' {
+  if (formOfSession(state, sessionId) === undefined) {
+    return 'idle';
+  }
+  return sessionId === state.activeSessionId ? paneView(state) : formView;
 }
 
 // Returns `state` itself when `change` returns the form it was given.
@@ -294,8 +308,8 @@ function applyLifecycle<
   }
 }
 
-// A form for the session shown becomes active; any other waits in the
-// background. A form already open stays as it is.
+// A form for the focused session becomes active; any other waits in the
+// background, drawn in its own tab. A form already open stays as it is.
 function showForm<Form extends SessionForm, FormView extends string>(
   state: SessionFormsState<Form, FormView>,
   shown: Form,
@@ -311,7 +325,7 @@ function showForm<Form extends SessionForm, FormView extends string>(
   return { ...state, forms, activeFormId: shown.formId, view: formView };
 }
 
-// The active form closing leaves its session shown with no form.
+// The active form closing leaves its session focused with no form.
 function closeForm<Form extends SessionForm, FormView extends string>(
   state: SessionFormsState<Form, FormView>,
   formId: string,

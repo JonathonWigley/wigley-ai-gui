@@ -68,7 +68,7 @@ export interface RoundState extends SessionForm {
 }
 
 // The open rounds and the view; the active round is the round of the session
-// the sessions plugin shows, or null when that session has none.
+// the sessions plugin focuses, or null when that session has none.
 export type FormsState = SessionFormsState<RoundState, 'forms'>;
 
 export interface Progress {

@@ -42,7 +42,7 @@ import {
 import {
   activeForm,
   formOfSession,
-  paneView,
+  sessionPaneView,
 } from '../../../shared/page/session-forms';
 import {
   createStatusLine,
@@ -150,7 +150,7 @@ export interface PrimerViewDeps {
 // still open for the session in a new Primer tab. `showPrimer` selects the
 // session's Primer tab, a no-op when it has none. `scrollBy` scrolls the
 // active primer's card or review, whichever shows, down for 1 and up for -1;
-// null with no primer shown. `setLayouts` draws every part whose picked
+// null with no active primer. `setLayouts` draws every part whose picked
 // layout changed again, keeping the focused box.
 export interface PrimerTab {
   forgetSession(sessionId: string): void;
@@ -254,8 +254,9 @@ const RAIL_WIDTH_KEY = 'primer-rail-width';
 const NO_TASK_ITEMS = 'Select a task to see its items.';
 const NO_ITEMS = 'No items. Press a on the task card to add one.';
 
-// The whole primer UI: each primer in its session's Primer tab and the cancel
-// prompt in the overlay layer, serving the active primer. Every store change
+// The whole primer UI: each primer drawn in its session's Primer tab, focused
+// or not, and the cancel prompt in the overlay layer, serving the active
+// primer, which alone takes keys. Every store change
 // renders it; a change a render's own dispatch makes renders again once that
 // render ends. While a Primer tab is the visible tab the key scope follows
 // the state; the cancel prompt pushes its own scope over it and is dismissed
@@ -323,13 +324,10 @@ export function mountPrimerTab(deps: PrimerViewDeps): PrimerTab {
       const primer = formOfSession(state, sessionId);
       return primer === undefined ? null : sessionTitle(primer);
     });
-    const view = state.view;
-    const shown = view === 'idle' ? null : activeForm(state);
-    for (const [primerId, primerView] of primerViews) {
-      primerView.element.hidden = primerId !== shown?.formId;
-    }
-    if (shown !== null) {
-      primerViews.get(shown.formId)?.update(shown, paneView(state));
+    for (const primer of state.forms) {
+      primerViews
+        .get(primer.formId)
+        ?.update(primer, sessionPaneView(state, primer.sessionId, 'primer'));
     }
     confirm.setBaseScope(() => {
       if (tabs.isShown()) {

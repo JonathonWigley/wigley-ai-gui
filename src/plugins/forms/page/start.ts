@@ -77,7 +77,7 @@ function createBoxes(api: FormsApi, store: FormsStore): EditorBoxes<BoxRef> {
 
 // Listeners first: a round shown while openForms is in flight arrives in
 // both, and showing an open round again changes nothing. The active round
-// follows the session the sessions plugin shows, and a round leaves only when
+// follows the session the sessions plugin focuses, and a round leaves only when
 // main closes it. Main's forms map to the page's rounds here.
 function listenForRounds(
   api: FormsApi,

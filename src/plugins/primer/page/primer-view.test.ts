@@ -70,17 +70,25 @@ interface NamedAnchor {
 }
 
 // Primer p1, holding `entries`, open and active in its session's Primer tab,
-// the visible tab; `tab` is the tab's element. The boxes and the commands are
+// the visible tab, and each of `others` open in its own session's tab; `tab`
+// is p1's tab element and `tabs` every tab element by session. The boxes and the commands are
 // wired as the page wires them; `anchors` holds every anchor the view named,
 // `resizeTargets` every split handed to the resize keys, `focusTargets` every
 // target handed to the focus keys, and `uiWrites` every
 // uiState write over the values `uiState` starts with.
 function primerTabSetup(
-  parts: { entries?: PrimerEntry[]; uiState?: Record<string, unknown> } = {},
+  parts: {
+    entries?: PrimerEntry[];
+    uiState?: Record<string, unknown>;
+    others?: string[];
+  } = {},
 ) {
   const presented = presentedPrimer('p1', { entries: parts.entries });
+  const others = (parts.others ?? []).map((primerId) =>
+    presentedPrimer(primerId),
+  );
   const store = createPrimerStore(
-    initialState([presented], presented.sessionId),
+    initialState([presented, ...others], presented.sessionId),
   );
   const logs: string[] = [];
   const log = (_source: string, message: string) => logs.push(message);
@@ -109,14 +117,14 @@ function primerTabSetup(
   const focusTargets: (FocusTarget | null)[] = [];
   const uiValues = new Map(Object.entries(parts.uiState ?? {}));
   const uiWrites: [string, unknown][] = [];
-  let tab: FakeElement | null = null;
+  const tabs = new Map<string, FakeElement>();
   const view = mountPrimerTab({
     areas: {
       overlay: { contribute: () => ({ dispose: () => undefined }) },
     },
     sessions: {
-      addTab: (_sessionId, view) => {
-        tab = asFake(view.element);
+      addTab: (sessionId, view) => {
+        tabs.set(sessionId, asFake(view.element));
         return {
           setStatus: () => undefined,
           select: () => undefined,
@@ -167,8 +175,9 @@ function primerTabSetup(
     timers: { set: () => 0, clear: () => undefined },
     log,
   });
-  if (tab === null) {
-    throw new Error('the primer mounted no tab');
+  const tab = tabs.get(presented.sessionId);
+  if (tab === undefined) {
+    throw new Error('the primer mounted no tab for p1');
   }
   const handlers = primerCommandHandlers({
     store,
@@ -190,7 +199,8 @@ function primerTabSetup(
     focusTargets,
     uiWrites,
     sessionId: presented.sessionId,
-    tab: tab as FakeElement,
+    tab,
+    tabs,
     // Fires `command` with no editor in its context, as a page key does.
     run: (command: PrimerCommand) => handlers[command]({}),
   };
@@ -340,6 +350,36 @@ describe('primer tab under the cancel prompt', () => {
     expect(store.get().view).toBe('confirm');
     expect(pane(tab, 'primer-card').hidden).toBe(true);
     expect(pane(tab, 'primer-review-pane').hidden).toBe(false);
+  });
+});
+
+describe('primer tabs of several sessions', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("draws an unfocused session's primer in its tab while the focused primer takes the keys", () => {
+    const { store, tabs, focusTargets } = primerTabSetup({ others: ['p2'] });
+    const unfocused = tabs.get('p2-session') as FakeElement;
+
+    store.dispatch({ type: 'openReview' });
+
+    expect(pane(unfocused, 'primer-form').hidden).not.toBe(true);
+    expect(pane(unfocused, 'primer-card').hidden).toBe(false);
+    expect(pane(unfocused, 'primer-review-pane').hidden).toBe(true);
+    expect(focusTargets.at(-1)).toBeNull();
+    expect(store.get().activeFormId).toBe('p1');
+  });
+
+  it('draws a primer that arrives for an unfocused session', () => {
+    const { store, tabs } = primerTabSetup();
+
+    store.dispatch({ type: 'formShown', form: presentedPrimer('p2') });
+
+    const unfocused = tabs.get('p2-session') as FakeElement;
+    expect(pane(unfocused, 'primer-form').hidden).not.toBe(true);
+    expect(pane(unfocused, 'primer-card').hidden).toBe(false);
   });
 });
 

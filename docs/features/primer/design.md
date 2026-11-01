@@ -112,6 +112,9 @@ iterating a layout in place.
 - **Page events:** `primerShown`, `needChanged`, `primerFinished`. **Page export:** `activePrimer`.
 - The tab is shown, swapped in over the chat and back, and alerted the same way the Form tab is, through the shared
   session form tab helper in `src/shared/page/`.
+- Every open primer draws in its session's Primer tab, its pane focused or not; an unfocused one draws in the primer
+  view and takes no keys until its pane is focused. Keys, scopes and the review and cancel prompt act on the focused
+  session's primer alone.
 
 ## Keys
 
