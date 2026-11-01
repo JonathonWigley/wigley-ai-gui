@@ -1,5 +1,5 @@
 import type { ClaudeControlId } from './claude-controls';
-import type { EntryDraft } from './entry-stamp';
+import type { EntryDraft } from '../../shared/entry-stamp';
 import { asArray, asJson, asString, type Json, parsed } from './json-fields';
 import { pairToolResult, type ToolEntry, toolUseEntry } from './tool-entries';
 

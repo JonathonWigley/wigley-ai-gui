@@ -25,7 +25,7 @@ import {
   controlValue,
   userMessage,
 } from './claude-controls';
-import { createEntryStamp, type EntryDraft } from './entry-stamp';
+import { createEntryStamp, type EntryDraft } from '../../shared/entry-stamp';
 import {
   listPastSessions,
   listProjectFolders,

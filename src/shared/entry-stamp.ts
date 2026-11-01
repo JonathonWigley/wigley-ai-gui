@@ -1,5 +1,5 @@
-import type { ChatEntry } from '../../contracts/agent';
-import type { Clock } from '../../contracts/ambient';
+import type { ChatEntry } from '../contracts/agent';
+import type { Clock } from '../contracts/ambient';
 
 type WithoutAt<E> = E extends unknown ? Omit<E, 'at'> : never;
 

@@ -13,6 +13,7 @@ import type {
   SessionControl,
 } from '../contracts/agent';
 import type { Clock } from '../contracts/ambient';
+import { createEntryStamp, type EntryDraft } from './entry-stamp';
 
 // A scripted harness behind `AgentHarness`, for the tests and the self-test.
 // Every emission runs in a microtask the causing call queues, never inside the
@@ -167,9 +168,6 @@ function startingControls(): SessionControl[] {
     },
   ];
 }
-
-type WithoutAt<E> = E extends unknown ? Omit<E, 'at'> : never;
-type EntryDraft = WithoutAt<ChatEntry>;
 
 // Emits one entry, stamped with its `at`.
 type EmitEntry = (draft: EntryDraft) => void;
@@ -393,11 +391,9 @@ export function createFakeAgentHarness(clock: Clock): FakeAgentHarness {
     let turn = 0;
     let isTurnOpen = false;
     let endPromise: Promise<void> | null = null;
-    const firstAt = new Map<string, number>();
+    const stamp = createEntryStamp(clock);
     const emitEntry: EmitEntry = (draft) => {
-      const at = firstAt.get(draft.id) ?? clock.now();
-      firstAt.set(draft.id, at);
-      events.entry({ ...draft, at } as ChatEntry);
+      events.entry(stamp(draft));
     };
     const requireRunning = () => {
       if (record.ended) {

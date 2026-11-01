@@ -1,4 +1,4 @@
-import type { EntryDraft } from './entry-stamp';
+import type { EntryDraft } from '../../shared/entry-stamp';
 import { asArray, asJson, asString, type Json } from './json-fields';
 import { toolSummary } from './tool-summary';
 
@@ -21,11 +21,11 @@ export function toolUseEntry(id: string, block: Json, raw: unknown): ToolEntry {
 
 // Joins a `tool_result` block to the entry of the call it answers, keyed in
 // `toolEntries` by tool use id: the entry, or undefined when no call matches.
-export function pairToolResult<E extends ToolEntry>(
-  toolEntries: ReadonlyMap<string, E>,
+export function pairToolResult(
+  toolEntries: ReadonlyMap<string, ToolEntry>,
   block: Json,
   raw: unknown,
-): E | undefined {
+): ToolEntry | undefined {
   const entry = toolEntries.get(asString(block.tool_use_id));
   if (entry === undefined) {
     return undefined;
