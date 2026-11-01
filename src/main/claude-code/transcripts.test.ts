@@ -547,6 +547,18 @@ describe('transcriptEntries', () => {
         ['history:u2', AT_TWO],
       ],
     },
+    {
+      name: 'NotJsonTakesTheLastTimestamp',
+      lines: [
+        userLine('u1', 'first', { timestamp: AT_ONE_TEXT }),
+        { type: 'last-prompt', timestamp: AT_TWO_TEXT },
+        'not json',
+      ],
+      expected: [
+        ['history:u1', AT_ONE],
+        ['history:line-3', AT_TWO],
+      ],
+    },
   ])('transcriptEntries_At_$name', ({ lines, expected }) => {
     const entries = transcriptEntries(jsonl(lines));
 
