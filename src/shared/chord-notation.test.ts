@@ -17,9 +17,11 @@ describe('parseChord', () => {
       meta: true,
       key: '7',
     });
+    expect(parseChord('<A-;>')?.key).toBe(';');
+    expect(parseChord("<A-'>")?.key).toBe("'");
   });
 
-  it.each(['<A-C-h>', '<C-H>', '<C-;>', '<C-F1>', '<S-h>', '<h>', 'h'])(
+  it.each(['<A-C-h>', '<C-H>', '<C-,>', '<C-F1>', '<S-h>', '<h>', 'h'])(
     'rejects %s',
     (token) => {
       expect(parseChord(token)).toBeNull();

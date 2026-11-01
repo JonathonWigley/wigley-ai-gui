@@ -272,6 +272,18 @@ describe('createChordMatcher', () => {
     ).toBeUndefined();
   });
 
+  it.each([
+    ['<A-;>', 'Semicolon'],
+    ["<A-'>", 'Quote'],
+  ])('matches the punctuation chord %s on code %s', (keys, code) => {
+    const chords = createChordMatcher([
+      { keys: [keys], scope: 'forms', command: 'test.split' },
+    ]);
+    expect(chords.match(press(code, { altKey: true }), 'forms')?.command).toBe(
+      'test.split',
+    );
+  });
+
   it('matches an Enter chord on code Enter', () => {
     const chords = createChordMatcher([
       { keys: ['<D-Enter>'], scope: 'chat.chat', command: 'test.send' },
@@ -328,7 +340,7 @@ describe('createChordMatcher', () => {
     ).toThrow(/test\.x.*<C-h>/);
   });
 
-  it.each(['<A-C-h>', '<C-H>', '<C-;>', '<C-F1>', '<S-h>', '<h>'])(
+  it.each(['<A-C-h>', '<C-H>', '<C-,>', '<C-F1>', '<S-h>', '<h>'])(
     'rejects a malformed chord %s',
     (token) => {
       expect(() =>

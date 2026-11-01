@@ -51,6 +51,8 @@ describe('formatChord', () => {
     expect(formatChord('<C-S-j>', 'macos')).toBe('⌃⇧J');
     expect(formatChord('<D-Enter>', 'macos')).toBe('⌘↩');
     expect(formatChord('<C-A-S-D-1>', 'macos')).toBe('⌃⌥⇧⌘1');
+    expect(formatChord('<A-;>', 'macos')).toBe('⌥;');
+    expect(formatChord("<A-'>", 'macos')).toBe("⌥'");
   });
 
   it('prints Windows chords as names joined by +', () => {

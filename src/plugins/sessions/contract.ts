@@ -179,8 +179,8 @@ export interface SessionsChannel extends ChannelShape {
 // A tab a plugin adds to a session. The tab bar draws its `icon`, a Codicon
 // name, with `title` as its tooltip and accessible name. `beforeClose` returns whether the session
 // may close now; false keeps it. `shown` runs each time this tab becomes the
-// visible tab: the selected tab of the selected session while Sessions mode
-// shows. Its plugin sets its base key scope there. `shown` may run inside
+// visible tab: the selected tab of the focused chat pane's session while
+// Sessions mode shows. Its plugin sets its base key scope there. `shown` may run inside
 // `addTab`, before its handle returns, so it must not read that handle.
 export interface SessionTabView {
   id: string;
@@ -211,6 +211,8 @@ export interface SessionTabHandle {
 // when it is the session's first; it throws on a tab id the session already
 // holds. A tab added before its session's row waits for the row. A session's
 // tabs drop when its row leaves, and `sessionRemoved` says so.
+// `selectedSessionId` is the focused chat pane's session, null for an empty
+// pane, not main's selection.
 export interface SessionsPageExports {
   addTab(sessionId: string, tab: SessionTabView): SessionTabHandle;
   selectedSessionId(): string | null;
@@ -219,8 +221,10 @@ export interface SessionsPageExports {
   closeSession(sessionId: string): void;
 }
 
-// `sessionAdded` fires once for every row main sends, the rows present at
-// start included, and `sessionRemoved` once when that row leaves.
+// `activeChanged` fires when the focused chat pane's session changes, to
+// null for an empty pane. `sessionAdded` fires once for every row main sends,
+// the rows present at start included, and `sessionRemoved` once when that row
+// leaves.
 export interface SessionsPageEvents extends EventShape {
   activeChanged: { sessionId: string | null };
   sessionAdded: {

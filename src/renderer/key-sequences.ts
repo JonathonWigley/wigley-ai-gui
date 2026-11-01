@@ -130,8 +130,8 @@ interface ParsedChord extends ChordPress {
   bind: PageBind;
 }
 
-// A letter matches its `Key` code, a digit its top-row `Digit` code, and
-// `Enter` the main Enter key's code.
+// A letter matches its `Key` code, a digit its top-row `Digit` code, `;` and
+// `'` their US-layout codes, and `Enter` the main Enter key's code.
 function toParsedChord(bind: PageBind, chord: Chord): ParsedChord {
   return {
     bind,
@@ -143,9 +143,16 @@ function toParsedChord(bind: PageBind, chord: Chord): ParsedChord {
   };
 }
 
+const NAMED_KEY_CODES: Partial<Record<string, string>> = {
+  ';': 'Semicolon',
+  "'": 'Quote',
+  Enter: 'Enter',
+};
+
 function chordCode(key: string): string {
-  if (key === 'Enter') {
-    return 'Enter';
+  const namedCode = NAMED_KEY_CODES[key];
+  if (namedCode !== undefined) {
+    return namedCode;
   }
   const isDigit = key >= '0' && key <= '9';
   return isDigit ? `Digit${key}` : `Key${key.toUpperCase()}`;

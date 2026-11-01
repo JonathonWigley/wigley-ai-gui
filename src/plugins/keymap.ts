@@ -208,6 +208,8 @@ export const defaultKeymap = {
     { keys: '<A-S-l>', scope: 'any', command: 'panes.resizePaneRight' },
     { keys: '<A-S-j>', scope: 'any', command: 'panes.resizePaneDown' },
     { keys: '<A-S-k>', scope: 'any', command: 'panes.resizePaneUp' },
+    { keys: "<A-'>", scope: 'any', command: 'sessions.splitDown' },
+    { keys: '<A-;>', scope: 'any', command: 'sessions.splitRight' },
     { keys: '<A-w>', scope: 'any', command: 'sessions.closePane' },
     { keys: '<C-A-h>', scope: 'any', command: 'sessions.swapPaneLeft' },
     { keys: '<C-A-j>', scope: 'any', command: 'sessions.swapPaneDown' },

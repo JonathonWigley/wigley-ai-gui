@@ -3,7 +3,7 @@
 // steps with it, so both read a token the same way.
 
 // The modifiers a chord holds, and its key: one lowercase letter, one digit,
-// or `Enter`.
+// `;`, `'`, or `Enter`.
 export interface Chord {
   ctrl: boolean;
   alt: boolean;
@@ -13,9 +13,9 @@ export interface Chord {
 }
 
 export const CHORD_NOTATION_RULE =
-  'write modifiers C-, A-, S-, D- in that order, at least one of C-, A-, D-, then one lowercase letter, one digit, or Enter';
+  "write modifiers C-, A-, S-, D- in that order, at least one of C-, A-, D-, then one lowercase letter, one digit, ;, ', or Enter";
 
-const CHORD_NOTATION = /^<(C-)?(A-)?(S-)?(D-)?([a-z0-9]|Enter)>$/;
+const CHORD_NOTATION = /^<(C-)?(A-)?(S-)?(D-)?([a-z0-9;']|Enter)>$/;
 
 // A key written in angle brackets claims to be a chord; a lone `<` or `>` is a
 // plain key.
