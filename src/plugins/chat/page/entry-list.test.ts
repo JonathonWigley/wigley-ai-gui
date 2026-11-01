@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Timers } from '../../../contracts/ambient';
 import type { ChatEntry } from '../../../contracts/agent';
+import type { ShownLayouts } from '../../../contracts/plugin';
 import type { CommandId } from '../../../contracts/commands';
 import { withUser } from '../../../shared/page/layout-host/test-layouts';
 import {
@@ -10,12 +12,14 @@ import {
 import { chatCommand } from '../ids';
 import defaultLayout from '../layouts/default/layout.js';
 import type {
+  ActivityInput,
   ChatKit,
   ChatLayout,
   EntryInput,
   EntryKind,
   EntryView,
 } from '../layouts/layout';
+import { createChatLayouts } from './chat-layouts';
 import { createEntryList } from './entry-list';
 
 type AnyBuilder = (
@@ -67,7 +71,7 @@ const updateThrows: AnyBuilder = (parent, _input, kit) => ({
   },
 });
 
-const tool = (id: string): ChatEntry => ({
+const tool = (id: string): Extract<ChatEntry, { kind: 'tool' }> => ({
   kind: 'tool',
   id,
   at: 1000,
@@ -115,7 +119,7 @@ const rows: Row[] = [
     name: 'shown layout draws',
     shown: 'fancy',
     puts: [tool('t1')],
-    slots: [['fancy@fancy']],
+    slots: [['chat-activity@default'], ['fancy@fancy']],
     logs: [],
     toasts: [],
     disposedAnchors: [],
@@ -125,7 +129,11 @@ const rows: Row[] = [
     shown: 'fancy',
     fancy: { tool: undefined },
     puts: [tool('t1'), notice('n1')],
-    slots: [['chat-entry chat-tool@default'], ['fancy@fancy']],
+    slots: [
+      ['chat-activity@default'],
+      ['chat-entry chat-tool@default'],
+      ['fancy@fancy'],
+    ],
     logs: [],
     toasts: [],
     disposedAnchors: [],
@@ -135,7 +143,11 @@ const rows: Row[] = [
     shown: 'fancy',
     fancy: { tool: anchorsThenThrows },
     puts: [tool('t1'), tool('t2')],
-    slots: [['chat-entry chat-tool@default'], ['chat-entry chat-tool@default']],
+    slots: [
+      ['chat-activity@default'],
+      ['chat-entry chat-tool@default'],
+      ['chat-entry chat-tool@default'],
+    ],
     logs: ['[chat] layout fancy tool entry failed: boom'],
     toasts: ['Chat layout fancy: tool entries drawn with default'],
     disposedAnchors: [
@@ -197,6 +209,139 @@ const rows: Row[] = [
   },
 ];
 
+const timed = (entry: ChatEntry, time: number): ChatEntry => ({
+  ...entry,
+  at: time,
+});
+const user = (id: string): ChatEntry => ({
+  kind: 'user',
+  id,
+  at: 1000,
+  text: 'ask',
+  images: [],
+  raw: [],
+});
+
+function defaultShown(): ShownLayouts<ChatLayout> {
+  return {
+    layouts: new Map<string, ChatLayout>([['default', defaultLayout]]),
+    user: 'default',
+  };
+}
+
+// Timers that run only when the test fires them.
+function fakeTimers() {
+  let nextHandle = 1;
+  const armed = new Map<number, () => void>();
+  const timers: Timers = {
+    set: (run) => {
+      armed.set(nextHandle, run);
+      return nextHandle++;
+    },
+    clear: (handle) => {
+      armed.delete(handle);
+    },
+  };
+  const fireAll = () => {
+    const runs = [...armed.values()];
+    armed.clear();
+    for (const run of runs) {
+      run();
+    }
+  };
+  return { timers, armed, fireAll };
+}
+
+// A list over `shown`, its logs, toasts, disposed anchors, timers and a
+// clock whose `time` the test sets. `put` puts an entry into the session's
+// list, replacing the one holding its id.
+function setUpList(shown: ShownLayouts<ChatLayout>) {
+  const logs: string[] = [];
+  const toasts: string[] = [];
+  const disposed: CommandId[] = [];
+  const log = (source: string, message: string) =>
+    logs.push(`[${source}] ${message}`);
+  const layouts = createChatLayouts(log);
+  layouts.set(shown);
+  const { timers, armed, fireAll } = fakeTimers();
+  const clock = { time: 1000, now: () => clock.time };
+  const list = createEntryList({
+    layouts,
+    toastedKinds: new Set(),
+    kit: {
+      markdown: {
+        block: (text) => text,
+        inline: (text) => text,
+        document: (text) => Promise.resolve(text),
+      },
+      keys: {
+        anchor: (_node, command) => ({
+          dispose: () => disposed.push(command),
+        }),
+        keysFor: () => null,
+      },
+      commands: { exists: () => true, run: () => undefined },
+      platform: 'macos',
+      allow: () => undefined,
+      deny: () => undefined,
+      openImages: () => undefined,
+    },
+    log,
+    toast: (text) => toasts.push(text),
+    timers,
+    clock,
+  });
+  const held = new Map<string, ChatEntry>();
+  const put = (entry: ChatEntry) => {
+    held.set(entry.id, entry);
+    list.put(entry, [...held.values()]);
+  };
+  const entries = () => [...held.values()];
+  return { list, logs, toasts, disposed, armed, fireAll, clock, put, entries };
+}
+
+// Each of the list's slots as `<classes>`, ` hidden` added while hidden.
+function slotClasses(list: HTMLElement): string[] {
+  return asFake(list).children.map(
+    (slot) => `${slot.className}${slot.hidden ? ' hidden' : ''}`,
+  );
+}
+
+// The list's slot whose classes include `className`, `index` among them.
+function slotOf(list: HTMLElement, className: string, index = 0): FakeElement {
+  return asFake(list).children.filter((slot) =>
+    slot.classList.contains(className),
+  )[index];
+}
+
+// One draw or update of a recording activity part: the run's first step id
+// and the input.
+interface ActivityCall {
+  how: 'draw' | 'update';
+  run: string;
+  input: ActivityInput;
+}
+
+// A user layout `fancy` whose activity part draws `div.fancy-activity` and
+// records each draw and update in `calls`.
+function recordingActivity(calls: ActivityCall[]): ShownLayouts<ChatLayout> {
+  const record = (how: ActivityCall['how'], input: ActivityInput) =>
+    calls.push({ how, run: input.steps[0].id, input });
+  return withUser<ChatLayout>(
+    defaultLayout,
+    {
+      activity(parent, input, kit) {
+        record('draw', input);
+        return {
+          element: kit.el(parent, 'div', 'fancy-activity'),
+          update: (next) => record('update', next),
+        };
+      },
+    },
+    'fancy',
+  );
+}
+
 describe('entry list', () => {
   beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
   afterEach(() => {
@@ -212,49 +357,18 @@ describe('entry list', () => {
         },
       );
     }
-    const logs: string[] = [];
-    const toasts: string[] = [];
-    const disposed: CommandId[] = [];
     const shown =
       row.shown === 'default'
-        ? {
-            layouts: new Map<string, ChatLayout>([['default', defaultLayout]]),
-            user: 'default',
-          }
+        ? defaultShown()
         : withUser<ChatLayout>(
             defaultLayout,
             fancyLayout(row.fancy ?? {}),
             'fancy',
           );
-    const list = createEntryList({
-      layouts: { shown: () => shown },
-      toastedKinds: new Set(),
-      kit: {
-        markdown: {
-          block: (text) => text,
-          inline: (text) => text,
-          document: (text) => Promise.resolve(text),
-        },
-        keys: {
-          anchor: (_node, command) => ({
-            dispose: () => disposed.push(command),
-          }),
-          keysFor: () => null,
-        },
-        commands: { exists: () => true, run: () => undefined },
-        platform: 'macos',
-        allow: () => undefined,
-        deny: () => undefined,
-        openImages: () => undefined,
-      },
-      log: (source, message) => logs.push(`[${source}] ${message}`),
-      toast: (text) => toasts.push(text),
-    });
+    const { list, logs, toasts, disposed, put } = setUpList(shown);
 
-    const entries = new Map<string, ChatEntry>();
     for (const entry of row.puts) {
-      entries.set(entry.id, entry);
-      list.put(entry, [...entries.values()]);
+      put(entry);
     }
 
     const slots = asFake(list.element).children.map((slot) =>
@@ -267,5 +381,201 @@ describe('entry list', () => {
     expect(logs).toEqual(row.logs);
     expect(toasts).toEqual(row.toasts);
     expect(disposed).toEqual(row.disposedAnchors);
+  });
+});
+
+describe('activity lines', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  const userToolToolAssistant = [
+    user('u1'),
+    tool('t1'),
+    tool('t2'),
+    assistant('done'),
+  ];
+  const runStop = (steps: ChatEntry[]) => ({
+    kind: 'activity',
+    runId: 'activity:t1',
+    steps,
+  });
+
+  it('runs_UserToolToolAssistant_OneActivitySlotBeforeHiddenSteps', () => {
+    const { list, put } = setUpList(defaultShown());
+    userToolToolAssistant.forEach(put);
+
+    expect(slotClasses(list.element)).toEqual([
+      'chat-entry-slot',
+      'chat-entry-slot chat-activity-slot',
+      'chat-entry-slot chat-step-slot hidden',
+      'chat-entry-slot chat-step-slot hidden',
+      'chat-entry-slot is-cursor',
+    ]);
+    expect(list.move(-1)).toEqual(runStop([tool('t1'), tool('t2')]));
+  });
+
+  it('runs_ToggleTwice_OpensIntoStepsThenCloses', () => {
+    const { list, put } = setUpList(defaultShown());
+    userToolToolAssistant.forEach(put);
+    list.move(-1);
+
+    expect(list.toggleFocused()).toEqual({
+      stop: runStop([tool('t1'), tool('t2')]),
+      result: 'expanded',
+    });
+    expect(slotOf(list.element, 'chat-step-slot', 0).hidden).toBe(false);
+    expect(slotOf(list.element, 'chat-step-slot', 1).hidden).toBe(false);
+    expect(list.move(1)).toEqual({ kind: 'entry', entry: tool('t1') });
+    list.move(-1);
+    expect(list.toggleFocused()?.result).toBe('collapsed');
+    expect(slotOf(list.element, 'chat-step-slot', 0).hidden).toBe(true);
+    expect(slotOf(list.element, 'chat-step-slot', 1).hidden).toBe(true);
+  });
+
+  it('runs_ClickClosesWithFocusOnStep_FocusMovesToTheRun', () => {
+    const { list, put } = setUpList(defaultShown());
+    userToolToolAssistant.forEach(put);
+    list.move(-1);
+    list.toggleFocused();
+    list.move(1);
+    list.move(1);
+
+    slotOf(list.element, 'chat-activity-slot').click();
+
+    expect(list.focused()).toEqual(runStop([tool('t1'), tool('t2')]));
+    expect(slotOf(list.element, 'chat-step-slot', 1).hidden).toBe(true);
+  });
+
+  it('runs_LastRunSetWorkingThenAnswered_LiveThenEndsAtTheAnswer', () => {
+    const calls: ActivityCall[] = [];
+    const { list, put } = setUpList(recordingActivity(calls));
+    put(timed(user('u1'), 1000));
+    put(timed(tool('t1'), 2000));
+
+    list.setWorking(true);
+    expect(calls.at(-1)?.input).toMatchObject({ live: true, endedAt: null });
+
+    put(timed(assistant('done'), 5000));
+    expect(calls.at(-1)?.input).toMatchObject({
+      live: false,
+      startedAt: 1000,
+      endedAt: 5000,
+    });
+  });
+
+  it('runs_LiveTick_UpdatesOnlyTheLiveRun', () => {
+    const calls: ActivityCall[] = [];
+    const { list, put, armed, fireAll, clock } = setUpList(
+      recordingActivity(calls),
+    );
+    [user('u1'), tool('t1'), assistant('mid'), tool('t2')].forEach(put);
+    list.setWorking(true);
+    calls.length = 0;
+    clock.time = 7000;
+
+    fireAll();
+
+    expect(calls).toEqual([
+      {
+        how: 'update',
+        run: 't2',
+        input: expect.objectContaining({ live: true, now: 7000 }),
+      },
+    ]);
+    expect(armed.size).toBe(1);
+    list.setWorking(false);
+    expect(armed.size).toBe(0);
+  });
+
+  it('runs_PutInAnotherRowThenOnItsStep_UpdatesOnlyOnItsStep', () => {
+    const calls: ActivityCall[] = [];
+    const { put } = setUpList(recordingActivity(calls));
+    [user('u1'), assistant('first'), tool('t1')].forEach(put);
+    calls.length = 0;
+
+    put(assistant('first, edited'));
+    expect(calls).toEqual([]);
+
+    put({ ...tool('t1'), result: { text: 'ok', isError: false } });
+    expect(calls.map((call) => call.how)).toEqual(['update']);
+  });
+
+  it('runs_UserToolBuilder_StepSlotsDrawWithIt', () => {
+    const { list, put } = setUpList(
+      withUser<ChatLayout>(defaultLayout, fancyLayout({}), 'fancy'),
+    );
+    userToolToolAssistant.forEach(put);
+    list.move(-1);
+    list.toggleFocused();
+
+    const step = slotOf(list.element, 'chat-step-slot');
+    expect(step.hidden).toBe(false);
+    expect(step.children.map((child) => child.className)).toEqual(['fancy']);
+  });
+
+  it('runs_UserActivityUpdateThrows_RedrawsWithDefault', () => {
+    const { list, logs, put } = setUpList(
+      withUser<ChatLayout>(
+        defaultLayout,
+        {
+          activity: (parent, _input, kit) => ({
+            element: kit.el(parent, 'div', 'fancy-activity'),
+            update() {
+              throw new Error('broken update');
+            },
+          }),
+        },
+        'fancy',
+      ),
+    );
+    [user('u1'), tool('t1')].forEach(put);
+
+    put(tool('t2'));
+
+    const run = slotOf(list.element, 'chat-activity-slot');
+    expect(
+      run.children.map((child) => `${child.className}@${child.dataset.layout}`),
+    ).toEqual(['chat-activity@default']);
+    expect(logs).toContain(
+      '[chat] layout fancy activity update failed: broken update',
+    );
+  });
+
+  it('runs_DefaultActivityThrows_LeavesBareLine', () => {
+    vi.spyOn(defaultLayout, 'activity').mockImplementation(() => {
+      throw new Error('broken default');
+    });
+    const { list, logs, put } = setUpList(defaultShown());
+
+    put(tool('t1'));
+
+    const run = slotOf(list.element, 'chat-activity-slot');
+    expect(run.children.map((child) => child.className)).toEqual([
+      'chat-entry chat-raw',
+    ]);
+    expect(run.textContent).toBe('activity');
+    expect(logs).toEqual([
+      '[chat] default layout activity failed: broken default',
+    ]);
+  });
+
+  it('runs_RebuildSameEntries_RunStaysOpen', () => {
+    const { list, put, entries } = setUpList(defaultShown());
+    userToolToolAssistant.forEach(put);
+    list.move(-1);
+    list.toggleFocused();
+
+    list.rebuild(entries());
+
+    expect(slotClasses(list.element)).toEqual([
+      'chat-entry-slot',
+      'chat-entry-slot chat-activity-slot is-cursor',
+      'chat-entry-slot chat-step-slot',
+      'chat-entry-slot chat-step-slot',
+      'chat-entry-slot',
+    ]);
   });
 });

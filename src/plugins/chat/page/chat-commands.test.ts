@@ -10,6 +10,7 @@ import { createAttachments } from './attachments';
 import type { CloseConfirm, ReasonBox } from './chat-dialogs';
 import { type ChatCommandDeps, chatCommandHandlers } from './chat-commands';
 import type { ChatSession, ChatTabs, PermissionActions } from './chat-view';
+import type { ListStop } from './activity-runs';
 import type { TranscriptScroll } from './entry-list';
 import type { ImageViewer } from './image-viewer';
 import type { Picker, PickerRequest } from './picker';
@@ -33,6 +34,24 @@ const userEntry: ChatEntry = {
   text: 'hi',
   images: [],
   raw: [],
+};
+
+const activityStop: ListStop = {
+  kind: 'activity',
+  runId: 'activity:tool-1',
+  steps: [
+    {
+      id: 'tool-1',
+      at: 1000,
+      kind: 'tool',
+      toolUseId: 'use-1',
+      name: 'Read',
+      input: {},
+      summary: 'a.ts',
+      result: null,
+      raw: [],
+    },
+  ],
 };
 
 const png: ChatImage = { mediaType: 'image/png', data: 'cG5n' };
@@ -75,17 +94,24 @@ function session(
   return Object.assign(shown, { counts });
 }
 
-// Entries focused on `entry`: `focused` answers with it, and `toggleFocused`
-// counts each call in `toggles` and answers that it expanded `entry`.
+// Entries focused on `entry`'s stop, as `focusedOnStop`.
 function focusedOn(entry: ChatEntry) {
+  return focusedOnStop({ kind: 'entry', entry });
+}
+
+// Entries focused on `stop`: `focused` and `move` answer with it, and
+// `toggleFocused` counts each call in `toggles` and answers that it expanded
+// `stop`.
+function focusedOnStop(stop: ListStop) {
   const counts = { toggles: 0 };
   const entries = {
-    focused: () => entry,
+    focused: () => stop,
+    move: () => stop,
     toggleFocused() {
       counts.toggles++;
-      return { entry, result: 'expanded' as const };
+      return { stop, result: 'expanded' as const };
     },
-  } as ChatSession['entries'];
+  } as Partial<ChatSession['entries']> as ChatSession['entries'];
   return Object.assign(entries, { counts });
 }
 
@@ -282,6 +308,28 @@ describe('chat commands', () => {
 
     expect(entries.counts.toggles).toBe(1);
     expect(run.viewed).toEqual([]);
+  });
+
+  it('toggleEntry_activityLine_logsExpandedActivityLine', () => {
+    const entries = focusedOnStop(activityStop);
+    const shown = Object.assign(session(true), { entries });
+    const run = setUp(shown);
+
+    run.handlers.toggleEntry({});
+
+    expect(entries.counts.toggles).toBe(1);
+    expect(run.logs).toEqual(['[chat] expanded activity line']);
+  });
+
+  it('nextEntry_activityLine_logsFocusedActivityLine', () => {
+    const shown = Object.assign(session(true), {
+      entries: focusedOnStop(activityStop),
+    });
+    const run = setUp(shown);
+
+    run.handlers.nextEntry({});
+
+    expect(run.logs).toEqual(['[chat] focused activity line']);
   });
 
   it.each([

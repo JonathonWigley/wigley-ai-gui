@@ -4,6 +4,7 @@ import type {
   SessionControl,
 } from '../../../contracts/agent';
 import type { Paths } from '../../../contracts/paths';
+import type { ChatSessionState } from '../contract';
 
 export type PermissionEntry = Extract<ChatEntry, { kind: 'permission' }>;
 
@@ -43,6 +44,14 @@ const TAB_STATUS: Record<ProcessActivity, string> = {
 // A session's line in its sidebar row; empty while idle.
 export function tabStatus(activity: ProcessActivity): string {
   return TAB_STATUS[activity];
+}
+
+// Whether the session's process works on a turn: waiting for a permission
+// answer is not working.
+export function isWorking(
+  state: Pick<ChatSessionState, 'running' | 'activity'>,
+): boolean {
+  return state.running && state.activity === 'working';
 }
 
 // The label of the choice holding the control's value, else the raw value,

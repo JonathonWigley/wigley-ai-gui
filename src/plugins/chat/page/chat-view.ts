@@ -1,3 +1,4 @@
+import type { Clock, Timers } from '../../../contracts/ambient';
 import type { ChatEntry, SessionControl } from '../../../contracts/agent';
 import type { CommandId } from '../../../contracts/commands';
 import type {
@@ -28,6 +29,7 @@ import {
   applyEntry,
   changedControls,
   folderName,
+  isWorking,
   type PermissionEntry,
   tabStatus,
   valueLabel,
@@ -94,7 +96,7 @@ export type ChatTabScope = 'chat';
 // the composer draw with; `paths` names each tab by its project folder.
 // `slashCommandNames` reads the app slash commands registered now, which the
 // `/` completion offers ahead of the agent's. `viewer` opens a sent message's
-// images full size.
+// images full size. `timers` and `clock` tick a live activity line's time.
 export interface ChatViewDeps extends SurfaceKitDeps {
   channel: PageChannel<ChatChannel>;
   paths: Paths;
@@ -112,6 +114,8 @@ export interface ChatViewDeps extends SurfaceKitDeps {
   visibleSessionRested(): void;
   log: Log;
   toast(text: string, tone: ToastTone): void;
+  timers: Timers;
+  clock: Clock;
 }
 
 // A held session's Chat tab. `handle` is null until `addTab` returns, and
@@ -228,6 +232,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     const tab = heldFor('activity', sessionId);
     if (tab !== undefined) {
       tab.state = { ...tab.state, activity };
+      tab.entries.setWorking(isWorking(tab.state));
       log('chat', `${tab.name} is ${activity}`);
       sendStatus(tab, tabStatus(activity));
       drawBar(tab);
@@ -251,6 +256,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     const tab = heldFor('sessionRunning', sessionId);
     if (tab !== undefined) {
       tab.state = { ...tab.state, running: true };
+      tab.entries.setWorking(isWorking(tab.state));
       drawBar(tab);
       log('chat', `${tab.name} running`);
     }
@@ -261,6 +267,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       return;
     }
     tab.state = { ...tab.state, running: false };
+    tab.entries.setWorking(isWorking(tab.state));
     drawBar(tab);
     sendStatus(tab, '');
     if (tab.handle?.isVisible() === true) {
@@ -395,6 +402,8 @@ function createTab(
     },
     log: deps.log,
     toast: deps.toast,
+    timers: deps.timers,
+    clock: deps.clock,
   });
   const boxElement = inputFrame();
   boxElement.classList.add('chat-box');
@@ -435,6 +444,7 @@ function createTab(
   };
   listenForImages({ name, attachments }, { root, box: boxElement }, deps);
   entries.rebuild(state.entries);
+  entries.setWorking(isWorking(state));
   drawComposer(tab);
   tab.handle = deps.sessions.addTab(state.sessionId, {
     id: 'chat',

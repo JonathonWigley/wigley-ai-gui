@@ -19,6 +19,7 @@ import type {
   SlashCommandContext,
 } from '../contract';
 import type { chatManifest } from '../manifest';
+import type { ListStop } from './activity-runs';
 import type { CloseConfirm, ReasonBox } from './chat-dialogs';
 import { controlText, oldestPendingPermission } from './chat-state';
 import type {
@@ -185,11 +186,13 @@ export function chatCommandHandlers(
       scrollTranscript(session, 'halfPage', -1, log),
     ),
     // A focused user entry with images opens the viewer on its first image and
-    // toggles nothing; any other focused entry toggles its expanders.
+    // toggles nothing; a focused activity line opens or closes, and any other
+    // focused entry toggles its expanders.
     toggleEntry: inSession((session) => {
       const focused = session.entries.focused();
-      if (focused?.kind === 'user' && focused.images.length > 0) {
-        deps.viewer.open(focused.images, 0);
+      const entry = focused?.kind === 'entry' ? focused.entry : null;
+      if (entry?.kind === 'user' && entry.images.length > 0) {
+        deps.viewer.open(entry.images, 0);
         return;
       }
       const toggled = session.entries.toggleFocused();
@@ -197,12 +200,17 @@ export function chatCommandHandlers(
         log('chat', `no entries in ${session.name}`);
         return;
       }
-      const { kind } = toggled.entry;
+      const { stop, result } = toggled;
+      if (stop.kind === 'activity') {
+        log('chat', `${result} activity line`);
+        return;
+      }
+      const { kind } = stop.entry;
       log(
         'chat',
-        toggled.result === 'nothing'
+        result === 'nothing'
           ? `${kind} entry has nothing to expand`
-          : `${toggled.result} ${kind} entry`,
+          : `${result} ${kind} entry`,
       );
     }),
     allowPermission: inSession((session) => {
@@ -367,12 +375,16 @@ function runSlashCommand(
 
 function moveEntry(session: ChatSession, step: 1 | -1, log: Log) {
   const focused = session.entries.move(step);
-  log(
-    'chat',
-    focused === null
-      ? `no entries in ${session.name}`
-      : `focused ${focused.kind} entry`,
-  );
+  log('chat', focusedLine(focused, session.name));
+}
+
+function focusedLine(stop: ListStop | null, sessionName: string): string {
+  if (stop === null) {
+    return `no entries in ${sessionName}`;
+  }
+  return stop.kind === 'activity'
+    ? 'focused activity line'
+    : `focused ${stop.entry.kind} entry`;
 }
 
 // Logs e.g. `scrolled the transcript up a line; not following`.

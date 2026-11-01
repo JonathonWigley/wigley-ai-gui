@@ -153,6 +153,8 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       visibleSessionRested: closeSessionDialogs,
       log: services.log,
       toast: services.toast,
+      timers: services.timers,
+      clock: services.clock,
     });
     api.layouts.show<ChatLayout>({
       defaultLayout,

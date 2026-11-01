@@ -7,6 +7,7 @@ import {
   changedControls,
   controlText,
   folderName,
+  isWorking,
   oldestPendingPermission,
 } from './chat-state';
 
@@ -101,6 +102,18 @@ describe('chat state', () => {
 
     expect(changedControls([], after)).toEqual(after);
   });
+
+  it.each([
+    { running: true, activity: 'working', expected: true },
+    { running: true, activity: 'waiting', expected: false },
+    { running: true, activity: 'idle', expected: false },
+    { running: false, activity: 'working', expected: false },
+  ] as const)(
+    'isWorking_RunningAndActivity_TrueOnlyWhenRunningAndWorking: running $running, $activity → $expected',
+    ({ running, activity, expected }) => {
+      expect(isWorking({ running, activity })).toBe(expected);
+    },
+  );
 
   it('folderName_LastSegmentTrailingSlashIgnored', () => {
     expect(folderName('/Users/u/dev/app/', posixPaths)).toBe('app');
