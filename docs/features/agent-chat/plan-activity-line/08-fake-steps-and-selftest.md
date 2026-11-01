@@ -1,6 +1,6 @@
 # 08 — Fake steps turn and self-test steps
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 4 · Depends on: 04, 07
 Plan: [plan.md](plan.md)
@@ -30,3 +30,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 56a7f3b · proof: diff read: FAKE_STEPS_TEXT and both self-test groups present as planned; typecheck clean; fake-agent-harness.test.ts passes per worker · concerns: activity line group leaves the focus off following; transcript scroll relies on sendFromBox calling entries.latest() (read, not run)

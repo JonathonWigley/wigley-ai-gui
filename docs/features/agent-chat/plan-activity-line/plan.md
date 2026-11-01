@@ -242,7 +242,7 @@ Boundary rules:
 - [x] [Entry list draws activity lines; commands and the view wired to it](07-entry-list-and-wiring.md) — after 02, 05, 06
 
 ### Wave 4
-- [ ] [Fake steps turn and self-test steps](08-fake-steps-and-selftest.md) — after 04, 07
+- [x] [Fake steps turn and self-test steps](08-fake-steps-and-selftest.md) — after 04, 07
 
 ### Wave 5
 - [ ] [Doc re-read](09-doc-re-read.md)
@@ -262,6 +262,7 @@ Review base: e2dbd6596bdd144fcd436c37ef19db140c258f9a
 - 05 · e49d51c · diff read: every Produces present in activity-runs.ts and entry-focus.ts; typecheck clean; 34 tests pass per worker (gate reruns) · concerns: lint's oxfmt flags DESIGN.md and docs/keymap.md, from a peer session's commits, not this run
 - 06 · 21d87f4 · diff read: every Produces present (StepInput, ActivityInput, collapsibleRow, ChatLayout.activity, PART_SET activity, kit collapsibleRow, layout.js activity and steps on collapsibleRow); typecheck clean · concerns: .chat-step-slot overrides .chat-entry-slot margin/padding only by source order, so it holds only while step slots also carry chat-entry-slot
 - 07 · 928abc4 · diff read: every Produces present (EntryListDeps layouts/timers/clock, setWorking, move/first/focused ListStop, toggleFocused {stop,result}, isWorking, ChatViewDeps timers/clock); typecheck clean; worker ran the 3 named test files · concerns: opening the last run while the focus follows recomputes via focusAfterChange and jumps the cursor to the run's last step, so a second Enter toggles that step, not the run; the START_FOCUS case of GIVEN 1 is unreachable through EntryList (focus is never null with entries)
+- 08 · 56a7f3b · diff read: FAKE_STEPS_TEXT and both self-test groups present as planned; typecheck clean; fake-agent-harness.test.ts passes per worker · concerns: activity line group leaves the focus off following; transcript scroll relies on sendFromBox calling entries.latest() (read, not run)
 ### Contract changes
 - pairToolResult: (Map<string, ToolEntry>) → ToolEntry → generic <E extends ToolEntry>(Map<string, E>) → E, and ToolEntry is now Extract<EntryDraft, {kind:'tool'}> · why: the decoder pairs drafts and transcripts pairs stamped entries · consumers: none outside 04 · group 04
 - layout.d.ts re-export: export type { DotStatus } → export type { BaseKit, DotStatus } · why: layout.js imports types only from ../layout and the activity part's JSDoc names BaseKit · consumers: none beyond 06 · group 06
@@ -279,5 +280,7 @@ Review base: e2dbd6596bdd144fcd436c37ef19db140c258f9a
 - a click on the run slot runs the same toggle as Enter, focusAfterClose included (GIVEN 3 needs it); it does not put the cursor on the clicked line — none · group 07
 - a bare-line run slot redraws on a recompute where the run changed but not on a tick, so a broken default does not log every second — none · group 07
 - put never removes a run slot (entries only append or replace same-kind); rebuild disposes and redraws every run slot — a stale slot if that invariant ever breaks · group 07
+- EXPECTED_CALLS gains the FAKE_STEPS_TEXT send and its interrupt, since the new group runs on the fixture's fake process — the self-test reports fake calls if wrong · group 08
+- passing step results read {text:'ok'}; each step is emitted once with its result set — none · group 08
 ### Review rounds
 ### Test gate
