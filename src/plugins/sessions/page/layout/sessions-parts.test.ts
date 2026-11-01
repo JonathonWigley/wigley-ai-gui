@@ -22,6 +22,7 @@ function tabView(id: string): SessionTabView {
   return {
     id,
     title: `title ${id}`,
+    icon: 'comment',
     element: asHtml(new FakeElement('div')),
     beforeClose: () => true,
     shown: () => undefined,

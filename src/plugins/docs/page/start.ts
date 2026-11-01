@@ -399,6 +399,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       held.tab = sessions.addTab(sessionId, {
         id: 'docs',
         title: 'Docs',
+        icon: 'book',
         element: held.view.element,
         beforeClose() {
           if (held.view.hasUnsavedEdits()) {

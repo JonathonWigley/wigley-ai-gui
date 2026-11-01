@@ -176,7 +176,8 @@ export interface SessionsChannel extends ChannelShape {
 
 // The page part's exports and events.
 
-// A tab a plugin adds to a session. `beforeClose` returns whether the session
+// A tab a plugin adds to a session. The tab bar draws its `icon`, a Codicon
+// name, with `title` as its tooltip and accessible name. `beforeClose` returns whether the session
 // may close now; false keeps it. `shown` runs each time this tab becomes the
 // visible tab: the selected tab of the selected session while Sessions mode
 // shows. Its plugin sets its base key scope there. `shown` may run inside
@@ -184,6 +185,7 @@ export interface SessionsChannel extends ChannelShape {
 export interface SessionTabView {
   id: string;
   title: string;
+  icon: string;
   element: HTMLElement;
   beforeClose(): boolean;
   shown(): void;

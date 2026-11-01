@@ -267,6 +267,7 @@ export function mountPrimerTab(deps: PrimerViewDeps): PrimerTab {
     addTab: (sessionId, tab) => deps.sessions.addTab(sessionId, tab),
     tabId: 'primer',
     title: 'Primer',
+    icon: 'lightbulb',
     className: 'primer-tab',
     idleText: "No primer open. The agent's next primer opens here.",
     beforeClose: (sessionId) => deps.beforeClose(sessionId),

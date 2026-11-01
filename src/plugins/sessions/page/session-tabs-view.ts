@@ -331,10 +331,11 @@ function drawTab(
   isActive: boolean,
   select: () => void,
 ): DrawnPart<SessionsPart> {
-  const drawn = parts.tab(strip, { title: view.title });
+  const drawn = parts.tab(strip, { title: view.title, icon: view.icon });
   const entry = drawn.built.element;
   rowAction(entry, select);
   entry.title = view.title;
+  entry.setAttribute('aria-label', view.title);
   entry.classList.toggle('is-active', isActive);
   entry.setAttribute('aria-current', String(isActive));
   return drawn;

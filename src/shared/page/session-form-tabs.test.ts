@@ -44,6 +44,7 @@ function tabsSetup() {
     },
     tabId: 'form',
     title: 'Form',
+    icon: 'checklist',
     className: 'form-tab',
     idleText: 'No form open.',
     beforeClose,
@@ -72,7 +73,11 @@ describe('session form tabs', () => {
 
     expect(added).toHaveLength(1);
     const { view } = added[0];
-    expect(view).toMatchObject({ id: 'form', title: 'Form' });
+    expect(view).toMatchObject({
+      id: 'form',
+      title: 'Form',
+      icon: 'checklist',
+    });
     const tab = asFake(view.element);
     expect(tab.childNodes).toHaveLength(3);
     expect(tab.childNodes[0]).toBe(asFake(first));

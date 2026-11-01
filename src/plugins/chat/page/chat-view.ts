@@ -449,6 +449,7 @@ function createTab(
   tab.handle = deps.sessions.addTab(state.sessionId, {
     id: 'chat',
     title: 'Chat',
+    icon: 'comment',
     element: root,
     beforeClose: () => view.beforeClose(tab),
     shown: () => view.shown(tab),

@@ -15,7 +15,8 @@ import type { BaseKit } from '../../../shared/page/layout-host/kit';
 // - the click on each row (activate its session) and each tab (select it), set on the element the part returns with
 //   `ui-row--action` and a mousedown that takes no focus, and dropped while that element is `is-disabled`;
 // - `is-selected` and `aria-current="true"` on the selected row, `is-active` and `aria-current` on the active tab;
-// - the `title` tooltip on each row (`label`, or `label · status`) and each tab (`title`);
+// - the `title` tooltip on each row (`label`, or `label · status`) and each tab (`title`), and each tab's `aria-label`
+//   (`title`), so a tab that draws only its icon keeps its accessible name;
 // - `is-no-target` on the elements `sessionEdge`, `prevTabEdge`, `nextTabEdge` and `closeHint` return, which hides
 //   each while it has nothing to act on;
 // - whether the empty text shows: `emptyText` draws only while the tab area shows no tab.
@@ -33,9 +34,10 @@ export interface SessionRowInput {
   status: string | null;
 }
 
-// One tab of the selected session.
+// One tab of the selected session. `icon` is a Codicon name.
 export interface SessionTabInput {
   title: string;
+  icon: string;
 }
 
 // Why the tab area shows no tab. `hasHint` is true when the text asks for a session to be picked; `kit.pickHint`

@@ -106,6 +106,7 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
     addTab: (sessionId, tab) => deps.sessions.addTab(sessionId, tab),
     tabId: 'form',
     title: 'Form',
+    icon: 'checklist',
     className: 'form-tab',
     idleText: "No round open. The agent's next round opens here.",
     beforeClose: (sessionId) => deps.beforeClose(sessionId),

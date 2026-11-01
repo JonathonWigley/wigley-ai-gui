@@ -5,6 +5,8 @@ import { emptyState } from './ui/empty-state';
 export interface FormTabView {
   id: string;
   title: string;
+  // A Codicon name.
+  icon: string;
   element: HTMLElement;
   beforeClose(): boolean;
   shown(): void;
@@ -23,6 +25,8 @@ export interface SessionFormTabsDeps {
   addTab(sessionId: string, tab: FormTabView): FormTabHandle;
   tabId: string;
   title: string;
+  // The tab's Codicon name.
+  icon: string;
   // The tab element's class.
   className: string;
   // The idle state's line while the session has no open form.
@@ -78,6 +82,7 @@ export function createSessionFormTabs(
     const handle = deps.addTab(sessionId, {
       id: deps.tabId,
       title: deps.title,
+      icon: deps.icon,
       element: tab,
       beforeClose: () => deps.beforeClose(sessionId),
       shown: deps.shown,

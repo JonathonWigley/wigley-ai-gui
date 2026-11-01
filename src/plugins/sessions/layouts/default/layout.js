@@ -1,8 +1,9 @@
 // @ts-check
 
 // The built-in Sessions look: the side bar's "Sessions" header over its rows,
-// each row's label, harness, attention dot and status line, and the tab bar's
-// prompts around its strip, in the class names `sessions.css` styles.
+// each row's label, harness, attention dot and status line, the tab bar's
+// prompts around its strip, and each tab's icon with no label, in the class
+// names `sessions.css` styles.
 
 /** @type {import('../layout').CompleteLayout} */
 const layout = {
@@ -47,7 +48,7 @@ const layout = {
     );
     element.type = 'button';
     element.tabIndex = -1;
-    kit.el(element, 'span', 'ui-tab-label', input.title);
+    kit.icon(element, input.icon, 'session-tab-icon');
     return { element };
   },
 
