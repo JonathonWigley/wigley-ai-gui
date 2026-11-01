@@ -447,7 +447,7 @@ describe('transcriptEntries', () => {
       expected: [['history:a1-0', AT_ONE]],
     },
     {
-      name: 'NoTimestampTakesTheOneBefore',
+      name: 'NoTimestampTakesTheLastTimestamp',
       lines: [
         assistantLine('a1', { type: 'text', text: 'hi' }, AT_ONE_TEXT),
         userLine('u1', 'next'),
@@ -492,6 +492,58 @@ describe('transcriptEntries', () => {
       ],
       expected: [
         ['history:a1-0', AT_ONE],
+        ['history:u2', AT_TWO],
+      ],
+    },
+    {
+      name: 'NoTimestampTakesAPairedResultLineTime',
+      lines: [
+        assistantLine(
+          'a1',
+          {
+            type: 'tool_use',
+            id: 't1',
+            name: 'Bash',
+            input: { command: 'ls' },
+          },
+          AT_ONE_TEXT,
+        ),
+        userLine(
+          'u1',
+          [{ type: 'tool_result', tool_use_id: 't1', content: 'out' }],
+          { timestamp: AT_TWO_TEXT },
+        ),
+        userLine('u2', 'after'),
+      ],
+      expected: [
+        ['history:a1-0', AT_ONE],
+        ['history:u2', AT_TWO],
+      ],
+    },
+    {
+      name: 'NoTimestampTakesASkippedLineTime',
+      lines: [
+        userLine('u1', 'first', { timestamp: AT_ONE_TEXT }),
+        { type: 'last-prompt', timestamp: AT_TWO_TEXT },
+        userLine('u2', 'after'),
+      ],
+      expected: [
+        ['history:u1', AT_ONE],
+        ['history:u2', AT_TWO],
+      ],
+    },
+    {
+      name: 'NoTimestampTakesASidechainLineTime',
+      lines: [
+        userLine('u1', 'first', { timestamp: AT_ONE_TEXT }),
+        userLine('s1', 'subagent', {
+          isSidechain: true,
+          timestamp: AT_TWO_TEXT,
+        }),
+        userLine('u2', 'after'),
+      ],
+      expected: [
+        ['history:u1', AT_ONE],
         ['history:u2', AT_TWO],
       ],
     },

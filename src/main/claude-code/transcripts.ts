@@ -113,25 +113,27 @@ export function sessionTitle(message: string | null): string {
 // A transcript as chat entries, oldest first, every id starting `history:`.
 // A line this reader does not know, and a `user` line the CLI wrote, becomes a
 // raw entry; a sidechain line (a subagent's) and the CLI's bookkeeping lines
-// become nothing. Each entry's `at` is its line's `timestamp`, or the `at` of
-// the entry before it when the line has none (`0` for the first); a tool
-// entry keeps its `tool_use` line's time when its result pairs.
+// become nothing. Each entry's `at` is its line's `timestamp`, or, when the
+// line has none, that of the last line that had one, entry or not (`0` before
+// any); a tool entry keeps its `tool_use` line's time when its result pairs.
 export function transcriptEntries(text: string): ChatEntry[] {
   const entries: ChatEntry[] = [];
   const toolEntries = new Map<string, StampedToolEntry>();
   const lines = text.split('\n');
+  let lastAt = 0;
   for (const [index, lineText] of lines.entries()) {
     if (lineText.trim() === '') {
       continue;
     }
     const lineNumber = index + 1;
-    const previousAt = entries.at(-1)?.at ?? 0;
     const json = parsed(lineText);
     if (!json.ok) {
-      entries.push(lineRaw(lineNumber, lineText, previousAt));
+      entries.push(lineRaw(lineNumber, lineText, lastAt));
       continue;
     }
-    addLineEntries(json.value, lineNumber, previousAt, entries, toolEntries);
+    const line = asJson(json.value);
+    lastAt = lineAt(line, lastAt);
+    addLineEntries(line, lineNumber, lastAt, entries, toolEntries);
   }
   return entries;
 }
@@ -145,18 +147,16 @@ function lineAt(line: Json, fallback: number): number {
 }
 
 function addLineEntries(
-  value: unknown,
+  line: Json,
   lineNumber: number,
-  previousAt: number,
+  at: number,
   entries: ChatEntry[],
   toolEntries: Map<string, StampedToolEntry>,
 ) {
-  const line = asJson(value);
   const type = asString(line.type);
   if (line.isSidechain === true || SKIPPED_LINE_TYPES.has(type)) {
     return;
   }
-  const at = lineAt(line, previousAt);
   if (type === 'system') {
     entries.push(...systemEntries(line, lineNumber, at));
     return;
