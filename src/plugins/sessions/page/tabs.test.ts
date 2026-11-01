@@ -40,23 +40,43 @@ function stateOf(
 }
 
 describe('tabs', () => {
-  it('stepSession wraps at both ends', () => {
-    const rows = ['a', 'b', 'c'];
-
-    expect(stepSession(stateOf(rows, 'a'), 1)).toBe('b');
-    expect(stepSession(stateOf(rows, 'c'), 1)).toBe('a');
-    expect(stepSession(stateOf(rows, 'a'), -1)).toBe('c');
-  });
-
-  it('stepSession picks an end when none is selected', () => {
-    expect(stepSession(stateOf(['a', 'b'], null), 1)).toBe('a');
-    expect(stepSession(stateOf(['a', 'b'], null), -1)).toBe('b');
-  });
-
-  it('stepSession finds nothing with no rows or one selected row', () => {
-    expect(stepSession(stateOf([], null), 1)).toBeNull();
-    expect(stepSession(stateOf(['a'], 'a'), 1)).toBeNull();
-  });
+  it.each([
+    { rows: ['a', 'b', 'c'], selected: 'a', step: 1, skip: [], expected: 'b' },
+    { rows: ['a', 'b', 'c'], selected: 'c', step: 1, skip: [], expected: 'a' },
+    { rows: ['a', 'b', 'c'], selected: 'a', step: -1, skip: [], expected: 'c' },
+    { rows: ['a', 'b'], selected: null, step: 1, skip: [], expected: 'a' },
+    { rows: ['a', 'b'], selected: null, step: -1, skip: [], expected: 'b' },
+    { rows: [], selected: null, step: 1, skip: [], expected: null },
+    { rows: ['a'], selected: 'a', step: 1, skip: [], expected: null },
+    {
+      rows: ['s1', 's2', 's3'],
+      selected: 's1',
+      step: 1,
+      skip: ['s2'],
+      expected: 's3',
+    },
+    {
+      rows: ['s1', 's2'],
+      selected: 's1',
+      step: 1,
+      skip: ['s2'],
+      expected: null,
+    },
+    {
+      rows: ['s1', 's2', 's3'],
+      selected: 's2',
+      step: 1,
+      skip: ['s2'],
+      expected: 's3',
+    },
+  ] as const)(
+    'stepSession over $rows from $selected by $step skipping $skip gives $expected',
+    ({ rows, selected, step, skip, expected }) => {
+      expect(
+        stepSession(stateOf([...rows], selected), step, new Set(skip)),
+      ).toBe(expected);
+    },
+  );
 
   it('stepTab wraps, picks an end with none selected, and finds nothing under two tabs', () => {
     expect(stepTab(['form', 'docs'], 'form', 1)).toBe('docs');

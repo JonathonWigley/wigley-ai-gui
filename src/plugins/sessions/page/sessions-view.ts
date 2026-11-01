@@ -106,7 +106,7 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
       if (preview === null) {
         return;
       }
-      const sessionId = stepSession(preview, by);
+      const sessionId = stepSession(preview, by, new Set());
       if (sessionId !== null) {
         preview = { ...preview, selectedSessionId: sessionId };
         drawSidebar();

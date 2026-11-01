@@ -20,11 +20,18 @@ function stepFrom(
   return ids[(position + step + ids.length) % ids.length];
 }
 
-// The session `step` rows away from the selected one, wrapping; with none
-// selected, the first row for `1` and the last for `-1`. Null with no rows,
-// or with one row that is selected.
-export function stepSession(state: SessionsState, step: 1 | -1): string | null {
-  const ids = state.rows.map((row) => row.sessionId);
+// The session `step` rows away from the selected one, wrapping, over the rows
+// not in `skip` (the selected row is never skipped); with none selected, the
+// first such row for `1` and the last for `-1`. Null with no such rows, or
+// with one that is selected.
+export function stepSession(
+  state: SessionsState,
+  step: 1 | -1,
+  skip: ReadonlySet<string>,
+): string | null {
+  const ids = state.rows
+    .map((row) => row.sessionId)
+    .filter((id) => id === state.selectedSessionId || !skip.has(id));
   const isOnlyRowSelected =
     ids.length === 1 && ids[0] === state.selectedSessionId;
   return isOnlyRowSelected
@@ -44,7 +51,7 @@ export function stepTab(
 
 // Whether a session step moves anywhere, so its edge prompts show.
 export function hasOtherSession(state: SessionsState): boolean {
-  return stepSession(state, 1) !== null;
+  return stepSession(state, 1, new Set()) !== null;
 }
 
 // Whether a tab step moves anywhere, so its edge prompts show.

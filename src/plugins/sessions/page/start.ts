@@ -255,7 +255,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         view.stepPreview(by);
         return;
       }
-      const sessionId = stepSession(state, by);
+      const sessionId = stepSession(state, by, new Set());
       if (sessionId !== null) {
         exports.activate(sessionId);
       }
