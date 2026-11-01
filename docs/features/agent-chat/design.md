@@ -30,8 +30,9 @@ interview on 2026-10-23; this file is the record of both.
   `content_block_start`; every other stream event is left out, since the entry's start event or the final `assistant`
   event already holds what it carries. Every entry carries `at`, the epoch milliseconds it first appeared; a later
   version of the entry (same id) keeps it. The Claude adapter stamps a live entry through its injected clock and a
-  history entry from its transcript line's `timestamp` (a line with none takes the time of the entry before it); chat
-  main's own notices and permission entries, the layout preview and the fake take their clock's time.
+  history entry from its transcript line's `timestamp` (a line with none takes the time of the entry before it, `0`
+  for the first); chat main's own notices and permission entries and the fake's live entries take their clock's time,
+  while the layout preview and the fake's history entries carry fixed times.
 - **Step** — a `tool`, `thinking` or `raw` chat entry. A **run** is the steps between two other entries (user,
   assistant, permission, notice, result): any other entry ends it. The **live run** is the run that is the last entry
   while the session is working (`running` and activity `working`); every other run is finished.
