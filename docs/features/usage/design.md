@@ -78,7 +78,8 @@ profile's `settings.json`, which is why the configured limit is read there.
    get_context_usage reply ──▶ AgentProcessEvents.agentEvent(usage) │
         │                                                           │
         ▼                                                           │
- chat main ──▶ bus: chat.agentEvent {sessionId, profile, event}     │
+ chat main ──▶ bus: chat.sessionOpened {sessionId, profile}        │
+           ──▶ bus: chat.agentEvent {sessionId, profile, event}     │
            ──▶ bus: chat.planUsage {profile, update}                │
         │                                                           │
         ▼                                                           ▼
@@ -112,8 +113,9 @@ In `src/contracts/agent.ts`, beside `AgentHarness`:
 
 - **Main** polls every chat profile at start and then every `usage.pollIntervalSeconds` (default 300, read at each
   reschedule and rescheduled on a settings change) through the injected main `timers`. It folds each
-  `chat.planUsage` update into that profile's plan usage and keeps each session's last `usage` agent event from
-  `chat.agentEvent`, dropping a session when it closes. It sends one snapshot over its channel on every change.
+  `chat.planUsage` update into that profile's plan usage, records each session's profile from `chat.sessionOpened`
+  (so the line shows the right profile before the session's first turn ends), keeps each session's last `usage` agent
+  event from `chat.agentEvent`, and drops a session when it ends. It sends one snapshot over its channel on every change.
 - A failed poll keeps the profile's last plan usage, marks it stale with the time of the last good poll, and carries
   the reason, which the details bar shows. A poll still running when the next one is due is not doubled.
 - **Page** draws, through the `usage` layout:
