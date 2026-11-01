@@ -1,6 +1,6 @@
 # 03 — Shared pane tree
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -102,3 +102,5 @@ the test gate runs `pane-tree.test.ts`.
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 83cebe9 · proof: diff read (every Produces in pane-tree.ts and pane-tree-view.ts present; split.ts prompt output unchanged) + typecheck clean in its files; pane-tree and split tests pass per the worker (79) · concerns: a slot moved in the DOM loses keyboard focus (focused slot on split, both on swap, sibling's on close) so 05b must restore editor focus; swap calls changed but not focused

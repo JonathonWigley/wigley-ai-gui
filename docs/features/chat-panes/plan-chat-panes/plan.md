@@ -181,8 +181,8 @@ Boundary rules:
 
 ### Wave 2
 
-- [ ] [Focus targets in docs, primer, backlog and settings](02-view-focus-targets.md) — after 01
-- [ ] [Shared pane tree](03-pane-tree.md) — after 01
+- [x] [Focus targets in docs, primer, backlog and settings](02-view-focus-targets.md) — after 01
+- [x] [Shared pane tree](03-pane-tree.md) — after 01
 
 ### Wave 3
 
@@ -204,12 +204,22 @@ Review base: 6562c495f9c5949743e50df7b963f344c3ee6d31
 - 05a · ab1e090 · diff read + typecheck clean in its files · concerns: none
 - 04 · ed4d503 · diff read (SessionTabView.icon, SessionTabInput.icon, form-tabs deps icon present) + typecheck clean in its files; 3 touched test files pass per the worker (22); peer chat-view.ts hunk left unstaged · concerns: contract.ts SessionTabView comment's first line runs past the wrap width
 - 01 · e5a3813 · diff read (PaneDirection, ResizeTarget boolean, FocusTarget, OuterPanes, PANE_FOCUS_COMMANDS, PageApi.panes, PaneTargets, createPaneTargets present) + whole-tree typecheck clean; named tests pass per the worker, primer-view's base-failing rows aside · concerns: docs/features/usage/plan-usage/01-right-bar-area.md:28 still names createPaneResize (another plan's doc); Alt+Shift+j/k show no key-hint prompt until a vertical divider exists
+- 03 · 83cebe9 · diff read (every Produces in pane-tree.ts and pane-tree-view.ts present; split.ts prompt output unchanged) + typecheck clean in its files; pane-tree and split tests pass per the worker (79) · concerns: a slot moved in the DOM loses keyboard focus (focused slot on split, both on swap, sibling's on close) so 05b must restore editor focus; swap calls changed but not focused
+- 02 · 9c84f9d · diff read (four any focus binds; each view hands a FocusTarget beside its resize target; kit resolves dotted names) + whole-tree typecheck clean; Done-when grep prints nothing; view tests pass per the workers (707 + 167, primer-view's 3 base-failing rows aside); self-test passes every step but the pane binds' unplaced lines (see ruling) · concerns: backlog-view.ts: paneTo was inserted between cursorActionsSlot's comment and its function, orphaning that comment; a pushed scope (backlog filter, picker, confirm) keeps the view's targets and any-scope Alt+h/l fire there, moving list/detail behind the overlay (the scoped binds did not); self-test unplaced lines for panes.focus* and resizePaneUp/Down until 05b
 ### Contract changes
+- pane-tree.ts: also exports clampedRatio(ratio, least) and withSplitRatio(tree, split, ratio) · why: the view's drag clamps and sets a ratio with nudgeFocused's own functions · consumers: none · group 03
+- split.ts: exports NUDGE_PROMPT_MS and splitResizePrompt(anchor, start: ResizePromptEnd, end: ResizePromptEnd): { element, anchors } (the helper the task named) · why: the pane tree view shares the prompt and its linger · consumers: none · group 03
 ### Rulings
 - plan.py matches only NN- task prefixes, so 05a and 05b's Status, box and Proof edits are made by hand in the same shape — none — a mis-shaped hand edit, caught at the final gate · lead
 - peer ai-dev-e8's uncommitted chat-view.ts hunk (turn-end latest, ~lines 233-240) stays in the tree; 04 edits the file and commits only its own hunk through a cached patch, checked with git diff --cached — settled with the peer — a swept peer hunk, caught by the cached-diff check · lead
 - paneOf returns the first pane in map order when two show one session; restorePanes takes the first row when two share a host id — neither can happen under the one-pane-per-session rule — none · group 05a
 - FormTabView in session-form-tabs.ts also gains icon so the value reaches addTab; icon colour lives on a sessions.css session-tab-icon class, ui/tabs.css untouched since other tab bars still draw labels — none · group 04 · group 04
 - nudgedSplitWidth takes Extract<PaneDirection,'left'|'right'>; a divider's nudge returns true for left/right also when disposed or mid-drag; renderer registers the eight commands in one loop over PANE_DIRECTIONS — none · group 01 · group 01
+- 02 splits across two workers by file: A takes items 1 (keymap), 2 (docs), 5 (settings), 6 (base kit) and the docs and settings self-tests; B takes items 3 (primer) and 4 (backlog) with the primer self-test — its files read past 60k tokens in one agent — a seam the split misses, caught at the 02 diff read · lead
+- no new layer entry: pane-tree/ sits in the existing src/shared/page layer, so 05b imports it without a check-layers edit, but the check does not stop the pure core importing DOM code — a later DOM import in pane-tree.ts goes uncaught · group 03 · group 03
+- least share capped at half the span, so a split narrower than two least sizes centres its divider; a nudge that moves nothing calls no callback yet returns owned — none · group 03 · group 03
+- 02's npm run selftest Done-when moves to 05b and 07: the any-scope panes.focus* and panes.resizePaneUp/Down binds stay unplaced until 05b's pane edges (focusEdge, anchored with no scope) and the pane tree's column-divider prompt reach the page; every other self-test step passes at 02A — if 05b's self-test never shows a column divider or a pane edge in some scope, the lines persist and 05b must anchor them · lead
+- Docs: Alt+h no longer reveals a hidden tree (item 2's focus target returns false there); Esc (docs.backToTree) still does, and the docs-browser design says so — none · group 02 · group 02
+- primer hands its focus target only while the primer view shows a primer's panes, else null; backlog's target also returns false with the editor open — none · group 02 · group 02
 ### Review rounds
 ### Test gate

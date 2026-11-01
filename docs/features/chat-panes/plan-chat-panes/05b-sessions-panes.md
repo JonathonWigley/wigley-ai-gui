@@ -1,6 +1,6 @@
 # 05b — Sessions panes
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 3 · Depends on: 01, 02, 03, 04, 05a
 Plan: [plan.md](plan.md)
