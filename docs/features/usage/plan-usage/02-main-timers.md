@@ -1,6 +1,6 @@
 # 02 — Main timers
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01 (shares `src/contracts/plugin.ts`)
 Plan: [plan.md](plan.md)
@@ -20,3 +20,5 @@ Done when: compiles; `npm run lint` passes; `grep -n 'timers: Timers' src/contra
 Commit:    one commit for the group
 
 ## Proof
+
+Commit eb3464b · proof: diff read: MainServices.timers after clock, live adapter in main.ts passed to startMainParts; typecheck clean; no tests picked (no test changed) · concerns: oxfmt --check flags DESIGN.md and docs/keymap.md, unmodified since 444f673 (pre-existing)

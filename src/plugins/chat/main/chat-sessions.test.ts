@@ -8,6 +8,8 @@ import {
   createFakeAgentHarness,
   FAKE_PAST_SESSIONS,
   type FakeAgentHarness,
+  fakePlanRowUpdate,
+  fakeUsageEvent,
 } from '../../../shared/fake-agent-harness';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
@@ -17,7 +19,7 @@ import type {
   SessionInfo,
   ToolResult,
 } from '../../sessions/contract';
-import type { ChatChannel, ChatProfile } from '../contract';
+import type { ChatChannel, ChatMainEvents, ChatProfile } from '../contract';
 import { DEFAULT_PROFILES } from '../manifest';
 import {
   ARCHIVED_SESSIONS_FILE,
@@ -43,6 +45,10 @@ type Message = {
     data: ChatChannel['messages'][K];
   };
 }[keyof ChatChannel['messages']];
+
+type Emitted = {
+  [K in keyof ChatMainEvents]: { event: K; data: ChatMainEvents[K] };
+}[keyof ChatMainEvents];
 
 interface Announced {
   title: string;
@@ -120,6 +126,7 @@ function setUp(
   const activated: string[] = [];
   const announced: Announced[] = [];
   const messages: Message[] = [];
+  const emitted: Emitted[] = [];
   let ownedEnds = 0;
   let windowShows = 0;
   let isFocused = true;
@@ -168,6 +175,7 @@ function setUp(
     archived,
     saved: saved.store,
     send: (message, data) => messages.push({ message, data } as Message),
+    emit: (event, data) => emitted.push({ event, data } as Emitted),
     alerts: {
       announce: (title, body, onClick) =>
         announced.push({ title, body, onClick }),
@@ -201,6 +209,7 @@ function setUp(
     activated,
     announced,
     messages,
+    emitted,
     agentSession,
     archived,
     saved,
@@ -1867,4 +1876,113 @@ describe('createChatSessions saved sessions', () => {
 
     expect(test.saved.last()?.selectedHostSessionId).toBe('host-b');
   });
+});
+
+describe('createChatSessions usage forwarding', () => {
+  it.each([
+    {
+      given: 'an agent event',
+      act: (test: Awaited<ReturnType<typeof started>>) =>
+        test.process.events.agentEvent(fakeUsageEvent(1, 1000)),
+      emitted: [
+        {
+          event: 'agentEvent',
+          data: {
+            sessionId: ROW_ID,
+            profileDir: '~/.claude-personal',
+            event: fakeUsageEvent(1, 1000),
+          },
+        },
+      ],
+    },
+    {
+      given: 'a plan row update',
+      act: (test: Awaited<ReturnType<typeof started>>) =>
+        test.process.events.planUsage(fakePlanRowUpdate(1, 1000)),
+      emitted: [
+        {
+          event: 'planUsage',
+          data: {
+            profileDir: '~/.claude-personal',
+            update: fakePlanRowUpdate(1, 1000),
+          },
+        },
+      ],
+    },
+    {
+      given: 'the profile setting changed after the start',
+      act: (test: Awaited<ReturnType<typeof started>>) => {
+        test.setProfiles([{ name: 'personal', configDir: '/elsewhere' }]);
+        test.process.events.agentEvent(fakeUsageEvent(1, 1000));
+      },
+      emitted: [
+        {
+          event: 'agentEvent',
+          data: {
+            sessionId: ROW_ID,
+            profileDir: '~/.claude-personal',
+            event: fakeUsageEvent(1, 1000),
+          },
+        },
+      ],
+    },
+    {
+      given: 'a plan row update after the process ended',
+      act: (test: Awaited<ReturnType<typeof started>>) => {
+        test.process.events.ended({ code: 0, error: null });
+        test.process.events.planUsage(fakePlanRowUpdate(1, 1000));
+      },
+      emitted: [],
+    },
+  ])(
+    'processEvents_UsageForwarding_EmitsWhileLive given $given',
+    async ({ act, emitted }) => {
+      const test = await started();
+      test.emitted.length = 0;
+
+      act(test);
+
+      expect(test.emitted).toEqual(emitted);
+    },
+  );
+
+  it.each([
+    {
+      given: 'a started row',
+      open: (test: ReturnType<typeof setUp>) =>
+        test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' }),
+      opened: [{ sessionId: ROW_ID, profileDir: '~/.claude-personal' }],
+    },
+    {
+      given: 'a restored row',
+      open: (test: ReturnType<typeof setUp>) =>
+        test.chat.restore({
+          sessions: [record('host-a', { profile: 'personal' })],
+          selectedHostSessionId: null,
+        }),
+      opened: [{ sessionId: ROW_ID, profileDir: '~/.claude-personal' }],
+    },
+    {
+      given: 'a restored row whose profile is missing',
+      open: (test: ReturnType<typeof setUp>) =>
+        test.chat.restore({
+          sessions: [record('host-a', { profile: 'gone' })],
+          selectedHostSessionId: null,
+        }),
+      opened: [],
+    },
+  ])(
+    'openRow_SessionOpened_EmitsTheRowsProfileDir given $given',
+    ({ open, opened }) => {
+      const test = setUp();
+
+      open(test);
+
+      expect(
+        test.emitted
+          .filter((emitted) => emitted.event === 'sessionOpened')
+          .map((emitted) => emitted.data),
+      ).toEqual(opened);
+    },
+  );
 });

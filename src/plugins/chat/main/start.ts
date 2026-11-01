@@ -19,7 +19,7 @@ import type {
   SessionsMainExports,
   ToolResult,
 } from '../../sessions/contract';
-import type { ChatChannel, ChatMainExports } from '../contract';
+import type { ChatChannel, ChatMainEvents, ChatMainExports } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { chatManifest } from '../manifest';
 import { createAccounts } from './accounts';
@@ -37,7 +37,7 @@ import { chatSelfTestScript } from './selftest-script';
 type ChatApi = MainApi<
   typeof chatManifest,
   ChatChannel,
-  Record<never, never>,
+  ChatMainEvents,
   QualifiedEvents<'sessions', SessionsMainEvents>
 >;
 
@@ -209,6 +209,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       archived: createArchivedSessions(api.data),
       saved,
       send: (message, data) => api.channel.send(message, data),
+      emit: (event, data) => api.events.emit(event, data),
       alerts: services.alerts,
       window: services.window,
       log: services.log,
@@ -330,6 +331,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     const exports: ChatMainExports = {
       launch: async (request) => chat.launch(request),
       profileNames,
+      profiles,
       profileOf: (sessionId) =>
         chat.sessions().find((held) => held.sessionId === sessionId)?.profile ??
         null,

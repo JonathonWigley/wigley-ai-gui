@@ -1,12 +1,14 @@
 import type {
   AccountStatus,
+  AgentEvent,
   ChatEntry,
+  PlanRowUpdate,
   ProcessActivity,
   SessionControl,
   UserMessage,
 } from '../../contracts/agent';
 import type { Disposable } from '../../contracts/disposable';
-import type { ChannelShape } from '../../contracts/plugin';
+import type { ChannelShape, EventShape } from '../../contracts/plugin';
 
 export interface ChatProfile {
   name: string;
@@ -157,6 +159,22 @@ export interface ChatChannel extends ChannelShape {
   };
 }
 
+// `agentEvent`: one agent event of a session chat owns. `planUsage`: the plan
+// rows one of those sessions saw. Both carry the `profileDir` the session's
+// process was started with: the profile's `configDir` as the `profiles`
+// setting writes it, unexpanded; null is the harness default, which chat never
+// sends. `sessionOpened`: a session chat now owns, with the profile it opened
+// under.
+export interface ChatMainEvents extends EventShape {
+  agentEvent: {
+    sessionId: string;
+    profileDir: string | null;
+    event: AgentEvent;
+  };
+  planUsage: { profileDir: string | null; update: PlanRowUpdate };
+  sessionOpened: { sessionId: string; profileDir: string };
+}
+
 // The main part's exports.
 export interface ChatMainExports {
   // Starts a session and sends `message` as its first message; leaves the
@@ -166,6 +184,10 @@ export interface ChatMainExports {
   launch(request: LaunchRequest): Promise<string>;
   // Chat's profile names, in settings order.
   profileNames(): string[];
+  // Chat's profiles, in settings order, read at each call. The first is
+  // chat's default profile: the one a drive `chat.start` takes when it names
+  // none, and the only choice the start prompt skips to.
+  profiles(): readonly ChatProfile[];
   // The profile of a session chat owns; null for any other session id.
   profileOf(sessionId: string): string | null;
 }

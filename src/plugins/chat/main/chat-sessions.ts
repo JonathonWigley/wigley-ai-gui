@@ -10,7 +10,7 @@ import type {
 import type { Alerts } from '../../../contracts/alerts';
 import type { Clock, RandomUuid } from '../../../contracts/ambient';
 import type { Log } from '../../../contracts/log';
-import type { MainChannel } from '../../../contracts/plugin';
+import type { MainChannel, PluginEvents } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { refusalOf } from '../image-rules';
 import type {
@@ -23,6 +23,7 @@ import type {
 } from '../../sessions/contract';
 import type {
   ChatChannel,
+  ChatMainEvents,
   ChatProfile,
   ChatSessionState,
   LaunchRequest,
@@ -63,6 +64,7 @@ export interface ChatSessionsDeps {
   archived: ArchivedSessions;
   saved: OpenSessions;
   send: MainChannel<ChatChannel>['send'];
+  emit: PluginEvents<ChatMainEvents>['emit'];
   alerts: Pick<Alerts, 'announce'>;
   window: { show(): void; isFocused(): boolean };
   log: Log;
@@ -429,12 +431,14 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     updateActivity(session);
   }
 
-  // The events of the row's `processStart`th process; `started.process` is
-  // that process once the harness's `start` returns.
+  // The events of the row's `processStart`th process, started under
+  // `profileDir`; `started.process` is that process once the harness's `start`
+  // returns.
   function processEvents(
     session: HeldSession,
     processStart: number,
     started: { process: AgentProcess | null },
+    profileDir: string,
   ): AgentProcessEvents {
     const { sessionId } = session.state;
     return {
@@ -465,9 +469,16 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         session.state.commands = [...names];
         send('commands', { sessionId, names: [...names] });
       },
-      // Chat main forwards no plan rows or agent events yet.
-      planUsage() {},
-      agentEvent() {},
+      planUsage(update) {
+        if (isLive(session, processStart)) {
+          deps.emit('planUsage', { profileDir, update });
+        }
+      },
+      agentEvent(event) {
+        if (isLive(session, processStart)) {
+          deps.emit('agentEvent', { sessionId, profileDir, event });
+        }
+      },
       ended({ code, error }) {
         // A close drops the row before its process ends, so the exit is
         // recorded for the row's latest process whether or not it is live.
@@ -510,10 +521,12 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   }
 
   // Opens the row for `opening.hostId` as `options` says and holds its state,
-  // resting, with `entries`.
+  // resting, with `entries`. `profileDir` is null when the profile is not in
+  // chat's profiles setting; such a row emits no `sessionOpened`.
   function openRow(
     projectDir: string,
     profileName: string,
+    profileDir: string | null,
     opening: {
       hostId: string;
       entries: ChatEntry[];
@@ -558,6 +571,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       exit: null,
     };
     held.set(sessionId, session);
+    if (profileDir !== null) {
+      deps.emit('sessionOpened', { sessionId, profileDir });
+    }
     // The sessions plugin emits `selected` inside `open`, before the row is
     // held, so `selected` cannot record it.
     if (options.select) {
@@ -578,14 +594,10 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     const { sessionId, projectDir } = session.state;
     session.processStarts += 1;
     const started: { process: AgentProcess | null } = { process: null };
+    const profileDir = profileDirOf(profile);
     const process = harness.start(
-      {
-        sessionId: session.hostId,
-        resume,
-        projectDir,
-        profileDir: profileDirOf(profile),
-      },
-      processEvents(session, session.processStarts, started),
+      { sessionId: session.hostId, resume, projectDir, profileDir },
+      processEvents(session, session.processStarts, started, profileDir),
     );
     started.process = process;
     session.process = process;
@@ -619,6 +631,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     const session = openRow(
       projectDir,
       profile.name,
+      profileDirOf(profile),
       {
         hostId: opening.hostId,
         entries: opening.entries,
@@ -727,11 +740,15 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       log('chat', `session ${hostSessionId} already open; not restored`);
       return;
     }
+    const profile = deps
+      .profiles()
+      .find((candidate) => candidate.name === record.profile);
     let session: HeldSession;
     try {
       session = openRow(
         record.projectDir,
         record.profile,
+        profile === undefined ? null : profileDirOf(profile),
         {
           hostId: hostSessionId,
           entries: [],
@@ -747,10 +764,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     if (record.busy) {
       addNotice(session, QUIT_DURING_TURN_TEXT, 'info');
     }
-    const hasProfile = deps
-      .profiles()
-      .some((profile) => profile.name === record.profile);
-    if (!hasProfile) {
+    if (profile === undefined) {
       addNotice(session, missingProfileText(record.profile), 'error');
     }
   }

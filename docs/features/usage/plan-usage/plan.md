@@ -184,7 +184,7 @@ chat's bus events and exports. New folders get their `scripts/check-layers.mts` 
 - [x] [Plan usage and agent events from the Claude adapter](03-adapter-usage.md)
 
 ### Wave 2
-- [ ] [Main timers](02-main-timers.md) — after 01 (shares `plugin.ts`)
+- [x] [Main timers](02-main-timers.md) — after 01 (shares `plugin.ts`)
 - [ ] [Chat forwards agent events and plan usage](04-chat-forwarding.md) — after 03
 
 ### Wave 3
@@ -209,6 +209,7 @@ Review base: 951296f231ed299e8ca9a12bf918bf1f5e9462cc
 ### Groups
 - 01 · fef2080 · diff read: every Produces present; typecheck clean in 01 files (only errors were 03's in-flight harness tests); worker ran shell/split/page-api tests, 106 pass · concerns: stale prose outside Files: settings.ts:96 shell.layout description and layouts/design.md:72,79 'four chrome areas'; side bar may not regrow in the same pass the right bar shrinks (real-DOM only); grid/handle/gallery layout not checked live; three shell test names undersell their two-handle assertions
 - 03 · 356bd8a · diff read: every Produces present; typecheck clean; worker ran 249 tests across adapter, fake harness and chat users, all pass · concerns: oxfmt --check fails on DESIGN.md and docs/keymap.md (committed in 444f673, predate this run); AGENTS.md claude-code row omits claude -p /usage; harness test checks plan-usage row labels only
+- 02 · eb3464b · diff read: MainServices.timers after clock, live adapter in main.ts passed to startMainParts; typecheck clean; no tests picked (no test changed) · concerns: oxfmt --check flags DESIGN.md and docs/keymap.md, unmodified since 444f673 (pre-existing)
 ### Contract changes
 ### Rulings
 - right bar redraws both bars only when its hidden state flips (updateHidden wrapper); a layout swap keeps plain applyHidden — a swap needing a redraw waits for the next resize · group 01 · group 01
