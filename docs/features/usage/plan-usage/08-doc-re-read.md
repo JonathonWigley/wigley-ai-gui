@@ -1,6 +1,6 @@
 # 08 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 6 · Depends on: 07
 Plan: [plan.md](plan.md)
@@ -29,3 +29,5 @@ Done when: every listed doc read in full against the code; every stale line fixe
 Commit:    one commit for the group, naming each doc fixed, or no commit when nothing was stale (say so in Proof)
 
 ## Proof
+
+Commit f3ec0df · proof: diff read: doc lines match the landed code; npm run lint passes in full (oxfmt included) · concerns: src/config/settings.ts ~96 shell.layout description still lists four chrome areas (code); extra usage enabled with no limit shows '<used> / no limit'

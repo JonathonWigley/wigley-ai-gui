@@ -197,10 +197,10 @@ chat's bus events and exports. New folders get their `scripts/check-layers.mts` 
 - [x] [Self-test and drive actions](07-selftest-drive.md) — after 06
 
 ### Wave 6
-- [ ] [Doc re-read](08-doc-re-read.md) — after 07
+- [x] [Doc re-read](08-doc-re-read.md) — after 07
 
 ### Wave 7
-- [ ] [Final verification](09-final-verification.md) — after 08
+- [x] [Final verification](09-final-verification.md) — after 08
 
 ## Run log
 
@@ -214,6 +214,8 @@ Review base: 951296f231ed299e8ca9a12bf918bf1f5e9462cc
 - 05 · 4e82cc2 · diff read: contract, manifest, store, poller, main part, registration and layer entries present; typecheck clean; worker ran usage + manifests tests, 42 pass · concerns: toggleDetails page command has no page part until 06, self-test unrun; start now polls once per profile (live spawns claude -p /usage); a throwing polled() rejects an unhandled round promise; two profiles sharing a configDir share one plan
 - 06 · 5b5b97e · diff read: layout contract, default layout, page part, formats, view model, kit/parts, Meter, gallery, bind, registration and layers present; typecheck clean; worker ran 87 tests across usage page, start, layout-contracts, keymap, all pass · concerns: with details-open at start the first logs are 'details shown: no profiles' / 'status line no profiles' before the snapshot lands (07 should wait for 'details drawn'); full redraw each tick loses details scroll; CSS scoped by data-layout-owner unlike other plugins; minute timer and status slot never disposed; usage/main/start.ts header comment line runs past the wrap width
 - 07 · 145aa74 + b406bfb · diff read: fixture, drive actions, self-test script present; typecheck clean; 19 unit tests pass; first selftest failed the details group's 420px fit (right bar beside left main ~10px), fixed by the lead's over-layout ruling in b406bfb; npm run selftest then passed in full; four usage screenshots read · concerns: failNextPoll fails whichever profile polls first (chat order), not necessarily work; notes toasts cover the lower right of usage screenshots; at 200px the Context/Autocompact labels ellipsize to Co…/Auto…; 09 D3–D5 and 01's narrow decision still state beside-at-every-width
+- 08 · f3ec0df · diff read: doc lines match the landed code; npm run lint passes in full (oxfmt included) · concerns: src/config/settings.ts ~96 shell.layout description still lists four chrome areas (code); extra usage enabled with no limit shows '<used> / no limit'
+- 09 · none (no fix) · D1–D8 (fake harness, run v09d) and C1–C5 (real Claude, run v09c, one Haiku 'Reply ok' in /tmp scratch) all PASS; S1/S2 from the b406bfb selftest; report /tmp/claude-usage-make/reports/09-1.md · concerns: usage.seed ignores unknown args; status line 'cache 59m' vs details 'expires in 58m' round differently; mid-first-turn context shows the reported limit (967k) until the result gives the window, then 300k configured; shell.ts:333-334 comment says the side bar gives way first; C1 probe must leave CLAUDE_CONFIG_DIR unset for ~/.claude
 ### Contract changes
 - usageFixture: as planned → plus export const USAGE_FIXTURE_VARIANTS · why: one home for the variant names · consumers: none · group 07
 ### Rulings
@@ -236,5 +238,7 @@ Review base: 951296f231ed299e8ca9a12bf918bf1f5e9462cc
 - result.snapshot that problems checks is the store read back after seed · group 07 · group 07
 - start.ts no longer returns early with no harness; poller is PlanPoller | null and the script and drive actions register on both paths · group 07 · group 07
 - over width is min(clampSplitWidth(width), span), joining the beside clamp at the threshold; data-right-bar reads beside while hidden · fix-narrow · group 07
+- usage/design.md documents the code's cache rule: a reply writing both TTL buckets takes the shorter, 5 min · group 08 · group 08
 ### Review rounds
 ### Test gate
+- picked by reading 951296f..HEAD: every test file the range added or edited (17: claude-code harness, plan-usage, session-usage, stream-decoder, chat-sessions, usage main/page tests, page-api, shell, fake-agent-harness, split) plus the tests that exercise changed logic — accounts and folder-choices (runCli refactor of the auth runner, fake harness users), manifests (usage manifest), keymap (Space v u bind), layout-contracts (usage layout contract); npm run selftest passed in full at b406bfb · 22 files, 506 tests passed, no type errors

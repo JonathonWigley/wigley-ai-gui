@@ -1,6 +1,6 @@
 # 09 — Final verification
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 7 · Depends on: 08
 Plan: [plan.md](plan.md)
@@ -64,3 +64,5 @@ Done when: every check above recorded in Proof as passed, with the screenshot an
 Commit:    no commit unless a fix lands
 
 ## Proof
+
+Commit none (no fix) · proof: D1–D8 (fake harness, run v09d) and C1–C5 (real Claude, run v09c, one Haiku 'Reply ok' in /tmp scratch) all PASS; S1/S2 from the b406bfb selftest; report /tmp/claude-usage-make/reports/09-1.md · concerns: usage.seed ignores unknown args; status line 'cache 59m' vs details 'expires in 58m' round differently; mid-first-turn context shows the reported limit (967k) until the result gives the window, then 300k configured; shell.ts:333-334 comment says the side bar gives way first; C1 probe must leave CLAUDE_CONFIG_DIR unset for ~/.claude
