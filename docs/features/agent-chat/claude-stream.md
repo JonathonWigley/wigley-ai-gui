@@ -664,7 +664,7 @@ stdout lines (every stdout line in every probe parsed as JSON).
 Measured 2026-10-30 on `2.1.314`. Excerpts trimmed as above.
 
 **`/usage` in `-p` mode.** `claude -p /usage --output-format stream-json --verbose` costs no tokens and emits an
-`assistant` line whose message carries a `usage_report` beside the text. `percent` is 0–100. `resets_at` is an
+`assistant` line carrying a top-level `usage_report` beside its `message` (the text). `percent` is 0–100. `resets_at` is an
 ISO-8601 string. `severity` is the server's grade. `extra_usage` amounts are minor units (cents) of `currency`.
 
 `"usage_report":{"session":{"total_cost_usd":0,…,"model_usage":{}},"rate_limits":{"limits":[{"kind":"session","group":"session","percent":35,"resets_at":"2026-10-31T08:09:59.607264+00:00","scope":null,"severity":"normal","is_active":false},{"kind":"weekly_all","group":"weekly","percent":97,"resets_at":"2026-10-31T05:59:59.607290+00:00","scope":null,"severity":"critical","is_active":true},{"kind":"weekly_scoped","group":"weekly","percent":0,"resets_at":"2026-10-31T06:00:00+00:00","scope":{"model":{"display_name":"Fable"},"surface":null},"severity":"normal","is_active":false}],"extra_usage":{"is_enabled":false,"monthly_limit":null,"used_credits":null,"utilization":null,"currency":null}}}`

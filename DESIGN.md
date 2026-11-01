@@ -281,6 +281,8 @@ The primitives, each a builder in `src/shared/page/ui/`:
   when on; a click calls the view's handler and the view sets the new state with `setToggleMark`, and the key that
   toggles it belongs to the view.
 - **StatusDot** (`statusDot`): a static dot for idle, running, success, warning, attention or error.
+- **Meter** (`meter`): a small bar filled to a percent in a status tone (`normal`, `warning`, `critical`); `setMeter`
+  changes it.
 - **InputFrame** (`inputFrame`): the frame around a text box.
 - **Row** (`row`): a list or tree row, density `list` or `tree`.
 - **Tabs** (`tabStrip`, `tab`): the strip on a sheet's top edge, and one tab.
