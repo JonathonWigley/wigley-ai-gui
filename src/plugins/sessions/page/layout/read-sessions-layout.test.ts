@@ -22,6 +22,11 @@ describe('readSessionsLayout', () => {
       module: { default: { row: 1 } },
       key: 'row',
     },
+    {
+      case: 'a pane that is no function',
+      module: { default: { pane: 1 } },
+      key: 'pane',
+    },
   ])(
     'readSessionsLayout_BadShape_ThrowsNamingIt ($case)',
     ({ module, key }) => {

@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { installFakeDom } from '../../../shared/page/test-dom';
 import { HARNESSES } from '../contract';
-import { PREVIEW_STATE, PREVIEW_STATUSES, previewToggle } from './preview';
+import {
+  PREVIEW_STATE,
+  PREVIEW_STATUSES,
+  previewRowState,
+  previewToggle,
+} from './preview';
 import {
   drawnRows,
   rowNamed,
@@ -30,6 +35,15 @@ describe('sessions preview', () => {
     );
     expect(rows.some((row) => statusOf(row.sessionId) !== null)).toBe(true);
     expect(rows.some((row) => statusOf(row.sessionId) === null)).toBe(true);
+  });
+
+  it('previewRowState_SampleRows_AreNeverOnScreen', () => {
+    for (const row of PREVIEW_STATE.rows) {
+      expect(previewRowState(row.sessionId)).toEqual({
+        status: PREVIEW_STATUSES[row.sessionId] ?? null,
+        onScreen: false,
+      });
+    }
   });
 
   it('sessionsView_PreviewShown_SendsNothingAndRestoresRealRows', () => {

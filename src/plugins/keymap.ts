@@ -208,6 +208,23 @@ export const defaultKeymap = {
     { keys: '<A-S-l>', scope: 'any', command: 'panes.resizePaneRight' },
     { keys: '<A-S-j>', scope: 'any', command: 'panes.resizePaneDown' },
     { keys: '<A-S-k>', scope: 'any', command: 'panes.resizePaneUp' },
+    { keys: '<A-w>', scope: 'any', command: 'sessions.closePane' },
+    { keys: '<C-A-h>', scope: 'any', command: 'sessions.swapPaneLeft' },
+    { keys: '<C-A-j>', scope: 'any', command: 'sessions.swapPaneDown' },
+    { keys: '<C-A-k>', scope: 'any', command: 'sessions.swapPaneUp' },
+    { keys: '<C-A-l>', scope: 'any', command: 'sessions.swapPaneRight' },
+    { keys: 'j', scope: 'sessions.picker', command: 'sessions.pickerDown' },
+    { keys: 'k', scope: 'sessions.picker', command: 'sessions.pickerUp' },
+    {
+      keys: '<CR>',
+      scope: 'sessions.picker',
+      command: 'sessions.pickerChoose',
+    },
+    {
+      keys: '<Esc>',
+      scope: 'sessions.picker',
+      command: 'sessions.pickerCancel',
+    },
 
     // ── Help ───────────────────────────────────────────────────────────────
     { keys: '<Leader>?', scope: 'any', command: 'keys.toggleHelp' },

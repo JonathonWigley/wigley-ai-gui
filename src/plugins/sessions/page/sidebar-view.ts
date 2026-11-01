@@ -6,6 +6,13 @@ import type { SessionsPart } from '../layouts/layout';
 import type { DrawnSideBar, SessionsParts } from './layout/sessions-parts';
 import { harnessText, hasOtherSession } from './tabs';
 
+// What a row draws beside its session: its second line, null for none, and
+// whether its session shows in a pane other than the focused one.
+export interface RowState {
+  status: string | null;
+  onScreen: boolean;
+}
+
 export interface SidebarView {
   // The side bar's host, which the shell holds; it lays out the drawn pane as
   // its own child.
@@ -13,16 +20,18 @@ export interface SidebarView {
   // Draws the side bar pane again with the parts' current layouts, dropping
   // its rows; `render` then draws them.
   redrawPane(): void;
-  // `statusOf` reads a session's second line, null for none.
+  // `rowStateOf` reads what a session's row draws; `skip` holds the sessions
+  // a session step passes over, which decide whether its prompts show.
   render(
     state: SessionsState | null,
-    statusOf: (sessionId: string) => string | null,
+    rowStateOf: (sessionId: string) => RowState,
+    skip: ReadonlySet<string>,
   ): void;
 }
 
 // Sessions mode's side bar, drawn through the sessions layout: the `sideBar`
 // pane (a "Sessions" header holding the previous and next session prompts,
-// hidden while no other session is there to move to) over one `row` per
+// hidden while no session a step reaches is there to move to) over one `row` per
 // session in main's order. The view keeps each row's click, which activates
 // its session, its tooltip, and the selected row's mark.
 export function mountSidebarView(
@@ -55,11 +64,11 @@ export function mountSidebarView(
       pane.dispose();
       pane = drawPane();
     },
-    render(state, statusOf) {
+    render(state, rowStateOf, skip) {
       const selectedSessionId = state?.selectedSessionId ?? null;
       pane.built.sessionEdge?.classList.toggle(
         'is-no-target',
-        state === null || !hasOtherSession(state),
+        state === null || !hasOtherSession(state, skip),
       );
       disposeRows();
       const list = pane.built.rows;
@@ -70,7 +79,7 @@ export function mountSidebarView(
           list,
           session,
           session.sessionId === selectedSessionId,
-          statusOf(session.sessionId),
+          rowStateOf(session.sessionId),
           activate,
         ),
       );
@@ -83,7 +92,7 @@ function drawRow(
   list: HTMLElement,
   session: SessionRow,
   isSelected: boolean,
-  status: string | null,
+  { status, onScreen }: RowState,
   activate: (sessionId: string) => void,
 ): DrawnPart<SessionsPart> {
   const drawn = parts.row(list, {
@@ -92,6 +101,7 @@ function drawRow(
     harness: harnessText(session.harness),
     marked: session.marked,
     status,
+    onScreen,
   });
   const entry = drawn.built.element;
   rowAction(entry, () => activate(session.sessionId));

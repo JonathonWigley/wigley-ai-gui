@@ -49,9 +49,13 @@ export function stepTab(
   return tabIds.length < 2 ? null : stepFrom(tabIds, selectedTabId, step);
 }
 
-// Whether a session step moves anywhere, so its edge prompts show.
-export function hasOtherSession(state: SessionsState): boolean {
-  return stepSession(state, 1, new Set()) !== null;
+// Whether a session step over the rows not in `skip` moves anywhere, so its
+// edge prompts show.
+export function hasOtherSession(
+  state: SessionsState,
+  skip: ReadonlySet<string>,
+): boolean {
+  return stepSession(state, 1, skip) !== null;
 }
 
 // Whether a tab step moves anywhere, so its edge prompts show.

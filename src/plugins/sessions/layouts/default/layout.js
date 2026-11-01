@@ -1,8 +1,9 @@
 // @ts-check
 
 // The built-in Sessions look: the side bar's "Sessions" header over its rows,
-// each row's label, harness, attention dot and status line, the tab bar's
-// prompts around its strip, and each tab's icon with no label, in the class
+// each row's label, harness, attention dot, status line and on-screen mark,
+// each chat pane's frame and focus edges, the tab bar's prompts around its
+// strip and its pane controls, and each tab's icon with no label, in the class
 // names `sessions.css` styles.
 
 /** @type {import('../layout').CompleteLayout} */
@@ -23,6 +24,7 @@ const layout = {
       detail: input.harness || null,
     });
     element.classList.add('session-row');
+    element.classList.toggle('is-on-screen', input.onScreen);
     if (input.marked) {
       kit.statusDot(kit.rowTrailing(element), 'attention');
     }
@@ -32,6 +34,16 @@ const layout = {
     return { element };
   },
 
+  pane(parent, input, kit) {
+    const element = kit.el(parent, 'div', 'session-pane');
+    element.classList.toggle('is-focused', input.isFocused);
+    const body = kit.el(element, 'div', 'session-pane-body');
+    for (const direction of input.edges) {
+      kit.focusEdge(element, direction);
+    }
+    return { element, body };
+  },
+
   tabBar(parent, kit) {
     const element = kit.el(parent, 'div', 'session-tabs-bar');
     kit.prevTabEdge(element);
@@ -39,6 +51,9 @@ const layout = {
     strip.setAttribute('aria-label', 'Tabs');
     kit.nextTabEdge(element);
     kit.closeHint(element);
+    kit.splitRightHint(element);
+    kit.splitDownHint(element);
+    kit.closePaneHint(element);
     return { element, strip };
   },
 

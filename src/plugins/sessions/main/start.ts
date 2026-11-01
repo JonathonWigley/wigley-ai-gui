@@ -36,6 +36,7 @@ import {
   writeEndpointFiles,
 } from './relay/endpoint';
 import { startRelayServer } from './relay/relay-server';
+import { sessionsSelfTestScript } from './selftest-script';
 import { createSessionList, type SessionList } from './session-list';
 
 type SessionsApi = MainApi<
@@ -212,8 +213,8 @@ export function addDriveActions(
 // plugins contribute for them, their sidebar rows, and the sessions layouts.
 // Each contribution rewrites the endpoint files, so a relay that starts the
 // app finds every tool listed. In the self-test it opens no relay and writes
-// no file; a drive run opens it in the run's own home and gets the drive
-// actions.
+// no file, and hands its pane keys' script; a drive run opens it in the run's
+// own home and gets the drive actions.
 export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
   manifest: sessionsManifest,
   start(api: SessionsApi) {
@@ -248,6 +249,9 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
           )
         : null;
     const layouts = api.layouts.register({ layoutTypes });
+    api.services.selfTest?.run(
+      sessionsSelfTestScript(exports, () => list.state()),
+    );
     return {
       commands: {},
       exports,

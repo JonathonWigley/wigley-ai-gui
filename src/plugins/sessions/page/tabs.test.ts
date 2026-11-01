@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { SessionsState } from '../contract';
 import {
+  hasOtherSession,
   hasOtherTab,
   isRoundToast,
   isSameVisibleTab,
@@ -84,6 +85,18 @@ describe('tabs', () => {
     expect(stepTab(['form', 'docs'], null, -1)).toBe('docs');
     expect(stepTab(['form'], 'form', 1)).toBeNull();
   });
+
+  it.each([
+    { rows: ['s1', 's2'], skip: [], expected: true },
+    { rows: ['s1', 's2'], skip: ['s2'], expected: false },
+  ])(
+    'hasOtherSession over $rows from s1 skipping $skip is $expected',
+    ({ rows, skip, expected }) => {
+      expect(hasOtherSession(stateOf(rows, 's1'), new Set(skip))).toBe(
+        expected,
+      );
+    },
+  );
 
   it('hasOtherTab is false under two tabs and true from two', () => {
     expect(hasOtherTab([], null)).toBe(false);

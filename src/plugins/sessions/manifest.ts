@@ -1,9 +1,11 @@
 import { definePlugin } from '../../shared/define-plugin';
 
 // Agent sessions: the relay each one connects through, and Sessions mode, its
-// sidebar of session rows beside the selected session's tabs. Its keys act in
-// every scope; `idle` is the base scope while Sessions mode shows no tab.
-// `layout` names the layout the side bar and tab bar draw with.
+// sidebar of session rows beside chat panes, each showing one session's tabs.
+// Its keys act in every scope; `idle` is the base scope while the focused pane
+// shows no tab, and `picker` is pushed while the list picker asks which
+// session a new pane shows. `layout` names the layout the side bar, the panes
+// and the tab bars draw with.
 export const sessionsManifest = definePlugin({
   id: 'sessions',
   dependsOn: ['keys'],
@@ -26,19 +28,54 @@ export const sessionsManifest = definePlugin({
       group: 'sessions',
       runsIn: 'page',
     },
+    splitDown: {
+      label: 'split the pane, new pane below',
+      group: 'panes',
+      runsIn: 'page',
+    },
+    splitRight: {
+      label: 'split the pane, new pane right',
+      group: 'panes',
+      runsIn: 'page',
+    },
+    closePane: { label: 'close the pane', group: 'panes', runsIn: 'page' },
+    swapPaneLeft: {
+      label: 'swap with the pane on the left',
+      group: 'panes',
+      runsIn: 'page',
+    },
+    swapPaneRight: {
+      label: 'swap with the pane on the right',
+      group: 'panes',
+      runsIn: 'page',
+    },
+    swapPaneUp: {
+      label: 'swap with the pane above',
+      group: 'panes',
+      runsIn: 'page',
+    },
+    swapPaneDown: {
+      label: 'swap with the pane below',
+      group: 'panes',
+      runsIn: 'page',
+    },
+    pickerDown: { label: 'next choice', group: 'picker', runsIn: 'page' },
+    pickerUp: { label: 'previous choice', group: 'picker', runsIn: 'page' },
+    pickerChoose: { label: 'choose', group: 'picker', runsIn: 'page' },
+    pickerCancel: { label: 'cancel', group: 'picker', runsIn: 'page' },
     openPreview: {
       label: 'show the layout preview rows',
       group: 'debug',
       runsIn: 'page',
     },
   },
-  scopes: { idle: 'Sessions' },
+  scopes: { idle: 'Sessions', picker: 'In the sessions pane picker' },
   settings: { layout: 'default' },
   settingInfo: {
     layout: {
       label: 'Layout',
       description:
-        "The sessions layout Sessions mode's side bar and tab bar draw in: a folder name in sessions' layouts folder, or default.",
+        "The sessions layout Sessions mode's side bar, panes and tab bars draw in: a folder name in sessions' layouts folder, or default.",
     },
   },
   themeTokens: {},

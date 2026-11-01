@@ -1,5 +1,6 @@
 import type { ModeHandle } from '../../../contracts/plugin';
 import type { SessionRow, SessionsState } from '../contract';
+import type { RowState } from './sidebar-view';
 
 function sampleRow(
   sessionId: string,
@@ -44,6 +45,12 @@ export const PREVIEW_STATUSES: Readonly<Record<string, string | null>> = {
   'preview-4': null,
   'preview-5': null,
 };
+
+// Each sample row's state: its second line, and never on screen, since no
+// pane shows a sample session.
+export function previewRowState(sessionId: string): RowState {
+  return { status: PREVIEW_STATUSES[sessionId] ?? null, onScreen: false };
+}
 
 // The view the preview toggle swaps the side bar's rows in.
 export interface PreviewView {

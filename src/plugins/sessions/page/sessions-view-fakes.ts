@@ -33,6 +33,9 @@ export function sessionsViewSetup() {
     isModeShown: () => true,
     tabsChanged: () => undefined,
     keys,
+    timers: { set: () => 0, clear: () => undefined },
+    panesChanged: () => undefined,
+    paneFocused: () => undefined,
     markdown: {
       block: (text) => text,
       inline: (text) => text,

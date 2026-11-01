@@ -6,6 +6,7 @@ import type { Layout } from '../../layouts/layout';
 const LAYOUT_PARTS: Record<keyof Layout, true> = {
   sideBar: true,
   row: true,
+  pane: true,
   tabBar: true,
   tab: true,
   emptyText: true,

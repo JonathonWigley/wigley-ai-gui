@@ -82,6 +82,23 @@ describe('sessions parts', () => {
       partName: 'tabBar',
       roots: ({ area }) => findAll(area, 'session-tabs-bar'),
     },
+    {
+      case: 'pane throws',
+      layout: { pane: fail },
+      partName: 'pane',
+      roots: ({ area }) => findAll(area, 'session-pane'),
+    },
+    {
+      case: 'pane returns a body outside its element',
+      layout: {
+        pane: (parent, _input, kit) => ({
+          element: kit.el(parent, 'div', 'mine-pane'),
+          body: document.createElement('div'),
+        }),
+      },
+      partName: 'pane',
+      roots: ({ area }) => findAll(area, 'session-pane'),
+    },
   ])(
     'sessionsParts_PartFails_DrawsWithDefault ($case)',
     ({ layout, partName, roots }) => {
@@ -89,6 +106,7 @@ describe('sessions parts', () => {
       setup.view.setLayouts(withUser<Layout>(defaultLayout, layout));
       setup.view.tabs.add('a', tabView('t1'));
       setup.view.tabs.add('a', tabView('t2'));
+      setup.view.panes.load(setup.view.panes.focusedPaneId(), 'a');
 
       setup.view.render(stateOf(['a', 'b'], 'a'));
       setup.view.render(stateOf(['a', 'b'], 'a'));
@@ -120,6 +138,7 @@ describe('sessions parts', () => {
     );
 
     view.render(stateOf(['first', 'second'], 'second'));
+    view.panes.load(view.panes.focusedPaneId(), 'second');
     const rows = drawnRows(sideBar);
     rowNamed(rows, 'first').click();
 
@@ -144,9 +163,11 @@ describe('sessions parts', () => {
     };
     view.setLayouts(withUser<Layout>(defaultLayout, layout));
 
-    // No row selected: the empty text asks for a pick, with its hint.
+    // The pane shows `first`, so its tab bar draws with every prompt and pane
+    // control.
+    view.panes.load(view.panes.focusedPaneId(), 'first');
     for (let draw = 0; draw < 3; draw++) {
-      view.render(stateOf(['first', 'second'], null));
+      view.render(stateOf(['first', 'second'], 'first'));
     }
     view.setLayouts(withUser<Layout>(defaultLayout, layout));
 
@@ -160,6 +181,9 @@ describe('sessions parts', () => {
       'sessions.prevTab': 1,
       'sessions.nextTab': 1,
       'sessions.closeSession': 1,
+      'sessions.splitRight': 1,
+      'sessions.splitDown': 1,
+      'sessions.closePane': 1,
       'sessions.showMode': 2,
     });
   });

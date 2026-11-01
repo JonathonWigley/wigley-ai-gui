@@ -1,4 +1,8 @@
 import type { Log } from '../../../../contracts/log';
+import {
+  PANE_FOCUS_COMMANDS,
+  type PaneDirection,
+} from '../../../../contracts/panes';
 import type { ShownLayouts } from '../../../../contracts/plugin';
 import { appSlot } from '../../../../shared/page/layout-host/app-slot';
 import {
@@ -12,13 +16,19 @@ import {
   requireElementIn,
 } from '../../../../shared/page/layout-host/draw-part';
 import { createLayoutParts } from '../../../../shared/page/layout-host/layout-parts';
+import { iconButton } from '../../../../shared/page/ui/icon-button';
+import { keyChevron, keyEdge } from '../../../../shared/page/ui/key-anchors';
 import '../../../../shared/page/ui/tabs.css';
+import { qualify } from '../../../../shared/plugin-manifests';
 import defaultLayout from '../../layouts/default/layout.js';
 import type {
   CompleteLayout,
   EmptyTextInput,
   EmptyTextKit,
   Layout,
+  PaneInput,
+  PaneKit,
+  PanePart,
   SessionRowInput,
   SessionsKit,
   SessionsPart,
@@ -29,6 +39,8 @@ import type {
   TabBarPane,
 } from '../../layouts/layout';
 import { sessionsManifest } from '../../manifest';
+
+type SessionsCommand = keyof typeof sessionsManifest.commands & string;
 
 // What every sessions kit reads: the page services and the keys export.
 export interface SessionsPartsDeps extends OwnerKitServices {
@@ -42,11 +54,15 @@ export interface DrawnSideBar extends SideBarPane {
 }
 
 // A drawn tab bar and the prompts its kit placed, each null when the layout
-// placed none.
+// placed none: the tab and close prompts, and the key inside each pane
+// control.
 export interface DrawnTabBar extends TabBarPane {
   previous: HTMLElement | null;
   next: HTMLElement | null;
   close: HTMLElement | null;
+  splitRight: HTMLElement | null;
+  splitDown: HTMLElement | null;
+  closePane: HTMLElement | null;
 }
 
 // Draws each sessions part into `parent` with the user's layout when it
@@ -56,6 +72,7 @@ export interface SessionsParts {
   setLayouts(shown: ShownLayouts<Layout>): void;
   sideBar(parent: HTMLElement): DrawnPart<DrawnSideBar>;
   row(parent: HTMLElement, input: SessionRowInput): DrawnPart<SessionsPart>;
+  pane(parent: HTMLElement, input: PaneInput): DrawnPart<PanePart>;
   tabBar(parent: HTMLElement): DrawnPart<DrawnTabBar>;
   tab(parent: HTMLElement, input: SessionTabInput): DrawnPart<SessionsPart>;
   // `pickHint` is the view's own element, which `kit.pickHint` moves in.
@@ -106,14 +123,61 @@ export function createSessionsParts(deps: SessionsPartsDeps): SessionsParts {
       parts.draw('row', parent, (builder, into, rollback) =>
         builder(into, input, sessionsKit(rollback)),
       ),
+    pane: (parent, input) =>
+      parts.draw('pane', parent, (builder, into, rollback) => {
+        const base = sessionsKit(rollback);
+        const kit: PaneKit = {
+          ...base,
+          focusEdge(edgeParent, direction) {
+            const edge = keyEdge(`session-pane-edge is-${direction}`, []);
+            edgeParent.append(edge);
+            const chevron = keyChevron(PANE_EDGE_CHEVRONS[direction]);
+            if (direction === 'left' || direction === 'up') {
+              edge.append(chevron);
+            }
+            base.keyHint(edge, PANE_FOCUS_COMMANDS[direction]);
+            base.keyHint(edge, PANE_SWAP_COMMANDS[direction], {
+              label: 'swap',
+            });
+            if (direction === 'right' || direction === 'down') {
+              edge.append(chevron);
+            }
+            return edge;
+          },
+        };
+        const pane = builder(into, input, kit);
+        requireElementIn(pane.element, pane.body, 'pane body');
+        return { element: pane.element, body: pane.body };
+      }),
     tabBar: (parent) =>
       parts.draw('tabBar', parent, (builder, into, rollback) => {
         const placed: Omit<DrawnTabBar, keyof TabBarPane> = {
           previous: null,
           next: null,
           close: null,
+          splitRight: null,
+          splitDown: null,
+          closePane: null,
         };
         const base = sessionsKit(rollback);
+        // A pane control: an icon button running `command` on a click,
+        // holding its key; returns the button and the key's element.
+        const paneControl = (
+          controlParent: HTMLElement,
+          iconName: string,
+          label: string,
+          command: SessionsCommand,
+        ) => {
+          const control = iconButton(
+            iconName,
+            label,
+            base.command(qualify(sessionsManifest.id, command)),
+            'sm',
+          );
+          control.classList.add('session-pane-control');
+          controlParent.append(control);
+          return { control, key: base.keyHint(control, command) };
+        };
         const kit: TabBarKit = {
           ...base,
           prevTabEdge(edgeParent) {
@@ -141,6 +205,36 @@ export function createSessionsParts(deps: SessionsPartsDeps): SessionsParts {
             });
             return placed.close;
           },
+          splitRightHint(hintParent) {
+            const { control, key } = paneControl(
+              hintParent,
+              'split-horizontal',
+              'Split right',
+              'splitRight',
+            );
+            placed.splitRight = key;
+            return control;
+          },
+          splitDownHint(hintParent) {
+            const { control, key } = paneControl(
+              hintParent,
+              'split-vertical',
+              'Split down',
+              'splitDown',
+            );
+            placed.splitDown = key;
+            return control;
+          },
+          closePaneHint(hintParent) {
+            const { control, key } = paneControl(
+              hintParent,
+              'close',
+              'Close the pane',
+              'closePane',
+            );
+            placed.closePane = key;
+            return control;
+          },
         };
         const pane = builder(into, kit);
         requireElementIn(pane.element, pane.strip, 'tabBar strip');
@@ -161,3 +255,19 @@ export function createSessionsParts(deps: SessionsPartsDeps): SessionsParts {
       }),
   };
 }
+
+// The chevron each pane edge points with.
+const PANE_EDGE_CHEVRONS: Record<PaneDirection, string> = {
+  left: '‹',
+  right: '›',
+  up: '▲',
+  down: '▼',
+};
+
+// The sessions command that swaps the focused pane with the pane each way.
+const PANE_SWAP_COMMANDS: Record<PaneDirection, SessionsCommand> = {
+  left: 'swapPaneLeft',
+  right: 'swapPaneRight',
+  up: 'swapPaneUp',
+  down: 'swapPaneDown',
+};

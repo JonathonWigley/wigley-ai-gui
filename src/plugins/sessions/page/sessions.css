@@ -1,7 +1,71 @@
-/* Sessions mode: the selected session's tab area. Its session list is the
-   mode's side bar, which the shell's side bar area draws. */
+/* Sessions mode: the chat panes, each a session's tab area. Its session
+   list is the mode's side bar, which the shell's side bar area draws. The
+   pane tree draws the focused pane's border; `.session-pane.is-focused`
+   draws nothing here, the class being there for user layouts. */
 .sessions {
+  display: flex;
   height: 100%;
+}
+
+.sessions > .pane-tree {
+  flex: 1 1 0;
+}
+
+/* A pane fills its slot; its body shows the session's frame or the empty
+   text in one cell, and its focus edges sit on its sides. */
+.session-pane {
+  position: relative;
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.session-pane-body {
+  display: grid;
+  flex: 1 1 0;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  min-height: 0;
+}
+
+.session-pane-body > * {
+  grid-area: 1 / 1;
+}
+
+/* `‹ ⌥H ⌃⌥H swap` on the side of the focused pane with a pane that way. */
+.session-pane-edge {
+  position: absolute;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.session-pane-edge.is-left,
+.session-pane-edge.is-right {
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.session-pane-edge.is-left {
+  left: var(--wg-space-1);
+}
+
+.session-pane-edge.is-right {
+  right: var(--wg-space-1);
+}
+
+.session-pane-edge.is-up,
+.session-pane-edge.is-down {
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.session-pane-edge.is-up {
+  top: 0;
+}
+
+.session-pane-edge.is-down {
+  bottom: 0;
 }
 
 /* The side bar: the "Sessions" header over the rows. */
@@ -25,6 +89,11 @@
   flex-direction: column;
   gap: var(--wg-space-0_5);
   min-height: 0;
+}
+
+/* A row whose session shows in an unfocused pane. */
+.ui-row.session-row.is-on-screen {
+  box-shadow: inset 0 0 0 1px var(--wg-border-strong);
 }
 
 /* A row's first line never wraps: the label shrinks to an ellipsis, the
@@ -64,8 +133,8 @@
   white-space: nowrap;
 }
 
-/* The tab area: the bar holding the selected session's tab strip over the
-   sheet of session bodies. */
+/* A session's frame: the bar holding its tab strip over the sheet of its
+   tabs. */
 .session-area {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -74,13 +143,14 @@
   min-height: 0;
 }
 
-/* `⌥I ‹`, the strip, `› ⌥O`, then `⌘W close` at the bar's end. The bar
-   takes the strip's margin, so the strip sits flush between its prompts. */
+/* `⌥I ‹`, the strip, `› ⌥O`, then `⌘W close` and the pane controls at the
+   bar's end. The bar takes the strip's margin, so the strip sits flush
+   between its prompts. */
 .session-tabs-bar {
   display: grid;
   grid-template-columns:
     max-content minmax(0, max-content) max-content 1fr
-    max-content;
+    repeat(4, max-content);
   align-items: center;
   column-gap: var(--wg-space-1);
   margin: var(--wg-sheet-gutter) var(--wg-sheet-gutter) 0;
@@ -88,6 +158,13 @@
 
 .session-tabs-close {
   grid-column: 5;
+}
+
+/* A pane control holds its icon and its key side by side. */
+.ui-icon-button.session-pane-control {
+  gap: var(--wg-space-1);
+  width: auto;
+  padding: 0 var(--wg-space-1);
 }
 
 .ui-tabs.session-tabs {
@@ -108,7 +185,8 @@
   color: var(--wg-fg);
 }
 
-/* Every session body and the text saying why no tab shows share one cell. */
+/* A session's tab body and the text saying why no tab shows share one
+   cell; an empty pane's sheet holds the text alone. */
 .session-bodies {
   display: grid;
   grid-template: minmax(0, 1fr) / minmax(0, 1fr);
@@ -122,8 +200,8 @@
   min-height: 0;
 }
 
-/* Why the tab area shows no tab: no sessions, none selected, or nothing open
-   in the selected one. */
+/* Why a pane shows no tab: no sessions, none in the pane, or nothing open in
+   its session. */
 .sessions-empty {
   display: grid;
   place-content: center;

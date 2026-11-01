@@ -1,3 +1,4 @@
+import type { PaneDirection } from '../../../contracts/panes';
 import { element } from '../../../shared/page/dom';
 import type { DrawnPart } from '../../../shared/page/layout-host/draw-part';
 import { rowAction } from '../../../shared/page/ui/row';
@@ -9,7 +10,12 @@ import type {
   SessionTabHandle,
   SessionTabView,
 } from '../contract';
-import type { EmptyTextInput, SessionsPart } from '../layouts/layout';
+import type {
+  EmptyTextInput,
+  PaneInput,
+  PanePart,
+  SessionsPart,
+} from '../layouts/layout';
 import { sessionsManifest } from '../manifest';
 import type { DrawnTabBar, SessionsParts } from './layout/sessions-parts';
 import {
@@ -31,18 +37,44 @@ interface Tab {
   status: string;
 }
 
-// A session's tab ids and selection, its tabs by id in add order, and the
-// body holding their elements.
-interface SessionTabs {
+// A session's frame: its tab bar over the sheet holding its tabs' body and
+// the text saying why no tab shows; its tab ids and selection, and its tabs
+// by id in add order.
+interface Frame {
+  element: HTMLElement;
+  barHost: HTMLElement;
+  bar: DrawnPart<DrawnTabBar>;
+  bodies: HTMLElement;
   body: HTMLElement;
   tabs: TabsState;
   entries: Map<string, Tab>;
+  drawnTabs: DrawnPart<SessionsPart>[];
+  text: DrawnPart<SessionsPart> | null;
+}
+
+// One chat pane as the owner places it: its pane tree slot and the session it
+// shows, null for none.
+export interface PanePlace {
+  id: string;
+  slot: HTMLElement;
+  sessionId: string | null;
+}
+
+// A pane drawn: its `pane` part and the input it drew with, and the sheet an
+// empty pane shows its text in.
+interface DrawnPane {
+  slot: HTMLElement;
+  sessionId: string | null;
+  input: PaneInput | null;
+  part: DrawnPart<PanePart> | null;
+  empty: HTMLElement;
+  text: DrawnPart<SessionsPart> | null;
 }
 
 // `isModeShown` reads whether Sessions mode shows; `changed` runs after any
 // change to a session's tabs, their selection or their statuses; `keys`
 // draws the key beside the text asking for a session to be picked; `parts`
-// draws the tab bar, the tabs and that text.
+// draws the panes, the tab bars, the tabs and that text.
 export interface SessionTabsDeps {
   isModeShown(): boolean;
   changed(): void;
@@ -51,14 +83,24 @@ export interface SessionTabsDeps {
 }
 
 export interface SessionTabsView {
-  element: HTMLElement;
+  // The hidden holder of every frame no pane shows; the owner keeps it in the
+  // document.
+  holder: HTMLElement;
   render(state: SessionsState): void;
-  // Draws the tab bar again with the parts' current layouts, then the tabs
-  // and the text; the tab bodies and their elements stay as they are.
+  // Draws each pane's `pane` part into its slot, again when its input
+  // changed, and moves each session's frame into the body of the pane that
+  // shows it, the rest into the holder. `edges` are the focused pane's.
+  place(
+    panes: readonly PanePlace[],
+    focusedPaneId: string,
+    edges: readonly PaneDirection[],
+  ): void;
+  // Draws every pane and tab bar again with the parts' current layouts, then
+  // the tabs and the texts; the tab bodies and their elements stay as they are.
   redrawPane(): void;
   add(sessionId: string, view: SessionTabView): SessionTabHandle;
-  // Drops the session's tabs and their elements; their handles then do
-  // nothing. Runs no `changed`.
+  // Drops the session's frame, its tabs and their elements; their handles
+  // then do nothing. Runs no `changed`.
   drop(sessionId: string): void;
   // The session's tabs, in add order.
   tabsOf(sessionId: string): SessionTabView[];
@@ -67,103 +109,202 @@ export interface SessionTabsView {
   select(sessionId: string, tabId: string): void;
 }
 
-// The tab area of Sessions mode, its bar, tabs and text drawn through the
-// sessions layout: the `tabBar` pane (the selected session's tab strip,
-// between its previous and next tab prompts and with the close prompt at the
-// bar's end) on the top edge of one sheet holding a body per session, only
-// the selected session's body showing and in it only its selected tab, or
-// the `emptyText` saying why nothing shows. The tab prompts hide while the
-// selected session has no other tab, and the close prompt while none is
-// selected. A tab's element fills its body. A tab added for a session with no
-// row yet waits in a hidden body. Until `render` hands it main's first state,
-// it shows no text either. The view keeps each tab's click, its tooltip and
-// the active tab's mark.
+// Sessions mode's chat panes, drawn through the sessions layout. Each pane is
+// the `pane` part, whose body holds the frame of the session it shows: the
+// `tabBar` (the session's tab strip between its previous and next tab
+// prompts, the close prompt and the pane controls at the bar's end) on the top
+// edge of a sheet holding the session's tabs, only its selected tab showing,
+// or the `emptyText` saying why no tab shows. An empty pane's body holds a
+// sheet with the empty text alone. The tab prompts hide while the session has
+// no other tab, and every tab bar's prompts and pane control keys hide outside
+// the focused pane, whose keys they are. A tab's element fills its frame's
+// sheet, and a frame moves between panes as the same element. A frame no pane
+// shows, a session's with no row yet included, waits in the hidden holder.
+// Until `render` hands it main's first state, it shows no text either. The
+// view keeps each tab's click, its tooltip and the active tab's mark.
 export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
   const { parts } = deps;
-  const area = element('div', 'session-area');
-  const barHost = element('div', 'session-tabs-host');
-  barHost.style.display = 'contents';
-  const bodies = sheet();
-  bodies.classList.add('session-bodies');
-  area.append(barHost, bodies);
+  const holder = element('div', 'session-frame-holder');
+  holder.hidden = true;
   const pickHint = element('span', 'sessions-pick-hint');
   deps.keys.anchor(pickHint, qualify(sessionsManifest.id, 'nextSession'));
-  const sessions = new Map<string, SessionTabs>();
+  const frames = new Map<string, Frame>();
+  const panes = new Map<string, DrawnPane>();
+  let focusedPaneId: string | null = null;
+  let focusedEdges: readonly PaneDirection[] = [];
   let state: SessionsState | null = null;
 
-  const drawBar = (): DrawnPart<DrawnTabBar> => {
-    barHost.replaceChildren();
-    return parts.tabBar(barHost);
-  };
-  let bar = drawBar();
-  let tabs: DrawnPart<SessionsPart>[] = [];
-  let text: DrawnPart<SessionsPart> | null = null;
+  const focusedSessionId = () =>
+    focusedPaneId === null
+      ? null
+      : (panes.get(focusedPaneId)?.sessionId ?? null);
 
-  const disposeTabs = () => {
-    for (const tab of tabs) {
-      tab.dispose();
-    }
-    tabs = [];
+  const drawBar = (frame: Pick<Frame, 'barHost'>): DrawnPart<DrawnTabBar> => {
+    frame.barHost.replaceChildren();
+    return parts.tabBar(frame.barHost);
   };
 
-  // Drops the drawn text, then draws `shown` after the bodies when not null.
-  const showText = (shown: EmptyTextInput | null) => {
-    text?.dispose();
-    text?.built.element.remove();
-    text = shown === null ? null : parts.emptyText(bodies, shown, pickHint);
-  };
-
-  const sessionOf = (sessionId: string): SessionTabs => {
-    const existing = sessions.get(sessionId);
+  const frameOf = (sessionId: string): Frame => {
+    const existing = frames.get(sessionId);
     if (existing !== undefined) {
       return existing;
     }
-    const created: SessionTabs = {
-      body: element('div', 'session-body'),
+    const frameElement = element('div', 'session-area');
+    const barHost = element('div', 'session-tabs-host');
+    barHost.style.display = 'contents';
+    const bodies = sheet();
+    bodies.classList.add('session-bodies');
+    const body = element('div', 'session-body');
+    bodies.append(body);
+    frameElement.append(barHost, bodies);
+    holder.append(frameElement);
+    const created: Frame = {
+      element: frameElement,
+      barHost,
+      bar: drawBar({ barHost }),
+      bodies,
+      body,
       tabs: NO_TABS,
       entries: new Map(),
+      drawnTabs: [],
+      text: null,
     };
-    sessions.set(sessionId, created);
-    bodies.append(created.body);
+    frames.set(sessionId, created);
     return created;
   };
 
-  const draw = () => {
-    const selectedSessionId = state?.selectedSessionId ?? null;
-    for (const [sessionId, session] of sessions) {
-      session.body.hidden = sessionId !== selectedSessionId;
-      for (const tab of session.entries.values()) {
-        tab.view.element.hidden = tab.view.id !== session.tabs.selectedTabId;
-      }
+  const disposeTabs = (frame: Frame) => {
+    for (const tab of frame.drawnTabs) {
+      tab.dispose();
     }
-    const selected =
-      selectedSessionId === null ? undefined : sessions.get(selectedSessionId);
-    const selectedTabs = [...(selected?.entries.values() ?? [])];
-    disposeTabs();
-    const strip = bar.built.strip;
+    frame.drawnTabs = [];
+  };
+
+  const disposeText = (drawn: { text: DrawnPart<SessionsPart> | null }) => {
+    drawn.text?.dispose();
+    drawn.text?.built.element.remove();
+    drawn.text = null;
+  };
+
+  const drawFrame = (sessionId: string, frame: Frame, isFocused: boolean) => {
+    for (const tab of frame.entries.values()) {
+      tab.view.element.hidden = tab.view.id !== frame.tabs.selectedTabId;
+    }
+    const tabs = [...frame.entries.values()];
+    disposeTabs(frame);
+    const strip = frame.bar.built.strip;
     strip.replaceChildren();
-    tabs = selectedTabs.map((tab) =>
+    frame.drawnTabs = tabs.map((tab) =>
       drawTab(
         parts,
         strip,
         tab.view,
-        tab.view.id === selected?.tabs.selectedTabId,
-        () => {
-          if (selectedSessionId !== null) {
-            select(selectedSessionId, tab.view.id);
-          }
-        },
+        tab.view.id === frame.tabs.selectedTabId,
+        () => select(sessionId, tab.view.id),
       ),
     );
-    const isTabStepping = hasOtherTab(
-      selected?.tabs.tabIds ?? [],
-      selected?.tabs.selectedTabId ?? null,
-    );
-    const { previous, next, close } = bar.built;
+    const isTabStepping =
+      isFocused && hasOtherTab(frame.tabs.tabIds, frame.tabs.selectedTabId);
+    const { previous, next, close, splitRight, splitDown, closePane } =
+      frame.bar.built;
     previous?.classList.toggle('is-no-target', !isTabStepping);
     next?.classList.toggle('is-no-target', !isTabStepping);
-    close?.classList.toggle('is-no-target', selectedSessionId === null);
-    showText(textFor(state, selectedTabs.length));
+    for (const prompt of [close, splitRight, splitDown, closePane]) {
+      prompt?.classList.toggle('is-no-target', !isFocused);
+    }
+    const text = textFor(state, sessionId, tabs.length, false);
+    frame.text =
+      text === null ? null : parts.emptyText(frame.bodies, text, pickHint);
+  };
+
+  // Draws every frame and empty pane; every text is dropped before any draws,
+  // so the one pick hint is free for whichever text takes it.
+  const draw = () => {
+    for (const frame of frames.values()) {
+      disposeText(frame);
+    }
+    for (const pane of panes.values()) {
+      disposeText(pane);
+    }
+    const focusedSession = focusedSessionId();
+    for (const [sessionId, frame] of frames) {
+      drawFrame(sessionId, frame, sessionId === focusedSession);
+    }
+    for (const [paneId, pane] of panes) {
+      if (pane.sessionId === null) {
+        const text = textFor(state, null, 0, paneId === focusedPaneId);
+        pane.text =
+          text === null ? null : parts.emptyText(pane.empty, text, pickHint);
+      }
+    }
+  };
+
+  // Draws `pane`'s part again when `input` differs from the one it drew with,
+  // or when it was marked for a redraw.
+  const drawPanePart = (pane: DrawnPane, input: PaneInput) => {
+    if (
+      pane.part !== null &&
+      pane.input !== null &&
+      isSameInput(pane.input, input)
+    ) {
+      return pane.part.built.body;
+    }
+    pane.part?.dispose();
+    pane.slot.replaceChildren();
+    pane.part = parts.pane(pane.slot, input);
+    pane.input = input;
+    return pane.part.built.body;
+  };
+
+  const place = (
+    placed: readonly PanePlace[],
+    focused: string,
+    edges: readonly PaneDirection[],
+  ) => {
+    focusedPaneId = focused;
+    focusedEdges = edges;
+    const placedIds = new Set(placed.map((pane) => pane.id));
+    for (const [paneId, pane] of panes) {
+      if (!placedIds.has(paneId)) {
+        disposeText(pane);
+        pane.part?.dispose();
+        panes.delete(paneId);
+      }
+    }
+    const shown = new Set<HTMLElement>();
+    for (const { id, slot, sessionId } of placed) {
+      let pane = panes.get(id);
+      if (pane === undefined || pane.slot !== slot) {
+        pane = {
+          slot,
+          sessionId,
+          input: null,
+          part: null,
+          empty: sheet(),
+          text: null,
+        };
+        pane.empty.classList.add('session-bodies');
+        panes.set(id, pane);
+      }
+      pane.sessionId = sessionId;
+      const isFocused = id === focused;
+      const body = drawPanePart(pane, {
+        isFocused: isFocused && placed.length > 1,
+        edges: isFocused ? [...edges] : [],
+      });
+      const content =
+        sessionId === null ? pane.empty : frameOf(sessionId).element;
+      shown.add(content);
+      if (body.children[0] !== content || body.children.length !== 1) {
+        body.replaceChildren(content);
+      }
+    }
+    for (const frame of frames.values()) {
+      if (!shown.has(frame.element) && frame.element.parentNode !== holder) {
+        holder.append(frame.element);
+      }
+    }
+    draw();
   };
 
   const changed = () => {
@@ -172,53 +313,63 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
   };
 
   // Stores the session's next tabs, running `changed` only when they changed.
-  const setTabs = (session: SessionTabs, tabs: TabsState) => {
-    if (tabs === session.tabs) {
+  const setTabs = (frame: Frame, tabs: TabsState) => {
+    if (tabs === frame.tabs) {
       return;
     }
-    session.tabs = tabs;
+    frame.tabs = tabs;
     changed();
   };
 
   const select = (sessionId: string, tabId: string) => {
-    const session = sessions.get(sessionId);
-    if (session !== undefined) {
-      setTabs(session, tabsAfterSelect(session.tabs, tabId));
+    const frame = frames.get(sessionId);
+    if (frame !== undefined) {
+      setTabs(frame, tabsAfterSelect(frame.tabs, tabId));
     }
   };
 
-  // The live tab entry, or undefined once it was dropped or removed.
-  const liveTab = (sessionId: string, tab: Tab): SessionTabs | undefined => {
-    const session = sessions.get(sessionId);
-    return session?.entries.get(tab.view.id) === tab ? session : undefined;
+  // The live tab's frame, or undefined once the tab was dropped or removed.
+  const liveTab = (sessionId: string, tab: Tab): Frame | undefined => {
+    const frame = frames.get(sessionId);
+    return frame?.entries.get(tab.view.id) === tab ? frame : undefined;
   };
 
-  const remove = (session: SessionTabs, tab: Tab) => {
+  const remove = (frame: Frame, tab: Tab) => {
     tab.view.element.remove();
-    session.tabs = tabsAfterRemove(session.tabs, tab.view.id);
-    session.entries.delete(tab.view.id);
+    frame.tabs = tabsAfterRemove(frame.tabs, tab.view.id);
+    frame.entries.delete(tab.view.id);
     changed();
   };
 
-  draw();
   return {
-    element: area,
+    holder,
     render(next) {
       state = next;
       draw();
     },
+    place,
     redrawPane() {
-      disposeTabs();
-      bar.dispose();
-      bar = drawBar();
-      draw();
+      for (const frame of frames.values()) {
+        disposeTabs(frame);
+        frame.bar.dispose();
+        frame.bar = drawBar(frame);
+      }
+      const placed = [...panes].map(([id, pane]) => {
+        pane.input = null;
+        return { id, slot: pane.slot, sessionId: pane.sessionId };
+      });
+      if (focusedPaneId === null) {
+        draw();
+        return;
+      }
+      place(placed, focusedPaneId, focusedEdges);
     },
     add(sessionId, view) {
-      const session = sessionOf(sessionId);
-      session.tabs = tabsAfterAdd(session.tabs, sessionId, view.id);
+      const frame = frameOf(sessionId);
+      frame.tabs = tabsAfterAdd(frame.tabs, sessionId, view.id);
       const tab: Tab = { view, status: '' };
-      session.entries.set(view.id, tab);
-      session.body.append(view.element);
+      frame.entries.set(view.id, tab);
+      frame.body.append(view.element);
       changed();
       return {
         setStatus(status) {
@@ -262,32 +413,47 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
         },
         isVisible: () =>
           deps.isModeShown() &&
-          state?.selectedSessionId === sessionId &&
+          focusedSessionId() === sessionId &&
           liveTab(sessionId, tab)?.tabs.selectedTabId === view.id,
       };
     },
     drop(sessionId) {
-      sessions.get(sessionId)?.body.remove();
-      sessions.delete(sessionId);
+      const frame = frames.get(sessionId);
+      if (frame === undefined) {
+        return;
+      }
+      disposeTabs(frame);
+      disposeText(frame);
+      frame.bar.dispose();
+      frame.element.remove();
+      frames.delete(sessionId);
       draw();
     },
     tabsOf: (sessionId) =>
-      [...(sessions.get(sessionId)?.entries.values() ?? [])].map(
+      [...(frames.get(sessionId)?.entries.values() ?? [])].map(
         (tab) => tab.view,
       ),
     statusesOf: (sessionId) =>
-      [...(sessions.get(sessionId)?.entries.values() ?? [])].map(
+      [...(frames.get(sessionId)?.entries.values() ?? [])].map(
         (tab) => tab.status,
       ),
     selectedTabOf(sessionId) {
-      const session = sessions.get(sessionId);
-      const selectedTabId = session?.tabs.selectedTabId ?? null;
+      const frame = frames.get(sessionId);
+      const selectedTabId = frame?.tabs.selectedTabId ?? null;
       return selectedTabId === null
         ? null
-        : (session?.entries.get(selectedTabId)?.view ?? null);
+        : (frame?.entries.get(selectedTabId)?.view ?? null);
     },
     select,
   };
+}
+
+function isSameInput(a: PaneInput, b: PaneInput): boolean {
+  return (
+    a.isFocused === b.isFocused &&
+    a.edges.length === b.edges.length &&
+    a.edges.every((edge, index) => edge === b.edges[index])
+  );
 }
 
 const EMPTY_TEXT: EmptyTextInput = {
@@ -305,22 +471,24 @@ const NOTHING_OPEN_TEXT: EmptyTextInput = {
   hasHint: false,
 };
 
-// Why the tab area shows no tab, or null when it shows one or main's first
-// state has not arrived.
+// Why a pane showing `sessionId` (null for an empty pane) shows no tab, or
+// null when it shows one or main's first state has not arrived. The pick
+// hint, whose key steps the focused pane, draws only when `isFocusedPane`.
 function textFor(
   state: SessionsState | null,
-  selectedTabCount: number,
+  sessionId: string | null,
+  tabCount: number,
+  isFocusedPane: boolean,
 ): EmptyTextInput | null {
-  if (showsEmptyText(state)) {
+  const shown =
+    state === null ? null : { ...state, selectedSessionId: sessionId };
+  if (showsEmptyText(shown)) {
     return EMPTY_TEXT;
   }
-  if (showsNoSelectionText(state)) {
-    return NO_SELECTION_TEXT;
+  if (showsNoSelectionText(shown)) {
+    return { ...NO_SELECTION_TEXT, hasHint: isFocusedPane };
   }
-  const isNothingOpen =
-    state !== null &&
-    state.selectedSessionId !== null &&
-    selectedTabCount === 0;
+  const isNothingOpen = shown !== null && sessionId !== null && tabCount === 0;
   return isNothingOpen ? NOTHING_OPEN_TEXT : null;
 }
 
