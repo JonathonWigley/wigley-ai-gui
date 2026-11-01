@@ -42,7 +42,6 @@ export type SelectionTarget =
 // showing `sessionId` takes focus; else the session loads into the focused
 // pane, or, when that pane waits, into the first pane in map order that does
 // not. When every pane waits, it loads into the focused pane, ending its wait.
-
 export function selectionTarget(
   panes: PaneSessions,
   focusedPaneId: string,

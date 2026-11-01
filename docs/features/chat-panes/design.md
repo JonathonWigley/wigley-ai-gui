@@ -117,8 +117,9 @@ come back after a relaunch. A pane names its session by the host session id, sin
 session id is new each run. Main resumes chat sessions after the page's first state, so a pane
 whose session that state lacks stays empty and waits for it, loading it when a later state brings
 it; the layout is saved with the session it waits for. A waiting pane never takes a session main
-selects on its own, such as one that connects first: that session loads into the first pane that
-is not waiting, and into the focused pane, ending its wait, only when every pane waits. The first
+selects on its own, such as one that connects first: that session loads into the focused pane,
+or, when that pane waits, into the first pane that does not, replacing its session; it loads into
+the focused pane, ending its wait, only when every pane waits. The first
 split, pane close or swap ends the wait, and the panes still waiting close.
 
 ## Rejected
