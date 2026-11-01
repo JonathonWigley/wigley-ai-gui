@@ -1,6 +1,6 @@
 # 06 — Usage page: status-bar line and details bar
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 4 · Depends on: 01, 05
 Plan: [plan.md](plan.md)
@@ -91,4 +91,4 @@ Commit:    one commit for the group
 
 ## Proof
 
-<written by wigley:make: commit sha, proof result, concerns; empty until the group lands>
+Commit 5b5b97e · proof: diff read: layout contract, default layout, page part, formats, view model, kit/parts, Meter, gallery, bind, registration and layers present; typecheck clean; worker ran 87 tests across usage page, start, layout-contracts, keymap, all pass · concerns: with details-open at start the first logs are 'details shown: no profiles' / 'status line no profiles' before the snapshot lands (07 should wait for 'details drawn'); full redraw each tick loses details scroll; CSS scoped by data-layout-owner unlike other plugins; minute timer and status slot never disposed; usage/main/start.ts header comment line runs past the wrap width

@@ -8,11 +8,16 @@ import {
   type ChatMainEvents,
   type ChatMainExports,
 } from '../../chat/contract';
-import type { SessionsMainEvents } from '../../sessions/contract';
-import type { UsageChannel } from '../contract';
+import type {
+  SessionsMainEvents,
+  SessionsMainExports,
+} from '../../sessions/contract';
+import type { UsageChannel, UsageSnapshot } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { usageManifest } from '../manifest';
-import { createPlanPoller } from './plan-poller';
+import { addDriveActions } from './drive-actions';
+import { createPlanPoller, type PlanPoller } from './plan-poller';
+import { usageSelfTestScript } from './selftest-script';
 import {
   EMPTY_USAGE_STATE,
   type UsageState,
@@ -35,13 +40,17 @@ type UsageApi = MainApi<
 // plan per chat profile, polls each through the Claude harness every
 // `pollIntervalSeconds` (rescheduled on a settings change), and hears
 // `chat.planUsage` (live rows), `chat.sessionOpened` (a session's profile),
-// `chat.agentEvent` (the main agent's `usage`) and `sessions.ended`.
+// `chat.agentEvent` (the main agent's `usage`) and `sessions.ended`. It hands
+// the self-test its script, and in a drive run it adds the drive actions; a
+// seed from either replaces the snapshot and stops the poller for the run,
+// while live rows and usage events still fold.
 export const usageMainPart: MainPart<typeof usageManifest> = {
   manifest: usageManifest,
   start(api: UsageApi) {
     const { services, channel, events } = api;
     const layouts = api.layouts.register({ layoutTypes });
     const chat = api.dependency<ChatMainExports>('chat');
+    const sessions = api.dependency<SessionsMainExports>('sessions');
     let state = EMPTY_USAGE_STATE;
     const apply = (next: UsageState) => {
       const changed = next.snapshot !== state.snapshot;
@@ -69,35 +78,70 @@ export const usageMainPart: MainPart<typeof usageManifest> = {
     const harness = services.agentHarnesses.find(
       (candidate) => candidate.id === CHAT_HARNESS_ID,
     );
+    const noHarness = `no agent harness "${CHAT_HARNESS_ID}"`;
     if (harness === undefined) {
-      services.log(
-        'usage',
-        `no agent harness "${CHAT_HARNESS_ID}": plan usage is not read`,
-      );
-      return { commands: {}, dispose: () => layouts.dispose() };
+      services.log('usage', `${noHarness}: plan usage is not read`);
     }
-    const poller = createPlanPoller({
-      timers: services.timers,
-      clock: services.clock,
-      profiles: () => chat.profiles(),
-      intervalSeconds: () => api.settings().pollIntervalSeconds,
-      planUsage: (profileDir) => harness.planUsage(profileDir),
-      roundStarted: (profiles) => apply(withProfiles(state, profiles)),
-      polled: (profile, result) => {
-        if (!result.ok) {
-          services.log('usage', `poll ${profile.name} failed: ${result.error}`);
-        }
-        apply(withPollResult(state, profile.configDir, result));
-      },
-    });
-    const settingsListener = api.onSettingsChanged(() => poller.reschedule());
-    poller.start();
+    let poller: PlanPoller | null =
+      harness === undefined
+        ? null
+        : createPlanPoller({
+            timers: services.timers,
+            clock: services.clock,
+            profiles: () => chat.profiles(),
+            intervalSeconds: () => api.settings().pollIntervalSeconds,
+            planUsage: (profileDir) => harness.planUsage(profileDir),
+            roundStarted: (profiles) => apply(withProfiles(state, profiles)),
+            polled: (profile, result) => {
+              if (!result.ok) {
+                services.log(
+                  'usage',
+                  `poll ${profile.name} failed: ${result.error}`,
+                );
+              }
+              apply(withPollResult(state, profile.configDir, result));
+            },
+          });
+    let seeded = false;
+    const seed = (snapshot: UsageSnapshot) => {
+      seeded = true;
+      poller?.dispose();
+      poller = null;
+      apply({ snapshot, held: [] });
+    };
+    const pollNow = () => {
+      if (poller === null) {
+        const reason = seeded
+          ? 'usage.seed stopped the poller for this run'
+          : noHarness;
+        return Promise.reject(new Error(reason));
+      }
+      return poller.pollNow();
+    };
+    const settingsListener = api.onSettingsChanged(() => poller?.reschedule());
+    poller?.start();
+    const snapshot = () => state.snapshot;
+    services.selfTest?.run(
+      usageSelfTestScript({ sessions, clock: services.clock, snapshot, seed }),
+    );
+    const driveActions =
+      api.drive !== null
+        ? addDriveActions(api.drive, {
+            clock: services.clock,
+            selectedSessionId: () => sessions.selectedSessionId(),
+            snapshot,
+            seed,
+            pollNow,
+            harnesses: services.agentHarnesses,
+          })
+        : null;
     return {
       commands: {},
       dispose() {
         layouts.dispose();
         settingsListener.dispose();
-        poller.dispose();
+        poller?.dispose();
+        driveActions?.dispose();
       },
     };
   },

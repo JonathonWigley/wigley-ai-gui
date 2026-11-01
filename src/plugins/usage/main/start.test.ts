@@ -4,14 +4,20 @@ import type {
   PlanUsage,
   UsageAgentEvent,
 } from '../../../contracts/agent';
+import { fakeDriveHost } from '../../../shared/fake-drive-host';
 import type { ChatMainExports, ChatProfile } from '../../chat/contract';
+import type { SessionsMainExports } from '../../sessions/contract';
 import type { UsageSnapshot } from '../contract';
 import { usageMainPart } from './start';
+import { usageFixture } from './usage-fixture';
 
 const PERSONAL: ChatProfile = {
   name: 'personal',
   configDir: '~/.claude-personal',
 };
+
+const NOW = 5_000_000;
+const SELECTED = 's-selected';
 
 const POLLED: PlanUsage = {
   rows: [
@@ -43,16 +49,24 @@ function usageEvent(agentId: string): UsageAgentEvent {
 }
 
 // Usage's main part started over a fake `MainApi` holding `PERSONAL` as
-// chat's one profile and `harnesses`; `emit` calls the listeners of a
-// qualified event, `sent` records every `changed`, `armed` every timer set.
+// chat's one profile, `harnesses` and a drive host whose `run` runs an added
+// action; `emit` calls the listeners of a qualified event, `sent` records
+// every `changed`, `armed` every timer set and `pendingTimers` the ids set and
+// not yet cleared. The clock reads `NOW` and sessions' selected session is
+// `SELECTED`.
 function startUsagePart(harnesses: Partial<AgentHarness>[]) {
   const handlers = new Map<string, (...args: unknown[]) => unknown>();
   const listeners = new Map<string, ((data: unknown) => void)[]>();
   const sent: UsageSnapshot[] = [];
   const logs: string[] = [];
   const armed: number[] = [];
+  const pendingTimers = new Set<number>();
+  const drive = fakeDriveHost();
   const chat: Pick<ChatMainExports, 'profiles'> = {
     profiles: () => [PERSONAL],
+  };
+  const sessions: Pick<SessionsMainExports, 'selectedSessionId'> = {
+    selectedSessionId: () => SELECTED,
   };
   const api = {
     channel: {
@@ -74,14 +88,21 @@ function startUsagePart(harnesses: Partial<AgentHarness>[]) {
     onSettingsChanged: () => ({ dispose: () => undefined }),
     services: {
       log: (_plugin: string, line: string) => logs.push(line),
-      clock: { now: () => 0 },
+      clock: { now: () => NOW },
       timers: {
-        set: (_run: () => void, ms: number) => armed.push(ms),
-        clear: () => undefined,
+        set: (_run: () => void, ms: number) => {
+          armed.push(ms);
+          pendingTimers.add(armed.length);
+          return armed.length;
+        },
+        clear: (id: number) => pendingTimers.delete(id),
       },
       agentHarnesses: harnesses,
+      selfTest: null,
     },
-    dependency: (pluginId: string) => (pluginId === 'chat' ? chat : {}),
+    drive: drive.host,
+    dependency: (pluginId: string) =>
+      ({ chat, sessions })[pluginId as 'chat' | 'sessions'] ?? {},
     layouts: { register: () => ({ dispose: () => undefined }) },
   } as unknown as Parameters<typeof usageMainPart.start>[0];
   usageMainPart.start(api);
@@ -91,7 +112,7 @@ function startUsagePart(harnesses: Partial<AgentHarness>[]) {
     }
   };
   const snapshot = () => handlers.get('snapshot')?.() as UsageSnapshot;
-  return { sent, logs, armed, emit, snapshot };
+  return { sent, logs, armed, pendingTimers, drive, emit, snapshot };
 }
 
 const settled = () => new Promise((settle) => setImmediate(settle));
@@ -206,5 +227,19 @@ describe('usageMainPart', () => {
         },
       ],
     });
+  });
+
+  it('usageMainPart_Seed_StopsThePollerAndSendsTheFixture', async () => {
+    const usage = startUsagePart([pollingHarness]);
+    await settled();
+    usage.sent.length = 0;
+
+    await usage.drive.run('seed');
+
+    expect(usage.sent).toEqual([usageFixture('fresh', NOW, SELECTED)]);
+    expect([...usage.pendingTimers]).toEqual([]);
+    await expect(usage.drive.run('pollNow')).rejects.toThrow(
+      'usage.seed stopped the poller for this run',
+    );
   });
 });
