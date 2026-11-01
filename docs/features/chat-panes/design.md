@@ -116,8 +116,10 @@ The pane tree, its proportions, the focused pane and each pane's session are kep
 come back after a relaunch. A pane names its session by the host session id, since the app's own
 session id is new each run. Main resumes chat sessions after the page's first state, so a pane
 whose session that state lacks stays empty and waits for it, loading it when a later state brings
-it; the layout is saved with the session it waits for. The first split, pane close or swap ends
-the wait, and the panes still waiting close.
+it; the layout is saved with the session it waits for. A waiting pane never takes a session main
+selects on its own, such as one that connects first: that session loads into the first pane that
+is not waiting, and into the focused pane, ending its wait, only when every pane waits. The first
+split, pane close or swap ends the wait, and the panes still waiting close.
 
 ## Rejected
 

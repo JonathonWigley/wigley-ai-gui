@@ -2,12 +2,16 @@ import { describe, expect, it } from 'vitest';
 import type { SessionRow } from '../contract';
 import {
   activationTarget,
+  fillPlan,
+  liveWaits,
   type PaneSessions,
   paneOf,
   panesToClose,
   pickerRows,
-  restorePanes,
+  restorePlan,
+  savedPaneSessions,
   selectionAction,
+  selectionTarget,
   shownElsewhere,
 } from './pane-sessions';
 
@@ -98,21 +102,180 @@ describe('pane-sessions', () => {
     );
   });
 
-  it('restorePanes maps each saved host id to its row, else to null', () => {
-    const saved = new Map([
-      ['p1', 'h2'],
-      ['p2', 'h9'],
-      ['p3', null],
-    ]);
-
-    expect(restorePanes(saved, ROWS)).toEqual(
-      new Map([
-        ['p1', 's2'],
-        ['p2', null],
+  it.each([
+    {
+      name: 'a pane whose session came back shows it, one whose did not waits, one saved empty closes',
+      saved: new Map([
+        ['p1', 'h2'],
+        ['p2', 'h9'],
         ['p3', null],
       ]),
-    );
+      expected: {
+        kind: 'restore',
+        sessions: new Map([
+          ['p1', 's2'],
+          ['p2', null],
+          ['p3', null],
+        ]),
+        waiting: new Map([['p2', 'h9']]),
+        closing: ['p3'],
+      },
+    },
+    {
+      name: 'panes that all wait keep the saved layout',
+      saved: new Map([
+        ['p1', 'h8'],
+        ['p2', 'h9'],
+      ]),
+      expected: {
+        kind: 'restore',
+        sessions: new Map([
+          ['p1', null],
+          ['p2', null],
+        ]),
+        waiting: new Map([
+          ['p1', 'h8'],
+          ['p2', 'h9'],
+        ]),
+        closing: [],
+      },
+    },
+    {
+      name: 'no saved pane names a session: one pane holds the selection',
+      saved: new Map([
+        ['p1', null],
+        ['p2', null],
+      ]),
+      expected: { kind: 'fallback' },
+    },
+    {
+      name: 'nothing valid saved: one pane holds the selection',
+      saved: null,
+      expected: { kind: 'fallback' },
+    },
+  ])('restorePlan: $name', ({ saved, expected }) => {
+    expect(restorePlan(saved, ROWS)).toEqual(expected);
   });
+
+  it('restorePlan shows the first row holding a host session id', () => {
+    const rows = [
+      ...ROWS,
+      { ...ROWS[0], sessionId: 's5', hostSessionId: 'h2' },
+    ];
+
+    const plan = restorePlan(new Map([['p1', 'h2']]), rows);
+
+    expect(plan).toMatchObject({ sessions: new Map([['p1', 's2']]) });
+  });
+
+  it.each([
+    {
+      name: 'a waiting pane loads its session when it arrives',
+      waiting: new Map([
+        ['p3', 'h4'],
+        ['p4', 'h9'],
+      ]),
+      expected: { ended: ['p3'], loads: [['p3', 's4']] },
+    },
+    {
+      name: 'a session another pane shows ends the wait and loads nowhere',
+      waiting: new Map([['p3', 'h2']]),
+      expected: { ended: ['p3'], loads: [] },
+    },
+    {
+      name: 'two panes waiting for one session: the first loads it',
+      waiting: new Map([
+        ['p3', 'h3'],
+        ['p4', 'h3'],
+      ]),
+      expected: { ended: ['p3', 'p4'], loads: [['p3', 's3']] },
+    },
+    {
+      name: 'no awaited session arrived',
+      waiting: new Map([['p3', 'h9']]),
+      expected: { ended: [], loads: [] },
+    },
+  ])('fillPlan: $name', ({ waiting, expected }) => {
+    const panes = new Map([...PANES, ['p4', null]]);
+
+    expect(fillPlan(waiting, ROWS, panes)).toEqual(expected);
+  });
+
+  it('liveWaits keeps only the waits of panes still open and empty', () => {
+    const waiting = new Map([
+      ['p1', 'h7'],
+      ['p3', 'h8'],
+      ['p9', 'h9'],
+    ]);
+
+    expect(liveWaits(waiting, PANES)).toEqual(new Map([['p3', 'h8']]));
+  });
+
+  it.each([
+    {
+      name: 'a waiting pane saves the host session it waits for',
+      waiting: new Map([['p3', 'h9']]),
+      expected: { p1: 'h1', p2: 'h2', p3: 'h9' },
+    },
+    {
+      name: 'an empty pane that waits for nothing saves null',
+      waiting: new Map<string, string>(),
+      expected: { p1: 'h1', p2: 'h2', p3: null },
+    },
+  ])('savedPaneSessions: $name', ({ waiting, expected }) => {
+    expect(savedPaneSessions(PANES, waiting, ROWS)).toEqual(expected);
+  });
+
+  it.each([
+    {
+      name: 'a pane showing the session takes focus, waits or not',
+      panes: PANES,
+      focused: 'p3',
+      waiting: ['p3'],
+      sessionId: 's2',
+      expected: { kind: 'focus', paneId: 'p2' },
+    },
+    {
+      name: 'a focused pane that waits for nothing loads it',
+      panes: PANES,
+      focused: 'p3',
+      waiting: [],
+      sessionId: 's4',
+      expected: { kind: 'load', paneId: 'p3' },
+    },
+    {
+      name: 'a focused waiting pane is passed over for the first pane that does not wait',
+      panes: new Map([
+        ['p1', null],
+        ['p2', 's2'],
+        ['p3', null],
+      ]),
+      focused: 'p3',
+      waiting: ['p1', 'p3'],
+      sessionId: 's4',
+      expected: { kind: 'load', paneId: 'p2' },
+    },
+    {
+      name: 'every pane waits: the focused pane loads it and its wait ends',
+      panes: new Map([
+        ['p1', null],
+        ['p2', null],
+      ]),
+      focused: 'p2',
+      waiting: ['p1', 'p2'],
+      sessionId: 's4',
+      expected: { kind: 'loadEndingWait', paneId: 'p2' },
+    },
+  ])(
+    'selectionTarget: $name',
+    ({ panes, focused, waiting, sessionId, expected }) => {
+      const waits = new Map(waiting.map((paneId) => [paneId, `h-${paneId}`]));
+
+      expect(selectionTarget(panes, focused, sessionId, waits)).toEqual(
+        expected,
+      );
+    },
+  );
 
   const echoes = (...sessionIds: string[]) =>
     sessionIds.map((sessionId) => ({ sessionId }));

@@ -4,7 +4,7 @@ import type { SessionRow } from '../contract';
 export type PaneSessions = ReadonlyMap<string, string | null>;
 
 // Where picking a session acts: focus the pane already showing it, or load it
-// into the focused pane.
+// into a pane and focus that pane.
 export type ActivationTarget =
   | { kind: 'focus'; paneId: string }
   | { kind: 'load'; paneId: string };
@@ -30,6 +30,35 @@ export function activationTarget(
   return paneId === null
     ? { kind: 'load', paneId: focusedPaneId }
     : { kind: 'focus', paneId };
+}
+
+// Where a selection main made acts: an activation target, or a load into a
+// waiting pane that ends its wait.
+export type SelectionTarget =
+  | ActivationTarget
+  | { kind: 'loadEndingWait'; paneId: string };
+
+// A waiting pane counts as occupied, so it is never a load target: the pane
+// showing `sessionId` takes focus; else the session loads into the focused
+// pane, or, when that pane waits, into the first pane in map order that does
+// not. When every pane waits, it loads into the focused pane, ending its wait.
+
+export function selectionTarget(
+  panes: PaneSessions,
+  focusedPaneId: string,
+  sessionId: string,
+  waiting: PaneWaits,
+): SelectionTarget {
+  const target = activationTarget(panes, focusedPaneId, sessionId);
+  if (target.kind === 'focus' || !waiting.has(focusedPaneId)) {
+    return target;
+  }
+  for (const paneId of panes.keys()) {
+    if (!waiting.has(paneId)) {
+      return { kind: 'load', paneId };
+    }
+  }
+  return { kind: 'loadEndingWait', paneId: focusedPaneId };
 }
 
 // The sessions every pane but the focused one shows.
@@ -66,10 +95,14 @@ export function pickerRows(
   return rows.filter((row) => !shown.has(row.sessionId));
 }
 
+// Each restored pane's id and the host session id it waits for: main does
+// not hold that session yet, so the pane stays empty until a state brings it.
+export type PaneWaits = ReadonlyMap<string, string>;
+
 // Each saved pane (pane id to host session id) with the app session id of the
 // first row holding that host session id; null when no row does or none was
 // saved.
-export function restorePanes(
+function restorePanes(
   saved: ReadonlyMap<string, string | null>,
   rows: readonly SessionRow[],
 ): Map<string, string | null> {
@@ -88,6 +121,99 @@ export function restorePanes(
         : (sessionIdByHostId.get(hostSessionId) ?? null),
     ]),
   );
+}
+
+// What the first state does with the saved panes: one pane holding main's
+// selection (`fallback`), or the saved tree with each pane's session, the
+// panes that wait, and the panes saved empty, which close.
+export type RestorePlan =
+  | { kind: 'fallback' }
+  | {
+      kind: 'restore';
+      sessions: Map<string, string | null>;
+      waiting: Map<string, string>;
+      closing: string[];
+    };
+
+// A saved pane whose session `rows` hold shows it, one whose session they lack
+// waits for it, and one saved empty closes. Falls back when nothing valid was
+// saved (`saved` null) or no saved pane names a session.
+export function restorePlan(
+  saved: ReadonlyMap<string, string | null> | null,
+  rows: readonly SessionRow[],
+): RestorePlan {
+  if (saved === null) {
+    return { kind: 'fallback' };
+  }
+  const sessions = restorePanes(saved, rows);
+  const waiting = new Map<string, string>();
+  const closing: string[] = [];
+  for (const [paneId, hostId] of saved) {
+    if (sessions.get(paneId) !== null) {
+      continue;
+    }
+    if (hostId === null) {
+      closing.push(paneId);
+    } else {
+      waiting.set(paneId, hostId);
+    }
+  }
+  const namesASession = [...saved.values()].some((hostId) => hostId !== null);
+  return namesASession
+    ? { kind: 'restore', sessions, waiting, closing }
+    : { kind: 'fallback' };
+}
+
+// The waits a state's `rows` settle: every waiting pane whose session arrived
+// (`ended`), and those of them that load it (`loads`, pane id and session id).
+// A pane whose session another pane already shows, or an earlier pane in this
+// plan loads, stays empty.
+export function fillPlan(
+  waiting: PaneWaits,
+  rows: readonly SessionRow[],
+  panes: PaneSessions,
+): { ended: string[]; loads: [string, string][] } {
+  const shown = new Set(panes.values());
+  const ended: string[] = [];
+  const loads: [string, string][] = [];
+  for (const [paneId, sessionId] of restorePanes(waiting, rows)) {
+    if (sessionId === null) {
+      continue;
+    }
+    ended.push(paneId);
+    if (!shown.has(sessionId)) {
+      shown.add(sessionId);
+      loads.push([paneId, sessionId]);
+    }
+  }
+  return { ended, loads };
+}
+
+// The waits that still hold: those of panes still open and still empty.
+export function liveWaits(
+  waiting: PaneWaits,
+  panes: PaneSessions,
+): Map<string, string> {
+  return new Map([...waiting].filter(([paneId]) => panes.get(paneId) === null));
+}
+
+// What the panes save, pane id to host session id: a pane showing a session
+// saves its row's host session id, a waiting pane the one it waits for, so a
+// relaunch before that session comes back keeps it; null otherwise.
+export function savedPaneSessions(
+  panes: PaneSessions,
+  waiting: PaneWaits,
+  rows: readonly SessionRow[],
+): Record<string, string | null> {
+  const saved: Record<string, string | null> = {};
+  for (const [paneId, sessionId] of panes) {
+    saved[paneId] =
+      sessionId === null
+        ? (waiting.get(paneId) ?? null)
+        : (rows.find((row) => row.sessionId === sessionId)?.hostSessionId ??
+          null);
+  }
+  return saved;
 }
 
 // An activation the page sent main whose state has not come back yet.

@@ -23,14 +23,19 @@ import type { Layout } from '../layouts/layout';
 import { sessionsManifest } from '../manifest';
 import { readSessionsLayout } from './layout/read-sessions-layout';
 import {
+  type ActivationTarget,
   activationTarget,
+  fillPlan,
+  liveWaits,
   type PaneSessions,
   type PendingEcho,
-  paneOf,
   panesToClose,
   pickerRows,
-  restorePanes,
+  restorePlan,
+  type SelectionTarget,
+  savedPaneSessions,
   selectionAction,
+  selectionTarget,
   shownElsewhere,
 } from './pane-sessions';
 import { previewToggle } from './preview';
@@ -155,10 +160,9 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
     // Read once; the first state places it.
     const saved = readSavedPanes(uiState.get(PANES_KEY));
     let hasRestored = false;
-    // Each restored pane, by pane id, whose saved host session main does not
-    // hold yet: it stays empty and loads that session when a state brings it,
-    // until the first pane key closes the panes still waiting.
-    const waiting = new Map<string, string>();
+    // The restored panes still waiting for their sessions (`restorePlan`),
+    // until the first pane key closes them.
+    let waiting = new Map<string, string>();
     // True while `activate` places a session, so the focus change it makes
     // does not ask main a second time; true while `apply` runs, so the panes
     // publish once its state is in.
@@ -241,28 +245,11 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       }
     };
 
-    // Forgets the waits of panes that closed or took a session.
-    const pruneWaiting = () => {
-      const panes = view.panes.sessions();
-      for (const paneId of waiting.keys()) {
-        const isEmptyPane = panes.has(paneId) && panes.get(paneId) === null;
-        if (!isEmptyPane) {
-          waiting.delete(paneId);
-        }
-      }
-    };
-
-    // A waiting pane saves the host session it waits for, so a relaunch
-    // before its session comes back keeps it.
     const savePanes = () => {
-      const sessions: Record<string, string | null> = {};
-      for (const [paneId, sessionId] of view.panes.sessions()) {
-        sessions[paneId] =
-          sessionId === null
-            ? (waiting.get(paneId) ?? null)
-            : (rowOf(sessionId)?.hostSessionId ?? null);
-      }
-      const panes: SavedPanes = { tree: view.panes.tree(), sessions };
+      const panes: SavedPanes = {
+        tree: view.panes.tree(),
+        sessions: savedPaneSessions(view.panes.sessions(), waiting, state.rows),
+      };
       uiState.set(PANES_KEY, panes);
     };
 
@@ -290,20 +277,21 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         });
     };
 
-    // Focuses the pane showing `sessionId`, or loads it into the focused pane.
-    const placeSession = (sessionId: string) => {
+    // Focuses the target pane, or loads `sessionId` into it and focuses it.
+    const placeSession = (
+      target: ActivationTarget | SelectionTarget,
+      sessionId: string,
+    ) => {
       const { panes } = view;
-      const target = activationTarget(
-        panes.sessions(),
-        panes.focusedPaneId(),
-        sessionId,
-      );
       isPlacing = true;
       try {
         if (target.kind === 'focus') {
           panes.focus(target.paneId);
-        } else {
-          panes.load(target.paneId, sessionId);
+          return;
+        }
+        panes.load(target.paneId, sessionId);
+        if (target.paneId !== panes.focusedPaneId()) {
+          panes.focus(target.paneId);
         }
       } finally {
         isPlacing = false;
@@ -312,7 +300,11 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
 
     const activate = (sessionId: string) => {
       if (rowOf(sessionId) !== undefined) {
-        placeSession(sessionId);
+        const { panes } = view;
+        placeSession(
+          activationTarget(panes.sessions(), panes.focusedPaneId(), sessionId),
+          sessionId,
+        );
       }
       tellMain(sessionId);
     };
@@ -334,7 +326,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       keys,
       timers: api.services.timers,
       panesChanged() {
-        pruneWaiting();
+        waiting = liveWaits(waiting, view.panes.sessions());
         savePanes();
         if (!isApplying) {
           publishFocused();
@@ -378,34 +370,19 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       },
     });
 
-    // The first state's panes: the saved tree, each pane holding its session
-    // when main has it and waiting for it when not, a pane saved empty
-    // closing; one pane holding main's selected session when nothing valid
-    // was saved or no saved pane names a session.
+    // Lays out the first state's panes as `restorePlan` says.
     const restoreSavedPanes = (first: SessionsState) => {
-      const restored =
-        saved === null
-          ? new Map<string, string | null>()
-          : restorePanes(saved.hostIds, first.rows);
-      for (const [paneId, hostId] of saved?.hostIds ?? []) {
-        if (hostId !== null && restored.get(paneId) === null) {
-          waiting.set(paneId, hostId);
-        }
-      }
-      const hasSession = [...restored.values()].some(
-        (sessionId) => sessionId !== null,
-      );
-      if (saved === null || (!hasSession && waiting.size === 0)) {
+      const plan = restorePlan(saved?.hostIds ?? null, first.rows);
+      if (saved === null || plan.kind === 'fallback') {
         if (first.selectedSessionId !== null) {
           view.panes.load(view.panes.focusedPaneId(), first.selectedSessionId);
         }
         return;
       }
-      view.panes.restore(saved.tree, restored);
-      for (const [paneId, sessionId] of restored) {
-        if (sessionId === null && !waiting.has(paneId)) {
-          view.panes.close(paneId);
-        }
+      waiting = plan.waiting;
+      view.panes.restore(saved.tree, plan.sessions);
+      for (const paneId of plan.closing) {
+        view.panes.close(paneId);
       }
       const focused = view.panes.focusedSessionId();
       if (focused !== null && focused !== first.selectedSessionId) {
@@ -413,18 +390,15 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       }
     };
 
-    // Loads each waiting pane whose session `rows` now hold, unless another
-    // pane shows it already.
+    // Ends the waits `rows` settle and loads the panes `fillPlan` fills.
     const fillWaiting = (rows: readonly SessionRow[]) => {
-      for (const [paneId, sessionId] of restorePanes(waiting, rows)) {
-        if (sessionId === null) {
-          continue;
-        }
+      const { ended, loads } = fillPlan(waiting, rows, view.panes.sessions());
+      for (const paneId of ended) {
         waiting.delete(paneId);
-        if (paneOf(view.panes.sessions(), sessionId) === null) {
-          view.panes.load(paneId, sessionId);
-          log('sessions', `pane restored ${labelOf(sessionId)}`);
-        }
+      }
+      for (const [paneId, sessionId] of loads) {
+        view.panes.load(paneId, sessionId);
+        log('sessions', `pane restored ${labelOf(sessionId)}`);
       }
     };
 
@@ -434,7 +408,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         return;
       }
       const paneIds = [...waiting.keys()];
-      waiting.clear();
+      waiting = new Map();
       for (const paneId of paneIds) {
         view.panes.close(paneId);
       }
@@ -458,7 +432,20 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       });
       pendingEchoes = echoes;
       if (action.kind === 'place') {
-        placeSession(action.sessionId);
+        const { panes } = view;
+        const target = selectionTarget(
+          panes.sessions(),
+          panes.focusedPaneId(),
+          action.sessionId,
+          waiting,
+        );
+        if (target.kind === 'loadEndingWait') {
+          log(
+            'sessions',
+            `wait ended: ${labelOf(action.sessionId)} loaded into a waiting pane`,
+          );
+        }
+        placeSession(target, action.sessionId);
       } else if (action.kind === 'tellFocused') {
         const focused = view.panes.focusedSessionId();
         if (focused !== null) {
