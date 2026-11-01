@@ -49,7 +49,8 @@ interview on 2026-10-23; this file is the record of both.
 - **Take over** — a session tab selecting itself and later giving the session back to the tab shown before.
 - **App slash command** — a `/name` the app runs itself when typed in the message box, instead of sending it to the
   agent. Any plugin registers one through chat's page exports. Chat registers `/login`, `/logout` and `/status`, the
-  terminal-only commands print mode refuses (`claude-stream.md` § Terminal-only commands).
+  terminal-only commands print mode refuses (`claude-stream.md` § Terminal-only commands), and `/clear` with Claude's
+  names for it, `/reset` and `/new` (§ Flow, Clear).
 - **Sign-in** — signing a profile in to its harness account, run by the harness adapter (`claude auth login` for
   Claude) and shown by chat in the sign-in dialog. **Account status** is whether a profile is signed in, and as whom.
 - **Attached image** — an image pasted or dropped into the composer, shown as a thumbnail above the message box and
@@ -226,7 +227,9 @@ interview on 2026-10-23; this file is the record of both.
   its Chat tab or the first send, whichever comes first, while its profile is in the settings, so start reads no
   transcripts; a send reads it before starting the process, so the read never holds the new turn. The first message sent in a resting row starts its process (`--resume` when a message was ever
   sent, else `--session-id`); app slash commands run without one, and the controls and the agent's slash commands
-  fill in once it runs. A session whose process exits while the app runs rests the same way, a notice in its chat
+  fill in once it runs. Every process start in a row passes the control values the row holds (`AgentStart.controls`),
+  so a row resumed after its process exits, or cleared, keeps the model, effort and mode the user set; a restored row
+  holds none until its process reports them. A session whose process exits while the app runs rests the same way, a notice in its chat
   giving the exit and its reason. A restored session whose turn was running at quit gets a notice that the app quit
   during that turn; one whose profile is no longer in the settings gets a notice naming it, and a send there toasts
   that the message was not sent because the profile is missing, instead of starting. A message main refuses goes
@@ -260,6 +263,16 @@ interview on 2026-10-23; this file is the record of both.
   cannot start toasts `Sign-in not started: <reason>`. Opening the dialog while it is open cancels its sign-in and
   starts the new one. Each open calls its caller back exactly once, so a start prompt opened again since never runs
   the old prompt's next step.
+- **Clear**: `/clear`, `/reset` and `/new` end the row's process and start a fresh one at once in the same row, under
+  a new host session id and with the row's control values, so the harness loads its plugins, skills, MCP servers and
+  settings again. A running turn is interrupted first; waiting permission calls are cancelled and queued messages are
+  pulled back into the box, as on an exit, and no exit notice shows for the old process. The row's entries become one
+  info notice, `Conversation cleared`. The saved record (with nothing sent yet), the sidebar row and the relay join
+  (the sessions plugin's `OwnedSession.setHostSessionId`) and the session's docs source follow the new id, so a later
+  resume reopens only the conversation after the clear; the earlier one stays in the past-sessions list. A resting
+  row clears the same way, starting its fresh process. The app clears rather than passing `/clear` to Claude: Claude's
+  own clear (measured on 2.1.314) keeps the same process, so its plugins and settings stay as loaded, and it moves
+  the conversation to a new session id the row would not follow.
 - **Sign-in identity**: main runs one sign-in at a time. The page names each sign-in by an id it picks, since the
   sign-in's link can reach the page before `logIn` answers; the link, the end, the code and the cancel all carry it,
   and the dialog ignores a message for any other id. A cancel stops the sign-in at once, so another may start, and
@@ -348,6 +361,9 @@ interview on 2026-10-23; this file is the record of both.
   and the Settings, keymap and Docs filters), descriptions behind a setting, and the completion row hook.
 - **Plan E — activity line** (`plan-activity-line/`, settled in an interview on 2026-10-30): the activity line, the
   chat focus outlines, and the `text-prose` token with its `fonts.proseSize` setting.
+- **Plan F — clear command** (`plan-clear-command/`, settled in an interview on 2026-10-31): `/clear` as an app
+  slash command restarting the row's process under a new host id, the sessions plugin's host-id change, and control
+  values carried into every process start.
 
 ## Out of scope
 
