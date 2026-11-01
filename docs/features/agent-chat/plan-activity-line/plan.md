@@ -245,7 +245,7 @@ Boundary rules:
 - [x] [Fake steps turn and self-test steps](08-fake-steps-and-selftest.md) — after 04, 07
 
 ### Wave 5
-- [ ] [Doc re-read](09-doc-re-read.md)
+- [x] [Doc re-read](09-doc-re-read.md)
 
 ### Wave 6
 - [ ] [Final verification](10-final-verification.md)
@@ -263,6 +263,7 @@ Review base: e2dbd6596bdd144fcd436c37ef19db140c258f9a
 - 06 · 21d87f4 · diff read: every Produces present (StepInput, ActivityInput, collapsibleRow, ChatLayout.activity, PART_SET activity, kit collapsibleRow, layout.js activity and steps on collapsibleRow); typecheck clean · concerns: .chat-step-slot overrides .chat-entry-slot margin/padding only by source order, so it holds only while step slots also carry chat-entry-slot
 - 07 · 928abc4 · diff read: every Produces present (EntryListDeps layouts/timers/clock, setWorking, move/first/focused ListStop, toggleFocused {stop,result}, isWorking, ChatViewDeps timers/clock); typecheck clean; worker ran the 3 named test files · concerns: opening the last run while the focus follows recomputes via focusAfterChange and jumps the cursor to the run's last step, so a second Enter toggles that step, not the run; the START_FOCUS case of GIVEN 1 is unreachable through EntryList (focus is never null with entries)
 - 08 · 56a7f3b · diff read: FAKE_STEPS_TEXT and both self-test groups present as planned; typecheck clean; fake-agent-harness.test.ts passes per worker · concerns: activity line group leaves the focus off following; transcript scroll relies on sendFromBox calling entries.latest() (read, not run)
+- 09 · cd30dcd · every listed passage re-read against the code; one stale line fixed (agent-chat design Vocabulary, preview and fake history times); layout.d.ts fields and log lines match the docs · concerns: AGENTS.md says each part's kit extends the base kit, but activity and imageViewer take BaseKit itself (pre-existing wording)
 ### Contract changes
 - pairToolResult: (Map<string, ToolEntry>) → ToolEntry → generic <E extends ToolEntry>(Map<string, E>) → E, and ToolEntry is now Extract<EntryDraft, {kind:'tool'}> · why: the decoder pairs drafts and transcripts pairs stamped entries · consumers: none outside 04 · group 04
 - layout.d.ts re-export: export type { DotStatus } → export type { BaseKit, DotStatus } · why: layout.js imports types only from ../layout and the activity part's JSDoc names BaseKit · consumers: none beyond 06 · group 06
@@ -282,5 +283,6 @@ Review base: e2dbd6596bdd144fcd436c37ef19db140c258f9a
 - put never removes a run slot (entries only append or replace same-kind); rebuild disposes and redraws every run slot — a stale slot if that invariant ever breaks · group 07
 - EXPECTED_CALLS gains the FAKE_STEPS_TEXT send and its interrupt, since the new group runs on the fixture's fake process — the self-test reports fake calls if wrong · group 08
 - passing step results read {text:'ok'}; each step is emitted once with its result set — none · group 08
+- peer ai-dev-e8's uncommitted chat-view.ts, chat-commands.ts and chat-commands.test.ts edits (focus follows the latest on send and at turn end) stay in the tree, uncommitted; the test gate and self-test run over them — settled with the peer — a self-test pass may lean on its send-latest call · lead
 ### Review rounds
 ### Test gate

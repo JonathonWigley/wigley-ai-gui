@@ -1,6 +1,6 @@
 # 09 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 5 · Depends on: 01, 02, 03, 04, 05, 06, 07, 08
 Plan: [plan.md](plan.md)
@@ -23,3 +23,4 @@ Commit:    one commit for the fixes, when any
 
 ## Proof
 
+Commit cd30dcd · proof: every listed passage re-read against the code; one stale line fixed (agent-chat design Vocabulary, preview and fake history times); layout.d.ts fields and log lines match the docs · concerns: AGENTS.md says each part's kit extends the base kit, but activity and imageViewer take BaseKit itself (pre-existing wording)
