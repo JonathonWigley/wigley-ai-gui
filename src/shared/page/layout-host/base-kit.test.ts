@@ -40,7 +40,11 @@ function kitOver(scope: ViewScope | null) {
           : null;
       },
     },
-    commands: { exists: () => true, run: () => undefined },
+    commands: {
+      exists: (id) =>
+        ['docs.open', 'docs.close', 'panes.focusLeft'].includes(id),
+      run: () => undefined,
+    },
     scope,
     commandNamed: (short) =>
       short === 'open' || short === 'close' ? `docs.${short}` : null,
@@ -104,6 +108,14 @@ describe('createBaseKit', () => {
       options: undefined,
       className: '',
       anchored: [['panes.focusLeft', { scope: 'docs.tree' }]],
+    },
+    {
+      row: 'unregistered qualified id',
+      scope: 'docs.tree',
+      command: 'docs.missing',
+      options: undefined,
+      className: '',
+      anchored: [],
     },
     {
       row: 'no scope',

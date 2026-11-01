@@ -127,8 +127,13 @@ export function createBaseKit(deps: BaseKitDeps): BaseKit {
     deps.scope === null
       ? deps.keys.keysFor(id)
       : deps.keys.keysFor(id, deps.scope);
+  // A name holding a `.` is a qualified id, null unless a plugin registers it.
   const commandId = (name: string) =>
-    name.includes('.') ? name : deps.commandNamed(name);
+    name.includes('.')
+      ? deps.commands.exists(name)
+        ? name
+        : null
+      : deps.commandNamed(name);
   const kit: BaseKit = {
     el(parent, tagName, className = '', text) {
       return appended(

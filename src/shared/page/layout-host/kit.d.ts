@@ -71,13 +71,14 @@ export interface BaseKit {
   section(parent: HTMLElement, label: string, text: string): HTMLElement | null;
   // The keys bound to the owner's command (its short name, as `choose1`), or to a name holding a `.` read as a
   // qualified id (as `panes.focusLeft`), in the scope of the part drawing, as `keysFor` reads it; null when unbound or
-  // unknown. It reads the keymap once, when called, so text a part draws from
+  // for a name no command has. It reads the keymap once, when called, so text a part draws from
   // it keeps the keys of the part's build after a rebind; draw a hint with `keyHint` for one that follows the keymap.
   keys(command: string): string | null;
   // `span` (with `options.className`): an anchor for the owner's command `command` in the scope of the part drawing;
   // a name holding a `.` names any plugin's command by its qualified id (as `panes.focusLeft`). It shows while that
   // scope is in force and the hints setting is on, and follows keymap changes. `options.label` draws the command's
-  // label after the keys, or the given text. Empty while unbound or for a short name no command of the owner has.
+  // label after the keys, or the given text. Empty while unbound, for a short name no command of the owner has, or for
+  // a qualified id no plugin registers.
   keyHint(
     parent: HTMLElement,
     command: string,
