@@ -104,7 +104,7 @@
   cursor: pointer;
 }
 
-.chat-step-slot {
+.chat-entry-slot.chat-step-slot {
   margin: 0;
   padding-left: var(--wg-space-4);
 }

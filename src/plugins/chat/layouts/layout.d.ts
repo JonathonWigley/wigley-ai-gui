@@ -99,7 +99,7 @@ export interface ActivityInput {
   live: boolean;
   // The user has the line open: the part draws only its header, and the app places the step rows under it.
   open: boolean;
-  // When the run began: the entry before it.
+  // When the run began: the entry before it, or its first step when the run opens the list.
   startedAt: number;
   // When the run ended; null while live.
   endedAt: number | null;
