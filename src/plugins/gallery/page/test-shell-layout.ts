@@ -20,7 +20,7 @@ function alignedArea(className: string): AlignedArea {
 
 // A shell layout the default never makes, so a contribution the swap fails to
 // move shows out of place: the status bar under the title bar, above the main
-// area, and the activity bar on the end side. `gallery.css` places each area
+// area, and the activity bar on the end side, past the right bar. `gallery.css` places each area
 // by its class.
 export const testShellLayout: ShellLayout = {
   mount(root) {
@@ -33,6 +33,10 @@ export const testShellLayout: ShellLayout = {
         'gallery-test-side-bar material-chrome material-chrome--dense',
       ),
       main: element('div', 'gallery-test-main'),
+      rightBar: element(
+        'div',
+        'gallery-test-right-bar material-chrome material-chrome--dense',
+      ),
       panel: element('div', 'gallery-test-panel'),
       activityBar: alignedArea('gallery-test-activity-bar material-chrome'),
       overlay: element('div', 'gallery-test-overlay'),

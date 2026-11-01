@@ -1,9 +1,10 @@
 import type { PaneDirection } from '../../../contracts/panes';
 import type { UiState } from '../../../contracts/ui-state';
 
-// A split's start pane width in CSS pixels, `initial` when nothing is known:
-// `min` is the start pane's least width, `endMin` the end pane's; no most
-// width.
+// A split's sized pane width in CSS pixels (its start pane unless the divider
+// sizes the end one), `initial` when nothing is known: `min` is the sized
+// pane's least width, `endMin` the least width it leaves the pane beside it;
+// no most width.
 export interface SplitLimits {
   initial: number;
   min: number;

@@ -20,6 +20,8 @@ import {
 // How long the handle's resize prompt shows after a keyboard nudge.
 const NUDGE_PROMPT_MS = 1000;
 
+const OPPOSITE_SIDES = { left: 'right', right: 'left' } as const;
+
 export interface SplitOptions extends SplitLimits {
   uiState: UiState;
   stateKey: string;
@@ -41,9 +43,13 @@ export interface Split extends ResizeTarget {
   dispose(): void;
 }
 
-// `measure` reads the start pane's left edge in client pixels and the span
-// both panes share; `show` draws a width. The divider owns the drag on
-// `handle`, the stored width under `stateKey` and `nudge`; a drag writes
+// `sizedPane` is the pane whose width the divider holds, `start` unless given;
+// `min` and `initial` describe it, and `endMin` the least width it leaves the
+// other pane. `measure` reads the start pane's left edge in client pixels and
+// the span both panes share, whichever pane is sized: an `end` pane's width
+// runs leftward from the span's right edge, so a nudge left widens it. `show`
+// draws a width. The divider owns the drag on `handle`, the stored width under
+// `stateKey` and `nudge`; a drag writes
 // uiState once at its end, a nudge on each press, each only when the width
 // changed. A nudge steps from the drawn width, the stored one clamped to the
 // span, so a press at a limit writes nothing and keeps a wider stored width;
@@ -55,6 +61,7 @@ export interface Split extends ResizeTarget {
 export interface SplitDividerOptions extends SplitLimits {
   uiState: UiState;
   stateKey: string;
+  sizedPane?: 'start' | 'end';
   handle: HTMLElement;
   measure(): { left: number; span: number };
   show(width: number): void;
@@ -112,7 +119,7 @@ export interface DividerHandle {
   dispose(): void;
 }
 
-// The drag core every divider shares, the split's, the side bar's and the
+// The drag core every divider shares, the split's, the shell's bars' and the
 // pane tree's: a primary press on `handle` captures the pointer and starts a
 // drag (`is-active`) that keeps the pointer's distance from the divider, so
 // the divider stays under the same point of the handle. The drag holds until
@@ -237,11 +244,18 @@ function splitResizePrompt(
   };
 }
 
-// The divider core every split and the side bar share: the width it opens at
-// from `uiState`, the drag on `handle` through `createDividerHandle`, and the
-// keyboard nudge. `dispose` leaves `handle` in the document; its owner removes
-// it.
+// The divider core every split and the shell's bars share: the width it opens
+// at from `uiState`, the drag on `handle` through `createDividerHandle`, and
+// the keyboard nudge. `dispose` leaves `handle` in the document; its owner
+// removes it.
 export function createSplitDivider(options: SplitDividerOptions): SplitDivider {
+  const sizesEnd = options.sizedPane === 'end';
+  // The divider's client position for the sized pane drawn `drawn` wide, and
+  // back: an end pane is measured from the span's right edge.
+  const dividerAtWidth = (drawn: number, left: number, span: number) =>
+    sizesEnd ? left + span - drawn : left + drawn;
+  const widthAtDivider = (at: number, left: number, span: number) =>
+    sizesEnd ? left + span - at : at - left;
   let width = storedSplitWidth(options.uiState, options.stateKey, options);
   let widthAtDragStart = width;
   let isDisposed = false;
@@ -262,14 +276,14 @@ export function createSplitDivider(options: SplitDividerOptions): SplitDivider {
     pointerAt: (event) => event.clientX,
     dividerAt() {
       const { left, span } = options.measure();
-      return left + clampSplitWidth(width, options, span);
+      return dividerAtWidth(clampSplitWidth(width, options, span), left, span);
     },
     onStart() {
       widthAtDragStart = width;
     },
     onMove(at) {
       const { left, span } = options.measure();
-      showWidth(clampSplitWidth(at - left, options, span));
+      showWidth(clampSplitWidth(widthAtDivider(at, left, span), options, span));
     },
     onEnd() {
       if (width !== widthAtDragStart) {
@@ -295,7 +309,8 @@ export function createSplitDivider(options: SplitDividerOptions): SplitDivider {
       }
       const { span } = options.measure();
       const drawn = clampSplitWidth(width, options, span);
-      const next = nudgedSplitWidth(drawn, direction, options, span);
+      const widthDirection = sizesEnd ? OPPOSITE_SIDES[direction] : direction;
+      const next = nudgedSplitWidth(drawn, widthDirection, options, span);
       if (next !== drawn) {
         showWidth(next);
         options.uiState.set(options.stateKey, next);

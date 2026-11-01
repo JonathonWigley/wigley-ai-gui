@@ -470,20 +470,55 @@ describe('createSplit dispose', () => {
 });
 
 describe('createSplitDivider', () => {
-  // The start pane's left edge at 100 with an 800px span draws at most 600.
+  // The start pane's left edge at 100 with an 800px span draws the sized pane
+  // at most 600; an end pane's divider sits at 900 less its width.
   it.each([
-    { stored: 240, pressAt: 340, moves: [400, 900], shown: [300, 600] },
-    { stored: 240, pressAt: 342, moves: [342, 402], shown: [240, 300] },
-    { stored: 700, pressAt: 702, moves: [652], shown: [550] },
-  ])(
-    'drags a handle it did not build, keeping the grab offset: $stored at $pressAt',
-    ({ stored, pressAt, moves, shown: expected }) => {
+    {
+      sizedPane: 'start',
+      stored: 240,
+      pressAt: 340,
+      moves: [400, 900],
+      shown: [300, 600],
+    },
+    {
+      sizedPane: 'start',
+      stored: 240,
+      pressAt: 342,
+      moves: [342, 402],
+      shown: [240, 300],
+    },
+    {
+      sizedPane: 'start',
+      stored: 700,
+      pressAt: 702,
+      moves: [652],
+      shown: [550],
+    },
+    {
+      sizedPane: 'end',
+      stored: 240,
+      pressAt: 660,
+      moves: [600, 0],
+      shown: [300, 600],
+    },
+    {
+      sizedPane: 'end',
+      stored: 240,
+      pressAt: 658,
+      moves: [658, 598],
+      shown: [240, 300],
+    },
+    { sizedPane: 'end', stored: 700, pressAt: 298, moves: [348], shown: [550] },
+  ] as const)(
+    'drags a handle it did not build, keeping the grab offset: $sizedPane $stored at $pressAt',
+    ({ sizedPane, stored, pressAt, moves, shown: expected }) => {
       const handle = fakeElement();
       const shown: number[] = [];
       createSplitDivider({
         ...limits,
         uiState: stateOver(new Map([['side', stored]])),
         stateKey: 'side',
+        sizedPane,
         handle: handle as unknown as HTMLElement,
         measure: () => ({ left: 100, span: 800 }),
         show: (width) => shown.push(width),
@@ -497,6 +532,34 @@ describe('createSplitDivider', () => {
       }
 
       expect(shown.slice(1)).toEqual(expected);
+    },
+  );
+
+  it.each([
+    { stored: 240, direction: 'left', width: 264, written: 264 },
+    { stored: 240, direction: 'right', width: 216, written: 216 },
+    { stored: 600, direction: 'left', width: 600, written: undefined },
+  ] as const)(
+    'nudges the end pane it sizes against the direction: $stored $direction',
+    ({ stored, direction, width, written }) => {
+      const saved = new Map<string, unknown>([['side', stored]]);
+      const divider = createSplitDivider({
+        ...limits,
+        uiState: stateOver(saved),
+        stateKey: 'side',
+        sizedPane: 'end',
+        handle: fakeElement() as unknown as HTMLElement,
+        measure: () => ({ left: 100, span: 800 }),
+        show: () => undefined,
+        anchor: fakeAnchor().anchor,
+        timers: fakeTimers().timers,
+      });
+      saved.delete('side');
+
+      divider.nudge(direction);
+
+      expect(divider.width()).toBe(width);
+      expect(saved.get('side')).toBe(written);
     },
   );
 });

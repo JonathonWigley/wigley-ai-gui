@@ -33,8 +33,8 @@ export interface ShellKit extends BaseKit {}
 // A layout defines only the parts it changes: each part comes from the first layout that defines it among the
 // `shell.layout` setting's layout and `default`. A part that throws, or returns no element appended to `parent`, is
 // drawn by `default` instead. The layout's `layout.css` restyles the chrome frames under
-// `[data-layout-owner="shell"][data-layout="<name>"]` on the title bar, activity bar, side bar and status bar
-// elements; the layout does not move the areas. Every part appends its element to `parent` and returns it.
+// `[data-layout-owner="shell"][data-layout="<name>"]` on the title bar, activity bar, side bar, right bar and status
+// bar elements; the layout does not move the areas. Every part appends its element to `parent` and returns it.
 export interface Layout {
   // The title bar's centre: the shown mode's context. Drawn again on each change; not drawn while the mode has none.
   titleContext?(

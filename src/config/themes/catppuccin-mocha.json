@@ -140,6 +140,7 @@
     "icon-button": "28px",
     "icon-size": "16px",
     "sidebar-width": "256px",
+    "rightbar-width": "300px",
     "traffic-light-inset": "78px",
     "radius-sm": "4px",
     "radius-md": "6px",

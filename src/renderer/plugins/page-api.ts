@@ -32,7 +32,8 @@ import type { PendingKeysHub } from '../pending-keys';
 // `config` is the config main serves now, which the keymap, commands, scopes
 // and settings are read from at each call; `bus` is the page load's event bus;
 // `modes` is the core's mode registry, which takes qualified ids. `areas`
-// holds every area; plugins get the title bar, panel, status bar and overlay.
+// holds every area; plugins get the title bar, panel, status bar, right bar
+// and overlay.
 // `setLayout` replaces the shell's layout. `transparency` is the page's one
 // transparency override, handed to every plugin as it is. `services` are the
 // ones every plugin shares; `uiState` gives each plugin its own scope of the
@@ -61,8 +62,9 @@ export interface PageApiDeps {
 
 // One plugin's page API: its channel and its events run under the manifest's
 // id, and the scopes it sets and pushes and the modes it adds are qualified by
-// it. Its areas leave out `main`, which only the mode registry fills, and the
-// activity bar and side bar, which the core draws from the modes. Its
+// it. Its areas are the title bar, panel, status bar, right bar and overlay:
+// they leave out `main`, which only the mode registry fills, and the activity
+// bar and side bar, which the core draws from the modes. Its
 // settings are its own entry in the config's plugin settings, and its ui state
 // is scoped to its id. Its layout shows run under its id.
 export function createPageApi(
@@ -182,6 +184,7 @@ function pluginAreas(areas: Record<AreaName, Area>): PluginAreas {
     titleBar: areas.titleBar,
     panel: areas.panel,
     statusBar: areas.statusBar,
+    rightBar: areas.rightBar,
     overlay: areas.overlay,
   };
 }

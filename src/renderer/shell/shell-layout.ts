@@ -8,13 +8,15 @@ import { ALIGNMENTS } from './shell';
 
 // The default layout: `shell.css` places each area by its class, the title bar
 // across the top, the activity bar and side bar down the left, main with the
-// panel under it, and the status bar across the bottom. The chrome bars take
-// the chrome material, the side bar its dense form.
+// panel under it, the right bar beside both on the right, and the status bar
+// across the bottom. The chrome bars take the chrome material, the side and
+// right bars its dense form.
 const AREA_CLASSES: Record<AreaName, string> = {
   titleBar: 'shell-title-bar material-chrome',
   activityBar: 'shell-activity-bar material-chrome',
   sideBar: 'shell-side-bar material-chrome material-chrome--dense',
   main: 'shell-main',
+  rightBar: 'shell-right-bar material-chrome material-chrome--dense',
   panel: 'shell-panel',
   statusBar: 'shell-status-bar material-chrome',
   overlay: 'shell-overlay',

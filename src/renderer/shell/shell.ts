@@ -22,6 +22,7 @@ const AREA_NAMES: readonly AreaName[] = [
   'activityBar',
   'sideBar',
   'main',
+  'rightBar',
   'panel',
   'statusBar',
   'overlay',
@@ -95,44 +96,61 @@ export function nextInTrack<Entry extends { placement: Placement }>(
 // each area's element keeps its scroll across the swap; a layout that throws
 // or misses an area leaves the previous one mounted and rethrows.
 // `layOutSideBar` shows or hides the side bar area and sets its
-// `data-side-bar`. `setChromeLayout` names the user's shell layout on the four
+// `data-side-bar`. `setChromeLayout` names the user's shell layout on the
 // chrome areas' elements (`data-layout`, with `data-layout-owner="shell"`),
 // kept across every later mount, so the layout's CSS restyles their frames.
 // `sideBarDivider` is the side bar's resize divider, which moves only while
-// the side bar is beside the content. `reloadSideBarOpenWidth` reads the
-// `sidebar-width` token again, after a theme is applied, and redraws the side
-// bar at it while the user has stored no width. `setKeys` anchors its
-// handle's resize prompt through `keys`, again on each call. `dispose`
-// disposes the divider, stops watching the root's width and removes the
-// handle.
+// the side bar is beside the content; `rightBarDivider` the right bar's, which
+// moves only while the right bar shows. `reloadBarOpenWidths` reads the
+// `sidebar-width` and `rightbar-width` tokens again, after a theme is applied,
+// and redraws each bar at its token while the user has stored no width for
+// it. `setKeys` anchors both handles' resize prompts through `keys`, again on
+// each call. `dispose` disposes both dividers, stops watching the root's width
+// and removes both handles.
 export interface Shell {
   areas: Record<AreaName, Area>;
   setLayout(layout: ShellLayout): Disposable;
   layOutSideBar(layout: SideBarLayout): void;
   setChromeLayout(name: string): void;
   sideBarDivider: ResizeTarget;
-  reloadSideBarOpenWidth(): void;
+  rightBarDivider: ResizeTarget;
+  reloadBarOpenWidths(): void;
   setKeys(keys: BaseKitDeps['keys']): void;
   dispose(): void;
 }
 
-// The side bar's least width, and the least width it leaves the main area.
+// Each bar's least width, and the least width either leaves the main area.
 const SIDE_BAR_MIN = 160;
+const RIGHT_BAR_MIN = 200;
 const MAIN_MIN = 320;
 
-// The side bar's open width when the `sidebar-width` token is no pixel length.
+// Each bar's open width when its width token is no pixel length.
 const SIDE_BAR_FALLBACK_WIDTH = 256;
+const RIGHT_BAR_FALLBACK_WIDTH = 300;
 
-// The side bar's open width: the `sidebar-width` theme token's pixels as
-// `root` computes it. The computed value is the token as written, so a length
-// in any other unit (`20rem`) takes the fallback.
-function sideBarOpenWidth(root: HTMLElement): number {
-  const token = getComputedStyle(root)
-    .getPropertyValue('--wg-sidebar-width')
-    .trim();
-  return /^\d+(\.\d+)?px$/.test(token)
-    ? parseFloat(token)
-    : SIDE_BAR_FALLBACK_WIDTH;
+// A bar's open width: the pixels of the width token `property` as `root`
+// computes it. The computed value is the token as written, so a length in any
+// other unit (`20rem`) takes `fallback`.
+function openWidthToken(
+  root: HTMLElement,
+  property: string,
+  fallback: number,
+): number {
+  const token = getComputedStyle(root).getPropertyValue(property).trim();
+  return /^\d+(\.\d+)?px$/.test(token) ? parseFloat(token) : fallback;
+}
+
+// `uiState` with a missing or non-finite stored width read as `openWidth()`,
+// so a bar divider's `reloadWidth` takes up a reloaded token; writes go
+// through.
+function openWidthState(uiState: UiState, openWidth: () => number): UiState {
+  return {
+    get(key) {
+      const stored = uiState.get(key);
+      return Number.isFinite(stored) ? stored : openWidth();
+    },
+    set: (key, value) => uiState.set(key, value),
+  };
 }
 
 // An anchor function that anchors through the keys `setKeys` hands it, nothing
@@ -180,6 +198,7 @@ const CHROME_AREAS: readonly AreaName[] = [
   'titleBar',
   'activityBar',
   'sideBar',
+  'rightBar',
   'statusBar',
 ];
 
@@ -297,11 +316,20 @@ function createStatusBarHeight(): { observe(statusBar: HTMLElement): void } {
 // the first call. The side bar's width is `--shell-side-bar-width` on `root`,
 // unitless pixels, which its resize handle `div.shell-side-bar-handle`, a
 // child of `root` shown only while the side bar is beside, drags and stores in
-// `uiState` under `side-bar-width`; `timers` runs the handle prompt's linger.
+// `uiState` under `side-bar-width`; `timers` runs the handle prompts' linger.
 // With no width stored, it opens at the `sidebar-width` token as `root`
 // computes it. Beside, the side bar draws no wider than leaves the main area
 // its least width; over the content, no wider than reaches the window's
 // edge; each kept as `root` resizes, while `uiState` keeps the user's width.
+// The right bar sits beside main on its right in every layout, hidden while
+// it holds no contribution. Its width is `--shell-right-bar-width` on `root`,
+// which its handle `div.shell-right-bar-handle`, a child of `root` hidden with
+// the right bar, drags from its start edge and stores under `right-bar-width`;
+// with none stored it opens at the `rightbar-width` token. Shown, it draws no
+// wider than leaves main its least width, its own least width winning in a
+// window too narrow for both; hidden, it draws its width unclamped. The side
+// bar draws first, so it gives way first when the window is too narrow for
+// both bars.
 export function mountShell(
   root: HTMLElement,
   layout: ShellLayout,
@@ -313,7 +341,12 @@ export function mountShell(
   // Counts layout replacements, so a restore knows whether its layout is
   // still the one mounted.
   let generation = 0;
-  let sideBarOpen = sideBarOpenWidth(root);
+  const sideBarOpenWidth = () =>
+    openWidthToken(root, '--wg-sidebar-width', SIDE_BAR_FALLBACK_WIDTH);
+  const rightBarOpenWidth = () =>
+    openWidthToken(root, '--wg-rightbar-width', RIGHT_BAR_FALLBACK_WIDTH);
+  let sideBarOpen = sideBarOpenWidth();
+  let rightBarOpen = rightBarOpenWidth();
   let mounted = mountLayout(root, layout);
   let sideBarLayout: SideBarLayout = 'hidden';
   let chromeLayout = 'default';
@@ -321,12 +354,18 @@ export function mountShell(
   const statusBarHeight = createStatusBarHeight();
   const sideBarHandle = document.createElement('div');
   sideBarHandle.className = 'shell-side-bar-handle';
+  const rightBarHandle = document.createElement('div');
+  rightBarHandle.className = 'shell-right-bar-handle';
 
   const applyHidden = (name: AreaName) => {
-    mounted[name].element.hidden =
+    const { element } = mounted[name];
+    element.hidden =
       name === 'sideBar'
         ? sideBarLayout === 'hidden'
         : contributions[name].length === 0;
+    if (name === 'rightBar') {
+      rightBarHandle.hidden = element.hidden;
+    }
   };
 
   const applySideBar = () => {
@@ -352,10 +391,22 @@ export function mountShell(
       }
       applyHidden(name);
     }
-    root.append(sideBarHandle);
+    root.append(sideBarHandle, rightBarHandle);
     applySideBar();
     applyChromeLayout();
     statusBarHeight.observe(mounted.statusBar.element);
+  };
+
+  // Hides `name`'s element while it holds nothing; the right bar showing or
+  // hiding redraws both bars, since the span each shares with main changed.
+  const updateHidden = (name: AreaName) => {
+    const wasHidden = mounted[name].element.hidden;
+    applyHidden(name);
+    const rightBarToggled =
+      name === 'rightBar' && mounted.rightBar.element.hidden !== wasHidden;
+    if (rightBarToggled) {
+      drawBarWidths();
+    }
   };
 
   const createArea = (name: AreaName): Area => {
@@ -377,7 +428,7 @@ export function mountShell(
         track.insertBefore(element, following?.element ?? null);
         const contribution = { element, placement };
         live.splice(index, 0, contribution);
-        applyHidden(name);
+        updateHidden(name);
         let isDisposed = false;
         return {
           dispose() {
@@ -387,7 +438,7 @@ export function mountShell(
             isDisposed = true;
             live.splice(live.indexOf(contribution), 1);
             element.remove();
-            applyHidden(name);
+            updateHidden(name);
           },
         };
       },
@@ -426,19 +477,38 @@ export function mountShell(
           : sideBarWidth;
     root.style.setProperty('--shell-side-bar-width', String(drawn));
   };
-  // The divider reads a missing or non-finite stored width as the current
-  // open width, so `reloadWidth` takes up a reloaded token; writes go through.
-  const sideBarState: UiState = {
-    get(key) {
-      const stored = uiState.get(key);
-      return Number.isFinite(stored) ? stored : sideBarOpen;
-    },
-    set: (key, value) => uiState.set(key, value),
+
+  const rightBarLimits = {
+    initial: rightBarOpen,
+    min: RIGHT_BAR_MIN,
+    endMin: MAIN_MIN,
   };
+  // The span main and the right bar share, from main's left edge.
+  const measureRightBar = () => {
+    const { left } = mounted.main.element.getBoundingClientRect();
+    const { right } = mounted.rightBar.element.getBoundingClientRect();
+    return { left, span: right - left };
+  };
+  // The last width the divider showed; shown, it is drawn leaving main its
+  // least width.
+  let rightBarWidth = rightBarOpen;
+  const drawRightBarWidth = () => {
+    const { span } = measureRightBar();
+    const drawn = mounted.rightBar.element.hidden
+      ? rightBarWidth
+      : clampSplitWidth(rightBarWidth, rightBarLimits, span);
+    root.style.setProperty('--shell-right-bar-width', String(drawn));
+  };
+
+  const drawBarWidths = () => {
+    drawSideBarWidth();
+    drawRightBarWidth();
+  };
+
   const promptAnchor = createForwardingAnchor();
   const sideBarDivider = createSplitDivider({
     ...sideBarLimits,
-    uiState: sideBarState,
+    uiState: openWidthState(uiState, () => sideBarOpen),
     stateKey: 'side-bar-width',
     handle: sideBarHandle,
     measure: measureSideBar,
@@ -449,7 +519,21 @@ export function mountShell(
     anchor: promptAnchor.anchor,
     timers,
   });
-  const rootWidth = new ResizeObserver(() => drawSideBarWidth());
+  const rightBarDivider = createSplitDivider({
+    ...rightBarLimits,
+    uiState: openWidthState(uiState, () => rightBarOpen),
+    stateKey: 'right-bar-width',
+    sizedPane: 'end',
+    handle: rightBarHandle,
+    measure: measureRightBar,
+    show(width) {
+      rightBarWidth = width;
+      drawRightBarWidth();
+    },
+    anchor: promptAnchor.anchor,
+    timers,
+  });
+  const rootWidth = new ResizeObserver(() => drawBarWidths());
   rootWidth.observe(root);
 
   // Each area's scroll is read before the remount detaches its element, and
@@ -488,22 +572,27 @@ export function mountShell(
     layOutSideBar(next) {
       sideBarLayout = next;
       applySideBar();
-      drawSideBarWidth();
+      drawBarWidths();
     },
     setChromeLayout(name) {
       chromeLayout = name;
       applyChromeLayout();
     },
     sideBarDivider,
-    reloadSideBarOpenWidth() {
-      sideBarOpen = sideBarOpenWidth(root);
+    rightBarDivider,
+    reloadBarOpenWidths() {
+      sideBarOpen = sideBarOpenWidth();
+      rightBarOpen = rightBarOpenWidth();
       sideBarDivider.reloadWidth();
+      rightBarDivider.reloadWidth();
     },
     setKeys: (keys) => promptAnchor.setKeys(keys),
     dispose() {
       sideBarDivider.dispose();
+      rightBarDivider.dispose();
       rootWidth.disconnect();
       sideBarHandle.remove();
+      rightBarHandle.remove();
     },
   };
 }

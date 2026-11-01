@@ -294,11 +294,12 @@ async function start() {
     },
     {
       live,
-      // The side bar's open width is the theme's `sidebar-width` token.
+      // The side bar's and right bar's open widths are the theme's
+      // `sidebar-width` and `rightbar-width` tokens.
       applier: {
         apply(theme, applied) {
           themeApplier.apply(theme, applied);
-          shell.reloadSideBarOpenWidth();
+          shell.reloadBarOpenWidths();
         },
       },
       editor,

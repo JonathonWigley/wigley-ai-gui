@@ -168,16 +168,17 @@
 }
 
 /* The test shell layout: the title bar across the top, the status bar under
-   it, the side bar down the start side, main with the panel under it, and the
-   activity bar down the end side. */
+   it, the side bar down the start side, main with the panel under it, the
+   right bar beside them, and the activity bar down the end side. The area
+   named `right` places the shell's right bar handle here too. */
 .gallery-test-shell {
   display: grid;
   grid-template-areas:
-    'title title title'
-    'status status status'
-    'side main activity'
-    'side panel activity';
-  grid-template-columns: auto minmax(0, 1fr) auto;
+    'title title title title'
+    'status status status status'
+    'side main right activity'
+    'side panel right activity';
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   grid-template-rows: var(--wg-toolbar-height) auto minmax(0, 1fr) auto;
   height: 100vh;
   overflow-wrap: anywhere;
@@ -261,6 +262,14 @@
   min-height: 0;
   overflow-y: auto;
   border-right: 1px solid var(--wg-border-default);
+}
+
+.gallery-test-right-bar {
+  grid-area: right;
+  width: calc(var(--shell-right-bar-width) * 1px);
+  min-height: 0;
+  overflow-y: auto;
+  border-left: 1px solid var(--wg-border-default);
 }
 
 /* Over the content, the side bar lies on the main and panel cell while its

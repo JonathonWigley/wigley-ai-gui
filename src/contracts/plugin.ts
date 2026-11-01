@@ -226,6 +226,7 @@ export type AreaName =
   | 'activityBar'
   | 'sideBar'
   | 'main'
+  | 'rightBar'
   | 'panel'
   | 'statusBar'
   | 'overlay';
@@ -247,11 +248,12 @@ export interface Area {
   contribute(element: HTMLElement, options?: ContributeOptions): Disposable;
 }
 
-// The areas a plugin contributes to: the core draws the activity bar and the
-// side bar from the modes, and `main` belongs to the modes, filled through
-// `modes.add`.
+// The areas a plugin contributes to: the title bar, the panel, the status
+// bar, the right bar beside `main` and the overlay. The core draws the
+// activity bar and the side bar from the modes, and `main` belongs to the
+// modes, filled through `modes.add`.
 export type PluginAreas = Record<
-  'titleBar' | 'panel' | 'statusBar' | 'overlay',
+  'titleBar' | 'panel' | 'statusBar' | 'rightBar' | 'overlay',
   Area
 >;
 

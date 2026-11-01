@@ -274,13 +274,14 @@ describe('createPageApi', () => {
     expect(heard).toEqual([4]);
   });
 
-  it('hands the plugin the title bar, panel, status bar and overlay areas', () => {
+  it('hands the plugin the title bar, panel, status bar, right bar and overlay areas', () => {
     const area = (): Area => ({ contribute: () => ({ dispose: () => {} }) });
     const areas: PageApiDeps['areas'] = {
       titleBar: area(),
       activityBar: area(),
       sideBar: area(),
       main: area(),
+      rightBar: area(),
       panel: area(),
       statusBar: area(),
       overlay: area(),
@@ -292,6 +293,7 @@ describe('createPageApi', () => {
       titleBar: areas.titleBar,
       panel: areas.panel,
       statusBar: areas.statusBar,
+      rightBar: areas.rightBar,
       overlay: areas.overlay,
     });
     expect(api.areas).not.toHaveProperty('main');

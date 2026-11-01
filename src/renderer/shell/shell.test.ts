@@ -127,20 +127,32 @@ interface FakeObserver {
   observed: unknown[];
 }
 
-// Stubs the computed `--wg-sidebar-width` token as `token`.
-function stubSideBarToken(token: string): void {
+// Stubs the computed `--wg-sidebar-width` token as `side` and
+// `--wg-rightbar-width` as `right`.
+function stubBarTokens({
+  side = '256px',
+  right = '300px',
+}: {
+  side?: string;
+  right?: string;
+} = {}): void {
+  const tokens: Record<string, string> = {
+    '--wg-sidebar-width': side,
+    '--wg-rightbar-width': right,
+  };
   vi.stubGlobal('getComputedStyle', () => ({
-    getPropertyValue: (name: string) =>
-      name === '--wg-sidebar-width' ? token : '',
+    getPropertyValue: (name: string) => tokens[name] ?? '',
   }));
 }
 
-// Stubs what mountShell reads beyond the fake DOM: the computed
-// `--wg-sidebar-width` token, `token`, and ResizeObservers that report only
-// when a test runs their callback; returns every observer made.
-function stubShellGlobals(token = '256px'): FakeObserver[] {
+// Stubs what mountShell reads beyond the fake DOM: the computed bar width
+// tokens, `tokens`, and ResizeObservers that report only when a test runs
+// their callback; returns every observer made.
+function stubShellGlobals(
+  tokens: { side?: string; right?: string } = {},
+): FakeObserver[] {
   const observers: FakeObserver[] = [];
-  stubSideBarToken(token);
+  stubBarTokens(tokens);
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -159,14 +171,24 @@ function stubShellGlobals(token = '256px'): FakeObserver[] {
   return observers;
 }
 
-// The side bar's left edge and main's right edge, in client pixels.
+// The side bar's left edge, main's left and right edges and the right bar's
+// right edge, in client pixels.
 interface Edges {
   sideBarLeft: number;
+  mainLeft: number;
   mainRight: number;
+  rightBarRight: number;
 }
 
-// `layout` with its side bar and main reporting `edges`, read at each call,
-// as their client rects.
+const DEFAULT_EDGES: Edges = {
+  sideBarLeft: 0,
+  mainLeft: 300,
+  mainRight: 1200,
+  rightBarRight: 1200,
+};
+
+// `layout` with its side bar, main and right bar reporting `edges`, read at
+// each call, as their client rects.
 function measuredLayout(
   edges: Edges,
   layout: ShellLayout = defaultShellLayout,
@@ -178,7 +200,13 @@ function measuredLayout(
         getBoundingClientRect: () => ({ left: edges.sideBarLeft }),
       });
       Object.assign(areas.main, {
-        getBoundingClientRect: () => ({ right: edges.mainRight }),
+        getBoundingClientRect: () => ({
+          left: edges.mainLeft,
+          right: edges.mainRight,
+        }),
+      });
+      Object.assign(areas.rightBar, {
+        getBoundingClientRect: () => ({ right: edges.rightBarRight }),
       });
       return areas;
     },
@@ -194,24 +222,36 @@ function stateOver(values: Map<string, unknown>): UiState {
   };
 }
 
-// A shell mounted on the default layout over a fake DOM, its side bar at
-// `edges.sideBarLeft` 0 and main ending at 1200 unless given, `stored` under
-// `side-bar-width` when given. `resizeRoot` runs the observers watching the
-// root, as a window resize does.
+// A shell mounted on the default layout over a fake DOM, at `DEFAULT_EDGES`
+// unless given, `stored` under `side-bar-width` and `rightStored` under
+// `right-bar-width` when given. `resizeRoot` runs the observers watching the
+// root, as a window resize does; `showRightBar` contributes to the right bar.
 function mountMeasuredShell(
-  options: { token?: string; stored?: number; edges?: Partial<Edges> } = {},
+  options: {
+    token?: string;
+    rightToken?: string;
+    stored?: number;
+    rightStored?: number;
+    edges?: Partial<Edges>;
+  } = {},
 ) {
   installFakeDom((name, value) => vi.stubGlobal(name, value));
   vi.stubGlobal('document', {
     createElement: (tag: string) => new FakeElement(tag),
     documentElement: { style: { setProperty: () => undefined } },
   });
-  const observers = stubShellGlobals(options.token);
+  const observers = stubShellGlobals({
+    side: options.token,
+    right: options.rightToken,
+  });
   const values = new Map<string, unknown>();
   if (options.stored !== undefined) {
     values.set('side-bar-width', options.stored);
   }
-  const edges = { sideBarLeft: 0, mainRight: 1200, ...options.edges };
+  if (options.rightStored !== undefined) {
+    values.set('right-bar-width', options.rightStored);
+  }
+  const edges = { ...DEFAULT_EDGES, ...options.edges };
   const root = new FakeElement('div');
   const shell = mountShell(
     asHtml(root),
@@ -225,7 +265,11 @@ function mountMeasuredShell(
     values,
     edges,
     handle: () => root.querySelector('.shell-side-bar-handle'),
+    rightHandle: () => root.querySelector('.shell-right-bar-handle'),
     drawnWidth: () => root.style['--shell-side-bar-width'],
+    drawnRightWidth: () => root.style['--shell-right-bar-width'],
+    showRightBar: () =>
+      shell.areas.rightBar.contribute(asHtml(new FakeElement('div'))),
     resizeRoot() {
       for (const observer of observers) {
         if (observer.observed.includes(root)) {
@@ -241,13 +285,14 @@ describe('mountShell', () => {
     vi.unstubAllGlobals();
   });
 
-  // The `data-layout` and `data-layout-owner` of the four chrome areas
+  // The `data-layout` and `data-layout-owner` of the five chrome areas
   // mounted in `root`.
   function chromeLayouts(root: FakeElement): string[][] {
     const classes = [
       'shell-title-bar',
       'shell-activity-bar',
       'shell-side-bar',
+      'shell-right-bar',
       'shell-status-bar',
     ];
     return classes.map((className) => {
@@ -266,12 +311,12 @@ describe('mountShell', () => {
     const root = new FakeElement('div');
     const shell = mountShell(
       asHtml(root),
-      measuredLayout({ sideBarLeft: 0, mainRight: 1200 }),
+      measuredLayout(DEFAULT_EDGES),
       stateOver(new Map()),
       NO_TIMERS,
     );
     shell.setChromeLayout('mine');
-    const mine = Array(4).fill(['mine', 'shell']);
+    const mine = Array(5).fill(['mine', 'shell']);
 
     const swap = shell.setLayout(defaultShellLayout);
     const swapped = chromeLayouts(root);
@@ -347,7 +392,7 @@ describe('mountShell', () => {
       const shell = mountShell(
         asHtml(root),
         measuredLayout(
-          { sideBarLeft: 0, mainRight: 1200 },
+          DEFAULT_EDGES,
           rangedLayout({ sideBar: sideBarRanges.first, main: 400 }),
         ),
         stateOver(new Map()),
@@ -372,21 +417,59 @@ describe('mountShell', () => {
   );
 
   it.each([
-    { token: '256px', stored: undefined, drawn: '256' },
-    { token: '300px', stored: undefined, drawn: '300' },
-    { token: '', stored: undefined, drawn: '256' },
-    { token: 'auto', stored: undefined, drawn: '256' },
-    { token: '20rem', stored: undefined, drawn: '256' },
-    { token: ' 300px ', stored: undefined, drawn: '300' },
-    { token: '256px', stored: 320, drawn: '320' },
-  ])(
-    'opens the side bar at the token or the stored width: token $token, stored $stored',
-    ({ token, stored, drawn }) => {
-      const { drawnWidth } = mountMeasuredShell({ token, stored });
+    { bar: 'side', token: '256px', stored: undefined, drawn: '256' },
+    { bar: 'side', token: '300px', stored: undefined, drawn: '300' },
+    { bar: 'side', token: '', stored: undefined, drawn: '256' },
+    { bar: 'side', token: 'auto', stored: undefined, drawn: '256' },
+    { bar: 'side', token: '20rem', stored: undefined, drawn: '256' },
+    { bar: 'side', token: ' 300px ', stored: undefined, drawn: '300' },
+    { bar: 'side', token: '256px', stored: 320, drawn: '320' },
+    { bar: 'right', token: '300px', stored: undefined, drawn: '300' },
+    { bar: 'right', token: '360px', stored: undefined, drawn: '360' },
+    { bar: 'right', token: '', stored: undefined, drawn: '300' },
+    { bar: 'right', token: '20rem', stored: undefined, drawn: '300' },
+    { bar: 'right', token: '300px', stored: 320, drawn: '320' },
+  ] as const)(
+    'opens each bar at its token or the stored width: $bar, token $token, stored $stored',
+    ({ bar, token, stored, drawn }) => {
+      const shell =
+        bar === 'side'
+          ? mountMeasuredShell({ token, stored })
+          : mountMeasuredShell({ rightToken: token, rightStored: stored });
 
-      expect(drawnWidth()).toBe(drawn);
+      const drawnWidth =
+        bar === 'side' ? shell.drawnWidth() : shell.drawnRightWidth();
+      expect(drawnWidth).toBe(drawn);
     },
   );
+
+  it('mountShell_RightBarContributions_HideItWhileEmpty', () => {
+    const { shell, root, rightHandle } = mountMeasuredShell();
+    const hiddenStates = () => [
+      root.querySelector('.shell-right-bar')?.hidden,
+      rightHandle()?.hidden,
+    ];
+    const states = [hiddenStates()];
+
+    const first = shell.areas.rightBar.contribute(
+      asHtml(new FakeElement('div')),
+    );
+    const second = shell.areas.rightBar.contribute(
+      asHtml(new FakeElement('div')),
+    );
+    states.push(hiddenStates());
+    first.dispose();
+    states.push(hiddenStates());
+    second.dispose();
+    states.push(hiddenStates());
+
+    expect(states).toEqual([
+      [true, true],
+      [false, false],
+      [false, false],
+      [true, true],
+    ]);
+  });
 
   it.each([
     { layout: 'beside', hidden: false },
@@ -404,28 +487,63 @@ describe('mountShell', () => {
   );
 
   it('keeps the side bar handle in the root across a layout swap', () => {
-    const { shell, root, handle } = mountMeasuredShell();
+    const { shell, root, handle, rightHandle } = mountMeasuredShell();
+    const parents = () => [handle()?.parentNode, rightHandle()?.parentNode];
 
     const swap = shell.setLayout(defaultShellLayout);
-    const swapped = handle()?.parentNode;
+    const swapped = parents();
     swap.dispose();
 
-    expect(swapped).toBe(root);
-    expect(handle()?.parentNode).toBe(root);
+    expect(swapped).toEqual([root, root]);
+    expect(parents()).toEqual([root, root]);
   });
 
-  it('stores and draws the width a side bar nudge sets', () => {
-    const { shell, values, handle, drawnWidth } = mountMeasuredShell({
-      edges: { sideBarLeft: 48 },
-    });
-    shell.layOutSideBar('beside');
-    Object.assign(handle()!, { getClientRects: () => [{}] });
+  it.each([
+    {
+      row: 'side bar beside, nudged right',
+      bar: 'side',
+      direction: 'right',
+      key: 'side-bar-width',
+      width: 280,
+    },
+    {
+      row: 'right bar shown, nudged left',
+      bar: 'right',
+      direction: 'left',
+      key: 'right-bar-width',
+      width: 324,
+    },
+    {
+      row: 'right bar shown, nudged right',
+      bar: 'right',
+      direction: 'right',
+      key: 'right-bar-width',
+      width: 276,
+    },
+  ] as const)(
+    'stores and draws the width a bar nudge sets: $row',
+    ({ bar, direction, key, width }) => {
+      const shell = mountMeasuredShell({ edges: { sideBarLeft: 48 } });
+      if (bar === 'side') {
+        shell.shell.layOutSideBar('beside');
+      } else {
+        shell.showRightBar();
+      }
+      const handle = bar === 'side' ? shell.handle() : shell.rightHandle();
+      Object.assign(handle!, { getClientRects: () => [{}] });
+      const divider =
+        bar === 'side'
+          ? shell.shell.sideBarDivider
+          : shell.shell.rightBarDivider;
 
-    shell.sideBarDivider.nudge('right');
+      divider.nudge(direction);
 
-    expect(values.get('side-bar-width')).toBe(280);
-    expect(drawnWidth()).toBe('280');
-  });
+      const drawn =
+        bar === 'side' ? shell.drawnWidth() : shell.drawnRightWidth();
+      expect(shell.values.get(key)).toBe(width);
+      expect(drawn).toBe(String(width));
+    },
+  );
 
   // Steps over a shell whose stored side bar width is 400 and whose side bar
   // starts at the client's left edge; the stored width stays 400 unless a row
@@ -509,6 +627,15 @@ describe('mountShell', () => {
       drawn: '280',
     },
     {
+      row: 'beside, then the right bar shows with main ending at 600 and no resize seen',
+      steps: (shell: NarrowingShell) => {
+        shell.shell.layOutSideBar('beside');
+        shell.edges.mainRight = 600;
+        shell.showRightBar();
+      },
+      drawn: '280',
+    },
+    {
       row: 'beside, main ending at 600, nudged left from the drawn width',
       steps: (shell: NarrowingShell) => {
         shell.shell.layOutSideBar('beside');
@@ -535,36 +662,145 @@ describe('mountShell', () => {
     },
   );
 
+  // Steps over a shell whose stored right bar width is 400 and whose main
+  // starts at 300; the stored width stays 400.
+  const resizeRightTo = (shell: NarrowingShell, rightBarRight: number) => {
+    shell.edges.rightBarRight = rightBarRight;
+    shell.resizeRoot();
+  };
   it.each([
-    { row: 'no stored width', stored: undefined, drawn: '300' },
-    { row: 'a stored width', stored: 320, drawn: '320' },
     {
-      row: 'no stored width, nudged right after',
-      stored: undefined,
-      nudged: true,
+      row: 'shown, right edge 1200',
+      steps: (shell: NarrowingShell) => {
+        shell.showRightBar();
+        resizeRightTo(shell, 1200);
+      },
+      drawn: '400',
+    },
+    {
+      row: 'shown, right edge 1000',
+      steps: (shell: NarrowingShell) => {
+        shell.showRightBar();
+        resizeRightTo(shell, 1000);
+      },
+      drawn: '380',
+    },
+    {
+      row: 'shown, right edge 1000 then 1200',
+      steps: (shell: NarrowingShell) => {
+        shell.showRightBar();
+        resizeRightTo(shell, 1000);
+        resizeRightTo(shell, 1200);
+      },
+      drawn: '400',
+    },
+    {
+      row: 'shown, right edge 700, its least width winning',
+      steps: (shell: NarrowingShell) => {
+        shell.showRightBar();
+        resizeRightTo(shell, 700);
+      },
+      drawn: '200',
+    },
+    {
+      row: 'hidden, right edge 700',
+      steps: (shell: NarrowingShell) => {
+        resizeRightTo(shell, 700);
+      },
+      drawn: '400',
+    },
+    {
+      row: 'hidden, then contributed at right edge 1000 with no resize seen',
+      steps: (shell: NarrowingShell) => {
+        shell.edges.rightBarRight = 1000;
+        shell.showRightBar();
+      },
+      drawn: '380',
+    },
+  ] satisfies {
+    row: string;
+    steps: (shell: NarrowingShell) => void;
+    drawn: string;
+  }[])(
+    'clamps only the drawn right bar width as the window narrows: $row',
+    ({ steps, drawn }) => {
+      const shell = mountMeasuredShell({ rightStored: 400 });
+
+      steps(shell);
+
+      expect(shell.drawnRightWidth()).toBe(drawn);
+      expect(shell.values.get('right-bar-width')).toBe(400);
+    },
+  );
+
+  it.each([
+    { row: 'side, no stored width', bar: 'side', drawn: '300' },
+    { row: 'side, a stored width', bar: 'side', stored: 320, drawn: '320' },
+    {
+      row: 'side, no stored width, nudged right after',
+      bar: 'side',
+      nudged: 'right',
       drawn: '324',
       storedAfter: 324,
     },
-  ])(
-    'redraws the side bar at a reloaded token only with no stored width: $row',
-    ({ stored, nudged = false, drawn, storedAfter = stored }) => {
-      const shell = mountMeasuredShell({ token: '256px', stored });
+    { row: 'right, no stored width', bar: 'right', drawn: '360' },
+    { row: 'right, a stored width', bar: 'right', stored: 320, drawn: '320' },
+    {
+      row: 'right, no stored width, nudged left after',
+      bar: 'right',
+      nudged: 'left',
+      drawn: '384',
+      storedAfter: 384,
+    },
+  ] satisfies {
+    row: string;
+    bar: 'side' | 'right';
+    stored?: number;
+    nudged?: 'left' | 'right';
+    drawn: string;
+    storedAfter?: number;
+  }[])(
+    'redraws each bar at a reloaded token only with no stored width: $row',
+    ({ bar, stored, nudged, drawn, storedAfter = stored }) => {
+      const isSide = bar === 'side';
+      const shell = mountMeasuredShell({
+        token: '256px',
+        rightToken: '300px',
+        stored: isSide ? stored : undefined,
+        rightStored: isSide ? undefined : stored,
+      });
       shell.shell.layOutSideBar('beside');
-      stubSideBarToken('300px');
+      shell.showRightBar();
+      stubBarTokens({ side: '300px', right: '360px' });
 
-      shell.shell.reloadSideBarOpenWidth();
-      if (nudged) {
-        nudge(shell, 'right');
+      shell.shell.reloadBarOpenWidths();
+      if (nudged !== undefined) {
+        const handle = isSide ? shell.handle() : shell.rightHandle();
+        Object.assign(handle!, { getClientRects: () => [{}] });
+        const divider = isSide
+          ? shell.shell.sideBarDivider
+          : shell.shell.rightBarDivider;
+        divider.nudge(nudged);
       }
 
-      expect(shell.drawnWidth()).toBe(drawn);
-      expect(shell.values.get('side-bar-width')).toBe(storedAfter);
+      const drawnWidth = isSide ? shell.drawnWidth() : shell.drawnRightWidth();
+      expect(drawnWidth).toBe(drawn);
+      const key = isSide ? 'side-bar-width' : 'right-bar-width';
+      expect(shell.values.get(key)).toBe(storedAfter);
     },
   );
 
   // The commands of `keys`' anchors, each with whether it was disposed.
   const anchored = (keys: ReturnType<typeof recordingAnchors>) =>
     keys.anchors.map((anchor) => [anchor.command, anchor.isDisposed]);
+
+  // The side bar's prompt anchors, then the right bar's, each `isDisposed`.
+  const bothPrompts = (isDisposed: boolean) => [
+    [PANE_RESIZE_COMMANDS.left, isDisposed],
+    [PANE_RESIZE_COMMANDS.right, isDisposed],
+    [PANE_RESIZE_COMMANDS.left, isDisposed],
+    [PANE_RESIZE_COMMANDS.right, isDisposed],
+  ];
 
   it("anchors the side bar handle's prompt again on each setKeys", () => {
     const { shell } = mountMeasuredShell();
@@ -575,31 +811,19 @@ describe('mountShell', () => {
     const afterFirst = anchored(first);
     shell.setKeys(second.keys);
 
-    expect(afterFirst).toEqual([
-      [PANE_RESIZE_COMMANDS.left, false],
-      [PANE_RESIZE_COMMANDS.right, false],
-    ]);
-    expect(anchored(first)).toEqual([
-      [PANE_RESIZE_COMMANDS.left, true],
-      [PANE_RESIZE_COMMANDS.right, true],
-    ]);
-    expect(anchored(second)).toEqual([
-      [PANE_RESIZE_COMMANDS.left, false],
-      [PANE_RESIZE_COMMANDS.right, false],
-    ]);
+    expect(afterFirst).toEqual(bothPrompts(false));
+    expect(anchored(first)).toEqual(bothPrompts(true));
+    expect(anchored(second)).toEqual(bothPrompts(false));
   });
 
   it('disposes the side bar divider and removes its handle', () => {
-    const { shell, handle } = mountMeasuredShell();
+    const { shell, handle, rightHandle } = mountMeasuredShell();
     const first = recordingAnchors();
     shell.setKeys(first.keys);
 
     shell.dispose();
 
-    expect(anchored(first)).toEqual([
-      [PANE_RESIZE_COMMANDS.left, true],
-      [PANE_RESIZE_COMMANDS.right, true],
-    ]);
-    expect(handle()).toBe(null);
+    expect(anchored(first)).toEqual(bothPrompts(true));
+    expect([handle(), rightHandle()]).toEqual([null, null]);
   });
 });
