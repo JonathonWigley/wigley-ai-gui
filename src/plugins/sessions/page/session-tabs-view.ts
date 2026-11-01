@@ -189,19 +189,21 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     drawn.text = null;
   };
 
-  // Scrolls the strip, and nothing around it, to the selected tab once each
-  // time the selection changes, so a tab the user scrolled past stays put.
+  // Scrolls the strip alone to the selected tab once each time the selection
+  // changes, so a tab the user scrolled past stays put. A strip with no width,
+  // in the holder or a hidden mode, waits until a draw finds it laid out.
   const scrollSelectedIntoView = (frame: Frame) => {
     const selectedId = frame.tabs.selectedTabId;
-    if (selectedId === frame.scrolledTabId) {
+    const strip = frame.bar.built.strip;
+    if (selectedId === frame.scrolledTabId || strip.clientWidth === 0) {
       return;
     }
     frame.scrolledTabId = selectedId;
     const index = [...frame.entries.keys()].indexOf(selectedId ?? '');
-    frame.drawnTabs[index]?.built.element.scrollIntoView?.({
-      block: 'nearest',
-      inline: 'nearest',
-    });
+    const tab = frame.drawnTabs[index]?.built.element;
+    if (tab !== undefined) {
+      strip.scrollLeft = scrollLeftShowing(strip, tab);
+    }
   };
 
   const drawFrame = (sessionId: string, frame: Frame, isFocused: boolean) => {
@@ -372,6 +374,7 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
         disposeTabs(frame);
         frame.bar.dispose();
         frame.bar = drawBar(frame);
+        frame.scrolledTabId = null;
       }
       const placed = [...panes].map(([id, pane]) => {
         pane.input = null;
@@ -465,6 +468,23 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     },
     select,
   };
+}
+
+// The strip's scroll that shows all of `tab`, moving the least: the current
+// one when the tab is in view already. Measured from the strip, so a
+// positioned wrapper a layout draws around it does not change it.
+function scrollLeftShowing(strip: HTMLElement, tab: HTMLElement): number {
+  const tabBox = tab.getBoundingClientRect();
+  const start =
+    tabBox.left - strip.getBoundingClientRect().left + strip.scrollLeft;
+  const end = start + tabBox.width;
+  if (start < strip.scrollLeft) {
+    return start;
+  }
+  if (end > strip.scrollLeft + strip.clientWidth) {
+    return end - strip.clientWidth;
+  }
+  return strip.scrollLeft;
 }
 
 function isSameInput(a: PaneInput, b: PaneInput): boolean {

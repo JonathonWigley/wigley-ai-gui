@@ -36,11 +36,29 @@
 /* `‹ ⌥H ⌃⌥H swap` on the side of the focused pane with a pane that way. A
    divider's resize prompt sits centred on its handle, so the side prompts sit
    below the pane's vertical centre and the up and down prompts at the right
-   corner, the up one under the tab bar, each clear of the resize prompt. */
+   corner, each clear of the resize prompt. The up and down prompts sit in an
+   inset their pane's sheet leaves free, the up one between the tab bar and
+   the sheet, so no content draws under them. */
+.session-pane {
+  --session-edge-inset: var(--wg-space-6);
+}
+
 .session-pane-edge {
   position: absolute;
   z-index: 2;
   pointer-events: none;
+}
+
+.session-pane:has(> .session-pane-edge.is-up)
+  > .session-pane-body
+  .session-bodies {
+  margin-top: var(--session-edge-inset);
+}
+
+.session-pane:has(> .session-pane-edge.is-down)
+  > .session-pane-body
+  .session-bodies {
+  margin-bottom: var(--session-edge-inset);
 }
 
 .session-pane-edge.is-left,
@@ -63,7 +81,7 @@
 }
 
 .session-pane-edge.is-down {
-  bottom: var(--wg-space-4);
+  bottom: var(--wg-space-1);
 }
 
 /* The side bar: the "Sessions" header over the rows. */
