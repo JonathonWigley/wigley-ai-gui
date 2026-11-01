@@ -89,6 +89,7 @@ them. The app-wide look of the primitives stays in themes.
 | `gallery` | `gallery.layout` | each primitive's sample block |
 | `usage` | `usage.layout` | the status-bar line (context bar, cache countdown, spend, plan rows) and the right-bar details |
 | `keys` | `keys.layout` | the help overlay, the which-key panel, the title bar's Keys button |
+| `workflow` | `workflow.layout` | the stage chip under each session row, the strip above the Chat composer (stepper and actions), the Flow tab (stepper, plan checklist by wave, actions) |
 
 Each owner's `layout.d.ts` names its parts exactly.
 
@@ -104,6 +105,7 @@ can be iterated in place. The sample sends nothing and raises no notification or
 | `Space z l c` | chat: a session of every entry kind, its steps grouped into finished activity lines |
 | `Space z l s` | sessions: rows in every state |
 | `Space z l a` | agents: a sample session with two running subagents |
+| `Space z l w` | workflow: a sample session in every stage, the plan-ready countdown included |
 
 ## The primer's columns
 

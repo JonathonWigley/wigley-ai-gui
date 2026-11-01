@@ -202,6 +202,13 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  `chat.planUsage` and `chat.agentEvent`), page/ (the status-bar line and the right-bar details),
                  layouts/ (the usage Layout contract and the built-in `default` layout),
                  `docs/features/usage/design.md`
+  workflow/      manifest.ts, contract.ts, flow.ts (the pure fold of signals into a session's flow), plan-reader.ts
+                 (ticked, total, wave and review rounds from a plan.md), stages/<stage>/ (one wigley workflow stage
+                 each: main.ts its entry rule and main actions, page.ts its look and page actions, registered through
+                 `addStage`), main/ (hears `chat.agentEvent` and the sessions events, keeps each session's flow in its
+                 plugin data, watches plan folders, runs Clear & make), page/ (the row chip, the composer strip, the
+                 Flow tab, the preview), layouts/ (the workflow Layout contract and the built-in `default` layout);
+                 `docs/features/workflow/design.md`
 ```
 
 Each Claude Code or Codex session runs the marketplace's `relay.py` (`plugins/wigley/scripts/forms/` in
@@ -268,6 +275,9 @@ round; primer: an open primer), since main, not the page, decides.
 - **A row part** is what a plugin draws under every session row in the side bar, through the `sessions` page export
   `addRowPart`, the same shape as forms' `addCardPart`: sessions hands each row's part a wrapper and the session id,
   and the part draws through its own plugin's layout. The agents plugin's subagent lines are one.
+- **A composer part** is what a plugin draws above the Chat composer, through the `chat` page export
+  `addComposerPart`, the same shape as a row part: chat hands each part a wrapper and the session id. The workflow
+  plugin's strip is one.
 - **A chat pane** is one pane of Sessions mode's pane tree (`src/shared/page/pane-tree/`, the sessions plugin its
   owner): it shows one whole session, tab bar included, and a session shows in at most one pane. The side bar drives
   the focused pane, and the visible tab, whose `shown` sets the key scope and whose `isVisible` reads true, is the

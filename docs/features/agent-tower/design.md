@@ -52,6 +52,9 @@ unchanged. Each event carries `at`, epoch milliseconds from the adapter's inject
 | `usage` | agent id, context tokens used, context window size (null until the first result), autocompact limit (configured and reported, each tokens or null), cache expiry (null when unknown), session spend in USD (null until the first result) | fatigue bar (context fill) |
 | `compacted` | tokens before and after | rest / heal |
 | `userMessage` | — | "message from HQ" |
+| `skillStarted` | skill (`wigley:make`), args; a Skill call or a slash command the user typed | — (the workflow plugin's stages) |
+| `fileWritten` | agent id, the full path of a Write or Edit | — (the workflow plugin's plan detection) |
+| `turnEnded` | — | — (the workflow plugin's plan ready) |
 
 Events with no producer yet join this union when one exists: plan created or revised (ordered plan steps, optional
 effort estimate), plan step started and ended, retry (tool, attempt number), and watcher progress (0–100). They wait
