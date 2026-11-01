@@ -663,7 +663,8 @@ describe('mountShell', () => {
   );
 
   // Steps over a shell whose stored right bar width is 400 and whose main
-  // starts at 300; the stored width stays 400.
+  // starts at 300, so the bar goes over below a right edge of 820; the stored
+  // width stays 400.
   const resizeRightTo = (shell: NarrowingShell, rightBarRight: number) => {
     shell.edges.rightBarRight = rightBarRight;
     shell.resizeRoot();
@@ -695,12 +696,31 @@ describe('mountShell', () => {
       drawn: '400',
     },
     {
-      row: 'shown, right edge 700, its least width winning',
+      row: 'shown, right edge 820, main at its least width',
+      steps: (shell: NarrowingShell) => {
+        shell.showRightBar();
+        resizeRightTo(shell, 820);
+      },
+      drawn: '200',
+    },
+    {
+      row: 'shown, right edge 700, over main at its least width',
       steps: (shell: NarrowingShell) => {
         shell.showRightBar();
         resizeRightTo(shell, 700);
       },
       drawn: '200',
+      layout: 'over',
+      handleHidden: true,
+    },
+    {
+      row: 'shown, right edge 700 then 1000, beside again',
+      steps: (shell: NarrowingShell) => {
+        shell.showRightBar();
+        resizeRightTo(shell, 700);
+        resizeRightTo(shell, 1000);
+      },
+      drawn: '380',
     },
     {
       row: 'hidden, right edge 700',
@@ -708,6 +728,7 @@ describe('mountShell', () => {
         resizeRightTo(shell, 700);
       },
       drawn: '400',
+      handleHidden: true,
     },
     {
       row: 'hidden, then contributed at right edge 1000 with no resize seen',
@@ -721,14 +742,21 @@ describe('mountShell', () => {
     row: string;
     steps: (shell: NarrowingShell) => void;
     drawn: string;
+    layout?: 'beside' | 'over';
+    handleHidden?: boolean;
   }[])(
     'clamps only the drawn right bar width as the window narrows: $row',
-    ({ steps, drawn }) => {
+    ({ steps, drawn, layout = 'beside', handleHidden = false }) => {
       const shell = mountMeasuredShell({ rightStored: 400 });
 
       steps(shell);
 
-      expect(shell.drawnRightWidth()).toBe(drawn);
+      const rightBar = shell.root.querySelector('.shell-right-bar');
+      expect([
+        shell.drawnRightWidth(),
+        rightBar?.dataset.rightBar,
+        shell.rightHandle()?.hidden,
+      ]).toEqual([drawn, layout, handleHidden]);
       expect(shell.values.get('right-bar-width')).toBe(400);
     },
   );

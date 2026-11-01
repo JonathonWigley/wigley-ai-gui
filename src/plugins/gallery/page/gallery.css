@@ -282,6 +282,16 @@
   z-index: 1;
 }
 
+/* Over the content, the right bar lies on the end of the main and panel cell
+   while its own column collapses. */
+.gallery-test-right-bar[data-right-bar='over'] {
+  box-shadow: 0 0 var(--wg-space-4) var(--wg-window-background);
+  grid-column: 2;
+  grid-row: 3 / 5;
+  justify-self: end;
+  z-index: 1;
+}
+
 .gallery-test-main {
   grid-area: main;
   min-width: 0;

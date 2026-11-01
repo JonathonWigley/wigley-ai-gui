@@ -2,7 +2,8 @@
    the left, main with the panel under it, the right bar down the right beside
    both, the status bar across the bottom. Areas are placed by name so a
    hidden area leaves its track empty instead of shifting the others: the
-   right bar's column is empty while no plugin contributes to it. The main
+   right bar's column is empty while no plugin contributes to it, and while
+   the right bar lies over main in a window too narrow for both. The main
    column never grows past the window, so content wraps to fit it; long
    unbroken words break anywhere. */
 .shell {
@@ -178,7 +179,7 @@
 }
 
 /* Its hairline is on its start edge, toward the content; its width is the
-   user's, drawn no wider than leaves main its least width. */
+   user's, drawn no wider than leaves main its least width while beside. */
 .shell-right-bar {
   border-left: 1px solid var(--wg-material-chrome-edge);
   grid-area: right;
@@ -232,6 +233,15 @@
   grid-column: 3;
   grid-row: 2 / 4;
   justify-self: start;
+  z-index: 1;
+}
+
+/* Over the content, the right bar lies on the end of the main and panel cell
+   while its own column collapses, as the side bar does. */
+.shell-right-bar[data-right-bar='over'] {
+  grid-column: 3;
+  grid-row: 2 / 4;
+  justify-self: end;
   z-index: 1;
 }
 

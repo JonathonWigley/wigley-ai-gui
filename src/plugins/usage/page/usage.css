@@ -40,11 +40,33 @@
   padding: var(--wg-space-2);
 }
 
+/* A details row fits the bar's least width: the detail and the trailing end
+   share the room the label leaves, the trailing end never less than its meter
+   and text, a long text wrapping at its spaces; the detail and then the label
+   ellipsize. */
+[data-layout-owner='usage'][data-layout='default'] .ui-row-detail {
+  flex: 1 1 0;
+}
+
+[data-layout-owner='usage'][data-layout='default'] .ui-row-trailing {
+  display: flex;
+  flex: 1 1 0;
+  justify-content: flex-end;
+}
+
 [data-layout-owner='usage'][data-layout='default'] .usage-trailing {
   align-items: center;
   display: inline-flex;
   gap: var(--wg-space-1_5);
   white-space: nowrap;
+}
+
+[data-layout-owner='usage'][data-layout='default']
+  .usage-trailing
+  > .usage-text {
+  overflow-wrap: normal;
+  text-align: end;
+  white-space: normal;
 }
 
 [data-layout-owner='usage'][data-layout='default'] .usage-freshness,

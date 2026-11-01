@@ -101,7 +101,7 @@ export function nextInTrack<Entry extends { placement: Placement }>(
 // kept across every later mount, so the layout's CSS restyles their frames.
 // `sideBarDivider` is the side bar's resize divider, which moves only while
 // the side bar is beside the content; `rightBarDivider` the right bar's, which
-// moves only while the right bar shows. `reloadBarOpenWidths` reads the
+// moves only while the right bar is beside main. `reloadBarOpenWidths` reads the
 // `sidebar-width` and `rightbar-width` tokens again, after a theme is applied,
 // and redraws each bar at its token while the user has stored no width for
 // it. `setKeys` anchors both handles' resize prompts through `keys`, again on
@@ -321,15 +321,17 @@ function createStatusBarHeight(): { observe(statusBar: HTMLElement): void } {
 // computes it. Beside, the side bar draws no wider than leaves the main area
 // its least width; over the content, no wider than reaches the window's
 // edge; each kept as `root` resizes, while `uiState` keeps the user's width.
-// The right bar sits beside main on its right in every layout, hidden while
-// it holds no contribution. Its width is `--shell-right-bar-width` on `root`,
-// which its handle `div.shell-right-bar-handle`, a child of `root` hidden with
-// the right bar, drags from its start edge and stores under `right-bar-width`;
-// with none stored it opens at the `rightbar-width` token. Shown, it draws no
-// wider than leaves main its least width, its own least width winning in a
-// window too narrow for both; hidden, it draws its width unclamped. The side
-// bar draws first, so it gives way first when the window is too narrow for
-// both bars.
+// The right bar sits on main's right, hidden while it holds no contribution.
+// Its width is `--shell-right-bar-width` on `root`, which its handle
+// `div.shell-right-bar-handle`, a child of `root` shown only while the right
+// bar is beside, drags from its start edge and stores under `right-bar-width`;
+// with none stored it opens at the `rightbar-width` token. Shown in a span
+// with room for its least width and main's, it sits beside main
+// (`data-right-bar="beside"`), drawn no wider than leaves main its least
+// width; in a narrower span it lies over main's end (`data-right-bar="over"`)
+// at its least width, no wider than the span; hidden, it draws its width
+// unclamped. The side bar draws first, so it gives way first when the window
+// is too narrow for both bars.
 export function mountShell(
   root: HTMLElement,
   layout: ShellLayout,
@@ -349,6 +351,7 @@ export function mountShell(
   let rightBarOpen = rightBarOpenWidth();
   let mounted = mountLayout(root, layout);
   let sideBarLayout: SideBarLayout = 'hidden';
+  let isRightBarOver = false;
   let chromeLayout = 'default';
   const contributions = {} as Record<AreaName, Contribution[]>;
   const statusBarHeight = createStatusBarHeight();
@@ -364,8 +367,14 @@ export function mountShell(
         ? sideBarLayout === 'hidden'
         : contributions[name].length === 0;
     if (name === 'rightBar') {
-      rightBarHandle.hidden = element.hidden;
+      applyRightBar();
     }
+  };
+
+  const applyRightBar = () => {
+    const { element } = mounted.rightBar;
+    element.dataset.rightBar = isRightBarOver ? 'over' : 'beside';
+    rightBarHandle.hidden = element.hidden || isRightBarOver;
   };
 
   const applySideBar = () => {
@@ -489,14 +498,21 @@ export function mountShell(
     const { right } = mounted.rightBar.element.getBoundingClientRect();
     return { left, span: right - left };
   };
-  // The last width the divider showed; shown, it is drawn leaving main its
-  // least width.
+  // The last width the divider showed; shown beside, it is drawn leaving main
+  // its least width; over main, which it squeezes none of, at its least width
+  // and no wider than the span.
   let rightBarWidth = rightBarOpen;
   const drawRightBarWidth = () => {
+    const { hidden } = mounted.rightBar.element;
     const { span } = measureRightBar();
-    const drawn = mounted.rightBar.element.hidden
+    const clamped = clampSplitWidth(rightBarWidth, rightBarLimits, span);
+    isRightBarOver = !hidden && span < RIGHT_BAR_MIN + MAIN_MIN;
+    applyRightBar();
+    const drawn = hidden
       ? rightBarWidth
-      : clampSplitWidth(rightBarWidth, rightBarLimits, span);
+      : isRightBarOver
+        ? Math.min(clamped, span)
+        : clamped;
     root.style.setProperty('--shell-right-bar-width', String(drawn));
   };
 

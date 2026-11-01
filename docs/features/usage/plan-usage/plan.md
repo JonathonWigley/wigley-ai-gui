@@ -214,6 +214,7 @@ Review base: 951296f231ed299e8ca9a12bf918bf1f5e9462cc
 - 05 · 4e82cc2 · diff read: contract, manifest, store, poller, main part, registration and layer entries present; typecheck clean; worker ran usage + manifests tests, 42 pass · concerns: toggleDetails page command has no page part until 06, self-test unrun; start now polls once per profile (live spawns claude -p /usage); a throwing polled() rejects an unhandled round promise; two profiles sharing a configDir share one plan
 - 06 · 5b5b97e · diff read: layout contract, default layout, page part, formats, view model, kit/parts, Meter, gallery, bind, registration and layers present; typecheck clean; worker ran 87 tests across usage page, start, layout-contracts, keymap, all pass · concerns: with details-open at start the first logs are 'details shown: no profiles' / 'status line no profiles' before the snapshot lands (07 should wait for 'details drawn'); full redraw each tick loses details scroll; CSS scoped by data-layout-owner unlike other plugins; minute timer and status slot never disposed; usage/main/start.ts header comment line runs past the wrap width
 ### Contract changes
+- usageFixture: as planned → plus export const USAGE_FIXTURE_VARIANTS · why: one home for the variant names · consumers: none · group 07
 ### Rulings
 - right bar redraws both bars only when its hidden state flips (updateHidden wrapper); a layout swap keeps plain applyHidden — a swap needing a redraw waits for the next resize · group 01 · group 01
 - sizedPane 'end' lives in two private mappings inside createSplitDivider plus a flipped nudge direction; createDividerHandle unchanged · group 01 · group 01
@@ -230,5 +231,6 @@ Review base: 951296f231ed299e8ca9a12bf918bf1f5e9462cc
 - status line's context meter carries no 'Context' label · group 06 · group 06
 - details with no plans draws a muted 'No profiles' line · group 06 · group 06
 - usage/main/start.test.ts gained layouts.register on its fake MainApi (outside the Files line) · group 06 · group 06
+- below RIGHT_BAR_MIN + MAIN_MIN the shown right bar overlays main (side bar's over precedent) instead of staying beside; details rows ellipsize/wrap to fit 200px; narrow group's second step drops width:'start' so its screenshot is taken at 520px — the beside-at-every-width rule left main ~10px at the 420px minimum, failing the fit check — if wrong, a narrow window covers main's right edge while details are open · lead
 ### Review rounds
 ### Test gate

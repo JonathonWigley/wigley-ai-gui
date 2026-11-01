@@ -1,6 +1,6 @@
 # 07 — Self-test and drive actions
 
-Status: not started
+Status: in progress
 Type: Batch
 Wave: 5 · Depends on: 06
 Plan: [plan.md](plan.md)

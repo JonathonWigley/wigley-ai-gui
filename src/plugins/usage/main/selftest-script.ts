@@ -33,7 +33,7 @@ const DETAILS_HIDDEN = '[usage] details hidden';
 const GROUPS: SelfTestGroup[] = [
   {
     name: 'details',
-    why: 'Space v u opens the usage details in the right bar beside the content and closes them again, and the status line and the bar each fit the minimum width.',
+    why: 'Space v u opens the usage details in the right bar and closes them again, and the status line and the bar each fit the minimum width.',
     steps: [
       {
         keys: TOGGLE,
@@ -51,7 +51,7 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'narrow',
-    why: 'In a narrow window the status line wraps between its groups and the right bar leaves the content its least width.',
+    why: 'In a narrow window the status line wraps between its groups and the right bar lies over the content at its least width.',
     steps: [
       {
         width: 520,
@@ -63,7 +63,6 @@ const GROUPS: SelfTestGroup[] = [
         keys: TOGGLE,
         expect: DETAILS_HIDDEN,
         screenshot: 'status-line-narrow',
-        width: 'start',
       },
     ],
   },
