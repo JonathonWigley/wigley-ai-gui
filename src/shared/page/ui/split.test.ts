@@ -347,7 +347,7 @@ describe('createSplit nudge', () => {
     { stored: 700, direction: 'left', width: 572, written: 572 },
     { stored: 700, direction: 'right', width: 700, written: undefined },
   ] as const)(
-    'nudges one step from the drawn width and stores only a changed width: $stored $direction',
+    'nudges one step from the drawn width, stores only a changed width and takes the press, at a limit too: $stored $direction',
     ({ stored, direction, width, written }) => {
       const saved = new Map<string, unknown>([['side', stored]]);
       const { split, handle, timers } = splitWithHandle(saved);
@@ -355,12 +355,29 @@ describe('createSplit nudge', () => {
       handle.rect = { left: 0, width: 4 };
       saved.delete('side');
 
-      split.nudge(direction);
+      const took = split.nudge(direction);
 
+      expect(took).toBe(true);
       expect(split.width()).toBe(width);
       expect(saved.get('side')).toBe(written);
       expect(handle.classes.has('is-nudged')).toBe(true);
       expect([...timers.armed.values()].map(({ ms }) => ms)).toEqual([1000]);
+    },
+  );
+
+  it.each(['up', 'down'] as const)(
+    'turns down a press off its axis and keeps its width: $0',
+    (direction) => {
+      const saved = new Map<string, unknown>([['side', 240]]);
+      const { split, handle } = splitWithHandle(saved);
+      handle.rect = { left: 0, width: 4 };
+
+      const took = split.nudge(direction);
+
+      expect(took).toBe(false);
+      expect(split.width()).toBe(240);
+      expect(saved.get('side')).toBe(240);
+      expect(handle.classes.has('is-nudged')).toBe(false);
     },
   );
 
@@ -382,8 +399,9 @@ describe('createSplit nudge', () => {
     const { split, handle } = splitWithHandle(saved);
     handle.clientRects = [];
 
-    split.nudge('right');
+    const took = split.nudge('right');
 
+    expect(took).toBe(true);
     expect(split.width()).toBe(240);
     expect(saved.has('side')).toBe(false);
     expect(handle.classes.has('is-nudged')).toBe(false);

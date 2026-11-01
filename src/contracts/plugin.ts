@@ -19,7 +19,7 @@ import type {
 import type { Log } from './log';
 import type { MarkdownRenderer } from './markdown';
 import type { MarkupEditor } from './markup';
-import type { ResizeTarget } from './panes';
+import type { FocusTarget, OuterPanes, ResizeTarget } from './panes';
 import type { Paths } from './paths';
 import type { Platform } from './platform';
 import type { ProcessRunner } from './processes';
@@ -447,10 +447,14 @@ export interface PageTransparency {
 // `setLayout` replaced the layout.
 // `transparency` is the page's one transparency override, shared by every
 // plugin (see `PageTransparency`).
-// `panes.setResizeTarget` hands the core the divider its resize commands move,
-// null for none, which moves the side bar; a view calls it after each
-// `keys.setScope`, since every change of the set scope drops the target and a
-// pushed scope keeps it.
+// `panes.setResizeTarget` hands the core the divider its resize commands move
+// and `panes.setFocusTarget` the view's own panes its focus commands move
+// between, null for none; a view calls both after each `keys.setScope`, since
+// every change of the set scope drops both targets and a pushed scope keeps
+// them. A resize asks the view's target, then the outer panes', then the side
+// bar, stopping at the first that returns true; a focus asks the view's
+// target, then the outer panes'. `panes.setOuterPanes` hands over the panes
+// around the view, kept across scope changes until their owner sets null.
 // `dependency` returns the exports of a plugin the manifest lists in
 // `dependsOn`, typed by the caller from that plugin's contract. `Ev` is the
 // plugin's own events and `Heard` the other plugins' events it hears, as
@@ -487,7 +491,11 @@ export interface PageApi<
   modes: Modes;
   shell: { setLayout(layout: ShellLayout): Disposable };
   transparency: PageTransparency;
-  panes: { setResizeTarget(target: ResizeTarget | null): void };
+  panes: {
+    setResizeTarget(target: ResizeTarget | null): void;
+    setFocusTarget(target: FocusTarget | null): void;
+    setOuterPanes(panes: OuterPanes | null): void;
+  };
   settings(): M['settings'];
   onSettingsChanged(listener: (settings: M['settings']) => void): Disposable;
   platform: Platform;

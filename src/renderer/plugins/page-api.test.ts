@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { Bridge } from '../../contracts/bridge';
 import type { Keymap } from '../../contracts/keymap';
-import type { ResizeTarget } from '../../contracts/panes';
+import type {
+  FocusTarget,
+  OuterPanes,
+  ResizeTarget,
+} from '../../contracts/panes';
 import type {
   Area,
   Mode,
@@ -107,7 +111,11 @@ function deps(overrides: Partial<PageApiDeps>): PageApiDeps {
     dependency: <E>() => undefined as E,
     bus: createEventBus(),
     layouts: {} as PageLayouts,
-    paneResize: { setTarget: () => {} },
+    paneTargets: {
+      setResizeTarget: () => {},
+      setFocusTarget: () => {},
+      setOuterPanes: () => {},
+    },
     ...overrides,
   };
 }
@@ -144,18 +152,34 @@ describe('createPageApi', () => {
     expect(heard).toEqual(['p.review']);
   });
 
-  it('hands the resize target to the pane resize', () => {
-    const handed: (ResizeTarget | null)[] = [];
+  it('hands the resize and focus targets and the outer panes to the pane targets', () => {
+    const handed: [string, ResizeTarget | FocusTarget | OuterPanes | null][] =
+      [];
     const api = createPageApi(
       manifest,
-      deps({ paneResize: { setTarget: (target) => handed.push(target) } }),
+      deps({
+        paneTargets: {
+          setResizeTarget: (target) => handed.push(['resize', target]),
+          setFocusTarget: (target) => handed.push(['focus', target]),
+          setOuterPanes: (panes) => handed.push(['outer', panes]),
+        },
+      }),
     );
-    const target: ResizeTarget = { nudge: () => {} };
+    const resize: ResizeTarget = { nudge: () => true };
+    const focus: FocusTarget = { move: () => true };
+    const outer: OuterPanes = { focus, resize };
 
-    api.panes.setResizeTarget(target);
-    api.panes.setResizeTarget(null);
+    api.panes.setResizeTarget(resize);
+    api.panes.setFocusTarget(focus);
+    api.panes.setOuterPanes(outer);
+    api.panes.setOuterPanes(null);
 
-    expect(handed).toEqual([target, null]);
+    expect(handed).toEqual([
+      ['resize', resize],
+      ['focus', focus],
+      ['outer', outer],
+      ['outer', null],
+    ]);
   });
 
   it("routes channel calls under the plugin's id", async () => {

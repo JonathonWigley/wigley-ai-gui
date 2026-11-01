@@ -1,4 +1,4 @@
-import type { ResizeDirection } from '../../../contracts/panes';
+import type { PaneDirection } from '../../../contracts/panes';
 import type { UiState } from '../../../contracts/ui-state';
 
 // A split's start pane width in CSS pixels, `initial` when nothing is known:
@@ -30,7 +30,7 @@ export function clampSplitWidth(
 // clamped.
 export function nudgedSplitWidth(
   width: number,
-  direction: ResizeDirection,
+  direction: Extract<PaneDirection, 'left' | 'right'>,
   limits: SplitLimits,
   span: number,
 ): number {

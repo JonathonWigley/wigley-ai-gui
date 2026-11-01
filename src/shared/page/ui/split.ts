@@ -3,7 +3,7 @@ import type { Timers } from '../../../contracts/ambient';
 import type { Disposable } from '../../../contracts/disposable';
 import {
   PANE_RESIZE_COMMANDS,
-  type ResizeDirection,
+  type PaneDirection,
   type ResizeTarget,
 } from '../../../contracts/panes';
 import type { UiState } from '../../../contracts/ui-state';
@@ -47,6 +47,8 @@ export interface Split extends ResizeTarget {
 // changed. A nudge steps from the drawn width, the stored one clamped to the
 // span, so a press at a limit writes nothing and keeps a wider stored width;
 // nudge does nothing while `handle` has no layout box or a drag is running.
+// `nudge` returns false for up and down, which are not the divider's axis,
+// and moves nothing; it returns true for left and right, moved or not.
 export interface SplitDividerOptions extends SplitLimits {
   uiState: UiState;
   stateKey: string;
@@ -179,10 +181,13 @@ export function createSplitDivider(options: SplitDividerOptions): SplitDivider {
         showWidth(storedSplitWidth(options.uiState, options.stateKey, options));
       }
     },
-    nudge(direction: ResizeDirection) {
+    nudge(direction: PaneDirection) {
+      if (direction === 'up' || direction === 'down') {
+        return false;
+      }
       const hasLayoutBox = handle.getClientRects().length > 0;
       if (isDisposed || !hasLayoutBox || isDragging()) {
-        return;
+        return true;
       }
       const { span } = options.measure();
       const drawn = clampSplitWidth(width, options, span);
@@ -192,6 +197,7 @@ export function createSplitDivider(options: SplitDividerOptions): SplitDivider {
         options.uiState.set(options.stateKey, next);
       }
       showPromptAfterNudge();
+      return true;
     },
     dispose() {
       if (isDisposed) {

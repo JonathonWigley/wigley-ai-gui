@@ -6,7 +6,10 @@ import type {
   InterceptBind,
   KeyBind,
 } from '../contracts/keymap';
-import type { PANE_RESIZE_COMMANDS } from '../contracts/panes';
+import type {
+  PANE_FOCUS_COMMANDS,
+  PANE_RESIZE_COMMANDS,
+} from '../contracts/panes';
 import type { QualifiedCommandId, QualifiedScopeId } from '../contracts/plugin';
 import { type builtInManifests, DIGITS } from './manifests';
 
@@ -14,7 +17,8 @@ type BuiltInManifest = (typeof builtInManifests)[number];
 
 // A page command of the core's own.
 type CorePageCommand =
-  (typeof PANE_RESIZE_COMMANDS)[keyof typeof PANE_RESIZE_COMMANDS];
+  | (typeof PANE_RESIZE_COMMANDS)[keyof typeof PANE_RESIZE_COMMANDS]
+  | (typeof PANE_FOCUS_COMMANDS)[keyof typeof PANE_FOCUS_COMMANDS];
 
 // A main-process command of a built-in plugin, or the core's.
 type BuiltInMainCommand =
@@ -198,6 +202,8 @@ export const defaultKeymap = {
     // ── Panes ──────────────────────────────────────────────────────────────
     { keys: '<A-S-h>', scope: 'any', command: 'panes.resizePaneLeft' },
     { keys: '<A-S-l>', scope: 'any', command: 'panes.resizePaneRight' },
+    { keys: '<A-S-j>', scope: 'any', command: 'panes.resizePaneDown' },
+    { keys: '<A-S-k>', scope: 'any', command: 'panes.resizePaneUp' },
 
     // ── Help ───────────────────────────────────────────────────────────────
     { keys: '<Leader>?', scope: 'any', command: 'keys.toggleHelp' },

@@ -24,7 +24,7 @@ import type { PageLayouts } from '../../shared/page/layout-host/show-layouts';
 import { qualify } from '../../shared/plugin-manifests';
 import type { ScopeStack } from '../key-scope';
 import type { LiveConfig } from '../live-config';
-import type { PaneResize } from '../pane-resize';
+import type { PaneTargets } from '../pane-targets';
 import type { PendingKeysHub } from '../pending-keys';
 
 // What the page core shares with every plugin's API. `scopeStack` holds
@@ -36,8 +36,8 @@ import type { PendingKeysHub } from '../pending-keys';
 // `setLayout` replaces the shell's layout. `transparency` is the page's one
 // transparency override, handed to every plugin as it is. `services` are the
 // ones every plugin shares; `uiState` gives each plugin its own scope of the
-// ui state. `layouts` shows each owner's layouts. `paneResize` takes the
-// divider a plugin hands the resize commands.
+// ui state. `layouts` shows each owner's layouts. `paneTargets` takes the
+// resize and focus targets and the outer panes a plugin hands the pane commands.
 export interface PageApiDeps {
   areas: Record<AreaName, Area>;
   modes: Modes;
@@ -53,7 +53,10 @@ export interface PageApiDeps {
   dependency<E>(pluginId: string): E;
   bus: EventBus;
   layouts: PageLayouts;
-  paneResize: Pick<PaneResize, 'setTarget'>;
+  paneTargets: Pick<
+    PaneTargets,
+    'setResizeTarget' | 'setFocusTarget' | 'setOuterPanes'
+  >;
 }
 
 // One plugin's page API: its channel and its events run under the manifest's
@@ -98,7 +101,9 @@ export function createPageApi(
     shell: { setLayout: (layout) => deps.setLayout(layout) },
     transparency: deps.transparency,
     panes: {
-      setResizeTarget: (target) => deps.paneResize.setTarget(target),
+      setResizeTarget: (target) => deps.paneTargets.setResizeTarget(target),
+      setFocusTarget: (target) => deps.paneTargets.setFocusTarget(target),
+      setOuterPanes: (panes) => deps.paneTargets.setOuterPanes(panes),
     },
     settings: () => settingsOf(config.current()),
     onSettingsChanged: (listener) =>
