@@ -1,6 +1,6 @@
 # 06 — Usage page: status-bar line and details bar
 
-Status: not started
+Status: in progress
 Type: Batch
 Wave: 4 · Depends on: 01, 05
 Plan: [plan.md](plan.md)

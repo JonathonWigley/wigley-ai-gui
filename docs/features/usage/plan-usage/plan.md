@@ -188,7 +188,7 @@ chat's bus events and exports. New folders get their `scripts/check-layers.mts` 
 - [x] [Chat forwards agent events and plan usage](04-chat-forwarding.md) — after 03
 
 ### Wave 3
-- [ ] [Usage main: poller and store](05-usage-main.md) — after 02, 03, 04
+- [x] [Usage main: poller and store](05-usage-main.md) — after 02, 03, 04
 
 ### Wave 4
 - [ ] [Usage page: status-bar line and details bar](06-usage-page.md) — after 01, 05
@@ -211,6 +211,7 @@ Review base: 951296f231ed299e8ca9a12bf918bf1f5e9462cc
 - 03 · 356bd8a · diff read: every Produces present; typecheck clean; worker ran 249 tests across adapter, fake harness and chat users, all pass · concerns: oxfmt --check fails on DESIGN.md and docs/keymap.md (committed in 444f673, predate this run); AGENTS.md claude-code row omits claude -p /usage; harness test checks plan-usage row labels only
 - 02 · eb3464b · diff read: MainServices.timers after clock, live adapter in main.ts passed to startMainParts; typecheck clean; no tests picked (no test changed) · concerns: oxfmt --check flags DESIGN.md and docs/keymap.md, unmodified since 444f673 (pre-existing)
 - 04 · e6b295a · diff read: ChatMainEvents, profiles() export, emit dep present; forwarding gated on isLive; typecheck clean; worker ran chat-sessions tests 100/100 · concerns: worker formatted its files via npm exec --offline oxfmt (local binary, no download); oxfmt --check still flags DESIGN.md and docs/keymap.md (pre-existing)
+- 05 · 4e82cc2 · diff read: contract, manifest, store, poller, main part, registration and layer entries present; typecheck clean; worker ran usage + manifests tests, 42 pass · concerns: toggleDetails page command has no page part until 06, self-test unrun; start now polls once per profile (live spawns claude -p /usage); a throwing polled() rejects an unhandled round promise; two profiles sharing a configDir share one plan
 ### Contract changes
 ### Rulings
 - right bar redraws both bars only when its hidden state flips (updateHidden wrapper); a layout swap keeps plain applyHidden — a swap needing a redraw waits for the next resize · group 01 · group 01
@@ -220,5 +221,9 @@ Review base: 951296f231ed299e8ca9a12bf918bf1f5e9462cc
 - turnUsageOf falls back to the largest window when the model key exists but has no numeric contextWindow · group 03 · group 03
 - get_context_usage is written after every result line, even with a queued turn pending · group 03 · group 03
 - a restored row whose profile is missing from chat's profiles emits no sessionOpened (openRow takes profileDir | null); usage learns of it only from its first agentEvent · group 04 · group 04
+- with… functions judge 'changes nothing' by value (same rows, same stale error, same usage object) so unchanged live rows send no changed · group 05 · group 05
+- withSessionUsage with usage null on a session with usage blanks it (replace reading) · group 05 · group 05
+- reschedule() is a no-op before start() and after dispose() · group 05 · group 05
+- with no harness, start registers no settings listener and returns no dispose · group 05 · group 05
 ### Review rounds
 ### Test gate

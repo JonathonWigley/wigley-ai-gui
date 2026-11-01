@@ -82,6 +82,7 @@ function startUsagePart(harnesses: Partial<AgentHarness>[]) {
       agentHarnesses: harnesses,
     },
     dependency: (pluginId: string) => (pluginId === 'chat' ? chat : {}),
+    layouts: { register: () => ({ dispose: () => undefined }) },
   } as unknown as Parameters<typeof usageMainPart.start>[0];
   usageMainPart.start(api);
   const emit = (event: string, data: unknown) => {

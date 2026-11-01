@@ -1,0 +1,63 @@
+/* The default usage layout's look, under each part's root. */
+
+/* The status-bar line: groups wrap between one another, never inside one, so
+   a narrow window stacks them at the bar's end without clipping. */
+[data-layout-owner='usage'][data-layout='default'].usage-status-line {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: var(--wg-text-12);
+  font-variant-numeric: tabular-nums;
+  gap: var(--wg-space-3);
+  justify-content: flex-end;
+  padding: 0 var(--wg-space-2);
+}
+
+[data-layout-owner='usage'][data-layout='default'] .usage-group {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--wg-space-1_5);
+  white-space: nowrap;
+}
+
+[data-layout-owner='usage'][data-layout='default'] .usage-divider {
+  align-self: stretch;
+  border-left: 1px solid var(--wg-border-default);
+  min-height: var(--wg-statusbar-height);
+}
+
+[data-layout-owner='usage'][data-layout='default'] .usage-note,
+[data-layout-owner='usage'][data-layout='default'] .usage-group.is-stale {
+  color: var(--wg-fg-tertiary);
+}
+
+/* The details: a section per profile, then the shown session. */
+[data-layout-owner='usage'][data-layout='default'].usage-details {
+  display: flex;
+  flex-direction: column;
+  font-variant-numeric: tabular-nums;
+  gap: var(--wg-space-3);
+  padding: var(--wg-space-2);
+}
+
+[data-layout-owner='usage'][data-layout='default'] .usage-trailing {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--wg-space-1_5);
+  white-space: nowrap;
+}
+
+[data-layout-owner='usage'][data-layout='default'] .usage-freshness,
+[data-layout-owner='usage'][data-layout='default'] .usage-error {
+  font-size: var(--wg-text-12);
+  margin: 0;
+  padding: 0 var(--wg-space-2);
+}
+
+[data-layout-owner='usage'][data-layout='default'] .usage-freshness {
+  color: var(--wg-fg-tertiary);
+}
+
+[data-layout-owner='usage'][data-layout='default'] .usage-error {
+  color: var(--wg-status-error);
+}

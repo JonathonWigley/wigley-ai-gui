@@ -1,0 +1,30 @@
+/* A small mark at full strength: the fill takes the status colour of its
+   tone, over a hairline-coloured track. */
+.ui-meter {
+  display: inline-block;
+  flex: none;
+  width: calc(var(--wg-space-8) * 1.5);
+  height: var(--wg-space-1);
+  overflow: hidden;
+  border-radius: var(--wg-radius-sm);
+  background: var(--wg-border-default);
+}
+
+.ui-meter-fill {
+  display: block;
+  width: calc(var(--ui-meter-percent) * 1%);
+  height: 100%;
+  border-radius: var(--wg-radius-sm);
+}
+
+.ui-meter[data-tone='normal'] > .ui-meter-fill {
+  background: var(--wg-status-success);
+}
+
+.ui-meter[data-tone='warning'] > .ui-meter-fill {
+  background: var(--wg-status-warning);
+}
+
+.ui-meter[data-tone='critical'] > .ui-meter-fill {
+  background: var(--wg-status-error);
+}

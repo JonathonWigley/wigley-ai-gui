@@ -9,6 +9,7 @@ import { notesPagePart } from './notes/page/start';
 import { primerPagePart } from './primer/page/start';
 import { sessionsPagePart } from './sessions/page/start';
 import { settingsPagePart } from './settings/page/start';
+import { usagePagePart } from './usage/page/start';
 
 // Every built-in plugin's page part, in start order where no dependency says
 // otherwise.
@@ -23,4 +24,5 @@ export const pageParts: readonly PagePart[] = [
   settingsPagePart,
   backlogPagePart,
   notesPagePart,
+  usagePagePart,
 ];

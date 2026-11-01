@@ -190,6 +190,7 @@ export const defaultKeymap = {
       scope: 'any',
       command: 'backlog.toggleAgentReadyOnly',
     },
+    { keys: '<Leader>vu', scope: 'any', command: 'usage.toggleDetails' },
 
     // ── Tabs and sessions ──────────────────────────────────────────────────
     { keys: '<A-S-o>', scope: 'any', command: 'sessions.nextSession' },

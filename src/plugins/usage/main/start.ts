@@ -10,6 +10,7 @@ import {
 } from '../../chat/contract';
 import type { SessionsMainEvents } from '../../sessions/contract';
 import type { UsageChannel } from '../contract';
+import layoutTypes from '../layouts/layout.d.ts?raw';
 import { usageManifest } from '../manifest';
 import { createPlanPoller } from './plan-poller';
 import {
@@ -30,7 +31,7 @@ type UsageApi = MainApi<
     QualifiedEvents<'sessions', SessionsMainEvents>
 >;
 
-// Serves the page the usage snapshot and sends it on every change. Seeds a
+// Registers usage's layouts. Serves the page the usage snapshot and sends it on every change. Seeds a
 // plan per chat profile, polls each through the Claude harness every
 // `pollIntervalSeconds` (rescheduled on a settings change), and hears
 // `chat.planUsage` (live rows), `chat.sessionOpened` (a session's profile),
@@ -39,6 +40,7 @@ export const usageMainPart: MainPart<typeof usageManifest> = {
   manifest: usageManifest,
   start(api: UsageApi) {
     const { services, channel, events } = api;
+    const layouts = api.layouts.register({ layoutTypes });
     const chat = api.dependency<ChatMainExports>('chat');
     let state = EMPTY_USAGE_STATE;
     const apply = (next: UsageState) => {
@@ -72,7 +74,7 @@ export const usageMainPart: MainPart<typeof usageManifest> = {
         'usage',
         `no agent harness "${CHAT_HARNESS_ID}": plan usage is not read`,
       );
-      return { commands: {} };
+      return { commands: {}, dispose: () => layouts.dispose() };
     }
     const poller = createPlanPoller({
       timers: services.timers,
@@ -93,6 +95,7 @@ export const usageMainPart: MainPart<typeof usageManifest> = {
     return {
       commands: {},
       dispose() {
+        layouts.dispose();
         settingsListener.dispose();
         poller.dispose();
       },

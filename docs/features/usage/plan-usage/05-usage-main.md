@@ -1,6 +1,6 @@
 # 05 — Usage main: poller and store
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 3 · Depends on: 02, 03, 04
 Plan: [plan.md](plan.md)
@@ -69,4 +69,4 @@ Commit:    one commit for the group
 
 ## Proof
 
-<written by wigley:make: commit sha, proof result, concerns; empty until the group lands>
+Commit 4e82cc2 · proof: diff read: contract, manifest, store, poller, main part, registration and layer entries present; typecheck clean; worker ran usage + manifests tests, 42 pass · concerns: toggleDetails page command has no page part until 06, self-test unrun; start now polls once per profile (live spawns claude -p /usage); a throwing polled() rejects an unhandled round promise; two profiles sharing a configDir share one plan

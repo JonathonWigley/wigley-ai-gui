@@ -24,6 +24,7 @@ import {
   keyStack,
 } from '../../../shared/page/ui/key-anchors';
 import { keyPrompt } from '../../../shared/page/ui/key-prompt';
+import { type MeterTone, meter } from '../../../shared/page/ui/meter';
 import { row } from '../../../shared/page/ui/row';
 import { sectionHeader } from '../../../shared/page/ui/section-header';
 import { sheet } from '../../../shared/page/ui/sheet';
@@ -178,6 +179,7 @@ function sectionSpecs(
     section('Tag', tagCells),
     section('ToggleMark', toggleMarkCells),
     section('StatusDot', statusDotCells),
+    section('Meter', meterCells),
     section('InputFrame', inputFrameCells),
     section('Row, list', listRowCells),
     section('Row, tree', treeRowCells),
@@ -455,6 +457,19 @@ function statusDotCells(): SampleCell[][] {
   ];
   return [
     statuses.map((status) => cell(statusDot(status), capitalised(status))),
+  ];
+}
+
+function meterCells(): SampleCell[][] {
+  const samples: { percent: number; tone: MeterTone }[] = [
+    { percent: 30, tone: 'normal' },
+    { percent: 75, tone: 'warning' },
+    { percent: 95, tone: 'critical' },
+  ];
+  return [
+    samples.map(({ percent, tone }) =>
+      cell(meter(percent, tone), `${capitalised(tone)}, ${percent}%`),
+    ),
   ];
 }
 
