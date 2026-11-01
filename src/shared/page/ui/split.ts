@@ -1,5 +1,6 @@
 import './split.css';
 import type { Timers } from '../../../contracts/ambient';
+import type { CommandId } from '../../../contracts/commands';
 import type { Disposable } from '../../../contracts/disposable';
 import {
   PANE_RESIZE_COMMANDS,
@@ -17,7 +18,7 @@ import {
 } from './split-width';
 
 // How long the handle's resize prompt shows after a keyboard nudge.
-const NUDGE_PROMPT_MS = 1000;
+export const NUDGE_PROMPT_MS = 1000;
 
 export interface SplitOptions extends SplitLimits {
   uiState: UiState;
@@ -68,6 +69,38 @@ export interface SplitDivider extends ResizeTarget {
   dispose(): void;
 }
 
+// One end of a resize prompt: the resize command whose key it shows, and the
+// chevron beside that key.
+export interface ResizePromptEnd {
+  command: CommandId;
+  chevron: string;
+}
+
+// A divider handle's resize prompt, `span.ui-split-prompt`: `start`'s key and
+// chevron, then `end`'s chevron and key (`⌥⇧H ◂ ▸ ⌥⇧L`). Its owner appends
+// `element` to the handle and disposes `anchors`.
+export function splitResizePrompt(
+  anchor: AnchorNamer<never>,
+  start: ResizePromptEnd,
+  end: ResizePromptEnd,
+): { element: HTMLElement; anchors: Disposable[] } {
+  const startAnchor = element('span');
+  const endAnchor = element('span');
+  const prompt = keyEdge('ui-split-prompt', [
+    startAnchor,
+    keyChevron(start.chevron),
+    keyChevron(end.chevron),
+    endAnchor,
+  ]);
+  return {
+    element: prompt,
+    anchors: [
+      anchor(startAnchor, start.command),
+      anchor(endAnchor, end.command),
+    ],
+  };
+}
+
 // The divider core every split and the side bar share: the drag on `handle`,
 // the width it opens at from `uiState`, the keyboard nudge, and the resize
 // prompt drawn centred on `handle`, shown while hovered, dragged
@@ -75,20 +108,13 @@ export interface SplitDivider extends ResizeTarget {
 // `handle` in the document; its owner removes it.
 export function createSplitDivider(options: SplitDividerOptions): SplitDivider {
   const { handle } = options;
-  const leftAnchor = element('span');
-  const rightAnchor = element('span');
-  handle.append(
-    keyEdge('ui-split-prompt', [
-      leftAnchor,
-      keyChevron('◂'),
-      keyChevron('▸'),
-      rightAnchor,
-    ]),
+  const prompt = splitResizePrompt(
+    options.anchor,
+    { command: PANE_RESIZE_COMMANDS.left, chevron: '◂' },
+    { command: PANE_RESIZE_COMMANDS.right, chevron: '▸' },
   );
-  const anchors: Disposable[] = [
-    options.anchor(leftAnchor, PANE_RESIZE_COMMANDS.left),
-    options.anchor(rightAnchor, PANE_RESIZE_COMMANDS.right),
-  ];
+  handle.append(prompt.element);
+  const { anchors } = prompt;
 
   let width = storedSplitWidth(options.uiState, options.stateKey, options);
   let widthAtDragStart = width;

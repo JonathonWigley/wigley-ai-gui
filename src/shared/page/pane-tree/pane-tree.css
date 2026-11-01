@@ -1,0 +1,61 @@
+/* The tree fills its owner's box; each split shares its span between its two
+   sides by `--pane-tree-ratio`, the handle between them keeping its own size.
+   The handle's line and resize prompt are `Split`'s (`split.css`). */
+.pane-tree,
+.pane-tree-split {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+.pane-tree > * {
+  flex: 1 1 0;
+}
+
+.pane-tree-split.is-column {
+  flex-direction: column;
+}
+
+.pane-tree-split > :first-child {
+  flex: var(--pane-tree-ratio) 1 0;
+}
+
+.pane-tree-split > :last-child {
+  flex: calc(1 - var(--pane-tree-ratio)) 1 0;
+}
+
+.pane-tree-split > .pane-tree-handle {
+  flex: 0 0 var(--wg-space-1);
+}
+
+.pane-tree-split.is-column > .pane-tree-handle {
+  cursor: row-resize;
+}
+
+.pane-tree-split.is-column > .pane-tree-handle::after {
+  top: 50%;
+  right: 0;
+  bottom: auto;
+  left: 0;
+  width: auto;
+  height: 1px;
+}
+
+.pane-tree-slot {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Drawn over the slot's content, so the owner's backgrounds do not hide it. */
+.pane-tree-slot.is-focused::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border: 1px solid var(--wg-focus-border);
+  pointer-events: none;
+}

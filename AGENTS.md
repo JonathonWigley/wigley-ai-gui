@@ -100,6 +100,10 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  session form lifecycle (the open forms' reducer, the close guard, send and close from main, the page
                  events queue)
                  → imported only by src/renderer and plugins' page/ parts
+    pane-tree/   the pane tree: panes as leaves of nested splits, kept as proportions (`pane-tree.ts`: split, close,
+                 the pane toward a direction, focus, swap and nudge → pure), and its view (`pane-tree-view.ts`: a slot
+                 per pane its owner fills, drag handles, the focused border, the outer focus and resize targets); a
+                 leaf is an id string, so it knows nothing of sessions; Sessions mode is its owner
     ui/          the design primitives `DESIGN.md` lists, each a builder with its CSS beside it; `icon.ts` is the only
                  module naming the Codicons font
 src/main/        core main process; main.ts is its composition root
