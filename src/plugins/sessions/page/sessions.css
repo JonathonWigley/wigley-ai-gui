@@ -173,6 +173,12 @@
   scrollbar-width: none;
 }
 
+/* A tab keeps its full width, so a narrow strip scrolls instead of clipping
+   its icons. */
+.session-tabs .ui-tab {
+  flex: none;
+}
+
 /* A tab draws its icon alone: `fg-secondary` at rest, `fg` on hover or
    while active. */
 .session-tab-icon {

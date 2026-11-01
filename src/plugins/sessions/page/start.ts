@@ -162,8 +162,8 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
 
     // Tells the visible tab, when it changed, that it shows; with none
     // visible while the mode shows, sets the `idle` scope. `isShownAgain`
-    // tells an unchanged visible tab again, after a pane move took keyboard
-    // focus from its element.
+    // tells an unchanged visible tab again, after a pane move or a layout
+    // redraw took keyboard focus from its element.
     const checkVisible = (isShownAgain = false) => {
       const sessionId = view.panes.focusedSessionId();
       const tab =
@@ -514,7 +514,10 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       defaultLayout,
       read: readSessionsLayout,
       userLayout: () => api.settings().layout,
-      setLayouts: (shown) => view.setLayouts(shown),
+      setLayouts: (shown) => {
+        view.setLayouts(shown);
+        checkVisible(true);
+      },
     });
 
     const openPreview = previewToggle(mode, view, (message) =>
