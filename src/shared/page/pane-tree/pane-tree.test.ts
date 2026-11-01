@@ -345,6 +345,14 @@ describe('nudgeFocused', () => {
       leastPane: 0.25,
     },
     {
+      name: 'right from a ratio past the limit, keeping the stored one',
+      from: tree(row(0.9, leaf('a'), leaf('b')), 'a'),
+      presses: ['right'],
+      expected: row(0.9, leaf('a'), leaf('b')),
+      owned: [true],
+      leastPane: 0.25,
+    },
+    {
       name: 'right past a side whose panes are stacked',
       from: tree(row(0.5, leaf('a'), column(0.5, leaf('b'), leaf('c'))), 'a'),
       presses: ['right', 'right', 'right', 'right'],

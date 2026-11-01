@@ -59,7 +59,8 @@ export interface PaneTreeView {
   // Swaps the focused pane with the pane toward `direction`; false at the edge.
   swap(direction: PaneDirection): boolean;
   // Focus moves between the panes, and resize moves the focused pane's
-  // divider, `owned` for any direction with a split of its axis above it.
+  // divider, `owned` for any direction with a split of its axis above it
+  // whose box has a span.
   outer: OuterPanes;
   dispose(): void;
 }
@@ -328,7 +329,10 @@ export function createPaneTreeView(options: PaneTreeViewOptions): PaneTreeView {
         throw new Error('The nudged split has no box drawn');
       }
       const { span, handle } = measured(box);
-      if (span <= 0 || box.divider.isDragging()) {
+      if (span <= 0) {
+        return null;
+      }
+      if (box.divider.isDragging()) {
         return { step: 0, least: { pane: 0, handle: 0 } };
       }
       nudged = box;

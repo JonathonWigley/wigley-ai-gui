@@ -282,6 +282,40 @@ describe('createPaneTreeView drag', () => {
     expect(changed).toEqual([view.tree()]);
     expect(outerRatio(view)).toBeCloseTo(0.6, 9);
   });
+
+  // A 1504px box leaves a 1500px span, so a stored 0.9 draws at 1220 / 1500,
+  // the second pane keeping its 280px.
+  it('moves the divider from where it is drawn when the stored ratio is clamped', () => {
+    const { view } = viewOf({
+      root: row(0.9, leaf('a'), leaf('b')),
+      focusedId: 'a',
+    });
+    asPane(view.element).rect = { left: 0, top: 0, width: 1504, height: 600 };
+    resized();
+    const { handle } = outerSplit(view, 1504);
+    handle.dispatch('pointerdown', { button: 0, pointerId: 1, clientX: 1220 });
+    handle.dispatch('pointermove', { pointerId: 1, clientX: 1220 });
+    const pressed = outerRatio(view);
+    handle.dispatch('pointermove', { pointerId: 1, clientX: 1120 });
+
+    expect(pressed).toBeCloseTo(1220 / 1500, 9);
+    expect(outerRatio(view)).toBeCloseTo(1120 / 1500, 9);
+  });
+});
+
+describe('createPaneTreeView resize keys', () => {
+  it('turns down a press when the split box has no span', () => {
+    const { view, changed } = viewOf({
+      root: row(0.4, leaf('a'), leaf('b')),
+      focusedId: 'a',
+    });
+    outerSplit(view, 0);
+
+    const owned = view.outer.resize.nudge('right');
+
+    expect(owned).toBe(false);
+    expect(changed).toEqual([]);
+  });
 });
 
 describe('createPaneTreeView focused', () => {

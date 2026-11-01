@@ -163,13 +163,15 @@ export function swapToward(
 // `first`, right and down growing it, each side held as `clampedRatio` holds
 // it. The divider is the leaf's right or lower one (the
 // nearest split of that axis with the leaf in `first`), else its left or upper
-// one. `limits` gives the step and least shares for the split it picked.
-// `owned` is false, with the tree unchanged, only when no split above the leaf
-// has that axis; a ratio that does not move returns the same tree.
+// one. `limits` gives the step and least shares for the split it picked, or
+// null when that split has no span to move in. `owned` is false, with the tree
+// unchanged, when no split above the leaf has that axis or `limits` gave null;
+// a press that leaves the drawn ratio where it is returns the same tree, so a
+// stored ratio past the limit is kept.
 export function nudgeFocused(
   tree: PaneTree,
   direction: PaneDirection,
-  limits: (split: PaneSplit) => { step: number; least: LeastShares },
+  limits: (split: PaneSplit) => { step: number; least: LeastShares } | null,
 ): { tree: PaneTree; owned: boolean } {
   const axis: SplitAxis =
     direction === 'left' || direction === 'right' ? 'row' : 'column';
@@ -183,10 +185,17 @@ export function nudgeFocused(
     return { tree, owned: false };
   }
   const { split } = divider;
-  const { step, least } = limits(split);
+  const shares = limits(split);
+  if (shares === null) {
+    return { tree, owned: false };
+  }
+  const { step, least } = shares;
   const signedStep = direction === 'left' || direction === 'up' ? -step : step;
   const drawn = clampedRatio(split, split.ratio, least);
   const ratio = clampedRatio(split, drawn + signedStep, least);
+  if (ratio === drawn) {
+    return { tree, owned: true };
+  }
   return { tree: withSplitRatio(tree, split, ratio), owned: true };
 }
 

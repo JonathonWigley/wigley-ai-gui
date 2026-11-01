@@ -35,6 +35,7 @@ describe('createPaneTargets', () => {
     view: Answer;
     outer: Answer;
     sideBar: boolean;
+    pushed?: boolean;
     direction: PaneDirection;
     asked: string[];
     logged: string[];
@@ -84,13 +85,23 @@ describe('createPaneTargets', () => {
       asked: ['view down', 'outer down', 'side bar down'],
       logged: ['no pane divider runs down'],
     },
+    {
+      row: 'scope pushed, view true',
+      view: true,
+      outer: true,
+      sideBar: true,
+      pushed: true,
+      direction: 'right',
+      asked: ['view right'],
+      logged: [],
+    },
   ])(
     'resizes through the first target that takes it: $row',
-    ({ view, outer, sideBar, direction, asked, logged }) => {
+    ({ view, outer, sideBar, pushed = false, direction, asked, logged }) => {
       const fakes = recordingTargets();
       const targets = createPaneTargets(
         fakes.resizer('side bar', sideBar),
-        () => false,
+        () => pushed,
         fakes.log,
       );
       if (view !== null) {
