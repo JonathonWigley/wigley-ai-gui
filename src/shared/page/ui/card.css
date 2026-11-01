@@ -73,3 +73,11 @@
   padding: 0 var(--wg-space-2) var(--wg-space-2);
   padding-left: calc(var(--wg-space-2) * 2 + var(--wg-icon-size));
 }
+
+/* The leading part is a status dot, `--wg-space-2` wide. */
+.ui-collapsible--plain.ui-collapsible--leading .ui-collapsible-body {
+  padding-left: calc(
+    var(--wg-space-2) * 2 + var(--wg-icon-size) + var(--wg-space-2) +
+      var(--wg-space-2)
+  );
+}

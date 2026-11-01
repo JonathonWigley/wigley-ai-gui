@@ -49,6 +49,7 @@ export function createCollapsibleCard(
   let chevron = icon('chevron-right');
   head.append(chevron);
   if (options.leading) {
+    root.classList.add('ui-collapsible--leading');
     head.append(options.leading);
   }
   const summary = element('span', 'ui-collapsible-summary', options.summary);
