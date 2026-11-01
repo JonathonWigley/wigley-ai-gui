@@ -1,5 +1,12 @@
 export type PaneDirection = 'left' | 'right' | 'up' | 'down';
 
+export const PANE_DIRECTIONS: readonly PaneDirection[] = [
+  'left',
+  'right',
+  'up',
+  'down',
+];
+
 // A divider between two panes that the resize keys move one step. `nudge`
 // returns false only when the direction's axis is not the divider's own (a
 // side-by-side split given up or down); a divider at a limit or with no layout

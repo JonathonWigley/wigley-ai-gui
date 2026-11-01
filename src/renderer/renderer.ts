@@ -9,9 +9,9 @@ import './shell/shell.css';
 import type { Clock, Timers } from '../contracts/ambient';
 import type { CommandId } from '../contracts/commands';
 import {
+  PANE_DIRECTIONS,
   PANE_FOCUS_COMMANDS,
   PANE_RESIZE_COMMANDS,
-  type PaneDirection,
 } from '../contracts/panes';
 import type { PageCommandContext, PageServices } from '../contracts/plugin';
 import type { AppConfig } from '../contracts/settings';
@@ -59,13 +59,6 @@ const INITIAL_SCOPE = 'any';
 
 // The plugin whose exports anchor the shell chrome's key hints.
 const KEYS_PLUGIN_ID = 'keys';
-
-const PANE_DIRECTIONS: readonly PaneDirection[] = [
-  'left',
-  'right',
-  'up',
-  'down',
-];
 
 const timers: Timers = {
   set: (run, ms) => window.setTimeout(run, ms),

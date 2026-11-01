@@ -7,10 +7,10 @@ import type {
   ScrollStep,
   TextEditor,
 } from '../../../contracts/editor';
+import type { PaneDirection } from '../../../contracts/panes';
 import type { PageCommandContext, ToastTone } from '../../../contracts/plugin';
 import type { PrimerBody, PrimerEntry, PrimerFeature } from '../contract';
 import { boxKey, type PrimerBox } from './boxes';
-import type { PaneDirection } from '../../../contracts/panes';
 import {
   closePrimerFromMain,
   guardClose,

@@ -150,7 +150,9 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  every built-in default key, main.ts and page.ts the parts each root starts
   sessions/      manifest.ts, contract.ts, main/ (the session list — rows, the selected session, tool routing — relay,
                  endpoint files, MCP adapter → the only @modelcontextprotocol import), page/ (Sessions mode: the
-                 sidebar, the pane tree of whole sessions with its split, swap and close commands and the shared list picker's `picker` scope, each session's tabs, the row parts other plugins add, and the layout preview rows),
+                 sidebar, the pane tree of whole sessions with its split, swap and close commands and the shared
+                 list picker's `picker` scope, each session's tabs, the row parts other plugins add, and the layout
+                 preview rows),
                  layouts/ (the sessions Layout contract and the built-in `default` layout)
   agents/        manifest.ts, contract.ts, roster.ts (the pure reducer folding agent events into a session's roster),
                  main/ (hears `chat.agentEvent`, keeps each session's roster, appends each event to

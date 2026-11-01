@@ -1,7 +1,7 @@
 import type { BaseKit } from '../../../shared/page/layout-host/kit';
 
-// The sessions layout contract: what a layout in `layouts/sessions/<name>/layout.js` draws Sessions mode's side bar
-// and tab bar with. A layout defines only the parts it changes; every part it leaves out, and every part that throws,
+// The sessions layout contract: what a layout in `layouts/sessions/<name>/layout.js` draws Sessions mode's side bar,
+// its chat panes and each session's tab bar with. A layout defines only the parts it changes; every part it leaves out, and every part that throws,
 // returns no element appended to `parent`, or appends any other node to `parent`, is drawn by `default` instead. The
 // app sets `data-layout-owner="sessions"` and `data-layout="<name>"` on the element each part returns, `<name>` being
 // the layout that drew it, so `[data-layout-owner="sessions"][data-layout="<name>"] …` in a layout's CSS selects only

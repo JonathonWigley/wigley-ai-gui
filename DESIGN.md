@@ -229,7 +229,7 @@ The keyboard is first; the mouse works everywhere.
     toward its direction: `⌥I ‹` and `› ⌥O` at the tab strip's ends, `⌥⇧I ▲ ▼ ⌥⇧O` on the session
     list's header, `⌃H ‹ F1 of 6 › ⌃L` on a card's header, `⌥L doc ›` at a split's edge. A pair
     hides when there is nothing else to move to. A split handle's resize prompt `⌥⇧H ◂ ▸ ⌥⇧L`
-    shows only on hover, during a drag and for a moment after a keyboard resize (Split, below).
+    (`⌥⇧K ▴ ▾ ⌥⇧J` on a divider between stacked panes) shows only on hover, during a drag and for a moment after a keyboard resize (Split, below).
   - **Cursor prompt:** an action on the selected row, with its label, on the cursor row only
     (`s star  r rename  d trash`): at the row's end in Docs, and in Settings and Backlog, where it
     wraps when the row has no room; on a line of its own under the label in Primer; in a column of
@@ -385,8 +385,8 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   and key hints right-aligned in `fg-tertiary`; dialogs, and chat's full-size image viewer, sit over the `scrim`.
 - **Empty states:** one line saying what to do, and the key or action that does it. No
   illustrations.
-- **Splits** resize by drag and by `Alt+Shift+h`/`Alt+Shift+l` (`docs/keymap.md`), the side bar too, and the
-  app keeps the widths.
+- **Splits** resize by drag and by `Alt+Shift+h`/`Alt+Shift+l` (`docs/keymap.md`), the side bar too, and
+  stacked chat panes by `Alt+Shift+j`/`Alt+Shift+k`; the app keeps the sizes.
 
 ## Icons and copy
 

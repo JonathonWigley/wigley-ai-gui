@@ -1,5 +1,9 @@
 import type { Timers } from '../../../contracts/ambient';
-import type { OuterPanes, PaneDirection } from '../../../contracts/panes';
+import {
+  PANE_DIRECTIONS,
+  type OuterPanes,
+  type PaneDirection,
+} from '../../../contracts/panes';
 import type { ShownLayouts } from '../../../contracts/plugin';
 import { element } from '../../../shared/page/dom';
 import {
@@ -87,13 +91,6 @@ export interface SessionsView {
   isPreviewShown(): boolean;
   stepPreview(by: 1 | -1): void;
 }
-
-const PANE_DIRECTIONS: readonly PaneDirection[] = [
-  'left',
-  'right',
-  'up',
-  'down',
-];
 
 // Sessions mode's two parts: the side bar of session rows, which the shell
 // draws in its side bar, and the root holding the chat panes. Each row's

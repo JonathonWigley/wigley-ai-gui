@@ -180,7 +180,8 @@ export interface SettingsViewDeps {
   toast(text: string, tone: ToastTone): void;
   setScope(scope: 'sections' | 'rows'): void;
   // Hands over the target the focus keys move between the sections and the
-  // rows; the view calls it after each `setScope`, which drops it.
+  // rows; the view calls it after each `setScope`, since a change of the set
+  // scope drops it.
   setFocusTarget(target: FocusTarget): void;
   pushScope(scope: 'box' | 'picker'): PushedScope;
   addOverlay(element: HTMLElement): Disposable;

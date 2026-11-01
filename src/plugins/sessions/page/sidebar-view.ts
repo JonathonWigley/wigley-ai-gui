@@ -31,8 +31,8 @@ export interface SidebarView {
 
 // Sessions mode's side bar, drawn through the sessions layout: the `sideBar`
 // pane (a "Sessions" header holding the previous and next session prompts,
-// hidden while no session a step reaches is there to move to) over one `row` per
-// session in main's order. The view keeps each row's click, which activates
+// hidden while no session a step reaches is there to move to) over one `row`
+// per session in main's order. The view keeps each row's click, which activates
 // its session, its tooltip, and the selected row's mark.
 export function mountSidebarView(
   activate: (sessionId: string) => void,

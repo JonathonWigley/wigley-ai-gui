@@ -1319,7 +1319,6 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   };
 }
 
-// A row's `cursorActions` slot, which the cursor prompt moves into.
 // The pane a focus move toward `direction` reaches from `from`: right from the
 // list to the detail, left back; null for every other move.
 function paneTo(
@@ -1335,6 +1334,7 @@ function paneTo(
   return null;
 }
 
+// A row's `cursorActions` slot, which the cursor prompt moves into.
 function cursorActionsSlot(): HTMLElement {
   return element('span', 'backlog-row-actions-slot');
 }
