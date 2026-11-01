@@ -158,9 +158,10 @@ export function swapToward(
   return { root: withLeavesRenamed(tree.root, swapped), focusedId: moved };
 }
 
-// Moves the focused leaf's nearest divider on `direction`'s axis by `step`,
-// left and up shrinking `first`, right and down growing it, each side held as
-// `clampedRatio` holds it. The divider is the leaf's right or lower one (the
+// Moves the focused leaf's nearest divider on `direction`'s axis by `step`
+// from its drawn ratio (its ratio held by `least`), left and up shrinking
+// `first`, right and down growing it, each side held as `clampedRatio` holds
+// it. The divider is the leaf's right or lower one (the
 // nearest split of that axis with the leaf in `first`), else its left or upper
 // one. `limits` gives the step and least shares for the split it picked.
 // `owned` is false, with the tree unchanged, only when no split above the leaf
@@ -184,7 +185,8 @@ export function nudgeFocused(
   const { split } = divider;
   const { step, least } = limits(split);
   const signedStep = direction === 'left' || direction === 'up' ? -step : step;
-  const ratio = clampedRatio(split, split.ratio + signedStep, least);
+  const drawn = clampedRatio(split, split.ratio, least);
+  const ratio = clampedRatio(split, drawn + signedStep, least);
   return { tree: withSplitRatio(tree, split, ratio), owned: true };
 }
 

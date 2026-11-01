@@ -73,7 +73,8 @@ hjkl is the direction in every layer; the modifier picks the verb.
   upper one. Key repeat supplies the speed. A press resizes the view's own focused pane first, then
   the focused chat pane, then the side bar (left and right only): with no split pane focused and one
   chat pane (a Chat tab, Settings mode, Docs mode's tree, the Backlog homes) the keys resize the side
-  bar. A divider stops where the pane it squeezes reaches its least size (280 px wide, 160 px tall). The commands are the
+  bar. A view's divider that is hidden (its split stacked, or its start pane hidden) passes the press on. A divider
+  stops where the pane it squeezes reaches its least size (280 px wide, 160 px tall). The commands are the
   core's `panes.resizePaneLeft`, `panes.resizePaneRight`, `panes.resizePaneUp` and
   `panes.resizePaneDown`, rebound in `keymap.json` like any other. Each divider shows the prompt
   `⌥⇧H ◂ ▸ ⌥⇧L` (`⌥⇧K ▴ ▾ ⌥⇧J` on a divider between stacked panes) while the pointer is over it,

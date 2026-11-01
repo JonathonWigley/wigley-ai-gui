@@ -8,9 +8,11 @@ export const PANE_DIRECTIONS: readonly PaneDirection[] = [
 ];
 
 // A divider between two panes that the resize keys move one step. `nudge`
-// returns false only when the direction's axis is not the divider's own (a
-// side-by-side split given up or down); a divider at a limit or with no layout
-// box stays and still returns true.
+// returns false, moving nothing, when the direction's axis is not the
+// divider's own (a side-by-side split given up or down) or the divider has no
+// layout box (its split stacked or its start pane hidden), so the press goes
+// on to the next divider; a divider at a limit or mid-drag stays and still
+// returns true.
 export interface ResizeTarget {
   nudge(direction: PaneDirection): boolean;
 }

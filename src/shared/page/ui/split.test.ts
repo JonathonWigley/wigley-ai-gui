@@ -394,14 +394,14 @@ describe('createSplit nudge', () => {
     expect(handle.classes.has('is-nudged')).toBe(false);
   });
 
-  it('does nothing while the handle has no layout box', () => {
+  it('passes the press on, moving nothing, while the handle has no layout box', () => {
     const saved = new Map<string, unknown>();
     const { split, handle } = splitWithHandle(saved);
     handle.clientRects = [];
 
     const took = split.nudge('right');
 
-    expect(took).toBe(true);
+    expect(took).toBe(false);
     expect(split.width()).toBe(240);
     expect(saved.has('side')).toBe(false);
     expect(handle.classes.has('is-nudged')).toBe(false);

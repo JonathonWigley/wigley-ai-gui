@@ -1,5 +1,5 @@
 /* The tree fills its owner's box; each split shares its span between its two
-   sides by the grow the view sets on each side from the split's ratio, the
+   sides by the grow the view sets on each side from the split's drawn ratio, the
    handle between them keeping its own size. The handle's line and resize
    prompt are `Split`'s (`split.css`). */
 .pane-tree,

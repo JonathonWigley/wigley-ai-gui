@@ -67,6 +67,10 @@ export class FakeElement {
     return this.childNodes.filter((node) => node.tagName !== '#TEXT');
   }
 
+  get lastElementChild(): FakeElement | null {
+    return this.children.at(-1) ?? null;
+  }
+
   get nextElementSibling(): FakeElement | null {
     const siblings = this.parentNode?.children ?? [];
     return siblings[siblings.indexOf(this) + 1] ?? null;
@@ -201,6 +205,12 @@ export class FakeElement {
     return event;
   }
 
+  // An empty client rect at the client's origin, as an element with no
+  // layout box reports.
+  getBoundingClientRect() {
+    return { left: 0, top: 0, width: 0, height: 0 };
+  }
+
   scrollIntoView() {}
 }
 
@@ -308,8 +318,8 @@ export class FocusFakeElement extends FakeElement {
     this.selectionEnd = end;
   }
 
-  getBoundingClientRect() {
-    return { top: this.rectTop };
+  override getBoundingClientRect() {
+    return { ...super.getBoundingClientRect(), top: this.rectTop };
   }
 
   override remove() {

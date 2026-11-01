@@ -18,7 +18,7 @@ import {
 } from './split-width';
 
 // How long the handle's resize prompt shows after a keyboard nudge.
-export const NUDGE_PROMPT_MS = 1000;
+const NUDGE_PROMPT_MS = 1000;
 
 export interface SplitOptions extends SplitLimits {
   uiState: UiState;
@@ -47,9 +47,11 @@ export interface Split extends ResizeTarget {
 // uiState once at its end, a nudge on each press, each only when the width
 // changed. A nudge steps from the drawn width, the stored one clamped to the
 // span, so a press at a limit writes nothing and keeps a wider stored width;
-// nudge does nothing while `handle` has no layout box or a drag is running.
-// `nudge` returns false for up and down, which are not the divider's axis,
-// and moves nothing; it returns true for left and right, moved or not.
+// nudge does nothing while a drag is running. `nudge` returns false, moving
+// nothing, for up and down, which are not the divider's axis, and while
+// `handle` has no layout box (its split stacked, its start pane hidden, or the
+// window too narrow for it), so the press goes on to the next divider; it
+// returns true for left and right otherwise, moved or not.
 export interface SplitDividerOptions extends SplitLimits {
   uiState: UiState;
   stateKey: string;
@@ -76,10 +78,144 @@ export interface ResizePromptEnd {
   chevron: string;
 }
 
+export interface DividerHandleOptions {
+  handle: HTMLElement;
+  // The resize prompt's two ends: `start`'s key and chevron, then `end`'s
+  // chevron and key (`⌥⇧H ◂ ▸ ⌥⇧L`).
+  prompt: { start: ResizePromptEnd; end: ResizePromptEnd };
+  // Places the prompt's keys; the owner's own anchor function.
+  anchor: AnchorNamer<never>;
+  // Runs the prompt's linger after a nudge; the page's Timers seam.
+  timers: Timers;
+  // The pointer's client position along the divider's axis.
+  pointerAt(event: PointerEvent): number;
+  // The divider's drawn client position along its axis, read at the press.
+  dividerAt(): number;
+  // A drag began.
+  onStart(): void;
+  // The pointer moved during the drag, the divider wanted at client
+  // position `at`.
+  onMove(at: number): void;
+  // The drag ended: `byRelease` true for a release, a capture loss or a new
+  // press after one went unheard, false for `dispose`.
+  onEnd(byRelease: boolean): void;
+}
+
+// A divider handle's drag and its resize prompt.
+export interface DividerHandle {
+  // Whether a drag holds the pointer now.
+  isDragging(): boolean;
+  // Shows the prompt (`is-nudged`) for a moment, a later nudge restarting it.
+  showPromptAfterNudge(): void;
+  // Ends a running drag, removes the listeners, clears the linger and
+  // disposes the prompt's anchors; leaves `handle` in the document.
+  dispose(): void;
+}
+
+// The drag core every divider shares, the split's, the side bar's and the
+// pane tree's: a primary press on `handle` captures the pointer and starts a
+// drag (`is-active`) that keeps the pointer's distance from the divider, so
+// the divider stays under the same point of the handle. The drag holds until
+// that pointer's pointerup or pointercancel reaches the window, which hears it
+// even after the handle has left the document, or its capture loss reaches the
+// handle. The prompt is drawn in `handle`, shown while hovered, dragged and for
+// a moment after a nudge.
+export function createDividerHandle(
+  options: DividerHandleOptions,
+): DividerHandle {
+  const { handle } = options;
+  const prompt = splitResizePrompt(
+    options.anchor,
+    options.prompt.start,
+    options.prompt.end,
+  );
+  handle.append(prompt.element);
+
+  let dragPointer: number | null = null;
+  // The pointer's distance from the divider at the press.
+  let grabOffset = 0;
+  let promptTimer: number | null = null;
+
+  const endDragOnRelease = (event: PointerEvent) => {
+    if (event.pointerId === dragPointer) {
+      endDrag(true);
+    }
+  };
+  const endDrag = (byRelease: boolean) => {
+    dragPointer = null;
+    window.removeEventListener('pointerup', endDragOnRelease);
+    window.removeEventListener('pointercancel', endDragOnRelease);
+    handle.classList.remove('is-active');
+    options.onEnd(byRelease);
+  };
+  const isDragging = () =>
+    dragPointer !== null && handle.hasPointerCapture(dragPointer);
+  const startDrag = (event: PointerEvent) => {
+    if (event.button !== 0 || isDragging()) {
+      return;
+    }
+    if (dragPointer !== null) {
+      endDrag(true);
+    }
+    event.preventDefault();
+    handle.setPointerCapture(event.pointerId);
+    dragPointer = event.pointerId;
+    window.addEventListener('pointerup', endDragOnRelease);
+    window.addEventListener('pointercancel', endDragOnRelease);
+    handle.classList.add('is-active');
+    options.onStart();
+    grabOffset = options.pointerAt(event) - options.dividerAt();
+  };
+  const drag = (event: PointerEvent) => {
+    if (handle.hasPointerCapture(event.pointerId)) {
+      options.onMove(options.pointerAt(event) - grabOffset);
+    }
+  };
+  // The browser fires lostpointercapture after pointerup and pointercancel
+  // release capture, and on every other loss of it while the handle is in the
+  // document.
+  const endDragOnCaptureLoss = (event: PointerEvent) => {
+    if (event.pointerId === dragPointer) {
+      endDrag(true);
+    }
+  };
+  handle.addEventListener('pointerdown', startDrag);
+  handle.addEventListener('pointermove', drag);
+  handle.addEventListener('lostpointercapture', endDragOnCaptureLoss);
+
+  return {
+    isDragging,
+    showPromptAfterNudge() {
+      handle.classList.add('is-nudged');
+      if (promptTimer !== null) {
+        options.timers.clear(promptTimer);
+      }
+      promptTimer = options.timers.set(() => {
+        promptTimer = null;
+        handle.classList.remove('is-nudged');
+      }, NUDGE_PROMPT_MS);
+    },
+    dispose() {
+      if (dragPointer !== null) {
+        endDrag(false);
+      }
+      handle.removeEventListener('pointerdown', startDrag);
+      handle.removeEventListener('pointermove', drag);
+      handle.removeEventListener('lostpointercapture', endDragOnCaptureLoss);
+      if (promptTimer !== null) {
+        options.timers.clear(promptTimer);
+        promptTimer = null;
+      }
+      for (const anchor of prompt.anchors) {
+        anchor.dispose();
+      }
+    },
+  };
+}
+
 // A divider handle's resize prompt, `span.ui-split-prompt`: `start`'s key and
-// chevron, then `end`'s chevron and key (`⌥⇧H ◂ ▸ ⌥⇧L`). Its owner appends
-// `element` to the handle and disposes `anchors`.
-export function splitResizePrompt(
+// chevron, then `end`'s chevron and key.
+function splitResizePrompt(
   anchor: AnchorNamer<never>,
   start: ResizePromptEnd,
   end: ResizePromptEnd,
@@ -101,118 +237,60 @@ export function splitResizePrompt(
   };
 }
 
-// The divider core every split and the side bar share: the drag on `handle`,
-// the width it opens at from `uiState`, the keyboard nudge, and the resize
-// prompt drawn centred on `handle`, shown while hovered, dragged
-// (`is-active`) and for a moment after a nudge (`is-nudged`). `dispose` leaves
-// `handle` in the document; its owner removes it.
+// The divider core every split and the side bar share: the width it opens at
+// from `uiState`, the drag on `handle` through `createDividerHandle`, and the
+// keyboard nudge. `dispose` leaves `handle` in the document; its owner removes
+// it.
 export function createSplitDivider(options: SplitDividerOptions): SplitDivider {
-  const { handle } = options;
-  const prompt = splitResizePrompt(
-    options.anchor,
-    { command: PANE_RESIZE_COMMANDS.left, chevron: '◂' },
-    { command: PANE_RESIZE_COMMANDS.right, chevron: '▸' },
-  );
-  handle.append(prompt.element);
-  const { anchors } = prompt;
-
   let width = storedSplitWidth(options.uiState, options.stateKey, options);
   let widthAtDragStart = width;
-  // The pointer's distance from the drawn width's edge at the press, kept
-  // through the drag so the edge stays under the same point of the handle.
-  let grabOffset = 0;
   let isDisposed = false;
-  let promptTimer: number | null = null;
   const showWidth = (next: number) => {
     width = next;
     options.show(width);
   };
   showWidth(width);
 
-  // The pointer whose drag the handle holds, until that pointer's pointerup or
-  // pointercancel reaches the window or its capture loss reaches the handle;
-  // the window hears the release even after the handle has left the document.
-  let dragPointer: number | null = null;
-  const endDragOnRelease = (event: PointerEvent) => {
-    if (event.pointerId === dragPointer) {
-      endDrag();
-    }
-  };
-  const endDrag = () => {
-    dragPointer = null;
-    window.removeEventListener('pointerup', endDragOnRelease);
-    window.removeEventListener('pointercancel', endDragOnRelease);
-    handle.classList.remove('is-active');
-    if (width !== widthAtDragStart) {
-      options.uiState.set(options.stateKey, width);
-    }
-  };
-
-  const isDragging = () =>
-    dragPointer !== null && handle.hasPointerCapture(dragPointer);
-
-  const startDrag = (event: PointerEvent) => {
-    if (event.button !== 0 || isDragging()) {
-      return;
-    }
-    if (dragPointer !== null) {
-      endDrag();
-    }
-    event.preventDefault();
-    handle.setPointerCapture(event.pointerId);
-    dragPointer = event.pointerId;
-    window.addEventListener('pointerup', endDragOnRelease);
-    window.addEventListener('pointercancel', endDragOnRelease);
-    handle.classList.add('is-active');
-    widthAtDragStart = width;
-    const { left, span } = options.measure();
-    grabOffset = event.clientX - left - clampSplitWidth(width, options, span);
-  };
-  const drag = (event: PointerEvent) => {
-    if (!handle.hasPointerCapture(event.pointerId)) {
-      return;
-    }
-    const { left, span } = options.measure();
-    showWidth(
-      clampSplitWidth(event.clientX - left - grabOffset, options, span),
-    );
-  };
-  // The browser fires lostpointercapture after pointerup and pointercancel
-  // release capture, and on every other loss of it while the handle is in the
-  // document.
-  const endDragOnCaptureLoss = (event: PointerEvent) => {
-    if (event.pointerId === dragPointer) {
-      endDrag();
-    }
-  };
-  handle.addEventListener('pointerdown', startDrag);
-  handle.addEventListener('pointermove', drag);
-  handle.addEventListener('lostpointercapture', endDragOnCaptureLoss);
-
-  const showPromptAfterNudge = () => {
-    handle.classList.add('is-nudged');
-    if (promptTimer !== null) {
-      options.timers.clear(promptTimer);
-    }
-    promptTimer = options.timers.set(() => {
-      promptTimer = null;
-      handle.classList.remove('is-nudged');
-    }, NUDGE_PROMPT_MS);
-  };
+  const handle = createDividerHandle({
+    handle: options.handle,
+    prompt: {
+      start: { command: PANE_RESIZE_COMMANDS.left, chevron: '◂' },
+      end: { command: PANE_RESIZE_COMMANDS.right, chevron: '▸' },
+    },
+    anchor: options.anchor,
+    timers: options.timers,
+    pointerAt: (event) => event.clientX,
+    dividerAt() {
+      const { left, span } = options.measure();
+      return left + clampSplitWidth(width, options, span);
+    },
+    onStart() {
+      widthAtDragStart = width;
+    },
+    onMove(at) {
+      const { left, span } = options.measure();
+      showWidth(clampSplitWidth(at - left, options, span));
+    },
+    onEnd() {
+      if (width !== widthAtDragStart) {
+        options.uiState.set(options.stateKey, width);
+      }
+    },
+  });
 
   return {
     width: () => width,
     reloadWidth() {
-      if (!isDragging()) {
+      if (!handle.isDragging()) {
         showWidth(storedSplitWidth(options.uiState, options.stateKey, options));
       }
     },
     nudge(direction: PaneDirection) {
-      if (direction === 'up' || direction === 'down') {
+      const hasLayoutBox = options.handle.getClientRects().length > 0;
+      if (direction === 'up' || direction === 'down' || !hasLayoutBox) {
         return false;
       }
-      const hasLayoutBox = handle.getClientRects().length > 0;
-      if (isDisposed || !hasLayoutBox || isDragging()) {
+      if (isDisposed || handle.isDragging()) {
         return true;
       }
       const { span } = options.measure();
@@ -222,7 +300,7 @@ export function createSplitDivider(options: SplitDividerOptions): SplitDivider {
         showWidth(next);
         options.uiState.set(options.stateKey, next);
       }
-      showPromptAfterNudge();
+      handle.showPromptAfterNudge();
       return true;
     },
     dispose() {
@@ -230,19 +308,7 @@ export function createSplitDivider(options: SplitDividerOptions): SplitDivider {
         return;
       }
       isDisposed = true;
-      if (dragPointer !== null) {
-        endDrag();
-      }
-      handle.removeEventListener('pointerdown', startDrag);
-      handle.removeEventListener('pointermove', drag);
-      handle.removeEventListener('lostpointercapture', endDragOnCaptureLoss);
-      if (promptTimer !== null) {
-        options.timers.clear(promptTimer);
-        promptTimer = null;
-      }
-      for (const anchor of anchors) {
-        anchor.dispose();
-      }
+      handle.dispose();
     },
   };
 }

@@ -13,17 +13,12 @@ import { createPaneTreeView, type PaneTreeView } from './pane-tree-view';
 type Listener = (event: unknown) => void;
 
 // The fake DOM's element with what the pane tree view reads beyond it: a
-// client rect the test sets, pointer capture as a set of pointer ids, its last
-// element child, and listeners `dispatch` runs with the event fields it is
-// given.
+// client rect the test sets, pointer capture as a set of pointer ids, and
+// listeners `dispatch` runs with the event fields it is given.
 class PaneFakeElement extends FocusFakeElement {
   rect = { left: 0, top: 0, width: 0, height: 0 };
   captured = new Set<number>();
   private handlers = new Map<string, Listener[]>();
-
-  get lastElementChild() {
-    return this.children.at(-1) ?? null;
-  }
 
   override getBoundingClientRect() {
     return this.rect;
@@ -89,11 +84,25 @@ function row(ratio: number, first: PaneNode, second: PaneNode): PaneNode {
 
 let doc: FocusFakeDocument;
 let fakeWin: ReturnType<typeof fakeWindow>;
+// Runs the callback of the last ResizeObserver built, as a resize of the box
+// it observes does.
+let resized: () => void;
 
 beforeEach(() => {
   doc = installFocusFakeDom(vi.stubGlobal, PaneFakeElement);
   fakeWin = fakeWindow();
   vi.stubGlobal('window', fakeWin);
+  resized = () => undefined;
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      constructor(callback: () => void) {
+        resized = callback;
+      }
+      observe() {}
+      disconnect() {}
+    },
+  );
   // A 4px handle.
   vi.stubGlobal('getComputedStyle', () => ({
     getPropertyValue: () => ' 4px',
@@ -227,6 +236,33 @@ describe('createPaneTreeView divider limits', () => {
       expect(outerRatio(view)).toBeCloseTo(936 / 1500, 9);
     },
   );
+});
+
+describe('createPaneTreeView resize of the tree box', () => {
+  // With a 4px handle a 1504px box leaves a 1500px span: the nested side
+  // keeps two 280px panes and a handle, 564px, so the outer split draws at
+  // most 936 / 1500, and the nested split, 560px across, draws at 0.5. A
+  // 3004px box has room for the stored ratios.
+  it('draws each split clamped to the least sizes, keeping the stored tree, and draws the stored ratios once the box grows back', () => {
+    const stored = row(0.7, leaf('a'), row(0.4, leaf('b'), leaf('c')));
+    const { view, changed } = viewOf({ root: stored, focusedId: 'a' });
+    const grows = () =>
+      ['a', 'b'].map((id) => Number(view.slot(id).style.flexGrow));
+    const resizeTo = (width: number) => {
+      asPane(view.element).rect = { left: 0, top: 0, width, height: 600 };
+      resized();
+    };
+
+    resizeTo(1504);
+    const shrunk = grows();
+    resizeTo(3004);
+
+    expect(shrunk[0]).toBeCloseTo(936 / 1500, 9);
+    expect(shrunk[1]).toBeCloseTo(0.5, 9);
+    expect(grows()).toEqual([0.7, 0.4]);
+    expect(view.tree().root).toEqual(stored);
+    expect(changed).toEqual([]);
+  });
 });
 
 describe('createPaneTreeView drag', () => {

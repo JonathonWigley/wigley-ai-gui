@@ -263,7 +263,7 @@ describe('swapToward', () => {
 });
 
 describe('nudgeFocused', () => {
-  const limits = () => ({ step: 0.1, least: { pane: 0.2, handle: 0.05 } });
+  const least = { pane: 0.2, handle: 0.05 };
   const nested = row(0.5, leaf('a'), row(0.5, leaf('b'), leaf('c')));
   it.each<{
     name: string;
@@ -271,6 +271,7 @@ describe('nudgeFocused', () => {
     presses: PaneDirection[];
     expected: PaneNode;
     owned: boolean[];
+    leastPane?: number;
   }>([
     {
       name: 'right from first grows its split',
@@ -336,13 +337,25 @@ describe('nudgeFocused', () => {
       owned: [true, true],
     },
     {
+      name: 'left from a ratio past the limit, stepping from the drawn one',
+      from: tree(row(0.9, leaf('a'), leaf('b')), 'a'),
+      presses: ['left'],
+      expected: row(0.65, leaf('a'), leaf('b')),
+      owned: [true],
+      leastPane: 0.25,
+    },
+    {
       name: 'right past a side whose panes are stacked',
       from: tree(row(0.5, leaf('a'), column(0.5, leaf('b'), leaf('c'))), 'a'),
       presses: ['right', 'right', 'right', 'right'],
       expected: row(0.8, leaf('a'), column(0.5, leaf('b'), leaf('c'))),
       owned: [true, true, true, true],
     },
-  ])('nudges $name', ({ from, presses, expected, owned }) => {
+  ])('nudges $name', ({ from, presses, expected, owned, leastPane }) => {
+    const limits = () => ({
+      step: 0.1,
+      least: { ...least, pane: leastPane ?? least.pane },
+    });
     let current = from;
     const ownedPresses: boolean[] = [];
     for (const direction of presses) {

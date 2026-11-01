@@ -1,6 +1,5 @@
 import './pane-tree.css';
 import type { Timers } from '../../../contracts/ambient';
-import type { Disposable } from '../../../contracts/disposable';
 import {
   type OuterPanes,
   PANE_RESIZE_COMMANDS,
@@ -8,7 +7,7 @@ import {
 } from '../../../contracts/panes';
 import { element } from '../dom';
 import type { AnchorNamer } from '../ui/key-anchors';
-import { NUDGE_PROMPT_MS, splitResizePrompt } from '../ui/split';
+import { createDividerHandle, type DividerHandle } from '../ui/split';
 import {
   clampedRatio,
   closePane,
@@ -37,7 +36,9 @@ const NUDGE_STEP = 24;
 // nested split boxes with a drag handle between each split's two sides.
 // `split`, `close`, `focus`, `swap`, a handle's drag and the outer panes'
 // focus and resize each call `changed` once when they change the tree, and a
-// focus change also calls `focused`; `restore` calls neither.
+// focus change also calls `focused`; `restore` calls neither. Each split is
+// drawn at its ratio clamped to the least pane sizes in the tree's box, drawn
+// again as the box resizes, while the tree keeps the ratio it was given.
 export interface PaneTreeView {
   element: HTMLElement;
   tree(): PaneTree;
@@ -74,15 +75,21 @@ export interface PaneTreeViewOptions {
 }
 
 // A split drawn: its box (`first`, handle, `second`), the node it draws now,
-// and its handle's drag and prompt. `dispose` ends a drag without reporting it.
+// the ratio it draws that node at, and its handle's drag and prompt, whose
+// `dispose` ends a drag without reporting it.
 interface SplitBox {
   element: HTMLElement;
   handle: HTMLElement;
   axis: SplitAxis;
   split: PaneSplit;
-  isDragging(): boolean;
-  showPromptAfterNudge(): void;
-  dispose(): void;
+  drawnRatio: number;
+  divider: DividerHandle;
+}
+
+// A box's size in pixels.
+interface Size {
+  width: number;
+  height: number;
 }
 
 // The pane tree's view. Split boxes are kept by their place in the tree and
@@ -124,131 +131,70 @@ export function createPaneTreeView(options: PaneTreeViewOptions): PaneTreeView {
   const createBox = (axis: SplitAxis, split: PaneSplit): SplitBox => {
     const box = element('div', `pane-tree-split is-${axis}`);
     const handle = element('div', 'ui-split-handle pane-tree-handle');
-    const prompt =
-      axis === 'row'
-        ? splitResizePrompt(
-            options.anchor,
-            { command: PANE_RESIZE_COMMANDS.left, chevron: '◂' },
-            { command: PANE_RESIZE_COMMANDS.right, chevron: '▸' },
-          )
-        : splitResizePrompt(
-            options.anchor,
-            { command: PANE_RESIZE_COMMANDS.up, chevron: '▴' },
-            { command: PANE_RESIZE_COMMANDS.down, chevron: '▾' },
-          );
-    handle.append(prompt.element);
-    const anchors: Disposable[] = prompt.anchors;
-    const pointerAt = (event: PointerEvent) =>
-      axis === 'row' ? event.clientX : event.clientY;
-
-    // The pointer whose drag the handle holds, as `createSplitDivider` holds
-    // it: until its pointerup or pointercancel reaches the window or its
-    // capture loss reaches the handle.
-    let dragPointer: number | null = null;
     let ratioAtDragStart = split.ratio;
-    // The pointer's distance from the divider at the press, kept through the
-    // drag so the divider stays under the same point of the handle.
-    let grabOffset = 0;
-    let promptTimer: number | null = null;
-
-    const endDragOnRelease = (event: PointerEvent) => {
-      if (event.pointerId === dragPointer) {
-        endDrag(true);
-      }
-    };
-    const endDrag = (reportsChange: boolean) => {
-      dragPointer = null;
-      window.removeEventListener('pointerup', endDragOnRelease);
-      window.removeEventListener('pointercancel', endDragOnRelease);
-      handle.classList.remove('is-active');
-      if (reportsChange && drawn.split.ratio !== ratioAtDragStart) {
-        options.changed(current);
-      }
-    };
-    const isDragging = () =>
-      dragPointer !== null && handle.hasPointerCapture(dragPointer);
-    const startDrag = (event: PointerEvent) => {
-      if (event.button !== 0 || isDragging()) {
-        return;
-      }
-      if (dragPointer !== null) {
-        endDrag(true);
-      }
-      event.preventDefault();
-      handle.setPointerCapture(event.pointerId);
-      dragPointer = event.pointerId;
-      window.addEventListener('pointerup', endDragOnRelease);
-      window.addEventListener('pointercancel', endDragOnRelease);
-      handle.classList.add('is-active');
-      ratioAtDragStart = drawn.split.ratio;
-      const { start, span } = measured(drawn);
-      grabOffset = pointerAt(event) - start - drawn.split.ratio * span;
-    };
-    const drag = (event: PointerEvent) => {
-      if (!handle.hasPointerCapture(event.pointerId)) {
-        return;
-      }
-      const { start, span, handle: handleSize } = measured(drawn);
-      if (span <= 0) {
-        return;
-      }
-      const ratio = clampedRatio(
-        drawn.split,
-        (pointerAt(event) - start - grabOffset) / span,
-        leastShares(axis, span, handleSize),
-      );
-      current = withSplitRatio(current, drawn.split, ratio);
-      draw();
-    };
-    const endDragOnCaptureLoss = (event: PointerEvent) => {
-      if (event.pointerId === dragPointer) {
-        endDrag(true);
-      }
-    };
-    handle.addEventListener('pointerdown', startDrag);
-    handle.addEventListener('pointermove', drag);
-    handle.addEventListener('lostpointercapture', endDragOnCaptureLoss);
+    const divider = createDividerHandle({
+      handle,
+      prompt:
+        axis === 'row'
+          ? {
+              start: { command: PANE_RESIZE_COMMANDS.left, chevron: '◂' },
+              end: { command: PANE_RESIZE_COMMANDS.right, chevron: '▸' },
+            }
+          : {
+              start: { command: PANE_RESIZE_COMMANDS.up, chevron: '▴' },
+              end: { command: PANE_RESIZE_COMMANDS.down, chevron: '▾' },
+            },
+      anchor: options.anchor,
+      timers: options.timers,
+      pointerAt: (event) => (axis === 'row' ? event.clientX : event.clientY),
+      dividerAt() {
+        const { start, span } = measured(drawn);
+        return start + drawn.drawnRatio * span;
+      },
+      onStart() {
+        ratioAtDragStart = drawn.split.ratio;
+      },
+      onMove(at) {
+        const { start, span, handle: handleSize } = measured(drawn);
+        if (span <= 0) {
+          return;
+        }
+        const ratio = clampedRatio(
+          drawn.split,
+          (at - start) / span,
+          leastShares(axis, span, handleSize),
+        );
+        current = withSplitRatio(current, drawn.split, ratio);
+        draw();
+      },
+      onEnd(byRelease) {
+        if (byRelease && drawn.split.ratio !== ratioAtDragStart) {
+          options.changed(current);
+        }
+      },
+    });
 
     const drawn: SplitBox = {
       element: box,
       handle,
       axis,
       split,
-      isDragging,
-      showPromptAfterNudge() {
-        handle.classList.add('is-nudged');
-        if (promptTimer !== null) {
-          options.timers.clear(promptTimer);
-        }
-        promptTimer = options.timers.set(() => {
-          promptTimer = null;
-          handle.classList.remove('is-nudged');
-        }, NUDGE_PROMPT_MS);
-      },
-      dispose() {
-        if (dragPointer !== null) {
-          endDrag(false);
-        }
-        handle.removeEventListener('pointerdown', startDrag);
-        handle.removeEventListener('pointermove', drag);
-        handle.removeEventListener('lostpointercapture', endDragOnCaptureLoss);
-        if (promptTimer !== null) {
-          options.timers.clear(promptTimer);
-          promptTimer = null;
-        }
-        for (const anchor of anchors) {
-          anchor.dispose();
-        }
-      },
+      drawnRatio: split.ratio,
+      divider,
     };
     return drawn;
   };
 
-  // `node`'s element, growing by `grow` (its parent split's share for it, ''
-  // for the root), its split boxes kept under `path` (`0` for `first`, `1`
-  // for `second` at each level) and recorded in `used`.
+  // `node`'s element, `size` in pixels with handles `handle` pixels across
+  // and growing by `grow` (its parent split's drawn share for it, '' for the
+  // root), its split boxes kept under `path` (`0` for `first`, `1` for
+  // `second` at each level) and recorded in `used`. Each split draws its
+  // ratio clamped so each side keeps its least in `size`, the tree's ratio
+  // left as it is.
   const drawnNode = (
     node: PaneNode,
+    size: Size,
+    handle: number,
     grow: string,
     path: string,
     used: Set<string>,
@@ -266,23 +212,50 @@ export function createPaneTreeView(options: PaneTreeViewOptions): PaneTreeView {
       boxes.set(key, box);
     }
     box.split = node;
+    box.drawnRatio = ratioDrawnIn(node, size, handle);
     box.element.style.flexGrow = grow;
+    const [firstSize, secondSize] = sideSizes(
+      node.axis,
+      size,
+      box.drawnRatio,
+      handle,
+    );
     placeChildren(box.element, [
-      drawnNode(node.first, String(node.ratio), `${path}0`, used),
+      drawnNode(
+        node.first,
+        firstSize,
+        handle,
+        String(box.drawnRatio),
+        `${path}0`,
+        used,
+      ),
       box.handle,
-      drawnNode(node.second, String(1 - node.ratio), `${path}1`, used),
+      drawnNode(
+        node.second,
+        secondSize,
+        handle,
+        String(1 - box.drawnRatio),
+        `${path}1`,
+        used,
+      ),
     ]);
     return box.element;
   };
 
-  // Draws `current`. An element focused in the tree is focused again when
-  // the draw moved it and it stayed in the document.
+  // Draws `current` in the tree's box as it is now. An element focused in the
+  // tree is focused again when the draw moved it and it stayed in the
+  // document.
   const draw = () => {
     const active = document.activeElement;
     const focusedInTree =
       active instanceof HTMLElement && root.contains(active) ? active : null;
     const used = new Set<string>();
-    placeChildren(root, [drawnNode(current.root, '', '', used)]);
+    const { width, height } = root.getBoundingClientRect();
+    // A box with no size, the tree hidden, draws the stored ratios.
+    const handle = width > 0 || height > 0 ? handleSize(root) : 0;
+    placeChildren(root, [
+      drawnNode(current.root, { width, height }, handle, '', '', used),
+    ]);
     if (
       focusedInTree?.isConnected === true &&
       document.activeElement !== focusedInTree
@@ -292,7 +265,7 @@ export function createPaneTreeView(options: PaneTreeViewOptions): PaneTreeView {
     for (const [key, box] of boxes) {
       if (!used.has(key)) {
         box.element.remove();
-        box.dispose();
+        box.divider.dispose();
         boxes.delete(key);
       }
     }
@@ -334,6 +307,9 @@ export function createPaneTreeView(options: PaneTreeViewOptions): PaneTreeView {
     }
   };
   root.addEventListener('pointerdown', focusOnPress, true);
+  // A resize of the tree's box draws every split's ratio clamped again.
+  const observer = new ResizeObserver(() => draw());
+  observer.observe(root);
 
   const focus = (id: string) => {
     if (!leafIds(current).includes(id)) {
@@ -352,7 +328,7 @@ export function createPaneTreeView(options: PaneTreeViewOptions): PaneTreeView {
         throw new Error('The nudged split has no box drawn');
       }
       const { span, handle } = measured(box);
-      if (span <= 0 || box.isDragging()) {
+      if (span <= 0 || box.divider.isDragging()) {
         return { step: 0, least: { pane: 0, handle: 0 } };
       }
       nudged = box;
@@ -364,7 +340,7 @@ export function createPaneTreeView(options: PaneTreeViewOptions): PaneTreeView {
     if (result.tree !== current) {
       commit(result.tree);
     }
-    nudged?.showPromptAfterNudge();
+    nudged?.divider.showPromptAfterNudge();
     return result.owned;
   };
 
@@ -427,8 +403,9 @@ export function createPaneTreeView(options: PaneTreeViewOptions): PaneTreeView {
     },
     dispose() {
       root.removeEventListener('pointerdown', focusOnPress, true);
+      observer.disconnect();
       for (const box of boxes.values()) {
-        box.dispose();
+        box.divider.dispose();
       }
       boxes.clear();
     },
@@ -447,6 +424,43 @@ function leastShares(
   handle: number,
 ): LeastShares {
   return { pane: leastSize(axis) / span, handle: handle / span };
+}
+
+// The ratio `split` is drawn at in a box of `size`: its own ratio, clamped so
+// each side keeps the least size of each pane across it while the span has
+// room; its own ratio in a box with no span.
+function ratioDrawnIn(split: PaneSplit, size: Size, handle: number): number {
+  const span = (split.axis === 'row' ? size.width : size.height) - handle;
+  if (span <= 0) {
+    return split.ratio;
+  }
+  return clampedRatio(
+    split,
+    split.ratio,
+    leastShares(split.axis, span, handle),
+  );
+}
+
+// The sizes of a split's two sides in a box of `size`, `first` taking
+// `ratio` of the span beside a handle of `handle` pixels.
+function sideSizes(
+  axis: SplitAxis,
+  size: Size,
+  ratio: number,
+  handle: number,
+): [Size, Size] {
+  if (axis === 'row') {
+    const span = Math.max(size.width - handle, 0);
+    return [
+      { width: span * ratio, height: size.height },
+      { width: span * (1 - ratio), height: size.height },
+    ];
+  }
+  const span = Math.max(size.height - handle, 0);
+  return [
+    { width: size.width, height: span * ratio },
+    { width: size.width, height: span * (1 - ratio) },
+  ];
 }
 
 // A divider handle's size, the `space-1` theme token's pixels as `root`
