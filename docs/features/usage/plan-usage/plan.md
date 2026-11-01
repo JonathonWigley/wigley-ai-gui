@@ -239,6 +239,20 @@ Review base: 951296f231ed299e8ca9a12bf918bf1f5e9462cc
 - start.ts no longer returns early with no harness; poller is PlanPoller | null and the script and drive actions register on both paths · group 07 · group 07
 - over width is min(clampSplitWidth(width), span), joining the beside clamp at the threshold; data-right-bar reads beside while hidden · fix-narrow · group 07
 - usage/design.md documents the code's cache rule: a reply writing both TTL buckets takes the shorter, 5 min · group 08 · group 08
+- review #4: the side bar gives way first — it narrows to SIDE_BAR_MIN before the right bar goes over (01's original Decisions); the right bar's over test measures the room left with the side bar at its least width — user's standing instruction to take the lead's recommendations — if wrong, the side bar narrows where the user wanted the right bar to cover main · lead
+- review #5: the adapter takes contextWindow from the get_context_usage reply's maxTokens whenever it arrives (so /model updates it) and asks get_context_usage once at session start; contract and design docs drop 'null until the first turn ends' — standing instruction — if wrong, a reply without maxTokens keeps the old window · lead
+- review #6: the right bar's handle anchors no resize prompt and Shell drops rightBarDivider; the right bar resizes by drag only — standing instruction — if wrong, keyboard users cannot resize the right bar · lead
+- review #9 (lane contradiction): withSessionUsage with usage null keeps a known session's usage, as its comment says — standing instruction — if wrong, a re-open shows the previous usage until the next event · lead
+- review #10: the usage page holds its first draw until the first snapshot (read or changed) lands, so it never claims no profiles before reading · lead
+- review #11: the adapter keeps extra_usage.currency only when it is a three-letter upper-case code, else null · lead
+- review #12 left: extra usage on with null figures keeps the plan's '$0.00' / 'no limit' wording (06 Decisions) · lead
+- review #13: live patches keep their at; a poll result folds the live patches newer than its own at, as held patches already do · lead
+- review #15: contextWindowOf returns null when the model key exists without a numeric window, so the kept window stands · lead
+- review #16: replies to the adapter's own get_context_usage requests stay out of the turn's gathered raw events · lead
+- review #17: replaceLayout ends with drawBarWidths so a swap re-measures both bars · lead
+- review #18: variantOf becomes optionalOneOf(args, 'variant', USAGE_FIXTURE_VARIANTS) ?? 'fresh'; the error message follows the shared helper · lead
+- review #19 left: usage CSS stays scoped under its layout's name, per AGENTS.md 'a layout's CSS selects under its own name' · lead
 ### Review rounds
+- round 1 · 73ea90a · NEEDS FIXES (4 Important, 24 Minor; 9 lead-applied in 0e17c46) · report /tmp/claude-usage-make/review-73ea90a.md
 ### Test gate
 - picked by reading 951296f..HEAD: every test file the range added or edited (17: claude-code harness, plan-usage, session-usage, stream-decoder, chat-sessions, usage main/page tests, page-api, shell, fake-agent-harness, split) plus the tests that exercise changed logic — accounts and folder-choices (runCli refactor of the auth runner, fake harness users), manifests (usage manifest), keymap (Space v u bind), layout-contracts (usage layout contract); npm run selftest passed in full at b406bfb · 22 files, 506 tests passed, no type errors
