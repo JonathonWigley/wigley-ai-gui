@@ -226,6 +226,7 @@ const ACTIVITY_LINE_STEPS: SelfTestStep[] = [
     expect: '[chat] focused activity line',
     screenshot: 'activity-finished',
   },
+  { keys: ['G'], expect: '[chat] following the latest entry' },
 ];
 
 const TRANSCRIPT_SCROLL_STEPS: SelfTestStep[] = [
@@ -461,7 +462,7 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'activity line',
-    why: "A held steps turn draws the live header and shortlist with the box focused (no frame, no marked entry); Ctrl+C ends it into the finished line with its failed count; Esc shows the focused entry's left bar.",
+    why: "A held steps turn draws the live header and shortlist with the box focused (no frame, no marked entry); Ctrl+C ends it into the finished line with its failed count; Esc shows the focused entry's left bar; k focuses the finished line and G follows the latest again.",
     steps: ACTIVITY_LINE_STEPS,
   },
   {
