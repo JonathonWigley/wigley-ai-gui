@@ -361,6 +361,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       shown() {
         isModeShown = true;
         api.panes.setOuterPanes(view.panes.outer);
+        view.tabs.rescroll();
         checkVisible();
       },
       hidden() {

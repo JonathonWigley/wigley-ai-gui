@@ -18,6 +18,7 @@ import type {
 } from '../layouts/layout';
 import { sessionsManifest } from '../manifest';
 import type { DrawnTabBar, SessionsParts } from './layout/sessions-parts';
+import { scrollLeftShowing } from './strip-scroll';
 import {
   hasOtherTab,
   NO_TABS,
@@ -100,6 +101,9 @@ export interface SessionTabsView {
   // Draws every pane and tab bar again with the parts' current layouts, then
   // the tabs and the texts; the tab bodies and their elements stay as they are.
   redrawPane(): void;
+  // Scrolls each pane's strip to its selected tab again, for a strip that
+  // had no width when the selection changed: the mode was hidden.
+  rescroll(): void;
   add(sessionId: string, view: SessionTabView): SessionTabHandle;
   // Drops the session's frame, its tabs and their elements; their handles
   // then do nothing. Runs no `changed`.
@@ -191,7 +195,8 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
 
   // Scrolls the strip alone to the selected tab once each time the selection
   // changes, so a tab the user scrolled past stays put. A strip with no width,
-  // in the holder or a hidden mode, waits until a draw finds it laid out.
+  // in the holder or a hidden mode, waits until a draw finds it laid out or
+  // the mode shows again (`rescroll`).
   const scrollSelectedIntoView = (frame: Frame) => {
     const selectedId = frame.tabs.selectedTabId;
     const strip = frame.bar.built.strip;
@@ -386,6 +391,16 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
       }
       place(placed, focusedPaneId, focusedEdges);
     },
+    rescroll() {
+      for (const pane of panes.values()) {
+        const frame =
+          pane.sessionId === null ? undefined : frames.get(pane.sessionId);
+        if (frame !== undefined) {
+          frame.scrolledTabId = null;
+          scrollSelectedIntoView(frame);
+        }
+      }
+    },
     add(sessionId, view) {
       const frame = frameOf(sessionId);
       frame.tabs = tabsAfterAdd(frame.tabs, sessionId, view.id);
@@ -468,23 +483,6 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     },
     select,
   };
-}
-
-// The strip's scroll that shows all of `tab`, moving the least: the current
-// one when the tab is in view already. Measured from the strip, so a
-// positioned wrapper a layout draws around it does not change it.
-function scrollLeftShowing(strip: HTMLElement, tab: HTMLElement): number {
-  const tabBox = tab.getBoundingClientRect();
-  const start =
-    tabBox.left - strip.getBoundingClientRect().left + strip.scrollLeft;
-  const end = start + tabBox.width;
-  if (start < strip.scrollLeft) {
-    return start;
-  }
-  if (end > strip.scrollLeft + strip.clientWidth) {
-    return end - strip.clientWidth;
-  }
-  return strip.scrollLeft;
 }
 
 function isSameInput(a: PaneInput, b: PaneInput): boolean {

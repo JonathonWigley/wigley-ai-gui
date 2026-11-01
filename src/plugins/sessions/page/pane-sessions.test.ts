@@ -256,6 +256,17 @@ describe('pane-sessions', () => {
       expected: { kind: 'load', paneId: 'p2' },
     },
     {
+      name: 'a focused pane that waits for nothing loads it while another pane waits',
+      panes: new Map([
+        ['p1', null],
+        ['p2', 's2'],
+      ]),
+      focused: 'p2',
+      waiting: ['p1'],
+      sessionId: 's4',
+      expected: { kind: 'load', paneId: 'p2' },
+    },
+    {
       name: 'every pane waits: the focused pane loads it and its wait ends',
       panes: new Map([
         ['p1', null],
