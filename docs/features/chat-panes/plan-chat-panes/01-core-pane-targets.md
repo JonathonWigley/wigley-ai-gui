@@ -1,6 +1,6 @@
 # 01 — Core focus and resize targets
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -71,3 +71,5 @@ Done when: `npm run typecheck` and `npm run lint` pass; the test gate runs the t
 Commit:    one commit for the group
 
 ## Proof
+
+Commit e5a3813 · proof: diff read (PaneDirection, ResizeTarget boolean, FocusTarget, OuterPanes, PANE_FOCUS_COMMANDS, PageApi.panes, PaneTargets, createPaneTargets present) + whole-tree typecheck clean; named tests pass per the worker, primer-view's base-failing rows aside · concerns: docs/features/usage/plan-usage/01-right-bar-area.md:28 still names createPaneResize (another plan's doc); Alt+Shift+j/k show no key-hint prompt until a vertical divider exists

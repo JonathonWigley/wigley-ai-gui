@@ -175,9 +175,9 @@ Boundary rules:
 
 ### Wave 1
 
-- [ ] [Core focus and resize targets](01-core-pane-targets.md)
-- [ ] [Tab icons](04-tab-icons.md)
-- [ ] [Pane session rules](05a-pane-session-rules.md)
+- [x] [Core focus and resize targets](01-core-pane-targets.md)
+- [x] [Tab icons](04-tab-icons.md)
+- [x] [Pane session rules](05a-pane-session-rules.md)
 
 ### Wave 2
 
@@ -198,10 +198,18 @@ Boundary rules:
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 6562c495f9c5949743e50df7b963f344c3ee6d31
 
 ### Groups
+- 05a · ab1e090 · diff read + typecheck clean in its files · concerns: none
+- 04 · ed4d503 · diff read (SessionTabView.icon, SessionTabInput.icon, form-tabs deps icon present) + typecheck clean in its files; 3 touched test files pass per the worker (22); peer chat-view.ts hunk left unstaged · concerns: contract.ts SessionTabView comment's first line runs past the wrap width
+- 01 · e5a3813 · diff read (PaneDirection, ResizeTarget boolean, FocusTarget, OuterPanes, PANE_FOCUS_COMMANDS, PageApi.panes, PaneTargets, createPaneTargets present) + whole-tree typecheck clean; named tests pass per the worker, primer-view's base-failing rows aside · concerns: docs/features/usage/plan-usage/01-right-bar-area.md:28 still names createPaneResize (another plan's doc); Alt+Shift+j/k show no key-hint prompt until a vertical divider exists
 ### Contract changes
 ### Rulings
+- plan.py matches only NN- task prefixes, so 05a and 05b's Status, box and Proof edits are made by hand in the same shape — none — a mis-shaped hand edit, caught at the final gate · lead
+- peer ai-dev-e8's uncommitted chat-view.ts hunk (turn-end latest, ~lines 233-240) stays in the tree; 04 edits the file and commits only its own hunk through a cached patch, checked with git diff --cached — settled with the peer — a swept peer hunk, caught by the cached-diff check · lead
+- paneOf returns the first pane in map order when two show one session; restorePanes takes the first row when two share a host id — neither can happen under the one-pane-per-session rule — none · group 05a
+- FormTabView in session-form-tabs.ts also gains icon so the value reaches addTab; icon colour lives on a sessions.css session-tab-icon class, ui/tabs.css untouched since other tab bars still draw labels — none · group 04 · group 04
+- nudgedSplitWidth takes Extract<PaneDirection,'left'|'right'>; a divider's nudge returns true for left/right also when disposed or mid-drag; renderer registers the eight commands in one loop over PANE_DIRECTIONS — none · group 01 · group 01
 ### Review rounds
 ### Test gate

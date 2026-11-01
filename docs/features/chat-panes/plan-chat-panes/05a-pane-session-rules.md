@@ -1,6 +1,6 @@
 # 05a — Pane session rules
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -53,3 +53,4 @@ Done when: `npm run typecheck` and `npm run lint` pass; the test gate runs both 
 Commit:    one commit for the group
 
 ## Proof
+Commit ab1e090 · diff read (all six Produces and the stepSession signature present) + typecheck clean in its files; both test files pass per the worker (55) · concerns: none

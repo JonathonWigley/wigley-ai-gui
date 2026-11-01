@@ -1,6 +1,6 @@
 # 04 — Tab icons
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -33,3 +33,5 @@ Done when: `npm run typecheck` and `npm run lint` pass; the test gate runs the t
 Commit:    one commit for the group
 
 ## Proof
+
+Commit ed4d503 · proof: diff read (SessionTabView.icon, SessionTabInput.icon, form-tabs deps icon present) + typecheck clean in its files; 3 touched test files pass per the worker (22); peer chat-view.ts hunk left unstaged · concerns: contract.ts SessionTabView comment's first line runs past the wrap width
