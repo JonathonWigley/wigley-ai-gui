@@ -62,6 +62,22 @@ tokens, the platform chord formatter, the active-line band, and the sessions and
 - Two tabs' take-overs released out of order give the session back to the first taker's tab even though its take-over has ended (pinned by `sessions/page/tabs.test.ts`); only forms takes over today, so it matters once a second plugin does.
 - **Backlog applied save closes another editor** — *agent-ready*: in `src/plugins/backlog/page/backlog-view.ts`, an `applied` save result closes whichever editor is open and selects the saved title, so leaving the editor mid-save and opening another loses that editor. Guard `closeEditor` as `moveEditorBaseline` is guarded: act only when the open editor's path and baseline title match the write.
 - **A note opening with "Shipped" files as done** — Notes files a follow-up whose one line is the body's first sentence (`src/plugins/notes/main/note-sender.ts`), and Backlog reads an item whose one line starts with "shipped" as done (`src/shared/followups/followup-file.ts`), so such a note never shows in the append picker (`note-homes.ts` drops done items). Options: prefix or reword a one line that would read as done, or have Backlog mark done by an explicit marker rather than the leading word.
+- **Agent settings through an adapter** — Settings mode edits only the app's own `settings.json`, so changing an agent's
+  config (Claude's model, effort, permissions, hooks, env, per profile and per user, project and local scope) still
+  needs a terminal: in print mode `/config` takes only `key=value` (`agent-chat/claude-stream.md` § Terminal-only
+  commands). Add an agent settings seam beside `AgentHarness` (`src/contracts/agent.ts`) that each harness adapter
+  fills: the settings it declares (key, label, type, choices, scope, current value) and a write checked by the
+  harness's own rules. Settings mode then draws whatever the adapter declares, as the Chat tab draws session controls.
+  Claude Code is the first adapter (`src/main/claude-code/`) and Codex's config the next; no file format or key name
+  leaves its adapter. The first question is where each harness's key list and types come from (a schema, its CLI, or
+  the adapter's own table) and whether a change reaches a running session. Plan it with `wigley:feature`.
+- **Agent plugin management** — List each profile's installed plugins and marketplaces (version, enabled, scope), and
+  install, update, enable, disable, uninstall and reload them from the app, behind the same harness seam: Claude Code's
+  adapter runs `claude plugin` (`list`, `install`, `update`, `enable`, `disable`, `uninstall`, `marketplace`), Codex's
+  its own commands. `/reload-plugins` is terminal-only in print mode (`agent-chat/claude-stream.md` § Init), so the
+  first question is how a running chat session picks up a changed plugin: a restart with `--resume`, or a stream
+  control. Design it with the "Plugin sync from the Docs view" follow-up above, whose update and reload steps would
+  call this one's harness calls. Plan it with `wigley:feature`.
 
 ## Extensibility review (2026-10-20)
 
