@@ -43,7 +43,10 @@ const layout = {
   sections(parent, kit) {
     const root = kit.el(parent, 'div', 'settings-pane');
     kit.sectionRows(root);
-    const edge = kit.edge(root, 'focusRows', { side: 'end', label: 'rows' });
+    const edge = kit.edge(root, 'panes.focusRight', {
+      side: 'end',
+      label: 'rows',
+    });
     edge.classList.add('settings-edge', 'settings-edge--end');
     return { element: root };
   },
@@ -51,7 +54,7 @@ const layout = {
     const root = kit.el(parent, 'div', 'settings-pane');
     const head = kit.sectionHeader(root, input.title);
     head.classList.add('settings-head');
-    const edge = kit.edge(head, 'focusSections', {
+    const edge = kit.edge(head, 'panes.focusLeft', {
       side: 'start',
       chevron: '‹ sections',
     });

@@ -38,6 +38,7 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
       log,
       toast: services.toast,
       setScope: (scope) => api.keys.setScope(scope),
+      setFocusTarget: (target) => api.panes.setFocusTarget(target),
       pushScope: (scope) => api.keys.pushScope(scope),
       addOverlay: (element) => api.areas.overlay.contribute(element),
       anchor: (element, command, scope, label) =>

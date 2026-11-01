@@ -55,8 +55,6 @@ export const backlogManifest = definePlugin({
       runsIn: 'page',
     },
     openInDocs: { label: 'open in Docs mode', group: 'view', runsIn: 'page' },
-    focusDetail: { label: 'focus the detail', group: 'focus', runsIn: 'page' },
-    focusList: { label: 'focus the list', group: 'focus', runsIn: 'page' },
     lineDown: { label: 'scroll a line down', group: 'detail', runsIn: 'page' },
     lineUp: { label: 'scroll a line up', group: 'detail', runsIn: 'page' },
     halfPageDown: {

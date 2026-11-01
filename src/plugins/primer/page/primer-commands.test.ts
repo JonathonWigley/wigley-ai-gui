@@ -10,10 +10,13 @@ import type {
 import type { PageCommandContext, ToastTone } from '../../../contracts/plugin';
 import type { PrimerBody, PrimerEntry, PrimerFeature } from '../contract';
 import { boxKey, type PrimerBox } from './boxes';
+import type { PaneDirection } from '../../../contracts/panes';
 import {
   closePrimerFromMain,
   guardClose,
+  type PrimerCommandDeps,
   primerCommandHandlers,
+  primerFocusTarget,
 } from './primer-commands';
 import {
   buildBody,
@@ -86,7 +89,7 @@ function setup(
     toasts.push(text);
     toastTones.push(tone);
   };
-  const handlers = primerCommandHandlers({
+  const deps: PrimerCommandDeps = {
     store,
     boxes: {
       focus: (box, options) => {
@@ -120,12 +123,16 @@ function setup(
         : Promise.reject(previewFailure),
     toast,
     log,
-  });
+  };
+  const handlers = primerCommandHandlers(deps);
+  const focusTarget = primerFocusTarget(deps);
   // Each Primer tab the guard selected, and each session it selected.
   const shownPrimers: string[] = [];
   const activated: string[] = [];
   const run = (command: PrimerCommand, context: PageCommandContext = {}) =>
     handlers[command](context);
+  // A press of the core's focus key toward `direction`.
+  const move = (direction: PaneDirection) => focusTarget.move(direction);
   const primer = () => {
     const current = activeForm(store.get());
     if (current === null) {
@@ -136,6 +143,7 @@ function setup(
   return {
     store,
     run,
+    move,
     primer,
     focused,
     focusedRows,
@@ -192,11 +200,11 @@ const newItem1: PrimerBox = {
 
 describe('primerCommandHandlers', () => {
   it('logs the selected row, and nothing at the first row', () => {
-    const { run, logs } = setup();
+    const { run, move, logs } = setup();
 
     run('prevRow');
     run('nextRow');
-    run('focusItems');
+    move('right');
     logs.length = 0;
     run('nextRow');
 
@@ -276,44 +284,58 @@ describe('primerCommandHandlers', () => {
     expect(logs).toHaveLength(1);
   });
 
+  // A move into a column commits add-item text and leaves the box; a move to
+  // the card keeps it.
   it.each<{
-    command: 'focusTasks' | 'focusItems' | 'focusCard';
     from: PrimerPane;
-    log: string;
+    direction: PaneDirection;
+    pane: PrimerPane;
+    moved: boolean;
     leaves: number;
   }>([
     {
-      command: 'focusItems',
       from: 'tasks',
-      log: 'focused the items',
-      leaves: 2,
+      direction: 'right',
+      pane: 'items',
+      moved: true,
+      leaves: 1,
     },
+    { from: 'items', direction: 'right', pane: 'card', moved: true, leaves: 0 },
+    { from: 'items', direction: 'left', pane: 'tasks', moved: true, leaves: 1 },
+    { from: 'card', direction: 'left', pane: 'items', moved: true, leaves: 1 },
     {
-      command: 'focusItems',
-      from: 'card',
-      log: 'focused the items',
-      leaves: 2,
+      from: 'tasks',
+      direction: 'left',
+      pane: 'tasks',
+      moved: false,
+      leaves: 0,
     },
-    {
-      command: 'focusTasks',
-      from: 'items',
-      log: 'focused the tasks',
-      leaves: 2,
-    },
-    { command: 'focusCard', from: 'items', log: 'focused the card', leaves: 0 },
+    { from: 'card', direction: 'right', pane: 'card', moved: false, leaves: 0 },
+    { from: 'items', direction: 'up', pane: 'items', moved: false, leaves: 0 },
+    { from: 'card', direction: 'down', pane: 'card', moved: false, leaves: 0 },
   ])(
-    'logs each focus move once, and leaves any box on focusTasks and focusItems: $command from $from',
-    ({ command, from, log, leaves: expectedLeaves }) => {
-      const { run, store, logs, leaves } = setup();
+    'moves focus $direction from $from to $pane, logging the move once',
+    ({ from, direction, pane, moved, leaves: expectedLeaves }) => {
+      const { move, store, primer, logs, leaves } = setup();
       store.dispatch({ type: 'focusPane', pane: from });
 
-      run(command);
-      run(command);
+      const result = move(direction);
 
-      expect(logs).toEqual([log]);
+      expect(result).toBe(moved);
+      expect(primer().pane).toBe(pane);
+      expect(logs).toEqual(moved ? [`focused the ${pane}`] : []);
       expect(leaves()).toBe(expectedLeaves);
     },
   );
+
+  it('moves no focus outside the primer view', () => {
+    const { run, move, store } = setup();
+    run('openReview');
+
+    expect(move('left')).toBe(false);
+    expect(move('right')).toBe(false);
+    expect(store.get().view).toBe('review');
+  });
 
   it('steps rows from a box, committing add-item text first', () => {
     const { run, store, primer, logs } = setup();
@@ -446,19 +468,26 @@ describe('primerCommandHandlers', () => {
     },
     {
       card: 'an item, as c',
-      steps: ['nextRow', 'focusItems'],
+      steps: ['nextRow'],
+      moves: ['right'],
       box: 'p1/task/1/item/1/comment',
     },
-  ])('focuses $box on $card for editFirstField', ({ entries, steps, box }) => {
-    const { run, focused } = setup({ entries });
-    for (const step of steps as PrimerCommand[]) {
-      run(step);
-    }
+  ])(
+    'focuses $box on $card for editFirstField',
+    ({ entries, steps, moves, box }) => {
+      const { run, move, focused } = setup({ entries });
+      for (const step of steps as PrimerCommand[]) {
+        run(step);
+      }
+      for (const direction of (moves ?? []) as PaneDirection[]) {
+        move(direction);
+      }
 
-    run('editFirstField');
+      run('editFirstField');
 
-    expect(focused.map(boxKey)).toEqual([box]);
-  });
+      expect(focused.map(boxKey)).toEqual([box]);
+    },
+  );
 
   it('steps to the next box with no focus options', () => {
     const { run, focused, focusOptions, setActive } = setup();

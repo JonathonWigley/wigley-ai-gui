@@ -2,6 +2,7 @@ import type { Disposable } from '../../../contracts/disposable';
 import type { EditorHost } from '../../../contracts/editor';
 import type { Log } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
+import type { FocusTarget } from '../../../contracts/panes';
 import type { Paths } from '../../../contracts/paths';
 import type {
   PageChannel,
@@ -43,8 +44,10 @@ import {
   contextChoices,
   type DocChangeRecord,
   type DocsAnchor,
+  type DocsPaneScope,
   detailFields,
   fileStatuses,
+  paneFocusedBy,
   readOnlyReason,
   reapplyChange,
   settlePending,
@@ -54,8 +57,6 @@ import {
 import { createDocsParts, type DocsScope } from './layout/docs-parts';
 import type { StarredDocs } from './starred-docs';
 import { createTreeView, type LeafMarks } from './tree-view';
-
-export type DocsPaneScope = 'tree' | 'doc';
 
 // The scopes a docs view pushes over its pane's scope.
 export type DocsPushedScope = 'conflict' | 'picker' | 'box' | 'confirm';
@@ -73,8 +74,7 @@ export interface DocsViewCommands {
   rescan(): void;
   pickContext(): void;
   toggleStar(): void;
-  focusDoc(): void;
-  focusTree(): void;
+  backToTree(): void;
   scrollDown(): void;
   scrollUp(): void;
   lineDown(): void;
@@ -138,6 +138,9 @@ export interface DocsView {
   treeOpenedOver(): void;
   // The scope this view's keys use now.
   focusScope(): DocsPaneScope;
+  // Moves focus between the tree and the doc pane by `paneFocusedBy`, with
+  // the pane's scope; its caller hands it over with each pane scope it sets.
+  focusTarget: FocusTarget;
   hasUnsavedEdits(): boolean;
   // The open doc's path while its editor holds unsaved edits, else null.
   unsavedPath(): string | null;
@@ -185,6 +188,8 @@ export interface DocsViewDeps {
   openChanged(path: string | null): void;
   // Shows the tree when its container hides it; nothing while it shows.
   revealTree(): void;
+  // Whether the tree's container shows it now.
+  isTreeShown(): boolean;
   // Hears each doc opened from the tree, by a leaf's click, `l` or Enter.
   leafOpened(): void;
   // Places a dialog element over the window, until the handle's `dispose`.
@@ -534,6 +539,23 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     applyScope();
   };
 
+  const focusTreePaneAndLog = () => {
+    focusTreePane();
+    log('docs', 'tree focused');
+  };
+
+  const focusTarget: FocusTarget = {
+    move(direction) {
+      const next = paneFocusedBy(focused, direction, deps.isTreeShown());
+      if (next === 'doc') {
+        focusDocAndLog();
+      } else if (next === 'tree') {
+        focusTreePaneAndLog();
+      }
+      return next !== null;
+    },
+  };
+
   const openInEditor = async (entry: IndexEntry, line: number) => {
     if (await doc.open(targetFor(entry.path, entry, line, null))) {
       doc.edit(line);
@@ -856,11 +878,9 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     rescan: () => view.rescan(),
     pickContext,
     toggleStar,
-    focusDoc: focusDocAndLog,
-    focusTree: () => {
+    backToTree: () => {
       deps.revealTree();
-      focusTreePane();
-      log('docs', 'tree focused');
+      focusTreePaneAndLog();
     },
     scrollDown: () => doc.scroll(1),
     scrollUp: () => doc.scroll(-1),
@@ -984,6 +1004,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     treeHidden: focusDoc,
     treeOpenedOver: focusTreePane,
     focusScope: () => focused,
+    focusTarget,
     layoutsChanged() {
       isRedrawing = true;
       try {

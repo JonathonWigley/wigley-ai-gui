@@ -31,8 +31,8 @@ plan is written from them. A decision here stands unless the user changes it.
   the mode. A page chord cannot hold `,`, so the accelerator is the route.
 - The side bar lists sections: Core, then one per plugin that declares settings, in manifest order, then Keymap.
   `j`/`k` move the cursor and Enter opens the section in the content sheet. In a window too narrow for the side bar it
-  opens over the content, and opening a section by click or Enter closes it. `Alt+l` / `Alt+h` move focus between the
-  side bar and the form, as in Docs mode.
+  opens over the content, and opening a section by click or Enter closes it. `Alt+l` / `Alt+h` (the core's
+  `panes.focusRight` / `panes.focusLeft`) move focus between the side bar and the form, as in Docs mode.
 - `/` filters the open section's rows, keeping their order: setting rows by label and dotted path (fuzzy, through
   the `FuzzyMatcher` page service) and by description (plain substring, since a fuzzy match over a sentence matches
   almost any query), command rows by label, qualified id, keys and accelerators, and the Leader row by "leader" and

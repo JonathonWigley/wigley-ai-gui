@@ -8,6 +8,7 @@
 // rollups.
 
 import type { Disposable } from '../../../contracts/disposable';
+import type { PaneDirection } from '../../../contracts/panes';
 import type { Paths } from '../../../contracts/paths';
 import type {
   CloneStatus,
@@ -968,4 +969,23 @@ function statusCounts(
     }
   }
   return counts;
+}
+
+export type DocsPaneScope = 'tree' | 'doc';
+
+// The pane a focus move `direction` from `focused` lands on: `right` from the
+// tree to the doc, `left` from the doc to the tree while `isTreeShown`; null
+// for every other move, which leaves focus where it is.
+export function paneFocusedBy(
+  focused: DocsPaneScope,
+  direction: PaneDirection,
+  isTreeShown: boolean,
+): DocsPaneScope | null {
+  if (focused === 'tree' && direction === 'right') {
+    return 'doc';
+  }
+  if (focused === 'doc' && direction === 'left' && isTreeShown) {
+    return 'tree';
+  }
+  return null;
 }

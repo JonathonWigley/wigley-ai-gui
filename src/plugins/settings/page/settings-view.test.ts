@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EditorHost } from '../../../contracts/editor';
+import type { FocusTarget, PaneDirection } from '../../../contracts/panes';
 import type { PageChannel } from '../../../contracts/plugin';
 import type {
   UserConfigRead,
@@ -82,13 +83,15 @@ function fakeChannel() {
 }
 
 // A view over the fake channel, shown with its first section open and focus
-// on the rows, the overlay its picker draws in, and every anchor its layout
-// parts named.
+// on the rows, the overlay its picker draws in, every anchor its layout parts
+// named, and `handed`: each scope set and each focus target handed over, in
+// order.
 async function shownView() {
   const { channel, written } = fakeChannel();
   const overlay = asFake(document.createElement('div'));
   const anchor = () => ({ dispose: () => undefined });
   const { anchors, keys } = recordingAnchors();
+  const handed: (string | FocusTarget)[] = [];
   const view = createSettingsView({
     channel,
     editor: {} as EditorHost,
@@ -102,7 +105,8 @@ async function shownView() {
     commands: { exists: () => true, run: () => undefined },
     log: () => undefined,
     toast: () => undefined,
-    setScope: () => undefined,
+    setScope: (scope) => handed.push(scope),
+    setFocusTarget: (target) => handed.push(target),
     pushScope: () => ({ pop: () => undefined, onBaseChanged: () => undefined }),
     addOverlay(element) {
       overlay.append(asFake(element));
@@ -114,8 +118,23 @@ async function shownView() {
   });
   await view.load();
   view.shown();
-  view.commands.focusRows();
-  return { view, overlay, written, anchors, sheet: asFake(view.sheet) };
+  const move = (direction: PaneDirection): boolean => {
+    const target = handed.at(-1);
+    if (typeof target !== 'object') {
+      throw new Error('no focus target handed over last');
+    }
+    return target.move(direction);
+  };
+  move('right');
+  return {
+    view,
+    overlay,
+    written,
+    anchors,
+    handed,
+    move,
+    sheet: asFake(view.sheet),
+  };
 }
 
 // Lets the row actions, which read the files first, run.
@@ -146,6 +165,32 @@ describe('createSettingsView', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
+
+  it.each([
+    { from: 'rows', direction: 'left', after: 'sections', moved: true },
+    { from: 'sections', direction: 'right', after: 'rows', moved: true },
+    { from: 'rows', direction: 'right', after: 'rows', moved: false },
+    { from: 'sections', direction: 'left', after: 'sections', moved: false },
+    { from: 'rows', direction: 'up', after: 'rows', moved: false },
+    { from: 'sections', direction: 'down', after: 'sections', moved: false },
+  ] as const)(
+    'focusTarget_MovesBetweenSectionsAndRows: $from $direction',
+    async ({ from, direction, after, moved }) => {
+      const { view, handed, move } = await shownView();
+      if (from === 'sections') {
+        move('left');
+      }
+      const handedBefore = handed.length;
+      const pane = { sections: view.sideBar, rows: view.sheet };
+
+      expect(move(direction)).toBe(moved);
+
+      expect(fakeDocument.activeElement).toBe(asFake(pane[after]));
+      expect(handed.slice(handedBefore).map((each) => typeof each)).toEqual(
+        moved ? ['string', 'object'] : [],
+      );
+    },
+  );
 
   it('a layout reload keeps the open row box', async () => {
     const { view, sheet } = await shownView();

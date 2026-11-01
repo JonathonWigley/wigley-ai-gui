@@ -33,12 +33,6 @@ export const settingsManifest = definePlugin({
       group: 'settings',
       runsIn: 'page',
     },
-    focusSections: {
-      label: 'focus the sections',
-      group: 'focus',
-      runsIn: 'page',
-    },
-    focusRows: { label: 'focus the rows', group: 'focus', runsIn: 'page' },
     boxAccept: { label: 'save the value', group: 'box', runsIn: 'page' },
     boxCancel: { label: 'cancel the edit', group: 'box', runsIn: 'page' },
     pickerDown: { label: 'next choice', group: 'picker', runsIn: 'page' },

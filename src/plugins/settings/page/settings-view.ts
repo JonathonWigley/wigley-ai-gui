@@ -3,6 +3,7 @@ import type { EditorHost } from '../../../contracts/editor';
 import type { UserKeymap } from '../../../contracts/keymap';
 import type { Log } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
+import type { FocusTarget } from '../../../contracts/panes';
 import type { Platform } from '../../../contracts/platform';
 import type {
   PageChannel,
@@ -178,6 +179,9 @@ export interface SettingsViewDeps {
   log: Log;
   toast(text: string, tone: ToastTone): void;
   setScope(scope: 'sections' | 'rows'): void;
+  // Hands over the target the focus keys move between the sections and the
+  // rows; the view calls it after each `setScope`, which drops it.
+  setFocusTarget(target: FocusTarget): void;
   pushScope(scope: 'box' | 'picker'): PushedScope;
   addOverlay(element: HTMLElement): Disposable;
   // Keeps the keys of the settings `command` drawn in `element`, shown while
@@ -207,8 +211,6 @@ export type SettingsCommand =
   | 'removeBind'
   | 'filter'
   | 'clearFilter'
-  | 'focusSections'
-  | 'focusRows'
   | 'boxAccept'
   | 'boxCancel'
   | 'pickerDown'
@@ -610,6 +612,22 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       deps.toast(errorText(error), 'error');
     });
 
+  // `right` from the sections focuses the rows and `left` from the rows the
+  // sections; every other move leaves focus where it is.
+  const focusTarget: FocusTarget = {
+    move(direction) {
+      if (focus === 'sections' && direction === 'right') {
+        focusRows();
+        return true;
+      }
+      if (focus === 'rows' && direction === 'left') {
+        focusSections();
+        return true;
+      }
+      return false;
+    },
+  };
+
   // Each focus change closes an open filter first: `setScope` leaves the
   // filter's pushed scope in force.
   const focusRows = () => {
@@ -619,6 +637,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     }
     focus = 'rows';
     deps.setScope('rows');
+    deps.setFocusTarget(focusTarget);
     rowsSheet.focus();
     markCursor();
   };
@@ -630,6 +649,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     }
     focus = 'sections';
     deps.setScope('sections');
+    deps.setFocusTarget(focusTarget);
     sections.element.focus();
     markCursor();
   };
@@ -998,8 +1018,6 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
       draw();
       logFilter();
     },
-    focusSections,
-    focusRows,
     boxAccept() {
       if (filterScope !== null) {
         logFilter();

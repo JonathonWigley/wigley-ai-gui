@@ -9,6 +9,7 @@ import type {
   ScrollStep,
 } from '../../../contracts/editor';
 import type { Log } from '../../../contracts/log';
+import type { FocusTarget, PaneDirection } from '../../../contracts/panes';
 import type {
   PageCommandContext,
   PageStart,
@@ -104,17 +105,6 @@ export function primerCommandHandlers(
     needUnclear: handler(() => setNeed(deps, 'unclear')),
     addExtraTask: handler(() => addExtraTask(deps)),
     removeExtraTask: handler(() => removeExtraTask(deps)),
-    focusTasks: handler((box) => {
-      commitNewItem(deps, box);
-      boxes.leave();
-      focusPane(deps, 'tasks', 'focused the tasks');
-    }),
-    focusItems: handler((box) => {
-      commitNewItem(deps, box);
-      boxes.leave();
-      focusPane(deps, 'items', 'focused the items');
-    }),
-    focusCard: handler(() => focusPane(deps, 'card', 'focused the card')),
     toggleInclude: handler(() => toggleInclude(deps)),
     addItem: handler(() => focusAddItem(deps)),
     editItemComment: handler(() => focusItemComment(deps)),
@@ -281,13 +271,66 @@ function removeExtraTask(deps: PrimerCommandDeps) {
   }
 }
 
-function focusPane(deps: PrimerCommandDeps, pane: PrimerPane, line: string) {
+// The panes the focus keys step through, left to right.
+const PANE_ORDER: readonly PrimerPane[] = ['tasks', 'items', 'card'];
+
+// The shown primer's panes for the core's focus keys: left and right step
+// through tasks, items and card, and every other move returns false. A move
+// first shows the focused box's row; one into a column commits the add-item
+// text and leaves the box, as a click there would.
+export function primerFocusTarget(
+  deps: Pick<PrimerCommandDeps, 'store' | 'boxes' | 'log'>,
+): FocusTarget {
+  return {
+    move(direction) {
+      const box = deps.boxes.active() ?? undefined;
+      showBoxTarget(deps.store, box);
+      const primer = shownPrimer(deps.store.get());
+      const pane = primer === null ? undefined : paneTo(primer.pane, direction);
+      if (pane === undefined) {
+        return false;
+      }
+      if (pane !== 'card') {
+        commitNewItem(deps, box);
+        deps.boxes.leave();
+      }
+      return focusPane(deps, pane);
+    },
+  };
+}
+
+// The pane beside `from` toward `direction`; undefined past either end and
+// for up and down.
+function paneTo(
+  from: PrimerPane,
+  direction: PaneDirection,
+): PrimerPane | undefined {
+  const at = PANE_ORDER.indexOf(from);
+  switch (direction) {
+    case 'left':
+      return PANE_ORDER[at - 1];
+    case 'right':
+      return PANE_ORDER[at + 1];
+    case 'up':
+    case 'down':
+      return undefined;
+  }
+}
+
+// Focuses `pane` of the active primer, logging and returning true when focus
+// moved.
+function focusPane(
+  deps: Pick<PrimerCommandDeps, 'store' | 'log'>,
+  pane: PrimerPane,
+): boolean {
   const before = activeForm(deps.store.get())?.pane;
   deps.store.dispatch({ type: 'focusPane', pane });
   const after = activeForm(deps.store.get())?.pane;
-  if (after !== undefined && after !== before) {
-    deps.log(SOURCE, line);
+  const moved = after !== undefined && after !== before;
+  if (moved) {
+    deps.log(SOURCE, `focused the ${pane}`);
   }
+  return moved;
 }
 
 // The shown primer's card row and its item; null when the card shows no item.

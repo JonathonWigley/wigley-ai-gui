@@ -20,9 +20,6 @@ export const primerManifest = definePlugin({
       group: 'tasks',
       runsIn: 'page',
     },
-    focusTasks: { label: 'focus the tasks', group: 'panes', runsIn: 'page' },
-    focusItems: { label: 'focus the items', group: 'panes', runsIn: 'page' },
-    focusCard: { label: 'focus the card', group: 'panes', runsIn: 'page' },
     toggleInclude: {
       label: 'include the item',
       group: 'items',

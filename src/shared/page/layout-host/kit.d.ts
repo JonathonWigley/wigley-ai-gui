@@ -69,14 +69,15 @@ export interface BaseKit {
   ): HTMLElement;
   // `section.context`: a section header over the text as markdown; nothing and null for blank text.
   section(parent: HTMLElement, label: string, text: string): HTMLElement | null;
-  // The keys bound to the owner's command (its short name, as `choose1`) in the scope of the part drawing, as
-  // `keysFor` reads it; null when unbound or unknown. It reads the keymap once, when called, so text a part draws from
+  // The keys bound to the owner's command (its short name, as `choose1`), or to a name holding a `.` read as a
+  // qualified id (as `panes.focusLeft`), in the scope of the part drawing, as `keysFor` reads it; null when unbound or
+  // unknown. It reads the keymap once, when called, so text a part draws from
   // it keeps the keys of the part's build after a rebind; draw a hint with `keyHint` for one that follows the keymap.
   keys(command: string): string | null;
   // `span` (with `options.className`): an anchor for the owner's command `command` in the scope of the part drawing;
-  // it shows while that scope is in force and the hints setting is on, and follows keymap changes. `options.label`
-  // draws the command's label after the keys, or the given text. Empty while unbound or for a name no command of the
-  // owner has.
+  // a name holding a `.` names any plugin's command by its qualified id (as `panes.focusLeft`). It shows while that
+  // scope is in force and the hints setting is on, and follows keymap changes. `options.label` draws the command's
+  // label after the keys, or the given text. Empty while unbound or for a short name no command of the owner has.
   keyHint(
     parent: HTMLElement,
     command: string,
@@ -122,8 +123,8 @@ export interface BaseKit {
   icon(parent: HTMLElement, name: string, className?: string): HTMLElement;
   // `span.ui-key-chevron` reading `text`, placed beside a key hint; it hides and shows with that hint.
   chevron(parent: HTMLElement, text: string): HTMLElement;
-  // `span.ui-key-edge`: a focus move's prompt for the owner's command `command`, its hint and chevron as `options`
-  // places them.
+  // `span.ui-key-edge`: a focus move's prompt for `command`, named as `keyHint` names it (the core's
+  // `panes.focusLeft` or `panes.focusRight` for a move between panes), its hint and chevron as `options` places them.
   edge(
     parent: HTMLElement,
     command: string,

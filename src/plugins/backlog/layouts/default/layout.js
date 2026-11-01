@@ -113,7 +113,7 @@ const layout = {
     hint(keys, kit, 'create', 'new');
     hint(keys, kit, 'rescan', 'rescan');
     hint(keys, kit, 'commit', 'commit');
-    edge(header, kit, 'end', 'focusDetail', 'detail');
+    edge(header, kit, 'end', 'panes.focusRight', 'detail');
     kit.filterBox(root);
     kit.rows(root);
     return { element: root };
@@ -121,7 +121,7 @@ const layout = {
   detail(parent, kit) {
     const root = paneRoot(parent, kit);
     const head = kit.el(root, 'div', 'backlog-detail-head');
-    edge(head, kit, 'start', 'focusList', 'list');
+    edge(head, kit, 'start', 'panes.focusLeft', 'list');
     hint(head, kit, 'openInDocs', 'docs');
     kit.body(root);
     kit.editor(root);

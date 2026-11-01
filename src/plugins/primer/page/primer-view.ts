@@ -5,7 +5,11 @@ import type { ContentScroll, ScrollStep } from '../../../contracts/editor';
 import type { ViewScope } from '../../../contracts/keymap';
 import type { Log } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
-import type { ResizeTarget } from '../../../contracts/panes';
+import {
+  type FocusTarget,
+  PANE_FOCUS_COMMANDS,
+  type ResizeTarget,
+} from '../../../contracts/panes';
 import type { Platform } from '../../../contracts/platform';
 import type {
   PluginAreas,
@@ -88,6 +92,7 @@ import {
   createTasksKit,
   type PrimerPartKitDeps,
 } from './layout/primer-kit';
+import { primerFocusTarget } from './primer-commands';
 import { reviewFooter, reviewInput, taskName } from './primer-review';
 import {
   cardRow,
@@ -123,9 +128,10 @@ export interface PrimerViewDeps {
   sessions: Pick<SessionsPageExports, 'addTab'>;
   beforeClose(sessionId: string): boolean;
   setScope(scope: PrimerScopeName): void;
-  // Hands the resize keys the split of the focused pane; called after each
-  // setScope.
+  // Hands the resize keys the split of the focused pane, and the focus keys
+  // the primer's panes; both called after each setScope.
   setResizeTarget(target: ResizeTarget | null): void;
+  setFocusTarget(target: FocusTarget | null): void;
   pushConfirmScope(): PushedScope;
   store: PrimerStore;
   boxes: EditorBoxes<PrimerBox>;
@@ -259,9 +265,11 @@ export function mountPrimerTab(deps: PrimerViewDeps): PrimerTab {
   const { areas, store, boxes } = deps;
   moveRailWidth(deps.uiState);
   const primerViews = new Map<string, PrimerFormView>();
+  const focusTarget = primerFocusTarget(deps);
   const setScopeFor = (state: PrimerState) => {
     deps.setScope(scopeOf(state));
     deps.setResizeTarget(resizeTargetOf(state, primerViews));
+    deps.setFocusTarget(hasPanes(state) ? focusTarget : null);
   };
   const tabs = createSessionFormTabs({
     addTab: (sessionId, tab) => deps.sessions.addTab(sessionId, tab),
@@ -390,6 +398,11 @@ function moveRailWidth(uiState: UiState) {
   }
   uiState.set(TASKS_WIDTH_KEY, railWidth);
   uiState.set(RAIL_WIDTH_KEY, undefined);
+}
+
+// Whether the primer view shows a primer's panes: tasks, items and card.
+function hasPanes(state: PrimerState): boolean {
+  return state.view === 'primer' && activeForm(state) !== null;
 }
 
 // The split the resize keys move: the shown primer view's split of the
@@ -600,25 +613,29 @@ function shownColumn(name: PrimerColumn, parts: ColumnParts): ShownColumn {
   return { name, parts, drawn: null, primer: null, selection: null };
 }
 
-// A `span` of `className` anchored to the primer `command`.
+// A `span` of `className` anchored to `command`.
 function anchoredSpan(
   keys: AnchorKeys,
   className: string,
-  command: PrimerCommandName,
+  command: CommandId,
   options: AnchorOptions,
 ): HTMLElement {
   const node = element('span', className);
-  keys.anchor(node, primerCommand(command), options);
+  keys.anchor(node, command, options);
   return node;
 }
 
 // `⌃H ▲ ▼ ⌃L`, the row pair at a column header, its keys in `scope`.
 function rowStepEdge(keys: AnchorKeys, scope: ViewScope): HTMLElement {
   return keyEdge('primer-column-edge', [
-    anchoredSpan(keys, 'primer-column-key', 'prevRow', { scope }),
+    anchoredSpan(keys, 'primer-column-key', primerCommand('prevRow'), {
+      scope,
+    }),
     keyChevron('▲'),
     keyChevron('▼'),
-    anchoredSpan(keys, 'primer-column-key', 'nextRow', { scope }),
+    anchoredSpan(keys, 'primer-column-key', primerCommand('nextRow'), {
+      scope,
+    }),
   ]);
 }
 
@@ -630,7 +647,10 @@ function columnRowPrompt(
 ): Pick<ColumnParts, 'rowPrompt' | 'promptKeys'> {
   const placed = promptKeys.map(
     ([command, label, field]): [HTMLElement, keyof RowPrompt] => [
-      anchoredSpan(keys, 'primer-row-key', command, { scope, label }),
+      anchoredSpan(keys, 'primer-row-key', primerCommand(command), {
+        scope,
+        label,
+      }),
       field,
     ],
   );
@@ -655,7 +675,7 @@ function mountTasksColumn(
   head.append(
     statusLine.element,
     edge,
-    anchoredSpan(keys, 'primer-column-key', 'focusItems', {
+    anchoredSpan(keys, 'primer-column-key', PANE_FOCUS_COMMANDS.right, {
       scope,
       label: 'items',
     }),
@@ -665,7 +685,7 @@ function mountTasksColumn(
   const reviewKeys = keyStack(
     'primer-review-keys',
     (['tasks', 'items', 'card'] as const).map((pane) =>
-      anchoredSpan(keys, 'primer-review-key', 'openReview', {
+      anchoredSpan(keys, 'primer-review-key', primerCommand('openReview'), {
         scope: primerScope(pane),
       }),
     ),
@@ -699,9 +719,11 @@ function mountItemsColumn(column: HTMLElement, keys: AnchorKeys): ColumnParts {
   const head = element('header', 'primer-column-head');
   head.append(
     keyChevron('‹ tasks'),
-    anchoredSpan(keys, 'primer-column-key', 'focusTasks', { scope }),
+    anchoredSpan(keys, 'primer-column-key', PANE_FOCUS_COMMANDS.left, {
+      scope,
+    }),
     edge,
-    anchoredSpan(keys, 'primer-column-key', 'focusCard', {
+    anchoredSpan(keys, 'primer-column-key', PANE_FOCUS_COMMANDS.right, {
       scope,
       label: 'card',
     }),
@@ -723,7 +745,7 @@ function cardEdgeStrip(keys: AnchorKeys): HTMLElement {
   const strip = element('div', 'primer-card-edge');
   strip.append(
     keyChevron('‹ items'),
-    anchoredSpan(keys, 'primer-card-edge-key', 'focusItems', {
+    anchoredSpan(keys, 'primer-card-edge-key', PANE_FOCUS_COMMANDS.left, {
       scope: primerScope('card'),
     }),
   );

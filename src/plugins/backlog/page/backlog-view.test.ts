@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EditorEvents, EditorHost } from '../../../contracts/editor';
+import type { FocusTarget, PaneDirection } from '../../../contracts/panes';
 import type { Paths } from '../../../contracts/paths';
 import type { PageChannel } from '../../../contracts/plugin';
 import type { FollowupItem } from '../../../shared/followups/followup-file';
@@ -21,7 +22,7 @@ import type { KeysPageExports } from '../../keys/contract';
 import type { BacklogChannel, BacklogRead } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type { BacklogLayout } from '../layouts/layout';
-import { type BacklogView, createBacklogView } from './backlog-view';
+import { createBacklogView } from './backlog-view';
 
 const ROOT = '/home/repo/docs/features';
 
@@ -112,15 +113,19 @@ async function settle() {
   await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-// One call to the view's `setScope` or `setResizeTarget`; a target is
-// `'target'` when one was set, else null.
-type ScopeCall = ['setScope', string] | ['setResizeTarget', 'target' | null];
+// One call to the view's `setScope`, `setResizeTarget` or `setFocusTarget`; a
+// target is `'target'` when one was set, else null.
+type ScopeCall =
+  | ['setScope', string]
+  | ['setResizeTarget' | 'setFocusTarget', 'target' | null];
 
 // A Backlog view, shown, over a channel that loads `READ`, with its home
-// open and its first follow-up selected. `calls` logs every `setScope` and
-// `setResizeTarget` call, in call order.
+// open and its first follow-up selected. `calls` logs every `setScope`,
+// `setResizeTarget` and `setFocusTarget` call, in call order; `move` presses
+// the core's focus key toward `direction` on the last focus target set.
 async function backlogSetup() {
   const calls: ScopeCall[] = [];
+  let focusTarget: FocusTarget | null = null;
   const { host, created } = fakeEditorHost();
   const overlays: FakeElement[] = [];
   const recorded = recordingAnchors();
@@ -154,6 +159,10 @@ async function backlogSetup() {
     setScope: (scope) => calls.push(['setScope', scope]),
     setResizeTarget: (target) =>
       calls.push(['setResizeTarget', target === null ? null : 'target']),
+    setFocusTarget: (target) => {
+      focusTarget = target;
+      calls.push(['setFocusTarget', target === null ? null : 'target']);
+    },
     pushScope: () => ({ pop: () => undefined, onBaseChanged: () => undefined }),
     addOverlay: (element) => {
       overlays.push(asFake(element));
@@ -171,7 +180,9 @@ async function backlogSetup() {
   await settle();
   view.commands.open();
   await settle();
-  return { view, created, anchors, overlays, sheet, calls };
+  const move = (direction: PaneDirection) =>
+    focusTarget?.move(direction) ?? false;
+  return { view, created, anchors, overlays, sheet, calls, move };
 }
 
 function withUser(layout: BacklogLayout) {
@@ -385,7 +396,7 @@ describe('backlog view layouts', () => {
   );
 });
 
-describe('backlog resize target', () => {
+describe('backlog pane targets', () => {
   beforeEach(() => {
     installFocusFakeDom((name, value) => vi.stubGlobal(name, value));
   });
@@ -394,42 +405,71 @@ describe('backlog resize target', () => {
   });
 
   it.each<{
-    command: string;
-    run(view: BacklogView): void;
+    name: string;
+    run(setup: Awaited<ReturnType<typeof backlogSetup>>): void;
     last: ScopeCall[];
   }>([
     {
-      command: 'focusList',
-      run: (view) => view.commands.focusList(),
-      last: [
-        ['setScope', 'list'],
-        ['setResizeTarget', 'target'],
-      ],
-    },
-    {
-      command: 'focusDetail',
-      run: (view) => view.commands.focusDetail(),
+      name: 'a focus move to the detail',
+      run: (setup) => setup.move('right'),
       last: [
         ['setScope', 'detail'],
         ['setResizeTarget', 'target'],
+        ['setFocusTarget', 'target'],
       ],
     },
     {
-      command: 'sideBarOpenedOver',
-      run: (view) => view.sideBarOpenedOver(),
+      name: 'sideBarOpenedOver',
+      run: (setup) => setup.view.sideBarOpenedOver(),
       last: [
         ['setScope', 'list'],
         ['setResizeTarget', null],
+        ['setFocusTarget', 'target'],
       ],
     },
   ])(
-    '$command sets the scope, then the resize target',
+    '$name sets the scope, then the resize and focus targets',
     async ({ run, last }) => {
-      const { view, calls } = await backlogSetup();
+      const setup = await backlogSetup();
 
-      run(view);
+      run(setup);
 
-      expect(calls.slice(-2)).toEqual(last);
+      expect(setup.calls.slice(-3)).toEqual(last);
+    },
+  );
+
+  // `scope` is the scope the view sets last; a move that returns false sets
+  // none.
+  it.each<{
+    from: 'list' | 'detail' | 'homes';
+    direction: PaneDirection;
+    scope: string;
+    moved: boolean;
+  }>([
+    { from: 'list', direction: 'right', scope: 'detail', moved: true },
+    { from: 'detail', direction: 'left', scope: 'list', moved: true },
+    { from: 'list', direction: 'left', scope: 'list', moved: false },
+    { from: 'detail', direction: 'right', scope: 'detail', moved: false },
+    { from: 'homes', direction: 'right', scope: 'list', moved: false },
+    { from: 'list', direction: 'up', scope: 'list', moved: false },
+    { from: 'detail', direction: 'down', scope: 'detail', moved: false },
+  ])(
+    'moves focus $direction from the $from to scope $scope',
+    async ({ from, direction, scope, moved }) => {
+      const setup = await backlogSetup();
+      if (from === 'detail') {
+        setup.move('right');
+      } else if (from === 'homes') {
+        setup.view.sideBarOpenedOver();
+      }
+      const before = setup.calls.length;
+
+      const result = setup.move(direction);
+
+      const scopes = setup.calls.filter((call) => call[0] === 'setScope');
+      expect(result).toBe(moved);
+      expect(scopes.at(-1)?.[1]).toBe(scope);
+      expect(setup.calls.length > before).toBe(moved);
     },
   );
 });

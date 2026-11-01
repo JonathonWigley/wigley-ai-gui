@@ -9,7 +9,7 @@ import {
 } from 'vitest';
 import type { CommandId } from '../../../contracts/commands';
 import type { EditorHost } from '../../../contracts/editor';
-import type { ResizeTarget } from '../../../contracts/panes';
+import type { FocusTarget, ResizeTarget } from '../../../contracts/panes';
 import { createEditorBoxes } from '../../../shared/page/editor-boxes';
 import {
   USER_LAYOUT,
@@ -72,7 +72,8 @@ interface NamedAnchor {
 // Primer p1, holding `entries`, open and active in its session's Primer tab,
 // the visible tab; `tab` is the tab's element. The boxes and the commands are
 // wired as the page wires them; `anchors` holds every anchor the view named,
-// `resizeTargets` every split handed to the resize keys, and `uiWrites` every
+// `resizeTargets` every split handed to the resize keys, `focusTargets` every
+// target handed to the focus keys, and `uiWrites` every
 // uiState write over the values `uiState` starts with.
 function primerTabSetup(
   parts: { entries?: PrimerEntry[]; uiState?: Record<string, unknown> } = {},
@@ -105,6 +106,7 @@ function primerTabSetup(
   );
   const anchors: NamedAnchor[] = [];
   const resizeTargets: (ResizeTarget | null)[] = [];
+  const focusTargets: (FocusTarget | null)[] = [];
   const uiValues = new Map(Object.entries(parts.uiState ?? {}));
   const uiWrites: [string, unknown][] = [];
   let tab: FakeElement | null = null;
@@ -127,6 +129,7 @@ function primerTabSetup(
     beforeClose: () => true,
     setScope: () => undefined,
     setResizeTarget: (target) => resizeTargets.push(target),
+    setFocusTarget: (target) => focusTargets.push(target),
     pushConfirmScope: () => ({
       pop: () => undefined,
       onBaseChanged: () => undefined,
@@ -184,6 +187,7 @@ function primerTabSetup(
     logs,
     anchors,
     resizeTargets,
+    focusTargets,
     uiWrites,
     sessionId: presented.sessionId,
     tab: tab as FakeElement,
@@ -296,6 +300,16 @@ describe('primer column widths', () => {
       expect(target === null).toBe(key === null);
     },
   );
+
+  it('hands the focus keys the panes in the primer view, and none in the review', () => {
+    const { store, focusTargets } = primerTabSetup();
+    const inPrimer = focusTargets.at(-1) ?? null;
+
+    store.dispatch({ type: 'openReview' });
+
+    expect(inPrimer).not.toBeNull();
+    expect(focusTargets.at(-1)).toBeNull();
+  });
 });
 
 describe('primer tab under the cancel prompt', () => {
@@ -463,11 +477,13 @@ describe('primer add-item box', () => {
     expect(setup.boxes.active()).toBeNull();
   });
 
-  it('adds the item once on focusItems', () => {
+  it('adds the item once on a focus move to the items', () => {
     const setup = primerTabSetup();
     typeNewItem(setup, 'Test the store');
 
-    setup.run('focusItems');
+    const moved = setup.focusTargets.at(-1)?.move('left');
+
+    expect(moved).toBe(true);
 
     expect(itemCount(setup)).toBe(3);
     expect(addedLines(setup.logs)).toEqual([
@@ -575,23 +591,23 @@ describe('primer anchors', () => {
       expected: [
         ['primer.prevRow', { scope: 'primer.tasks' }],
         ['primer.nextRow', { scope: 'primer.tasks' }],
-        ['primer.focusItems', { scope: 'primer.tasks', label: 'items' }],
+        ['panes.focusRight', { scope: 'primer.tasks', label: 'items' }],
       ],
     },
     {
       name: 'the items column head',
       container: (tab) => pane(columnOf(tab, 'items'), 'primer-column-head'),
       expected: [
-        ['primer.focusTasks', { scope: 'primer.items' }],
+        ['panes.focusLeft', { scope: 'primer.items' }],
         ['primer.prevRow', { scope: 'primer.items' }],
         ['primer.nextRow', { scope: 'primer.items' }],
-        ['primer.focusCard', { scope: 'primer.items', label: 'card' }],
+        ['panes.focusRight', { scope: 'primer.items', label: 'card' }],
       ],
     },
     {
       name: 'the card edge strip',
       container: (tab) => pane(tab, 'primer-card-edge'),
-      expected: [['primer.focusItems', { scope: 'primer.card' }]],
+      expected: [['panes.focusLeft', { scope: 'primer.card' }]],
     },
   ])('anchors the header keys of $name', ({ container, expected }) => {
     const { tab, anchors } = primerTabSetup();
@@ -901,7 +917,9 @@ describe('primer layout', () => {
       inside(node).filter((anchor) => anchor.command === 'primer.addExtraTask');
     const firstTasks = addsIn(columnBody(tab, 'tasks'));
     const firstCard = inside(pane(tab, 'primer-card'));
-    const edges = anchorsOf(anchors, 'primer.focusItems');
+    const edges = anchors.filter((anchor) =>
+      anchor.command.startsWith('panes.focus'),
+    );
     const splitAnchors = anchors.filter((anchor) =>
       anchor.command.startsWith('panes.resizePane'),
     );

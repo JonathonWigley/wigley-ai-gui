@@ -349,7 +349,7 @@ describe('primer state', () => {
       cardColumn: 'tasks',
     },
   ])(
-    "moves focus and keeps the card's column on focusCard: $from to $pane",
+    "moves focus and keeps the card's column on a focus to the card: $from to $pane",
     ({ start, pane, cardColumn }) => {
       const primer = primerOf(focus(start(stateWith()), pane));
 

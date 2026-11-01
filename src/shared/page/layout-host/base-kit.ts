@@ -127,6 +127,8 @@ export function createBaseKit(deps: BaseKitDeps): BaseKit {
     deps.scope === null
       ? deps.keys.keysFor(id)
       : deps.keys.keysFor(id, deps.scope);
+  const commandId = (name: string) =>
+    name.includes('.') ? name : deps.commandNamed(name);
   const kit: BaseKit = {
     el(parent, tagName, className = '', text) {
       return appended(
@@ -158,12 +160,12 @@ export function createBaseKit(deps: BaseKitDeps): BaseKit {
       return appended(parent, section);
     },
     keys(command) {
-      const id = deps.commandNamed(command);
+      const id = commandId(command);
       return id === null ? null : keysFor(id);
     },
     keyHint(parent, command, options = {}) {
       const node = appended(parent, element('span', options.className ?? ''));
-      const id = deps.commandNamed(command);
+      const id = commandId(command);
       if (id !== null) {
         const anchor = deps.keys.anchor(
           node,

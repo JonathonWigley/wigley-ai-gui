@@ -4,7 +4,11 @@ import type { Disposable } from '../../../contracts/disposable';
 import type { EditorHost, ScrollStep } from '../../../contracts/editor';
 import type { Log } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
-import type { ResizeTarget } from '../../../contracts/panes';
+import type {
+  FocusTarget,
+  PaneDirection,
+  ResizeTarget,
+} from '../../../contracts/panes';
 import type { Paths } from '../../../contracts/paths';
 import type { Platform } from '../../../contracts/platform';
 import type {
@@ -64,6 +68,7 @@ import {
   actedRow,
   type BacklogConfirm,
   type BacklogEditor,
+  type BacklogFocus,
   type BacklogRow,
   type BacklogState,
   backlogReducer,
@@ -144,6 +149,8 @@ export interface BacklogViewDeps {
   // Sets the divider the resize keys move, after each `setScope`: the list |
   // detail split, or null while the homes have focus, which moves the side bar.
   setResizeTarget(target: ResizeTarget | null): void;
+  // Sets the panes the focus keys move between, after each `setScope`.
+  setFocusTarget(target: FocusTarget | null): void;
   pushScope(scope: BacklogPushedScope): PushedScope;
   addOverlay(element: HTMLElement): Disposable;
   run(command: CommandId): void;
@@ -277,6 +284,19 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     timers: deps.timers,
   });
   split.element.classList.add('backlog-split');
+  // The list and the detail, for the focus keys; the homes and an open
+  // editor take no move.
+  const focusTarget: FocusTarget = {
+    move(direction) {
+      const state = store.get();
+      const to = state.editor === null ? paneTo(state.focus, direction) : null;
+      if (to === null) {
+        return false;
+      }
+      dispatch({ type: 'focus', focus: to });
+      return store.get().focus === to;
+    },
+  };
   split.start.append(listPane);
   split.end.append(detailPane);
   const contentSheet = sheet();
@@ -891,6 +911,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
         if (deps.isShown()) {
           deps.setScope(scopeOf(state));
           deps.setResizeTarget(state.focus === 'homes' ? null : split);
+          deps.setFocusTarget(focusTarget);
         }
       }),
     );
@@ -1201,8 +1222,6 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
       log(`agent-ready only ${store.get().isAgentReadyOnly ? 'on' : 'off'}`);
     },
     openInDocs,
-    focusDetail: () => dispatch({ type: 'focus', focus: 'detail' }),
-    focusList: () => dispatch({ type: 'focus', focus: 'items' }),
     lineDown: () => scrollDetail('line', 1),
     lineUp: () => scrollDetail('line', -1),
     halfPageDown: () => scrollDetail('halfPage', 1),
@@ -1301,6 +1320,21 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
 }
 
 // A row's `cursorActions` slot, which the cursor prompt moves into.
+// The pane a focus move toward `direction` reaches from `from`: right from the
+// list to the detail, left back; null for every other move.
+function paneTo(
+  from: BacklogFocus,
+  direction: PaneDirection,
+): BacklogFocus | null {
+  if (from === 'items' && direction === 'right') {
+    return 'detail';
+  }
+  if (from === 'detail' && direction === 'left') {
+    return 'items';
+  }
+  return null;
+}
+
 function cursorActionsSlot(): HTMLElement {
   return element('span', 'backlog-row-actions-slot');
 }

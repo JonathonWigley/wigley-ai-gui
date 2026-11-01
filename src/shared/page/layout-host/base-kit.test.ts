@@ -10,10 +10,14 @@ import {
 } from './base-kit';
 import { recordingAnchors } from './test-layouts';
 
-const BOUND: Record<string, string> = { 'docs.open': 'Mod+O' };
+const BOUND: Record<string, string> = {
+  'docs.open': 'Mod+O',
+  'panes.focusLeft': 'Alt+H',
+};
 
 // A kit for owner `docs` whose only commands are `open` and `close`, with
-// `Mod+O` bound to `docs.open` in `docs.tree` alone, recording each anchor
+// `Mod+O` bound to `docs.open` and `Alt+H` to `panes.focusLeft` in
+// `docs.tree` alone, recording each anchor
 // and each keys read.
 function kitOver(scope: ViewScope | null) {
   const anchors: unknown[][] = [];
@@ -94,6 +98,14 @@ describe('createBaseKit', () => {
       anchored: [],
     },
     {
+      row: 'qualified id',
+      scope: 'docs.tree',
+      command: 'panes.focusLeft',
+      options: undefined,
+      className: '',
+      anchored: [['panes.focusLeft', { scope: 'docs.tree' }]],
+    },
+    {
       row: 'no scope',
       scope: null,
       command: 'close',
@@ -130,6 +142,12 @@ describe('createBaseKit', () => {
     },
     { row: 'unbound', scope: 'docs.tree', command: 'close', keys: null },
     { row: 'unknown name', scope: 'docs.tree', command: 'nope', keys: null },
+    {
+      row: 'qualified id',
+      scope: 'docs.tree',
+      command: 'panes.focusLeft',
+      keys: 'Alt+H',
+    },
   ])('keys_ReadsInScope: $row', ({ scope, command, keys }) => {
     const { kit, reads } = kitOver(scope);
 

@@ -140,7 +140,7 @@ describe('createDocsParts', () => {
     const hinted: Layout = {
       docHeader(parent, _input, kit) {
         const head = kit.el(parent, 'div', 'hinted');
-        kit.keyHint(head, 'focusTree');
+        kit.keyHint(head, 'backToTree');
         kit.editHint(head);
         return { element: head };
       },
@@ -165,7 +165,7 @@ describe('createDocsParts', () => {
     expect(asFake(slot).children).toEqual([]);
     expect(
       anchors.map(({ command, isDisposed }) => ({ command, isDisposed })),
-    ).toEqual([{ command: 'docs.focusTree', isDisposed: true }]);
+    ).toEqual([{ command: 'docs.backToTree', isDisposed: true }]);
     expect(asFake(slot).contains(asFake(editHint))).toBe(false);
   });
 });

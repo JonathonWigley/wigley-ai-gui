@@ -177,7 +177,8 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
 
     // `changed` reads the view only once a change is made, after creation.
     // Each scope the view sets is followed by `resizeTarget`, the divider the
-    // resize keys move while the view has the keys; null moves the side bar.
+    // resize keys move while the view has the keys (null moves the side bar),
+    // and by the view's focus target, which moves between its tree and doc.
     const createView = (
       viewId: string,
       sourceId: string,
@@ -207,11 +208,13 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         setScope: (scope) => {
           api.keys.setScope(scope);
           api.panes.setResizeTarget(resizeTarget);
+          api.panes.setFocusTarget(view.focusTarget);
         },
         pushScope: (scope) => api.keys.pushScope(scope),
         isActive,
         openChanged,
         revealTree,
+        isTreeShown: () => !isTreeHiddenIn(view),
         leafOpened,
         addOverlay: (element) => api.areas.overlay.contribute(element),
         layouts: () => current,
@@ -304,6 +307,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         closeOverlaysBesides(machineView);
         api.keys.setScope(machineView.focusScope());
         api.panes.setResizeTarget(null);
+        api.panes.setFocusTarget(machineView.focusTarget);
         machineView.showFirstTime();
       },
       hidden: () => undefined,
@@ -372,6 +376,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
           closeOverlaysBesides(added.view);
           api.keys.setScope(added.view.focusScope());
           api.panes.setResizeTarget(split);
+          api.panes.setFocusTarget(added.view.focusTarget);
           log('docs', 'Docs tab shown');
           added.view.showFirstTime();
         },
@@ -537,8 +542,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         rescan: onActiveView('rescan'),
         pickContext: onActiveView('pickContext'),
         toggleStar: onActiveView('toggleStar'),
-        focusDoc: onActiveView('focusDoc'),
-        focusTree: onActiveView('focusTree'),
+        backToTree: onActiveView('backToTree'),
         scrollDown: onActiveView('scrollDown'),
         scrollUp: onActiveView('scrollUp'),
         lineDown: onActiveView('lineDown'),

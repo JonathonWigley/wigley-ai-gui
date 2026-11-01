@@ -32,7 +32,7 @@ const layout = {
     for (const [command, label] of TREE_HINTS) {
       kit.keyHint(header, command, { label });
     }
-    const edge = kit.edge(header, 'focusDoc', {
+    const edge = kit.edge(header, 'panes.focusRight', {
       side: 'end',
       chevron: '›',
       label: 'doc',
@@ -91,7 +91,7 @@ const layout = {
   docPane(parent, _input, kit) {
     const frame = kit.el(parent, 'div', 'docs-doc-frame');
     const top = kit.el(frame, 'div', 'docs-doc-top');
-    const edge = kit.edge(top, 'focusTree', {
+    const edge = kit.edge(top, 'panes.focusLeft', {
       side: 'start',
       chevron: '‹ tree',
     });
@@ -101,7 +101,7 @@ const layout = {
   },
   emptyDoc(parent, input, kit) {
     const empty = kit.emptyState(parent, input.text);
-    kit.keyHint(empty, 'focusTree');
+    kit.keyHint(empty, 'panes.focusLeft');
     return { element: empty };
   },
   docHeader(parent, input, kit) {

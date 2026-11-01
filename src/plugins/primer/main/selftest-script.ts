@@ -38,7 +38,7 @@ const PRIMER_STEPS: SelfTestStep[] = [
   { keys: ['j'], expect: '[primer] selected task 2' },
   {
     keys: ['<A-l>'],
-    expect: '[page] <A-l> ran primer.focusItems',
+    expect: '[page] <A-l> ran panes.focusRight',
     checksFit: true,
     screenshot: 'items',
   },
@@ -49,7 +49,7 @@ const PRIMER_STEPS: SelfTestStep[] = [
   },
   { keys: ['j'], expect: '[primer] selected item 2 on task 2' },
   { keys: ['x'], expect: '[primer] left out item 2 on task 2' },
-  { keys: ['<A-h>'], expect: '[page] <A-h> ran primer.focusTasks' },
+  { keys: ['<A-h>'], expect: '[page] <A-h> ran panes.focusLeft' },
   { keys: ['j'], expect: '[primer] selected task 3' },
   { keys: ['u'], expect: '[page] u ran primer.needUnclear' },
   {
@@ -57,11 +57,11 @@ const PRIMER_STEPS: SelfTestStep[] = [
     expect: '[primer] selected task 2',
     why: 'Selecting a task selects its first item.',
   },
-  { keys: ['<A-l>'], expect: '[page] <A-l> ran primer.focusItems' },
+  { keys: ['<A-l>'], expect: '[page] <A-l> ran panes.focusRight' },
   { keys: ['j'], expect: '[primer] selected item 2 on task 2' },
   {
     keys: ['<A-l>'],
-    expect: '[page] <A-l> ran primer.focusCard',
+    expect: '[page] <A-l> ran panes.focusRight',
     checksFit: true,
     screenshot: 'item-card',
   },
@@ -88,8 +88,8 @@ const PRIMER_STEPS: SelfTestStep[] = [
     screenshot: 'task-card',
     why: 'The task card steps the tasks column.',
   },
-  { keys: ['<A-h>'], expect: '[page] <A-h> ran primer.focusItems' },
-  { keys: ['<A-h>'], expect: '[page] <A-h> ran primer.focusTasks' },
+  { keys: ['<A-h>'], expect: '[page] <A-h> ran panes.focusLeft' },
+  { keys: ['<A-h>'], expect: '[page] <A-h> ran panes.focusLeft' },
 ];
 
 // An extra task added from the tasks column and removed again, so the
@@ -101,8 +101,8 @@ const EXTRA_TASK_STEPS: SelfTestStep[] = [
     checksFit: true,
   },
   { keys: ['Escape', 'Escape'], expect: '[primer] left the box' },
-  { keys: ['<A-h>'], expect: '[page] <A-h> ran primer.focusItems' },
-  { keys: ['<A-h>'], expect: '[page] <A-h> ran primer.focusTasks' },
+  { keys: ['<A-h>'], expect: '[page] <A-h> ran panes.focusLeft' },
+  { keys: ['<A-h>'], expect: '[page] <A-h> ran panes.focusLeft' },
   { keys: ['D'], expect: '[primer] removed extra task extra-1' },
 ];
 

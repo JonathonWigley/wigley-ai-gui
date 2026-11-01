@@ -24,6 +24,7 @@ import {
   fileStatuses,
   isEntryIdInside,
   movedEntryId,
+  paneFocusedBy,
   parentId,
   provisionalEntry,
   readOnlyReason,
@@ -1801,4 +1802,21 @@ describe('treeRowStatus', () => {
       treeRowStatus(kind, noTexts, uncommittedA, [], asIs, posixPaths),
     ).toEqual({ mark: null, detail: null });
   });
+});
+
+describe('paneFocusedBy', () => {
+  it.each([
+    { from: 'tree', direction: 'right', isTreeShown: true, after: 'doc' },
+    { from: 'doc', direction: 'left', isTreeShown: true, after: 'tree' },
+    { from: 'doc', direction: 'left', isTreeShown: false, after: null },
+    { from: 'tree', direction: 'left', isTreeShown: true, after: null },
+    { from: 'doc', direction: 'right', isTreeShown: true, after: null },
+    { from: 'tree', direction: 'up', isTreeShown: true, after: null },
+    { from: 'doc', direction: 'down', isTreeShown: true, after: null },
+  ] as const)(
+    'paneFocusedBy: $from $direction, tree shown $isTreeShown',
+    ({ from, direction, isTreeShown, after }) => {
+      expect(paneFocusedBy(from, direction, isTreeShown)).toBe(after);
+    },
+  );
 });

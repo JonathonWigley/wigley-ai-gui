@@ -41,7 +41,7 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
   does the same for Docs mode and its docs tree. `<Leader>ks` / `<Leader>kd` do the same inside a box. No existing bind
   starts with `Space k`.
 - `Space v t` hides and shows the tree of whichever docs view shows: Docs mode's side bar, or a session Docs tab's
-  tree pane. `Alt+h` from the doc shows a hidden tree again.
+  tree pane. Esc from the doc shows a hidden tree again; `Alt+h` moves focus to the tree only while it shows.
 - In a window too narrow for the side bar, the side bar opens over the content, and a pick closes it: selecting a
   session row, or opening a doc by click, `l` or Enter. Expanding or collapsing a tree group keeps it open.
 - While a docs view's tree is hidden, by `Space k d`, `Space v t` or a window too narrow for it, a tree key moves focus to the doc
@@ -161,10 +161,10 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
   it (on the doc already shown it only focuses it, keeping an open editor), or toggles a group, expanding or
   collapsing it as `l` and `h` do, and under a filter, which shows every group expanded, steps into a group as `l`
   does; `h` collapses a group or goes to the parent; `/` filter, `a`, `A`, `r`, `d`, `R` rescan,
-  `c` pick the load-state folder, `s` star or unstar the selected doc; `Alt+l` / `Alt+h` move focus between tree and doc; `Ctrl+j`/`Ctrl+k` and
+  `c` pick the load-state folder, `s` star or unstar the selected doc; `Alt+l` / `Alt+h` (the core's `panes.focusRight` / `panes.focusLeft`) move focus between tree and doc; `Ctrl+j`/`Ctrl+k` and
   `Ctrl+Shift+j`/`Ctrl+Shift+k` scroll the doc beside the tree.
   Doc `j`/`k` scroll, `Ctrl+j`/`Ctrl+k` scroll the doc a line and `Ctrl+Shift+j`/`Ctrl+Shift+k` half a page, the
-  editor too while editing, `i` edit, Esc focuses the tree as `Alt+h` does; Esc in the editor's normal mode closes
+  editor too while editing, `i` edit, Esc (`docs.backToTree`) focuses the tree, showing it first when hidden; Esc in the editor's normal mode closes
   the editor as `:q` does.
   Conflict prompt `r` reload, `o` overwrite, Esc keep editing. Picker `j`/`k` move, Enter or `l` choose, Esc cancel. Text box Tab
   completes the path, Enter accepts, Esc cancels. Trash confirm `y` yes, `n` or Esc keep.
