@@ -105,7 +105,7 @@ export interface TabBarKit extends SessionsKit {
   prevTabEdge(parent: HTMLElement): HTMLElement;
   // `› ⌥O`: the next tab prompt.
   nextTabEdge(parent: HTMLElement): HTMLElement;
-  // `⌘W close`: the close prompt.
+  // `⌘W`: the close prompt, its key alone.
   closeHint(parent: HTMLElement): HTMLElement;
   // The `split-horizontal` button holding `⌥;`, which splits the pane with the new pane right.
   splitRightHint(parent: HTMLElement): HTMLElement;

@@ -201,7 +201,6 @@ export function createSessionsParts(deps: SessionsPartsDeps): SessionsParts {
           closeHint(hintParent) {
             placed.close = base.keyHint(hintParent, 'closeSession', {
               className: 'session-tabs-close',
-              label: 'close',
             });
             return placed.close;
           },

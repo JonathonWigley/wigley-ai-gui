@@ -30,7 +30,9 @@ so the same hands work in both tools.
 - Pane sizes are proportions of their parent, so panes scale with the window, as tmux's do.
 - A pane keeps at least 280 px of width beside another pane and 160 px of height above or below
   one (at most half its parent when the parent is smaller). A split that would leave either half
-  under its least is refused; a divider stops where it reaches the least.
+  under its least is refused; a divider stops where it reaches the least. A window shrinking past
+  the stored proportions draws the panes at their least and keeps the proportions, which come back
+  as the window grows; a resize key steps from the drawn size.
 
 ## The side bar and the focused pane
 
@@ -94,8 +96,15 @@ does not wrap, as the user's tmux binds stop at `pane_at_left` and the other edg
   Each tab plugin names its Codicon: Chat `comment`, Form `checklist`, Docs `book`, Primer
   `lightbulb`. A user layout can bring the titles back.
 - The focused pane shows a key prompt on each side that has a pane that way (`‹ ⌥H ⌃⌥H swap`),
-  so the user sees where focus and swap would go. The up and down prompts sit on the pane's top
-  and bottom edge and overlay the pane's tab bar buttons in a stacked pane.
+  so the user sees where focus and swap would go. None shares a divider's centre, where the
+  divider's resize prompt shows: the up prompt sits at the pane's right corner under the tab bar,
+  the down prompt at the right corner above the bottom edge, and the left and right prompts below
+  the pane's vertical centre.
+- Each tab bar holds the tab strip, `⌘W` (close the session) and three pane controls: split right,
+  split down and close the pane. The focused pane's controls carry their keys. An unfocused pane's
+  bar drops every key, taking no space, so its controls are bare icons and its strip keeps room in
+  a 280 px pane. This breaks the rule that an out-of-scope hint keeps its space: a pane's bar
+  changes width when focus moves.
 - A side bar row whose session shows in an unfocused pane carries a quieter on-screen mark, so the
   user sees which picks jump to a pane and which load into the focused one.
 
