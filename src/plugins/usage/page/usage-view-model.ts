@@ -40,7 +40,7 @@ export function statusLineInput(
     profileName: plan?.name ?? null,
     plans: plan?.usage?.rows.map(rowMeter) ?? [],
     note: planNote(plan),
-    stale: plan?.usage != null && plan.stale,
+    stale: plan !== null && plan.usage !== null && plan.stale,
   };
 }
 

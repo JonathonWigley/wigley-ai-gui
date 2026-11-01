@@ -111,7 +111,7 @@ In `src/contracts/agent.ts`, beside `AgentHarness`:
 
 ## The usage plugin
 
-`src/plugins/usage/` depends on `chat` and `sessions`.
+`src/plugins/usage/` depends on `chat`, `sessions` and `keys` (the page kit's key anchors).
 
 - **Main** keeps one plan per chat profile (re-read at the start of each poll round, so a profile added or removed in
   settings joins or leaves), polls every one at start and then every `usage.pollIntervalSeconds` (default 300, never

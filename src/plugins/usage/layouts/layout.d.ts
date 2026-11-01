@@ -24,7 +24,7 @@ export interface SessionLineInput {
 }
 // `session` is null while no session with usage shows. `profileName` is the shown plan's profile, null when there is
 // no profile at all. `note` (`plan loading`, `plan unavailable`, `no plan rows`, `no profiles`) stands in place of
-// `plans` when set. `stale` is true while the shown plan's last poll failed.
+// `plans` when set. `stale` is true while the shown plan's last poll failed after a good one.
 export interface StatusLineInput {
   session: SessionLineInput | null;
   profileName: string | null;

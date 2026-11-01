@@ -93,6 +93,6 @@ export const settingInfo: SettingInfos<Settings> = {
   'shell.layout': {
     label: 'Shell layout',
     description:
-      'The layout that draws the title bar, activity bar, side bar and status bar: a folder in the layouts/shell folder, or default.',
+      'The layout that draws the title bar, activity bar, side bar, right bar and status bar: a folder in the layouts/shell folder, or default.',
   },
 };

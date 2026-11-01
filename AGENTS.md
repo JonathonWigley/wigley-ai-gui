@@ -117,8 +117,8 @@ src/main/        core main process; main.ts is its composition root
   alerts/        native notification, Dock bounce or taskbar flash, and the badge, behind Alerts; the badge sums the
                  open counts each source sets
   claude-code/   Claude Code CLI adapter behind AgentHarness, which also lists and reads Claude's saved sessions and
-                 project folders and runs `claude auth` sign-in, sign-out and status, `claude -p /usage` (the plan usage poll) and
-                 the `get_context_usage` request to a session → the only place the app spawns `claude`
+                 project folders, runs `claude auth` sign-in, sign-out and status and `claude -p /usage` (the plan usage
+                 poll), and asks each session for `get_context_usage` → the only place the app spawns `claude`
   files/         file reads (whole as text or bytes, or the first bytes), modified times, atomic writes, rename, trash, folder lists
                  and watching, behind Files
   processes/     runs a program, killed past an optional timeout, and returns its exit code and output, behind
@@ -253,9 +253,9 @@ round; primer: an open primer), since main, not the page, decides.
   areas are the fixed set `AreaName` names, and a contribution carries an order and an alignment. Reworking the window's structure is
   editing the default layout or adding a plugin; track sizes are theme tokens, except the side and right bars' widths, which
   open at their tokens and then are the user's, resized through the split core and kept in `uiState`
-  (`shell.side-bar-width`, `shell.right-bar-width`). The right bar sits beside `main` across every mode, lies over `main`'s
-  end when the window leaves no room for both their least widths, stays hidden while empty, and takes contributions
-  through `api.areas.rightBar`.
+  (`shell.side-bar-width`, `shell.right-bar-width`). The right bar sits beside `main` across every mode, lies over
+  `main`'s end when the window leaves no room for both their least widths, stays hidden while empty, and takes
+  contributions through `api.areas.rightBar`.
 - **A mode** fills the content sheet, and the core shows one at a time: a plugin registers its mode, with its icon,
   title and an optional side bar element, through the page plugin API, and binds the command that shows it
   (Sessions on `Space k s`, Docs on `Space k d`; pressed while its mode already shows, the same command toggles the

@@ -101,12 +101,12 @@ export function nextInTrack<Entry extends { placement: Placement }>(
 // kept across every later mount, so the layout's CSS restyles their frames.
 // `sideBarDivider` is the side bar's resize divider, which moves only while
 // the side bar is beside the content; `rightBarDivider` the right bar's, which
-// moves only while the right bar is beside main. `reloadBarOpenWidths` reads the
-// `sidebar-width` and `rightbar-width` tokens again, after a theme is applied,
-// and redraws each bar at its token while the user has stored no width for
-// it. `setKeys` anchors both handles' resize prompts through `keys`, again on
-// each call. `dispose` disposes both dividers, stops watching the root's width
-// and removes both handles.
+// moves only while the right bar is beside main. `reloadBarOpenWidths` reads
+// the `sidebar-width` and `rightbar-width` tokens again, after a theme is
+// applied, and redraws each bar at its token while the user has stored no
+// width for it. `setKeys` anchors both handles' resize prompts through `keys`,
+// again on each call. `dispose` disposes both dividers, stops watching the
+// root's width and removes both handles.
 export interface Shell {
   areas: Record<AreaName, Area>;
   setLayout(layout: ShellLayout): Disposable;
@@ -406,8 +406,9 @@ export function mountShell(
     statusBarHeight.observe(mounted.statusBar.element);
   };
 
-  // Hides `name`'s element while it holds nothing; the right bar showing or
-  // hiding redraws both bars, since the span each shares with main changed.
+  // Hides `name`'s element while it holds nothing, except the side bar, which
+  // only `layOutSideBar` shows or hides; the right bar showing or hiding
+  // redraws both bars, since the span each shares with main changed.
   const updateHidden = (name: AreaName) => {
     const wasHidden = mounted[name].element.hidden;
     applyHidden(name);

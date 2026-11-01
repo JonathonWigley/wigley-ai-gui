@@ -486,7 +486,7 @@ describe('mountShell', () => {
     },
   );
 
-  it('keeps the side bar handle in the root across a layout swap', () => {
+  it('keeps both bar handles in the root across a layout swap', () => {
     const { shell, root, handle, rightHandle } = mountMeasuredShell();
     const parents = () => [handle()?.parentNode, rightHandle()?.parentNode];
 
@@ -830,7 +830,7 @@ describe('mountShell', () => {
     [PANE_RESIZE_COMMANDS.right, isDisposed],
   ];
 
-  it("anchors the side bar handle's prompt again on each setKeys", () => {
+  it("anchors both bar handles' prompts again on each setKeys", () => {
     const { shell } = mountMeasuredShell();
     const first = recordingAnchors();
     const second = recordingAnchors();
@@ -844,7 +844,7 @@ describe('mountShell', () => {
     expect(anchored(second)).toEqual(bothPrompts(false));
   });
 
-  it('disposes the side bar divider and removes its handle', () => {
+  it('disposes both bar dividers and removes their handles', () => {
     const { shell, handle, rightHandle } = mountMeasuredShell();
     const first = recordingAnchors();
     shell.setKeys(first.keys);

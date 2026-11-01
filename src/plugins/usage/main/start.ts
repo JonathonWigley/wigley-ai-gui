@@ -36,14 +36,14 @@ type UsageApi = MainApi<
     QualifiedEvents<'sessions', SessionsMainEvents>
 >;
 
-// Registers usage's layouts. Serves the page the usage snapshot and sends it on every change. Seeds a
-// plan per chat profile, polls each through the Claude harness every
-// `pollIntervalSeconds` (rescheduled on a settings change), and hears
-// `chat.planUsage` (live rows), `chat.sessionOpened` (a session's profile),
-// `chat.agentEvent` (the main agent's `usage`) and `sessions.ended`. It hands
-// the self-test its script, and in a drive run it adds the drive actions; a
-// seed from either replaces the snapshot and stops the poller for the run,
-// while live rows and usage events still fold.
+// Registers usage's layouts. Serves the page the usage snapshot and sends it on
+// every change. Seeds a plan per chat profile, polls each through the Claude
+// harness every `pollIntervalSeconds` (rescheduled on a settings change), and
+// hears `chat.planUsage` (live rows), `chat.sessionOpened` (a session's
+// profile), `chat.agentEvent` (the main agent's `usage`) and `sessions.ended`.
+// It hands the self-test its script, and in a drive run it adds the drive
+// actions; a seed from either replaces the snapshot and stops the poller for
+// the run, while live rows and usage events still fold.
 export const usageMainPart: MainPart<typeof usageManifest> = {
   manifest: usageManifest,
   start(api: UsageApi) {

@@ -69,8 +69,9 @@ A layout draws every pane, and every repeated row, card or entry of its owner's 
 
 A layout's CSS restyles only under its own root: every part root carries `data-layout="<name>"` and
 `data-layout-owner="<owner>"`, so two owners' layouts of one name never share selectors. The shell's frames are
-CSS-only: the five chrome areas (`CHROME_AREAS`: title bar, activity bar, side bar, right bar, status bar) carry the shell layout's attributes, and its JS parts draw only what the core puts in
-them. The app-wide look of the primitives stays in themes.
+CSS-only: the five chrome areas (`CHROME_AREAS`: title bar, activity bar, side bar, right bar, status bar) carry the
+shell layout's attributes, and its JS parts draw only what the core puts in them. The app-wide look of the primitives
+stays in themes.
 
 ## Adopters
 

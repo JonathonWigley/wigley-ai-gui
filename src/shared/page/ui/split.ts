@@ -55,8 +55,9 @@ export interface Split extends ResizeTarget {
 // span, so a press at a limit writes nothing and keeps a wider stored width;
 // nudge does nothing while a drag is running. `nudge` returns false, moving
 // nothing, for up and down, which are not the divider's axis, and while
-// `handle` has no layout box (its split stacked, its start pane hidden, or the
-// window too narrow for it), so the press goes on to the next divider; it
+// `handle` has no layout box (its split stacked, the pane it sizes hidden or
+// lying over, or the window too narrow for it), so the press goes on to the
+// next divider; it
 // returns true for left and right otherwise, moved or not.
 export interface SplitDividerOptions extends SplitLimits {
   uiState: UiState;
