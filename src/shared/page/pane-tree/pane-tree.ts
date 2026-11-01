@@ -159,17 +159,16 @@ export function swapToward(
 }
 
 // Moves the focused leaf's nearest divider on `direction`'s axis by `step`,
-// left and up shrinking `first`, right and down growing it, each side keeping
-// at least `least` of the split's span. The divider is the leaf's right or
-// lower one (the nearest split of that axis with the leaf in `first`), else
-// its left or upper one. `limits` gives the step and least share for the
-// split it picked. `owned` is false, with the tree unchanged, only when no
-// split above the leaf has that axis; a ratio that does not move returns the
-// same tree.
+// left and up shrinking `first`, right and down growing it, each side held as
+// `clampedRatio` holds it. The divider is the leaf's right or lower one (the
+// nearest split of that axis with the leaf in `first`), else its left or upper
+// one. `limits` gives the step and least shares for the split it picked.
+// `owned` is false, with the tree unchanged, only when no split above the leaf
+// has that axis; a ratio that does not move returns the same tree.
 export function nudgeFocused(
   tree: PaneTree,
   direction: PaneDirection,
-  limits: (split: PaneSplit) => { step: number; least: number },
+  limits: (split: PaneSplit) => { step: number; least: LeastShares },
 ): { tree: PaneTree; owned: boolean } {
   const axis: SplitAxis =
     direction === 'left' || direction === 'right' ? 'row' : 'column';
@@ -185,14 +184,48 @@ export function nudgeFocused(
   const { split } = divider;
   const { step, least } = limits(split);
   const signedStep = direction === 'left' || direction === 'up' ? -step : step;
-  const ratio = clampedRatio(split.ratio + signedStep, least);
+  const ratio = clampedRatio(split, split.ratio + signedStep, least);
   return { tree: withSplitRatio(tree, split, ratio), owned: true };
 }
 
-// `ratio` held so that each side of a split keeps at least `least` of its
-// span.
-export function clampedRatio(ratio: number, least: number): number {
-  return Math.min(Math.max(ratio, least), 1 - least);
+// A pane's least size and a divider handle's size, each as a share of one
+// split's span.
+export interface LeastShares {
+  pane: number;
+  handle: number;
+}
+
+// `ratio` held for `split` so that each side keeps the least share of every
+// pane it lays out across the split's axis, with the handles between them, at
+// most half the span.
+export function clampedRatio(
+  split: PaneSplit,
+  ratio: number,
+  least: LeastShares,
+): number {
+  const first = sideLeastShare(split.first, split.axis, least);
+  const second = sideLeastShare(split.second, split.axis, least);
+  return Math.min(Math.max(ratio, first), 1 - second);
+}
+
+function sideLeastShare(
+  side: PaneNode,
+  axis: SplitAxis,
+  least: LeastShares,
+): number {
+  const panes = panesAcross(side, axis);
+  return Math.min(panes * least.pane + (panes - 1) * least.handle, 0.5);
+}
+
+// The most panes `node` lays side by side along `axis`: a split of `axis`
+// adds its sides' counts, a split of the other axis takes the larger.
+function panesAcross(node: PaneNode, axis: SplitAxis): number {
+  if (node.kind === 'leaf') {
+    return 1;
+  }
+  const first = panesAcross(node.first, axis);
+  const second = panesAcross(node.second, axis);
+  return node.axis === axis ? first + second : Math.max(first, second);
 }
 
 // The tree with `split` (found by identity) at `ratio`; the same tree when

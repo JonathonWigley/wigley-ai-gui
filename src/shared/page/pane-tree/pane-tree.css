@@ -1,6 +1,7 @@
 /* The tree fills its owner's box; each split shares its span between its two
-   sides by `--pane-tree-ratio`, the handle between them keeping its own size.
-   The handle's line and resize prompt are `Split`'s (`split.css`). */
+   sides by the grow the view sets on each side from the split's ratio, the
+   handle between them keeping its own size. The handle's line and resize
+   prompt are `Split`'s (`split.css`). */
 .pane-tree,
 .pane-tree-split {
   display: flex;
@@ -8,20 +9,13 @@
   min-height: 0;
 }
 
-.pane-tree > * {
+.pane-tree > *,
+.pane-tree-split > * {
   flex: 1 1 0;
 }
 
 .pane-tree-split.is-column {
   flex-direction: column;
-}
-
-.pane-tree-split > :first-child {
-  flex: var(--pane-tree-ratio) 1 0;
-}
-
-.pane-tree-split > :last-child {
-  flex: calc(1 - var(--pane-tree-ratio)) 1 0;
 }
 
 .pane-tree-split > .pane-tree-handle {

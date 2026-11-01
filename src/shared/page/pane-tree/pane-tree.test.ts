@@ -263,7 +263,7 @@ describe('swapToward', () => {
 });
 
 describe('nudgeFocused', () => {
-  const limits = () => ({ step: 0.1, least: 0.2 });
+  const limits = () => ({ step: 0.1, least: { pane: 0.2, handle: 0.05 } });
   const nested = row(0.5, leaf('a'), row(0.5, leaf('b'), leaf('c')));
   it.each<{
     name: string;
@@ -327,6 +327,20 @@ describe('nudgeFocused', () => {
       presses: ['up', 'up'],
       expected: column(0.2, leaf('a'), leaf('b')),
       owned: [true, true],
+    },
+    {
+      name: 'right stopping where a nested side keeps its two panes',
+      from: tree(nested, 'a'),
+      presses: ['right', 'right'],
+      expected: row(0.55, leaf('a'), row(0.5, leaf('b'), leaf('c'))),
+      owned: [true, true],
+    },
+    {
+      name: 'right past a side whose panes are stacked',
+      from: tree(row(0.5, leaf('a'), column(0.5, leaf('b'), leaf('c'))), 'a'),
+      presses: ['right', 'right', 'right', 'right'],
+      expected: row(0.8, leaf('a'), column(0.5, leaf('b'), leaf('c'))),
+      owned: [true, true, true, true],
     },
   ])('nudges $name', ({ from, presses, expected, owned }) => {
     let current = from;

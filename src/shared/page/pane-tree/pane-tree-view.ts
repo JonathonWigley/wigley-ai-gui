@@ -13,6 +13,7 @@ import {
   clampedRatio,
   closePane,
   focusToward,
+  type LeastShares,
   leafIds,
   nudgeFocused,
   type PaneNode,
@@ -102,12 +103,22 @@ export function createPaneTreeView(options: PaneTreeViewOptions): PaneTreeView {
     return slot;
   };
 
+  // The split's start edge, the span its two sides share, and its handle's
+  // size, along its axis.
   const measured = (box: SplitBox) => {
     const rect = box.element.getBoundingClientRect();
     const handleRect = box.handle.getBoundingClientRect();
     return box.axis === 'row'
-      ? { start: rect.left, span: rect.width - handleRect.width }
-      : { start: rect.top, span: rect.height - handleRect.height };
+      ? {
+          start: rect.left,
+          span: rect.width - handleRect.width,
+          handle: handleRect.width,
+        }
+      : {
+          start: rect.top,
+          span: rect.height - handleRect.height,
+          handle: handleRect.height,
+        };
   };
 
   const createBox = (axis: SplitAxis, split: PaneSplit): SplitBox => {
@@ -177,13 +188,14 @@ export function createPaneTreeView(options: PaneTreeViewOptions): PaneTreeView {
       if (!handle.hasPointerCapture(event.pointerId)) {
         return;
       }
-      const { start, span } = measured(drawn);
+      const { start, span, handle: handleSize } = measured(drawn);
       if (span <= 0) {
         return;
       }
       const ratio = clampedRatio(
+        drawn.split,
         (pointerAt(event) - start - grabOffset) / span,
-        leastShare(axis, span),
+        leastShares(axis, span, handleSize),
       );
       current = withSplitRatio(current, drawn.split, ratio);
       draw();
@@ -232,15 +244,19 @@ export function createPaneTreeView(options: PaneTreeViewOptions): PaneTreeView {
     return drawn;
   };
 
-  // `node`'s element, its split boxes kept under `path` (`0` for `first`, `1`
+  // `node`'s element, growing by `grow` (its parent split's share for it, ''
+  // for the root), its split boxes kept under `path` (`0` for `first`, `1`
   // for `second` at each level) and recorded in `used`.
   const drawnNode = (
     node: PaneNode,
+    grow: string,
     path: string,
     used: Set<string>,
   ): HTMLElement => {
     if (node.kind === 'leaf') {
-      return slotFor(node.id);
+      const slot = slotFor(node.id);
+      slot.style.flexGrow = grow;
+      return slot;
     }
     const key = `${path}:${node.axis}`;
     used.add(key);
@@ -250,18 +266,29 @@ export function createPaneTreeView(options: PaneTreeViewOptions): PaneTreeView {
       boxes.set(key, box);
     }
     box.split = node;
-    box.element.style.setProperty('--pane-tree-ratio', String(node.ratio));
+    box.element.style.flexGrow = grow;
     placeChildren(box.element, [
-      drawnNode(node.first, `${path}0`, used),
+      drawnNode(node.first, String(node.ratio), `${path}0`, used),
       box.handle,
-      drawnNode(node.second, `${path}1`, used),
+      drawnNode(node.second, String(1 - node.ratio), `${path}1`, used),
     ]);
     return box.element;
   };
 
+  // Draws `current`. An element focused in the tree is focused again when
+  // the draw moved it and it stayed in the document.
   const draw = () => {
+    const active = document.activeElement;
+    const focusedInTree =
+      active instanceof HTMLElement && root.contains(active) ? active : null;
     const used = new Set<string>();
-    placeChildren(root, [drawnNode(current.root, '', used)]);
+    placeChildren(root, [drawnNode(current.root, '', '', used)]);
+    if (
+      focusedInTree?.isConnected === true &&
+      document.activeElement !== focusedInTree
+    ) {
+      focusedInTree.focus({ preventScroll: true });
+    }
     for (const [key, box] of boxes) {
       if (!used.has(key)) {
         box.element.remove();
@@ -324,12 +351,15 @@ export function createPaneTreeView(options: PaneTreeViewOptions): PaneTreeView {
       if (box === undefined) {
         throw new Error('The nudged split has no box drawn');
       }
-      const { span } = measured(box);
+      const { span, handle } = measured(box);
       if (span <= 0 || box.isDragging()) {
-        return { step: 0, least: 0 };
+        return { step: 0, least: { pane: 0, handle: 0 } };
       }
       nudged = box;
-      return { step: NUDGE_STEP / span, least: leastShare(box.axis, span) };
+      return {
+        step: NUDGE_STEP / span,
+        least: leastShares(box.axis, span, handle),
+      };
     });
     if (result.tree !== current) {
       commit(result.tree);
@@ -358,7 +388,7 @@ export function createPaneTreeView(options: PaneTreeViewOptions): PaneTreeView {
       const next = splitFocused(current, axis, newId);
       const rect = slotFor(current.focusedId).getBoundingClientRect();
       const size = axis === 'row' ? rect.width : rect.height;
-      if (size / 2 < leastSize(axis)) {
+      if ((size - handleSize(root)) / 2 < leastSize(axis)) {
         return false;
       }
       commit(next);
@@ -409,13 +439,25 @@ function leastSize(axis: SplitAxis): number {
   return axis === 'row' ? LEAST_PANE_WIDTH : LEAST_PANE_HEIGHT;
 }
 
-// The least pane size as a share of a split's `span`, at most half of it.
-function leastShare(axis: SplitAxis, span: number): number {
-  return Math.min(leastSize(axis) / span, 0.5);
+// The least pane size and a handle of `handle` pixels as shares of a split's
+// `span`.
+function leastShares(
+  axis: SplitAxis,
+  span: number,
+  handle: number,
+): LeastShares {
+  return { pane: leastSize(axis) / span, handle: handle / span };
+}
+
+// A divider handle's size, the `space-1` theme token's pixels as `root`
+// computes it; 0 for a length in any other unit.
+function handleSize(root: HTMLElement): number {
+  const token = getComputedStyle(root).getPropertyValue('--wg-space-1').trim();
+  return /^\d+(\.\d+)?px$/.test(token) ? parseFloat(token) : 0;
 }
 
 // Makes `wanted` the children of `parent` in order, moving only the elements
-// not already in their place, so a focused element that stays keeps focus.
+// not already in their place.
 function placeChildren(parent: HTMLElement, wanted: HTMLElement[]): void {
   wanted.forEach((child, index) => {
     const present = parent.children[index] ?? null;
