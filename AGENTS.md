@@ -117,7 +117,8 @@ src/main/        core main process; main.ts is its composition root
   alerts/        native notification, Dock bounce or taskbar flash, and the badge, behind Alerts; the badge sums the
                  open counts each source sets
   claude-code/   Claude Code CLI adapter behind AgentHarness, which also lists and reads Claude's saved sessions and
-                 project folders and runs `claude auth` sign-in, sign-out and status → the only place the app spawns `claude`
+                 project folders and runs `claude auth` sign-in, sign-out and status, `claude -p /usage` (the plan usage poll) and
+                 the `get_context_usage` request to a session → the only place the app spawns `claude`
   files/         file reads (whole as text or bytes, or the first bytes), modified times, atomic writes, rename, trash, folder lists
                  and watching, behind Files
   processes/     runs a program, killed past an optional timeout, and returns its exit code and output, behind

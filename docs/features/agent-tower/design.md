@@ -18,7 +18,7 @@ running subagents in the Sessions side bar.
 Built by the usage feature (`docs/features/usage/design.md`):
 
 - the agent event record in `src/contracts/agent.ts`, with its first member, `usage`, emitted by the Claude adapter
-- chat main forwarding each owned session's events as `chat.agentEvent`
+- chat main forwarding each owned session's events as `chat.agentEvent`, carrying `{ sessionId, profileDir, event }`
 
 Waits: the `agents` plugin (each session's roster, one JSON-lines event log per host session, one line per running
 subagent under its session's row), sessions' `addRowPart`, the `Space z l a` layout preview, and the other events.

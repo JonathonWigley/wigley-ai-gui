@@ -1,6 +1,6 @@
 # 07 — Self-test and drive actions
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 5 · Depends on: 06
 Plan: [plan.md](plan.md)
@@ -73,4 +73,4 @@ Commit:    one commit for the group
 
 ## Proof
 
-<written by wigley:make: commit sha, proof result, concerns; empty until the group lands>
+Commit 145aa74 + b406bfb · proof: diff read: fixture, drive actions, self-test script present; typecheck clean; 19 unit tests pass; first selftest failed the details group's 420px fit (right bar beside left main ~10px), fixed by the lead's over-layout ruling in b406bfb; npm run selftest then passed in full; four usage screenshots read · concerns: failNextPoll fails whichever profile polls first (chat order), not necessarily work; notes toasts cover the lower right of usage screenshots; at 200px the Context/Autocompact labels ellipsize to Co…/Auto…; 09 D3–D5 and 01's narrow decision still state beside-at-every-width

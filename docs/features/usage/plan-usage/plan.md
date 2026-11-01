@@ -194,7 +194,7 @@ chat's bus events and exports. New folders get their `scripts/check-layers.mts` 
 - [x] [Usage page: status-bar line and details bar](06-usage-page.md) — after 01, 05
 
 ### Wave 5
-- [ ] [Self-test and drive actions](07-selftest-drive.md) — after 06
+- [x] [Self-test and drive actions](07-selftest-drive.md) — after 06
 
 ### Wave 6
 - [ ] [Doc re-read](08-doc-re-read.md) — after 07
@@ -213,6 +213,7 @@ Review base: 951296f231ed299e8ca9a12bf918bf1f5e9462cc
 - 04 · e6b295a · diff read: ChatMainEvents, profiles() export, emit dep present; forwarding gated on isLive; typecheck clean; worker ran chat-sessions tests 100/100 · concerns: worker formatted its files via npm exec --offline oxfmt (local binary, no download); oxfmt --check still flags DESIGN.md and docs/keymap.md (pre-existing)
 - 05 · 4e82cc2 · diff read: contract, manifest, store, poller, main part, registration and layer entries present; typecheck clean; worker ran usage + manifests tests, 42 pass · concerns: toggleDetails page command has no page part until 06, self-test unrun; start now polls once per profile (live spawns claude -p /usage); a throwing polled() rejects an unhandled round promise; two profiles sharing a configDir share one plan
 - 06 · 5b5b97e · diff read: layout contract, default layout, page part, formats, view model, kit/parts, Meter, gallery, bind, registration and layers present; typecheck clean; worker ran 87 tests across usage page, start, layout-contracts, keymap, all pass · concerns: with details-open at start the first logs are 'details shown: no profiles' / 'status line no profiles' before the snapshot lands (07 should wait for 'details drawn'); full redraw each tick loses details scroll; CSS scoped by data-layout-owner unlike other plugins; minute timer and status slot never disposed; usage/main/start.ts header comment line runs past the wrap width
+- 07 · 145aa74 + b406bfb · diff read: fixture, drive actions, self-test script present; typecheck clean; 19 unit tests pass; first selftest failed the details group's 420px fit (right bar beside left main ~10px), fixed by the lead's over-layout ruling in b406bfb; npm run selftest then passed in full; four usage screenshots read · concerns: failNextPoll fails whichever profile polls first (chat order), not necessarily work; notes toasts cover the lower right of usage screenshots; at 200px the Context/Autocompact labels ellipsize to Co…/Auto…; 09 D3–D5 and 01's narrow decision still state beside-at-every-width
 ### Contract changes
 - usageFixture: as planned → plus export const USAGE_FIXTURE_VARIANTS · why: one home for the variant names · consumers: none · group 07
 ### Rulings
@@ -232,5 +233,8 @@ Review base: 951296f231ed299e8ca9a12bf918bf1f5e9462cc
 - details with no plans draws a muted 'No profiles' line · group 06 · group 06
 - usage/main/start.test.ts gained layouts.register on its fake MainApi (outside the Files line) · group 06 · group 06
 - below RIGHT_BAR_MIN + MAIN_MIN the shown right bar overlays main (side bar's over precedent) instead of staying beside; details rows ellipsize/wrap to fit 200px; narrow group's second step drops width:'start' so its screenshot is taken at 520px — the beside-at-every-width rule left main ~10px at the 420px minimum, failing the fit check — if wrong, a narrow window covers main's right edge while details are open · lead
+- result.snapshot that problems checks is the store read back after seed · group 07 · group 07
+- start.ts no longer returns early with no harness; poller is PlanPoller | null and the script and drive actions register on both paths · group 07 · group 07
+- over width is min(clampSplitWidth(width), span), joining the beside clamp at the threshold; data-right-bar reads beside while hidden · fix-narrow · group 07
 ### Review rounds
 ### Test gate

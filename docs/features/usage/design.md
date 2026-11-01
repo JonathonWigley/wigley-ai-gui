@@ -36,8 +36,10 @@ extra-usage credits.
   is set, otherwise the limit Claude reports. The configured limit is `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` from the
   profile's `settings.json` `env`, as a percent of the context window (30 → 300,000 on a 1,000,000 window).
 - **Cache expiry** — when the session's prompt cache goes cold: its last model reply plus the TTL that reply wrote
-  (1 hour for `ephemeral_1h_input_tokens`, 5 minutes for `ephemeral_5m_input_tokens`). After it, the next message
-  re-reads the whole context at full price.
+  (1 hour for `ephemeral_1h_input_tokens`, 5 minutes for `ephemeral_5m_input_tokens`; a reply that wrote both counts
+  5 minutes, since part of its context goes cold then). A reply that only read the cache restarts the expiry with the
+  TTL last written; a session that has written none has no expiry. After it, the next message re-reads the whole
+  context at full price.
 - **Session spend** — the session process's `total_cost_usd`, cumulative. On a subscription it is priced at API list
   rates (`modelUsage.<model>.costBasis: "list"`), not money billed.
 
@@ -47,13 +49,13 @@ Only `src/main/claude-code/` knows any of these shapes.
 
 | Number | Source | When |
 | --- | --- | --- |
-| Plan rows, extra usage | `claude -p /usage --output-format stream-json --verbose`: the `assistant` line's `usage_report.rate_limits` (`limits[]`, `extra_usage`) | every poll, per profile; 0 tokens, about 3 s |
+| Plan rows, extra usage | `claude -p /usage --output-format stream-json --verbose`: the `assistant` line's `usage_report.rate_limits` (`limits[]`, `extra_usage`) | every poll, per profile; 0 tokens, about 3 s; killed and failed after 20 s (`PLAN_USAGE_TIMEOUT_MS`) |
 | Session and weekly rows between polls | `rate_limit_event.rate_limit_info.unifiedWindows` (`five_hour` → `session`, `seven_day` → `weekly_all`; `status` `allowed` / `allowed_warning` / `rejected` → `normal` / `warning` / `critical`) | after every model message |
 | Context tokens | each `assistant` message's `usage`: `input_tokens + cache_read_input_tokens + cache_creation_input_tokens + output_tokens` | every reply |
 | Context window, session spend | the `result` line: `modelUsage.<model>.contextWindow`, `total_cost_usd` | every turn |
 | Reported autocompact limit | the `get_context_usage` control request's `autoCompactThreshold` | after every turn |
 | Configured autocompact limit | the profile's `settings.json` `env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE`, read when a session starts | session start |
-| Cache expiry | the reply's `usage.cache_creation` bucket and the adapter's clock | every reply |
+| Cache expiry | the reply's `usage.cache_creation` bucket (or a cache read) and the adapter's clock | every reply |
 
 Measured 2026-10-30 on 2.1.314: `get_context_usage` reported `autoCompactThreshold: 967000`,
 `autocompactSource: "model-default"` on Opus, Sonnet and Haiku with the override at 30 in both the environment and
@@ -67,7 +69,7 @@ profile's `settings.json`, which is why the configured limit is read there.
 ## Flow
 
 ```
- claude -p /usage (per profile, every pollIntervalSeconds)
+ claude -p /usage (per profile, every pollIntervalSeconds, least 60)
         │ usage_report
         ▼
  ClaudeCodeHarness.planUsage(profileDir) ──▶ PlanUsage ─────────────┐
@@ -78,9 +80,9 @@ profile's `settings.json`, which is why the configured limit is read there.
    get_context_usage reply ──▶ AgentProcessEvents.agentEvent(usage) │
         │                                                           │
         ▼                                                           │
- chat main ──▶ bus: chat.sessionOpened {sessionId, profile}        │
-           ──▶ bus: chat.agentEvent {sessionId, profile, event}     │
-           ──▶ bus: chat.planUsage {profile, update}                │
+ chat main ──▶ bus: chat.sessionOpened {sessionId, profileDir}     │
+           ──▶ bus: chat.agentEvent {sessionId, profileDir, event}  │
+           ──▶ bus: chat.planUsage {profileDir, update}             │
         │                                                           │
         ▼                                                           ▼
  usage main: per-profile PlanUsage (poll, then live updates folded in), per-session usage
@@ -99,7 +101,7 @@ In `src/contracts/agent.ts`, beside `AgentHarness`:
   adapter's name for the kind), `percent` (0–100), `resetsAt` (epoch ms or null), `severity`
   (`'normal' | 'warning' | 'critical'`), `isActive`.
 - `ExtraUsage` — `enabled`, `usedMinor`, `limitMinor`, `currency` (each null when the server sends none).
-- `PlanRowUpdate` — the live rows a session saw: `rows` of `{ kind, percent, resetsAt, severity }`, `at`. Folded into
+- `PlanRowUpdate` — the live rows a session saw: `rows` of `PlanRowPatch` (`{ kind, percent, resetsAt, severity }`), `at`. Folded into
   the profile's last `PlanUsage` by `kind`; a kind the poll has not reported yet is held until it does.
 - `AgentHarness.planUsage(profileDir)` — runs one poll and resolves its `PlanUsage`, or rejects with the reason.
 - `AgentProcessEvents.planUsage(update)` and `AgentProcessEvents.agentEvent(event)`.
@@ -111,22 +113,28 @@ In `src/contracts/agent.ts`, beside `AgentHarness`:
 
 `src/plugins/usage/` depends on `chat` and `sessions`.
 
-- **Main** polls every chat profile at start and then every `usage.pollIntervalSeconds` (default 300, read at each
-  reschedule and rescheduled on a settings change) through the injected main `timers`. It folds each
+- **Main** keeps one plan per chat profile (re-read at the start of each poll round, so a profile added or removed in
+  settings joins or leaves), polls every one at start and then every `usage.pollIntervalSeconds` (default 300, never
+  under `MIN_POLL_SECONDS` = 60; read at each reschedule and rescheduled on a settings change) through the injected
+  main `timers`. It folds each
   `chat.planUsage` update into that profile's plan usage, records each session's profile from `chat.sessionOpened`
   (so the line shows the right profile before the session's first turn ends), keeps each session's last `usage` agent
   event from `chat.agentEvent`, and drops a session when it ends. It sends one snapshot over its channel on every change.
 - A failed poll keeps the profile's last plan usage, marks it stale with the time of the last good poll, and carries
-  the reason, which the details bar shows. A poll still running when the next one is due is not doubled.
+  the reason, which the details bar shows; the next good poll clears both. With no good poll yet the profile has no
+  usage: the line says `plan loading` (or `plan unavailable` after a failure) and the details say `no good read yet`.
+  A poll still running when the next one is due is not doubled.
 - **Page** draws, through the `usage` layout:
   - a status-bar line, always on, aligned to the end: the shown session's context bar (`used/limit`), its cache
     countdown and its spend, a divider, then the shown session's profile's plan rows (the default profile while no
-    session shows). Each meter is tinted by its severity; the context bar by its share of the limit. With no session
-    shown, the session half is left out.
+    session shows). Each meter is tinted by its severity; the context bar by its share of the limit (`warning` from
+    70 %, `critical` from 90 %). A stale profile's rows draw muted. With no autocompact limit the context shows
+    tokens alone. With no session shown, or none with a usage event yet, the session half is left out.
   - the details bar in the right bar, toggled by `usage.toggleDetails` (`Space v u`), its open state kept in
     `uiState`: every profile's rows with reset times, extra usage as `spent / limit` in its currency (or `off`), the
     poll's staleness and error, and the shown session's context, both autocompact limits and the marker when they
-    differ, cache expiry and spend.
+    differ, cache expiry and spend. A fresh profile reads `updated <ago>`, measured from the poll's `at`; with no
+    profiles the bar says `No profiles`.
 - Countdowns redraw once a minute through the page `timers` and `clock`.
 
 ## The right bar

@@ -69,14 +69,14 @@ A layout draws every pane, and every repeated row, card or entry of its owner's 
 
 A layout's CSS restyles only under its own root: every part root carries `data-layout="<name>"` and
 `data-layout-owner="<owner>"`, so two owners' layouts of one name never share selectors. The shell's frames are
-CSS-only: the four chrome areas carry the shell layout's attributes, and its JS parts draw only what the core puts in
+CSS-only: the five chrome areas (`CHROME_AREAS`: title bar, activity bar, side bar, right bar, status bar) carry the shell layout's attributes, and its JS parts draw only what the core puts in
 them. The app-wide look of the primitives stays in themes.
 
 ## Adopters
 
 | Owner | Setting | Surfaces |
 | --- | --- | --- |
-| `shell` | `shell.layout` | the title bar's context, dev tag and config problems; each mode's activity bar item; the four chrome frames take the layout's CSS |
+| `shell` | `shell.layout` | the title bar's context, dev tag and config problems; each mode's activity bar item; the five chrome frames take the layout's CSS |
 | `forms` | `forms.layout` | question, finding and notice cards; head, rail and review panes |
 | `chat` | `chat.layout` | chat entries; the activity line (a run of the agent's steps); the composer and its bar, the attachments, the picker rows (start prompt and pickers), the sign-in, deny-reason and end-session dialogs, the image viewer |
 | `primer` | `primer.layout` | feature, task and item cards; tasks, items and review panes |

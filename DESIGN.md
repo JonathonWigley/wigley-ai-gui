@@ -63,12 +63,12 @@ Everything on screen belongs to exactly one layer, and the layer decides its mat
   L0 backdrop: crust with two faint washes, seen only through L1
 ```
 
-| Layer       | What lives here                                                         | Material                                                                                              |
-| ----------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| L0 backdrop | The window itself                                                       | `--wg-window-background` with `--wg-window-ambient`                                                   |
-| L1 chrome   | Title bar, activity bar, side bar, right bar, tab strips, status bar, panel header | The `material-chrome` class (`material-chrome--dense` for the side and right bars)                               |
-| L2 content  | Form tab, chat transcript, docs, editors, the forms rail, diffs         | Solid `--wg-sheet-background`, as inset sheets with a `--wg-sheet-gutter` gutter and `--wg-radius-lg` |
-| L3 floating | Composer, pickers, which-key, help, dialogs, menus, toasts              | The `material-floating` class                                                                         |
+| Layer       | What lives here                                                                    | Material                                                                                              |
+| ----------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| L0 backdrop | The window itself                                                                  | `--wg-window-background` with `--wg-window-ambient`                                                   |
+| L1 chrome   | Title bar, activity bar, side bar, right bar, tab strips, status bar, panel header | The `material-chrome` class (`material-chrome--dense` for the side and right bars)                    |
+| L2 content  | Form tab, chat transcript, docs, editors, the forms rail, diffs                    | Solid `--wg-sheet-background`, as inset sheets with a `--wg-sheet-gutter` gutter and `--wg-radius-lg` |
+| L3 floating | Composer, pickers, which-key, help, dialogs, menus, toasts                         | The `material-floating` class                                                                         |
 
 - **Content is solid.** Glass in L2 makes text compete with whatever scrolls behind it, so cards,
   code blocks and inputs inside a sheet tint with alpha over the solid sheet and never show through.
@@ -346,10 +346,14 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
 - **Usage:** the status-bar line is always on and aligned to the end, in `text-12`: the shown session's context bar
   (`used/limit` against the autocompact limit), its cache countdown and its spend, a divider, then the plan rows of the
   session's profile, each a meter with its percent in the server's order. A meter takes the existing status colours by
-  the server's severity (`normal`, `warning`, `critical`); the context bar by its share of the limit. With no session
-  shown, the session half is left out. The details bar (right bar, `Space v u`) lists every profile's rows with reset
-  times, extra usage as `spent / limit` in its currency or `off`, the poll's staleness and error, and the shown
-  session's context, both autocompact limits (marked when they differ), cache expiry and spend.
+  the server's severity (`normal`, `warning`, `critical`); the context bar by its share of the limit (`warning` from
+  70 %, `critical` from 90 %). The context bar carries no label; a stale profile's rows and a note (`plan loading`,
+  `plan unavailable`) draw in `fg-tertiary`. With no session shown, the session half is left out. The details bar
+  (right bar, `Space v u`) is a section per profile, each a header (the default profile tagged) over its rows with
+  reset times, extra usage as `spent / limit` in its currency or `off`, a muted freshness line (`updated <ago>` from
+  the poll's time, or `stale, last good <ago>`) and the poll's error in `status-error`; with no profile it holds a
+  muted `No profiles` line. A last section holds the shown session's context, remaining tokens, window, both
+  autocompact limits (marked when they differ), cache expiry and spend.
 - **Forms:** the rail is the start pane of a split in the Form tab's sheet, on the sheet colour with no fill of its own. Its header holds the
   open count, the saved state and the `⌥P ◂ ▸ ⌥N` edge prompt. Cards are `card-background` with
   `radius-md`. The recommended choice carries the accent, since Enter accepts it.
