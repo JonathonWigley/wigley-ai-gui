@@ -488,6 +488,10 @@ describe('activity lines', () => {
     expect(armed.size).toBe(1);
     list.setWorking(false);
     expect(armed.size).toBe(0);
+    list.setWorking(true);
+    expect(armed.size).toBe(1);
+    list.dispose();
+    expect(armed.size).toBe(0);
   });
 
   it('runs_PutInAnotherRowThenOnItsStep_UpdatesOnlyOnItsStep', () => {
