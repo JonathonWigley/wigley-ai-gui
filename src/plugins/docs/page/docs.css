@@ -210,6 +210,12 @@
   display: none;
 }
 
+/* While the tree is hidden `⌥H` reaches no tree, so the edge prompt to it
+   goes; Esc (`docs.backToTree`) reveals the tree. */
+.is-tree-hidden .docs-edge--start {
+  display: none;
+}
+
 .docs-doc-top {
   padding: var(--wg-space-3) var(--wg-space-6) 0;
 }

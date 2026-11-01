@@ -133,6 +133,9 @@ export interface DocsView {
   dismissFilter(): void;
   // The tree's container hid it: the doc pane takes focus and the doc scope.
   treeHidden(): void;
+  // Whether the tree shows now: the doc pane keeps the `is-tree-hidden` class
+  // while it does not, which hides the doc pane's edge prompt to the tree.
+  treeShownChanged(isShown: boolean): void;
   // The tree's container opened it over the doc: the tree takes focus and
   // the tree scope.
   treeOpenedOver(): void;
@@ -1002,6 +1005,8 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     },
     dismissFilter: () => tree.dismissFilter(),
     treeHidden: focusDoc,
+    treeShownChanged: (isShown) =>
+      doc.element.classList.toggle('is-tree-hidden', !isShown),
     treeOpenedOver: focusTreePane,
     focusScope: () => focused,
     focusTarget,

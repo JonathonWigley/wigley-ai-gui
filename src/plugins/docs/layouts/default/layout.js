@@ -101,7 +101,7 @@ const layout = {
   },
   emptyDoc(parent, input, kit) {
     const empty = kit.emptyState(parent, input.text);
-    kit.keyHint(empty, 'panes.focusLeft');
+    kit.keyHint(empty, 'backToTree', { label: 'tree' });
     return { element: empty };
   },
   docHeader(parent, input, kit) {

@@ -103,8 +103,8 @@ export interface DocViewDeps {
 
 // The doc pane, drawn by the layout's `docPane` around the app's scroller:
 // in `default`, a top row holding the `‹ tree ⌥H` edge prompt while a doc is
-// open, above the scroller. The scroller holds one slot per doc part, each
-// drawn by the layout: the empty state ending in the focus-tree key while no
+// open and the tree shows, above the scroller. The scroller holds one slot per doc part, each
+// drawn by the layout: the empty state ending in the `Esc tree` hint while no
 // doc is open; then the header with its chips (load states, then
 // plugin-source statuses, then the last-loaded line), the `i edit` hint while
 // the doc may be edited and no editor is open, and the read-only line; the

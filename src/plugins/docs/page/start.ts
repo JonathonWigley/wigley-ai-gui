@@ -248,9 +248,13 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       () => {
         if (!mode.sideBarShown()) {
           mode.toggleSideBar();
+          showTreeEdge(machineView);
         }
       },
-      () => mode.picked(),
+      () => {
+        mode.picked();
+        showTreeEdge(machineView);
+      },
       null,
     );
 
@@ -309,11 +313,23 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         api.panes.setResizeTarget(null);
         api.panes.setFocusTarget(machineView.focusTarget);
         machineView.showFirstTime();
+        showTreeEdge(machineView);
       },
       hidden: () => undefined,
-      sideBarHidden: () => treeHiddenIn(machineView),
-      sideBarOpenedOver: () => treeOpenedOverIn(machineView),
+      sideBarHidden: () => {
+        treeHiddenIn(machineView);
+        showTreeEdge(machineView);
+      },
+      sideBarOpenedOver: () => {
+        treeOpenedOverIn(machineView);
+        showTreeEdge(machineView);
+      },
     });
+    // A narrowing hides the side bar without telling the mode, so the machine
+    // view's edge prompt follows the window too, once the core has laid out.
+    window.addEventListener('resize', () =>
+      requestAnimationFrame(() => showTreeEdge(machineView)),
+    );
     api.modes.onChanged((modeId) => {
       isDocsModeShown = modeId === 'docs.docs';
     });
@@ -324,6 +340,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     const setTreeHidden = (added: AddedView, isHidden: boolean) => {
       added.split.setStartHidden(isHidden);
       added.isTreeHidden = isHidden;
+      showTreeEdge(added.view);
       log('docs', isHidden ? 'tree hidden' : 'tree shown');
       if (isHidden) {
         treeHiddenIn(added.view);
@@ -434,6 +451,11 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         ? !mode.sideBarShown()
         : addedViewOf(view)?.isTreeHidden === true;
 
+    // Tells a view whether its tree shows, so its doc pane draws the edge
+    // prompt to the tree only while a key reaches it.
+    const showTreeEdge = (view: DocsView) =>
+      view.treeShownChanged(!isTreeHiddenIn(view));
+
     const activeView = (): DocsView | null => {
       if (isDocsModeShown) {
         return machineView;
@@ -506,6 +528,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         return;
       }
       mode.toggleSideBar();
+      showTreeEdge(machineView);
     };
 
     const toggleTree = () => {
@@ -515,6 +538,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       }
       if (view === machineView) {
         mode.toggleSideBar();
+        showTreeEdge(view);
         return;
       }
       const added = addedViewOf(view);

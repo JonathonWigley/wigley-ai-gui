@@ -161,7 +161,7 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
   it (on the doc already shown it only focuses it, keeping an open editor), or toggles a group, expanding or
   collapsing it as `l` and `h` do, and under a filter, which shows every group expanded, steps into a group as `l`
   does; `h` collapses a group or goes to the parent; `/` filter, `a`, `A`, `r`, `d`, `R` rescan,
-  `c` pick the load-state folder, `s` star or unstar the selected doc; `Alt+l` / `Alt+h` (the core's `panes.focusRight` / `panes.focusLeft`) move focus between tree and doc; `Ctrl+j`/`Ctrl+k` and
+  `c` pick the load-state folder, `s` star or unstar the selected doc; `Alt+l` / `Alt+h` (the core's `panes.focusRight` / `panes.focusLeft`) move focus between tree and doc while the tree shows (the doc pane's `‹ tree ⌥H` edge prompt hides with the tree, and the empty doc's hint names `Esc tree`); `Ctrl+j`/`Ctrl+k` and
   `Ctrl+Shift+j`/`Ctrl+Shift+k` scroll the doc beside the tree.
   Doc `j`/`k` scroll, `Ctrl+j`/`Ctrl+k` scroll the doc a line and `Ctrl+Shift+j`/`Ctrl+Shift+k` half a page, the
   editor too while editing, `i` edit, Esc (`docs.backToTree`) focuses the tree, showing it first when hidden; Esc in the editor's normal mode closes
