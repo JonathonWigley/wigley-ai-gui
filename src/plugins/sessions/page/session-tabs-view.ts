@@ -49,6 +49,8 @@ interface Frame {
   tabs: TabsState;
   entries: Map<string, Tab>;
   drawnTabs: DrawnPart<SessionsPart>[];
+  // The selected tab the strip last scrolled into view.
+  scrolledTabId: string | null;
   text: DrawnPart<SessionsPart> | null;
 }
 
@@ -167,6 +169,7 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
       tabs: NO_TABS,
       entries: new Map(),
       drawnTabs: [],
+      scrolledTabId: null,
       text: null,
     };
     frames.set(sessionId, created);
@@ -186,6 +189,21 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     drawn.text = null;
   };
 
+  // Scrolls the strip, and nothing around it, to the selected tab once each
+  // time the selection changes, so a tab the user scrolled past stays put.
+  const scrollSelectedIntoView = (frame: Frame) => {
+    const selectedId = frame.tabs.selectedTabId;
+    if (selectedId === frame.scrolledTabId) {
+      return;
+    }
+    frame.scrolledTabId = selectedId;
+    const index = [...frame.entries.keys()].indexOf(selectedId ?? '');
+    frame.drawnTabs[index]?.built.element.scrollIntoView?.({
+      block: 'nearest',
+      inline: 'nearest',
+    });
+  };
+
   const drawFrame = (sessionId: string, frame: Frame, isFocused: boolean) => {
     for (const tab of frame.entries.values()) {
       tab.view.element.hidden = tab.view.id !== frame.tabs.selectedTabId;
@@ -203,6 +221,7 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
         () => select(sessionId, tab.view.id),
       ),
     );
+    scrollSelectedIntoView(frame);
     const isTabStepping =
       isFocused && hasOtherTab(frame.tabs.tabIds, frame.tabs.selectedTabId);
     const { previous, next, close, splitRight, splitDown, closePane } =

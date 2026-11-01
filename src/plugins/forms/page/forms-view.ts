@@ -94,12 +94,13 @@ export interface FormsView {
 
 // The whole forms UI: each round drawn in its session's Form tab, focused or
 // not, and the cancel prompt in the overlay layer, serving the active round,
-// which alone takes keys. Every store change re-renders it; editors live in the round views and survive every
-// render. While a Form tab is the visible tab the key scope follows the view;
-// the cancel prompt pushes its own scope over it and is dismissed when another
-// view sets the scope. While the round sends, that dismiss waits: a failed
-// send dismisses the prompt, and a sent round closes it with the round. Round
-// views start on the default layout alone.
+// which alone takes keys. Every store change re-renders it; editors live in
+// the round views and survive every render. While a Form tab is the visible
+// tab the key scope follows the view; the cancel prompt pushes its own scope
+// over it and is dismissed when another view sets the scope. While the round
+// sends, that dismiss waits: a failed send dismisses the prompt, and a sent
+// round closes it with the round. Round views start on the default layout
+// alone.
 export function mountFormsView(deps: FormsViewDeps): FormsView {
   const { areas, store, boxes } = deps;
   const tabs = createSessionFormTabs({
