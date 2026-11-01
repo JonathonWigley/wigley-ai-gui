@@ -211,17 +211,20 @@ function columnBody(tab: FakeElement, column: PrimerColumn): FakeElement {
   return pane(columnOf(tab, column), 'primer-column-body');
 }
 
-// Gives every split under `tab` a layout box 1000 pixels wide, so its nudge
-// moves it, as a browser lays the splits out.
+// Gives every split under `tab` a layout box 1000 pixels wide and its handle
+// one 4 pixels wide, so the panes share a 996px span and a nudge moves the
+// split, as a browser lays the splits out.
 function measureSplits(tab: FakeElement): void {
-  for (const node of [
-    ...findAll(tab, 'ui-split'),
-    ...findAll(tab, 'ui-split-handle'),
-  ]) {
-    Object.assign(node, {
-      getClientRects: () => [{}],
-      getBoundingClientRect: () => ({ left: 0, width: 1000 }),
-    });
+  for (const [className, width] of [
+    ['ui-split', 1000],
+    ['ui-split-handle', 4],
+  ] as const) {
+    for (const node of findAll(tab, className)) {
+      Object.assign(node, {
+        getClientRects: () => [{}],
+        getBoundingClientRect: () => ({ left: 0, width }),
+      });
+    }
   }
 }
 
