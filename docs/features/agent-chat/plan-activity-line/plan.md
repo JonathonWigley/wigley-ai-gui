@@ -248,7 +248,7 @@ Boundary rules:
 - [x] [Doc re-read](09-doc-re-read.md)
 
 ### Wave 6
-- [ ] [Final verification](10-final-verification.md)
+- [x] [Final verification](10-final-verification.md)
 
 ## Run log
 
@@ -264,6 +264,7 @@ Review base: e2dbd6596bdd144fcd436c37ef19db140c258f9a
 - 07 · 928abc4 · diff read: every Produces present (EntryListDeps layouts/timers/clock, setWorking, move/first/focused ListStop, toggleFocused {stop,result}, isWorking, ChatViewDeps timers/clock); typecheck clean; worker ran the 3 named test files · concerns: opening the last run while the focus follows recomputes via focusAfterChange and jumps the cursor to the run's last step, so a second Enter toggles that step, not the run; the START_FOCUS case of GIVEN 1 is unreachable through EntryList (focus is never null with entries)
 - 08 · 56a7f3b · diff read: FAKE_STEPS_TEXT and both self-test groups present as planned; typecheck clean; fake-agent-harness.test.ts passes per worker · concerns: activity line group leaves the focus off following; transcript scroll relies on sendFromBox calling entries.latest() (read, not run)
 - 09 · cd30dcd · every listed passage re-read against the code; one stale line fixed (agent-chat design Vocabulary, preview and fake history times); layout.d.ts fields and log lines match the docs · concerns: AGENTS.md says each part's kit extends the base kit, but activity and imageViewer take BaseKit itself (pre-existing wording)
+- 10 · none · lint: oxfmt flags only peer files DESIGN.md, docs/keymap.md; npm test 4282/4283 (the 1 fail is peer commit 9c84f9d's shell-chrome row); selftest all passed incl. activity line, screenshots chat-activity-open/chat-step-open read (step body under the tool name after 4f13fca); drive run 20261031-200407-528d (/tmp/claude-502/make-activity-line/reports/10-drive.md): live timer 0s→7s with no other redraws and frozen after C-c PASS, prose size 18px/14px PASS (nested setting), click open/close with cursor unmoved PASS, layout fallback logs and draws default with no toast PASS, gallery plain cells with no chrome PASS, history resume PASS with no activity line present · concerns: drive history check found no activity line in the fake past session (its history holds no steps), so history-time drawing is proved by transcripts tests, not live; a mouse click on an activity line logs no expanded/collapsed line; the drive's dotted setting name writes a flat key
 ### Contract changes
 - pairToolResult: (Map<string, ToolEntry>) → ToolEntry → generic <E extends ToolEntry>(Map<string, E>) → E, and ToolEntry is now Extract<EntryDraft, {kind:'tool'}> · why: the decoder pairs drafts and transcripts pairs stamped entries · consumers: none outside 04 · group 04
 - layout.d.ts re-export: export type { DotStatus } → export type { BaseKit, DotStatus } · why: layout.js imports types only from ../layout and the activity part's JSDoc names BaseKit · consumers: none beyond 06 · group 06
@@ -285,4 +286,9 @@ Review base: e2dbd6596bdd144fcd436c37ef19db140c258f9a
 - passing step results read {text:'ok'}; each step is emitted once with its result set — none · group 08
 - peer ai-dev-e8's uncommitted chat-view.ts, chat-commands.ts and chat-commands.test.ts edits (focus follows the latest on send and at turn end) stay in the tree, uncommitted; the test gate and self-test run over them — settled with the peer — a self-test pass may lean on its send-latest call · lead
 ### Review rounds
+- implementation review · 0b6322c · NEEDS FIXES (2 important, 5 minor; 5 lead-applied in 8e9cd27; report /tmp/claude-502/make-activity-line/review-0b6322c.md)
+- fix cycle 1 · 6.2 determined: 9146e53 (#1), 13fd348 (#3, #4), 2db8cde (#5); triage Fix now (user, recommendation 1 on all): e9f9b3f + 52b5963 (#2 cursor stays on the open last line and follows), 4f13fca (#6 leading-dot body indent), 0af4e7b (#7 lastAt fallback), a52b431 (pre-existing primer-view fixture: handles 4px, stale since 83b17a4)
+- re-review 1 · correctness · 52b5963 · NEEDS FIXES (every prior finding closed; 1 minor determined: non-JSON fallback unpinned) → 0377aa9 adds the row; a one-row test-only fix, read by the lead, not re-reviewed (Decided under the user's standing go-with-recommendations)
 ### Test gate
+- full npm test (Vitest + type tests), as task 10 names it, since the range touches the entry contract every chat test builds on · 4152 pass, 3 fail: primer-view.test.ts 'hands the resize keys the split of the focused pane' (tasks/items/card), failing identically at review base e2dbd65 — pre-existing, outside this run; typecheck clean; lint fails only oxfmt on DESIGN.md and docs/keymap.md from peer commits 444f673/5e1ec6e/cb9591f
+- after fixes, at 0377aa9 · npm test 4282 pass, 1 fail: shell-chrome.test.ts setKeys_UserItemHint 'an unregistered command', bisected to peer commit 9c84f9d (Focus targets: Alt+hjkl), outside this run; the 3 primer-view failures are fixed; typecheck clean; lint fails only oxfmt on DESIGN.md and docs/keymap.md (peer commits); npm run selftest all passed (activity line group included)

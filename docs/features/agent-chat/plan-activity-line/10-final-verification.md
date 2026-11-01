@@ -1,6 +1,6 @@
 # 10 — Final verification
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 6 · Depends on: 09
 Plan: [plan.md](plan.md)
@@ -32,3 +32,4 @@ Commit:    none (captures are not committed); the Proof rides in `wigley:make`'s
 
 ## Proof
 
+Commit none · proof: lint: oxfmt flags only peer files DESIGN.md, docs/keymap.md; npm test 4282/4283 (the 1 fail is peer commit 9c84f9d's shell-chrome row); selftest all passed incl. activity line, screenshots chat-activity-open/chat-step-open read (step body under the tool name after 4f13fca); drive run 20261031-200407-528d (/tmp/claude-502/make-activity-line/reports/10-drive.md): live timer 0s→7s with no other redraws and frozen after C-c PASS, prose size 18px/14px PASS (nested setting), click open/close with cursor unmoved PASS, layout fallback logs and draws default with no toast PASS, gallery plain cells with no chrome PASS, history resume PASS with no activity line present · concerns: drive history check found no activity line in the fake past session (its history holds no steps), so history-time drawing is proved by transcripts tests, not live; a mouse click on an activity line logs no expanded/collapsed line; the drive's dotted setting name writes a flat key
