@@ -228,8 +228,8 @@ interview on 2026-10-23; this file is the record of both.
   transcripts; a send reads it before starting the process, so the read never holds the new turn. The first message sent in a resting row starts its process (`--resume` when a message was ever
   sent, else `--session-id`); app slash commands run without one, and the controls and the agent's slash commands
   fill in once it runs. Every process start in a row passes the control values the row holds (`AgentStart.controls`),
-  so a row resumed after its process exits, or cleared, keeps the model, effort and mode the user set; a restored row
-  holds none until its process reports them. A session whose process exits while the app runs rests the same way, a notice in its chat
+  so a row resumed after its process exits, or cleared, keeps the model, effort and mode the user set, and its chips
+  show them from the start; a restored row holds none until its process reports them. A session whose process exits while the app runs rests the same way, a notice in its chat
   giving the exit and its reason. A restored session whose turn was running at quit gets a notice that the app quit
   during that turn; one whose profile is no longer in the settings gets a notice naming it, and a send there toasts
   that the message was not sent because the profile is missing, instead of starting. A message main refuses goes
@@ -266,11 +266,12 @@ interview on 2026-10-23; this file is the record of both.
 - **Clear**: `/clear`, `/reset` and `/new` end the row's process and start a fresh one at once in the same row, under
   a new host session id and with the row's control values, so the harness loads its plugins, skills, MCP servers and
   settings again. A running turn is interrupted first; waiting permission calls are cancelled and queued messages are
-  pulled back into the box, as on an exit, and no exit notice shows for the old process. The row's entries become one
-  info notice, `Conversation cleared`. The saved record (with nothing sent yet), the sidebar row and the relay join
-  (the sessions plugin's `OwnedSession.setHostSessionId`) and the session's docs source follow the new id, so a later
-  resume reopens only the conversation after the clear; the earlier one stays in the past-sessions list. A resting
-  row clears the same way, starting its fresh process. The app clears rather than passing `/clear` to Claude: Claude's
+  pulled back into the box, as on an exit; no exit notice shows for the old process and no turn-finished alert fires.
+  The row's entries become one info notice, `Conversation cleared`. The saved record (with nothing sent yet), the
+  sidebar row and the relay join (the sessions plugin's `OwnedSession.setHostSessionId`), the session's docs source
+  and the notes page's session follow the new id, so a later resume reopens only the conversation after the clear;
+  the earlier one stays in the past-sessions list. A resting row clears the same way, starting its fresh process; a
+  start that fails leaves it resting under the new id. The app clears rather than passing `/clear` to Claude: Claude's
   own clear (measured on 2.1.314) keeps the same process, so its plugins and settings stay as loaded, and it moves
   the conversation to a new session id the row would not follow.
 - **Sign-in identity**: main runs one sign-in at a time. The page names each sign-in by an id it picks, since the
