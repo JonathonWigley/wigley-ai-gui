@@ -181,7 +181,7 @@ chat's bus events and exports. New folders get their `scripts/check-layers.mts` 
 
 ### Wave 1
 - [x] [Right bar shell area](01-right-bar-area.md)
-- [ ] [Plan usage and agent events from the Claude adapter](03-adapter-usage.md)
+- [x] [Plan usage and agent events from the Claude adapter](03-adapter-usage.md)
 
 ### Wave 2
 - [ ] [Main timers](02-main-timers.md) — after 01 (shares `plugin.ts`)
@@ -208,9 +208,14 @@ Review base: 951296f231ed299e8ca9a12bf918bf1f5e9462cc
 
 ### Groups
 - 01 · fef2080 · diff read: every Produces present; typecheck clean in 01 files (only errors were 03's in-flight harness tests); worker ran shell/split/page-api tests, 106 pass · concerns: stale prose outside Files: settings.ts:96 shell.layout description and layouts/design.md:72,79 'four chrome areas'; side bar may not regrow in the same pass the right bar shrinks (real-DOM only); grid/handle/gallery layout not checked live; three shell test names undersell their two-handle assertions
+- 03 · 356bd8a · diff read: every Produces present; typecheck clean; worker ran 249 tests across adapter, fake harness and chat users, all pass · concerns: oxfmt --check fails on DESIGN.md and docs/keymap.md (committed in 444f673, predate this run); AGENTS.md claude-code row omits claude -p /usage; harness test checks plan-usage row labels only
 ### Contract changes
 ### Rulings
 - right bar redraws both bars only when its hidden state flips (updateHidden wrapper); a layout swap keeps plain applyHidden — a swap needing a redraw waits for the next resize · group 01 · group 01
 - sizedPane 'end' lives in two private mappings inside createSplitDivider plus a flipped nudge direction; createDividerHandle unchanged · group 01 · group 01
+- chat-sessions processEvents got empty planUsage/agentEvent bodies with a placeholder comment; task 04 replaces both and drops the comment · group 03 · group 03
+- runCli timeout message is built from the args; reads exactly 'claude -p /usage gave no answer in 20 s' · group 03 · group 03
+- turnUsageOf falls back to the largest window when the model key exists but has no numeric contextWindow · group 03 · group 03
+- get_context_usage is written after every result line, even with a queued turn pending · group 03 · group 03
 ### Review rounds
 ### Test gate

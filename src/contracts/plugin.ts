@@ -614,6 +614,7 @@ export interface DriveHost {
 
 // `runMode` is how the app was started. `selfTest` is the plugin's own
 // self-test host, null outside the self-test.
+// `timers` runs one-shot timers, the page's `Timers` seam.
 // `files` takes absolute paths; outside a live run, `files.trash` deletes for
 // good. `paths` handles full paths by the rules of the OS main runs on.
 // `processes` runs the machine's programs; `git` is the one way a plugin runs
@@ -636,6 +637,7 @@ export interface MainServices {
   git: Git;
   log: Log;
   clock: Clock;
+  timers: Timers;
   randomHex: RandomHex;
   randomUuid: RandomUuid;
   homeDir: string;

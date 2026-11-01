@@ -18,6 +18,7 @@ import { mkdirSync, mkdtempSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { clearTimeout, setTimeout } from 'node:timers';
 import { coreCommands, coreScopes } from '../config/keymap';
 import {
   defaultSettings,
@@ -28,7 +29,12 @@ import {
 import { coreThemeTokens } from '../config/theme-tokens';
 import { builtInThemes } from '../config/themes';
 import { type AgentHarness, CLAUDE_PERMISSION_TOOL } from '../contracts/agent';
-import type { Clock, RandomHex, RandomUuid } from '../contracts/ambient';
+import type {
+  Clock,
+  RandomHex,
+  RandomUuid,
+  Timers,
+} from '../contracts/ambient';
 import { BRIDGE_CHANNELS } from '../contracts/bridge';
 import type { Log } from '../contracts/log';
 import type { Paths } from '../contracts/paths';
@@ -282,6 +288,11 @@ function modeServicesOf(environment: RunEnvironment): ModeServices {
   }
 }
 const clock: Clock = { now: () => Date.now() };
+const timers: Timers = {
+  // Node's Timeout converts to its numeric id, and `clearTimeout` takes the id.
+  set: (run, ms) => setTimeout(run, ms)[Symbol.toPrimitive](),
+  clear: (handle) => clearTimeout(handle),
+};
 const modeServices = modeServicesOf(runEnvironment);
 
 const files = createNodeFiles({ trashItem: modeServices.trashItem });
@@ -744,6 +755,7 @@ function createWindow(
       git,
       log,
       clock,
+      timers,
       randomHex,
       randomUuid,
       homeDir: inputs.homeDir,

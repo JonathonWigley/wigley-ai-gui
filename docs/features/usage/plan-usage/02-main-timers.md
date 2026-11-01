@@ -1,6 +1,6 @@
 # 02 — Main timers
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 2 · Depends on: 01 (shares `src/contracts/plugin.ts`)
 Plan: [plan.md](plan.md)

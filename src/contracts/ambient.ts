@@ -10,7 +10,9 @@ export type RandomHex = () => string;
 // An RFC 4122 v4 UUID, fresh per call.
 export type RandomUuid = () => string;
 
-// The page's timers, passed in so tests drive time themselves.
+// One-shot timers for either process, passed in so tests drive time
+// themselves: `set` runs `run` once after `ms` and returns a handle; `clear`
+// cancels a handle `set` returned.
 export interface Timers {
   set(run: () => void, ms: number): number;
   clear(handle: number): void;

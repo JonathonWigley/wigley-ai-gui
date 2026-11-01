@@ -1,6 +1,6 @@
 # 03 — Plan usage and agent events from the Claude adapter
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -78,3 +78,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 356bd8a · proof: diff read: every Produces present; typecheck clean; worker ran 249 tests across adapter, fake harness and chat users, all pass · concerns: oxfmt --check fails on DESIGN.md and docs/keymap.md (committed in 444f673, predate this run); AGENTS.md claude-code row omits claude -p /usage; harness test checks plan-usage row labels only
