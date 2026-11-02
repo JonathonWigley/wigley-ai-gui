@@ -218,6 +218,7 @@ describe('chat main part', () => {
       args: ['preview-7', { allowed: true, reason: null }],
     },
     { method: 'loadHistory', args: [] },
+    { method: 'pullBack', args: ['queued-1'] },
   ])(
     'calls_PreviewSession_AreIgnoredWithNoError: $method',
     async ({ method, args }) => {

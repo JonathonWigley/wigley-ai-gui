@@ -213,6 +213,8 @@ Review base: 7f62c7d
 - G and a following focus land on the newest pending row when any exist, overriding the open-last-activity-line hold — stops end with pending rows — a following user sees pending rows instead of the open activity line · group 03 · group 03
 - Queue only while the harness's own turn runs (harnessActivity !== 'idle'), not while the shown activity is not idle — the fake leaves a permission card waiting after its turn goes idle, so the shown-activity rule queued sends behind it and stranded them (no drain fires when the card settles; a later direct send overtook them: 12 self-test failures); a real Claude turn waiting on a permission still reports working, so it still queues as the plan decided — if Claude ever reports idle with a card waiting, a send then goes straight to the process · lead
 - plan step 3/4/6 landed as finer steps (Escape, G, Enter each with its own expect; step 6 waits on the echo's assistant entry, no separate idle wait) — one diagnostic line per key — none for the proof · group 04 · group 04
+### Review rounds
+- 1 · af8b7c4 · NEEDS FIXES (1 Important, 6 Minor; 5 determined dispatched, 2 open to triage) — /tmp/claude-scratch-pm/review-af8b7c4.md
 ### Test gate
 - whole vitest suite (7.6 s, every touched module's tests incl. chat-sessions, entry-list, chat-commands, layout, read-chat-layout) + npm run selftest (chat groups own the queue steps; run at 9e86eaa, later commits docs only) + typecheck + lint · 4712/4712 unit pass; self-test 793 pass 0 fail; typecheck and lint clean
 

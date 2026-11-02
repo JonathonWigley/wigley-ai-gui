@@ -677,4 +677,33 @@ describe('pending rows', () => {
     expect(pulled).toEqual(['q2']);
     expect(list.focused()).toEqual(pendingStop('q1'));
   });
+
+  it('pending_RebuildWithFocusOnRow_RowsStayAfterEntriesAndKeepTheFocus', () => {
+    const { list, put, entries } = setUpList(defaultShown());
+    [user('u1'), notice('n1')].forEach(put);
+    list.setQueued([queued('q1'), queued('q2')]);
+    list.move(-1);
+
+    list.rebuild(entries());
+
+    expect(slotClasses(list.element)).toEqual([
+      'chat-entry-slot',
+      'chat-entry-slot',
+      'chat-entry-slot chat-queued-slot is-cursor',
+      'chat-entry-slot chat-queued-slot',
+    ]);
+    expect(list.focused()).toEqual(pendingStop('q1'));
+  });
+
+  it('pending_RowAfterFollowedOpenLastRun_FollowingFocusLandsOnTheRow', () => {
+    const { list, put } = setUpList(defaultShown());
+    [user('u1'), tool('t1'), tool('t2')].forEach(put);
+    list.toggleFocused();
+
+    list.setQueued([queued('q1')]);
+
+    expect(list.focused()).toEqual(pendingStop('q1'));
+    list.latest();
+    expect(list.focused()).toEqual(pendingStop('q1'));
+  });
 });

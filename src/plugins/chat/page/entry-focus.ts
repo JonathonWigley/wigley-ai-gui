@@ -54,16 +54,17 @@ export function focusAfterScroll(
 }
 
 // After the list changed: a focus on an entry still listed stays, and a
-// following one only while it sits on `lastRowId`, the last row's stop (an
-// open last run's line); any other following focus, and one whose entry is
-// gone, follows the last of `ids`.
+// following one only while it sits on `lastStopId`, the stop a following focus
+// may rest on (the newest pending row, else the last row's stop: an open last
+// run's line); any other following focus, and one whose entry is gone, follows
+// the last of `ids`.
 export function focusAfterChange(
   focus: EntryFocus,
   ids: readonly string[],
-  lastRowId: string | null,
+  lastStopId: string | null,
 ): EntryFocus {
   const isListed = focus.entryId !== null && ids.includes(focus.entryId);
-  const isKept = isListed && (!focus.following || focus.entryId === lastRowId);
+  const isKept = isListed && (!focus.following || focus.entryId === lastStopId);
   return isKept ? focus : focusLatest(ids.at(-1) ?? null);
 }
 

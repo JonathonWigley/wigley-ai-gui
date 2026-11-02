@@ -1107,7 +1107,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         (queued) => queued.id === queuedId,
       );
       if (pulled === undefined) {
-        log('chat', `queued message ${queuedId} already sent`);
+        log('chat', `queued message ${queuedId} no longer queued`);
         return;
       }
       session.state.queued = session.state.queued.filter(

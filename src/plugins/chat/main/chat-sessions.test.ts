@@ -1095,7 +1095,7 @@ describe('createChatSessions', () => {
 
     expect(test.messages).toHaveLength(sentBefore);
     expect(test.logged).toContain(
-      `[chat] queued message ${firstId} already sent`,
+      `[chat] queued message ${firstId} no longer queued`,
     );
   });
 
