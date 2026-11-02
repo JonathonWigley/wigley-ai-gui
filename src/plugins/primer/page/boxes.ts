@@ -1,5 +1,9 @@
 import type { BoxIdentity } from '../../../shared/page/editor-boxes';
-import { activeForm } from '../../../shared/page/session-forms';
+import {
+  activeForm,
+  formById,
+  sessionPaneView,
+} from '../../../shared/page/session-forms';
 import { MAX_PRIMER_ITEMS, type PrimerEntry } from '../contract';
 import {
   cardRow,
@@ -60,11 +64,32 @@ export const PRIMER_BOX_IDENTITY: BoxIdentity<PrimerBox> = {
   logSource: 'primer',
 };
 
-// The boxes the user can reach now, in Ctrl+n order: the boxes of the card
-// the card row shows in view 'primer', none in any other view.
+// The boxes the user can reach now, in Ctrl+n order: the active primer's
+// boxes in `state.view`.
 export function shownBoxes(state: PrimerState): PrimerBox[] {
   const primer = activeForm(state);
-  if (primer === null || state.view !== 'primer') {
+  return primer === null ? [] : boxesInView(primer, state.view);
+}
+
+// The boxes primer `primerId`'s view draws, focused or not: its boxes in the
+// view its session's pane draws it in.
+export function primerViewBoxes(
+  state: PrimerState,
+  primerId: string,
+): PrimerBox[] {
+  const primer = formById(state, primerId);
+  return primer === undefined
+    ? []
+    : boxesInView(primer, sessionPaneView(state, primer.sessionId, 'primer'));
+}
+
+// The boxes of the card the card row shows in view 'primer', none in any
+// other view.
+function boxesInView(
+  primer: OpenPrimer,
+  view: PrimerState['view'],
+): PrimerBox[] {
+  if (view !== 'primer') {
     return [];
   }
   const primerId = primer.formId;

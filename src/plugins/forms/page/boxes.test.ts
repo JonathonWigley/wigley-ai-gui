@@ -5,6 +5,7 @@ import {
   boxKey,
   focusActionFor,
   isBoxShown,
+  roundViewBoxes,
   shownBox,
   shownBoxes,
 } from './boxes';
@@ -78,6 +79,64 @@ describe('shownBoxes', () => {
 
   it('shows no box with no round open', () => {
     expect(shownBoxes(initialState([], null))).toEqual([]);
+  });
+});
+
+describe('roundViewBoxes', () => {
+  // Rounds r1 and r2, each with questions Alpha and Beta at rail positions 0
+  // and 1, and r1's session focused.
+  function twoRoundsAfter(...actions: FormsAction[]): FormsState {
+    const start = initialState(
+      ['r1', 'r2'].map((roundId) =>
+        presentedRound(roundId, {
+          questions: [question('Alpha'), question('Beta')],
+        }),
+      ),
+      'r1-session',
+    );
+    return actions.reduce(apply, start);
+  }
+  const focus = (sessionId: string): FormsAction => ({
+    type: 'sessionActivated',
+    sessionId,
+  });
+  const onBeta: FormsAction = { type: 'focusItem', item: 1 };
+  const notesOn = (roundId: string, index: number): BoxRef => ({
+    roundId,
+    target: { field: 'notes', item: { kind: 'question', index } },
+  });
+
+  it.each<{
+    name: string;
+    actions: FormsAction[];
+    roundId: string;
+    boxes: BoxRef[];
+  }>([
+    {
+      name: 'the focused round in the review',
+      actions: [{ type: 'openReview' }],
+      roundId: 'r1',
+      boxes: [{ roundId: 'r1', target: { field: 'note' } }],
+    },
+    {
+      name: 'a round whose pane lost focus to a Chat pane',
+      actions: [onBeta, focus('chat-session')],
+      roundId: 'r1',
+      boxes: [notesOn('r1', 2)],
+    },
+    {
+      name: 'a round behind the focused round in the review',
+      actions: [
+        focus('r2-session'),
+        onBeta,
+        focus('r1-session'),
+        { type: 'openReview' },
+      ],
+      roundId: 'r2',
+      boxes: [notesOn('r2', 2)],
+    },
+  ])('draws $name', ({ actions, roundId, boxes }) => {
+    expect(roundViewBoxes(twoRoundsAfter(...actions), roundId)).toEqual(boxes);
   });
 });
 

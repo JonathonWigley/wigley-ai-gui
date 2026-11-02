@@ -34,7 +34,7 @@ import type { SessionsPageExports } from '../../sessions/contract';
 import { formsCommand, formsScope } from '../ids';
 import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
-import { type BoxRef, isBoxShown } from './boxes';
+import { type BoxRef, isBoxInRoundView, isBoxShown } from './boxes';
 import type { FormsContributions } from './contributions';
 import {
   type FormsAction,
@@ -248,13 +248,13 @@ function syncRoundViews(
 }
 
 // Files dropped or pasted on the round view go into the round's box used
-// last, else its first shown box.
+// last, else its first box the view draws, whether or not its pane has focus.
 function addRoundDropTarget(
   roundId: string,
   roundView: RoundView,
   deps: FormsViewDeps,
 ): Disposable {
-  const isShown = (box: BoxRef) => isBoxShown(deps.store.get(), box);
+  const isShown = (box: BoxRef) => isBoxInRoundView(deps.store.get(), box);
   return deps.drops.addTarget({
     element: roundView.element,
     take: boxDropTake(() => deps.boxes.fileEditor(roundId, isShown), {

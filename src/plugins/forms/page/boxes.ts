@@ -1,5 +1,9 @@
 import type { BoxIdentity } from '../../../shared/page/editor-boxes';
-import { activeForm } from '../../../shared/page/session-forms';
+import {
+  activeForm,
+  formById,
+  sessionPaneView,
+} from '../../../shared/page/session-forms';
 import {
   focusedItem,
   type FormsAction,
@@ -52,19 +56,30 @@ export const FORMS_BOX_IDENTITY: BoxIdentity<BoxRef> = {
   logSource: 'forms',
 };
 
-// The boxes the user can reach now, in Ctrl+n order: the forms view shows the
-// focused item's boxes, the review only the round note.
+// The boxes the user can reach now, in Ctrl+n order: the active round's boxes
+// in `state.view`.
 export function shownBoxes(state: FormsState): BoxRef[] {
   const round = activeForm(state);
-  if (round === null) {
-    return [];
-  }
-  const note: BoxRef = { roundId: round.formId, target: { field: 'note' } };
-  switch (state.view) {
+  return round === null ? [] : boxesInView(round, state.view);
+}
+
+// The boxes round `roundId`'s view draws, focused or not: its boxes in the
+// view its session's pane draws it in.
+export function roundViewBoxes(state: FormsState, roundId: string): BoxRef[] {
+  const round = formById(state, roundId);
+  return round === undefined
+    ? []
+    : boxesInView(round, sessionPaneView(state, round.sessionId, 'forms'));
+}
+
+// The forms view shows the focused item's boxes, the review only the round
+// note.
+function boxesInView(round: RoundState, view: FormsState['view']): BoxRef[] {
+  switch (view) {
     case 'forms':
       return itemBoxes(round);
     case 'review':
-      return [note];
+      return [{ roundId: round.formId, target: { field: 'note' } }];
     default:
       return [];
   }
@@ -91,8 +106,17 @@ function itemBoxes(round: RoundState): BoxRef[] {
 }
 
 export function isBoxShown(state: FormsState, box: BoxRef): boolean {
+  return hasBox(shownBoxes(state), box);
+}
+
+// Whether the box's round view draws it, focused or not.
+export function isBoxInRoundView(state: FormsState, box: BoxRef): boolean {
+  return hasBox(roundViewBoxes(state, box.roundId), box);
+}
+
+function hasBox(boxes: BoxRef[], box: BoxRef): boolean {
   const key = boxKey(box);
-  return shownBoxes(state).some((shown) => boxKey(shown) === key);
+  return boxes.some((shown) => boxKey(shown) === key);
 }
 
 // The first shown box editing one of `fields`, or null.

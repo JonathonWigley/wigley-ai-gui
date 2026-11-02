@@ -39,8 +39,10 @@ Decisions:
   them); only `forgetForm` clears them.
 - **Shown boxes only**: Forms and Primer mount every item's card up front and hide the cards not in focus, so a
   mounted box may be one the user cannot see. `fileEditor` skips a last-used box `isShown` rejects, and falls back
-  to the first shown box. Forms passes `(box) => isBoxShown(store.get(), box)` (`forms/page/boxes.ts`), Primer its
-  own `isBoxShown` over its state, and Backlog `() => true` (its one editor is shown while the slot is).
+  to the first shown box. A pane without focus still draws its form, so a box is judged against its own form's
+  view, not the focused one: Forms passes `(box) => isBoxInRoundView(store.get(), box)` (`forms/page/boxes.ts`,
+  over `roundViewBoxes`), Primer its own `isBoxInPrimerView` over `primerViewBoxes`, both reading the view
+  `sessionPaneView` draws the form in, and Backlog `() => true` (its one editor is shown while the slot is).
 - **Release**: `destroyRoundView`, `destroyPrimerView` and the follow-up editor's `destroy` call
   `boxes.forgetForm(formId)`, so a closed round's records do not outlive it.
 - `boxDropTake(editorFor, deps)(files)`: reads `editorFor()` first; null → toast `NOTHING_TAKES_FILES`, tone

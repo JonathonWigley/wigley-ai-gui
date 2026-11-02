@@ -84,7 +84,13 @@ import type {
   TaskRowInput,
   TasksInput,
 } from '../layouts/layout';
-import { boxKey, hasAddItemBox, type PrimerBox, shownBoxes } from './boxes';
+import {
+  boxKey,
+  hasAddItemBox,
+  type PrimerBox,
+  primerViewBoxes,
+  shownBoxes,
+} from './boxes';
 import {
   type CardKit,
   createFeatureKit,
@@ -428,8 +434,17 @@ function resizeTargetOf(
 }
 
 function isBoxShown(state: PrimerState, box: PrimerBox): boolean {
+  return hasBox(shownBoxes(state), box);
+}
+
+// Whether the box's primer view draws it, focused or not.
+function isBoxInPrimerView(state: PrimerState, box: PrimerBox): boolean {
+  return hasBox(primerViewBoxes(state, box.primerId), box);
+}
+
+function hasBox(boxes: PrimerBox[], box: PrimerBox): boolean {
   const key = boxKey(box);
-  return shownBoxes(state).some((shown) => boxKey(shown) === key);
+  return boxes.some((shown) => boxKey(shown) === key);
 }
 
 // The open primers' views, and the drop target each view's element is, by
@@ -476,13 +491,13 @@ function syncPrimerViews(
 }
 
 // Files dropped or pasted on the primer view go into the primer's box used
-// last, else its first shown box.
+// last, else its first box the view draws, whether or not its pane has focus.
 function addPrimerDropTarget(
   primerId: string,
   primerView: PrimerFormView,
   deps: PrimerViewDeps,
 ): Disposable {
-  const isShown = (box: PrimerBox) => isBoxShown(deps.store.get(), box);
+  const isShown = (box: PrimerBox) => isBoxInPrimerView(deps.store.get(), box);
   return deps.drops.addTarget({
     element: primerView.element,
     take: boxDropTake(() => deps.boxes.fileEditor(primerId, isShown), {

@@ -6,9 +6,10 @@ import {
   boxText,
   focusActionFor,
   type PrimerBox,
+  primerViewBoxes,
   shownBoxes,
 } from './boxes';
-import { apply, initialState } from './primer-state';
+import { apply, initialState, type PrimerAction } from './primer-state';
 import {
   presentedPrimer,
   primerEntry,
@@ -70,6 +71,28 @@ describe('primer boxes', () => {
 
   it('shows no box in the review', () => {
     expect(shownBoxes(apply(setup(), { type: 'openReview' }))).toEqual([]);
+  });
+
+  it.each<{ name: string; action: PrimerAction; keys: string[] }>([
+    {
+      name: 'a primer whose pane lost focus to a Chat pane',
+      action: { type: 'sessionActivated', sessionId: 'chat-session' },
+      keys: ['p1/task/extra-1/item/2/comment'],
+    },
+    {
+      name: 'the focused primer in the review',
+      action: { type: 'openReview' },
+      keys: [],
+    },
+  ])('draws the boxes of $name', ({ action, keys }) => {
+    const onItem = apply(apply(setup(), { type: 'nextRow' }), {
+      type: 'selectItem',
+      item: 2,
+    });
+
+    expect(primerViewBoxes(apply(onItem, action), 'p1').map(boxKey)).toEqual(
+      keys,
+    );
   });
 
   it('keys and describes one box of each field', () => {
