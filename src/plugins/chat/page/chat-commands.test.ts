@@ -11,6 +11,7 @@ import type { CloseConfirm, ReasonBox } from './chat-dialogs';
 import {
   type ChatCommandDeps,
   chatCommandHandlers,
+  fillComposer,
   putBack,
 } from './chat-commands';
 import type { ChatSession, ChatTabs, PermissionActions } from './chat-view';
@@ -144,9 +145,10 @@ function box(text: string) {
   return Object.assign(editor, { held });
 }
 
-// The handlers over one shown session; `invoked` records each call to chat
-// main, `opened` each picker request, `viewed` each image viewer opening,
-// `toasts` each toast and `toastTones` its tone. Every invoke
+// The handlers over one shown session, and the `deps` they run with;
+// `invoked` records each call to chat main, `opened` each picker request,
+// `viewed` each image viewer opening, `revealed` each session the tabs
+// reveal, `toasts` each toast and `toastTones` its tone. Every invoke
 // resolves, or rejects with `refusal` when one is given. With `visible`
 // false no Chat tab is the visible tab. `slashCommands` holds the app slash
 // commands send matches. `close` removes the session from the tabs.
@@ -162,8 +164,10 @@ function setUp(
   const toasts: string[] = [];
   const toastTones: string[] = [];
   const viewed: { images: readonly ChatImage[]; index: number }[] = [];
+  const revealed: string[] = [];
   let isOpen = true;
   const tabs = {
+    reveal: (sessionId: string) => revealed.push(sessionId),
     visibleSessionId: () => (visible ? shown.sessionId : null),
     session: (sessionId: string) =>
       isOpen && sessionId === shown.sessionId ? shown : undefined,
@@ -203,7 +207,9 @@ function setUp(
   };
   return {
     handlers: chatCommandHandlers(deps),
+    deps,
     invoked,
+    revealed,
     opened,
     logs,
     toasts,
@@ -562,6 +568,40 @@ describe('chat commands', () => {
     expect(message.held.text).toBe('one\ntwo\ndraft');
     expect(shown.attachments.images()).toEqual([png, gif, jpeg]);
   });
+
+  it.each([
+    {
+      case: 'held session',
+      sessionId: 'row-1',
+      text: '/wigley:feature ',
+      box: '/wigley:feature ',
+      revealed: ['row-1'],
+      logged: [],
+    },
+    {
+      case: 'unknown session',
+      sessionId: 'other',
+      text: 'x',
+      box: 'draft',
+      revealed: [],
+      logged: ['[chat] fillComposer for unknown session other ignored'],
+    },
+  ])(
+    'fillComposer_$case',
+    ({ sessionId, text, box: expected, revealed, logged }) => {
+      const message = box('draft');
+      const shown = Object.assign(session(true), { box: message });
+      shown.attachments.add(png);
+      const run = setUp(shown);
+
+      fillComposer(run.deps, sessionId, text);
+
+      expect(message.held.text).toBe(expected);
+      expect(shown.attachments.images()).toEqual([png]);
+      expect(run.revealed).toEqual(revealed);
+      expect(run.logs).toEqual(logged);
+    },
+  );
 
   it.each([{ running: true }, { running: false }])(
     'send with images, running $running, sends to main and clears attachments',

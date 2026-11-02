@@ -1,9 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ChatEntry } from '../../../../contracts/agent';
 import type { SessionInfo } from '../../../sessions/contract';
-import type { ChatSessionState } from '../../contract';
+import { CHAT_PREVIEW_HOST_ID, type ChatSessionState } from '../../contract';
 import { createChatPreview } from './chat-preview';
-import { PREVIEW_HOST_ID } from './preview-session';
 
 // A preview over sessions whose `open` hands out rows `row-1`, `row-2`, …;
 // `sent` holds each channel message, `ends` each row whose owned session
@@ -49,7 +48,7 @@ describe('chat preview', () => {
 
     expect(opened).toEqual([
       [
-        expect.objectContaining({ sessionId: PREVIEW_HOST_ID }),
+        expect.objectContaining({ sessionId: CHAT_PREVIEW_HOST_ID }),
         { select: true },
       ],
     ]);

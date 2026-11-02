@@ -1,8 +1,6 @@
 import type { ChatEntry, SessionControl } from '../../../../contracts/agent';
 import { FAKE_HISTORY_IMAGES } from '../../../../shared/fake-agent-harness';
 
-// The preview row's host session id; no harness holds a session by it.
-export const PREVIEW_HOST_ID = 'chat-layout-preview';
 // The row label and the Chat tab's name are this folder's basename.
 export const PREVIEW_PROJECT_DIR = 'Chat preview';
 export const PREVIEW_PROFILE = 'preview';

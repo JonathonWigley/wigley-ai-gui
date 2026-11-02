@@ -6,9 +6,12 @@ import type {
   OwnedSession,
   SessionsMainExports,
 } from '../../../sessions/contract';
-import type { ChatChannel, ChatSessionState } from '../../contract';
 import {
-  PREVIEW_HOST_ID,
+  CHAT_PREVIEW_HOST_ID,
+  type ChatChannel,
+  type ChatSessionState,
+} from '../../contract';
+import {
   PREVIEW_PROFILE,
   PREVIEW_PROJECT_DIR,
   previewControls,
@@ -61,7 +64,7 @@ export function createChatPreview(deps: ChatPreviewDeps): ChatPreview {
       }
       const owned = sessions.open(
         {
-          sessionId: PREVIEW_HOST_ID,
+          sessionId: CHAT_PREVIEW_HOST_ID,
           projectDir: PREVIEW_PROJECT_DIR,
           deadlineSeconds: null,
           harness: null,

@@ -211,6 +211,12 @@ export interface ComposerKit extends BaseKit {
   attachments(parent: HTMLElement): HTMLElement;
   // The slot the `composerBar` part draws into.
   bar(parent: HTMLElement): HTMLElement;
+  // `div.chat-composer-parts`, holding one `div.chat-composer-part` (`data-part="<id>"`) per part other plugins added
+  // for every Chat tab, in the order they were added, each drawn for the tab's session; returns the
+  // `div.chat-composer-parts`. Call it once, where the parts go: a composer that leaves it out gets the parts first in
+  // its element. A part that throws is logged and draws nothing. A second call throws
+  // `composer placed contributed parts twice`, so the composer draws with `default`.
+  contributedParts(parent: HTMLElement): HTMLElement;
 }
 // The bar's pieces that hold keys. Each places the same element on every draw.
 export interface ComposerBarKit extends BaseKit {

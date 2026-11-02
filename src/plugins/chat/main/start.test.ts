@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
 import type { ToolResult } from '../../sessions/contract';
-import type { ChatSessionState } from '../contract';
+import type { ChatMainExports, ChatSessionState } from '../contract';
 import { addDriveActions, chatMainPart } from './start';
 
 // A chat holding one session, `held`, whose permission calls wait until the
@@ -121,24 +121,38 @@ describe('chat drive actions', () => {
 // and whose processes record each message sent, with one profile, `work`, and
 // a data folder that cannot be read; sessions open rows `row-1`, `row-2`, ….
 // `invoke` calls the page channel's handler for `name`; `sent` holds each
-// channel message and `logged` each log line.
+// channel message, `logged` each log line, and `starts` counts the harness's
+// process starts.
+// `exports` is the part's main exports.
 function startChatPart() {
   const handlers = new Map<string, (...args: unknown[]) => unknown>();
   const cancelLogIn = vi.fn<() => void>();
   const processSends = vi.fn<(message: unknown) => void>();
   const sent: { message: string; data: unknown }[] = [];
   const logged: string[] = [];
+  const starts = { count: 0 };
   const harness = {
     id: 'claude',
     logIn: () => ({ sendCode: () => undefined, cancel: cancelLogIn }),
-    start: () => ({ send: processSends }),
+    start: () => {
+      starts.count += 1;
+      return {
+        send: processSends,
+        end: () => Promise.resolve(),
+        interrupt: () => undefined,
+      };
+    },
   };
   let rows = 0;
   const sessions = {
     contributeTools: () => undefined,
     open: () => {
       rows += 1;
-      return { session: { id: `row-${rows}` }, end: () => undefined };
+      return {
+        session: { id: `row-${rows}` },
+        end: () => undefined,
+        setHostSessionId: () => undefined,
+      };
     },
     activate: () => undefined,
   };
@@ -177,7 +191,17 @@ function startChatPart() {
     }
     return handler(...args);
   };
-  return { part, invoke, cancelLogIn, processSends, sent, logged };
+  const exports = part.exports as ChatMainExports;
+  return {
+    part,
+    exports,
+    invoke,
+    cancelLogIn,
+    processSends,
+    sent,
+    logged,
+    starts,
+  };
 }
 
 describe('chat main part', () => {
@@ -251,6 +275,50 @@ describe('chat main part', () => {
         },
       },
     ]);
+  });
+
+  it.each([
+    { method: 'send', target: 'row-9' },
+    { method: 'send', target: 'row-2' },
+    { method: 'clear', target: 'row-9' },
+    { method: 'clear', target: 'row-2' },
+  ] as const)(
+    'exports_$method_SessionChatDoesNotHold_Rejects ($target)',
+    async ({ method, target }) => {
+      const chat = startChatPart();
+      chat.invoke('start', { projectDir: '/p', profile: 'work' });
+      chat.invoke('openPreview');
+      const startsBefore = chat.starts.count;
+
+      const called =
+        method === 'send'
+          ? chat.exports.send(target, { text: 'hi', images: [] })
+          : chat.exports.clear(target);
+
+      await expect(called).rejects.toThrow(`chat holds no session ${target}`);
+      expect(chat.processSends).not.toHaveBeenCalled();
+      expect(chat.starts.count).toBe(startsBefore);
+    },
+  );
+
+  it('exports_Send_WritesToTheProcess', async () => {
+    const chat = startChatPart();
+    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    const message = { text: '/wigley:make /p', images: [] };
+
+    await chat.exports.send('row-1', message);
+
+    expect(chat.processSends).toHaveBeenCalledExactlyOnceWith(message);
+  });
+
+  it('exports_Clear_ResolvesAfterTheFreshStart', async () => {
+    const chat = startChatPart();
+    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    await chat.exports.send('row-1', { text: 'hi', images: [] });
+
+    await chat.exports.clear('row-1');
+
+    expect(chat.starts.count).toBe(2);
   });
 
   it('dispose_SignInRunning_CancelsIt', async () => {

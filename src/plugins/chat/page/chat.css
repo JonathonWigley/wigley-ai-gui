@@ -221,8 +221,9 @@
   width: calc(var(--wg-space-8) * 3);
 }
 
-/* The composer: the attached images' strip, then the message box over its
-   bar (mode, type hint, control chips, running indicator, send). */
+/* The composer: other plugins' parts, the attached images' strip, then the
+   message box over its bar (mode, type hint, control chips, running
+   indicator, send). */
 .ui-floating.chat-composer {
   border-radius: var(--wg-radius-xl);
   bottom: var(--wg-space-3);
@@ -234,6 +235,16 @@
   padding: var(--wg-space-2);
   position: absolute;
   right: var(--wg-space-3);
+}
+
+/* Other plugins' composer parts; a Chat tab with none shows no space. */
+.chat-composer-parts {
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-composer-parts:empty {
+  display: none;
 }
 
 .chat-attachments {

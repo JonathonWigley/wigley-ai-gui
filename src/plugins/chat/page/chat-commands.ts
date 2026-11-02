@@ -373,6 +373,23 @@ export function putBack(
   return true;
 }
 
+// Replaces the session's draft with `text`, leaving its attached images, then
+// shows its Chat tab with the box focused in insert mode at the end. An
+// unknown session is logged and left alone.
+export function fillComposer(
+  deps: Pick<ChatCommandDeps, 'tabs' | 'log'>,
+  sessionId: string,
+  text: string,
+): void {
+  const session = deps.tabs.session(sessionId);
+  if (session === undefined) {
+    deps.log('chat', `fillComposer for unknown session ${sessionId} ignored`);
+    return;
+  }
+  session.box.setText(text);
+  deps.tabs.reveal(sessionId);
+}
+
 // Asks main to take the queued message out of the session's queue; it
 // arrives back as `returned`.
 export function pullBackQueued(

@@ -2,6 +2,10 @@ import './sessions.css';
 import type { PaneDirection } from '../../../contracts/panes';
 import type { PageApi, PagePart } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
+import {
+  createPartStore,
+  type PartStore,
+} from '../../../shared/page/contributed-parts';
 import { createListPicker } from '../../../shared/page/list-picker';
 import {
   leafIds,
@@ -12,6 +16,7 @@ import {
 import { qualify } from '../../../shared/plugin-manifests';
 import type { KeysPageExports } from '../../keys/contract';
 import type {
+  SessionPart,
   SessionRow,
   SessionsChannel,
   SessionsPageEvents,
@@ -39,10 +44,6 @@ import {
   shownElsewhere,
 } from './pane-sessions';
 import { previewToggle } from './preview';
-import {
-  createSessionPartStore,
-  type SessionPartStore,
-} from './session-part-store';
 import { mountSessionsView, type SessionsView } from './sessions-view';
 import {
   isRoundToast,
@@ -99,8 +100,8 @@ type PickerChoice = { kind: 'row'; row: SessionRow } | { kind: 'new' };
 function createExports(
   api: SessionsApi,
   view: SessionsView,
-  rowParts: SessionPartStore,
-  barParts: SessionPartStore,
+  rowParts: PartStore<SessionPart>,
+  barParts: PartStore<SessionPart>,
   activate: (sessionId: string) => void,
   labelOf: (sessionId: string) => string,
 ): SessionsPageExports {
@@ -322,8 +323,8 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       return sessionId === null ? 'empty' : labelOf(sessionId);
     };
 
-    const rowParts = createSessionPartStore();
-    const barParts = createSessionPartStore();
+    const rowParts = createPartStore<SessionPart>();
+    const barParts = createPartStore<SessionPart>();
     // A row click closes the side bar's overlay; `activate` reads `mode` only
     // on a click, after `add`.
     const view = mountSessionsView({

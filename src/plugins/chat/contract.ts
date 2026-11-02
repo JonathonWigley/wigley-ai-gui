@@ -14,6 +14,9 @@ import type { ChannelShape, EventShape } from '../../contracts/plugin';
 // that harness's config folders.
 export const CHAT_HARNESS_ID = 'claude';
 
+// The layout preview's row host session id; no harness holds a session by it.
+export const CHAT_PREVIEW_HOST_ID = 'chat-layout-preview';
+
 export interface ChatProfile {
   name: string;
   configDir: string;
@@ -227,6 +230,13 @@ export interface ChatMainExports {
   profiles(): readonly ChatProfile[];
   // The profile of a session chat owns; null for any other session id.
   profileOf(sessionId: string): string | null;
+  // Sends as the composer does: queued while the session's turn runs.
+  // Rejects for a session chat does not hold, the layout preview included.
+  send(sessionId: string, message: UserMessage): Promise<void>;
+  // The `/clear` command's clear: resolves once the fresh process started;
+  // rejects when it cannot start, or for a session chat does not hold.
+  // `sessions.hostSessionChanged` is emitted before it resolves.
+  clear(sessionId: string): Promise<void>;
 }
 
 // The session an app slash command was sent in: `args` is the trimmed text
@@ -246,8 +256,25 @@ export interface AppSlashCommand {
   run(context: SlashCommandContext): Promise<void> | void;
 }
 
+// What a plugin draws above every Chat tab's composer: chat hands it a
+// wrapper and the tab's session id.
+export interface ChatComposerPart {
+  id: string;
+  build(parent: HTMLElement, sessionId: string): { dispose?(): void };
+}
+
 // The page part's exports. `addSlashCommand` registers an app slash command
 // until its `dispose`, and throws when the name is already registered.
+// `fillComposer` replaces the session's draft, leaving its attached images,
+// selects its Chat tab and focuses the box in insert mode at the end; an
+// unknown session is logged and ignored. `addComposerPart` throws on an id
+// already added; adding a part and disposing its `Disposable` each draw every
+// Chat tab's composer again. A part is built each time the composer draws,
+// which is at a layout change and at a part add or removal, not on each bar
+// change, so a part whose content changes redraws into its wrapper itself. A
+// part is drawn in every Chat tab, the layout preview's included.
 export interface ChatPageExports {
   addSlashCommand(command: AppSlashCommand): Disposable;
+  fillComposer(sessionId: string, text: string): void;
+  addComposerPart(part: ChatComposerPart): Disposable;
 }

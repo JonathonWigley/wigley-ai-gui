@@ -5,6 +5,7 @@ import {
   type PaneDirection,
 } from '../../../contracts/panes';
 import type { ShownLayouts } from '../../../contracts/plugin';
+import type { PartStore } from '../../../shared/page/contributed-parts';
 import { element } from '../../../shared/page/dom';
 import {
   leafIds,
@@ -14,7 +15,7 @@ import {
 } from '../../../shared/page/pane-tree/pane-tree';
 import { createPaneTreeView } from '../../../shared/page/pane-tree/pane-tree-view';
 import type { KeysPageExports } from '../../keys/contract';
-import type { SessionsState } from '../contract';
+import type { SessionPart, SessionsState } from '../contract';
 import type { Layout } from '../layouts/layout';
 import {
   createSessionsParts,
@@ -22,7 +23,6 @@ import {
 } from './layout/sessions-parts';
 import { type PaneSessions, shownElsewhere } from './pane-sessions';
 import { PREVIEW_STATE, previewRowState } from './preview';
-import type { SessionPartStore } from './session-part-store';
 import {
   mountSessionTabsView,
   type SessionTabsView,
@@ -51,8 +51,8 @@ export interface SessionsViewDeps extends Omit<
   timers: Timers;
   panesChanged(): void;
   paneFocused(paneId: string): void;
-  rowParts: SessionPartStore;
-  barParts: SessionPartStore;
+  rowParts: PartStore<SessionPart>;
+  barParts: PartStore<SessionPart>;
 }
 
 // The chat panes and the session each shows. Each change draws the panes and

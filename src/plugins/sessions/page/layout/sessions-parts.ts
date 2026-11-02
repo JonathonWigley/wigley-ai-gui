@@ -4,8 +4,11 @@ import {
   type PaneDirection,
 } from '../../../../contracts/panes';
 import type { ShownLayouts } from '../../../../contracts/plugin';
-import { errorText } from '../../../../shared/error-text';
-import { element } from '../../../../shared/page/dom';
+import {
+  type ContributedPartsPlace,
+  type PartStore,
+  placeContributedParts,
+} from '../../../../shared/page/contributed-parts';
 import { appSlot } from '../../../../shared/page/layout-host/app-slot';
 import {
   createBaseKit,
@@ -43,7 +46,6 @@ import type {
 } from '../../layouts/layout';
 import { sessionsManifest } from '../../manifest';
 import type { SessionPart } from '../../contract';
-import type { SessionPartStore } from '../session-part-store';
 
 type SessionsCommand = keyof typeof sessionsManifest.commands & string;
 
@@ -52,8 +54,8 @@ type SessionsCommand = keyof typeof sessionsManifest.commands & string;
 // draws.
 export interface SessionsPartsDeps extends OwnerKitServices {
   log: Log;
-  rowParts: Pick<SessionPartStore, 'parts'>;
-  barParts: Pick<SessionPartStore, 'parts'>;
+  rowParts: Pick<PartStore<SessionPart>, 'parts'>;
+  barParts: Pick<PartStore<SessionPart>, 'parts'>;
 }
 
 // A drawn side bar and the session prompt its kit placed, null when the
@@ -139,7 +141,7 @@ export function createSessionsParts(deps: SessionsPartsDeps): SessionsParts {
               throw new Error('row placed contributed parts twice');
             }
             isPlaced = true;
-            return placeSessionParts(
+            return placeContributedParts(
               partsParent,
               input.sessionId,
               deps.rowParts.parts(),
@@ -272,7 +274,7 @@ export function createSessionsParts(deps: SessionsPartsDeps): SessionsParts {
               throw new Error('tabBar placed contributed parts twice');
             }
             isPlaced = true;
-            return placeSessionParts(
+            return placeContributedParts(
               partsParent,
               sessionId,
               deps.barParts.parts(),
@@ -305,65 +307,19 @@ export function createSessionsParts(deps: SessionsPartsDeps): SessionsParts {
   };
 }
 
-// Where one surface's session parts go: the holder's and each wrapper's
-// class, and the noun its log lines name a part by.
-interface SessionPartsPlace {
-  holderClass: string;
-  wrapperClass: string;
-  noun: string;
-}
-
-const ROW_PARTS: SessionPartsPlace = {
+const ROW_PARTS: ContributedPartsPlace = {
+  owner: 'sessions',
+  noun: 'row part',
   holderClass: 'session-row-parts',
   wrapperClass: 'session-row-part',
-  noun: 'row part',
 };
 
-const BAR_PARTS: SessionPartsPlace = {
+const BAR_PARTS: ContributedPartsPlace = {
+  owner: 'sessions',
+  noun: 'bar part',
   holderClass: 'session-bar-parts',
   wrapperClass: 'session-bar-part',
-  noun: 'bar part',
 };
-
-// A `div` of `place.holderClass` at the end of `parent`, holding one `div` of
-// `place.wrapperClass` (`data-part="<id>"`) per part, in add order, each built
-// into its wrapper for `sessionId`. Each built part's dispose is recorded on
-// `rollback`, so it runs before the surface draws again; a dispose that throws
-// is logged and the rest still run. A part whose build throws is logged and
-// its wrapper removed; the rest still draw.
-function placeSessionParts(
-  parent: HTMLElement,
-  sessionId: string,
-  sessionParts: readonly SessionPart[],
-  place: SessionPartsPlace,
-  log: Log,
-  rollback: RollbackDeps,
-): HTMLElement {
-  const holder = element('div', place.holderClass);
-  parent.append(holder);
-  for (const part of sessionParts) {
-    const wrapper = element('div', place.wrapperClass);
-    wrapper.dataset.part = part.id;
-    holder.append(wrapper);
-    try {
-      const built = part.build(wrapper, sessionId);
-      rollback.recordBox(() => {
-        try {
-          built.dispose?.();
-        } catch (error) {
-          log(
-            'sessions',
-            `${place.noun} ${part.id} dispose failed: ${errorText(error)}`,
-          );
-        }
-      });
-    } catch (error) {
-      wrapper.remove();
-      log('sessions', `${place.noun} ${part.id} failed: ${errorText(error)}`);
-    }
-  }
-  return holder;
-}
 
 // The chevron each pane edge points with.
 const PANE_EDGE_CHEVRONS: Record<PaneDirection, string> = {

@@ -2,6 +2,11 @@ import type { ChatImage } from '../../../contracts/agent';
 import type { CommandId } from '../../../contracts/commands';
 import type { Disposable } from '../../../contracts/disposable';
 import type { Log } from '../../../contracts/log';
+import {
+  type ContributedPartsPlace,
+  type PartStore,
+  placeContributedParts,
+} from '../../../shared/page/contributed-parts';
 import { appended, element } from '../../../shared/page/dom';
 import { appSlot } from '../../../shared/page/layout-host/app-slot';
 import {
@@ -15,6 +20,7 @@ import { floatingPanel } from '../../../shared/page/ui/floating-panel';
 import { iconButton } from '../../../shared/page/ui/icon-button';
 import { disposeAnchors } from '../../../shared/page/ui/key-anchors';
 import { statusDot } from '../../../shared/page/ui/status-dot';
+import type { ChatComposerPart } from '../contract';
 import { type ChatCommandName, chatCommand, chatScope } from '../ids';
 import type {
   AttachmentsInput,
@@ -34,23 +40,28 @@ import {
 import { chipKeyCommands } from './composer-input';
 import { controlCommand } from './control-commands';
 
-// `run` runs a command, as the chips and Send do.
+// `run` runs a command, as the chips and Send do; `composerParts` holds the
+// parts other plugins added above every composer.
 export interface ComposerSurfaceDeps extends SurfaceKitDeps {
   layouts: ChatLayouts;
   run(command: CommandId): void;
+  composerParts: Pick<PartStore<ChatComposerPart>, 'parts'>;
   log: Log;
 }
 
-// One Chat tab's app-owned pieces: the message box frame its editor is
-// mounted in, and the removal of an attached image.
+// One Chat tab's app-owned pieces: the session whose parts the composer
+// draws, the message box frame its editor is mounted in, and the removal of
+// an attached image.
 export interface ComposerPieces {
+  sessionId: string;
   box: HTMLElement;
   removeImage(index: number): void;
 }
 
 // One Chat tab's composer, drawn through the chat layout. The box, the
 // attachments and bar slots, and the bar's key-holding parts are built once
-// and placed again by each draw.
+// and placed again by each draw; other plugins' composer parts are built
+// again by each composer draw.
 export interface ComposerSurface {
   // Draws the composer into `parent` in place of its last draw, then the bar
   // with `input` and the last attached images; returns the composer's root.
@@ -114,6 +125,7 @@ export function createComposerSurface(
         const box = appSlot(pieces.box, 'box', rollback);
         const attachmentsAt = appSlot(attachmentsSlot, 'attachments', rollback);
         const barAt = appSlot(barSlot, 'bar', rollback);
+        let arePartsPlaced = false;
         const kit: ComposerKit = {
           ...surfaceBaseKit(deps, 'chat', rollback),
           floatingPanel: (panelParent) =>
@@ -121,9 +133,26 @@ export function createComposerSurface(
           box: (boxParent) => box.place(boxParent),
           attachments: (slotParent) => attachmentsAt.place(slotParent),
           bar: (slotParent) => barAt.place(slotParent),
+          contributedParts(partsParent) {
+            if (arePartsPlaced) {
+              throw new Error('composer placed contributed parts twice');
+            }
+            arePartsPlaced = true;
+            return placeContributedParts(
+              partsParent,
+              pieces.sessionId,
+              deps.composerParts.parts(),
+              COMPOSER_PARTS,
+              deps.log,
+              rollback,
+            );
+          },
         };
         const view = builder(at, input, kit);
         const root = requireElementIn(at, view.element, 'composer');
+        if (!arePartsPlaced && deps.composerParts.parts().length > 0) {
+          root.prepend(kit.contributedParts(root));
+        }
         box.placeIfLeftOut(root);
         return { element: root, view };
       });
@@ -198,6 +227,13 @@ export function createComposerSurface(
 
   return surface;
 }
+
+const COMPOSER_PARTS: ContributedPartsPlace = {
+  owner: 'chat',
+  noun: 'composer part',
+  holderClass: 'chat-composer-parts',
+  wrapperClass: 'chat-composer-part',
+};
 
 function createBarParts(
   deps: Pick<ComposerSurfaceDeps, 'keys' | 'run'>,

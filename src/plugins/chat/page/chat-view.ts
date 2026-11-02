@@ -11,13 +11,18 @@ import type { Log } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import type { PageChannel, ToastTone } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
+import type { PartStore } from '../../../shared/page/contributed-parts';
 import { element } from '../../../shared/page/dom';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
 import type {
   SessionsPageExports,
   SessionTabHandle,
 } from '../../sessions/contract';
-import type { ChatChannel, ChatSessionState } from '../contract';
+import type {
+  ChatChannel,
+  ChatComposerPart,
+  ChatSessionState,
+} from '../contract';
 import {
   type Attachments,
   createAttachments,
@@ -98,6 +103,7 @@ export type ChatTabScope = 'chat';
 // `slashCommandNames` reads the app slash commands registered now, which the
 // `/` completion offers ahead of the agent's. `viewer` opens a sent message's
 // images full size. `timers` and `clock` tick a live activity line's time.
+// `composerParts` holds the parts other plugins draw above every composer.
 export interface ChatViewDeps extends SurfaceKitDeps {
   channel: PageChannel<ChatChannel>;
   paths: Paths;
@@ -106,6 +112,7 @@ export interface ChatViewDeps extends SurfaceKitDeps {
   editor: EditorHost;
   run(command: CommandId): void;
   layouts: ChatLayouts;
+  composerParts: Pick<PartStore<ChatComposerPart>, 'parts' | 'onChanged'>;
   permissions: PermissionActions;
   confirm: CloseConfirm;
   viewer: Pick<ImageViewer, 'open'>;
@@ -145,7 +152,8 @@ const STARTING_MODE: VimMode = { mode: 'normal', subMode: '' };
 // pending rows and its composer (attached images, message box, mode, type
 // hint, running indicator, control chips, send), kept up to date from chat
 // main's messages. Each tab is selected in its session when added. A layout
-// change draws every tab's entries, pending rows and composer again, each box
+// change draws every tab's entries, pending rows and composer again, and a
+// composer part added or removed draws every tab's composer again, each box
 // keeping its text, vim mode and focus.
 export function mountChatView(deps: ChatViewDeps): ChatTabs {
   const { log } = deps;
@@ -156,6 +164,11 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     toastedKinds.clear();
     for (const tab of tabs.values()) {
       tab.entries.rebuild(tab.state.entries);
+      drawComposer(tab);
+    }
+  });
+  deps.composerParts.onChanged(() => {
+    for (const tab of tabs.values()) {
       drawComposer(tab);
     }
   });
@@ -389,7 +402,8 @@ function sessionOf(tab: HeldTab, box: TextEditor): ChatSession {
 }
 
 // The tab element (`div.chat-tab`: entries, then the floating composer
-// holding the attached images' strip, the box and its bar) added to its
+// holding other plugins' parts, the attached images' strip, the box and its
+// bar) added to its
 // session, with the box's editor mounted once the element is attached. The
 // tab then selects itself, so a chat session opens on its Chat tab whichever
 // plugin's tab the session got first. `view.shown` may run inside `addTab`,
@@ -431,9 +445,11 @@ function createTab(
       commands: deps.commands,
       platform: deps.platform,
       run: deps.run,
+      composerParts: deps.composerParts,
       log: deps.log,
     },
     {
+      sessionId: state.sessionId,
       box: boxElement,
       removeImage: (index) => attachments.removeAt(index),
     },

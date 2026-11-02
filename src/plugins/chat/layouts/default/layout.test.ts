@@ -630,6 +630,8 @@ function fakeSurfaceKit() {
       part(parent, 'div', 'floatingPanel'),
     box: (parent: HTMLElement) => part(parent, 'div', 'box'),
     attachments: (parent: HTMLElement) => part(parent, 'div', 'attachments'),
+    contributedParts: (parent: HTMLElement) =>
+      part(parent, 'div', 'contributedParts'),
     bar: (parent: HTMLElement) => part(parent, 'div', 'bar'),
     typeHint: (parent: HTMLElement) => part(parent, 'span', 'typeHint'),
     controlChip: (parent: HTMLElement, control: { id: string }) =>
@@ -723,7 +725,12 @@ describe('default chat layout surfaces', () => {
 
     const panel = asFake(view.element);
     expect(panel.dataset.part).toBe('floatingPanel');
-    expect(describeChildren(panel)).toEqual(['attachments', 'box', 'bar']);
+    expect(describeChildren(panel)).toEqual([
+      'contributedParts',
+      'attachments',
+      'box',
+      'bar',
+    ]);
   });
 
   it('composerBar_Default_ChipsInControlOrderThenRunningThenSend', () => {

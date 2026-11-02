@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CommandId } from '../../../contracts/commands';
+import { createPartStore } from '../../../shared/page/contributed-parts';
 import {
   recordingAnchors,
   USER_LAYOUT,
@@ -11,6 +12,7 @@ import {
   FakeElement,
   installFakeDom,
 } from '../../../shared/page/test-dom';
+import type { ChatComposerPart } from '../contract';
 import { chatCommand } from '../ids';
 import defaultLayout from '../layouts/default/layout.js';
 import type { ChatLayout, ComposerInput } from '../layouts/layout';
@@ -19,8 +21,9 @@ import { createComposerSurface } from './composer-kit';
 import { createSignInPart } from './dialog-kits';
 
 // The deps every surface takes, drawing with `user` as the user's layout,
-// or with `default` alone when `user` is null; each anchor is kept in
-// `anchors` and each log line in `logs`.
+// or with `default` alone when `user` is null, and no composer part until
+// one is added to `deps.composerParts`; each anchor is kept in `anchors` and
+// each log line in `logs`.
 function surfaceDeps(user: ChatLayout | null) {
   const logs: string[] = [];
   const log = (_source: string, line: string) => logs.push(line);
@@ -40,6 +43,7 @@ function surfaceDeps(user: ChatLayout | null) {
     commands: { exists: () => true, run: () => undefined },
     platform: 'macos' as const,
     run: () => undefined,
+    composerParts: createPartStore<ChatComposerPart>(),
     log,
   };
   return { deps, anchors, logs };
@@ -63,6 +67,18 @@ function rootIn(parent: HTMLElement): HTMLElement {
   return root;
 }
 
+// A composer part recording `build:<id>:<sessionId>` and
+// `dispose:<id>:<sessionId>` into `record`.
+function recordingPart(id: string, record: string[]): ChatComposerPart {
+  return {
+    id,
+    build(_parent, sessionId) {
+      record.push(`build:${id}:${sessionId}`);
+      return { dispose: () => record.push(`dispose:${id}:${sessionId}`) };
+    },
+  };
+}
+
 // A box frame with an editor inside, as the app mounts one.
 function boxWithEditor(): FakeElement {
   const box = new FakeElement('div');
@@ -76,11 +92,15 @@ describe('composer surface parts', () => {
     vi.unstubAllGlobals();
   });
 
-  // Draws the composer with `user` into a fresh tab root.
-  function drawComposer(user: ChatLayout) {
+  // Draws the composer with `user` into a fresh tab root, `parts` held.
+  function drawComposer(user: ChatLayout, parts: ChatComposerPart[] = []) {
     const { deps, logs } = surfaceDeps(user);
+    for (const part of parts) {
+      deps.composerParts.add(part);
+    }
     const box = boxWithEditor();
     const surface = createComposerSurface(deps, {
+      sessionId: 'row-1',
       box: asHtml(box),
       removeImage: () => undefined,
     });
@@ -117,6 +137,7 @@ describe('composer surface parts', () => {
         }),
       layout: 'mine',
       endsWithPieces: true,
+      startsWithParts: false,
       log: null,
     },
     {
@@ -125,6 +146,7 @@ describe('composer surface parts', () => {
         drawSignIn({ signIn: (parent) => ({ element: rootIn(parent) }) }),
       layout: 'mine',
       endsWithPieces: true,
+      startsWithParts: false,
       log: null,
     },
     {
@@ -140,11 +162,47 @@ describe('composer surface parts', () => {
         }),
       layout: 'default',
       endsWithPieces: false,
+      startsWithParts: false,
       log: 'layout mine composer failed: box placed twice',
+    },
+    {
+      name: 'a composer that never calls kit.contributedParts',
+      draw: () =>
+        drawComposer(
+          {
+            composer(parent, _input, kit) {
+              const panel = kit.floatingPanel(parent);
+              kit.box(panel);
+              return { element: panel };
+            },
+          },
+          [recordingPart('strip', [])],
+        ),
+      layout: 'mine',
+      endsWithPieces: false,
+      startsWithParts: true,
+      log: null,
+    },
+    {
+      name: 'a composer that calls kit.contributedParts twice',
+      draw: () =>
+        drawComposer({
+          composer(parent, _input, kit) {
+            const panel = kit.floatingPanel(parent);
+            kit.contributedParts(panel);
+            kit.contributedParts(panel);
+            kit.box(panel);
+            return { element: panel };
+          },
+        }),
+      layout: 'default',
+      endsWithPieces: false,
+      startsWithParts: false,
+      log: 'layout mine composer failed: composer placed contributed parts twice',
     },
   ])(
     'composerParts_PieceLeftOutOrPlacedTwice_KeysStillReachTheBox ($name)',
-    ({ draw, layout, endsWithPieces, log }) => {
+    ({ draw, layout, endsWithPieces, startsWithParts, log }) => {
       const { root, pieces, logs } = draw();
 
       expect(root.dataset.layout).toBe(layout);
@@ -156,11 +214,48 @@ describe('composer surface parts', () => {
       if (endsWithPieces) {
         expect(root.children.slice(-pieces.length)).toEqual(pieces);
       }
+      if (startsWithParts) {
+        expect(root.children[0]?.className).toBe('chat-composer-parts');
+      }
       expect(logs.filter((line) => line.includes('failed'))).toEqual(
         log === null ? [] : [log],
       );
     },
   );
+
+  it('composer_ContributedParts_BuiltInAddOrderAboveTheBox', () => {
+    const { deps } = surfaceDeps(null);
+    const record: string[] = [];
+    deps.composerParts.add(recordingPart('first', record));
+    deps.composerParts.add(recordingPart('second', record));
+    const box = boxWithEditor();
+    const surface = createComposerSurface(deps, {
+      sessionId: 'row-1',
+      box: asHtml(box),
+      removeImage: () => undefined,
+    });
+    const tab = asHtml(new FakeElement('div'));
+    const draw = () => asFake(surface.drawComposer(tab, composerInput(false)));
+
+    draw();
+    const firstDraw = [...record];
+    const panel = draw();
+
+    const holder = panel.children[0];
+    expect(holder?.className).toBe('chat-composer-parts');
+    expect(holder?.children.map((wrapper) => wrapper.dataset.part)).toEqual([
+      'first',
+      'second',
+    ]);
+    expect(panel.children.indexOf(box)).toBeGreaterThan(0);
+    expect(firstDraw).toEqual(['build:first:row-1', 'build:second:row-1']);
+    expect(record.slice(firstDraw.length)).toEqual([
+      'dispose:first:row-1',
+      'dispose:second:row-1',
+      'build:first:row-1',
+      'build:second:row-1',
+    ]);
+  });
 
   it('composerBar_Redraw_LeavesOneAnchorPerHint', () => {
     const { deps, anchors } = surfaceDeps({
@@ -172,6 +267,7 @@ describe('composer surface parts', () => {
       },
     });
     const surface = createComposerSurface(deps, {
+      sessionId: 'row-1',
       box: asHtml(boxWithEditor()),
       removeImage: () => undefined,
     });
@@ -203,6 +299,7 @@ describe('composer surface parts', () => {
     };
     const { deps, logs } = surfaceDeps(throwsOnUpdate);
     const surface = createComposerSurface(deps, {
+      sessionId: 'row-1',
       box: asHtml(boxWithEditor()),
       removeImage: () => undefined,
     });
@@ -235,6 +332,7 @@ describe('composer surface parts', () => {
       name: 'composer box',
       draw(deps: ReturnType<typeof surfaceDeps>['deps'], box: FakeElement) {
         const surface = createComposerSurface(deps, {
+          sessionId: 'row-1',
           box: asHtml(box),
           removeImage: () => undefined,
         });

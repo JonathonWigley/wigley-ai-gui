@@ -1,10 +1,10 @@
+import {
+  createPartStore,
+  type PartStore,
+} from '../../../shared/page/contributed-parts';
 import { recordingAnchors } from '../../../shared/page/layout-host/test-layouts';
 import { asFake, FakeElement, findAll } from '../../../shared/page/test-dom';
-import type { SessionRow, SessionsState } from '../contract';
-import {
-  createSessionPartStore,
-  type SessionPartStore,
-} from './session-part-store';
+import type { SessionPart, SessionRow, SessionsState } from '../contract';
 import { mountSessionsView } from './sessions-view';
 
 export function sessionRow(sessionId: string): SessionRow {
@@ -31,8 +31,8 @@ export function stateOf(
 // unless one is handed in) and the bar parts its tab bars draw (`barParts`,
 // likewise). Runs under `installFakeDom`.
 export function sessionsViewSetup(
-  rowParts: SessionPartStore = createSessionPartStore(),
-  barParts: SessionPartStore = createSessionPartStore(),
+  rowParts: PartStore<SessionPart> = createPartStore(),
+  barParts: PartStore<SessionPart> = createPartStore(),
 ) {
   const { anchors, keys } = recordingAnchors();
   const logged: string[] = [];

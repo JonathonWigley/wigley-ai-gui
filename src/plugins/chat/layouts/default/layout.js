@@ -420,10 +420,12 @@ const layout = {
       },
     };
   },
-  // The glass panel: the attached images, the box, then the bar.
+  // The glass panel: other plugins' parts, the attached images, the box, then
+  // the bar.
   composer(parent, _input, kit) {
     const panel = kit.floatingPanel(parent);
     panel.classList.add('chat-composer');
+    kit.contributedParts(panel);
     kit.attachments(panel);
     kit.box(panel);
     kit.bar(panel);

@@ -6,12 +6,17 @@ import type {
   QualifiedEvents,
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
+import { createPartStore } from '../../../shared/page/contributed-parts';
 import type { KeysPageExports } from '../../keys/contract';
 import type {
   SessionsPageEvents,
   SessionsPageExports,
 } from '../../sessions/contract';
-import type { ChatChannel, ChatPageExports } from '../contract';
+import type {
+  ChatChannel,
+  ChatComposerPart,
+  ChatPageExports,
+} from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type { ChatLayout } from '../layouts/layout';
 import { chatManifest } from '../manifest';
@@ -19,6 +24,7 @@ import { addAccountCommands } from './account-commands';
 import {
   chatCommandHandlers,
   createPermissionActions,
+  fillComposer,
   putBack,
 } from './chat-commands';
 import { createCloseConfirm, createReasonBox } from './chat-dialogs';
@@ -50,7 +56,8 @@ type ChatApi = PageApi<
 // the entries until main writes it to the agent; pulling it back puts it into
 // the box.
 // Sending `/login`, `/logout`, `/status` or another app slash command runs it
-// in the page in place of sending it; the exports register more. Images
+// in the page in place of sending it; the exports register more, fill a
+// session's box, and add parts above every composer. Images
 // pasted or dropped into a Chat tab attach to its next message, and a sent
 // message's images open full size in the image viewer. The picker, the deny
 // reason box, the end-session confirmation, the sign-in dialog and the image
@@ -135,6 +142,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       reasonBox.cancel();
       confirm.keep();
     };
+    const composerParts = createPartStore<ChatComposerPart>();
     const view = mountChatView({
       channel: api.channel,
       paths: services.paths,
@@ -150,6 +158,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       commands: partDeps.commands,
       platform: api.platform,
       layouts,
+      composerParts,
       permissions,
       confirm,
       viewer,
@@ -198,6 +207,9 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
     });
     const exports: ChatPageExports = {
       addSlashCommand: (command) => slashCommands.add(command),
+      fillComposer: (sessionId, text) =>
+        fillComposer({ tabs: view, log: services.log }, sessionId, text),
+      addComposerPart: (part) => composerParts.add(part),
     };
     return {
       commands: {

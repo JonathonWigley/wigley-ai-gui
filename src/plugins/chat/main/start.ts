@@ -169,7 +169,8 @@ export function addDriveActions(
 // sign-in when the page loads again or the part is disposed), registers its
 // chat layouts, opens the layout preview's sample session (held apart from
 // chat's sessions, with no process), offers a drive run its fixtures, and
-// exports a background launch to other plugins.
+// exports to other plugins a background launch and a send and clear on the
+// sessions it holds.
 export const chatMainPart: MainPart<typeof chatManifest> = {
   manifest: chatManifest,
   start(api: ChatApi) {
@@ -338,6 +339,11 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       );
     }
     const layouts = api.layouts.register({ layoutTypes });
+    const requireHeld = (sessionId: string) => {
+      if (!chat.sessions().some((held) => held.sessionId === sessionId)) {
+        throw new Error(`chat holds no session ${sessionId}`);
+      }
+    };
     const exports: ChatMainExports = {
       launch: async (request) => chat.launch(request),
       profileNames,
@@ -345,6 +351,14 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       profileOf: (sessionId) =>
         chat.sessions().find((held) => held.sessionId === sessionId)?.profile ??
         null,
+      send: async (sessionId, message) => {
+        requireHeld(sessionId);
+        return chat.send(sessionId, message);
+      },
+      clear: async (sessionId) => {
+        requireHeld(sessionId);
+        chat.clear(sessionId);
+      },
     };
     return {
       commands: {},
