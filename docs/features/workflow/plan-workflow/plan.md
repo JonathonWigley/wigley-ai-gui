@@ -334,7 +334,7 @@ Boundary rules:
 
 ### Wave 5
 
-- [ ] [10 — Workflow self-test](10-workflow-selftest.md) · after 05, 09
+- [x] [10 — Workflow self-test](10-workflow-selftest.md) · after 05, 09
 
 ### Wave 6
 
@@ -358,6 +358,7 @@ Review base: c95c7eb
 - 05 · 5729b79 · diff read: createFakeAgentHarness(clock, files), the four FAKE_WORKFLOW_* exports, turn/skill/file events present; every call site passes files; tests 395 pass, no type errors · concerns: workflow turns run as void promises (an emitter throw would be an unhandled rejection); the process-ends-while-a-write-is-pending path has no test; workflow tests settle on setTimeout(0)
 - 08 · 112bb1f · diff read: manifest, start (addStage export, WorkflowSelfTestHooks), flow-store, plan-watch, actions, countdown, agent-signals present; registration in manifests/main/check-layers; typecheck clean; lint one expected warning (selfTestHooks unused until 10); workflow tests 172 pass · concerns: selfTestHooks built but unused until task 10 (oxlint warning); a start test stands in for an OS watcher that misses a delete with a watch that reports nothing; readIfPresent widened in src/contracts/files.ts, outside the Files line
 - 09 · 2be0260 · diff read: layout.d.ts and default layout, page start/view/flow-tab/preview/countdown/css, layout kit and reader present; keymap w group, zlw, Flow tab scroll binds; page.ts registration; typecheck clean; tests 1322 pass · concerns: a second Space z l w preview run shows no Flow tab: closing the preview's flowTabs.remove forgets the strip build, so a reopen adds no tab until chat redraws its composer; AGENTS.md debug-keys list and DESIGN.md Surfaces/Checks lack the workflow entries (for 11)
+- 10 · a3bbd8e · diff read: selftest-script with six groups, each with a why; main hands it the hooks; worker's npm run selftest ended '[selftest] all passed'; lint clean (08's unused warning gone); six screenshots checked · concerns: a second run in one page life may match '<name> shows idle' early off the earlier run's still-open row; the Flow tab shows the plan title twice (heading and 'Fake flow · 3 tasks'); other plugins' toasts cover composer chips in two screenshots
 ### Contract changes
 - placeContributedParts(..., rollback): RollbackDeps → PartRollback { recordBox(destroy) } (new export; RollbackDeps assignable) · why: check-layers refuses src/shared/page importing layout-host · consumers: 09 · group 06
 - signalOf(event: ChatAgentEvent, flow, fromCurrentHost) → signalOf(event: AgentEvent, flow, fromCurrentHost) · why: the task doc's Produces names AgentEvent; start.ts derives fromCurrentHost from the ChatAgentEvent's hostSessionId · consumers: none outside 08 · group 08
@@ -382,5 +383,7 @@ Review base: c95c7eb
 - the shows/progress/countdown log lines fire only in setFlow, so a wrapper rebuild or a tick logs nothing · group 09 · group 09
 - while the preview shows, pushed flows for that session are stored but not drawn; closing redraws the real flow · group 09 · group 09
 - new log line: a scroll key with no Flow tab visible logs '[workflow] no Flow tab shows' · group 09 · group 09
+- the onMainTurnEnded listener is disposed when the next run opens, not when result settles (result settles at launch, before steps) · group 10 · group 10
+- a failed launch resolves result with the error so problems reports 'no workflow session: <error>' · group 10 · group 10
 ### Review rounds
 ### Test gate

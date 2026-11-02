@@ -1,6 +1,6 @@
 # 10 — Workflow self-test
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 5 · Depends on: 05, 09
 Plan: [plan.md](plan.md)
@@ -109,3 +109,5 @@ Done when: compiles; `npm run lint` passes; `npm run selftest` (12) runs the wor
 Commit:    one commit for the group
 
 ## Proof
+
+Commit a3bbd8e · proof: diff read: selftest-script with six groups, each with a why; main hands it the hooks; worker's npm run selftest ended '[selftest] all passed'; lint clean (08's unused warning gone); six screenshots checked · concerns: a second run in one page life may match '<name> shows idle' early off the earlier run's still-open row; the Flow tab shows the plan title twice (heading and 'Fake flow · 3 tasks'); other plugins' toasts cover composer chips in two screenshots
