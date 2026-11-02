@@ -1,6 +1,6 @@
 # 04 — Page core drop registry
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 3 · Depends on: 01, 02, 03
 Plan: [plan.md](plan.md)

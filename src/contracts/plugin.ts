@@ -4,6 +4,7 @@ import type { Clock, RandomHex, RandomUuid, Timers } from './ambient';
 import type { AppInstance } from './app-instance';
 import type { CommandId } from './commands';
 import type { Disposable } from './disposable';
+import type { PageDrops } from './drops';
 import type { EditorHost, TextEditor } from './editor';
 import type { Files } from './files';
 import type { Git } from './git';
@@ -458,6 +459,9 @@ export interface PageTransparency {
 // target, then the outer panes', and does neither while a scope is pushed,
 // since a move would dismiss it. `panes.setOuterPanes` hands over the panes
 // around the view, kept across scope changes until their owner sets null.
+// `drops.addTarget` registers an element and what takes the files dropped or
+// pasted on it, returning the `Disposable` that removes it; `drops.savePasted`
+// saves a file with no path and returns its path.
 // `dependency` returns the exports of a plugin the manifest lists in
 // `dependsOn`, typed by the caller from that plugin's contract. `Ev` is the
 // plugin's own events and `Heard` the other plugins' events it hears, as
@@ -499,6 +503,7 @@ export interface PageApi<
     setFocusTarget(target: FocusTarget | null): void;
     setOuterPanes(panes: OuterPanes | null): void;
   };
+  drops: PageDrops;
   settings(): M['settings'];
   onSettingsChanged(listener: (settings: M['settings']) => void): Disposable;
   platform: Platform;

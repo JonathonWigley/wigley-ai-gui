@@ -116,6 +116,10 @@ function deps(overrides: Partial<PageApiDeps>): PageApiDeps {
       setFocusTarget: () => {},
       setOuterPanes: () => {},
     },
+    drops: {
+      addTarget: () => ({ dispose: () => {} }),
+      savePasted: async () => '',
+    },
     ...overrides,
   };
 }

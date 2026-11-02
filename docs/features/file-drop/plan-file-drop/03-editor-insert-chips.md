@@ -1,6 +1,6 @@
 # 03 — Editor insert and file chips
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -127,3 +127,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 002f34c · proof: diff read: every Produces present (two extra host-only exports, logged); typecheck and lint pass · concerns: a on a chip ending its line may leave the caret before the chip; vim's own cursor re-sync after the filter moves the selection (l onto a chip, x widening) is unproven — both for the live check in 10; one over-long comment line in boxExtensions

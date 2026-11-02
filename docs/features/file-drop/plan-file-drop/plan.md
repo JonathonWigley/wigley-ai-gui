@@ -227,7 +227,7 @@ Boundary rules:
 
 ### Wave 2
 - [x] [Drop contracts, bridge and pasted files](01-drop-contracts-bridge.md) — after 02
-- [ ] [Editor insert and file chips](03-editor-insert-chips.md) — after 02
+- [x] [Editor insert and file chips](03-editor-insert-chips.md) — after 02
 
 ### Wave 3
 - [ ] [Page core drop registry](04-drop-registry.md) — after 01, 02, 03
@@ -249,11 +249,17 @@ Review base: 87a254cb76dee43042396e82e9a353b6c9573795
 ### Groups
 - 02 · a717159 · diff read: every Produces present; typecheck and lint (layers included) pass · concerns: AGENTS.md's image-types.ts line still says media types only (goes to 09); 05 and 07 still name pasted-images in their text and Done-when greps
 - 01 · d4ea7b1 · diff read: every Produces present word for word; typecheck and lint pass · concerns: pastedFolder in main.ts not yet exercised live (task 10 checks it per run mode)
+- 03 · 002f34c · diff read: every Produces present (two extra host-only exports, logged); typecheck and lint pass · concerns: a on a chip ending its line may leave the caret before the chip; vim's own cursor re-sync after the filter moves the selection (l onto a chip, x widening) is unproven — both for the live check in 10; one over-long comment line in boxExtensions
 ### Contract changes
+- chip-decorations.ts exports: fileChipExtension, snapHead, widenRange → those plus skipsChipRules (an Annotation the host's setText and insert put on their own transactions) and fileChipsOf(state) (the chips of a box's state; [] in a document editor) · why: the host's insert reads the chip under a normal-mode cursor and its own transactions must skip the chip rules · consumers: none outside the host · group 03
 ### Rulings
 - canvasEncoder copies the bytes into a new Uint8Array before the Blob — TS rejects Uint8Array<ArrayBufferLike> as a BlobPart; avoids a cast — one extra copy per encode step on a cold path · group 02
 - fileChipsIn ends a quoted span at \r as well as \n — the task said only 'a line break' — only CRLF text is affected if wrong · group 02
 - The 05 and 07 briefs name the moved module src/shared/page/file-drop/pasted-text.ts wherever their task text says pasted-images, and their Done-when greps search for both names — the task text predates 02's move — a grep for the old name alone would pass without checking anything · lead
 - pasted-files.test.ts uses a POSIX Pick<Paths,'join'> double, not posixPaths — the src/main layer may not import src/shared/paths and check-layers.mts was 02's alone — a per-file layer entry would let it use the real adapter · group 01
+- The chip filter reads vim's mode through a ViewPlugin holding its view, then getCM — the host has no other route to mode inside a transaction filter — a mode read stale by one transaction would misplace a snap · group 03
+- The filter returns [tr, {changes: remainders, selection?, sequential: true}], leaving vim's own transaction untouched and deleting each cut chip's rest after it — keeps vim's registers on its own change — a yank register holding only part of a chip · group 03
+- Visual-selection widening reads the chips of the resulting document, not the state before as the task says — a selection lives in the new document — none for selection-only transactions · group 03
+- insert in visual mode exits visual mode, then a second selection-only dispatch puts the cursor back; the text changes once so changed reports once — exitVisualMode moves the cursor to vim's visual head — a flicker of the cursor · group 03
 ### Review rounds
 ### Test gate

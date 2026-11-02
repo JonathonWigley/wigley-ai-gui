@@ -33,6 +33,7 @@ import { mountCodeColours } from './codemirror-vim/code-colours';
 import { announceNewProblems, createConfigPush } from './config-push';
 import { createCodeMirrorHighlighter } from './codemirror-vim/codemirror-highlighter';
 import { createCodeMirrorVimHost } from './codemirror-vim/codemirror-vim-host';
+import { createDropTargets } from './drop-targets';
 import { editorBindInForce } from './editor-binds';
 import { createFabricMarkupEditor } from './fabric/fabric-markup-editor';
 import { createLiveConfig } from './live-config';
@@ -165,6 +166,12 @@ async function start() {
   // Targets a view set under the previous base belong to a view no longer in
   // force.
   scopeStack.onBaseChange(() => paneTargets.dropViewTargets());
+  const drops = createDropTargets({
+    document,
+    bridge,
+    toast: (text, tone) => toasts.show(text, tone),
+    isShown: (element) => element.checkVisibility(),
+  });
   for (const direction of PANE_DIRECTIONS) {
     commands.register(PANE_RESIZE_COMMANDS[direction], () =>
       paneTargets.resize(direction),
@@ -256,6 +263,7 @@ async function start() {
           bus,
           layouts,
           paneTargets,
+          drops,
         }),
       );
       const handlers: Record<string, (context: PageCommandContext) => void> =

@@ -1,6 +1,7 @@
 import type { Bridge } from '../../contracts/bridge';
 import type { CommandId } from '../../contracts/commands';
 import type { Disposable } from '../../contracts/disposable';
+import type { PageDrops } from '../../contracts/drops';
 import type {
   Area,
   AreaName,
@@ -39,6 +40,7 @@ import type { PendingKeysHub } from '../pending-keys';
 // ones every plugin shares; `uiState` gives each plugin its own scope of the
 // ui state. `layouts` shows each owner's layouts. `paneTargets` takes the
 // resize and focus targets and the outer panes a plugin hands the pane commands.
+// `drops` is the page's one drop registry, handed to every plugin as it is.
 export interface PageApiDeps {
   areas: Record<AreaName, Area>;
   modes: Modes;
@@ -58,6 +60,7 @@ export interface PageApiDeps {
     PaneTargets,
     'setResizeTarget' | 'setFocusTarget' | 'setOuterPanes'
   >;
+  drops: PageDrops;
 }
 
 // One plugin's page API: its channel and its events run under the manifest's
@@ -107,6 +110,7 @@ export function createPageApi(
       setFocusTarget: (target) => deps.paneTargets.setFocusTarget(target),
       setOuterPanes: (panes) => deps.paneTargets.setOuterPanes(panes),
     },
+    drops: deps.drops,
     settings: () => settingsOf(config.current()),
     onSettingsChanged: (listener) =>
       onChangedPart(config, settingsOf, listener),
