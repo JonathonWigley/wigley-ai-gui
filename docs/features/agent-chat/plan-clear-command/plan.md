@@ -178,5 +178,6 @@ Review base: 54aed2e
 - nextNotice(session,text,tone) pulled out of addNotice so clear builds the notice without an entry send — reuse — none · group 03
 - clear group is three steps (A-S-i to chat-second, /clear with checksFit, A-S-o back) since resting session ends on chat-selftest and sending expects it — keeps sending unchanged — two extra keystrokes · group 05
 ### Review rounds
+- 1 · c53d231 · NEEDS FIXES (4 Important, 9 Minor, 1 pre-existing; 6 determined dispatched, 8 open to triage) — /tmp/claude-scratch-cc/review-c53d231.md
 ### Test gate
 - full vitest (4734/4734, every touched module incl. chat-sessions, claude-launch, claude-code-harness, fake harness, session-list, tabs, docs start) + npm run selftest (797 pass, 0 fail, at 4fa6000) + typecheck + lint, all clean
