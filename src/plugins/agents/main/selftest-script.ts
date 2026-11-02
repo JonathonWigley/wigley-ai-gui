@@ -59,7 +59,7 @@ const GROUPS: SelfTestGroup[] = [
         expect: `[agents] lines in ${PREVIEW_NAME}: 2`,
         checksFit: 'held',
         screenshot: 'subagent-lines-narrow',
-        why: "The preview's sample roster holds the widest line (a long type, an elapsed time past a minute, 12 tools), checked beside this run's lines at the side bar's least width: the fit check at the minimum width hides the side bar.",
+        why: "The preview's sample roster holds the widest lines (one with a long type, one with an elapsed time past a minute and 12 tools), checked beside this run's lines at the side bar's least width: the fit check at the minimum width hides the side bar.",
       },
       {
         keys: PREVIEW_KEYS,
