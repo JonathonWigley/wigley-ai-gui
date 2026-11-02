@@ -19,6 +19,7 @@ import {
 import { errorText } from '../../../shared/error-text';
 import type { JsonObject } from '../../../shared/json';
 import type {
+  AgentSession,
   ConnectedSession,
   SessionsMainEvents,
   SessionsMainExports,
@@ -266,7 +267,7 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
     );
     // Keyed by the session row's id.
     const sessionSources = new Map<string, Disposable>();
-    api.events.on('sessions.connected', ({ id, info }) => {
+    const addSessionSource = ({ id, info }: AgentSession) => {
       const spec = {
         hostSessionId: info.sessionId,
         projectDir: info.projectDir,
@@ -280,6 +281,15 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
         false,
       );
       sessionSources.set(id, added);
+    };
+    api.events.on('sessions.connected', addSessionSource);
+    api.events.on('sessions.hostSessionChanged', (session) => {
+      const source = sessionSources.get(session.id);
+      if (source === undefined) {
+        return;
+      }
+      source.dispose();
+      addSessionSource(session);
     });
     api.events.on('sessions.ended', ({ sessionId }) => {
       sessionSources.get(sessionId)?.dispose();

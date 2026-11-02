@@ -261,6 +261,39 @@ describe('docs main part', () => {
     );
   });
 
+  it('sessionSource_HostSessionChanged_LoadsNewId', async () => {
+    const docs = startDocsPart();
+    docs.processes.script(
+      'python3',
+      ['-X', 'utf8', '/script.py', 'session', 'new-host'],
+      {
+        code: 0,
+        stdout: JSON.stringify(INDEX_DOCUMENT),
+        stderr: '',
+        timedOut: false,
+      },
+    );
+    const info: SessionInfo = {
+      sessionId: 'old-host',
+      projectDir: '/p',
+      deadlineSeconds: null,
+      harness: 'claude',
+    };
+    docs.emit('sessions.connected', { id: 'row-1', info });
+
+    docs.emit('sessions.hostSessionChanged', {
+      id: 'row-1',
+      info: { ...info, sessionId: 'new-host' },
+    });
+
+    expect(await docs.invoke('loadIndex', 'session:row-1')).toEqual({
+      document: INDEX_DOCUMENT,
+      message: null,
+      title: 'session index',
+      canRebuild: false,
+    });
+  });
+
   it('pluginStatus_MachineSourceNoClones_Empty', async () => {
     const docs = startDocsPart();
     await docs.invoke('loadIndex', 'machine');

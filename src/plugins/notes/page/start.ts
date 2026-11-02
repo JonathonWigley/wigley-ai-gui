@@ -45,6 +45,20 @@ export const notesPagePart: PagePart<typeof notesManifest> = {
     api.events.on('sessions.sessionRemoved', ({ sessionId }) => {
       rows.delete(sessionId);
     });
+    api.events.on(
+      'sessions.sessionHostChanged',
+      ({ sessionId, hostSessionId }) => {
+        const row = rows.get(sessionId);
+        if (row !== undefined) {
+          if (hostSessionId === null) {
+            rows.delete(sessionId);
+          } else {
+            rows.set(sessionId, { ...row, hostSessionId });
+          }
+        }
+        services.log('notes', `session ${hostSessionId ?? 'none'} listed`);
+      },
+    );
 
     const popup = createNotePopup({
       channel: api.channel,
