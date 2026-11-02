@@ -118,6 +118,16 @@ export interface ChatSessions {
   notice(sessionId: string, text: string, tone: 'info' | 'error'): void;
   // Returns every queued message, then interrupts the process.
   interrupt(sessionId: string): void;
+  // Ends the session's process, interrupting a running turn first, and starts
+  // a fresh one at once under a new host session id with the control values
+  // the row holds. Waiting permission calls are cancelled and queued messages
+  // returned; the old process raises no exit notice and no turn-finished
+  // alert. The entries become one `Conversation cleared` notice. A resting
+  // session just starts its fresh process. Throws before changing anything
+  // when the profile or harness is missing; a fresh start that throws leaves
+  // the row resting under the new id, then rethrows. Logs and does nothing
+  // for a session chat does not hold, or after `killAll`.
+  clear(sessionId: string): void;
   // Takes the queued message out of the queue and returns it; logs and sends
   // nothing for one no longer queued.
   pullBack(sessionId: string, queuedId: string): void;
@@ -344,20 +354,29 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     send('entry', { sessionId: session.state.sessionId, entry });
   }
 
-  function addNotice(
+  // The session's next app notice, numbered and stamped now.
+  function nextNotice(
     session: HeldSession,
     text: string,
     tone: 'info' | 'error',
-  ) {
+  ): ChatEntry {
     session.noticeCount += 1;
-    sendEntry(session, {
+    return {
       kind: 'notice',
       id: `app-notice-${session.noticeCount}`,
       at: deps.clock.now(),
       text,
       tone,
       raw: [],
-    });
+    };
+  }
+
+  function addNotice(
+    session: HeldSession,
+    text: string,
+    tone: 'info' | 'error',
+  ) {
+    sendEntry(session, nextNotice(session, text, tone));
   }
 
   function announceTurnFinished(session: HeldSession) {
@@ -514,6 +533,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     profileDir: string,
   ): AgentProcessEvents {
     const { sessionId } = session.state;
+    // A clear moves the row to a new host id while this process still ends.
+    const hostSessionId = session.hostId;
     return {
       entry(entry) {
         if (isLive(session, processStart)) {
@@ -561,7 +582,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           deps.emit('agentEvent', {
             sessionId,
             profileDir,
-            hostSessionId: session.hostId,
+            hostSessionId,
             event,
           });
         }
@@ -951,13 +972,16 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     harness: AgentHarness,
   ) {
     const { sessionId } = session.state;
+    const { hostId } = session;
     const history = await readHistory(
       harness,
-      session.hostId,
+      hostId,
       session.state.projectDir,
       profileDirOf(profile),
     );
-    if (held.get(sessionId) !== session) {
+    const isClosedOrCleared =
+      held.get(sessionId) !== session || session.hostId !== hostId;
+    if (isClosedOrCleared) {
       return;
     }
     session.state.entries = [...history, ...session.state.entries];
@@ -1079,6 +1103,67 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     }
   }
 
+  // Ends the session's process, interrupting its turn first, and rests the
+  // row with no exit notice and no alert; the process's later events are no
+  // longer live. Does nothing for a resting session.
+  function endForClear(session: HeldSession) {
+    const { process } = session;
+    if (process === null) {
+      return;
+    }
+    const { sessionId } = session.state;
+    if (session.state.activity !== 'idle') {
+      process.interrupt();
+    }
+    process
+      .end()
+      .catch((error: unknown) =>
+        log('chat', `session ${sessionId} end failed: ${errorText(error)}`),
+      );
+    session.state.running = false;
+    session.process = null;
+    showRestingIdle(session);
+  }
+
+  function clear(sessionId: string) {
+    const session = held.get(sessionId);
+    if (session === undefined) {
+      log('chat', `clear for unknown session ${sessionId} ignored`);
+      return;
+    }
+    if (isKilled) {
+      log('chat', `clear for session ${sessionId} ignored: chat is stopping`);
+      return;
+    }
+    const profile = profileNamed(session.state.profile);
+    const harness = requireHarness();
+    endForClear(session);
+    cancelPending(session);
+    returnAllQueued(session);
+    const oldHostId = session.hostId;
+    const newHostId = deps.randomUuid();
+    session.owned.setHostSessionId(newHostId);
+    session.hostId = newHostId;
+    session.sent = false;
+    session.historyPending = false;
+    if (selectedHostId === oldHostId) {
+      selectedHostId = newHostId;
+    }
+    session.state.entries = [
+      nextNotice(session, 'Conversation cleared', 'info'),
+    ];
+    send('entries', { sessionId, entries: [...session.state.entries] });
+    try {
+      startProcess(session, harness, profile, false);
+    } finally {
+      save();
+    }
+    log(
+      'chat',
+      `conversation cleared in ${path.basename(session.state.projectDir)}`,
+    );
+  }
+
   return {
     sessions: () =>
       [...held.values()].map((session) => copyState(session.state)),
@@ -1117,6 +1202,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       returnAllQueued(session);
       session.process?.interrupt();
     },
+    clear,
     pullBack(sessionId, queuedId) {
       const session = held.get(sessionId);
       if (session === undefined) {

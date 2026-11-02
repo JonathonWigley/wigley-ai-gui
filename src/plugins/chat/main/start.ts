@@ -270,6 +270,11 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
         chat.interrupt(sessionId);
       }
     });
+    api.channel.handle('clear', (sessionId) => {
+      if (!ignoredInPreview('clear', sessionId)) {
+        chat.clear(sessionId);
+      }
+    });
     api.channel.handle('pullBack', (sessionId, queuedId) => {
       if (!ignoredInPreview('pullBack', sessionId)) {
         chat.pullBack(sessionId, queuedId);

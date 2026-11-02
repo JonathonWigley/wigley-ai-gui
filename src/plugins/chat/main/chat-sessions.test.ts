@@ -135,6 +135,7 @@ function setUp(
   let isFocused = true;
   let selectedSessionId: string | null = ROW_ID;
   let uuidCalls = 0;
+  const hostIdChanges: string[] = [];
   // Host ids whose `open` throws, and what each owned `end` also does.
   const refusedOpens = new Set<string>();
   let onOwnedEnd = () => {};
@@ -155,7 +156,9 @@ function setUp(
           ownedEnds++;
           onOwnedEnd();
         },
-        setHostSessionId: () => undefined,
+        setHostSessionId: (hostSessionId) => {
+          hostIdChanges.push(hostSessionId);
+        },
       };
     },
     mark: (sessionId) => marked.push(sessionId),
@@ -168,7 +171,7 @@ function setUp(
     profiles: () => profiles,
     randomUuid: () => {
       uuidCalls++;
-      return 'uuid-1';
+      return `uuid-${uuidCalls}`;
     },
     recent: createRecentFolders({
       data,
@@ -218,6 +221,7 @@ function setUp(
     archived,
     saved,
     uuidCalls: () => uuidCalls,
+    hostIdChanges,
     ownedEnds: () => ownedEnds,
     windowShows: () => windowShows,
     setFocused: (focused: boolean) => {
@@ -2213,4 +2217,183 @@ describe('createChatSessions usage forwarding', () => {
       ).toEqual(opened);
     },
   );
+});
+
+describe('createChatSessions clear', () => {
+  const CLEARED: ChatEntry = {
+    kind: 'notice',
+    id: 'app-notice-1',
+    at: 1000,
+    text: 'Conversation cleared',
+    tone: 'info',
+    raw: [],
+  };
+
+  const MODEL_SONNET: SessionControl = {
+    id: 'model',
+    label: 'Model',
+    choices: [{ value: 'sonnet', label: 'Sonnet' }],
+    value: 'sonnet',
+  };
+
+  it('clear_RunningRow_RestartsUnderNewIdWithOneNotice', async () => {
+    const test = setUp();
+    test.chat.restore(NOTHING_SAVED);
+    test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+    await flush();
+    const old = test.harness.processes[0];
+    test.chat.send(ROW_ID, { text: 'first', images: [] });
+    await flush();
+    old.events.entry(assistant('extra', 'more'));
+    old.events.controls([MODEL_SONNET]);
+
+    test.chat.clear(ROW_ID);
+    await flush();
+
+    expect(test.chat.sessions()[0].entries).toEqual([CLEARED]);
+    expect(test.sent('entries').at(-1)).toEqual({
+      sessionId: ROW_ID,
+      entries: [CLEARED],
+    });
+    expect(old.request.sessionId).toBe('uuid-1');
+    expect(test.harness.processes[1].request).toMatchObject({
+      sessionId: 'uuid-2',
+      resume: false,
+      controls: { model: 'sonnet' },
+    });
+    expect(old.calls).toContainEqual({ method: 'end' });
+    expect(test.hostIdChanges).toEqual(['uuid-2']);
+    expect(test.saved.last()).toEqual({
+      sessions: [
+        {
+          hostSessionId: 'uuid-2',
+          projectDir: PROJECT_DIR,
+          profile: 'personal',
+          sent: false,
+          busy: false,
+        },
+      ],
+      selectedHostSessionId: 'uuid-2',
+    });
+    expect(test.chat.sessions()[0].running).toBe(true);
+    expect(test.logged).toContain('[chat] conversation cleared in app');
+  });
+
+  it('clear_MidTurn_StopsOldProcessAndIgnoresItsLateEvents', async () => {
+    const test = await started();
+    test.activity('working');
+    const call = test.chat
+      .permissionToolSession(test.agentSession)
+      .call('permission_prompt', BASH_ARGS, {
+        toolUseId: 'tu-1',
+        signal: signal().signal,
+      });
+
+    test.chat.clear(ROW_ID);
+    await flush();
+    test.process.events.entry(assistant('late', 'stale'));
+    test.process.events.ended({ code: 1, error: 'late' });
+
+    expect(test.process.calls).toEqual([
+      { method: 'interrupt' },
+      { method: 'end' },
+    ]);
+    expect(replyText(await settled(call))).toBe(
+      JSON.stringify({ behavior: 'deny', message: CANCELLED_REASON }),
+    );
+    expect(test.chat.sessions()[0].entries).toEqual([CLEARED]);
+    expect(test.chat.sessions()[0].running).toBe(true);
+    expect(test.sent('sessionRested')).toEqual([]);
+    const sessionEndedHostIds = test.emitted.flatMap((emitted) =>
+      emitted.event === 'agentEvent' &&
+      emitted.data.event.type === 'sessionEnded'
+        ? [emitted.data.hostSessionId]
+        : [],
+    );
+    expect(sessionEndedHostIds).toEqual(['uuid-1']);
+  });
+
+  it('clear_RestingRow_StartsFreshProcess', async () => {
+    const test = await started();
+    test.process.events.ended({ code: 0, error: null });
+
+    test.chat.clear(ROW_ID);
+    await flush();
+
+    expect(test.harness.processes).toHaveLength(2);
+    expect(test.harness.processes[1].request).toMatchObject({
+      sessionId: 'uuid-2',
+      resume: false,
+    });
+    expect(test.process.calls).not.toContainEqual({ method: 'end' });
+    expect(test.chat.sessions()[0].entries).toEqual([
+      { ...CLEARED, id: 'app-notice-2' },
+    ]);
+  });
+
+  it('clear_QueuedMessages_ReturnedOldestFirst', async () => {
+    const test = await started();
+    const [first, second] = queueTwo(test);
+
+    test.chat.clear(ROW_ID);
+    await flush();
+
+    expect(test.chat.sessions()[0].queued).toEqual([]);
+    expect(test.sent('returned')).toEqual([
+      { sessionId: ROW_ID, messages: [first, second] },
+    ]);
+    expect(
+      test.harness.processes[1].calls.filter((call) => call.method === 'send'),
+    ).toEqual([]);
+  });
+
+  it('clear_StartThrows_RowRestsUnderNewIdAndRethrows', async () => {
+    const test = setUp();
+    test.chat.restore(NOTHING_SAVED);
+    test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+    await flush();
+    test.harness.failNextStart('spawn failed');
+
+    expect(() => test.chat.clear(ROW_ID)).toThrow('spawn failed');
+
+    expect(test.chat.sessions()[0]).toMatchObject({
+      running: false,
+      entries: [CLEARED],
+    });
+    expect(test.saved.last()?.sessions).toEqual([
+      expect.objectContaining({ hostSessionId: 'uuid-2', sent: false }),
+    ]);
+  });
+
+  it('clear_HistoryReadInFlight_Dropped', async () => {
+    const test = setUp();
+    test.chat.restore({
+      sessions: [record(PAST_ONE.sessionId, { sent: true })],
+      selectedHostSessionId: null,
+    });
+    const sending = test.chat.send(ROW_ID, { text: 'after', images: [] });
+
+    test.chat.clear(ROW_ID);
+    await sending;
+    await flush();
+
+    const { entries } = test.chat.sessions()[0];
+    expect(entries[0]).toEqual(CLEARED);
+    expect(entries.filter((entry) => entry.id.startsWith('history:'))).toEqual(
+      [],
+    );
+    expect(test.sent('entries')).toHaveLength(1);
+  });
+
+  it('clear_WorkingRowUnfocused_NoTurnFinishedAlert', async () => {
+    const test = await started();
+    test.setFocused(false);
+    test.activity('working');
+
+    test.chat.clear(ROW_ID);
+    await flush();
+
+    expect(test.announced).toEqual([]);
+    expect(test.marked).toEqual([]);
+  });
 });

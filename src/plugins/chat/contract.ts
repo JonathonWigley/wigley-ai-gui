@@ -140,6 +140,11 @@ export interface ChatChannel extends ChannelShape {
     // Returns every queued message, arriving as `returned`, then interrupts the
     // running turn.
     interrupt(sessionId: string): void;
+    // Ends the session's process and starts a fresh one under a new host
+    // session id; the entries become one `Conversation cleared` notice, sent
+    // as `entries`, and every queued message arrives as `returned`. Rejects
+    // when the fresh process cannot start, leaving the row resting.
+    clear(sessionId: string): void;
     // Takes the queued message out of the queue, arriving as `returned`; does
     // nothing for one already written to the agent.
     pullBack(sessionId: string, queuedId: string): void;
