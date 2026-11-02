@@ -17,6 +17,7 @@ import {
   type EditorEvents,
   type EditorScroll,
   type EditorOptions,
+  type FileChipDrawing,
   type FocusOptions,
   type ScrollStep,
   type SightTop,
@@ -30,11 +31,18 @@ import type {
   EditorKeymap,
   EditorMode,
 } from '../../contracts/keymap';
+import type { Paths } from '../../contracts/paths';
 import {
   DOCUMENT_EX_COMMANDS,
   type DocumentExEvent,
   documentExEvent,
 } from './document-ex-commands';
+import { fileChipsIn } from '../../shared/page/file-drop/file-chips';
+import {
+  fileChipExtension,
+  fileChipsOf,
+  skipsChipRules,
+} from './chip-decorations';
 import { codeColours } from './code-colours';
 import { editorTheme } from './editor-theme';
 import { exBindName } from './ex-command-name';
@@ -215,7 +223,78 @@ function replaceText(view: EditorView, text: string) {
   view.dispatch({
     changes: { from: 0, to: view.state.doc.length, insert: text },
     userEvent: HOST_REPLACE,
+    annotations: skipsChipRules.of(true),
   });
+}
+
+// The range `insert` replaces in vim's current mode: in insert and visual
+// mode the main selection; in normal mode the empty point after the
+// character or chip under the cursor, as vim's `p`, or the cursor itself on
+// an empty line.
+function insertionRange(
+  view: EditorView,
+  cm: VimEditor,
+): { from: number; to: number } {
+  const { state } = view;
+  const { main } = state.selection;
+  const { vim } = cm.state;
+  if (vim.insertMode || vim.visualMode) {
+    return { from: main.from, to: main.to };
+  }
+  const chip = fileChipsOf(state).find((range) => range.from === main.head);
+  const isOnCharacter = main.head < state.doc.lineAt(main.head).to;
+  const at = chip?.to ?? (isOnCharacter ? main.head + 1 : main.head);
+  return { from: at, to: at };
+}
+
+function charBeforeInsertion(view: EditorView, cm: VimEditor): string {
+  const { from } = insertionRange(view, cm);
+  return from === 0 ? '' : view.state.doc.sliceString(from - 1, from);
+}
+
+const WHITESPACE = /\s/;
+
+// Types `text` over `insertionRange` in one transaction, a space after it when
+// the next character is not whitespace, without focusing the editor. The
+// cursor lands after the text and its space in insert mode; otherwise on the
+// last chip the text holds, or its last character, and visual mode drops to
+// normal. A read-only editor takes nothing.
+function insertText(
+  view: EditorView,
+  cm: VimEditor,
+  text: string,
+  paths: Paths,
+) {
+  const { state } = view;
+  if (state.readOnly) {
+    return;
+  }
+  const { vim } = cm.state;
+  const isInsertMode = vim.insertMode === true;
+  const isVisualMode = vim.visualMode === true;
+  const { from, to } = insertionRange(view, cm);
+  const next = state.doc.sliceString(to, to + 1);
+  const needsSpaceAfter = next !== '' && !WHITESPACE.test(next);
+  const inserted = needsSpaceAfter ? `${text} ` : text;
+  const lastChip = fileChipsIn(text, paths).at(-1);
+  const cursor = isInsertMode
+    ? from + inserted.length
+    : from + (lastChip?.from ?? Math.max(text.length - 1, 0));
+  view.dispatch({
+    changes: { from, to, insert: inserted },
+    selection: { anchor: cursor },
+    userEvent: 'input.paste',
+    scrollIntoView: true,
+    annotations: skipsChipRules.of(true),
+  });
+  if (isVisualMode) {
+    Vim.exitVisualMode(cm);
+    // Leaving visual mode puts the cursor at vim's own visual head.
+    view.dispatch({
+      selection: { anchor: cursor },
+      annotations: skipsChipRules.of(true),
+    });
+  }
 }
 
 // Replaces the whole text in one transaction, the cursor at the start of the
@@ -658,13 +737,14 @@ function reportUserChanges(changed: (text: string) => void) {
 
 // Answer boxes are prose: no gutters or brackets, and completion only when
 // `options.completions` is given, after vim so CodeMirror's keymap stays
-// behind vim; lines wrap. `leaving` runs on blur before the editor reports it,
-// so a box the user leaves drops its unfinished keys before any other box
-// reports. Its popups draw on the page body, past any scroll box it sits in.
+// behind vim; lines wrap, and paths draw as file chips. `leaving` runs on
+// blur before the editor reports it, so a box the user leaves drops its
+// unfinished keys before any other box reports. Its popups draw on the page body, past any scroll box it sits in.
 function boxExtensions(
   events: EditorEvents,
   options: EditorOptions | undefined,
   leaving: (view: EditorView) => void,
+  chips: FileChipDrawing,
 ) {
   const completion = options?.completions
     ? prefixCompletion(options.completions)
@@ -676,6 +756,7 @@ function boxExtensions(
     minimalSetup,
     EditorView.lineWrapping,
     editorTheme,
+    fileChipExtension(chips),
     tooltipsOnBody(),
     reportUserChanges(events.changed),
     EditorView.domEventHandlers({
@@ -762,6 +843,7 @@ export const createCodeMirrorVimHost: CreateEditorHost = (
   initialKeymap,
   run,
   log,
+  chips,
 ) => {
   const hosted: HostedEditor[] = [];
   let keymap = initialKeymap;
@@ -813,6 +895,8 @@ export const createCodeMirrorVimHost: CreateEditorHost = (
     const editor = editorOf({
       text: () => view.state.doc.toString(),
       setText: (text) => replaceText(view, text),
+      insert: (text) => insertText(view, cm, text, chips.paths),
+      charBeforeCursor: () => charBeforeInsertion(view, cm),
       focus: (options) => {
         leaveFocusedEditor(view, hosted);
         focusEditor(view, cm, options);
@@ -843,7 +927,7 @@ export const createCodeMirrorVimHost: CreateEditorHost = (
     create(parent, doc, events, options) {
       const view = new EditorView({
         doc,
-        extensions: boxExtensions(events, options, leaving),
+        extensions: boxExtensions(events, options, leaving, chips),
         parent,
       });
       const editor = hostView(view, events.modeChanged, (shared) => shared);

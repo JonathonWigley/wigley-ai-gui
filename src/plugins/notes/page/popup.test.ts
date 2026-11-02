@@ -91,6 +91,8 @@ function fakeEditor(
   return {
     text: () => '',
     setText: () => undefined,
+    insert: () => undefined,
+    charBeforeCursor: () => '',
     focus() {
       doc.activeElement = asFake(parent);
       events.focused();

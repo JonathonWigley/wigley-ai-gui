@@ -34,6 +34,8 @@ function fakeHost() {
       return {
         text: () => doc,
         setText: () => undefined,
+        insert: () => undefined,
+        charBeforeCursor: () => '',
         focus: (options) => {
           editor.focusOptions.push(options);
           events.focused();

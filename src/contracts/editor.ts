@@ -1,5 +1,6 @@
 import type { EditorBind, EditorKeymap } from './keymap';
 import type { Log } from './log';
+import type { Paths } from './paths';
 
 // The keys an insert-mode editor bind may take, in vim notation: each is one
 // the host can type itself when no bind on it runs, as `CreateEditorHost`
@@ -29,6 +30,15 @@ export interface TextEditor {
   // Replaces the whole text, keeping focus and the vim mode; it reports no
   // `changed`.
   setText(text: string): void;
+  // Types `text` at the cursor — after the character under a normal-mode
+  // cursor, as vim's `p`; over the main range of a visual selection, which
+  // then drops to normal — adding one space after it when the next character
+  // is not whitespace; keeps focus and the mode (visual excepted); reports
+  // `changed`.
+  insert(text: string): void;
+  // The character just before the point `insert` puts text at (in normal
+  // mode, the character under the cursor); '' at the start of the text.
+  charBeforeCursor(): string;
   focus(options?: FocusOptions): void;
   blur(): void;
   // Removes the editor from the page; the host forgets it.
@@ -183,8 +193,17 @@ export interface EditorHost {
 // returns whether a bind ran; when none ran on an insert-mode key, the host
 // does what the key does unbound, so Enter still breaks the line. `log`
 // takes the host's own lines, such as a mapping the editor engine had lost.
+// `chips` draws the file chips every box shows; a document editor draws none.
 export type CreateEditorHost = (
   keymap: EditorKeymap,
   run: (binds: EditorBind[], editor: TextEditor) => boolean,
   log: Log,
+  chips: FileChipDrawing,
 ) => EditorHost;
+
+// What the host needs to draw file chips: the OS's path rules, which find a
+// path in a box's text, and the icon each chip shows.
+export interface FileChipDrawing {
+  paths: Paths;
+  fileIcon(): HTMLElement;
+}

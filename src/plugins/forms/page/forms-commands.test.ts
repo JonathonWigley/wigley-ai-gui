@@ -28,6 +28,8 @@ function editorOf(box: BoxRef): TextEditor {
   const editor: TextEditor = {
     text: () => '',
     setText: () => undefined,
+    insert: () => undefined,
+    charBeforeCursor: () => '',
     focus: () => undefined,
     blur: () => undefined,
     destroy: () => undefined,

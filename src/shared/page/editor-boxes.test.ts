@@ -35,6 +35,8 @@ function fakeHost() {
         isDestroyed: false,
         text: () => doc,
         setText: () => undefined,
+        insert: () => undefined,
+        charBeforeCursor: () => '',
         focus: (options) => {
           editor.focusCalls++;
           editor.focusOptions.push(options);

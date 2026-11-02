@@ -68,6 +68,23 @@ export const editorTheme = EditorView.theme({
     zIndex: 'auto',
   },
   '.cm-vim-panel input': { color: 'var(--wg-fg)' },
+  // A file chip: a path drawn as a pill with a file icon and the file's name.
+  '.wg-file-chip': {
+    display: 'inline-flex',
+    alignItems: 'center',
+    verticalAlign: 'middle',
+    gap: 'var(--wg-space-1)',
+    padding: '0 var(--wg-space-1)',
+    borderRadius: 'var(--wg-radius-sm)',
+    backgroundColor: 'var(--wg-block-background)',
+    color: 'var(--wg-fg)',
+    fontFamily: 'var(--wg-font-mono)',
+    whiteSpace: 'nowrap',
+  },
+  '.wg-file-chip-icon': {
+    color: 'var(--wg-fg-secondary)',
+    fontSize: 'var(--wg-icon-size)',
+  },
   '.cm-tooltip.cm-tooltip-autocomplete': {
     // The popup carries `.material-floating`; CodeMirror's base tooltip theme
     // outranks that class on background and border, so both are restated here.

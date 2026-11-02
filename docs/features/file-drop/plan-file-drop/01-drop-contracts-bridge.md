@@ -1,6 +1,6 @@
 # 01 — Drop contracts, bridge and pasted files
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -88,3 +88,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit d4ea7b1 · proof: diff read: every Produces present word for word; typecheck and lint pass · concerns: pastedFolder in main.ts not yet exercised live (task 10 checks it per run mode)

@@ -24,6 +24,7 @@ import { editorBindMode } from '../shared/key-hints';
 import { requireUnambiguousEditorBinds } from '../shared/keymap-checks';
 import type { BaseKitDeps } from '../shared/page/layout-host/base-kit';
 import { createPageLayouts } from '../shared/page/layout-host/show-layouts';
+import { icon } from '../shared/page/ui/icon';
 import { startPlugins } from '../shared/plugin-host';
 import { posixPaths } from '../shared/paths/posix-paths';
 import { windowsPaths } from '../shared/paths/windows-paths';
@@ -176,6 +177,7 @@ async function start() {
   requireUnambiguousEditorBinds(keymap.editor.binds, keymap.editor.leader);
   // An insert-mode key with no bind in force types as it would unbound, so
   // only a normal-mode miss is logged.
+  const paths = config.platform === 'windows' ? windowsPaths : posixPaths;
   const editor = createCodeMirrorVimHost(
     keymap.editor,
     (binds, fired) => {
@@ -190,6 +192,7 @@ async function start() {
       return false;
     },
     log,
+    { paths, fileIcon: () => icon('file') },
   );
   // Highlighted markdown has no editor to mount the code colours.
   mountCodeColours(document);
@@ -201,7 +204,7 @@ async function start() {
     log,
     timers,
     clock,
-    paths: config.platform === 'windows' ? windowsPaths : posixPaths,
+    paths,
     homeDir: config.homeDir,
   };
   // Filled once the page keys are installed; no key reaches the engine before.
