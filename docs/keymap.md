@@ -47,7 +47,7 @@ hjkl is the direction in every layer; the modifier picks the verb.
   (its prose's line height, the editor's own line in the editor), key repeat supplying the
   speed, and `Ctrl+Shift+j`/`Ctrl+Shift+k` scroll half a page, Shift being the bigger step. The
   views are the doc, its editor too while editing, the chat transcript, the form and its review,
-  the primer card and its review, the Backlog list and detail, and the gallery; the docs tree takes both pairs and scrolls the doc beside it.
+  the primer card and its review, the Backlog list and detail, the gallery, and the Flow tab; the docs tree takes both pairs and scrolls the doc beside it.
   In the editor the line scroll keeps the cursor unless it would leave the view, as vim's
   `Ctrl+e`/`Ctrl+y` do, and the half page moves it with the scroll in visual mode, as vim's
   `Ctrl+d`/`Ctrl+u` do; in visual mode the selection grows or shrinks with the cursor. Other list
@@ -114,7 +114,7 @@ is the group's main action, `n`/`p` are next and previous, and uppercase is a va
 | `a`                | answer                               | in a box only: `a1`…`a9` pick the numbered choice or action header, `ac` clear                                                                                                                                                      |
 | `x`                | none: forms not applicable           | in a box only: `x`                                                                                                                                                                                                                  |
 | `z`                | debug                                | `zg` gallery, `zs` shell layout                                                                                                                                                                                                     |
-| `zl`               | layout previews                      | `zlo` forms preview, `zlp` primer preview, `zls` sessions preview, `zlc` chat preview, `zla` agents preview                                                                                                                         |
+| `zl`               | layout previews                      | `zlo` forms preview, `zlp` primer preview, `zls` sessions preview, `zlc` chat preview, `zla` agents preview, `zlw` workflow preview                                                                                                 |
 
 A row named `none` is a prefix without a `groups` entry; which-key labels it from its commands'
 groups, and its description here is only for readers of this table.

@@ -11,6 +11,7 @@ import { primerPagePart } from './primer/page/start';
 import { sessionsPagePart } from './sessions/page/start';
 import { settingsPagePart } from './settings/page/start';
 import { usagePagePart } from './usage/page/start';
+import { workflowPagePart } from './workflow/page/start';
 
 // Every built-in plugin's page part, in start order where no dependency says
 // otherwise.
@@ -21,6 +22,7 @@ export const pageParts: readonly PagePart[] = [
   keysPagePart,
   chatPagePart,
   agentsPagePart,
+  workflowPagePart,
   docsPagePart,
   galleryPagePart,
   settingsPagePart,

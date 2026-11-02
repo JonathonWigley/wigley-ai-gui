@@ -5,6 +5,7 @@ import type {
   QualifiedEvents,
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
+import layoutTypes from '../layouts/layout.d.ts?raw';
 import type { ChatMainEvents, ChatMainExports } from '../../chat/contract';
 import type { SessionsMainEvents } from '../../sessions/contract';
 import type {
@@ -48,6 +49,7 @@ export interface WorkflowSelfTestHooks {
 export const workflowMainPart: MainPart<typeof workflowManifest> = {
   manifest: workflowManifest,
   start(api: WorkflowApi) {
+    const layouts = api.layouts.register({ layoutTypes });
     const { services, channel, events } = api;
     const { log, clock } = services;
     const chat = api.dependency<ChatMainExports>('chat');
@@ -287,6 +289,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       commands: {},
       exports,
       dispose() {
+        layouts.dispose();
         settingsListener.dispose();
         planWatch.dispose();
         countdown.dispose();

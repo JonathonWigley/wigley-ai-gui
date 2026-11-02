@@ -176,6 +176,7 @@ export const defaultKeymap = {
     '<Leader>c': 'chat controls',
     '<Leader>a': 'answer',
     '<Leader>n': 'notes',
+    '<Leader>w': 'workflow',
   },
   binds: [
     // ── Windows and modes ──────────────────────────────────────────────────
@@ -200,6 +201,27 @@ export const defaultKeymap = {
     { keys: '<A-i>', scope: 'any', command: 'sessions.prevTab' },
     { keys: '<D-w>', scope: 'any', command: 'sessions.closeSession' },
     { keys: '<Leader>;', scope: 'any', command: 'sessions.closeSession' },
+
+    // ── Workflow ───────────────────────────────────────────────────────────
+    { keys: '<Leader>ww', scope: 'any', command: 'workflow.mainAction' },
+    { keys: '<Leader>wn', scope: 'any', command: 'workflow.makeInNewSession' },
+    { keys: '<Leader>wr', scope: 'any', command: 'workflow.resumeMake' },
+    { keys: '<Leader>wo', scope: 'any', command: 'workflow.openPlan' },
+    { keys: '<Leader>wt', scope: 'any', command: 'workflow.retro' },
+    { keys: '<Leader>wf', scope: 'any', command: 'workflow.startFeature' },
+    { keys: '<Leader>wd', scope: 'any', command: 'workflow.dismiss' },
+    { keys: '<C-j>', scope: 'workflow.flow', command: 'workflow.lineDown' },
+    { keys: '<C-k>', scope: 'workflow.flow', command: 'workflow.lineUp' },
+    {
+      keys: '<C-S-j>',
+      scope: 'workflow.flow',
+      command: 'workflow.halfPageDown',
+    },
+    {
+      keys: '<C-S-k>',
+      scope: 'workflow.flow',
+      command: 'workflow.halfPageUp',
+    },
 
     // ── Panes ──────────────────────────────────────────────────────────────
     { keys: '<A-h>', scope: 'any', command: 'panes.focusLeft' },
@@ -687,6 +709,12 @@ export const defaultKeymap = {
       keys: '<Leader>zla',
       scope: 'any',
       command: 'agents.openPreview',
+      where: 'page',
+    },
+    {
+      keys: '<Leader>zlw',
+      scope: 'any',
+      command: 'workflow.openPreview',
       where: 'page',
     },
     {
