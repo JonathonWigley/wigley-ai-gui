@@ -189,10 +189,11 @@ export class FakeElement {
     this.fire('click');
   }
 
-  // Runs the `type` listeners with one event and returns it, so a test reads
-  // whether a listener called `preventDefault`.
-  fire(type: string): FakeEvent {
+  // Runs the `type` listeners with one event, carrying `fields` too, and
+  // returns it, so a test reads whether a listener called `preventDefault`.
+  fire(type: string, fields: Record<string, unknown> = {}): FakeEvent {
     const event: FakeEvent = {
+      ...fields,
       target: this,
       defaultPrevented: false,
       preventDefault() {

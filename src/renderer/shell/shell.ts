@@ -100,20 +100,19 @@ export function nextInTrack<Entry extends { placement: Placement }>(
 // chrome areas' elements (`data-layout`, with `data-layout-owner="shell"`),
 // kept across every later mount, so the layout's CSS restyles their frames.
 // `sideBarDivider` is the side bar's resize divider, which moves only while
-// the side bar is beside the content; `rightBarDivider` the right bar's, which
-// moves only while the right bar is beside main. `reloadBarOpenWidths` reads
-// the `sidebar-width` and `rightbar-width` tokens again, after a theme is
-// applied, and redraws each bar at its token while the user has stored no
-// width for it. `setKeys` anchors both handles' resize prompts through `keys`,
-// again on each call. `dispose` disposes both dividers, stops watching the
-// root's width and removes both handles.
+// the side bar is beside the content; the right bar resizes by its handle's
+// drag alone. `reloadBarOpenWidths` reads the `sidebar-width` and
+// `rightbar-width` tokens again, after a theme is applied, and redraws each
+// bar at its token while the user has stored no width for it. `setKeys`
+// anchors the side bar handle's resize prompt through `keys`, again on each
+// call. `dispose` disposes both dividers, stops watching the root's width and
+// removes both handles.
 export interface Shell {
   areas: Record<AreaName, Area>;
   setLayout(layout: ShellLayout): Disposable;
   layOutSideBar(layout: SideBarLayout): void;
   setChromeLayout(name: string): void;
   sideBarDivider: ResizeTarget;
-  rightBarDivider: ResizeTarget;
   reloadBarOpenWidths(): void;
   setKeys(keys: BaseKitDeps['keys']): void;
   dispose(): void;
@@ -192,6 +191,10 @@ function createForwardingAnchor(): {
     },
   };
 }
+
+// The right bar handle's anchor function: its handle carries no resize
+// prompt keys.
+const NO_ANCHOR: AnchorNamer<never> = () => ({ dispose: () => undefined });
 
 // The areas whose frames a user shell layout restyles.
 const CHROME_AREAS: readonly AreaName[] = [
@@ -318,20 +321,23 @@ function createStatusBarHeight(): { observe(statusBar: HTMLElement): void } {
 // child of `root` shown only while the side bar is beside, drags and stores in
 // `uiState` under `side-bar-width`; `timers` runs the handle prompts' linger.
 // With no width stored, it opens at the `sidebar-width` token as `root`
-// computes it. Beside, the side bar draws no wider than leaves the main area
-// its least width; over the content, no wider than reaches the window's
-// edge; each kept as `root` resizes, while `uiState` keeps the user's width.
-// The right bar sits on main's right, hidden while it holds no contribution.
-// Its width is `--shell-right-bar-width` on `root`, which its handle
-// `div.shell-right-bar-handle`, a child of `root` shown only while the right
-// bar is beside, drags from its start edge and stores under `right-bar-width`;
-// with none stored it opens at the `rightbar-width` token. Shown in a span
-// with room for its least width and main's, it sits beside main
-// (`data-right-bar="beside"`), drawn no wider than leaves main its least
-// width; in a narrower span it lies over main's end (`data-right-bar="over"`)
-// at its least width, no wider than the span; hidden, it draws its width
-// unclamped. The side bar draws first, so it gives way first when the window
-// is too narrow for both bars.
+// computes it. The right bar sits on main's right, hidden while it holds no
+// contribution. Its width is `--shell-right-bar-width` on `root`, which its
+// handle `div.shell-right-bar-handle`, a child of `root` shown only while the
+// right bar is beside, drags from its start edge and stores under
+// `right-bar-width`; with none stored it opens at the `rightbar-width` token.
+// In a window too narrow for both bars beside main, the side bar gives way
+// first: the right bar is measured against the side bar at its least width
+// (none unless beside), so the side bar narrows to its least width before the
+// right bar narrows to its own. Shown in a span with room for its least width
+// and main's, the right bar sits beside main (`data-right-bar="beside"`),
+// drawn no wider than leaves main its least width; in a narrower span it lies
+// over main's end (`data-right-bar="over"`) at its least width, no wider than
+// the span; hidden, it draws its width unclamped. Beside, the side bar draws
+// no wider than leaves main its least width beside the right bar, which takes
+// its least width while over main; over the content, no wider than reaches
+// the right bar. Each bar's drawn width is kept as `root` resizes, while
+// `uiState` keeps the user's width.
 export function mountShell(
   root: HTMLElement,
   layout: ShellLayout,
@@ -467,15 +473,60 @@ export function mountShell(
     min: SIDE_BAR_MIN,
     endMin: MAIN_MIN,
   };
-  // The span the side bar and main share; the handle takes no layout space.
-  const measureSideBar = () => {
-    const { left } = mounted.sideBar.element.getBoundingClientRect();
-    const { right } = mounted.main.element.getBoundingClientRect();
-    return { left, span: right - left };
+  const rightBarLimits = {
+    initial: rightBarOpen,
+    min: RIGHT_BAR_MIN,
+    endMin: MAIN_MIN,
   };
-  // The last width the divider showed; beside, it is drawn leaving main its
-  // least width; over the content, which it squeezes none of, no wider than
-  // the span to main's end, the window's edge.
+  // The edges of the span the side bar, main and the right bar share: the side
+  // bar's start, main's while the side bar is hidden, to the right bar's end,
+  // main's while the right bar is hidden. Neither moves with a bar's width or
+  // layout; the handles take no layout space.
+  const measureBarSpan = () => {
+    const main = mounted.main.element.getBoundingClientRect();
+    const left =
+      sideBarLayout === 'hidden'
+        ? main.left
+        : mounted.sideBar.element.getBoundingClientRect().left;
+    const right = mounted.rightBar.element.hidden
+      ? main.right
+      : mounted.rightBar.element.getBoundingClientRect().right;
+    return { left, right };
+  };
+  // The span main and the right bar share with the side bar at its least
+  // width, ending at the right bar's end.
+  const measureRightBar = () => {
+    const { left, right } = measureBarSpan();
+    const sideBarLeast = sideBarLayout === 'beside' ? SIDE_BAR_MIN : 0;
+    const span = right - left - sideBarLeast;
+    return { left: right - span, span };
+  };
+  // The last width the right bar's divider showed, and how it draws: shown
+  // beside, leaving main its least width; over main, which it squeezes none
+  // of, at its least width and no wider than the span.
+  let rightBarWidth = rightBarOpen;
+  const layOutRightBar = () => {
+    const { hidden } = mounted.rightBar.element;
+    const { span } = measureRightBar();
+    const clamped = clampSplitWidth(rightBarWidth, rightBarLimits, span);
+    const isOver = !hidden && span < RIGHT_BAR_MIN + MAIN_MIN;
+    const drawn = hidden
+      ? rightBarWidth
+      : isOver
+        ? Math.min(clamped, span)
+        : clamped;
+    const taken = hidden ? 0 : isOver ? RIGHT_BAR_MIN : drawn;
+    return { isOver, drawn, taken };
+  };
+  // The span the side bar and main share, less the width the right bar takes
+  // from it.
+  const measureSideBar = () => {
+    const { left, right } = measureBarSpan();
+    return { left, span: right - left - layOutRightBar().taken };
+  };
+  // The last width the side bar's divider showed; beside, it is drawn leaving
+  // main its least width; over the content, which it squeezes none of, no
+  // wider than the span.
   let sideBarWidth = sideBarOpen;
   const drawSideBarWidth = () => {
     const { span } = measureSideBar();
@@ -487,39 +538,18 @@ export function mountShell(
           : sideBarWidth;
     root.style.setProperty('--shell-side-bar-width', String(drawn));
   };
-
-  const rightBarLimits = {
-    initial: rightBarOpen,
-    min: RIGHT_BAR_MIN,
-    endMin: MAIN_MIN,
-  };
-  // The span main and the right bar share, from main's left edge.
-  const measureRightBar = () => {
-    const { left } = mounted.main.element.getBoundingClientRect();
-    const { right } = mounted.rightBar.element.getBoundingClientRect();
-    return { left, span: right - left };
-  };
-  // The last width the divider showed; shown beside, it is drawn leaving main
-  // its least width; over main, which it squeezes none of, at its least width
-  // and no wider than the span.
-  let rightBarWidth = rightBarOpen;
   const drawRightBarWidth = () => {
-    const { hidden } = mounted.rightBar.element;
-    const { span } = measureRightBar();
-    const clamped = clampSplitWidth(rightBarWidth, rightBarLimits, span);
-    isRightBarOver = !hidden && span < RIGHT_BAR_MIN + MAIN_MIN;
+    const { isOver, drawn } = layOutRightBar();
+    isRightBarOver = isOver;
     applyRightBar();
-    const drawn = hidden
-      ? rightBarWidth
-      : isRightBarOver
-        ? Math.min(clamped, span)
-        : clamped;
     root.style.setProperty('--shell-right-bar-width', String(drawn));
   };
 
+  // Neither bar's measure reads the other's drawn width or layout, so one
+  // pass ends settled.
   const drawBarWidths = () => {
-    drawSideBarWidth();
     drawRightBarWidth();
+    drawSideBarWidth();
   };
 
   const promptAnchor = createForwardingAnchor();
@@ -545,9 +575,9 @@ export function mountShell(
     measure: measureRightBar,
     show(width) {
       rightBarWidth = width;
-      drawRightBarWidth();
+      drawBarWidths();
     },
-    anchor: promptAnchor.anchor,
+    anchor: NO_ANCHOR,
     timers,
   });
   const rootWidth = new ResizeObserver(() => drawBarWidths());
@@ -555,7 +585,7 @@ export function mountShell(
 
   // Each area's scroll is read before the remount detaches its element, and
   // set on the new element once its contributions are back in it, an area at
-  // its end kept at the end.
+  // its end kept at the end; both bars are measured again in the new layout.
   const replaceLayout = (next: ShellLayout) => {
     const previous = currentLayout;
     const scrolls = areaScrolls(mounted);
@@ -571,6 +601,7 @@ export function mountShell(
     generation += 1;
     fillElements();
     restoreAreaScrolls(mounted, scrolls);
+    drawBarWidths();
   };
 
   return {
@@ -596,7 +627,6 @@ export function mountShell(
       applyChromeLayout();
     },
     sideBarDivider,
-    rightBarDivider,
     reloadBarOpenWidths() {
       sideBarOpen = sideBarOpenWidth();
       rightBarOpen = rightBarOpenWidth();

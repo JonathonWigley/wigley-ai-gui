@@ -336,8 +336,10 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   tree, the Primer tab's tasks and items columns), the pane without focus marks itself `is-pane-inactive` and its selected
   row takes `list-inactive-selection-background` instead, so the pane the keys act on reads at a glance.
 - **Right bar:** L1 dense glass beside the content sheet in every mode, opening at `rightbar-width` and then the
-  user's width; in a window too narrow for its least width beside the sheet's, it lies over the sheet's end at its least
-  width; hidden while no plugin contributes to it. Rows and hover follow the side bar.
+  user's width (by drag; it carries no resize keys); hidden while no plugin contributes to it. In a window too narrow
+  for both bars, the side bar narrows to its least width first, then the right bar to its own; with too little room left
+  for its least width and the sheet's, it lies over the sheet's end at its least width. Rows and hover follow the side
+  bar.
 - **Tabs:** sit on the top edge of their sheet. The active tab is solid sheet colour with a 2px
   accent top mark; others are transparent in `fg-secondary`.
 - **Status bar:** L1, `statusbar-height`, `text-12`, shown only while a plugin contributes to it;

@@ -253,9 +253,11 @@ round; primer: an open primer), since main, not the page, decides.
   areas are the fixed set `AreaName` names, and a contribution carries an order and an alignment. Reworking the window's structure is
   editing the default layout or adding a plugin; track sizes are theme tokens, except the side and right bars' widths, which
   open at their tokens and then are the user's, resized through the split core and kept in `uiState`
-  (`shell.side-bar-width`, `shell.right-bar-width`). The right bar sits beside `main` across every mode, lies over
-  `main`'s end when the window leaves no room for both their least widths, stays hidden while empty, and takes
-  contributions through `api.areas.rightBar`.
+  (`shell.side-bar-width`, `shell.right-bar-width`). The right bar sits beside `main` across every mode, stays hidden
+  while empty, and takes contributions through `api.areas.rightBar`. In a window too narrow for both bars beside `main`,
+  the side bar narrows to its least width first; the right bar then narrows to its own, and lies over `main`'s end when
+  the room left with the side bar at its least width is less than its least width and `main`'s. Only the side bar
+  resizes by keys; the right bar by drag alone.
 - **A mode** fills the content sheet, and the core shows one at a time: a plugin registers its mode, with its icon,
   title and an optional side bar element, through the page plugin API, and binds the command that shows it
   (Sessions on `Space k s`, Docs on `Space k d`; pressed while its mode already shows, the same command toggles the

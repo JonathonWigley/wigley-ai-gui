@@ -210,6 +210,11 @@
   justify-self: start;
 }
 
+/* No key resizes the right bar, so its handle shows no resize prompt. */
+.shell-right-bar-handle > .ui-split-prompt {
+  display: none;
+}
+
 :is(.shell-side-bar-handle, .shell-right-bar-handle)::after {
   background: var(--wg-border-default);
   bottom: 0;
