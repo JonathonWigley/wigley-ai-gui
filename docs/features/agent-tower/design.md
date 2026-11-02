@@ -77,7 +77,10 @@ would emit the same events into `chat.agentEvent`'s payload shape.
   mid-subagent sends no `agentFinished`. The Claude adapter finishes a subagent itself on its `task_notification`
   or its non-launch `tool_result`, whichever comes first: on Claude 2.1.316 a subagent runs in the background by
   default, so its Agent call's first `tool_result` is only a launch receipt, and a turn's `result` (an interrupt's
-  included) fails only the calls with neither. A resumed session keeps its host session id, so it appends to the same
+  included) fails only the main agent's calls with neither. An agent's end fails its own open tool calls and every
+  foreground call still pending under it, nested levels included; a background call waits for its own end. A `result`
+  whose `origin` is `peer` or `task-notification` is a turn Claude ran on its own after a background subagent ended,
+  and the harness matches it to no message sent. A resumed session keeps its host session id, so it appends to the same
   log. Logs are never pruned.
 - **Page** adds a row part through sessions' `addRowPart` and draws, under each session row, one line per running
   subagent through the `agents` layout: a working dot, the agent type, the description, the elapsed time and the
