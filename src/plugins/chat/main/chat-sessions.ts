@@ -119,8 +119,8 @@ export interface ChatSessions {
   // Returns every queued message, then interrupts the process.
   interrupt(sessionId: string): void;
   // Ends the session's process, interrupting a running turn first, and starts
-  // a fresh one at once under a new host session id with the control values
-  // the user set in the row. Waiting permission calls are cancelled and queued messages
+  // a fresh one at once under a new host session id with the row's held mode
+  // and the model and effort the user picked that a report confirmed. Waiting permission calls are cancelled and queued messages
   // returned; the old process raises no exit notice and no turn-finished
   // alert. The entries become one `Conversation cleared` notice. A resting
   // session just starts its fresh process. Throws before changing anything
@@ -133,8 +133,11 @@ export interface ChatSessions {
   pullBack(sessionId: string, queuedId: string): void;
   // Throws for a session chat no longer holds or that has no running process,
   // as the process's own `setControl` throws for a value it refuses, so the
-  // caller learns the change was not made. A control set this way is the
-  // user's, so every later start in the row passes its held value.
+  // caller learns the change was not made. A model or effort set this way is
+  // the user's once a controls report from the same process holds the picked
+  // value; every later start in the row then passes its held value. A pick no
+  // report confirms before the process ends, or a newer pick replaces, is
+  // never passed.
   setControl(sessionId: string, controlId: string, value: string): void;
   answerPermission(
     sessionId: string,
@@ -192,9 +195,12 @@ interface HeldSession {
   queuedCount: number;
   // Processes started in this row, the one running included.
   processStarts: number;
-  // Ids of the controls the user set in this row; a start passes their held
-  // values and no value the process only reported.
+  // Ids of the controls whose pick in this row a report confirmed; a start
+  // passes their held values and no other model or effort.
   userSetControls: Set<string>;
+  // Control id → the value the user picked that the running process has not
+  // reported yet.
+  pendingPicks: Map<string, string>;
   // How the process exited, once its `ended` arrives; a user close logs it.
   exit: { code: number | null; error: string | null } | null;
 }
@@ -248,19 +254,41 @@ function copyState(state: ChatSessionState): ChatSessionState {
   };
 }
 
-// The launch values a process starts with: each held control the user set
-// that has a value.
+// A held mode narrows nothing, so a start passes it whoever set it.
+const MODE_CONTROL_ID = 'mode';
+
+// The launch values a process starts with: the held mode, and each other held
+// control the user set, all with a value.
 function controlValuesOf(
   controls: readonly SessionControl[],
   userSetControls: ReadonlySet<string>,
 ): Record<string, string> {
   const values: Record<string, string> = {};
   for (const control of controls) {
-    if (control.value !== null && userSetControls.has(control.id)) {
+    const isPassed =
+      control.id === MODE_CONTROL_ID || userSetControls.has(control.id);
+    if (control.value !== null && isPassed) {
       values[control.id] = control.value;
     }
   }
   return values;
+}
+
+// Moves each pending pick whose control `controls` holds at the picked value
+// into `userSetControls`.
+function confirmPicks(
+  controls: readonly SessionControl[],
+  pendingPicks: Map<string, string>,
+  userSetControls: Set<string>,
+) {
+  for (const control of controls) {
+    const isConfirmed =
+      control.value !== null && pendingPicks.get(control.id) === control.value;
+    if (isConfirmed) {
+      pendingPicks.delete(control.id);
+      userSetControls.add(control.id);
+    }
+  }
 }
 
 function userMessageOf(queued: QueuedMessage): UserMessage {
@@ -550,6 +578,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       controls(controls) {
         if (isLive(session, processStart)) {
           session.state.controls = controls;
+          confirmPicks(controls, session.pendingPicks, session.userSetControls);
           send('controls', { sessionId, controls });
         }
       },
@@ -686,6 +715,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       queuedCount: 0,
       processStarts: 0,
       userSetControls: new Set(),
+      pendingPicks: new Map(),
       exit: null,
     };
     held.set(sessionId, session);
@@ -701,8 +731,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     return session;
   }
 
-  // Starts the session's process with the control values the user set and
-  // records the folder; a throw from the harness leaves the session resting.
+  // Starts the session's process with the held mode and the confirmed picks,
+  // and records the folder; a throw from the harness leaves the session
+  // resting. A pick still pending belongs to the old process and is dropped.
   function startProcess(
     session: HeldSession,
     harness: AgentHarness,
@@ -711,6 +742,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   ) {
     const { sessionId, projectDir } = session.state;
     session.processStarts += 1;
+    session.pendingPicks.clear();
     const started: { process: AgentProcess | null } = { process: null };
     const profileDir = profileDirOf(profile);
     const process = harness.start(
@@ -1241,7 +1273,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         throw new Error(`session ${sessionId} has no running process`);
       }
       session.process?.setControl(controlId, value);
-      session.userSetControls.add(controlId);
+      session.pendingPicks.set(controlId, value);
     },
     answerPermission(sessionId, entryId, answer) {
       const session = liveFor('answerPermission', sessionId);

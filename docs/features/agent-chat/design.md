@@ -70,8 +70,8 @@ interview on 2026-10-23; this file is the record of both.
  chat main ─► sessions.open(info with a fresh host session id, or the saved one's on resume) ─► row + Chat tab, selected
           └─► AgentHarness.start(...) ─► claude -p --input-format stream-json --output-format stream-json
                                             --include-partial-messages --verbose --session-id <id> (--resume <id> on resume)
-                                            --permission-mode <the mode the user set, auto without one> --permission-prompt-tool <chat's tool>
-                                            (--model <m> and --effort <e> when the user set them)
+                                            --permission-mode <the row's mode, auto without one> --permission-prompt-tool <chat's tool>
+                                            (--model <m> and --effort <e> when the user picked them and Claude confirmed)
                  │ claude starts the wigley plugin's relay.py, whose hello carries the same session id
                  ▼
  sessions relay ─► connect(info) finds the owned session by host id ─► joins its row (no second row)
@@ -109,7 +109,7 @@ interview on 2026-10-23; this file is the record of both.
   declares. Claude changes `mode` by a `set_permission_mode` control request and `effort` and `model` by sending
   `/effort <value>` and `/model <value>` as messages (`claude-stream.md` records each on the installed CLI). The
   adapter reads Claude's values like this: each control starts at the value the start carries, so a new row starts
-  unset (null) and a resumed or cleared row starts with the values the user set; `default` mode is the `manual` choice;
+  unset (null) and a resumed or cleared row starts with the row's mode and the model and effort the user picked; `default` mode is the `manual` choice;
   effort then changes only when a `/effort` succeeds, since no event reports it; the model comes from the init event
   and the last successful `/model`, a full model name shown as its alias.
 - **Interrupt**: Ctrl+C ends the running turn by an `interrupt` control request; the process stays open for the next
@@ -241,13 +241,16 @@ interview on 2026-10-23; this file is the record of both.
   its Chat tab or the first send, whichever comes first, while its profile is in the settings, so start reads no
   transcripts; a send reads it before starting the process, so the read never holds the new turn. The first message sent in a resting row starts its process (`--resume` when a message was ever
   sent, else `--session-id`); app slash commands run without one, and the controls and the agent's slash commands
-  fill in once it runs. Every process start in a row passes the control values the user set (`AgentStart.controls`,
-  one key per control the user set through `setControl` in the row, carrying the value the row holds for it now):
-  Claude gets that `mode` as `--permission-mode` (`auto` when the user set none), `model` as `--model` and `effort` as
-  `--effort`. A value Claude only reported is not passed, so a profile's own model (`opus[1m]`, `opusplan`, a pinned
-  id), which the chip shows as its alias, is never narrowed to the alias. So a row resumed after its process exits, or
-  cleared, keeps the model, effort and mode the user set, and its chips show them from the start; a restored row
-  holds none until its process reports them, and passes none until the user sets one again. A session whose process exits while the app runs rests the same way, a notice in its chat
+  fill in once it runs. Every process start in a row passes (`AgentStart.controls`, each carrying the value the row
+  holds for it now) the row's `mode` as `--permission-mode` (`auto` when the row holds none), whoever set it, since a
+  mode narrows nothing: a `plan` Claude entered after the user approved its `EnterPlanMode` card carries over. It
+  passes `model` as `--model` and `effort` as `--effort` only once the user picked them through `setControl` in the row
+  and a controls report from the same process then held the picked value: a pick Claude refused, one a clear or exit
+  cut short before it resolved, or one a newer pick replaced is never passed. A model or effort Claude only reported
+  is not passed, so a profile's own model (`opus[1m]`, `opusplan`, a pinned id), which the chip shows as its alias, is
+  never narrowed to the alias. So a row resumed after its process exits, or cleared, keeps its mode and the model and
+  effort the user picked, and its chips show them from the start; a restored row holds none until its process reports
+  them, and passes no model or effort until the user picks one again. A session whose process exits while the app runs rests the same way, a notice in its chat
   giving the exit and its reason. A restored session whose turn was running at quit gets a notice that the app quit
   during that turn; one whose profile is no longer in the settings gets a notice naming it, and a send there toasts
   that the message was not sent because the profile is missing, instead of starting. A message main refuses goes
@@ -283,7 +286,7 @@ interview on 2026-10-23; this file is the record of both.
   the old prompt's next step.
 - **Clear**: `/clear`, `/reset` and `/new` (registered by the page's `clear-commands.ts`, each calling chat's `clear`
   channel call) end the row's process and start a fresh one at once in the same row, under a new host session id and
-  with the control values the user set, so the harness loads its plugins, skills, MCP servers and settings again. A running
+  with the row's mode and the model and effort the user picked (§ Saved sessions), so the harness loads its plugins, skills, MCP servers and settings again. A running
   turn is interrupted first; waiting permission calls are cancelled and queued messages are pulled back into the box,
   as on an exit; no exit notice shows for the old process and no turn-finished alert fires. The old process's later
   events are no longer live: none reaches the chat, but its `agentEvent`s that do emit keep the old host id, and its
@@ -327,7 +330,7 @@ interview on 2026-10-23; this file is the record of both.
   draws the thumbnails, so a user layout gets the viewer too.
 - **Completion popup**: the editor adapter draws CodeMirror's popups on the page body, so the composer's scroll box
   does not clip the slash completion list.
-- **Permissions**: a session runs in the `mode` the user set in its row, `auto` when the user set none; anything that mode would
+- **Permissions**: a session runs in the `mode` its row holds, `auto` when it holds none; anything that mode would
   still prompt reaches chat's `permission_prompt` MCP tool, contributed to sessions as forms contributes its tools,
   and shows as a permission entry. `y` allows, `n` denies and opens a box for an optional reason Claude reads, each
   answering the oldest pending permission of the session on screen.

@@ -719,37 +719,72 @@ describe('createChatSessions', () => {
     ]);
   });
 
+  // `opus` is the alias Claude's `claude-opus-5-5[1m]` shows as. A row whose
+  // pick the process never confirms has its own reports dropped meanwhile.
   it.each([
     {
-      case: 'UserSetModel',
-      userSet: [['model', 'fake-large']],
-      reported: { model: 'fake-large', effort: null },
-      controls: { model: 'fake-large' },
+      case: 'ConfirmedPicksFollowLaterReport',
+      picks: [
+        ['model', 'fake-large'],
+        ['effort', 'low'],
+      ],
+      confirms: true,
+      clears: false,
+      reported: { mode: 'auto', model: 'opus', effort: 'high' },
+      controls: { mode: 'auto', model: 'opus', effort: 'high' },
     },
     {
       case: 'ReportedOnly1mModelAndEffort',
-      userSet: [],
-      reported: { model: 'opus', effort: 'high' },
-      controls: {},
+      picks: [],
+      confirms: true,
+      clears: false,
+      reported: { mode: 'auto', model: 'opus', effort: 'high' },
+      controls: { mode: 'auto' },
     },
     {
-      case: 'UserSetModeBesideReportedModel',
-      userSet: [['mode', 'plan']],
-      reported: { model: 'opus', effort: 'high', mode: 'acceptEdits' },
-      controls: { mode: 'acceptEdits' },
+      case: 'RefusedModelPick',
+      picks: [['model', 'fake-large']],
+      confirms: false,
+      clears: false,
+      reported: { mode: 'auto', model: 'opus', effort: 'high' },
+      controls: { mode: 'auto' },
+    },
+    {
+      case: 'ClearBeforeConfirmation',
+      picks: [['model', 'fake-large']],
+      confirms: true,
+      clears: true,
+      reported: { mode: 'auto', model: 'fake-large', effort: 'high' },
+      controls: { mode: 'auto' },
+    },
+    {
+      case: 'ModeClaudeEntered',
+      picks: [],
+      confirms: true,
+      clears: false,
+      reported: { mode: 'plan', model: 'opus', effort: 'high' },
+      controls: { mode: 'plan' },
     },
   ])(
-    'resume_AfterExit_StartCarriesUserSetControlValues ($case)',
-    async ({ userSet, reported, controls }) => {
+    'restart_StartCarriesHeldModeAndConfirmedPicks ($case)',
+    async ({ picks, confirms, clears, reported, controls }) => {
       const test = await started();
       test.chat.send(ROW_ID, { text: 'first', images: [] });
       await flush();
-      for (const [id, value] of userSet) {
+      const reportControls = test.process.events.controls;
+      if (!confirms) {
+        test.process.events.controls = () => {};
+      }
+      for (const [id, value] of picks) {
         test.chat.setControl(ROW_ID, id, value);
       }
+      if (clears) {
+        test.chat.clear(ROW_ID);
+      }
       await flush();
-      // `opus` is the alias Claude's `claude-opus-5-5[1m]` shows as.
-      test.process.events.controls(
+      test.process.events.controls = reportControls;
+      const current = test.harness.processes[clears ? 1 : 0];
+      current.events.controls(
         Object.entries(reported).map(([id, value]) => ({
           id,
           label: id,
@@ -757,14 +792,12 @@ describe('createChatSessions', () => {
           value,
         })),
       );
-      test.process.events.ended({ code: 0, error: null });
+      current.events.ended({ code: 0, error: null });
 
       test.chat.send(ROW_ID, { text: 'second', images: [] });
       await flush();
 
-      const { request } = test.harness.processes[1];
-      expect(request.resume).toBe(true);
-      expect(request.controls).toEqual(controls);
+      expect(test.harness.processes.at(-1)?.request.controls).toEqual(controls);
     },
   );
 
