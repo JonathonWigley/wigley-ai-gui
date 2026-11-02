@@ -76,6 +76,7 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
   layouts/       the layout registry behind the core LayoutService (main side)
   layout-url.ts  the `wigley-layout:` URLs that serve layout files to the page
   visual-url.ts  the `wigley-visual:` URLs that serve a visual's document by its source hash
+  visual-messages.ts the messages between a visual's frame and the page: theme in, height and `Esc` out
   file-url.ts    what `layout-url.ts` and `data-url.ts` share: per-segment encoding, scheme and revision checks,
                  and per-segment decoding that refuses an encoded `/`
   agent-forms/   the agent form lifecycle every agent form type shares (forms' rounds, the primer): the service with
@@ -96,7 +97,8 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  `ownerBaseKitDeps` (the deps an owner's base kit is built from), the markdown mount
                  (`markdown-mount.ts`: draws markdown into an element, hydrates each registered fence's placeholder
                  through its contribution, reuses a mounted fence view while its language and source are unchanged, and
-                 disposes the rest; `kit.markdown` and the docs view draw through it), `layout-parts.ts`
+                 disposes the rest; `kit.markdown` and the docs view draw through it), `fake-visual-frames.ts` (the visual
+                 frames fake plugin tests open visuals through), `layout-parts.ts`
                  (`createLayoutParts`: an owner's shown layouts and its draws, kept by slot), `app-slot.ts` (where an
                  app element sits in a part), `read-layout-module.ts` (`readLayoutParts` and `requireLayoutParts`, the
                  reader skeleton) and `test-layouts.ts` (the test helpers owners share)), the reducer store, autosave,
@@ -135,8 +137,8 @@ src/main/        core main process; main.ts is its composition root
                  `kit.d.ts` and each owner's `layout.d.ts` and sends each owner's set of layouts to the page
   data-protocol/ the `wigley-data:` scheme serving each plugin's data folder to the page, the `wigley-layout:`
                  scheme serving the layouts folder, and the `wigley-visual:` scheme serving each visual the page hands
-                 over (kept in memory by source hash, with its bootstrap script and a no-network CSP header), plus the
-                 guard refusing any frame navigation off that scheme; `docs/features/visuals/design.md`
+                 over (`visual-documents.ts`: kept in memory by source hash, with its bootstrap script and a no-network
+                 CSP header); `window.ts` refuses any frame navigation off that scheme; `docs/features/visuals/design.md`
   drive/         the drive run: the page driver the self-test shares, the commands, their HTTP server, plugins'
                  drive actions and the video recorder, over a `DrivenWindow` → no electron import
 src/preload/     the Bridge, exposed as window.wigley

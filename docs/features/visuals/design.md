@@ -50,6 +50,8 @@ points at the `wigley:visuals` skill in wigley-ai-marketplace, which holds the h
 - **Scripts run; the network does not.** The frame's sandbox has `allow-scripts` and no `allow-same-origin`, so it
   has an opaque origin: no Bridge, no parent DOM. Its CSP allows inline script, inline style and `data:` images and
   nothing else, and main refuses any frame navigation off the scheme, since CSP does not cover navigation.
+  WebRTC is the one route CSP and the sandbox leave open; it stays open because a frame holds nothing but the
+  source the agent already wrote.
 - **A served document, not `srcdoc`.** A `srcdoc`, `data:` or `blob:` frame inherits the page's CSP, which forbids
   inline script. A document served on its own scheme carries its own CSP header.
 - **Kept by content hash, in memory.** The same source always gets the same URL, so a redraw or a page reload
@@ -70,6 +72,8 @@ points at the `wigley:visuals` skill in wigley-ai-marketplace, which holds the h
 - **The theme reaches in live.** The frame host posts the whole token set, then reduced transparency, then the font
   settings (the order `src/renderer/theme.ts` applies them) on load and on every theme change. Tokens reference each
   other, so a subset would break.
+  The theme arrives after the frame's own scripts ran, so the frame stays hidden until the first theme message and
+  never paints unthemed.
 - **Focus.** A click gives the visual the user's clicks and typing; `Esc` inside it hands focus back to the page.
 - **Overlay.** `v` on the focused chat entry opens its visuals full size; `h`/`l` move between them and `Esc` closes.
   Each visual also carries an expand control, which is the route outside chat.
