@@ -224,7 +224,10 @@ export interface SessionTabHandle {
 // each session row, or in each session's tab bar. `build` draws into `parent`,
 // its own wrapper on that surface; the returned `dispose` runs before the
 // surface draws again and when it leaves. A part that throws is logged and
-// draws nothing; the surface still draws.
+// draws nothing; the surface still draws. Sessions builds a part only when its
+// surface draws: a row on each side-bar draw, a tab bar once per session, per
+// sessions layout set and per bar part added or removed. A part whose content
+// changes between those draws redraws into its wrapper itself.
 export interface SessionPart {
   id: string;
   build(parent: HTMLElement, sessionId: string): { dispose?(): void };

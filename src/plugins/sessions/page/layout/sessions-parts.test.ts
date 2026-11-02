@@ -9,6 +9,7 @@ import {
 import type { SessionPart, SessionTabView } from '../../contract';
 import defaultLayout from '../../layouts/default/layout.js';
 import type { Layout } from '../../layouts/layout';
+import type { SessionPartStore } from '../session-part-store';
 import {
   drawnRows,
   rowNamed,
@@ -48,7 +49,7 @@ function recordingPart(id: string, record: string[]): SessionPart {
 // that part which never calls `contributedParts`.
 interface Surface {
   surface: string;
-  store(setup: Setup): Setup['rowParts'];
+  store(setup: Setup): SessionPartStore;
   draw(setup: Setup, sessionIds: string[]): void;
   drawAgain(setup: Setup): void;
   roots(setup: Setup): FakeElement[];

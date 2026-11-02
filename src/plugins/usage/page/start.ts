@@ -44,7 +44,8 @@ const REDRAW_MS = 60_000;
 // in `uiState`), all through the `usage.layout` layout. Hears main's
 // `changed` snapshots (after one `snapshot` read) and
 // `sessions.activeChanged` for the shown session, and redraws all on each,
-// on each layouts set and once a minute for the countdowns. Draws nothing
+// on each layouts set and once a minute for the countdowns; hears
+// `sessions.sessionRemoved` to forget a session's line. Draws nothing
 // until the first snapshot lands. Logs the status line's and each session
 // line's text when it changes, and the details' states when they show, hide
 // or change.

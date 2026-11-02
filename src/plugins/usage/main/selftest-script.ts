@@ -31,7 +31,7 @@ const DETAILS_HIDDEN = '[usage] details hidden';
 const GROUPS: SelfTestGroup[] = [
   {
     name: 'details',
-    why: 'Space v u opens the usage details in the right bar and closes them again, and the status line, the session line and the bar each fit the minimum width.',
+    why: 'Space v u opens the usage details in the right bar and closes them again, and the status line and the bar each fit the minimum width, and the box of the session line stays inside it.',
     steps: [
       {
         keys: TOGGLE,

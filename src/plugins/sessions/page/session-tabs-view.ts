@@ -125,10 +125,9 @@ export interface SessionTabsView {
 // the `pane` part, whose body holds the frame of the session it shows: the
 // `tabBar` (the session's tab strip between its previous and next tab
 // prompts, the bar parts other plugins added, the close prompt and the pane
-// controls at the bar's end) on the top
-// edge of a sheet holding the session's tabs, only its selected tab showing,
-// or the `emptyText` saying why no tab shows. An empty pane's body holds a
-// sheet with the empty text alone. The tab prompts hide while the session has
+// controls at the bar's end) on the top edge of a sheet holding the session's
+// tabs, only its selected tab showing, or the `emptyText` saying why no tab
+// shows. An empty pane's body holds a sheet with the empty text alone. The tab prompts hide while the session has
 // no other tab, and every tab bar's prompts and pane control keys hide outside
 // the focused pane, whose keys they are. A tab's element fills its frame's
 // sheet, and a frame moves between panes as the same element. A frame no pane

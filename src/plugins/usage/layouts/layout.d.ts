@@ -23,8 +23,9 @@ export interface SessionLineInput {
   cache: string | null;
   spend: string | null;
 }
-// The status-bar plan line. `profileName` is the shown plan's profile, null when there is no profile at all. `note` (`plan loading`, `plan unavailable`, `no plan rows`, `no profiles`) stands in place of
-// `plans` when set. `stale` is true while the shown plan's last poll failed after a good one.
+// The status-bar plan line. `profileName` is the shown plan's profile, null when there is no profile at all. `note`
+// (`plan loading`, `plan unavailable`, `no plan rows`, `no profiles`) stands in place of `plans` when set. `stale` is
+// true while the shown plan's last poll failed after a good one.
 export interface StatusLineInput {
   profileName: string | null;
   plans: readonly MeterInput[];
