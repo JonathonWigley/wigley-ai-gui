@@ -9,6 +9,7 @@ import {
   FakeElement,
   installFakeDom,
 } from '../../../shared/page/test-dom';
+import type { QueuedMessage } from '../contract';
 import { chatCommand } from '../ids';
 import defaultLayout from '../layouts/default/layout.js';
 import type {
@@ -252,11 +253,13 @@ function fakeTimers() {
   return { timers, armed, fireAll };
 }
 
-// A list over `shown`, its logs, toasts, disposed anchors, timers and a
-// clock whose `time` the test sets. `put` puts an entry into the session's
-// list, replacing the one holding its id.
+// A list over `shown`, its logs, toasts, disposed anchors, timers, a clock
+// whose `time` the test sets, and the ids each pending row click pulled back.
+// `put` puts an entry into the session's list, replacing the one holding its
+// id.
 function setUpList(shown: ShownLayouts<ChatLayout>) {
   const logs: string[] = [];
+  const pulled: string[] = [];
   const toasts: string[] = [];
   const disposed: CommandId[] = [];
   const log = (source: string, message: string) =>
@@ -290,6 +293,7 @@ function setUpList(shown: ShownLayouts<ChatLayout>) {
     toast: (text) => toasts.push(text),
     timers,
     clock,
+    pullBack: (queuedId) => pulled.push(queuedId),
   });
   const held = new Map<string, ChatEntry>();
   const put = (entry: ChatEntry) => {
@@ -297,7 +301,18 @@ function setUpList(shown: ShownLayouts<ChatLayout>) {
     list.put(entry, [...held.values()]);
   };
   const entries = () => [...held.values()];
-  return { list, logs, toasts, disposed, armed, fireAll, clock, put, entries };
+  return {
+    list,
+    logs,
+    toasts,
+    disposed,
+    pulled,
+    armed,
+    fireAll,
+    clock,
+    put,
+    entries,
+  };
 }
 
 // Each of the list's slots as `<classes>`, ` hidden` added while hidden.
@@ -596,5 +611,70 @@ describe('activity lines', () => {
       'chat-entry-slot chat-step-slot',
       'chat-entry-slot',
     ]);
+  });
+});
+
+describe('pending rows', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  const queued = (id: string): QueuedMessage => ({
+    id,
+    text: `text of ${id}`,
+    images: [],
+  });
+  const pendingStop = (id: string) => ({ kind: 'queued', message: queued(id) });
+
+  it('pending_FocusOnLastEntryThenRowLeaves_StopsAfterEntriesAndFollowsLatest', () => {
+    const { list, put } = setUpList(defaultShown());
+    [user('u1'), notice('n1')].forEach(put);
+    list.setQueued([queued('q1'), queued('q2')]);
+    list.move(-1);
+    list.move(-1);
+
+    expect(list.move(1)).toEqual(pendingStop('q1'));
+    expect(list.move(1)).toEqual(pendingStop('q2'));
+    list.move(-1);
+    list.setQueued([queued('q2')]);
+
+    expect(slotClasses(list.element)).toEqual([
+      'chat-entry-slot',
+      'chat-entry-slot',
+      'chat-entry-slot chat-queued-slot is-cursor',
+    ]);
+    expect(list.focused()).toEqual(pendingStop('q2'));
+    list.setQueued([queued('q2'), queued('q3')]);
+    expect(list.focused()).toEqual(pendingStop('q3'));
+  });
+
+  it('pending_EntryPutAfterRows_SlotsSitBeforeRows', () => {
+    const { list, put } = setUpList(defaultShown());
+    put(user('u1'));
+    list.setQueued([queued('q1'), queued('q2')]);
+
+    put(tool('t1'));
+
+    expect(slotClasses(list.element)).toEqual([
+      'chat-entry-slot',
+      'chat-entry-slot chat-activity-slot',
+      'chat-entry-slot chat-step-slot hidden',
+      'chat-entry-slot chat-queued-slot',
+      'chat-entry-slot chat-queued-slot is-cursor',
+    ]);
+  });
+
+  it('pending_ClickRow_PullsBackWithoutMovingTheCursor', () => {
+    const { list, put, pulled } = setUpList(defaultShown());
+    put(user('u1'));
+    list.setQueued([queued('q1'), queued('q2')]);
+    list.move(-1);
+
+    slotOf(list.element, 'chat-queued-slot', 1).click();
+
+    expect(pulled).toEqual(['q2']);
+    expect(list.focused()).toEqual(pendingStop('q1'));
   });
 });

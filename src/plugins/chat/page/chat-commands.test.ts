@@ -8,10 +8,14 @@ import type { ScrollStep, TextEditor } from '../../../contracts/editor';
 import type { ChatSessionState, SlashCommandContext } from '../contract';
 import { createAttachments } from './attachments';
 import type { CloseConfirm, ReasonBox } from './chat-dialogs';
-import { type ChatCommandDeps, chatCommandHandlers } from './chat-commands';
+import {
+  type ChatCommandDeps,
+  chatCommandHandlers,
+  putBack,
+} from './chat-commands';
 import type { ChatSession, ChatTabs, PermissionActions } from './chat-view';
 import type { ListStop } from './activity-runs';
-import type { TranscriptScroll } from './entry-list';
+import type { EntryListStop, TranscriptScroll } from './entry-list';
 import type { ImageViewer } from './image-viewer';
 import type { Picker, PickerRequest } from './picker';
 import type { SignInDialog } from './sign-in-dialog';
@@ -56,6 +60,7 @@ const activityStop: ListStop = {
 
 const png: ChatImage = { mediaType: 'image/png', data: 'cG5n' };
 const jpeg: ChatImage = { mediaType: 'image/jpeg', data: 'anBn' };
+const gif: ChatImage = { mediaType: 'image/gif', data: 'Z2lm' };
 
 // `scrollBy` records each step and direction in `scrolls` and answers with
 // `scroll`; `latest` counts each call in `latest`.
@@ -107,7 +112,7 @@ function focusedOn(entry: ChatEntry) {
 // Entries focused on `stop`: `focused` and `move` answer with it, and
 // `toggleFocused` counts each call in `toggles` and answers that it expanded
 // `stop`.
-function focusedOnStop(stop: ListStop) {
+function focusedOnStop(stop: EntryListStop) {
   const counts = { toggles: 0 };
   const entries = {
     focused: () => stop,
@@ -326,6 +331,50 @@ describe('chat commands', () => {
     expect(run.logs).toEqual(['[chat] expanded activity line']);
   });
 
+  it('toggleEntry_pendingRow_pullsItBack', () => {
+    const entries = focusedOnStop({
+      kind: 'queued',
+      message: { id: 'q-2', text: 'later', images: [] },
+    });
+    const shown = Object.assign(session(true), { entries });
+    const run = setUp(shown);
+
+    run.handlers.toggleEntry({});
+
+    expect(run.invoked).toEqual([['pullBack', 'row-1', 'q-2']]);
+    expect(entries.counts.toggles).toBe(0);
+  });
+
+  it.each([
+    {
+      given: 'two queued',
+      queued: ['q-1', 'q-2'],
+      invoked: [['pullBack', 'row-1', 'q-2']],
+      logs: ['[chat] pulling back a pending message in app'],
+    },
+    {
+      given: 'none queued',
+      queued: [],
+      invoked: [],
+      logs: ['[chat] no pending message in app'],
+    },
+  ])(
+    'pullBackQueued given $given pulls back the newest',
+    ({ queued, invoked, logs }) => {
+      const shown = session(true);
+      const state = {
+        ...shown.state,
+        queued: queued.map((id) => ({ id, text: id, images: [] })),
+      };
+      const run = setUp(Object.assign(shown, { state }));
+
+      run.handlers.pullBackQueued({});
+
+      expect(run.invoked).toEqual(invoked);
+      expect(run.logs).toEqual(logs);
+    },
+  );
+
   it('nextEntry_activityLine_logsFocusedActivityLine', () => {
     const shown = Object.assign(session(true), {
       entries: focusedOnStop(activityStop),
@@ -496,6 +545,22 @@ describe('chat commands', () => {
     expect(run.invoked).toEqual([
       ['send', 'row-1', { text: '', images: [png] }],
     ]);
+  });
+
+  it('putBack_TwoReturnedOverADraft_OldestOnTopImagesAheadOfAttached', () => {
+    const message = box('draft');
+    const shown = Object.assign(session(true), { box: message });
+    shown.attachments.add(jpeg);
+    const tabs = { session: () => shown } as unknown as ChatTabs;
+
+    const took = putBack({ tabs }, shown, [
+      { text: 'one', images: [png] },
+      { text: 'two', images: [gif] },
+    ]);
+
+    expect(took).toBe(true);
+    expect(message.held.text).toBe('one\ntwo\ndraft');
+    expect(shown.attachments.images()).toEqual([png, gif, jpeg]);
   });
 
   it.each([{ running: true }, { running: false }])(

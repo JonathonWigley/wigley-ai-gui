@@ -23,6 +23,7 @@ import {
   createAttachments,
   listenForImages,
 } from './attachments';
+import { pullBackQueued } from './chat-commands';
 import { blurFocusedElement, type CloseConfirm } from './chat-dialogs';
 import type { ChatLayouts, SurfaceKitDeps } from './chat-layouts';
 import {
@@ -71,10 +72,11 @@ export interface ChatSession extends SessionRef {
 }
 
 // The Chat view with what the commands read: the session a box belongs to,
-// and a held session by id.
+// a held session by id, and the name of a held tab, its box mounted or not.
 export interface ChatTabs extends ChatView {
   session(sessionId: string): ChatSession | undefined;
   sessionOfEditor(editor: TextEditor): ChatSession | undefined;
+  heldName(sessionId: string): string | undefined;
 }
 
 // `allow` answers a permission entry allowed; `deny` asks for the reason
@@ -140,11 +142,12 @@ interface HeldTab {
 
 const STARTING_MODE: VimMode = { mode: 'normal', subMode: '' };
 
-// One Chat tab per chat session main holds, each with its entries and its
-// composer (attached images, message box, mode, type hint, running indicator,
-// control chips, send), kept up to date from chat main's messages. Each tab is
-// selected in its session when added. A layout change draws every tab's
-// entries and composer again, each box keeping its text, vim mode and focus.
+// One Chat tab per chat session main holds, each with its entries, its
+// pending rows and its composer (attached images, message box, mode, type
+// hint, running indicator, control chips, send), kept up to date from chat
+// main's messages. Each tab is selected in its session when added. A layout
+// change draws every tab's entries, pending rows and composer again, each box
+// keeping its text, vim mode and focus.
 export function mountChatView(deps: ChatViewDeps): ChatTabs {
   const { log } = deps;
   const tabs = new Map<string, HeldTab>();
@@ -256,6 +259,14 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       log('chat', `${entries.length} entries read in ${tab.name}`);
     }
   });
+  channel.on('queued', ({ sessionId, queued }) => {
+    const tab = heldFor('queued', sessionId);
+    if (tab !== undefined) {
+      tab.state = { ...tab.state, queued };
+      tab.entries.setQueued(queued);
+      log('chat', `${queued.length} pending message(s) in ${tab.name}`);
+    }
+  });
   channel.on('sessionRunning', ({ sessionId }) => {
     const tab = heldFor('sessionRunning', sessionId);
     if (tab !== undefined) {
@@ -327,6 +338,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     session: (sessionId) => asSession(tabs.get(sessionId)),
     sessionOfEditor: (editor) =>
       asSession([...tabs.values()].find((tab) => tab.box === editor)),
+    heldName: (sessionId) => tabs.get(sessionId)?.name,
   };
 }
 
@@ -408,6 +420,7 @@ function createTab(
     toast: deps.toast,
     timers: deps.timers,
     clock: deps.clock,
+    pullBack: (queuedId) => pullBackQueued(deps, ref, queuedId),
   });
   const boxElement = inputFrame();
   boxElement.classList.add('chat-box');
@@ -448,6 +461,7 @@ function createTab(
   };
   listenForImages({ name, attachments }, { root, box: boxElement }, deps);
   entries.rebuild(state.entries);
+  entries.setQueued(state.queued);
   entries.setWorking(isWorking(state));
   drawComposer(tab);
   tab.handle = deps.sessions.addTab(state.sessionId, {

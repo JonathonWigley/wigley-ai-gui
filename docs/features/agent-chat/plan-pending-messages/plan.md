@@ -181,7 +181,7 @@ Boundary rules:
 - [x] [Chat main queue and the channel](01-main-queue.md)
 
 ### Wave 2
-- [ ] [The queuedMessage layout part](02-queued-message-part.md) — after 01 (shares `layout.test.ts`)
+- [x] [The queuedMessage layout part](02-queued-message-part.md) — after 01 (shares `layout.test.ts`)
 
 ### Wave 3
 - [ ] [Pending rows, pull-back keys and put-back on the page](03-page-pending-rows.md) — after 01, 02
@@ -199,6 +199,8 @@ Boundary rules:
 Review base: 7f62c7d
 ### Groups
 - 01 · 04ebdfb · diff read: every Produces present; typecheck clean · concerns: compiler named only chat-commands.test.ts for queued: [] (other listed literals are partial); start.test.ts preview-ignored table lacks a pullBack row
+- 02 · f1adb79 · diff read: every Produces present; typecheck clean · concerns: AGENTS.md part list updated outside Files (stale prose); pre-wrap line breaks left to the live check
 ### Rulings
 - returned and the drain write carry { text, images } only, no id; a throwing drain write sends queued twice (shift, then restore) — matches the plan's shapes — a page redraw flickers once if wrong · group 01 · group 01
+- label sits on its own line above the text (two divs); root font --wg-font-ui/--wg-text-ui as .chat-activity — matches 'label, then the text' — two CSS/markup lines if a one-line row is wanted · group 02 · group 02
 

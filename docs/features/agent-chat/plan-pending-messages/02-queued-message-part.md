@@ -1,6 +1,6 @@
 # 02 — The queuedMessage layout part
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -25,3 +25,5 @@ Done when: compiles; `npm run lint` passes; the test gate runs the tests above
 Commit:    one commit for the group
 
 ## Proof
+
+Commit f1adb79 · proof: diff read: every Produces present; typecheck clean · concerns: AGENTS.md part list updated outside Files (stale prose); pre-wrap line breaks left to the live check

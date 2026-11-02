@@ -19,8 +19,8 @@ import type {
   SlashCommandContext,
 } from '../contract';
 import type { chatManifest } from '../manifest';
-import type { ListStop } from './activity-runs';
 import type { CloseConfirm, ReasonBox } from './chat-dialogs';
+import type { EntryListStop } from './entry-list';
 import { controlText, oldestPendingPermission } from './chat-state';
 import type {
   ChatSession,
@@ -185,11 +185,16 @@ export function chatCommandHandlers(
     halfPageUp: inSession((session) =>
       scrollTranscript(session, 'halfPage', -1, log),
     ),
-    // A focused user entry with images opens the viewer on its first image and
-    // toggles nothing; a focused activity line opens or closes, and any other
-    // focused entry toggles its expanders.
+    // A focused pending row is pulled back; a focused user entry with images
+    // opens the viewer on its first image and toggles nothing; a focused
+    // activity line opens or closes, and any other focused entry toggles its
+    // expanders.
     toggleEntry: inSession((session) => {
       const focused = session.entries.focused();
+      if (focused?.kind === 'queued') {
+        pullBackQueued(deps, session, focused.message.id);
+        return;
+      }
       const entry = focused?.kind === 'entry' ? focused.entry : null;
       if (entry?.kind === 'user' && entry.images.length > 0) {
         deps.viewer.open(entry.images, 0);
@@ -248,6 +253,14 @@ export function chatCommandHandlers(
         sessionBound: true,
         picked: (control) => openChoices(deps, session, control),
       });
+    }),
+    pullBackQueued: inSession((session) => {
+      const newest = session.state.queued.at(-1);
+      if (newest === undefined) {
+        log('chat', `no pending message in ${session.name}`);
+        return;
+      }
+      pullBackQueued(deps, session, newest.id);
     }),
     removeImage: inSession((session) => {
       if (session.attachments.removeLast()) {
@@ -318,7 +331,9 @@ function send(deps: ChatCommandDeps, session: ChatSession) {
     .catch((error: unknown) => {
       log('chat', `send failed: ${errorText(error)}`);
       deps.toast(`Message not sent: ${errorText(error)}`, 'error');
-      putBack(deps, session, { text, images });
+      if (putBack(deps, session, [{ text, images }])) {
+        log('chat', `put the refused message back in ${session.name}`);
+      }
     });
   session.box.setText('');
   session.attachments.clear();
@@ -328,29 +343,49 @@ function send(deps: ChatCommandDeps, session: ChatSession) {
   log('chat', `sent a message${withImages} in ${session.name}`);
 }
 
-// Puts a refused message back into its session's box, ahead of anything typed
-// or attached since: the text on its own line above the box's text, the
-// images before the attached ones. A session closed since takes nothing back.
-function putBack(
-  deps: ChatCommandDeps,
+// Puts messages, oldest first, back into their session's box, ahead of
+// anything typed or attached since: each text on its own line above the box's
+// text, the oldest at the top, and their images in order before the attached
+// ones. A session closed since takes nothing back; whether the box took them.
+export function putBack(
+  deps: Pick<ChatCommandDeps, 'tabs'>,
   session: ChatSession,
-  refused: UserMessage,
-) {
+  messages: readonly UserMessage[],
+): boolean {
   if (deps.tabs.session(session.sessionId) === undefined) {
-    return;
+    return false;
   }
-  const typed = session.box.text();
-  if (refused.text !== '') {
+  const texts = messages
+    .map((message) => message.text)
+    .filter((text) => text !== '');
+  if (texts.length > 0) {
+    const typed = session.box.text();
     session.box.setText(
-      typed === '' ? refused.text : `${refused.text}\n${typed}`,
+      [...texts, ...(typed === '' ? [] : [typed])].join('\n'),
     );
   }
   const attached = session.attachments.images();
   session.attachments.clear();
-  for (const image of [...refused.images, ...attached]) {
+  const returned = messages.flatMap((message) => message.images);
+  for (const image of [...returned, ...attached]) {
     session.attachments.add(image);
   }
-  deps.log('chat', `put the refused message back in ${session.name}`);
+  return true;
+}
+
+// Asks main to take the queued message out of the session's queue; it
+// arrives back as `returned`.
+export function pullBackQueued(
+  deps: { channel: ChatInvoke; log: Log },
+  session: SessionRef,
+  queuedId: string,
+) {
+  void deps.channel
+    .invoke('pullBack', session.sessionId, queuedId)
+    .catch((error: unknown) =>
+      deps.log('chat', `pullBack failed: ${errorText(error)}`),
+    );
+  deps.log('chat', `pulling back a pending message in ${session.name}`);
 }
 
 // Runs the command for the session and clears the box; a run that throws or
@@ -380,9 +415,12 @@ function moveEntry(session: ChatSession, step: 1 | -1, log: Log) {
   log('chat', focusedLine(focused, session.name));
 }
 
-function focusedLine(stop: ListStop | null, sessionName: string): string {
+function focusedLine(stop: EntryListStop | null, sessionName: string): string {
   if (stop === null) {
     return `no entries in ${sessionName}`;
+  }
+  if (stop.kind === 'queued') {
+    return 'focused pending message';
   }
   return stop.kind === 'activity'
     ? 'focused activity line'

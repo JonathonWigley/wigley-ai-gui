@@ -127,6 +127,7 @@ function chatBoxBinds() {
     { keys: '<CR>', command: 'chat.send' as const },
     { keys: '<Esc>', command: 'chat.leaveBox' as const },
     { keys: '<Leader>cx', command: 'chat.removeImage' as const },
+    { keys: '<Leader>cp', command: 'chat.pullBackQueued' as const },
   ].map((bind) => ({ ...bind, scope, where: 'box' as const }));
 }
 

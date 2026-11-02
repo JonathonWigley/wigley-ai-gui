@@ -11,6 +11,7 @@ import {
 } from '../../../shared/page/layout-host/draw-part';
 import { textLineHeightPx } from '../../../shared/page/text-line';
 import { isScrolledToEnd, scrollContent } from '../../../shared/content-scroll';
+import type { QueuedMessage } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type {
   ActivityInput,
@@ -19,7 +20,9 @@ import type {
   EntryKind,
   EntryView,
   PartView,
+  QueuedMessageInput,
 } from '../layouts/layout';
+import type { BaseKit } from '../../../shared/page/layout-host/kit';
 import {
   cursorStops,
   type ListRow,
@@ -47,10 +50,11 @@ import {
   START_FOCUS,
 } from './entry-focus';
 
-// `layouts` are the ones every session's entries and activity lines are
-// built with; `toastedKinds` the kinds whose failed draw has toasted since
-// they were shown, shared by every session's list. `timers` and `clock` tick
-// a live activity line's time.
+// `layouts` are the ones every session's entries, activity lines and pending
+// rows are built with; `toastedKinds` the kinds whose failed draw has toasted
+// since they were shown, shared by every session's list. `timers` and `clock`
+// tick a live activity line's time. `pullBack` is what a click on a pending
+// row calls with its message's id.
 export interface EntryListDeps {
   layouts: ChatLayouts;
   toastedKinds: Set<ChatEntryKind>;
@@ -59,9 +63,16 @@ export interface EntryListDeps {
   toast(text: string, tone: ToastTone): void;
   timers: Timers;
   clock: Clock;
+  pullBack(queuedId: string): void;
 }
 
 export type ToggleResult = 'expanded' | 'collapsed' | 'nothing';
+
+// One place the entry cursor can stop: an entry, a run's activity line, or a
+// pending row.
+export type EntryListStop =
+  | ListStop
+  | { kind: 'queued'; message: QueuedMessage };
 
 // A scroll, and whether the list follows the latest entry after it.
 export interface TranscriptScroll extends ContentScroll {
@@ -70,32 +81,37 @@ export interface TranscriptScroll extends ContentScroll {
 
 // One session's entries, one slot per entry in the session's order, each run
 // of steps also drawn as one activity line slot right before its first step's
-// slot; a closed run's step slots are hidden. The cursor stops on each entry
-// and activity line, and on each step of an open run; the focused stop's slot
-// is marked `is-cursor`. A following focus moves to the latest stop as the
-// list changes, except one on the last row's activity line, which stays on
-// it while the run is open and grows. After every change, and whenever the
-// list's own box resizes, a following focus scrolls the list to its bottom; a
-// hidden list does not scroll, so its tab calls `scrollToFocus` each time it
-// shows. While a live run is drawn its line's time ticks once a second.
+// slot; a closed run's step slots are hidden. The session's queued messages
+// follow the last entry as pending rows, oldest first. The cursor stops on
+// each entry and activity line, on each step of an open run, then on each
+// pending row; the focused stop's slot is marked `is-cursor`. A following
+// focus moves to the latest stop as the list changes, except one on the last
+// row's activity line, which stays on it while the run is open and grows and
+// no pending row follows it. After every change, and whenever the list's own
+// box resizes, a following focus scrolls the list to its bottom; a hidden
+// list does not scroll, so its tab calls `scrollToFocus` each time it shows.
+// While a live run is drawn its line's time ticks once a second.
 export interface EntryList {
   element: HTMLOListElement;
   // Builds an entry new to the list, or redraws the one holding its id;
   // `entries` is the session's list after the change.
   put(entry: ChatEntry, entries: readonly ChatEntry[]): void;
-  // Builds every entry again with the shown layouts, keeping the focus, each
-  // entry's open expanders by id and each run's open state.
+  // Builds every entry and pending row again with the shown layouts, keeping
+  // the focus, each entry's open expanders by id and each run's open state.
   rebuild(entries: readonly ChatEntry[]): void;
+  // Draws one pending row per message after the last entry, in order,
+  // updating a row whose message it already holds and removing the rest.
+  setQueued(queued: readonly QueuedMessage[]): void;
   // Whether the session works on its turn: only then is a last run live.
   setWorking(working: boolean): void;
-  // The focused stop after the move; null with no entries.
-  move(step: 1 | -1): ListStop | null;
-  // Follows the last row, an entry or a run's line whether the run is open
-  // or not, and scrolls to the bottom.
+  // The focused stop after the move; null with no stops.
+  move(step: 1 | -1): EntryListStop | null;
+  // Follows the last row, the newest pending row, else an entry or a run's
+  // line whether the run is open or not, and scrolls to the bottom.
   latest(): void;
   // Focuses the first stop and scrolls to the top; the focused stop, null
-  // with no entries.
-  first(): ListStop | null;
+  // with no stops.
+  first(): EntryListStop | null;
   // Scrolls to the bottom while following, else leaves the scroll alone.
   followBottom(): void;
   // Scrolls to the bottom while following, else brings the focused stop
@@ -107,14 +123,14 @@ export interface EntryList {
   // focused stop stays either way.
   scrollBy(step: ScrollStep, direction: 1 | -1): TranscriptScroll;
   // The focused stop; null with no focused stop.
-  focused(): ListStop | null;
+  focused(): EntryListStop | null;
   // On an activity line, opens the run when it is closed, else closes it. On
   // an entry, opens every expander when any is closed, else closes them all.
-  // Null with no focused stop.
+  // Null with no focused stop, or on a pending row, which toggles nothing.
   toggleFocused(): { stop: ListStop; result: ToggleResult } | null;
-  // Stops following the list's size and the tick, disposes every entry's kit
-  // and every activity line, and forgets the open runs; the list's owner
-  // calls it when it drops the list.
+  // Stops following the list's size and the tick, disposes every entry's kit,
+  // every activity line and every pending row, and forgets the open runs; the
+  // list's owner calls it when it drops the list.
   dispose(): void;
 }
 
@@ -151,21 +167,47 @@ type AnyBuilder = EntryBuilder<EntryKind>;
 
 type RunRow = Extract<ListRow, { kind: 'run' }>;
 
-type BuiltActivity = { element: HTMLElement; view: PartView<ActivityInput> };
-
-// One run's activity line slot: the run as last listed, the input its part
-// last drew or updated with, and the drawn part, null while the slot holds
-// the bare line.
-interface RunSlot {
-  element: HTMLLIElement;
-  row: RunRow;
-  input: ActivityInput;
-  drawn: DrawnPart<BuiltActivity> | null;
+// The parts a list slot of its own draws, by the input each takes.
+interface SlotPartInputs {
+  activity: ActivityInput;
+  queuedMessage: QueuedMessageInput;
 }
 
-// What drawing an activity line needs from the list.
-interface ActivityDraws {
-  draws: ChatPartDraws<'activity'>;
+type SlotPartName = keyof SlotPartInputs;
+
+type SlotPartBuilder<K extends SlotPartName> = (
+  parent: HTMLElement,
+  input: SlotPartInputs[K],
+  kit: BaseKit,
+) => PartView<SlotPartInputs[K]>;
+
+type BuiltSlotPart<K extends SlotPartName> = {
+  element: HTMLElement;
+  view: PartView<SlotPartInputs[K]>;
+};
+
+// A slot drawn by one layout part: the input its part last drew or updated
+// with, and the drawn part, null while the slot holds the bare line.
+interface PartSlot<K extends SlotPartName> {
+  element: HTMLLIElement;
+  input: SlotPartInputs[K];
+  drawn: DrawnPart<BuiltSlotPart<K>> | null;
+}
+
+// One run's activity line slot, with the run as last listed.
+interface RunSlot extends PartSlot<'activity'> {
+  row: RunRow;
+}
+
+// One pending row's slot, with the message it shows.
+interface QueuedSlot extends PartSlot<'queuedMessage'> {
+  message: QueuedMessage;
+}
+
+// What drawing a part into a slot needs from the list.
+interface SlotPartDraws<K extends SlotPartName> {
+  part: K;
+  draws: ChatPartDraws<K>;
   deps: EntryListDeps;
 }
 
@@ -175,9 +217,17 @@ export function createEntryList(deps: EntryListDeps): EntryList {
   const list = element('ol', 'chat-entries');
   const slots = new Map<string, Slot>();
   const runSlots = new Map<string, RunSlot>();
+  // Each pending row's slot by its stop id, oldest first.
+  let queuedSlots = new Map<string, QueuedSlot>();
   const openRuns = new Set<string>();
-  const activity: ActivityDraws = {
+  const activity: SlotPartDraws<'activity'> = {
+    part: 'activity',
     draws: chatPartDraws(deps.layouts, 'activity', deps.log),
+    deps,
+  };
+  const queuedPart: SlotPartDraws<'queuedMessage'> = {
+    part: 'queuedMessage',
+    draws: chatPartDraws(deps.layouts, 'queuedMessage', deps.log),
     deps,
   };
   let entries: readonly ChatEntry[] = [];
@@ -188,10 +238,19 @@ export function createEntryList(deps: EntryListDeps): EntryList {
   let tick: number | null = null;
 
   const slotElement = (id: string) =>
-    slots.get(id)?.element ?? runSlots.get(id)?.element;
+    slots.get(id)?.element ??
+    runSlots.get(id)?.element ??
+    queuedSlots.get(id)?.element;
+
+  // Where a new entry slot goes: before the first pending row, else last.
+  const firstQueuedElement = () =>
+    [...queuedSlots.values()].at(0)?.element ?? null;
+
+  // The stop the list ends on: the newest pending row, else the last row's.
+  const lastStopId = () => [...queuedSlots.keys()].at(-1) ?? lastRowId(rows);
 
   const drawFocus = (scroll: 'follow' | 'slot' | 'bottom' | 'top') => {
-    for (const [id, slot] of [...slots, ...runSlots]) {
+    for (const [id, slot] of [...slots, ...runSlots, ...queuedSlots]) {
       slot.element.classList.toggle('is-cursor', id === focus.entryId);
     }
     const isBottom = scroll === 'bottom' || focus.following;
@@ -213,7 +272,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       return;
     }
     if (live.drawn !== null) {
-      updateRunSlot(live, { ...live.input, now: deps.clock.now() }, activity);
+      updatePartSlot(live, { ...live.input, now: deps.clock.now() }, activity);
     }
     tick = deps.timers.set(runTick, TICK_MS);
   };
@@ -235,10 +294,37 @@ export function createEntryList(deps: EntryListDeps): EntryList {
         putRun(row);
       }
     }
-    order = cursorStops(rows, openRuns);
-    focus = focusAfterChange(focus, order, lastRowId(rows));
+    order = [...cursorStops(rows, openRuns), ...queuedSlots.keys()];
+    focus = focusAfterChange(focus, order, lastStopId());
     drawFocus('follow');
     followLiveRun();
+  };
+
+  // Draws `messages` as the pending rows, in order, after the entries.
+  const putQueued = (messages: readonly QueuedMessage[]) => {
+    const next = new Map<string, QueuedSlot>();
+    for (const message of messages) {
+      const id = queuedStopId(message.id);
+      const input = queuedInput(message);
+      const held = queuedSlots.get(id);
+      if (held === undefined) {
+        next.set(id, buildQueuedSlot(message, input, queuedPart));
+      } else {
+        if (isQueuedChanged(held.input, input)) {
+          updatePartSlot(held, input, queuedPart);
+        }
+        held.message = message;
+        next.set(id, held);
+      }
+    }
+    for (const [id, gone] of queuedSlots) {
+      if (!next.has(id)) {
+        gone.drawn?.dispose();
+        gone.element.remove();
+      }
+    }
+    queuedSlots = next;
+    list.append(...[...next.values()].map((slot) => slot.element));
   };
 
   // Draws a run new to the list before its first step's slot, or updates its
@@ -256,7 +342,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       list.insertBefore(created.element, slotElement(row.steps[0].id) ?? null);
     } else {
       if (isActivityChanged(held.input, input)) {
-        updateRunSlot(held, input, activity);
+        updatePartSlot(held, input, activity);
       }
       held.row = row;
     }
@@ -285,7 +371,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     return opens ? 'expanded' : 'collapsed';
   };
 
-  const focusedStop = (): ListStop | null => {
+  const focusedStop = (): EntryListStop | null => {
     if (focus.entryId === null) {
       return null;
     }
@@ -294,9 +380,13 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       return { kind: 'entry', entry: slot.entry };
     }
     const run = runSlots.get(focus.entryId);
-    return run === undefined
+    if (run !== undefined) {
+      return { kind: 'activity', runId: run.row.runId, steps: run.row.steps };
+    }
+    const queued = queuedSlots.get(focus.entryId);
+    return queued === undefined
       ? null
-      : { kind: 'activity', runId: run.row.runId, steps: run.row.steps };
+      : { kind: 'queued', message: queued.message };
   };
 
   const followBottom = () => {
@@ -314,7 +404,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       if (slot === undefined) {
         const created = buildSlot(entry, deps);
         slots.set(entry.id, created);
-        list.append(created.element);
+        list.insertBefore(created.element, firstQueuedElement());
       } else {
         redrawSlot(slot, entry, deps);
       }
@@ -325,10 +415,13 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       const openStates = new Map(
         [...slots].map(([id, slot]) => [id, slot.kit.expanders.openStates()]),
       );
+      const queued = [...queuedSlots.values()].map((slot) => slot.message);
       disposeSlots(slots);
       slots.clear();
-      disposeRunSlots(runSlots);
+      disposePartSlots(runSlots);
       runSlots.clear();
+      disposePartSlots(queuedSlots);
+      queuedSlots.clear();
       list.replaceChildren();
       for (const entry of next) {
         const created = buildSlot(entry, deps);
@@ -336,6 +429,11 @@ export function createEntryList(deps: EntryListDeps): EntryList {
         slots.set(entry.id, created);
         list.append(created.element);
       }
+      putQueued(queued);
+      changed();
+    },
+    setQueued(queued) {
+      putQueued(queued);
       changed();
     },
     setWorking(next) {
@@ -348,7 +446,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       return focusedStop();
     },
     latest() {
-      focus = focusLatest(lastRowId(rows));
+      focus = focusLatest(lastStopId());
       drawFocus('bottom');
     },
     first() {
@@ -374,7 +472,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     focused: focusedStop,
     toggleFocused() {
       const stop = focusedStop();
-      if (stop === null) {
+      if (stop === null || stop.kind === 'queued') {
         return null;
       }
       if (stop.kind === 'activity') {
@@ -395,7 +493,8 @@ export function createEntryList(deps: EntryListDeps): EntryList {
         tick = null;
       }
       disposeSlots(slots);
-      disposeRunSlots(runSlots);
+      disposePartSlots(runSlots);
+      disposePartSlots(queuedSlots);
       openRuns.clear();
     },
   };
@@ -423,9 +522,9 @@ function disposeSlots(slots: Map<string, Slot>) {
   }
 }
 
-function disposeRunSlots(runSlots: Map<string, RunSlot>) {
-  for (const run of runSlots.values()) {
-    run.drawn?.dispose();
+function disposePartSlots(partSlots: Map<string, PartSlot<SlotPartName>>) {
+  for (const slot of partSlots.values()) {
+    slot.drawn?.dispose();
   }
 }
 
@@ -470,7 +569,7 @@ function isActivityChanged(last: ActivityInput, next: ActivityInput): boolean {
 function buildRunSlot(
   row: RunRow,
   input: ActivityInput,
-  activity: ActivityDraws,
+  activity: SlotPartDraws<'activity'>,
   toggle: () => void,
 ): RunSlot {
   const slot = element('li', 'chat-entry-slot chat-activity-slot');
@@ -479,45 +578,80 @@ function buildRunSlot(
     element: slot,
     row,
     input,
-    drawn: drawActivity(slot, input, activity),
+    drawn: drawSlotPart(slot, input, activity),
   };
 }
 
-// Runs the line's update with `input`; a line whose part has no update, or
-// whose update threw, or that is the bare line, is drawn again.
-function updateRunSlot(
-  run: RunSlot,
-  input: ActivityInput,
-  activity: ActivityDraws,
+// The cursor stop a pending row is drawn as.
+function queuedStopId(queuedId: string): string {
+  return `queued:${queuedId}`;
+}
+
+function queuedInput(message: QueuedMessage): QueuedMessageInput {
+  return { text: message.text, imageCount: message.images.length };
+}
+
+function isQueuedChanged(
+  last: QueuedMessageInput,
+  next: QueuedMessageInput,
+): boolean {
+  return last.text !== next.text || last.imageCount !== next.imageCount;
+}
+
+// A pending row's slot, its row drawn, a click on it pulling the message
+// back.
+function buildQueuedSlot(
+  message: QueuedMessage,
+  input: QueuedMessageInput,
+  queuedPart: SlotPartDraws<'queuedMessage'>,
+): QueuedSlot {
+  const slot = element('li', 'chat-entry-slot chat-queued-slot');
+  slot.addEventListener('click', () => queuedPart.deps.pullBack(message.id));
+  return {
+    element: slot,
+    message,
+    input,
+    drawn: drawSlotPart(slot, input, queuedPart),
+  };
+}
+
+// Runs the slot's part update with `input`; a slot whose part has no update,
+// or whose update threw, or that holds the bare line, is drawn again.
+function updatePartSlot<K extends SlotPartName>(
+  slot: PartSlot<K>,
+  input: SlotPartInputs[K],
+  part: SlotPartDraws<K>,
 ) {
-  run.input = input;
+  slot.input = input;
   const result =
-    run.drawn === null ? 'none' : activity.draws.update(run.drawn, input);
+    slot.drawn === null ? 'none' : part.draws.update(slot.drawn, input);
   if (result === 'ran') {
     return;
   }
-  run.drawn?.dispose();
-  run.element.replaceChildren();
-  run.drawn = drawActivity(run.element, input, activity);
+  slot.drawn?.dispose();
+  slot.element.replaceChildren();
+  slot.drawn = drawSlotPart(slot.element, input, part);
 }
 
-// The line drawn into `slot` with the user's layout when it defines the
+// The part drawn into `slot` with the user's layout when it defines the
 // part, else with `default`; a default that fails is logged and leaves a
-// bare line, null.
-function drawActivity(
+// bare line naming the part, null.
+function drawSlotPart<K extends SlotPartName>(
   slot: HTMLElement,
-  input: ActivityInput,
-  { draws, deps }: ActivityDraws,
-): DrawnPart<BuiltActivity> | null {
+  input: SlotPartInputs[K],
+  { part, draws, deps }: SlotPartDraws<K>,
+): DrawnPart<BuiltSlotPart<K>> | null {
   try {
     return draws.draw(slot, (builder, parent, rollback) => {
       const kit = surfaceBaseKit(deps.kit, 'chat', rollback);
-      const view = builder(parent, input, kit);
+      // TypeScript cannot narrow the builder to the part's own input.
+      const build = builder as SlotPartBuilder<K>;
+      const view = build(parent, input, kit);
       return { element: view.element, view };
     });
   } catch (error) {
-    deps.log('chat', `default layout activity failed: ${errorText(error)}`);
-    slot.append(element('div', 'chat-entry chat-raw', 'activity'));
+    deps.log('chat', `default layout ${part} failed: ${errorText(error)}`);
+    slot.append(element('div', 'chat-entry chat-raw', part));
     return null;
   }
 }

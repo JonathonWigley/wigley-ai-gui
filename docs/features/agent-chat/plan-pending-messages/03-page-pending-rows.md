@@ -1,6 +1,6 @@
 # 03 — Pending rows, pull-back keys and put-back on the page
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 3 · Depends on: 01, 02
 Plan: [plan.md](plan.md)

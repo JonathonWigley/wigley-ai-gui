@@ -26,6 +26,11 @@ export const chatManifest = definePlugin({
       group: 'box',
       runsIn: 'page',
     },
+    pullBackQueued: {
+      label: 'pull back the newest pending message',
+      group: 'box',
+      runsIn: 'page',
+    },
     nextImage: { label: 'next image', group: 'image', runsIn: 'page' },
     prevImage: { label: 'previous image', group: 'image', runsIn: 'page' },
     closeImage: { label: 'close the image', group: 'image', runsIn: 'page' },

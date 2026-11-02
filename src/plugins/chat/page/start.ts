@@ -16,7 +16,11 @@ import defaultLayout from '../layouts/default/layout.js';
 import type { ChatLayout } from '../layouts/layout';
 import { chatManifest } from '../manifest';
 import { addAccountCommands } from './account-commands';
-import { chatCommandHandlers, createPermissionActions } from './chat-commands';
+import {
+  chatCommandHandlers,
+  createPermissionActions,
+  putBack,
+} from './chat-commands';
 import { createCloseConfirm, createReasonBox } from './chat-dialogs';
 import { createChatLayouts } from './chat-layouts';
 import { mountChatView } from './chat-view';
@@ -41,6 +45,9 @@ type ChatApi = PageApi<
 // The new-session prompt asks for a folder, a profile and a new or saved
 // session in the picker and starts or resumes a session there, signing a
 // signed-out profile in first.
+// A message sent while the session's turn runs shows as a pending row after
+// the entries until main writes it to the agent; pulling it back puts it into
+// the box.
 // Sending `/login`, `/logout`, `/status` or another app slash command runs it
 // in the page in place of sending it; the exports register more. Images
 // pasted or dropped into a Chat tab attach to its next message, and a sent
@@ -155,6 +162,26 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       toast: services.toast,
       timers: services.timers,
       clock: services.clock,
+    });
+    // Messages pulled back out of a session's queue go back into its box.
+    api.channel.on('returned', ({ sessionId, messages }) => {
+      const session = view.session(sessionId);
+      if (session !== undefined) {
+        if (putBack({ tabs: view }, session, messages)) {
+          services.log(
+            'chat',
+            `pulled back ${messages.length} message(s) in ${session.name}`,
+          );
+        }
+        return;
+      }
+      const name = view.heldName(sessionId);
+      services.log(
+        'chat',
+        name === undefined
+          ? `returned for unknown session ${sessionId} ignored`
+          : `returned for ${name} dropped: no box`,
+      );
     });
     api.layouts.show<ChatLayout>({
       defaultLayout,
