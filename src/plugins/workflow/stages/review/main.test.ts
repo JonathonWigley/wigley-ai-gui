@@ -70,10 +70,10 @@ describe('reviewMainStage', () => {
       stages: ['feature'],
     },
     {
-      name: 'planChanged with a review round in a flow saved before reviewRoundsAtMake',
+      name: 'a flow saved before reviewRoundsAtMake counts its rounds from the first read',
       from: 'make',
-      signals: [planChanged(1)],
-      stages: ['review'],
+      signals: [planChanged(1), planChanged(1, 6), planChanged(2, 6)],
+      stages: ['make', 'make', 'review'],
     },
     {
       name: 'planChanged with no review round in make',

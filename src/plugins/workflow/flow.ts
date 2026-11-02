@@ -92,9 +92,7 @@ function applyBookkeeping(next: SessionFlow, signal: WorkflowSignal): void {
       if (!sameProgress(next.progress, signal.progress)) {
         next.progress = signal.progress;
       }
-      if (next.reviewRoundsAtMake === null) {
-        next.reviewRoundsAtMake = signal.progress.reviewRounds;
-      }
+      next.reviewRoundsAtMake ??= signal.progress.reviewRounds;
       break;
     case 'cleared':
       next.countdownEndsAt = null;
@@ -162,10 +160,13 @@ function planDirOfArgsPath(argsPath: string | null): string | null {
   return PLAN_FOLDER_NAME.test(folderName) ? folder : null;
 }
 
+// A new plan folder drops the old plan's progress and review rounds; the
+// folder's first read fills both.
 function setPlanDir(next: SessionFlow, planDir: string): void {
   if (planDir !== next.planDir) {
     next.planDir = planDir;
     next.progress = null;
+    next.reviewRoundsAtMake = null;
   }
 }
 

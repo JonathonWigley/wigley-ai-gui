@@ -119,10 +119,13 @@ describe('chat drive actions', () => {
 
 // Chat's main part started on a harness whose sign-ins record their cancel
 // and whose processes record each message sent, with one profile, `work`, and
-// a data folder that cannot be read; sessions open rows `row-1`, `row-2`, ….
+// a data folder that cannot be read; sessions open rows `row-1`, `row-2`, …,
+// and an owned session's end emits `sessions.ended`, recorded in `ended`.
 // `invoke` calls the page channel's handler for `name`; `sent` holds each
 // channel message, `logged` each log line, and `starts` counts the harness's
-// process starts.
+// process starts. `processEvents` holds each process's events, by start, and
+// `holdProcessEnds` keeps every process's `end` pending until the function it
+// returns is called. Paths compare equal ignoring a trailing `/`.
 // `exports` is the part's main exports.
 function startChatPart() {
   const handlers = new Map<string, (...args: unknown[]) => unknown>();
@@ -131,26 +134,44 @@ function startChatPart() {
   const sent: { message: string; data: unknown }[] = [];
   const logged: string[] = [];
   const starts = { count: 0 };
+  const processEvents: {
+    ended: (exit: { code: number; error: string | null }) => void;
+  }[] = [];
+  let processEnd = Promise.resolve();
+  const holdProcessEnds = () => {
+    let release = () => undefined as void;
+    processEnd = new Promise((resolve) => {
+      release = resolve;
+    });
+    return release;
+  };
   const harness = {
     id: 'claude',
     logIn: () => ({ sendCode: () => undefined, cancel: cancelLogIn }),
-    start: () => {
+    start: (_options: unknown, events: (typeof processEvents)[number]) => {
       starts.count += 1;
+      processEvents.push(events);
       return {
         send: processSends,
-        end: () => Promise.resolve(),
+        end: () => processEnd,
         interrupt: () => undefined,
       };
     },
   };
+  const listeners = new Map<string, (data: unknown) => void>();
+  const ended: string[] = [];
   let rows = 0;
   const sessions = {
     contributeTools: () => undefined,
     open: () => {
       rows += 1;
+      const id = `row-${rows}`;
       return {
-        session: { id: `row-${rows}` },
-        end: () => undefined,
+        session: { id },
+        end: () => {
+          ended.push(id);
+          listeners.get('sessions.ended')?.({ sessionId: id });
+        },
         setHostSessionId: () => undefined,
       };
     },
@@ -163,7 +184,10 @@ function startChatPart() {
       send: (message: string, data: unknown) => sent.push({ message, data }),
     },
     events: {
-      on: () => ({ dispose: () => undefined }),
+      on: (name: string, listener: (data: unknown) => void) => {
+        listeners.set(name, listener);
+        return { dispose: () => undefined };
+      },
       emit: () => undefined,
     },
     settings: () => ({ profiles: [{ name: 'work', configDir: '/work' }] }),
@@ -172,6 +196,10 @@ function startChatPart() {
       agentHarnesses: [harness],
       randomUuid: () => 'host-1',
       clock: { now: () => 5000 },
+      paths: {
+        samePath: (a: string, b: string) =>
+          a.replace(/\/$/, '') === b.replace(/\/$/, ''),
+      },
       selfTest: null,
     },
     dependency: () => sessions,
@@ -201,6 +229,9 @@ function startChatPart() {
     sent,
     logged,
     starts,
+    processEvents,
+    holdProcessEnds,
+    ended,
   };
 }
 
@@ -319,6 +350,29 @@ describe('chat main part', () => {
     await chat.exports.clear('row-1');
 
     expect(chat.starts.count).toBe(2);
+  });
+
+  it("exports_CloseSessionsIn_EndsTheFolder'sSessions_ResolvesOnceTheyEnded", async () => {
+    const chat = startChatPart();
+    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    chat.invoke('start', { projectDir: '/q', profile: 'work' });
+    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    chat.processEvents[2]?.ended({ code: 0, error: null });
+    const releaseEnds = chat.holdProcessEnds();
+    let resolved = false;
+
+    const closing = chat.exports.closeSessionsIn('/p/').then(() => {
+      resolved = true;
+    });
+    await Promise.resolve();
+
+    expect(resolved).toBe(false);
+    expect(chat.ended).toEqual(['row-3']);
+    releaseEnds();
+    await closing;
+    expect(chat.ended).toEqual(['row-3', 'row-1']);
+    const listed = chat.invoke('sessions') as ChatSessionState[];
+    expect(listed.map((state) => state.sessionId)).toEqual(['row-2']);
   });
 
   it('dispose_SignInRunning_CancelsIt', async () => {

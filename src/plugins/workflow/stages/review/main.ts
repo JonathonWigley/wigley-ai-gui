@@ -12,6 +12,9 @@ export const reviewMainStage: MainStage = {
     }
     const startedReview =
       signal.type === 'skillStarted' && signal.skill === 'wigley:review';
+    // The bookkeeping fills a null or left-out reviewRoundsAtMake on every
+    // planChanged before the stage rules run; the fallback only satisfies the
+    // optional type.
     const loggedReviewRound =
       signal.type === 'planChanged' &&
       signal.progress.reviewRounds > (flow.reviewRoundsAtMake ?? 0);

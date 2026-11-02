@@ -301,9 +301,14 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     api.events.on('sessions.connected', (session) =>
       chat.sessionConnected(session),
     );
-    api.events.on('sessions.ended', ({ sessionId }) =>
-      chat.sessionEnded(sessionId),
-    );
+    // closeSessionsIn's waits, by session id: each resolves when its session
+    // ends.
+    const endWaits = new Map<string, () => void>();
+    api.events.on('sessions.ended', ({ sessionId }) => {
+      chat.sessionEnded(sessionId);
+      endWaits.get(sessionId)?.();
+      endWaits.delete(sessionId);
+    });
     api.events.on('sessions.selected', ({ sessionId }) =>
       chat.selected(sessionId),
     );
@@ -359,12 +364,21 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
         requireHeld(sessionId);
         chat.clear(sessionId);
       },
-      closeSessionsIn: (projectDir) => {
-        for (const held of chat.sessions()) {
-          if (held.projectDir === projectDir) {
-            chat.closed(held.sessionId);
-          }
+      closeSessionsIn: async (projectDir) => {
+        const closing = chat
+          .sessions()
+          .filter((held) =>
+            services.paths.samePath(held.projectDir, projectDir),
+          )
+          .map((held) => held.sessionId);
+        const ended = closing.map(
+          (sessionId) =>
+            new Promise<void>((resolve) => endWaits.set(sessionId, resolve)),
+        );
+        for (const sessionId of closing) {
+          chat.closed(sessionId);
         }
+        await Promise.all(ended);
       },
     };
     return {

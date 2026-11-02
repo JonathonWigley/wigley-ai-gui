@@ -20,8 +20,9 @@ export interface SessionFlow {
   // Null until the plan folder is read.
   progress: PlanProgress | null;
   // The plan's review rounds when make was last entered: review lights only on
-  // a round above it. Null when make was entered before the plan was read; the
-  // next read fills it. Left out (a flow saved before this field) counts as 0.
+  // a round above it. Null when make was entered before the plan was read, or
+  // the plan folder changed since; left out on a flow saved before this field.
+  // Either way the next read fills it.
   reviewRoundsAtMake?: number | null;
   turnRunning: boolean;
   // Agent ids the main agent spawned that have not finished.

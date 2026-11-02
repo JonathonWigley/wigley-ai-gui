@@ -136,10 +136,17 @@ const FOLD_ROWS: FoldRow[] = [
     expected: UNCHANGED,
   },
   {
-    name: 'fileWritten of a new plan moves planDir and drops progress',
-    flow: flowWith({ planDir: PLAN_X, progress: PROGRESS }),
+    name: 'fileWritten of a new plan moves planDir and drops progress and reviewRoundsAtMake',
+    flow: flowWith({
+      planDir: PLAN_X,
+      progress: PROGRESS,
+      reviewRoundsAtMake: 1,
+    }),
     signal: { type: 'fileWritten', path: '/r/docs/features/y/plan-b/plan.md' },
-    expected: flowWith({ planDir: '/r/docs/features/y/plan-b' }),
+    expected: flowWith({
+      planDir: '/r/docs/features/y/plan-b',
+      reviewRoundsAtMake: null,
+    }),
   },
   {
     name: 'fileWritten of the same plan keeps progress',
@@ -157,25 +164,25 @@ const FOLD_ROWS: FoldRow[] = [
     name: 'fileWritten with backslash separators',
     flow: flowWith({}),
     signal: { type: 'fileWritten', path: 'C:\\r\\plan-a\\plan.md' },
-    expected: flowWith({ planDir: 'C:\\r\\plan-a' }),
+    expected: flowWith({ planDir: 'C:\\r\\plan-a', reviewRoundsAtMake: null }),
   },
   {
     name: 'wigley:make of a plan folder moves planDir and drops progress',
     flow: flowWith({ planDir: '/r/plan-z', progress: PROGRESS }),
     signal: skill('wigley:make', '/r/plan-a'),
-    expected: flowWith({ planDir: '/r/plan-a' }),
+    expected: flowWith({ planDir: '/r/plan-a', reviewRoundsAtMake: null }),
   },
   {
     name: 'wigley:make of a plan folder with a trailing separator',
     flow: flowWith({ planDir: '/r/plan-z', progress: PROGRESS }),
     signal: skill('wigley:make', '/r/plan-a/'),
-    expected: flowWith({ planDir: '/r/plan-a' }),
+    expected: flowWith({ planDir: '/r/plan-a', reviewRoundsAtMake: null }),
   },
   {
     name: 'wigley:make of a plan.md',
     flow: flowWith({ planDir: '/r/plan-z', progress: PROGRESS }),
     signal: skill('wigley:make', '/r/plan-a/plan.md'),
-    expected: flowWith({ planDir: '/r/plan-a' }),
+    expected: flowWith({ planDir: '/r/plan-a', reviewRoundsAtMake: null }),
   },
   {
     name: 'wigley:make of a folder that is no plan changes nothing',
@@ -202,19 +209,35 @@ const FOLD_ROWS: FoldRow[] = [
   },
   {
     name: 'planChanged sets progress',
-    flow: flowWith({ planDir: PLAN_X }),
+    flow: flowWith({ planDir: PLAN_X, reviewRoundsAtMake: 0 }),
     signal: { type: 'planChanged', progress: PROGRESS },
-    expected: flowWith({ planDir: PLAN_X, progress: PROGRESS }),
+    expected: flowWith({
+      planDir: PLAN_X,
+      progress: PROGRESS,
+      reviewRoundsAtMake: 0,
+    }),
   },
   {
     name: 'planChanged with a changed task line replaces progress',
-    flow: flowWith({ planDir: PLAN_X, progress: PROGRESS }),
+    flow: flowWith({
+      planDir: PLAN_X,
+      progress: PROGRESS,
+      reviewRoundsAtMake: 0,
+    }),
     signal: { type: 'planChanged', progress: PROGRESS_RETITLED_TASK },
-    expected: flowWith({ planDir: PLAN_X, progress: PROGRESS_RETITLED_TASK }),
+    expected: flowWith({
+      planDir: PLAN_X,
+      progress: PROGRESS_RETITLED_TASK,
+      reviewRoundsAtMake: 0,
+    }),
   },
   {
     name: 'planChanged with an equal progress changes nothing',
-    flow: flowWith({ planDir: PLAN_X, progress: PROGRESS }),
+    flow: flowWith({
+      planDir: PLAN_X,
+      progress: PROGRESS,
+      reviewRoundsAtMake: 0,
+    }),
     signal: { type: 'planChanged', progress: structuredClone(PROGRESS) },
     expected: UNCHANGED,
   },
@@ -257,7 +280,12 @@ const FOLD_ROWS: FoldRow[] = [
     flow: flowWith({}),
     signal: { type: 'fileWritten', path: `${PLAN_X}/plan.md` },
     stages: WITH_PLAN_WATCHER,
-    expected: flowWith({ stage: 'd', hasLeftIdle: true, planDir: PLAN_X }),
+    expected: flowWith({
+      stage: 'd',
+      hasLeftIdle: true,
+      planDir: PLAN_X,
+      reviewRoundsAtMake: null,
+    }),
   },
   {
     name: 'a stage change stops the countdown',
@@ -331,6 +359,16 @@ const FOLD_ROWS: FoldRow[] = [
   {
     name: 'planChanged fills a null reviewRoundsAtMake',
     flow: flowWith({ planDir: PLAN_X, reviewRoundsAtMake: null }),
+    signal: { type: 'planChanged', progress: PROGRESS },
+    expected: flowWith({
+      planDir: PLAN_X,
+      progress: PROGRESS,
+      reviewRoundsAtMake: 1,
+    }),
+  },
+  {
+    name: 'planChanged fills a reviewRoundsAtMake left out (a flow saved before the field)',
+    flow: flowWith({ planDir: PLAN_X }),
     signal: { type: 'planChanged', progress: PROGRESS },
     expected: flowWith({
       planDir: PLAN_X,

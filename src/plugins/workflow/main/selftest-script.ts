@@ -244,8 +244,9 @@ function runProblems(
 
 // Each run first undoes what an earlier run left: the fake's plan under the
 // project's `docs`, an auto-start `settings.json`, every session still open in
-// the project and the flows of the project's sessions. It then launches one session in
-// the project, counting the main turn ends main hears until the next run
+// the project, waiting for their rows to go so the new row takes the first
+// label, and the flows of the project's sessions. It then launches one session
+// in the project, counting the main turn ends main hears until the next run
 // opens. The fake writes, ticks and deletes the plan itself; problems reads
 // its records, which the steps keep changing in place, when it runs.
 export function workflowSelfTestScript(
@@ -274,7 +275,7 @@ export function workflowSelfTestScript(
       }
     }
     await files.write(path.join(homeDir, SETTINGS_FILE), NO_SETTINGS);
-    chat.closeSessionsIn(project);
+    await chat.closeSessionsIn(project);
     hooks.forgetFlows(project);
   }
 
