@@ -107,9 +107,10 @@ export interface ChatSessions {
   // missing or the start fails; the row then stays resting. A restored row
   // whose earlier conversation is still pending has it read before the start,
   // so the read holds none of this turn. After `killAll` a resting session
-  // starts no process and the message is dropped. While a turn runs the
-  // message is queued instead, and each `idle` the harness reports writes the
-  // oldest queued message until none is left.
+  // starts no process and the message is dropped. While the harness reports
+  // its turn running the message is queued instead, and each `idle` the
+  // harness reports writes the oldest queued message until none is left; a
+  // permission call left waiting after the turn ended queues nothing.
   send(sessionId: string, message: UserMessage): Promise<void>;
   // Adds an app notice to the session's entries and sends it as harness
   // entries travel, so `sessions()` keeps it.
@@ -746,7 +747,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       return;
     }
     const isTurnRunning =
-      session.state.running && session.state.activity !== 'idle';
+      session.state.running && session.harnessActivity !== 'idle';
     if (isTurnRunning) {
       queue(session, message);
       return;

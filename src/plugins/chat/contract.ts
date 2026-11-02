@@ -111,8 +111,10 @@ export interface ChatChannel extends ChannelShape {
     // Starts a resting session's process first; rejects, leaving it resting,
     // when its profile is missing or the start fails. A restored session's
     // earlier conversation still pending is read first, arriving as
-    // `entries`. While the session's turn runs the message is queued, arriving
-    // as `queued`, and written to the agent when the turns before it end.
+    // `entries`. While the agent reports the session's turn running the
+    // message is queued, arriving as `queued`, and written to the agent when
+    // the turns before it end; a permission call left waiting after its turn
+    // ended queues nothing.
     send(sessionId: string, message: UserMessage): Promise<void>;
     // Reads a restored session's earlier conversation, arriving as `entries`.
     // While its profile is missing a call reads nothing and a later call

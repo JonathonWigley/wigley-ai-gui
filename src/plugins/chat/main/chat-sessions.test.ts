@@ -1025,6 +1025,23 @@ describe('createChatSessions', () => {
     expect(test.chat.sessions()[0].queued).toEqual(queued);
   });
 
+  it('send_HarnessIdleWithPermissionWaiting_WritesAtOnce', async () => {
+    const test = await started();
+    void test.chat
+      .permissionToolSession(test.agentSession)
+      .call('permission_prompt', BASH_ARGS, {
+        toolUseId: null,
+        signal: signal().signal,
+      });
+    const message: UserMessage = { text: 'go on', images: [] };
+
+    test.chat.send(ROW_ID, message);
+
+    expect(test.chat.sessions()[0].activity).toBe('waiting');
+    expect(test.process.calls).toEqual([sendCall(message)]);
+    expect(test.sent('queued')).toEqual([]);
+  });
+
   it('activityIdle_Queued_WritesOneEachIdleAndAlertsAfterTheLast', async () => {
     const test = await started();
     test.setFocused(false);

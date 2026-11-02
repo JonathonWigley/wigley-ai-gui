@@ -209,4 +209,5 @@ Review base: 7f62c7d
 - ChatTabs gains heldName(sessionId) for the no-box log — needed to name the tab — small surface if unwanted · group 03 · group 03
 - returned for a session with no tab logs 'returned for unknown session <id> ignored' like other listeners, not silent — matches pattern — one log line · group 03 · group 03
 - G and a following focus land on the newest pending row when any exist, overriding the open-last-activity-line hold — stops end with pending rows — a following user sees pending rows instead of the open activity line · group 03 · group 03
+- Queue only while the harness's own turn runs (harnessActivity !== 'idle'), not while the shown activity is not idle — the fake leaves a permission card waiting after its turn goes idle, so the shown-activity rule queued sends behind it and stranded them (no drain fires when the card settles; a later direct send overtook them: 12 self-test failures); a real Claude turn waiting on a permission still reports working, so it still queues as the plan decided — if Claude ever reports idle with a card waiting, a send then goes straight to the process · lead
 
