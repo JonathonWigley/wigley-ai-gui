@@ -59,6 +59,8 @@ interface SessionContext<Form, Body, Payload> {
   // The app's id for the session, which every form it shows carries.
   sessionId: string;
   info: AgentFormOwnerInfo;
+  // The host id the open and last finished forms were made under.
+  formsHostId: string | null;
   deadlineSeconds: number;
   type: AgentFormType<Form, Body, Payload>;
   presenter: AgentFormPresenter<Form, Body>;
@@ -323,6 +325,21 @@ function closeOpenForm<Form, Body, Payload>(
   wakeWaiters(open);
 }
 
+// After the host moves the session to a new id, as `/clear` does, the forms
+// made under the old id leave it as on a disconnect: an unfinished one leaves
+// the window with its file open, a finished one stays unreturned on disk.
+function leaveFormsOfPastHost<Form, Body, Payload>(
+  session: SessionContext<Form, Body, Payload>,
+): void {
+  const hostId = session.info.sessionId;
+  if (session.formsHostId === hostId) {
+    return;
+  }
+  session.formsHostId = hostId;
+  session.lastFinished = null;
+  closeOpenForm(session);
+}
+
 function formListener<Form, Body, Payload>(
   session: SessionContext<Form, Body, Payload>,
   open: OpenForm<Form, Body>,
@@ -435,6 +452,7 @@ async function openParsedForm<Form, Body, Payload>(
   host: AbortSignal = signal,
 ): Promise<Payload> {
   requireLiveCaller(session, signal);
+  leaveFormsOfPastHost(session);
   const open = session.open;
   if (open !== null && open.record.fingerprint === formFingerprint) {
     return presentOpen(session, open, session.deadlineSeconds, signal, host);
@@ -522,6 +540,7 @@ function queuedDeadlinePayload<Form, Body, Payload>(
   form: Form,
   formFingerprint: string,
 ): Payload {
+  leaveFormsOfPastHost(session);
   const open = session.open;
   if (open !== null && open.record.fingerprint === formFingerprint) {
     return openFormPayload(session, open);
@@ -596,6 +615,7 @@ async function openFormQueuedOrNow<Form, Body, Payload>(
 ): Promise<Payload> {
   const form = session.type.parse(args);
   const formFingerprint = session.type.fingerprint(form);
+  leaveFormsOfPastHost(session);
   const runsNow =
     earlier === null && otherUnfinishedForm(session, formFingerprint) === null;
   if (runsNow) {
@@ -667,6 +687,7 @@ async function collectLastForm<Form, Body, Payload>(
   wait: boolean,
   signal: AbortSignal,
 ): Promise<Payload> {
+  leaveFormsOfPastHost(session);
   const open = session.open;
   if (open !== null) {
     const seconds = wait ? session.deadlineSeconds : 0;
@@ -692,6 +713,7 @@ function startSession<Form, Body, Payload>(
   const session: SessionContext<Form, Body, Payload> = {
     sessionId: owner.id,
     info,
+    formsHostId: info.sessionId,
     deadlineSeconds: deadlineSeconds(info, deps.defaultDeadlineSeconds()),
     type: deps.type,
     presenter: deps.presenter,

@@ -1231,3 +1231,79 @@ describe('a session that ends', () => {
     expect(presenter.closed).toEqual([]);
   });
 });
+
+describe('a session moved to a new host id', () => {
+  // A session whose host id `moveHost` changes in place, as `/clear` does.
+  function startMovableSession() {
+    const info: AgentFormOwnerInfo = { ...SESSION };
+    const session = createAgentFormService({
+      type: TEST_FORM_TYPE,
+      presenter,
+      store,
+      defaultDeadlineSeconds: () => DEFAULT_DEADLINE_SECONDS,
+    }).startSession({ id: 'app-1', info });
+    const moveHost = () => {
+      info.sessionId = 'session-2';
+    };
+    return { session, moveHost };
+  }
+
+  it.each([
+    {
+      case: 'submitted after the move',
+      finishBeforeMove: false,
+    },
+    {
+      case: 'already returned before the move',
+      finishBeforeMove: true,
+    },
+  ])(
+    'never returns a form of the old host id to collect: $case',
+    async ({ finishBeforeMove }) => {
+      const { session, moveHost } = startMovableSession();
+      const asking = session.open(NAMING_ARGS, null, live());
+      const shown = presenter.latest();
+      if (finishBeforeMove) {
+        presenter.submit(shown.formId, body('choice 1'));
+        await asking;
+        moveHost();
+      } else {
+        await expireDeadline();
+        await asking;
+        moveHost();
+        presenter.submit(shown.formId, body('choice 1'));
+      }
+
+      const collected = await session.collect(false, live());
+
+      expect(collected.outcome).toBe('no_form');
+      expect(savedFile(shown.formId)).toMatchObject({
+        outcome: 'submitted',
+        returned: finishBeforeMove,
+        session_id: 'session-1',
+      });
+    },
+  );
+
+  it('opens a new form under the new id, leaving an unfinished old form open on disk', async () => {
+    const { session, moveHost } = startMovableSession();
+    const asking = session.open(NAMING_ARGS, null, live());
+    const old = presenter.latest();
+    presenter.draft(old.formId, body('half'));
+    moveHost();
+
+    void session.open(PLACEMENT_ARGS, null, live());
+
+    expect((await asking).outcome).toBe('draft');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(presenter.closed).toEqual([old.formId]);
+    expect(savedFile(old.formId)).toMatchObject({
+      outcome: 'open',
+      session_id: 'session-1',
+    });
+    expect(savedFile(presenter.latest().formId)).toMatchObject({
+      fingerprint: fingerprintOf(PLACEMENT_ARGS),
+      session_id: 'session-2',
+    });
+  });
+});
