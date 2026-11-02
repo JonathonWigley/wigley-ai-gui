@@ -236,6 +236,7 @@ describe('workflowMainPart', () => {
       ['clear', 's1'],
       ['send', 's1', `/wigley:make ${PLAN_DIR}`],
     ]);
+    expect(workflow.logs).toContainEqual(['workflow', 'ran clearAndMake in r']);
   });
 
   it.each([

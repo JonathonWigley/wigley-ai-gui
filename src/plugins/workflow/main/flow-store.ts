@@ -11,7 +11,7 @@ export const FLOWS_FILE = 'flows.json';
 // The open sessions' flows, and every flow saved in `flows.json`, keyed by
 // host session id (a row id is fresh on each launch). `load` reads the file
 // once; a flow read from it runs no turn, no subagent and no countdown.
-// `put`, `rekey`, `drop`, `open` and `resetFlows` each write the whole file,
+// `put`, `rekey`, `drop`, `open` and `forgetFlows` each write the whole file,
 // one write after another in call order; a write that fails is logged and the
 // next change writes again. `rekey`, `put` and `drop` ignore a session the
 // store does not hold. A saved entry no open session took stays in the file.
@@ -36,9 +36,9 @@ export interface FlowStore {
   put(flow: SessionFlow): void;
   // Forgets the session's flow and its saved entry.
   drop(sessionId: string): void;
-  // Every open flow in `projectDir` becomes a new flow, and every saved entry
-  // in it no open session holds is removed.
-  resetFlows(projectDir: string): void;
+  // Forgets every flow in `projectDir`, open and saved alike; returns the
+  // session ids of the open ones forgotten.
+  forgetFlows(projectDir: string): string[];
 }
 
 interface OpenFlow {
@@ -144,26 +144,24 @@ export function createFlowStore(deps: {
       saved.delete(held.hostSessionId);
       write();
     },
-    resetFlows(projectDir) {
+    forgetFlows(projectDir) {
       const inFolder = (flow: SessionFlow) =>
         paths.samePath(flow.projectDir, projectDir);
-      const openHostIds = new Set<string>();
+      const forgotten: string[] = [];
       for (const [sessionId, held] of opened) {
-        openHostIds.add(held.hostSessionId);
         if (inFolder(held.flow)) {
-          hold(
-            sessionId,
-            held.hostSessionId,
-            newFlow(sessionId, held.flow.projectDir),
-          );
+          opened.delete(sessionId);
+          saved.delete(held.hostSessionId);
+          forgotten.push(sessionId);
         }
       }
       for (const [hostSessionId, flow] of saved) {
-        if (!openHostIds.has(hostSessionId) && inFolder(flow)) {
+        if (inFolder(flow)) {
           saved.delete(hostSessionId);
         }
       }
       write();
+      return forgotten;
     },
   };
 }

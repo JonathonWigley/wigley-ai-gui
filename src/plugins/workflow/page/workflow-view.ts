@@ -25,6 +25,7 @@ import type {
   StripInput,
 } from '../layouts/layout';
 import type { PlanProgress } from '../plan-reader';
+import { createStageList, type StageList } from '../stage-list';
 import { countdownText } from './countdown';
 import {
   createWorkflowParts,
@@ -464,31 +465,9 @@ function waves(progress: PlanProgress): PlanWaveInput[] {
   }));
 }
 
-// The page halves in stage order, ascending, a half of an order already held
-// placed after it. `add` throws `stage <id> is already added` on a held id;
-// its dispose removes the half.
-export interface PageStageList extends PageStages {
-  add(stage: PageStage): Disposable;
-}
+// The page halves in stage order: the shared stage list over page halves.
+export type PageStageList = StageList<PageStage>;
 
 export function createPageStageList(): PageStageList {
-  const stages: PageStage[] = [];
-  return {
-    all: () => stages,
-    add(stage) {
-      if (stages.some((held) => held.id === stage.id)) {
-        throw new Error(`stage ${stage.id} is already added`);
-      }
-      const at = stages.findIndex((held) => held.order > stage.order);
-      stages.splice(at === -1 ? stages.length : at, 0, stage);
-      return {
-        dispose() {
-          const index = stages.indexOf(stage);
-          if (index !== -1) {
-            stages.splice(index, 1);
-          }
-        },
-      };
-    },
-  };
+  return createStageList<PageStage>();
 }

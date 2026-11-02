@@ -20,6 +20,7 @@ import type {
 } from '../contract';
 import { foldFlow, isPlanFile } from '../flow';
 import { workflowManifest } from '../manifest';
+import { createStageList } from '../stage-list';
 import { BUILT_IN_MAIN_STAGES } from '../stages';
 import { createWorkflowActions } from './actions';
 import { signalOf } from './agent-signals';
@@ -58,7 +59,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     const { services, channel, events } = api;
     const { log, clock } = services;
     const chat = api.dependency<ChatMainExports>('chat');
-    const stages: MainStage[] = [];
+    const stages = createStageList<MainStage>();
     const store = createFlowStore({
       files: api.data,
       log,
@@ -80,7 +81,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
 
     const sendFlows = () => channel.send('flows', store.all());
     const stageOf = (flow: SessionFlow) =>
-      stages.find((stage) => stage.id === flow.stage);
+      stages.all().find((stage) => stage.id === flow.stage);
 
     const planWatch = createPlanWatch({
       files: services.files,
@@ -129,7 +130,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       if (flow === null) {
         return;
       }
-      const folded = foldFlow(flow, signal, stages);
+      const folded = foldFlow(flow, signal, stages.all());
       if (signal.type === 'turnEnded') {
         planWatch.check(sessionId);
       }
@@ -163,26 +164,20 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       if (command === undefined) {
         return;
       }
-      actions.run(sessionId, command).catch((error: unknown) => {
-        log('workflow', `auto-start failed: ${errorText(error)}`);
-      });
-    }
-
-    const addStage = (stage: MainStage): Disposable => {
-      if (stages.some((held) => held.id === stage.id)) {
-        throw new Error(`Workflow stage ${stage.id} is already added`);
-      }
-      const at = stages.findIndex((held) => held.order > stage.order);
-      stages.splice(at === -1 ? stages.length : at, 0, stage);
-      return {
-        dispose: () => {
-          const index = stages.indexOf(stage);
-          if (index !== -1) {
-            stages.splice(index, 1);
+      const name = services.paths.base(flow.projectDir);
+      actions.run(sessionId, command).then(
+        (ran) => {
+          if (ran) {
+            log('workflow', `ran ${command} in ${name}`);
           }
         },
-      };
-    };
+        (error: unknown) => {
+          log('workflow', `auto-start failed: ${errorText(error)}`);
+        },
+      );
+    }
+
+    const addStage = (stage: MainStage) => stages.add(stage);
     for (const stage of BUILT_IN_MAIN_STAGES) {
       addStage(stage);
     }
@@ -262,24 +257,19 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
 
     channel.handle('flows', () => ready.then(() => store.all()));
     channel.handle('runAction', ({ sessionId, command }) =>
-      ready.then(() => actions.run(sessionId, command)),
+      ready.then(async () => {
+        await actions.run(sessionId, command);
+      }),
     );
     void ready.then(sendFlows);
 
     if (services.selfTest !== null) {
       const selfTestHooks: WorkflowSelfTestHooks = {
         forgetFlows(projectDir) {
-          const forgotten = store
-            .all()
-            .filter((flow) =>
-              services.paths.samePath(flow.projectDir, projectDir),
-            );
-          for (const { sessionId } of forgotten) {
+          for (const sessionId of store.forgetFlows(projectDir)) {
             countdown.stop(sessionId);
             planWatch.follow(sessionId, null);
-            store.drop(sessionId);
           }
-          store.resetFlows(projectDir);
           sendFlows();
         },
         onMainTurnEnded(listener) {

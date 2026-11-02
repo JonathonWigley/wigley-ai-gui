@@ -86,8 +86,9 @@ describe('createWorkflowActions', () => {
   ])('$command', async ({ command, calls, signals }) => {
     const subject = startActions(PLANNED);
 
-    await subject.actions.run('s1', command);
+    const ran = await subject.actions.run('s1', command);
 
+    expect(ran).toBe(true);
     expect(subject.calls).toEqual(calls);
     expect(subject.signals).toEqual(signals);
   });
@@ -145,8 +146,9 @@ describe('createWorkflowActions', () => {
   )('$command with $busy does nothing', async ({ command, flow }) => {
     const subject = startActions(flow);
 
-    await subject.actions.run('s1', command);
+    const ran = await subject.actions.run('s1', command);
 
+    expect(ran).toBe(false);
     expect(subject.calls).toEqual([]);
     expect(subject.logs).toEqual([
       expect.stringMatching(new RegExp(`^${command}\\b.* s1\\b`)),

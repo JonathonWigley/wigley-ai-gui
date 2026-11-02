@@ -105,21 +105,27 @@ describe('createFlowStore', () => {
     expect(store.get('s1')).toBeNull();
   });
 
-  it('resetFlows_ResetsOpenFlowsInTheFolder_AndRemovesUnopenedOnes', async () => {
+  it('forgetFlows_ForgetsOpenAndSavedFlowsInTheFolder_KeepsOthers', async () => {
     const unopenedR = { ...newFlow('s-x', '/r'), stage: 'feature' };
+    const unopenedQ = { ...newFlow('s-y', '/q'), stage: 'feature' };
     const { store, saved } = await loadStore(
-      flowsFile([{ hostSessionId: 'h-x', flow: unopenedR }]),
+      flowsFile([
+        { hostSessionId: 'h-x', flow: unopenedR },
+        { hostSessionId: 'h-y', flow: unopenedQ },
+      ]),
     );
-    const inR = { ...store.open('s1', 'h1', '/r'), stage: 'make' };
+    store.open('s1', 'h1', '/r');
     const inQ = { ...store.open('s2', 'h2', '/q'), stage: 'make' };
-    store.put(inR);
+    store.open('s3', 'h3', '/r');
     store.put(inQ);
 
-    store.resetFlows('/r/');
+    const forgotten = store.forgetFlows('/r/');
 
-    expect(store.all()).toEqual([newFlow('s1', '/r'), inQ]);
+    expect(forgotten).toEqual(['s1', 's3']);
+    expect(store.all()).toEqual([inQ]);
+    expect(store.get('s1')).toBeNull();
     expect((await saved()).flows).toEqual([
-      { hostSessionId: 'h1', flow: newFlow('s1', '/r') },
+      { hostSessionId: 'h-y', flow: unopenedQ },
       { hostSessionId: 'h2', flow: inQ },
     ]);
   });

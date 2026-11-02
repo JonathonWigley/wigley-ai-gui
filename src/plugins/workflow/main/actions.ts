@@ -19,10 +19,11 @@ const IDLE_ONLY_COMMANDS = new Set(['clearAndMake', 'resumeMake', 'retro']);
 // The main-side workflow commands. `run` rejects, with the text the page
 // toasts, for an unknown command, a session with no flow, a plan command on a
 // flow with no plan, and a chat call that rejects; a plan command checks the
-// plan before any chat call. An idle-only command on a busy flow is logged and
-// resolves having done nothing.
+// plan before any chat call. It resolves true once the command ran; an
+// idle-only command on a busy flow is logged and resolves false, having done
+// nothing.
 export function createWorkflowActions(deps: WorkflowActionsDeps): {
-  run(sessionId: string, command: string): Promise<void>;
+  run(sessionId: string, command: string): Promise<boolean>;
 } {
   const { chat } = deps;
 
@@ -72,9 +73,10 @@ export function createWorkflowActions(deps: WorkflowActionsDeps): {
           'workflow',
           `${command} not run in session ${sessionId}: the session is busy`,
         );
-        return;
+        return false;
       }
       await action(sessionId, flow);
+      return true;
     },
   };
 }
