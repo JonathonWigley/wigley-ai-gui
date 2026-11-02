@@ -1246,6 +1246,87 @@ describe('createFakeAgentHarness workflow', () => {
     expect(changed).toEqual([]);
   });
 
+  // Files whose writes and trashes land at once until `hold()`, then wait in
+  // `pending` until the test settles them.
+  function holdableFiles() {
+    let isHeld = false;
+    const pending: { resolve: () => void; reject: (error: Error) => void }[] =
+      [];
+    const change = () =>
+      isHeld
+        ? new Promise<void>((resolve, reject) =>
+            pending.push({ resolve, reject }),
+          )
+        : Promise.resolve();
+    return {
+      files: { write: change, trash: change },
+      pending,
+      hold: () => {
+        isHeld = true;
+      },
+    };
+  }
+
+  const makeSteps = [
+    FAKE_WORKFLOW_FEATURE_TEXT,
+    `/wigley:make ${planDir}`,
+    FAKE_WORKFLOW_STEP_TEXT,
+    FAKE_WORKFLOW_STEP_TEXT,
+  ];
+
+  it.each([
+    {
+      case: 'featureWriteLands',
+      landed: [],
+      held: FAKE_WORKFLOW_FEATURE_TEXT,
+      settle: (change: { resolve: () => void }) => change.resolve(),
+    },
+    {
+      case: 'featureWriteRejects',
+      landed: [],
+      held: FAKE_WORKFLOW_FEATURE_TEXT,
+      settle: (change: { reject: (error: Error) => void }) =>
+        change.reject(new Error('disk full')),
+    },
+    {
+      case: 'makeTrashLands',
+      landed: makeSteps,
+      held: FAKE_WORKFLOW_STEP_TEXT,
+      settle: (change: { resolve: () => void }) => change.resolve(),
+    },
+    {
+      case: 'makeTrashRejects',
+      landed: makeSteps,
+      held: FAKE_WORKFLOW_STEP_TEXT,
+      settle: (change: { reject: (error: Error) => void }) =>
+        change.reject(new Error('disk full')),
+    },
+  ])(
+    'workflowChange_EndBeforeItSettles_EmitsNothingAfterSessionEnded ($case)',
+    async ({ landed, held, settle: settleChange }) => {
+      const { files, pending, hold } = holdableFiles();
+      const { agent, timeline } = await startedProcess(files);
+      for (const text of landed) {
+        agent.send({ text, images: [] });
+        await settle();
+      }
+      hold();
+      agent.send({ text: held, images: [] });
+      await settle();
+      expect(pending).toHaveLength(1);
+
+      await agent.end();
+      settleChange(pending[0]);
+      await settle();
+
+      const lines = timeline.map(timelineLine);
+      expect(lines.slice(lines.indexOf('sessionEnded'))).toEqual([
+        'sessionEnded',
+        'ended',
+      ]);
+    },
+  );
+
   it('workflowWrite_Rejects_EndsTheTurnWithANotice', async () => {
     const { agent, heard, agentEvents } = await startedProcess({
       write: async () => {
