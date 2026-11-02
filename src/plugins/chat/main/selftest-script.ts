@@ -152,6 +152,18 @@ const RESTING_SESSION_STEPS: SelfTestStep[] = [
   { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
 ];
 
+// Clears the second session: a clear in the first would replace the process
+// whose calls the run checks at its end.
+const CLEAR_STEPS: SelfTestStep[] = [
+  { keys: ['<A-S-i>'], expect: '[chat] Chat tab shown in chat-second' },
+  {
+    keys: sendKeys('/clear'),
+    expect: '[chat] conversation cleared in chat-second',
+    checksFit: true,
+  },
+  { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
+];
+
 const SENDING_STEPS: SelfTestStep[] = [
   {
     keys: sendKeys('hello'),
@@ -482,6 +494,11 @@ const GROUPS: SelfTestGroup[] = [
     name: 'resting session',
     why: "fake: end leaves the second session resting in its row, where the box's control keys log that no process runs, Esc still leaves the box, j still moves through the entries, and the next message starts the process again in place.",
     steps: RESTING_SESSION_STEPS,
+  },
+  {
+    name: 'clear',
+    why: '/clear in the second session empties its Chat tab to one notice and restarts its agent.',
+    steps: CLEAR_STEPS,
   },
   {
     name: 'sending',

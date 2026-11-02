@@ -23,6 +23,7 @@ import {
 } from './chat-commands';
 import { createCloseConfirm, createReasonBox } from './chat-dialogs';
 import { createChatLayouts } from './chat-layouts';
+import { addClearCommands } from './clear-commands';
 import { mountChatView } from './chat-view';
 import { createImageViewer } from './image-viewer';
 import { createPicker } from './picker';
@@ -111,6 +112,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       signIn,
       channel: api.channel,
     });
+    addClearCommands({ commands: slashCommands, channel: api.channel });
     const picker = createPicker({
       ...partDeps,
       overlay: api.areas.overlay,
