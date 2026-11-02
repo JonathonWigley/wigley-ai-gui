@@ -197,24 +197,35 @@ interview on 2026-10-23; this file is the record of both.
   - Permission prompts, notices and the turn result stay entries of their own, and each ends the run before it.
   - The key log lines are `focused activity line`, `expanded activity line` and `collapsed activity line`; a step row
     logs as its entry kind does (`focused tool entry`).
-- **Pending messages**: a message sent while the session's turn runs (activity `working` or `waiting`) is not
-  written to the agent. Chat main holds it in the session's queue (`ChatSessionState.queued`, oldest first, each with
-  an id of its own; kept across a page reload, dropped on quit), and the Chat tab shows it as a pending row after the
-  last entry, drawn by the layout's `queuedMessage` part: dim, labelled `pending`. The code names these **queued**
+- **Pending messages**: a message sent while the harness reports the session's turn running (the process runs and
+  its own activity is not `idle`) is not written to the agent. A permission call left waiting after the turn ended
+  queues nothing; a running turn waiting on a permission still queues. Chat main holds the message in the session's
+  queue (`ChatSessionState.queued`, oldest first, each with an id of its own; kept across a page reload, dropped on
+  quit), and the Chat tab shows it as a pending row after the last entry, drawn by the layout's `queuedMessage` part:
+  dim, with a `pending` label on its own line above the text (`pending · 2 images` when it carries images). The code names these **queued**
   messages, after claude-stream.md § Queued messages, since `pending` already names chat main's permission calls and a
   restored session's unread history.
-  - **Sending**: when the harness reports the turn ended (activity `idle`), chat main writes the oldest queued message
-    to the agent, and it joins the transcript as its user entry then, at the place it really ran. Each queued message
-    runs as its own turn, in the order sent. The session keeps showing `working` until the queue is empty, so the
-    turn-finished alert fires once, after the last one.
-  - **Pulling back**: a pending row is a cursor stop after the last entry: `j` / `k` reach it, and Enter or a click on
-    it pulls it back; `<Leader>cp` in the box pulls back the newest. Pulling back takes the message out of the queue
-    and puts it into the box the way a refused message goes back: its text on its own line above anything typed, its
-    images ahead of any attached. A pull-back for a message already written to the agent does nothing and logs
-    `queued message <id> already sent`.
-  - **Interrupt and exit**: Ctrl+C interrupts the running turn and pulls back every queued message, oldest at the top
-    of the box. A process that exits pulls them all back the same way, so nothing is written to a process started
-    later without the user sending it again.
+  - **Sending**: when the harness reports the turn ended (activity `idle`) and a message is queued, chat main writes
+    the oldest queued message to the agent and swallows that `idle`: the activity the session shows does not change,
+    so it shows no idle between turns. The message joins the transcript as its user entry then, at the place it really
+    ran. Each queued message runs as its own turn, in the order sent, so the turn-finished alert fires once, after the
+    last one. A write that throws leaves the message at the head of the queue and logs
+    `queued message <id> not sent: <error>`.
+  - **Pulling back**: a pending row is a cursor stop after the last entry, so `G` and a following focus land on the
+    newest pending row when any exist. Three routes pull a message back: Enter on the focused row, a click on it, and
+    `<Leader>cp` in the box, which pulls back the newest. Each logs `pulling back a pending message in <session>`
+    (`no pending message in <session>` for `<Leader>cp` with none). Main takes the message out of the queue and returns
+    it, and the page puts it into the box the way a refused message goes back: its text on its own line above
+    anything typed, its images ahead of any attached. `putBack` returns whether the box took the messages, and each
+    caller logs its own line: `pulled back <n> message(s) in <session>`, or `put the refused message back in
+    <session>` for a refused send. A pull-back for a message already written to the agent does nothing and logs
+    `queued message <id> already sent`. A `returned` for a session with no tab logs
+    `returned for unknown session <id> ignored`; for a held session with no box, `returned for <session> dropped: no
+    box`. The key log lines are `focused pending message` for `j` / `k` onto a pending row and
+    `following the latest entry` for `G`.
+  - **Interrupt and exit**: Ctrl+C returns every queued message, oldest first, then interrupts the running turn;
+    the oldest ends at the top of the box. A process that exits returns them all the same way, so nothing is
+    written to a process started later without the user sending it again.
   - App slash commands run at once, working or not, and never queue; the agent's slash commands queue like any
     message.
 - **Saved sessions**: every session chat runs — started, resumed, or launched by another plugin — is saved in

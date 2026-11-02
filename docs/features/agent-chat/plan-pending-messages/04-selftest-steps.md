@@ -1,6 +1,6 @@
 # 04 — Self-test steps
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 03
 Plan: [plan.md](plan.md)
@@ -24,3 +24,5 @@ Done when: compiles; `npm run lint` passes; the self-test runs green with the ne
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 0b150ee + fix 9e86eaa · proof: self-test green after the queue-rule fix (793 pass, 0 fail); typecheck and lint clean · concerns: queue rule read shown activity and stranded sends behind a leftover permission card (fixed in 9e86eaa, lead ruling); G logs 'following the latest entry' not 'focused pending message'; composer working flag still reads shown activity while a leftover card waits
