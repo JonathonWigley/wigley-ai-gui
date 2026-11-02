@@ -148,7 +148,10 @@ function startChatPart() {
         handlers.set(name, handler),
       send: (message: string, data: unknown) => sent.push({ message, data }),
     },
-    events: { on: () => ({ dispose: () => undefined }) },
+    events: {
+      on: () => ({ dispose: () => undefined }),
+      emit: () => undefined,
+    },
     settings: () => ({ profiles: [{ name: 'work', configDir: '/work' }] }),
     services: {
       log: (_plugin: string, line: string) => logged.push(line),
