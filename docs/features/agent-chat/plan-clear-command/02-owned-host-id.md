@@ -1,6 +1,6 @@
 # 02 — Owned session host id change
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -40,3 +40,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit d79c347 + fmt f12ceae · proof: diff read: setHostSessionId, hostSessionChanged, sessionHostChanged, rowChanges.changed present; typecheck and lint clean; 609 wave-1 tests pass · concerns: chat-sessions.test.ts OwnedSession double (task 01's file) needed setHostSessionId, added by 01's worker on the lead's note; worker ran npx --version once (nothing installed)

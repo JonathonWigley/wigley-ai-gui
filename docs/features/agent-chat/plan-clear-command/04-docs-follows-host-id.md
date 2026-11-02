@@ -1,6 +1,6 @@
 # 04 — Docs source and notes follow the host id
 
-Status: not started
+Status: in progress
 Type: Batch
 Wave: 2 · Depends on: 02
 Plan: [plan.md](plan.md)

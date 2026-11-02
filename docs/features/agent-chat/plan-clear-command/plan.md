@@ -141,8 +141,8 @@ Shared names (word for word across tasks):
 > the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Control values at launch](01-control-values-at-launch.md)
-- [ ] [Owned session host id change](02-owned-host-id.md)
+- [x] [Control values at launch](01-control-values-at-launch.md)
+- [x] [Owned session host id change](02-owned-host-id.md)
 
 ### Wave 2
 - [ ] [Chat main clear](03-chat-main-clear.md) — after 01, 02
@@ -157,10 +157,16 @@ Shared names (word for word across tasks):
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 54aed2e
 
 ### Groups
+- 01 · 446d54e + fmt f12ceae · diff read: AgentStart.controls present; typecheck and lint clean; 609 wave-1 tests pass · concerns: test line numbers drifted from plan (3 extra toEqual literals needed controls: {}); claudeLaunch destructures Record<string,string> without noUncheckedIndexedAccess (runtime-correct); design.md:73 still shows --permission-mode auto (true for no held mode)
+- 02 · d79c347 + fmt f12ceae · diff read: setHostSessionId, hostSessionChanged, sessionHostChanged, rowChanges.changed present; typecheck and lint clean; 609 wave-1 tests pass · concerns: chat-sessions.test.ts OwnedSession double (task 01's file) needed setHostSessionId, added by 01's worker on the lead's note; worker ran npx --version once (nothing installed)
 ### Contract changes
 ### Rulings
+- fake startingControls(launchValues) takes request.controls; launch value replaces the fixed starting value — keeps the rule in the function the task names — small move if wrong · group 01
+- setHostSessionId on a live session whose row was closed updates info and sends no state, as end does — a missing row means no state change — none lost · group 02
+- setHostSessionId(currentId) skips the self-holding check and still emits — harmless — one extra event · group 02
+- drive's started map typed StartedSession = Pick<OwnedSession,'session'|'end'> since it also holds ConnectedSession — avoids stubbing connected handles — none · group 02
 ### Review rounds
 ### Test gate

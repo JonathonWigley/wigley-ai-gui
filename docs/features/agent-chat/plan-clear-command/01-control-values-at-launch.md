@@ -1,6 +1,6 @@
 # 01 — Control values at launch
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -40,3 +40,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 446d54e + fmt f12ceae · proof: diff read: AgentStart.controls present; typecheck and lint clean; 609 wave-1 tests pass · concerns: test line numbers drifted from plan (3 extra toEqual literals needed controls: {}); claudeLaunch destructures Record<string,string> without noUncheckedIndexedAccess (runtime-correct); design.md:73 still shows --permission-mode auto (true for no held mode)
