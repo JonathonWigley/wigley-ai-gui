@@ -1067,6 +1067,54 @@ describe('createStreamDecoder', () => {
       ],
       expected: [spawned('b1'), spawned('n1', 'Explore', 'b1')],
     },
+    {
+      case: 'interrupted foreground subagent fails its nested call',
+      lines: [
+        agentCall('a1', { run_in_background: false }),
+        agentCall('n1', { run_in_background: false }, 'a1'),
+        taskNotification('a1', 'stopped'),
+        toolResultLine('a1', { isError: true }),
+        INTERRUPTED_RESULT_LINE,
+      ],
+      expected: [
+        spawned('a1'),
+        spawned('n1', 'Explore', 'a1'),
+        finished('a1', 'failed'),
+        finished('n1', 'failed'),
+      ],
+    },
+    {
+      case: 'background subagent end fails its nested call',
+      lines: [
+        agentCall('b1'),
+        launchReceipt('b1'),
+        agentCall('n1', { run_in_background: false }, 'b1'),
+        taskNotification('b1', 'completed'),
+      ],
+      expected: [
+        spawned('b1'),
+        spawned('n1', 'Explore', 'b1'),
+        finished('b1', 'done'),
+        finished('n1', 'failed'),
+      ],
+    },
+    {
+      case: 'main result fails a call two levels deep',
+      lines: [
+        agentCall('a1', { run_in_background: false }),
+        agentCall('n1', { run_in_background: false }, 'a1'),
+        agentCall('n2', { run_in_background: false }, 'n1'),
+        RESULT_LINE,
+      ],
+      expected: [
+        spawned('a1'),
+        spawned('n1', 'Explore', 'a1'),
+        spawned('n2', 'Explore', 'n1'),
+        finished('a1', 'failed'),
+        finished('n1', 'failed'),
+        finished('n2', 'failed'),
+      ],
+    },
   ])('decode_AgentEvents_$case', ({ lines, expected }) => {
     const decoder = createStreamDecoder();
 

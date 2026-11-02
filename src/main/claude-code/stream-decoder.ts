@@ -281,14 +281,27 @@ export function createStreamDecoder(
     });
   }
 
+  // An agent's end also fails every Agent call still pending under it, nested
+  // calls included, since a foreground call cannot outlive the agent waiting
+  // on it: the agent finishes first, then its calls level by level, each level
+  // in spawn order. A launched background call waits for its own end event.
   function finishAgent(agentId: string, isOk: boolean, out: DecodedLine) {
-    pendingAgents.delete(agentId);
-    launchedAgents.delete(agentId);
-    out.agentEvents.push({
-      type: 'agentFinished',
-      agentId,
-      outcome: isOk ? 'done' : 'failed',
-    });
+    const ending = [agentId];
+    for (let index = 0; index < ending.length; index += 1) {
+      const endingId = ending[index];
+      pendingAgents.delete(endingId);
+      launchedAgents.delete(endingId);
+      out.agentEvents.push({
+        type: 'agentFinished',
+        agentId: endingId,
+        outcome: isOk && endingId === agentId ? 'done' : 'failed',
+      });
+      for (const [callId, parentAgentId] of pendingAgents) {
+        if (parentAgentId === endingId) {
+          ending.push(callId);
+        }
+      }
+    }
   }
 
   // A pending Agent call's `tool_result` is its subagent's end, except a
@@ -332,9 +345,10 @@ export function createStreamDecoder(
   }
 
   // A turn's result fails every Agent call the main agent made that is still
-  // pending, a guard for a call whose end never came. A launched background
-  // call waits for its end event, and so does a call a subagent made: a
-  // background subagent keeps running past the main turn's result.
+  // pending, a guard for a call whose end never came, and with it the calls
+  // pending under that call. A launched background call waits for its end
+  // event, and so does a call a running subagent made: a background subagent
+  // keeps running past the main turn's result, and a call ends with its parent.
   function failPendingAgents(out: DecodedLine) {
     for (const [agentId, parentAgentId] of pendingAgents) {
       if (parentAgentId === MAIN_AGENT_ID) {
