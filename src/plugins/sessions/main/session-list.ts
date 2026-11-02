@@ -55,6 +55,9 @@ interface SessionEntry {
   // null while no relay is joined.
   owned: boolean;
   joinedBy: symbol | null;
+  // Host ids an owned session moved away from; a relay saying hello with one
+  // is refused.
+  retiredHostIds: Set<string>;
 }
 
 const NO_FOLDER_LABEL = 'session';
@@ -143,7 +146,8 @@ function routeCall(
 // its row at open, selected unless opened with `select` false, is joined by
 // each relay carrying its host id without a row of its own, a newer relay
 // taking the join from an older one, moves to a new host id by its
-// `setHostSessionId()`, and ends only by its `end()`. Each
+// `setHostSessionId()`, which retires the old id and its relay, and ends only
+// by its `end()`. Each
 // session keeps its label while it lasts; a closed row comes back at the end
 // with the session's next mark. `mark`, `activate` and `closeSession` send the
 // whole state only when it changed, and log and ignore a session they cannot
@@ -239,6 +243,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       ...startToolSessions(contributions, session),
       owned,
       joinedBy: null,
+      retiredHostIds: new Set(),
     };
     entries.set(session.id, entry);
     rows.push(rowOf(entry));
@@ -250,8 +255,8 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       (entry) => entry.session.info.sessionId === hostId,
     );
 
-  // The `AgentSession` object stays the same, so tool sessions started with it
-  // read the new info; a relay already joined keeps its join.
+  // Changes `sessionId` inside the session's one info object, so every holder
+  // of it sees the new id. The relay joined under the old id loses its join.
   const setHostSessionId = (entry: SessionEntry, newHostId: string) => {
     const appId = entry.session.id;
     if (!entries.has(appId)) {
@@ -266,7 +271,12 @@ export function createSessionList(deps: SessionListDeps): SessionList {
         `Host session ${newHostId} is already open; owned session ${appId} keeps host ${String(oldHostId)}`,
       );
     }
-    entry.session.info = { ...entry.session.info, sessionId: newHostId };
+    entry.session.info.sessionId = newHostId;
+    entry.retiredHostIds.delete(newHostId);
+    if (oldHostId !== null && oldHostId !== newHostId) {
+      entry.retiredHostIds.add(oldHostId);
+      entry.joinedBy = null;
+    }
     const index = rowIndex(appId);
     if (index !== -1) {
       rows[index].hostSessionId = newHostId;
@@ -279,9 +289,11 @@ export function createSessionList(deps: SessionListDeps): SessionList {
   // The relay's handle on an owned session, taking the join from any older
   // relay still holding it: a harness restarting its MCP connection can say
   // hello on the new socket before the old one closes. The handle's `end`
-  // only clears the join, and only while this handle still holds it.
+  // only clears the join, and only while this handle still holds it; its
+  // calls are refused once the session moves off the host id it joined under.
   const join = (entry: SessionEntry): ConnectedSession => {
     const appId = entry.session.id;
+    const joinedHostId = entry.session.info.sessionId;
     const handle = Symbol(appId);
     const isTakingOver = entry.joinedBy !== null;
     entry.joinedBy = handle;
@@ -293,7 +305,21 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     );
     return {
       session: entry.session,
-      call: (name, args, context) => routeCall(entry, name, args, context),
+      call: (name, args, context) => {
+        const hostId = entry.session.info.sessionId;
+        if (hostId !== joinedHostId) {
+          deps.log(
+            'sessions',
+            `call ${name} from relay of retired host ${String(joinedHostId)} on session ${appId} refused`,
+          );
+          return Promise.reject(
+            new Error(
+              `Session ${appId} moved from host ${String(joinedHostId)} to ${String(hostId)}`,
+            ),
+          );
+        }
+        return routeCall(entry, name, args, context);
+      },
       end: () => {
         if (entry.joinedBy !== handle || !entries.has(appId)) {
           return;
@@ -333,6 +359,22 @@ export function createSessionList(deps: SessionListDeps): SessionList {
           : entriesHolding(hostId).find((entry) => entry.owned);
       if (ownedEntry !== undefined) {
         return join(ownedEntry);
+      }
+      const retiringEntry =
+        hostId === null
+          ? undefined
+          : [...entries.values()].find((entry) =>
+              entry.retiredHostIds.has(hostId),
+            );
+      if (retiringEntry !== undefined) {
+        const appId = retiringEntry.session.id;
+        deps.log(
+          'sessions',
+          `connect for retired host ${hostId} of session ${appId} refused`,
+        );
+        throw new Error(
+          `Host session ${hostId} was retired by session ${appId}`,
+        );
       }
       const entry = addEntry(info, false);
       sendState();

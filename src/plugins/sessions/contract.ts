@@ -94,10 +94,13 @@ export interface ConnectedSession extends ToolSession {
 }
 
 // A session the app started itself. `end` ends its tool sessions and removes
-// its row; a second call does nothing. `setHostSessionId` moves the session,
-// its row and its relay joins to a new host id, keeping its app id, and emits
-// `hostSessionChanged`; it throws when another session holds that host id and
-// does nothing after `end`.
+// its row; a second call does nothing. `setHostSessionId` moves the session
+// and its row to a new host id, keeping its app id, by changing `sessionId`
+// inside the session's one info object, and emits `hostSessionChanged`. The
+// relay joined under the old id loses its join and has its later calls
+// refused, and a relay saying hello with the old id is refused while the
+// session lasts. It throws when another session holds that host id and does
+// nothing after `end`.
 export interface OwnedSession {
   session: AgentSession;
   end(): void;
@@ -121,7 +124,8 @@ export interface SessionsMainExports {
   // Adds the session's row, unmarked and unselected, or joins the owned session
   // whose host id the info carries, adding no row. A newer relay for that host
   // id takes the join from an older one still connected; the older handle's
-  // `end` then leaves the join alone.
+  // `end` then leaves the join alone. Throws for a host id an owned session
+  // moved away from.
   connect(info: SessionInfo): ConnectedSession;
   // Starts an owned session with its row selected, or, with `options.select`
   // false, added unmarked and the selected row (or none) left as it was.

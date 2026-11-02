@@ -74,10 +74,14 @@ function setUp() {
 // session records its calls and counts its ends.
 function fakeContribution() {
   const started: AgentSession[] = [];
+  // Each started session's info as it was at start, held as a form session
+  // holds it.
+  const startedInfos: SessionInfo[] = [];
   const calls: { name: string; args: unknown; context: ToolCallContext }[] = [];
   let ends = 0;
   const start = (session: AgentSession): ToolSession => {
     started.push(session);
+    startedInfos.push(session.info);
     return {
       call: async (name, args, context) => {
         calls.push({ name, args, context });
@@ -88,7 +92,7 @@ function fakeContribution() {
       },
     };
   };
-  return { start, started, calls, ends: () => ends };
+  return { start, started, startedInfos, calls, ends: () => ends };
 }
 
 function labels(state: SessionsState): string[] {
@@ -708,7 +712,7 @@ describe('createSessionList', () => {
   });
 
   it('setHostSessionId_MovesRowAndJoinToNewId', () => {
-    const { list, states, emitted, calls } = setUp();
+    const { list, states, emitted, calls, logged } = setUp();
     const contribution = fakeContribution();
     list.contributeTools([tool('a')], contribution.start);
     const ownedSession = list.open(owned('a'));
@@ -726,15 +730,48 @@ describe('createSessionList', () => {
     const changed = emitted.filter(([event]) => event === 'hostSessionChanged');
     expect(changed).toEqual([['hostSessionChanged', ownedSession.session]]);
     expect(ownedSession.session.info.sessionId).toBe('b');
-    expect(contribution.started[0].info.sessionId).toBe('b');
+    expect(contribution.startedInfos[0].sessionId).toBe('b');
 
     expect(list.connect(owned('b')).session).toBe(ownedSession.session);
     expect(list.state().rows).toHaveLength(1);
-    expect(list.connect(owned('a')).session).not.toBe(ownedSession.session);
-    expect(list.state().rows.map((row) => row.hostSessionId)).toEqual([
-      'b',
-      'a',
-    ]);
+
+    // A late hello for the retired id is refused rather than adding a row.
+    const sentBeforeLateHello = states.length;
+    expect(() => list.connect(owned('a'))).toThrow(/a.*00000001/);
+    expect(logged.at(-1)).toEqual(
+      expect.stringContaining('retired host a of session 00000001'),
+    );
+    expect(list.state().rows.map((row) => row.hostSessionId)).toEqual(['b']);
+    expect(states).toHaveLength(sentBeforeLateHello);
+  });
+
+  it('setHostSessionId_RelayJoinedUnderOldId_LosesJoinAndItsCallsAreRefused', async () => {
+    const { list, logged } = setUp();
+    const contribution = fakeContribution();
+    list.contributeTools([tool('a')], contribution.start);
+    const ownedSession = list.open(owned('host-a'));
+    const oldRelay = list.connect(owned('host-a'));
+
+    ownedSession.setHostSessionId('host-b');
+
+    await expect(oldRelay.call('a', { v: 1 }, CONTEXT)).rejects.toThrow(
+      /host-a.*host-b/,
+    );
+    expect(contribution.calls).toEqual([]);
+    expect(logged.at(-1)).toEqual(
+      expect.stringContaining('retired host host-a'),
+    );
+
+    // The new relay joins rather than taking over, and the old relay's late
+    // close leaves its join alone.
+    const newRelay = list.connect(owned('host-b'));
+    expect(logged.at(-1)).toEqual(
+      expect.stringContaining('relay joined session 00000001'),
+    );
+    const loggedBefore = logged.length;
+    oldRelay.end();
+    expect(logged).toHaveLength(loggedBefore);
+    expect(await newRelay.call('a', { v: 2 }, CONTEXT)).toBe(RESULT);
   });
 
   it('setHostSessionId_IdHeldElsewhere_ThrowsAndChangesNothing', () => {
