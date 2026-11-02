@@ -76,8 +76,8 @@ export interface PlanWaveInput {
   current: boolean;
 }
 
-// As StripInput, with the plan's title (null before a plan is read, or for a plan with no title) and its checklist by
-// wave, empty before a plan is read.
+// As StripInput, with the plan's title (null before a plan is read, '' for a read plan with no title) and its
+// checklist by wave, empty before a plan is read.
 export interface FlowTabInput {
   stage: string;
   label: string;

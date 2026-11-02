@@ -29,11 +29,11 @@ import { newFlow } from '../flow';
 import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
 import { workflowManifest } from '../manifest';
+import { createStageList } from '../stage-list';
 import { BUILT_IN_PAGE_STAGES } from '../stages';
 import { createFlowTabs } from './flow-tab';
 import { readWorkflowLayout } from './layout/read-workflow-layout';
 import { createPreview } from './preview';
-import { createStageList } from '../stage-list';
 import { createWorkflowView } from './workflow-view';
 
 type WorkflowApi = PageApi<
@@ -198,10 +198,17 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
     // A flows read is stale for each session a `flows` push touched since the
     // read began; null once the read settles.
     let changedSinceRead: Set<string> | null = new Set<string>();
+    // A flow whose draw throws is logged, so the rest of its push or read
+    // still draws.
     const putFlow = (flow: SessionFlow) => {
       flows.set(flow.sessionId, flow);
-      if (!isPreview(flow.sessionId)) {
+      if (isPreview(flow.sessionId)) {
+        return;
+      }
+      try {
         showFlow(flow);
+      } catch (error) {
+        log(`flow of ${flow.sessionId} not drawn: ${errorText(error)}`);
       }
     };
     api.channel.on('flows', (pushed) => {

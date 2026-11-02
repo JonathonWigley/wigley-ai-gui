@@ -113,10 +113,17 @@ describe('default layout flowTab', () => {
     },
     {
       name: 'a read plan with no title',
-      planTitle: null,
+      planTitle: '',
       boxes: 2,
       keys: 'Space w f',
       drawn: ['section:Make', 'section:Wave 1'],
+    },
+    {
+      name: 'a read plan with no title and no boxes',
+      planTitle: '',
+      boxes: 0,
+      keys: 'Space w f',
+      drawn: ['section:Make'],
     },
     {
       name: 'a read plan with boxes',

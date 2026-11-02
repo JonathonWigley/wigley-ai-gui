@@ -191,10 +191,9 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
 
   const flowTabInput = (flow: SessionFlow): FlowTabInput => {
     const progress = flow.progress;
-    const hasTitle = progress !== null && progress.title !== '';
     return {
       ...stripInput(flow),
-      planTitle: hasTitle ? progress.title : null,
+      planTitle: progress === null ? null : progress.title,
       waves: progress === null ? [] : waves(progress),
     };
   };

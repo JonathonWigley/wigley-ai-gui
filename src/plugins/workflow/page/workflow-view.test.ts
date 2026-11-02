@@ -18,8 +18,8 @@ import { newFlow } from '../flow';
 import defaultLayout from '../layouts/default/layout.js';
 import type { FlowTabInput, Layout, StripInput } from '../layouts/layout';
 import type { PlanProgress } from '../plan-reader';
-import { BUILT_IN_PAGE_STAGES } from '../stages';
 import { createStageList } from '../stage-list';
+import { BUILT_IN_PAGE_STAGES } from '../stages';
 import { createWorkflowView } from './workflow-view';
 
 const NOW = 1_000_000;
@@ -440,6 +440,32 @@ describe('workflow view', () => {
       },
     ]);
   });
+
+  it.each([
+    { name: 'NoPlanRead', progress: null, planTitle: null },
+    {
+      name: 'ReadPlanWithNoTitle',
+      progress: { ...progressOf(0, []), title: '' },
+      planTitle: '',
+    },
+    {
+      name: 'ReadPlanWithTitle',
+      progress: progressOf(0, [2]),
+      planTitle: 'Plan x',
+    },
+  ])(
+    'planTitle_$name_IsNullOnlyBeforeAPlanIsRead',
+    ({ progress, planTitle }) => {
+      const { view, put } = setUp();
+      const recording = recordingLayout();
+      view.setLayouts(withUser<Layout>(defaultLayout, recording.layout));
+      view.drawFlowTab(asHtml(new FakeElement('div')), 'a', () => undefined);
+
+      put(flowIn('make', { progress }));
+
+      expect(recording.flowTabs.at(-1)!.planTitle).toBe(planTitle);
+    },
+  );
 
   it('registry_StageAddedOutOfOrder_SortsOnOrder', () => {
     const { view, stages, put } = setUp();
