@@ -6,7 +6,8 @@ import { errorText } from '../../../shared/error-text';
 // Each host session's agent events, one JSON line per event in
 // `logs/<hostSessionId>.jsonl`. Appends to one file run in call order, each
 // after the last settles; the returned promise never rejects, a failed append
-// logged and the next one still run.
+// logged and the next one still run. A file's tail is dropped once its last
+// append settles.
 export interface AgentLog {
   append(hostSessionId: string, event: AgentEvent): Promise<void>;
 }
@@ -20,13 +21,18 @@ export function createAgentLog(deps: {
     append(hostSessionId, event) {
       const path = `logs/${hostSessionId}.jsonl`;
       const line = JSON.stringify(event) + '\n';
-      const tail = (tails.get(path) ?? Promise.resolve())
+      const tail: Promise<void> = (tails.get(path) ?? Promise.resolve())
         .then(() => deps.files.append(path, line))
         .catch((error: unknown) => {
           deps.log(
             'agents',
             `event not logged to ${path}: ${errorText(error)}`,
           );
+        })
+        .then(() => {
+          if (tails.get(path) === tail) {
+            tails.delete(path);
+          }
         });
       tails.set(path, tail);
       return tail;

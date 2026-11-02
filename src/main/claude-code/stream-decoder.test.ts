@@ -76,13 +76,22 @@ const toolUseLine = (
     parent_tool_use_id: parent,
   });
 
-const agentCall = (id: string, input: object = {}) =>
-  toolUseLine(id, 'Agent', {
-    description: 'read notes',
-    subagent_type: 'Explore',
-    prompt: 'Read notes.txt.',
-    ...input,
-  });
+const agentCall = (
+  id: string,
+  input: object = {},
+  parent: string | null = null,
+) =>
+  toolUseLine(
+    id,
+    'Agent',
+    {
+      description: 'read notes',
+      subagent_type: 'Explore',
+      prompt: 'Read notes.txt.',
+      ...input,
+    },
+    parent,
+  );
 
 const toolResultLine = (
   toolUseId: string,
@@ -142,10 +151,14 @@ const compactBoundary = (metadata: object) =>
     compact_metadata: { trigger: 'manual', ...metadata },
   });
 
-const spawned = (agentId: string, agentType = 'Explore') => ({
+const spawned = (
+  agentId: string,
+  agentType = 'Explore',
+  parentAgentId = 'main',
+) => ({
   type: 'agentSpawned',
   agentId,
-  parentAgentId: 'main',
+  parentAgentId,
   agentType,
   description: 'read notes',
 });
@@ -999,6 +1012,39 @@ describe('createStreamDecoder', () => {
         INTERRUPTED_RESULT_LINE,
       ],
       expected: [spawned('a1'), spawned('b1'), finished('a1', 'failed')],
+    },
+    {
+      case: 'interrupted foreground subagent, measured order',
+      lines: [
+        agentCall('a1', { run_in_background: false }),
+        taskNotification('a1', 'stopped'),
+        toolResultLine('a1', { isError: true }),
+        line({
+          type: 'user',
+          message: {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: '[Request interrupted by user for tool use]',
+              },
+            ],
+          },
+          parent_tool_use_id: null,
+        }),
+        INTERRUPTED_RESULT_LINE,
+      ],
+      expected: [spawned('a1'), finished('a1', 'failed')],
+    },
+    {
+      case: 'background subagent spawn outlives main result',
+      lines: [
+        agentCall('b1'),
+        launchReceipt('b1'),
+        agentCall('n1', { run_in_background: false }, 'b1'),
+        RESULT_LINE,
+      ],
+      expected: [spawned('b1'), spawned('n1', 'Explore', 'b1')],
     },
   ])('decode_AgentEvents_$case', ({ lines, expected }) => {
     const decoder = createStreamDecoder();

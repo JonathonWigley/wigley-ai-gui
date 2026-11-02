@@ -169,8 +169,9 @@ export function createStreamDecoder(
   let openThinking: TextEntry | null = null;
   // Assistant blocks with no streamed entry, per message id.
   const unstreamedCounts = new Map<string, number>();
-  // Agent calls with no `tool_result` and no end event yet, in spawn order.
-  const pendingAgents = new Set<string>();
+  // Agent calls with no `tool_result` and no end event yet, in spawn order,
+  // each mapped to the agent that made the call.
+  const pendingAgents = new Map<string, string>();
   // Background Agent calls whose launch receipt came, waiting for their end
   // event.
   const launchedAgents = new Set<string>();
@@ -259,7 +260,7 @@ export function createStreamDecoder(
       return;
     }
     const input = asJson(block.input);
-    pendingAgents.add(id);
+    pendingAgents.set(id, agentId);
     out.agentEvents.push({
       type: 'agentSpawned',
       agentId: id,
@@ -281,7 +282,9 @@ export function createStreamDecoder(
 
   // A pending Agent call's `tool_result` is its subagent's end, except a
   // background call's launch receipt, which leaves it running until its end
-  // event. Any other paired result finishes its tool call.
+  // event. Any other paired result finishes its tool call. The receipt check
+  // reads the line's `tool_use_result`, which describes the whole line: it
+  // assumes a user line carries one `tool_result`, as every measured one did.
   function finishAgentOrTool(block: Json, event: Json, out: DecodedLine) {
     const id = asString(block.tool_use_id);
     const isOk = block.is_error !== true;
@@ -317,11 +320,15 @@ export function createStreamDecoder(
     }
   }
 
-  // A turn's result fails every Agent call still pending, a guard for a call
-  // whose end never came; a launched background call waits for its end event.
+  // A turn's result fails every Agent call the main agent made that is still
+  // pending, a guard for a call whose end never came. A launched background
+  // call waits for its end event, and so does a call a subagent made: a
+  // background subagent keeps running past the main turn's result.
   function failPendingAgents(out: DecodedLine) {
-    for (const agentId of pendingAgents) {
-      finishAgent(agentId, false, out);
+    for (const [agentId, parentAgentId] of pendingAgents) {
+      if (parentAgentId === MAIN_AGENT_ID) {
+        finishAgent(agentId, false, out);
+      }
     }
   }
 

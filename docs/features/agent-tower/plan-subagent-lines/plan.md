@@ -302,4 +302,6 @@ Review base: 66fec31
 - the ending table is agentsTurn_$case with full-tail case names, since vitest reads $ending_FinishesSubagents as one key — test names differ from the plan · group 04 · group 04
 - scrollsItself also lists .chat-activity-step, chat's ellipsis-clipped activity shortlist that the long Agent descriptions overflow on purpose — a real overflow there goes unflagged in this one step · group 10 · group 10
 ### Review rounds
+- 1 · cb0c8ce · NEEDS FIXES (14 findings: 9 determined dispatched, 5 to triage; lead-applied 287c6ea)
 ### Test gate
+- whole vitest suite (the run touched contracts, Files adapters, the Claude adapter, the fake harness, chat, sessions and a new plugin, and the suite runs in 10 s), typecheck and lint; npm run selftest ran in group 10 after the last code change (11 is docs only) · 4672 passed, typecheck and lint clean, self-test all passed

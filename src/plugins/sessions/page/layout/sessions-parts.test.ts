@@ -74,6 +74,19 @@ describe('sessions parts', () => {
       roots: ({ sideBar }) => drawnRows(sideBar),
     },
     {
+      case: 'row places contributed parts twice',
+      layout: {
+        row: (parent, input, kit) => {
+          const element = kit.el(parent, 'div', 'bare', input.label);
+          kit.contributedParts(element);
+          kit.contributedParts(element);
+          return { element };
+        },
+      },
+      partName: 'row',
+      roots: ({ sideBar }) => drawnRows(sideBar),
+    },
+    {
       case: 'tab throws',
       layout: { tab: fail },
       partName: 'tab',
@@ -277,23 +290,46 @@ describe('sessions parts', () => {
     );
   });
 
-  it('rowParts_PartThrows_LogsAndOthersDraw', () => {
-    const { view, sideBar, rowParts, logged } = sessionsViewSetup();
-    rowParts.add({
-      id: 'bad',
-      build: () => {
-        throw new Error('boom');
-      },
-    });
-    rowParts.add(recordingPart('good', []));
+  it.each<{
+    case: string;
+    bad: SessionRowPart;
+    logLine: string;
+    drawnParts: string[];
+  }>([
+    {
+      case: 'build throws',
+      bad: { id: 'bad', build: fail },
+      logLine: '[sessions] row part bad failed: broken part',
+      drawnParts: ['good'],
+    },
+    {
+      case: 'dispose throws',
+      bad: { id: 'bad', build: () => ({ dispose: fail }) },
+      logLine: '[sessions] row part bad dispose failed: broken part',
+      drawnParts: ['bad', 'good'],
+    },
+  ])(
+    'rowParts_PartThrows_LogsAndOthersRun ($case)',
+    ({ bad, logLine, drawnParts }) => {
+      const record: string[] = [];
+      const { view, sideBar, rowParts, logged } = sessionsViewSetup();
+      rowParts.add(bad);
+      rowParts.add(recordingPart('good', record));
 
-    view.render(stateOf(['a'], 'a'));
+      view.render(stateOf(['a'], 'a'));
+      view.render(stateOf(['a'], 'a'));
 
-    expect(logged).toContain('[sessions] row part bad failed: boom');
-    const rows = drawnRows(sideBar);
-    expect(rows.map(partIds)).toEqual([['good']]);
-    expect(rowNamed(rows, 'label a').dataset.layout).toBe('default');
-  });
+      expect(logged).toContain(logLine);
+      expect(record).toEqual([
+        'build:good:a',
+        'dispose:good:a',
+        'build:good:a',
+      ]);
+      const rows = drawnRows(sideBar);
+      expect(rows.map(partIds)).toEqual([drawnParts]);
+      expect(rowNamed(rows, 'label a').dataset.layout).toBe('default');
+    },
+  );
 
   it('rowParts_AddAndDispose_RedrawsRows', () => {
     const { view, sideBar, rowParts } = sessionsViewSetup();

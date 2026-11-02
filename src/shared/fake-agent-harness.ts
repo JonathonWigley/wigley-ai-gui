@@ -39,7 +39,9 @@ export const FAKE_TOOL_TEXT = 'fake: tool';
 export const FAKE_STEPS_TEXT = 'fake: steps';
 // A send of this text spawns two subagents, each running one tool, then stays
 // open as `FAKE_HOLD_TEXT`'s turn does. The subagents run until an interrupt
-// (failed), the next send (done) or the process's end (no `agentFinished`).
+// (failed), the next send other than `FAKE_END_TEXT` (done) or the process's
+// end (no `agentFinished`). An interrupt or send queued before the end still
+// finishes them.
 export const FAKE_AGENTS_TEXT = 'fake: agents';
 // A send of this text ends the process on its own, as a CLI that exits.
 export const FAKE_END_TEXT = 'fake: end';
@@ -685,7 +687,6 @@ export function createFakeAgentHarness(clock: Clock): FakeAgentHarness {
         if (text === FAKE_END_TEXT) {
           record.ended = true;
           isTurnOpen = false;
-          runningSubagents = [];
           endPromise = new Promise<void>((resolve) => {
             queueMicrotask(() => {
               emitUserEntry();
@@ -773,7 +774,6 @@ export function createFakeAgentHarness(clock: Clock): FakeAgentHarness {
         }
         record.ended = true;
         isTurnOpen = false;
-        runningSubagents = [];
         const isHeld = isEndHeld;
         endPromise = new Promise<void>((resolve) => {
           const exit = () => {
@@ -796,7 +796,6 @@ export function createFakeAgentHarness(clock: Clock): FakeAgentHarness {
         }
         record.ended = true;
         isTurnOpen = false;
-        runningSubagents = [];
         endPromise = new Promise<void>((resolve) => {
           queueMicrotask(() => {
             emitSessionEnded();

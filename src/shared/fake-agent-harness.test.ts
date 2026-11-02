@@ -529,6 +529,23 @@ describe('createFakeAgentHarness', () => {
       end: (agent: AgentProcess) => void agent.end(),
       lines: ['sessionEnded', 'ended'],
     },
+    {
+      case: 'interruptThenEnd_FinishesSubagentsBeforeSessionEnded',
+      end: (agent: AgentProcess) => {
+        agent.interrupt();
+        void agent.end();
+      },
+      lines: [
+        'tool agent-1-1 Interrupted',
+        'agentFinished fake-agent-1-1 failed',
+        'tool agent-1-2 Interrupted',
+        'agentFinished fake-agent-1-2 failed',
+        'notice notice-1',
+        'activity idle',
+        'sessionEnded',
+        'ended',
+      ],
+    },
   ])('agentsTurn_$case', async ({ end, lines }) => {
     const { agent, timeline } = await startedProcess();
     agent.send({ text: FAKE_AGENTS_TEXT, images: [] });
@@ -593,6 +610,29 @@ describe('createFakeAgentHarness', () => {
       run: async () => {
         const { agent, agentEvents } = await startedProcess();
         await agent.end();
+        return agentEvents;
+      },
+      expected: [{ type: 'sessionEnded', at: 1000 }],
+    },
+    {
+      case: 'kill',
+      run: async () => {
+        const { agent, agentEvents } = await startedProcess();
+        agent.kill();
+        await flush();
+        return agentEvents;
+      },
+      expected: [{ type: 'sessionEnded', at: 1000 }],
+    },
+    {
+      case: 'held end released',
+      run: async () => {
+        const { harness, agent, agentEvents } = await startedProcess();
+        harness.holdEnd();
+        const ending = agent.end();
+        await flush();
+        harness.releaseEnd();
+        await ending;
         return agentEvents;
       },
       expected: [{ type: 'sessionEnded', at: 1000 }],

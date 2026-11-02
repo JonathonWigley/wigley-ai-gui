@@ -67,22 +67,27 @@ export const agentsPagePart: PagePart<typeof agentsManifest> = {
     });
 
     // A rosters read is stale for each session a rosterChanged touched since
-    // the read began.
-    const changedSinceRead = new Set<string>();
+    // the read began; null once the read settles.
+    let changedSinceRead: Set<string> | null = new Set<string>();
     api.channel.on('rosterChanged', ({ sessionId, running }) => {
-      changedSinceRead.add(sessionId);
+      changedSinceRead?.add(sessionId);
       lines.setRunning(sessionId, running);
     });
-    api.channel.invoke('rosters').then(
-      (rosters) => {
-        for (const [sessionId, running] of Object.entries(rosters)) {
-          if (!changedSinceRead.has(sessionId)) {
-            lines.setRunning(sessionId, running);
+    api.channel
+      .invoke('rosters')
+      .then(
+        (rosters) => {
+          for (const [sessionId, running] of Object.entries(rosters)) {
+            if (!changedSinceRead?.has(sessionId)) {
+              lines.setRunning(sessionId, running);
+            }
           }
-        }
-      },
-      (error: unknown) => log(`rosters not read: ${errorText(error)}`),
-    );
+        },
+        (error: unknown) => log(`rosters not read: ${errorText(error)}`),
+      )
+      .finally(() => {
+        changedSinceRead = null;
+      });
 
     api.layouts.show<Layout>({
       defaultLayout,

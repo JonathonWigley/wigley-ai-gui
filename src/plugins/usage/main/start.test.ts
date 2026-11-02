@@ -4,9 +4,17 @@ import type {
   PlanUsage,
   UsageAgentEvent,
 } from '../../../contracts/agent';
+import type { QualifiedEvents } from '../../../contracts/plugin';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
-import type { ChatMainExports, ChatProfile } from '../../chat/contract';
-import type { SessionsMainExports } from '../../sessions/contract';
+import type {
+  ChatMainEvents,
+  ChatMainExports,
+  ChatProfile,
+} from '../../chat/contract';
+import type {
+  SessionsMainEvents,
+  SessionsMainExports,
+} from '../../sessions/contract';
 import type { UsageSnapshot } from '../contract';
 import { usageMainPart } from './start';
 import { usageFixture } from './usage-fixture';
@@ -34,6 +42,10 @@ const POLLED: PlanUsage = {
   extraUsage: null,
   at: 1_000,
 };
+
+// The events usage's main part hears.
+type UsageHeard = QualifiedEvents<'chat', ChatMainEvents> &
+  QualifiedEvents<'sessions', SessionsMainEvents>;
 
 function usageEvent(agentId: string): UsageAgentEvent {
   return {
@@ -106,7 +118,10 @@ function startUsagePart(harnesses: Partial<AgentHarness>[]) {
     layouts: { register: () => ({ dispose: () => undefined }) },
   } as unknown as Parameters<typeof usageMainPart.start>[0];
   usageMainPart.start(api);
-  const emit = (event: string, data: unknown) => {
+  const emit = <Name extends keyof UsageHeard & string>(
+    event: Name,
+    data: UsageHeard[Name],
+  ) => {
     for (const listener of listeners.get(event) ?? []) {
       listener(data);
     }
@@ -130,11 +145,13 @@ describe('usageMainPart', () => {
     usage.emit('chat.agentEvent', {
       sessionId: 's1',
       profileDir: '~/.claude-personal',
+      hostSessionId: 'h1',
       event: usageEvent('main'),
     });
     usage.emit('chat.agentEvent', {
       sessionId: 's1',
       profileDir: '~/.claude-personal',
+      hostSessionId: 'h1',
       event: usageEvent('agent-7'),
     });
     usage.emit('sessions.ended', { sessionId: 's1' });
@@ -182,6 +199,7 @@ describe('usageMainPart', () => {
     usage.emit('chat.agentEvent', {
       sessionId: 's1',
       profileDir: '~/.claude-personal',
+      hostSessionId: 'h1',
       event: usageEvent('main'),
     });
 
@@ -200,6 +218,7 @@ describe('usageMainPart', () => {
     usage.emit('chat.agentEvent', {
       sessionId: 's1',
       profileDir: '~/.claude-personal',
+      hostSessionId: 'h1',
       event: usageEvent('main'),
     });
 
