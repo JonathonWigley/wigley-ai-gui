@@ -625,6 +625,58 @@ describe('createClaudeCodeHarness', () => {
     ]);
   });
 
+  it.each([
+    {
+      case: 'skill with args',
+      text: '/wigley:make /p/plan-y',
+      expected: [
+        { type: 'userMessage', at: 1000 },
+        {
+          type: 'skillStarted',
+          at: 1000,
+          agentId: 'main',
+          skill: 'wigley:make',
+          args: '/p/plan-y',
+        },
+      ],
+    },
+    {
+      case: 'skill alone',
+      text: '/wigley:feature',
+      expected: [
+        { type: 'userMessage', at: 1000 },
+        {
+          type: 'skillStarted',
+          at: 1000,
+          agentId: 'main',
+          skill: 'wigley:feature',
+          args: '',
+        },
+      ],
+    },
+    {
+      case: 'plain message',
+      text: 'hi',
+      expected: [{ type: 'userMessage', at: 1000 }],
+    },
+    {
+      case: 'control command',
+      text: '/effort high',
+      expected: [{ type: 'userMessage', at: 1000 }],
+    },
+  ])('send_SlashText_EmitsSkillStarted ($case)', async ({ text, expected }) => {
+    const run = started();
+    await settle();
+
+    run.agent.send({ text, images: [] });
+    await settle();
+
+    expect(run.agentEvents).toEqual([
+      { type: 'sessionStarted', at: 1000 },
+      ...expected,
+    ]);
+  });
+
   it('kill_SendsSigtermAtOnceAndEndsClean', async () => {
     const run = await startedQuiet();
 

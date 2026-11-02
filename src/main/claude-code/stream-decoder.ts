@@ -101,6 +101,16 @@ const UNREQUESTED_ORIGINS: ReadonlySet<string> = new Set([
 const SUBAGENT_TOOLS: ReadonlySet<string> = new Set(['Agent', 'Task']);
 // The type Claude gives an Agent call whose input names none.
 const DEFAULT_AGENT_TYPE = 'general-purpose';
+// The tool that runs a skill: its input names the skill and, when passed, its
+// args.
+const SKILL_TOOL = 'Skill';
+// The input field that names the file each file-changing tool writes.
+const WRITE_TOOL_PATHS: Readonly<Record<string, string>> = {
+  Write: 'file_path',
+  Edit: 'file_path',
+  MultiEdit: 'file_path',
+  NotebookEdit: 'notebook_path',
+};
 
 function emptyLine(): DecodedLine {
   return {
@@ -151,6 +161,25 @@ function messageText(content: unknown): string {
     .join('\n');
 }
 
+// A Skill call of `agentId` that names its skill starts that skill.
+function reportSkillCall(
+  name: string,
+  input: Json,
+  agentId: string,
+  out: DecodedLine,
+) {
+  const skill = asString(input.skill);
+  if (name !== SKILL_TOOL || skill === '') {
+    return;
+  }
+  out.agentEvents.push({
+    type: 'skillStarted',
+    agentId,
+    skill,
+    args: asString(input.args).trim(),
+  });
+}
+
 // One decoder reads one process's stdout: it keeps the entries it built, so a
 // later line updates them. An event joins the entry it belongs to; a known
 // event that belongs to none joins the turn's events entry, one raw entry per
@@ -188,6 +217,8 @@ export function createStreamDecoder(
   const launchedAgents = new Set<string>();
   // The agent each pending tool call runs under, by tool call id.
   const toolAgents = new Map<string, string>();
+  // The file each pending write call writes, by tool call id.
+  const writePaths = new Map<string, string>();
   let rawCount = 0;
   let turnCount = 0;
   // The events entry gathered events join: the first gathered event opens the
@@ -255,11 +286,13 @@ export function createStreamDecoder(
   }
 
   // A `tool_use` block starts a subagent when it calls the Agent tool, and a
-  // tool call of the line's agent otherwise.
+  // tool call of the line's agent otherwise; a Skill call also starts its
+  // skill, and a write call keeps its path for its result.
   function startAgentOrTool(block: Json, event: Json, out: DecodedLine) {
     const id = asString(block.id);
     const name = asString(block.name);
     const agentId = agentOf(event);
+    const input = asJson(block.input);
     if (!SUBAGENT_TOOLS.has(name)) {
       toolAgents.set(id, agentId);
       out.agentEvents.push({
@@ -268,9 +301,10 @@ export function createStreamDecoder(
         toolUseId: id,
         tool: name,
       });
+      reportSkillCall(name, input, agentId, out);
+      keepWritePath(id, name, input);
       return;
     }
-    const input = asJson(block.input);
     pendingAgents.set(id, agentId);
     out.agentEvents.push({
       type: 'agentSpawned',
@@ -279,6 +313,15 @@ export function createStreamDecoder(
       agentType: asString(input.subagent_type) || DEFAULT_AGENT_TYPE,
       description: asString(input.description),
     });
+  }
+
+  function keepWritePath(id: string, name: string, input: Json) {
+    const path = Object.hasOwn(WRITE_TOOL_PATHS, name)
+      ? asString(input[WRITE_TOOL_PATHS[name]])
+      : '';
+    if (path !== '') {
+      writePaths.set(id, path);
+    }
   }
 
   // An agent's end also fails every Agent call still pending under it, nested
@@ -313,6 +356,7 @@ export function createStreamDecoder(
     for (const [toolUseId, toolAgentId] of toolAgents) {
       if (toolAgentId === agentId) {
         toolAgents.delete(toolUseId);
+        writePaths.delete(toolUseId);
         out.agentEvents.push({
           type: 'toolFinished',
           agentId,
@@ -325,7 +369,8 @@ export function createStreamDecoder(
 
   // A pending Agent call's `tool_result` is its subagent's end, except a
   // background call's launch receipt, which leaves it running until its end
-  // event. Any other paired result finishes its tool call. The receipt check
+  // event. Any other paired result finishes its tool call, and an ok result of
+  // a write call reports its file written. The receipt check
   // reads the line's `tool_use_result`, which describes the whole line: it
   // assumes a user line carries one `tool_result`, as every measured one did.
   function finishAgentOrTool(block: Json, event: Json, out: DecodedLine) {
@@ -343,14 +388,20 @@ export function createStreamDecoder(
       return;
     }
     const agentId = toolAgents.get(id);
-    if (agentId !== undefined) {
-      toolAgents.delete(id);
-      out.agentEvents.push({
-        type: 'toolFinished',
-        agentId,
-        toolUseId: id,
-        ok: isOk,
-      });
+    if (agentId === undefined) {
+      return;
+    }
+    toolAgents.delete(id);
+    const path = writePaths.get(id);
+    writePaths.delete(id);
+    out.agentEvents.push({
+      type: 'toolFinished',
+      agentId,
+      toolUseId: id,
+      ok: isOk,
+    });
+    if (isOk && path !== undefined) {
+      out.agentEvents.push({ type: 'fileWritten', agentId, path });
     }
   }
 
@@ -390,6 +441,7 @@ export function createStreamDecoder(
       });
     }
     if (event.subtype === 'init') {
+      out.agentEvents.push({ type: 'turnStarted' });
       out.commands = commandNames(event);
       if (typeof event.permissionMode === 'string') {
         out.reported.mode = event.permissionMode;
@@ -618,9 +670,12 @@ export function createStreamDecoder(
   // the `stop_reason` of the last message it finished. A cumulative total below
   // the last one has no turn share, so its cost is null. A result ends the
   // turn's open blocks, and its events entry takes events until the next init.
+  // Every result ends a turn of the main conversation, an unrequested one
+  // included.
   function decodeResult(event: Json, out: DecodedLine) {
     closeOpenBlocks(out);
     failPendingAgents(out);
+    out.agentEvents.push({ type: 'turnEnded' });
     const isError = event.is_error === true;
     out.turnEnded = true;
     out.turnUsage = turnUsageOf(event, lastMainModel);

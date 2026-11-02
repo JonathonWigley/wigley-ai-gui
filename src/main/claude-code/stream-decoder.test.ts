@@ -170,6 +170,23 @@ const finished = (agentId: string, outcome: 'done' | 'failed') => ({
   outcome,
 });
 
+const skillStarted = (agentId: string, skill: string, args: string) => ({
+  type: 'skillStarted',
+  agentId,
+  skill,
+  args,
+});
+
+const written = (agentId: string, path: string) => ({
+  type: 'fileWritten',
+  agentId,
+  path,
+});
+
+const INIT_LINE = line({ type: 'system', subtype: 'init' });
+const TURN_STARTED = { type: 'turnStarted' };
+const TURN_ENDED = { type: 'turnEnded' };
+
 describe('createStreamDecoder', () => {
   it('decode_Init_ReportsCommandsAndControls', () => {
     const decoder = createStreamDecoder();
@@ -1033,7 +1050,12 @@ describe('createStreamDecoder', () => {
         launchReceipt('b1'),
         INTERRUPTED_RESULT_LINE,
       ],
-      expected: [spawned('a1'), spawned('b1'), finished('a1', 'failed')],
+      expected: [
+        spawned('a1'),
+        spawned('b1'),
+        finished('a1', 'failed'),
+        TURN_ENDED,
+      ],
     },
     {
       case: 'interrupted foreground subagent, measured order',
@@ -1056,7 +1078,7 @@ describe('createStreamDecoder', () => {
         }),
         INTERRUPTED_RESULT_LINE,
       ],
-      expected: [spawned('a1'), finished('a1', 'failed')],
+      expected: [spawned('a1'), finished('a1', 'failed'), TURN_ENDED],
     },
     {
       case: 'background subagent spawn outlives main result',
@@ -1066,7 +1088,7 @@ describe('createStreamDecoder', () => {
         agentCall('n1', { run_in_background: false }, 'b1'),
         RESULT_LINE,
       ],
-      expected: [spawned('b1'), spawned('n1', 'Explore', 'b1')],
+      expected: [spawned('b1'), spawned('n1', 'Explore', 'b1'), TURN_ENDED],
     },
     {
       case: 'interrupted foreground subagent fails its nested call',
@@ -1082,6 +1104,7 @@ describe('createStreamDecoder', () => {
         spawned('n1', 'Explore', 'a1'),
         finished('a1', 'failed'),
         finished('n1', 'failed'),
+        TURN_ENDED,
       ],
     },
     {
@@ -1114,6 +1137,7 @@ describe('createStreamDecoder', () => {
         finished('a1', 'failed'),
         finished('n1', 'failed'),
         finished('n2', 'failed'),
+        TURN_ENDED,
       ],
     },
     {
@@ -1170,7 +1194,197 @@ describe('createStreamDecoder', () => {
         finished('a1', 'failed'),
         { type: 'toolFinished', agentId: 'n1', toolUseId: 't2', ok: false },
         finished('n1', 'failed'),
+        TURN_ENDED,
       ],
+    },
+    {
+      case: 'main skill',
+      lines: [
+        toolUseLine('s1', 'Skill', {
+          skill: 'wigley:feature',
+          args: ' plan x ',
+        }),
+      ],
+      expected: [
+        {
+          type: 'toolStarted',
+          agentId: 'main',
+          toolUseId: 's1',
+          tool: 'Skill',
+        },
+        skillStarted('main', 'wigley:feature', 'plan x'),
+      ],
+    },
+    {
+      case: 'skill without args',
+      lines: [toolUseLine('s1', 'Skill', { skill: 'wigley:make' })],
+      expected: [
+        {
+          type: 'toolStarted',
+          agentId: 'main',
+          toolUseId: 's1',
+          tool: 'Skill',
+        },
+        skillStarted('main', 'wigley:make', ''),
+      ],
+    },
+    {
+      case: 'skill without a name',
+      lines: [toolUseLine('s1', 'Skill', { args: 'x' })],
+      expected: [
+        {
+          type: 'toolStarted',
+          agentId: 'main',
+          toolUseId: 's1',
+          tool: 'Skill',
+        },
+      ],
+    },
+    {
+      case: 'subagent skill',
+      lines: [
+        agentCall('a1'),
+        toolUseLine(
+          's1',
+          'Skill',
+          { skill: 'wigley:feature', args: 'plan x' },
+          'a1',
+        ),
+      ],
+      expected: [
+        spawned('a1'),
+        { type: 'toolStarted', agentId: 'a1', toolUseId: 's1', tool: 'Skill' },
+        skillStarted('a1', 'wigley:feature', 'plan x'),
+      ],
+    },
+    {
+      case: 'write ok',
+      lines: [
+        toolUseLine('w1', 'Write', {
+          file_path: '/p/docs/features/x/plan-y/plan.md',
+          content: '# Plan',
+        }),
+        toolResultLine('w1'),
+        RESULT_LINE,
+      ],
+      expected: [
+        {
+          type: 'toolStarted',
+          agentId: 'main',
+          toolUseId: 'w1',
+          tool: 'Write',
+        },
+        { type: 'toolFinished', agentId: 'main', toolUseId: 'w1', ok: true },
+        written('main', '/p/docs/features/x/plan-y/plan.md'),
+        TURN_ENDED,
+      ],
+    },
+    {
+      case: 'edit, multi edit and notebook edit',
+      lines: [
+        toolUseLine('e1', 'Edit', { file_path: '/p/a.ts', old_string: 'a' }),
+        toolUseLine('e2', 'MultiEdit', { file_path: '/p/b.ts', edits: [] }),
+        toolUseLine('e3', 'NotebookEdit', {
+          notebook_path: '/p/c.ipynb',
+          new_source: 'x',
+        }),
+        toolResultLine('e1'),
+        toolResultLine('e2'),
+        toolResultLine('e3'),
+      ],
+      expected: [
+        { type: 'toolStarted', agentId: 'main', toolUseId: 'e1', tool: 'Edit' },
+        {
+          type: 'toolStarted',
+          agentId: 'main',
+          toolUseId: 'e2',
+          tool: 'MultiEdit',
+        },
+        {
+          type: 'toolStarted',
+          agentId: 'main',
+          toolUseId: 'e3',
+          tool: 'NotebookEdit',
+        },
+        { type: 'toolFinished', agentId: 'main', toolUseId: 'e1', ok: true },
+        written('main', '/p/a.ts'),
+        { type: 'toolFinished', agentId: 'main', toolUseId: 'e2', ok: true },
+        written('main', '/p/b.ts'),
+        { type: 'toolFinished', agentId: 'main', toolUseId: 'e3', ok: true },
+        written('main', '/p/c.ipynb'),
+      ],
+    },
+    {
+      case: 'write error result',
+      lines: [
+        toolUseLine('w1', 'Write', { file_path: '/p/a.md', content: 'x' }),
+        toolResultLine('w1', { isError: true }),
+      ],
+      expected: [
+        {
+          type: 'toolStarted',
+          agentId: 'main',
+          toolUseId: 'w1',
+          tool: 'Write',
+        },
+        { type: 'toolFinished', agentId: 'main', toolUseId: 'w1', ok: false },
+      ],
+    },
+    {
+      case: "write left open at an agent's end",
+      lines: [
+        agentCall('a1', { run_in_background: false }),
+        toolUseLine(
+          'w1',
+          'Write',
+          { file_path: '/p/a.md', content: 'x' },
+          'a1',
+        ),
+        toolResultLine('a1', { toolUseResult: { status: 'completed' } }),
+        toolResultLine('w1', { parent: 'a1' }),
+      ],
+      expected: [
+        spawned('a1'),
+        { type: 'toolStarted', agentId: 'a1', toolUseId: 'w1', tool: 'Write' },
+        { type: 'toolFinished', agentId: 'a1', toolUseId: 'w1', ok: false },
+        finished('a1', 'done'),
+      ],
+    },
+    {
+      case: 'read is no write',
+      lines: [
+        toolUseLine('t1', 'Read', { file_path: '/p/a.md' }),
+        toolResultLine('t1'),
+      ],
+      expected: [
+        { type: 'toolStarted', agentId: 'main', toolUseId: 't1', tool: 'Read' },
+        { type: 'toolFinished', agentId: 'main', toolUseId: 't1', ok: true },
+      ],
+    },
+    {
+      case: 'result ends the turn',
+      lines: [RESULT_LINE],
+      expected: [TURN_ENDED],
+    },
+    {
+      case: 'init starts the turn',
+      lines: [INIT_LINE],
+      expected: [TURN_STARTED],
+    },
+    {
+      case: 'unrequested turn',
+      lines: [
+        INIT_LINE,
+        line({
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          result: 'ok',
+          stop_reason: 'end_turn',
+          origin: { kind: 'task-notification', producer: 'session-task' },
+        }),
+      ],
+      expected: [TURN_STARTED, TURN_ENDED],
     },
   ])('decode_AgentEvents_$case', ({ lines, expected }) => {
     const decoder = createStreamDecoder();

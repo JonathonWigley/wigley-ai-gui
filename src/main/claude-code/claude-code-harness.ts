@@ -1,18 +1,19 @@
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createInterface } from 'node:readline';
-import type {
-  AccountStatus,
-  AgentEvent,
-  AgentHarness,
-  AgentProcess,
-  AgentProcessEvents,
-  AgentStart,
-  LogInEvents,
-  LogInProcess,
-  PlanUsage,
-  ProcessActivity,
-  SessionControl,
-  UsageAgentEvent,
+import {
+  type AccountStatus,
+  type AgentEvent,
+  type AgentHarness,
+  type AgentProcess,
+  type AgentProcessEvents,
+  type AgentStart,
+  type LogInEvents,
+  type LogInProcess,
+  MAIN_AGENT_ID,
+  type PlanUsage,
+  type ProcessActivity,
+  type SessionControl,
+  type UsageAgentEvent,
 } from '../../contracts/agent';
 import type { Clock } from '../../contracts/ambient';
 import { type Files, readIfPresent } from '../../contracts/files';
@@ -20,6 +21,7 @@ import type { Log } from '../../contracts/log';
 import type { Paths } from '../../contracts/paths';
 import { errorText } from '../../shared/error-text';
 import { isSameJson } from '../../shared/json';
+import { typedSkill } from '../../shared/typed-skill';
 import { readAccountStatus, signInLink } from './claude-auth';
 import { claudeConfigFolder, claudeEnv, claudeLaunch } from './claude-launch';
 import {
@@ -485,6 +487,15 @@ function startClaudeProcess(
       });
       emitAgentEvent({ type: 'userMessage' });
       const typed = CONTROL_COMMAND.exec(userInput.text);
+      // Claude prints no line for a sent message, so a typed skill starts here.
+      const skill = typedSkill(userInput.text);
+      if (skill !== null && typed === null) {
+        emitAgentEvent({
+          type: 'skillStarted',
+          agentId: MAIN_AGENT_ID,
+          ...skill,
+        });
+      }
       pendingTurns.push(
         typed === null
           ? null

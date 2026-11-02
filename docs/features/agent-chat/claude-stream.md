@@ -241,6 +241,8 @@ Tool-use block (§ Tool results probe, stdin `U(Read the file notes.txt and repl
 - Local slash commands print a **synthetic** `assistant` event with `"model":"<synthetic>"` and a non-`msg_` id
   (§ Effort, § Model).
 - An interrupted text block still gets its `assistant` event, holding the partial text (§ Interrupt).
+- A `Skill` call carries `input.skill`, the skill's name as `slash_commands` lists it (`wigley:make`), and
+  `input.args` only when the call passes text.
 
 ## Tool results
 
