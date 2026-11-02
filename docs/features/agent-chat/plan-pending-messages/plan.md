@@ -190,7 +190,7 @@ Boundary rules:
 - [x] [Self-test steps](04-selftest-steps.md) — after 03
 
 ### Wave 5
-- [ ] [Doc re-read](05-doc-re-read.md) — after 04
+- [x] [Doc re-read](05-doc-re-read.md) — after 04
 
 ### Wave 6
 - [ ] [Final verification](06-final-verification.md) — after 05
@@ -202,6 +202,7 @@ Review base: 7f62c7d
 - 02 · f1adb79 · diff read: every Produces present; typecheck clean · concerns: AGENTS.md part list updated outside Files (stale prose); pre-wrap line breaks left to the live check
 - 03 · 6c92273 · diff read: every Produces present (putBack amended, see Contract changes); typecheck clean · concerns: held-tab-no-box branch near unreachable; npx --version ran once (nothing installed); activity slot helpers widened into generic slot-part helpers
 - 04 · 0b150ee + fix 9e86eaa · self-test green after the queue-rule fix (793 pass, 0 fail); typecheck and lint clean · concerns: queue rule read shown activity and stranded sends behind a leftover permission card (fixed in 9e86eaa, lead ruling); G logs 'following the latest entry' not 'focused pending message'; composer working flag still reads shown activity while a leftover card waits
+- 05 · 08b6004 · § Pending messages fixed line by line; § Chat tab, § Layouts and keymap.md cp row true · concerns: none
 ### Contract changes
 - putBack: (deps: Pick<ChatCommandDeps, 'tabs' | 'log'>, …, messages): void → (deps: Pick<ChatCommandDeps, 'tabs'>, …, messages): boolean · why: each caller logs its own line only when the box took them (a closed session logs nothing, as before) · consumers: none later · group 03
 ### Rulings
@@ -212,4 +213,6 @@ Review base: 7f62c7d
 - G and a following focus land on the newest pending row when any exist, overriding the open-last-activity-line hold — stops end with pending rows — a following user sees pending rows instead of the open activity line · group 03 · group 03
 - Queue only while the harness's own turn runs (harnessActivity !== 'idle'), not while the shown activity is not idle — the fake leaves a permission card waiting after its turn goes idle, so the shown-activity rule queued sends behind it and stranded them (no drain fires when the card settles; a later direct send overtook them: 12 self-test failures); a real Claude turn waiting on a permission still reports working, so it still queues as the plan decided — if Claude ever reports idle with a card waiting, a send then goes straight to the process · lead
 - plan step 3/4/6 landed as finer steps (Escape, G, Enter each with its own expect; step 6 waits on the echo's assistant entry, no separate idle wait) — one diagnostic line per key — none for the proof · group 04 · group 04
+### Test gate
+- whole vitest suite (7.6 s, every touched module's tests incl. chat-sessions, entry-list, chat-commands, layout, read-chat-layout) + npm run selftest (chat groups own the queue steps; run at 9e86eaa, later commits docs only) + typecheck + lint · 4712/4712 unit pass; self-test 793 pass 0 fail; typecheck and lint clean
 

@@ -1,6 +1,6 @@
 # 05 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 5 · Depends on: 04
 Plan: [plan.md](plan.md)
@@ -18,3 +18,5 @@ Done when: every line above matches the code; the fixes are committed
 Commit:    one commit, docs only
 
 ## Proof
+
+Commit 08b6004 · proof: § Pending messages fixed line by line; § Chat tab, § Layouts and keymap.md cp row true · concerns: none
