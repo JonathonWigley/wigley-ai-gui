@@ -1,5 +1,7 @@
 Measured on `claude --version` → `2.1.304 (Claude Code)`, 2026-10-20, macOS.
 
+§ Subagents and § Compaction measured on 2.1.316, 2026-11-01.
+
 # Claude Code stream-json wire facts
 
 What the installed `claude` CLI prints and accepts in stream-json mode, measured live by the agent-chat spike (plan A,
@@ -743,3 +745,249 @@ millisecond after it, `{"type":"control_request","request_id":"probe-1","request
 - Every `result` carried `"queued_turn_count":0`, even the A turn's result with `U(two)` waiting behind it, so the
   field does not count queued messages. A queued local command's `result` also carries `"local_command":"effort"`.
 - The process exited with code 0 when stdin closed after phase C.
+
+## Subagents
+
+Measured on 2.1.316, 2026-11-01, as § How every probe ran (base plus `--model haiku --effort low`, one process per
+probe). Excerpts are trimmed as above; `toolu_…Agent` stands for the Agent call's `tool_use` id, and `a4e4…` for a
+subagent's id. The profile that ran the probes has `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` in its settings.
+
+**A subagent runs in the background unless the call says `run_in_background: false`.** Every Agent call without that
+input, `Explore` included, got `"is_backgrounded":true` on its `task_started`. Only the explicit `false` ran in the
+foreground (`"is_backgrounded":false`). So the Agent call's `tool_result` is, by default, the launch receipt, not the
+subagent's report (below).
+
+**The Agent call's `tool_use`.** Probe 1 (stdin `U(Use the Agent tool to start one subagent of type Explore with the
+description "read notes" …)`; Explore spawned on the first attempt):
+
+```
+2.12 {"type":"assistant","message":{…,"content":[{"type":"tool_use","id":"toolu_01FqZQTLkePVaZcsvgWG3jqK","name":"Agent","input":{"description":"read notes","subagent_type":"Explore","prompt":"Use the Read tool to read the file notes.txt in the current working directory (<project>). Report back its first line only. Do not modify any files."},"caller":{"type":"direct"}}],…,"usage":{…}},"parent_tool_use_id":null,…,"wire_tool_inputs":{"toolu_01FqZQTLkePVaZcsvgWG3jqK":{"description":"read notes","subagent_type":"Explore","prompt":"…"}}}
+```
+
+- **The `tool_use` `name` is `Agent`; init's `tools` still lists `Task`** (and not `Agent`): `"tools":["Task","Bash",…]`
+  on 2.1.316, as on 2.1.304 (§ Init). A decoder matches both names.
+- `input` keys: `description`, `prompt`, and `subagent_type` only when the model names one. Probe 2 (no type named by
+  the user): `input` is `{"description":"read notes","prompt":"…"}`, with the key absent; `task_started` then reports
+  `"subagent_type":"general-purpose"`. The model may pick a type itself: probe 6's call (also no type named) carried
+  `"subagent_type":"wigley:reader-sonnet"`.
+- `run_in_background` is in `input` only when the model sets it: `true` in probe 4, `false` in the foreground probes,
+  absent otherwise. Probe 4: `{"description":"read notes","prompt":"…","run_in_background":true}`. The CLI did not
+  refuse the option.
+- No other `input` key appeared.
+- A reader pins an Agent call by `tool_use.id`, which is also the `tool_use_id` of every `task_*` line below.
+
+**The system lines for a subagent.** All four carry the Agent call's id in `tool_use_id` (not in
+`parent_tool_use_id`, which no `system` line carried) and the subagent's id in `task_id`:
+
+```
+3.40 {"type":"system","subtype":"background_tasks_changed","tasks":[{"task_id":"a4e45e22d2e0fef8f","run_id":"0mvylyy1j-5c2e141f","task_type":"local_agent","subagent_type":"Explore","description":"read notes"}]}
+3.40 {"type":"system","subtype":"task_started","task_id":"a4e45e22d2e0fef8f","run_id":"0mvylyy1j-5c2e141f","tool_use_id":"toolu_01FqZQTLkePVaZcsvgWG3jqK","description":"read notes","subagent_type":"Explore","is_backgrounded":true,"spawn_depth":1,"task_type":"local_agent","prompt":"Use the Read tool …"}
+4.76 {"type":"system","subtype":"task_progress","task_id":"a4e45e22d2e0fef8f","run_id":"0mvylyy1j-5c2e141f","tool_use_id":"toolu_01FqZQTLkePVaZcsvgWG3jqK","description":"Reading notes.txt","subagent_type":"Explore","usage":{"total_tokens":15662,"tool_uses":1,"duration_ms":1363},"last_tool_name":"Read"}
+7.71 {"type":"system","subtype":"task_updated","task_id":"a4e45e22d2e0fef8f","run_id":"0mvylyy1j-5c2e141f","patch":{"status":"completed","end_time":1793584619176}}
+7.71 {"type":"system","subtype":"task_notification","task_id":"a4e45e22d2e0fef8f","run_id":"0mvylyy1j-5c2e141f","tool_use_id":"toolu_01FqZQTLkePVaZcsvgWG3jqK","status":"completed","output_file":"<tasks>/a4e45e22d2e0fef8f.output","summary":"This agent's report was delivered to you as a message from \"a4e45e22d2e0fef8f\" (its SubagentHandback call). Read it there; it is not repeated here.\n","usage":{"total_tokens":16993,"tool_uses":2,"duration_ms":4309},"handback":"send","handback_report":{"text":"First line of notes.txt: spike"}}
+7.71 {"type":"system","subtype":"background_tasks_changed","tasks":[]}
+```
+
+- **New system subtypes:** `task_started` (the start: `subagent_type`, `description`, `prompt`, `is_backgrounded`,
+  `spawn_depth`), `task_progress` (one per subagent tool call: `description` is a model-written label of the current
+  tool call, `last_tool_name`, cumulative `usage.{total_tokens,tool_uses,duration_ms}`; `usage.total_tokens` counts the
+  subagent's tokens, not the main context), `task_updated` (`patch.status`: `completed`, or `killed` on an interrupt),
+  `task_notification` (the end event) and `background_tasks_changed` (`tasks` is the full list of running tasks; `[]`
+  when none). `task_updated` and `task_notification` arrive in the same millisecond, and the list update follows.
+  `task_started` and `task_notification` carry the call's id as `tool_use_id`; `task_updated` carries only
+  `task_id` and `run_id`, and `background_tasks_changed` only its `tasks` list.
+- **The subagent's id** is `task_id`: `a4e45e22d2e0fef8f`. It also appears as `agent_id` on the subagent's
+  `assistant`/`user` lines and as `agentId` in the Agent call's `tool_use_result`. It differs from the call's
+  `toolu_` id, and the pair is given by `task_started` (`task_id` with `tool_use_id`).
+- **The end event is `system/task_notification`**, with `status` `completed` (or `stopped` after an interrupt,
+  below), the call's id in `tool_use_id`, `usage` and, on a normal end, `handback_report.text` (the subagent's final
+  message, here from its `SubagentHandback` tool call; a subagent that ends in plain text was not measured). No
+  `<task-notification>` user message appeared. `task_notification` comes 0 ms after the subagent's last line (its last
+  `user` tool result). `status` `failed` was not observed.
+- **After the end, the harness runs a turn on the main agent** when the main turn is already over (below):
+  `system/init`, `system/status requesting`, an `assistant`, and a `result` whose `origin` is
+  `{"kind":"peer","from":"a5d2bf79d0e109653","senderTaskId":"a5d2…","name":"general-purpose","body":"[Subagent hand-back] …","handback":true,"handbackReportText":"spike"}`;
+  then a second `init` and an empty `result` (`"result":""`, `"num_turns":0`, `"origin":{"kind":"task-notification","producer":"session-task","runId":"0mvylzfvo-dc6760e4"}`).
+  Each `result` carries `subagent_stats`:
+  `{"spawned":1,"requested":{"background":1,"foreground":0,"unset":0},"started_in_background":1,"max_depth":1,"spawned_by_subagents":0,"completed":1,"failed":0,"killed":{"parent":0,"user":0,"system":0},"refused":{…},"by_type":{"general-purpose":1}}`.
+  Neither `result` is a user turn: § Result counts one `result` per message written, and these two come with no stdin
+  message.
+
+**The subagent's own lines.** `assistant` and `user` events only; **no `stream_event` lines for a subagent** in any
+probe. Every one carries `parent_tool_use_id` equal to the Agent call's `tool_use` id (checked on all subagent lines of
+probes 1, 2, 4, 6 and 7), plus three top-level keys the main agent's lines lack: `agent_id`, `subagent_type`,
+`task_description`. A subagent's tool call and its result:
+
+```
+4.76 {"type":"assistant","message":{"model":"claude-haiku-5-5","id":"msg_011CgdGgYLDfFWRV43cgsu25",…,"content":[{"type":"tool_use","id":"toolu_01Th9zCiM7nvQkeAH1gsms6w","name":"Read","input":{"file_path":"<project>/notes.txt"},"caller":{"type":"direct"}}],…,"usage":{"input_tokens":2,"cache_creation_input_tokens":15637,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":15637,"ephemeral_1h_input_tokens":0},"output_tokens":17,…}},"parent_tool_use_id":"toolu_01FqZQTLkePVaZcsvgWG3jqK","agent_id":"a4e45e22d2e0fef8f","request_id":"req_011CgdGgY1sEU695qQGKYAK9","subagent_type":"Explore","task_description":"read notes"}
+4.84 {"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_01Th9zCiM7nvQkeAH1gsms6w","type":"tool_result","content":"1\tspike\n2\t"}]},"parent_tool_use_id":"toolu_01FqZQTLkePVaZcsvgWG3jqK","agent_id":"a4e45e22d2e0fef8f","tool_result_meta":[{…}],"subagent_type":"Explore","task_description":"read notes"}
+```
+
+- A subagent's tool calls are `tool_use` blocks in `assistant` events carrying the parent id, and their results are
+  `user` events carrying it: yes, as above. A thinking block is its own `assistant` line there too (one block per
+  event, § Assistant messages).
+- **A subagent's `assistant` events carry `message.usage`**, in the shape of the main agent's. Its values are the
+  subagent's own context (above: `cache_creation_input_tokens` 15637 on its first call, against 34649 for the main
+  agent's call at 2.12), so the usage plan's reader skips any line with a non-null `parent_tool_use_id`.
+- A foreground subagent also emits a first `user` line holding its prompt as a text block, with the parent id
+  (`"content":[{"type":"text","text":"Read the file notes.txt … "}]`, 2.46, 0 ms after `task_started`). A
+  background subagent printed no such line.
+- The subagent's last tool is `SubagentHandback` on this machine (its report goes back through it): its `tool_use`
+  `input` is `{"message":"…"}`, and its `user` result is `{"success":true,"message":"Report delivered to your caller."}`.
+  A subagent's tool list depends on the install, so a reader does not rely on this tool's name.
+- A subagent's own background task (a Bash command it ran) prints a `task_started` of its own, then a
+  `task_notification` when done, both without `subagent_type` and with the owning subagent named:
+  `{"type":"system","subtype":"task_started","task_id":"bpdumb7hy","tool_use_id":"toolu_013yMwaFpXAMzqHRy4wXcMto","description":"Sleep for 45 seconds via python3","is_backgrounded":false,"parent_task_id":"a8e9e7aad968da282","owned_by_subagent":true,"task_type":"local_bash"}`.
+  Its `task_type` is `local_bash`, against `local_agent`, and its `tool_use_id` is the subagent's own Bash call, so a
+  reader keys a subagent on `task_type":"local_agent"`.
+
+**The Agent call's `tool_result`.**
+
+- **Background (the default).** It arrives at the launch, 0.07 s after `task_started` and **before any subagent line**,
+  and says nothing about the report:
+
+  ```
+  3.47 {"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_01FqZQTLkePVaZcsvgWG3jqK","type":"tool_result","content":[{"type":"text","text":"Async agent launched successfully. (This tool result is internal metadata …)\nagentId: a4e45e22d2e0fef8f (internal ID …)\nThe agent is working in the background. You will be notified automatically when it completes. …\noutput_file: <tasks>/a4e45e22d2e0fef8f.output\n…"}]}]},"parent_tool_use_id":null,…,"tool_use_result":{"isAsync":true,"status":"async_launched","agentId":"a4e45e22d2e0fef8f","description":"read notes","resolvedModel":"claude-haiku-5-5","prompt":"…","outputFile":"<tasks>/a4e45e22d2e0fef8f.output","canReadOutputFile":true,"canContinueAgent":true},"tool_result_meta":[{…}]}
+  ```
+
+  `content` is an array of `text` blocks; there is no `is_error`. The main agent's turn usually ends (`result`) before
+  the subagent does: probe 1 `result` at 5.52, `task_notification` at 7.71; probe 4 `result` at 4.11, end at 6.07.
+  The subagent's lines keep arriving after that `result`, then `task_notification` and the follow-up turn.
+- **Foreground** (`run_in_background: false`). It arrives after the subagent's last line and 0.04 s after
+  `task_notification`:
+
+  ```
+  6.28 system/task_notification   (status completed)
+  6.32 {"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_01UHa5cdpgttXA663ts275NS","type":"tool_result","content":[{"type":"text","text":"  This agent's report was delivered to you as a message from \"a9ad8b8754f9ef387\" (its SubagentHandback call). Read it there; it is not repeated here.\n  \nagentId: a9ad8b8754f9ef387 (use SendMessage …)\n<usage>subagent_tokens: 31736\ntool_uses: 2\nduration_ms: 3829</usage>"}]}]},"parent_tool_use_id":null,…,"tool_use_result":{"status":"completed","prompt":"…","agentId":"a9ad8b8754f9ef387","agentType":"general-purpose","handback":"send","handbackReport":{"text":"The first line of …"},"toolsUsed":["Read","SubagentHandback"],"content":[{"type":"text","text":"This agent's report was delivered to you as a message from …"}],"resolvedModel":"claude-haiku-5-5","totalDurationMs":3829,"totalTokens":31736,"totalToolUseCount":2,"usage":{…}}}
+  ```
+
+  `parent_tool_use_id` is `null` and `tool_use_result` is an object with `status`, `agentId`, `agentType`,
+  `handbackReport.text`, `toolsUsed`, `totalDurationMs`, `totalTokens`, `totalToolUseCount` and `usage`. The report
+  text is in `tool_use_result.handbackReport.text` and `task_notification.handback_report.text`; the `content` text is
+  a pointer, not the report.
+- **Failure.** Probe 3 (unknown type): the call gets no `task_*` line and no subagent line; its error comes 0.74 s
+  after the `tool_use` (3.22 → 3.96) as an ordinary failed tool result (§ Tool results):
+
+  ```
+  3.96 {"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":"Agent type 'no-such-agent' not found. Available agents: claude, Explore, general-purpose, Plan, statusline-setup, wigley:haiku, …","is_error":true,"tool_use_id":"toolu_01TY9qXDX4qukQXpdow3rvTw"}]},"parent_tool_use_id":null,…,"tool_use_result":"Error: Agent type 'no-such-agent' not found. Available agents: claude, Explore, …","tool_result_meta":[{…}]}
+  ```
+
+  The model then answered in text and the turn ended `success`. A subagent that starts and then fails (`status`
+  `failed`) was not observed.
+
+**`tool_progress` for the Agent call.** A foreground subagent whose Bash call slept 45 s printed one heartbeat at
+32.95 s, 30 s after the call started (§ Other events), naming the Agent call:
+
+```
+32.95 {"type":"tool_progress","tool_use_id":"toolu_01NMyJe26umYFtHXKQgytyLA-heartbeat-0","tool_name":"Agent","parent_tool_use_id":"toolu_01NMyJe26umYFtHXKQgytyLA","elapsed_time_seconds":30,"heartbeat":true,…}
+```
+
+Here `parent_tool_use_id` is the Agent call's id, the same value a subagent's own lines carry, and the line has no
+`agent_id`. A decoder that maps `parent_tool_use_id` to a subagent must not read this line as the subagent's activity:
+its `type` is `tool_progress`. The subagent's Bash call (a background task of its own) had no heartbeat of its own.
+Background launches (the Agent call's `tool_result` came at once) printed no `tool_progress` in the 4–7 s probes; a
+background subagent running past 30 s was not measured.
+
+**Probe 4, background with `run_in_background: true`.** Same as the default, since the default is background: the
+`tool_result` at launch (3.11), the main turn's `result` at 4.11 (`"result":"Waiting on the background agent …"`), the
+subagent's lines at 4.45–6.07, then:
+
+```
+6.07 system/task_updated {"patch":{"status":"completed",…}}
+6.07 system/task_notification {"task_id":"a5d2bf79d0e109653","tool_use_id":"toolu_01UyJ5sv6bZNWc6kmUugWkJn","status":"completed",…,"handback_report":{"text":"spike"}}
+6.07 system/background_tasks_changed {"tasks":[]}
+6.09 system/init … 7.43 result/success "done"   (origin kind "peer": the subagent's hand-back, above)
+```
+
+The end event ties to the Agent call by `task_notification.tool_use_id` equal to the call's `tool_use.id`
+(`toolu_01UyJ5sv6bZNWc6kmUugWkJn`), and by `task_id` equal to the launch receipt's `tool_use_result.agentId`.
+
+**Probe 6, interrupt.** The `interrupt` control request as § Interrupt sends it.
+
+- **Foreground subagent**, interrupt at 4.34, mid-run (the subagent had made one Read, result at 3.83), before the Agent
+  call's `tool_result`:
+
+  ```
+  4.34 stdin  {"type":"control_request","request_id":"spike-int","request":{"subtype":"interrupt"}}
+  4.35 {"type":"control_response","response":{"subtype":"success","request_id":"spike-int","response":{"still_queued":[]}}}
+  4.36 {"type":"system","subtype":"task_updated","task_id":"af0c6c15600dc7947","run_id":"0mvym12x8-634db02c","patch":{"status":"killed","end_time":1793584716241}}
+  4.36 {"type":"system","subtype":"task_notification","task_id":"af0c6c15600dc7947","tool_use_id":"toolu_017C8XtU59g9eSqrTt6PAvVU","status":"stopped","output_file":"<tasks>/af0c6c15600dc7947.output","summary":"read notes"}
+  4.36 {"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":"The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). STOP what you are doing and wait for the user to tell you how to proceed. Correction to the text above: this call was stopped while running, not refused before it ran. …","is_error":true,"tool_use_id":"toolu_017C8XtU59g9eSqrTt6PAvVU"}]},"parent_tool_use_id":null,…,"tool_use_result":"User rejected tool use","tool_result_meta":[{"id":"toolu_017C8XtU59g9eSqrTt6PAvVU","non_execution_kind":"user-rejected"}]}
+  4.36 {"type":"user","message":{"role":"user","content":[{"type":"text","text":"[Request interrupted by user for tool use]"}]},"parent_tool_use_id":null,…}
+  4.36 {"type":"result","subtype":"error_during_execution","is_error":true,"stop_reason":"tool_use","terminal_reason":"aborted_tools","num_turns":3,"errors":["[ede_diagnostic] result_type=user last_content_type=n/a stop_reason=tool_use"],"subagent_stats":{"spawned":1,"requested":{"background":0,"foreground":1,"unset":0},"started_in_background":0,…,"completed":0,"failed":0,"killed":{"parent":0,"user":1,"system":0},…},…}
+  ```
+
+  So the Agent call **does** get a `tool_result`, `is_error: true` with the text above, parent id `null`, in the same
+  millisecond as the `task_notification` (`status: "stopped"`). **No subagent line follows the interrupt** (the subagent's
+  last line was its Read result at 3.83). The turn's `result` is `error_during_execution` with
+  `terminal_reason: "aborted_tools"` and `stop_reason: "tool_use"`, and the marker text reads `… for tool use]` (against
+  § Interrupt's `[Request interrupted by user]` for an interrupt during text). There is no `result` key; the process
+  stayed alive until stdin closed, and then exited with code **1**, not the 0 § Interrupt records for a control
+  interrupt, with no stderr line (also on a second run, interrupted at 2.38 s, before `task_started`: the Agent
+  call got the same error `tool_result`, the marker read `[Request interrupted by user]`, and the `result` had
+  `terminal_reason` `aborted_streaming`, `stop_reason` `null` and no `task_*` lines).
+- **Background subagent**, interrupt at 4.99 (the launch receipt and the main turn's `result` were already out, 4.43;
+  the subagent was running). There is no pending Agent `tool_result` to cancel, so none is printed, and no `result`
+  (no turn was running):
+
+  ```
+  4.99 system/task_updated {"patch":{"status":"killed",…}}
+  4.99 system/task_notification {"task_id":"af1f9edb244f783e5","tool_use_id":"toolu_01SHt4fc61cUU5vZjsgvzhQ6","status":"stopped","output_file":"<tasks>/af1f9edb244f783e5.output","summary":"read notes"}
+  4.99 system/background_tasks_changed {"tasks":[]}
+  4.99 control_response {"subtype":"success","request_id":"spike-int","response":{"still_queued":[]}}
+  4.99 {"type":"user","message":{"role":"user","content":[{"type":"text","text":"[Request interrupted by user]"}]},"parent_tool_use_id":"toolu_01SHt4fc61cUU5vZjsgvzhQ6","agent_id":"af1f9edb244f783e5","subagent_type":"wigley:reader-sonnet","task_description":"read notes"}
+  ```
+
+  The interrupt kills the running background subagent too, ends it with `task_notification` `status: "stopped"` (no
+  `handback_report`), and prints the interrupt marker as a **subagent line** (`parent_tool_use_id` = the call's id,
+  with `agent_id`). The process exited with code 0. No follow-up turn ran.
+- A subagent's end therefore comes as `task_notification` in every case measured (`completed`, `stopped`), so an
+  adapter finishes a subagent on that line, keyed by `tool_use_id`, and need not wait for the Agent call's `tool_result`.
+
+**Not observed:** `task_notification` `status: "failed"`, a subagent that spawns its own subagent (`spawn_depth` was 1
+in every probe), a subagent `stream_event`, a `<task-notification>` user message, and a background subagent running
+past 30 s.
+
+## Compaction
+
+Measured on 2.1.316, 2026-11-01. Probe 5: in the probe 1 process, `U(/compact)` after the first turn's `result`, then
+`U(Reply with the single word ok.)`. The conversation held the Agent call and its subagent (above) and was 37,393
+tokens at its last main-agent message (`usage`: `input_tokens` 2 + `cache_creation_input_tokens` 2744 +
+`cache_read_input_tokens` 34647, taken as their sum). The summary took 8.3 s (5.59 → 13.98), during which the
+background subagent finished (the `task_*` lines of § Subagents arrived between).
+
+```
+5.59  stdin  U(/compact)
+5.63  {"type":"system","subtype":"status","status":"compacting"}
+13.93 {"type":"system","subtype":"hook_started","hook_name":"SessionStart:compact","hook_event":"SessionStart",…}
+13.98 {"type":"system","subtype":"hook_response","hook_name":"SessionStart:compact",…,"exit_code":0,"outcome":"success"}
+13.98 {"type":"system","subtype":"status","status":null,"compact_result":"success"}
+13.98 {"type":"system","subtype":"init",…}
+13.98 {"type":"system","subtype":"compact_boundary","compact_metadata":{"trigger":"manual","pre_tokens":37559,"post_tokens":9023,"cumulative_dropped_tokens":28536,"duration_ms":8303,"preserved_segment":{"head_uuid":"c207…","anchor_uuid":"13de…","tail_uuid":"05ab…"},"preserved_messages":{"anchor_uuid":"13de…","uuids":["c207…","1572…","7797…","05ab…"],"all_uuids":[…]}},"logical_parent_uuid":"05ab…"}
+13.98 {"type":"user","message":{"role":"user","content":"This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.\n\n<system-reminder>\n<tools-used-before-summary>Agent, Read</tools-used-before-summary>\n</system-reminder>\nSummary:\n1. Primary Request and Intent: …"},"parent_tool_use_id":null,…}
+13.98 {"type":"user","message":{"role":"user","content":"<local-command-stdout>Compacted </local-command-stdout>"},"parent_tool_use_id":null,…,"isReplay":true}
+13.98 {"type":"result","subtype":"success","is_error":false,"result":"","stop_reason":null,"num_turns":0,"local_command":"compact","total_cost_usd":0.00967945,"duration_ms":…,"modelUsage":{…},"subagent_stats":{…},…}
+```
+
+- **`system/compact_boundary`** is the compaction marker. `compact_metadata`: `trigger` (`"manual"` here; an automatic
+  compaction's value was not measured), `pre_tokens` (37559), **`post_tokens`** (9023: the after-size key exists),
+  `cumulative_dropped_tokens` (28536, which is `pre_tokens − post_tokens`), `duration_ms`, `preserved_segment`
+  (`head_uuid`, `anchor_uuid`, `tail_uuid`) and `preserved_messages` (`anchor_uuid`, `uuids`, `all_uuids`). The line
+  also has top-level `logical_parent_uuid`.
+- **`/compact` prints no synthetic `assistant` event** (unlike § Effort's local commands). The lines, in order:
+  `system/status compacting`, the `SessionStart:compact` hook pair, `system/status` with `status: null` and
+  `compact_result: "success"`, `system/init`, `compact_boundary`, a `user` event whose string `content` is the
+  summary prompt, a `user` replay `<local-command-stdout>Compacted </local-command-stdout>` (`isReplay: true`), and a
+  `result` with `"local_command":"compact"`, `"result":""`, `"num_turns":0`, `"stop_reason":null` and no
+  `terminal_reason`. The `init` here comes after the `status`, not before it as in other local commands.
+- **`pre_tokens` against usage.** `pre_tokens` (37559) is 166 above the last main message's context (37393: the
+  `assistant` `usage` sum before the compaction), so it is the context size at the compaction.
+  `post_tokens` (9023) is **not** what the next message's usage shows: the next messages' context (`input_tokens` +
+  `cache_creation_input_tokens` + `cache_read_input_tokens`) was 38,021 (the follow-up turn the subagent's end
+  started, 16.61) and 38,930 (the `ok` turn, 18.04: `{"input_tokens":2,"cache_creation_input_tokens":909,"cache_read_input_tokens":38019}`),
+  about the size before the compaction. The context after a compaction therefore reads from the next `usage`, not from
+  `post_tokens`; `post_tokens` counts the conversation messages, and the next call's input also holds the system prompt
+  and tools.
+- The next call after the compaction rebuilt the cache: `"diagnostics":{"cache_miss_reason":{"type":"messages_changed","cache_missed_input_tokens":22479}}`
+  and `"input_transformations":[{"type":"thinking_dropped",…}]` on the 16.61 `assistant`.
+- Not measured: an automatic compaction (`trigger` other than `manual`), and the lines it prints.
