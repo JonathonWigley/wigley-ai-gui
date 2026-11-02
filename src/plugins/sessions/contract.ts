@@ -99,8 +99,8 @@ export interface ConnectedSession extends ToolSession {
 // inside the session's one info object, and emits `hostSessionChanged`. The
 // relay joined under the old id loses its join and has its later calls
 // refused, and a relay saying hello with the old id is refused while the
-// session lasts. It throws when another session holds that host id and does
-// nothing after `end`.
+// session lasts, unless another owned session holds that id. It throws when
+// another session holds that host id and does nothing after `end`.
 export interface OwnedSession {
   session: AgentSession;
   end(): void;
@@ -125,7 +125,7 @@ export interface SessionsMainExports {
   // whose host id the info carries, adding no row. A newer relay for that host
   // id takes the join from an older one still connected; the older handle's
   // `end` then leaves the join alone. Throws for a host id an owned session
-  // moved away from.
+  // moved away from, unless another owned session holds it.
   connect(info: SessionInfo): ConnectedSession;
   // Starts an owned session with its row selected, or, with `options.select`
   // false, added unmarked and the selected row (or none) left as it was.

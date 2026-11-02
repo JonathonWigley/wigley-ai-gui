@@ -1306,4 +1306,17 @@ describe('a session moved to a new host id', () => {
       session_id: 'session-2',
     });
   });
+
+  it('rejects a call queued under the old id, opening nothing under the new one', async () => {
+    const { session, moveHost } = startMovableSession();
+    void session.open(NAMING_ARGS, null, live());
+    const queued = session.open(PLACEMENT_ARGS, null, live());
+    moveHost();
+
+    void session.collect(false, live());
+
+    await expect(queued).rejects.toThrow(/new host id.*open_form/);
+    expect(presenter.shown).toHaveLength(1);
+    expect(store.newestFor(fingerprintOf(PLACEMENT_ARGS))).toBeNull();
+  });
 });

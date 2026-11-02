@@ -640,23 +640,23 @@ round; primer: an open primer), since main, not the page, decides.
   the group proves, and a step may add its own `why`; the report prints `group <plugin>: <name>` before the group's
   steps, and a failed step prints the group's why and the step's own. The groups are checked when the handover
   closes, once every part has started: a blank or repeated group name, a blank `why`, a bad `width` or a bad
-  `repeat` (or a `repeat` beside `alsoExpect`) fails the self-test before any step runs. A step's `width` (a positive whole number, or `'start'`, the
-  width the self-test began on) sets the window's content width before the step's write and keys and holds it, the
-  fit check returning to it, until a later step sets another or the script ends; every script starts and ends on the
-  start width. A run a reload interrupted does not restore the width itself: the next run resizes back on opening. A
-  step's `repeat: { until, max }` presses its keys again after each `expect` line until the `until` line is logged;
-  the first press counts toward `max` (a whole number of at least 2), and passing the cap without `until` fails. It
-  reports one line, `<keys> ×<presses> -> <until>`, and its `screenshot` saves one PNG per press,
-  `<plugin>-<name>-<n>.png`, file n after press n. A step's `alsoExpect` holds patterns that must each match another
-  line logged after the step began, before or after `expect`, for a line carrying a value the script cannot know
-  (chat's clear step matches the notes line naming the row's random new host id). The self-test's user config folder sits in its temp home. The
-  script's `settings` override plugin settings in the config main serves the page (forms' sets a short
-  `keys.whichKeyTimeoutMs`, so a step can wait out the panel); main parts start on the ConfigStore's config, which
-  under the self-test is the empty config folder in its temp home, so the defaults, with no script `settings` over
-  them. Each plugin hands at most one script, and the scripts run in plugin start order; the keys plugin's main part only
-  registers its layouts and hands no script, so its steps live in forms' script, whose fixture gives them scopes full
-  of binds and a box to type in. The gallery's main part hands none either, so its steps live in forms' and docs'
-  scripts. Chat's script runs its sessions
+  `repeat` (or a `repeat` beside `alsoExpect`) fails the self-test before any step runs. A step's `width` (a positive
+  whole number, or `'start'`, the width the self-test began on) sets the window's content width before the step's
+  write and keys and holds it, the fit check returning to it, until a later step sets another or the script ends;
+  every script starts and ends on the start width. A run a reload interrupted does not restore the width itself: the
+  next run resizes back on opening. A step's `repeat: { until, max }` presses its keys again after each `expect` line
+  until the `until` line is logged; the first press counts toward `max` (a whole number of at least 2), and passing
+  the cap without `until` fails. It reports one line, `<keys> ×<presses> -> <until>`, and its `screenshot` saves one
+  PNG per press, `<plugin>-<name>-<n>.png`, file n after press n. A step's `alsoExpect` holds patterns that must each
+  match a line logged after the step began, before or after `expect`, for a line carrying a value the script cannot
+  know (chat's clear step matches the notes line naming the row's random new host id). The self-test's user config
+  folder sits in its temp home. The script's `settings` override plugin settings in the config main serves the page
+  (forms' sets a short `keys.whichKeyTimeoutMs`, so a step can wait out the panel); main parts start on the
+  ConfigStore's config, which under the self-test is the empty config folder in its temp home, so the defaults, with
+  no script `settings` over them. Each plugin hands at most one script, and the scripts run in plugin start order; the
+  keys plugin's main part only registers its layouts and hands no script, so its steps live in forms' script, whose
+  fixture gives them scopes full of binds and a box to type in. The gallery's main part hands none either, so its
+  steps live in forms' and docs' scripts. Chat's script runs its sessions
   over the fake agent harness, whose controls are Mode, Effort, Model and Verbosity so every chip and its pick key draws, its steps covering the resume list, archive and slash completion. Docs'
   (`src/plugins/docs/main/selftest-script.ts`) runs over a fixture (`selftest-fixture.ts`) that writes docs, an
   index and a stand-in `docs_index.py` into the temp home at start when the home holds none yet, and again at each

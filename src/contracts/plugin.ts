@@ -530,7 +530,7 @@ export interface PagePart<M extends PluginManifest = PluginManifest> {
 // self-test's temp home (`MainServices.homeDir` under the self-test), and one
 // that resolves outside it fails the self-test. `expect` is a line the page
 // logs once the write and the keys have run, and `alsoExpect`, when set, holds
-// patterns that each match another line logged after the step began, before or
+// patterns that each match a line logged after the step began, before or
 // after `expect`, for a line carrying a value the script cannot know, such as
 // a random id; a repeating step takes none. `checksFit` also checks the page
 // fits the window's minimum width, or, as `'held'`, the width the step holds,

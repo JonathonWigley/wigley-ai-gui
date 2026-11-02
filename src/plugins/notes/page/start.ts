@@ -49,14 +49,18 @@ export const notesPagePart: PagePart<typeof notesManifest> = {
       'sessions.sessionHostChanged',
       ({ sessionId, hostSessionId }) => {
         const row = rows.get(sessionId);
-        if (row !== undefined) {
-          if (hostSessionId === null) {
-            rows.delete(sessionId);
-          } else {
-            rows.set(sessionId, { ...row, hostSessionId });
-          }
+        if (row === undefined) {
+          return;
         }
-        services.log('notes', `session ${hostSessionId ?? 'none'} listed`);
+        if (hostSessionId === null) {
+          rows.delete(sessionId);
+          return;
+        }
+        rows.set(sessionId, { ...row, hostSessionId });
+        services.log(
+          'notes',
+          `session ${row.hostSessionId} moved to ${hostSessionId}`,
+        );
       },
     );
 

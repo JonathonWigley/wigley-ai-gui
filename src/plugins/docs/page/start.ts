@@ -106,13 +106,13 @@ const SESSION_TREE_SPLIT = { initial: 288, min: 160, endMin: 240 };
 
 // Docs mode over the machine's index, its tree in the side bar and its doc in
 // the sheet, and the views `addView` hands out, each its tree and doc side by
-// side in a split: a Docs tab in every session over that session's index
-// among them, rebuilt once shown when the session's host id changes. Each command acts on the active view: the machine view while
-// Docs mode shows, else the added view that is visible. A change made in one
-// view reaches every other and the star set every view shares, and a view
-// showing closes the others' overlays, since two views' pane scopes may be
-// equal. `toggleTree` hides or shows the active view's tree. `openDoc` opens a
-// doc in Docs mode.
+// side in a split: a Docs tab in every session over that session's index among
+// them, rebuilt once shown when the session's host id changes. Each command
+// acts on the active view: the machine view while Docs mode shows, else the
+// added view that is visible. A change made in one view reaches every other and
+// the star set every view shares, and a view showing closes the others'
+// overlays, since two views' pane scopes may be equal. `toggleTree` hides or
+// shows the active view's tree. `openDoc` opens a doc in Docs mode.
 export const docsPagePart: PagePart<typeof docsManifest> = {
   manifest: docsManifest,
   start(api: DocsApi) {

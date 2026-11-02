@@ -440,6 +440,19 @@ function requireLiveCaller<Form, Body, Payload>(
   }
 }
 
+// Rejects a queued call made under a host id the session has since left, so
+// the old conversation's form never opens, or reads a form, under the new id.
+function requireCallerHostId<Form, Body, Payload>(
+  session: SessionContext<Form, Body, Payload>,
+  callerHostId: string | null,
+): void {
+  if (session.info.sessionId !== callerHostId) {
+    throw new Error(
+      `The session moved to a new host id before this ${session.type.openTool} ran.`,
+    );
+  }
+}
+
 // `signal` wakes the call's wait early; `host` is the caller's own signal,
 // whose abort may abandon the form.
 async function openParsedForm<Form, Body, Payload>(
@@ -560,6 +573,7 @@ async function openFormWhenFree<Form, Body, Payload>(
   formFingerprint: string,
   args: unknown,
   toolUseId: string | null,
+  callerHostId: string | null,
   signal: AbortSignal,
 ): Promise<Payload> {
   const deadline = new AbortController();
@@ -583,6 +597,7 @@ async function openFormWhenFree<Form, Body, Payload>(
     if (resentOpen !== null) {
       releaseCaller(session, resentOpen, signal);
     }
+    requireCallerHostId(session, callerHostId);
     const deadlinePassed =
       deadline.signal.aborted && !signal.aborted && !session.ended;
     if (deadlinePassed) {
@@ -615,6 +630,7 @@ async function openFormQueuedOrNow<Form, Body, Payload>(
 ): Promise<Payload> {
   const form = session.type.parse(args);
   const formFingerprint = session.type.fingerprint(form);
+  const callerHostId = session.info.sessionId;
   leaveFormsOfPastHost(session);
   const runsNow =
     earlier === null && otherUnfinishedForm(session, formFingerprint) === null;
@@ -635,6 +651,7 @@ async function openFormQueuedOrNow<Form, Body, Payload>(
     formFingerprint,
     args,
     toolUseId,
+    callerHostId,
     signal,
   );
 }
