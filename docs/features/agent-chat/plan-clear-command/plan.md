@@ -179,5 +179,6 @@ Review base: 54aed2e
 - clear group is three steps (A-S-i to chat-second, /clear with checksFit, A-S-o back) since resting session ends on chat-selftest and sending expects it — keeps sending unchanged — two extra keystrokes · group 05
 ### Review rounds
 - 1 · c53d231 · NEEDS FIXES (4 Important, 9 Minor, 1 pre-existing; 6 determined dispatched, 8 open to triage) — /tmp/claude-scratch-cc/review-c53d231.md
+- 2 · fix commits 0e099ce 5fb2911 859a8e4 337c617 070b136 8a2abd0 993ee62 · NEEDS FIXES (1 Important repeat of R1#3, 8 Minor; 7 fixed in cycle 2, 2 to follow-ups: Docs page test seam, terminal resume of a cleared conversation)
 ### Test gate
 - full vitest (4734/4734, every touched module incl. chat-sessions, claude-launch, claude-code-harness, fake harness, session-list, tabs, docs start) + npm run selftest (797 pass, 0 fail, at 4fa6000) + typecheck + lint, all clean
