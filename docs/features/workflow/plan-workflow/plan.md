@@ -338,7 +338,7 @@ Boundary rules:
 
 ### Wave 6
 
-- [ ] [11 — Doc re-read](11-doc-re-read.md) · after 01–10
+- [x] [11 — Doc re-read](11-doc-re-read.md) · after 01–10
 
 ### Wave 7
 
@@ -359,6 +359,7 @@ Review base: c95c7eb
 - 08 · 112bb1f · diff read: manifest, start (addStage export, WorkflowSelfTestHooks), flow-store, plan-watch, actions, countdown, agent-signals present; registration in manifests/main/check-layers; typecheck clean; lint one expected warning (selfTestHooks unused until 10); workflow tests 172 pass · concerns: selfTestHooks built but unused until task 10 (oxlint warning); a start test stands in for an OS watcher that misses a delete with a watch that reports nothing; readIfPresent widened in src/contracts/files.ts, outside the Files line
 - 09 · 2be0260 · diff read: layout.d.ts and default layout, page start/view/flow-tab/preview/countdown/css, layout kit and reader present; keymap w group, zlw, Flow tab scroll binds; page.ts registration; typecheck clean; tests 1322 pass · concerns: a second Space z l w preview run shows no Flow tab: closing the preview's flowTabs.remove forgets the strip build, so a reopen adds no tab until chat redraws its composer; AGENTS.md debug-keys list and DESIGN.md Surfaces/Checks lack the workflow entries (for 11)
 - 10 · a3bbd8e · diff read: selftest-script with six groups, each with a why; main hands it the hooks; worker's npm run selftest ended '[selftest] all passed'; lint clean (08's unused warning gone); six screenshots checked · concerns: a second run in one page life may match '<name> shows idle' early off the earlier run's still-open row; the Flow tab shows the plan title twice (heading and 'Fake flow · 3 tasks'); other plugins' toasts cover composer chips in two screenshots
+- 11 · 884def5 · diff read: four docs fixed against the code (keymap.md and layouts design already true); DESIGN.md fixed beyond the Files line · concerns: DESIGN.md Workflow wording read from layout.js and workflow.css, not a screenshot; the Flow tab shows the plan title twice (code, for the review)
 ### Contract changes
 - placeContributedParts(..., rollback): RollbackDeps → PartRollback { recordBox(destroy) } (new export; RollbackDeps assignable) · why: check-layers refuses src/shared/page importing layout-host · consumers: 09 · group 06
 - signalOf(event: ChatAgentEvent, flow, fromCurrentHost) → signalOf(event: AgentEvent, flow, fromCurrentHost) · why: the task doc's Produces names AgentEvent; start.ts derives fromCurrentHost from the ChatAgentEvent's hostSessionId · consumers: none outside 08 · group 08
@@ -387,3 +388,4 @@ Review base: c95c7eb
 - a failed launch resolves result with the error so problems reports 'no workflow session: <error>' · group 10 · group 10
 ### Review rounds
 ### Test gate
+- the whole Vitest suite and lint, as task 12 lists (the suite runs in seconds, and the range touches shared contracts, the fake harness every chat test uses, and the chat and sessions page) · 328 files, 5035 tests pass, no type errors, lint clean; npm run selftest passed in task 10's run (all groups, workflow's six included)

@@ -1,6 +1,6 @@
 # 11 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 6 · Depends on: every code task (01–10)
 Plan: [plan.md](plan.md)
@@ -33,3 +33,5 @@ Done when: every line is checked and every stale line is fixed.
 Commit:    one commit, `Workflow docs: re-read against the landed plugin`, pathspec-scoped to the five docs.
 
 ## Proof
+
+Commit 884def5 · proof: diff read: four docs fixed against the code (keymap.md and layouts design already true); DESIGN.md fixed beyond the Files line · concerns: DESIGN.md Workflow wording read from layout.js and workflow.css, not a screenshot; the Flow tab shows the plan title twice (code, for the review)
