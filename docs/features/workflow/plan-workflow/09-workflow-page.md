@@ -1,6 +1,6 @@
 # 09 — Workflow page: row chip, composer strip, Flow tab, keys, preview
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 4 · Depends on: 06, 08
 Plan: [plan.md](plan.md)

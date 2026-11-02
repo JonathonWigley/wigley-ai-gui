@@ -1,6 +1,6 @@
 # 05 — Fake harness emits the workflow events and scripts a workflow run
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -180,3 +180,5 @@ Done when: compiles; the test gate runs `fake-agent-harness.test.ts` and the fou
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 5729b79 · proof: diff read: createFakeAgentHarness(clock, files), the four FAKE_WORKFLOW_* exports, turn/skill/file events present; every call site passes files; tests 395 pass, no type errors · concerns: workflow turns run as void promises (an emitter throw would be an unhandled rejection); the process-ends-while-a-write-is-pending path has no test; workflow tests settle on setTimeout(0)

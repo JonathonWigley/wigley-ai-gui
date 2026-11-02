@@ -1,6 +1,6 @@
 # 08 — Workflow main part: manifest, flows, plan watch, actions, countdown
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 01, 03, 06, 07
 Plan: [plan.md](plan.md)
@@ -304,3 +304,5 @@ Done when: compiles; `npm run lint` passes (check-layers included); the test gat
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 112bb1f · proof: diff read: manifest, start (addStage export, WorkflowSelfTestHooks), flow-store, plan-watch, actions, countdown, agent-signals present; registration in manifests/main/check-layers; typecheck clean; lint one expected warning (selfTestHooks unused until 10); workflow tests 172 pass · concerns: selfTestHooks built but unused until task 10 (oxlint warning); a start test stands in for an OS watcher that misses a delete with a watch that reports nothing; readIfPresent widened in src/contracts/files.ts, outside the Files line

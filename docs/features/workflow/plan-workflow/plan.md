@@ -321,12 +321,12 @@ Boundary rules:
 ### Wave 2
 
 - [x] [04 — Claude agent events](04-claude-agent-events.md) · after 01
-- [ ] [05 — Fake agent events](05-fake-agent-events.md) · after 01
+- [x] [05 — Fake agent events](05-fake-agent-events.md) · after 01
 - [x] [07 — Stage modules](07-stage-modules.md) · after 02, 03
 
 ### Wave 3
 
-- [ ] [08 — Workflow main](08-workflow-main.md) · after 01, 03, 06, 07
+- [x] [08 — Workflow main](08-workflow-main.md) · after 01, 03, 06, 07
 
 ### Wave 4
 
@@ -355,8 +355,11 @@ Review base: c95c7eb
 - 04 · 59d441c · diff read: decoder emits skillStarted (Skill), fileWritten (ok write results), turnStarted (init), turnEnded (result); harness emits typed skillStarted; typecheck clean; claude-code tests 247 pass · concerns: the write-left-open-at-agent-end row cannot fail on a leaked writePaths entry (only a memory leak, unobservable)
 - 07 · 6456472 · diff read: seven stage halves, BUILT_IN_MAIN_STAGES/BUILT_IN_PAGE_STAGES/WORKFLOW_COMMANDS present; typecheck and lint clean; workflow tests 122 pass · concerns: stage folders name other stages' ids as string literals (idle checks 'closed', review and closed check 'make'); a rename edits them too
 - 06 · bbdee57 · diff read: send, clear, fillComposer, addComposerPart, ChatComposerPart, CHAT_PREVIEW_HOST_ID, composer contributedParts slot, shared contributed-parts present; typecheck and lint clean; chat/sessions/shared tests 1751 pass · concerns: sessions-parts.test.ts and chat layout.test.ts changed beyond the Files line (imports and one slot-order assertion); forms keeps its own part store (src/plugins/forms/page/contributions.ts), a candidate to move onto the shared helper
+- 05 · 5729b79 · diff read: createFakeAgentHarness(clock, files), the four FAKE_WORKFLOW_* exports, turn/skill/file events present; every call site passes files; tests 395 pass, no type errors · concerns: workflow turns run as void promises (an emitter throw would be an unhandled rejection); the process-ends-while-a-write-is-pending path has no test; workflow tests settle on setTimeout(0)
+- 08 · 112bb1f · diff read: manifest, start (addStage export, WorkflowSelfTestHooks), flow-store, plan-watch, actions, countdown, agent-signals present; registration in manifests/main/check-layers; typecheck clean; lint one expected warning (selfTestHooks unused until 10); workflow tests 172 pass · concerns: selfTestHooks built but unused until task 10 (oxlint warning); a start test stands in for an OS watcher that misses a delete with a watch that reports nothing; readIfPresent widened in src/contracts/files.ts, outside the Files line
 ### Contract changes
 - placeContributedParts(..., rollback): RollbackDeps → PartRollback { recordBox(destroy) } (new export; RollbackDeps assignable) · why: check-layers refuses src/shared/page importing layout-host · consumers: 09 · group 06
+- signalOf(event: ChatAgentEvent, flow, fromCurrentHost) → signalOf(event: AgentEvent, flow, fromCurrentHost) · why: the task doc's Produces names AgentEvent; start.ts derives fromCurrentHost from the ChatAgentEvent's hostSessionId · consumers: none outside 08 · group 08
 ### Rulings
 - 03 stays in wave 1 beside 02 although it consumes PlanProgress — the consumption is a type import the plan writes against plan.md's line, and the compile proves it once both land — a mismatch costs one re-dispatch of 03 · lead
 - origin fetch failed (the 1Password SSH agent is unreachable from this session); the run builds on local main at c95c7eb, even with the last-fetched origin/main — a newer origin commit would need a merge before push · lead
@@ -367,5 +370,10 @@ Review base: c95c7eb
 - a sent control command (CONTROL_COMMAND match) gives no skillStarted; only other /-messages do — a control command never starts a workflow stage · group 04 · group 04
 - stage folders do not import each other; a rule naming another stage writes its id literal — a stage rename must edit those literals · group 07 · group 07
 - an absent contributedParts call in a custom composer layout prepends the parts holder to the composer root · group 06 · group 06
+- a workflow write or trash that rejects emits an error notice in place of the assistant reply, then ends the turn — the reply would claim a change that did not happen · group 05 · group 05
+- a workflow turn is picked in the send's microtask, after the user entry, not at send time · group 05 · group 05
+- a flows.json read error other than missing logs and starts with no flows, so ready always resolves · group 08 · group 08
+- the connected/hostSessionChanged handlers copy the info fields as the event arrives, since setHostSessionId mutates the shared info; a null host id skips the rekey but still folds cleared · group 08 · group 08
+- check-layers' workflow/main layer also allows src/shared/paths (posixPaths in tests), as notes/main does · group 08 · group 08
 ### Review rounds
 ### Test gate
