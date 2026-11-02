@@ -133,8 +133,8 @@ In `src/contracts/agent.ts`, beside `AgentHarness`:
   - each session's line, a bar part (sessions' `addBarPart`) in that session's tab bar: its context bar
     (`used/limit`), its cache countdown and its spend. The context bar is tinted by its share of the limit (`warning`
     from 70 %, `critical` from 90 %); with no autocompact limit it shows tokens alone. A session with no usage event
-    yet draws no line. The line redraws on each snapshot, each layouts set and the minute tick, and the page logs
-    `session line <session id>: <text>` when a session's text changes.
+    yet draws no line. The line redraws on each snapshot, each `sessions.activeChanged`, each layouts set and the
+    minute tick, and the page logs `session line <session id>: <text>` when a session's text changes.
   - the details bar in the right bar, toggled by `usage.toggleDetails` (`Space v u`), its open state kept in
     `uiState`: every profile's rows with reset times, extra usage as `spent / limit` in its currency (or `off`), the
     poll's staleness and error, and the shown session's context, both autocompact limits and the marker when they
