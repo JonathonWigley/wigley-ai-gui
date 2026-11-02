@@ -1,6 +1,6 @@
 # 05 — Chat drop target
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 01, 02, 03, 04
 Plan: [plan.md](plan.md)
@@ -100,4 +100,4 @@ and check 12 (a JPEG over 5 MB attaches re-encoded as JPEG).
 
 ## Proof
 
-<written by wigley:make: commit sha, proof result, concerns; empty until the group lands>
+Commit 20ccf47 · proof: diff read: every Produces present; chat compiles (typecheck's only errors were in 06's in-progress forms files); chat files pass oxfmt and oxlint · concerns: only add, insert and charBeforeCursor are guarded once the session is gone, as the Decision lists, so a take outliving its session still logs and still saves a pasted non-image

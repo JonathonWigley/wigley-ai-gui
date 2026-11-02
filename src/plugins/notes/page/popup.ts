@@ -1,3 +1,4 @@
+import type { DroppedFile, PageDrops } from '../../../contracts/drops';
 import type { TextEditor } from '../../../contracts/editor';
 import type { Platform } from '../../../contracts/platform';
 import type {
@@ -13,11 +14,12 @@ import { IMAGE_TYPES } from '../../../shared/image-types';
 import { saveState, startAutosave } from '../../../shared/page/autosave';
 import { element } from '../../../shared/page/dom';
 import type { KitCommands } from '../../../shared/page/layout-host/base-kit';
-import { createListPicker } from '../../../shared/page/list-picker';
+import { insertionText } from '../../../shared/page/file-drop/file-chips';
 import {
-  filesOf,
-  holdsPastedText,
-} from '../../../shared/page/file-drop/pasted-text';
+  type ImageEncoder,
+  shrinkToFit,
+} from '../../../shared/page/file-drop/shrink-image';
+import { createListPicker } from '../../../shared/page/list-picker';
 import { createReducerStore } from '../../../shared/page/reducer-store';
 import { textBoxInput } from '../../../shared/page/text-box';
 import { createDialog } from '../../../shared/page/ui/dialog';
@@ -66,7 +68,7 @@ export type NotesPageCommand = CommandsRunIn<typeof notesManifest, 'page'>;
 
 type NotesScope = keyof typeof notesManifest.scopes & string;
 
-const REFUSED_TYPE = 'Only PNG, JPEG, GIF and WebP images can be attached';
+export const SHRINK_REFUSED = 'Image could not be shrunk under 5 MB';
 
 const FIELD_LABELS: Record<NoteField, string> = {
   target: 'Target',
@@ -106,6 +108,10 @@ export interface NotePopupDeps {
   selectedSession(): NoteSession | null;
   // Every open session row with a host session id, in row order.
   sessionRows(): readonly NoteSession[];
+  // Where the popup registers as a drop target, and saves a file with no path.
+  drops: Pick<PageDrops, 'addTarget' | 'savePasted'>;
+  // Re-encodes an image over the cap smaller as it joins the Images field.
+  encoder: ImageEncoder;
 }
 
 export interface NotePopup {
@@ -517,10 +523,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
   };
 
   // Main's draft after an image was added: the new image is the last.
-  const imageAdded = async (
-    draft: NoteDraft,
-    how: 'capture' | 'pasted' | 'dropped',
-  ) => {
+  const imageAdded = async (draft: NoteDraft, how: 'capture' | 'file') => {
     await cacheImages(draft);
     const pos = draft.images.length;
     dispatch({
@@ -531,23 +534,25 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     log('notes', `image ${pos} attached (${how})`);
   };
 
-  const attachFiles = (files: readonly File[], how: 'pasted' | 'dropped') =>
-    runDraftOperation('attach', () => attachEach(files, how));
-
-  const attachEach = async (
-    files: readonly File[],
-    how: 'pasted' | 'dropped',
-  ) => {
+  // Each image file as a PNG shrunk to fit the cap, added in order.
+  const attachEach = async (files: readonly DroppedFile[]) => {
     for (const file of files) {
-      if (!IMAGE_TYPES.includes(file.type)) {
-        toast(REFUSED_TYPE, 'error');
-        log('notes', `image refused: ${REFUSED_TYPE}`);
-        continue;
-      }
       try {
-        const png = await toPngBytes(file);
-        const draft = await channel.invoke('addImage', png);
-        await imageAdded(draft, how);
+        const bytes = await file.bytes();
+        const png = await toPngBytes(
+          new Blob([new Uint8Array(bytes)], { type: file.mediaType }),
+        );
+        const fitted = await shrinkToFit(
+          { bytes: png, mediaType: 'image/png' },
+          deps.encoder,
+        );
+        if (fitted === null) {
+          toast(SHRINK_REFUSED, 'error');
+          log('notes', `image refused: ${SHRINK_REFUSED}`);
+          continue;
+        }
+        const draft = await channel.invoke('addImage', fitted.bytes);
+        await imageAdded(draft, 'file');
       } catch (error) {
         const message = `Image not attached: ${errorText(error)}`;
         toast(message, 'error');
@@ -1114,37 +1119,79 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     });
   };
 
-  // ── Paste and drop ────────────────────────────────────────────────────────
-  document.addEventListener(
-    'paste',
-    (event) => {
-      if (!mayEdit()) {
-        return;
-      }
-      const files = filesOf(event.clipboardData);
-      if (files.length === 0 || holdsPastedText(event.clipboardData, files)) {
-        return;
-      }
-      event.preventDefault();
-      void attachFiles(files, 'pasted');
-    },
-    { capture: true },
-  );
-  dialog.element.addEventListener('dragover', (event) => {
-    if (event.dataTransfer?.types.includes('Files') === true) {
-      event.preventDefault();
+  // ── Dropped and pasted files ──────────────────────────────────────────────
+  // Each file's path, a pasted one saved first; null when its save failed.
+  const pathOf = async (file: DroppedFile): Promise<string | null> => {
+    if (file.path !== '') {
+      return file.path;
     }
-  });
-  dialog.element.addEventListener('drop', (event) => {
-    const files = filesOf(event.dataTransfer);
-    if (files.length === 0) {
+    try {
+      return await deps.drops.savePasted(file);
+    } catch (error) {
+      const message = `${file.name} not saved: ${errorText(error)}`;
+      toast(message, 'error');
+      log('notes', message);
+      return null;
+    }
+  };
+
+  // Puts the paths of `files` into the Body at its cursor, unless the popup
+  // changed while they were saved: `isOwnAttach` tells whether an 'attach' in
+  // flight is the same take's.
+  const insertPaths = async (
+    files: readonly DroppedFile[],
+    isOwnAttach: () => boolean,
+  ) => {
+    const filePaths: string[] = [];
+    for (const file of files) {
+      const path = await pathOf(file);
+      if (path !== null) {
+        filePaths.push(path);
+      }
+    }
+    if (filePaths.length === 0) {
       return;
     }
-    event.preventDefault();
-    if (mayEdit()) {
-      void attachFiles(files, 'dropped');
+    const isDraftFree =
+      inFlight === null || (inFlight === 'attach' && isOwnAttach());
+    if (!fieldsShown() || !isDraftFree) {
+      log('notes', `paths not inserted, popup changed: ${filePaths.join(' ')}`);
+      return;
     }
-  });
+    body.insert(insertionText(filePaths, body.charBeforeCursor()));
+    log('notes', `${filePaths.length} paths inserted`);
+  };
+
+  // Images join the Images field; every other file goes into the Body as its
+  // path.
+  const take = (files: readonly DroppedFile[]) => {
+    if (!mayEdit()) {
+      log('notes', `files skipped: ${inFlight ?? 'popup not editable'}`);
+      return;
+    }
+    const imageFiles = files.filter((file) =>
+      IMAGE_TYPES.includes(file.mediaType),
+    );
+    const otherFiles = files.filter(
+      (file) => !IMAGE_TYPES.includes(file.mediaType),
+    );
+    let isAttaching = false;
+    if (imageFiles.length > 0) {
+      isAttaching = true;
+      void runDraftOperation('attach', async () => {
+        try {
+          await attachEach(imageFiles);
+        } finally {
+          isAttaching = false;
+        }
+      });
+    }
+    if (otherFiles.length > 0) {
+      void insertPaths(otherFiles, () => isAttaching);
+    }
+  };
+  // The popup lives as long as the page, so it keeps no target to dispose.
+  deps.drops.addTarget({ element: dialog.element, take });
 
   render();
 

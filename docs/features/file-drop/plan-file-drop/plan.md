@@ -233,7 +233,7 @@ Boundary rules:
 - [x] [Page core drop registry](04-drop-registry.md) — after 01, 02, 03
 
 ### Wave 4
-- [ ] [Chat drop target](05-chat-target.md) — after 01, 02, 03, 04
+- [x] [Chat drop target](05-chat-target.md) — after 01, 02, 03, 04
 - [ ] [Editor-box pane targets: Forms, Primer, Backlog](06-editor-box-targets.md) — after 01, 03, 04
 - [ ] [Notes popup drop target](07-notes-target.md) — after 02, 03, 04
 - [ ] [Docs editor drop target](08-docs-target.md) — after 01, 02, 03, 04
@@ -251,6 +251,7 @@ Review base: 87a254cb76dee43042396e82e9a353b6c9573795
 - 01 · d4ea7b1 · diff read: every Produces present word for word; typecheck and lint pass · concerns: pastedFolder in main.ts not yet exercised live (task 10 checks it per run mode)
 - 03 · 002f34c · diff read: every Produces present (two extra host-only exports, logged); typecheck and lint pass · concerns: a on a chip ending its line may leave the caret before the chip; vim's own cursor re-sync after the filter moves the selection (l onto a chip, x widening) is unproven — both for the live check in 10; one over-long comment line in boxExtensions
 - 04 · 2afa21b · diff read: every Produces present; typecheck and lint pass · concerns: drops.ts DroppedFile.name comment says a pasted file is named image.png, while 04 names it pasted (stale comment, outside 04's Files); isShown's checkVisibility unchecked live; tests wait with vi.waitFor plus one setTimeout(0)
+- 05 · 20ccf47 · diff read: every Produces present; chat compiles (typecheck's only errors were in 06's in-progress forms files); chat files pass oxfmt and oxlint · concerns: only add, insert and charBeforeCursor are guarded once the session is gone, as the Decision lists, so a take outliving its session still logs and still saves a pasted non-image
 ### Contract changes
 - chip-decorations.ts exports: fileChipExtension, snapHead, widenRange → those plus skipsChipRules (an Annotation the host's setText and insert put on their own transactions) and fileChipsOf(state) (the chips of a box's state; [] in a document editor) · why: the host's insert reads the chip under a normal-mode cursor and its own transactions must skip the chip rules · consumers: none outside the host · group 03
 ### Rulings

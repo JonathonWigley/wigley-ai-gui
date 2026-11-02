@@ -4,6 +4,7 @@ import type {
   PagePart,
   QualifiedEvents,
 } from '../../../contracts/plugin';
+import { canvasEncoder } from '../../../shared/page/file-drop/canvas-encoder';
 import type { KeysPageExports } from '../../keys/contract';
 import type {
   SessionsPageEvents,
@@ -81,6 +82,8 @@ export const notesPagePart: PagePart<typeof notesManifest> = {
         return selected === null ? null : (rows.get(selected) ?? null);
       },
       sessionRows: () => [...rows.values()],
+      drops: api.drops,
+      encoder: canvasEncoder,
     });
     api.layouts.show<Layout>({
       defaultLayout,

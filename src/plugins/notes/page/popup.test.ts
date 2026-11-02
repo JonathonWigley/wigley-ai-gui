@@ -1,11 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { DropTarget, DroppedFile } from '../../../contracts/drops';
 import type { EditorEvents, TextEditor } from '../../../contracts/editor';
 import type { MarkupEditor, MarkupSession } from '../../../contracts/markup';
 import type {
   PageChannel,
   PageServices,
   PushedScope,
+  ToastTone,
 } from '../../../contracts/plugin';
+import { insertionText } from '../../../shared/page/file-drop/file-chips';
+import type { ImageEncoder } from '../../../shared/page/file-drop/shrink-image';
 import {
   recordingAnchors,
   USER_LAYOUT,
@@ -20,11 +24,16 @@ import {
   installFocusFakeDom,
 } from '../../../shared/page/test-dom';
 import { posixPaths } from '../../../shared/paths/posix-paths';
-import type { NoteDraft, NoteSession, NotesChannel } from '../contract';
+import type {
+  NoteDraft,
+  NoteFields,
+  NoteSession,
+  NotesChannel,
+} from '../contract';
 import { emptyDraft } from '../draft';
 import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
-import { createNotePopup, type NotePopup } from './popup';
+import { createNotePopup, type NotePopup, SHRINK_REFUSED } from './popup';
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
@@ -51,6 +60,11 @@ const DRAFT: NoteDraft = {
     { id: 2, hasMarkup: false },
   ],
 };
+
+const PASTED_PATH = '/app/pasted/20261102-090000-1.txt';
+
+// The most bytes whose base64 text fits the 5 MB cap.
+const CAP_BYTES = ((5 * 1024 * 1024) / 4) * 3;
 
 // A row in its own look, so a test sees which rows drew with it.
 const MINE_ROW: Layout = {
@@ -79,19 +93,59 @@ interface Harness {
   body: TextEditor;
   markups: FakeMarkup[];
   logged: string[];
+  toasts: [string, ToastTone][];
+  // The bytes of each `addImage` call, in order.
+  added: number[][];
+  // The text of each body `insert` call, in order.
+  inserts: string[];
+  // The fields of each `saveDraft` call, in order.
+  saved: NoteFields[];
+  // What the popup's drop target, the core's save and main's `addImage` do;
+  // a test replaces one before it acts.
+  fakes: Fakes;
+  // Hands `files` to the popup's drop target, as the core does.
+  take(files: readonly DroppedFile[]): void;
 }
+
+interface Fakes {
+  savePasted(file: DroppedFile): Promise<string>;
+  encode: ImageEncoder['encode'];
+  addImage(bytes: Uint8Array): Promise<NoteDraft>;
+}
+
+function droppedFile(
+  name: string,
+  mediaType: string,
+  path: string,
+  bytes: Uint8Array = new Uint8Array(),
+): DroppedFile {
+  return { name, mediaType, path, bytes: () => Promise.resolve(bytes) };
+}
+
+const png = (name: string, bytes: Uint8Array = new Uint8Array([1, 2, 3])) =>
+  droppedFile(name, 'image/png', `/d/${name}`, bytes);
 
 // A text box whose `focus` makes its frame the active element, as the editor
 // focuses its own content inside the frame.
+// `insert` records its text into `inserts` and reports `changed`, as the real
+// one does.
 function fakeEditor(
   doc: FocusFakeDocument,
   parent: HTMLElement,
   events: EditorEvents,
+  inserts: string[],
 ): TextEditor {
+  let text = '';
   return {
-    text: () => '',
-    setText: () => undefined,
-    insert: () => undefined,
+    text: () => text,
+    setText(next) {
+      text = next;
+    },
+    insert(inserted) {
+      inserts.push(inserted);
+      text += inserted;
+      events.changed(text);
+    },
     charBeforeCursor: () => '',
     focus() {
       doc.activeElement = asFake(parent);
@@ -129,31 +183,64 @@ function fakeMarkupEditor(markups: FakeMarkup[]): MarkupEditor {
   } as unknown as MarkupEditor;
 }
 
-const channel = {
-  invoke(name: string) {
-    switch (name) {
-      case 'loadDraft':
-        return Promise.resolve(DRAFT);
-      case 'homes':
-        return Promise.resolve({ homes: [], message: null });
-      case 'image':
-        return Promise.resolve(new Uint8Array([1]));
-      case 'markup':
-        return Promise.resolve(null);
-      default:
-        return Promise.reject(new Error(`no ${name} in the fake`));
-    }
-  },
-} as unknown as PageChannel<NotesChannel>;
+// Main's side: `addImage` and `saveDraft` record what they get.
+function fakeChannel(
+  draft: NoteDraft,
+  fakes: Fakes,
+  added: number[][],
+  saved: NoteFields[],
+): PageChannel<NotesChannel> {
+  return {
+    invoke(name: string, ...args: unknown[]) {
+      switch (name) {
+        case 'loadDraft':
+          return Promise.resolve(draft);
+        case 'homes':
+          return Promise.resolve({ homes: [], message: null });
+        case 'image':
+          return Promise.resolve(new Uint8Array([1]));
+        case 'markup':
+          return Promise.resolve(null);
+        case 'addImage': {
+          const bytes = args[0] as Uint8Array;
+          added.push([...bytes]);
+          return fakes.addImage(bytes);
+        }
+        case 'saveDraft':
+          saved.push(args[0] as NoteFields);
+          return Promise.resolve();
+        case 'sendToFollowup':
+          return new Promise(() => undefined);
+        default:
+          return Promise.reject(new Error(`no ${name} in the fake`));
+      }
+    },
+  } as unknown as PageChannel<NotesChannel>;
+}
 
-// The popup over fakes, opened on `DRAFT`, its body focused.
-async function openPopup(): Promise<Harness> {
+// The popup over fakes, opened on `draft`, its body focused.
+async function openPopup(draft: NoteDraft = DRAFT): Promise<Harness> {
   const doc = installFocusFakeDom((name, value) => vi.stubGlobal(name, value));
   Object.assign(doc, { addEventListener: () => undefined });
   vi.stubGlobal('getComputedStyle', () => ({ getPropertyValue: () => 'red' }));
   const roots: HTMLElement[] = [];
   const markups: FakeMarkup[] = [];
   const logged: string[] = [];
+  const toasts: [string, ToastTone][] = [];
+  const added: number[][] = [];
+  const inserts: string[] = [];
+  const saved: NoteFields[] = [];
+  let images = draft.images;
+  const fakes: Fakes = {
+    savePasted: () => Promise.resolve(PASTED_PATH),
+    encode: () => Promise.reject(new Error('no encode in the fake')),
+    addImage() {
+      const id = draft.nextImageId + images.length;
+      images = [...images, { id, hasMarkup: false }];
+      return Promise.resolve({ ...draft, images });
+    },
+  };
+  const targets: DropTarget[] = [];
   let body: TextEditor | null = null;
   const pushed = (): PushedScope => ({
     pop: () => undefined,
@@ -162,7 +249,7 @@ async function openPopup(): Promise<Harness> {
   const services = {
     editor: {
       create(parent: HTMLElement, _doc: string, events: EditorEvents) {
-        const editor = fakeEditor(doc, parent, events);
+        const editor = fakeEditor(doc, parent, events, inserts);
         if (parent.classList.contains('notes-body')) {
           body = editor;
         }
@@ -175,7 +262,7 @@ async function openPopup(): Promise<Harness> {
       document: () => Promise.resolve(''),
     },
     markup: fakeMarkupEditor(markups),
-    toast: () => undefined,
+    toast: (text: string, tone: ToastTone) => toasts.push([text, tone]),
     log: (_source: string, line: string) => logged.push(line),
     timers: { set: () => 0, clear: () => undefined },
     clock: { now: () => 0 },
@@ -184,7 +271,7 @@ async function openPopup(): Promise<Harness> {
     uiState: { get: () => undefined, set: () => undefined },
   } as unknown as PageServices;
   const popup = createNotePopup({
-    channel,
+    channel: fakeChannel(draft, fakes, added, saved),
     services,
     keys: recordingAnchors().keys,
     overlay: {
@@ -199,6 +286,14 @@ async function openPopup(): Promise<Harness> {
     autosaveDelayMs: () => 1000,
     selectedSession: () => null,
     sessionRows: () => SESSIONS,
+    drops: {
+      addTarget(target) {
+        targets.push(target);
+        return { dispose: () => undefined };
+      },
+      savePasted: (file) => fakes.savePasted(file),
+    },
+    encoder: { encode: (...args) => fakes.encode(...args) },
   });
   popup.commands.open();
   await settle();
@@ -214,6 +309,12 @@ async function openPopup(): Promise<Harness> {
     body: body as unknown as TextEditor,
     markups,
     logged,
+    toasts,
+    added,
+    inserts,
+    saved,
+    fakes,
+    take: (files) => targets[0].take(files),
   };
 }
 
@@ -307,4 +408,161 @@ describe('note popup', () => {
       check(harness);
     },
   );
+
+  it.each([
+    {
+      files: [png('a.png')],
+      added: [[1, 2, 3]],
+      inserts: [],
+    },
+    {
+      files: [droppedFile('a b.md', 'text/markdown', '/d/a b.md')],
+      added: [],
+      inserts: [insertionText(['/d/a b.md'], '')],
+    },
+    {
+      files: [droppedFile('n.txt', 'text/plain', '')],
+      added: [],
+      inserts: [insertionText([PASTED_PATH], '')],
+    },
+    {
+      files: [
+        png('a.png', new Uint8Array([1, 2, 3])),
+        droppedFile('v.mp4', 'video/mp4', '/d/v.mp4'),
+        png('b.png', new Uint8Array([4, 5])),
+      ],
+      added: [
+        [1, 2, 3],
+        [4, 5],
+      ],
+      inserts: [insertionText(['/d/v.mp4'], '')],
+    },
+  ])(
+    'take_EachFile_GoesWhereItsKindGoes ($files.length files)',
+    async ({ files, added, inserts }) => {
+      const harness = await openPopup();
+
+      harness.take(files);
+      await settle();
+
+      expect(harness.added).toEqual(added);
+      expect(harness.inserts).toEqual(inserts);
+    },
+  );
+
+  it('take_PathInserted_ReachesTheDraftBody', async () => {
+    const harness = await openPopup();
+
+    harness.take([droppedFile('a b.md', 'text/markdown', '/d/a b.md')]);
+    await settle();
+    harness.popup.commands.close();
+    await settle();
+
+    expect(harness.saved.at(-1)?.body).toBe(insertionText(['/d/a b.md'], ''));
+  });
+
+  it('take_PastedFileSaveRejects', async () => {
+    const harness = await openPopup();
+    harness.fakes.savePasted = () => Promise.reject(new Error('disk full'));
+
+    harness.take([
+      droppedFile('bad.txt', 'text/plain', ''),
+      droppedFile('a.md', 'text/markdown', '/d/a.md'),
+    ]);
+    await settle();
+
+    expect(harness.toasts).toEqual([['bad.txt not saved: disk full', 'error']]);
+    expect(harness.inserts).toEqual([insertionText(['/d/a.md'], '')]);
+  });
+
+  it.each([
+    {
+      change: 'popup closed',
+      act: (harness: Harness) => harness.popup.commands.close(),
+    },
+    {
+      change: 'send started',
+      act: (harness: Harness) => harness.popup.commands.sendFollowup(),
+    },
+  ])(
+    'take_StateChangedDuringSave_InsertsNothing ($change)',
+    async ({ act }) => {
+      const harness = await openPopup({
+        ...DRAFT,
+        target: '/home/me/a',
+        title: 'A note',
+      });
+      harness.fakes.savePasted = () => {
+        act(harness);
+        return Promise.resolve(PASTED_PATH);
+      };
+
+      harness.take([droppedFile('n.txt', 'text/plain', '')]);
+      await settle();
+
+      expect(harness.inserts).toEqual([]);
+      expect(harness.logged.some((line) => line.includes(PASTED_PATH))).toBe(
+        true,
+      );
+    },
+  );
+
+  it.each([
+    {
+      case: 'shrunk',
+      encoded: new Uint8Array(300).fill(7),
+      added: [Array.from({ length: 300 }, () => 7)],
+      toasts: [],
+    },
+    {
+      case: 'refused',
+      encoded: new Uint8Array(CAP_BYTES + 1),
+      added: [],
+      toasts: [SHRINK_REFUSED],
+    },
+  ])(
+    'take_OverCapPng_ShrinksOrRefuses ($case)',
+    async ({ encoded, added, toasts }) => {
+      const harness = await openPopup();
+      harness.fakes.encode = () => Promise.resolve(encoded);
+
+      harness.take([png('big.png', new Uint8Array(CAP_BYTES + 1))]);
+      await settle();
+
+      expect(harness.added).toEqual(added);
+      expect(harness.toasts.map(([text]) => text)).toEqual(toasts);
+    },
+  );
+
+  it.each([
+    {
+      state: 'popup closed',
+      setUp: (harness: Harness) => harness.popup.commands.close(),
+    },
+    {
+      state: 'discard confirmation showing',
+      setUp: (harness: Harness) => harness.popup.commands.discard(),
+    },
+    {
+      state: 'addImage of an earlier take pending',
+      setUp(harness: Harness) {
+        harness.fakes.addImage = () => new Promise(() => undefined);
+        harness.take([png('earlier.png')]);
+      },
+    },
+  ])('take_WhileNotEditable_TakesNothing ($state)', async ({ setUp }) => {
+    const harness = await openPopup();
+    setUp(harness);
+    await settle();
+    const addedBefore = harness.added.length;
+
+    harness.take([
+      png('a.png'),
+      droppedFile('a.md', 'text/markdown', '/d/a.md'),
+    ]);
+    await settle();
+
+    expect(harness.added.slice(addedBefore)).toEqual([]);
+    expect(harness.inserts).toEqual([]);
+  });
 });
