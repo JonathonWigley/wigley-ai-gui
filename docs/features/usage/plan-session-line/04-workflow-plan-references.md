@@ -1,6 +1,6 @@
 # 04 — Workflow plan references
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -24,3 +24,4 @@ Commit:    one commit for the tracked files, or none when every file is untracke
 
 ## Proof
 
+Commit none · proof: grep for SessionRowPart in plan-workflow prints nothing; plan.md:60 now names SessionPart; whole folder untracked (peer ai-dev-fa), so no commit · concerns: none

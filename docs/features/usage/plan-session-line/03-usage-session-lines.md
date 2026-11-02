@@ -1,6 +1,6 @@
 # 03 — Usage draws each session's line
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01, 02
 Plan: [plan.md](plan.md)
@@ -60,3 +60,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 679fdc7, 8545355 · proof: diff read; Produces present (SessionLines, createSessionLines); typecheck + lint pass; usage page tests 88 pass; npm run selftest all passed (797 PASS) after 8545355 · concerns: chat and agents self-tests failed 13 fit checks on the clipped .session-bar-parts; fixed in 8545355

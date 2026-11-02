@@ -132,8 +132,8 @@ Shared names:
 - [x] [Usage session line part](02-usage-session-line-part.md)
 
 ### Wave 2
-- [ ] [Usage draws each session's line](03-usage-session-lines.md) — after 01, 02
-- [ ] [Workflow plan references](04-workflow-plan-references.md) — after 01
+- [x] [Usage draws each session's line](03-usage-session-lines.md) — after 01, 02
+- [x] [Workflow plan references](04-workflow-plan-references.md) — after 01
 
 ### Wave 3
 - [ ] [Doc re-read](05-doc-re-read.md) — after 03, 04
@@ -146,6 +146,8 @@ Review base: d66a196a007248071a0c7ad363f22effdd460db7
 ### Groups
 - 01 · f034f08 · diff read; Produces present (SessionPart, addBarPart, SessionPartStore/createSessionPartStore, TabBarKit.contributedParts, tabBar(parent, sessionId)); typecheck + lint pass; worker ran sessions+agents tests 255 pass · concerns: AddAndDispose same-element check is vacuous on the row surface; bar part build gets a session id and redrawBars runs only on add/dispose, so usage redraws in place
 - 02 · 9eb4d06 · diff read; Produces present (sessionLine on Layout, StatusLineInput without session, sessionLineInput, sessionLineText, UsageParts.sessionLine); typecheck + lint pass after 01; usage-view-model.test.ts 54 pass (worker) · concerns: usage selftest expects the old status line text until task 03 updates selftest-script.ts
+- 04 · none · grep for SessionRowPart in plan-workflow prints nothing; plan.md:60 now names SessionPart; whole folder untracked (peer ai-dev-fa), so no commit · concerns: none
+- 03 · 679fdc7, 8545355 · diff read; Produces present (SessionLines, createSessionLines); typecheck + lint pass; usage page tests 88 pass; npm run selftest all passed (797 PASS) after 8545355 · concerns: chat and agents self-tests failed 13 fit checks on the clipped .session-bar-parts; fixed in 8545355
 ### Contract changes
 - statusLineInput (outside the Produces list): statusLineInput(snapshot, shownSessionId, now) → statusLineInput(snapshot, shownSessionId) · why: now went unused once session left the input · consumers: 03 · group 02
 ### Rulings
@@ -154,5 +156,9 @@ Review base: d66a196a007248071a0c7ad363f22effdd460db7
 - Fallback with no slot appends bar parts before the strip containment check, matching the row — nothing visible · group 01 · group 01
 - statusLineInput drops now and start.ts drawStatusLine follows — now went unused — task 03 re-adds if needed · group 02 · group 02
 - .usage-divider removed (nothing draws it); session line children use usage-text, the usage-session class pair dropped — one CSS tweak if wrong · group 02 · group 02
+- No Heard type edit: UsageApi already hears sessions.sessionRemoved — none · group 03 · group 03
+- addBarPart Disposable not kept, as agents does for addRowPart — matters only if the page gains a stop path · group 03 · group 03
+- Tests draw through the real createUsageParts over the default layout, with a third no-snapshot row — none · group 03 · group 03
+- Every self-test script that shows a tab bar with a usage line lists .session-bar-parts in scrollsItself (chat, agents, usage), beside .session-row-status — the per-script pattern; a core-wide exemption was the alternative — a future script showing tab bars must add it too · lead
 ### Review rounds
 ### Test gate
