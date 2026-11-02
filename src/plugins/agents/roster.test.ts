@@ -158,6 +158,41 @@ describe('foldAgentEvent', () => {
       },
       same: true,
     },
+    {
+      case: 'SkillStarted',
+      before: [a],
+      event: {
+        type: 'skillStarted',
+        at: 7000,
+        agentId: a.agentId,
+        skill: 'wigley:make',
+        args: '/p/plan-x',
+      },
+      same: true,
+    },
+    {
+      case: 'FileWritten',
+      before: [a],
+      event: {
+        type: 'fileWritten',
+        at: 7000,
+        agentId: a.agentId,
+        path: '/p/plan-x/plan.md',
+      },
+      same: true,
+    },
+    {
+      case: 'TurnStarted',
+      before: [a],
+      event: { type: 'turnStarted', at: 7000 },
+      same: true,
+    },
+    {
+      case: 'TurnEnded',
+      before: [a],
+      event: { type: 'turnEnded', at: 7000 },
+      same: true,
+    },
   ])(
     'foldAgentEvent_Event_FoldsRoster ($case)',
     ({ before, event, after, same }) => {

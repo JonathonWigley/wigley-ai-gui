@@ -224,7 +224,24 @@ export type AgentEvent =
       beforeTokens: number | null;
       afterTokens: number | null;
     }
-  | { type: 'userMessage'; at: number };
+  | { type: 'userMessage'; at: number }
+  // A skill or slash command started: the agent called its Skill tool, or the user's sent message began with `/`.
+  // `skill` has no leading `/` (`wigley:make`); `args` is trimmed, `''` when none.
+  | {
+      type: 'skillStarted';
+      at: number;
+      agentId: string;
+      skill: string;
+      args: string;
+    }
+  // A write tool (Write, Edit and the others the adapter names) finished without an error. `path` is the full path as
+  // the tool got it.
+  | { type: 'fileWritten'; at: number; agentId: string; path: string }
+  // A turn of the main conversation started. Every turn emits it, a turn the harness runs with no user message
+  // included (Claude: each turn's `system/init`, the turn after a background subagent ends included).
+  | { type: 'turnStarted'; at: number }
+  // The main conversation's turn ended, done, failed or interrupted.
+  | { type: 'turnEnded'; at: number };
 
 // An event caused by `start` or by a call on the process arrives in a later
 // microtask, never inside that call.

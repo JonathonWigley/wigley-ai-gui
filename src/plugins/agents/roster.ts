@@ -35,6 +35,10 @@ export function foldAgentEvent(
     case 'usage':
     case 'compacted':
     case 'userMessage':
+    case 'skillStarted':
+    case 'fileWritten':
+    case 'turnStarted':
+    case 'turnEnded':
       return running;
   }
   return event satisfies never;
