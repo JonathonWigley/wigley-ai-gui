@@ -143,9 +143,12 @@ export const markRun = (harnesses: readonly AgentHarness[]): RunMark[] =>
     pastSessionCalls: harness.pastSessionCalls.length,
   }));
 
-// One control for each pick key, and one no pick key reaches.
-function startingControls(): SessionControl[] {
-  return [
+// One control for each pick key, and one no pick key reaches; a value in
+// `launchValues` replaces that control's fixed starting value.
+function startingControls(
+  launchValues: AgentStart['controls'],
+): SessionControl[] {
+  const controls: SessionControl[] = [
     {
       id: 'mode',
       label: 'Mode',
@@ -184,6 +187,10 @@ function startingControls(): SessionControl[] {
       value: 'brief',
     },
   ];
+  return controls.map((control) => ({
+    ...control,
+    value: launchValues[control.id] ?? control.value,
+  }));
 }
 
 // Every profile's plan usage at `at`: a 5-hour row, a critical active weekly
@@ -642,7 +649,7 @@ export function createFakeAgentHarness(clock: Clock): FakeAgentHarness {
 
   function startProcess(record: FakeAgentProcessRecord): AgentProcess {
     const { events, calls } = record;
-    let controls = startingControls();
+    let controls = startingControls(record.request.controls);
     let turn = 0;
     let isTurnOpen = false;
     // The Agent entries of the subagents still running, in spawn order.

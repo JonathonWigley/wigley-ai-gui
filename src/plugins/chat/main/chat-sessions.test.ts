@@ -155,6 +155,7 @@ function setUp(
           ownedEnds++;
           onOwnedEnd();
         },
+        setHostSessionId: () => undefined,
       };
     },
     mark: (sessionId) => marked.push(sessionId),
@@ -336,6 +337,7 @@ describe('createChatSessions', () => {
         resume: false,
         projectDir: PROJECT_DIR,
         profileDir: '~/.claude-personal',
+        controls: {},
       },
     ]);
     expect(test.sent('sessionStarted')).toEqual([
@@ -490,6 +492,7 @@ describe('createChatSessions', () => {
       resume: true,
       projectDir: '/w/app',
       profileDir: '~/.claude',
+      controls: {},
     });
     expect(test.uuidCalls()).toBe(0);
     expect(JSON.parse(await test.data.read(RECENT_FOLDERS_FILE))).toEqual([
@@ -710,6 +713,34 @@ describe('createChatSessions', () => {
       expect.objectContaining({ kind: 'notice' }),
       expect.objectContaining({ kind: 'user', text: 'second' }),
     ]);
+  });
+
+  it('resume_AfterExit_StartCarriesHeldControlValues', async () => {
+    const test = await started();
+    test.chat.send(ROW_ID, { text: 'first', images: [] });
+    await flush();
+    test.process.events.controls([
+      {
+        id: 'model',
+        label: 'Model',
+        choices: [{ value: 'sonnet', label: 'Sonnet' }],
+        value: 'sonnet',
+      },
+      {
+        id: 'effort',
+        label: 'Effort',
+        choices: [{ value: 'high', label: 'High' }],
+        value: null,
+      },
+    ]);
+    test.process.events.ended({ code: 0, error: null });
+
+    test.chat.send(ROW_ID, { text: 'second', images: [] });
+    await flush();
+
+    const { request } = test.harness.processes[1];
+    expect(request.resume).toBe(true);
+    expect(request.controls).toEqual({ model: 'sonnet' });
   });
 
   it('controls_storedAndSent', async () => {
@@ -1593,6 +1624,7 @@ describe('createChatSessions saved sessions', () => {
           resume: sent,
           projectDir: '/w/app',
           profileDir: '~/.claude',
+          controls: {},
         },
       ]);
       expect(test.sent('sessionRunning')).toEqual([{ sessionId: ROW_ID }]);

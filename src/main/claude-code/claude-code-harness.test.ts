@@ -24,6 +24,7 @@ const request: AgentStart = {
   resume: false,
   projectDir: '/proj',
   profileDir: null,
+  controls: {},
 };
 
 // A child with `PassThrough` stdio that records its signals and stdin lines.
@@ -124,6 +125,7 @@ function started(
   fake = fakeChild(),
   files: Files = createMemoryFiles(),
   harnessClock: Clock = clock,
+  startRequest: AgentStart = request,
 ) {
   const logged: [string, string][] = [];
   const spawn: ClaudeSpawn = () => fake.child;
@@ -139,7 +141,7 @@ function started(
     clock: harnessClock,
   });
   const { heard, agentEvents, events } = recordingEvents();
-  const agent = harness.start(request, events);
+  const agent = harness.start(startRequest, events);
   return { ...fake, agent, heard, agentEvents, logged };
 }
 
@@ -211,6 +213,23 @@ describe('createClaudeCodeHarness', () => {
       ['model', null],
     ]);
     expect(run.heard[1]).toEqual(['activity', 'idle']);
+  });
+
+  it('start_RequestControls_SeedStartingValues', async () => {
+    const run = started(fakeChild(), createMemoryFiles(), clock, {
+      ...request,
+      controls: { model: 'sonnet' },
+    });
+
+    await settle();
+
+    expect(run.heard[0][0]).toBe('controls');
+    const controls = run.heard[0][1] as { id: string; value: unknown }[];
+    expect(controls.map((control) => [control.id, control.value])).toEqual([
+      ['mode', null],
+      ['effort', null],
+      ['model', 'sonnet'],
+    ]);
   });
 
   it('send_WritesUserMessageAndEmitsWorking', async () => {

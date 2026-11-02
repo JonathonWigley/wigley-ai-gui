@@ -108,11 +108,14 @@ export type ChatEntryKind = ChatEntry['kind'];
 // `sessionId` is the host's session id: fresh for a new session, the old one when `resume` is true.
 // `profileDir` is the harness's config folder (Claude's `CLAUDE_CONFIG_DIR`) as the profile writes it, which the
 // adapter resolves (`~` against the home the adapter was built with); null for the harness default.
+// `controls` maps a control id to the value the row holds, one key per control whose `value` is not null; the
+// adapter starts with each value it knows and ignores an id it does not declare.
 export interface AgentStart {
   sessionId: string;
   resume: boolean;
   projectDir: string;
   profileDir: string | null;
+  controls: Readonly<Record<string, string>>;
 }
 
 export type PlanSeverity = 'normal' | 'warning' | 'critical';

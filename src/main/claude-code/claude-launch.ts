@@ -60,9 +60,10 @@ function defaultConfigFolder(homeDir: string, paths: Paths): string {
 }
 
 // The arguments, folder and environment `claude` runs one session with:
-// stream-json both ways, partial messages streamed, auto permission mode with
-// what it would still prompt sent to `permissionTool`, and `claudeEnv`'s
-// environment.
+// stream-json both ways, partial messages streamed, the request's `mode`
+// control as the permission mode (auto without one) with what it would still
+// prompt sent to `permissionTool`, its `model` and `effort` controls as
+// `--model` and `--effort`, and `claudeEnv`'s environment.
 export function claudeLaunch(
   request: AgentStart,
   permissionTool: string,
@@ -71,6 +72,9 @@ export function claudeLaunch(
   paths: Paths,
 ): ClaudeLaunch {
   const sessionFlag = request.resume ? '--resume' : '--session-id';
+  const { model, effort, mode } = request.controls;
+  const modelArgs = model === undefined ? [] : ['--model', model];
+  const effortArgs = effort === undefined ? [] : ['--effort', effort];
   return {
     args: [
       '-p',
@@ -84,9 +88,11 @@ export function claudeLaunch(
       sessionFlag,
       request.sessionId,
       '--permission-mode',
-      'auto',
+      mode ?? 'auto',
       '--permission-prompt-tool',
       permissionTool,
+      ...modelArgs,
+      ...effortArgs,
     ],
     cwd: request.projectDir,
     env: claudeEnv(env, request.profileDir, homeDir, paths),

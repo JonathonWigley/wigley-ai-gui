@@ -160,7 +160,7 @@ function startClaudeProcess(
   const stamp = createEntryStamp(deps.clock);
   let controls: SessionControl[] = CLAUDE_CONTROLS.map((control) => ({
     ...control,
-    value: null,
+    value: request.controls[control.id] ?? null,
   }));
   let activity: ProcessActivity = 'idle';
   let sendCount = 0;

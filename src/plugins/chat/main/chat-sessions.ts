@@ -5,6 +5,7 @@ import type {
   AgentProcessEvents,
   ChatEntry,
   ProcessActivity,
+  SessionControl,
   UserMessage,
 } from '../../../contracts/agent';
 import type { Alerts } from '../../../contracts/alerts';
@@ -231,6 +232,19 @@ function copyState(state: ChatSessionState): ChatSessionState {
     commands: [...state.commands],
     queued: [...state.queued],
   };
+}
+
+// The launch values a process starts with: each held control that has a value.
+function controlValuesOf(
+  controls: readonly SessionControl[],
+): Record<string, string> {
+  const values: Record<string, string> = {};
+  for (const control of controls) {
+    if (control.value !== null) {
+      values[control.id] = control.value;
+    }
+  }
+  return values;
 }
 
 function userMessageOf(queued: QueuedMessage): UserMessage {
@@ -659,8 +673,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     return session;
   }
 
-  // Starts the session's process and records the folder; a throw from the
-  // harness leaves the session resting.
+  // Starts the session's process with the control values the row holds and
+  // records the folder; a throw from the harness leaves the session resting.
   function startProcess(
     session: HeldSession,
     harness: AgentHarness,
@@ -672,7 +686,13 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     const started: { process: AgentProcess | null } = { process: null };
     const profileDir = profileDirOf(profile);
     const process = harness.start(
-      { sessionId: session.hostId, resume, projectDir, profileDir },
+      {
+        sessionId: session.hostId,
+        resume,
+        projectDir,
+        profileDir,
+        controls: controlValuesOf(session.state.controls),
+      },
       processEvents(session, session.processStarts, started, profileDir),
     );
     started.process = process;

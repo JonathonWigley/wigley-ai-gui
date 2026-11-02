@@ -13,6 +13,7 @@ describe('claudeLaunch', () => {
         resume: false,
         projectDir: '/proj',
         profileDir: '/p',
+        controls: {},
       },
       TOOL,
       { HOME: '/h', CLAUDE_CONFIG_DIR: '/x' },
@@ -43,7 +44,13 @@ describe('claudeLaunch', () => {
     const env = { CLAUDE_CONFIG_DIR: '/x' };
 
     const launch = claudeLaunch(
-      { sessionId: 's-1', resume: true, projectDir: '/proj', profileDir: null },
+      {
+        sessionId: 's-1',
+        resume: true,
+        projectDir: '/proj',
+        profileDir: null,
+        controls: { model: 'opus', effort: 'max' },
+      },
       TOOL,
       env,
       '/h',
@@ -56,6 +63,71 @@ describe('claudeLaunch', () => {
     expect(launch.env).not.toBe(env);
   });
 
+  it.each<{
+    name: string;
+    controls: Record<string, string>;
+    present: string[][];
+    absent: string[][];
+  }>([
+    {
+      name: 'all three controls',
+      controls: { model: 'sonnet', effort: 'high', mode: 'plan' },
+      present: [
+        ['--model', 'sonnet'],
+        ['--effort', 'high'],
+        ['--permission-mode', 'plan'],
+      ],
+      absent: [['--permission-mode', 'auto']],
+    },
+    {
+      name: 'no controls',
+      controls: {},
+      present: [['--permission-mode', 'auto']],
+      absent: [['--model'], ['--effort']],
+    },
+    {
+      name: 'mode only',
+      controls: { mode: 'manual' },
+      present: [['--permission-mode', 'manual']],
+      absent: [['--permission-mode', 'auto'], ['--model'], ['--effort']],
+    },
+    {
+      name: 'an unknown id',
+      controls: { verbosity: 'loud', effort: 'low' },
+      present: [
+        ['--effort', 'low'],
+        ['--permission-mode', 'auto'],
+      ],
+      absent: [['--verbosity'], ['loud'], ['--model']],
+    },
+  ])(
+    'claudeLaunch_Controls_BecomeLaunchFlags ($name)',
+    ({ controls, present, absent }) => {
+      const launch = claudeLaunch(
+        {
+          sessionId: 's-1',
+          resume: false,
+          projectDir: '/proj',
+          profileDir: null,
+          controls,
+        },
+        TOOL,
+        {},
+        '/h',
+        posixPaths,
+      );
+
+      for (const flag of present) {
+        expect(adjacentRuns(launch.args, flag.length)).toContainEqual(flag);
+      }
+      for (const flag of absent) {
+        expect(adjacentRuns(launch.args, flag.length)).not.toContainEqual(
+          flag,
+        );
+      }
+    },
+  );
+
   it('claudeLaunch_NestedSessionEnv_StripsListedNamesOnly', () => {
     const launch = claudeLaunch(
       {
@@ -63,6 +135,7 @@ describe('claudeLaunch', () => {
         resume: false,
         projectDir: '/proj',
         profileDir: '/p',
+        controls: {},
       },
       TOOL,
       {
@@ -89,6 +162,7 @@ describe('claudeLaunch', () => {
         resume: false,
         projectDir: '/proj',
         profileDir: '~/.claude-personal',
+        controls: {},
       },
       TOOL,
       { HOME: '/elsewhere' },
@@ -106,6 +180,7 @@ describe('claudeLaunch', () => {
         resume: false,
         projectDir: 'C:\\proj',
         profileDir: '~/.claude-work',
+        controls: {},
       },
       TOOL,
       {},
@@ -135,3 +210,10 @@ describe('claudeConfigFolder', () => {
     );
   });
 });
+
+// Every run of `length` consecutive args, so a flag is matched with its value.
+function adjacentRuns(args: string[], length: number): string[][] {
+  return args
+    .slice(0, args.length - length + 1)
+    .map((_, index) => args.slice(index, index + length));
+}

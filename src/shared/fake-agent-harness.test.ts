@@ -33,6 +33,7 @@ const request: AgentStart = {
   resume: false,
   projectDir: '/p',
   profileDir: null,
+  controls: {},
 };
 
 // Every event the process emits, as `[event name, payload]`, in emit order,
@@ -133,6 +134,26 @@ describe('createFakeAgentHarness', () => {
       'verbosity',
     ]);
     expect(heard[2]).toEqual(['activity', 'idle']);
+  });
+
+  it('start_RequestControls_ReplaceStartingValues', async () => {
+    const harness = createFakeAgentHarness(clock);
+    const { heard, events } = recordingEvents();
+
+    harness.start({ ...request, controls: { effort: 'high' } }, events);
+    await flush();
+
+    const controls = heard[0][1] as Parameters<
+      AgentProcessEvents['controls']
+    >[0];
+    expect(
+      controls.map((control) => [control.id, control.value]),
+    ).toEqual([
+      ['mode', 'auto'],
+      ['effort', 'high'],
+      ['model', 'fake-small'],
+      ['verbosity', 'brief'],
+    ]);
   });
 
   it('failNextStart_ThrowsOnce', () => {
