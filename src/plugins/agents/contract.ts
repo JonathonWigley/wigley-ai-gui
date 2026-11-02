@@ -14,8 +14,9 @@ export interface RunningAgent {
 
 // Rosters are keyed by the app's sessionId (the session row's id), each listing its running subagents in spawn order.
 // `rosters` returns every session's roster that lists one; `rosterChanged` carries a session's whole roster after
-// each change, `running` empty once its last subagent finishes.
+// each change, `running` empty once its last subagent finishes. `openPreview` opens the layout preview's sample
+// session, or ends it while it is open.
 export interface AgentsChannel extends ChannelShape {
-  invoke: { rosters(): Record<string, RunningAgent[]> };
+  invoke: { rosters(): Record<string, RunningAgent[]>; openPreview(): void };
   messages: { rosterChanged: { sessionId: string; running: RunningAgent[] } };
 }

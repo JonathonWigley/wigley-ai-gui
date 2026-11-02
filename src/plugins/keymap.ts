@@ -683,6 +683,12 @@ export const defaultKeymap = {
       where: 'page',
     },
     {
+      keys: '<Leader>zla',
+      scope: 'any',
+      command: 'agents.openPreview',
+      where: 'page',
+    },
+    {
       keys: '<Leader>zg',
       scope: 'any',
       command: 'gallery.showMode',

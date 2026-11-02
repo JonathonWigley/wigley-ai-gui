@@ -1,0 +1,33 @@
+/* The default layout's subagent lines, one per running subagent under a session row. */
+
+.agents-line {
+  display: grid;
+  grid-template-columns: max-content max-content minmax(
+      0,
+      1fr
+    ) max-content max-content;
+  column-gap: var(--wg-space-2);
+  align-items: center;
+  min-height: var(--wg-row-tree);
+  padding-left: 0;
+  font-size: var(--wg-text-12);
+}
+
+.agents-line-type {
+  font-family: var(--wg-font-mono);
+  color: var(--wg-fg-secondary);
+}
+
+.agents-line-description {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--wg-fg-secondary);
+}
+
+.agents-line-elapsed,
+.agents-line-tools {
+  font-variant-numeric: tabular-nums;
+  color: var(--wg-fg-tertiary);
+}
