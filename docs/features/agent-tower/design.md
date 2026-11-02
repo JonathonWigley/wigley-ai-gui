@@ -15,14 +15,15 @@ running subagents in the Sessions side bar.
 
 ## Status
 
-Built by the usage feature (`docs/features/usage/design.md`):
+Built:
 
-- the agent event record in `src/contracts/agent.ts`, with its first member, `usage`, emitted by the Claude adapter
+- the agent event record in `src/contracts/agent.ts` (`AgentEvent`), emitted by the Claude adapter
+  (`src/main/claude-code/stream-decoder.ts`, `claude-code-harness.ts`) and by the fake harness
 - chat main forwarding each owned session's events as `chat.agentEvent`, carrying `{ sessionId, profileDir, event }`
+- the `agents` plugin: each session's roster, one JSON-lines event log per host session, one line per running subagent
+  under its session's row through sessions' `addRowPart`, and the `Space z l a` layout preview
 
-Waits: the `agents` plugin (each session's roster, one JSON-lines event log per host session, one line per running
-subagent under its session's row), sessions' `addRowPart`, the `Space z l a` layout preview, and the other events.
-Of those, plan, plan step, retry and watcher events wait for a producer; replay and the tower view wait for the tower
+Waits: plan, plan step, retry and watcher events wait for a producer; replay and the tower view wait for the tower
 itself.
 
 ## Vocabulary
@@ -71,8 +72,11 @@ would emit the same events into `chat.agentEvent`'s payload shape.
 - **Main** hears `chat.agentEvent`, folds each event into its session's roster with a pure reducer, appends the event
   as one JSON line to `logs/<host session id>.jsonl` in its plugin data, and sends each changed roster to the page
   over its channel. A session's `sessionEnded` finishes every subagent still listed: a process that exits or crashes
-  mid-subagent sends no `agentFinished` (an interrupt's turn result finishes them in the adapter). A resumed session keeps its host session id, so it appends to the same log. Logs are never
-  pruned.
+  mid-subagent sends no `agentFinished`. The Claude adapter finishes a subagent itself on its `task_notification`
+  or its non-launch `tool_result`, whichever comes first: on Claude 2.1.316 a subagent runs in the background by
+  default, so its Agent call's first `tool_result` is only a launch receipt, and a turn's `result` (an interrupt's
+  included) fails only the calls with neither. A resumed session keeps its host session id, so it appends to the same
+  log. Logs are never pruned.
 - **Page** adds a row part through sessions' `addRowPart` and draws, under each session row, one line per running
   subagent through the `agents` layout: a working dot, the agent type, the description, the elapsed time and the
   tool-call count. A line goes when its subagent finishes. The lines take no keys and no focus; a click on one
