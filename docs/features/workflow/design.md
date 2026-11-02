@@ -21,12 +21,8 @@ the workflow is editing or adding one stage folder.
 
 ## Status
 
-Waits on four plans, each a precondition of `plan-workflow/`:
-
-- `agent-chat/plan-clear-command/` — the app-side clear (`sessions.hostSessionChanged`)
-- `usage/plan-usage/` — `AgentEvent` and `chat.agentEvent`
-- `agent-tower/plan-subagent-lines/` — the wider `AgentEvent` union and sessions' `addRowPart`
-- `chat-panes/plan-chat-panes/` — the sidebar `addRowPart` builds on
+Designed; not built. `plan-workflow/` builds it, on the clear, the agent events and the row parts that four earlier
+plans landed (`chat.agentEvent`, `sessions.hostSessionChanged`, `addRowPart`).
 
 ## Vocabulary
 
@@ -44,18 +40,18 @@ Waits on four plans, each a precondition of `plan-workflow/`:
 | idle | it starts; Dismiss on closed; Make in new session hands its plan away | nothing on the row; a dim Start feature on the strip | Start feature |
 | primer | `wigley:feature-primer` starts | the stage | Start feature |
 | feature | `wigley:feature` starts | the stage, and the plan's name once one is written | Open plan, once a plan is written |
-| plan ready | a turn ends in feature after the session wrote a `plan-*/plan.md` | the plan's name and task count | Clear & make (Cancel during the countdown), Make in new session, Open plan |
+| plan ready | a turn ends in feature after the session wrote a `plan-*/plan.md` whose Tasks hold a box, with no subagent running | the plan's name and task count | Clear & make (Cancel during the countdown), Make in new session, Open plan |
 | make | `wigley:make` starts | ticked over total, the current wave | Resume make, Open plan |
 | review | `wigley:review` starts in make, or the plan's Run log gains a review round | the review round, ticked over total | Resume make, Open plan |
 | closed | the plan folder is deleted in make or review | the plan's name, done | Retro, Dismiss |
 
 - **Start feature** puts `/wigley:feature ` in the composer and focuses it, without sending.
 - **Clear & make** clears the session (the row and its tabs stay, a new conversation starts) and sends
-  `/wigley:make <plan folder>`. It is disabled while a turn runs.
+  `/wigley:make <plan folder>`. It is disabled while the session is busy: a turn or a main-agent subagent runs.
 - **Make in new session** starts a background session in the same folder with `/wigley:make <plan folder>` through
   chat's `launch`, hands the plan to it, and returns this session to idle. One plan shows in one session.
-- **Resume make** shows only when the plan has open boxes and no turn runs, as after a relaunch or a crash. It clears
-  and sends make again; make reads its own Run log back.
+- **Resume make** shows when the plan has open boxes, and is enabled only when the session is not busy, as after a
+  relaunch or a crash. It clears and sends make again; make reads its own Run log back.
 - **Open plan** opens `plan.md` in Docs mode (`openDoc`).
 - **Retro** sends `/wigley:retro` in the same session, which holds the run's context.
 - **Dismiss** returns a closed session to idle. A closed session also leaves on its next flow skill.
@@ -93,14 +89,15 @@ Main folds these, for owned sessions only:
 | skill started | `chat.agentEvent` `skillStarted` (a Skill call, or a slash command the user typed) | skill (`wigley:make`), args |
 | file written | `chat.agentEvent` `fileWritten` (a Write or Edit) | the full path |
 | turn ended | `chat.agentEvent` `turnEnded` | — |
-| turn started | `chat.agentEvent` `userMessage` | — |
+| turn started | `chat.agentEvent` `turnStarted` (every turn, a subagent's result turn included) | — |
+| subagent started, finished | `chat.agentEvent` `agentSpawned` with the main agent as parent, `agentFinished` | the agent id |
 | cleared | `sessions.hostSessionChanged` | the new host session id |
 | plan changed | main's watch on the flow's plan folder | ticked, total, current wave, review rounds |
 | plan gone | the same watch, the folder deleted | — |
 
-`skillStarted`, `fileWritten` and `turnEnded` are members of `AgentEvent` (`src/contracts/agent.ts`) that the Claude
+`skillStarted`, `fileWritten`, `turnStarted` and `turnEnded` are members of `AgentEvent` (`src/contracts/agent.ts`) that the Claude
 adapter and the fake harness emit, so the fold never reads a harness's JSON. A cleared session keeps its stage:
-Clear & make's own clear must not reset plan ready. `sessions.sessionRemoved` drops the session's flow.
+Clear & make's own clear must not reset plan ready. `sessions.ended` (main's event for a closed row) drops the session's flow.
 
 ## Where it draws
 

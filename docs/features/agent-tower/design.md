@@ -24,9 +24,9 @@ Built:
 - the `agents` plugin: each session's roster, one JSON-lines event log per host session, one line per running subagent
   under its session's row through sessions' `addRowPart`, and the `Space z l a` layout preview
 
-Waits: plan, plan step, retry and watcher events wait for a producer; `skillStarted`, `fileWritten` and `turnEnded`
-wait for the workflow plugin's plan (`docs/features/workflow/design.md`); replay and the tower view wait for the tower
-itself.
+Waits: plan, plan step, retry and watcher events wait for a producer; `skillStarted`, `fileWritten`, `turnStarted` and
+`turnEnded` wait for the workflow plugin's plan (`docs/features/workflow/design.md`); replay and the tower view wait for
+the tower itself.
 
 ## Vocabulary
 
@@ -57,6 +57,7 @@ unchanged. Each event carries `at`, epoch milliseconds from the adapter's inject
 | `userMessage` | — | "message from HQ" |
 | `skillStarted` | skill (`wigley:make`), args; a Skill call or a slash command the user typed | — (the workflow plugin's stages) |
 | `fileWritten` | agent id, the full path of a Write or Edit | — (the workflow plugin's plan detection) |
+| `turnStarted` | —; every turn of the main conversation, a turn the harness runs with no user message included (Claude: each turn's `system/init`) | — (the workflow plugin's busy state) |
 | `turnEnded` | — | — (the workflow plugin's plan ready) |
 
 Events with no producer yet join this union when one exists: plan created or revised (ordered plan steps, optional
