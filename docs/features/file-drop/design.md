@@ -60,7 +60,9 @@ file goes in as its path, which the agent opens itself; Chat keeps sending image
 | Notes popup | its Images field, as today | file chip in its Body |
 
 Several files insert in the order given, separated by spaces, with a space before the first when
-the character before the cursor is not whitespace.
+the character before the cursor is not whitespace. In a vim box, normal mode inserts after the
+character under the cursor, as vim's `p`, and a space follows the last when the next character is
+not whitespace, so a path never runs into the text around it.
 
 ## Pasted files
 
@@ -78,7 +80,8 @@ The API caps one image at 5 MB of base64 text. An image over it is scaled down a
 stepping down until it fits: JPEG and WebP re-encode as themselves at quality 0.9, PNG and GIF as
 PNG (a GIF keeps its first frame). An image still over the cap after six steps is refused with a
 toast. Chat shrinks an image when it is attached; the Notes popup shrinks one when it joins the Images field, so its send to a
-session always fits.
+session always fits. Notes stores every image as PNG, so it converts first and shrinks the PNG form
+it stores: a large JPEG loses more resolution there than in Chat.
 
 ## Seams
 
