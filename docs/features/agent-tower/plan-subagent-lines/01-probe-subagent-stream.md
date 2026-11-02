@@ -1,6 +1,6 @@
 # 01 — Probe the CLI's subagent stream
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none (precondition: the usage plan `docs/features/usage/plan-usage/` has landed)
 Plan: [plan.md](plan.md)
@@ -35,3 +35,5 @@ Done when: the two sections are in `claude-stream.md`, each claim backed by an e
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 7a12ec2 · proof: diff read: ## Subagents and ## Compaction at the end of claude-stream.md with excerpts and not-observed lines; housekeeping line names 2.1.316 · concerns: background is the default (only run_in_background:false runs foreground); task_notification (completed|stopped) is every subagent's end, tool_use_id = the Agent call id; design.md's 'an interrupt's turn result finishes them' fails for background subagents; subagent assistant lines carry usage; heartbeat parent id equals the call id; a foreground interrupt exited code 1 on stdin close, unexplained

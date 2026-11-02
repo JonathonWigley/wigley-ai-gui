@@ -240,27 +240,27 @@ export interface Layout { line?(parent: HTMLElement, input: SubagentLineInput, k
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Probe the CLI's subagent stream](01-probe-subagent-stream.md)
+- [x] [Probe the CLI's subagent stream](01-probe-subagent-stream.md)
 - [x] [Agent event contract and Files.append](02-agent-event-contract.md)
 - [x] [Sessions row parts](06-sessions-row-parts.md)
 
 ### Wave 2
-- [ ] [Claude adapter emits agent events](03-claude-agent-events.md) — after 01, 02
+- [x] [Claude adapter emits agent events](03-claude-agent-events.md) — after 01, 02
 - [x] [Chat forwards agent events](05-chat-forwards-agent-events.md) — after 02
 - [x] [Agents plugin: manifest, contract, roster](07-agents-roster.md) — after 02
 
 ### Wave 3
-- [ ] [Fake harness emits agent events](04-fake-agent-events.md) — after 02, 03
-- [ ] [Agents main: rosters, log, channel](08-agents-main.md) — after 02, 05, 07
+- [x] [Fake harness emits agent events](04-fake-agent-events.md) — after 02, 03
+- [x] [Agents main: rosters, log, channel](08-agents-main.md) — after 02, 05, 07
 
 ### Wave 4
-- [ ] [Agents page: lines, layout, preview](09-agents-page.md) — after 06, 08
+- [x] [Agents page: lines, layout, preview](09-agents-page.md) — after 06, 08
 
 ### Wave 5
-- [ ] [Agents self-test](10-agents-selftest.md) — after 04, 09
+- [x] [Agents self-test](10-agents-selftest.md) — after 04, 09
 
 ### Wave 6
-- [ ] [Doc re-read](11-doc-re-read.md) — after every task above
+- [x] [Doc re-read](11-doc-re-read.md) — after every task above
 
 ### Wave 7
 - [ ] [Final verification](12-final-verification.md) — after 11
@@ -274,6 +274,13 @@ Review base: 66fec31
 - 06 · f6ec263 · diff read: SessionRowPart, addRowPart, RowKit and Layout.row(kit: RowKit), SessionRowParts/createSessionRowParts present; typecheck clean; row-parts and sessions-parts tests 17 pass · concerns: dispose-failed log and placed-twice throw have no test (not in the Tests list); sessions.css row comment still names the harness, stale only under the uncommitted non-run layout.js edit; layout.js committed with only the worker's two lines, the uncommitted detail:null edit left in the tree
 - 05 · 30227b4 · diff read: ChatAgentEvent and ChatMainEvents.agentEvent present, hostSessionId = session.hostId; typecheck clean; worker ran chat-sessions.test.ts (102 pass) and lint · concerns: usage/main/start.test.ts sends chat.agentEvent payloads without hostSessionId (loosely typed emit, outside Files); describe block still named 'usage forwarding'
 - 07 · d8856ba · diff read: agentsManifest, RunningAgent, AgentsChannel, foldAgentEvent present; typecheck clean; worker ran roster.test.ts (15 rows) and lint · concerns: agentsManifest is listed before keysManifest, which it depends on; nothing starts a part yet, so 08/09 prove list order does not matter
+- 01 · 7a12ec2 · diff read: ## Subagents and ## Compaction at the end of claude-stream.md with excerpts and not-observed lines; housekeeping line names 2.1.316 · concerns: background is the default (only run_in_background:false runs foreground); task_notification (completed|stopped) is every subagent's end, tool_use_id = the Agent call id; design.md's 'an interrupt's turn result finishes them' fails for background subagents; subagent assistant lines carry usage; heartbeat parent id equals the call id; a foreground interrupt exited code 1 on stdin close, unexplained
+- 08 · 4bd3bbc · diff read: agentsMainPart and AgentLog/createAgentLog present, main part registered after chat, layer entries added; typecheck clean; worker ran agent-log.test.ts (3 pass) and lint · concerns: task doc's 'no main part has a fake MainApi' is stale (usage and chat main start tests have one); a ~25-line start test would pin no-send-on-no-change, closed-then-ended sending once and rosters() copying — not written, Tests list governs; part order after chat but before keys relies on the host's dependency-ordered start, first proved live in 10/12
+- 03 · 93786d0 · diff read: DecodedLine.agentEvents and AgentEventDraft present, harness emits sessionStarted/userMessage/sessionEnded and stamped drafts; mapping follows the lead rulings; worker ran both test files (87 pass), typecheck and oxlint/oxfmt on its files · concerns: isAsync is read from the line's top-level tool_use_result, so a user line with several tool_result blocks would apply it to each (every measured line had one); toolAgents keeps an interrupted tool's id for the process's life; agent-tower/design.md § Status lists 'the other events' under Waits and names skillStarted/fileWritten/turnEnded (doc re-read, 11)
+- 09 · a6af203 · diff read: layout.d.ts types, elapsedText, agentsPagePart, AgentsPreview/createAgentsPreview, openPreview on the channel, manifest command and layout setting present; typecheck clean; agents tests 33 pass; worker ran lint clean · concerns: AGENTS.md debug-keys bullet lists zlo/zlp/zls/zlc and not zla (doc re-read, 11); elapsedText repeats chat default layout's spanText formatting, accepted by the Decisions
+- 04 · f84719b · diff read: FAKE_AGENTS_TEXT and the fake's agent events present, MAIN_AGENT_ID replaces the literal; typecheck clean; worker ran fake-agent-harness and its three consumer suites (161 pass) and lint · concerns: end, kill and a fake: end send clear the running-subagent list when called, so an agents send whose microtask has not run could refill it after; nothing reads it after the end
+- 10 · 916e552 · diff read: agentsSelfTestScript handed through services.selfTest in agentsMainPart; typecheck and lint clean; npm run selftest all passed, group agents: subagent lines passes (2 lines, fit check, 0 lines); screenshot exists and shows both lines under the agents-selftest row · concerns: screenshot: the first line's type wigley:sonnet-medium takes the row width and its description 'Map the stream decoder' shows nothing (09's grid gives type max-content) — for the review
+- 11 · be9cc24 · diff read: design.md Status and agents plugin section, AGENTS.md files/, debug keys and self-test lines match the code; layouts/design.md and claude-stream.md checked and hold; lint clean · concerns: the worker removed design.md's skillStarted/fileWritten/turnEnded rows as stale; they are the workflow design's rows written ahead in 22dfcf9 for its unstarted plan, so a follow-up dispatch restored them before the commit; the click-selects-session line was not traced in code (12 checks it live)
 ### Contract changes
 ### Rulings
 - MAIN_AGENT_ID and AgentEventType added (absent before); widening flagged no switch, usage main already narrows on type 'usage' — none — a missed site would fail typecheck · group 02 · group 02
@@ -281,5 +288,18 @@ Review base: 66fec31
 - the view does not keep the rowParts.onChanged handle: view and registry share the page load's lifetime — a listener leaks only if the view outlives its registry · group 06 · group 06
 - forwarding was under isLive, so the guard stays for every event but sessionEnded, which is forwarded after the row closes — wrong means a late usage reaches usage, or a closed row's roster never empties · group 05 · group 05
 - exhaustiveness is 'return event satisfies never' after a default-less switch — a type outside the union (a hand-edited log in replay) returns the event, not an array · group 07 · group 07
+- measured on 2.1.316, not 2.1.314 — the installed CLI — none · group 01 · group 01
+- sessions.closed and sessions.ended share one dropRoster, sending only when an entry was deleted — none · group 08 · group 08
+- 03's background test reads the launch tool_result, not input: a launch result whose tool_use_result.isAsync is true emits nothing (is_error true still emits agentFinished failed), since run_in_background is absent from input on the default background call — reading input would finish every default subagent at launch · lead
+- 03 finishes a subagent on system/task_notification matched by tool_use_id (completed → done, any other status → failed) or on its non-launch tool_result, whichever comes first, forgetting the id so the second emits nothing; a turn's result fails only spawns with neither — a foreground call gets task_notification 0.04 s before its tool_result, so without the forget rule it would finish twice · lead
+- 03: SUBAGENT_TOOLS is {Agent, Task}; a missing subagent_type maps to general-purpose (task_started reports it); compacted.afterTokens reads post_tokens; the usage reader skips assistant lines whose parent_tool_use_id is non-null — measured in claude-stream.md § Subagents and § Compaction on 2.1.316 · lead
+- usage reader already skips subagent replies (readReplyUsage, test decode_Assistant_ReplyUsage_SubagentReply), so no restriction added — none · group 03 · group 03
+- non-usage agent events record into a separate agentEvents list in the harness test, keeping six whole-heard assertions unchanged — later harness tests read two lists · group 03 · group 03
+- WithoutAt exported from shared/entry-stamp.ts (outside Files) and reused rather than copied — one alias if the lead prefers · group 03 · group 03
+- SubagentLinesDeps carries kit: OwnerKitServices as a field, as UsagePartsDeps.kit does — one field rename · group 09 · group 09
+- preview.closed(sessionId) ends the preview row and sends an empty rosterChanged without a log line; main's sessions.closed runs dropRoster then preview.closed, and rosters() spreads the preview roster over the live map — none: sessionRemoved forgets the session on the page either way · group 09 · group 09
+- fake test records non-usage agent events in a separate agentEvents list (03's split) plus a timeline list for cross-list order — one extra helper · group 04 · group 04
+- the ending table is agentsTurn_$case with full-tail case names, since vitest reads $ending_FinishesSubagents as one key — test names differ from the plan · group 04 · group 04
+- scrollsItself also lists .chat-activity-step, chat's ellipsis-clipped activity shortlist that the long Agent descriptions overflow on purpose — a real overflow there goes unflagged in this one step · group 10 · group 10
 ### Review rounds
 ### Test gate

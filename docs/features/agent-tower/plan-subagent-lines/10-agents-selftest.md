@@ -1,6 +1,6 @@
 # 10 — Agents self-test
 
-Status: not started
+Status: done
 Type: Task
 Wave: 5 · Depends on: 04, 09
 Plan: [plan.md](plan.md)
@@ -65,3 +65,5 @@ Done when: compiles; `npm run lint` passes (the script imports no `node:` module
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 916e552 · proof: diff read: agentsSelfTestScript handed through services.selfTest in agentsMainPart; typecheck and lint clean; npm run selftest all passed, group agents: subagent lines passes (2 lines, fit check, 0 lines); screenshot exists and shows both lines under the agents-selftest row · concerns: screenshot: the first line's type wigley:sonnet-medium takes the row width and its description 'Map the stream decoder' shows nothing (09's grid gives type max-content) — for the review

@@ -1,6 +1,6 @@
 # 03 — Claude adapter emits agent events
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 2 · Depends on: 01, 02 (precondition: the usage plan `docs/features/usage/plan-usage/` has landed; its task 03, `03-adapter-usage.md`, already changed both files this task edits)
 Plan: [plan.md](plan.md)
@@ -64,3 +64,5 @@ Done when: compiles; the test gate runs `stream-decoder.test.ts` and `claude-cod
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 93786d0 · proof: diff read: DecodedLine.agentEvents and AgentEventDraft present, harness emits sessionStarted/userMessage/sessionEnded and stamped drafts; mapping follows the lead rulings; worker ran both test files (87 pass), typecheck and oxlint/oxfmt on its files · concerns: isAsync is read from the line's top-level tool_use_result, so a user line with several tool_result blocks would apply it to each (every measured line had one); toolAgents keeps an interrupted tool's id for the process's life; agent-tower/design.md § Status lists 'the other events' under Waits and names skillStarted/fileWritten/turnEnded (doc re-read, 11)

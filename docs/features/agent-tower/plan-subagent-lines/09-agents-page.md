@@ -1,6 +1,6 @@
 # 09 — Agents page: lines, layout, preview
 
-Status: not started
+Status: done
 Type: Task
 Wave: 4 · Depends on: 06, 08 (precondition: the chat-panes plan `docs/features/chat-panes/plan-chat-panes/` has landed and 06 hooked the row parts into the side bar as it stands then)
 Plan: [plan.md](plan.md)
@@ -203,3 +203,5 @@ Done when: compiles; `npm test` runs the three test files and `layout-contracts.
 Commit:    one commit for the group
 
 ## Proof
+
+Commit a6af203 · proof: diff read: layout.d.ts types, elapsedText, agentsPagePart, AgentsPreview/createAgentsPreview, openPreview on the channel, manifest command and layout setting present; typecheck clean; agents tests 33 pass; worker ran lint clean · concerns: AGENTS.md debug-keys bullet lists zlo/zlp/zls/zlc and not zla (doc re-read, 11); elapsedText repeats chat default layout's spanText formatting, accepted by the Decisions

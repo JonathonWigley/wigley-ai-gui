@@ -1,6 +1,6 @@
 # 11 — Doc re-read against the landed code
 
-Status: not started
+Status: done
 Type: Task
 Wave: 6 · Depends on: 01, 02, 03, 04, 05, 06, 07, 08, 09, 10
 Plan: [plan.md](plan.md)
@@ -30,3 +30,5 @@ Done when: every line above checked; fixes committed
 Commit:    one commit for the group, naming each doc changed
 
 ## Proof
+
+Commit be9cc24 · proof: diff read: design.md Status and agents plugin section, AGENTS.md files/, debug keys and self-test lines match the code; layouts/design.md and claude-stream.md checked and hold; lint clean · concerns: the worker removed design.md's skillStarted/fileWritten/turnEnded rows as stale; they are the workflow design's rows written ahead in 22dfcf9 for its unstarted plan, so a follow-up dispatch restored them before the commit; the click-selects-session line was not traced in code (12 checks it live)

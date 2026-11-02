@@ -1,6 +1,6 @@
 # 08 — Agents main: rosters, log, channel
 
-Status: not started
+Status: done
 Type: Task
 Wave: 3 · Depends on: 02, 05, 07
 Plan: [plan.md](plan.md)
@@ -81,3 +81,5 @@ Done when: compiles; `npm test` runs `agent-log.test.ts`; `npm run lint` passes
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 4bd3bbc · proof: diff read: agentsMainPart and AgentLog/createAgentLog present, main part registered after chat, layer entries added; typecheck clean; worker ran agent-log.test.ts (3 pass) and lint · concerns: task doc's 'no main part has a fake MainApi' is stale (usage and chat main start tests have one); a ~25-line start test would pin no-send-on-no-change, closed-then-ended sending once and rosters() copying — not written, Tests list governs; part order after chat but before keys relies on the host's dependency-ordered start, first proved live in 10/12

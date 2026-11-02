@@ -1,6 +1,6 @@
 # 04 — Fake harness emits agent events
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 3 · Depends on: 02, 03 (precondition: the usage plan `docs/features/usage/plan-usage/` has landed; its task 03 gave the fake its `usage` and `planUsage` part)
 Plan: [plan.md](plan.md)
@@ -45,3 +45,5 @@ Done when: compiles; the test gate runs `fake-agent-harness.test.ts`; `npm run l
 Commit:    one commit for the group
 
 ## Proof
+
+Commit f84719b · proof: diff read: FAKE_AGENTS_TEXT and the fake's agent events present, MAIN_AGENT_ID replaces the literal; typecheck clean; worker ran fake-agent-harness and its three consumer suites (161 pass) and lint · concerns: end, kill and a fake: end send clear the running-subagent list when called, so an agents send whose microtask has not run could refill it after; nothing reads it after the end
