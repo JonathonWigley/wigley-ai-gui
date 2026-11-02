@@ -32,7 +32,7 @@ import { workflowManifest } from '../manifest';
 import { BUILT_IN_PAGE_STAGES } from '../stages';
 import { createFlowTabs } from './flow-tab';
 import { readWorkflowLayout } from './layout/read-workflow-layout';
-import { PREVIEW_STAGES, previewFlow } from './preview';
+import { createPreview } from './preview';
 import { createPageStageList, createWorkflowView } from './workflow-view';
 
 type WorkflowApi = PageApi<
@@ -68,7 +68,7 @@ interface HeardSession {
 // `flows` read, and the page halves of the stages, which `addStage` extends.
 // Each workflow command runs on the selected session; each button on the
 // session it draws. `openPreview` steps chat's preview session through a
-// sample of every stage.
+// sample of every stage (`createPreview`).
 export const workflowPagePart: PagePart<typeof workflowManifest> = {
   manifest: workflowManifest,
   start(api: WorkflowApi) {
@@ -82,28 +82,13 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
     const flows = new Map<string, SessionFlow>();
     const stages = createPageStageList();
 
-    // The preview's session and the sample it shows, made once per step so its
-    // countdown runs down; `awaitingPreview` while chat opens its preview
-    // session.
-    let preview: {
-      sessionId: string;
-      index: number;
-      flow: SessionFlow;
-    } | null = null;
-    let awaitingPreview = false;
-
     const nameOf = (sessionId: string) =>
       heard.get(sessionId)?.name ?? sessionId;
-    const isPreview = (sessionId: string) => preview?.sessionId === sessionId;
-    const flowOf = (sessionId: string): SessionFlow => {
-      if (preview !== null && preview.sessionId === sessionId) {
-        return preview.flow;
-      }
-      return (
-        flows.get(sessionId) ??
-        newFlow(sessionId, heard.get(sessionId)?.projectDir ?? '')
-      );
-    };
+    const isPreview = (sessionId: string) => preview.flowOf(sessionId) !== null;
+    const flowOf = (sessionId: string): SessionFlow =>
+      preview.flowOf(sessionId) ??
+      flows.get(sessionId) ??
+      newFlow(sessionId, heard.get(sessionId)?.projectDir ?? '');
 
     const view = createWorkflowView({
       kit: {
@@ -148,6 +133,22 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
       flowTabs.setFlow(flow);
     };
 
+    const preview = createPreview({
+      openChatPreview: () => api.commands.run('chat.openPreview'),
+      previewSessionId: () =>
+        [...heard].find(
+          ([, session]) => session.hostSessionId === CHAT_PREVIEW_HOST_ID,
+        )?.[0] ?? null,
+      showFlow,
+      closed(sessionId) {
+        flowTabs.removeTab(sessionId);
+        view.setFlow(flowOf(sessionId));
+      },
+      clock: services.clock,
+      autoStartSeconds: () => api.settings().autoStartSeconds,
+      log: services.log,
+    });
+
     const addStage = (stage: PageStage): Disposable => {
       const added = stages.add(stage);
       view.redraw();
@@ -165,30 +166,6 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
     sessions.addRowPart(view.chipPart);
     chat.addComposerPart(view.stripPart);
 
-    const showPreviewStep = (sessionId: string, index: number) => {
-      const flow = previewFlow(
-        index,
-        sessionId,
-        services.clock.now(),
-        api.settings().autoStartSeconds,
-      );
-      preview = { sessionId, index, flow };
-      showFlow(flow);
-      log(
-        `workflow preview step ${index + 1} of ${PREVIEW_STAGES.length}: ${PREVIEW_STAGES[index]}`,
-      );
-    };
-    const closePreview = (sessionId: string) => {
-      preview = null;
-      flowTabs.removeTab(sessionId);
-      view.setFlow(flowOf(sessionId));
-      log('workflow preview closed');
-    };
-    const previewSessionId = () =>
-      [...heard].find(
-        ([, session]) => session.hostSessionId === CHAT_PREVIEW_HOST_ID,
-      )?.[0] ?? null;
-
     api.events.on(
       'sessions.sessionAdded',
       ({ sessionId, projectDir, hostSessionId }) => {
@@ -198,10 +175,7 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
           projectDir,
           hostSessionId,
         });
-        if (awaitingPreview && hostSessionId === CHAT_PREVIEW_HOST_ID) {
-          awaitingPreview = false;
-          showPreviewStep(sessionId, 0);
-        }
+        preview.sessionAdded(sessionId, hostSessionId);
       },
     );
     api.events.on(
@@ -214,9 +188,7 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
       },
     );
     api.events.on('sessions.sessionRemoved', ({ sessionId }) => {
-      if (isPreview(sessionId)) {
-        preview = null;
-      }
+      preview.sessionRemoved(sessionId);
       heard.delete(sessionId);
       flows.delete(sessionId);
       flowTabs.forget(sessionId);
@@ -300,27 +272,7 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
         lineUp: () => scrollFlowTab('line', -1),
         halfPageDown: () => scrollFlowTab('halfPage', 1),
         halfPageUp: () => scrollFlowTab('halfPage', -1),
-        openPreview() {
-          if (preview !== null) {
-            const { sessionId, index } = preview;
-            if (index + 1 < PREVIEW_STAGES.length) {
-              showPreviewStep(sessionId, index + 1);
-            } else {
-              closePreview(sessionId);
-            }
-            return;
-          }
-          if (awaitingPreview) {
-            return;
-          }
-          api.commands.run('chat.openPreview');
-          const sessionId = previewSessionId();
-          if (sessionId === null) {
-            awaitingPreview = true;
-          } else {
-            showPreviewStep(sessionId, 0);
-          }
-        },
+        openPreview: () => preview.press(),
       },
       exports,
     };
