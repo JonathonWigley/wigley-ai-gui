@@ -223,7 +223,7 @@ Boundary rules:
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Shared file-drop modules](02-shared-file-drop.md)
+- [x] [Shared file-drop modules](02-shared-file-drop.md)
 
 ### Wave 2
 - [ ] [Drop contracts, bridge and pasted files](01-drop-contracts-bridge.md) — after 02
@@ -247,7 +247,11 @@ Boundary rules:
 Review base: 87a254cb76dee43042396e82e9a353b6c9573795
 
 ### Groups
+- 02 · a717159 · diff read: every Produces present; typecheck and lint (layers included) pass · concerns: AGENTS.md's image-types.ts line still says media types only (goes to 09); 05 and 07 still name pasted-images in their text and Done-when greps
 ### Contract changes
 ### Rulings
+- canvasEncoder copies the bytes into a new Uint8Array before the Blob — TS rejects Uint8Array<ArrayBufferLike> as a BlobPart; avoids a cast — one extra copy per encode step on a cold path · group 02
+- fileChipsIn ends a quoted span at \r as well as \n — the task said only 'a line break' — only CRLF text is affected if wrong · group 02
+- The 05 and 07 briefs name the moved module src/shared/page/file-drop/pasted-text.ts wherever their task text says pasted-images, and their Done-when greps search for both names — the task text predates 02's move — a grep for the old name alone would pass without checking anything · lead
 ### Review rounds
 ### Test gate

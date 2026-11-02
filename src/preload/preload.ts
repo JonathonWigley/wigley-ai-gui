@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import { type Bridge, BRIDGE_CHANNELS } from '../contracts/bridge';
 import type { LayoutSet } from '../contracts/layouts';
 import type { AppConfig } from '../contracts/settings';
@@ -57,6 +57,18 @@ const bridge: Bridge = {
         }
       },
     );
+  },
+  pathForFile: (file) => webUtils.getPathForFile(file),
+  savePasted: async (bytes, mediaType) => {
+    try {
+      return await ipcRenderer.invoke(
+        BRIDGE_CHANNELS.savePasted,
+        bytes,
+        mediaType,
+      );
+    } catch (error) {
+      throw new Error(mainErrorText(error));
+    }
   },
 };
 

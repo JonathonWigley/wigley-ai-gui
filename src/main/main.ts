@@ -100,6 +100,7 @@ import {
 } from './layouts/layout-service';
 import { createMainApi } from './plugins/main-api';
 import { createPageLog } from './page-log';
+import { createPastedFiles } from './pasted-files';
 import { createPluginChannels } from './plugins/plugin-channel';
 import { createNodeProcesses } from './processes/node-processes';
 import { failSelfTest, type SelfTestDriver, startSelfTest } from './selftest';
@@ -381,6 +382,7 @@ interface StartInputs {
   homeDir: string;
   dataRoot: string;
   uiStatePath: string;
+  pastedFolder: string;
   tempFolders: readonly string[];
   // The drive run's folder; null outside a drive run.
   driveRunDir: string | null;
@@ -461,6 +463,15 @@ function uiStateFilePath(homeDir: string): string {
     : path.join(homeDir, 'ui-state.json');
 }
 
+// The folder pasted files are saved in, whose files the app never deletes;
+// outside a live run it sits inside the run's own home folder beside the
+// plugin data.
+function pastedFolder(homeDir: string): string {
+  return runMode === 'live'
+    ? path.join(app.getPath('userData'), 'pasted')
+    : path.join(homeDir, 'pasted');
+}
+
 // The OS's temp folders as real paths; none in the self-test, whose home is
 // itself a temp folder its chat steps open folders in. A temp folder whose
 // real path cannot be read is logged and listed as given, since the list only
@@ -488,6 +499,7 @@ async function readStartInputs(): Promise<StartInputs> {
     homeDir,
     dataRoot: dataFolder(homeDir),
     uiStatePath: uiStateFilePath(homeDir),
+    pastedFolder: pastedFolder(homeDir),
     tempFolders: await runTempFolders(),
     driveRunDir,
   };
@@ -797,6 +809,17 @@ function createWindow(
   const startServed = served();
   ipcMain.handle(BRIDGE_CHANNELS.config, () => served());
   serveUiState(inputs.uiStatePath, log);
+  const pasted = createPastedFiles({
+    files,
+    clock,
+    paths,
+    folder: inputs.pastedFolder,
+  });
+  ipcMain.handle(
+    BRIDGE_CHANNELS.savePasted,
+    (_event, bytes: Uint8Array, mediaType: string) =>
+      pasted.save(bytes, mediaType),
+  );
   const keybindings = installWindowKeybindings(
     window,
     startServed.keymap,

@@ -1,6 +1,6 @@
 # 02 — Shared file-drop modules
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -147,3 +147,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit a717159 · proof: diff read: every Produces present; typecheck and lint (layers included) pass · concerns: AGENTS.md's image-types.ts line still says media types only (goes to 09); 05 and 07 still name pasted-images in their text and Done-when greps
