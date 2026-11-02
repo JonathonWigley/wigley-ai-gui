@@ -1,6 +1,8 @@
 import type { Clock, Timers } from '../../../contracts/ambient';
 import type { ChatEntry, SessionControl } from '../../../contracts/agent';
 import type { CommandId } from '../../../contracts/commands';
+import type { Disposable } from '../../../contracts/disposable';
+import type { PageDrops } from '../../../contracts/drops';
 import type {
   EditorHost,
   TextEditor,
@@ -13,6 +15,7 @@ import type { PageChannel, ToastTone } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import type { PartStore } from '../../../shared/page/contributed-parts';
 import { element } from '../../../shared/page/dom';
+import { canvasEncoder } from '../../../shared/page/file-drop/canvas-encoder';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
 import type {
   SessionsPageExports,
@@ -24,9 +27,11 @@ import type {
   ChatSessionState,
 } from '../contract';
 import {
+  type AttachReport,
   type Attachments,
+  type ChatDropDeps,
   createAttachments,
-  listenForImages,
+  takeChatFiles,
 } from './attachments';
 import { pullBackQueued } from './chat-commands';
 import { blurFocusedElement, type CloseConfirm } from './chat-dialogs';
@@ -104,6 +109,8 @@ export type ChatTabScope = 'chat';
 // `/` completion offers ahead of the agent's. `viewer` opens a sent message's
 // images full size. `timers` and `clock` tick a live activity line's time.
 // `composerParts` holds the parts other plugins draw above every composer.
+// `drops` registers each Chat tab as the target of the files dropped or
+// pasted on it, and saves a pasted file that is not an image.
 export interface ChatViewDeps extends SurfaceKitDeps {
   channel: PageChannel<ChatChannel>;
   paths: Paths;
@@ -124,11 +131,13 @@ export interface ChatViewDeps extends SurfaceKitDeps {
   toast(text: string, tone: ToastTone): void;
   timers: Timers;
   clock: Clock;
+  drops: Pick<PageDrops, 'addTarget' | 'savePasted'>;
 }
 
 // A held session's Chat tab. `handle` is null until `addTab` returns, and
-// `box` until the editor mounts into the attached tab. `composerSize` follows
-// the drawn composer's height for as long as the tab is held.
+// `box` and `dropTarget` until the editor mounts into the attached tab.
+// `composerSize` follows the drawn composer's height for as long as the tab is
+// held.
 interface HeldTab {
   sessionId: string;
   name: string;
@@ -144,6 +153,7 @@ interface HeldTab {
   attachments: Attachments;
   composer: ComposerSurface;
   composerSize: ResizeObserver;
+  dropTarget: Disposable | null;
 }
 
 const STARTING_MODE: VimMode = { mode: 'normal', subMode: '' };
@@ -193,6 +203,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       return;
     }
     const tab = createTab(state, toastedKinds, deps, {
+      isHeld: (heldTab) => tabs.get(heldTab.sessionId) === heldTab,
       // Chat keys act only on the visible Chat tab's session. Every Chat tab
       // sets the same scope, so no pushed dialog hears a base change:
       // `otherSessionShown` closes the session's dialogs.
@@ -313,6 +324,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       return;
     }
     tabs.delete(sessionId);
+    tab.dropTarget?.dispose();
     tab.box?.destroy();
     tab.composerSize.disconnect();
     tab.composer.dispose();
@@ -407,12 +419,18 @@ function sessionOf(tab: HeldTab, box: TextEditor): ChatSession {
 // session, with the box's editor mounted once the element is attached. The
 // tab then selects itself, so a chat session opens on its Chat tab whichever
 // plugin's tab the session got first. `view.shown` may run inside `addTab`,
-// before the handle and box are set.
+// before the handle and box are set. Once the box is mounted the tab element is
+// the target of the files dropped or pasted on it; `view.isHeld` answers
+// whether the tab is still held, so a take that outlives it does nothing.
 function createTab(
   state: ChatSessionState,
   toastedKinds: Set<ChatEntryKind>,
   deps: ChatViewDeps,
-  view: { shown(tab: HeldTab): void; beforeClose(tab: HeldTab): boolean },
+  view: {
+    isHeld(tab: HeldTab): boolean;
+    shown(tab: HeldTab): void;
+    beforeClose(tab: HeldTab): boolean;
+  },
 ): HeldTab {
   const name = folderName(state.projectDir, deps.paths);
   const ref: SessionRef = { sessionId: state.sessionId, name };
@@ -472,8 +490,8 @@ function createTab(
     attachments,
     composer,
     composerSize: followComposerHeight(root, entries),
+    dropTarget: null,
   };
-  listenForImages({ name, attachments }, { root, box: boxElement }, deps);
   entries.rebuild(state.entries);
   entries.setQueued(state.queued);
   entries.setWorking(isWorking(state));
@@ -522,9 +540,64 @@ function createTab(
       },
     },
   );
+  const dropDeps = chatDropDepsOf(tab, tab.box, () => view.isHeld(tab), deps);
+  tab.dropTarget = deps.drops.addTarget({
+    element: root,
+    take: (files) => void takeChatFiles(files, dropDeps),
+  });
   sendStatus(tab, tabStatus(state.activity));
   tab.handle.select();
   return tab;
+}
+
+// What a take on the tab writes into: its box and attachments, each doing
+// nothing once `isHeld` answers false.
+function chatDropDepsOf(
+  tab: HeldTab,
+  box: TextEditor,
+  isHeld: () => boolean,
+  deps: Pick<ChatViewDeps, 'drops' | 'log' | 'toast'>,
+): ChatDropDeps {
+  return {
+    attachments: {
+      add: (image) => {
+        if (isHeld()) {
+          tab.attachments.add(image);
+        }
+      },
+    },
+    box: {
+      insert: (text) => {
+        if (isHeld()) {
+          box.insert(text);
+        }
+      },
+      charBeforeCursor: () => (isHeld() ? box.charBeforeCursor() : ''),
+    },
+    savePasted: (file) => deps.drops.savePasted(file),
+    encoder: canvasEncoder,
+    report: attachReportOf(tab.name, deps),
+  };
+}
+
+function attachReportOf(
+  name: string,
+  deps: Pick<ChatViewDeps, 'log' | 'toast'>,
+): AttachReport {
+  return {
+    attached: (image) =>
+      deps.log('chat', `attached a ${image.mediaType} image in ${name}`),
+    refused: (reason) => {
+      deps.log('chat', `image refused: ${reason}`);
+      deps.toast(reason, 'error');
+    },
+    failed: (fileName, what, error) => {
+      deps.log('chat', `${fileName} not ${what}: ${error}`);
+      deps.toast(`${fileName} not ${what}: ${error}`, 'error');
+    },
+    inserted: (paths) =>
+      deps.log('chat', `inserted ${paths.length} file path(s) in ${name}`),
+  };
 }
 
 function putEntry(tab: HeldTab, entry: ChatEntry, log: Log) {

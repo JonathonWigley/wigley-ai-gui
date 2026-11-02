@@ -1,6 +1,6 @@
 # 04 — Page core drop registry
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 01, 02, 03
 Plan: [plan.md](plan.md)
@@ -123,3 +123,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 2afa21b · proof: diff read: every Produces present; typecheck and lint pass · concerns: drops.ts DroppedFile.name comment says a pasted file is named image.png, while 04 names it pasted (stale comment, outside 04's Files); isShown's checkVisibility unchecked live; tests wait with vi.waitFor plus one setTimeout(0)

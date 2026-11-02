@@ -58,8 +58,9 @@ type ChatApi = PageApi<
 // Sending `/login`, `/logout`, `/status` or another app slash command runs it
 // in the page in place of sending it; the exports register more, fill a
 // session's box, and add parts above every composer. Images
-// pasted or dropped into a Chat tab attach to its next message, and a sent
-// message's images open full size in the image viewer. The picker, the deny
+// pasted or dropped into a Chat tab attach to its next message, other files go
+// into the box as file chips, and a sent message's images open full size in
+// the image viewer. The picker, the deny
 // reason box, the end-session confirmation, the sign-in dialog and the image
 // viewer sit in the overlay layer, each over a scope of its own; another
 // session's Chat tab showing closes the reason box, the confirmation, a
@@ -173,6 +174,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       toast: services.toast,
       timers: services.timers,
       clock: services.clock,
+      drops: api.drops,
     });
     // Messages pulled back out of a session's queue go back into its box.
     api.channel.on('returned', ({ sessionId, messages }) => {

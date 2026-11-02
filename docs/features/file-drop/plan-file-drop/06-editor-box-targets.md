@@ -1,6 +1,6 @@
 # 06 — Editor-box pane targets: Forms, Primer, Backlog
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 4 · Depends on: 01, 03, 04
 Plan: [plan.md](plan.md)

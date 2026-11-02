@@ -230,7 +230,7 @@ Boundary rules:
 - [x] [Editor insert and file chips](03-editor-insert-chips.md) — after 02
 
 ### Wave 3
-- [ ] [Page core drop registry](04-drop-registry.md) — after 01, 02, 03
+- [x] [Page core drop registry](04-drop-registry.md) — after 01, 02, 03
 
 ### Wave 4
 - [ ] [Chat drop target](05-chat-target.md) — after 01, 02, 03, 04
@@ -250,6 +250,7 @@ Review base: 87a254cb76dee43042396e82e9a353b6c9573795
 - 02 · a717159 · diff read: every Produces present; typecheck and lint (layers included) pass · concerns: AGENTS.md's image-types.ts line still says media types only (goes to 09); 05 and 07 still name pasted-images in their text and Done-when greps
 - 01 · d4ea7b1 · diff read: every Produces present word for word; typecheck and lint pass · concerns: pastedFolder in main.ts not yet exercised live (task 10 checks it per run mode)
 - 03 · 002f34c · diff read: every Produces present (two extra host-only exports, logged); typecheck and lint pass · concerns: a on a chip ending its line may leave the caret before the chip; vim's own cursor re-sync after the filter moves the selection (l onto a chip, x widening) is unproven — both for the live check in 10; one over-long comment line in boxExtensions
+- 04 · 2afa21b · diff read: every Produces present; typecheck and lint pass · concerns: drops.ts DroppedFile.name comment says a pasted file is named image.png, while 04 names it pasted (stale comment, outside 04's Files); isShown's checkVisibility unchecked live; tests wait with vi.waitFor plus one setTimeout(0)
 ### Contract changes
 - chip-decorations.ts exports: fileChipExtension, snapHead, widenRange → those plus skipsChipRules (an Annotation the host's setText and insert put on their own transactions) and fileChipsOf(state) (the chips of a box's state; [] in a document editor) · why: the host's insert reads the chip under a normal-mode cursor and its own transactions must skip the chip rules · consumers: none outside the host · group 03
 ### Rulings
@@ -261,5 +262,9 @@ Review base: 87a254cb76dee43042396e82e9a353b6c9573795
 - The filter returns [tr, {changes: remainders, selection?, sequential: true}], leaving vim's own transaction untouched and deleting each cut chip's rest after it — keeps vim's registers on its own change — a yank register holding only part of a chip · group 03
 - Visual-selection widening reads the chips of the resulting document, not the state before as the task says — a selection lives in the new document — none for selection-only transactions · group 03
 - insert in visual mode exits visual mode, then a second selection-only dispatch puts the cursor back; the text changes once so changed reports once — exitVisualMode moves the cursor to vim's visual head — a flicker of the cursor · group 03
+- Each addTarget call is its own registration; of two targets on one element the last registered takes the files — the task left duplicates open — a plugin registering twice gets two takes · group 04
+- A file drop carrying no File toasts Nothing here takes files, even over a one-line input — the input is not asked — an empty drag over an input toasts rather than doing nothing · group 04
+- A paste is cancelled only when an input or a target takes it; otherwise left alone — text paste must keep working — none · group 04
+- A null selectionStart falls back to the end of the value — DOM types only; these inputs never report null — none · group 04
 ### Review rounds
 ### Test gate
