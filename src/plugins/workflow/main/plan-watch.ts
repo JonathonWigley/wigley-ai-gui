@@ -15,7 +15,8 @@ import { readPlanProgress } from '../plan-reader';
 // watch to `planDir` (null: none); following the folder it already watches
 // does nothing, unless `planGone` closed that watch, which `follow` reopens.
 // `check` reads the watched plan now, for a delete the OS watcher may not
-// report; it does nothing for a watch `planGone` closed. A missing folder is
+// report; it does nothing while the watch is still opening or after `planGone`
+// closed it. A missing folder is
 // never watched, since `Files.watch` creates the folder it is given. A read
 // that settles after the session's watch moved or closed is dropped.
 export interface PlanWatch {

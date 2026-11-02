@@ -70,10 +70,10 @@ folder. Only the main agent moves the stage: a subagent's skill or write is not 
   plan)
 
 Each half registers through the workflow plugin's `addStage` export in its process; the built-in stages register the
-same way a user plugin would. Each action names a command; `stages/index.ts` lists the commands (`WORKFLOW_COMMANDS`) and the manifest
-joins them, so a key and a button run the same command. The plugin core names no stage: it folds every signal through the registered
-entry rules in stage order (`foldFlow(flow, signal, stages)`), the first rule that answers wins, and the flow keeps
-its stage when none answers.
+same way a user plugin would. Each action names a command; `stages/index.ts` lists the commands (`WORKFLOW_COMMANDS`)
+and the manifest joins them, so a key and a button run the same command. The plugin core names no stage: it folds every
+signal through the registered entry rules in stage order (`foldFlow(flow, signal, stages)`), the first rule that answers
+wins, and the flow keeps its stage when none answers.
 
 To change the workflow:
 
@@ -97,10 +97,12 @@ Main folds these, for owned sessions only:
 | plan gone | the same watch, the folder deleted | — |
 | handed off, dismissed | the Make in new session and Dismiss actions | — |
 
-`skillStarted`, `fileWritten`, `turnStarted` and `turnEnded` are members of `AgentEvent` (`src/contracts/agent.ts`) that the Claude
-adapter and the fake harness emit, so the fold never reads a harness's JSON. A `skillStarted` or `fileWritten` of a subagent is no signal. A `sessionEnded` of the flow's current host session
-(a process that exits mid-turn) gives a subagent-finished signal for each running subagent, then a turn-ended signal. A cleared session keeps its stage:
-Clear & make's own clear must not reset plan ready. `sessions.ended` (main's event for a closed row) drops the session's flow.
+`skillStarted`, `fileWritten`, `turnStarted` and `turnEnded` are members of `AgentEvent` (`src/contracts/agent.ts`) that
+the Claude adapter and the fake harness emit, so the fold never reads a harness's JSON. A `skillStarted` or
+`fileWritten` of a subagent is no signal. A `sessionEnded` of the flow's current host session (a process that exits
+mid-turn) gives a subagent-finished signal for each running subagent, then a turn-ended signal. A cleared session keeps
+its stage: Clear & make's own clear must not reset plan ready. `sessions.ended` (main's event for a closed row) drops
+the session's flow.
 
 ## Where it draws
 
@@ -134,8 +136,8 @@ The `<Leader>w` group (which-key: workflow), each anchored on the strip and the 
 | `<Leader>wf` | Start feature |
 | `<Leader>wd` | Dismiss |
 
-In the Flow tab (scope `workflow.flow`), `<C-j>` and `<C-k>` scroll a line, and `<C-S-j>` and `<C-S-k>` scroll half a page.
-The layout preview opens on `<Leader>zlw`.
+In the Flow tab (scope `workflow.flow`), `<C-j>` and `<C-k>` scroll a line, and `<C-S-j>` and `<C-S-k>` scroll half a
+page. The layout preview opens on `<Leader>zlw`.
 
 ## Decisions
 

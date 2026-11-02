@@ -25,8 +25,8 @@ Built:
   under its session's row through sessions' `addRowPart`, and the `Space z l a` layout preview
 
 Waits: plan, plan step, retry and watcher events wait for a producer; replay and the tower view wait for the tower
-itself. `skillStarted`, `fileWritten`, `turnStarted` and `turnEnded` are emitted and read by the workflow plugin
-(`docs/features/workflow/design.md`).
+itself. `skillStarted`, `fileWritten`, `turnStarted` and `turnEnded` are emitted by the Claude adapter and the fake
+harness and read by the workflow plugin (`docs/features/workflow/design.md`).
 
 ## Vocabulary
 
@@ -55,7 +55,7 @@ unchanged. Each event carries `at`, epoch milliseconds from the adapter's inject
 | `usage` | agent id, context tokens used, context window size (null until the harness reports it), autocompact limit (configured and reported, each tokens or null), cache expiry (null when unknown), session spend in USD (null until the first result) | fatigue bar (context fill) |
 | `compacted` | context tokens before and after, each null when the harness does not report it (Claude reports no after-size; the next `usage` carries it) | rest / heal |
 | `userMessage` | — | "message from HQ" |
-| `skillStarted` | skill (`wigley:make`), args; a Skill call or a slash command the user typed | — (the workflow plugin's stages) |
+| `skillStarted` | agent id, skill (`wigley:make`), args; a Skill call or a slash command the user typed | — (the workflow plugin's stages) |
 | `fileWritten` | agent id, the full path of a Write or Edit | — (the workflow plugin's plan detection) |
 | `turnStarted` | —; every turn of the main conversation, a turn the harness runs with no user message included (Claude: each turn's `system/init`) | — (the workflow plugin's busy state) |
 | `turnEnded` | — | — (the workflow plugin's plan ready) |

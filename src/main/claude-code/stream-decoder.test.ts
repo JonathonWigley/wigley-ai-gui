@@ -1331,7 +1331,7 @@ describe('createStreamDecoder', () => {
       ],
     },
     {
-      case: "write left open at an agent's end",
+      case: "write open at its agent's end fails with no write",
       lines: [
         agentCall('a1', { run_in_background: false }),
         toolUseLine(

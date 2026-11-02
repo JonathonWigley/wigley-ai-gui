@@ -68,7 +68,7 @@ export interface PlanTaskInput {
 }
 
 // The boxes under one `### Wave N` (`Wave 2`), or those under no wave heading (`Tasks`), in file order; `current` is
-// the wave holding the first open box.
+// the wave of the first open box under a wave heading.
 export interface PlanWaveInput {
   title: string;
   tasks: readonly PlanTaskInput[];

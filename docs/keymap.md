@@ -47,7 +47,8 @@ hjkl is the direction in every layer; the modifier picks the verb.
   (its prose's line height, the editor's own line in the editor), key repeat supplying the
   speed, and `Ctrl+Shift+j`/`Ctrl+Shift+k` scroll half a page, Shift being the bigger step. The
   views are the doc, its editor too while editing, the chat transcript, the form and its review,
-  the primer card and its review, the Backlog list and detail, the gallery, and the Flow tab; the docs tree takes both pairs and scrolls the doc beside it.
+  the primer card and its review, the Backlog list and detail, the gallery, and the Flow tab; the docs
+  tree takes both pairs and scrolls the doc beside it.
   In the editor the line scroll keeps the cursor unless it would leave the view, as vim's
   `Ctrl+e`/`Ctrl+y` do, and the half page moves it with the scroll in visual mode, as vim's
   `Ctrl+d`/`Ctrl+u` do; in visual mode the selection grows or shrinks with the cursor. Other list
