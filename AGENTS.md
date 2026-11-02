@@ -234,8 +234,11 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
 Each Claude Code or Codex session runs the marketplace's `relay.py` (`plugins/wigley/scripts/forms/` in
 wigley-ai-marketplace, whose README states the tool contract, the saved-round file format
 the `retro` skill reads, and the relay's side of the channel). A change to either contract
-lands in both repos together. Each relay connection is one agent session, owned by the `sessions` plugin; every
-connected session has a row in the sessions sidebar until it disconnects or the user closes the row. A session the
+lands in both repos together. Each relay connection is one agent session, owned by the `sessions` plugin. A
+connected session (one the app did not start, such as a terminal `claude` or Codex session) has no row in the sessions
+sidebar until a plugin needs the user there: `mark` adds its row, as a form opening does, and `release` closes it
+again once every close guard allows, as the form presenter does when the session's last form closes, by submit,
+cancel or any other close. The user may also close the row; it leaves when the session disconnects. A session the
 app starts (`open`) is an owned session: its row exists from start, the relay connection whose hello carries its
 host session id joins that row instead of adding one (a newer relay takes the join from an older one still
 connected, as when the harness restarts its MCP connection), and the row ends when its owner ends it: chat keeps
