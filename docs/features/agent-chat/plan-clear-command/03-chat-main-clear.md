@@ -1,6 +1,6 @@
 # 03 — Chat main clear
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01, 02
 Plan: [plan.md](plan.md)
@@ -54,3 +54,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit a7fdab6 · proof: diff read: ChatSessions.clear and ChatChannel clear present; typecheck and lint clean; chat main + docs tests pass (7 new clear tests) · concerns: old process's sessionEnded agentEvent still reaches the agents roster fold for the row (harmless today); old relay keeps its join until the new relay takes over, so a permission call in that window shows on the new process; an interrupt() throw on a dead process makes clear throw before anything changes

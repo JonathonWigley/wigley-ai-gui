@@ -1,6 +1,6 @@
 # 06 — Doc re-read
 
-Status: not started
+Status: done
 Type: Task
 Wave: 4 · Depends on: 01, 02, 03, 04, 05
 Plan: [plan.md](plan.md)
@@ -17,3 +17,4 @@ Commit:    one commit, if any line changed
 
 ## Proof
 
+Commit 4fa6000 · proof: glossary, Saved sessions, Clear, App slash commands, Plan F checked line by line; start diagram, control-values sentence and Clear fixed · concerns: worker doubted --permission-mode manual; claude 2.1.316 --help lists manual among the choices, so it holds

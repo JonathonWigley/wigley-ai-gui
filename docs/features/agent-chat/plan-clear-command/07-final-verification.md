@@ -1,6 +1,6 @@
 # 07 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 4 · Depends on: 06
 Plan: [plan.md](plan.md)
@@ -27,3 +27,4 @@ Commit:    none (captures are not committed); the Proof rides in `wigley:make`'s
 
 ## Proof
 
+Commit none · proof: lint clean; npm test 4734/4734; selftest 797 pass 0 fail (chat: clear group passed); drive run clear-live on real Claude (haiku, then sonnet): 6/6 live checks PASS — one notice + empty composer, process started (resume false) + conversation cleared, no exit notice, next reply ok; Model chip Sonnet right after clear and reply names claude-sonnet-5-5; relay left/joined same app id, one sidebar row; resume list two entries, post-clear resume shows only post-clear turn; docs index ran with new host id (scratch reports/07-live-1.md) · concerns: after a clear the tab shows a '1 step · 0s' activity line under the notice (the new process's init entry), unlike a fresh session's empty tab; pre-clear session titled '/model haiku' when that was the first send; two outside sessions appeared in the drive log after resume (drive isolation); first selftest run had 2 forms failures and hit the 20-min limit, the full re-run passed

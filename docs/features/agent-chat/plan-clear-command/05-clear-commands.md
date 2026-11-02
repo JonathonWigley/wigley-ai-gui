@@ -1,6 +1,6 @@
 # 05 — Clear commands and self-test step
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 3 · Depends on: 03
 Plan: [plan.md](plan.md)
@@ -28,3 +28,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit e67ef59 · proof: diff read: addClearCommands present, registered in page start; selftest clear group after resting session; typecheck and lint clean · concerns: fact sheet wrong: resting session ends on chat-selftest, so the clear group shows chat-second first and switches back

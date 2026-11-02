@@ -145,15 +145,15 @@ Shared names (word for word across tasks):
 - [x] [Owned session host id change](02-owned-host-id.md)
 
 ### Wave 2
-- [ ] [Chat main clear](03-chat-main-clear.md) — after 01, 02
-- [ ] [Docs source and notes follow the host id](04-docs-follows-host-id.md) — after 02
+- [x] [Chat main clear](03-chat-main-clear.md) — after 01, 02
+- [x] [Docs source and notes follow the host id](04-docs-follows-host-id.md) — after 02
 
 ### Wave 3
-- [ ] [Clear commands and self-test step](05-clear-commands.md) — after 03
+- [x] [Clear commands and self-test step](05-clear-commands.md) — after 03
 
 ### Wave 4
-- [ ] [Doc re-read](06-doc-re-read.md)
-- [ ] [Final verification](07-final-verification.md)
+- [x] [Doc re-read](06-doc-re-read.md)
+- [x] [Final verification](07-final-verification.md)
 
 ## Run log
 
@@ -162,11 +162,21 @@ Review base: 54aed2e
 ### Groups
 - 01 · 446d54e + fmt f12ceae · diff read: AgentStart.controls present; typecheck and lint clean; 609 wave-1 tests pass · concerns: test line numbers drifted from plan (3 extra toEqual literals needed controls: {}); claudeLaunch destructures Record<string,string> without noUncheckedIndexedAccess (runtime-correct); design.md:73 still shows --permission-mode auto (true for no held mode)
 - 02 · d79c347 + fmt f12ceae · diff read: setHostSessionId, hostSessionChanged, sessionHostChanged, rowChanges.changed present; typecheck and lint clean; 609 wave-1 tests pass · concerns: chat-sessions.test.ts OwnedSession double (task 01's file) needed setHostSessionId, added by 01's worker on the lead's note; worker ran npx --version once (nothing installed)
+- 04 · cb04f23 · diff read: both listeners present; worker's typecheck and lint clean; docs start.test.ts 21 pass incl. sessionSource_HostSessionChanged_LoadsNewId · concerns: a notes row added with a null host id that later gains one stays out of the notes list (event lacks harness/projectDir to rebuild it)
+- 03 · a7fdab6 · diff read: ChatSessions.clear and ChatChannel clear present; typecheck and lint clean; chat main + docs tests pass (7 new clear tests) · concerns: old process's sessionEnded agentEvent still reaches the agents roster fold for the row (harmless today); old relay keeps its join until the new relay takes over, so a permission call in that window shows on the new process; an interrupt() throw on a dead process makes clear throw before anything changes
+- 05 · e67ef59 · diff read: addClearCommands present, registered in page start; selftest clear group after resting session; typecheck and lint clean · concerns: fact sheet wrong: resting session ends on chat-selftest, so the clear group shows chat-second first and switches back
+- 06 · 4fa6000 · glossary, Saved sessions, Clear, App slash commands, Plan F checked line by line; start diagram, control-values sentence and Clear fixed · concerns: worker doubted --permission-mode manual; claude 2.1.316 --help lists manual among the choices, so it holds
+- 07 · none · lint clean; npm test 4734/4734; selftest 797 pass 0 fail (chat: clear group passed); drive run clear-live on real Claude (haiku, then sonnet): 6/6 live checks PASS — one notice + empty composer, process started (resume false) + conversation cleared, no exit notice, next reply ok; Model chip Sonnet right after clear and reply names claude-sonnet-5-5; relay left/joined same app id, one sidebar row; resume list two entries, post-clear resume shows only post-clear turn; docs index ran with new host id (scratch reports/07-live-1.md) · concerns: after a clear the tab shows a '1 step · 0s' activity line under the notice (the new process's init entry), unlike a fresh session's empty tab; pre-clear session titled '/model haiku' when that was the first send; two outside sessions appeared in the drive log after resume (drive isolation); first selftest run had 2 forms failures and hit the 20-min limit, the full re-run passed
 ### Contract changes
 ### Rulings
 - fake startingControls(launchValues) takes request.controls; launch value replaces the fixed starting value — keeps the rule in the function the task names — small move if wrong · group 01
 - setHostSessionId on a live session whose row was closed updates info and sends no state, as end does — a missing row means no state change — none lost · group 02
 - setHostSessionId(currentId) skips the self-holding check and still emits — harmless — one extra event · group 02
 - drive's started map typed StartedSession = Pick<OwnedSession,'session'|'end'> since it also holds ConnectedSession — avoids stubbing connected handles — none · group 02
+- notes logs 'session <id|none> listed' on every sessionHostChanged, as sessionAdded logs every row — matches pattern — one extra log line · group 04
+- agentEvent carries the host id read at process start, so an old process's sessionEnded after a clear stays under the old id (isLive drops every other event) — narrowest fix, no second liveness guard — only the event's host id if wrong · group 03
+- nextNotice(session,text,tone) pulled out of addNotice so clear builds the notice without an entry send — reuse — none · group 03
+- clear group is three steps (A-S-i to chat-second, /clear with checksFit, A-S-o back) since resting session ends on chat-selftest and sending expects it — keeps sending unchanged — two extra keystrokes · group 05
 ### Review rounds
 ### Test gate
+- full vitest (4734/4734, every touched module incl. chat-sessions, claude-launch, claude-code-harness, fake harness, session-list, tabs, docs start) + npm run selftest (797 pass, 0 fail, at 4fa6000) + typecheck + lint, all clean

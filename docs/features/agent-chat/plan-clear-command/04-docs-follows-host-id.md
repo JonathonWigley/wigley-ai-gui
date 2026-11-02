@@ -1,6 +1,6 @@
 # 04 — Docs source and notes follow the host id
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 2 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -29,3 +29,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit cb04f23 · proof: diff read: both listeners present; worker's typecheck and lint clean; docs start.test.ts 21 pass incl. sessionSource_HostSessionChanged_LoadsNewId · concerns: a notes row added with a null host id that later gains one stays out of the notes list (event lacks harness/projectDir to rebuild it)
