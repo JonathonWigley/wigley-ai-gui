@@ -1,6 +1,6 @@
 # 12 — Final verification
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 7 · Depends on: 11
 Plan: [plan.md](plan.md)
@@ -40,3 +40,5 @@ Done when: every check above passed, each capture read; a failure goes back to t
 Commit:    none, unless a fix lands in its owning task's files
 
 ## Proof
+
+Commit be9f9ee · proof: Live drive /tmp/claude-subagent-lines/reports/12-1.md: 9/10 checks incl. real Claude adapter probe; check 5 (narrow side bar) failed and was fixed by 7e4ee8f + be9f9ee, proven by the self-test's held fit check at 160px (fails on the old CSS, passes now: /tmp/claude-subagent-lines/r1wrap/selftest-new.log) · concerns: Ending a session removes its row without a 'lines … 0' log (expected); a foreground interrupt in probe 6 exited 1, unexplained

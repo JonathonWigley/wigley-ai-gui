@@ -283,14 +283,17 @@ export function createStreamDecoder(
 
   // An agent's end also fails every Agent call still pending under it, nested
   // calls included, since a foreground call cannot outlive the agent waiting
-  // on it: the agent finishes first, then its calls level by level, each level
-  // in spawn order. A launched background call waits for its own end event.
+  // on it: the agent finishes first, then its calls breadth-first, each level
+  // in its parents' order and then in spawn order under each parent. A launched
+  // background call waits for its own end event. Each ending agent's open tool
+  // calls fail just ahead of its `agentFinished`.
   function finishAgent(agentId: string, isOk: boolean, out: DecodedLine) {
     const ending = [agentId];
     for (let index = 0; index < ending.length; index += 1) {
       const endingId = ending[index];
       pendingAgents.delete(endingId);
       launchedAgents.delete(endingId);
+      failOpenTools(endingId, out);
       out.agentEvents.push({
         type: 'agentFinished',
         agentId: endingId,
@@ -300,6 +303,22 @@ export function createStreamDecoder(
         if (parentAgentId === endingId) {
           ending.push(callId);
         }
+      }
+    }
+  }
+
+  // Every tool call still open under an ending agent, finished as failed and
+  // forgotten, so a later `tool_result` for one finishes nothing.
+  function failOpenTools(agentId: string, out: DecodedLine) {
+    for (const [toolUseId, toolAgentId] of toolAgents) {
+      if (toolAgentId === agentId) {
+        toolAgents.delete(toolUseId);
+        out.agentEvents.push({
+          type: 'toolFinished',
+          agentId,
+          toolUseId,
+          ok: false,
+        });
       }
     }
   }

@@ -118,8 +118,9 @@ const toolResultLine = (
     tool_use_result: toolUseResult,
   });
 
-const launchReceipt = (toolUseId: string) =>
+const launchReceipt = (toolUseId: string, parent: string | null = null) =>
   toolResultLine(toolUseId, {
+    parent,
     toolUseResult: {
       isAsync: true,
       status: 'async_launched',
@@ -1113,6 +1114,62 @@ describe('createStreamDecoder', () => {
         finished('a1', 'failed'),
         finished('n1', 'failed'),
         finished('n2', 'failed'),
+      ],
+    },
+    {
+      case: 'subagent background call outlives its end',
+      lines: [
+        agentCall('a1', { run_in_background: false }),
+        agentCall('b2', {}, 'a1'),
+        launchReceipt('b2', 'a1'),
+        taskNotification('a1', 'completed'),
+      ],
+      expected: [
+        spawned('a1'),
+        spawned('b2', 'Explore', 'a1'),
+        finished('a1', 'done'),
+      ],
+    },
+    {
+      case: 'subagent end fails its open tool call',
+      lines: [
+        agentCall('a1', { run_in_background: false }),
+        toolUseLine('t1', 'Read', { file_path: 'notes.txt' }, 'a1'),
+        toolUseLine('t2', 'Grep', { pattern: 'x' }, 'a1'),
+        toolResultLine('t2', { parent: 'a1' }),
+        toolResultLine('a1', { isError: true }),
+        toolResultLine('t1', { parent: 'a1' }),
+      ],
+      expected: [
+        spawned('a1'),
+        { type: 'toolStarted', agentId: 'a1', toolUseId: 't1', tool: 'Read' },
+        { type: 'toolStarted', agentId: 'a1', toolUseId: 't2', tool: 'Grep' },
+        { type: 'toolFinished', agentId: 'a1', toolUseId: 't2', ok: true },
+        { type: 'toolFinished', agentId: 'a1', toolUseId: 't1', ok: false },
+        finished('a1', 'failed'),
+      ],
+    },
+    {
+      case: 'main result fails open tool calls of swept agents',
+      lines: [
+        toolUseLine('t0', 'Bash', { command: 'ls' }),
+        agentCall('a1', { run_in_background: false }),
+        agentCall('n1', { run_in_background: false }, 'a1'),
+        toolUseLine('t1', 'Read', { file_path: 'notes.txt' }, 'a1'),
+        toolUseLine('t2', 'Read', { file_path: 'todo.txt' }, 'n1'),
+        RESULT_LINE,
+        toolResultLine('t2', { parent: 'n1' }),
+      ],
+      expected: [
+        { type: 'toolStarted', agentId: 'main', toolUseId: 't0', tool: 'Bash' },
+        spawned('a1'),
+        spawned('n1', 'Explore', 'a1'),
+        { type: 'toolStarted', agentId: 'a1', toolUseId: 't1', tool: 'Read' },
+        { type: 'toolStarted', agentId: 'n1', toolUseId: 't2', tool: 'Read' },
+        { type: 'toolFinished', agentId: 'a1', toolUseId: 't1', ok: false },
+        finished('a1', 'failed'),
+        { type: 'toolFinished', agentId: 'n1', toolUseId: 't2', ok: false },
+        finished('n1', 'failed'),
       ],
     },
   ])('decode_AgentEvents_$case', ({ lines, expected }) => {

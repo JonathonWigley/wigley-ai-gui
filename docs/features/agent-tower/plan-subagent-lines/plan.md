@@ -263,7 +263,7 @@ export interface Layout { line?(parent: HTMLElement, input: SubagentLineInput, k
 - [x] [Doc re-read](11-doc-re-read.md) — after every task above
 
 ### Wave 7
-- [ ] [Final verification](12-final-verification.md) — after 11
+- [x] [Final verification](12-final-verification.md) — after 11
 
 ## Run log
 
@@ -281,6 +281,7 @@ Review base: 66fec31
 - 04 · f84719b · diff read: FAKE_AGENTS_TEXT and the fake's agent events present, MAIN_AGENT_ID replaces the literal; typecheck clean; worker ran fake-agent-harness and its three consumer suites (161 pass) and lint · concerns: end, kill and a fake: end send clear the running-subagent list when called, so an agents send whose microtask has not run could refill it after; nothing reads it after the end
 - 10 · 916e552 · diff read: agentsSelfTestScript handed through services.selfTest in agentsMainPart; typecheck and lint clean; npm run selftest all passed, group agents: subagent lines passes (2 lines, fit check, 0 lines); screenshot exists and shows both lines under the agents-selftest row · concerns: screenshot: the first line's type wigley:sonnet-medium takes the row width and its description 'Map the stream decoder' shows nothing (09's grid gives type max-content) — for the review
 - 11 · be9cc24 · diff read: design.md Status and agents plugin section, AGENTS.md files/, debug keys and self-test lines match the code; layouts/design.md and claude-stream.md checked and hold; lint clean · concerns: the worker removed design.md's skillStarted/fileWritten/turnEnded rows as stale; they are the workflow design's rows written ahead in 22dfcf9 for its unstarted plan, so a follow-up dispatch restored them before the commit; the click-selects-session line was not traced in code (12 checks it live)
+- 12 · be9f9ee · Live drive /tmp/claude-subagent-lines/reports/12-1.md: 9/10 checks incl. real Claude adapter probe; check 5 (narrow side bar) failed and was fixed by 7e4ee8f + be9f9ee, proven by the self-test's held fit check at 160px (fails on the old CSS, passes now: /tmp/claude-subagent-lines/r1wrap/selftest-new.log) · concerns: Ending a session removes its row without a 'lines … 0' log (expected); a foreground interrupt in probe 6 exited 1, unexplained
 ### Contract changes
 - Review round 1 (user decision): compacted.beforeTokens number → number | null; afterTokens always null from Claude (post_tokens counts messages only; the next usage carries the after-size); AgentEventType export removed · consumers: 03, 07
 ### Rulings
@@ -304,5 +305,7 @@ Review base: 66fec31
 - scrollsItself also lists .chat-activity-step, chat's ellipsis-clipped activity shortlist that the long Agent descriptions overflow on purpose — a real overflow there goes unflagged in this one step · group 10 · group 10
 ### Review rounds
 - 1 · cb0c8ce · NEEDS FIXES (14 findings: 9 determined dispatched, 5 to triage; lead-applied 287c6ea)
+- 2 (re-review, correctness) · be9f9ee · NEEDS FIXES (13/14 closed; repeat on the pending-Agent guard, a missing kill row; why line lead-applied)
+- 3 (re-review cycle 2, correctness) · 48768e1 · PASS (2 determined minors + 1 pre-existing minor dispatched, agent-decided under the user's delegation)
 ### Test gate
 - whole vitest suite (the run touched contracts, Files adapters, the Claude adapter, the fake harness, chat, sessions and a new plugin, and the suite runs in 10 s), typecheck and lint; npm run selftest ran in group 10 after the last code change (11 is docs only) · 4672 passed, typecheck and lint clean, self-test all passed
