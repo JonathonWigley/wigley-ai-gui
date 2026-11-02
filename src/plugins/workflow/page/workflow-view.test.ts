@@ -487,4 +487,19 @@ describe('workflow view', () => {
     ).toEqual(['default']);
     expect(wrapper.children).toHaveLength(1);
   });
+
+  it('hold_FirstDrawThrows_LetsThePartGo', () => {
+    const { view, put } = setUp();
+    const body = new FakeElement('div');
+    put(flowIn('planReady'));
+
+    expect(() =>
+      view.drawFlowTab(asHtml(body), 'a', () => {
+        throw new Error('no status line');
+      }),
+    ).toThrow('no status line');
+    put(flowIn('make', { progress: progressOf(1, [3]) }));
+
+    expect(body.children).toEqual([]);
+  });
 });

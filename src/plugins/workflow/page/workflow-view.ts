@@ -277,14 +277,28 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
     drawEach([...held].filter((part) => part.showsCountdown));
   };
 
+  // Stops drawing `part` and disposes what it drew last.
+  const release = (part: HeldPart) => {
+    held.delete(part);
+    const last = part.drawn;
+    part.drawn = null;
+    part.showsCountdown = false;
+    try {
+      last?.dispose();
+    } finally {
+      updateTicker();
+    }
+  };
+
   // Holds a new wrapper of `kind` for the session and draws it; the returned
-  // dispose lets it go.
+  // dispose lets it go. A first draw that throws lets it go and empties the
+  // wrapper before the throw goes on.
   const hold = (
     kind: PartKind,
     wrapper: HTMLElement,
     sessionId: string,
     setStatus: ((status: string) => void) | null,
-  ) => {
+  ): Disposable => {
     const part: HeldPart = {
       kind,
       sessionId,
@@ -294,20 +308,17 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
       showsCountdown: false,
     };
     held.add(part);
-    drawEach([part]);
-    return {
-      dispose() {
-        held.delete(part);
-        const last = part.drawn;
-        part.drawn = null;
-        part.showsCountdown = false;
-        try {
-          last?.dispose();
-        } finally {
-          updateTicker();
-        }
-      },
-    };
+    try {
+      drawEach([part]);
+    } catch (error) {
+      try {
+        release(part);
+      } finally {
+        wrapper.replaceChildren();
+      }
+      throw error;
+    }
+    return { dispose: () => release(part) };
   };
 
   const logFlow = (flow: SessionFlow) => {

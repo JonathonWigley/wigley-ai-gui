@@ -29,12 +29,15 @@ export interface FlowTabsDeps {
 // the current call returns, so a build schedules the add on a zero-delay
 // timer, and a flow that arrives after the build adds it at once. A flow for
 // a session whose strip was never built waits for the build. The tab stays
-// until `remove`, which also forgets the build. `visibleBody` is the
-// scrolling body of the Flow tab that is the visible tab, null for none.
+// until `removeTab`, which keeps the build so the next flow adds it again, or
+// `forget`, which also forgets the build for a session that left. A tab whose
+// draw throws is removed again. `visibleBody` is the scrolling body of the
+// Flow tab that is the visible tab, null for none.
 export interface FlowTabs {
   chatTabBuilt(sessionId: string): void;
   setFlow(flow: SessionFlow): void;
-  remove(sessionId: string): void;
+  removeTab(sessionId: string): void;
+  forget(sessionId: string): void;
   visibleBody(): HTMLElement | null;
 }
 
@@ -78,11 +81,31 @@ export function createFlowTabs(deps: FlowTabsDeps): FlowTabs {
         log(`Flow tab shown in ${name}`);
       },
     });
-    log(`Flow tab added in ${name}`);
-    const drawing = deps.draw(body, sessionId, (status) =>
-      handle.setStatus(status),
-    );
+    let drawing: Disposable;
+    try {
+      drawing = deps.draw(body, sessionId, (status) =>
+        handle.setStatus(status),
+      );
+    } catch (error) {
+      handle.remove();
+      throw error;
+    }
     tabs.set(sessionId, { handle, body, drawing });
+    log(`Flow tab added in ${name}`);
+  };
+
+  const removeTab = (sessionId: string) => {
+    cancelPendingAdd(sessionId);
+    const tab = tabs.get(sessionId);
+    if (tab === undefined) {
+      return;
+    }
+    tabs.delete(sessionId);
+    try {
+      tab.drawing.dispose();
+    } finally {
+      tab.handle.remove();
+    }
   };
 
   return {
@@ -105,19 +128,10 @@ export function createFlowTabs(deps: FlowTabsDeps): FlowTabs {
         add(flow.sessionId);
       }
     },
-    remove(sessionId) {
-      cancelPendingAdd(sessionId);
+    removeTab,
+    forget(sessionId) {
       built.delete(sessionId);
-      const tab = tabs.get(sessionId);
-      if (tab === undefined) {
-        return;
-      }
-      tabs.delete(sessionId);
-      try {
-        tab.drawing.dispose();
-      } finally {
-        tab.handle.remove();
-      }
+      removeTab(sessionId);
     },
     visibleBody() {
       for (const tab of tabs.values()) {

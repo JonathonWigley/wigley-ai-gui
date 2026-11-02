@@ -15,21 +15,28 @@ function flowOf(hasLeftIdle: boolean): SessionFlow {
   };
 }
 
-// Flow tabs over sessions that record each added tab and timers that hold
-// each pending run until the test fires it.
+// Flow tabs over sessions that record each added tab and throw on adding a
+// tab id the session still holds, a draw that throws while `drawThrows`, and
+// timers that hold each pending run until the test fires it.
 function setUp() {
   let flow = newFlow(SESSION, '/p/proj');
   const added: SessionTabView[] = [];
+  const held = new Set<string>();
+  let drawThrows = false;
   const pending = new Map<number, () => void>();
   let nextHandle = 1;
   const tabs = createFlowTabs({
     addTab(_sessionId, tab) {
+      if (held.has(tab.id)) {
+        throw new Error(`tab ${tab.id} is already added`);
+      }
+      held.add(tab.id);
       added.push(tab);
       return {
         setStatus: () => undefined,
         select: () => undefined,
         takeOver: () => ({ release: () => undefined }),
-        remove: () => undefined,
+        remove: () => held.delete(tab.id),
         isVisible: () => false,
       };
     },
@@ -44,7 +51,12 @@ function setUp() {
     log: () => undefined,
     flowOf: () => flow,
     nameOf: () => 'proj',
-    draw: () => ({ dispose: () => undefined }),
+    draw() {
+      if (drawThrows) {
+        throw new Error('draw failed');
+      }
+      return { dispose: () => undefined };
+    },
     shown: () => undefined,
   });
   const steps = {
@@ -60,12 +72,25 @@ function setUp() {
         run();
       }
     },
-    remove: () => tabs.remove(SESSION),
+    throwingFlow() {
+      drawThrows = true;
+      expect(() => steps.flow(true)).toThrow('draw failed');
+      drawThrows = false;
+    },
+    removeTab: () => tabs.removeTab(SESSION),
+    forget: () => tabs.forget(SESSION),
   };
   return { steps, added };
 }
 
-type Step = 'flow' | 'idleFlow' | 'build' | 'timer' | 'remove';
+type Step =
+  | 'flow'
+  | 'idleFlow'
+  | 'throwingFlow'
+  | 'build'
+  | 'timer'
+  | 'removeTab'
+  | 'forget';
 
 beforeEach(() => {
   installFakeDom(vi.stubGlobal);
@@ -98,9 +123,19 @@ describe('flow tabs', () => {
       addsAfter: [0, 1, 1, 1, 1],
     },
     {
-      case: 'RemoveThenFlow_WaitsForTheNextBuild',
-      order: ['build', 'flow', 'remove', 'flow', 'build', 'timer'],
+      case: 'ForgetThenFlow_WaitsForTheNextBuild',
+      order: ['build', 'flow', 'forget', 'flow', 'build', 'timer'],
       addsAfter: [0, 1, 1, 1, 1, 2],
+    },
+    {
+      case: 'RemoveTabThenFlow_AddsAtOnce',
+      order: ['build', 'flow', 'removeTab', 'flow'],
+      addsAfter: [0, 1, 1, 2],
+    },
+    {
+      case: 'DrawThrowsThenFlow_AddsAgain',
+      order: ['build', 'throwingFlow', 'flow'],
+      addsAfter: [0, 1, 2],
     },
   ])('add_$case', ({ order, addsAfter }) => {
     const { steps, added } = setUp();

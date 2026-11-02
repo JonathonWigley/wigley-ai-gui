@@ -19,6 +19,18 @@
   color: var(--wg-fg-tertiary);
 }
 
+/* At the narrowest side bar the main action's label is cut with an ellipsis
+   so the chip stays inside its row. */
+.workflow-chip > .ui-button {
+  min-width: 0;
+}
+
+.workflow-chip > .ui-button .ui-button-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .workflow-strip {
   display: flex;
   flex-wrap: wrap;

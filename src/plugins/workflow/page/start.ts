@@ -180,7 +180,7 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
     };
     const closePreview = (sessionId: string) => {
       preview = null;
-      flowTabs.remove(sessionId);
+      flowTabs.removeTab(sessionId);
       view.setFlow(flowOf(sessionId));
       log('workflow preview closed');
     };
@@ -219,7 +219,7 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
       }
       heard.delete(sessionId);
       flows.delete(sessionId);
-      flowTabs.remove(sessionId);
+      flowTabs.forget(sessionId);
       view.forget(sessionId);
     });
 
