@@ -30,6 +30,7 @@ import {
   type LaunchRequest,
   type PastSessionRow,
   type PermissionAnswer,
+  type QueuedMessage,
   type ResumeRequest,
   type StartRequest,
 } from '../contract';
@@ -106,12 +107,18 @@ export interface ChatSessions {
   // missing or the start fails; the row then stays resting. A restored row
   // whose earlier conversation is still pending has it read before the start,
   // so the read holds none of this turn. After `killAll` a resting session
-  // starts no process and the message is dropped.
+  // starts no process and the message is dropped. While a turn runs the
+  // message is queued instead, and each `idle` the harness reports writes the
+  // oldest queued message until none is left.
   send(sessionId: string, message: UserMessage): Promise<void>;
   // Adds an app notice to the session's entries and sends it as harness
   // entries travel, so `sessions()` keeps it.
   notice(sessionId: string, text: string, tone: 'info' | 'error'): void;
+  // Returns every queued message, then interrupts the process.
   interrupt(sessionId: string): void;
+  // Takes the queued message out of the queue and returns it; logs and sends
+  // nothing for one no longer queued.
+  pullBack(sessionId: string, queuedId: string): void;
   // Throws for a session chat no longer holds or that has no running process,
   // as the process's own `setControl` throws for a value it refuses, so the
   // caller learns the change was not made.
@@ -168,6 +175,8 @@ interface HeldSession {
   pending: Map<string, PendingPermission>;
   permissionCount: number;
   noticeCount: number;
+  // Messages ever queued in this row, numbering their ids.
+  queuedCount: number;
   // Processes started in this row, the one running included.
   processStarts: number;
   // How the process exited, once its `ended` arrives; a user close logs it.
@@ -219,7 +228,12 @@ function copyState(state: ChatSessionState): ChatSessionState {
     entries: [...state.entries],
     controls: [...state.controls],
     commands: [...state.commands],
+    queued: [...state.queued],
   };
+}
+
+function userMessageOf(queued: QueuedMessage): UserMessage {
+  return { text: queued.text, images: queued.images };
 }
 
 function sameNames(held: readonly string[], names: readonly string[]): boolean {
@@ -244,8 +258,9 @@ function savedSessionOf(session: HeldSession): SavedSession {
 }
 
 // Chat's owned sessions: each one's agent process while it runs, its chat
-// entries, controls and commands, the activity it shows, and the permission
-// calls waiting on the user; the folder's saved sessions it can resume; and
+// entries, controls and commands, the activity it shows, the permission
+// calls waiting on the user, and the messages queued behind its running turn;
+// the folder's saved sessions it can resume; and
 // the open sessions it saves and restores across a relaunch. Every state
 // change reaches the page over `send`.
 export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
@@ -395,8 +410,50 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     }
   }
 
+  function sendQueued(session: HeldSession) {
+    send('queued', {
+      sessionId: session.state.sessionId,
+      queued: [...session.state.queued],
+    });
+  }
+
+  // Empties the queue and sends every message it held back to the page,
+  // oldest first; sends nothing when it is already empty.
+  function returnAllQueued(session: HeldSession) {
+    const { queued } = session.state;
+    if (queued.length === 0) {
+      return;
+    }
+    session.state.queued = [];
+    sendQueued(session);
+    send('returned', {
+      sessionId: session.state.sessionId,
+      messages: queued.map(userMessageOf),
+    });
+  }
+
+  // Writes the oldest queued message to the agent; false when none is queued
+  // or the write throws, which leaves it at the queue's head.
+  function writeNextQueued(session: HeldSession): boolean {
+    const [next, ...rest] = session.state.queued;
+    if (next === undefined) {
+      return false;
+    }
+    session.state.queued = rest;
+    sendQueued(session);
+    try {
+      deliver(session, userMessageOf(next));
+    } catch (error) {
+      session.state.queued = [next, ...rest];
+      sendQueued(session);
+      log('chat', `queued message ${next.id} not sent: ${errorText(error)}`);
+      return false;
+    }
+    return true;
+  }
+
   // The state is dropped first, so every later event for the session is
-  // ignored.
+  // ignored; its queue goes with it, returned nowhere.
   function drop(session: HeldSession) {
     held.delete(session.state.sessionId);
     cancelPending(session);
@@ -455,10 +512,16 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         }
       },
       activity(activity) {
-        if (isLive(session, processStart)) {
-          session.harnessActivity = activity;
-          updateActivity(session);
+        if (!isLive(session, processStart)) {
+          return;
         }
+        // A queued message starts the next turn, so the session shows no idle
+        // in between and the turn-finished alert waits for the last one.
+        if (activity === 'idle' && writeNextQueued(session)) {
+          return;
+        }
+        session.harnessActivity = activity;
+        updateActivity(session);
       },
       commands(names) {
         if (
@@ -509,6 +572,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         session.process = null;
         showPendingCancelled(session);
         cancelPending(session);
+        returnAllQueued(session);
         const isCleanExit = code === 0 && error === null;
         addNotice(
           session,
@@ -565,6 +629,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         activity: 'idle',
         commands: [],
         running: false,
+        queued: [],
       },
       owned,
       hostId,
@@ -576,6 +641,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       pending: new Map(),
       permissionCount: 0,
       noticeCount: 0,
+      queuedCount: 0,
       processStarts: 0,
       exit: null,
     };
@@ -679,6 +745,12 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       log('chat', `send for unknown session ${sessionId} ignored`);
       return;
     }
+    const isTurnRunning =
+      session.state.running && session.state.activity !== 'idle';
+    if (isTurnRunning) {
+      queue(session, message);
+      return;
+    }
     if (!session.state.running) {
       const profile = profileNamed(session.state.profile);
       const harness = requireHarness();
@@ -702,6 +774,16 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       }
     }
     deliver(session, message);
+  }
+
+  function queue(session: HeldSession, message: UserMessage) {
+    session.queuedCount += 1;
+    session.state.queued = [
+      ...session.state.queued,
+      { ...message, id: `queued-${session.queuedCount}` },
+    ];
+    sendQueued(session);
+    log('chat', `queued a message in session ${session.state.sessionId}`);
   }
 
   function deliver(session: HeldSession, message: UserMessage) {
@@ -1004,8 +1086,34 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       }
       addNotice(session, text, tone);
     },
+    // A resting session's queue is always empty, so `liveFor` skipping it
+    // returns nothing.
     interrupt(sessionId) {
-      liveFor('interrupt', sessionId)?.process?.interrupt();
+      const session = liveFor('interrupt', sessionId);
+      if (session === null) {
+        return;
+      }
+      returnAllQueued(session);
+      session.process?.interrupt();
+    },
+    pullBack(sessionId, queuedId) {
+      const session = held.get(sessionId);
+      if (session === undefined) {
+        log('chat', `pullBack for unknown session ${sessionId} ignored`);
+        return;
+      }
+      const pulled = session.state.queued.find(
+        (queued) => queued.id === queuedId,
+      );
+      if (pulled === undefined) {
+        log('chat', `queued message ${queuedId} already sent`);
+        return;
+      }
+      session.state.queued = session.state.queued.filter(
+        (queued) => queued !== pulled,
+      );
+      sendQueued(session);
+      send('returned', { sessionId, messages: [userMessageOf(pulled)] });
     },
     setControl(sessionId, controlId, value) {
       const session = held.get(sessionId);

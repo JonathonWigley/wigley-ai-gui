@@ -77,6 +77,7 @@ export function createChatPreview(deps: ChatPreviewDeps): ChatPreview {
         activity: 'idle',
         commands: [],
         running: true,
+        queued: [],
       };
       preview = { owned, state, noticeCount: 0 };
       // `select` picks the row; only `activate` shows the sessions mode.

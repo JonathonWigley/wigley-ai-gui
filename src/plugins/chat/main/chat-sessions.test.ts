@@ -5,6 +5,7 @@ import {
   MAIN_AGENT_ID,
   type ProcessActivity,
   type SessionControl,
+  type UserMessage,
 } from '../../../contracts/agent';
 import {
   createFakeAgentHarness,
@@ -264,6 +265,29 @@ function assistant(id: string, text: string): ChatEntry {
   return { kind: 'assistant', id, at: 1000, text, streaming: false, raw: [] };
 }
 
+// Two messages sent while the session's harness reports `working`.
+function queueTwo(
+  test: Awaited<ReturnType<typeof started>>,
+): [UserMessage, UserMessage] {
+  const first: UserMessage = { text: 'first', images: [] };
+  const second: UserMessage = {
+    text: 'second',
+    images: [{ mediaType: 'image/png', data: 'iVBORw0K' }],
+  };
+  test.activity('working');
+  test.chat.send(ROW_ID, first);
+  test.chat.send(ROW_ID, second);
+  return [first, second];
+}
+
+function sendCall(message: UserMessage) {
+  return {
+    method: 'send',
+    text: message.text,
+    imageCount: message.images.length,
+  };
+}
+
 function signal(): AbortController {
   return new AbortController();
 }
@@ -324,6 +348,7 @@ describe('createChatSessions', () => {
         activity: 'idle',
         commands: [],
         running: false,
+        queued: [],
       },
     ]);
     expect(test.sent('sessionRunning')).toEqual([{ sessionId: ROW_ID }]);
@@ -983,6 +1008,122 @@ describe('createChatSessions', () => {
         { method: 'interrupt' },
         { method: 'setControl', id: 'mode', value: 'plan' },
       ]);
+    },
+  );
+
+  it('send_TurnRunning_QueuesWithoutWriting', async () => {
+    const test = await started();
+
+    const [first, second] = queueTwo(test);
+
+    const queued = [
+      expect.objectContaining(first),
+      expect.objectContaining(second),
+    ];
+    expect(test.process.calls).toEqual([]);
+    expect(test.sent('queued').at(-1)).toEqual({ sessionId: ROW_ID, queued });
+    expect(test.chat.sessions()[0].queued).toEqual(queued);
+  });
+
+  it('activityIdle_Queued_WritesOneEachIdleAndAlertsAfterTheLast', async () => {
+    const test = await started();
+    test.setFocused(false);
+    const [first, second] = queueTwo(test);
+
+    test.activity('idle');
+
+    expect(test.process.calls).toEqual([sendCall(first)]);
+    expect(test.sent('queued').at(-1)).toEqual({
+      sessionId: ROW_ID,
+      queued: [expect.objectContaining(second)],
+    });
+
+    test.activity('idle');
+
+    expect(test.process.calls).toEqual([sendCall(first), sendCall(second)]);
+    expect(test.sent('activity')).toEqual([
+      { sessionId: ROW_ID, activity: 'working' },
+    ]);
+    expect(test.announced).toEqual([]);
+
+    test.activity('idle');
+
+    expect(test.sent('activity').at(-1)).toEqual({
+      sessionId: ROW_ID,
+      activity: 'idle',
+    });
+    expect(test.announced).toHaveLength(1);
+  });
+
+  it('pullBack_QueuedReturnsItAloneAndSentIsIgnored', async () => {
+    const test = await started();
+    const [first, second] = queueTwo(test);
+    const [firstId, secondId] = test.chat
+      .sessions()[0]
+      .queued.map((queued) => queued.id);
+
+    test.chat.pullBack(ROW_ID, secondId);
+
+    expect(test.sent('returned')).toEqual([
+      { sessionId: ROW_ID, messages: [second] },
+    ]);
+    expect(test.sent('queued').at(-1)).toEqual({
+      sessionId: ROW_ID,
+      queued: [{ ...first, id: firstId }],
+    });
+
+    test.activity('idle');
+    const sentBefore = test.messages.length;
+    test.chat.pullBack(ROW_ID, firstId);
+
+    expect(test.messages).toHaveLength(sentBefore);
+    expect(test.logged).toContain(
+      `[chat] queued message ${firstId} already sent`,
+    );
+  });
+
+  it('interrupt_Queued_ReturnsAllThenInterrupts', async () => {
+    const test = await started();
+    const [first, second] = queueTwo(test);
+
+    test.chat.interrupt(ROW_ID);
+
+    expect(test.sent('returned')).toEqual([
+      { sessionId: ROW_ID, messages: [first, second] },
+    ]);
+    expect(test.sent('queued').at(-1)).toEqual({
+      sessionId: ROW_ID,
+      queued: [],
+    });
+    expect(test.process.calls).toEqual([{ method: 'interrupt' }]);
+  });
+
+  it.each([
+    { order: 'ended alone', idleFirst: false },
+    { order: 'idle after the process closed, then ended', idleFirst: true },
+  ])(
+    'processExit_Queued_ReturnsAllBeforeResting ($order)',
+    async ({ idleFirst }) => {
+      const test = await started();
+      const [first, second] = queueTwo(test);
+
+      if (idleFirst) {
+        test.process.ended = true;
+        test.activity('idle');
+      }
+      test.process.events.ended({ code: 0, error: null });
+
+      expect(test.sent('returned')).toEqual([
+        { sessionId: ROW_ID, messages: [first, second] },
+      ]);
+      const kinds = test.messages.map((sent) => sent.message);
+      expect(kinds.indexOf('returned')).toBeLessThan(
+        kinds.indexOf('sessionRested'),
+      );
+      expect(test.chat.sessions()[0].queued).toEqual([]);
+      const again = { text: 'again', images: [] };
+      await test.chat.send(ROW_ID, again);
+      expect(test.harness.processes[1].calls).toEqual([sendCall(again)]);
     },
   );
 

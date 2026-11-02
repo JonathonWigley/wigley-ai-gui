@@ -50,6 +50,12 @@ export interface ResumeRequest {
   hostSessionId: string;
 }
 
+// A message sent while its session's turn ran, held by chat main until the
+// turn ends; `id` is unique within its session.
+export interface QueuedMessage extends UserMessage {
+  id: string;
+}
+
 // `sessionId` is the sessions plugin's id for the row. A session's row lasts
 // until the user closes it, across a relaunch, where it comes back resting
 // with its earlier conversation read again; a closed session's state is
@@ -67,6 +73,9 @@ export interface ChatSessionState {
   // True while the session's process runs; false while it rests, with no
   // process yet or its process exited.
   running: boolean;
+  // The messages waiting for the running turn to end, oldest first; [] while
+  // nothing waits.
+  queued: QueuedMessage[];
 }
 
 export interface PermissionAnswer {
@@ -102,7 +111,8 @@ export interface ChatChannel extends ChannelShape {
     // Starts a resting session's process first; rejects, leaving it resting,
     // when its profile is missing or the start fails. A restored session's
     // earlier conversation still pending is read first, arriving as
-    // `entries`.
+    // `entries`. While the session's turn runs the message is queued, arriving
+    // as `queued`, and written to the agent when the turns before it end.
     send(sessionId: string, message: UserMessage): Promise<void>;
     // Reads a restored session's earlier conversation, arriving as `entries`.
     // While its profile is missing a call reads nothing and a later call
@@ -125,7 +135,12 @@ export interface ChatChannel extends ChannelShape {
     // is not the running sign-in.
     cancelLogIn(id: number): void;
     logOut(profile: string): Promise<void>;
+    // Returns every queued message, arriving as `returned`, then interrupts the
+    // running turn.
     interrupt(sessionId: string): void;
+    // Takes the queued message out of the queue, arriving as `returned`; does
+    // nothing for one already written to the agent.
+    pullBack(sessionId: string, queuedId: string): void;
     setControl(sessionId: string, controlId: string, value: string): void;
     answerPermission(
       sessionId: string,
@@ -149,6 +164,11 @@ export interface ChatChannel extends ChannelShape {
     sessionRunning: { sessionId: string };
     // A started process exited, and its row rests until the user closes it.
     sessionRested: { sessionId: string; error: string | null };
+    // Replaces the session's whole queue.
+    queued: { sessionId: string; queued: QueuedMessage[] };
+    // Messages taken out of the queue, oldest first, for the page to put back
+    // into the box.
+    returned: { sessionId: string; messages: UserMessage[] };
     // The page the user opens to finish sign-in `id`.
     logInLink: { id: number; profile: string; url: string };
     // `status` is null when the status could not be read; `error` is null

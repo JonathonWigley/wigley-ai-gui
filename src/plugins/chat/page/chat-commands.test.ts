@@ -76,6 +76,7 @@ function session(
     activity: 'working',
     commands: [],
     running,
+    queued: [],
   };
   const entries = {
     scrollBy(step: ScrollStep, direction: 1 | -1) {

@@ -196,3 +196,5 @@ Boundary rules:
 - [ ] [Final verification](06-final-verification.md) — after 05
 
 ## Run log
+Review base: 7f62c7d
+
