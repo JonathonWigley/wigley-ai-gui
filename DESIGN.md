@@ -280,6 +280,9 @@ The primitives, each a builder in `src/shared/page/ui/`:
 - **IconButton** (`iconButton`): a square Codicon button, sizes `sm` and `md`.
 - **Chip** (`chip`): a session control's label and value; a button when given a click handler.
 - **Tag** (`tag`): a small static label in a tone.
+- **File chip**: a file's path drawn inside a vim box as a pill: `block-background`, `radius-sm`, `space-1` padding,
+  a file Codicon in `fg-secondary`, then the file's name. The CodeMirror adapter draws it; it is not a builder
+  (`docs/features/file-drop/design.md`).
 - **ToggleMark** (`toggleMark`): a small square on/off mark beside a row's label, such as an included item, with a check
   when on; a click calls the view's handler and the view sets the new state with `setToggleMark`, and the key that
   toggles it belongs to the view.

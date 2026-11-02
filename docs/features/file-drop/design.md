@@ -26,21 +26,26 @@ file goes in as its path, which the agent opens itself; Chat keeps sending image
 - **File chip** — a file's path in a vim box's text, drawn as a pill holding a file icon and the
   file's name (`[VideoName.mp4]`). The text holds the full path, so the agent receives the plain
   path, and a draft or `setText` keeps the chip. A path with a space is written in double quotes
-  (`"/Users/me/My File.md"`). Any absolute path in a box's text draws as a chip, typed or dropped.
+  (`"/Users/me/My File.md"`). Any absolute path of two or more segments in a box's text draws as a chip, typed or dropped, so
+  a slash command (`/compact`) stays text.
   In vim a chip is one character: the cursor steps over it and `x` deletes it whole.
 - **Pasted file** — a file with no path on disk: a screenshot on the clipboard, or an image
   dragged out of a browser. It is saved first, so it has a path.
 
 ## Routing
 
-- **Drop**: the innermost registered target under the pointer takes the files. A drop on no
-  target does nothing, and no drop ever opens the file in the window (the core cancels every
+- **Drop**: the innermost registered target under the pointer takes the files; a one-line
+  `<input>` or `<textarea>` under the pointer is innermost of all and takes plain paths at its
+  caret. A drop on no target and no input shows the toast `Nothing here takes files`, and no drop
+  ever opens the file in the window (the core cancels every
   file `dragover` and `drop` on the page).
-- **Paste**: the innermost target holding the focused element takes it; with no focused
+- **Paste**: a focused one-line input takes it as plain paths; else the innermost target holding
+  the focused element takes it; with no focused
   element inside a target, the target that last held focus and is still on screen takes it.
   Paste with no files, or with text that is more than a file's name or one URL (spreadsheet and
   word-processor copies put a picture beside the text), stays a text paste.
-- A target inserts at its box's cursor without moving focus or changing the vim mode.
+- A target inserts at its box's cursor without moving focus or changing the vim mode. In visual
+  mode the insert replaces the selection and the box drops to normal mode, as vim's `p` does.
 - A pane's own target picks its box: the Chat composer; on a Form or Primer tab the box last
   used, else the first. A pane with no box shows the toast `Nothing here takes files`.
 
