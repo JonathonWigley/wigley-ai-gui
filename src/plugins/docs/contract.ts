@@ -160,8 +160,8 @@ export interface SourceRead extends IndexLoad {
 }
 
 // The docs main part's exports, each running the same code as the channel
-// method of its name, except `writeBytes`, which has no channel method and is
-// guarded as `writeDoc`. `addSource` throws on an id already registered; while
+// method of its name, except `addSource`, which has none, and `watchDoc`,
+// which takes a callback. `addSource` throws on an id already registered; while
 // the source is registered, the entries it last loaded allow changes to their
 // docs. None of them emits `indexLoaded`.
 export interface DocsMainExports {
@@ -279,6 +279,9 @@ export interface DocsChannel extends ChannelShape {
       text: string,
       expectedText: string | null,
     ): Promise<WriteResult>;
+    // Guarded as `writeDoc`, with no changed-on-disk check; makes the folders
+    // `path` needs.
+    writeBytes(path: string, bytes: Uint8Array): Promise<WriteResult>;
     createDoc(request: CreateRequest): Promise<CreatedDoc>;
     // The path the doc now has.
     renameDoc(from: string, to: string): Promise<string>;

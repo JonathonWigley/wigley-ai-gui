@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { DroppedFile, DropTarget } from '../../../contracts/drops';
 import type { DocumentEditorEvents } from '../../../contracts/editor';
 import type { ShownLayouts } from '../../../contracts/plugin';
 import { withUser } from '../../../shared/page/layout-host/test-layouts';
@@ -37,8 +38,16 @@ function paneLayout(marker: string): Layout {
   };
 }
 
+// A drop target the view registered, and whether it has been disposed.
+interface RecordedTarget {
+  target: DropTarget;
+  isDisposed: boolean;
+}
+
 // A doc view over a channel reading every doc as `# Doc`, drawing with the
-// layouts `layouts` returns, its editor host recording each editor it makes.
+// layouts `layouts` returns, its editor host recording each editor it makes
+// and each text inserted. `writeBytes` answers the channel's `writeBytes`,
+// each call recorded in `writes`; `targets` holds each drop target.
 function docViewOver(
   layouts: () => ShownLayouts<Layout>,
   chipsOf: DocViewDeps['chipsOf'] = () => {
@@ -56,10 +65,25 @@ function docViewOver(
     readDoc: '# Doc',
     writeDoc: { type: 'written' },
   };
+  const inserts: string[] = [];
+  const toasts: string[] = [];
+  const writes: [string, number[]][] = [];
+  const targets: RecordedTarget[] = [];
+  const io = {
+    writeBytes: async (): Promise<unknown> => ({ type: 'written' }),
+    now: 0,
+  };
   const deps = {
     viewId: 'view',
     channel: {
-      invoke: async (name: string) => replies[name] ?? null,
+      invoke: async (name: string, ...args: unknown[]) => {
+        if (name !== 'writeBytes') {
+          return replies[name] ?? null;
+        }
+        const [path, bytes] = args as [string, Uint8Array];
+        writes.push([path, [...bytes]]);
+        return io.writeBytes();
+      },
     },
     homeDir: '/home',
     editor: {
@@ -75,6 +99,8 @@ function docViewOver(
           text: () => text,
           focus: () => undefined,
           blur: () => undefined,
+          insert: (inserted: string) => inserts.push(inserted),
+          charBeforeCursor: () => '',
           destroy,
         };
       },
@@ -85,8 +111,20 @@ function docViewOver(
       document: async (text: string) => text,
     },
     paths: posixPaths,
-    toast: () => undefined,
+    toast: (text: string) => toasts.push(text),
     log: () => undefined,
+    drops: {
+      addTarget(target: DropTarget) {
+        const recorded = { target, isDisposed: false };
+        targets.push(recorded);
+        return {
+          dispose: () => {
+            recorded.isDisposed = true;
+          },
+        };
+      },
+    },
+    now: () => io.now,
     chipsOf,
     statusesOf: () => [],
     loadedOf: () => null,
@@ -96,12 +134,21 @@ function docViewOver(
     parts,
     openChanged: () => undefined,
   } as unknown as DocViewDeps;
-  return { view: createDocView(deps), editors, deps };
+  return {
+    view: createDocView(deps),
+    editors,
+    deps,
+    inserts,
+    toasts,
+    writes,
+    targets,
+    io,
+  };
 }
 
-function target(entryId: string | null): DocTarget {
+function target(entryId: string | null, path = '/home/notes.md'): DocTarget {
   return {
-    path: '/home/notes.md',
+    path,
     title: 'notes',
     entryId,
     detail: null,
@@ -242,7 +289,178 @@ describe('createDocView', () => {
       expect(pane.scrollTop).toBe(120);
     },
   );
+
+  it.each([
+    { steps: ['open'], live: [] },
+    { steps: ['open', 'edit'], live: ['pane'] },
+    { steps: ['open', 'edit', ':q'], live: [] },
+    { steps: ['openReadOnly', 'edit'], live: [] },
+    { steps: ['open', 'edit', 'clear'], live: [] },
+    { steps: ['open', 'edit', 'dispose'], live: [] },
+  ])('dropTarget_OnlyWhileEditing $steps', async ({ steps, live }) => {
+    const { view, editors, targets } = docViewOver(() =>
+      withUser(defaultLayout, paneLayout('pane')),
+    );
+    for (const step of steps) {
+      switch (step) {
+        case 'open':
+          await view.open(target(null));
+          break;
+        case 'openReadOnly':
+          await view.open({
+            ...target(null),
+            readOnly: { type: 'downloaded', plugin: null },
+          });
+          break;
+        case 'edit':
+          view.edit(1);
+          break;
+        case ':q':
+          editors[0].events.quit(false);
+          break;
+        case 'clear':
+          view.clear();
+          break;
+        case 'dispose':
+          view.dispose();
+          break;
+      }
+    }
+
+    const pane = asHtml(scroller(view.element));
+    expect(
+      targets
+        .filter(({ isDisposed }) => !isDisposed)
+        .map(({ target: { element } }) =>
+          element === pane ? 'pane' : 'other',
+        ),
+    ).toEqual(live);
+  });
+
+  // `writeBytes`: 'written' answers at once; 'refused' rejects; 'afterQuit'
+  // answers only once the test has quit the editor with `:q`.
+  it.each([
+    {
+      name: 'a dropped image',
+      takes: [[dropped('/n/docs/images/a.png', 'image/png')]],
+      writeBytes: 'written',
+      writes: [],
+      inserts: ['![a.png](images/a.png)'],
+      toasts: [],
+    },
+    {
+      name: 'a pasted image',
+      takes: [[pasted([1])]],
+      writeBytes: 'written',
+      writes: [['/n/docs/images/guide-20261102-090507.png', [1]]],
+      inserts: [
+        '![guide-20261102-090507.png](images/guide-20261102-090507.png)',
+      ],
+      toasts: [],
+    },
+    {
+      name: 'a pasted image main refuses',
+      takes: [[pasted([1])]],
+      writeBytes: 'refused',
+      writes: [['/n/docs/images/guide-20261102-090507.png', [1]]],
+      inserts: [],
+      toasts: ['Refused: outside the docs'],
+    },
+    {
+      name: 'a pasted image, then a dropped doc',
+      takes: [[pasted([1]), dropped('/n/notes/b.md', 'text/markdown')]],
+      writeBytes: 'written',
+      writes: [['/n/docs/images/guide-20261102-090507.png', [1]]],
+      inserts: [
+        '![guide-20261102-090507.png](images/guide-20261102-090507.png) [b.md](../notes/b.md)',
+      ],
+      toasts: [],
+    },
+    {
+      name: 'two takes in one second',
+      takes: [[pasted([1])], [pasted([2])]],
+      writeBytes: 'written',
+      writes: [
+        ['/n/docs/images/guide-20261102-090507.png', [1]],
+        ['/n/docs/images/guide-20261102-090507-2.png', [2]],
+      ],
+      inserts: [
+        '![guide-20261102-090507.png](images/guide-20261102-090507.png)',
+        '![guide-20261102-090507-2.png](images/guide-20261102-090507-2.png)',
+      ],
+      toasts: [],
+    },
+    {
+      name: 'a pasted image written after :q',
+      takes: [[pasted([1])]],
+      writeBytes: 'afterQuit',
+      writes: [['/n/docs/images/guide-20261102-090507.png', [1]]],
+      inserts: [],
+      toasts: [],
+    },
+  ])('take_FilesBecomeDocLinks $name', async (row) => {
+    const shown = docViewOver(() =>
+      withUser(defaultLayout, paneLayout('pane')),
+    );
+    const { view, editors, targets, io } = shown;
+    io.now = new Date(2026, 10, 2, 9, 5, 7).getTime();
+    let answerWrite: () => void = () => undefined;
+    if (row.writeBytes === 'refused') {
+      io.writeBytes = async () => {
+        throw new Error('Refused: outside the docs');
+      };
+    } else if (row.writeBytes === 'afterQuit') {
+      io.writeBytes = () =>
+        new Promise((resolve) => {
+          answerWrite = () => resolve({ type: 'written' });
+        });
+    }
+    await view.open(target(null, '/n/docs/guide.md'));
+    view.edit(1);
+
+    for (const files of row.takes) {
+      targets[0].target.take(files);
+      await settled();
+    }
+    if (row.writeBytes === 'afterQuit') {
+      editors[0].events.quit(false);
+      answerWrite();
+      await settled();
+    }
+
+    expect({
+      writes: shown.writes,
+      inserts: shown.inserts,
+      toasts: shown.toasts,
+    }).toEqual({
+      writes: row.writes,
+      inserts: row.inserts,
+      toasts: row.toasts,
+    });
+  });
 });
+
+// A file dropped from disk at `path`.
+function dropped(path: string, mediaType: string): DroppedFile {
+  return {
+    name: path.slice(path.lastIndexOf('/') + 1),
+    mediaType,
+    path,
+    bytes: async () => {
+      throw new Error('a dropped file is never read');
+    },
+  };
+}
+
+// A pasted PNG holding `bytes`, with no path on disk.
+function pasted(bytes: number[]): DroppedFile {
+  return {
+    name: 'image.png',
+    mediaType: 'image/png',
+    path: '',
+    bytes: async () => new Uint8Array(bytes),
+  };
+}
 
 // The classes of the doc pane part's root.
 function paneClasses(root: HTMLElement): string[] {

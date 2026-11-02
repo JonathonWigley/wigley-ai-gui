@@ -199,6 +199,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         markdown: services.markdown,
         paths: services.paths,
         toast: services.toast,
+        drops: api.drops,
         starred,
         now: () => services.clock.now(),
         log,

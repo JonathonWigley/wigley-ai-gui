@@ -321,6 +321,7 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
     });
     channel.handle('readDoc', readDoc);
     channel.handle('writeDoc', writeDoc);
+    channel.handle('writeBytes', writeBytes);
     channel.handle('createDoc', async (request) =>
       (await docs).docFiles.create(request),
     );

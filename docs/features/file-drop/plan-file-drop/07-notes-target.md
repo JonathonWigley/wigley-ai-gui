@@ -1,6 +1,6 @@
 # 07 — Notes popup drop target
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 02, 03, 04
 Plan: [plan.md](plan.md)
@@ -100,4 +100,4 @@ shrunk).
 
 ## Proof
 
-<written by wigley:make: commit sha, proof result, concerns; empty until the group lands>
+Commit ac8739b · proof: diff read: every Produces present; listener grep clean; notes compiles (typecheck's only errors were in 06's in-progress test fakes); notes files pass lint · concerns: new log lines 'paths not inserted, popup changed: <paths>' and '<n> paths inserted'

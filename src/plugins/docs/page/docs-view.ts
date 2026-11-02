@@ -1,4 +1,5 @@
 import type { Disposable } from '../../../contracts/disposable';
+import type { PageDrops } from '../../../contracts/drops';
 import type { EditorHost } from '../../../contracts/editor';
 import type { Log } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
@@ -176,10 +177,12 @@ export interface DocsViewDeps {
   paths: Paths;
   toast(text: string, tone: ToastTone): void;
   log: Log;
+  // Where the doc pane's editor registers its drop target.
+  drops: Pick<PageDrops, 'addTarget'>;
   // The star set every docs view shares; each view redraws on its toggles.
   // The view that makes a change moves the set's stars with it.
   starred: StarredDocs;
-  // Epoch milliseconds, for the last-loaded times.
+  // Epoch milliseconds, for the last-loaded times and pasted files' names.
   now(): number;
   // Names the hints the tree, the doc pane and the dialogs show.
   anchor: DocsAnchor;
@@ -481,6 +484,8 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     paths: deps.paths,
     toast,
     log,
+    drops: deps.drops,
+    now: deps.now,
     chipsOf: (entryId, path) => {
       const entryPath = entriesById.get(entryId)?.path ?? path;
       return chips(context(), entryId, pending.has(entryPath));

@@ -235,7 +235,7 @@ Boundary rules:
 ### Wave 4
 - [x] [Chat drop target](05-chat-target.md) — after 01, 02, 03, 04
 - [ ] [Editor-box pane targets: Forms, Primer, Backlog](06-editor-box-targets.md) — after 01, 03, 04
-- [ ] [Notes popup drop target](07-notes-target.md) — after 02, 03, 04
+- [x] [Notes popup drop target](07-notes-target.md) — after 02, 03, 04
 - [ ] [Docs editor drop target](08-docs-target.md) — after 01, 02, 03, 04
 
 ### Wave 5
@@ -252,6 +252,7 @@ Review base: 87a254cb76dee43042396e82e9a353b6c9573795
 - 03 · 002f34c · diff read: every Produces present (two extra host-only exports, logged); typecheck and lint pass · concerns: a on a chip ending its line may leave the caret before the chip; vim's own cursor re-sync after the filter moves the selection (l onto a chip, x widening) is unproven — both for the live check in 10; one over-long comment line in boxExtensions
 - 04 · 2afa21b · diff read: every Produces present; typecheck and lint pass · concerns: drops.ts DroppedFile.name comment says a pasted file is named image.png, while 04 names it pasted (stale comment, outside 04's Files); isShown's checkVisibility unchecked live; tests wait with vi.waitFor plus one setTimeout(0)
 - 05 · 20ccf47 · diff read: every Produces present; chat compiles (typecheck's only errors were in 06's in-progress forms files); chat files pass oxfmt and oxlint · concerns: only add, insert and charBeforeCursor are guarded once the session is gone, as the Decision lists, so a take outliving its session still logs and still saves a pasted non-image
+- 07 · ac8739b · diff read: every Produces present; listener grep clean; notes compiles (typecheck's only errors were in 06's in-progress test fakes); notes files pass lint · concerns: new log lines 'paths not inserted, popup changed: <paths>' and '<n> paths inserted'
 ### Contract changes
 - chip-decorations.ts exports: fileChipExtension, snapHead, widenRange → those plus skipsChipRules (an Annotation the host's setText and insert put on their own transactions) and fileChipsOf(state) (the chips of a box's state; [] in a document editor) · why: the host's insert reads the chip under a normal-mode cursor and its own transactions must skip the chip rules · consumers: none outside the host · group 03
 ### Rulings
@@ -267,5 +268,8 @@ Review base: 87a254cb76dee43042396e82e9a353b6c9573795
 - A file drop carrying no File toasts Nothing here takes files, even over a one-line input — the input is not asked — an empty drag over an input toasts rather than doing nothing · group 04
 - A paste is cancelled only when an input or a target takes it; otherwise left alone — text paste must keep working — none · group 04
 - A null selectionStart falls back to the end of the value — DOM types only; these inputs never report null — none · group 04
+- Before inserting paths the take checks fieldsShown() (open, shown, no picker, markup view or discard confirmation) plus nothing in flight but its own attach, stricter than the doc's phase === 'open' — the doc's prose names the picker and markup view — paths dropped while a picker opened during a save are logged, not inserted · group 07
+- A per-take flag marks the take's own attach, cleared in the run's finally before the in-flight marker is released — so a later take's attach never counts as this one's — none · group 07
+- Image bytes are copied into the Blob (new Uint8Array(bytes)), as canvas-encoder does — the BlobPart typing — one extra copy per image · group 07
 ### Review rounds
 ### Test gate

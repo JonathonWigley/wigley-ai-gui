@@ -1,4 +1,5 @@
 import type { Disposable } from '../../../contracts/disposable';
+import type { DroppedFile, PageDrops } from '../../../contracts/drops';
 import type {
   DocumentEditor,
   DocumentEditorEvents,
@@ -16,6 +17,7 @@ import type {
 } from '../../../contracts/plugin';
 import { scrollContent, scrollText } from '../../../shared/content-scroll';
 import { errorText } from '../../../shared/error-text';
+import { fileStamp } from '../../../shared/file-stamp';
 import { element, markdownElement } from '../../../shared/page/dom';
 import { textLineHeightPx } from '../../../shared/page/text-line';
 import { disposeAnchors } from '../../../shared/page/ui/key-anchors';
@@ -23,6 +25,7 @@ import type { DocsChannel } from '../contract';
 import { splitFrontmatter } from '../frontmatter';
 import type { DocHeaderInput } from '../layouts/layout';
 import { resolveLink } from '../links';
+import { docLinkOf, docLinksText, pastedImagePath } from './doc-links';
 import {
   type Chip,
   codeFence,
@@ -82,6 +85,10 @@ export interface DocViewDeps {
   paths: Paths;
   toast(text: string, tone: ToastTone): void;
   log: Log;
+  // Registers the scroller as a drop target while the editor is open.
+  drops: Pick<PageDrops, 'addTarget'>;
+  // Epoch milliseconds, for naming pasted files.
+  now(): number;
   // The chips of the doc at `path` whose entry is `entryId`.
   chipsOf(entryId: string, path: string): { claude: Chip; codex: Chip };
   // The plugin-source status texts of the entry `entryId`, in chip order.
@@ -111,8 +118,11 @@ export interface DocViewDeps {
 // changed-on-disk banner; the changed-on-disk prompt with its keys; the
 // frontmatter table and the rendered body (a detail's field table), hidden
 // while the document editor's frame shows on `edit`; the editor's `:q`
-// returns to them. Opening another doc is refused while the editor holds
-// unsaved edits. `open` resolves to whether the doc opened.
+// returns to them. While the editor is open, files dropped or pasted on the
+// scroller go in at its cursor as markdown links relative to the doc, a
+// pasted file saved first under `images/` beside the doc. Opening another doc
+// is refused while the editor holds unsaved edits. `open` resolves to whether
+// the doc opened.
 export interface DocView {
   element: HTMLElement;
   open(target: DocTarget): Promise<boolean>;
@@ -151,8 +161,8 @@ export interface DocView {
   // and the editor's stay, and the pane's frame draws again once the editor
   // closes.
   redraw(): void;
-  // Ends the prompt, destroys the editor, stops the watch and disposes the
-  // pane's anchors and drawn parts.
+  // Ends the prompt, destroys the editor and its drop target, stops the watch
+  // and disposes the pane's anchors and drawn parts.
   dispose(): void;
 }
 
@@ -301,6 +311,12 @@ export function createDocView(deps: DocViewDeps): DocView {
 
   let shown: ShownDoc | null = null;
   let editor: DocumentEditor | null = null;
+  // The scroller's drop target, registered while the editor is open.
+  let dropTarget: Disposable | null = null;
+  // The stamp the last pasted file was named by, and the index the next
+  // pasted file under that stamp takes.
+  let pasteStamp = '';
+  let nextPasteIndex = 0;
   let conflict: Conflict | null = null;
   // The text a write in flight sends: the watch it fires is the view's own.
   let writingText: string | null = null;
@@ -575,6 +591,8 @@ export function createDocView(deps: DocViewDeps): DocView {
     endConflict(false);
     editor?.destroy();
     editor = null;
+    dropTarget?.dispose();
+    dropTarget = null;
     editorBox.replaceChildren();
     drawnEditorFrame?.dispose();
     drawnEditorFrame = null;
@@ -711,6 +729,77 @@ export function createDocView(deps: DocViewDeps): DocView {
     deps.log('docs', `reloaded ${doc.name}`);
   };
 
+  // The index each pasted file of a take at `now` is named with, in order;
+  // a take in a new second starts again at 0.
+  const claimPasteIndexes = (
+    files: readonly DroppedFile[],
+    now: number,
+  ): number[] => {
+    const stamp = fileStamp(now);
+    if (stamp !== pasteStamp) {
+      pasteStamp = stamp;
+      nextPasteIndex = 0;
+    }
+    return files.filter((file) => file.path === '').map(() => nextPasteIndex++);
+  };
+
+  // Writes a pasted file beside the doc and resolves to its path; null when
+  // main refused, which toasts.
+  const writePasted = async (
+    doc: ShownDoc,
+    file: DroppedFile,
+    now: number,
+    index: number,
+  ): Promise<string | null> => {
+    const path = pastedImagePath(
+      doc.filePath,
+      file.mediaType,
+      now,
+      index,
+      deps.paths,
+    );
+    try {
+      await deps.channel.invoke('writeBytes', path, await file.bytes());
+      deps.log('docs', `saved pasted ${file.name} as ${path}`);
+      return path;
+    } catch (error) {
+      deps.toast(errorText(error), 'error');
+      deps.log('docs', `not saved pasted ${file.name}: ${errorText(error)}`);
+      return null;
+    }
+  };
+
+  // Links every file at the editor's cursor, once each pasted one is saved,
+  // while the doc and editor the take began on are still open.
+  const takeFiles = async (files: readonly DroppedFile[]) => {
+    const doc = shown;
+    const taking = editor;
+    if (doc === null || taking === null) {
+      return;
+    }
+    const now = deps.now();
+    const pasteIndexes = claimPasteIndexes(files, now);
+    const links: string[] = [];
+    for (const file of files) {
+      const path =
+        file.path === ''
+          ? await writePasted(doc, file, now, pasteIndexes.shift()!)
+          : file.path;
+      if (path !== null) {
+        links.push(docLinkOf(path, doc.filePath, file.mediaType, deps.paths));
+      }
+    }
+    if (shown !== doc || editor !== taking) {
+      deps.log('docs', `not linked: the editor on ${doc.name} closed`);
+      return;
+    }
+    if (links.length === 0) {
+      return;
+    }
+    taking.insert(docLinksText(links, taking.charBeforeCursor()));
+    deps.log('docs', `linked ${String(links.length)} in ${doc.name}`);
+  };
+
   // The frame draws first, so the editor mounts into an attached host.
   const openEditor = (doc: ShownDoc, line: number) => {
     pane.classList.add('is-editing');
@@ -726,6 +815,14 @@ export function createDocView(deps: DocViewDeps): DocView {
     if (drawnBody !== null) {
       drawnBody.element.hidden = true;
     }
+    dropTarget = deps.drops.addTarget({
+      element: pane,
+      take: (files) => {
+        takeFiles(files).catch((error) =>
+          deps.log('docs', `not linked: ${errorText(error)}`),
+        );
+      },
+    });
     showEditHint();
     showDocState();
     editor.focus();
@@ -994,6 +1091,8 @@ export function createDocView(deps: DocViewDeps): DocView {
       endConflict(false);
       editor?.destroy();
       editor = null;
+      dropTarget?.dispose();
+      dropTarget = null;
       watchFile(null, shown?.name ?? 'the doc');
       disposeAnchors(anchors);
       const drawn = [
