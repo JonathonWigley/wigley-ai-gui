@@ -91,6 +91,21 @@ describe('readPlanUsage', () => {
     expect(readPlanUsage(stdout, 0).rows[0].label).toBe(label);
   });
 
+  it.each([
+    { name: 'Code', currency: 'EUR', expected: 'EUR' },
+    { name: 'LowerCase', currency: 'usd', expected: null },
+    { name: 'TwoLetters', currency: 'US', expected: null },
+    { name: 'Symbol', currency: '$', expected: null },
+    { name: 'NotAString', currency: 840, expected: null },
+  ])('readPlanUsage_Currency_$name', ({ currency, expected }) => {
+    const stdout = reportLine({
+      limits: [{ kind: 'session', percent: 1 }],
+      extra_usage: { is_enabled: true, currency },
+    });
+
+    expect(readPlanUsage(stdout, 0).extraUsage?.currency).toBe(expected);
+  });
+
   it('readPlanUsage_ExtraUsageOn_KeepsAmounts', () => {
     const stdout = reportLine({
       limits: [{ kind: 'session', percent: 1 }],

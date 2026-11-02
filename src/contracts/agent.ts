@@ -129,7 +129,8 @@ export interface PlanRow {
   isActive: boolean;
 }
 
-// The plan's overage credits, amounts in minor units of `currency`; each null when the server sends none.
+// The plan's overage credits, amounts in minor units of `currency`, a three-letter ISO 4217 code; each null when the
+// server sends none (or, for `currency`, sends another shape).
 export interface ExtraUsage {
   enabled: boolean;
   usedMinor: number | null;
@@ -161,8 +162,8 @@ export interface AutocompactLimits {
   reported: number | null;
 }
 
-// One agent's context and spend. `agentId` is `main` for the session's own agent; `contextWindow` and `spendUsd`
-// are null until the first turn ends; `cacheExpiresAt` is epoch ms, null when unknown.
+// One agent's context and spend. `agentId` is `main` for the session's own agent; `contextWindow` is null until the
+// harness reports it and `spendUsd` until the first turn ends; `cacheExpiresAt` is epoch ms, null when unknown.
 export interface UsageAgentEvent {
   type: 'usage';
   agentId: string;

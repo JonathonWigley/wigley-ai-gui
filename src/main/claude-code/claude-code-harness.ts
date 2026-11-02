@@ -37,13 +37,13 @@ import {
 import { readPlanUsage } from './plan-usage';
 import {
   configuredPercent,
+  contextUsageOf,
   EMPTY_SESSION_USAGE,
+  foldContextUsage,
   foldReply,
   foldTurn,
-  reportedLimit,
   usageEvent,
   withConfiguredPercent,
-  withReported,
 } from './session-usage';
 import { createStreamDecoder, type DecodedLine } from './stream-decoder';
 import { projectFolderName } from './transcripts';
@@ -150,7 +150,6 @@ function startClaudeProcess(
     cwd: launch.cwd,
     env: launch.env,
   });
-  const decoder = createStreamDecoder();
   const stamp = createEntryStamp(deps.clock);
   let controls: SessionControl[] = CLAUDE_CONTROLS.map((control) => ({
     ...control,
@@ -161,6 +160,10 @@ function startClaudeProcess(
   let requestCount = 0;
   let noticeCount = 0;
   const pendingRequests = new Map<string, PendingRequest>();
+  // The adapter's own `get_context_usage` replies stay out of the chat.
+  const decoder = createStreamDecoder(
+    (requestId) => pendingRequests.get(requestId)?.kind === 'contextUsage',
+  );
   // One item per message written and not yet answered by a `result`, in
   // write order: Claude queues a message sent mid-turn and answers each with
   // its own `result`. The item is the effort or model command the message
@@ -287,7 +290,7 @@ function startClaudeProcess(
         deps.log('claude', `get_context_usage failed: ${response.error}`);
         return;
       }
-      usage = withReported(usage, reportedLimit(response.response));
+      usage = foldContextUsage(usage, contextUsageOf(response.response));
       emitUsage();
       return;
     }
@@ -327,8 +330,8 @@ function startClaudeProcess(
     });
   };
 
-  // A control command's result asks too: `/model` changes the window and the
-  // limit.
+  // Asked at start and after every turn, a control command's included:
+  // `/model` changes the window and the limit.
   const requestContextUsage = () => {
     const requestId = nextRequestId();
     pendingRequests.set(requestId, { kind: 'contextUsage' });
@@ -432,6 +435,7 @@ function startClaudeProcess(
 
   emitControls();
   setActivity('idle');
+  requestContextUsage();
   // The profile's autocompact override, read once: a change applies to the
   // next session.
   const settingsPath = deps.paths.join(
@@ -557,9 +561,10 @@ function withStderr(message: string, stderr: string): string {
   return stderr === '' ? message : `${message}: ${stderr}`;
 }
 
-// The command `args` run, without its `--` options, as a message names it.
+// The command `args` run, up to its first `--` option, as a message names it.
 function commandLabel(args: readonly string[]): string {
-  const words = args.filter((arg) => !arg.startsWith('--'));
+  const optionAt = args.findIndex((arg) => arg.startsWith('--'));
+  const words = optionAt === -1 ? args : args.slice(0, optionAt);
   return ['claude', ...words].join(' ');
 }
 

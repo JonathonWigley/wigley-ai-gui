@@ -91,6 +91,20 @@ const RESULT_LINE =
 const CONTEXT_REPLY_LINE =
   '{"type":"control_response","response":{"subtype":"success","request_id":"wigley-1","response":{"autoCompactThreshold":967000,"autocompactSource":"model-default","maxTokens":1000000,"rawMaxTokens":1000000,"isAutoCompactEnabled":true}}}';
 
+// A `get_context_usage` reply to `requestId` reporting `maxTokens` and `autoCompactThreshold`.
+const contextReply = (
+  requestId: string,
+  maxTokens: number,
+  autoCompactThreshold: number,
+) => ({
+  type: 'control_response',
+  response: {
+    subtype: 'success',
+    request_id: requestId,
+    response: { autoCompactThreshold, maxTokens },
+  },
+});
+
 const contextUsageRequest = (requestId: string) => ({
   type: 'control_request',
   request_id: requestId,
@@ -195,7 +209,7 @@ describe('createClaudeCodeHarness', () => {
     await settle();
 
     const message = userMessage({ text: 'hi', images: [] });
-    expect(run.written).toEqual([message]);
+    expect(run.written).toEqual([contextUsageRequest('wigley-1'), message]);
     expect(run.heard).toEqual([
       [
         'entry',
@@ -220,13 +234,16 @@ describe('createClaudeCodeHarness', () => {
       type: 'control_response',
       response: {
         subtype: 'success',
-        request_id: 'wigley-1',
+        request_id: 'wigley-2',
         response: { mode: 'plan' },
       },
     });
     await settle();
 
-    expect(run.written).toEqual([controlMessage('mode', 'plan', 'wigley-1')]);
+    expect(run.written).toEqual([
+      contextUsageRequest('wigley-1'),
+      controlMessage('mode', 'plan', 'wigley-2'),
+    ]);
     const [name, controls] = run.heard[run.heard.length - 1];
     expect(name).toBe('controls');
     expect(controls).toContainEqual(
@@ -258,8 +275,9 @@ describe('createClaudeCodeHarness', () => {
     await settle();
 
     expect(run.written).toEqual([
-      controlMessage('effort', 'high', ''),
       contextUsageRequest('wigley-1'),
+      controlMessage('effort', 'high', ''),
+      contextUsageRequest('wigley-2'),
     ]);
     expect(
       run.heard.some(
@@ -288,9 +306,9 @@ describe('createClaudeCodeHarness', () => {
       .filter((entry) => entry.kind === 'notice')
       .map((entry) => entry.id);
     expect(noticeIds).toEqual(['notice-1', 'control-notice-1']);
-    expect(run.written[3]).toEqual({
+    expect(run.written[4]).toEqual({
       type: 'control_request',
-      request_id: 'wigley-2',
+      request_id: 'wigley-3',
       request: { subtype: 'interrupt' },
     });
   });
@@ -305,9 +323,10 @@ describe('createClaudeCodeHarness', () => {
     await settle();
     run.agent.send({ text: 'hi', images: [] });
 
-    for (const text of [REPLY_LINE, RESULT_LINE, CONTEXT_REPLY_LINE]) {
+    for (const text of [CONTEXT_REPLY_LINE, REPLY_LINE, RESULT_LINE]) {
       run.stdout.write(`${text}\n`);
     }
+    writeLine(run.stdout, contextReply('wigley-2', 200_000, 167_000));
     await settle();
 
     const first = {
@@ -315,27 +334,49 @@ describe('createClaudeCodeHarness', () => {
       agentId: 'main',
       at: 1000,
       contextTokens: 42123,
-      contextWindow: null,
-      autocompact: { configured: null, reported: null },
+      contextWindow: 1000000,
+      autocompact: { configured: 300000, reported: 967000 },
       cacheExpiresAt: 3601000,
       spendUsd: null,
     };
-    const second = {
-      ...first,
-      contextWindow: 1000000,
-      autocompact: { configured: 300000, reported: null },
-      spendUsd: 0.25,
-    };
+    const second = { ...first, spendUsd: 0.25 };
     const third = {
       ...second,
-      autocompact: { configured: 300000, reported: 967000 },
+      contextWindow: 200000,
+      autocompact: { configured: 60000, reported: 167000 },
     };
     expect(
       run.heard
         .filter(([name]) => name === 'agentEvent')
         .map(([, event]) => event),
     ).toEqual([first, second, third]);
-    expect(run.written[1]).toEqual(contextUsageRequest('wigley-1'));
+    expect(run.written).toEqual([
+      contextUsageRequest('wigley-1'),
+      userMessage({ text: 'hi', images: [] }),
+      contextUsageRequest('wigley-2'),
+    ]);
+  });
+
+  it('controlResponse_OwnContextUsageReply_StaysOutOfTurnEvents', async () => {
+    const run = await startedQuiet();
+    run.agent.setControl('mode', 'plan');
+    const modeReply = {
+      type: 'control_response',
+      response: {
+        subtype: 'success',
+        request_id: 'wigley-2',
+        response: { mode: 'plan' },
+      },
+    };
+
+    run.stdout.write(`${CONTEXT_REPLY_LINE}\n`);
+    writeLine(run.stdout, modeReply);
+    await settle();
+
+    const raws = run.heard
+      .filter(([name]) => name === 'entry')
+      .flatMap(([, entry]) => (entry as { raw: unknown[] }).raw);
+    expect(raws).toEqual([modeReply]);
   });
 
   it('start_RateLimitEvent_EmitsPlanUsage', async () => {
@@ -391,9 +432,9 @@ describe('createClaudeCodeHarness', () => {
 
     run.agent.interrupt();
 
-    expect(run.written[3]).toEqual({
+    expect(run.written[4]).toEqual({
       type: 'control_request',
-      request_id: 'wigley-2',
+      request_id: 'wigley-3',
       request: { subtype: 'interrupt' },
     });
   });
@@ -981,7 +1022,9 @@ describe('createClaudeCodeHarness accounts', () => {
     await settle();
 
     expect(child.signals).toEqual(['SIGKILL']);
-    expect(String(failure)).toContain('20 s');
+    expect((failure as Error).message).toBe(
+      'claude -p /usage gave no answer in 20 s',
+    );
   });
 
   it('accountStatus_NonZeroExit_RejectsWithStderr', async () => {

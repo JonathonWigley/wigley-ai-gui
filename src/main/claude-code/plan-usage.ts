@@ -6,7 +6,14 @@ import type {
   PlanUsage,
 } from '../../contracts/agent';
 import { isJsonObject } from '../../shared/json';
-import { asArray, asJson, asString, type Json, parsed } from './json-fields';
+import {
+  asArray,
+  asJson,
+  asString,
+  type Json,
+  numberOrNull,
+  parsed,
+} from './json-fields';
 
 // The adapter's names for the kinds the server sends unscoped.
 const KIND_LABELS: Readonly<Record<string, string>> = {
@@ -32,11 +39,15 @@ const WINDOW_SEVERITIES: Readonly<Record<string, PlanSeverity>> = {
   rejected: 'critical',
 };
 
-const numberOrNull = (value: unknown): number | null =>
-  typeof value === 'number' ? value : null;
-
 const stringOrNull = (value: unknown): string | null =>
   typeof value === 'string' ? value : null;
+
+// An ISO 4217 currency code, the shape `Intl.NumberFormat` accepts.
+const CURRENCY_CODE = /^[A-Z]{3}$/;
+
+function currencyOf(value: unknown): string | null {
+  return typeof value === 'string' && CURRENCY_CODE.test(value) ? value : null;
+}
 
 function resetTime(value: unknown): number | null {
   if (typeof value !== 'string') {
@@ -80,7 +91,7 @@ function extraUsageOf(value: unknown): ExtraUsage | null {
     enabled: extra.is_enabled === true,
     usedMinor: numberOrNull(extra.used_credits),
     limitMinor: numberOrNull(extra.monthly_limit),
-    currency: stringOrNull(extra.currency),
+    currency: currencyOf(extra.currency),
   };
 }
 

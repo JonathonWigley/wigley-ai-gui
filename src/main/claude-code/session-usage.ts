@@ -1,5 +1,5 @@
 import type { UsageAgentEvent } from '../../contracts/agent';
-import { asJson, type Json, parsed } from './json-fields';
+import { asJson, type Json, numberOrNull, parsed } from './json-fields';
 
 // The prompt cache's two lifetimes, by the `usage.cache_creation` bucket a reply wrote.
 const CACHE_TTL_5M_MS = 300_000;
@@ -20,6 +20,13 @@ export interface ReplyUsage {
 export interface TurnUsage {
   contextWindow: number | null;
   spendUsd: number | null;
+}
+
+// What one `get_context_usage` reply says: the main model's context window and the autocompact limit the harness
+// reports, each null when the reply carries none.
+export interface ContextUsage {
+  contextWindow: number | null;
+  reported: number | null;
 }
 
 // One process's usage so far. `hasReply` is false until a reply was folded; `cacheTtlMs` is the last lifetime a
@@ -87,11 +94,16 @@ export function foldTurn(
   };
 }
 
-export function withReported(
+// The reply's limit replaces the kept one; a null window keeps the kept one.
+export function foldContextUsage(
   state: SessionUsageState,
-  reported: number | null,
+  usage: ContextUsage,
 ): SessionUsageState {
-  return { ...state, reported };
+  return {
+    ...state,
+    contextWindow: usage.contextWindow ?? state.contextWindow,
+    reported: usage.reported,
+  };
 }
 
 export function withConfiguredPercent(
@@ -147,17 +159,14 @@ export function replyUsageOf(usage: Json): ReplyUsage {
   return { contextTokens, cacheTtlMs, readsCache: cacheRead > 0 };
 }
 
-// The context window `model` ran with, or the largest the result names when `model` is null or not among them.
+// The context window `model` ran with, null when its entry names none; the largest the result names when `model` is
+// null or not among them.
 function contextWindowOf(
   modelUsage: Json,
   model: string | null,
 ): number | null {
-  const own =
-    model !== null && Object.hasOwn(modelUsage, model)
-      ? asJson(modelUsage[model]).contextWindow
-      : undefined;
-  if (typeof own === 'number') {
-    return own;
+  if (model !== null && Object.hasOwn(modelUsage, model)) {
+    return numberOrNull(asJson(modelUsage[model]).contextWindow);
   }
   const windows = Object.values(modelUsage)
     .map((usage) => asJson(usage).contextWindow)
@@ -167,10 +176,9 @@ function contextWindowOf(
 
 // A `result` line's usage, `model` the main conversation's last model (null before any main reply).
 export function turnUsageOf(result: Json, model: string | null): TurnUsage {
-  const spend = result.total_cost_usd;
   return {
     contextWindow: contextWindowOf(asJson(result.modelUsage), model),
-    spendUsd: typeof spend === 'number' ? spend : null,
+    spendUsd: numberOrNull(result.total_cost_usd),
   };
 }
 
@@ -192,8 +200,10 @@ export function configuredPercent(settingsText: string | null): number | null {
   return isPercent ? percent : null;
 }
 
-// The autocompact limit a `get_context_usage` reply reports, or null.
-export function reportedLimit(response: Json): number | null {
-  const threshold = response.autoCompactThreshold;
-  return typeof threshold === 'number' ? threshold : null;
+// What a `get_context_usage` reply's data says.
+export function contextUsageOf(response: Json): ContextUsage {
+  return {
+    contextWindow: numberOrNull(response.maxTokens),
+    reported: numberOrNull(response.autoCompactThreshold),
+  };
 }

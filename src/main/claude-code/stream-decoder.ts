@@ -2,7 +2,14 @@ import type { PlanRowPatch } from '../../contracts/agent';
 import type { ClaudeControlId } from './claude-controls';
 import type { EntryDraft } from '../../shared/entry-stamp';
 import { isJsonObject } from '../../shared/json';
-import { asArray, asJson, asString, type Json, parsed } from './json-fields';
+import {
+  asArray,
+  asJson,
+  asString,
+  type Json,
+  numberOrNull,
+  parsed,
+} from './json-fields';
 import { rateLimitRows } from './plan-usage';
 import {
   type ReplyUsage,
@@ -119,8 +126,11 @@ function messageText(content: unknown): string {
 // turn's result when an interrupt ends the block with no stop. Of the stream
 // events, an entry's `raw` keeps only a text or thinking block's
 // `content_block_start`; every other stream event is left out, since the
-// entry's start event or the final `assistant` event holds its content.
-export function createStreamDecoder(): StreamDecoder {
+// entry's start event or the final `assistant` event holds its content. A
+// `control_response` whose request id `isKeptOut` names joins no entry.
+export function createStreamDecoder(
+  isKeptOut: (requestId: string) => boolean = () => false,
+): StreamDecoder {
   const textEntries = new Map<string, TextEntry>();
   const toolEntries = new Map<string, ToolEntry>();
   // Stream entries an assistant event has already confirmed.
@@ -455,8 +465,7 @@ export function createStreamDecoder(): StreamDecoder {
         ? (event.stop_reason as string)
         : asString(event.subtype),
       costUsd,
-      durationMs:
-        typeof event.duration_ms === 'number' ? event.duration_ms : null,
+      durationMs: numberOrNull(event.duration_ms),
       raw: [event],
     });
     betweenTurns = true;
@@ -465,12 +474,15 @@ export function createStreamDecoder(): StreamDecoder {
   function decodeControlResponse(event: Json, out: DecodedLine) {
     const response = asJson(event.response);
     const isError = response.subtype === 'error';
+    const requestId = asString(response.request_id);
     out.controlResponse = {
-      requestId: asString(response.request_id),
+      requestId,
       error: isError ? asString(response.error) || 'unknown error' : null,
       response: asJson(response.response),
     };
-    out.entries.push(gathered(event));
+    if (!isKeptOut(requestId)) {
+      out.entries.push(gathered(event));
+    }
   }
 
   function decodeControlRequest(event: Json, out: DecodedLine) {

@@ -52,8 +52,9 @@ Only `src/main/claude-code/` knows any of these shapes.
 | Plan rows, extra usage | `claude -p /usage --output-format stream-json --verbose`: the `assistant` line's `usage_report.rate_limits` (`limits[]`, `extra_usage`) | every poll, per profile; 0 tokens, about 3 s; killed and failed after 20 s (`PLAN_USAGE_TIMEOUT_MS`) |
 | Session and weekly rows between polls | `rate_limit_event.rate_limit_info.unifiedWindows` (`five_hour` → `session`, `seven_day` → `weekly_all`; `status` `allowed` / `allowed_warning` / `rejected` → `normal` / `warning` / `critical`) | after every model message |
 | Context tokens | each `assistant` message's `usage`: `input_tokens + cache_read_input_tokens + cache_creation_input_tokens + output_tokens` | every reply |
-| Context window, session spend | the `result` line: `modelUsage.<model>.contextWindow`, `total_cost_usd` | every turn |
-| Reported autocompact limit | the `get_context_usage` control request's `autoCompactThreshold` | after every turn |
+| Context window | the `get_context_usage` control request's `maxTokens`, and the `result` line's `modelUsage.<model>.contextWindow` | session start and every turn |
+| Session spend | the `result` line's `total_cost_usd` | every turn |
+| Reported autocompact limit | the `get_context_usage` control request's `autoCompactThreshold` | session start and after every turn |
 | Configured autocompact limit | the profile's `settings.json` `env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE`, read when a session starts | session start |
 | Cache expiry | the reply's `usage.cache_creation` bucket (or a cache read) and the adapter's clock | every reply |
 
@@ -100,13 +101,14 @@ In `src/contracts/agent.ts`, beside `AgentHarness`:
 - `PlanRow` — `kind`, `group`, `label` (the server's model or surface name for a scoped row, otherwise the
   adapter's name for the kind), `percent` (0–100), `resetsAt` (epoch ms or null), `severity`
   (`'normal' | 'warning' | 'critical'`), `isActive`.
-- `ExtraUsage` — `enabled`, `usedMinor`, `limitMinor`, `currency` (each null when the server sends none).
+- `ExtraUsage` — `enabled`, `usedMinor`, `limitMinor`, `currency` (a three-letter ISO 4217 code; each null when the
+  server sends none, and `currency` null when it sends another shape).
 - `PlanRowUpdate` — the live rows a session saw: `rows` of `PlanRowPatch` (`{ kind, percent, resetsAt, severity }`), `at`. Folded into
   the profile's last `PlanUsage` by `kind`; a kind the poll has not reported yet is held until it does.
 - `AgentHarness.planUsage(profileDir)` — runs one poll and resolves its `PlanUsage`, or rejects with the reason.
 - `AgentProcessEvents.planUsage(update)` and `AgentProcessEvents.agentEvent(event)`.
 - `AgentEvent` — the agent-tower union, built here with its first member, `usage`: `agentId` (`main`), `at`,
-  `contextTokens`, `contextWindow` (null until the first result), `autocompact` (`configured` and `reported`, each
+  `contextTokens`, `contextWindow` (null until the harness reports it), `autocompact` (`configured` and `reported`, each
   tokens or null), `cacheExpiresAt` (epoch ms or null), `spendUsd` (null until the first result).
 
 ## The usage plugin

@@ -733,6 +733,22 @@ describe('createStreamDecoder', () => {
       expected: { contextWindow: 1000000, spendUsd: 0.5 },
     },
     {
+      name: 'ModelKeyWithoutWindow_Null',
+      lines: [
+        REPLY_LINE,
+        line({
+          type: 'result',
+          subtype: 'success',
+          total_cost_usd: 0.5,
+          modelUsage: {
+            'claude-opus-5-5': { costUSD: 0.5 },
+            'claude-haiku-5-5': { contextWindow: 200000 },
+          },
+        }),
+      ],
+      expected: { contextWindow: null, spendUsd: 0.5 },
+    },
+    {
       name: 'NoReplyNoModelUsage',
       lines: [
         line({

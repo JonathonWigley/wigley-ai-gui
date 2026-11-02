@@ -1,16 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
   configuredPercent,
+  contextUsageOf,
   EMPTY_SESSION_USAGE,
+  foldContextUsage,
   foldReply,
   foldTurn,
   type ReplyUsage,
   replyUsageOf,
-  reportedLimit,
   type SessionUsageState,
   usageEvent,
   withConfiguredPercent,
-  withReported,
 } from './session-usage';
 
 // REPLY_LINE's `message.usage`, docs/features/agent-chat/claude-stream.md § Usage.
@@ -189,7 +189,10 @@ describe('session usage', () => {
       2000,
     );
     const turned = foldTurn(replied, { contextWindow: 200_000, spendUsd: 0.4 });
-    const state = withReported(withConfiguredPercent(turned, 45), 193_000);
+    const state = foldContextUsage(withConfiguredPercent(turned, 45), {
+      contextWindow: null,
+      reported: 193_000,
+    });
 
     expect(usageEvent(state, 7000)).toEqual({
       type: 'usage',
@@ -238,12 +241,45 @@ describe('session usage', () => {
 
   it.each([
     {
-      name: 'Threshold',
-      response: { autoCompactThreshold: 967000 },
-      limit: 967000,
+      name: 'MeasuredReply',
+      response: {
+        autoCompactThreshold: 967000,
+        maxTokens: 1000000,
+        rawMaxTokens: 1000000,
+      },
+      expected: { contextWindow: 1000000, reported: 967000 },
     },
-    { name: 'Missing', response: {}, limit: null },
-  ])('reportedLimit_$name', ({ response, limit }) => {
-    expect(reportedLimit(response)).toBe(limit);
+    {
+      name: 'Missing',
+      response: {},
+      expected: { contextWindow: null, reported: null },
+    },
+  ])('contextUsageOf_$name', ({ response, expected }) => {
+    expect(contextUsageOf(response)).toEqual(expected);
+  });
+
+  it.each([
+    {
+      name: 'WindowReplaces',
+      usage: { contextWindow: 200_000, reported: 167_000 },
+      expected: { contextWindow: 200_000, reported: 167_000 },
+    },
+    {
+      name: 'NullWindowKeepsWindow',
+      usage: { contextWindow: null, reported: null },
+      expected: { contextWindow: 1_000_000, reported: null },
+    },
+  ])('foldContextUsage_$name', ({ usage, expected }) => {
+    const kept = foldContextUsage(EMPTY_SESSION_USAGE, {
+      contextWindow: 1_000_000,
+      reported: 967_000,
+    });
+
+    const state = foldContextUsage(kept, usage);
+
+    expect({
+      contextWindow: state.contextWindow,
+      reported: state.reported,
+    }).toEqual(expected);
   });
 });
