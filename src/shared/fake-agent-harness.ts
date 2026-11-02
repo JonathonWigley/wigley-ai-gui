@@ -1,19 +1,20 @@
-import type {
-  AccountStatus,
-  AgentHarness,
-  AgentProcess,
-  AgentProcessEvents,
-  AgentStart,
-  ChatEntry,
-  ChatImage,
-  LogInEvents,
-  LogInProcess,
-  PastSession,
-  PlanRowUpdate,
-  PlanUsage,
-  ProjectFolder,
-  SessionControl,
-  UsageAgentEvent,
+import {
+  MAIN_AGENT_ID,
+  type AccountStatus,
+  type AgentHarness,
+  type AgentProcess,
+  type AgentProcessEvents,
+  type AgentStart,
+  type ChatEntry,
+  type ChatImage,
+  type LogInEvents,
+  type LogInProcess,
+  type PastSession,
+  type PlanRowUpdate,
+  type PlanUsage,
+  type ProjectFolder,
+  type SessionControl,
+  type UsageAgentEvent,
 } from '../contracts/agent';
 import type { Clock } from '../contracts/ambient';
 import { createEntryStamp, type EntryDraft } from './entry-stamp';
@@ -24,7 +25,10 @@ import { createEntryStamp, type EntryDraft } from './entry-stamp';
 // entry carries the clock's time when its id first arrived; `history` entries
 // carry fixed times one second apart. Every finished turn reports a `usage`
 // agent event and a plan row update after its result, and `planUsage` answers
-// every profile with `fakePlanUsage`.
+// every profile with `fakePlanUsage`. The process emits the agent events Claude
+// would for what it simulates, each at the clock's time: `sessionStarted` first,
+// `userMessage` after each user entry, tool and subagent events beside their
+// entries, and `sessionEnded` just before each `ended`.
 
 // A send of this text opens a turn that stays open until `interrupt` or `end`.
 export const FAKE_HOLD_TEXT = 'fake: hold';
@@ -33,6 +37,10 @@ export const FAKE_TOOL_TEXT = 'fake: tool';
 // A send of this text runs six finished tools, one failed, and a thought, then
 // stays open as `FAKE_HOLD_TEXT`'s turn does.
 export const FAKE_STEPS_TEXT = 'fake: steps';
+// A send of this text spawns two subagents, each running one tool, then stays
+// open as `FAKE_HOLD_TEXT`'s turn does. The subagents run until an interrupt
+// (failed), the next send (done) or the process's end (no `agentFinished`).
+export const FAKE_AGENTS_TEXT = 'fake: agents';
 // A send of this text ends the process on its own, as a CLI that exits.
 export const FAKE_END_TEXT = 'fake: end';
 // The link every `logIn` reports, and the one code that finishes it.
@@ -223,7 +231,7 @@ export function fakePlanUsage(at: number): PlanUsage {
 export function fakeUsageEvent(turn: number, at: number): UsageAgentEvent {
   return {
     type: 'usage',
-    agentId: 'main',
+    agentId: MAIN_AGENT_ID,
     at,
     contextTokens: 42_000 * turn,
     contextWindow: 1_000_000,
@@ -293,10 +301,24 @@ function emitToolTurn(
     summary: 'echo fake',
   };
   emitEntry({ ...tool, result: null, raw: [{ fake: 'tool' }] });
+  events.agentEvent({
+    type: 'toolStarted',
+    at: clock.now(),
+    agentId: MAIN_AGENT_ID,
+    toolUseId: tool.toolUseId,
+    tool: tool.name,
+  });
   emitEntry({
     ...tool,
     result: { text: 'fake', isError: false },
     raw: [{ fake: 'tool' }, { fake: 'tool-result' }],
+  });
+  events.agentEvent({
+    type: 'toolFinished',
+    at: clock.now(),
+    agentId: MAIN_AGENT_ID,
+    toolUseId: tool.toolUseId,
+    ok: true,
   });
   const reply = 'fake agent ran a tool';
   emitEntry({
@@ -328,20 +350,41 @@ const FAKE_STEP_TOOLS = [
   { name: 'Bash', input: { command: 'npm test' }, summary: 'npm test' },
 ];
 
-// The steps of turn `turn`, ids `step-<turn>-<n>`: the tools, then one
-// finished thought. The turn stays open.
-function emitStepsTurn(emitEntry: EmitEntry, turn: number) {
+// The steps of turn `turn`, ids `step-<turn>-<n>`: the tools, each with its
+// tool events, then one finished thought. The turn stays open.
+function emitStepsTurn(
+  events: AgentProcessEvents,
+  emitEntry: EmitEntry,
+  clock: Clock,
+  turn: number,
+) {
   FAKE_STEP_TOOLS.forEach((tool, index) => {
     const n = index + 1;
+    const toolUseId = `fake-step-${turn}-${n}`;
+    const result = tool.result ?? { text: 'ok', isError: false };
     emitEntry({
       kind: 'tool',
       id: `step-${turn}-${n}`,
-      toolUseId: `fake-step-${turn}-${n}`,
+      toolUseId,
       name: tool.name,
       input: tool.input,
       summary: tool.summary,
-      result: tool.result ?? { text: 'ok', isError: false },
+      result,
       raw: [{ fake: 'step' }],
+    });
+    events.agentEvent({
+      type: 'toolStarted',
+      at: clock.now(),
+      agentId: MAIN_AGENT_ID,
+      toolUseId,
+      tool: tool.name,
+    });
+    events.agentEvent({
+      type: 'toolFinished',
+      at: clock.now(),
+      agentId: MAIN_AGENT_ID,
+      toolUseId,
+      ok: !result.isError,
     });
   });
   const thought = 'Checking the test output.';
@@ -352,6 +395,124 @@ function emitStepsTurn(emitEntry: EmitEntry, turn: number) {
     streaming: false,
     raw: [{ fake: 'thinking', text: thought }],
   });
+}
+
+// The subagents `FAKE_AGENTS_TEXT`'s turn spawns, in order, each with the one
+// tool it runs.
+const FAKE_SUBAGENTS = [
+  {
+    agentType: 'wigley:sonnet-medium',
+    description: 'Map the stream decoder',
+    tool: {
+      name: 'Read',
+      input: { file_path: 'src/main/claude-code/stream-decoder.ts' },
+      summary: 'src/main/claude-code/stream-decoder.ts',
+    },
+  },
+  {
+    agentType: 'Explore',
+    description: 'Find every Files adapter',
+    tool: {
+      name: 'Grep',
+      input: { pattern: 'append' },
+      summary: 'append',
+    },
+  },
+];
+
+type ToolEntryDraft = Extract<EntryDraft, { kind: 'tool' }>;
+
+// A running subagent's Agent tool entry, without its result and raw events.
+type SubagentEntry = Omit<ToolEntryDraft, 'result' | 'raw'>;
+
+// Spawns turn `turn`'s subagents, ids `fake-agent-<turn>-<n>`, and runs each
+// one's tool; returns their Agent entries in spawn order. The turn stays open.
+function emitAgentsTurn(
+  events: AgentProcessEvents,
+  emitEntry: EmitEntry,
+  clock: Clock,
+  turn: number,
+): SubagentEntry[] {
+  const spawned = FAKE_SUBAGENTS.map((subagent, index) => {
+    const agentId = `fake-agent-${turn}-${index + 1}`;
+    const entry: SubagentEntry = {
+      kind: 'tool',
+      id: `agent-${turn}-${index + 1}`,
+      toolUseId: agentId,
+      name: 'Agent',
+      input: {
+        subagent_type: subagent.agentType,
+        description: subagent.description,
+      },
+      summary: subagent.description,
+    };
+    emitEntry({ ...entry, result: null, raw: [{ fake: 'agent' }] });
+    events.agentEvent({
+      type: 'agentSpawned',
+      at: clock.now(),
+      agentId,
+      parentAgentId: MAIN_AGENT_ID,
+      agentType: subagent.agentType,
+      description: subagent.description,
+    });
+    return entry;
+  });
+  FAKE_SUBAGENTS.forEach(({ tool }, index) => {
+    const agentId = spawned[index].toolUseId;
+    const toolCall = {
+      kind: 'tool' as const,
+      id: `${spawned[index].id}-tool`,
+      toolUseId: `${agentId}-tool`,
+      name: tool.name,
+      input: tool.input,
+      summary: tool.summary,
+    };
+    emitEntry({ ...toolCall, result: null, raw: [{ fake: 'tool' }] });
+    events.agentEvent({
+      type: 'toolStarted',
+      at: clock.now(),
+      agentId,
+      toolUseId: toolCall.toolUseId,
+      tool: tool.name,
+    });
+    emitEntry({
+      ...toolCall,
+      result: { text: 'fake', isError: false },
+      raw: [{ fake: 'tool' }, { fake: 'tool-result' }],
+    });
+    events.agentEvent({
+      type: 'toolFinished',
+      at: clock.now(),
+      agentId,
+      toolUseId: toolCall.toolUseId,
+      ok: true,
+    });
+  });
+  return spawned;
+}
+
+// Re-sends each running subagent's Agent entry with `result`, then its
+// `agentFinished`, in spawn order.
+function finishSubagents(
+  events: AgentProcessEvents,
+  emitEntry: EmitEntry,
+  clock: Clock,
+  running: readonly SubagentEntry[],
+  result: { text: string; isError: boolean },
+) {
+  for (const entry of running) {
+    emitEntry({
+      ...entry,
+      result,
+      raw: [{ fake: 'agent' }, { fake: 'agent-result' }],
+    });
+    events.agentEvent({
+      type: 'agentFinished',
+      at: clock.now(),
+      agentId: entry.toolUseId,
+      outcome: result.isError ? 'failed' : 'done',
+    });
+  }
 }
 
 function emitEchoTurn(
@@ -482,6 +643,8 @@ export function createFakeAgentHarness(clock: Clock): FakeAgentHarness {
     let controls = startingControls();
     let turn = 0;
     let isTurnOpen = false;
+    // The Agent entries of the subagents still running, in spawn order.
+    let runningSubagents: SubagentEntry[] = [];
     let endPromise: Promise<void> | null = null;
     const stamp = createEntryStamp(clock);
     const emitEntry: EmitEntry = (draft) => {
@@ -492,7 +655,11 @@ export function createFakeAgentHarness(clock: Clock): FakeAgentHarness {
         throw new Error('fake agent process has ended');
       }
     };
+    const emitSessionEnded = () => {
+      events.agentEvent({ type: 'sessionEnded', at: clock.now() });
+    };
     queueMicrotask(() => {
+      events.agentEvent({ type: 'sessionStarted', at: clock.now() });
       events.controls(controls);
       events.commands(['fake-command']);
       events.activity('idle');
@@ -512,14 +679,17 @@ export function createFakeAgentHarness(clock: Clock): FakeAgentHarness {
             images,
             raw: [{ fake: 'user', text }],
           });
+          events.agentEvent({ type: 'userMessage', at: clock.now() });
           events.activity('working');
         };
         if (text === FAKE_END_TEXT) {
           record.ended = true;
           isTurnOpen = false;
+          runningSubagents = [];
           endPromise = new Promise<void>((resolve) => {
             queueMicrotask(() => {
               emitUserEntry();
+              emitSessionEnded();
               events.ended({ code: 0, error: null });
               resolve();
             });
@@ -528,14 +698,27 @@ export function createFakeAgentHarness(clock: Clock): FakeAgentHarness {
         }
         const isHold = text === FAKE_HOLD_TEXT;
         const isSteps = text === FAKE_STEPS_TEXT;
-        isTurnOpen = isHold || isSteps;
+        const isAgents = text === FAKE_AGENTS_TEXT;
+        isTurnOpen = isHold || isSteps || isAgents;
         queueMicrotask(() => {
+          finishSubagents(events, emitEntry, clock, runningSubagents, {
+            text: 'fake subagent done',
+            isError: false,
+          });
+          runningSubagents = [];
           emitUserEntry();
           if (isHold) {
             return;
           }
-          if (isSteps) {
-            emitStepsTurn(emitEntry, sentTurn);
+          if (isAgents) {
+            runningSubagents = emitAgentsTurn(
+              events,
+              emitEntry,
+              clock,
+              sentTurn,
+            );
+          } else if (isSteps) {
+            emitStepsTurn(events, emitEntry, clock, sentTurn);
           } else if (text === FAKE_TOOL_TEXT) {
             emitToolTurn(events, emitEntry, clock, sentTurn);
           } else {
@@ -552,6 +735,11 @@ export function createFakeAgentHarness(clock: Clock): FakeAgentHarness {
         isTurnOpen = false;
         const interruptedTurn = turn;
         queueMicrotask(() => {
+          finishSubagents(events, emitEntry, clock, runningSubagents, {
+            text: 'Interrupted',
+            isError: true,
+          });
+          runningSubagents = [];
           emitEntry({
             kind: 'notice',
             id: `notice-${interruptedTurn}`,
@@ -585,11 +773,12 @@ export function createFakeAgentHarness(clock: Clock): FakeAgentHarness {
         }
         record.ended = true;
         isTurnOpen = false;
-        const emitEnded = () => events.ended({ code: 0, error: null });
+        runningSubagents = [];
         const isHeld = isEndHeld;
         endPromise = new Promise<void>((resolve) => {
           const exit = () => {
-            emitEnded();
+            emitSessionEnded();
+            events.ended({ code: 0, error: null });
             resolve();
           };
           if (isHeld) {
@@ -607,8 +796,10 @@ export function createFakeAgentHarness(clock: Clock): FakeAgentHarness {
         }
         record.ended = true;
         isTurnOpen = false;
+        runningSubagents = [];
         endPromise = new Promise<void>((resolve) => {
           queueMicrotask(() => {
+            emitSessionEnded();
             events.ended({ code: null, error: null });
             resolve();
           });

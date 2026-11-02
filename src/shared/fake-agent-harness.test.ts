@@ -1,13 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import type {
-  AgentHarness,
-  AgentProcessEvents,
-  AgentStart,
-  ChatEntry,
-  LogInEvents,
+import {
+  MAIN_AGENT_ID,
+  type AgentEvent,
+  type AgentHarness,
+  type AgentProcess,
+  type AgentProcessEvents,
+  type AgentStart,
+  type ChatEntry,
+  type LogInEvents,
 } from '../contracts/agent';
 import {
   createFakeAgentHarness,
+  FAKE_AGENTS_TEXT,
   FAKE_END_TEXT,
   FAKE_HISTORY_IMAGES,
   FAKE_HOLD_TEXT,
@@ -31,19 +35,52 @@ const request: AgentStart = {
   profileDir: null,
 };
 
-// Every event the process emits, as `[event name, payload]`, in emit order.
+// Every event the process emits, as `[event name, payload]`, in emit order,
+// except the agent events other than `usage`, which `agentEvents` holds.
+// `timeline` holds every event, those included, in emit order.
 function recordingEvents() {
   const heard: [string, unknown][] = [];
-  const events: AgentProcessEvents = {
-    entry: (entry) => heard.push(['entry', entry]),
-    controls: (controls) => heard.push(['controls', controls]),
-    activity: (activity) => heard.push(['activity', activity]),
-    commands: (names) => heard.push(['commands', names]),
-    planUsage: (update) => heard.push(['planUsage', update]),
-    agentEvent: (event) => heard.push(['agentEvent', event]),
-    ended: (end) => heard.push(['ended', end]),
+  const agentEvents: AgentEvent[] = [];
+  const timeline: [string, unknown][] = [];
+  const hear = (name: string, payload: unknown) => {
+    heard.push([name, payload]);
+    timeline.push([name, payload]);
   };
-  return { heard, events };
+  const events: AgentProcessEvents = {
+    entry: (entry) => hear('entry', entry),
+    controls: (controls) => hear('controls', controls),
+    activity: (activity) => hear('activity', activity),
+    commands: (names) => hear('commands', names),
+    planUsage: (update) => hear('planUsage', update),
+    agentEvent: (event) => {
+      if (event.type === 'usage') {
+        hear('agentEvent', event);
+        return;
+      }
+      agentEvents.push(event);
+      timeline.push(['agentEvent', event]);
+    },
+    ended: (end) => hear('ended', end),
+  };
+  return { heard, agentEvents, timeline, events };
+}
+
+// One timeline event as a line: an entry as its kind, id and tool result text,
+// an agent event as its type, agent id and outcome, any other as its name and,
+// for activity, its value.
+function timelineLine([name, payload]: [string, unknown]): string {
+  if (name === 'entry') {
+    const entry = payload as ChatEntry;
+    const resultText = entry.kind === 'tool' ? entry.result?.text : undefined;
+    return [entry.kind, entry.id, resultText].filter(Boolean).join(' ');
+  }
+  if (name === 'agentEvent') {
+    const event = payload as AgentEvent;
+    const agentId = 'agentId' in event ? event.agentId : undefined;
+    const outcome = 'outcome' in event ? event.outcome : undefined;
+    return [event.type, agentId, outcome].filter(Boolean).join(' ');
+  }
+  return name === 'activity' ? `activity ${String(payload)}` : name;
 }
 
 const flush = async () => {
@@ -54,11 +91,20 @@ const flush = async () => {
 // A started process with its start events flushed and cleared.
 async function startedProcess() {
   const harness = createFakeAgentHarness(clock);
-  const { heard, events } = recordingEvents();
+  const { heard, agentEvents, timeline, events } = recordingEvents();
   const agent = harness.start(request, events);
   await flush();
   heard.length = 0;
-  return { harness, agent, heard, record: harness.processes[0] };
+  agentEvents.length = 0;
+  timeline.length = 0;
+  return {
+    harness,
+    agent,
+    heard,
+    agentEvents,
+    timeline,
+    record: harness.processes[0],
+  };
 }
 
 describe('createFakeAgentHarness', () => {
@@ -283,7 +329,7 @@ describe('createFakeAgentHarness', () => {
   });
 
   it('send_StepsText_EmitsStepsAndHoldsTurnOpen', async () => {
-    const { agent, heard } = await startedProcess();
+    const { agent, heard, agentEvents } = await startedProcess();
 
     agent.send({ text: FAKE_STEPS_TEXT, images: [] });
     await flush();
@@ -323,6 +369,24 @@ describe('createFakeAgentHarness', () => {
       ['Bash', 'npm test', false],
       'thinking',
     ]);
+    const stepTools = ['Read', 'Read', 'Read', 'Bash', 'Edit', 'Bash'];
+    expect(agentEvents).toEqual([
+      { type: 'userMessage', at: 1000 },
+      ...stepTools.flatMap((tool, index) => {
+        const toolUseId = `fake-step-1-${index + 1}`;
+        const agentId = MAIN_AGENT_ID;
+        return [
+          { type: 'toolStarted', at: 1000, agentId, toolUseId, tool },
+          {
+            type: 'toolFinished',
+            at: 1000,
+            agentId,
+            toolUseId,
+            ok: index !== 3,
+          },
+        ];
+      }),
+    ]);
     heard.length = 0;
 
     agent.interrupt();
@@ -352,6 +416,202 @@ describe('createFakeAgentHarness', () => {
 
     expect(heard).toEqual([]);
     expect(record.calls).toEqual([{ method: 'interrupt' }]);
+  });
+
+  it('send_AgentsText_SpawnsTwoSubagentsAndHoldsTurn', async () => {
+    const { agent, heard, agentEvents } = await startedProcess();
+
+    agent.send({ text: FAKE_AGENTS_TEXT, images: [] });
+    await flush();
+
+    const subagentTool = (n: number, tool: string) => [
+      {
+        type: 'toolStarted',
+        at: 1000,
+        agentId: `fake-agent-1-${n}`,
+        toolUseId: `fake-agent-1-${n}-tool`,
+        tool,
+      },
+      {
+        type: 'toolFinished',
+        at: 1000,
+        agentId: `fake-agent-1-${n}`,
+        toolUseId: `fake-agent-1-${n}-tool`,
+        ok: true,
+      },
+    ];
+    expect(agentEvents).toEqual([
+      { type: 'userMessage', at: 1000 },
+      {
+        type: 'agentSpawned',
+        at: 1000,
+        agentId: 'fake-agent-1-1',
+        parentAgentId: MAIN_AGENT_ID,
+        agentType: 'wigley:sonnet-medium',
+        description: 'Map the stream decoder',
+      },
+      {
+        type: 'agentSpawned',
+        at: 1000,
+        agentId: 'fake-agent-1-2',
+        parentAgentId: MAIN_AGENT_ID,
+        agentType: 'Explore',
+        description: 'Find every Files adapter',
+      },
+      ...subagentTool(1, 'Read'),
+      ...subagentTool(2, 'Grep'),
+    ]);
+    // Each entry as `[kind, id, tool result text]`.
+    expect(
+      heard.map(([name, payload]) => {
+        const entry = payload as ChatEntry;
+        return name === 'entry'
+          ? [entry.kind, entry.id, entry.kind === 'tool' && entry.result?.text]
+          : [name, payload];
+      }),
+    ).toEqual([
+      ['user', 'user-1', false],
+      ['activity', 'working'],
+      ['tool', 'agent-1-1', undefined],
+      ['tool', 'agent-1-2', undefined],
+      ['tool', 'agent-1-1-tool', undefined],
+      ['tool', 'agent-1-1-tool', 'fake'],
+      ['tool', 'agent-1-2-tool', undefined],
+      ['tool', 'agent-1-2-tool', 'fake'],
+    ]);
+    expect(heard[2][1]).toMatchObject({
+      toolUseId: 'fake-agent-1-1',
+      name: 'Agent',
+      input: {
+        subagent_type: 'wigley:sonnet-medium',
+        description: 'Map the stream decoder',
+      },
+      summary: 'Map the stream decoder',
+    });
+  });
+
+  // vitest reads `$name_suffix` as one key, so each row's case names the
+  // whole tail.
+  it.each([
+    {
+      case: 'interrupt_FinishesSubagentsAsFailed',
+      end: (agent: AgentProcess) => agent.interrupt(),
+      lines: [
+        'tool agent-1-1 Interrupted',
+        'agentFinished fake-agent-1-1 failed',
+        'tool agent-1-2 Interrupted',
+        'agentFinished fake-agent-1-2 failed',
+        'notice notice-1',
+        'activity idle',
+      ],
+    },
+    {
+      case: 'send_FinishesSubagentsAsDone',
+      end: (agent: AgentProcess) => agent.send({ text: 'hi', images: [] }),
+      lines: [
+        'tool agent-1-1 fake subagent done',
+        'agentFinished fake-agent-1-1 done',
+        'tool agent-1-2 fake subagent done',
+        'agentFinished fake-agent-1-2 done',
+        'user user-2',
+        'userMessage',
+        'activity working',
+        'assistant assistant-2',
+        'assistant assistant-2',
+        'result result-2',
+        'usage main',
+        'planUsage',
+        'activity idle',
+      ],
+    },
+    {
+      case: 'end_LeavesSubagentsToSessionEnded',
+      end: (agent: AgentProcess) => void agent.end(),
+      lines: ['sessionEnded', 'ended'],
+    },
+  ])('agentsTurn_$case', async ({ end, lines }) => {
+    const { agent, timeline } = await startedProcess();
+    agent.send({ text: FAKE_AGENTS_TEXT, images: [] });
+    await flush();
+    timeline.length = 0;
+
+    end(agent);
+    await flush();
+
+    expect(timeline.map(timelineLine)).toEqual(lines);
+  });
+
+  it.each([
+    {
+      case: 'start',
+      run: async () => {
+        const { agentEvents, events } = recordingEvents();
+        createFakeAgentHarness(clock).start(request, events);
+        await flush();
+        return agentEvents;
+      },
+      expected: [{ type: 'sessionStarted', at: 1000 }],
+    },
+    {
+      case: 'plain send',
+      run: async () => {
+        const { agent, agentEvents } = await startedProcess();
+        agent.send({ text: 'hi', images: [] });
+        await flush();
+        return agentEvents;
+      },
+      expected: [{ type: 'userMessage', at: 1000 }],
+    },
+    {
+      case: 'tool turn',
+      run: async () => {
+        const { agent, agentEvents } = await startedProcess();
+        agent.send({ text: FAKE_TOOL_TEXT, images: [] });
+        await flush();
+        return agentEvents;
+      },
+      expected: [
+        { type: 'userMessage', at: 1000 },
+        {
+          type: 'toolStarted',
+          at: 1000,
+          agentId: MAIN_AGENT_ID,
+          toolUseId: 'fake-tool-1',
+          tool: 'Bash',
+        },
+        {
+          type: 'toolFinished',
+          at: 1000,
+          agentId: MAIN_AGENT_ID,
+          toolUseId: 'fake-tool-1',
+          ok: true,
+        },
+      ],
+    },
+    {
+      case: 'end',
+      run: async () => {
+        const { agent, agentEvents } = await startedProcess();
+        await agent.end();
+        return agentEvents;
+      },
+      expected: [{ type: 'sessionEnded', at: 1000 }],
+    },
+    {
+      case: 'end text',
+      run: async () => {
+        const { agent, agentEvents } = await startedProcess();
+        agent.send({ text: FAKE_END_TEXT, images: [] });
+        await flush();
+        return agentEvents;
+      },
+      expected: [
+        { type: 'userMessage', at: 1000 },
+        { type: 'sessionEnded', at: 1000 },
+      ],
+    },
+  ])('sessionEvents_$case', async ({ run, expected }) => {
+    expect(await run()).toEqual(expected);
   });
 
   it('setControl_KnownChoice_ReportsNewValue', async () => {
