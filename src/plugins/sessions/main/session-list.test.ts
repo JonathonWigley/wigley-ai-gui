@@ -744,9 +744,7 @@ describe('createSessionList', () => {
     const stateBefore = list.state();
     const lengthsBefore = [states.length, emitted.length];
 
-    expect(() => first.setHostSessionId('host-b')).toThrow(
-      /host-b.*host-a/,
-    );
+    expect(() => first.setHostSessionId('host-b')).toThrow(/host-b.*host-a/);
 
     expect(list.state()).toEqual(stateBefore);
     expect([states.length, emitted.length]).toEqual(lengthsBefore);

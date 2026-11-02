@@ -146,9 +146,7 @@ describe('createFakeAgentHarness', () => {
     const controls = heard[0][1] as Parameters<
       AgentProcessEvents['controls']
     >[0];
-    expect(
-      controls.map((control) => [control.id, control.value]),
-    ).toEqual([
+    expect(controls.map((control) => [control.id, control.value])).toEqual([
       ['mode', 'auto'],
       ['effort', 'high'],
       ['model', 'fake-small'],

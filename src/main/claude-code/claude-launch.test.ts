@@ -121,9 +121,7 @@ describe('claudeLaunch', () => {
         expect(adjacentRuns(launch.args, flag.length)).toContainEqual(flag);
       }
       for (const flag of absent) {
-        expect(adjacentRuns(launch.args, flag.length)).not.toContainEqual(
-          flag,
-        );
+        expect(adjacentRuns(launch.args, flag.length)).not.toContainEqual(flag);
       }
     },
   );
