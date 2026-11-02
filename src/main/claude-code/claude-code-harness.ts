@@ -60,13 +60,13 @@ export type ClaudeSpawn = (
 ) => ChildProcessWithoutNullStreams;
 
 // `command` reads the `claude` binary's path, once per spawned session;
-// `permissionTool` the MCP tool Claude asks what auto mode would still prompt;
-// `env` the environment the process inherits; `files` reads saved transcripts,
-// `homeDir` holds the default config folder `.claude`, is what a `~` profile
-// folder resolves against and is where `claude auth` and `claude -p /usage`
-// run, and `paths` joins and compares paths by the rules of the OS `claude`
-// runs on; `clock` stamps each live entry's and agent event's `at`. `files`
-// also reads the profile's `settings.json` at each session start.
+// `permissionTool` the MCP tool Claude asks what the session's permission mode
+// would still prompt; `env` the environment the process inherits; `files` reads
+// saved transcripts, `homeDir` holds the default config folder `.claude`, is
+// what a `~` profile folder resolves against and is where `claude auth` and
+// `claude -p /usage` run, and `paths` joins and compares paths by the rules of
+// the OS `claude` runs on; `clock` stamps each live entry's and agent event's
+// `at`. `files` also reads the profile's `settings.json` at each session start.
 export interface ClaudeCodeHarnessDeps {
   command(): string;
   permissionTool: string;

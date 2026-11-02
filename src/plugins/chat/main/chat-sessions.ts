@@ -1155,6 +1155,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     send('entries', { sessionId, entries: [...session.state.entries] });
     try {
       startProcess(session, harness, profile, false);
+    } catch (error) {
+      send('sessionRested', { sessionId, error: null });
+      throw error;
     } finally {
       save();
     }

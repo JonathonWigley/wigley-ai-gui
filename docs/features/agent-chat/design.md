@@ -9,7 +9,7 @@
 - **Sessions and tabs** — owned sessions, joining the relay, take over and give back, the attention mark.
 - **Chat plugin** — the Chat tab, activity lines, the start prompt, sign-in, app slash commands, images, permission cards, alerts, keys.
 - **Layouts** — chat layouts on the core layout service and the page host.
-- **Plans** — what plans A to E each land.
+- **Plans** — what plans A to F each land.
 - **Out of scope** — follow-ups.
 
 ## Intent
@@ -108,9 +108,10 @@ interview on 2026-10-23; this file is the record of both.
 - **Controls**: the adapter declares its controls and reports their current values; the chat draws whatever it
   declares. Claude changes `mode` by a `set_permission_mode` control request and `effort` and `model` by sending
   `/effort <value>` and `/model <value>` as messages (`claude-stream.md` records each on the installed CLI). The
-  adapter reads Claude's values like this: `default` mode is the `manual` choice; effort stays unset (null) until a
-  `/effort` succeeds, since no event reports it; the model comes from the init event and the last successful
-  `/model`, a full model name shown as its alias.
+  adapter reads Claude's values like this: each control starts at the value the start carries, so a new row starts
+  unset (null) and a resumed or cleared row starts with the values it holds; `default` mode is the `manual` choice;
+  effort then changes only when a `/effort` succeeds, since no event reports it; the model comes from the init event
+  and the last successful `/model`, a full model name shown as its alias.
 - **Interrupt**: Ctrl+C ends the running turn by an `interrupt` control request; the process stays open for the next
   message. A SIGINT would end the process.
 - A result entry's `costUsd` is the difference between consecutive results, since Claude's `total_cost_usd` is
@@ -319,10 +320,10 @@ interview on 2026-10-23; this file is the record of both.
   draws the thumbnails, so a user layout gets the viewer too.
 - **Completion popup**: the editor adapter draws CodeMirror's popups on the page body, so the composer's scroll box
   does not clip the slash completion list.
-- **Permissions**: sessions run in auto mode; anything auto mode would still prompt reaches chat's `permission_prompt`
-  MCP tool, contributed to sessions as forms contributes its tools, and shows as a permission entry. `y` allows, `n`
-  denies and opens a box for an optional reason Claude reads, each answering the oldest pending permission of the
-  session on screen.
+- **Permissions**: a session runs in the `mode` its row holds, `auto` when it holds none; anything that mode would
+  still prompt reaches chat's `permission_prompt` MCP tool, contributed to sessions as forms contributes its tools,
+  and shows as a permission entry. `y` allows, `n` denies and opens a box for an optional reason Claude reads, each
+  answering the oldest pending permission of the session on screen.
 - **Status**: a row's tab status reads what the chat is doing — working, waiting for a permission — and is empty
   while idle.
 - **Turn finished**: when the window is not focused or the session is not on screen, the same alert as a round, and

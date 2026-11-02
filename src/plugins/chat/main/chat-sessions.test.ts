@@ -2363,6 +2363,51 @@ describe('createChatSessions clear', () => {
     expect(test.saved.last()?.sessions).toEqual([
       expect.objectContaining({ hostSessionId: 'uuid-2', sent: false }),
     ]);
+    expect(test.sent('sessionRested')).toEqual([
+      { sessionId: ROW_ID, error: null },
+    ]);
+  });
+
+  it.each([
+    {
+      given: 'an unknown session',
+      arrange: () => {},
+      sessionId: 'row-x',
+      logged: '[chat] clear for unknown session row-x ignored',
+    },
+    {
+      given: 'killAll',
+      arrange: (test: ReturnType<typeof setUp>) => test.chat.killAll(),
+      sessionId: ROW_ID,
+      logged: `[chat] clear for session ${ROW_ID} ignored: chat is stopping`,
+    },
+  ])(
+    'clear_Ignored_ChangesNothingAndLogs given $given',
+    async ({ arrange, sessionId, logged }) => {
+      const test = await started();
+      arrange(test);
+
+      test.chat.clear(sessionId);
+      await flush();
+
+      expect(test.harness.processes).toHaveLength(1);
+      expect(test.hostIdChanges).toEqual([]);
+      expect(test.logged).toContain(logged);
+    },
+  );
+
+  it('clear_ProfileMissing_ThrowsAndChangesNothing', async () => {
+    const test = await started();
+    test.process.events.entry(assistant('kept', 'still here'));
+    const entriesBefore = test.chat.sessions()[0].entries;
+    test.setProfiles([]);
+
+    expect(() => test.chat.clear(ROW_ID)).toThrow('personal');
+
+    expect(test.chat.sessions()[0].entries).toEqual(entriesBefore);
+    expect(test.hostIdChanges).toEqual([]);
+    expect(test.process.calls).toEqual([]);
+    expect(test.harness.processes).toHaveLength(1);
   });
 
   it('clear_HistoryReadInFlight_Dropped', async () => {

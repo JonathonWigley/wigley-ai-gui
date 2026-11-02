@@ -49,7 +49,7 @@ describe('claudeLaunch', () => {
         resume: true,
         projectDir: '/proj',
         profileDir: null,
-        controls: { model: 'opus', effort: 'max' },
+        controls: {},
       },
       TOOL,
       env,
