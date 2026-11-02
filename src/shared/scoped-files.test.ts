@@ -67,6 +67,11 @@ describe('scopedFiles', () => {
       path: '../v',
       call: (scoped: Files) => scoped.modified('../v'),
     },
+    {
+      method: 'append',
+      path: '../a.log',
+      call: (scoped: Files) => scoped.append('../a.log', 'x'),
+    },
   ])('$method rejects $path before any I/O', async ({ path, call }) => {
     const calls: string[] = [];
     const scoped = scopedFiles(recordingCalls(calls), ROOT, posixPaths);
@@ -229,6 +234,10 @@ function recordingCalls(calls: string[]): MemoryFiles {
     modified: async (path) => {
       calls.push(path);
       return inner.modified(path);
+    },
+    append: async (path, text) => {
+      calls.push(path);
+      return inner.append(path, text);
     },
   };
 }

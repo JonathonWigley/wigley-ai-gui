@@ -6,6 +6,7 @@ import {
   watch as watchFolder,
 } from 'node:fs';
 import {
+  appendFile,
   link,
   lstat,
   mkdir,
@@ -51,6 +52,10 @@ export function createNodeFiles(options: NodeFilesOptions): Files {
     readStart: readFirstBytes,
     write: writeAtomically,
     writeBytes: writeAtomically,
+    append: async (file, text) => {
+      await mkdir(path.dirname(file), { recursive: true });
+      await appendFile(file, text, 'utf8');
+    },
     readBytes: (file) => readFile(file),
     list: listFolder,
     watch: watchDebounced,

@@ -49,6 +49,30 @@ export function describeFilesContract(current: () => FilesUnderTest): void {
 
     it.each([
       {
+        before: null,
+        file: 'x/y/log.txt',
+        appends: ['a', 'b'],
+        expected: 'ab',
+      },
+      { before: 'x', file: 'log.txt', appends: ['y'], expected: 'xy' },
+    ])(
+      'append after $before reads $expected',
+      async ({ before, file, appends, expected }) => {
+        const { files, at } = current();
+        if (before !== null) {
+          await files.write(at(file), before);
+        }
+
+        for (const text of appends) {
+          await files.append(at(file), text);
+        }
+
+        expect(await files.read(at(file))).toBe(expected);
+      },
+    );
+
+    it.each([
+      {
         method: 'read',
         call: (files: Files, file: string) => files.read(file),
       },

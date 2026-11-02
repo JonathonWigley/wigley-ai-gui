@@ -26,8 +26,9 @@ export interface WatchOptions {
   onError?(error: unknown): void;
 }
 
-// UTF-8 text files read whole or by their first bytes, any file read or
-// written whole as bytes, and the folders that hold them.
+// UTF-8 text files read whole or by their first bytes, written whole or
+// appended to, any file read or written whole as bytes, and the folders that
+// hold them.
 export interface Files {
   // Rejects when the file is missing with an error naming the path, which
   // `isMissingFile` tells from every other failure.
@@ -45,6 +46,10 @@ export interface Files {
   // `write` for bytes: atomic through the same temp file, creating missing
   // parent folders first.
   writeBytes(path: string, bytes: Uint8Array): Promise<void>;
+  // Appends `text` to the file, creating it (and its folders, as `write` does)
+  // when missing. Not atomic: two appends to one file not awaited in turn may
+  // interleave, so a caller orders its own appends.
+  append(path: string, text: string): Promise<void>;
   // `read` for bytes: the file's bytes exactly as stored. Rejects when the
   // file is missing, naming the path.
   readBytes(path: string): Promise<Uint8Array>;

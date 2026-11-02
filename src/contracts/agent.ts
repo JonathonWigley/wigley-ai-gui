@@ -175,8 +175,52 @@ export interface UsageAgentEvent {
   spendUsd: number | null;
 }
 
+export const MAIN_AGENT_ID = 'main';
+
 // The harness-neutral record of what an agent did, `docs/features/agent-tower/design.md` § Agent events.
-export type AgentEvent = UsageAgentEvent;
+// `at` is epoch milliseconds from the adapter's clock. `agentId` is MAIN_AGENT_ID or a subagent's id (Claude: the
+// Agent tool call's id).
+export type AgentEvent =
+  | UsageAgentEvent
+  | { type: 'sessionStarted'; at: number }
+  | { type: 'sessionEnded'; at: number }
+  | {
+      type: 'agentSpawned';
+      at: number;
+      agentId: string;
+      parentAgentId: string;
+      agentType: string;
+      description: string;
+    }
+  | {
+      type: 'agentFinished';
+      at: number;
+      agentId: string;
+      outcome: 'done' | 'failed';
+    }
+  | {
+      type: 'toolStarted';
+      at: number;
+      agentId: string;
+      toolUseId: string;
+      tool: string;
+    }
+  | {
+      type: 'toolFinished';
+      at: number;
+      agentId: string;
+      toolUseId: string;
+      ok: boolean;
+    }
+  | {
+      type: 'compacted';
+      at: number;
+      beforeTokens: number;
+      afterTokens: number | null;
+    }
+  | { type: 'userMessage'; at: number };
+
+export type AgentEventType = AgentEvent['type'];
 
 // An event caused by `start` or by a call on the process arrives in a later
 // microtask, never inside that call.

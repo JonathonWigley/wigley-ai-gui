@@ -3,7 +3,7 @@ import type { FileEntry, Files, FileStat } from '../contracts/files';
 import { relativeSegments } from './scoped-files';
 
 // `Files` held in memory, the double plugin tests use. `write`, `writeBytes`,
-// `rename`, `trash` and `remove` report each changed file's path to the
+// `append`, `rename`, `trash` and `remove` report each changed file's path to the
 // watches over it at once, with no debounce, so a test drives a save by
 // writing; a rename reports each moved file's old path and its new one. A
 // watch with `recursive: false` reports a change under a subfolder as the
@@ -30,7 +30,7 @@ interface MemoryWatch {
 // under it; the top folder always exists. A path's leading `/` is optional:
 // `/a/b` and `a/b` name one file. Each call that meets a file where a folder
 // must be, or a folder where a file must be, rejects with the code Node's fs
-// gives. Each `write` and `writeBytes` stamps the file's `modified` time with
+// gives. Each `write`, `writeBytes` and `append` stamps the file's `modified` time with
 // `clock.now()`, or `0` with no clock; `rename` carries a file's stamp to its
 // new path.
 export function createMemoryFiles(clock?: Clock): MemoryFiles {
@@ -138,8 +138,8 @@ export function createMemoryFiles(clock?: Clock): MemoryFiles {
       : new TextDecoder('utf-8').decode(content);
   };
 
-  // Stores `content` at `path` and reports it, as `write` and `writeBytes`
-  // both do.
+  // Stores `content` at `path` and reports it, as `write`, `writeBytes` and
+  // `append` all do.
   const store = (path: string, content: string | Uint8Array) => {
     const file = keyOf(path);
     requireFolderCanBeMade(parentOf(file), parentOf(file));
@@ -166,6 +166,10 @@ export function createMemoryFiles(clock?: Clock): MemoryFiles {
     write: async (path, text) => store(path, text),
     // A copy, so the caller may reuse its buffer.
     writeBytes: async (path, bytes) => store(path, bytes.slice()),
+    append: async (path, text) => {
+      const before = contents.has(keyOf(path)) ? textOf(path) : '';
+      store(path, before + text);
+    },
     readBytes: async (path) => bytesOf(path),
     list: async (folder, options) =>
       listUnder(
