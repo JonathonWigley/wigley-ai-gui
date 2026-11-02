@@ -105,13 +105,13 @@ interview on 2026-10-23; this file is the record of both.
 - **Raw entries**: the adapter folds related events into their entries and gathers the rest into one raw entry per
   turn, re-sent under one id as it grows (the start hooks open the first). An event of a type the adapter has no
   name for gets a raw entry of its own, since it signals a new CLI event.
-- **Controls**: the adapter declares its controls and reports their current values; the chat draws whatever it
-  declares. Claude changes `mode` by a `set_permission_mode` control request and `effort` and `model` by sending
-  `/effort <value>` and `/model <value>` as messages (`claude-stream.md` records each on the installed CLI). The
-  adapter reads Claude's values like this: each control starts at the value the start carries, so a new row starts
-  unset (null) and a resumed or cleared row starts with the row's mode and the model and effort the user picked; `default` mode is the `manual` choice;
-  effort then changes only when a `/effort` succeeds, since no event reports it; the model comes from the init event
-  and the last successful `/model`, a full model name shown as its alias.
+- **Controls**: the adapter declares its controls and reports their current values; the chat draws whatever it declares.
+  Claude changes `mode` by a `set_permission_mode` control request and `effort` and `model` by sending `/effort <value>`
+  and `/model <value>` as messages (`claude-stream.md` records each on the installed CLI). The adapter reads Claude's
+  values like this: each control starts at the value the start carries, so a new row starts unset (null) and a resumed
+  or cleared row starts with the row's mode and the model and effort the user picked; `default` mode is the `manual`
+  choice; effort then changes only when a `/effort` succeeds, since no event reports it; the model comes from the init
+  event and the last successful `/model`, a full model name shown as its alias.
 - **Interrupt**: Ctrl+C ends the running turn by an `interrupt` control request; the process stays open for the next
   message. A SIGINT would end the process.
 - A result entry's `costUsd` is the difference between consecutive results, since Claude's `total_cost_usd` is
@@ -230,36 +230,37 @@ interview on 2026-10-23; this file is the record of both.
   - App slash commands run at once, working or not, and never queue; the agent's slash commands queue like any
     message.
 - **Saved sessions**: every session chat runs — started, resumed, or launched by another plugin — is saved in
-  `open-sessions.json` in chat's plugin data: its host session id, folder and profile, in row order, with the
-  selected row (null when it names no row chat still holds), whether a message was ever sent, and whether a turn was
-  running. A new, resumed or launched session is saved only after its process starts, so a start that fails leaves no
-  record. Only the user closing its row removes a record; quit, `install-app`, a process exit and a chat plugin reload keep it. Plugin data is per app
-  instance, so the stable and dev apps, drive runs and the self-test each keep their own list. On start, chat opens a
-  row for each record, in order and unselected, then selects the saved row: each row **rests**, holding no process.
-  A record whose host id is already open, or whose open throws, is skipped and logged.
-  A restored row that was ever sent to has its earlier conversation read from its transcript once, on the first show of
-  its Chat tab or the first send, whichever comes first, while its profile is in the settings, so start reads no
-  transcripts; a send reads it before starting the process, so the read never holds the new turn. The first message sent in a resting row starts its process (`--resume` when a message was ever
-  sent, else `--session-id`); app slash commands run without one, and the controls and the agent's slash commands
-  fill in once it runs. Every process start in a row passes (`AgentStart.controls`, each carrying the value the row
-  holds for it now) the row's `mode` as `--permission-mode` (`auto` when the row holds none), whoever set it, since a
-  mode narrows nothing: a `plan` Claude entered after the user approved its `EnterPlanMode` card carries over. It
-  passes `model` as `--model` and `effort` as `--effort` only once the user picked them through `setControl` in the row
-  and a controls report from the same process then held the picked value: a pick Claude refused, one a clear or exit
-  cut short before it resolved, or one a newer pick replaced is never passed. A model or effort Claude only reported
-  is not passed, so a profile's own model (`opus[1m]`, `opusplan`, a pinned id), which the chip shows as its alias, is
-  never narrowed to the alias. So a row resumed after its process exits, or cleared, keeps its mode and the model and
-  effort the user picked, and its chips show them from the start; a restored row holds none until its process reports
-  them, and passes no model or effort until the user picks one again. A session whose process exits while the app runs rests the same way, a notice in its chat
-  giving the exit and its reason. A restored session whose turn was running at quit gets a notice that the app quit
-  during that turn; one whose profile is no longer in the settings gets a notice naming it, and a send there toasts
-  that the message was not sent because the profile is missing, instead of starting. A message main refuses goes
-  back into the box, above anything typed since, with its images ahead of any attached since. A resting row looks like an
-  idle one in the sidebar. A file that cannot be read is logged (`open sessions not read`) and restores nothing, and the
-  store refuses every save (logged `open sessions not saved: … unreadable`) so the file is never overwritten: it is
-  the user's state. A later clean load lifts the refusal. Closing a
-  row asks the end-session confirmation only while Claude is working, as before; closing removes the row for good
-  but touches no transcript, so the session stays in the start prompt's saved-session list, unarchived.
+  `open-sessions.json` in chat's plugin data: its host session id, folder and profile, in row order, with the selected
+  row (null when it names no row chat still holds), whether a message was ever sent, and whether a turn was running. A
+  new, resumed or launched session is saved only after its process starts, so a start that fails leaves no record. Only
+  the user closing its row removes a record; quit, `install-app`, a process exit and a chat plugin reload keep it.
+  Plugin data is per app instance, so the stable and dev apps, drive runs and the self-test each keep their own list. On
+  start, chat opens a row for each record, in order and unselected, then selects the saved row: each row **rests**,
+  holding no process. A record whose host id is already open, or whose open throws, is skipped and logged. A restored
+  row that was ever sent to has its earlier conversation read from its transcript once, on the first show of its Chat
+  tab or the first send, whichever comes first, while its profile is in the settings, so start reads no transcripts; a
+  send reads it before starting the process, so the read never holds the new turn. The first message sent in a resting
+  row starts its process (`--resume` when a message was ever sent, else `--session-id`); app slash commands run without
+  one, and the controls and the agent's slash commands fill in once it runs. Every process start in a row passes
+  (`AgentStart.controls`, each carrying the value the row holds for it now) the row's `mode` as `--permission-mode`
+  (`auto` when the row holds none), whoever set it, since a mode narrows nothing: a `plan` Claude entered after the user
+  approved its `EnterPlanMode` card carries over. It passes `model` as `--model` and `effort` as `--effort` only once
+  the user picked them through `setControl` in the row and a controls report from the same process then held the picked
+  value: a pick Claude refused, one a clear or exit cut short before it resolved, or one a newer pick replaced is never
+  passed. A model or effort Claude only reported is not passed, so a profile's own model (`opus[1m]`, `opusplan`, a
+  pinned id), which the chip shows as its alias, is never narrowed to the alias. So a row resumed after its process
+  exits, or cleared, keeps its mode and the model and effort the user picked, and its chips show them from the start; a
+  restored row holds none until its process reports them, and passes no model or effort until the user picks one again.
+  A session whose process exits while the app runs rests the same way, a notice in its chat giving the exit and its
+  reason. A restored session whose turn was running at quit gets a notice that the app quit during that turn; one whose
+  profile is no longer in the settings gets a notice naming it, and a send there toasts that the message was not sent
+  because the profile is missing, instead of starting. A message main refuses goes back into the box, above anything
+  typed since, with its images ahead of any attached since. A resting row looks like an idle one in the sidebar. A file
+  that cannot be read is logged (`open sessions not read`) and restores nothing, and the store refuses every save
+  (logged `open sessions not saved: … unreadable`) so the file is never overwritten: it is the user's state. A later
+  clean load lifts the refusal. Closing a row asks the end-session confirmation only while Claude is working, as before;
+  closing removes the row for good but touches no transcript, so the session stays in the start prompt's saved-session
+  list, unarchived.
 - **Controls**: raw `m` mode, `e` effort, `o` model in the chat scope (`<Leader>cm` / `ce` / `co` in the composer box),
   each opening a picker of its choices; raw `c` (`<Leader>cc` in the box) lists every control, so a control a new
   adapter declares is reachable before it gets a key (changed by ui-design plan C).
@@ -286,28 +287,28 @@ interview on 2026-10-23; this file is the record of both.
   the old prompt's next step.
 - **Clear**: `/clear`, `/reset` and `/new` (registered by the page's `clear-commands.ts`, each calling chat's `clear`
   channel call) end the row's process and start a fresh one at once in the same row, under a new host session id and
-  with the row's mode and the model and effort the user picked (§ Saved sessions), so the harness loads its plugins, skills, MCP servers and settings again. A running
-  turn is interrupted first; waiting permission calls are cancelled and queued messages are pulled back into the box,
-  as on an exit; no exit notice shows for the old process and no turn-finished alert fires. The old process's later
-  events are no longer live: none reaches the chat, but its `agentEvent`s that do emit keep the old host id, and its
-  `sessionEnded` still emits; the agents roster folds each host id apart, so that `sessionEnded` drops only the old
-  process's subagents. The row's entries become one info notice, `Conversation cleared`, followed by whatever the
-  fresh process reports at start (its start step draws under the notice as a finished run, such as `1 step · 0s`), and chat logs
-  `conversation cleared in <folder name>`. The row's host id moves through the sessions plugin's
-  `OwnedSession.setHostSessionId(newId)`, which keeps the app session id and its tool sessions, updates the sidebar
-  row and emits `hostSessionChanged` (main) and `sessionHostChanged` (page); it throws when another session holds the
-  id. It changes the id inside the session's one info object, so the row's forms and primer sessions save and look up
-  rounds under the new id. The old process's relay loses its join and its later tool calls are refused, and a late
-  hello for the old id is refused rather than adding a row. The new process's relay joins the same row by the new id. Chat's saved record (with nothing sent yet), the
-  session's docs source (`sessions.hostSessionChanged` disposes it and adds it again, and the page's
-  `sessions.sessionHostChanged` rebuilds a Docs tab that has shown) and the notes page's session
-  (`sessions.sessionHostChanged`) follow the new id, so a later resume reopens only the conversation after the clear;
-  the earlier one stays in the past-sessions list. A resting row clears the same way, with no process to end, starting
-  its fresh process; a start that fails leaves it resting under the new id. A clear for an unknown session, or after
-  chat stops, logs `clear for unknown session <id> ignored` or `clear for session <id> ignored: chat is stopping` and
-  does nothing. The app clears rather than passing `/clear` to Claude: Claude's
-  own clear (measured on 2.1.314) keeps the same process, so its plugins and settings stay as loaded, and it moves
-  the conversation to a new session id the row would not follow.
+  with the row's mode and the model and effort the user picked (§ Saved sessions), so the harness loads its plugins,
+  skills, MCP servers and settings again. A running turn is interrupted first; waiting permission calls are cancelled
+  and queued messages are pulled back into the box, as on an exit; no exit notice shows for the old process and no
+  turn-finished alert fires. The old process's later events are no longer live: none reaches the chat, but its
+  `agentEvent`s that do emit keep the old host id, and its `sessionEnded` still emits; the agents roster folds each host
+  id apart, so that `sessionEnded` drops only the old process's subagents. The row's entries become one info notice,
+  `Conversation cleared`, followed by whatever the fresh process reports at start (its start step draws under the notice
+  as a finished run, such as `1 step · 0s`), and chat logs `conversation cleared in <folder name>`. The row's host id
+  moves through the sessions plugin's `OwnedSession.setHostSessionId(newId)`, which keeps the app session id and its
+  tool sessions, updates the sidebar row and emits `hostSessionChanged` (main) and `sessionHostChanged` (page); it
+  throws when another session holds the id. It changes the id inside the session's one info object, so the row's forms
+  and primer sessions save and look up rounds under the new id. The old process's relay loses its join and its later
+  tool calls are refused, and a late hello for the old id is refused rather than adding a row. The new process's relay
+  joins the same row by the new id. Chat's saved record (with nothing sent yet), the session's docs source
+  (`sessions.hostSessionChanged` disposes it and adds it again, and the page's `sessions.sessionHostChanged` rebuilds a
+  Docs tab that has shown) and the notes page's session (`sessions.sessionHostChanged`) follow the new id, so a later
+  resume reopens only the conversation after the clear; the earlier one stays in the past-sessions list. A resting row
+  clears the same way, with no process to end, starting its fresh process; a start that fails leaves it resting under
+  the new id. A clear for an unknown session, or after chat stops, logs `clear for unknown session <id> ignored` or
+  `clear for session <id> ignored: chat is stopping` and does nothing. The app clears rather than passing `/clear` to
+  Claude: Claude's own clear (measured on 2.1.314) keeps the same process, so its plugins and settings stay as loaded,
+  and it moves the conversation to a new session id the row would not follow.
 - **Sign-in identity**: main runs one sign-in at a time. The page names each sign-in by an id it picks, since the
   sign-in's link can reach the page before `logIn` answers; the link, the end, the code and the cancel all carry it,
   and the dialog ignores a message for any other id. A cancel stops the sign-in at once, so another may start, and

@@ -118,15 +118,16 @@ export interface ChatSessions {
   notice(sessionId: string, text: string, tone: 'info' | 'error'): void;
   // Returns every queued message, then interrupts the process.
   interrupt(sessionId: string): void;
-  // Ends the session's process, interrupting a running turn first, and starts
-  // a fresh one at once under a new host session id with the row's held mode
-  // and the model and effort the user picked that a report confirmed. Waiting permission calls are cancelled and queued messages
-  // returned; the old process raises no exit notice and no turn-finished
-  // alert. The entries become one `Conversation cleared` notice. A resting
-  // session just starts its fresh process. Throws before changing anything
-  // when the profile or harness is missing; a fresh start that throws leaves
-  // the row resting under the new id, then rethrows. Logs and does nothing
-  // for a session chat does not hold, or after `killAll`.
+  // Ends the session's process, interrupting a running turn first, and starts a
+  // fresh one at once under a new host session id with the row's held mode and
+  // the model and effort the user picked that a report confirmed. Waiting
+  // permission calls are cancelled and queued messages returned; the old
+  // process raises no exit notice and no turn-finished alert. The entries
+  // become one `Conversation cleared` notice. A resting session just starts its
+  // fresh process. Throws before changing anything when the profile or harness
+  // is missing; a fresh start that throws leaves the row resting under the new
+  // id, then rethrows. Logs and does nothing for a session chat does not hold,
+  // or after `killAll`.
   clear(sessionId: string): void;
   // Takes the queued message out of the queue and returns it; logs and sends
   // nothing for one no longer queued.
