@@ -524,6 +524,27 @@ describe('createStreamDecoder', () => {
     ]);
   });
 
+  it.each([
+    { origin: undefined, isUnrequested: false },
+    { origin: { kind: 'peer', handback: true }, isUnrequested: true },
+    {
+      origin: { kind: 'task-notification', producer: 'session-task' },
+      isUnrequested: true,
+    },
+  ])(
+    'decode_ResultOrigin_MarksTurnsClaudeRanOnItsOwn ($origin.kind)',
+    ({ origin, isUnrequested }) => {
+      const decoder = createStreamDecoder();
+
+      const decoded = decoder.decode(
+        line({ type: 'result', subtype: 'success', result: '', origin }),
+      );
+
+      expect(decoded.turnEnded).toBe(true);
+      expect(decoded.turnUnrequested).toBe(isUnrequested);
+    },
+  );
+
   it('decode_SecondResult_CostIsTheTurnsShare', () => {
     const decoder = createStreamDecoder();
     const result = (total: number) =>
@@ -957,12 +978,12 @@ describe('createStreamDecoder', () => {
     {
       case: 'compaction',
       lines: [compactBoundary({ pre_tokens: 37559, post_tokens: 9023 })],
-      expected: [{ type: 'compacted', beforeTokens: 37559, afterTokens: 9023 }],
+      expected: [{ type: 'compacted', beforeTokens: 37559, afterTokens: null }],
     },
     {
-      case: 'compaction without after size',
-      lines: [compactBoundary({ pre_tokens: 37559 })],
-      expected: [{ type: 'compacted', beforeTokens: 37559, afterTokens: null }],
+      case: 'compaction without before size',
+      lines: [compactBoundary({ post_tokens: 9023 })],
+      expected: [{ type: 'compacted', beforeTokens: null, afterTokens: null }],
     },
     {
       case: 'background spawn',

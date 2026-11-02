@@ -173,8 +173,9 @@ function startClaudeProcess(
   );
   // One item per message written and not yet answered by a `result`, in
   // write order: Claude queues a message sent mid-turn and answers each with
-  // its own `result`. The item is the effort or model command the message
-  // carries, or null.
+  // its own `result`. A `result` of a turn Claude ran on its own, after a
+  // background subagent ends, answers none of them. The item is the effort or
+  // model command the message carries, or null.
   const pendingTurns: (ControlCommand | null)[] = [];
   let lastStderr: string | null = null;
   let isEndCalled = false;
@@ -376,7 +377,8 @@ function startClaudeProcess(
   // value that is not among the control's choices leaves the control unknown.
   const handleLine = (line: string) => {
     const decoded = decoder.decode(line);
-    const command = decoded.turnEnded ? (pendingTurns.shift() ?? null) : null;
+    const answersSend = decoded.turnEnded && !decoded.turnUnrequested;
+    const command = answersSend ? (pendingTurns.shift() ?? null) : null;
     for (const entry of decoded.entries) {
       const isCommandResult = command !== null && entry.kind === 'result';
       if (!isCommandResult) {

@@ -53,7 +53,7 @@ unchanged. Each event carries `at`, epoch milliseconds from the adapter's inject
 | `agentFinished` | agent id, done or failed | the member steps back |
 | `toolStarted` / `toolFinished` | agent id, tool call id, tool name, success or failure | attack / player hurt |
 | `usage` | agent id, context tokens used, context window size (null until the harness reports it), autocompact limit (configured and reported, each tokens or null), cache expiry (null when unknown), session spend in USD (null until the first result) | fatigue bar (context fill) |
-| `compacted` | tokens before and after | rest / heal |
+| `compacted` | context tokens before and after, each null when the harness does not report it (Claude reports no after-size; the next `usage` carries it) | rest / heal |
 | `userMessage` | — | "message from HQ" |
 | `skillStarted` | skill (`wigley:make`), args; a Skill call or a slash command the user typed | — (the workflow plugin's stages) |
 | `fileWritten` | agent id, the full path of a Write or Edit | — (the workflow plugin's plan detection) |

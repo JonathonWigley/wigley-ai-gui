@@ -212,15 +212,15 @@ export type AgentEvent =
       toolUseId: string;
       ok: boolean;
     }
+  // `beforeTokens` is the context size when the compaction ran, `afterTokens` the context size after it; each null
+  // when the harness does not report it (Claude reports no after-size, so the next `usage` event carries it).
   | {
       type: 'compacted';
       at: number;
-      beforeTokens: number;
+      beforeTokens: number | null;
       afterTokens: number | null;
     }
   | { type: 'userMessage'; at: number };
-
-export type AgentEventType = AgentEvent['type'];
 
 // An event caused by `start` or by a call on the process arrives in a later
 // microtask, never inside that call.

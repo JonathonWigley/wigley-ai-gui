@@ -28,7 +28,9 @@ import { pairToolResult, type ToolEntry, toolUseEntry } from './tool-entries';
 // `entries` are whole entries, not yet stamped with `at`, each replacing an
 // earlier one with its id; `reported` holds control values as Claude names
 // them (`controlValue` maps them); `turnFailed` is true on a turn-ending line
-// that reports an error. `agentEvents` are the line's agent events other than
+// that reports an error; `turnUnrequested` is true on a `result` whose
+// `origin` marks a turn Claude ran with no stdin message behind it.
+// `agentEvents` are the line's agent events other than
 // `usage`, not yet stamped with `at`, in the order the line gave them. The
 // usage side channels: `planRows` from a `rate_limit_event`, `replyUsage` from
 // a main-conversation reply, `turnUsage` from every `result`;
@@ -40,6 +42,7 @@ export interface DecodedLine {
   commands: string[] | null;
   turnEnded: boolean;
   turnFailed: boolean;
+  turnUnrequested: boolean;
   controlResponse: {
     requestId: string;
     error: string | null;
@@ -86,6 +89,13 @@ const GATHERED_SYSTEM_SUBTYPES: ReadonlySet<string> = new Set([
   'thinking_tokens',
 ]);
 
+// The `origin.kind` of a `result` Claude ran on its own: a subagent's
+// hand-back and the task notification after it.
+const UNREQUESTED_ORIGINS: ReadonlySet<string> = new Set([
+  'peer',
+  'task-notification',
+]);
+
 // The names of the tool that starts a subagent: the `tool_use` carries
 // `Agent`, and init's tool list still names it `Task`.
 const SUBAGENT_TOOLS: ReadonlySet<string> = new Set(['Agent', 'Task']);
@@ -100,6 +110,7 @@ function emptyLine(): DecodedLine {
     commands: null,
     turnEnded: false,
     turnFailed: false,
+    turnUnrequested: false,
     controlResponse: null,
     hostRequest: null,
     planRows: null,
@@ -337,11 +348,12 @@ export function createStreamDecoder(
       finishByNotification(event, out);
     }
     if (event.subtype === 'compact_boundary') {
-      const metadata = asJson(event.compact_metadata);
+      // `post_tokens` counts the conversation messages only, not the system prompt and tools `pre_tokens` holds, so
+      // the after-size is left to the next usage event (claude-stream.md § Compaction).
       out.agentEvents.push({
         type: 'compacted',
-        beforeTokens: numberOrNull(metadata.pre_tokens) ?? 0,
-        afterTokens: numberOrNull(metadata.post_tokens),
+        beforeTokens: numberOrNull(asJson(event.compact_metadata).pre_tokens),
+        afterTokens: null,
       });
     }
     if (event.subtype === 'init') {
@@ -580,6 +592,9 @@ export function createStreamDecoder(
     out.turnEnded = true;
     out.turnUsage = turnUsageOf(event, lastMainModel);
     out.turnFailed = isError;
+    out.turnUnrequested = UNREQUESTED_ORIGINS.has(
+      asString(asJson(event.origin).kind),
+    );
     const errorText = asString(event.result);
     if (isError && errorText !== '') {
       out.entries.push(noticeEntry(errorText, 'error', event));

@@ -468,6 +468,29 @@ describe('createClaudeCodeHarness', () => {
     expect(lastActivity(run.heard)).toBe('idle');
   });
 
+  it.each([
+    { kind: 'peer', from: 'a5d2bf79d0e109653', handback: true },
+    { kind: 'task-notification', producer: 'session-task' },
+  ])(
+    'send_UnrequestedResultWhileCommandPending_CommandTakesItsOwnResult (origin $kind)',
+    async (origin) => {
+      const run = await startedQuiet();
+      run.agent.send({ text: '/effort high', images: [] });
+
+      writeLine(run.stdout, { ...successResult('done'), origin });
+      await settle();
+      expect(lastActivity(run.heard)).toBe('working');
+      expect(effortValue(run.heard)).toBeNull();
+      expect(resultEntries(run.heard)).toHaveLength(1);
+
+      writeLine(run.stdout, successResult('Set effort level to high'));
+      await settle();
+      expect(effortValue(run.heard)).toBe('high');
+      expect(resultEntries(run.heard)).toHaveLength(1);
+      expect(lastActivity(run.heard)).toBe('idle');
+    },
+  );
+
   it('send_EffortValueNotAChoice_LeavesEffortUnknown', async () => {
     const run = await startedQuiet();
     run.agent.setControl('effort', 'high');
