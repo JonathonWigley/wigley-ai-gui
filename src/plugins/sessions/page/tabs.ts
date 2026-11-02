@@ -200,19 +200,27 @@ export function roundToastText(label: string, keys: string | null): string {
     : `Round from ${label} — ${keys} to answer`;
 }
 
-// The rows `after` holds that `before` did not, in `after`'s order, and the
-// ids of the rows `before` held that `after` does not, in `before`'s order.
+// The rows `after` holds that `before` did not, in `after`'s order; the ids
+// of the rows `before` held that `after` does not, in `before`'s order; and
+// the rows both hold whose `hostSessionId` differs, in `after`'s order.
 export function rowChanges(
   before: readonly SessionRow[],
   after: readonly SessionRow[],
-): { added: SessionRow[]; removed: string[] } {
-  const beforeIds = new Set(before.map((row) => row.sessionId));
+): { added: SessionRow[]; removed: string[]; changed: SessionRow[] } {
+  const beforeHostIds = new Map(
+    before.map((row) => [row.sessionId, row.hostSessionId]),
+  );
   const afterIds = new Set(after.map((row) => row.sessionId));
   return {
-    added: after.filter((row) => !beforeIds.has(row.sessionId)),
+    added: after.filter((row) => !beforeHostIds.has(row.sessionId)),
     removed: before
       .map((row) => row.sessionId)
       .filter((sessionId) => !afterIds.has(sessionId)),
+    changed: after.filter(
+      (row) =>
+        beforeHostIds.has(row.sessionId) &&
+        beforeHostIds.get(row.sessionId) !== row.hostSessionId,
+    ),
   };
 }
 

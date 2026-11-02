@@ -142,7 +142,8 @@ function routeCall(
 // connected session gets its row at connect, unselected; an owned session gets
 // its row at open, selected unless opened with `select` false, is joined by
 // each relay carrying its host id without a row of its own, a newer relay
-// taking the join from an older one, and ends only by its `end()`. Each
+// taking the join from an older one, moves to a new host id by its
+// `setHostSessionId()`, and ends only by its `end()`. Each
 // session keeps its label while it lasts; a closed row comes back at the end
 // with the session's next mark. `mark`, `activate` and `closeSession` send the
 // whole state only when it changed, and log and ignore a session they cannot
@@ -249,6 +250,32 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       (entry) => entry.session.info.sessionId === hostId,
     );
 
+  // The `AgentSession` object stays the same, so tool sessions started with it
+  // read the new info; a relay already joined keeps its join.
+  const setHostSessionId = (entry: SessionEntry, newHostId: string) => {
+    const appId = entry.session.id;
+    if (!entries.has(appId)) {
+      return;
+    }
+    const oldHostId = entry.session.info.sessionId;
+    const isHeldElsewhere = entriesHolding(newHostId).some(
+      (holder) => holder !== entry,
+    );
+    if (isHeldElsewhere) {
+      throw new Error(
+        `Host session ${newHostId} is already open; owned session ${appId} keeps host ${String(oldHostId)}`,
+      );
+    }
+    entry.session.info = { ...entry.session.info, sessionId: newHostId };
+    const index = rowIndex(appId);
+    if (index !== -1) {
+      rows[index].hostSessionId = newHostId;
+      sendState();
+    }
+    deps.log('sessions', `owned session ${appId} now host ${newHostId}`);
+    deps.emit('hostSessionChanged', entry.session);
+  };
+
   // The relay's handle on an owned session, taking the join from any older
   // relay still holding it: a harness restarting its MCP connection can say
   // hello on the new socket before the old one closes. The handle's `end`
@@ -330,7 +357,11 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       }
       sendState();
       deps.emit('connected', entry.session);
-      return { session: entry.session, end: () => end(entry) };
+      return {
+        session: entry.session,
+        end: () => end(entry),
+        setHostSessionId: (newHostId) => setHostSessionId(entry, newHostId),
+      };
     },
     mark(sessionId) {
       const entry = entries.get(sessionId);

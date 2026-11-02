@@ -376,13 +376,18 @@ describe('tabs', () => {
   });
 
   it('rowChanges lists added rows in their order and removed ids', () => {
-    const changes = rowChanges(
-      stateOf(['a', 'b'], null).rows,
-      stateOf(['b', 'c', 'd'], null).rows,
+    const before = stateOf(['a', 'b', 'e', 'f'], null).rows;
+    const after = stateOf(['f', 'b', 'c', 'e', 'd'], null).rows.map((row) =>
+      row.sessionId === 'b' || row.sessionId === 'f'
+        ? { ...row, hostSessionId: `${row.sessionId}-new` }
+        : row,
     );
+
+    const changes = rowChanges(before, after);
 
     expect(changes.added.map((row) => row.sessionId)).toEqual(['c', 'd']);
     expect(changes.removed).toEqual(['a']);
+    expect(changes.changed.map((row) => row.sessionId)).toEqual(['f', 'b']);
   });
 
   it('isRoundToast only when main selects from none while the mode is hidden', () => {

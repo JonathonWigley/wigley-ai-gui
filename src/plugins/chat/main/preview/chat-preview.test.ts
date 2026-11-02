@@ -21,6 +21,7 @@ function setUp() {
         return {
           session: { id } as never,
           end: () => ends.push(id),
+          setHostSessionId: () => undefined,
         };
       },
       activate,

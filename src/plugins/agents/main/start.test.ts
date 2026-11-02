@@ -45,6 +45,7 @@ function startAgentsPart() {
     open: (info) => ({
       session: { id: PREVIEW_ROW, info },
       end: () => undefined,
+      setHostSessionId: () => undefined,
     }),
     activate: () => undefined,
   };

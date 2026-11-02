@@ -24,7 +24,11 @@ function fakeSessions() {
     open(info: SessionInfo): OwnedSession {
       openedInfo.push(info);
       const id = `owned-${String(info.sessionId)}`;
-      return { session: { id, info }, end: () => ended.push(id) };
+      return {
+        session: { id, info },
+        end: () => ended.push(id),
+        setHostSessionId: () => undefined,
+      };
     },
   };
 }

@@ -115,6 +115,9 @@ function driveSessionInfo(args: JsonObject, sessionId: string): SessionInfo {
   };
 }
 
+// What the drive keeps of a session it connected or opened.
+type StartedSession = Pick<OwnedSession, 'session' | 'end'>;
+
 // Starts a drive run's sessions, each with no form, and ends or selects them:
 // `connect` connects one as a relay would, unselected; `open` opens an owned
 // one, selected, which forms' and the primer's open actions join when they
@@ -128,7 +131,7 @@ export function addDriveActions(
   sessions: Pick<SessionsMainExports, 'connect' | 'open' | 'activate'>,
   onSessionEnded: (listener: (rowId: string) => void) => void,
 ): Disposable {
-  const started = new Map<string, OwnedSession>();
+  const started = new Map<string, StartedSession>();
   let defaultIds = 0;
   onSessionEnded((rowId) => {
     for (const [sessionId, session] of started) {
@@ -142,7 +145,7 @@ export function addDriveActions(
   // Reads the args, then starts the session `start` makes from them.
   const startSession = (
     rawArgs: unknown,
-    start: (info: SessionInfo) => OwnedSession,
+    start: (info: SessionInfo) => StartedSession,
   ) => {
     const args = argsObject(rawArgs);
     const sessionId =

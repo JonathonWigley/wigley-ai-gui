@@ -94,10 +94,14 @@ export interface ConnectedSession extends ToolSession {
 }
 
 // A session the app started itself. `end` ends its tool sessions and removes
-// its row; a second call does nothing.
+// its row; a second call does nothing. `setHostSessionId` moves the session,
+// its row and its relay joins to a new host id, keeping its app id, and emits
+// `hostSessionChanged`; it throws when another session holds that host id and
+// does nothing after `end`.
 export interface OwnedSession {
   session: AgentSession;
   end(): void;
+  setHostSessionId(hostSessionId: string): void;
 }
 
 // `select` false opens a session in the background: its row is added unmarked
@@ -139,16 +143,19 @@ export interface SessionsMainExports {
 // stays until it ends. `selected` is the selected row changing, to another row
 // or to none, emitted after the state that carries it: an open that selects,
 // an activate or mark that selects, or the selected row closing or ending.
+// `hostSessionChanged` is an owned session moved to a new host id, emitted
+// after the state that carries it, with the session's info already updated.
 export interface SessionsMainEvents extends EventShape {
   connected: AgentSession;
   ended: { sessionId: string };
   closed: { sessionId: string };
   selected: { sessionId: string | null };
+  hostSessionChanged: AgentSession;
 }
 
 // One connected session's sidebar row. `marked` is a form not yet opened;
 // `projectDir`, `hostSessionId` and `harness` are the session's info, fixed at
-// connect.
+// connect, `hostSessionId` also changed by the owner through `setHostSessionId`.
 export interface SessionRow {
   sessionId: string;
   label: string;
@@ -237,7 +244,8 @@ export interface SessionsPageExports {
 // `activeChanged` fires when the focused chat pane's session changes, to
 // null for an empty pane. `sessionAdded` fires once for every row main sends,
 // the rows present at start included, and `sessionRemoved` once when that row
-// leaves.
+// leaves. `sessionHostChanged` fires when a kept row's host id changes, after
+// the `sessionAdded` and `sessionRemoved` events of the same state.
 export interface SessionsPageEvents extends EventShape {
   activeChanged: { sessionId: string | null };
   sessionAdded: {
@@ -247,4 +255,5 @@ export interface SessionsPageEvents extends EventShape {
     hostSessionId: string | null;
   };
   sessionRemoved: { sessionId: string };
+  sessionHostChanged: { sessionId: string; hostSessionId: string | null };
 }

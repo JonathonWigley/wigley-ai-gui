@@ -707,6 +707,52 @@ describe('createSessionList', () => {
     expect(contribution.ends()).toBe(0);
   });
 
+  it('setHostSessionId_MovesRowAndJoinToNewId', () => {
+    const { list, states, emitted, calls } = setUp();
+    const contribution = fakeContribution();
+    list.contributeTools([tool('a')], contribution.start);
+    const ownedSession = list.open(owned('a'));
+    const sentBefore = states.length;
+    const callsBefore = calls.length;
+
+    ownedSession.setHostSessionId('b');
+
+    expect(states).toHaveLength(sentBefore + 1);
+    expect(states.at(-1)?.rows.map((row) => row.hostSessionId)).toEqual(['b']);
+    expect(calls.slice(callsBefore)).toEqual([
+      'stateChanged',
+      'emit hostSessionChanged',
+    ]);
+    const changed = emitted.filter(([event]) => event === 'hostSessionChanged');
+    expect(changed).toEqual([['hostSessionChanged', ownedSession.session]]);
+    expect(ownedSession.session.info.sessionId).toBe('b');
+    expect(contribution.started[0].info.sessionId).toBe('b');
+
+    expect(list.connect(owned('b')).session).toBe(ownedSession.session);
+    expect(list.state().rows).toHaveLength(1);
+    expect(list.connect(owned('a')).session).not.toBe(ownedSession.session);
+    expect(list.state().rows.map((row) => row.hostSessionId)).toEqual([
+      'b',
+      'a',
+    ]);
+  });
+
+  it('setHostSessionId_IdHeldElsewhere_ThrowsAndChangesNothing', () => {
+    const { list, states, emitted } = setUp();
+    const first = list.open(owned('host-a'));
+    list.open(owned('host-b'));
+    const stateBefore = list.state();
+    const lengthsBefore = [states.length, emitted.length];
+
+    expect(() => first.setHostSessionId('host-b')).toThrow(
+      /host-b.*host-a/,
+    );
+
+    expect(list.state()).toEqual(stateBefore);
+    expect([states.length, emitted.length]).toEqual(lengthsBefore);
+    expect(first.session.info.sessionId).toBe('host-a');
+  });
+
   it('ends an owned session: its tool sessions, its row and an ended event', () => {
     const { list, states, emitted, logged } = setUp();
     const first = fakeContribution();

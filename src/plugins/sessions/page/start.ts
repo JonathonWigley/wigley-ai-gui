@@ -498,6 +498,12 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
           hostSessionId: row.hostSessionId,
         });
       }
+      for (const row of changes.changed) {
+        api.events.emit('sessionHostChanged', {
+          sessionId: row.sessionId,
+          hostSessionId: row.hostSessionId,
+        });
+      }
       publishFocused();
       checkVisible(closing.length > 0);
     };
