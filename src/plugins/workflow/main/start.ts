@@ -7,7 +7,10 @@ import type {
 import { errorText } from '../../../shared/error-text';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import type { ChatMainEvents, ChatMainExports } from '../../chat/contract';
-import type { SessionsMainEvents } from '../../sessions/contract';
+import type {
+  SessionsMainEvents,
+  SessionsMainExports,
+} from '../../sessions/contract';
 import type {
   MainStage,
   SessionFlow,
@@ -23,6 +26,7 @@ import { signalOf } from './agent-signals';
 import { createCountdown } from './countdown';
 import { createFlowStore } from './flow-store';
 import { createPlanWatch } from './plan-watch';
+import { workflowSelfTestScript } from './selftest-script';
 
 type WorkflowApi = MainApi<
   typeof workflowManifest,
@@ -260,29 +264,38 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     );
     void ready.then(sendFlows);
 
-    const selfTestHooks: WorkflowSelfTestHooks | null =
-      services.selfTest === null
-        ? null
-        : {
-            resetFlows(projectDir) {
-              const reset = store
-                .all()
-                .filter((flow) =>
-                  services.paths.samePath(flow.projectDir, projectDir),
-                );
-              store.resetFlows(projectDir);
-              for (const { sessionId } of reset) {
-                countdown.stop(sessionId);
-                planWatch.follow(sessionId, null);
-              }
-              sendFlows();
-            },
-            onMainTurnEnded(listener) {
-              const registered = (sessionId: string) => listener(sessionId);
-              turnEndedListeners.add(registered);
-              return { dispose: () => turnEndedListeners.delete(registered) };
-            },
-          };
+    if (services.selfTest !== null) {
+      const selfTestHooks: WorkflowSelfTestHooks = {
+        resetFlows(projectDir) {
+          const reset = store
+            .all()
+            .filter((flow) =>
+              services.paths.samePath(flow.projectDir, projectDir),
+            );
+          store.resetFlows(projectDir);
+          for (const { sessionId } of reset) {
+            countdown.stop(sessionId);
+            planWatch.follow(sessionId, null);
+          }
+          sendFlows();
+        },
+        onMainTurnEnded(listener) {
+          const registered = (sessionId: string) => listener(sessionId);
+          turnEndedListeners.add(registered);
+          return { dispose: () => turnEndedListeners.delete(registered) };
+        },
+      };
+      services.selfTest.run(
+        workflowSelfTestScript({
+          homeDir: services.homeDir,
+          files: services.files,
+          chat,
+          sessions: api.dependency<SessionsMainExports>('sessions'),
+          harnesses: services.agentHarnesses,
+          hooks: selfTestHooks,
+        }),
+      );
+    }
 
     const exports: WorkflowMainExports = { addStage };
     return {
