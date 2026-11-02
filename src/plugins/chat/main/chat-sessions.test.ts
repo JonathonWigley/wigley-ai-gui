@@ -719,33 +719,54 @@ describe('createChatSessions', () => {
     ]);
   });
 
-  it('resume_AfterExit_StartCarriesHeldControlValues', async () => {
-    const test = await started();
-    test.chat.send(ROW_ID, { text: 'first', images: [] });
-    await flush();
-    test.process.events.controls([
-      {
-        id: 'model',
-        label: 'Model',
-        choices: [{ value: 'sonnet', label: 'Sonnet' }],
-        value: 'sonnet',
-      },
-      {
-        id: 'effort',
-        label: 'Effort',
-        choices: [{ value: 'high', label: 'High' }],
-        value: null,
-      },
-    ]);
-    test.process.events.ended({ code: 0, error: null });
+  it.each([
+    {
+      case: 'UserSetModel',
+      userSet: [['model', 'fake-large']],
+      reported: { model: 'fake-large', effort: null },
+      controls: { model: 'fake-large' },
+    },
+    {
+      case: 'ReportedOnly1mModelAndEffort',
+      userSet: [],
+      reported: { model: 'opus', effort: 'high' },
+      controls: {},
+    },
+    {
+      case: 'UserSetModeBesideReportedModel',
+      userSet: [['mode', 'plan']],
+      reported: { model: 'opus', effort: 'high', mode: 'acceptEdits' },
+      controls: { mode: 'acceptEdits' },
+    },
+  ])(
+    'resume_AfterExit_StartCarriesUserSetControlValues ($case)',
+    async ({ userSet, reported, controls }) => {
+      const test = await started();
+      test.chat.send(ROW_ID, { text: 'first', images: [] });
+      await flush();
+      for (const [id, value] of userSet) {
+        test.chat.setControl(ROW_ID, id, value);
+      }
+      await flush();
+      // `opus` is the alias Claude's `claude-opus-5-5[1m]` shows as.
+      test.process.events.controls(
+        Object.entries(reported).map(([id, value]) => ({
+          id,
+          label: id,
+          choices: [],
+          value,
+        })),
+      );
+      test.process.events.ended({ code: 0, error: null });
 
-    test.chat.send(ROW_ID, { text: 'second', images: [] });
-    await flush();
+      test.chat.send(ROW_ID, { text: 'second', images: [] });
+      await flush();
 
-    const { request } = test.harness.processes[1];
-    expect(request.resume).toBe(true);
-    expect(request.controls).toEqual({ model: 'sonnet' });
-  });
+      const { request } = test.harness.processes[1];
+      expect(request.resume).toBe(true);
+      expect(request.controls).toEqual(controls);
+    },
+  );
 
   it('controls_storedAndSent', async () => {
     const test = await started();
@@ -2229,13 +2250,6 @@ describe('createChatSessions clear', () => {
     raw: [],
   };
 
-  const MODEL_SONNET: SessionControl = {
-    id: 'model',
-    label: 'Model',
-    choices: [{ value: 'sonnet', label: 'Sonnet' }],
-    value: 'sonnet',
-  };
-
   it('clear_RunningRow_RestartsUnderNewIdWithOneNotice', async () => {
     const test = setUp();
     test.chat.restore(NOTHING_SAVED);
@@ -2245,7 +2259,8 @@ describe('createChatSessions clear', () => {
     test.chat.send(ROW_ID, { text: 'first', images: [] });
     await flush();
     old.events.entry(assistant('extra', 'more'));
-    old.events.controls([MODEL_SONNET]);
+    test.chat.setControl(ROW_ID, 'model', 'fake-large');
+    await flush();
 
     test.chat.clear(ROW_ID);
     await flush();
@@ -2259,7 +2274,7 @@ describe('createChatSessions clear', () => {
     expect(test.harness.processes[1].request).toMatchObject({
       sessionId: 'uuid-2',
       resume: false,
-      controls: { model: 'sonnet' },
+      controls: { model: 'fake-large' },
     });
     expect(old.calls).toContainEqual({ method: 'end' });
     expect(test.hostIdChanges).toEqual(['uuid-2']);

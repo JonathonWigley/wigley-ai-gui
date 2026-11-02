@@ -120,7 +120,7 @@ export interface ChatSessions {
   interrupt(sessionId: string): void;
   // Ends the session's process, interrupting a running turn first, and starts
   // a fresh one at once under a new host session id with the control values
-  // the row holds. Waiting permission calls are cancelled and queued messages
+  // the user set in the row. Waiting permission calls are cancelled and queued messages
   // returned; the old process raises no exit notice and no turn-finished
   // alert. The entries become one `Conversation cleared` notice. A resting
   // session just starts its fresh process. Throws before changing anything
@@ -133,7 +133,8 @@ export interface ChatSessions {
   pullBack(sessionId: string, queuedId: string): void;
   // Throws for a session chat no longer holds or that has no running process,
   // as the process's own `setControl` throws for a value it refuses, so the
-  // caller learns the change was not made.
+  // caller learns the change was not made. A control set this way is the
+  // user's, so every later start in the row passes its held value.
   setControl(sessionId: string, controlId: string, value: string): void;
   answerPermission(
     sessionId: string,
@@ -191,6 +192,9 @@ interface HeldSession {
   queuedCount: number;
   // Processes started in this row, the one running included.
   processStarts: number;
+  // Ids of the controls the user set in this row; a start passes their held
+  // values and no value the process only reported.
+  userSetControls: Set<string>;
   // How the process exited, once its `ended` arrives; a user close logs it.
   exit: { code: number | null; error: string | null } | null;
 }
@@ -244,13 +248,15 @@ function copyState(state: ChatSessionState): ChatSessionState {
   };
 }
 
-// The launch values a process starts with: each held control that has a value.
+// The launch values a process starts with: each held control the user set
+// that has a value.
 function controlValuesOf(
   controls: readonly SessionControl[],
+  userSetControls: ReadonlySet<string>,
 ): Record<string, string> {
   const values: Record<string, string> = {};
   for (const control of controls) {
-    if (control.value !== null) {
+    if (control.value !== null && userSetControls.has(control.id)) {
       values[control.id] = control.value;
     }
   }
@@ -679,6 +685,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       noticeCount: 0,
       queuedCount: 0,
       processStarts: 0,
+      userSetControls: new Set(),
       exit: null,
     };
     held.set(sessionId, session);
@@ -694,7 +701,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     return session;
   }
 
-  // Starts the session's process with the control values the row holds and
+  // Starts the session's process with the control values the user set and
   // records the folder; a throw from the harness leaves the session resting.
   function startProcess(
     session: HeldSession,
@@ -712,7 +719,10 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         resume,
         projectDir,
         profileDir,
-        controls: controlValuesOf(session.state.controls),
+        controls: controlValuesOf(
+          session.state.controls,
+          session.userSetControls,
+        ),
       },
       processEvents(session, session.processStarts, started, profileDir),
     );
@@ -1231,6 +1241,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         throw new Error(`session ${sessionId} has no running process`);
       }
       session.process?.setControl(controlId, value);
+      session.userSetControls.add(controlId);
     },
     answerPermission(sessionId, entryId, answer) {
       const session = liveFor('answerPermission', sessionId);

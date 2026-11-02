@@ -22,6 +22,15 @@ const finished: AgentEvent = {
   outcome: 'done',
 };
 const userMessage: AgentEvent = { type: 'userMessage', at: 3_000 };
+const sessionEnded: AgentEvent = { type: 'sessionEnded', at: 4_000 };
+const spawnedB: AgentEvent = {
+  type: 'agentSpawned',
+  at: 5_000,
+  agentId: 'toolu_b',
+  parentAgentId: MAIN_AGENT_ID,
+  agentType: 'general-purpose',
+  description: 'Write the reducer',
+};
 
 const runningA: RunningAgent = {
   agentId: 'toolu_a',
@@ -30,6 +39,16 @@ const runningA: RunningAgent = {
   startedAt: 1_000,
   toolCalls: 0,
 };
+const runningB: RunningAgent = {
+  agentId: 'toolu_b',
+  agentType: 'general-purpose',
+  description: 'Write the reducer',
+  startedAt: 5_000,
+  toolCalls: 0,
+};
+
+// Row s1's process after a clear, beside its first process `h1`.
+const CLEARED_HOST = 'h2';
 
 // Agents' main part started over a fake `MainApi` whose plugin data is a
 // memory `Files`; `emit` calls the listeners of a qualified event, `sent`
@@ -83,11 +102,11 @@ function startAgentsPart() {
       listener(payload);
     }
   };
-  const agentEvent = (event: AgentEvent) =>
+  const agentEvent = (event: AgentEvent, hostSessionId = 'h1') =>
     emit('chat.agentEvent', {
       sessionId: 's1',
       profileDir: null,
-      hostSessionId: 'h1',
+      hostSessionId,
       event,
     });
   const invoke = (name: string) => handlers.get(name)?.();
@@ -96,8 +115,17 @@ function startAgentsPart() {
 
 const settled = () => new Promise((settle) => setImmediate(settle));
 
+// A step: a sessions event on s1, an agent event from host `h1`, or an agent
+// event from the host it names.
+type Step = string | AgentEvent | { host: string; event: AgentEvent };
+
 describe('agentsMainPart', () => {
-  it.each([
+  it.each<{
+    name: string;
+    steps: Step[];
+    sent: { sessionId: string; running: RunningAgent[] }[];
+    rosters: Record<string, RunningAgent[]>;
+  }>([
     {
       name: 'an event that leaves the roster as it was sends nothing',
       steps: [spawned, userMessage],
@@ -128,12 +156,30 @@ describe('agentsMainPart', () => {
       sent: [],
       rosters: {},
     },
+    {
+      name: "a cleared row's old process ending keeps the new process's subagent",
+      steps: [{ host: CLEARED_HOST, event: spawned }, sessionEnded],
+      sent: [{ sessionId: 's1', running: [runningA] }],
+      rosters: { s1: [runningA] },
+    },
+    {
+      name: "a row's old process ending drops only its own subagents",
+      steps: [spawned, { host: CLEARED_HOST, event: spawnedB }, sessionEnded],
+      sent: [
+        { sessionId: 's1', running: [runningA] },
+        { sessionId: 's1', running: [runningA, runningB] },
+        { sessionId: 's1', running: [runningB] },
+      ],
+      rosters: { s1: [runningB] },
+    },
   ])('$name', ({ steps, sent, rosters }) => {
     const agents = startAgentsPart();
 
     for (const step of steps) {
       if (typeof step === 'string') {
         agents.emit(step, { sessionId: 's1' });
+      } else if ('host' in step) {
+        agents.agentEvent(step.event, step.host);
       } else {
         agents.agentEvent(step);
       }

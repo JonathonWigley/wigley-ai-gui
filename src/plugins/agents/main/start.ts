@@ -26,9 +26,18 @@ type AgentsApi = MainApi<
 
 const NONE: readonly RunningAgent[] = [];
 
-// Hears chat's agent events: logs each in plugin data and folds it into its
-// session's roster, sending the page each roster that changed. A session's
-// roster is dropped when its row closes or ends. Registers the agents layouts,
+// A row's roster as the page sees it: each host session id's subagents, in
+// the order each host id's roster began.
+function rowRoster(
+  hosts: ReadonlyMap<string, readonly RunningAgent[]>,
+): RunningAgent[] {
+  return [...hosts.values()].flat();
+}
+
+// Hears chat's agent events: logs each in plugin data and folds it into the
+// roster of its process's host session id, sending the page each row's roster
+// that changed: every host id's subagents in the row, in fold order. A row's
+// rosters are dropped when it closes or ends. Registers the agents layouts,
 // and holds the layout preview, whose roster `rosters` lists beside the live
 // ones, and hands the self-test its script.
 export const agentsMainPart: MainPart<typeof agentsManifest> = {
@@ -46,21 +55,33 @@ export const agentsMainPart: MainPart<typeof agentsManifest> = {
       files: api.data,
       log: api.services.log,
     });
-    const rosters = new Map<string, readonly RunningAgent[]>();
+    // Row id → host session id → that process's roster. A clear leaves the
+    // old process ending under the same row, so its `sessionEnded` must drop
+    // only its own subagents.
+    const rosters = new Map<string, Map<string, readonly RunningAgent[]>>();
 
     api.events.on('chat.agentEvent', ({ sessionId, hostSessionId, event }) => {
       void agentLog.append(hostSessionId, event);
-      const before = rosters.get(sessionId) ?? NONE;
+      const hosts = rosters.get(sessionId) ?? new Map();
+      const before = hosts.get(hostSessionId) ?? NONE;
       const after = foldAgentEvent(before, event);
       if (after === before) {
         return;
       }
       if (after.length === 0) {
+        hosts.delete(hostSessionId);
+      } else {
+        hosts.set(hostSessionId, after);
+      }
+      if (hosts.size === 0) {
         rosters.delete(sessionId);
       } else {
-        rosters.set(sessionId, after);
+        rosters.set(sessionId, hosts);
       }
-      api.channel.send('rosterChanged', { sessionId, running: [...after] });
+      api.channel.send('rosterChanged', {
+        sessionId,
+        running: rowRoster(hosts),
+      });
     });
 
     const dropRoster = ({ sessionId }: { sessionId: string }) => {
@@ -76,7 +97,7 @@ export const agentsMainPart: MainPart<typeof agentsManifest> = {
 
     api.channel.handle('rosters', () => ({
       ...Object.fromEntries(
-        [...rosters].map(([sessionId, running]) => [sessionId, [...running]]),
+        [...rosters].map(([sessionId, hosts]) => [sessionId, rowRoster(hosts)]),
       ),
       ...preview.rosters(),
     }));

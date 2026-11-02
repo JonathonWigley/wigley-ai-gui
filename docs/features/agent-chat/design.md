@@ -70,8 +70,8 @@ interview on 2026-10-23; this file is the record of both.
  chat main ─► sessions.open(info with a fresh host session id, or the saved one's on resume) ─► row + Chat tab, selected
           └─► AgentHarness.start(...) ─► claude -p --input-format stream-json --output-format stream-json
                                             --include-partial-messages --verbose --session-id <id> (--resume <id> on resume)
-                                            --permission-mode <the row's mode, auto without one> --permission-prompt-tool <chat's tool>
-                                            (--model <m> and --effort <e> when the row holds them)
+                                            --permission-mode <the mode the user set, auto without one> --permission-prompt-tool <chat's tool>
+                                            (--model <m> and --effort <e> when the user set them)
                  │ claude starts the wigley plugin's relay.py, whose hello carries the same session id
                  ▼
  sessions relay ─► connect(info) finds the owned session by host id ─► joins its row (no second row)
@@ -109,7 +109,7 @@ interview on 2026-10-23; this file is the record of both.
   declares. Claude changes `mode` by a `set_permission_mode` control request and `effort` and `model` by sending
   `/effort <value>` and `/model <value>` as messages (`claude-stream.md` records each on the installed CLI). The
   adapter reads Claude's values like this: each control starts at the value the start carries, so a new row starts
-  unset (null) and a resumed or cleared row starts with the values it holds; `default` mode is the `manual` choice;
+  unset (null) and a resumed or cleared row starts with the values the user set; `default` mode is the `manual` choice;
   effort then changes only when a `/effort` succeeds, since no event reports it; the model comes from the init event
   and the last successful `/model`, a full model name shown as its alias.
 - **Interrupt**: Ctrl+C ends the running turn by an `interrupt` control request; the process stays open for the next
@@ -241,11 +241,13 @@ interview on 2026-10-23; this file is the record of both.
   its Chat tab or the first send, whichever comes first, while its profile is in the settings, so start reads no
   transcripts; a send reads it before starting the process, so the read never holds the new turn. The first message sent in a resting row starts its process (`--resume` when a message was ever
   sent, else `--session-id`); app slash commands run without one, and the controls and the agent's slash commands
-  fill in once it runs. Every process start in a row passes the control values the row holds (`AgentStart.controls`,
-  one key per control with a value): Claude gets the held `mode` as `--permission-mode` (`auto` when none is held),
-  `model` as `--model` and `effort` as `--effort`. So a row resumed after its process exits, or cleared, keeps the
-  model, effort and mode the user set, and its chips show them from the start; a restored row holds none until its
-  process reports them. A session whose process exits while the app runs rests the same way, a notice in its chat
+  fill in once it runs. Every process start in a row passes the control values the user set (`AgentStart.controls`,
+  one key per control the user set through `setControl` in the row, carrying the value the row holds for it now):
+  Claude gets that `mode` as `--permission-mode` (`auto` when the user set none), `model` as `--model` and `effort` as
+  `--effort`. A value Claude only reported is not passed, so a profile's own model (`opus[1m]`, `opusplan`, a pinned
+  id), which the chip shows as its alias, is never narrowed to the alias. So a row resumed after its process exits, or
+  cleared, keeps the model, effort and mode the user set, and its chips show them from the start; a restored row
+  holds none until its process reports them, and passes none until the user sets one again. A session whose process exits while the app runs rests the same way, a notice in its chat
   giving the exit and its reason. A restored session whose turn was running at quit gets a notice that the app quit
   during that turn; one whose profile is no longer in the settings gets a notice naming it, and a send there toasts
   that the message was not sent because the profile is missing, instead of starting. A message main refuses goes
@@ -281,15 +283,19 @@ interview on 2026-10-23; this file is the record of both.
   the old prompt's next step.
 - **Clear**: `/clear`, `/reset` and `/new` (registered by the page's `clear-commands.ts`, each calling chat's `clear`
   channel call) end the row's process and start a fresh one at once in the same row, under a new host session id and
-  with the row's control values, so the harness loads its plugins, skills, MCP servers and settings again. A running
+  with the control values the user set, so the harness loads its plugins, skills, MCP servers and settings again. A running
   turn is interrupted first; waiting permission calls are cancelled and queued messages are pulled back into the box,
   as on an exit; no exit notice shows for the old process and no turn-finished alert fires. The old process's later
   events are no longer live: none reaches the chat, but its `agentEvent`s that do emit keep the old host id, and its
-  `sessionEnded` still emits. The row's entries become one info notice, `Conversation cleared`, and chat logs
+  `sessionEnded` still emits; the agents roster folds each host id apart, so that `sessionEnded` drops only the old
+  process's subagents. The row's entries become one info notice, `Conversation cleared`, followed by whatever the
+  fresh process reports at start (its start step draws under the notice as a finished run, such as `1 step · 0s`), and chat logs
   `conversation cleared in <folder name>`. The row's host id moves through the sessions plugin's
   `OwnedSession.setHostSessionId(newId)`, which keeps the app session id and its tool sessions, updates the sidebar
   row and emits `hostSessionChanged` (main) and `sessionHostChanged` (page); it throws when another session holds the
-  id. The new process's relay joins the same row by the new id. Chat's saved record (with nothing sent yet), the
+  id. It changes the id inside the session's one info object, so the row's forms and primer sessions save and look up
+  rounds under the new id. The old process's relay loses its join and its later tool calls are refused, and a late
+  hello for the old id is refused rather than adding a row. The new process's relay joins the same row by the new id. Chat's saved record (with nothing sent yet), the
   session's docs source (`sessions.hostSessionChanged` disposes it and adds it again) and the notes page's session
   (`sessions.sessionHostChanged`) follow the new id, so a later resume reopens only the conversation after the clear;
   the earlier one stays in the past-sessions list. A resting row clears the same way, with no process to end, starting
@@ -320,7 +326,7 @@ interview on 2026-10-23; this file is the record of both.
   draws the thumbnails, so a user layout gets the viewer too.
 - **Completion popup**: the editor adapter draws CodeMirror's popups on the page body, so the composer's scroll box
   does not clip the slash completion list.
-- **Permissions**: a session runs in the `mode` its row holds, `auto` when it holds none; anything that mode would
+- **Permissions**: a session runs in the `mode` the user set in its row, `auto` when the user set none; anything that mode would
   still prompt reaches chat's `permission_prompt` MCP tool, contributed to sessions as forms contributes its tools,
   and shows as a permission entry. `y` allows, `n` denies and opens a box for an optional reason Claude reads, each
   answering the oldest pending permission of the session on screen.

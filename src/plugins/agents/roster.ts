@@ -1,7 +1,7 @@
 import { MAIN_AGENT_ID, type AgentEvent } from '../../contracts/agent';
 import type { RunningAgent } from './contract';
 
-// Folds one agent event into a session's running subagents, kept in spawn order. Returns `running` itself when the
+// Folds one agent event into one process's running subagents, kept in spawn order. Returns `running` itself when the
 // event changes nothing. `sessionEnded` finishes every listed subagent, since a process that exits mid-subagent sends
 // no `agentFinished`.
 export function foldAgentEvent(
