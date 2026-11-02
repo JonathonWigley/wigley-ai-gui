@@ -122,9 +122,10 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
 - **Viewing and editing**: a doc opens rendered; `i` swaps the pane to the vim document editor at the line shown; `:w`
   saves; `:q`, `:wq` and Esc in normal mode each return to the rendered view at the scroll the doc had when `i` opened
   the editor (`:q` and Esc are refused with unsaved edits; `:q!` drops them). YAML frontmatter shows as a field table
-  above the rendered body. The editor highlights markdown, JSON, TOML and YAML by file extension. A file dropped or pasted into the editor
+  above the rendered body. The editor highlights markdown, JSON, TOML and YAML by file extension. A file dropped or pasted into the open editor
   goes in as a markdown link relative to the doc (`![name](path)` for an image); a pasted screenshot is saved beside the
-  doc as `images/<doc name>-<yyyyMMdd-HHmmss>.<ext>` (`docs/features/file-drop/design.md`).
+  doc as `images/<doc name>-<yyyyMMdd-HHmmss>[-<n>].<ext>` (`docs/features/file-drop/design.md`). The rendered view shows
+  `![…]` as its alt text, not the picture.
 - **Load states**: a Claude and a Codex chip on each doc (state; reason on hover), judged for a folder the user picks
   from the index's contexts (`c`), the home folder by default. A session's Docs tab uses that session's own states.
 - **Create**: `a` new doc by kind, `A` new file by path. By kind covers instructions, rule, skill, subagent, command,

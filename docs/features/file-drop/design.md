@@ -21,8 +21,7 @@ file goes in as its path, which the agent opens itself; Chat keeps sending image
 ## Words
 
 - **Drop target** — an element a plugin registers with the core, with what to do with files
-  dropped or pasted on it. Targets nest: a Chat tab, and inside it nothing else; a settings row's
-  input inside Settings mode.
+  dropped or pasted on it. Targets may nest; the innermost wins.
 - **File chip** — a file's path in a vim box's text, drawn as a pill holding a file icon and the
   file's name (`[VideoName.mp4]`). The text holds the full path, so the agent receives the plain
   path, and a draft or `setText` keeps the chip. A path with a space is written in double quotes
@@ -70,17 +69,17 @@ not whitespace, so a path never runs into the text around it.
   extension from the media type. Never deleted by the app. In the self-test and a drive run, the
   folder sits in the run's own home.
 - In the Docs editor a pasted file is saved beside the doc instead, as
-  `images/<doc name>-<yyyyMMdd-HHmmss>.<ext>`, through the docs write guard, so the picture
-  travels with the doc.
+  `images/<doc name>-<yyyyMMdd-HHmmss>[-<n>].<ext>`, through the docs write guard, so the picture
+  travels with the doc. `-<n>` (from 2) names only the second and later files of one take.
 - In Chat a pasted image attaches as an image, saving nothing.
 
 ## Images over 5 MB
 
 The API caps one image at 5 MB of base64 text. An image over it is scaled down and re-encoded,
-stepping down until it fits: JPEG and WebP re-encode as themselves at quality 0.9, PNG and GIF as
-PNG (a GIF keeps its first frame). An image still over the cap after six steps is refused with a
-toast. Chat shrinks an image when it is attached; the Notes popup shrinks one when it joins the Images field, so its send to a
-session always fits. Notes stores every image as PNG, so it converts first and shrinks the PNG form
+stepping down until it fits, each step scaling to 0.75 of the one before: JPEG and WebP re-encode as themselves at quality 0.9, PNG and GIF as
+PNG (a GIF keeps its first frame). An image still over the cap after six steps is refused with the toast `Image could not be shrunk under 5 MB`. Chat shrinks an
+image when it is attached; the Notes popup shrinks a pasted or dropped one when it joins the Images
+field. A GUI capture is not shrunk. Notes stores every image as PNG, so it converts first and shrinks the PNG form
 it stores: a large JPEG loses more resolution there than in Chat.
 
 ## Seams

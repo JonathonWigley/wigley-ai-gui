@@ -1,6 +1,6 @@
 # 06 — Editor-box pane targets: Forms, Primer, Backlog
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 01, 03, 04
 Plan: [plan.md](plan.md)
@@ -116,4 +116,4 @@ and check 4 (a drop on the right pane lands in its box).
 
 ## Proof
 
-<written by wigley:make: commit sha, proof result, concerns; empty until the group lands>
+Commit df9b76a · proof: diff read: every Produces present; whole-tree typecheck and lint pass · concerns: boxDropTake test's null-editor row uses an on-disk file, so its savePasted-never-called check would pass even if the null short-circuit broke (a pasted-file row would catch it); fakes' charBeforeCursor now answers 'x'

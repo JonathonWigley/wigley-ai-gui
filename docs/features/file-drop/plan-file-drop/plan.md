@@ -234,7 +234,7 @@ Boundary rules:
 
 ### Wave 4
 - [x] [Chat drop target](05-chat-target.md) — after 01, 02, 03, 04
-- [ ] [Editor-box pane targets: Forms, Primer, Backlog](06-editor-box-targets.md) — after 01, 03, 04
+- [x] [Editor-box pane targets: Forms, Primer, Backlog](06-editor-box-targets.md) — after 01, 03, 04
 - [x] [Notes popup drop target](07-notes-target.md) — after 02, 03, 04
 - [x] [Docs editor drop target](08-docs-target.md) — after 01, 02, 03, 04
 
@@ -254,6 +254,7 @@ Review base: 87a254cb76dee43042396e82e9a353b6c9573795
 - 05 · 20ccf47 · diff read: every Produces present; chat compiles (typecheck's only errors were in 06's in-progress forms files); chat files pass oxfmt and oxlint · concerns: only add, insert and charBeforeCursor are guarded once the session is gone, as the Decision lists, so a take outliving its session still logs and still saves a pasted non-image
 - 07 · ac8739b · diff read: every Produces present; listener grep clean; notes compiles (typecheck's only errors were in 06's in-progress test fakes); notes files pass lint · concerns: new log lines 'paths not inserted, popup changed: <paths>' and '<n> paths inserted'
 - 08 · e239418 · diff read: every Produces present; docs compiles (typecheck's only errors in 06's in-progress test fakes); lint passes · concerns: AGENTS.md's docs page architecture line doesn't say the editor takes dropped and pasted files (for 09); a non-null assertion on pasteIndexes.shift() in takeFiles
+- 06 · df9b76a · diff read: every Produces present; whole-tree typecheck and lint pass · concerns: boxDropTake test's null-editor row uses an on-disk file, so its savePasted-never-called check would pass even if the null short-circuit broke (a pasted-file row would catch it); fakes' charBeforeCursor now answers 'x'
 ### Contract changes
 - chip-decorations.ts exports: fileChipExtension, snapHead, widenRange → those plus skipsChipRules (an Annotation the host's setText and insert put on their own transactions) and fileChipsOf(state) (the chips of a box's state; [] in a document editor) · why: the host's insert reads the chip under a normal-mode cursor and its own transactions must skip the chip rules · consumers: none outside the host · group 03
 ### Rulings
@@ -275,5 +276,10 @@ Review base: 87a254cb76dee43042396e82e9a353b6c9573795
 - A refused pasted save leaves the other files of the same take linked — the Decisions' 'leaves the rest' — no test row covers a refusal beside another file · group 08
 - Paste indexes for a whole take are reserved at its start — so two overlapping takes never share a file name — none · group 08
 - When every file of a take fails nothing is inserted — none to link — none · group 08
+- Forms and Primer keep each view's drop-target Disposable in a second map beside the views map — disposed with the view — none · group 06
+- Each box's first-mount order comes from a counter — fileEditor's fallback needs an order — none · group 06
+- boxDropTake also logs a failed save, beside its toast — matches the other targets — none · group 06
+- 09's Files widen to two stale lines the workers found outside every Files line: AGENTS.md's image-types.ts listing line (now also the cap and extensionOf/base64LengthOf/base64Of) and the DroppedFile.name comment in src/contracts/drops.ts ('image.png', where 04 names a nameless pasted file 'pasted'), plus any AGENTS.md docs-page line that should say the editor takes files — stale docs are fixed when found — none · lead
 ### Review rounds
 ### Test gate
+- npm test, the whole Vitest suite (340 files) — the range touches src/shared, src/renderer, src/main and six plugins' page code, so nearly every suite is in scope, and the whole suite runs in 14 s · 5279 passed, type tests clean

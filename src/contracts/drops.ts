@@ -2,7 +2,7 @@ import type { Disposable } from './disposable';
 
 // One file dropped or pasted on the page.
 export interface DroppedFile {
-  // The file's name, or a made-up one for a pasted file ("image.png").
+  // The file's name, or `pasted` for a pasted file with an empty name.
   readonly name: string;
   // `File.type`; '' when the OS gave none (a folder).
   readonly mediaType: string;

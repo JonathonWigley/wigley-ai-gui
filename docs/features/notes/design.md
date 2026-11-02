@@ -71,8 +71,8 @@ session.
 - **New session** — chat starts a session in the folder the target resolves to (see The popup), under the attached session's profile when chat owns
   that session, else chat's first profile. Its first message is the brief from the `notes.launchBrief` setting
   (default `A nitpick to fix, noted while working. Make the change, then report.`), then the note's title, body and
-  session line, with the images attached under chat's per-image cap (5 MB of base64 text), which every image meets: the popup shrinks
-  an image over it when it joins the strip. The user stays where they were; the session runs
+  session line, with the images attached under chat's per-image cap (5 MB of base64 text), which a pasted or dropped image meets: the popup
+  shrinks one over it when it joins the strip (a GUI capture is not shrunk). The user stays where they were; the session runs
   in the background and a toast reads `Session started in <folder>`.
 
 ## Seams

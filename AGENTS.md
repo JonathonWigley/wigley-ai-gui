@@ -90,8 +90,8 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  tags, body, line span, done) and turns a create, edit, tag change or delete into the file's new
                  text, in the file's own shape (triage.md § The project's follow-ups in wigley-ai-marketplace) →
                  pure, no I/O; Backlog and Docs' create dialog both write follow-ups through it
-  image-types.ts the image media types the app attaches and pastes (chat and notes share it)
-  page/          page-only DOM builders plugins share: the paste and drop helpers (`file-drop/`: the text-paste rule, the file chip pattern, the image shrink), the layout host
+  image-types.ts the image media types the app attaches and pastes (chat and notes share it), the 5 MB base64 cap `MAX_IMAGE_BASE64`, and the helpers `extensionOf`, `base64LengthOf` and `base64Of`
+  page/          page-only DOM builders plugins share: the paste and drop helpers (`file-drop/`: the text-paste rule, the file chip pattern, the image shrink and its canvas encoder), the layout host
                  (`layout-host/`: showing layouts, the pick chain, drawing a part, rollback, `BaseKit` (the kit every
                  owner's kit extends, with the shared `icon`, `chevron`, `edge`, `rowTrailing` and `duration`) and
                  `ownerBaseKitDeps` (the deps an owner's base kit is built from), the markdown mount
@@ -179,7 +179,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
   docs/          manifest.ts, contract.ts, main/ (the index source registry, docs index runs, file changes inside
                  the indexed folders only and never to a third-party doc, watching the open file, the git statuses
                  of marketplace clone plugin files), page/ (one docs view per source — tree under Starred, Mine and
-                 Third-party roots by the index's `owner`, rendered doc with its status chips, document editor —
+                 Third-party roots by the index's `owner`, rendered doc with its status chips, document editor (takes dropped and pasted files as relative links) —
                  shown as Docs mode over the machine's index, its tree in the side
                  bar, and as a split of tree and doc in each view `addView` hands out, each session's Docs tab
                  among them), layouts/ (the docs Layout contract and the built-in `default` layout)
@@ -369,8 +369,9 @@ round; primer: an open primer), since main, not the page, decides.
   the drag listeners and disposes the prompt's anchors; a view that drops a split calls it.
 - **A drop target** is how files dropped or pasted reach a plugin's text box: the view registers its element and
   `take(files)` with `api.drops.addTarget`, which returns a `Disposable`. The page core routes a drop to the innermost
-  target under the pointer and a paste to the innermost target holding focus (else the one that last held it), and
-  cancels every other file drop so the window never navigates. A target inserts at its box's cursor through
+  target under the pointer and a paste to the innermost target holding focus (else the one that last held it); a
+  one-line input under the pointer or focused takes plain paths ahead of any target; a drop on nothing toasts
+  `Nothing here takes files`, and no file drop navigates the window. A target inserts at its box's cursor through
   `TextEditor.insert`, keeping focus and the vim mode. A file's path comes from the Bridge's `pathForFile`; a file with
   none (a screenshot) is saved through `savePasted` first. What each surface makes of a file is
   `docs/features/file-drop/design.md`.
