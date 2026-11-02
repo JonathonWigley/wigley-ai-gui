@@ -1,7 +1,8 @@
 import type { ChatEntry } from '../contracts/agent';
 import type { Clock } from '../contracts/ambient';
 
-type WithoutAt<E> = E extends unknown ? Omit<E, 'at'> : never;
+// Each member of the union `E` without its `at`.
+export type WithoutAt<E> = E extends unknown ? Omit<E, 'at'> : never;
 
 // A chat entry as the decoder builds it, before it is stamped with its `at`.
 export type EntryDraft = WithoutAt<ChatEntry>;

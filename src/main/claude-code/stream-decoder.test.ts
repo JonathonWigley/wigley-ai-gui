@@ -61,6 +61,101 @@ const toolUseEvent = assistantEvent('m2', [
   },
 ]);
 
+// Agent and subagent lines shaped after the excerpts in
+// docs/features/agent-chat/claude-stream.md § Subagents and § Compaction.
+const toolUseLine = (
+  id: string,
+  name: string,
+  input: object,
+  parent: string | null = null,
+) =>
+  line({
+    ...assistantEvent(`msg-${id}`, [
+      { type: 'tool_use', id, name, input, caller: { type: 'direct' } },
+    ]),
+    parent_tool_use_id: parent,
+  });
+
+const agentCall = (id: string, input: object = {}) =>
+  toolUseLine(id, 'Agent', {
+    description: 'read notes',
+    subagent_type: 'Explore',
+    prompt: 'Read notes.txt.',
+    ...input,
+  });
+
+const toolResultLine = (
+  toolUseId: string,
+  {
+    isError = false,
+    parent = null,
+    toolUseResult = {},
+  }: { isError?: boolean; parent?: string | null; toolUseResult?: object } = {},
+) =>
+  line({
+    type: 'user',
+    message: {
+      role: 'user',
+      content: [
+        {
+          tool_use_id: toolUseId,
+          type: 'tool_result',
+          content: 'ok',
+          ...(isError ? { is_error: true } : {}),
+        },
+      ],
+    },
+    parent_tool_use_id: parent,
+    tool_use_result: toolUseResult,
+  });
+
+const launchReceipt = (toolUseId: string) =>
+  toolResultLine(toolUseId, {
+    toolUseResult: {
+      isAsync: true,
+      status: 'async_launched',
+      agentId: 'a4e45e22d2e0fef8f',
+    },
+  });
+
+const taskNotification = (toolUseId: string, status: string) =>
+  line({
+    type: 'system',
+    subtype: 'task_notification',
+    task_id: 'a4e45e22d2e0fef8f',
+    tool_use_id: toolUseId,
+    status,
+  });
+
+const INTERRUPTED_RESULT_LINE = line({
+  type: 'result',
+  subtype: 'error_during_execution',
+  is_error: true,
+  stop_reason: 'tool_use',
+  terminal_reason: 'aborted_tools',
+});
+
+const compactBoundary = (metadata: object) =>
+  line({
+    type: 'system',
+    subtype: 'compact_boundary',
+    compact_metadata: { trigger: 'manual', ...metadata },
+  });
+
+const spawned = (agentId: string, agentType = 'Explore') => ({
+  type: 'agentSpawned',
+  agentId,
+  parentAgentId: 'main',
+  agentType,
+  description: 'read notes',
+});
+
+const finished = (agentId: string, outcome: 'done' | 'failed') => ({
+  type: 'agentFinished',
+  agentId,
+  outcome,
+});
+
 describe('createStreamDecoder', () => {
   it('decode_Init_ReportsCommandsAndControls', () => {
     const decoder = createStreamDecoder();
@@ -766,5 +861,150 @@ describe('createStreamDecoder', () => {
     const decoded = lines.map((text) => decoder.decode(text));
 
     expect(decoded.at(-1)?.turnUsage).toEqual(expected);
+  });
+
+  it.each([
+    {
+      case: 'main tool',
+      lines: [toolUseLine('t1', 'Read', { file_path: 'notes.txt' })],
+      expected: [
+        { type: 'toolStarted', agentId: 'main', toolUseId: 't1', tool: 'Read' },
+      ],
+    },
+    {
+      case: 'spawn',
+      lines: [agentCall('a1')],
+      expected: [spawned('a1')],
+    },
+    {
+      case: 'spawn without type',
+      lines: [agentCall('a1', { subagent_type: undefined })],
+      expected: [spawned('a1', 'general-purpose')],
+    },
+    {
+      case: 'subagent tool start and ok result',
+      lines: [
+        agentCall('a1'),
+        toolUseLine('t1', 'Read', { file_path: 'notes.txt' }, 'a1'),
+        toolResultLine('t1', { parent: 'a1' }),
+      ],
+      expected: [
+        spawned('a1'),
+        { type: 'toolStarted', agentId: 'a1', toolUseId: 't1', tool: 'Read' },
+        { type: 'toolFinished', agentId: 'a1', toolUseId: 't1', ok: true },
+      ],
+    },
+    {
+      case: 'tool error result',
+      lines: [
+        toolUseLine('t1', 'Read', { file_path: 'missing.txt' }),
+        toolResultLine('t1', { isError: true }),
+      ],
+      expected: [
+        { type: 'toolStarted', agentId: 'main', toolUseId: 't1', tool: 'Read' },
+        { type: 'toolFinished', agentId: 'main', toolUseId: 't1', ok: false },
+      ],
+    },
+    {
+      case: 'agent done',
+      lines: [
+        agentCall('a1', { run_in_background: false }),
+        toolResultLine('a1', { toolUseResult: { status: 'completed' } }),
+      ],
+      expected: [spawned('a1'), finished('a1', 'done')],
+    },
+    {
+      case: 'agent failed',
+      lines: [
+        agentCall('a1', { subagent_type: 'no-such-agent' }),
+        toolResultLine('a1', { isError: true }),
+      ],
+      expected: [spawned('a1', 'no-such-agent'), finished('a1', 'failed')],
+    },
+    {
+      case: 'unknown tool result',
+      lines: [toolResultLine('t9')],
+      expected: [],
+    },
+    {
+      case: 'heartbeat',
+      lines: [
+        agentCall('a1', { run_in_background: false }),
+        line({
+          type: 'tool_progress',
+          tool_use_id: 'a1-heartbeat-0',
+          tool_name: 'Agent',
+          parent_tool_use_id: 'a1',
+          elapsed_time_seconds: 30,
+          heartbeat: true,
+        }),
+      ],
+      expected: [spawned('a1')],
+    },
+    {
+      case: 'compaction',
+      lines: [compactBoundary({ pre_tokens: 37559, post_tokens: 9023 })],
+      expected: [{ type: 'compacted', beforeTokens: 37559, afterTokens: 9023 }],
+    },
+    {
+      case: 'compaction without after size',
+      lines: [compactBoundary({ pre_tokens: 37559 })],
+      expected: [{ type: 'compacted', beforeTokens: 37559, afterTokens: null }],
+    },
+    {
+      case: 'background spawn',
+      lines: [
+        agentCall('b1'),
+        launchReceipt('b1'),
+        toolUseLine('t1', 'Read', { file_path: 'notes.txt' }, 'b1'),
+        toolResultLine('t1', { parent: 'b1' }),
+        taskNotification('b1', 'completed'),
+      ],
+      expected: [
+        spawned('b1'),
+        { type: 'toolStarted', agentId: 'b1', toolUseId: 't1', tool: 'Read' },
+        { type: 'toolFinished', agentId: 'b1', toolUseId: 't1', ok: true },
+        finished('b1', 'done'),
+      ],
+    },
+    {
+      case: 'background launch failed',
+      lines: [agentCall('b1'), toolResultLine('b1', { isError: true })],
+      expected: [spawned('b1'), finished('b1', 'failed')],
+    },
+    {
+      case: 'background stopped',
+      lines: [
+        agentCall('b1'),
+        launchReceipt('b1'),
+        taskNotification('b1', 'stopped'),
+      ],
+      expected: [spawned('b1'), finished('b1', 'failed')],
+    },
+    {
+      case: 'foreground notification then result',
+      lines: [
+        agentCall('a1', { run_in_background: false }),
+        taskNotification('a1', 'completed'),
+        toolResultLine('a1', { toolUseResult: { status: 'completed' } }),
+      ],
+      expected: [spawned('a1'), finished('a1', 'done')],
+    },
+    {
+      case: 'interrupted foreground subagent',
+      lines: [
+        agentCall('a1', { run_in_background: false }),
+        agentCall('b1'),
+        launchReceipt('b1'),
+        INTERRUPTED_RESULT_LINE,
+      ],
+      expected: [spawned('a1'), spawned('b1'), finished('a1', 'failed')],
+    },
+  ])('decode_AgentEvents_$case', ({ lines, expected }) => {
+    const decoder = createStreamDecoder();
+
+    const drafts = lines.flatMap((text) => decoder.decode(text).agentEvents);
+
+    expect(drafts).toEqual(expected);
   });
 });

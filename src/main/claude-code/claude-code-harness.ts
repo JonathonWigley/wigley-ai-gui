@@ -2,6 +2,7 @@ import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import type {
   AccountStatus,
+  AgentEvent,
   AgentHarness,
   AgentProcess,
   AgentProcessEvents,
@@ -45,7 +46,11 @@ import {
   usageEvent,
   withConfiguredPercent,
 } from './session-usage';
-import { createStreamDecoder, type DecodedLine } from './stream-decoder';
+import {
+  type AgentEventDraft,
+  createStreamDecoder,
+  type DecodedLine,
+} from './stream-decoder';
 import { projectFolderName } from './transcripts';
 
 export type ClaudeSpawn = (
@@ -132,7 +137,9 @@ function spawnError(error: Error, command: string, cwd: string): string {
 }
 
 // One `claude` process in stream-json mode. Events a call causes are emitted
-// in a microtask, never inside the call, as the fake harness does.
+// in a microtask, never inside the call, as the fake harness does. Its agent
+// events open with `sessionStarted` and close with `sessionEnded`, just before
+// `ended`; a subagent still running then gets no `agentFinished`.
 function startClaudeProcess(
   deps: ClaudeCodeHarnessDeps,
   request: AgentStart,
@@ -198,6 +205,11 @@ function startClaudeProcess(
     emit(() => events.entry(entry));
   };
 
+  const emitAgentEvent = (draft: AgentEventDraft) => {
+    const event = { ...draft, at: deps.clock.now() } as AgentEvent;
+    emit(() => events.agentEvent(event));
+  };
+
   // Emits the usage event when it differs from the last one in any field but
   // `at`.
   const emitUsage = () => {
@@ -260,6 +272,7 @@ function startClaudeProcess(
       return;
     }
     hasEmittedEnded = true;
+    emitAgentEvent({ type: 'sessionEnded' });
     emit(() => events.ended(end));
   };
 
@@ -370,6 +383,9 @@ function startClaudeProcess(
         emitEntry(entry);
       }
     }
+    for (const draft of decoded.agentEvents) {
+      emitAgentEvent(draft);
+    }
     let hasChanged = false;
     for (const [id, value] of Object.entries(decoded.reported)) {
       const controlId = id as ClaudeControlId;
@@ -433,6 +449,7 @@ function startClaudeProcess(
     }
   });
 
+  emitAgentEvent({ type: 'sessionStarted' });
   emitControls();
   setActivity('idle');
   requestContextUsage();
@@ -464,6 +481,7 @@ function startClaudeProcess(
         images: userInput.images,
         raw: [message],
       });
+      emitAgentEvent({ type: 'userMessage' });
       const typed = CONTROL_COMMAND.exec(userInput.text);
       pendingTurns.push(
         typed === null

@@ -3,10 +3,12 @@ import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type {
+  AgentEvent,
   AgentProcessEvents,
   AgentStart,
   LogInEvents,
 } from '../../contracts/agent';
+import type { Clock } from '../../contracts/ambient';
 import { createMemoryFiles } from '../../shared/memory-files';
 import { posixPaths } from '../../shared/paths/posix-paths';
 import type { Files } from '../../contracts/files';
@@ -64,19 +66,24 @@ function fakeChild() {
 
 const clock = { now: () => 1000 };
 
-// Every event the process emits, as `[event name, payload]`, in emit order.
+// Every event the process emits, as `[event name, payload]`, in emit order,
+// except the agent events other than `usage`, which `agentEvents` holds.
 function recordingEvents() {
   const heard: [string, unknown][] = [];
+  const agentEvents: AgentEvent[] = [];
   const events: AgentProcessEvents = {
     entry: (entry) => heard.push(['entry', entry]),
     controls: (controls) => heard.push(['controls', controls]),
     activity: (activity) => heard.push(['activity', activity]),
     commands: (names) => heard.push(['commands', names]),
     planUsage: (update) => heard.push(['planUsage', update]),
-    agentEvent: (event) => heard.push(['agentEvent', event]),
+    agentEvent: (event) =>
+      event.type === 'usage'
+        ? heard.push(['agentEvent', event])
+        : agentEvents.push(event),
     ended: (end) => heard.push(['ended', end]),
   };
-  return { heard, events };
+  return { heard, agentEvents, events };
 }
 
 // Measured lines, docs/features/agent-chat/claude-stream.md § Usage and § Other events.
@@ -113,7 +120,11 @@ const contextUsageRequest = (requestId: string) => ({
 
 const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
 
-function started(fake = fakeChild(), files: Files = createMemoryFiles()) {
+function started(
+  fake = fakeChild(),
+  files: Files = createMemoryFiles(),
+  harnessClock: Clock = clock,
+) {
   const logged: [string, string][] = [];
   const spawn: ClaudeSpawn = () => fake.child;
   const harness = createClaudeCodeHarness({
@@ -125,11 +136,11 @@ function started(fake = fakeChild(), files: Files = createMemoryFiles()) {
     files,
     homeDir: '/Users/u',
     paths: posixPaths,
-    clock,
+    clock: harnessClock,
   });
-  const { heard, events } = recordingEvents();
+  const { heard, agentEvents, events } = recordingEvents();
   const agent = harness.start(request, events);
-  return { ...fake, agent, heard, logged };
+  return { ...fake, agent, heard, agentEvents, logged };
 }
 
 // A started process with its start events settled and cleared.
@@ -528,6 +539,48 @@ describe('createClaudeCodeHarness', () => {
     await ending;
 
     expect(run.heard).toEqual([['ended', { code: null, error: null }]]);
+  });
+
+  it('start_AgentEvents_StampedAtTheClockAndBracketedBySession', async () => {
+    let at = 1000;
+    const run = started(fakeChild(), createMemoryFiles(), { now: () => at });
+    run.agent.send({ text: 'hi', images: [] });
+    await settle();
+
+    at = 2000;
+    writeLine(run.stdout, {
+      type: 'assistant',
+      message: {
+        model: 'claude-haiku-5-5',
+        id: 'msg_1',
+        role: 'assistant',
+        content: [
+          {
+            type: 'tool_use',
+            id: 't1',
+            name: 'Read',
+            input: { file_path: 'notes.txt' },
+          },
+        ],
+      },
+      parent_tool_use_id: null,
+    });
+    await settle();
+    run.emitter.emit('close', 0, null);
+    await settle();
+
+    expect(run.agentEvents).toEqual([
+      { type: 'sessionStarted', at: 1000 },
+      { type: 'userMessage', at: 1000 },
+      {
+        type: 'toolStarted',
+        at: 2000,
+        agentId: 'main',
+        toolUseId: 't1',
+        tool: 'Read',
+      },
+      { type: 'sessionEnded', at: 2000 },
+    ]);
   });
 
   it('kill_SendsSigtermAtOnceAndEndsClean', async () => {

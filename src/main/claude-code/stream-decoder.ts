@@ -1,6 +1,11 @@
-import type { PlanRowPatch } from '../../contracts/agent';
+import {
+  type AgentEvent,
+  MAIN_AGENT_ID,
+  type PlanRowPatch,
+  type UsageAgentEvent,
+} from '../../contracts/agent';
 import type { ClaudeControlId } from './claude-controls';
-import type { EntryDraft } from '../../shared/entry-stamp';
+import type { EntryDraft, WithoutAt } from '../../shared/entry-stamp';
 import { isJsonObject } from '../../shared/json';
 import {
   asArray,
@@ -23,12 +28,14 @@ import { pairToolResult, type ToolEntry, toolUseEntry } from './tool-entries';
 // `entries` are whole entries, not yet stamped with `at`, each replacing an
 // earlier one with its id; `reported` holds control values as Claude names
 // them (`controlValue` maps them); `turnFailed` is true on a turn-ending line
-// that reports an error. The usage side channels: `planRows` from a
-// `rate_limit_event`, `replyUsage` from a main-conversation reply, `turnUsage`
-// from every `result`; `controlResponse.response` is the reply's data, `{}`
-// when it carries none.
+// that reports an error. `agentEvents` are the line's agent events other than
+// `usage`, not yet stamped with `at`, in the order the line gave them. The
+// usage side channels: `planRows` from a `rate_limit_event`, `replyUsage` from
+// a main-conversation reply, `turnUsage` from every `result`;
+// `controlResponse.response` is the reply's data, `{}` when it carries none.
 export interface DecodedLine {
   entries: EntryDraft[];
+  agentEvents: AgentEventDraft[];
   reported: Partial<Record<ClaudeControlId, string>>;
   commands: string[] | null;
   turnEnded: boolean;
@@ -43,6 +50,10 @@ export interface DecodedLine {
   replyUsage: ReplyUsage | null;
   turnUsage: TurnUsage | null;
 }
+
+// An agent event as the decoder builds it, before it is stamped with its `at`.
+// `usage` is left out: the harness builds it from the usage side channels.
+export type AgentEventDraft = WithoutAt<Exclude<AgentEvent, UsageAgentEvent>>;
 
 export interface StreamDecoder {
   decode(line: string): DecodedLine;
@@ -75,9 +86,16 @@ const GATHERED_SYSTEM_SUBTYPES: ReadonlySet<string> = new Set([
   'thinking_tokens',
 ]);
 
+// The names of the tool that starts a subagent: the `tool_use` carries
+// `Agent`, and init's tool list still names it `Task`.
+const SUBAGENT_TOOLS: ReadonlySet<string> = new Set(['Agent', 'Task']);
+// The type Claude gives an Agent call whose input names none.
+const DEFAULT_AGENT_TYPE = 'general-purpose';
+
 function emptyLine(): DecodedLine {
   return {
     entries: [],
+    agentEvents: [],
     reported: {},
     commands: null,
     turnEnded: false,
@@ -101,6 +119,13 @@ function commandNames(init: Json): string[] {
     (name) => asString(name).replace(/^\//, ''),
   );
   return [...new Set(names)];
+}
+
+// The agent whose line `event` is: a subagent's lines carry its Agent call's id.
+function agentOf(event: Json): string {
+  return typeof event.parent_tool_use_id === 'string'
+    ? event.parent_tool_use_id
+    : MAIN_AGENT_ID;
 }
 
 // The text of a message's text content, a string or text blocks.
@@ -144,6 +169,13 @@ export function createStreamDecoder(
   let openThinking: TextEntry | null = null;
   // Assistant blocks with no streamed entry, per message id.
   const unstreamedCounts = new Map<string, number>();
+  // Agent calls with no `tool_result` and no end event yet, in spawn order.
+  const pendingAgents = new Set<string>();
+  // Background Agent calls whose launch receipt came, waiting for their end
+  // event.
+  const launchedAgents = new Set<string>();
+  // The agent each pending tool call runs under, by tool call id.
+  const toolAgents = new Map<string, string>();
   let rawCount = 0;
   let turnCount = 0;
   // The events entry gathered events join: the first gathered event opens the
@@ -210,7 +242,102 @@ export function createStreamDecoder(
     };
   }
 
+  // A `tool_use` block starts a subagent when it calls the Agent tool, and a
+  // tool call of the line's agent otherwise.
+  function startAgentOrTool(block: Json, event: Json, out: DecodedLine) {
+    const id = asString(block.id);
+    const name = asString(block.name);
+    const agentId = agentOf(event);
+    if (!SUBAGENT_TOOLS.has(name)) {
+      toolAgents.set(id, agentId);
+      out.agentEvents.push({
+        type: 'toolStarted',
+        agentId,
+        toolUseId: id,
+        tool: name,
+      });
+      return;
+    }
+    const input = asJson(block.input);
+    pendingAgents.add(id);
+    out.agentEvents.push({
+      type: 'agentSpawned',
+      agentId: id,
+      parentAgentId: agentId,
+      agentType: asString(input.subagent_type) || DEFAULT_AGENT_TYPE,
+      description: asString(input.description),
+    });
+  }
+
+  function finishAgent(agentId: string, isOk: boolean, out: DecodedLine) {
+    pendingAgents.delete(agentId);
+    launchedAgents.delete(agentId);
+    out.agentEvents.push({
+      type: 'agentFinished',
+      agentId,
+      outcome: isOk ? 'done' : 'failed',
+    });
+  }
+
+  // A pending Agent call's `tool_result` is its subagent's end, except a
+  // background call's launch receipt, which leaves it running until its end
+  // event. Any other paired result finishes its tool call.
+  function finishAgentOrTool(block: Json, event: Json, out: DecodedLine) {
+    const id = asString(block.tool_use_id);
+    const isOk = block.is_error !== true;
+    if (pendingAgents.has(id)) {
+      const isLaunchReceipt =
+        isOk && asJson(event.tool_use_result).isAsync === true;
+      if (isLaunchReceipt) {
+        pendingAgents.delete(id);
+        launchedAgents.add(id);
+        return;
+      }
+      finishAgent(id, isOk, out);
+      return;
+    }
+    const agentId = toolAgents.get(id);
+    if (agentId !== undefined) {
+      toolAgents.delete(id);
+      out.agentEvents.push({
+        type: 'toolFinished',
+        agentId,
+        toolUseId: id,
+        ok: isOk,
+      });
+    }
+  }
+
+  // A subagent's end event; it also comes for other background tasks, whose
+  // `tool_use_id` is no Agent call's.
+  function finishByNotification(event: Json, out: DecodedLine) {
+    const id = asString(event.tool_use_id);
+    if (pendingAgents.has(id) || launchedAgents.has(id)) {
+      finishAgent(id, event.status === 'completed', out);
+    }
+  }
+
+  // An interrupt ends the turn with no `tool_result` for a pending call, so a
+  // result fails every Agent call still pending; a launched background call
+  // waits for its end event.
+  function failPendingAgents(out: DecodedLine) {
+    for (const agentId of pendingAgents) {
+      finishAgent(agentId, false, out);
+    }
+  }
+
   function decodeSystem(event: Json, out: DecodedLine) {
+    if (event.subtype === 'task_notification') {
+      finishByNotification(event, out);
+    }
+    if (event.subtype === 'compact_boundary') {
+      const metadata = asJson(event.compact_metadata);
+      out.agentEvents.push({
+        type: 'compacted',
+        beforeTokens: numberOrNull(metadata.pre_tokens) ?? 0,
+        afterTokens: numberOrNull(metadata.post_tokens),
+      });
+    }
     if (event.subtype === 'init') {
       out.commands = commandNames(event);
       if (typeof event.permissionMode === 'string') {
@@ -398,6 +525,7 @@ export function createStreamDecoder(
         );
       } else if (block.type === 'tool_use') {
         out.entries.push(snapshot(toolEntry(block, event)));
+        startAgentOrTool(block, event, out);
       }
     }
   }
@@ -418,6 +546,7 @@ export function createStreamDecoder(
     if (toolResults.length > 0) {
       for (const block of toolResults) {
         out.entries.push(decodeToolResult(block, event));
+        finishAgentOrTool(block, event, out);
       }
       return;
     }
@@ -440,6 +569,7 @@ export function createStreamDecoder(
   // turn's open blocks, and its events entry takes events until the next init.
   function decodeResult(event: Json, out: DecodedLine) {
     closeOpenBlocks(out);
+    failPendingAgents(out);
     const isError = event.is_error === true;
     out.turnEnded = true;
     out.turnUsage = turnUsageOf(event, lastMainModel);
