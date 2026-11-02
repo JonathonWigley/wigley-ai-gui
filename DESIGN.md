@@ -394,6 +394,13 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   user set carries a neutral "Set" Tag and the default in `fg-tertiary`; a box opens in place inside an InputFrame,
   its check message under it in `status-error`. A file that fails its check shows an error Card at the section's
   top.
+- **Workflow:** three parts, each drawn by the workflow plugin's `default` layout (`docs/features/workflow/design.md`). The chip is
+  one line under a session row: the stage as an accent Tag, its detail in `fg-secondary`, the countdown and the main
+  action as a ghost button; an idle session draws no chip. The strip sits above the Chat composer: the stepper with the
+  current stage lit, the detail, the countdown and every action as buttons; an idle session shows only a dim ghost Start
+  feature. The Flow tab holds the plan's title, the stepper, the stage's detail with the countdown, the plan's tasks
+  under a header per wave (the current wave marked, a task's mark filled once it is done) and the stage's actions; with
+  no plan it shows a `No plan yet` empty state. A disabled action draws disabled.
 - **Floating:** pickers, which-key, help and dialogs use the floating material with `row-list` rows
   and key hints right-aligned in `fg-tertiary`; dialogs, and chat's full-size image viewer, sit over the `scrim`.
 - **Empty states:** one line saying what to do, and the key or action that does it. No
@@ -421,7 +428,7 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   Docs (`docs-docs-*`) in both transparency settings, the docs kind picker, completion list and
   session Docs tab (`docs-kind-picker`, `docs-completion`, `docs-session-tab`), the shell layout
   swap (`forms-shell-layout-*`) and the layout previews (`forms-preview-*`, `primer-preview*`,
-  `chat-chat-preview`). The gallery's and the keys plugin's main parts hand no self-test script, so forms' script
+  `chat-chat-preview`) and the workflow strip and Flow tab (`workflow-strip-*`, `workflow-flow-tab-plan-ready`). The gallery's and the keys plugin's main parts hand no self-test script, so forms' script
   saves the gallery's pages and the shell swap, and no screenshot shows keys' overlays. The agent checks them against
   this file — density, the one accent, each surface on its layer
   and material, sentence case — before handing a UI change to the user.

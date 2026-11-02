@@ -21,8 +21,9 @@ the workflow is editing or adding one stage folder.
 
 ## Status
 
-Designed; not built. `plan-workflow/` builds it, on the clear, the agent events and the row parts that four earlier
-plans landed (`chat.agentEvent`, `sessions.hostSessionChanged`, `addRowPart`).
+Built, in `src/plugins/workflow/`, on the clear, the agent events and the row parts that earlier plans landed
+(`chat.agentEvent`, `sessions.hostSessionChanged`, `addRowPart`). Its self-test script
+(`src/plugins/workflow/main/selftest-script.ts`) drives the fake agent harness through the stages.
 
 ## Vocabulary
 
@@ -40,7 +41,7 @@ plans landed (`chat.agentEvent`, `sessions.hostSessionChanged`, `addRowPart`).
 | idle | it starts; Dismiss on closed; Make in new session hands its plan away | nothing on the row; a dim Start feature on the strip | Start feature |
 | primer | `wigley:feature-primer` starts | the stage | Start feature |
 | feature | `wigley:feature` starts | the stage, and the plan's name once one is written | Open plan, once a plan is written |
-| plan ready | a turn ends in feature after the session wrote a `plan-*/plan.md` whose Tasks hold a box, with no subagent running | the plan's name and task count | Clear & make (Cancel during the countdown), Make in new session, Open plan |
+| plan ready | in feature, a turn ends or the plan changes while the session's `plan-*/plan.md` holds a box under Tasks and no turn or subagent runs | the plan's name and task count | Clear & make (Cancel during the countdown), Make in new session, Open plan |
 | make | `wigley:make` starts | ticked over total, the current wave | Resume make, Open plan |
 | review | `wigley:review` starts in make, or the plan's Run log gains a review round | the review round, ticked over total | Resume make, Open plan |
 | closed | the plan folder is deleted in make or review | the plan's name, done | Retro, Dismiss |
@@ -69,8 +70,8 @@ folder. Only the main agent moves the stage: a subagent's skill or write is not 
   plan)
 
 Each half registers through the workflow plugin's `addStage` export in its process; the built-in stages register the
-same way a user plugin would. Each action is a command the stage declares, joined into the workflow manifest, so a key
-and a button run the same command. The plugin core names no stage: it folds every signal through the registered
+same way a user plugin would. Each action names a command; `stages/index.ts` lists the commands (`WORKFLOW_COMMANDS`) and the manifest
+joins them, so a key and a button run the same command. The plugin core names no stage: it folds every signal through the registered
 entry rules in stage order (`foldFlow(flow, signal, stages)`), the first rule that answers wins, and the flow keeps
 its stage when none answers.
 
@@ -91,12 +92,14 @@ Main folds these, for owned sessions only:
 | turn ended | `chat.agentEvent` `turnEnded` | — |
 | turn started | `chat.agentEvent` `turnStarted` (every turn, a subagent's result turn included) | — |
 | subagent started, finished | `chat.agentEvent` `agentSpawned` with the main agent as parent, `agentFinished` | the agent id |
-| cleared | `sessions.hostSessionChanged` | the new host session id |
-| plan changed | main's watch on the flow's plan folder | ticked, total, current wave, review rounds |
+| cleared | `sessions.hostSessionChanged` | — (the flow is rekeyed to the new host session id) |
+| plan changed | main's watch on the flow's plan folder | the plan's progress: title, ticked, total, current wave, review rounds, the task lines |
 | plan gone | the same watch, the folder deleted | — |
+| handed off, dismissed | the Make in new session and Dismiss actions | — |
 
 `skillStarted`, `fileWritten`, `turnStarted` and `turnEnded` are members of `AgentEvent` (`src/contracts/agent.ts`) that the Claude
-adapter and the fake harness emit, so the fold never reads a harness's JSON. A cleared session keeps its stage:
+adapter and the fake harness emit, so the fold never reads a harness's JSON. A `skillStarted` or `fileWritten` of a subagent is no signal. A `sessionEnded` of the flow's current host session
+(a process that exits mid-turn) gives a subagent-finished signal for each running subagent, then a turn-ended signal. A cleared session keeps its stage:
 Clear & make's own clear must not reset plan ready. `sessions.ended` (main's event for a closed row) drops the session's flow.
 
 ## Where it draws
@@ -131,16 +134,19 @@ The `<Leader>w` group (which-key: workflow), each anchored on the strip and the 
 | `<Leader>wf` | Start feature |
 | `<Leader>wd` | Dismiss |
 
+In the Flow tab (scope `workflow.flow`), `<C-j>` and `<C-k>` scroll a line, and `<C-S-j>` and `<C-S-k>` scroll half a page.
+The layout preview opens on `<Leader>zlw`.
+
 ## Decisions
 
-- **Build on the in-flight plans.** The clear, the agent events and the row parts already have plans; a second copy
-  here would collide with them.
+- **Build on what landed.** The clear, the agent events and the row parts have their own plans and docs; the flow
+  reads their exports and events and keeps no second copy.
 - **The user presses, unless the setting is on.** Clear throws away the interview's conversation, so the default
   waits for the user, and the auto-start counts down with a Cancel.
 - **Cancel is `ww`, not Esc.** The strip is a part inside the Chat tab and holds no key scope, and Esc already leaves
   the chat box.
 - **Agent events, not chat entries.** Detection reads `AgentEvent` so a Codex or wigley-harness adapter drives the
-  flow unchanged; the planned `toolStarted` carries no input, so skills and writes get members of their own.
+  flow unchanged; `toolStarted` carries only the tool's name, no input, so skills and writes get members of their own.
 - **A plan reader of its own.** Backlog reads only plan titles, and the docs index's counts carry no waves or Run log.
 
 ## Out of scope

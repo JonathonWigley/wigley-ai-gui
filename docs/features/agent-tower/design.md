@@ -24,9 +24,9 @@ Built:
 - the `agents` plugin: each session's roster, one JSON-lines event log per host session, one line per running subagent
   under its session's row through sessions' `addRowPart`, and the `Space z l a` layout preview
 
-Waits: plan, plan step, retry and watcher events wait for a producer; `skillStarted`, `fileWritten`, `turnStarted` and
-`turnEnded` wait for the workflow plugin's plan (`docs/features/workflow/design.md`); replay and the tower view wait for
-the tower itself.
+Waits: plan, plan step, retry and watcher events wait for a producer; replay and the tower view wait for the tower
+itself. `skillStarted`, `fileWritten`, `turnStarted` and `turnEnded` are emitted and read by the workflow plugin
+(`docs/features/workflow/design.md`).
 
 ## Vocabulary
 
