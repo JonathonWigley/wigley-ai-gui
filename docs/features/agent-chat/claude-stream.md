@@ -841,7 +841,17 @@ probes 1, 2, 4, 6 and 7), plus three top-level keys the main agent's lines lack:
   `task_notification` when done, both without `subagent_type` and with the owning subagent named:
   `{"type":"system","subtype":"task_started","task_id":"bpdumb7hy","tool_use_id":"toolu_013yMwaFpXAMzqHRy4wXcMto","description":"Sleep for 45 seconds via python3","is_backgrounded":false,"parent_task_id":"a8e9e7aad968da282","owned_by_subagent":true,"task_type":"local_bash"}`.
   Its `task_type` is `local_bash`, against `local_agent`, and its `tool_use_id` is the subagent's own Bash call, so a
-  reader keys a subagent on `task_type":"local_agent"`.
+  reader keys a subagent on `task_type":"local_agent"`. Its `parent_task_id` is the owning subagent's `task_id`, not
+  its Agent call's id, so a reader pairs the two from the subagent's own `task_started`.
+- **The main agent's background Bash** (`run_in_background: true`, Claude 2.1.316, probed 2026-11-02 with
+  `claude -p … --output-format stream-json --verbose`) prints the same task lines with no owner:
+  `background_tasks_changed` listing it, then
+  `{"type":"system","subtype":"task_started","task_id":"bvrvtgapv","tool_use_id":"toolu_016R…","description":"Sleep 6 seconds in background","is_backgrounded":true,"task_type":"local_bash"}`,
+  then the Bash call's `tool_result` (`Command running in background with ID: bvrvtgapv. Output is being written to:
+  <tasks>/bvrvtgapv.output …`). The `result` of the turn comes next, and the task keeps running past it. Its end is
+  `task_updated` (`patch.status` `completed`), then `task_notification` with the same `task_id` and `tool_use_id`,
+  `status` `completed`, `output_file`, and `summary` `Background command "Sleep 6 seconds in background" completed (exit
+  code 0)`, then `background_tasks_changed` with `[]`.
 
 **The Agent call's `tool_result`.**
 

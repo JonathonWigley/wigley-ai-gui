@@ -5,7 +5,7 @@
 - **Status** — what is built now and what waits.
 - **Vocabulary** — agent event, agent id, roster, plan step.
 - **Agent events** — the record every view reads, who emits it, and where it is logged.
-- **The agents plugin** — the roster, the event log and the sidebar's subagent lines.
+- **The agents plugin** — the roster, the event log and the sidebar's subagent and task lines.
 - **The tower** — the game view the seams are built for: constraints, inputs and phases.
 
 A gamified view of a session's agents: each plan step is a floor of a tower, and chibi characters fight their way up
@@ -22,7 +22,7 @@ Built:
 - chat main forwarding each owned session's events as `chat.agentEvent`, carrying
   `{ sessionId, profileDir, hostSessionId, event }`
 - the `agents` plugin: each session's roster, one JSON-lines event log per host session, one line per running subagent
-  under its session's row through sessions' `addRowPart`, and the `Space z l a` layout preview
+  and per running task under its session's row through sessions' `addRowPart`, and the `Space z l a` layout preview
 
 Waits: plan, plan step, retry and watcher events wait for a producer; replay and the tower view wait for the tower
 itself. `skillStarted`, `fileWritten`, `turnStarted` and `turnEnded` are emitted by the Claude adapter and the fake
@@ -34,8 +34,12 @@ harness and read by the workflow plugin (`docs/features/workflow/design.md`).
   on the event bus: `chat.agentEvent` is the bus event that carries one.
 - **Agent id** — which agent an event is about: `main` for the session's own agent, or a subagent's id (Claude: the
   id of the Agent tool call that started it).
-- **Roster** — a session's agents as the agents plugin tracks them from its events: each running subagent with its
-  type, description, start time and tool-call count.
+- **Task** — a process an agent started that runs apart from its turn, such as a background shell command (Claude: a
+  `task_started` whose `task_type` is not `local_agent`; a subagent is a task too in Claude's stream, but the app
+  calls it a subagent and never a task).
+- **Roster** — a session's agents and tasks as the agents plugin tracks them from its events: each running subagent
+  with its type, description, start time and tool-call count, and each running task with its owning agent,
+  description and start time.
 - **Plan step** — one step of the session's task plan, one floor of the tower. Chat's **step** (a tool, thinking or
   raw entry, `agent-chat/design.md` § Vocabulary) is a different thing; the tower always says plan step.
 
@@ -51,6 +55,8 @@ unchanged. Each event carries `at`, epoch milliseconds from the adapter's inject
 | `sessionStarted` / `sessionEnded` | — | enter the tower / results screen |
 | `agentSpawned` | agent id, parent agent id, agent type, description | a party member joins |
 | `agentFinished` | agent id, done or failed | the member steps back |
+| `taskStarted` | task id, agent id (the agent that started it), description | — |
+| `taskFinished` | task id, done or failed | — |
 | `toolStarted` / `toolFinished` | agent id, tool call id, tool name, success or failure | attack / player hurt |
 | `usage` | agent id, context tokens used, context window size (null until the harness reports it), autocompact limit (configured and reported, each tokens or null), cache expiry (null when unknown), session spend in USD (null until the first result) | fatigue bar (context fill) |
 | `compacted` | context tokens before and after, each null when the harness does not report it (Claude reports no after-size; the next `usage` carries it) | rest / heal |
@@ -83,9 +89,17 @@ would emit the same events into `chat.agentEvent`'s payload shape.
   under it, nested levels included; a background call waits for its own end. A `result` whose `origin` is `peer` or
   `task-notification` is a turn Claude ran on its own after a background subagent ended, and the harness matches it to
   no message sent. A resumed session keeps its host session id, so it appends to the same log. Logs are never pruned.
+- **Tasks.** The Claude adapter starts a task on each `task_started` whose `task_type` is not `local_agent`, so a task
+  type Claude adds later shows without a change, and finishes it on its `task_notification` (`completed` is done,
+  any other status failed). A task's agent id is its owning subagent's (its `parent_task_id` paired with the
+  subagent's Agent call through the subagent's own `task_started`), or `main`. A task outlives the turn and the
+  subagent that started it: neither a `result` nor an agent's end finishes it, only its own end event or
+  `sessionEnded`. Foreground Bash calls of a subagent get a task too (`is_backgrounded: false`) and show the same way.
 - **Page** adds a row part through sessions' `addRowPart` and draws, under each session row, one line per running
-  subagent through the `agents` layout: a working dot, the agent type, the description, the elapsed time and the
-  tool-call count. A line goes when its subagent finishes. The lines take no keys and no focus; a click on one
+  subagent and one per running task through the `agents` layout, in start order, each task right under its owning
+  subagent's line, indented, while that subagent runs. A subagent line shows a working dot, the agent type, the
+  description, the elapsed time and the tool-call count; a task line a terminal icon, the description and the
+  elapsed time. A line goes when its subagent or task finishes. The lines take no keys and no focus; a click on one
   selects its session, as the row does. The elapsed time ticks once a second while any line shows.
 
 The same reducer folds a logged session's events, so replay drives the views with the code a live session uses.
