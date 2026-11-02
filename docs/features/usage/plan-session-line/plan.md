@@ -164,5 +164,6 @@ Review base: d66a196a007248071a0c7ad363f22effdd460db7
 - Every self-test script that shows a tab bar with a usage line lists .session-bar-parts in scrollsItself (chat, agents, usage), beside .session-row-status — the per-script pattern; a core-wide exemption was the alternative — a future script showing tab bars must add it too · lead
 ### Review rounds
 - implementation review · ab687fe · NEEDS FIXES (1 important open, 2 minor determined, 1 contradiction; 6 applied in 01b14d9)
+- re-review 1 · 518b755, 53c2810 (correctness) · PASS (1 minor open, settled by the lead per the user's standing note: meter-height tie named in a comment, lead-applied); Fix now answers: drop whole items (53c2810), keep the row-surface check (no change)
 ### Test gate
 - Full suite (npm test) — the range touches the sessions part store, tab bar drawing and the usage view model, which many plugins test through; 4768 passed, no type errors · npm run selftest all passed (797 PASS) at 8545355 · pass
