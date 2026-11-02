@@ -37,7 +37,9 @@
   white-space: nowrap;
 }
 
-/* The meter's row is a full line tall, so a wrapped text starts below it. */
+/* The meter's row is a full line tall, so a wrapped text starts below it. The
+   margin assumes the meter is `space-1` tall (`src/shared/page/ui/meter.css`);
+   a shorter meter lets the wrapped text show through. */
 [data-layout-owner='usage'][data-layout='default'].usage-session-line
   > .ui-meter {
   margin-block: calc(
