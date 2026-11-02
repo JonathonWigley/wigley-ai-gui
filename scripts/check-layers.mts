@@ -189,6 +189,17 @@ const LAYERS: Record<string, LayerRule> = {
     packages: [],
   },
   'src/plugins/agents/contract.ts': { layers: ['src/contracts'], packages: [] },
+  'src/plugins/agents/main': {
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/plugins/agents',
+      'src/plugins/agents/contract.ts',
+      'src/plugins/chat/contract.ts',
+      'src/plugins/sessions/contract.ts',
+    ],
+    packages: [],
+  },
   'src/plugins/chat': {
     layers: [
       'src/contracts',
@@ -642,6 +653,8 @@ const LAYERS: Record<string, LayerRule> = {
     layers: [
       'src/contracts',
       'src/shared',
+      'src/plugins/agents',
+      'src/plugins/agents/main',
       'src/plugins/backlog',
       'src/plugins/backlog/main',
       'src/plugins/chat',
