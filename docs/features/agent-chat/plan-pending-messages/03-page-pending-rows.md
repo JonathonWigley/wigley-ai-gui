@@ -1,6 +1,6 @@
 # 03 — Pending rows, pull-back keys and put-back on the page
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 01, 02
 Plan: [plan.md](plan.md)
@@ -37,3 +37,5 @@ Done when: compiles; `npm run lint` passes; the test gate runs the tests above
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 6c92273 · proof: diff read: every Produces present (putBack amended, see Contract changes); typecheck clean · concerns: held-tab-no-box branch near unreachable; npx --version ran once (nothing installed); activity slot helpers widened into generic slot-part helpers

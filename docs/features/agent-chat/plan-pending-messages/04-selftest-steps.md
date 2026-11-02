@@ -1,6 +1,6 @@
 # 04 — Self-test steps
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 4 · Depends on: 03
 Plan: [plan.md](plan.md)

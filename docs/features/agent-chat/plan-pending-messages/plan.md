@@ -184,7 +184,7 @@ Boundary rules:
 - [x] [The queuedMessage layout part](02-queued-message-part.md) — after 01 (shares `layout.test.ts`)
 
 ### Wave 3
-- [ ] [Pending rows, pull-back keys and put-back on the page](03-page-pending-rows.md) — after 01, 02
+- [x] [Pending rows, pull-back keys and put-back on the page](03-page-pending-rows.md) — after 01, 02
 
 ### Wave 4
 - [ ] [Self-test steps](04-selftest-steps.md) — after 03
@@ -200,7 +200,13 @@ Review base: 7f62c7d
 ### Groups
 - 01 · 04ebdfb · diff read: every Produces present; typecheck clean · concerns: compiler named only chat-commands.test.ts for queued: [] (other listed literals are partial); start.test.ts preview-ignored table lacks a pullBack row
 - 02 · f1adb79 · diff read: every Produces present; typecheck clean · concerns: AGENTS.md part list updated outside Files (stale prose); pre-wrap line breaks left to the live check
+- 03 · 6c92273 · diff read: every Produces present (putBack amended, see Contract changes); typecheck clean · concerns: held-tab-no-box branch near unreachable; npx --version ran once (nothing installed); activity slot helpers widened into generic slot-part helpers
+### Contract changes
+- putBack: (deps: Pick<ChatCommandDeps, 'tabs' | 'log'>, …, messages): void → (deps: Pick<ChatCommandDeps, 'tabs'>, …, messages): boolean · why: each caller logs its own line only when the box took them (a closed session logs nothing, as before) · consumers: none later · group 03
 ### Rulings
 - returned and the drain write carry { text, images } only, no id; a throwing drain write sends queued twice (shift, then restore) — matches the plan's shapes — a page redraw flickers once if wrong · group 01 · group 01
 - label sits on its own line above the text (two divs); root font --wg-font-ui/--wg-text-ui as .chat-activity — matches 'label, then the text' — two CSS/markup lines if a one-line row is wanted · group 02 · group 02
+- ChatTabs gains heldName(sessionId) for the no-box log — needed to name the tab — small surface if unwanted · group 03 · group 03
+- returned for a session with no tab logs 'returned for unknown session <id> ignored' like other listeners, not silent — matches pattern — one log line · group 03 · group 03
+- G and a following focus land on the newest pending row when any exist, overriding the open-last-activity-line hold — stops end with pending rows — a following user sees pending rows instead of the open activity line · group 03 · group 03
 

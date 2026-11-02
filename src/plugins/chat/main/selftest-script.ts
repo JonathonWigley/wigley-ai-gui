@@ -289,6 +289,44 @@ const INTERRUPT_AND_CLOSE_STEPS: SelfTestStep[] = [
     expect: '[chat] chat-selftest is working',
   },
   { keys: ['<C-c>'], expect: '[chat] notice entry added in chat-selftest' },
+  {
+    keys: sendKeys(FAKE_HOLD_TEXT),
+    expect: '[chat] chat-selftest is working',
+  },
+  {
+    keys: sendKeys('pending one'),
+    expect: '[chat] 1 pending message(s) in chat-selftest',
+  },
+  { keys: ['Escape'], expect: '[chat] left the box' },
+  {
+    keys: ['G'],
+    expect: '[chat] following the latest entry',
+    why: 'The latest stop is the pending row, after the entries.',
+  },
+  {
+    keys: ['Enter'],
+    expect: '[chat] pulled back 1 message(s) in chat-selftest',
+  },
+  {
+    keys: ['i', 'Escape', 'Enter'],
+    expect: '[chat] 1 pending message(s) in chat-selftest',
+    why: 'The box holds the pulled-back message.',
+  },
+  {
+    keys: sendKeys('pending two'),
+    expect: '[chat] 2 pending message(s) in chat-selftest',
+    checksFit: true,
+    screenshot: 'pending-rows',
+  },
+  {
+    keys: ['<C-c>'],
+    expect: '[chat] pulled back 2 message(s) in chat-selftest',
+  },
+  {
+    keys: ['Enter'],
+    expect: '[chat] assistant entry added in chat-selftest',
+    why: 'The box holds both pulled-back messages, the oldest on top, and sends them as one.',
+  },
   { keys: ['Escape'], expect: '[chat] left the box' },
   {
     keys: [' ', 'k', 'n'],
@@ -477,7 +515,7 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'interrupt and close',
-    why: "Ctrl+c in the box ends a held turn with the fake's notice, and Cmd+W on a working session asks before y ends it.",
+    why: "Ctrl+c in the box ends a held turn with the fake's notice; messages sent during a held turn wait as pending rows, Enter on one and Ctrl+c pull them back into the box, the oldest on top, and none reaches the process; Cmd+W on a working session asks before y ends it.",
     steps: INTERRUPT_AND_CLOSE_STEPS,
   },
   {
@@ -546,6 +584,9 @@ const EXPECTED_CALLS: FakeAgentCall[] = [
   { method: 'setControl', id: 'effort', value: 'low' },
   { method: 'send', text: FAKE_HOLD_TEXT, imageCount: 0 },
   { method: 'interrupt' },
+  { method: 'send', text: FAKE_HOLD_TEXT, imageCount: 0 },
+  { method: 'interrupt' },
+  { method: 'send', text: 'pending one\npending two', imageCount: 0 },
   { method: 'send', text: FAKE_HOLD_TEXT, imageCount: 0 },
   { method: 'end' },
 ];
