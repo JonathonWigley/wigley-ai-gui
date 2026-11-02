@@ -11,9 +11,11 @@ import type { ProfilePlan, SessionUsage, UsageSnapshot } from '../contract';
 // The pure fold behind usage main: each `with…` returns the same state object
 // when it changes nothing, and keeps the same `snapshot` object when only
 // `held` changes, so a caller sends the snapshot when its object is new.
+// Profiles sharing a `configDir` share one usage, each plan keeping its own
+// `name` and `isDefault`.
 
-// A live row of a kind the profile's poll has not reported yet, with its
-// update's `at`.
+// A live row with its update's `at`, kept until a poll reporting its kind
+// lands, so a poll older than the row cannot overwrite it.
 export interface HeldPatch {
   profileDir: string | null;
   patch: PlanRowPatch;
@@ -63,8 +65,9 @@ export function withProfiles(
 }
 
 // On success the plan takes the poll, then folds that profile's held patches
-// the poll reports and is older than; on failure it keeps its last usage and
-// is marked stale with the reason.
+// the poll reports and is older than, dropping every held patch of a kind it
+// reports; on failure it keeps its last usage and is marked stale with the
+// reason.
 export function withPollResult(
   state: UsageState,
   profileDir: string | null,
@@ -83,7 +86,8 @@ export function withPollResult(
     }
     return withPlan(
       state,
-      { ...plan, error: result.error, stale: true },
+      profileDir,
+      { error: result.error, stale: true },
       state.held,
     );
   }
@@ -101,8 +105,8 @@ export function withPollResult(
   const rows = patchedRows(usage.rows, foldable);
   return withPlan(
     state,
+    profileDir,
     {
-      ...plan,
       usage: rows === usage.rows ? usage : { ...usage, rows },
       lastGoodAt: usage.at,
       error: null,
@@ -112,8 +116,8 @@ export function withPollResult(
   );
 }
 
-// Patches every row of each update row's kind the plan's usage holds; holds
-// the rest until a poll reports their kind.
+// Patches every row of each update row's kind the plan's usage holds, and holds
+// every update row until a poll reports its kind.
 export function withLiveRows(
   state: UsageState,
   profileDir: string | null,
@@ -128,17 +132,16 @@ export function withLiveRows(
   const { usage } = plan;
   const kinds = usage === null ? new Set<string>() : kindsOf(usage.rows);
   const foldable = update.rows.filter((patch) => kinds.has(patch.kind));
-  const toHold = update.rows.filter((patch) => !kinds.has(patch.kind));
-  const held = withHeldPatches(state.held, profileDir, toHold, update.at);
+  const held = withHeldPatches(state.held, profileDir, update.rows, update.at);
   const rows = patchedRows(usage?.rows ?? [], foldable);
   if (usage !== null && rows !== usage.rows) {
-    return withPlan(state, { ...plan, usage: { ...usage, rows } }, held);
+    return withPlan(state, profileDir, { usage: { ...usage, rows } }, held);
   }
   return held === state.held ? state : { ...state, held };
 }
 
 // Replaces the session's entry, or appends one for a new id; `usage` null
-// records only the session's profile.
+// records only the session's profile, keeping a known session's usage.
 export function withSessionUsage(
   state: UsageState,
   sessionId: string,
@@ -146,13 +149,17 @@ export function withSessionUsage(
   usage: UsageAgentEvent | null,
 ): UsageState {
   const { sessions } = state.snapshot;
-  const entry: SessionUsage = { sessionId, profileDir, usage };
   const index = sessions.findIndex((held) => held.sessionId === sessionId);
   if (index === -1) {
-    return withSessions(state, [...sessions, entry]);
+    return withSessions(state, [...sessions, { sessionId, profileDir, usage }]);
   }
   const known = sessions[index];
-  if (known.profileDir === profileDir && known.usage === usage) {
+  const entry: SessionUsage = {
+    sessionId,
+    profileDir,
+    usage: usage ?? known.usage,
+  };
+  if (known.profileDir === profileDir && known.usage === entry.usage) {
     return state;
   }
   return withSessions(state, sessions.with(index, entry));
@@ -254,13 +261,18 @@ function sameHeldPatch(a: HeldPatch, b: HeldPatch): boolean {
   );
 }
 
+// Every plan of `profileDir` with `change`, each keeping its own `name` and
+// `isDefault`.
 function withPlan(
   state: UsageState,
-  plan: ProfilePlan,
+  profileDir: string | null,
+  change: Partial<
+    Pick<ProfilePlan, 'usage' | 'lastGoodAt' | 'error' | 'stale'>
+  >,
   held: readonly HeldPatch[],
 ): UsageState {
   const plans = state.snapshot.plans.map((current) =>
-    current.profileDir === plan.profileDir ? plan : current,
+    current.profileDir === profileDir ? { ...current, ...change } : current,
   );
   return { snapshot: { ...state.snapshot, plans }, held };
 }

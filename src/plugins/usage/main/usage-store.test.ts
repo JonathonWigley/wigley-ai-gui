@@ -84,9 +84,13 @@ const POLL_1000 = usage(1_000, [row('session', 35), row('weekly_all', 61)]);
 const POLL_2000 = usage(2_000, [row('session', 12), row('weekly_all', 64)]);
 
 describe('withPollResult', () => {
+  const personalOnly = [{ name: 'personal', isDefault: true }];
+
   it.each<{
     case: string;
+    profiles?: ChatProfile[];
     results: PollResult[];
+    onDir?: Pick<ProfilePlan, 'name' | 'isDefault'>[];
     expected: Partial<ProfilePlan>;
   }>([
     {
@@ -124,19 +128,52 @@ describe('withPollResult', () => {
         stale: false,
       },
     },
-  ])('withPollResult_$case', ({ results, expected }) => {
-    const state = results.reduce(
-      (current, result) => withPollResult(current, PERSONAL.configDir, result),
-      seeded(),
-    );
+    {
+      case: 'TwoProfilesOnOneDirShareUsageKeepingTheirNames',
+      profiles: [
+        PERSONAL,
+        { name: 'home', configDir: PERSONAL.configDir },
+        WORK,
+      ],
+      results: [ok(POLL_1000), failed('exit 1')],
+      onDir: [
+        { name: 'personal', isDefault: true },
+        { name: 'home', isDefault: false },
+      ],
+      expected: {
+        usage: POLL_1000,
+        lastGoodAt: 1_000,
+        error: 'exit 1',
+        stale: true,
+      },
+    },
+  ])(
+    'withPollResult_$case',
+    ({
+      profiles = [PERSONAL, WORK],
+      results,
+      onDir = personalOnly,
+      expected,
+    }) => {
+      const state = results.reduce(
+        (current, result) =>
+          withPollResult(current, PERSONAL.configDir, result),
+        withProfiles(EMPTY_USAGE_STATE, profiles),
+      );
 
-    expect(planOf(state, PERSONAL)).toEqual({
-      name: 'personal',
-      profileDir: '~/.claude-personal',
-      isDefault: true,
-      ...expected,
-    });
-  });
+      expect(
+        state.snapshot.plans.filter(
+          (plan) => plan.profileDir === PERSONAL.configDir,
+        ),
+      ).toEqual(
+        onDir.map((named) => ({
+          ...named,
+          profileDir: '~/.claude-personal',
+          ...expected,
+        })),
+      );
+    },
+  );
 
   it('withPollResult_UnknownProfileDir_ReturnsSameState', () => {
     const state = seeded();
@@ -202,6 +239,18 @@ describe('withPollResult held patches', () => {
       ],
     },
     {
+      case: 'FoldedLivePatchRefoldsOverAnOlderPoll',
+      given: () =>
+        withLiveRows(
+          withPollResult(seeded(), PERSONAL.configDir, ok(POLL_1000)),
+          PERSONAL.configDir,
+          { rows: [patch('session', 40)], at: 2_000 },
+        ),
+      poll: usage(1_500, [row('session', 30), row('weekly_all', 61)]),
+      expectedSession: 40,
+      expectedHeld: [],
+    },
+    {
       case: 'OtherProfilesPatchUntouched',
       given: () =>
         withLiveRows(seeded(), WORK.configDir, {
@@ -246,7 +295,7 @@ describe('withLiveRows', () => {
     snapshotKept: boolean;
   }>([
     {
-      case: 'HeldKindPatchedKeepingTheRest',
+      case: 'ReportedKindPatchedAndHeldWithItsAt',
       given: () => polled([row('session', 35), row('weekly_all', 61)]),
       patches: [patch('weekly_all', 70)],
       expectedUsage: usage(1_000, [
@@ -261,7 +310,13 @@ describe('withLiveRows', () => {
           isActive: true,
         },
       ]),
-      expectedHeld: [],
+      expectedHeld: [
+        {
+          profileDir: '~/.claude-personal',
+          patch: patch('weekly_all', 70),
+          at: 2_000,
+        },
+      ],
       snapshotKept: false,
     },
     {
@@ -284,7 +339,13 @@ describe('withLiveRows', () => {
           severity: 'warning',
         },
       ]),
-      expectedHeld: [],
+      expectedHeld: [
+        {
+          profileDir: '~/.claude-personal',
+          patch: patch('weekly_scoped', 30),
+          at: 2_000,
+        },
+      ],
       snapshotKept: false,
     },
     {
@@ -525,6 +586,16 @@ describe('session usage', () => {
       expected: [
         { sessionId: 's1', profileDir: '~/.claude-work', usage: SECOND },
         { sessionId: 's2', profileDir: '~/.claude-personal', usage: FIRST },
+      ],
+    },
+    {
+      case: 'OpenAfterEventKeepsUsageAndTakesTheProfile',
+      steps: [
+        event('s1', '~/.claude-work', FIRST),
+        opened('s1', '~/.claude-personal'),
+      ],
+      expected: [
+        { sessionId: 's1', profileDir: '~/.claude-personal', usage: FIRST },
       ],
     },
     {

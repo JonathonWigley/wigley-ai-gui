@@ -86,7 +86,7 @@ describe('usage drive actions', () => {
     const { drive, seeded } = setUp();
 
     await expect(drive.run('seed', { variant: 'odd' })).rejects.toThrow(
-      'variant must be fresh, stale or error',
+      'variant "odd" is none of fresh, stale, error',
     );
     expect(seeded).toEqual([]);
   });

@@ -2,15 +2,14 @@ import type { AgentHarness } from '../../../contracts/agent';
 import type { Clock } from '../../../contracts/ambient';
 import type { Disposable } from '../../../contracts/disposable';
 import type { DriveHost } from '../../../contracts/plugin';
-import { argsObject, optionalString } from '../../../shared/drive-args';
-import { isFakeAgentHarness } from '../../../shared/fake-agent-harness';
-import type { JsonObject } from '../../../shared/json';
-import type { UsageSnapshot } from '../contract';
 import {
-  USAGE_FIXTURE_VARIANTS,
-  type UsageFixtureVariant,
-  usageFixture,
-} from './usage-fixture';
+  argsObject,
+  optionalOneOf,
+  optionalString,
+} from '../../../shared/drive-args';
+import { isFakeAgentHarness } from '../../../shared/fake-agent-harness';
+import type { UsageSnapshot } from '../contract';
+import { USAGE_FIXTURE_VARIANTS, usageFixture } from './usage-fixture';
 
 // `snapshot` is the one the page draws; `seed` replaces it and stops the
 // poller for the run; `pollNow` reads every profile's plan usage and resolves
@@ -26,14 +25,6 @@ export interface UsageDriveDeps {
 
 const DEFAULT_POLL_FAILURE = 'fake poll failed';
 
-function variantOf(args: JsonObject): UsageFixtureVariant {
-  const variant = args.variant ?? 'fresh';
-  if (!USAGE_FIXTURE_VARIANTS.includes(variant as UsageFixtureVariant)) {
-    throw new Error('variant must be fresh, stale or error');
-  }
-  return variant as UsageFixtureVariant;
-}
-
 // `usage.seed`, `usage.snapshot`, `usage.pollNow` and `usage.failNextPoll`.
 // Disposing removes them all.
 export function addDriveActions(
@@ -47,7 +38,8 @@ export function addDriveActions(
       args: '{ "variant"?: "fresh" | "stale" | "error", "sessionId"?: string }',
       async run(rawArgs) {
         const args = argsObject(rawArgs);
-        const variant = variantOf(args);
+        const variant =
+          optionalOneOf(args, 'variant', USAGE_FIXTURE_VARIANTS) ?? 'fresh';
         const sessionId =
           optionalString(args, 'sessionId') ?? deps.selectedSessionId();
         const snapshot = usageFixture(variant, deps.clock.now(), sessionId);

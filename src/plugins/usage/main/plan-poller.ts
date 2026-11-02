@@ -23,8 +23,9 @@ export interface PlanPollerDeps {
 // `start` runs a round and arms the timer; each timer run does the same.
 // `reschedule` re-arms for the last round's start plus the interval read now,
 // running a round at once when that time has passed. `pollNow` runs a round,
-// re-arms from it, and resolves when that round's polls settle. `dispose`
-// clears the timer, and a poll settling after it reports nothing.
+// re-arms from it, and resolves when every profile's poll settles, one already
+// running when it was called included. `dispose` clears the timer, and a poll
+// settling after it reports nothing.
 export interface PlanPoller {
   start(): void;
   pollNow(): Promise<void>;
@@ -33,9 +34,10 @@ export interface PlanPoller {
 }
 
 // Polls every profile's plan usage each interval, never running two polls of
-// one profile at once.
+// one profile at once: a round awaits a profile's running poll instead.
 export function createPlanPoller(deps: PlanPollerDeps): PlanPoller {
-  const running = new Set<string>();
+  // Each running poll, by `configDir`, until it has settled and reported.
+  const inFlight = new Map<string, Promise<void>>();
   let timer: number | null = null;
   let lastRoundAt: number | null = null;
   let disposed = false;
@@ -68,24 +70,27 @@ export function createPlanPoller(deps: PlanPollerDeps): PlanPoller {
     lastRoundAt = deps.clock.now();
     const profiles = deps.profiles();
     deps.roundStarted(profiles);
-    const polls: Promise<void>[] = [];
-    for (const profile of profiles) {
-      if (!running.has(profile.configDir)) {
-        polls.push(poll(profile));
-      }
-    }
-    await Promise.all(polls);
+    await Promise.all(
+      profiles.map(
+        (profile) => inFlight.get(profile.configDir) ?? poll(profile),
+      ),
+    );
   }
 
-  async function poll(profile: ChatProfile): Promise<void> {
-    running.add(profile.configDir);
+  function poll(profile: ChatProfile): Promise<void> {
+    const running = readAndReport(profile).finally(() =>
+      inFlight.delete(profile.configDir),
+    );
+    inFlight.set(profile.configDir, running);
+    return running;
+  }
+
+  async function readAndReport(profile: ChatProfile): Promise<void> {
     let result: PollResult;
     try {
       result = { ok: true, usage: await deps.planUsage(profile.configDir) };
     } catch (reason) {
       result = { ok: false, error: errorText(reason) };
-    } finally {
-      running.delete(profile.configDir);
     }
     if (!disposed) {
       deps.polled(profile, result);

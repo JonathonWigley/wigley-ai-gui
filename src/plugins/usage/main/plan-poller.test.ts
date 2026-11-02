@@ -172,22 +172,49 @@ describe('createPlanPoller', () => {
     ]);
   });
 
-  it('poller_PollNow_ResolvesWhenTheRoundSettles', async () => {
-    const run = setup();
-    let resolved = false;
+  it.each<{
+    case: string;
+    given: (run: ReturnType<typeof setup>) => Promise<void>;
+    expectedCalls: string[];
+  }>([
+    {
+      case: 'NoPollRunning',
+      given: async () => {},
+      expectedCalls: ['~/.claude', '~/.claude-personal'],
+    },
+    {
+      // `~/.claude`'s poll from `start` still runs; `~/.claude-personal`'s
+      // has settled.
+      case: 'PollAlreadyRunning',
+      given: async (run) => {
+        run.poller.start();
+        run.pending.get('~/.claude-personal')?.resolve(usageAt(0));
+        await new Promise((settle) => setImmediate(settle));
+      },
+      expectedCalls: ['~/.claude-personal'],
+    },
+  ])(
+    'poller_PollNow_ResolvesWhenEveryProfileSettles_$case',
+    async ({ given, expectedCalls }) => {
+      const run = setup();
+      await given(run);
+      run.calls.length = 0;
+      let resolved = false;
 
-    void run.poller.pollNow().then(() => {
-      resolved = true;
-    });
-    run.pending.get('~/.claude')?.resolve(usageAt(0));
-    await new Promise((settle) => setImmediate(settle));
-    expect(resolved).toBe(false);
-    run.pending.get('~/.claude-personal')?.resolve(usageAt(0));
-    await new Promise((settle) => setImmediate(settle));
+      void run.poller.pollNow().then(() => {
+        resolved = true;
+      });
+      run.pending.get('~/.claude-personal')?.resolve(usageAt(0));
+      await new Promise((settle) => setImmediate(settle));
+      expect(resolved).toBe(false);
+      run.pending.get('~/.claude')?.resolve(usageAt(0));
+      await new Promise((settle) => setImmediate(settle));
 
-    expect(resolved).toBe(true);
-    expect(run.armedMs()).toEqual([300_000]);
-  });
+      expect(run.calls).toEqual(expectedCalls);
+      expect(resolved).toBe(true);
+      expect(run.armedMs()).toEqual([300_000]);
+    },
+  );
 
   it('poller_Dispose_ClearsTimerAndDropsLateResults', async () => {
     const run = setup();

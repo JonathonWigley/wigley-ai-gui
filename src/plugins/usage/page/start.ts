@@ -42,9 +42,9 @@ const REDRAW_MS = 60_000;
 // (`toggleDetails`, kept in `uiState`), both through the `usage.layout`
 // layout. Hears main's `changed` snapshots (after one `snapshot` read) and
 // `sessions.activeChanged` for the shown session, and redraws both on each,
-// on each layouts set and once a minute for the countdowns. Logs the line's
-// text when it changes, and the details' states when they show, hide or
-// change.
+// on each layouts set and once a minute for the countdowns. Draws nothing
+// until the first snapshot lands. Logs the line's text when it changes, and
+// the details' states when they show, hide or change.
 export const usagePagePart: PagePart<typeof usageManifest> = {
   manifest: usageManifest,
   start(api: UsageApi) {
@@ -66,12 +66,15 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
       log: services.log,
     });
 
-    let snapshot: UsageSnapshot = { plans: [], sessions: [] };
+    // Null until the `snapshot` reply or a `changed` lands.
+    let snapshot: UsageSnapshot | null = null;
+    // Whether the details are open, wanted before the first snapshot too.
+    let detailsOpen = services.uiState.get(DETAILS_OPEN_KEY) === true;
     let shownSessionId = sessions.selectedSessionId();
     const statusSlot = element('span', 'usage-status-slot');
     api.areas.statusBar.contribute(statusSlot, { align: 'end' });
     const detailsSlot = element('div', 'usage-details-slot');
-    // The right-bar contribution while the details are open, null while closed.
+    // The right-bar contribution while the details are drawn, null otherwise.
     let detailsContribution: Disposable | null = null;
     let statusLine: Drawn | null = null;
     let details: Drawn | null = null;
@@ -79,8 +82,8 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
     let lastDetailsText: string | null = null;
 
     // Draws the line again, the last draw disposed first.
-    const drawStatusLine = (now: number) => {
-      const input = statusLineInput(snapshot, shownSessionId, now);
+    const drawStatusLine = (current: UsageSnapshot, now: number) => {
+      const input = statusLineInput(current, shownSessionId, now);
       const last = statusLine;
       statusLine = null;
       callEach<() => void>(
@@ -100,8 +103,8 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
     };
     // Draws the details again, the last draw disposed first, and returns
     // their states text.
-    const drawDetails = (now: number): string => {
-      const input = detailsInput(snapshot, shownSessionId, now);
+    const drawDetails = (current: UsageSnapshot, now: number): string => {
+      const input = detailsInput(current, shownSessionId, now);
       const last = details;
       details = null;
       callEach<() => void>(
@@ -115,45 +118,52 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
       );
       return detailsStatesText(input);
     };
+    // Draws the line, and the details while open, at one `now`; shows the
+    // details on their first draw.
     const redraw = () => {
-      const now = services.clock.now();
-      drawStatusLine(now);
-      if (detailsContribution === null) {
+      if (snapshot === null) {
         return;
       }
-      const text = drawDetails(now);
+      const now = services.clock.now();
+      drawStatusLine(snapshot, now);
+      if (!detailsOpen) {
+        return;
+      }
+      if (detailsContribution === null) {
+        detailsContribution = api.areas.rightBar.contribute(detailsSlot);
+        lastDetailsText = drawDetails(snapshot, now);
+        log(`details shown: ${lastDetailsText}`);
+        return;
+      }
+      const text = drawDetails(snapshot, now);
       if (text !== lastDetailsText) {
         lastDetailsText = text;
         log(`details drawn: ${text}`);
       }
     };
-    const openDetails = () => {
-      detailsContribution = api.areas.rightBar.contribute(detailsSlot);
-      lastDetailsText = drawDetails(services.clock.now());
-      log(`details shown: ${lastDetailsText}`);
-    };
     const closeDetails = () => {
+      if (detailsContribution === null) {
+        return;
+      }
       const contribution = detailsContribution;
       const last = details;
       detailsContribution = null;
       details = null;
       lastDetailsText = null;
       callEach<() => void>(
-        [() => contribution?.dispose(), () => last?.dispose()],
+        [() => contribution.dispose(), () => last?.dispose()],
         (step) => step(),
       );
       log('details hidden');
     };
 
-    let heardChanged = false;
     api.channel.on('changed', (next) => {
-      heardChanged = true;
       snapshot = next;
       redraw();
     });
     api.channel.invoke('snapshot').then(
       (first) => {
-        if (!heardChanged) {
+        if (snapshot === null) {
           snapshot = first;
           redraw();
         }
@@ -170,10 +180,6 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
     };
     services.timers.set(tick, REDRAW_MS);
 
-    drawStatusLine(services.clock.now());
-    if (services.uiState.get(DETAILS_OPEN_KEY) === true) {
-      openDetails();
-    }
     api.layouts.show<Layout>({
       defaultLayout,
       read: readUsageLayout,
@@ -187,11 +193,14 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
     return {
       commands: {
         toggleDetails() {
-          if (detailsContribution === null) {
-            services.uiState.set(DETAILS_OPEN_KEY, true);
-            openDetails();
+          detailsOpen = !detailsOpen;
+          services.uiState.set(
+            DETAILS_OPEN_KEY,
+            detailsOpen ? true : undefined,
+          );
+          if (detailsOpen) {
+            redraw();
           } else {
-            services.uiState.set(DETAILS_OPEN_KEY, undefined);
             closeDetails();
           }
         },
