@@ -1,6 +1,6 @@
 # 06 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 3 · Depends on: 05
 Plan: [plan.md](plan.md)
@@ -37,3 +37,4 @@ Commit:    none
 
 ## Proof
 
+Commit none · proof: drive run session-line-06: all 5 checks PASS (two panes, follows on swap, Form tab, narrow 268px bar clips line and keeps controls whole, user layout hot reload); captures in .drive/session-line-06/screenshots/; lead read check1 and check4 · concerns: at the narrow width the clipped line ends flush against the ⌘W prompt with no gap; usage.seed and sessions.activate take the row id, not the sessionId their action docs name

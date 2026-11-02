@@ -1,6 +1,6 @@
 # 05 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 03, 04
 Plan: [plan.md](plan.md)
@@ -37,3 +37,4 @@ Commit:    one commit for the doc fixes, or none when nothing is stale
 
 ## Proof
 
+Commit ab687fe · proof: every 2813b99 line checked against the code; one stale line fixed (redraw triggers lacked sessions.activeChanged); greps for SessionRowPart, createSessionRowParts, row-parts and session-context status-line text print nothing stale · concerns: none

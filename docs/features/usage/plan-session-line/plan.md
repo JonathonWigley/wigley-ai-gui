@@ -136,8 +136,8 @@ Shared names:
 - [x] [Workflow plan references](04-workflow-plan-references.md) — after 01
 
 ### Wave 3
-- [ ] [Doc re-read](05-doc-re-read.md) — after 03, 04
-- [ ] [Final verification](06-final-verification.md) — after 05
+- [x] [Doc re-read](05-doc-re-read.md) — after 03, 04
+- [x] [Final verification](06-final-verification.md) — after 05
 
 ## Run log
 
@@ -148,6 +148,8 @@ Review base: d66a196a007248071a0c7ad363f22effdd460db7
 - 02 · 9eb4d06 · diff read; Produces present (sessionLine on Layout, StatusLineInput without session, sessionLineInput, sessionLineText, UsageParts.sessionLine); typecheck + lint pass after 01; usage-view-model.test.ts 54 pass (worker) · concerns: usage selftest expects the old status line text until task 03 updates selftest-script.ts
 - 04 · none · grep for SessionRowPart in plan-workflow prints nothing; plan.md:60 now names SessionPart; whole folder untracked (peer ai-dev-fa), so no commit · concerns: none
 - 03 · 679fdc7, 8545355 · diff read; Produces present (SessionLines, createSessionLines); typecheck + lint pass; usage page tests 88 pass; npm run selftest all passed (797 PASS) after 8545355 · concerns: chat and agents self-tests failed 13 fit checks on the clipped .session-bar-parts; fixed in 8545355
+- 05 · ab687fe · every 2813b99 line checked against the code; one stale line fixed (redraw triggers lacked sessions.activeChanged); greps for SessionRowPart, createSessionRowParts, row-parts and session-context status-line text print nothing stale · concerns: none
+- 06 · none · drive run session-line-06: all 5 checks PASS (two panes, follows on swap, Form tab, narrow 268px bar clips line and keeps controls whole, user layout hot reload); captures in .drive/session-line-06/screenshots/; lead read check1 and check4 · concerns: at the narrow width the clipped line ends flush against the ⌘W prompt with no gap; usage.seed and sessions.activate take the row id, not the sessionId their action docs name
 ### Contract changes
 - statusLineInput (outside the Produces list): statusLineInput(snapshot, shownSessionId, now) → statusLineInput(snapshot, shownSessionId) · why: now went unused once session left the input · consumers: 03 · group 02
 ### Rulings
@@ -162,3 +164,4 @@ Review base: d66a196a007248071a0c7ad363f22effdd460db7
 - Every self-test script that shows a tab bar with a usage line lists .session-bar-parts in scrollsItself (chat, agents, usage), beside .session-row-status — the per-script pattern; a core-wide exemption was the alternative — a future script showing tab bars must add it too · lead
 ### Review rounds
 ### Test gate
+- Full suite (npm test) — the range touches the sessions part store, tab bar drawing and the usage view model, which many plugins test through; 4768 passed, no type errors · npm run selftest all passed (797 PASS) at 8545355 · pass
