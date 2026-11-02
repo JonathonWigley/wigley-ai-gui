@@ -751,6 +751,43 @@ describe('createSessionList', () => {
     expect(first.session.info.sessionId).toBe('host-a');
   });
 
+  it('setHostSessionId_AfterEnd_DoesNothing', () => {
+    const { list, states, emitted, logged } = setUp();
+    const ownedSession = list.open(owned('host-a'));
+    ownedSession.end();
+    const lengthsBefore = [states.length, emitted.length, logged.length];
+
+    ownedSession.setHostSessionId('host-b');
+
+    expect([states.length, emitted.length, logged.length]).toEqual(
+      lengthsBefore,
+    );
+    expect(emitted.map(([event]) => event)).not.toContain('hostSessionChanged');
+    expect(ownedSession.session.info.sessionId).toBe('host-a');
+  });
+
+  it('setHostSessionId_RowClosedByUser_SendsNoStateAndMarkReaddsRowWithNewId', () => {
+    const { list, states, emitted } = setUp();
+    const ownedSession = list.open(owned('host-a'));
+    list.closeSession(ownedSession.session.id);
+    const sentBefore = states.length;
+
+    ownedSession.setHostSessionId('host-b');
+
+    expect(states).toHaveLength(sentBefore);
+    expect(ownedSession.session.info.sessionId).toBe('host-b');
+    expect(emitted.at(-1)).toEqual([
+      'hostSessionChanged',
+      ownedSession.session,
+    ]);
+
+    list.mark(ownedSession.session.id);
+
+    expect(list.state().rows.map((row) => row.hostSessionId)).toEqual([
+      'host-b',
+    ]);
+  });
+
   it('ends an owned session: its tool sessions, its row and an ended event', () => {
     const { list, states, emitted, logged } = setUp();
     const first = fakeContribution();
