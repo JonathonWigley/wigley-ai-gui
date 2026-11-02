@@ -75,6 +75,7 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  theme variables, `errorText`, the fake agent harness)
   layouts/       the layout registry behind the core LayoutService (main side)
   layout-url.ts  the `wigley-layout:` URLs that serve layout files to the page
+  visual-url.ts  the `wigley-visual:` URLs that serve a visual's document by its source hash
   file-url.ts    what `layout-url.ts` and `data-url.ts` share: per-segment encoding, scheme and revision checks,
                  and per-segment decoding that refuses an encoded `/`
   agent-forms/   the agent form lifecycle every agent form type shares (forms' rounds, the primer): the service with
@@ -92,7 +93,10 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
   page/          page-only DOM builders plugins share: the paste and drop helpers (`file-drop/`: the text-paste rule, the file chip pattern, the image shrink), the layout host
                  (`layout-host/`: showing layouts, the pick chain, drawing a part, rollback, `BaseKit` (the kit every
                  owner's kit extends, with the shared `icon`, `chevron`, `edge`, `rowTrailing` and `duration`) and
-                 `ownerBaseKitDeps` (the deps an owner's base kit is built from), `layout-parts.ts`
+                 `ownerBaseKitDeps` (the deps an owner's base kit is built from), the markdown mount
+                 (`markdown-mount.ts`: draws markdown into an element, hydrates each registered fence's placeholder
+                 through its contribution, reuses a mounted fence view while its language and source are unchanged, and
+                 disposes the rest; `kit.markdown` and the docs view draw through it), `layout-parts.ts`
                  (`createLayoutParts`: an owner's shown layouts and its draws, kept by slot), `app-slot.ts` (where an
                  app element sits in a part), `read-layout-module.ts` (`readLayoutParts` and `requireLayoutParts`, the
                  reader skeleton) and `test-layouts.ts` (the test helpers owners share)), the reducer store, autosave,
@@ -129,8 +133,10 @@ src/main/        core main process; main.ts is its composition root
                  `config`, `add` and first commit, and its `git log` check, run through `services.processes`)
   layouts/       the core LayoutService: one registry per owner over the user config folder's `layouts/`, which writes
                  `kit.d.ts` and each owner's `layout.d.ts` and sends each owner's set of layouts to the page
-  data-protocol/ the `wigley-data:` scheme serving each plugin's data folder to the page, and the `wigley-layout:`
-                 scheme serving the layouts folder
+  data-protocol/ the `wigley-data:` scheme serving each plugin's data folder to the page, the `wigley-layout:`
+                 scheme serving the layouts folder, and the `wigley-visual:` scheme serving each visual the page hands
+                 over (kept in memory by source hash, with its bootstrap script and a no-network CSP header), plus the
+                 guard refusing any frame navigation off that scheme; `docs/features/visuals/design.md`
   drive/         the drive run: the page driver the self-test shares, the commands, their HTTP server, plugins'
                  drive actions and the video recorder, over a `DrivenWindow` → no electron import
 src/preload/     the Bridge, exposed as window.wigley
@@ -140,6 +146,8 @@ src/renderer/    core page; renderer.ts is its composition root
                  layout (`layouts/`, the `shell.layout` setting)
   plugins/       the page-side plugin API
   markdown-it/   markdown adapter behind MarkdownRenderer   → the only markdown-it import
+  visual-frames/ the visual frames service plugins open a visual through: the sandboxed frame on the `wigley-visual:`
+                 scheme, the theme posted in on load and on each change, and the height and `Esc` it posts out
   fzf/           fuzzy matcher adapter behind FuzzyMatcher, which every `/` filter and the slash completion rank
                  with                                       → the only fzf import
   codemirror-vim/ editor (with fuzzy slash completion) and code-highlight adapters behind EditorHost and CodeHighlighter,
@@ -186,7 +194,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  the start prompt with its folder, profile, sign-in and session steps), layouts/ (the chat Layout contract
                  and the built-in `default` chat layout); `image-rules.ts` at the root holds the attach rules both
                  parts share; main exports `launch` (a background session with a first message), `profileNames` and
-                 `profileOf` to notes
+                 `profileOf` to notes, and `addInstructions` (text every session chat starts carries to its harness)
+                 to visual; page exports `focusedEntry` (the focused entry's element) to visual
   keys/          manifest.ts, contract.ts, main/ (registers the layouts only), page/ (which-key, the help overlay,
                  the title bar's Keys button, and the hint anchors and keys-for-command lookup it exports), layouts/
                  (the keys Layout contract and the built-in `default` layout)
@@ -213,6 +222,11 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  plugin data, watches plan folders, runs Clear & make), page/ (the row chip, the composer strip, the
                  Flow tab, the preview), layouts/ (the workflow Layout contract and the built-in `default` layout);
                  `docs/features/workflow/design.md`
+  visual/        manifest.ts, contract.ts, main/ (the session note it hands chat's `addInstructions`, the layout
+                 registration), page/ (the `html` fence contribution: the "drawing visual…" card for an open block, a
+                 visual frame for a closed one; the full-size overlay and its `v` key on chat's focused entry),
+                 layouts/ (the visual Layout contract and the built-in `default` layout);
+                 `docs/features/visuals/design.md`
 ```
 
 Each Claude Code or Codex session runs the marketplace's `relay.py` (`plugins/wigley/scripts/forms/` in
