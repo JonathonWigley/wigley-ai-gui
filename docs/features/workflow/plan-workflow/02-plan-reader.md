@@ -1,6 +1,6 @@
 # 02 — Plan reader: progress from a plan.md
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -85,3 +85,5 @@ Done when: compiles; `npm run lint` passes; the test gate runs the test above.
 Commit:    one commit for the group
 
 ## Proof
+
+Commit ed6174a · proof: diff read: PlanProgress, PlanTaskLine, readPlanProgress word for word; typecheck clean for the file; plan-reader tests pass · concerns: none (lint could not reach the file past 06's in-flight layer error; oxlint/oxfmt run directly passed)

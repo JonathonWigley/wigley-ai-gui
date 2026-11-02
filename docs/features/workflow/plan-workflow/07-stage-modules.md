@@ -1,6 +1,6 @@
 # 07 — The seven built-in stage modules
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 2 · Depends on: 02, 03
 Plan: [plan.md](plan.md)
@@ -149,3 +149,5 @@ Done when: compiles; `npm run lint` passes; the test gate runs the tests above.
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 6456472 · proof: diff read: seven stage halves, BUILT_IN_MAIN_STAGES/BUILT_IN_PAGE_STAGES/WORKFLOW_COMMANDS present; typecheck and lint clean; workflow tests 122 pass · concerns: stage folders name other stages' ids as string literals (idle checks 'closed', review and closed check 'make'); a rename edits them too

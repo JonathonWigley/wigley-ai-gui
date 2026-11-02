@@ -313,16 +313,16 @@ Boundary rules:
 
 ### Wave 1
 
-- [ ] [01 — Agent event members](01-agent-event-members.md)
-- [ ] [02 — Plan reader](02-plan-reader.md)
-- [ ] [03 — Workflow contract and fold](03-workflow-contract-and-fold.md)
-- [ ] [06 — Chat exports](06-chat-exports.md)
+- [x] [01 — Agent event members](01-agent-event-members.md)
+- [x] [02 — Plan reader](02-plan-reader.md)
+- [x] [03 — Workflow contract and fold](03-workflow-contract-and-fold.md)
+- [x] [06 — Chat exports](06-chat-exports.md)
 
 ### Wave 2
 
-- [ ] [04 — Claude agent events](04-claude-agent-events.md) · after 01
+- [x] [04 — Claude agent events](04-claude-agent-events.md) · after 01
 - [ ] [05 — Fake agent events](05-fake-agent-events.md) · after 01
-- [ ] [07 — Stage modules](07-stage-modules.md) · after 02, 03
+- [x] [07 — Stage modules](07-stage-modules.md) · after 02, 03
 
 ### Wave 3
 
@@ -346,10 +346,26 @@ Boundary rules:
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: c95c7eb
 
 ### Groups
+- 01 · 441b6eb · diff read: all four AgentEvent members and typedSkill present as Produces; roster fold exhaustive; typecheck clean outside in-flight 06; worker ran roster and typed-skill tests (28 pass) · concerns: plan.md Architecture says three new members, four landed (turnStarted) — for task 11's doc re-read
+- 02 · ed6174a · diff read: PlanProgress, PlanTaskLine, readPlanProgress word for word; typecheck clean for the file; plan-reader tests pass · concerns: none (lint could not reach the file past 06's in-flight layer error; oxlint/oxfmt run directly passed)
+- 03 · f459b85 · diff read: every contract.ts export and foldFlow/newFlow/isPlanFile/planDirOf present as Produces; typecheck clean for the files; workflow tests 55 pass · concerns: check-layers has no workflow layer rules yet (08 adds them); clearsPlan read from the stage whose id won, not the stage whose rule answered
+- 04 · 59d441c · diff read: decoder emits skillStarted (Skill), fileWritten (ok write results), turnStarted (init), turnEnded (result); harness emits typed skillStarted; typecheck clean; claude-code tests 247 pass · concerns: the write-left-open-at-agent-end row cannot fail on a leaked writePaths entry (only a memory leak, unobservable)
+- 07 · 6456472 · diff read: seven stage halves, BUILT_IN_MAIN_STAGES/BUILT_IN_PAGE_STAGES/WORKFLOW_COMMANDS present; typecheck and lint clean; workflow tests 122 pass · concerns: stage folders name other stages' ids as string literals (idle checks 'closed', review and closed check 'make'); a rename edits them too
+- 06 · bbdee57 · diff read: send, clear, fillComposer, addComposerPart, ChatComposerPart, CHAT_PREVIEW_HOST_ID, composer contributedParts slot, shared contributed-parts present; typecheck and lint clean; chat/sessions/shared tests 1751 pass · concerns: sessions-parts.test.ts and chat layout.test.ts changed beyond the Files line (imports and one slot-order assertion); forms keeps its own part store (src/plugins/forms/page/contributions.ts), a candidate to move onto the shared helper
 ### Contract changes
+- placeContributedParts(..., rollback): RollbackDeps → PartRollback { recordBox(destroy) } (new export; RollbackDeps assignable) · why: check-layers refuses src/shared/page importing layout-host · consumers: 09 · group 06
 ### Rulings
+- 03 stays in wave 1 beside 02 although it consumes PlanProgress — the consumption is a type import the plan writes against plan.md's line, and the compile proves it once both land — a mismatch costs one re-dispatch of 03 · lead
+- origin fetch failed (the 1Password SSH agent is unreachable from this session); the run builds on local main at c95c7eb, even with the last-fetched origin/main — a newer origin commit would need a merge before push · lead
+- typedSkill splits on \S (any Unicode whitespace), wider than the brief's space/tab/newline — no real skill name holds other whitespace — a skill name with a non-breaking space would split · group 01 · group 01
+- ## Run log and ### Review rounds match with trailing whitespace ignored, like ## Tasks — one heading rule — a heading with trailing spaces counts · group 02 · group 02
+- a non-wave ### heading under ## Tasks ends the current wave (later boxes wave null), per the Decisions' level-1-to-3 rule — such boxes drop out of the wave pick · group 02 · group 02
+- foldFlow reads clearsPlan from the stage whose id is the winning answer, as plan.md says — differs only if one stage's rule returns another stage's id · group 03 · group 03
+- a sent control command (CONTROL_COMMAND match) gives no skillStarted; only other /-messages do — a control command never starts a workflow stage · group 04 · group 04
+- stage folders do not import each other; a rule naming another stage writes its id literal — a stage rename must edit those literals · group 07 · group 07
+- an absent contributedParts call in a custom composer layout prepends the parts holder to the composer root · group 06 · group 06
 ### Review rounds
 ### Test gate

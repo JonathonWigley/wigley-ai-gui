@@ -1,6 +1,6 @@
 # 04 — Claude adapter emits the workflow events
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -117,3 +117,5 @@ Done when: compiles; the test gate runs `stream-decoder.test.ts` and `claude-cod
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 59d441c · proof: diff read: decoder emits skillStarted (Skill), fileWritten (ok write results), turnStarted (init), turnEnded (result); harness emits typed skillStarted; typecheck clean; claude-code tests 247 pass · concerns: the write-left-open-at-agent-end row cannot fail on a leaked writePaths entry (only a memory leak, unobservable)

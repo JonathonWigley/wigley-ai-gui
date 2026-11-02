@@ -1,6 +1,6 @@
 # 06 — Chat exports send, clear, fillComposer and composer parts
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -161,3 +161,5 @@ Done when: compiles; the test gate runs `chat/main/start.test.ts`, `chat-preview
 Commit:    one commit for the group
 
 ## Proof
+
+Commit bbdee57 · proof: diff read: send, clear, fillComposer, addComposerPart, ChatComposerPart, CHAT_PREVIEW_HOST_ID, composer contributedParts slot, shared contributed-parts present; typecheck and lint clean; chat/sessions/shared tests 1751 pass · concerns: sessions-parts.test.ts and chat layout.test.ts changed beyond the Files line (imports and one slot-order assertion); forms keeps its own part store (src/plugins/forms/page/contributions.ts), a candidate to move onto the shared helper

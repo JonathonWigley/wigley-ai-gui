@@ -1,6 +1,6 @@
 # 08 — Workflow main part: manifest, flows, plan watch, actions, countdown
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 3 · Depends on: 01, 03, 06, 07
 Plan: [plan.md](plan.md)

@@ -1,6 +1,6 @@
 # 01 — Agent event members for the workflow
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -76,3 +76,5 @@ Done when: compiles; the test gate runs `roster.test.ts` and `typed-skill.test.t
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 441b6eb · proof: diff read: all four AgentEvent members and typedSkill present as Produces; roster fold exhaustive; typecheck clean outside in-flight 06; worker ran roster and typed-skill tests (28 pass) · concerns: plan.md Architecture says three new members, four landed (turnStarted) — for task 11's doc re-read

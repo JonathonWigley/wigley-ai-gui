@@ -1,6 +1,6 @@
 # 03 — Workflow contract and the flow fold
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -140,3 +140,5 @@ Done when: compiles; `npm run lint` passes; the test gate runs the tests above.
 Commit:    one commit for the group
 
 ## Proof
+
+Commit f459b85 · proof: diff read: every contract.ts export and foldFlow/newFlow/isPlanFile/planDirOf present as Produces; typecheck clean for the files; workflow tests 55 pass · concerns: check-layers has no workflow layer rules yet (08 adds them); clearsPlan read from the stage whose id won, not the stage whose rule answered
