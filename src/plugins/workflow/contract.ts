@@ -19,6 +19,10 @@ export interface SessionFlow {
   planDir: string | null;
   // Null until the plan folder is read.
   progress: PlanProgress | null;
+  // The plan's review rounds when make was last entered: review lights only on
+  // a round above it. Null when make was entered before the plan was read; the
+  // next read fills it. Left out (a flow saved before this field) counts as 0.
+  reviewRoundsAtMake?: number | null;
   turnRunning: boolean;
   // Agent ids the main agent spawned that have not finished.
   runningSubagents: readonly string[];
@@ -70,6 +74,9 @@ export interface MainStage {
   // True for a stage that starts a new plan (primer, feature): entering it
   // clears planDir and progress.
   clearsPlan?: boolean;
+  // True for the stage that starts a make run (make): entering it, or entering
+  // it again, records the plan's review rounds as reviewRoundsAtMake.
+  recordsReviewRounds?: boolean;
 }
 
 // A flow is busy while a turn runs or a main-agent subagent runs (wigley:make

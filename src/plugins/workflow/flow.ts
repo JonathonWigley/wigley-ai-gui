@@ -92,6 +92,9 @@ function applyBookkeeping(next: SessionFlow, signal: WorkflowSignal): void {
       if (!sameProgress(next.progress, signal.progress)) {
         next.progress = signal.progress;
       }
+      if (next.reviewRoundsAtMake === null) {
+        next.reviewRoundsAtMake = signal.progress.reviewRounds;
+      }
       break;
     case 'cleared':
       next.countdownEndsAt = null;
@@ -123,6 +126,9 @@ function applyStageRules(
   }
   if (entered.stage?.clearsPlan === true) {
     clearPlan(next);
+  }
+  if (entered.stage?.recordsReviewRounds === true) {
+    next.reviewRoundsAtMake = next.progress?.reviewRounds ?? null;
   }
 }
 
@@ -211,6 +217,7 @@ function sameFlow(a: SessionFlow, b: SessionFlow): boolean {
     a.stage === b.stage &&
     a.planDir === b.planDir &&
     a.progress === b.progress &&
+    a.reviewRoundsAtMake === b.reviewRoundsAtMake &&
     a.turnRunning === b.turnRunning &&
     sameIds(a.runningSubagents, b.runningSubagents) &&
     a.countdownEndsAt === b.countdownEndsAt &&

@@ -18,9 +18,9 @@ function fake(
   id: StageId,
   order: number,
   enter: MainStage['enter'],
-  clearsPlan?: boolean,
+  flags: Pick<MainStage, 'clearsPlan' | 'recordsReviewRounds'> = {},
 ): MainStage {
-  return { id, order, enter, clearsPlan };
+  return { id, order, enter, ...flags };
 }
 
 function skill(name: string, argsPath: string | null): WorkflowSignal {
@@ -47,7 +47,13 @@ const STAGES: readonly MainStage[] = [
     'e',
     40,
     (_f, s) => (s.type === 'skillStarted' && s.skill === 'x:e' ? 'e' : null),
-    true,
+    { clearsPlan: true },
+  ),
+  fake(
+    'm',
+    50,
+    (_f, s) => (s.type === 'skillStarted' && s.skill === 'x:m' ? 'm' : null),
+    { recordsReviewRounds: true },
   ),
 ];
 
@@ -280,6 +286,71 @@ const FOLD_ROWS: FoldRow[] = [
     }),
     signal: skill('x:e', null),
     expected: flowWith({ stage: 'e', hasLeftIdle: true }),
+  },
+  {
+    name: "entering a recordsReviewRounds stage records the plan's review rounds",
+    flow: flowWith({ ...IN_C, planDir: PLAN_X, progress: PROGRESS }),
+    signal: skill('x:m', null),
+    expected: flowWith({
+      stage: 'm',
+      hasLeftIdle: true,
+      planDir: PLAN_X,
+      progress: PROGRESS,
+      reviewRoundsAtMake: 1,
+    }),
+  },
+  {
+    name: 're-entering a recordsReviewRounds stage records the rounds again',
+    flow: flowWith({
+      stage: 'm',
+      hasLeftIdle: true,
+      planDir: PLAN_X,
+      progress: PROGRESS,
+      reviewRoundsAtMake: 0,
+    }),
+    signal: skill('x:m', null),
+    expected: flowWith({
+      stage: 'm',
+      hasLeftIdle: true,
+      planDir: PLAN_X,
+      progress: PROGRESS,
+      reviewRoundsAtMake: 1,
+    }),
+  },
+  {
+    name: 'entering a recordsReviewRounds stage with the plan unread records null',
+    flow: flowWith({ ...IN_C, planDir: PLAN_X }),
+    signal: skill('x:m', null),
+    expected: flowWith({
+      stage: 'm',
+      hasLeftIdle: true,
+      planDir: PLAN_X,
+      reviewRoundsAtMake: null,
+    }),
+  },
+  {
+    name: 'planChanged fills a null reviewRoundsAtMake',
+    flow: flowWith({ planDir: PLAN_X, reviewRoundsAtMake: null }),
+    signal: { type: 'planChanged', progress: PROGRESS },
+    expected: flowWith({
+      planDir: PLAN_X,
+      progress: PROGRESS,
+      reviewRoundsAtMake: 1,
+    }),
+  },
+  {
+    name: 'planChanged keeps a recorded reviewRoundsAtMake',
+    flow: flowWith({
+      planDir: PLAN_X,
+      progress: PROGRESS,
+      reviewRoundsAtMake: 0,
+    }),
+    signal: { type: 'planChanged', progress: PROGRESS_RETITLED_TASK },
+    expected: flowWith({
+      planDir: PLAN_X,
+      progress: PROGRESS_RETITLED_TASK,
+      reviewRoundsAtMake: 0,
+    }),
   },
   {
     name: 'returning to idle drops the plan and keeps hasLeftIdle',

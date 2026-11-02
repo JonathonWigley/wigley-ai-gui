@@ -8,4 +8,5 @@ export const makeMainStage: MainStage = {
       ? 'make'
       : null;
   },
+  recordsReviewRounds: true,
 };

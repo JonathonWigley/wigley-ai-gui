@@ -8,9 +8,9 @@ function flowIn(stage: string): SessionFlow {
   return { ...newFlow('s1', '/r'), stage, planDir: '/r/plan-f' };
 }
 
-function planChanged(reviewRounds: number): WorkflowSignal {
+function planChanged(reviewRounds: number, checked = 5): WorkflowSignal {
   const progress: PlanProgress = {
-    checked: 5,
+    checked,
     total: 7,
     wave: 3,
     reviewRounds,
@@ -27,40 +27,85 @@ const REVIEW_STARTED: WorkflowSignal = {
   argsPath: null,
 };
 
+function makeStarted(argsPath: string | null): WorkflowSignal {
+  return {
+    type: 'skillStarted',
+    skill: 'wigley:make',
+    args: argsPath ?? '',
+    argsPath,
+  };
+}
+
+// The stage after each signal in turn.
+function stagesAfter(
+  flow: SessionFlow,
+  signals: readonly WorkflowSignal[],
+): string[] {
+  const stages: string[] = [];
+  let current = flow;
+  for (const signal of signals) {
+    current = foldFlow(current, signal, BUILT_IN_MAIN_STAGES);
+    stages.push(current.stage);
+  }
+  return stages;
+}
+
 describe('reviewMainStage', () => {
   it.each<{
     name: string;
     from: string;
-    signal: WorkflowSignal;
-    stage: string;
+    signals: readonly WorkflowSignal[];
+    stages: readonly string[];
   }>([
     {
       name: 'wigley:review in make',
       from: 'make',
-      signal: REVIEW_STARTED,
-      stage: 'review',
+      signals: [REVIEW_STARTED],
+      stages: ['review'],
     },
     {
       name: 'wigley:review in feature',
       from: 'feature',
-      signal: REVIEW_STARTED,
-      stage: 'feature',
+      signals: [REVIEW_STARTED],
+      stages: ['feature'],
     },
     {
-      name: 'planChanged with a review round in make',
+      name: 'planChanged with a review round in a flow saved before reviewRoundsAtMake',
       from: 'make',
-      signal: planChanged(1),
-      stage: 'review',
+      signals: [planChanged(1)],
+      stages: ['review'],
     },
     {
       name: 'planChanged with no review round in make',
       from: 'make',
-      signal: planChanged(0),
-      stage: 'make',
+      signals: [planChanged(0)],
+      stages: ['make'],
     },
-  ])('$name', ({ from, signal, stage }) => {
-    expect(foldFlow(flowIn(from), signal, BUILT_IN_MAIN_STAGES).stage).toBe(
-      stage,
-    );
+    {
+      name: 'Resume make from review waits for a round logged after it',
+      from: 'planReady',
+      signals: [
+        planChanged(0),
+        makeStarted(null),
+        planChanged(1),
+        makeStarted(null),
+        planChanged(1, 6),
+        planChanged(2, 6),
+      ],
+      stages: ['planReady', 'make', 'review', 'make', 'make', 'review'],
+    },
+    {
+      name: 'make of an unread plan counts its rounds from the first read',
+      from: 'idle',
+      signals: [
+        makeStarted('/r/plan-g'),
+        planChanged(2),
+        planChanged(2, 6),
+        planChanged(3, 6),
+      ],
+      stages: ['make', 'make', 'make', 'review'],
+    },
+  ])('$name', ({ from, signals, stages }) => {
+    expect(stagesAfter(flowIn(from), signals)).toEqual(stages);
   });
 });

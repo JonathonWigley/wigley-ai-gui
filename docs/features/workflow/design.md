@@ -43,8 +43,8 @@ Built, in `src/plugins/workflow/`, on the clear, the agent events and the row pa
 | feature | `wigley:feature` starts | the stage, and the plan's name once one is written | Open plan, once a plan is written |
 | plan ready | in feature, a turn ends or the plan changes while the session's `plan-*/plan.md` holds a box under Tasks and no turn or subagent runs | the plan's name and task count | Clear & make (Cancel during the countdown), Make in new session, Open plan |
 | make | `wigley:make` starts | ticked over total, the current wave | Resume make, Open plan |
-| review | `wigley:review` starts in make, or the plan's Run log gains a review round | the review round, ticked over total | Resume make, Open plan |
-| closed | the plan folder is deleted in make or review | the plan's name, done | Retro, Dismiss |
+| review | `wigley:review` starts in make, or the plan's Run log gains a review round logged after make started (Resume make from review stays in make until the next round) | the review round, ticked over total | Resume make, Open plan |
+| closed | in make or review, a plan folder that was read goes missing (`wigley:make` naming a folder not written yet waits in make for its `plan.md`) | the plan's name, done | Retro, Dismiss |
 
 - **Start feature** puts `/wigley:feature ` in the composer and focuses it, without sending.
 - **Clear & make** clears the session (the row and its tabs stay, a new conversation starts) and sends
@@ -80,6 +80,8 @@ To change the workflow:
 - a renamed skill or a new trigger — edit that stage's `main.ts`
 - a new stage — a new stage folder, its commands and keys, and its place in the stage order
 - a stage dropped — delete its folder and its entries
+- a renamed stage id — edit every rule that names it, in every stage's `main.ts`; `stages/main-stages.test.ts` turns red
+  on one left behind
 
 ## Signals
 
