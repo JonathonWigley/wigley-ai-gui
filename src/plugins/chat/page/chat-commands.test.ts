@@ -58,13 +58,14 @@ const png: ChatImage = { mediaType: 'image/png', data: 'cG5n' };
 const jpeg: ChatImage = { mediaType: 'image/jpeg', data: 'anBn' };
 
 // `scrollBy` records each step and direction in `scrolls` and answers with
-// `scroll`.
+// `scroll`; `latest` counts each call in `latest`.
 function session(
   running: boolean,
   scroll: TranscriptScroll = { moved: true, atEnd: false, following: false },
 ) {
   const counts = {
     scrolls: [] as [ScrollStep, 1 | -1][],
+    latest: 0,
   };
   const state: ChatSessionState = {
     sessionId: 'row-1',
@@ -80,6 +81,9 @@ function session(
     scrollBy(step: ScrollStep, direction: 1 | -1) {
       counts.scrolls.push([step, direction]);
       return scroll;
+    },
+    latest() {
+      counts.latest += 1;
     },
   } as ChatSession['entries'];
   const shown: ChatSession = {
@@ -507,6 +511,7 @@ describe('chat commands', () => {
         ['send', 'row-1', { text: 'hi', images: [png, jpeg] }],
       ]);
       expect(shown.attachments.images()).toEqual([]);
+      expect(shown.counts.latest).toBe(1);
     },
   );
 

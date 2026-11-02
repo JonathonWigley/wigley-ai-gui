@@ -296,9 +296,10 @@ function sessionFor(
 // Sends the box's text as typed with the attached images, then clears the box
 // and the attachments; images send with an empty box too. A box and
 // attachments both empty send nothing. A message to a resting session starts
-// its process in main. When main refuses the message, it goes back into the
-// box (see `putBack`). A registered app slash command runs in place of
-// sending and clears the box, leaving the images attached.
+// its process in main, and the entries follow the latest one and scroll to
+// the bottom. When main refuses the message, it goes back into the box (see
+// `putBack`). A registered app slash command runs in place of sending and
+// clears the box, leaving the images attached.
 function send(deps: ChatCommandDeps, session: ChatSession) {
   const { log } = deps;
   const text = session.box.text();
@@ -321,6 +322,7 @@ function send(deps: ChatCommandDeps, session: ChatSession) {
     });
   session.box.setText('');
   session.attachments.clear();
+  session.entries.latest();
   const withImages =
     images.length === 0 ? '' : ` with ${images.length} image(s)`;
   log('chat', `sent a message${withImages} in ${session.name}`);

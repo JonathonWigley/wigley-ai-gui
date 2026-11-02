@@ -231,8 +231,12 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
   channel.on('activity', ({ sessionId, activity }) => {
     const tab = heldFor('activity', sessionId);
     if (tab !== undefined) {
+      const isTurnEnded = tab.state.activity !== 'idle' && activity === 'idle';
       tab.state = { ...tab.state, activity };
       tab.entries.setWorking(isWorking(tab.state));
+      if (isTurnEnded) {
+        tab.entries.latest();
+      }
       log('chat', `${tab.name} is ${activity}`);
       sendStatus(tab, tabStatus(activity));
       drawBar(tab);
