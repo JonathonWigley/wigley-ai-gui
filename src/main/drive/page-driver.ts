@@ -391,24 +391,33 @@ function linesSince(
   return isReloaded ? lines : lines.slice(0, lines.length - mark.length);
 }
 
-// Waits for any of `lines` among those logged after `mark`, or among all of
-// them once the page has navigated since the mark or its log holds fewer
-// lines than the mark's. Resolves to the first of `lines`, in the order given,
-// that one read found logged, or to null when none was within `timeoutMs`.
+// Whether `logged` holds `line`, or a line `line` matches when it is a
+// pattern.
+function holdsLine(logged: readonly string[], line: string | RegExp): boolean {
+  return typeof line === 'string'
+    ? logged.includes(line)
+    : logged.some((each) => line.test(each));
+}
+
+// Waits for any of `lines`, each a line or a pattern one must match, among
+// those logged after `mark`, or among all of them once the page has navigated
+// since the mark or its log holds fewer lines than the mark's. Resolves to the
+// first of `lines`, in the order given, that one read found logged, or to null
+// when none was within `timeoutMs`.
 export async function waitForAnyNewLogLine(
   window: DrivenWindow,
-  lines: readonly string[],
+  lines: readonly (string | RegExp)[],
   mark: LogMark,
   timeoutMs = STEP_TIMEOUT_MS,
-): Promise<string | null> {
+): Promise<string | RegExp | null> {
   // Set only to a line found logged, so a check left running past its cap
   // never clears what a later check found.
-  let found: string | null = null;
+  let found: string | RegExp | null = null;
   const isLogged = await waitFor(async () => {
     // Counted before the read, so an old log is never taken as all new.
     const navigation = window.navigationCount();
     const logged = linesSince(await readLog(window), mark, navigation);
-    const line = lines.find((candidate) => logged.includes(candidate));
+    const line = lines.find((candidate) => holdsLine(logged, candidate));
     if (line !== undefined) {
       found = line;
     }
@@ -417,11 +426,11 @@ export async function waitForAnyNewLogLine(
   return isLogged ? found : null;
 }
 
-// Waits for the line among those logged after `mark`, as
-// `waitForAnyNewLogLine` does; true once it is logged.
+// Waits for the line, or a line the pattern matches, among those logged after
+// `mark`, as `waitForAnyNewLogLine` does; true once it is logged.
 export async function waitForNewLogLine(
   window: DrivenWindow,
-  line: string,
+  line: string | RegExp,
   mark: LogMark,
   timeoutMs = STEP_TIMEOUT_MS,
 ): Promise<boolean> {

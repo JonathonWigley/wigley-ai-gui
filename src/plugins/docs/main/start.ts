@@ -283,6 +283,7 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
       sessionSources.set(id, added);
     };
     api.events.on('sessions.connected', addSessionSource);
+    // The new source holds no entries until the session's Docs tab loads it.
     api.events.on('sessions.hostSessionChanged', (session) => {
       const source = sessionSources.get(session.id);
       if (source === undefined) {

@@ -98,8 +98,8 @@ function pressFiles(base: string, repeatMax: number | undefined): string[] {
 // Throws on a script whose groups the runner cannot report or run: a group
 // with a blank `name` or `why`, two groups of one script with one name, a step
 // whose `why` is given but blank, a `repeat` whose `max` is not a whole number
-// of at least 2 or whose `until` is blank, and a `width` that is neither
-// `'start'` nor a positive whole number.
+// of at least 2 or whose `until` is blank, a `repeat` beside `alsoExpect`, and
+// a `width` that is neither `'start'` nor a positive whole number.
 export function checkGroups(handed: readonly HandedScript[]): void {
   for (const { pluginId, script } of handed) {
     const names = new Set<string>();
@@ -138,6 +138,11 @@ function checkStep(where: string, step: SelfTestStep): void {
   }
   if (step.repeat === undefined) {
     return;
+  }
+  if (step.alsoExpect !== undefined) {
+    throw new Error(
+      `${where} has a step (${step.expect}) repeating with alsoExpect: a repeating step waits for no other lines`,
+    );
   }
   const { until, max } = step.repeat;
   if (!Number.isInteger(max) || max < 2) {

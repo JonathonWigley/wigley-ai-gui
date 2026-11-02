@@ -336,6 +336,27 @@ describe('checkGroups', () => {
     expect(noUntil).toThrow(/forms.*pages.*\(x\)/);
   });
 
+  it('throws on a repeating step with alsoExpect', () => {
+    const check = () =>
+      checkGroups([
+        withGroups('forms', [
+          {
+            name: 'pages',
+            why: 'w',
+            steps: [
+              {
+                ...step,
+                repeat: { until: 'end', max: 3 },
+                alsoExpect: [/id/],
+              },
+            ],
+          },
+        ]),
+      ]);
+
+    expect(check).toThrow(/forms.*pages.*\(x\).*alsoExpect/);
+  });
+
   it.each([0, -600, 600.5])('throws on a width of %s', (width) => {
     const check = () =>
       checkGroups([

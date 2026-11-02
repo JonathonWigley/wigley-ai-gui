@@ -206,8 +206,9 @@ async function repeatUntil(
   }
 }
 
-// Waits up to `timeoutMs` for the step's line and reports it, then saves the
-// window to `png` when the step has one.
+// Waits up to `timeoutMs` for the step's line, then for a line each of its
+// `alsoExpect` patterns matches, and reports them, then saves the window to
+// `png` when the step has one.
 async function waitForStepLine(
   window: DrivenWindow,
   step: SelfTestStep,
@@ -217,9 +218,13 @@ async function waitForStepLine(
   timeoutMs: number,
   isCurrent: () => boolean,
 ): Promise<{ passed: boolean; isSaved: boolean }> {
-  const passed = await waitForNewLogLine(window, step.expect, mark, timeoutMs);
+  const lines = [step.expect, ...(step.alsoExpect ?? [])];
+  let passed = true;
+  for (const line of lines) {
+    passed &&= await waitForNewLogLine(window, line, mark, timeoutMs);
+  }
   if (isCurrent()) {
-    report(passed, `${label} -> ${step.expect}`);
+    report(passed, `${label} -> ${lines.join(' and ')}`);
   }
   const isSaved =
     png === undefined || !isCurrent()

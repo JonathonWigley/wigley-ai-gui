@@ -152,6 +152,11 @@ const RESTING_SESSION_STEPS: SelfTestStep[] = [
   { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
 ];
 
+// The notes page's line for a row listed under the random host id a clear
+// gives it.
+const NOTES_LISTED_NEW_HOST =
+  /^\[notes\] session [0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12} listed$/;
+
 // Clears the second session: a clear in the first would replace the process
 // whose calls the run checks at its end.
 const CLEAR_STEPS: SelfTestStep[] = [
@@ -159,6 +164,7 @@ const CLEAR_STEPS: SelfTestStep[] = [
   {
     keys: sendKeys('/clear'),
     expect: '[chat] conversation cleared in chat-second',
+    alsoExpect: [NOTES_LISTED_NEW_HOST],
     checksFit: true,
   },
   { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
@@ -497,7 +503,7 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'clear',
-    why: '/clear in the second session empties its Chat tab to one notice and restarts its agent.',
+    why: '/clear in the second session empties its Chat tab to one notice and restarts its agent, and the notes page lists the row under its new host session id.',
     steps: CLEAR_STEPS,
   },
   {

@@ -292,6 +292,42 @@ describe('runScript', () => {
     ]);
   });
 
+  it.each([
+    ['[t] id 4f2a', 0],
+    ['[t] id none', 1],
+  ])(
+    'a step whose key logs %s before its expect line fails %s times on its alsoExpect pattern',
+    async (earlier, expected) => {
+      const { window, log } = page((key, pageLog) => {
+        pageLog.unshift(earlier);
+        pageLog.unshift(`[t] ${key}`);
+      });
+
+      const failures = await runGroups(
+        window,
+        log,
+        [
+          {
+            name: 'ids',
+            why: 'the new id is listed',
+            steps: [
+              {
+                keys: ['j'],
+                expect: '[t] j',
+                alsoExpect: [/^\[t\] id [0-9a-f]+$/],
+              },
+            ],
+          },
+        ],
+        new Map(),
+        () => true,
+        50,
+      );
+
+      expect(failures).toBe(expected);
+    },
+  );
+
   it('passes a repeating step whose first press logs its until line', async () => {
     const { window, log } = page(pager(1));
 

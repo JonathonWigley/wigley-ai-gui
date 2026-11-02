@@ -64,6 +64,8 @@ interface AddedView {
 
 interface SessionDocs {
   view: DocsViewHandle;
+  // The docs view behind `view`.
+  docsView: DocsView;
   // Null until `addTab` returns.
   tab: SessionTabHandle | null;
 }
@@ -105,7 +107,7 @@ const SESSION_TREE_SPLIT = { initial: 288, min: 160, endMin: 240 };
 // Docs mode over the machine's index, its tree in the side bar and its doc in
 // the sheet, and the views `addView` hands out, each its tree and doc side by
 // side in a split: a Docs tab in every session over that session's index
-// among them. Each command acts on the active view: the machine view while
+// among them, rebuilt once shown when the session's host id changes. Each command acts on the active view: the machine view while
 // Docs mode shows, else the added view that is visible. A change made in one
 // view reaches every other and the star set every view shares, and a view
 // showing closes the others' overlays, since two views' pane scopes may be
@@ -348,11 +350,12 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     };
 
     // A docs view over the source `sourceId`, its tree and doc in a split
-    // whose width every added view shares; its keys act while `isVisible`.
+    // whose width every added view shares, and its handle; its keys act while
+    // `isVisible`.
     const addView = (
       sourceId: string,
       options: { isVisible(): boolean },
-    ): DocsViewHandle => {
+    ): { handle: DocsViewHandle; view: DocsView } => {
       addedCount += 1;
       const viewId = `view:${String(addedCount)}`;
       const split = createSplit({
@@ -384,7 +387,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       split.start.append(added.view.tree);
       split.end.append(added.view.doc);
       addedViews.set(viewId, added);
-      return {
+      const handle: DocsViewHandle = {
         element: split.element,
         shown() {
           // Another view's drag may have stored a new width since this one
@@ -404,13 +407,16 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
           split.dispose();
         },
       };
+      return { handle, view: added.view };
     };
 
     api.events.on('sessions.sessionAdded', ({ sessionId, projectDir }) => {
+      const added = addView(sessionSourceId(sessionId), {
+        isVisible: () => held.tab?.isVisible() === true,
+      });
       const held: SessionDocs = {
-        view: addView(sessionSourceId(sessionId), {
-          isVisible: () => held.tab?.isVisible() === true,
-        }),
+        view: added.handle,
+        docsView: added.view,
         tab: null,
       };
       sessionDocs.set(sessionId, held);
@@ -441,6 +447,10 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       sessionDocs.delete(sessionId);
       held.tab?.remove();
       held.view.dispose();
+    });
+    // Main replaces a session's index source when its host id changes.
+    api.events.on('sessions.sessionHostChanged', ({ sessionId }) => {
+      sessionDocs.get(sessionId)?.docsView.sourceReplaced();
     });
 
     const addedViewOf = (view: DocsView): AddedView | undefined =>
@@ -548,7 +558,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     };
 
     const exports: DocsPageExports = {
-      addView,
+      addView: (sourceId, options) => addView(sourceId, options).handle,
       openDoc: (path, line) => openDoc(path, line ?? null),
     };
     return {

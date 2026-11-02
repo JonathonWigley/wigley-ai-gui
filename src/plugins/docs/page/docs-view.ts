@@ -118,6 +118,10 @@ export interface DocsView {
   // rename or trash shows at once, the doc pane following its file, and the
   // index rebuilds, which lists a created doc.
   outsideChange(change: DocChangeRecord): void;
+  // The source registered under the view's `sourceId` was replaced. A view
+  // not shown yet does nothing, its first show reading the new source; else
+  // the index rebuilds and the statuses are read again.
+  sourceReplaced(): void;
   // Once the view's first index read has settled, opens `path` at the
   // 1-based `line` and selects its row. When that read does not list `path`
   // and a rebuild is coming (the first show's) or running, waits for that one
@@ -983,6 +987,11 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         showChange(change);
       }
       void rebuild(false);
+    },
+    sourceReplaced() {
+      if (hasRun) {
+        void rebuild(false);
+      }
     },
     openDoc(path, line) {
       const number = ++askedOpens;

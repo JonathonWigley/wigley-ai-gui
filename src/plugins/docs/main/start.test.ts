@@ -294,6 +294,63 @@ describe('docs main part', () => {
     });
   });
 
+  it('sessionSource_HostSessionChanged_RebuildAllowsItsDocWrites', async () => {
+    const docs = startDocsPart();
+    const path = '/p/notes.md';
+    await docs.files.makeFolder('/p');
+    await docs.files.write(path, 'one');
+    const document: IndexDocument = {
+      ...INDEX_DOCUMENT,
+      entries: [
+        {
+          id: path,
+          kind: 'instructions',
+          source: 'global',
+          owner: 'mine',
+          repo: null,
+          root: null,
+          plugin: null,
+          path,
+          line: null,
+          title: 'notes',
+          meta: {},
+          walked: [],
+          lastLoaded: null,
+        },
+      ],
+    };
+    docs.processes.script(
+      'python3',
+      ['-X', 'utf8', '/script.py', 'session', 'new-host'],
+      {
+        code: 0,
+        stdout: JSON.stringify(document),
+        stderr: '',
+        timedOut: false,
+      },
+    );
+    const info: SessionInfo = {
+      sessionId: 'old-host',
+      projectDir: '/p',
+      deadlineSeconds: null,
+      harness: 'claude',
+    };
+    docs.emit('sessions.connected', { id: 'row-1', info });
+    docs.emit('sessions.hostSessionChanged', {
+      id: 'row-1',
+      info: { ...info, sessionId: 'new-host' },
+    });
+    await expect(
+      docs.invoke('writeDoc', path, 'two', 'one') as Promise<unknown>,
+    ).rejects.toThrow(path);
+
+    await docs.invoke('rebuildIndex', 'session:row-1');
+
+    expect(await docs.invoke('writeDoc', path, 'two', 'one')).toEqual({
+      type: 'written',
+    });
+  });
+
   it('pluginStatus_MachineSourceNoClones_Empty', async () => {
     const docs = startDocsPart();
     await docs.invoke('loadIndex', 'machine');
