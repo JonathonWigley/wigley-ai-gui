@@ -2,18 +2,26 @@
 
 .agents-line {
   display: grid;
-  grid-template-columns: max-content max-content minmax(
-      0,
+  /* The type shrinks first, to an ellipsis, and takes at most 40% of the
+     line; the description keeps a minimum width; the dot, elapsed time and
+     tool count never shrink. */
+  grid-template-columns: max-content fit-content(40%) minmax(
+      var(--wg-space-6),
       1fr
     ) max-content max-content;
-  column-gap: var(--wg-space-2);
+  column-gap: var(--wg-space-1_5);
   align-items: center;
   min-height: var(--wg-row-tree);
+  min-width: 0;
   padding-left: 0;
   font-size: var(--wg-text-12);
 }
 
 .agents-line-type {
+  min-width: var(--wg-space-4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-family: var(--wg-font-mono);
   color: var(--wg-fg-secondary);
 }
@@ -28,6 +36,7 @@
 
 .agents-line-elapsed,
 .agents-line-tools {
+  white-space: nowrap;
   font-variant-numeric: tabular-nums;
   color: var(--wg-fg-tertiary);
 }

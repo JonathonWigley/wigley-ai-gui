@@ -118,26 +118,6 @@ function stepCount(count) {
   return count === 1 ? '1 step' : `${count} steps`;
 }
 
-/** @param {number} value */
-function twoDigits(value) {
-  return String(value).padStart(2, '0');
-}
-
-// A run's time in whole seconds, rounded down: `42s`, `1m 05s`, `1h 02m`; a
-// negative span reads `0s`.
-/** @param {number} ms */
-function spanText(ms) {
-  const seconds = Math.max(0, Math.floor(ms / 1000));
-  if (seconds < 60) {
-    return `${seconds}s`;
-  }
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) {
-    return `${minutes}m ${twoDigits(seconds % 60)}s`;
-  }
-  return `${Math.floor(minutes / 60)}h ${twoDigits(minutes % 60)}m`;
-}
-
 // Each tool's name with its count, most used first, ties in order of first
 // use; a tool used once is named alone.
 /** @param {import('../layout').StepInput[]} steps */
@@ -204,7 +184,7 @@ function fillActivity(line, input, kit) {
   const time = el(
     'span',
     'chat-activity-time',
-    `· ${spanText((input.endedAt ?? input.now) - input.startedAt)}`,
+    `· ${kit.duration((input.endedAt ?? input.now) - input.startedAt)}`,
   );
   if (!input.live) {
     line.append(activitySummary(input, time));

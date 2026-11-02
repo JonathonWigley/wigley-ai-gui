@@ -117,6 +117,7 @@ function fakeKit() {
     sectionHeader: (parent, text) => part(parent, 'h3', `section:${text}`),
     permissionActions: (parent) => part(parent, 'div', 'permissionActions'),
     images: (parent) => part(parent, 'div', 'images'),
+    duration: (ms) => `${Math.floor(ms / 1000)}s`,
   };
   return { kit: parts as ChatKit, calls };
 }
@@ -550,16 +551,12 @@ describe('default chat layout activity', () => {
 
   const oneStep = [toolStep('Read', 'a.ts')];
 
+  // The kit's `duration` owns the format; these rows pin
+  // the span the line hands it, finished and ticking.
   it.each([
-    { ms: 0, text: '0s' },
-    { ms: 8000, text: '8s' },
     { ms: 42999, text: '42s' },
-    { ms: 65000, text: '1m 05s' },
-    { ms: 3599000, text: '59m 59s' },
-    { ms: 3720000, text: '1h 02m' },
-    { ms: -500, text: '0s' },
     { ms: 'tick 12000 → 13000', text: '13s' },
-  ])('activity_Default_TimeFormat ($ms → $text)', ({ ms, text }) => {
+  ])('activity_Default_Time ($ms → $text)', ({ ms, text }) => {
     const isTick = typeof ms === 'string';
     const view = drawActivity(
       isTick ? liveRun(oneStep, false, 12000) : finishedRun(oneStep, ms),

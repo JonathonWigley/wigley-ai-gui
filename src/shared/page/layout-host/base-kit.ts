@@ -233,8 +233,25 @@ export function createBaseKit(deps: BaseKitDeps): BaseKit {
     },
     rowTrailing: (parentRow) =>
       appended(parentRow, element('span', 'ui-row-trailing')),
+    duration: (ms) => durationText(ms),
   };
   return kit;
+}
+
+function durationText(ms: number): string {
+  const seconds = Math.max(0, Math.floor(ms / 1000));
+  if (seconds < 60) {
+    return `${seconds}s`;
+  }
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) {
+    return `${minutes}m ${twoDigits(seconds % 60)}s`;
+  }
+  return `${Math.floor(minutes / 60)}h ${twoDigits(minutes % 60)}m`;
+}
+
+function twoDigits(value: number): string {
+  return String(value).padStart(2, '0');
 }
 
 // The anchor options for `scope`: no scope option when null, and no label

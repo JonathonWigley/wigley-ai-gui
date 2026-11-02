@@ -21,10 +21,23 @@ export interface AgentsSelfTestDeps {
 // sends.
 const sendKeys = (text: string) => ['i', ...text, 'Escape', 'Enter'];
 
+// The side bar's open width (`sidebar-width`, 256px) less four 24px resize
+// steps is its least width, 160px.
+const SIDE_BAR_STEPS_TO_LEAST = 4;
+
+// One side bar resize step `direction`, by `Alt+Shift+h` or `Alt+Shift+l`.
+const resizeSideBar = (direction: 'Left' | 'Right') => {
+  const keys = direction === 'Left' ? '<A-S-h>' : '<A-S-l>';
+  return {
+    keys: [keys],
+    expect: `[page] ${keys} ran panes.resizePane${direction}`,
+  };
+};
+
 const GROUPS: SelfTestGroup[] = [
   {
     name: 'subagent lines',
-    why: 'A session whose agent spawns two subagents draws a line for each under its row (dot, type, description, elapsed, tool count), and an interrupt finishes them and the lines go.',
+    why: "A session whose agent spawns two subagents draws a line for each under its row (dot, type, description, elapsed, tool count), each fitting its row at the side bar's least width with its description showing, and an interrupt finishes them and the lines go.",
     steps: [
       {
         keys: sendKeys(FAKE_AGENTS_TEXT),
@@ -32,6 +45,18 @@ const GROUPS: SelfTestGroup[] = [
         checksFit: true,
         screenshot: 'subagent-lines',
       },
+      ...Array.from({ length: SIDE_BAR_STEPS_TO_LEAST - 1 }, () =>
+        resizeSideBar('Left'),
+      ),
+      {
+        ...resizeSideBar('Left'),
+        checksFit: 'held',
+        screenshot: 'subagent-lines-narrow',
+        why: "The fit check at the minimum width hides the side bar, so the lines are checked at the side bar's least width here.",
+      },
+      ...Array.from({ length: SIDE_BAR_STEPS_TO_LEAST }, () =>
+        resizeSideBar('Right'),
+      ),
       {
         keys: ['<C-c>'],
         expect: `[agents] lines in ${SELFTEST_PROJECT_NAME}: 0`,
@@ -62,10 +87,18 @@ export function agentsSelfTestScript(deps: AgentsSelfTestDeps): SelfTestScript {
   return {
     pageBinds: [],
     settings: {},
-    // A line's description, and each of the transcript's live activity steps
-    // (the Agent calls carry the subagents' prompts), end in an ellipsis
-    // inside their own boxes, as their CSS says.
-    scrollsItself: ['.agents-line-description', '.chat-activity-step'],
+    // A line's type and description, its session row's status, and each of
+    // the transcript's live activity steps (the Agent calls carry the
+    // subagents' prompts), end in an ellipsis inside their own boxes, as their
+    // CSS says. The side bar handle's resize prompt shows past its box for a
+    // second after each resize step.
+    scrollsItself: [
+      '.agents-line-type',
+      '.agents-line-description',
+      '.session-row-status',
+      '.chat-activity-step',
+      '.shell-side-bar-handle',
+    ],
     open() {
       made ??= makeProject().catch((error: unknown) => {
         made = null;

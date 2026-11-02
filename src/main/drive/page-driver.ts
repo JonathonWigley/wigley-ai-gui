@@ -269,7 +269,7 @@ export const SCREENSHOT_NAME = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 // Lists what the page cuts off on the right: an element whose content is wider
 // than its box, or that ends past the window, skipping the elements the
 // `scrollsItself` selectors and the core's own match, and everything inside
-// them.
+// them, unless such an element holding text has shrunk to no width.
 function cutOffScript(scrollsItself: string[]): string {
   return `(() => {
   const scrollsItself = ${JSON.stringify([...CORE_SCROLLS_ITSELF, ...scrollsItself])};
@@ -286,6 +286,10 @@ function cutOffScript(scrollsItself: string[]): string {
       (selector) => node.parentElement.closest(selector) !== null,
     );
     if (isInScroller || node.getClientRects().length === 0) {
+      continue;
+    }
+    if (isScroller(node) && node.getBoundingClientRect().width < 1 && node.textContent.trim() !== '') {
+      problems.push(name(node) + ' shows its text in 0px');
       continue;
     }
     const isOverfull =

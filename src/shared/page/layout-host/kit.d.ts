@@ -133,4 +133,7 @@ export interface BaseKit {
   ): HTMLElement;
   // `span.ui-row-trailing` at the end of `row`, for what the row ends with.
   rowTrailing(row: HTMLElement): HTMLElement;
+  // How long `ms` lasts, in whole seconds rounded down: `42s` under a minute, `3m 05s` under an hour, else `1h 02m`;
+  // a negative span reads `0s`. Appends nothing.
+  duration(ms: number): string;
 }

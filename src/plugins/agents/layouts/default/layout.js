@@ -11,7 +11,12 @@ const layout = {
     kit.statusDot(element, 'running');
     kit.el(element, 'span', 'agents-line-type', input.agentType);
     kit.el(element, 'span', 'agents-line-description', input.description);
-    kit.el(element, 'span', 'agents-line-elapsed', input.elapsed);
+    kit.el(
+      element,
+      'span',
+      'agents-line-elapsed',
+      kit.duration(input.elapsedMs),
+    );
     kit.el(element, 'span', 'agents-line-tools', toolsText(input.toolCalls));
     return { element };
   },

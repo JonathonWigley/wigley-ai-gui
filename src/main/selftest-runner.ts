@@ -275,8 +275,9 @@ function stepLabel(step: SelfTestStep): string {
 // the write, so a line either alone causes counts. A width that never lands
 // fails the step before its write and keys. Then, whether the line came or not,
 // saves the window to each of `pngs` the presses reached, and, when the step
-// passed, runs its fit check, which resizes the window, so it comes after the
-// screenshots, and returns to the width the step left.
+// passed, runs its fit check, at the minimum width or the held one, which
+// resizes the window, so it comes after the screenshots, and returns to the
+// width the step left.
 async function runStep(
   window: DrivenWindow,
   homeFiles: Files,
@@ -336,16 +337,17 @@ async function runStep(
   if (!passed || !isSaved || !step.checksFit) {
     return passed && isSaved;
   }
+  const isHeld = step.checksFit === 'held';
   const cutOff = await cutOffAtWidth(
     window,
-    window.minimumWidth(),
+    isHeld ? window.contentSize().width : window.minimumWidth(),
     scrollsItself,
     isCurrent,
   );
   if (isCurrent()) {
     report(
       cutOff.length === 0,
-      `${label} fits the minimum width: ${cutOff.join('; ') || 'nothing cut off'}`,
+      `${label} fits the ${isHeld ? 'held' : 'minimum'} width: ${cutOff.join('; ') || 'nothing cut off'}`,
     );
   }
   return cutOff.length === 0;

@@ -59,6 +59,21 @@ describe('createBaseKit', () => {
     vi.unstubAllGlobals();
   });
 
+  it.each([
+    { ms: 0, text: '0s' },
+    { ms: 8000, text: '8s' },
+    { ms: 42999, text: '42s' },
+    { ms: 59999, text: '59s' },
+    { ms: 60000, text: '1m 00s' },
+    { ms: 185000, text: '3m 05s' },
+    { ms: 3599000, text: '59m 59s' },
+    { ms: 3600000, text: '1h 00m' },
+    { ms: 3720000, text: '1h 02m' },
+    { ms: -500, text: '0s' },
+  ])('duration_Ms_Formats ($ms → $text)', ({ ms, text }) => {
+    expect(kitOver(null).kit.duration(ms)).toBe(text);
+  });
+
   it('commandRunner_UnknownId_ThrowsAtCreationAndRunsOnlyOnCall', () => {
     const ran: string[] = [];
     const commands: KitCommands = {

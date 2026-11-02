@@ -7,16 +7,16 @@
 // The app keeps:
 // - the click on a line, which is the session row's own: it selects the session;
 // - no keys and no focus: a line takes neither;
-// - the redraw once a second while any line shows, which draws every line again with the new elapsed text;
-// - the elapsed text, formatted as `42s`, `3m 05s` or `1h 02m`.
+// - the redraw once a second while any line shows, which draws every line again with the new elapsed time.
+// `kit.duration` formats the elapsed time as chat's activity line does: `42s`, `3m 05s` or `1h 02m`.
 import type { BaseKit } from '../../../shared/page/layout-host/kit';
 
-// One running subagent: its type (`Explore`, `wigley:sonnet-medium`), the task it was given, how long it has run, and
-// how many tool calls it has started.
+// One running subagent: its type (`Explore`, `wigley:sonnet-medium`), the task it was given, how long it has run in
+// milliseconds, and how many tool calls it has started.
 export interface SubagentLineInput {
   agentType: string;
   description: string;
-  elapsed: string;
+  elapsedMs: number;
   toolCalls: number;
 }
 

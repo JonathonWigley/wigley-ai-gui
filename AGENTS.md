@@ -91,7 +91,7 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
   image-types.ts the image media types the app attaches and pastes (chat and notes share it)
   page/          page-only DOM builders plugins share: the paste and drop helpers (`pasted-images.ts`), the layout host
                  (`layout-host/`: showing layouts, the pick chain, drawing a part, rollback, `BaseKit` (the kit every
-                 owner's kit extends, with the shared `icon`, `chevron`, `edge` and `rowTrailing`) and
+                 owner's kit extends, with the shared `icon`, `chevron`, `edge`, `rowTrailing` and `duration`) and
                  `ownerBaseKitDeps` (the deps an owner's base kit is built from), `layout-parts.ts`
                  (`createLayoutParts`: an owner's shown layouts and its draws, kept by slot), `app-slot.ts` (where an
                  app element sits in a part), `read-layout-module.ts` (`readLayoutParts` and `requireLayoutParts`, the

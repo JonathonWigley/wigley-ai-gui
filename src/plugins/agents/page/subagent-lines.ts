@@ -19,7 +19,6 @@ import type {
   SubagentLineInput,
 } from '../layouts/layout';
 import { agentsManifest } from '../manifest';
-import { elapsedText } from './elapsed';
 
 // `nameOf` is the session's name in the page log line.
 export interface SubagentLinesDeps {
@@ -51,7 +50,7 @@ const TICK_MS = 1000;
 
 // Each session's running list outlives its wrapper, which a row redraw builds
 // and disposes many times. While any line shows, one tick a second redraws
-// every line, since a line has no hook to update its elapsed text alone.
+// every line, since a line has no hook to update its elapsed time alone.
 // After each draw it logs `lines in <name>: <count>` when the count differs
 // from the last one logged for that session, so a row redraw or a tick logs
 // nothing new.
@@ -119,7 +118,7 @@ export function createSubagentLines(deps: SubagentLinesDeps): SubagentLines {
         drawLine(holder, {
           agentType: agent.agentType,
           description: agent.description,
-          elapsed: elapsedText(now - agent.startedAt),
+          elapsedMs: now - agent.startedAt,
           toolCalls: agent.toolCalls,
         }),
       );

@@ -530,7 +530,8 @@ export interface PagePart<M extends PluginManifest = PluginManifest> {
 // self-test's temp home (`MainServices.homeDir` under the self-test), and one
 // that resolves outside it fails the self-test. `expect` is a line the page
 // logs once the write and the keys have run; `checksFit` also checks the page
-// fits the window's minimum width. `screenshot`, when set, saves a PNG of the
+// fits the window's minimum width, or, as `'held'`, the width the step holds,
+// for what shows only while the window is wide (a side bar beside the view). `screenshot`, when set, saves a PNG of the
 // window once the step's line has been waited for, as
 // `<pluginId>-<screenshot>.png` in the run's screenshot folder; the name is
 // lowercase letters and digits in words joined by `-`. `why`, when set, says
@@ -547,7 +548,7 @@ export interface SelfTestStep {
   writeFile?: { path: string; text: string };
   keys: string[];
   expect: string;
-  checksFit?: true;
+  checksFit?: true | 'held';
   screenshot?: string;
   why?: string;
   width?: number | 'start';
