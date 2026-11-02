@@ -1,6 +1,6 @@
 # 06 — Sessions row parts
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none (precondition: the chat-panes plan `docs/features/chat-panes/plan-chat-panes/` lands first; it restructures the side bar and edits the same sessions files)
 Plan: [plan.md](plan.md)
@@ -102,3 +102,5 @@ Done when: compiles; `npm test` runs the tests above; `npm run lint` passes (lay
 Commit:    one commit for the group
 
 ## Proof
+
+Commit f6ec263 · proof: diff read: SessionRowPart, addRowPart, RowKit and Layout.row(kit: RowKit), SessionRowParts/createSessionRowParts present; typecheck clean; row-parts and sessions-parts tests 17 pass · concerns: dispose-failed log and placed-twice throw have no test (not in the Tests list); sessions.css row comment still names the harness, stale only under the uncommitted non-run layout.js edit; layout.js committed with only the worker's two lines, the uncommitted detail:null edit left in the tree

@@ -1,6 +1,6 @@
 # 02 — Agent event contract and Files.append
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 1 · Depends on: none (precondition: the usage plan `docs/features/usage/plan-usage/` has landed; its task 03 made `AgentEvent = UsageAgentEvent` and `AgentProcessEvents.agentEvent`)
 Plan: [plan.md](plan.md)
@@ -31,3 +31,5 @@ Done when: `npm test` compiles and passes `files-contract` (through `memory-file
 Commit:    one commit for the group
 
 ## Proof
+
+Commit a9e56d7 · proof: diff read: MAIN_AGENT_ID, widened AgentEvent, AgentEventType, Files.append in node/memory/scoped present; typecheck clean for these files; worker ran the three test files (107 pass) and lint · concerns: usage/main/start.ts:71 still compares agentId to the literal 'main' (outside Files); append comment leaves out the plan's pointer to 08 per writing-code Comments; AGENTS.md files/ line does not list append (doc re-read, 11)

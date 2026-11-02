@@ -1,6 +1,6 @@
 # 01 — Probe the CLI's subagent stream
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 1 · Depends on: none (precondition: the usage plan `docs/features/usage/plan-usage/` has landed)
 Plan: [plan.md](plan.md)

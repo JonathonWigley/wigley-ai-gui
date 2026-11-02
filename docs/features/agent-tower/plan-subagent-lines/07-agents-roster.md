@@ -1,6 +1,6 @@
 # 07 — Agents plugin: manifest, contract, roster
 
-Status: not started
+Status: done
 Type: Task
 Wave: 2 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -78,3 +78,5 @@ Done when: compiles; `npm test` runs `roster.test.ts`; `npm run lint` passes
 Commit:    one commit for the group
 
 ## Proof
+
+Commit d8856ba · proof: diff read: agentsManifest, RunningAgent, AgentsChannel, foldAgentEvent present; typecheck clean; worker ran roster.test.ts (15 rows) and lint · concerns: agentsManifest is listed before keysManifest, which it depends on; nothing starts a part yet, so 08/09 prove list order does not matter

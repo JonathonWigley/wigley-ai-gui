@@ -1,6 +1,6 @@
 # 05 — Chat forwards agent events
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 2 · Depends on: 02 (precondition: the usage plan `docs/features/usage/plan-usage/` has landed; its task 04, `04-chat-forwarding.md`, already emits `chat.agentEvent`)
 Plan: [plan.md](plan.md)
@@ -25,3 +25,5 @@ Done when: compiles; the test gate runs `chat-sessions.test.ts`; `npm run lint` 
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 30227b4 · proof: diff read: ChatAgentEvent and ChatMainEvents.agentEvent present, hostSessionId = session.hostId; typecheck clean; worker ran chat-sessions.test.ts (102 pass) and lint · concerns: usage/main/start.test.ts sends chat.agentEvent payloads without hostSessionId (loosely typed emit, outside Files); describe block still named 'usage forwarding'

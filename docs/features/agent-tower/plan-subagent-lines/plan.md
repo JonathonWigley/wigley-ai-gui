@@ -241,13 +241,13 @@ export interface Layout { line?(parent: HTMLElement, input: SubagentLineInput, k
 
 ### Wave 1
 - [ ] [Probe the CLI's subagent stream](01-probe-subagent-stream.md)
-- [ ] [Agent event contract and Files.append](02-agent-event-contract.md)
-- [ ] [Sessions row parts](06-sessions-row-parts.md)
+- [x] [Agent event contract and Files.append](02-agent-event-contract.md)
+- [x] [Sessions row parts](06-sessions-row-parts.md)
 
 ### Wave 2
 - [ ] [Claude adapter emits agent events](03-claude-agent-events.md) — after 01, 02
-- [ ] [Chat forwards agent events](05-chat-forwards-agent-events.md) — after 02
-- [ ] [Agents plugin: manifest, contract, roster](07-agents-roster.md) — after 02
+- [x] [Chat forwards agent events](05-chat-forwards-agent-events.md) — after 02
+- [x] [Agents plugin: manifest, contract, roster](07-agents-roster.md) — after 02
 
 ### Wave 3
 - [ ] [Fake harness emits agent events](04-fake-agent-events.md) — after 02, 03
@@ -267,10 +267,19 @@ export interface Layout { line?(parent: HTMLElement, input: SubagentLineInput, k
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 66fec31
 
 ### Groups
+- 02 · a9e56d7 · diff read: MAIN_AGENT_ID, widened AgentEvent, AgentEventType, Files.append in node/memory/scoped present; typecheck clean for these files; worker ran the three test files (107 pass) and lint · concerns: usage/main/start.ts:71 still compares agentId to the literal 'main' (outside Files); append comment leaves out the plan's pointer to 08 per writing-code Comments; AGENTS.md files/ line does not list append (doc re-read, 11)
+- 06 · f6ec263 · diff read: SessionRowPart, addRowPart, RowKit and Layout.row(kit: RowKit), SessionRowParts/createSessionRowParts present; typecheck clean; row-parts and sessions-parts tests 17 pass · concerns: dispose-failed log and placed-twice throw have no test (not in the Tests list); sessions.css row comment still names the harness, stale only under the uncommitted non-run layout.js edit; layout.js committed with only the worker's two lines, the uncommitted detail:null edit left in the tree
+- 05 · 30227b4 · diff read: ChatAgentEvent and ChatMainEvents.agentEvent present, hostSessionId = session.hostId; typecheck clean; worker ran chat-sessions.test.ts (102 pass) and lint · concerns: usage/main/start.test.ts sends chat.agentEvent payloads without hostSessionId (loosely typed emit, outside Files); describe block still named 'usage forwarding'
+- 07 · d8856ba · diff read: agentsManifest, RunningAgent, AgentsChannel, foldAgentEvent present; typecheck clean; worker ran roster.test.ts (15 rows) and lint · concerns: agentsManifest is listed before keysManifest, which it depends on; nothing starts a part yet, so 08/09 prove list order does not matter
 ### Contract changes
 ### Rulings
+- MAIN_AGENT_ID and AgentEventType added (absent before); widening flagged no switch, usage main already narrows on type 'usage' — none — a missed site would fail typecheck · group 02 · group 02
+- the end-of-row append calls requireElementIn first, so a row returning no element fails with the draw's own message — only a broken user row's log text changes if wrong · group 06 · group 06
+- the view does not keep the rowParts.onChanged handle: view and registry share the page load's lifetime — a listener leaks only if the view outlives its registry · group 06 · group 06
+- forwarding was under isLive, so the guard stays for every event but sessionEnded, which is forwarded after the row closes — wrong means a late usage reaches usage, or a closed row's roster never empties · group 05 · group 05
+- exhaustiveness is 'return event satisfies never' after a default-less switch — a type outside the union (a hand-edited log in replay) returns the event, not an array · group 07 · group 07
 ### Review rounds
 ### Test gate
