@@ -82,8 +82,8 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
     let lastDetailsText: string | null = null;
 
     // Draws the line again, the last draw disposed first.
-    const drawStatusLine = (current: UsageSnapshot, now: number) => {
-      const input = statusLineInput(current, shownSessionId, now);
+    const drawStatusLine = (current: UsageSnapshot) => {
+      const input = statusLineInput(current, shownSessionId);
       const last = statusLine;
       statusLine = null;
       callEach<() => void>(
@@ -125,7 +125,7 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
         return;
       }
       const now = services.clock.now();
-      drawStatusLine(snapshot, now);
+      drawStatusLine(snapshot);
       if (!detailsOpen) {
         return;
       }

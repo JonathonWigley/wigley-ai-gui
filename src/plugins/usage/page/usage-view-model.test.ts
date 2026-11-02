@@ -9,11 +9,14 @@ import type {
   DetailsInput,
   DetailsProfileInput,
   MeterInput,
+  SessionLineInput,
   StatusLineInput,
 } from '../layouts/layout';
 import {
   detailsInput,
   detailsStatesText,
+  sessionLineInput,
+  sessionLineText,
   statusLineInput,
   statusLineText,
 } from './usage-view-model';
@@ -123,7 +126,6 @@ describe('statusLineInput', () => {
       sessions: [session('s1', PERSONAL_DIR, usageEvent())],
       profileName: 'personal',
       rows: ['Week'],
-      hasSession: true,
     },
     {
       case: 'NoShownSession',
@@ -131,7 +133,6 @@ describe('statusLineInput', () => {
       sessions: [session('s1', PERSONAL_DIR, usageEvent())],
       profileName: 'work',
       rows: ['5h'],
-      hasSession: false,
     },
     {
       case: 'ShownSessionWithNoUsage',
@@ -139,7 +140,6 @@ describe('statusLineInput', () => {
       sessions: [session('s1', PERSONAL_DIR, usageEvent())],
       profileName: 'work',
       rows: ['5h'],
-      hasSession: false,
     },
     {
       case: 'ShownSessionBeforeItsFirstTurn',
@@ -147,7 +147,6 @@ describe('statusLineInput', () => {
       sessions: [session('s1', PERSONAL_DIR, null)],
       profileName: 'personal',
       rows: ['Week'],
-      hasSession: false,
     },
     {
       case: 'SessionOnAProfileNoPlanHolds',
@@ -155,67 +154,16 @@ describe('statusLineInput', () => {
       sessions: [session('s1', '~/.claude-gone', usageEvent())],
       profileName: 'work',
       rows: ['5h'],
-      hasSession: true,
     },
   ])(
     'statusLineInput_Profile_$case',
-    ({ shown, sessions, profileName, rows, hasSession }) => {
-      const input = statusLineInput(twoProfiles(sessions), shown, NOW);
+    ({ shown, sessions, profileName, rows }) => {
+      const input = statusLineInput(twoProfiles(sessions), shown);
 
       expect(input.profileName).toBe(profileName);
       expect(input.plans.map((each) => each.label)).toEqual(rows);
-      expect(input.session !== null).toBe(hasSession);
     },
   );
-
-  it.each([
-    {
-      case: 'ConfiguredWinsOverReported',
-      usage: usageEvent(),
-      context: meter('180k/300k', 60, 'normal'),
-    },
-    {
-      case: 'ReportedOnly',
-      usage: usageEvent({
-        autocompact: { configured: null, reported: 360_000 },
-      }),
-      context: meter('180k/360k', 50, 'normal'),
-    },
-    {
-      case: 'NoLimit',
-      usage: usageEvent({ autocompact: { configured: null, reported: null } }),
-      context: meter('180k', 0, 'normal'),
-    },
-    {
-      case: 'BelowSeventyIsNormal',
-      usage: usageEvent({ contextTokens: 207_000 }),
-      context: meter('207k/300k', 69, 'normal'),
-    },
-    {
-      case: 'SeventyIsWarning',
-      usage: usageEvent({ contextTokens: 210_000 }),
-      context: meter('210k/300k', 70, 'warning'),
-    },
-    {
-      case: 'BelowNinetyIsWarning',
-      usage: usageEvent({ contextTokens: 267_000 }),
-      context: meter('267k/300k', 89, 'warning'),
-    },
-    {
-      case: 'NinetyIsCritical',
-      usage: usageEvent({ contextTokens: 270_000 }),
-      context: meter('270k/300k', 90, 'critical'),
-    },
-    {
-      case: 'PastTheLimitFillsToAHundred',
-      usage: usageEvent({ contextTokens: 330_000 }),
-      context: meter('330k/300k', 100, 'critical'),
-    },
-  ])('statusLineInput_Context_$case', ({ usage, context }) => {
-    const input = statusLineInput(withSession(usage), 's1', NOW);
-
-    expect(input.session?.context).toEqual(context);
-  });
 
   it.each([
     {
@@ -249,16 +197,59 @@ describe('statusLineInput', () => {
       expected: { stale: false },
     },
   ])('statusLineInput_Notes_$case', ({ plans, expected }) => {
-    const input = statusLineInput({ plans, sessions: [] }, null, NOW);
+    const input = statusLineInput({ plans, sessions: [] }, null);
 
     expect(input).toMatchObject(expected);
   });
+});
 
+describe('sessionLineInput', () => {
   it.each([
     {
-      case: 'NoCacheNoSpend',
+      case: 'ConfiguredWinsOverReported',
       usage: usageEvent(),
-      expected: { cache: null, spend: null },
+      expected: {
+        context: meter('180k/300k', 60, 'normal'),
+        cache: null,
+        spend: null,
+      },
+    },
+    {
+      case: 'ReportedOnly',
+      usage: usageEvent({
+        autocompact: { configured: null, reported: 360_000 },
+      }),
+      expected: { context: meter('180k/360k', 50, 'normal') },
+    },
+    {
+      case: 'NoLimit',
+      usage: usageEvent({ autocompact: { configured: null, reported: null } }),
+      expected: { context: meter('180k', 0, 'normal') },
+    },
+    {
+      case: 'BelowSeventyIsNormal',
+      usage: usageEvent({ contextTokens: 207_000 }),
+      expected: { context: meter('207k/300k', 69, 'normal') },
+    },
+    {
+      case: 'SeventyIsWarning',
+      usage: usageEvent({ contextTokens: 210_000 }),
+      expected: { context: meter('210k/300k', 70, 'warning') },
+    },
+    {
+      case: 'BelowNinetyIsWarning',
+      usage: usageEvent({ contextTokens: 267_000 }),
+      expected: { context: meter('267k/300k', 89, 'warning') },
+    },
+    {
+      case: 'NinetyIsCritical',
+      usage: usageEvent({ contextTokens: 270_000 }),
+      expected: { context: meter('270k/300k', 90, 'critical') },
+    },
+    {
+      case: 'PastTheLimitFillsToAHundred',
+      usage: usageEvent({ contextTokens: 330_000 }),
+      expected: { context: meter('330k/300k', 100, 'critical') },
     },
     {
       case: 'CacheCold',
@@ -266,19 +257,32 @@ describe('statusLineInput', () => {
       expected: { cache: 'cache cold' },
     },
     {
-      case: 'CacheWarm',
-      usage: usageEvent({ cacheExpiresAt: NOW + 42 * MINUTE }),
-      expected: { cache: 'cache 42m' },
+      case: 'CacheWarmAndSpend',
+      usage: usageEvent({
+        cacheExpiresAt: NOW + 42 * MINUTE,
+        spendUsd: 1.234,
+      }),
+      expected: { cache: 'cache 42m', spend: '$1.23' },
     },
-    {
-      case: 'Spend',
-      usage: usageEvent({ spendUsd: 1.234 }),
-      expected: { spend: '$1.23' },
-    },
-  ])('statusLineInput_Notes_Session$case', ({ usage, expected }) => {
-    const input = statusLineInput(withSession(usage), 's1', NOW);
+  ])('sessionLineInput_$case', ({ usage, expected }) => {
+    const input = sessionLineInput(withSession(usage), 's1', NOW);
 
-    expect(input.session).toMatchObject(expected);
+    expect(input).toMatchObject(expected);
+  });
+
+  it.each([
+    { case: 'AbsentSession', sessionId: 's9' },
+    { case: 'SessionBeforeItsFirstTurn', sessionId: 's2' },
+  ])('sessionLineInput_Null_$case', ({ sessionId }) => {
+    const snapshot: UsageSnapshot = {
+      plans: [plan()],
+      sessions: [
+        session('s1', WORK_DIR, usageEvent()),
+        session('s2', WORK_DIR, null),
+      ],
+    };
+
+    expect(sessionLineInput(snapshot, sessionId, NOW)).toBeNull();
   });
 });
 
@@ -463,7 +467,6 @@ describe('detailsInput', () => {
 
 function lineInput(overrides: Partial<StatusLineInput>): StatusLineInput {
   return {
-    session: null,
     profileName: 'work',
     plans: [{ label: '5h', text: '42%', percent: 42, tone: 'normal' }],
     note: null,
@@ -490,37 +493,15 @@ function profileInput(
 describe('log text', () => {
   it.each([
     {
-      case: 'SessionAndPlans',
+      case: 'Plans',
       input: lineInput({
-        session: {
-          context: meter('180k/300k', 60, 'normal'),
-          cache: 'cache 42m',
-          spend: '$1.23',
-        },
         plans: [
           { label: '5h', text: '42%', percent: 42, tone: 'normal' },
           { label: 'Week', text: '61%', percent: 61, tone: 'normal' },
           { label: 'Fable', text: '88%', percent: 88, tone: 'warning' },
         ],
       }),
-      expected:
-        'context 180k/300k, cache 42m, spend $1.23 | work: 5h 42%, Week 61%, Fable 88%',
-    },
-    {
-      case: 'SessionWithNoCacheOrSpend',
-      input: lineInput({
-        session: {
-          context: meter('180k', 0, 'normal'),
-          cache: null,
-          spend: null,
-        },
-      }),
-      expected: 'context 180k | work: 5h 42%',
-    },
-    {
-      case: 'NoSession',
-      input: lineInput({}),
-      expected: 'work: 5h 42%',
+      expected: 'work: 5h 42%, Week 61%, Fable 88%',
     },
     {
       case: 'NoteInPlaceOfRows',
@@ -539,6 +520,38 @@ describe('log text', () => {
     },
   ])('logText_StatusLine$case', ({ input, expected }) => {
     expect(statusLineText(input)).toBe(expected);
+  });
+
+  it.each<{ case: string; input: SessionLineInput; expected: string }>([
+    {
+      case: 'Everything',
+      input: {
+        context: meter('180k/300k', 60, 'normal'),
+        cache: 'cache 42m',
+        spend: '$1.23',
+      },
+      expected: 'context 180k/300k, cache 42m, spend $1.23',
+    },
+    {
+      case: 'NoCache',
+      input: {
+        context: meter('180k/300k', 60, 'normal'),
+        cache: null,
+        spend: '$1.23',
+      },
+      expected: 'context 180k/300k, spend $1.23',
+    },
+    {
+      case: 'NoSpend',
+      input: {
+        context: meter('180k', 0, 'normal'),
+        cache: 'cache cold',
+        spend: null,
+      },
+      expected: 'context 180k, cache cold',
+    },
+  ])('logText_SessionLine$case', ({ input, expected }) => {
+    expect(sessionLineText(input)).toBe(expected);
   });
 
   it.each([

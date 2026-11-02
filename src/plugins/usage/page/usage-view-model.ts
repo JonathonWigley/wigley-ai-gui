@@ -24,24 +24,31 @@ const CONTEXT_WARNING_PERCENT = 70;
 const CONTEXT_CRITICAL_PERCENT = 90;
 const MINUTE_MS = 60_000;
 
-// The status-bar line for `shownSessionId` (null while no session shows): its
-// session's context, cache and spend, and the plan of its profile, or of the
-// default profile while it has none.
+// The status-bar plan line for `shownSessionId` (null while no session
+// shows): the plan of its session's profile, or of the default profile while
+// it has none.
 export function statusLineInput(
   snapshot: UsageSnapshot,
   shownSessionId: string | null,
-  now: number,
 ): StatusLineInput {
-  const sessionUsage = shownSession(snapshot, shownSessionId);
-  const plan = shownPlan(snapshot.plans, sessionUsage);
-  const usage = sessionUsage?.usage ?? null;
+  const plan = shownPlan(snapshot.plans, findSession(snapshot, shownSessionId));
   return {
-    session: usage === null ? null : sessionLine(usage, now),
     profileName: plan?.name ?? null,
     plans: plan?.usage?.rows.map(rowMeter) ?? [],
     note: planNote(plan),
     stale: plan !== null && plan.usage !== null && plan.stale,
   };
+}
+
+// `sessionId`'s line: its context, cache and spend; null while the snapshot
+// holds no such session or it has no usage yet.
+export function sessionLineInput(
+  snapshot: UsageSnapshot,
+  sessionId: string,
+  now: number,
+): SessionLineInput | null {
+  const usage = findSession(snapshot, sessionId)?.usage ?? null;
+  return usage === null ? null : sessionLine(usage, now);
 }
 
 // The details bar: every profile's plan, and the shown session's usage.
@@ -50,24 +57,31 @@ export function detailsInput(
   shownSessionId: string | null,
   now: number,
 ): DetailsInput {
-  const usage = shownSession(snapshot, shownSessionId)?.usage ?? null;
+  const usage = findSession(snapshot, shownSessionId)?.usage ?? null;
   return {
     profiles: snapshot.plans.map((plan) => detailsProfile(plan, now)),
     session: usage === null ? null : detailsSession(usage, now),
   };
 }
 
-// The line as the page log writes it:
-// `context 180k/300k, cache 42m, spend $1.23 | work: 5h 42%, Week 61%`.
+// The plan line as the page log writes it: `work: 5h 42%, Week 61%`.
 export function statusLineText(input: StatusLineInput): string {
-  const planPart = planText(input);
-  if (input.session === null) {
-    return planPart;
+  if (input.profileName === null) {
+    return 'no profiles';
   }
-  const { context, cache, spend } = input.session;
-  const cachePart = cache === null ? '' : `, ${cache}`;
-  const spendPart = spend === null ? '' : `, spend ${spend}`;
-  return `context ${context.text}${cachePart}${spendPart} | ${planPart}`;
+  const meters =
+    input.note ??
+    input.plans.map((meter) => `${meter.label} ${meter.text}`).join(', ');
+  const stalePart = input.stale ? ' (stale)' : '';
+  return `${input.profileName}: ${meters}${stalePart}`;
+}
+
+// A session's line as the page log writes it:
+// `context 180k/300k, cache 42m, spend $1.23`.
+export function sessionLineText(input: SessionLineInput): string {
+  const cachePart = input.cache === null ? '' : `, ${input.cache}`;
+  const spendPart = input.spend === null ? '' : `, spend ${input.spend}`;
+  return `context ${input.context.text}${cachePart}${spendPart}`;
 }
 
 // Each profile's state as the page log writes it: `work fresh, personal stale`.
@@ -80,27 +94,15 @@ export function detailsStatesText(input: DetailsInput): string {
     .join(', ');
 }
 
-function planText(input: StatusLineInput): string {
-  if (input.profileName === null) {
-    return 'no profiles';
-  }
-  const meters =
-    input.note ??
-    input.plans.map((meter) => `${meter.label} ${meter.text}`).join(', ');
-  const stalePart = input.stale ? ' (stale)' : '';
-  return `${input.profileName}: ${meters}${stalePart}`;
-}
-
-function shownSession(
+function findSession(
   snapshot: UsageSnapshot,
-  shownSessionId: string | null,
+  sessionId: string | null,
 ): SessionUsage | null {
-  if (shownSessionId === null) {
+  if (sessionId === null) {
     return null;
   }
   return (
-    snapshot.sessions.find((session) => session.sessionId === shownSessionId) ??
-    null
+    snapshot.sessions.find((session) => session.sessionId === sessionId) ?? null
   );
 }
 

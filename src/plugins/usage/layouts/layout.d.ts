@@ -1,7 +1,8 @@
-// The usage layout contract: the parts a usage layout draws for the status-bar line and the right-bar details, and
-// the kit each part gets. The app keeps the status-bar slot (always on, at the bar's end), the right-bar slot (there
-// only while the details are open), the open state, the shown session and every redraw: on each snapshot, each change
-// of the shown session, each layouts set and once a minute.
+// The usage layout contract: the parts a usage layout draws for the status-bar plan line, each session's line and the
+// right-bar details, and the kit each part gets. The app keeps the status-bar slot (always on, at the bar's end), the
+// right-bar slot (there only while the details are open), each session's bar slot (in that session's tab bar), the
+// open state, the shown session and every redraw: on each snapshot, each change of the shown session, each layouts set
+// and once a minute.
 //
 // Every input is already worded for the screen: counts, percents, money and times arrive as text, and each meter's
 // fill and tone beside its text.
@@ -15,18 +16,16 @@ export interface MeterInput {
   percent: number;
   tone: UsageTone;
 }
-// The shown session's context meter, its cache countdown (`cache 42m`, `cache cold`) and its spend (`$1.23`); null
-// cache or spend while the session has reported none.
+// One session's line: its context meter, its cache countdown (`cache 42m`, `cache cold`) and its spend (`$1.23`);
+// null cache or spend while the session has reported none.
 export interface SessionLineInput {
   context: MeterInput;
   cache: string | null;
   spend: string | null;
 }
-// `session` is null while no session with usage shows. `profileName` is the shown plan's profile, null when there is
-// no profile at all. `note` (`plan loading`, `plan unavailable`, `no plan rows`, `no profiles`) stands in place of
+// The status-bar plan line. `profileName` is the shown plan's profile, null when there is no profile at all. `note` (`plan loading`, `plan unavailable`, `no plan rows`, `no profiles`) stands in place of
 // `plans` when set. `stale` is true while the shown plan's last poll failed after a good one.
 export interface StatusLineInput {
-  session: SessionLineInput | null;
   profileName: string | null;
   plans: readonly MeterInput[];
   note: string | null;
@@ -59,7 +58,7 @@ export interface DetailsSessionInput {
   cache: string;
   spend: string;
 }
-// Every profile in chat's profile order, and the shown session, null as `StatusLineInput.session` is.
+// Every profile in chat's profile order, and the shown session, null while no session with usage shows.
 export interface DetailsInput {
   profiles: readonly DetailsProfileInput[];
   session: DetailsSessionInput | null;
@@ -73,12 +72,18 @@ export interface UsageKit extends BaseKit {
 
 // Each part comes from the first layout that defines it among the `usage.layout` setting and `default`; a part that
 // throws, returns no element appended to `parent`, or appends other nodes beside it is drawn by `default` instead.
-// Every part appends one element to `parent` and returns it. `statusLine` draws the status-bar line, `details` the
-// right-bar details.
+// Every part appends one element to `parent` and returns it. `statusLine` draws the status-bar plan line,
+// `sessionLine` one session's line into the bar slot sessions gives it (drawn only while that session has usage), and
+// `details` the right-bar details.
 export interface Layout {
   statusLine?(
     parent: HTMLElement,
     input: StatusLineInput,
+    kit: UsageKit,
+  ): HTMLElement;
+  sessionLine?(
+    parent: HTMLElement,
+    input: SessionLineInput,
     kit: UsageKit,
   ): HTMLElement;
   details?(

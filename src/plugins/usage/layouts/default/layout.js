@@ -1,26 +1,14 @@
 // @ts-check
 
-// The built-in usage look: the status-bar line as wrapping groups (the
-// session's context, cache and spend, a divider, then each plan meter), and
-// the details as a section per profile and one for the shown session.
+// The built-in usage look: the status-bar line as wrapping groups (each plan
+// meter, or the note), each session's line as one inline run (its context,
+// cache and spend), and the details as a section per profile and one for the
+// shown session.
 
 /** @type {import('../layout').CompleteLayout} */
 const layout = {
   statusLine(parent, input, kit) {
     const line = kit.el(parent, 'div', 'usage-status-line');
-    if (input.session !== null) {
-      const group = kit.el(line, 'span', 'usage-group usage-session');
-      const { context, cache, spend } = input.session;
-      kit.meter(group, context.percent, context.tone);
-      kit.el(group, 'span', 'usage-text', context.text);
-      if (cache !== null) {
-        kit.el(group, 'span', 'usage-text', cache);
-      }
-      if (spend !== null) {
-        kit.el(group, 'span', 'usage-text', spend);
-      }
-      kit.el(line, 'span', 'usage-divider');
-    }
     const planGroups =
       input.note === null
         ? input.plans.map((meter) => planMeter(line, meter, kit))
@@ -30,6 +18,18 @@ const layout = {
       if (input.profileName !== null) {
         group.title = input.profileName;
       }
+    }
+    return line;
+  },
+  sessionLine(parent, input, kit) {
+    const line = kit.el(parent, 'span', 'usage-session-line');
+    kit.meter(line, input.context.percent, input.context.tone);
+    kit.el(line, 'span', 'usage-text', input.context.text);
+    if (input.cache !== null) {
+      kit.el(line, 'span', 'usage-text', input.cache);
+    }
+    if (input.spend !== null) {
+      kit.el(line, 'span', 'usage-text', input.spend);
     }
     return line;
   },

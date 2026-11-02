@@ -2,8 +2,9 @@ import { definePlugin } from '../../shared/define-plugin';
 
 // Plan usage and session usage, always on screen: main polls each chat
 // profile's plan windows through the Claude harness and folds in the live rows
-// and usage events chat forwards; the page draws the status-bar line and the
-// right-bar details through the `layout` setting's usage layout.
+// and usage events chat forwards; the page draws the status-bar plan line, each
+// session's line in its tab bar and the right-bar details through the `layout`
+// setting's usage layout.
 // `pollIntervalSeconds` is how often each profile is polled, at least 60.
 export const usageManifest = definePlugin({
   id: 'usage',
@@ -26,7 +27,7 @@ export const usageManifest = definePlugin({
     layout: {
       label: 'Usage layout',
       description:
-        'The layout that draws the status-bar line and the usage details: a folder in the layouts/usage folder, or default.',
+        "The layout that draws the status-bar plan line, each session's usage line and the usage details: a folder in the layouts/usage folder, or default.",
     },
   },
   themeTokens: {},

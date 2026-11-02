@@ -20,10 +20,14 @@
   white-space: nowrap;
 }
 
-[data-layout-owner='usage'][data-layout='default'] .usage-divider {
-  align-self: stretch;
-  border-left: 1px solid var(--wg-border-default);
-  min-height: var(--wg-statusbar-height);
+/* A session's line in its tab bar: one run that never wraps. */
+[data-layout-owner='usage'][data-layout='default'].usage-session-line {
+  align-items: center;
+  display: inline-flex;
+  font-size: var(--wg-text-12);
+  font-variant-numeric: tabular-nums;
+  gap: var(--wg-space-1_5);
+  white-space: nowrap;
 }
 
 [data-layout-owner='usage'][data-layout='default'] .usage-note,

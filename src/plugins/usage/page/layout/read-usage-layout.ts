@@ -4,6 +4,7 @@ import type { Layout } from '../../layouts/layout';
 // Every part a usage layout may define.
 const LAYOUT_PARTS: Record<keyof Layout, true> = {
   statusLine: true,
+  sessionLine: true,
   details: true,
 };
 
