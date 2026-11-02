@@ -2,7 +2,10 @@ import type { ChatImage } from '../../../contracts/agent';
 import type { Log } from '../../../contracts/log';
 import type { ToastTone } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
-import { filesOf, holdsPastedText } from '../../../shared/page/pasted-images';
+import {
+  filesOf,
+  holdsPastedText,
+} from '../../../shared/page/file-drop/pasted-text';
 import { refusalOf } from '../image-rules';
 
 // The images attached to one Chat tab's next message, in the order attached.

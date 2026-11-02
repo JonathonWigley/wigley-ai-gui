@@ -1,7 +1,6 @@
-import { IMAGE_TYPES } from '../../shared/image-types';
+import { IMAGE_TYPES, MAX_IMAGE_BASE64 } from '../../shared/image-types';
 
-// The API's per-image cap, measured on the base64 text it receives.
-export const MAX_IMAGE_BASE64 = 5 * 1024 * 1024;
+export { MAX_IMAGE_BASE64 } from '../../shared/image-types';
 
 // Why an image of `type` whose base64 text is `base64Length` long cannot be
 // attached; null when it can.

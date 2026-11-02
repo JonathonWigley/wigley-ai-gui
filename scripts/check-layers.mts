@@ -26,13 +26,32 @@ const LAYERS: Record<string, LayerRule> = {
     packages: ['node:'],
   },
   'src/shared/page': {
-    layers: ['src/contracts', 'src/shared', 'src/shared/page/ui'],
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/shared/page/ui',
+      'src/shared/page/file-drop',
+    ],
     packages: [],
   },
   // Type-checks every owner's layout contract with the TypeScript compiler.
   'src/shared/layouts/layout-contracts.test.ts': {
     layers: ['src/contracts', 'src/shared'],
     packages: ['node:', 'typescript'],
+  },
+  'src/shared/page/file-drop': {
+    layers: ['src/contracts', 'src/shared'],
+    packages: [],
+  },
+  // Finds chips through the real POSIX and Windows path adapters.
+  'src/shared/page/file-drop/file-chips.test.ts': {
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/shared/paths',
+      'src/shared/page/file-drop',
+    ],
+    packages: [],
   },
   'src/shared/page/layout-host': {
     layers: [
@@ -262,6 +281,7 @@ const LAYERS: Record<string, LayerRule> = {
       'src/plugins/keys/contract.ts',
       'src/plugins/sessions/contract.ts',
       'src/shared/page/layout-host',
+      'src/shared/page/file-drop',
     ],
     packages: [],
   },
@@ -311,6 +331,7 @@ const LAYERS: Record<string, LayerRule> = {
       'src/plugins/sessions/contract.ts',
       'src/plugins/docs/layouts',
       'src/shared/page/layout-host',
+      'src/shared/page/file-drop',
     ],
     packages: [],
   },
@@ -353,6 +374,7 @@ const LAYERS: Record<string, LayerRule> = {
       'src/plugins/keys/contract.ts',
       'src/plugins/backlog/layouts',
       'src/shared/page/layout-host',
+      'src/shared/page/file-drop',
     ],
     packages: [],
   },
@@ -402,6 +424,7 @@ const LAYERS: Record<string, LayerRule> = {
       'src/plugins/sessions/contract.ts',
       'src/plugins/notes/layouts',
       'src/shared/page/layout-host',
+      'src/shared/page/file-drop',
     ],
     packages: [],
   },
@@ -582,6 +605,7 @@ const LAYERS: Record<string, LayerRule> = {
       'src/plugins/keys/contract.ts',
       'src/plugins/sessions/contract.ts',
       'src/shared/page/layout-host',
+      'src/shared/page/file-drop',
     ],
     packages: [],
   },
@@ -618,6 +642,7 @@ const LAYERS: Record<string, LayerRule> = {
       'src/plugins/sessions/contract.ts',
       'src/plugins/primer/layouts',
       'src/shared/page/layout-host',
+      'src/shared/page/file-drop',
     ],
     packages: [],
   },
@@ -827,6 +852,7 @@ const LAYERS: Record<string, LayerRule> = {
       'src/shared/page/ui',
       'src/shared/page/layout-host',
       'src/renderer/shell/layouts',
+      'src/shared/page/file-drop',
     ],
     packages: [],
   },
@@ -835,7 +861,7 @@ const LAYERS: Record<string, LayerRule> = {
     packages: [],
   },
   'src/renderer/codemirror-vim': {
-    layers: ['src/contracts', 'src/shared'],
+    layers: ['src/contracts', 'src/shared', 'src/shared/page/file-drop'],
     packages: [
       'codemirror',
       '@codemirror/lang-markdown',

@@ -14,7 +14,10 @@ import { saveState, startAutosave } from '../../../shared/page/autosave';
 import { element } from '../../../shared/page/dom';
 import type { KitCommands } from '../../../shared/page/layout-host/base-kit';
 import { createListPicker } from '../../../shared/page/list-picker';
-import { filesOf, holdsPastedText } from '../../../shared/page/pasted-images';
+import {
+  filesOf,
+  holdsPastedText,
+} from '../../../shared/page/file-drop/pasted-text';
 import { createReducerStore } from '../../../shared/page/reducer-store';
 import { textBoxInput } from '../../../shared/page/text-box';
 import { createDialog } from '../../../shared/page/ui/dialog';
