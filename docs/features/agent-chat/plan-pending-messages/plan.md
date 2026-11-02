@@ -178,7 +178,7 @@ Boundary rules:
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Chat main queue and the channel](01-main-queue.md)
+- [x] [Chat main queue and the channel](01-main-queue.md)
 
 ### Wave 2
 - [ ] [The queuedMessage layout part](02-queued-message-part.md) — after 01 (shares `layout.test.ts`)
@@ -197,4 +197,8 @@ Boundary rules:
 
 ## Run log
 Review base: 7f62c7d
+### Groups
+- 01 · 04ebdfb · diff read: every Produces present; typecheck clean · concerns: compiler named only chat-commands.test.ts for queued: [] (other listed literals are partial); start.test.ts preview-ignored table lacks a pullBack row
+### Rulings
+- returned and the drain write carry { text, images } only, no id; a throwing drain write sends queued twice (shift, then restore) — matches the plan's shapes — a page redraw flickers once if wrong · group 01 · group 01
 

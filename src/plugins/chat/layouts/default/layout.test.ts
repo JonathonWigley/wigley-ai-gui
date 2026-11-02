@@ -11,6 +11,7 @@ import type {
   EntryView,
   PartView,
   PickerRowKit,
+  QueuedMessageInput,
   SignInKit,
   StepInput,
 } from '../layout';
@@ -571,6 +572,54 @@ describe('default chat layout activity', () => {
   });
 });
 
+function drawQueued(input: QueuedMessageInput): PartView<QueuedMessageInput> {
+  const parent = new FakeElement('div');
+  const view = layout.queuedMessage(asHtml(parent), input, fakeKit().kit);
+  expect(parent.children).toEqual([asFake(view.element)]);
+  return view;
+}
+
+describe('default chat layout queuedMessage', () => {
+  beforeEach(() => {
+    vi.stubGlobal('document', {
+      createElement: (tag: string) => new FakeElement(tag),
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it.each([
+    { imageCount: 0, label: 'pending' },
+    { imageCount: 1, label: 'pending · 1 image' },
+    { imageCount: 3, label: 'pending · 3 images' },
+  ])(
+    'queuedMessage_Default_Label ($imageCount → $label)',
+    ({ imageCount, label }) => {
+      const view = drawQueued({ text: 'fix the tests', imageCount });
+
+      expect(describeChildren(asFake(view.element))).toEqual([
+        `div.chat-queued-label:${label}`,
+        'div.chat-queued-text:fix the tests',
+      ]);
+    },
+  );
+
+  it('queuedMessage_Default_UpdateRedrawsInPlace', () => {
+    const view = drawQueued({ text: 'fix the tests', imageCount: 0 });
+    const row = view.element;
+
+    view.update?.({ text: 'and the lint', imageCount: 2 });
+
+    expect(view.element).toBe(row);
+    expect(describeChildren(asFake(row))).toEqual([
+      'div.chat-queued-label:pending · 2 images',
+      'div.chat-queued-text:and the lint',
+    ]);
+  });
+});
+
 // The kit parts of the surfaces beside the entries, each appending a tagged
 // fake element; `row` keeps its options.
 function fakeSurfaceKit() {
@@ -608,6 +657,7 @@ type SurfacePart = Exclude<keyof ChatLayout, 'entries'>;
 // Every part beside the entries; a part left out fails to compile.
 const SURFACE_PARTS: Record<SurfacePart, true> = {
   activity: true,
+  queuedMessage: true,
   composer: true,
   composerBar: true,
   attachments: true,

@@ -108,6 +108,12 @@ export interface ActivityInput {
   now: number;
 }
 
+// One pending message: its text as typed and how many images it carries.
+export interface QueuedMessageInput {
+  text: string;
+  imageCount: number;
+}
+
 export interface EntryView<K extends EntryKind = EntryKind> {
   element: HTMLElement;
   // Runs with each later version of the entry (same id) while it shows. A view with no update is built again and its element replaced.
@@ -326,6 +332,13 @@ export interface ChatLayout {
     input: ActivityInput,
     kit: BaseKit,
   ): PartView<ActivityInput>;
+  // One pending message's row, appended to the entry list after the last entry; the app marks the focused row and
+  // handles its click.
+  queuedMessage?(
+    parent: HTMLElement,
+    input: QueuedMessageInput,
+    kit: BaseKit,
+  ): PartView<QueuedMessageInput>;
   // The floating composer, appended to the Chat tab under the entries.
   composer?(
     parent: HTMLElement,

@@ -1,9 +1,9 @@
 // @ts-check
 
-// The built-in chat look: the entries, the activity lines, the composer, the
-// list rows, the dialogs' bodies and the image viewer. Every collapsible row's
-// body is built on its first open and kept, so an update refills it in place
-// whether it is open or closed.
+// The built-in chat look: the entries, the activity lines, the pending
+// messages' rows, the composer, the list rows, the dialogs' bodies and the
+// image viewer. Every collapsible row's body is built on its first open and
+// kept, so an update refills it in place whether it is open or closed.
 
 // The steps a live, closed activity line lists under its header; a user
 // layout sets its own shortlist's length.
@@ -203,6 +203,24 @@ function fillActivity(line, input, kit) {
   }
 }
 
+/** @param {number} imageCount */
+function queuedLabel(imageCount) {
+  if (imageCount === 0) {
+    return 'pending';
+  }
+  return `pending · ${imageCount} ${imageCount === 1 ? 'image' : 'images'}`;
+}
+
+/**
+ * @param {HTMLElement} label
+ * @param {HTMLElement} text
+ * @param {import('../layout').QueuedMessageInput} input
+ */
+function showQueued(label, text, input) {
+  label.textContent = queuedLabel(input.imageCount);
+  text.textContent = input.text;
+}
+
 const WAITING_TEXT = 'Waiting for the sign-in link…';
 
 /** @param {string | null} link */
@@ -384,6 +402,21 @@ const layout = {
       element: line,
       update(next) {
         fillActivity(line, next, kit);
+      },
+    };
+  },
+  // The dim label, with the image count when there are images, over the text
+  // as typed.
+  queuedMessage(parent, input) {
+    const row = root(parent, 'chat-queued');
+    const label = el('div', 'chat-queued-label');
+    const text = el('div', 'chat-queued-text');
+    row.append(label, text);
+    showQueued(label, text, input);
+    return {
+      element: row,
+      update(next) {
+        showQueued(label, text, next);
       },
     };
   },

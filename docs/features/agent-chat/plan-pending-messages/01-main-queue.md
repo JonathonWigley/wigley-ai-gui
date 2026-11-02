@@ -1,6 +1,6 @@
 # 01 — Chat main queue and the channel
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -37,3 +37,5 @@ Done when: compiles; `npm run lint` passes; the test gate runs the tests above
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 04ebdfb · proof: diff read: every Produces present; typecheck clean · concerns: compiler named only chat-commands.test.ts for queued: [] (other listed literals are partial); start.test.ts preview-ignored table lacks a pullBack row
