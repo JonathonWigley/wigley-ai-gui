@@ -546,6 +546,23 @@ describe('createFakeAgentHarness', () => {
         'ended',
       ],
     },
+    {
+      case: 'interruptThenKill_FinishesSubagentsBeforeSessionEnded',
+      end: (agent: AgentProcess) => {
+        agent.interrupt();
+        agent.kill();
+      },
+      lines: [
+        'tool agent-1-1 Interrupted',
+        'agentFinished fake-agent-1-1 failed',
+        'tool agent-1-2 Interrupted',
+        'agentFinished fake-agent-1-2 failed',
+        'notice notice-1',
+        'activity idle',
+        'sessionEnded',
+        'ended',
+      ],
+    },
   ])('agentsTurn_$case', async ({ end, lines }) => {
     const { agent, timeline } = await startedProcess();
     agent.send({ text: FAKE_AGENTS_TEXT, images: [] });
