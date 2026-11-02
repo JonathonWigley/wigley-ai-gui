@@ -1,6 +1,6 @@
 # 02 — Usage session line part
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -56,3 +56,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 9eb4d06 · proof: diff read; Produces present (sessionLine on Layout, StatusLineInput without session, sessionLineInput, sessionLineText, UsageParts.sessionLine); typecheck + lint pass after 01; usage-view-model.test.ts 54 pass (worker) · concerns: usage selftest expects the old status line text until task 03 updates selftest-script.ts

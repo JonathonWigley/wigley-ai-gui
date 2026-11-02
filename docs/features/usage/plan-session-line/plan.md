@@ -128,8 +128,8 @@ Shared names:
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Sessions bar parts](01-sessions-bar-parts.md)
-- [ ] [Usage session line part](02-usage-session-line-part.md)
+- [x] [Sessions bar parts](01-sessions-bar-parts.md)
+- [x] [Usage session line part](02-usage-session-line-part.md)
 
 ### Wave 2
 - [ ] [Usage draws each session's line](03-usage-session-lines.md) — after 01, 02
@@ -141,10 +141,18 @@ Shared names:
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: d66a196a007248071a0c7ad363f22effdd460db7
 
 ### Groups
+- 01 · f034f08 · diff read; Produces present (SessionPart, addBarPart, SessionPartStore/createSessionPartStore, TabBarKit.contributedParts, tabBar(parent, sessionId)); typecheck + lint pass; worker ran sessions+agents tests 255 pass · concerns: AddAndDispose same-element check is vacuous on the row surface; bar part build gets a session id and redrawBars runs only on add/dispose, so usage redraws in place
+- 02 · 9eb4d06 · diff read; Produces present (sessionLine on Layout, StatusLineInput without session, sessionLineInput, sessionLineText, UsageParts.sessionLine); typecheck + lint pass after 01; usage-view-model.test.ts 54 pass (worker) · concerns: usage selftest expects the old status line text until task 03 updates selftest-script.ts
 ### Contract changes
+- statusLineInput (outside the Produces list): statusLineInput(snapshot, shownSessionId, now) → statusLineInput(snapshot, shownSessionId) · why: now went unused once session left the input · consumers: 03 · group 02
 ### Rulings
+- Bar-row tests drive through view.panes.load rather than tabs.place directly — place with a fresh slot draws outside view.element — none, same place path · group 01 · group 01
+- Extra CSS beyond the spec: .session-bar-parts display flex, align-items center, gap space-2; .session-bar-part flex none — look decision for the drive run · group 01 · group 01
+- Fallback with no slot appends bar parts before the strip containment check, matching the row — nothing visible · group 01 · group 01
+- statusLineInput drops now and start.ts drawStatusLine follows — now went unused — task 03 re-adds if needed · group 02 · group 02
+- .usage-divider removed (nothing draws it); session line children use usage-text, the usage-session class pair dropped — one CSS tweak if wrong · group 02 · group 02
 ### Review rounds
 ### Test gate

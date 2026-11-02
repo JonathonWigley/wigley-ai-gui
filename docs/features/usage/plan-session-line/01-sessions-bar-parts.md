@@ -1,6 +1,6 @@
 # 01 — Sessions bar parts
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -73,3 +73,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit f034f08 · proof: diff read; Produces present (SessionPart, addBarPart, SessionPartStore/createSessionPartStore, TabBarKit.contributedParts, tabBar(parent, sessionId)); typecheck + lint pass; worker ran sessions+agents tests 255 pass · concerns: AddAndDispose same-element check is vacuous on the row surface; bar part build gets a session id and redrawBars runs only on add/dispose, so usage redraws in place
