@@ -9,6 +9,7 @@ import {
   type ChatEntry,
   type LogInEvents,
 } from '../contracts/agent';
+import type { Files } from '../contracts/files';
 import {
   createFakeAgentHarness,
   FAKE_AGENTS_TEXT,
@@ -20,11 +21,15 @@ import {
   FAKE_SIGN_IN_URL,
   FAKE_STEPS_TEXT,
   FAKE_TOOL_TEXT,
+  FAKE_WORKFLOW_FEATURE_TEXT,
+  FAKE_WORKFLOW_STEP_TEXT,
   fakePlanRowUpdate,
   fakePlanUsage,
   fakeUsageEvent,
+  fakeWorkflowPlan,
   isFakeAgentHarness,
 } from './fake-agent-harness';
+import { createMemoryFiles } from './memory-files';
 
 const clock = { now: () => 1000 };
 
@@ -90,8 +95,10 @@ const flush = async () => {
 };
 
 // A started process with its start events flushed and cleared.
-async function startedProcess() {
-  const harness = createFakeAgentHarness(clock);
+async function startedProcess(
+  files: Pick<Files, 'write' | 'trash'> = createMemoryFiles(),
+) {
+  const harness = createFakeAgentHarness(clock, files);
   const { heard, agentEvents, timeline, events } = recordingEvents();
   const agent = harness.start(request, events);
   await flush();
@@ -110,7 +117,7 @@ async function startedProcess() {
 
 describe('createFakeAgentHarness', () => {
   it('start_RecordsRequestAndEvents_ThenControlsCommandsIdle', async () => {
-    const harness = createFakeAgentHarness(clock);
+    const harness = createFakeAgentHarness(clock, createMemoryFiles());
     const { heard, events } = recordingEvents();
 
     harness.start(request, events);
@@ -137,7 +144,7 @@ describe('createFakeAgentHarness', () => {
   });
 
   it('start_RequestControls_ReplaceStartingValues', async () => {
-    const harness = createFakeAgentHarness(clock);
+    const harness = createFakeAgentHarness(clock, createMemoryFiles());
     const { heard, events } = recordingEvents();
 
     harness.start({ ...request, controls: { effort: 'high' } }, events);
@@ -155,7 +162,7 @@ describe('createFakeAgentHarness', () => {
   });
 
   it('failNextStart_ThrowsOnce', () => {
-    const harness = createFakeAgentHarness(clock);
+    const harness = createFakeAgentHarness(clock, createMemoryFiles());
     harness.failNextStart('no claude');
 
     expect(() => harness.start(request, recordingEvents().events)).toThrow(
@@ -391,6 +398,7 @@ describe('createFakeAgentHarness', () => {
     const stepTools = ['Read', 'Read', 'Read', 'Bash', 'Edit', 'Bash'];
     expect(agentEvents).toEqual([
       { type: 'userMessage', at: 1000 },
+      { type: 'turnStarted', at: 1000 },
       ...stepTools.flatMap((tool, index) => {
         const toolUseId = `fake-step-1-${index + 1}`;
         const agentId = MAIN_AGENT_ID;
@@ -461,6 +469,7 @@ describe('createFakeAgentHarness', () => {
     ];
     expect(agentEvents).toEqual([
       { type: 'userMessage', at: 1000 },
+      { type: 'turnStarted', at: 1000 },
       {
         type: 'agentSpawned',
         at: 1000,
@@ -521,6 +530,7 @@ describe('createFakeAgentHarness', () => {
         'tool agent-1-2 Interrupted',
         'agentFinished fake-agent-1-2 failed',
         'notice notice-1',
+        'turnEnded',
         'activity idle',
       ],
     },
@@ -534,12 +544,14 @@ describe('createFakeAgentHarness', () => {
         'agentFinished fake-agent-1-2 done',
         'user user-2',
         'userMessage',
+        'turnStarted',
         'activity working',
         'assistant assistant-2',
         'assistant assistant-2',
         'result result-2',
         'usage main',
         'planUsage',
+        'turnEnded',
         'activity idle',
       ],
     },
@@ -560,6 +572,7 @@ describe('createFakeAgentHarness', () => {
         'tool agent-1-2 Interrupted',
         'agentFinished fake-agent-1-2 failed',
         'notice notice-1',
+        'turnEnded',
         'activity idle',
         'sessionEnded',
         'ended',
@@ -577,6 +590,7 @@ describe('createFakeAgentHarness', () => {
         'tool agent-1-2 Interrupted',
         'agentFinished fake-agent-1-2 failed',
         'notice notice-1',
+        'turnEnded',
         'activity idle',
         'sessionEnded',
         'ended',
@@ -599,7 +613,10 @@ describe('createFakeAgentHarness', () => {
       case: 'start',
       run: async () => {
         const { agentEvents, events } = recordingEvents();
-        createFakeAgentHarness(clock).start(request, events);
+        createFakeAgentHarness(clock, createMemoryFiles()).start(
+          request,
+          events,
+        );
         await flush();
         return agentEvents;
       },
@@ -613,7 +630,32 @@ describe('createFakeAgentHarness', () => {
         await flush();
         return agentEvents;
       },
-      expected: [{ type: 'userMessage', at: 1000 }],
+      expected: [
+        { type: 'userMessage', at: 1000 },
+        { type: 'turnStarted', at: 1000 },
+        { type: 'turnEnded', at: 1000 },
+      ],
+    },
+    {
+      case: 'slash send',
+      run: async () => {
+        const { agent, agentEvents } = await startedProcess();
+        agent.send({ text: '/wigley:feature x', images: [] });
+        await flush();
+        return agentEvents;
+      },
+      expected: [
+        { type: 'userMessage', at: 1000 },
+        {
+          type: 'skillStarted',
+          at: 1000,
+          agentId: MAIN_AGENT_ID,
+          skill: 'wigley:feature',
+          args: 'x',
+        },
+        { type: 'turnStarted', at: 1000 },
+        { type: 'turnEnded', at: 1000 },
+      ],
     },
     {
       case: 'tool turn',
@@ -625,6 +667,7 @@ describe('createFakeAgentHarness', () => {
       },
       expected: [
         { type: 'userMessage', at: 1000 },
+        { type: 'turnStarted', at: 1000 },
         {
           type: 'toolStarted',
           at: 1000,
@@ -639,6 +682,7 @@ describe('createFakeAgentHarness', () => {
           toolUseId: 'fake-tool-1',
           ok: true,
         },
+        { type: 'turnEnded', at: 1000 },
       ],
     },
     {
@@ -814,7 +858,7 @@ describe('createFakeAgentHarness', () => {
   });
 
   it('listSessions_ReturnsTheFakeSessionsAndRecords', async () => {
-    const harness = createFakeAgentHarness(clock);
+    const harness = createFakeAgentHarness(clock, createMemoryFiles());
 
     const sessions = await harness.listSessions('/a', '/p');
 
@@ -831,7 +875,7 @@ describe('createFakeAgentHarness', () => {
   });
 
   it('history_KnownUnknownAndFailNext', async () => {
-    const harness = createFakeAgentHarness(clock);
+    const harness = createFakeAgentHarness(clock, createMemoryFiles());
     const known = '00000000-0000-4000-8000-000000000001';
 
     expect(await harness.history(known, '/a', null)).toEqual([
@@ -887,7 +931,7 @@ describe('createFakeAgentHarness', () => {
   });
 
   it('planUsage_ResolvesFakeRows_FailNextRejectsOnce', async () => {
-    const harness = createFakeAgentHarness(clock);
+    const harness = createFakeAgentHarness(clock, createMemoryFiles());
 
     expect(await harness.planUsage('/p')).toEqual(fakePlanUsage(1000));
     harness.failNextPlanUsage('offline');
@@ -897,9 +941,13 @@ describe('createFakeAgentHarness', () => {
 
   it('isFakeAgentHarness_TellsTheFakeFromAnother', () => {
     // A copy has every member of the fake but is not the object it made.
-    const other: AgentHarness = { ...createFakeAgentHarness(clock) };
+    const other: AgentHarness = {
+      ...createFakeAgentHarness(clock, createMemoryFiles()),
+    };
 
-    expect(isFakeAgentHarness(createFakeAgentHarness(clock))).toBe(true);
+    expect(
+      isFakeAgentHarness(createFakeAgentHarness(clock, createMemoryFiles())),
+    ).toBe(true);
     expect(isFakeAgentHarness(other)).toBe(false);
   });
 });
@@ -916,7 +964,7 @@ describe('createFakeAgentHarness accounts and projects', () => {
   }
 
   it('logIn_RightCode_SignsIn', async () => {
-    const harness = createFakeAgentHarness(clock);
+    const harness = createFakeAgentHarness(clock, createMemoryFiles());
     await harness.logOut('/p');
     const { heard, events } = recordingLogIn();
 
@@ -934,7 +982,7 @@ describe('createFakeAgentHarness accounts and projects', () => {
   });
 
   it('logIn_WrongCodeThenCancel_EndsOnceWithStatusUnchanged', async () => {
-    const harness = createFakeAgentHarness(clock);
+    const harness = createFakeAgentHarness(clock, createMemoryFiles());
     const { heard, events } = recordingLogIn();
 
     const login = harness.logIn(null, events);
@@ -955,7 +1003,7 @@ describe('createFakeAgentHarness accounts and projects', () => {
   });
 
   it('logOut_ThenStatus_SignedOut', async () => {
-    const harness = createFakeAgentHarness(clock);
+    const harness = createFakeAgentHarness(clock, createMemoryFiles());
     expect(await harness.accountStatus(null)).toEqual({
       signedIn: true,
       account: 'fake@example.invalid',
@@ -971,7 +1019,7 @@ describe('createFakeAgentHarness accounts and projects', () => {
   });
 
   it('listProjects_StartedFolders_NewestFirst', async () => {
-    const harness = createFakeAgentHarness(clock);
+    const harness = createFakeAgentHarness(clock, createMemoryFiles());
     const { events } = recordingEvents();
     harness.start({ ...request, projectDir: '/a', profileDir: '/p' }, events);
     harness.start({ ...request, projectDir: '/b', profileDir: '/p' }, events);
@@ -982,5 +1030,249 @@ describe('createFakeAgentHarness accounts and projects', () => {
 
     expect(projects.map((project) => project.projectDir)).toEqual(['/a', '/b']);
     expect(projects[0].modified).toBeGreaterThan(projects[1].modified);
+  });
+});
+
+describe('createFakeAgentHarness workflow', () => {
+  const planDir = '/p/docs/features/fake-flow/plan-fake-flow';
+  const planPath = `${planDir}/plan.md`;
+  const workflowTypes = new Set([
+    'skillStarted',
+    'fileWritten',
+    'turnStarted',
+    'turnEnded',
+  ]);
+
+  // The events of the four workflow types, without their `at`.
+  const workflowEvents = (agentEvents: readonly AgentEvent[]) =>
+    agentEvents
+      .filter((event) => workflowTypes.has(event.type))
+      .map(({ at: _at, ...event }) => event);
+
+  // Lets the queued events and the files' awaited changes run.
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  const turnStarted = { type: 'turnStarted' };
+  const turnEnded = { type: 'turnEnded' };
+  const planWritten = {
+    type: 'fileWritten',
+    agentId: MAIN_AGENT_ID,
+    path: planPath,
+  };
+  const skillStarted = (skill: string, args: string) => ({
+    type: 'skillStarted',
+    agentId: MAIN_AGENT_ID,
+    skill,
+    args,
+  });
+
+  // The assistant entries' last texts, in emit order.
+  const replies = (heard: readonly [string, unknown][]) =>
+    heard.flatMap(([name, payload]) => {
+      const entry = payload as ChatEntry;
+      const isFinalReply =
+        name === 'entry' && entry.kind === 'assistant' && !entry.streaming;
+      return isFinalReply ? [entry.text] : [];
+    });
+
+  it.each([
+    {
+      case: 'none',
+      ticked: 0,
+      reviewRounds: 0,
+      boxes: [
+        '- [ ] [Fake first task](01-fake-first.md)',
+        '- [ ] [Fake second task](02-fake-second.md)',
+        '- [ ] [Fake third task](03-fake-third.md) — after 01, 02',
+      ],
+      rounds: [],
+    },
+    {
+      case: 'wave one done',
+      ticked: 2,
+      reviewRounds: 0,
+      boxes: [
+        '- [x] [Fake first task](01-fake-first.md)',
+        '- [x] [Fake second task](02-fake-second.md)',
+        '- [ ] [Fake third task](03-fake-third.md) — after 01, 02',
+      ],
+      rounds: [],
+    },
+    {
+      case: 'all done, two rounds',
+      ticked: 3,
+      reviewRounds: 2,
+      boxes: [
+        '- [x] [Fake first task](01-fake-first.md)',
+        '- [x] [Fake second task](02-fake-second.md)',
+        '- [x] [Fake third task](03-fake-third.md) — after 01, 02',
+      ],
+      rounds: ['- round 1 · no findings', '- round 2 · no findings'],
+    },
+  ])(
+    'fakeWorkflowPlan_TicksAndRounds ($case)',
+    ({ ticked, reviewRounds, boxes, rounds }) => {
+      const lines = fakeWorkflowPlan(ticked, reviewRounds).split('\n');
+      const roundsAt = lines.indexOf('### Review rounds');
+
+      expect(lines.filter((line) => line.startsWith('- ['))).toEqual(boxes);
+      expect(roundsAt).toBeGreaterThan(lines.indexOf('## Run log'));
+      expect(
+        lines.slice(roundsAt).filter((line) => line.startsWith('- ')),
+      ).toEqual(rounds);
+    },
+  );
+
+  it('workflowRun_FeatureThenMake_WalksEveryStage', async () => {
+    const files = createMemoryFiles();
+    const harness = createFakeAgentHarness(clock, files);
+    const planText = async () =>
+      (await files.stat(planDir)) === null ? null : files.read(planPath);
+    const first = recordingEvents();
+    const feature = harness.start(request, first.events);
+
+    feature.send({ text: FAKE_WORKFLOW_FEATURE_TEXT, images: [] });
+    await settle();
+
+    expect(workflowEvents(first.agentEvents)).toEqual([
+      turnStarted,
+      skillStarted('wigley:feature', ''),
+      planWritten,
+      turnEnded,
+    ]);
+    expect(await planText()).toBe(fakeWorkflowPlan(0, 0));
+    await feature.end();
+
+    const second = recordingEvents();
+    const make = harness.start(request, second.events);
+    const steps = [
+      {
+        text: `/wigley:make ${planDir}`,
+        events: [
+          skillStarted('wigley:make', planDir),
+          turnStarted,
+          planWritten,
+          turnEnded,
+        ],
+        plan: fakeWorkflowPlan(1, 0),
+      },
+      {
+        text: FAKE_WORKFLOW_STEP_TEXT,
+        events: [turnStarted, planWritten, turnEnded],
+        plan: fakeWorkflowPlan(2, 0),
+      },
+      {
+        text: FAKE_WORKFLOW_STEP_TEXT,
+        events: [
+          turnStarted,
+          skillStarted('wigley:review', ''),
+          planWritten,
+          turnEnded,
+        ],
+        plan: fakeWorkflowPlan(3, 1),
+      },
+      {
+        text: FAKE_WORKFLOW_STEP_TEXT,
+        events: [turnStarted, turnEnded],
+        plan: null,
+      },
+    ];
+    for (const step of steps) {
+      second.agentEvents.length = 0;
+
+      make.send({ text: step.text, images: [] });
+      await settle();
+
+      expect(workflowEvents(second.agentEvents)).toEqual(step.events);
+      expect(await planText()).toBe(step.plan);
+    }
+  });
+
+  it('workflowTypedFeature_RunsTheScriptWithOneSkillStarted', async () => {
+    const files = createMemoryFiles();
+    const { agent, agentEvents } = await startedProcess(files);
+
+    agent.send({
+      text: `/wigley:feature ${FAKE_WORKFLOW_FEATURE_TEXT}`,
+      images: [],
+    });
+    await settle();
+
+    expect(await files.read(planPath)).toBe(fakeWorkflowPlan(0, 0));
+    expect(workflowEvents(agentEvents)).toEqual([
+      skillStarted('wigley:feature', FAKE_WORKFLOW_FEATURE_TEXT),
+      turnStarted,
+      planWritten,
+      turnEnded,
+    ]);
+  });
+
+  it.each([
+    {
+      case: 'makeOfAFolderNeverWritten',
+      text: '/wigley:make /p/elsewhere',
+      events: [
+        skillStarted('wigley:make', '/p/elsewhere'),
+        turnStarted,
+        turnEnded,
+      ],
+    },
+    {
+      case: 'stepWithNoMakeRun',
+      text: FAKE_WORKFLOW_STEP_TEXT,
+      events: [turnStarted, turnEnded],
+    },
+  ])('workflowSend_$case', async ({ text, events }) => {
+    const changed: string[] = [];
+    const { agent, heard, agentEvents } = await startedProcess({
+      write: async (path) => {
+        changed.push(path);
+      },
+      trash: async (path) => {
+        changed.push(path);
+      },
+    });
+    agent.send({ text: FAKE_WORKFLOW_FEATURE_TEXT, images: [] });
+    await settle();
+    changed.length = 0;
+    heard.length = 0;
+    agentEvents.length = 0;
+
+    agent.send({ text, images: [] });
+    await settle();
+
+    expect(workflowEvents(agentEvents)).toEqual(events);
+    expect(replies(heard)).toEqual([`fake agent heard: ${text}`]);
+    expect(changed).toEqual([]);
+  });
+
+  it('workflowWrite_Rejects_EndsTheTurnWithANotice', async () => {
+    const { agent, heard, agentEvents } = await startedProcess({
+      write: async () => {
+        throw new Error('disk full');
+      },
+      trash: async () => {},
+    });
+
+    agent.send({ text: FAKE_WORKFLOW_FEATURE_TEXT, images: [] });
+    await settle();
+
+    expect(heard.map(([, payload]) => payload)).toContainEqual(
+      expect.objectContaining({
+        kind: 'notice',
+        tone: 'error',
+        text: expect.stringMatching(new RegExp(`${planPath}.*disk full`)),
+      }),
+    );
+    expect(
+      agentEvents.flatMap((event) =>
+        event.type === 'toolFinished' ? [event.ok] : [],
+      ),
+    ).toEqual([true, false]);
+    expect(workflowEvents(agentEvents)).toEqual([
+      turnStarted,
+      skillStarted('wigley:feature', ''),
+      turnEnded,
+    ]);
   });
 });

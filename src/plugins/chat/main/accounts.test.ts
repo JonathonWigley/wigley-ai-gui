@@ -4,6 +4,7 @@ import {
   FAKE_SIGN_IN_CODE,
   FAKE_SIGN_IN_URL,
 } from '../../../shared/fake-agent-harness';
+import { createMemoryFiles } from '../../../shared/memory-files';
 import type { ChatChannel, ChatProfile } from '../contract';
 import { createAccounts } from './accounts';
 
@@ -27,7 +28,10 @@ async function flush() {
 }
 
 function setUp() {
-  const harness = createFakeAgentHarness({ now: () => 1000 });
+  const harness = createFakeAgentHarness(
+    { now: () => 1000 },
+    createMemoryFiles(),
+  );
   const messages: Message[] = [];
   const logged: string[] = [];
   let logIns = 0;

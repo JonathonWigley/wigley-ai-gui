@@ -117,7 +117,7 @@ function setUp(
   options: { harnesses?: FakeAgentHarness[]; clockNow?: number } = {},
 ) {
   const clock = { now: () => options.clockNow ?? 1000 };
-  const harness = createFakeAgentHarness(clock);
+  const harness = createFakeAgentHarness(clock, createMemoryFiles());
   const harnesses = options.harnesses ?? [harness];
   const data = createMemoryFiles();
   const logged: string[] = [];
@@ -1016,7 +1016,10 @@ describe('createChatSessions', () => {
   });
 
   it('closed_processExitsWithAnError_endsTheOwnedSessionAndReportsNoEnd', async () => {
-    const fake = createFakeAgentHarness({ now: () => 1000 });
+    const fake = createFakeAgentHarness(
+      { now: () => 1000 },
+      createMemoryFiles(),
+    );
     const failingExit: FakeAgentHarness = {
       ...fake,
       start: (request, events) => ({
@@ -1040,7 +1043,10 @@ describe('createChatSessions', () => {
   });
 
   it('closed_processEndRejects_logsAndEndsTheOwnedSession', async () => {
-    const fake = createFakeAgentHarness({ now: () => 1000 });
+    const fake = createFakeAgentHarness(
+      { now: () => 1000 },
+      createMemoryFiles(),
+    );
     const failingEnd: FakeAgentHarness = {
       ...fake,
       start: (request, events) => ({

@@ -17,7 +17,10 @@ import {
   type UsageAgentEvent,
 } from '../contracts/agent';
 import type { Clock } from '../contracts/ambient';
+import type { Files } from '../contracts/files';
 import { createEntryStamp, type EntryDraft } from './entry-stamp';
+import { errorText } from './error-text';
+import { typedSkill } from './typed-skill';
 
 // A scripted harness behind `AgentHarness`, for the tests and the self-test.
 // Every emission runs in a microtask the causing call queues, never inside the
@@ -27,8 +30,12 @@ import { createEntryStamp, type EntryDraft } from './entry-stamp';
 // agent event and a plan row update after its result, and `planUsage` answers
 // every profile with `fakePlanUsage`. The process emits the agent events Claude
 // would for what it simulates, each at the clock's time: `sessionStarted` first,
-// `userMessage` after each user entry, tool and subagent events beside their
-// entries, and `sessionEnded` just before each `ended`.
+// `userMessage` after each user entry, then `skillStarted` for a typed
+// `/<skill>` message and `turnStarted` for every send that runs a turn, tool
+// and subagent events beside their entries, `turnEnded` when a turn closes or
+// is interrupted, and `sessionEnded` just before each `ended`. The workflow
+// sends (`FAKE_WORKFLOW_FEATURE_TEXT`, `/wigley:make <plan folder>`,
+// `FAKE_WORKFLOW_STEP_TEXT`) change a fake plan through the injected `files`.
 
 // A send of this text opens a turn that stays open until `interrupt` or `end`.
 export const FAKE_HOLD_TEXT = 'fake: hold';
@@ -45,6 +52,17 @@ export const FAKE_STEPS_TEXT = 'fake: steps';
 export const FAKE_AGENTS_TEXT = 'fake: agents';
 // A send of this text ends the process on its own, as a CLI that exits.
 export const FAKE_END_TEXT = 'fake: end';
+// A send of this text, or `/wigley:feature ` before it, runs a wigley:feature
+// turn that writes `fakeWorkflowPlan(0, 0)` at `FAKE_WORKFLOW_PLAN_PATH` under
+// the process's project folder.
+export const FAKE_WORKFLOW_FEATURE_TEXT = 'fake: workflow feature';
+// After `/wigley:make <that plan's folder>`, each send of this text runs the
+// next make step: a tick, a tick with a review round, then the folder removed.
+export const FAKE_WORKFLOW_STEP_TEXT = 'fake: workflow step';
+// Relative to the process's project folder.
+export const FAKE_WORKFLOW_PLAN_PATH =
+  'docs/features/fake-flow/plan-fake-flow/plan.md';
+export const FAKE_WORKFLOW_TITLE = 'Fake flow';
 // The link every `logIn` reports, and the one code that finishes it.
 export const FAKE_SIGN_IN_URL = 'https://example.invalid/fake-sign-in';
 export const FAKE_SIGN_IN_CODE = 'fake-code';
@@ -272,6 +290,36 @@ export function fakePlanRowUpdate(turn: number, at: number): PlanRowUpdate {
   };
 }
 
+// The fake plan with its first `ticked` boxes ticked, in task order, and
+// `reviewRounds` lines under its review rounds heading.
+export function fakeWorkflowPlan(ticked: number, reviewRounds: number): string {
+  const box = (index: number) => (index < ticked ? '[x]' : '[ ]');
+  const roundLines = Array.from(
+    { length: reviewRounds },
+    (_, index) => `- round ${index + 1} · no findings`,
+  );
+  return [
+    `# ${FAKE_WORKFLOW_TITLE} — plan`,
+    '',
+    '## Tasks',
+    '',
+    '### Wave 1',
+    '',
+    `- ${box(0)} [Fake first task](01-fake-first.md)`,
+    `- ${box(1)} [Fake second task](02-fake-second.md)`,
+    '',
+    '### Wave 2',
+    '',
+    `- ${box(2)} [Fake third task](03-fake-third.md) — after 01, 02`,
+    '',
+    '## Run log',
+    '',
+    '### Review rounds',
+    ...(roundLines.length > 0 ? ['', ...roundLines] : []),
+    '',
+  ].join('\n');
+}
+
 // Emits one entry, stamped with its `at`.
 type EmitEntry = (draft: EntryDraft) => void;
 
@@ -292,6 +340,7 @@ function emitTurnEnd(
   });
   events.agentEvent(fakeUsageEvent(turn, clock.now()));
   events.planUsage(fakePlanRowUpdate(turn, clock.now()));
+  events.agentEvent({ type: 'turnEnded', at: clock.now() });
   events.activity('idle');
 }
 
@@ -431,8 +480,11 @@ const FAKE_SUBAGENTS = [
 
 type ToolEntryDraft = Extract<EntryDraft, { kind: 'tool' }>;
 
-// A running subagent's Agent tool entry, without its result and raw events.
-type SubagentEntry = Omit<ToolEntryDraft, 'result' | 'raw'>;
+// A tool entry without its result and raw events.
+type ToolCall = Omit<ToolEntryDraft, 'result' | 'raw'>;
+
+// A running subagent's Agent tool entry.
+type SubagentEntry = ToolCall;
 
 // Spawns turn `turn`'s subagents, ids `fake-agent-<turn>-<n>`, and runs each
 // one's tool; returns their Agent entries in spawn order. The turn stays open.
@@ -524,6 +576,135 @@ function finishSubagents(
   }
 }
 
+// One fake plan's progress, kept by plan folder.
+interface WorkflowPlan {
+  ticked: number;
+  reviewRounds: number;
+}
+
+// What a workflow send runs: the feature turn, with or without its Skill call,
+// or the next make step of the plan in `folder`.
+type WorkflowTurn =
+  | { kind: 'feature'; runsSkill: boolean }
+  | { kind: 'make'; folder: string; plan: WorkflowPlan };
+
+// How a workflow tool's file change went: `ended` when the process ended
+// while it was pending.
+type WorkflowChange = 'landed' | 'failed' | 'ended';
+
+const WORKFLOW_TOOL_OK = { text: 'ok', isError: false };
+
+// The fake plan's full path under `projectDir`.
+function workflowPlanPathOf(projectDir: string): string {
+  return `${projectDir}/${FAKE_WORKFLOW_PLAN_PATH}`;
+}
+
+// The plan folder of a full plan path.
+function workflowFolderOf(planPath: string): string {
+  return planPath.slice(0, -'/plan.md'.length);
+}
+
+// The workflow turn `text` runs, or null when it runs as any other send.
+// `makeFolder` is the plan folder the process's make run works on.
+function workflowTurnOf(
+  text: string,
+  makeFolder: string | null,
+  workflowPlans: ReadonlyMap<string, WorkflowPlan>,
+): WorkflowTurn | null {
+  if (text === FAKE_WORKFLOW_FEATURE_TEXT) {
+    return { kind: 'feature', runsSkill: true };
+  }
+  const typed = typedSkill(text);
+  const isTypedFeature =
+    typed?.skill === 'wigley:feature' &&
+    typed.args === FAKE_WORKFLOW_FEATURE_TEXT;
+  if (isTypedFeature) {
+    return { kind: 'feature', runsSkill: false };
+  }
+  const typedMakeFolder = typed?.skill === 'wigley:make' ? typed.args : null;
+  const folder =
+    typedMakeFolder ?? (text === FAKE_WORKFLOW_STEP_TEXT ? makeFolder : null);
+  const plan = folder === null ? undefined : workflowPlans.get(folder);
+  if (folder === null || plan === undefined) {
+    return null;
+  }
+  return { kind: 'make', folder, plan };
+}
+
+// Emits tool `n` of workflow turn `turn` without its result, then its
+// `toolStarted`.
+function startWorkflowTool(
+  events: AgentProcessEvents,
+  emitEntry: EmitEntry,
+  clock: Clock,
+  turn: number,
+  n: number,
+  tool: Pick<ToolCall, 'name' | 'input' | 'summary'>,
+): ToolCall {
+  const call: ToolCall = {
+    kind: 'tool',
+    id: `workflow-${turn}-${n}`,
+    toolUseId: `fake-workflow-${turn}-${n}`,
+    ...tool,
+  };
+  emitEntry({ ...call, result: null, raw: [{ fake: 'workflow' }] });
+  events.agentEvent({
+    type: 'toolStarted',
+    at: clock.now(),
+    agentId: MAIN_AGENT_ID,
+    toolUseId: call.toolUseId,
+    tool: call.name,
+  });
+  return call;
+}
+
+// Re-sends `call` with `result`, then its `toolFinished`.
+function finishWorkflowTool(
+  events: AgentProcessEvents,
+  emitEntry: EmitEntry,
+  clock: Clock,
+  call: ToolCall,
+  result: { text: string; isError: boolean },
+) {
+  emitEntry({
+    ...call,
+    result,
+    raw: [{ fake: 'workflow' }, { fake: 'workflow-result' }],
+  });
+  events.agentEvent({
+    type: 'toolFinished',
+    at: clock.now(),
+    agentId: MAIN_AGENT_ID,
+    toolUseId: call.toolUseId,
+    ok: !result.isError,
+  });
+}
+
+// Tool `n` of workflow turn `turn`: a Skill call of `skill`, with its
+// `skillStarted` after its `toolStarted`.
+function emitWorkflowSkill(
+  events: AgentProcessEvents,
+  emitEntry: EmitEntry,
+  clock: Clock,
+  turn: number,
+  n: number,
+  skill: string,
+) {
+  const call = startWorkflowTool(events, emitEntry, clock, turn, n, {
+    name: 'Skill',
+    input: { skill },
+    summary: skill,
+  });
+  events.agentEvent({
+    type: 'skillStarted',
+    at: clock.now(),
+    agentId: MAIN_AGENT_ID,
+    skill,
+    args: '',
+  });
+  finishWorkflowTool(events, emitEntry, clock, call, WORKFLOW_TOOL_OK);
+}
+
 function emitEchoTurn(
   events: AgentProcessEvents,
   emitEntry: EmitEntry,
@@ -586,7 +767,10 @@ function fakeHistory(sessionId: string): ChatEntry[] {
   ];
 }
 
-export function createFakeAgentHarness(clock: Clock): FakeAgentHarness {
+export function createFakeAgentHarness(
+  clock: Clock,
+  files: Pick<Files, 'write' | 'trash'>,
+): FakeAgentHarness {
   const processes: FakeAgentProcessRecord[] = [];
   const pastSessionCalls: FakePastSessionCall[] = [];
   let nextStartFailure: string | null = null;
@@ -600,6 +784,9 @@ export function createFakeAgentHarness(clock: Clock): FakeAgentHarness {
   // last started: the fake's stand-in for a modified time.
   const startedFolders = new Map<string | null, Map<string, number>>();
   let startCount = 0;
+  // Each fake plan's progress by plan folder, kept across processes so a make
+  // run outlives a clear.
+  const workflowPlans = new Map<string, WorkflowPlan>();
 
   const statusOf = (profileDir: string | null): AccountStatus =>
     signedOutProfiles.has(profileDir)
@@ -654,6 +841,8 @@ export function createFakeAgentHarness(clock: Clock): FakeAgentHarness {
     let isTurnOpen = false;
     // The Agent entries of the subagents still running, in spawn order.
     let runningSubagents: SubagentEntry[] = [];
+    // The plan folder this process's make run works on.
+    let makeFolder: string | null = null;
     let endPromise: Promise<void> | null = null;
     const stamp = createEntryStamp(clock);
     const emitEntry: EmitEntry = (draft) => {
@@ -666,6 +855,153 @@ export function createFakeAgentHarness(clock: Clock): FakeAgentHarness {
     };
     const emitSessionEnded = () => {
       events.agentEvent({ type: 'sessionEnded', at: clock.now() });
+    };
+
+    // Runs `change` between workflow tool `n`'s call and its result; a
+    // rejection gives an error result and a notice naming `path`.
+    const runWorkflowChange = async (
+      turn: number,
+      n: number,
+      tool: Pick<ToolCall, 'name' | 'input' | 'summary'>,
+      path: string,
+      change: () => Promise<void>,
+    ): Promise<WorkflowChange> => {
+      const call = startWorkflowTool(events, emitEntry, clock, turn, n, tool);
+      try {
+        await change();
+      } catch (error) {
+        if (record.ended) {
+          return 'ended';
+        }
+        const message = errorText(error);
+        finishWorkflowTool(events, emitEntry, clock, call, {
+          text: message,
+          isError: true,
+        });
+        emitEntry({
+          kind: 'notice',
+          id: `notice-${turn}`,
+          text: `fake workflow could not change ${path}: ${message}`,
+          tone: 'error',
+          raw: [{ fake: 'workflow-error' }],
+        });
+        return 'failed';
+      }
+      if (record.ended) {
+        return 'ended';
+      }
+      finishWorkflowTool(events, emitEntry, clock, call, WORKFLOW_TOOL_OK);
+      return 'landed';
+    };
+
+    // Workflow tool `n`: `toolName` writes `plan` to `planPath`, then
+    // `fileWritten`; on landing the plan's folder holds `plan` in the map.
+    const writeWorkflowPlan = async (
+      turn: number,
+      n: number,
+      toolName: 'Write' | 'Edit',
+      planPath: string,
+      plan: WorkflowPlan,
+    ): Promise<WorkflowChange> => {
+      const change = await runWorkflowChange(
+        turn,
+        n,
+        { name: toolName, input: { file_path: planPath }, summary: planPath },
+        planPath,
+        () =>
+          files.write(
+            planPath,
+            fakeWorkflowPlan(plan.ticked, plan.reviewRounds),
+          ),
+      );
+      if (change === 'landed') {
+        workflowPlans.set(workflowFolderOf(planPath), plan);
+        events.agentEvent({
+          type: 'fileWritten',
+          at: clock.now(),
+          agentId: MAIN_AGENT_ID,
+          path: planPath,
+        });
+      }
+      return change;
+    };
+
+    // Ends workflow turn `turn` with `reply` once its change landed, with no
+    // reply once it failed, and with nothing once the process ended.
+    const closeWorkflowTurn = (
+      turn: number,
+      change: WorkflowChange,
+      reply: string,
+    ) => {
+      if (change === 'ended') {
+        return;
+      }
+      if (change === 'landed') {
+        emitEntry({
+          kind: 'assistant',
+          id: `assistant-${turn}`,
+          text: reply,
+          streaming: false,
+          raw: [{ fake: 'assistant', text: reply }],
+        });
+      }
+      emitTurnEnd(events, emitEntry, clock, turn);
+    };
+
+    const runWorkflowFeature = async (turn: number, runsSkill: boolean) => {
+      const planPath = workflowPlanPathOf(record.request.projectDir);
+      if (runsSkill) {
+        emitWorkflowSkill(events, emitEntry, clock, turn, 1, 'wigley:feature');
+      }
+      const change = await writeWorkflowPlan(
+        turn,
+        runsSkill ? 2 : 1,
+        'Write',
+        planPath,
+        { ticked: 0, reviewRounds: 0 },
+      );
+      closeWorkflowTurn(turn, change, `fake feature wrote ${planPath}`);
+    };
+
+    // Ticks the first and second box, then ticks the third with a review, then
+    // removes the plan folder and ends the make run.
+    const runWorkflowMakeStep = async (
+      turn: number,
+      folder: string,
+      plan: WorkflowPlan,
+    ) => {
+      const planPath = `${folder}/plan.md`;
+      if (plan.ticked < 2) {
+        const ticked = plan.ticked + 1;
+        const change = await writeWorkflowPlan(turn, 1, 'Edit', planPath, {
+          ...plan,
+          ticked,
+        });
+        closeWorkflowTurn(turn, change, `fake make ticked task ${ticked}`);
+        return;
+      }
+      if (plan.ticked === 2) {
+        emitWorkflowSkill(events, emitEntry, clock, turn, 1, 'wigley:review');
+        const change = await writeWorkflowPlan(turn, 2, 'Edit', planPath, {
+          ticked: 3,
+          reviewRounds: plan.reviewRounds + 1,
+        });
+        closeWorkflowTurn(turn, change, 'fake make ticked task 3 and reviewed');
+        return;
+      }
+      const command = `rm -r ${folder}`;
+      const change = await runWorkflowChange(
+        turn,
+        1,
+        { name: 'Bash', input: { command }, summary: command },
+        folder,
+        () => files.trash(folder),
+      );
+      if (change === 'landed') {
+        workflowPlans.delete(folder);
+        makeFolder = null;
+      }
+      closeWorkflowTurn(turn, change, 'fake make closed the plan');
     };
     queueMicrotask(() => {
       events.agentEvent({ type: 'sessionStarted', at: clock.now() });
@@ -680,7 +1016,9 @@ export function createFakeAgentHarness(clock: Clock): FakeAgentHarness {
         requireRunning();
         turn += 1;
         const sentTurn = turn;
-        const emitUserEntry = () => {
+        // The user entry and its events; `startsTurn` is false for a send
+        // that ends the process instead of running a turn.
+        const emitUserEntry = (startsTurn: boolean) => {
           emitEntry({
             kind: 'user',
             id: `user-${sentTurn}`,
@@ -689,6 +1027,19 @@ export function createFakeAgentHarness(clock: Clock): FakeAgentHarness {
             raw: [{ fake: 'user', text }],
           });
           events.agentEvent({ type: 'userMessage', at: clock.now() });
+          const typed = typedSkill(text);
+          if (typed !== null) {
+            events.agentEvent({
+              type: 'skillStarted',
+              at: clock.now(),
+              agentId: MAIN_AGENT_ID,
+              skill: typed.skill,
+              args: typed.args,
+            });
+          }
+          if (startsTurn) {
+            events.agentEvent({ type: 'turnStarted', at: clock.now() });
+          }
           events.activity('working');
         };
         if (text === FAKE_END_TEXT) {
@@ -696,7 +1047,7 @@ export function createFakeAgentHarness(clock: Clock): FakeAgentHarness {
           isTurnOpen = false;
           endPromise = new Promise<void>((resolve) => {
             queueMicrotask(() => {
-              emitUserEntry();
+              emitUserEntry(false);
               emitSessionEnded();
               events.ended({ code: 0, error: null });
               resolve();
@@ -714,11 +1065,21 @@ export function createFakeAgentHarness(clock: Clock): FakeAgentHarness {
             isError: false,
           });
           runningSubagents = [];
-          emitUserEntry();
+          emitUserEntry(true);
           if (isHold) {
             return;
           }
-          if (isAgents) {
+          const workflowTurn = workflowTurnOf(text, makeFolder, workflowPlans);
+          if (workflowTurn?.kind === 'feature') {
+            void runWorkflowFeature(sentTurn, workflowTurn.runsSkill);
+          } else if (workflowTurn?.kind === 'make') {
+            makeFolder = workflowTurn.folder;
+            void runWorkflowMakeStep(
+              sentTurn,
+              workflowTurn.folder,
+              workflowTurn.plan,
+            );
+          } else if (isAgents) {
             runningSubagents = emitAgentsTurn(
               events,
               emitEntry,
@@ -755,6 +1116,7 @@ export function createFakeAgentHarness(clock: Clock): FakeAgentHarness {
             tone: 'info',
             raw: [{ fake: 'interrupt' }],
           });
+          events.agentEvent({ type: 'turnEnded', at: clock.now() });
           events.activity('idle');
         });
       },
