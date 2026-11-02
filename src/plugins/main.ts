@@ -11,6 +11,7 @@ import { primerMainPart } from './primer/main/start';
 import { sessionsMainPart } from './sessions/main/start';
 import { settingsMainPart } from './settings/main/start';
 import { usageMainPart } from './usage/main/start';
+import { workflowMainPart } from './workflow/main/start';
 
 // Every built-in plugin's main part, in start order where no dependency says
 // otherwise.
@@ -25,6 +26,7 @@ export const mainParts: readonly MainPart[] = [
   backlogMainPart,
   notesMainPart,
   usageMainPart,
+  workflowMainPart,
   keysMainPart,
   galleryMainPart,
 ];

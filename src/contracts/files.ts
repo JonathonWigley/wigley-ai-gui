@@ -106,7 +106,7 @@ export function isMissingFile(error: unknown): boolean {
 
 // The text at `path`; null when nothing is there.
 export async function readIfPresent(
-  files: Files,
+  files: Pick<Files, 'read'>,
   path: string,
 ): Promise<string | null> {
   try {
