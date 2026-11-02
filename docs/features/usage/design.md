@@ -7,7 +7,7 @@
 - **Sources** — where each number comes from, measured on Claude Code 2.1.314.
 - **Flow** — adapter to bus to the usage plugin to the screen.
 - **Records** — the harness-neutral shapes that cross the seam.
-- **The usage plugin** — the poller, the status-bar line and the details bar.
+- **The usage plugin** — the poller, the status-bar plan line, each session's line and the details bar.
 - **The right bar** — the new shell area.
 - **Decisions** — what the user settled, with the reason for each.
 - **Rejected** — the alternatives weighed and why each lost.
@@ -19,8 +19,8 @@ is in AGENTS.md § Architecture (The shell); how the line and the bar look is in
 
 The user runs long sessions on a plan with a 5-hour window, a weekly window and a Fable weekly window, with
 autocompact set to fire well before the model's window. The user wants, always on screen: how much of each plan
-window is used, how much context the shown session holds against the autocompact limit, how long its prompt cache
-stays warm, and what the session has spent; and, one key away, every profile's windows with reset times and the
+window is used, and for each session on screen, in its own pane, how much context it holds against the autocompact
+limit, how long its prompt cache stays warm, and what it has spent; and, one key away, every profile's windows with reset times and the
 extra-usage credits.
 
 ## Vocabulary
@@ -89,7 +89,8 @@ profile's `settings.json`, which is why the configured limit is read there.
  usage main: per-profile PlanUsage (poll, then live updates folded in), per-session usage
         │ channel: snapshot
         ▼
- usage page ──▶ status bar line (shown session + its profile)
+ usage page ──▶ status bar line (the shown session's profile's plan rows)
+            ──▶ sessions.addBarPart: each session's line in its own tab bar (context, cache, spend)
             ──▶ right bar details (every profile, the shown session)   toggled by Space v u
 ```
 
@@ -127,11 +128,13 @@ In `src/contracts/agent.ts`, beside `AgentHarness`:
   usage: the line says `plan loading` (or `plan unavailable` after a failure) and the details say `no good read yet`.
   A poll still running when the next one is due is not doubled.
 - **Page** draws, through the `usage` layout:
-  - a status-bar line, always on, aligned to the end: the shown session's context bar (`used/limit`), its cache
-    countdown and its spend, a divider, then the shown session's profile's plan rows (the default profile while no
-    session shows). Each meter is tinted by its severity; the context bar by its share of the limit (`warning` from
-    70 %, `critical` from 90 %). A stale profile's rows draw muted. With no autocompact limit the context shows
-    tokens alone. With no session shown, or none with a usage event yet, the session half is left out.
+  - a status-bar line, always on, aligned to the end: the shown session's profile's plan rows (the default profile
+    while no session shows). Each meter is tinted by its severity. A stale profile's rows draw muted.
+  - each session's line, a bar part (sessions' `addBarPart`) in that session's tab bar: its context bar
+    (`used/limit`), its cache countdown and its spend. The context bar is tinted by its share of the limit (`warning`
+    from 70 %, `critical` from 90 %); with no autocompact limit it shows tokens alone. A session with no usage event
+    yet draws no line. The line redraws on each snapshot, each layouts set and the minute tick, and the page logs
+    `session line <session id>: <text>` when a session's text changes.
   - the details bar in the right bar, toggled by `usage.toggleDetails` (`Space v u`), its open state kept in
     `uiState`: every profile's rows with reset times, extra usage as `spent / limit` in its currency (or `off`), the
     poll's staleness and error, and the shown session's context, both autocompact limits and the marker when they
@@ -155,6 +158,13 @@ contributes to it through `api.areas.rightBar`.
 - **The structured `usage_report`, not the text.** The server's rows, severities and order render verbatim.
 - **Credits:** spend against the monthly limit when the plan has it; `off` when extra usage is disabled.
 - **Always-on status-bar line, details one key away in a right bar.**
+- **Session numbers sit on the session, plan numbers on the shared bar.** With several panes, one shared line can
+  show only one session's context, so each session's context, cache and spend draw in its own tab bar; the plan rows
+  are account facts every pane shares and stay on the status bar.
+- **The session line is a sessions bar part, not chat input.** Sessions offers `addBarPart` beside `addRowPart`,
+  and usage draws into it, so sessions and chat know nothing of usage and the next per-session readout plugs in the
+  same way. The tab bar holds it because the frame moves with its session between panes and shows on every tab, Form
+  and Primer included.
 - **A new right bar shell area** rather than a floating panel or a Sessions-only pane: it serves the next plugin and
   covers nothing.
 - **The agent-tower agent event seam is built now,** with `usage` as its first member grown to carry the autocompact
@@ -173,3 +183,8 @@ contributes to it through `api.areas.rightBar`.
   and one path for every profile is simpler.
 - **App-side severity thresholds** — the server already grades each row.
 - **A separate `sessionUsage` event** — a second forwarding path agent-tower would then have to merge.
+- **Chat depending on usage for the session line** — usage already depends on chat (its profiles), so the dependency
+  would be a cycle, and each later readout would edit chat's layout contract.
+- **A global data store or data buckets any plugin reads** — a second sharing mechanism beside `dependsOn` exports
+  and events.
+- **The session line in the Chat composer bar** — it would hide while a Form or Primer tab shows.

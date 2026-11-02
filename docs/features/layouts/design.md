@@ -85,10 +85,10 @@ stays in themes.
 | `backlog` | `backlog.layout` | the repo and home side bar, the follow-up list and its rows, the detail and editor panes, plans and features, the picker rows and the confirm body |
 | `settings` | `settings.layout` | the section list, the setting, key, leader and advanced rows, the problem line, the picker rows |
 | `notes` | `notes.layout` | the note popup: fields, tags, images, target, session, actions, markup toolbar, the confirm and picker rows |
-| `sessions` | `sessions.layout` | the session rows in the side bar, each session's tab strip |
+| `sessions` | `sessions.layout` | the session rows in the side bar, each session's tab strip, and where other plugins' row and bar parts sit |
 | `agents` | `agents.layout` | the running subagent lines under each session row |
 | `gallery` | `gallery.layout` | each primitive's sample block |
-| `usage` | `usage.layout` | the status-bar line (context bar, cache countdown, spend, plan rows) and the right-bar details |
+| `usage` | `usage.layout` | the status-bar line (plan rows), each session's line in its tab bar (context bar, cache countdown, spend) and the right-bar details |
 | `keys` | `keys.layout` | the help overlay, the which-key panel, the title bar's Keys button |
 | `workflow` | `workflow.layout` | the stage chip under each session row, the strip above the Chat composer (stepper and actions), the Flow tab (stepper, plan checklist by wave, actions) |
 

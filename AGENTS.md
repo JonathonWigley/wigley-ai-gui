@@ -152,8 +152,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
   sessions/      manifest.ts, contract.ts, main/ (the session list — rows, the selected session, tool routing — relay,
                  endpoint files, MCP adapter → the only @modelcontextprotocol import), page/ (Sessions mode: the
                  sidebar, the pane tree of whole sessions with its split, swap and close commands and the shared
-                 list picker's `picker` scope, each session's tabs, the row parts other plugins add, and the layout
-                 preview rows),
+                 list picker's `picker` scope, each session's tabs, the row and bar parts other plugins add, and the
+                 layout preview rows),
                  layouts/ (the sessions Layout contract and the built-in `default` layout)
   agents/        manifest.ts, contract.ts, roster.ts (the pure reducer folding agent events into a session's roster),
                  main/ (hears `chat.agentEvent`, keeps each session's roster, appends each event to
@@ -202,7 +202,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  `docs/features/notes/design.md`), layouts/ (the notes Layout contract and the built-in `default`
                  layout)
   usage/         manifest.ts, contract.ts, main/ (polls each chat profile's plan usage through the Claude harness, folds
-                 `chat.planUsage` and `chat.agentEvent`), page/ (the status-bar line and the right-bar details),
+                 `chat.planUsage` and `chat.agentEvent`), page/ (the status-bar plan line, each session's line in
+                 its tab bar through sessions' `addBarPart`, and the right-bar details),
                  layouts/ (the usage Layout contract and the built-in `default` layout),
                  `docs/features/usage/design.md`
   workflow/      manifest.ts, contract.ts, flow.ts (the pure fold of signals into a session's flow), plan-reader.ts
@@ -278,11 +279,14 @@ round; primer: an open primer), since main, not the page, decides.
   `sessions.sessionRemoved` tells each plugin to forget the session; the user moves between tabs with `Option+o` /
   `Option+i` and between sessions with `Option+Shift+o` / `Option+Shift+i`. A tab names its Codicon (`icon`), and
   the tab bar draws it with the title as its tooltip.
-- **A row part** is what a plugin draws under every session row in the side bar, through the `sessions` page export
-  `addRowPart`, the same shape as forms' `addCardPart`: sessions hands each row's part a wrapper and the session id,
-  and the part draws through its own plugin's layout. The agents plugin's subagent lines are one.
+- **A session part** (`SessionPart`) is what a plugin draws for every session on a sessions surface: sessions hands
+  it a wrapper and the session id, and the part draws through its own plugin's layout. It has the same shape as forms'
+  `addCardPart`. A **row part** draws under every session row in the side bar, through the `sessions` page export
+  `addRowPart`; the agents plugin's subagent lines are one. A **bar part** draws in every session's tab bar, which moves
+  with its session between panes, through `addBarPart`; the usage plugin's per-session context line is one.
+  Information about one session goes in a session part, not on a shared bar.
 - **A composer part** is what a plugin draws above the Chat composer, through the `chat` page export
-  `addComposerPart`, the same shape as a row part: chat hands each part a wrapper and the session id. The workflow
+  `addComposerPart`, the same shape as a session part: chat hands each part a wrapper and the session id. The workflow
   plugin's strip is one.
 - **A chat pane** is one pane of Sessions mode's pane tree (`src/shared/page/pane-tree/`, the sessions plugin its
   owner): it shows one whole session, tab bar included, and a session shows in at most one pane. The side bar drives
