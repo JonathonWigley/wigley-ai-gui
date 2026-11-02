@@ -163,18 +163,24 @@ export interface ChatChannel extends ChannelShape {
   };
 }
 
-// `agentEvent`: one agent event of a session chat owns. `planUsage`: the plan
-// rows one of those sessions saw. Both carry the `profileDir` the session's
-// process was started with: the profile's `configDir` as the `profiles`
-// setting writes it, unexpanded; null is the harness default, which chat never
-// sends. `sessionOpened`: a session chat now owns, with the profile it opened
-// under.
+// One agent event of a session chat owns. `sessionId` is the sessions plugin's
+// row id, `hostSessionId` the harness's session id, which a resumed session
+// keeps.
+export interface ChatAgentEvent {
+  sessionId: string;
+  profileDir: string | null;
+  hostSessionId: string;
+  event: AgentEvent;
+}
+
+// `agentEvent`: one agent event of a session chat owns, still sent after the
+// row closes for its process's `sessionEnded`. `planUsage`: the plan rows one
+// of those sessions saw. Both carry the `profileDir` the session's process was
+// started with: the profile's `configDir` as the `profiles` setting writes it,
+// unexpanded; null is the harness default, which chat never sends.
+// `sessionOpened`: a session chat now owns, with the profile it opened under.
 export interface ChatMainEvents extends EventShape {
-  agentEvent: {
-    sessionId: string;
-    profileDir: string | null;
-    event: AgentEvent;
-  };
+  agentEvent: ChatAgentEvent;
   planUsage: { profileDir: string | null; update: PlanRowUpdate };
   sessionOpened: { sessionId: string; profileDir: string };
 }

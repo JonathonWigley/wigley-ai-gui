@@ -476,8 +476,16 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         }
       },
       agentEvent(event) {
-        if (isLive(session, processStart)) {
-          deps.emit('agentEvent', { sessionId, profileDir, event });
+        // A closed row's process still ends, and its log and roster close on
+        // its `sessionEnded`.
+        const endsTheSession = event.type === 'sessionEnded';
+        if (isLive(session, processStart) || endsTheSession) {
+          deps.emit('agentEvent', {
+            sessionId,
+            profileDir,
+            hostSessionId: session.hostId,
+            event,
+          });
         }
       },
       ended({ code, error }) {

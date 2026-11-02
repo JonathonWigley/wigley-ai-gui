@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type {
-  ChatEntry,
-  ProcessActivity,
-  SessionControl,
+import {
+  type AgentEvent,
+  type ChatEntry,
+  MAIN_AGENT_ID,
+  type ProcessActivity,
+  type SessionControl,
 } from '../../../contracts/agent';
 import {
   createFakeAgentHarness,
@@ -1881,20 +1883,47 @@ describe('createChatSessions saved sessions', () => {
 describe('createChatSessions usage forwarding', () => {
   it.each([
     {
-      given: 'an agent event',
-      act: (test: Awaited<ReturnType<typeof started>>) =>
-        test.process.events.agentEvent(fakeUsageEvent(1, 1000)),
-      emitted: [
-        {
-          event: 'agentEvent',
-          data: {
-            sessionId: ROW_ID,
-            profileDir: '~/.claude-personal',
-            event: fakeUsageEvent(1, 1000),
-          },
-        },
-      ],
+      case: 'running',
+      close: false,
+      event: {
+        type: 'toolStarted',
+        at: 1000,
+        agentId: MAIN_AGENT_ID,
+        toolUseId: 'tool-1',
+        tool: 'Read',
+      } satisfies AgentEvent,
     },
+    {
+      case: 'after close',
+      close: true,
+      event: { type: 'sessionEnded', at: 1000 } satisfies AgentEvent,
+    },
+  ])('agentEvent_$case_ReachesTheBusWithBothIds', async ({ close, event }) => {
+    const test = await started();
+    if (close) {
+      test.chat.closed(ROW_ID);
+    }
+    test.emitted.length = 0;
+
+    test.process.events.agentEvent(event);
+
+    expect(test.emitted).toEqual([
+      {
+        event: 'agentEvent',
+        data: {
+          sessionId: ROW_ID,
+          profileDir: '~/.claude-personal',
+          hostSessionId: 'uuid-1',
+          event,
+        },
+      },
+    ]);
+    expect((test.emitted[0].data as ChatMainEvents['agentEvent']).event).toBe(
+      event,
+    );
+  });
+
+  it.each([
     {
       given: 'a plan row update',
       act: (test: Awaited<ReturnType<typeof started>>) =>
@@ -1921,10 +1950,19 @@ describe('createChatSessions usage forwarding', () => {
           data: {
             sessionId: ROW_ID,
             profileDir: '~/.claude-personal',
+            hostSessionId: 'uuid-1',
             event: fakeUsageEvent(1, 1000),
           },
         },
       ],
+    },
+    {
+      given: 'an agent event after the row closed',
+      act: (test: Awaited<ReturnType<typeof started>>) => {
+        test.chat.closed(ROW_ID);
+        test.process.events.agentEvent(fakeUsageEvent(1, 1000));
+      },
+      emitted: [],
     },
     {
       given: 'a plan row update after the process ended',
