@@ -57,7 +57,7 @@ export function focusAfterScroll(
 // following one only while it sits on `lastStopId`, the stop a following focus
 // may rest on (the newest pending row, else the last row's stop: an open last
 // run's line); any other following focus, and one whose entry is gone, follows
-// the last of `ids`.
+// `lastStopId`.
 export function focusAfterChange(
   focus: EntryFocus,
   ids: readonly string[],
@@ -65,7 +65,7 @@ export function focusAfterChange(
 ): EntryFocus {
   const isListed = focus.entryId !== null && ids.includes(focus.entryId);
   const isKept = isListed && (!focus.following || focus.entryId === lastStopId);
-  return isKept ? focus : focusLatest(ids.at(-1) ?? null);
+  return isKept ? focus : focusLatest(lastStopId);
 }
 
 // After run `runId` closed: a focus on one of its `stepIds` moves to the run's

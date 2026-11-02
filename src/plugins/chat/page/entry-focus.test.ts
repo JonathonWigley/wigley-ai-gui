@@ -70,7 +70,14 @@ describe('entry focus', () => {
       focus: { entryId: 's2', following: true },
       next: openRun,
       lastRow: 'activity:s1',
-      expected: { entryId: 's3', following: true },
+      expected: onLine,
+    },
+    {
+      given: 'a gone entry after an open last run',
+      focus: { entryId: 'q1', following: true },
+      next: openRun,
+      lastRow: 'activity:s1',
+      expected: onLine,
     },
     {
       given: 'following on a run line no longer last',

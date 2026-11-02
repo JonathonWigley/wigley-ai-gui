@@ -175,13 +175,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
         }
         return;
       }
-      const name = view.heldName(sessionId);
-      services.log(
-        'chat',
-        name === undefined
-          ? `returned for unknown session ${sessionId} ignored`
-          : `returned for ${name} dropped: no box`,
-      );
+      services.log('chat', `returned for unknown session ${sessionId} ignored`);
     });
     api.layouts.show<ChatLayout>({
       defaultLayout,

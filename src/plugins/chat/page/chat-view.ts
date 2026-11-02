@@ -72,11 +72,10 @@ export interface ChatSession extends SessionRef {
 }
 
 // The Chat view with what the commands read: the session a box belongs to,
-// a held session by id, and the name of a held tab, its box mounted or not.
+// and a held session by id.
 export interface ChatTabs extends ChatView {
   session(sessionId: string): ChatSession | undefined;
   sessionOfEditor(editor: TextEditor): ChatSession | undefined;
-  heldName(sessionId: string): string | undefined;
 }
 
 // `allow` answers a permission entry allowed; `deny` asks for the reason
@@ -338,7 +337,6 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     session: (sessionId) => asSession(tabs.get(sessionId)),
     sessionOfEditor: (editor) =>
       asSession([...tabs.values()].find((tab) => tab.box === editor)),
-    heldName: (sessionId) => tabs.get(sessionId)?.name,
   };
 }
 

@@ -220,8 +220,7 @@ interview on 2026-10-23; this file is the record of both.
     caller logs its own line: `pulled back <n> message(s) in <session>`, or `put the refused message back in
     <session>` for a refused send. A pull-back for a message no longer queued (already written to the agent, returned,
     or pulled back) does nothing and logs `queued message <id> no longer queued`. A `returned` for a session with no tab logs
-    `returned for unknown session <id> ignored`; for a held session with no box, `returned for <session> dropped: no
-    box`. The key log lines are `focused pending message` for `j` / `k` onto a pending row and
+    `returned for unknown session <id> ignored`. The key log lines are `focused pending message` for `j` / `k` onto a pending row and
     `following the latest entry` for `G`.
   - **Interrupt and exit**: Ctrl+C returns every queued message, oldest first, then interrupts the running turn;
     the oldest ends at the top of the box. A process that exits returns them all the same way, so nothing is

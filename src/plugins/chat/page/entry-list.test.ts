@@ -706,4 +706,22 @@ describe('pending rows', () => {
     list.latest();
     expect(list.focused()).toEqual(pendingStop('q1'));
   });
+
+  it('pending_OnlyRowLeavesDuringFollowedOpenLastRun_FocusReturnsToTheLineAndFollows', () => {
+    const { list, put } = setUpList(defaultShown());
+    [user('u1'), tool('t1'), tool('t2')].forEach(put);
+    list.toggleFocused();
+    const line = expect.objectContaining({
+      kind: 'activity',
+      runId: 'activity:t1',
+    });
+    list.setQueued([queued('q1')]);
+    expect(list.focused()).toEqual(pendingStop('q1'));
+
+    list.setQueued([]);
+    expect(list.focused()).toEqual(line);
+    put(tool('t3'));
+
+    expect(list.focused()).toEqual(line);
+  });
 });
