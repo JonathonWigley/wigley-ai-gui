@@ -1,6 +1,6 @@
 # 10 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 5 · Depends on: 09
 Plan: [plan.md](plan.md)
@@ -78,3 +78,5 @@ Done when: every check above passes, each with its screenshot or listing named i
 Commit:    none
 
 ## Proof
+
+Commit 839ad22 · proof: drive run file-drop: checks 1-3, 5-10, 12-13 and regression checks 14 (Form number picks, notes box, Esc out) and 15 (Chat/Primer typing, send, text paste) PASS (report /tmp/claude-make-file-drop/reports/10-1.md, screenshots .drive/file-drop/screenshots/); check 4 FAILED (Forms drop target judged shown boxes by the focused form) and was fixed in 839ad22 (Primer had the same bug, fixed too), then re-run PASS in drive run file-drop-fix; check 11 UNRUN for the drop half — a synthetic File has no path and window.wigley is frozen, so a spaced path cannot be dropped (link half PASS: [my notes.md](<my notes.md>) saved, rendered, opened) — goes to the user's Finder checks · concerns: w from a chip lands on the space after it, not the next word; typing right before an unquoted chip dissolves it (quoted chips survive); after 839ad22 a drop on the focused form under the cancel prompt is judged against the view the prompt returns to rather than no boxes; Primer's fix was not driven live

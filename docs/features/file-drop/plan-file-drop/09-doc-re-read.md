@@ -1,6 +1,6 @@
 # 09 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 5 · Depends on: 01, 02, 03, 04, 05, 06, 07, 08
 Plan: [plan.md](plan.md)
@@ -21,3 +21,5 @@ Done when: every listed doc agrees with the code
 Commit:    one commit for the doc fixes, or none when nothing was stale (say so in Proof)
 
 ## Proof
+
+Commit d4c6639 · proof: diff read: each changed line checked against the landed code; agent-chat design and DESIGN.md File chip found true · concerns: Notes GUI capture (popup.ts ~785, imageAdded(draft,'capture')) is never shrunk, so a large capture could exceed 5 MB at a New session send, where the design written ahead promised every Notes image fits; the docs now say a capture is not shrunk — a code gap for the review to triage

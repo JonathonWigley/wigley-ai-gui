@@ -239,8 +239,8 @@ Boundary rules:
 - [x] [Docs editor drop target](08-docs-target.md) — after 01, 02, 03, 04
 
 ### Wave 5
-- [ ] [Doc re-read](09-doc-re-read.md) — after 01–08
-- [ ] [Final verification](10-final-verification.md) — after 09
+- [x] [Doc re-read](09-doc-re-read.md) — after 01–08
+- [x] [Final verification](10-final-verification.md) — after 09
 
 ## Run log
 
@@ -255,6 +255,8 @@ Review base: 87a254cb76dee43042396e82e9a353b6c9573795
 - 07 · ac8739b · diff read: every Produces present; listener grep clean; notes compiles (typecheck's only errors were in 06's in-progress test fakes); notes files pass lint · concerns: new log lines 'paths not inserted, popup changed: <paths>' and '<n> paths inserted'
 - 08 · e239418 · diff read: every Produces present; docs compiles (typecheck's only errors in 06's in-progress test fakes); lint passes · concerns: AGENTS.md's docs page architecture line doesn't say the editor takes dropped and pasted files (for 09); a non-null assertion on pasteIndexes.shift() in takeFiles
 - 06 · df9b76a · diff read: every Produces present; whole-tree typecheck and lint pass · concerns: boxDropTake test's null-editor row uses an on-disk file, so its savePasted-never-called check would pass even if the null short-circuit broke (a pasted-file row would catch it); fakes' charBeforeCursor now answers 'x'
+- 09 · d4c6639 · diff read: each changed line checked against the landed code; agent-chat design and DESIGN.md File chip found true · concerns: Notes GUI capture (popup.ts ~785, imageAdded(draft,'capture')) is never shrunk, so a large capture could exceed 5 MB at a New session send, where the design written ahead promised every Notes image fits; the docs now say a capture is not shrunk — a code gap for the review to triage
+- 10 · 839ad22 · drive run file-drop: checks 1-3, 5-10, 12-13 and regression checks 14 (Form number picks, notes box, Esc out) and 15 (Chat/Primer typing, send, text paste) PASS (report /tmp/claude-make-file-drop/reports/10-1.md, screenshots .drive/file-drop/screenshots/); check 4 FAILED (Forms drop target judged shown boxes by the focused form) and was fixed in 839ad22 (Primer had the same bug, fixed too), then re-run PASS in drive run file-drop-fix; check 11 UNRUN for the drop half — a synthetic File has no path and window.wigley is frozen, so a spaced path cannot be dropped (link half PASS: [my notes.md](<my notes.md>) saved, rendered, opened) — goes to the user's Finder checks · concerns: w from a chip lands on the space after it, not the next word; typing right before an unquoted chip dissolves it (quoted chips survive); after 839ad22 a drop on the focused form under the cancel prompt is judged against the view the prompt returns to rather than no boxes; Primer's fix was not driven live
 ### Contract changes
 - chip-decorations.ts exports: fileChipExtension, snapHead, widenRange → those plus skipsChipRules (an Annotation the host's setText and insert put on their own transactions) and fileChipsOf(state) (the chips of a box's state; [] in a document editor) · why: the host's insert reads the chip under a normal-mode cursor and its own transactions must skip the chip rules · consumers: none outside the host · group 03
 ### Rulings
@@ -280,6 +282,9 @@ Review base: 87a254cb76dee43042396e82e9a353b6c9573795
 - Each box's first-mount order comes from a counter — fileEditor's fallback needs an order — none · group 06
 - boxDropTake also logs a failed save, beside its toast — matches the other targets — none · group 06
 - 09's Files widen to two stale lines the workers found outside every Files line: AGENTS.md's image-types.ts listing line (now also the cap and extensionOf/base64LengthOf/base64Of) and the DroppedFile.name comment in src/contracts/drops.ts ('image.png', where 04 names a nameless pasted file 'pasted'), plus any AGENTS.md docs-page line that should say the editor takes files — stale docs are fixed when found — none · lead
+- Notes cap wording narrowed to a pasted or dropped image — matches popup.ts, which shrinks only in attachEach — if the capture should shrink, the code changes and the wording returns · group 09 · group 09
+- Check 4's failure was fixed through a worker dispatch before the review (839ad22) rather than left to it — a proof failure re-dispatches with the failure named · lead · group 10
 ### Review rounds
 ### Test gate
 - npm test, the whole Vitest suite (340 files) — the range touches src/shared, src/renderer, src/main and six plugins' page code, so nearly every suite is in scope, and the whole suite runs in 14 s · 5279 passed, type tests clean
+- npm run selftest, started before 09 landed — invalid: at 17:21:46 09's edit to src/contracts/drops.ts made Vite reload the page, the script restarted (page load 3) over its own half-run sessions and panes, and every later step cascaded to FAIL; every step before the reload passed. Not re-run, by the user's ruling to test the change and its high-risk neighbours only: task 10's drive run carries the file-drop checks plus box-key regression checks (Forms number picks and Esc out of a box, Primer and Chat typing and send)
