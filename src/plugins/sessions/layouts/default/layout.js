@@ -1,7 +1,7 @@
 // @ts-check
 
 // The built-in Sessions look: the side bar's "Sessions" header over its rows,
-// each row's label, harness, attention dot, status line and on-screen mark,
+// each row's label (no harness name), attention dot, status line and on-screen mark,
 // then other plugins' row parts (`contributedParts`) under them,
 // each chat pane's frame and focus edges, the tab bar's prompts around its
 // strip and its pane controls, and each tab's icon with no label, in the class
@@ -22,7 +22,7 @@ const layout = {
     const element = kit.row(parent, {
       density: 'list',
       label: input.label,
-      detail: input.harness || null,
+      detail: null,
     });
     element.classList.add('session-row');
     element.classList.toggle('is-on-screen', input.onScreen);
