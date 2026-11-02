@@ -101,23 +101,66 @@ describe('createDriveCommands', () => {
     ).toHaveLength(1);
   });
 
-  it('setting_PluginSettingAndTheConfigChanges_KeepsBothSettingsAndIsApplied', async () => {
-    const { files, commands, changeConfigOnWrite } = setUp(() => []);
-    await files.write(SETTINGS, '{ "transparency": "full" }');
-    changeConfigOnWrite();
-
-    const result = await commands.run('setting', {
-      plugin: 'keys',
-      name: 'whichKeyTimeoutMs',
+  it.each([
+    {
+      name: 'transparency',
+      value: 'reduced',
+      written: {
+        transparency: 'reduced',
+        workflow: { autoClearAndMake: true },
+      },
+    },
+    {
+      name: 'workflow.autoStartSeconds',
+      value: 5,
+      written: {
+        transparency: 'full',
+        workflow: { autoClearAndMake: true, autoStartSeconds: 5 },
+      },
+    },
+    {
+      name: 'keys.whichKeyTimeoutMs',
       value: 50,
-    });
+      written: {
+        transparency: 'full',
+        workflow: { autoClearAndMake: true },
+        keys: { whichKeyTimeoutMs: 50 },
+      },
+    },
+  ])(
+    'setting_$name_SetsItAtItsDottedPathKeepsTheRestAndIsApplied',
+    async ({ name, value, written }) => {
+      const { files, commands, changeConfigOnWrite } = setUp(() => []);
+      await files.write(
+        SETTINGS,
+        '{ "transparency": "full", "workflow": { "autoClearAndMake": true } }',
+      );
+      changeConfigOnWrite();
 
-    expect(JSON.parse(await files.read(SETTINGS))).toEqual({
-      transparency: 'full',
-      keys: { whichKeyTimeoutMs: 50 },
-    });
-    expect(result).toEqual({ lines: [], applied: true });
-  });
+      const result = await commands.run('setting', { name, value });
+
+      expect(JSON.parse(await files.read(SETTINGS))).toEqual(written);
+      expect(result).toEqual({ lines: [], applied: true });
+    },
+  );
+
+  it.each([
+    { name: 'workflow.', error: '"workflow."' },
+    { name: '.autoStartSeconds', error: '".autoStartSeconds"' },
+    { name: 'transparency.level', error: 'transparency is not a JSON object' },
+  ])(
+    'setting_$name_IsRefusedAndTheFileIsUnchanged',
+    async ({ name, error }) => {
+      const { files, commands } = setUp(() => []);
+      const before = '{ "transparency": "full" }';
+      await files.write(SETTINGS, before);
+
+      await expect(commands.run('setting', { name, value: 1 })).rejects.toThrow(
+        error,
+      );
+      expect(await files.read(SETTINGS)).toBe(before);
+    },
+  );
 
   it('setting_ConfigNeverChanges_ResolvesNotAppliedAfterTheStepTimeout', async () => {
     vi.useFakeTimers();

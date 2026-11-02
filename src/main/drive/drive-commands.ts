@@ -238,15 +238,14 @@ export function createDriveCommands(deps: DriveCommandsDeps): DriveCommands {
       },
     },
     setting: {
-      args: '{ name: string, value: unknown, plugin?: string }',
+      args: '{ name: string, value: unknown }',
       description:
-        "writes a top-level setting, or a plugin's, to the home's settings.json",
+        "writes the setting at a dotted path (`transparency`, `window.width`, a plugin's `workflow.autoStartSeconds`) to the home's settings.json",
       run: async (args) => {
-        const name = requiredString(args, 'name');
-        const plugin = optionalString(args, 'plugin');
+        const settingPath = settingPathOf(requiredString(args, 'name'));
         const mark = await markLog(window);
         const applied = await whenConfigChanges(deps.configChanged, () =>
-          writeSetting(deps.homeFiles, plugin, name, args.value),
+          writeSetting(deps.homeFiles, settingPath, args.value),
         );
         await waitForRedraw(window);
         return { lines: await linesAfter(window, mark), applied };
@@ -506,13 +505,25 @@ async function whenConfigChanges(
   }
 }
 
-// Sets `name` to `value` at the top level of the home's settings.json, or
-// under `plugin` when given, and writes the file back whole; a missing file
-// starts as `{}`.
+// The keys of the dotted setting path `name`, outermost first; refused when a
+// key is empty.
+function settingPathOf(name: string): string[] {
+  const keys = name.split('.');
+  if (keys.includes('')) {
+    throw new Error(
+      `setting name "${name}" is not keys joined by . (a plugin's setting is <plugin>.<name>)`,
+    );
+  }
+  return keys;
+}
+
+// Sets `value` at `settingPath` in the home's settings.json, the objects on
+// the way kept and missing ones made, and writes the file back whole; a
+// missing file starts as `{}`. A plugin's settings sit under its id, so
+// `['workflow', 'autoStartSeconds']` is the workflow plugin's setting.
 async function writeSetting(
   homeFiles: Files,
-  plugin: string | undefined,
-  name: string,
+  settingPath: string[],
   value: unknown,
 ): Promise<void> {
   const text = await readIfPresent(homeFiles, SETTINGS_FILE);
@@ -520,15 +531,17 @@ async function writeSetting(
   if (!isJsonObject(settings)) {
     throw new Error(`${SETTINGS_FILE} is not a JSON object`);
   }
-  if (plugin === undefined) {
-    settings[name] = value;
-  } else {
-    const pluginSettings = settings[plugin] ?? {};
-    if (!isJsonObject(pluginSettings)) {
-      throw new Error(`${SETTINGS_FILE}'s ${plugin} is not a JSON object`);
+  let parent = settings;
+  for (const [index, key] of settingPath.slice(0, -1).entries()) {
+    const child = parent[key] ?? {};
+    if (!isJsonObject(child)) {
+      const childPath = settingPath.slice(0, index + 1).join('.');
+      throw new Error(`${SETTINGS_FILE}'s ${childPath} is not a JSON object`);
     }
-    settings[plugin] = { ...pluginSettings, [name]: value };
+    parent[key] = child;
+    parent = child;
   }
+  parent[settingPath[settingPath.length - 1]] = value;
   await homeFiles.write(
     SETTINGS_FILE,
     `${JSON.stringify(settings, null, 2)}\n`,

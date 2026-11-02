@@ -41,7 +41,12 @@ or touches their data, so start one whenever a check needs it.
    expected there.
 3. Act with `key`, `type`, `click`, `drag`, `resize` and `setting`. Each returns once the page has
    redrawn: `resize` with the size the window took, the others with the log lines they caused
-   (`setting` also says whether the config applied). The page holds document focus as the visible app's does,
+   (`setting` also says whether the config applied). `setting <name> <json value>` takes the
+   setting's dotted path, as `settings.json` nests it: `transparency`, `window.width`, and a
+   plugin's setting under its id, `workflow.autoStartSeconds`. It reports `applied: false` when the
+   served config did not change: the value was already served, or `settings.json` still holds a
+   problem from an earlier write, which keeps the last good settings; fix or remove that key
+   first. The page holds document focus as the visible app's does,
    so `document.hasFocus()`, `.cm-focused`, `:focus` styles and focus events behave as they do for
    the user. When focus cannot be emulated (another debugger, such as DevTools, holds the page),
    the command still runs, unfocused, and the run's log says why. The self-test emulates the same

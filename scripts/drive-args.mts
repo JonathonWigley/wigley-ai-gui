@@ -27,7 +27,6 @@ interface Flags {
   packaged: boolean;
   harness: string | null;
   userConfig: boolean;
-  plugin: string | null;
   hold: boolean;
 }
 
@@ -39,7 +38,7 @@ interface PositionalForm {
 
 const HARNESSES: readonly DriveHarness[] = ['fake', 'claude'];
 
-const VALUE_FLAGS = ['--run', '--harness', '--plugin'];
+const VALUE_FLAGS = ['--run', '--harness'];
 
 // Every argument after it is positional, so a value such as `--wg-accent`
 // reaches its command.
@@ -48,7 +47,6 @@ const END_OF_FLAGS = '--';
 // The flags each command accepts beyond `--run`, which every command takes.
 const COMMAND_FLAGS: Record<string, string[]> = {
   start: ['--packaged', '--harness', '--user-config'],
-  setting: ['--plugin'],
   drag: ['--hold'],
 };
 
@@ -104,13 +102,10 @@ const POSITIONAL_FORMS: Record<string, PositionalForm> = {
     },
   },
   setting: {
-    usage: 'setting <name> <json value> [--plugin <id>]',
-    parse: (rest, flags) => {
-      requireCount(rest, 2, 2, 'setting <name> <json value> [--plugin <id>]');
-      const value = jsonArg(rest[1], 'setting value');
-      return flags.plugin === null
-        ? { name: rest[0], value }
-        : { name: rest[0], value, plugin: flags.plugin };
+    usage: 'setting <dotted name> <json value>',
+    parse: (rest) => {
+      requireCount(rest, 2, 2, 'setting <dotted name> <json value>');
+      return { name: rest[0], value: jsonArg(rest[1], 'setting value') };
     },
   },
   'wait-log': {
@@ -252,7 +247,6 @@ function splitFlags(argv: string[]): { flags: Flags; positionals: string[] } {
     packaged: false,
     harness: null,
     userConfig: false,
-    plugin: null,
     hold: false,
   };
   const positionals: string[] = [];
@@ -291,10 +285,8 @@ function splitFlags(argv: string[]): { flags: Flags; positionals: string[] } {
 function setValueFlag(flags: Flags, flag: string, value: string): void {
   if (flag === '--run') {
     flags.run = runIdOf(value);
-  } else if (flag === '--harness') {
-    flags.harness = value;
   } else {
-    flags.plugin = value;
+    flags.harness = value;
   }
 }
 
