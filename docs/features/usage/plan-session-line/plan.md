@@ -163,5 +163,6 @@ Review base: d66a196a007248071a0c7ad363f22effdd460db7
 - Tests draw through the real createUsageParts over the default layout, with a third no-snapshot row — none · group 03 · group 03
 - Every self-test script that shows a tab bar with a usage line lists .session-bar-parts in scrollsItself (chat, agents, usage), beside .session-row-status — the per-script pattern; a core-wide exemption was the alternative — a future script showing tab bars must add it too · lead
 ### Review rounds
+- implementation review · ab687fe · NEEDS FIXES (1 important open, 2 minor determined, 1 contradiction; 6 applied in 01b14d9)
 ### Test gate
 - Full suite (npm test) — the range touches the sessions part store, tab bar drawing and the usage view model, which many plugins test through; 4768 passed, no type errors · npm run selftest all passed (797 PASS) at 8545355 · pass
