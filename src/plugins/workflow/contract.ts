@@ -86,6 +86,11 @@ export function isBusy(flow: SessionFlow): boolean {
   return flow.turnRunning || flow.runningSubagents.length > 0;
 }
 
+// A stage's detail from its parts, joined by ` · `, each empty part left out.
+export function detailLine(...parts: string[]): string {
+  return parts.filter((part) => part !== '').join(' · ');
+}
+
 export interface StageActionSpec {
   // The workflow command id it runs, without the 'workflow.' prefix:
   // 'clearAndMake'.
@@ -116,7 +121,8 @@ export interface PageStage {
   // the first available one; when that one is disabled, they run nothing and
   // log `nothing to run`.
   actions: readonly StageActionSpec[];
-  // The chip's and the strip's detail text: '3/7 · wave 2'; '' for none.
+  // The chip's, the strip's and the Flow tab's detail text:
+  // '3/7 · wave 2 · Claim grants'; '' for none. The chip ellipsizes it.
   detail(flow: SessionFlow): string;
 }
 

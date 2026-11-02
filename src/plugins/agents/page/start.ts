@@ -27,7 +27,7 @@ type AgentsApi = PageApi<
 // Draws each session's running subagents under its row, one line each,
 // through sessions' row parts and the `agents.layout` layout. Hears main's
 // `rosterChanged`, filled in by one `rosters` read, and names each session by
-// its project folder for the page log. `openPreview` asks main for the layout
+// its side-bar label for the page log. `openPreview` asks main for the layout
 // preview's sample session.
 export const agentsPagePart: PagePart<typeof agentsManifest> = {
   manifest: agentsManifest,
@@ -36,7 +36,7 @@ export const agentsPagePart: PagePart<typeof agentsManifest> = {
     const log = (line: string) => services.log('agents', line);
     const sessions = api.dependency<SessionsPageExports>('sessions');
     const keys = api.dependency<KeysPageExports>('keys');
-    // Each session's name, its project folder's or its id.
+    // Each session's name in the log, its side-bar label (`gamma 2`).
     const names = new Map<string, string>();
     const lines = createSubagentLines({
       kit: {
@@ -55,11 +55,8 @@ export const agentsPagePart: PagePart<typeof agentsManifest> = {
     });
     sessions.addRowPart(lines.part);
 
-    api.events.on('sessions.sessionAdded', ({ sessionId, projectDir }) => {
-      names.set(
-        sessionId,
-        projectDir === null ? sessionId : services.paths.base(projectDir),
-      );
+    api.events.on('sessions.sessionAdded', ({ sessionId, label }) => {
+      names.set(sessionId, label);
     });
     api.events.on('sessions.sessionRemoved', ({ sessionId }) => {
       names.delete(sessionId);

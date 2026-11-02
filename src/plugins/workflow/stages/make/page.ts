@@ -1,4 +1,4 @@
-import { isBusy, type PageStage } from '../../contract';
+import { detailLine, isBusy, type PageStage } from '../../contract';
 
 export const makePageStage: PageStage = {
   id: 'make',
@@ -27,7 +27,11 @@ export const makePageStage: PageStage = {
     if (progress === null) {
       return '';
     }
-    const boxes = `${progress.checked}/${progress.total}`;
-    return progress.wave === null ? boxes : `${boxes} · wave ${progress.wave}`;
+    const wave = progress.wave === null ? '' : `wave ${progress.wave}`;
+    return detailLine(
+      `${progress.checked}/${progress.total}`,
+      wave,
+      progress.title,
+    );
   },
 };

@@ -466,6 +466,10 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       return true;
     },
     selectedSessionId: () => selectedSessionId,
+    label(sessionId) {
+      const entry = entries.get(sessionId);
+      return entry === undefined ? null : labelOf(entry);
+    },
     tools: () => contributions.flatMap((contribution) => contribution.tools),
     state,
   };

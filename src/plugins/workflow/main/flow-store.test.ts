@@ -53,6 +53,18 @@ describe('createFlowStore', () => {
       }),
       logged: 1,
     },
+    {
+      name: 'a reviewRoundsAtMake not a number',
+      text: JSON.stringify({
+        flows: [
+          {
+            hostSessionId: 'h1',
+            flow: { ...SAVED_H1, reviewRoundsAtMake: '2' },
+          },
+        ],
+      }),
+      logged: 1,
+    },
   ])('load: $name gives no saved flows', async ({ text, logged }) => {
     const { store, logs } = await loadStore(text);
 
@@ -61,22 +73,35 @@ describe('createFlowStore', () => {
     expect(logs).toHaveLength(logged);
   });
 
-  it('load_SavedFlow_OpensWithNoTurnSubagentOrCountdown', async () => {
-    const { store } = await loadStore(
-      flowsFile([{ hostSessionId: 'h1', flow: SAVED_H1 }]),
-    );
+  it.each<{ name: string; flow: SessionFlow }>([
+    { name: 'no reviewRoundsAtMake', flow: SAVED_H1 },
+    {
+      name: 'reviewRoundsAtMake 2',
+      flow: { ...SAVED_H1, reviewRoundsAtMake: 2 },
+    },
+    {
+      name: 'reviewRoundsAtMake null',
+      flow: { ...SAVED_H1, reviewRoundsAtMake: null },
+    },
+  ])(
+    'load_SavedFlowWith_$name_OpensAsSavedWithNoTurnSubagentOrCountdown',
+    async ({ flow }) => {
+      const { store } = await loadStore(
+        flowsFile([{ hostSessionId: 'h1', flow }]),
+      );
 
-    expect(store.open('s9', 'h1', '/r')).toEqual({
-      ...SAVED_H1,
-      sessionId: 's9',
-      turnRunning: false,
-      runningSubagents: [],
-      countdownEndsAt: null,
-    });
-    expect(store.hostIdOf('s9')).toBe('h1');
-    store.rekey('s9', 'h2');
-    expect(store.hostIdOf('s9')).toBe('h2');
-  });
+      expect(store.open('s9', 'h1', '/r')).toStrictEqual({
+        ...flow,
+        sessionId: 's9',
+        turnRunning: false,
+        runningSubagents: [],
+        countdownEndsAt: null,
+      });
+      expect(store.hostIdOf('s9')).toBe('h1');
+      store.rekey('s9', 'h2');
+      expect(store.hostIdOf('s9')).toBe('h2');
+    },
+  );
 
   it('putRekeyDrop_EachWritesTheEntries_KeepingUnopenedOnes', async () => {
     const unopened = { ...newFlow('s-x', '/q'), stage: 'feature' };

@@ -69,13 +69,13 @@ describe('BUILT_IN_PAGE_STAGES', () => {
       name: 'make in a wave',
       stage: 'make',
       flow: flowWith({}),
-      detail: '3/7 · wave 2',
+      detail: '3/7 · wave 2 · Claim grants',
     },
     {
       name: 'make with no open wave',
       stage: 'make',
       flow: flowWith({ progress: progress({ wave: null }) }),
-      detail: '3/7',
+      detail: '3/7 · Claim grants',
     },
     {
       name: 'make unread',
@@ -87,14 +87,27 @@ describe('BUILT_IN_PAGE_STAGES', () => {
       name: 'review with rounds',
       stage: 'review',
       flow: flowWith({ progress: progress({ checked: 6, reviewRounds: 2 }) }),
-      detail: 'round 2 · 6/7',
+      detail: 'round 2 · 6/7 · Claim grants',
     },
     {
       name: 'review with no round',
       stage: 'review',
       flow: flowWith({}),
-      detail: '3/7',
+      detail: '3/7 · Claim grants',
     },
+    ...(['planReady', 'make', 'review', 'closed'] as const).map((stage) => ({
+      name: `${stage} with an untitled plan`,
+      stage,
+      flow: flowWith({
+        progress: progress({ wave: null, reviewRounds: 1, title: '' }),
+      }),
+      detail: {
+        planReady: '7 tasks',
+        make: '3/7',
+        review: 'round 1 · 3/7',
+        closed: 'done',
+      }[stage],
+    })),
     {
       name: 'review unread',
       stage: 'review',

@@ -402,8 +402,9 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   the main action as a ghost button; an idle session draws no chip. The strip sits above the Chat composer: the stepper
   with the current stage lit, the detail, the countdown and every action as buttons; an idle session shows only a dim
   ghost Start feature. The Flow tab holds the stage's label as its header, the stepper, the stage's detail (which
-  carries the plan's title where the stage names it) with the countdown, the plan's tasks under a header per wave (the
-  current wave marked, a task's mark filled once it is done) and the stage's actions; with no plan read it shows the
+  carries the plan's title from feature on, once a plan is read, after the progress in make and review so the chip's
+  ellipsis cuts the title first) with the countdown, the plan's tasks under a header per wave (the current wave
+  marked, a task's mark filled once it is done) and the stage's actions; with no plan read it shows the
   empty state `No plan yet — Space w f starts a feature`, and a read plan with no boxes shows none. A disabled action
   draws disabled.
 - **Floating:** pickers, which-key, help and dialogs use the floating material with `row-list` rows

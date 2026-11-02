@@ -19,7 +19,8 @@ import defaultLayout from '../layouts/default/layout.js';
 import type { FlowTabInput, Layout, StripInput } from '../layouts/layout';
 import type { PlanProgress } from '../plan-reader';
 import { BUILT_IN_PAGE_STAGES } from '../stages';
-import { createPageStageList, createWorkflowView } from './workflow-view';
+import { createStageList } from '../stage-list';
+import { createWorkflowView } from './workflow-view';
 
 const NOW = 1_000_000;
 const PLAN_DIR = '/p/proj/docs/features/x/plan-x';
@@ -85,7 +86,7 @@ function setUp() {
   const invoked: WorkflowActionRequest[] = [];
   const filled: [string, string][] = [];
   const flows = new Map<string, SessionFlow>();
-  const stages = createPageStageList();
+  const stages = createStageList<PageStage>();
   for (const stage of BUILT_IN_PAGE_STAGES) {
     stages.add(stage);
   }

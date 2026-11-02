@@ -235,6 +235,20 @@ describe('createSessionList', () => {
     expect(labels(list.state())).toEqual(['x', 'x 3', 'x 2']);
   });
 
+  it('label_IsTheRowsLabel_KeptWhileTheRowIsClosed_NullOnceTheSessionEnds', () => {
+    const { list } = setUp();
+    list.connect(info('/work/x'));
+    const second = list.connect(info('/work/x'));
+    const id = second.session.id;
+
+    expect(list.label(id)).toBe('x 2');
+    list.closeSession(id);
+    expect(list.label(id)).toBe('x 2');
+    second.end();
+    expect(list.label(id)).toBeNull();
+    expect(list.label('unknown')).toBeNull();
+  });
+
   it('numbers two folders with one name as one group', () => {
     const { list } = setUp();
 

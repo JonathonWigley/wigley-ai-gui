@@ -1,4 +1,4 @@
-import { isBusy, type PageStage } from '../../contract';
+import { detailLine, isBusy, type PageStage } from '../../contract';
 
 export const closedPageStage: PageStage = {
   id: 'closed',
@@ -22,5 +22,5 @@ export const closedPageStage: PageStage = {
     },
   ],
   detail: (flow) =>
-    flow.progress === null ? '' : `${flow.progress.title} · done`,
+    flow.progress === null ? '' : detailLine(flow.progress.title, 'done'),
 };

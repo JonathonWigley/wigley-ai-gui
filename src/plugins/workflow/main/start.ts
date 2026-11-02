@@ -59,6 +59,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     const { services, channel, events } = api;
     const { log, clock } = services;
     const chat = api.dependency<ChatMainExports>('chat');
+    const sessions = api.dependency<SessionsMainExports>('sessions');
     const stages = createStageList<MainStage>();
     const store = createFlowStore({
       files: api.data,
@@ -164,7 +165,8 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       if (command === undefined) {
         return;
       }
-      const name = services.paths.base(flow.projectDir);
+      const name =
+        sessions.label(sessionId) ?? services.paths.base(flow.projectDir);
       actions.run(sessionId, command).then(
         (ran) => {
           if (ran) {
@@ -283,7 +285,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
           homeDir: services.homeDir,
           files: services.files,
           chat,
-          sessions: api.dependency<SessionsMainExports>('sessions'),
+          sessions,
           harnesses: services.agentHarnesses,
           hooks: selfTestHooks,
         }),

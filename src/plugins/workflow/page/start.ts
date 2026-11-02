@@ -33,7 +33,8 @@ import { BUILT_IN_PAGE_STAGES } from '../stages';
 import { createFlowTabs } from './flow-tab';
 import { readWorkflowLayout } from './layout/read-workflow-layout';
 import { createPreview } from './preview';
-import { createPageStageList, createWorkflowView } from './workflow-view';
+import { createStageList } from '../stage-list';
+import { createWorkflowView } from './workflow-view';
 
 type WorkflowApi = PageApi<
   typeof workflowManifest,
@@ -80,7 +81,7 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
     const keys = api.dependency<KeysPageExports>('keys');
     const heard = new Map<string, HeardSession>();
     const flows = new Map<string, SessionFlow>();
-    const stages = createPageStageList();
+    const stages = createStageList<PageStage>();
 
     const nameOf = (sessionId: string) =>
       heard.get(sessionId)?.name ?? sessionId;

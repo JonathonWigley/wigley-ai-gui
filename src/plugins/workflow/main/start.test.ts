@@ -5,7 +5,11 @@ import type { QualifiedEvents } from '../../../contracts/plugin';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import type { ChatMainEvents, ChatMainExports } from '../../chat/contract';
-import type { AgentSession, SessionsMainEvents } from '../../sessions/contract';
+import type {
+  AgentSession,
+  SessionsMainEvents,
+  SessionsMainExports,
+} from '../../sessions/contract';
 import type { SessionFlow } from '../contract';
 import { readPlanProgress } from '../plan-reader';
 import { FLOWS_FILE } from './flow-store';
@@ -77,10 +81,11 @@ function session(id: string, hostSessionId: string): AgentSession {
 // Workflow's main part started over a fake `MainApi`: memory files for its
 // data and for the project (`project`), hand-moved time, and a chat fake that
 // records each `clear` and `send`. `silentWatch` gives the project files a
-// watch that reports nothing, as an OS watcher that misses a delete.
+// watch that reports nothing, as an OS watcher that misses a delete;
+// `sessionLabel` is the side-bar label sessions gives s1 (none by default).
 function startWorkflowPart(
   settings: WorkflowTestSettings,
-  options: { silentWatch?: boolean } = {},
+  options: { silentWatch?: boolean; sessionLabel?: string } = {},
 ) {
   const listeners = new Map<string, ((data: unknown) => void)[]>();
   const handlers = new Map<string, (...args: unknown[]) => unknown>();
@@ -106,6 +111,11 @@ function startWorkflowPart(
       launch: async () => 's2',
       profileOf: () => 'personal',
     };
+  const sessions: Pick<SessionsMainExports, 'label'> = {
+    label: (sessionId) =>
+      sessionId === 's1' ? (options.sessionLabel ?? null) : null,
+  };
+  const dependencies: Record<string, unknown> = { chat, sessions };
   const api = {
     channel: {
       handle: (name: string, handler: (...args: unknown[]) => unknown) =>
@@ -135,7 +145,7 @@ function startWorkflowPart(
       paths: posixPaths,
       selfTest: null,
     },
-    dependency: (pluginId: string) => (pluginId === 'chat' ? chat : {}),
+    dependency: (pluginId: string) => dependencies[pluginId] ?? {},
     data,
     drive: null,
     layouts: { register: () => ({ dispose: () => undefined }) },
@@ -210,34 +220,46 @@ async function runFeatureTurn(
 }
 
 describe('workflowMainPart', () => {
-  it('featureTurnWritingAPlan_ReachesPlanReady_AndAutoStartsClearAndMake', async () => {
-    const workflow = startWorkflowPart({ ...SETTINGS, autoClearAndMake: true });
+  it.each([
+    { name: 'its side-bar label', sessionLabel: 'r 2', ranIn: 'r 2' },
+    { name: 'its folder with no label', sessionLabel: undefined, ranIn: 'r' },
+  ])(
+    'featureTurnWritingAPlan_ReachesPlanReady_AndAutoStartsClearAndMake_LoggingTheSessionBy_$name',
+    async ({ sessionLabel, ranIn }) => {
+      const workflow = startWorkflowPart(
+        { ...SETTINGS, autoClearAndMake: true },
+        { sessionLabel },
+      );
 
-    await runFeatureTurn(workflow);
+      await runFeatureTurn(workflow);
 
-    const ready = workflow.lastFlow();
-    expect(ready).toMatchObject({
-      stage: 'planReady',
-      planDir: PLAN_DIR,
-      progress: readPlanProgress(PLAN),
-      countdownEndsAt: START + 10_000,
-    });
-    await settled();
-    const saved = JSON.parse(await workflow.data.read(FLOWS_FILE)) as {
-      flows: { hostSessionId: string; flow: SessionFlow }[];
-    };
-    expect(saved.flows).toEqual([{ hostSessionId: 'h1', flow: ready }]);
+      const ready = workflow.lastFlow();
+      expect(ready).toMatchObject({
+        stage: 'planReady',
+        planDir: PLAN_DIR,
+        progress: readPlanProgress(PLAN),
+        countdownEndsAt: START + 10_000,
+      });
+      await settled();
+      const saved = JSON.parse(await workflow.data.read(FLOWS_FILE)) as {
+        flows: { hostSessionId: string; flow: SessionFlow }[];
+      };
+      expect(saved.flows).toEqual([{ hostSessionId: 'h1', flow: ready }]);
 
-    workflow.time.advance(9_999);
-    expect(workflow.chatCalls).toEqual([]);
-    workflow.time.advance(1);
-    await settled();
-    expect(workflow.chatCalls).toEqual([
-      ['clear', 's1'],
-      ['send', 's1', `/wigley:make ${PLAN_DIR}`],
-    ]);
-    expect(workflow.logs).toContainEqual(['workflow', 'ran clearAndMake in r']);
-  });
+      workflow.time.advance(9_999);
+      expect(workflow.chatCalls).toEqual([]);
+      workflow.time.advance(1);
+      await settled();
+      expect(workflow.chatCalls).toEqual([
+        ['clear', 's1'],
+        ['send', 's1', `/wigley:make ${PLAN_DIR}`],
+      ]);
+      expect(workflow.logs).toContainEqual([
+        'workflow',
+        `ran clearAndMake in ${ranIn}`,
+      ]);
+    },
+  );
 
   it.each([
     {

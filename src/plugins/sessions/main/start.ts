@@ -241,6 +241,7 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
       mark: (sessionId) => list.mark(sessionId),
       activate: (sessionId) => list.activate(sessionId),
       selectedSessionId: () => list.selectedSessionId(),
+      label: (sessionId) => list.label(sessionId),
       addCloseGuard: (mayClose) => list.addCloseGuard(mayClose),
     };
     const driveActions =

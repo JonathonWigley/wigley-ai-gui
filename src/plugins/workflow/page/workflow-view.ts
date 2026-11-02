@@ -25,7 +25,6 @@ import type {
   StripInput,
 } from '../layouts/layout';
 import type { PlanProgress } from '../plan-reader';
-import { createStageList, type StageList } from '../stage-list';
 import { countdownText } from './countdown';
 import {
   createWorkflowParts,
@@ -463,11 +462,4 @@ function waves(progress: PlanProgress): PlanWaveInput[] {
     tasks,
     current: wave !== null && wave === progress.wave,
   }));
-}
-
-// The page halves in stage order: the shared stage list over page halves.
-export type PageStageList = StageList<PageStage>;
-
-export function createPageStageList(): PageStageList {
-  return createStageList<PageStage>();
 }

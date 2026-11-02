@@ -200,6 +200,8 @@ function isSessionFlow(value: unknown): value is SessionFlow {
     typeof value.stage === 'string' &&
     isStringOrNull(value.planDir) &&
     (value.progress === null || isPlanProgress(value.progress)) &&
+    (value.reviewRoundsAtMake === undefined ||
+      isNumberOrNull(value.reviewRoundsAtMake)) &&
     typeof value.turnRunning === 'boolean' &&
     isStringList(value.runningSubagents) &&
     isNumberOrNull(value.countdownEndsAt) &&

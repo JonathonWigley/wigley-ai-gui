@@ -137,6 +137,9 @@ export interface SessionsMainExports {
   mark(sessionId: string): void;
   activate(sessionId: string): void;
   selectedSessionId(): string | null;
+  // The session's side-bar label (`gamma 2`), kept while its row is closed;
+  // null for a session not connected.
+  label(sessionId: string): string | null;
   // The user closing a session's row asks every guard first, and the row stays
   // while any answers false; once every guard allows, the row goes and
   // `closed` is emitted. A session that ends loses its row regardless.
