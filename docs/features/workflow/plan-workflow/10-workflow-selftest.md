@@ -1,6 +1,6 @@
 # 10 — Workflow self-test
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 5 · Depends on: 05, 09
 Plan: [plan.md](plan.md)

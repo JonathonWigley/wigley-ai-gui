@@ -330,7 +330,7 @@ Boundary rules:
 
 ### Wave 4
 
-- [ ] [09 — Workflow page](09-workflow-page.md) · after 06, 08
+- [x] [09 — Workflow page](09-workflow-page.md) · after 06, 08
 
 ### Wave 5
 
@@ -357,9 +357,12 @@ Review base: c95c7eb
 - 06 · bbdee57 · diff read: send, clear, fillComposer, addComposerPart, ChatComposerPart, CHAT_PREVIEW_HOST_ID, composer contributedParts slot, shared contributed-parts present; typecheck and lint clean; chat/sessions/shared tests 1751 pass · concerns: sessions-parts.test.ts and chat layout.test.ts changed beyond the Files line (imports and one slot-order assertion); forms keeps its own part store (src/plugins/forms/page/contributions.ts), a candidate to move onto the shared helper
 - 05 · 5729b79 · diff read: createFakeAgentHarness(clock, files), the four FAKE_WORKFLOW_* exports, turn/skill/file events present; every call site passes files; tests 395 pass, no type errors · concerns: workflow turns run as void promises (an emitter throw would be an unhandled rejection); the process-ends-while-a-write-is-pending path has no test; workflow tests settle on setTimeout(0)
 - 08 · 112bb1f · diff read: manifest, start (addStage export, WorkflowSelfTestHooks), flow-store, plan-watch, actions, countdown, agent-signals present; registration in manifests/main/check-layers; typecheck clean; lint one expected warning (selfTestHooks unused until 10); workflow tests 172 pass · concerns: selfTestHooks built but unused until task 10 (oxlint warning); a start test stands in for an OS watcher that misses a delete with a watch that reports nothing; readIfPresent widened in src/contracts/files.ts, outside the Files line
+- 09 · 2be0260 · diff read: layout.d.ts and default layout, page start/view/flow-tab/preview/countdown/css, layout kit and reader present; keymap w group, zlw, Flow tab scroll binds; page.ts registration; typecheck clean; tests 1322 pass · concerns: a second Space z l w preview run shows no Flow tab: closing the preview's flowTabs.remove forgets the strip build, so a reopen adds no tab until chat redraws its composer; AGENTS.md debug-keys list and DESIGN.md Surfaces/Checks lack the workflow entries (for 11)
 ### Contract changes
 - placeContributedParts(..., rollback): RollbackDeps → PartRollback { recordBox(destroy) } (new export; RollbackDeps assignable) · why: check-layers refuses src/shared/page importing layout-host · consumers: 09 · group 06
 - signalOf(event: ChatAgentEvent, flow, fromCurrentHost) → signalOf(event: AgentEvent, flow, fromCurrentHost) · why: the task doc's Produces names AgentEvent; start.ts derives fromCurrentHost from the ChatAgentEvent's hostSessionId · consumers: none outside 08 · group 08
+- WorkflowView gains drawFlowTab(body, sessionId, setStatus): Disposable and redraw(); FlowTabs drops redraw() and adds visibleBody(); setFlow only adds the tab · why: one page ticker redraws the Flow tab countdown through the view, and addStage must redraw every held part · consumers: page start.ts only · group 09
+- workflow layout.d.ts imports from '../../../shared/page/layout-host/kit', not '../kit' · why: every other owner's layout.d.ts uses that path and layout-contracts.test.ts checks them so · consumers: none · group 09
 ### Rulings
 - 03 stays in wave 1 beside 02 although it consumes PlanProgress — the consumption is a type import the plan writes against plan.md's line, and the compile proves it once both land — a mismatch costs one re-dispatch of 03 · lead
 - origin fetch failed (the 1Password SSH agent is unreachable from this session); the run builds on local main at c95c7eb, even with the last-fetched origin/main — a newer origin commit would need a merge before push · lead
@@ -375,5 +378,9 @@ Review base: c95c7eb
 - a flows.json read error other than missing logs and starts with no flows, so ready always resolves · group 08 · group 08
 - the connected/hostSessionChanged handlers copy the info fields as the event arrives, since setHostSessionId mutates the shared info; a null host id skips the rekey but still folds cleared · group 08 · group 08
 - check-layers' workflow/main layer also allows src/shared/paths (posixPaths in tests), as notes/main does · group 08 · group 08
+- the page stage registry is createPageStageList() in workflow-view.ts; start.ts redraws the view on each add and dispose · group 09 · group 09
+- the shows/progress/countdown log lines fire only in setFlow, so a wrapper rebuild or a tick logs nothing · group 09 · group 09
+- while the preview shows, pushed flows for that session are stored but not drawn; closing redraws the real flow · group 09 · group 09
+- new log line: a scroll key with no Flow tab visible logs '[workflow] no Flow tab shows' · group 09 · group 09
 ### Review rounds
 ### Test gate

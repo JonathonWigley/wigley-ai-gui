@@ -1,6 +1,6 @@
 # 09 — Workflow page: row chip, composer strip, Flow tab, keys, preview
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 06, 08
 Plan: [plan.md](plan.md)
@@ -320,3 +320,5 @@ Done when: compiles; `npm test` runs the test files above and `layout-contracts.
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 2be0260 · proof: diff read: layout.d.ts and default layout, page start/view/flow-tab/preview/countdown/css, layout kit and reader present; keymap w group, zlw, Flow tab scroll binds; page.ts registration; typecheck clean; tests 1322 pass · concerns: a second Space z l w preview run shows no Flow tab: closing the preview's flowTabs.remove forgets the strip build, so a reopen adds no tab until chat redraws its composer; AGENTS.md debug-keys list and DESIGN.md Surfaces/Checks lack the workflow entries (for 11)
