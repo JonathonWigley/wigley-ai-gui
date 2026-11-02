@@ -3,8 +3,8 @@ import type { FileEntry, Files, FileStat } from '../contracts/files';
 import { relativeSegments } from './scoped-files';
 
 // `Files` held in memory, the double plugin tests use. `write`, `writeBytes`,
-// `append`, `rename`, `trash` and `remove` report each changed file's path to the
-// watches over it at once, with no debounce, so a test drives a save by
+// `append`, `rename`, `trash` and `remove` report each changed file's path to
+// the watches over it at once, with no debounce, so a test drives a save by
 // writing; a rename reports each moved file's old path and its new one. A
 // watch with `recursive: false` reports a change under a subfolder as the
 // subfolder's name, once per call. A watch never fails, so it never calls its
@@ -30,9 +30,9 @@ interface MemoryWatch {
 // under it; the top folder always exists. A path's leading `/` is optional:
 // `/a/b` and `a/b` name one file. Each call that meets a file where a folder
 // must be, or a folder where a file must be, rejects with the code Node's fs
-// gives. Each `write`, `writeBytes` and `append` stamps the file's `modified` time with
-// `clock.now()`, or `0` with no clock; `rename` carries a file's stamp to its
-// new path.
+// gives. Each `write`, `writeBytes` and `append` stamps the file's `modified`
+// time with `clock.now()`, or `0` with no clock; `rename` carries a file's
+// stamp to its new path.
 export function createMemoryFiles(clock?: Clock): MemoryFiles {
   const contents = new Map<string, string | Uint8Array>();
   const modifiedTimes = new Map<string, number>();

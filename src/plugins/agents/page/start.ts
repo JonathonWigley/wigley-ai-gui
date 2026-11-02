@@ -26,8 +26,8 @@ type AgentsApi = PageApi<
 
 // Draws each session's running subagents under its row, one line each,
 // through sessions' row parts and the `agents.layout` layout. Hears main's
-// `rosterChanged` (after one `rosters` read) and names each session by its
-// project folder for the page log. `openPreview` asks main for the layout
+// `rosterChanged`, filled in by one `rosters` read, and names each session by
+// its project folder for the page log. `openPreview` asks main for the layout
 // preview's sample session.
 export const agentsPagePart: PagePart<typeof agentsManifest> = {
   manifest: agentsManifest,

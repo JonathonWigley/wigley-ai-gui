@@ -1,4 +1,4 @@
-import type { UsageAgentEvent } from '../../contracts/agent';
+import { MAIN_AGENT_ID, type UsageAgentEvent } from '../../contracts/agent';
 import { asJson, type Json, numberOrNull, parsed } from './json-fields';
 
 // The prompt cache's two lifetimes, by the `usage.cache_creation` bucket a reply wrote.
@@ -128,7 +128,7 @@ export function usageEvent(
       : Math.round((configuredPercent / 100) * contextWindow);
   return {
     type: 'usage',
-    agentId: 'main',
+    agentId: MAIN_AGENT_ID,
     at,
     contextTokens: state.contextTokens,
     contextWindow,

@@ -1,3 +1,4 @@
+import { MAIN_AGENT_ID } from '../../../contracts/agent';
 import type {
   MainApi,
   MainPart,
@@ -68,7 +69,7 @@ export const usageMainPart: MainPart<typeof usageManifest> = {
       apply(withSessionUsage(state, sessionId, profileDir, null)),
     );
     events.on('chat.agentEvent', ({ sessionId, profileDir, event }) => {
-      if (event.type === 'usage' && event.agentId === 'main') {
+      if (event.type === 'usage' && event.agentId === MAIN_AGENT_ID) {
         apply(withSessionUsage(state, sessionId, profileDir, event));
       }
     });

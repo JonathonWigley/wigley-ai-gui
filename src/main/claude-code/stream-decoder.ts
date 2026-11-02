@@ -317,9 +317,8 @@ export function createStreamDecoder(
     }
   }
 
-  // An interrupt ends the turn with no `tool_result` for a pending call, so a
-  // result fails every Agent call still pending; a launched background call
-  // waits for its end event.
+  // A turn's result fails every Agent call still pending, a guard for a call
+  // whose end never came; a launched background call waits for its end event.
   function failPendingAgents(out: DecodedLine) {
     for (const agentId of pendingAgents) {
       finishAgent(agentId, false, out);

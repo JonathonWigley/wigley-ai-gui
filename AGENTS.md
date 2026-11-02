@@ -119,8 +119,8 @@ src/main/        core main process; main.ts is its composition root
   claude-code/   Claude Code CLI adapter behind AgentHarness, which also lists and reads Claude's saved sessions and
                  project folders, runs `claude auth` sign-in, sign-out and status and `claude -p /usage` (the plan usage
                  poll), and asks each session for `get_context_usage` → the only place the app spawns `claude`
-  files/         file reads (whole as text or bytes, or the first bytes), modified times, atomic writes, append, rename, trash, folder lists
-                 and watching, behind Files
+  files/         file reads (whole as text or bytes, or the first bytes), modified times, atomic writes, append,
+                 rename, trash, folder lists and watching, behind Files
   processes/     runs a program, killed past an optional timeout, and returns its exit code and output, behind
                  ProcessRunner
   git/           git adapter behind Git, over ProcessRunner: a clone's top folder, changed and unpushed paths,
@@ -314,8 +314,8 @@ round; primer: an open primer), since main, not the page, decides.
   it and runs nothing.
 - **Debug and testing keys** sit under `Space z`, so everyday keys stay clear of them (the layout previews under
   `Space z l`: forms' on `Space z l o`, the primer's on `Space z l p`, sessions' on `Space z l s`, chat's on
-  `Space z l c` and agents' on `Space z l a`; the gallery's `Space z g`, which shows Gallery mode, and its `Space z s`, which swaps the shell to a
-  test layout and back).
+  `Space z l c` and agents' on `Space z l a`; the gallery's `Space z g`, which shows Gallery mode, and its
+  `Space z s`, which swaps the shell to a test layout and back).
 - **A key scope** in force is the top of the page core's scope stack: `api.keys.setScope` sets a plugin's base
   scope (forms' view), and `api.keys.pushScope` lays a scope over it until its `pop` (help's `keys.help`), so a
   modal view never fights the plugin under it for the scope. The pushed scope's `onBaseChanged` hears the set scope

@@ -19,11 +19,13 @@ Built:
 
 - the agent event record in `src/contracts/agent.ts` (`AgentEvent`), emitted by the Claude adapter
   (`src/main/claude-code/stream-decoder.ts`, `claude-code-harness.ts`) and by the fake harness
-- chat main forwarding each owned session's events as `chat.agentEvent`, carrying `{ sessionId, profileDir, event }`
+- chat main forwarding each owned session's events as `chat.agentEvent`, carrying
+  `{ sessionId, profileDir, hostSessionId, event }`
 - the `agents` plugin: each session's roster, one JSON-lines event log per host session, one line per running subagent
   under its session's row through sessions' `addRowPart`, and the `Space z l a` layout preview
 
-Waits: plan, plan step, retry and watcher events wait for a producer; replay and the tower view wait for the tower
+Waits: plan, plan step, retry and watcher events wait for a producer; `skillStarted`, `fileWritten` and `turnEnded`
+wait for the workflow plugin's plan (`docs/features/workflow/design.md`); replay and the tower view wait for the tower
 itself.
 
 ## Vocabulary

@@ -1,4 +1,8 @@
-import type { PlanRow, PlanUsage } from '../../../contracts/agent';
+import {
+  MAIN_AGENT_ID,
+  type PlanRow,
+  type PlanUsage,
+} from '../../../contracts/agent';
 import type { ProfilePlan, SessionUsage, UsageSnapshot } from '../contract';
 
 // `fresh` holds two read plans; `stale` is work's poll failing after a good
@@ -95,7 +99,7 @@ function sessionUsage(sessionId: string, now: number): SessionUsage {
     profileDir: WORK_DIR,
     usage: {
       type: 'usage',
-      agentId: 'main',
+      agentId: MAIN_AGENT_ID,
       at: now,
       contextTokens: 180_000,
       contextWindow: 1_000_000,
