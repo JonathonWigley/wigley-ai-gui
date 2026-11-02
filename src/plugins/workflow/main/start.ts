@@ -36,12 +36,13 @@ type WorkflowApi = MainApi<
     QualifiedEvents<'sessions', SessionsMainEvents>
 >;
 
-// What the self-test script drives main through. `resetFlows` makes every
-// flow in the folder a new idle flow, stopping its countdown and plan watch;
+// What the self-test script drives main through. `forgetFlows` drops every
+// flow in the folder, saved ones included, stopping each open one's countdown
+// and plan watch, for a run that closed the folder's sessions;
 // `onMainTurnEnded` hears each main-agent `turnEnded` once main applied it,
 // whether or not the flow changed.
 export interface WorkflowSelfTestHooks {
-  resetFlows(projectDir: string): void;
+  forgetFlows(projectDir: string): void;
   onMainTurnEnded(listener: (sessionId: string) => void): Disposable;
 }
 
@@ -93,6 +94,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     });
     const actions = createWorkflowActions({
       chat,
+      log,
       flowOf: (sessionId) => store.get(sessionId),
       signal: (sessionId, signal) => apply(sessionId, signal),
       cancelCountdown: (sessionId) => cancelCountdown(sessionId),
@@ -266,17 +268,18 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
 
     if (services.selfTest !== null) {
       const selfTestHooks: WorkflowSelfTestHooks = {
-        resetFlows(projectDir) {
-          const reset = store
+        forgetFlows(projectDir) {
+          const forgotten = store
             .all()
             .filter((flow) =>
               services.paths.samePath(flow.projectDir, projectDir),
             );
-          store.resetFlows(projectDir);
-          for (const { sessionId } of reset) {
+          for (const { sessionId } of forgotten) {
             countdown.stop(sessionId);
             planWatch.follow(sessionId, null);
+            store.drop(sessionId);
           }
+          store.resetFlows(projectDir);
           sendFlows();
         },
         onMainTurnEnded(listener) {

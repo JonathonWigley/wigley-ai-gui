@@ -128,6 +128,21 @@ describe('BUILT_IN_PAGE_STAGES', () => {
     flow: SessionFlow;
     actions: [string, boolean][];
   }>([
+    ...(['idle', 'primer'] as const).map((stage) => ({
+      name: stage,
+      stage,
+      flow: flowWith({}),
+      actions: [['startFeature', true]] as [string, boolean][],
+    })),
+    {
+      name: 'plan ready with no plan folder',
+      stage: 'planReady',
+      flow: flowWith({ planDir: null }),
+      actions: [
+        ['clearAndMake', true],
+        ['makeInNewSession', true],
+      ],
+    },
     {
       name: 'plan ready during the countdown',
       stage: 'planReady',
@@ -190,6 +205,12 @@ describe('BUILT_IN_PAGE_STAGES', () => {
         stage,
         flow: unread,
         actions: [['openPlan', true]] as [string, boolean][],
+      },
+      {
+        name: `${stage} with no plan folder`,
+        stage,
+        flow: flowWith({ planDir: null }),
+        actions: [['resumeMake', true]] as [string, boolean][],
       },
       {
         name: `${stage} with a turn running`,

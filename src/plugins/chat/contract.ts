@@ -237,6 +237,9 @@ export interface ChatMainExports {
   // rejects when it cannot start, or for a session chat does not hold.
   // `sessions.hostSessionChanged` is emitted before it resolves.
   clear(sessionId: string): Promise<void>;
+  // Closes every session chat holds in `projectDir`, a resting one included,
+  // as the user closing its row: for a self-test that starts its project over.
+  closeSessionsIn(projectDir: string): void;
 }
 
 // The session an app slash command was sent in: `args` is the trimmed text

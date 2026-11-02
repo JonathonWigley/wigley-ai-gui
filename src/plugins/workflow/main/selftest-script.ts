@@ -36,7 +36,7 @@ const FEATURE_SEND = `/wigley:feature ${FAKE_WORKFLOW_FEATURE_TEXT}`;
 export interface WorkflowSelfTestDeps {
   homeDir: string;
   files: Pick<Files, 'makeFolder' | 'realPath' | 'trash' | 'write'>;
-  chat: Pick<ChatMainExports, 'launch'>;
+  chat: Pick<ChatMainExports, 'launch' | 'closeSessionsIn'>;
   sessions: Pick<SessionsMainExports, 'activate'>;
   harnesses: readonly AgentHarness[];
   hooks: WorkflowSelfTestHooks;
@@ -242,9 +242,9 @@ function runProblems(
   return problems;
 }
 
-// Each run first undoes what an earlier run that failed midway left: the
-// fake's plan under the project's `docs`, an auto-start `settings.json`, and
-// flows still at a stage or watching a plan. It then launches one session in
+// Each run first undoes what an earlier run left: the fake's plan under the
+// project's `docs`, an auto-start `settings.json`, every session still open in
+// the project and the flows of the project's sessions. It then launches one session in
 // the project, counting the main turn ends main hears until the next run
 // opens. The fake writes, ticks and deletes the plan itself; problems reads
 // its records, which the steps keep changing in place, when it runs.
@@ -274,7 +274,8 @@ export function workflowSelfTestScript(
       }
     }
     await files.write(path.join(homeDir, SETTINGS_FILE), NO_SETTINGS);
-    hooks.resetFlows(project);
+    chat.closeSessionsIn(project);
+    hooks.forgetFlows(project);
   }
 
   async function openSession(): Promise<WorkflowSelfTestResult> {

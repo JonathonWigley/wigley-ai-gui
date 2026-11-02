@@ -3,7 +3,7 @@ import type { Files } from '../../../contracts/files';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import type { WorkflowSignal } from '../contract';
 import { readPlanProgress } from '../plan-reader';
-import { createPlanWatch } from './plan-watch';
+import { createPlanWatch, type PlanWatch } from './plan-watch';
 
 const PLAN_DIR = '/r/docs/features/x/plan-a';
 const PLAN_FILE = `${PLAN_DIR}/plan.md`;
@@ -52,22 +52,49 @@ describe('createPlanWatch', () => {
     ]);
   });
 
-  it('follow_TheSameFolderAfterPlanGone_WatchesItAgain', async () => {
-    const files = createMemoryFiles();
-    await files.write(PLAN_FILE, PLAN);
-    const { watch, signals } = startWatch(files);
-    watch.follow('s1', PLAN_DIR);
-    await settled();
-    files.remove(PLAN_DIR);
-    await settled();
-    await files.write(PLAN_FILE, PLAN_TICKED);
-    signals.length = 0;
+  it.each([
+    {
+      closedBy: 'planGone',
+      watchFailsOnce: false,
+      close: async (files: ReturnType<typeof createMemoryFiles>) => {
+        files.remove(PLAN_DIR);
+        await settled();
+      },
+    },
+    {
+      closedBy: 'a watch that failed to open',
+      watchFailsOnce: true,
+      close: async () => undefined,
+    },
+  ])(
+    'follow_TheSameFolderAfterTheWatchClosed_WatchesItAgain ($closedBy)',
+    async ({ watchFailsOnce, close }) => {
+      const files = createMemoryFiles();
+      await files.write(PLAN_FILE, PLAN);
+      let watchFails = watchFailsOnce;
+      const { watch, signals } = startWatch({
+        read: (path) => files.read(path),
+        stat: (path) => files.stat(path),
+        watch: (folder, onChange, options) => {
+          if (watchFails) {
+            watchFails = false;
+            throw new Error('watch refused');
+          }
+          return files.watch(folder, onChange, options);
+        },
+      });
+      watch.follow('s1', PLAN_DIR);
+      await settled();
+      await close(files);
+      await files.write(PLAN_FILE, PLAN_TICKED);
+      signals.length = 0;
 
-    watch.follow('s1', PLAN_DIR);
-    await settled();
+      watch.follow('s1', PLAN_DIR);
+      await settled();
 
-    expect(signals).toEqual([changed(PLAN_TICKED)]);
-  });
+      expect(signals).toEqual([changed(PLAN_TICKED)]);
+    },
+  );
 
   it('follow_AMissingFolder_SignalsPlanGoneAndMakesNoFolder', async () => {
     const files = createMemoryFiles();
@@ -80,27 +107,44 @@ describe('createPlanWatch', () => {
     expect(await files.stat(PLAN_DIR)).toBeNull();
   });
 
-  it('read_SettlingAfterTheWatchMoved_SignalsNothing', async () => {
+  it.each([
+    {
+      name: 'the watch moved',
+      act: (watch: PlanWatch, resolveReads: ((text: string) => void)[]) => {
+        watch.follow('s1', null);
+        resolveReads[0](PLAN);
+      },
+      signals: [],
+    },
+    {
+      name: 'a newer read started',
+      act: (watch: PlanWatch, resolveReads: ((text: string) => void)[]) => {
+        watch.check('s1');
+        resolveReads[1](PLAN_TICKED);
+        resolveReads[0](PLAN);
+      },
+      signals: [changed(PLAN_TICKED)],
+    },
+  ])('read_SettlingLate_IsDropped ($name)', async ({ act, signals }) => {
     const files = createMemoryFiles();
     await files.write(PLAN_FILE, PLAN);
-    let resolveRead: (text: string) => void = () => undefined;
+    const resolveReads: ((text: string) => void)[] = [];
     const deferred: Pick<Files, 'read' | 'stat' | 'watch'> = {
       read: () =>
         new Promise<string>((resolve) => {
-          resolveRead = resolve;
+          resolveReads.push(resolve);
         }),
       stat: (path) => files.stat(path),
       watch: (folder, onChange, options) =>
         files.watch(folder, onChange, options),
     };
-    const { watch, signals } = startWatch(deferred);
-    watch.follow('s1', PLAN_DIR);
+    const subject = startWatch(deferred);
+    subject.watch.follow('s1', PLAN_DIR);
     await settled();
 
-    watch.follow('s1', null);
-    resolveRead(PLAN);
+    act(subject.watch, resolveReads);
     await settled();
 
-    expect(signals).toEqual([]);
+    expect(subject.signals).toEqual(signals);
   });
 });

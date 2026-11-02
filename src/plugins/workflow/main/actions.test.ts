@@ -20,6 +20,7 @@ function startActions(
 ) {
   const calls: unknown[][] = [];
   const signals: WorkflowSignal[] = [];
+  const logs: string[] = [];
   const actions = createWorkflowActions({
     chat: {
       send: async (sessionId, message) => {
@@ -38,11 +39,12 @@ function startActions(
       profileOf: () =>
         options.profile === undefined ? 'personal' : options.profile,
     },
+    log: (_source, line) => logs.push(line),
     flowOf: () => flow,
     signal: (_sessionId, signal) => signals.push(signal),
     cancelCountdown: (sessionId) => calls.push(['cancelCountdown', sessionId]),
   });
-  return { actions, calls, signals };
+  return { actions, calls, signals, logs };
 }
 
 describe('createWorkflowActions', () => {
@@ -125,6 +127,30 @@ describe('createWorkflowActions', () => {
     await expect(subject.actions.run('s1', command)).rejects.toThrow(message);
     expect(subject.calls).toEqual([]);
     expect(subject.signals).toEqual([]);
+  });
+
+  it.each(
+    ['clearAndMake', 'resumeMake', 'retro'].flatMap((command) => [
+      {
+        command,
+        busy: 'a turn running',
+        flow: { ...PLANNED, turnRunning: true },
+      },
+      {
+        command,
+        busy: 'a subagent running',
+        flow: { ...PLANNED, runningSubagents: ['a1'] },
+      },
+    ]),
+  )('$command with $busy does nothing', async ({ command, flow }) => {
+    const subject = startActions(flow);
+
+    await subject.actions.run('s1', command);
+
+    expect(subject.calls).toEqual([]);
+    expect(subject.logs).toEqual([
+      expect.stringMatching(new RegExp(`^${command}\\b.* s1\\b`)),
+    ]);
   });
 
   it('clearAndMake_ClearRejects_SendsNothingAndRejects', async () => {

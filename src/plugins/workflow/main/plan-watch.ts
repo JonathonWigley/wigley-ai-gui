@@ -18,7 +18,9 @@ import { readPlanProgress } from '../plan-reader';
 // report; it does nothing while the watch is still opening or after `planGone`
 // closed it. A missing folder is
 // never watched, since `Files.watch` creates the folder it is given. A read
-// that settles after the session's watch moved or closed is dropped.
+// that settles after the session's watch moved or closed, or after a newer
+// read of the session started, is dropped. A watch that fails to open is
+// logged and forgotten, so the next `follow` of its folder tries again.
 export interface PlanWatch {
   follow(sessionId: string, planDir: string | null): void;
   check(sessionId: string): void;
@@ -44,6 +46,8 @@ export function createPlanWatch(deps: {
   const generations = new Map<string, number>();
 
   const generationOf = (sessionId: string) => generations.get(sessionId) ?? 0;
+  // The number of the session's newest read: an older read is dropped.
+  const latestReads = new Map<string, number>();
 
   const nextGeneration = (sessionId: string) => {
     generations.set(sessionId, generationOf(sessionId) + 1);
@@ -53,6 +57,7 @@ export function createPlanWatch(deps: {
   const close = (sessionId: string) => {
     watched.get(sessionId)?.watch?.close();
     watched.delete(sessionId);
+    latestReads.delete(sessionId);
     nextGeneration(sessionId);
   };
 
@@ -73,7 +78,11 @@ export function createPlanWatch(deps: {
 
   const read = (sessionId: string, entry: Watched) => {
     const generation = generationOf(sessionId);
-    const isCurrent = () => generationOf(sessionId) === generation;
+    const readNumber = (latestReads.get(sessionId) ?? 0) + 1;
+    latestReads.set(sessionId, readNumber);
+    const isCurrent = () =>
+      generationOf(sessionId) === generation &&
+      latestReads.get(sessionId) === readNumber;
     const readPlan = async () => {
       const text = await readIfPresent(
         files,
@@ -118,7 +127,12 @@ export function createPlanWatch(deps: {
       entry.status = 'open';
       read(sessionId, entry);
     };
-    startWatch().catch(logFailure(entry));
+    startWatch().catch((error: unknown) => {
+      if (generationOf(sessionId) === generation) {
+        watched.delete(sessionId);
+      }
+      logFailure(entry)(error);
+    });
   };
 
   return {

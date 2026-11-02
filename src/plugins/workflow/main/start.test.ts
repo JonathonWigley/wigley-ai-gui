@@ -192,21 +192,28 @@ function skill(name: string, args: string): AgentEvent {
   return { type: 'skillStarted', at: 1, agentId: 'main', skill: name, args };
 }
 
+// Opens s1 and runs a wigley:feature turn that writes the plan and ends.
+async function runFeatureTurn(
+  workflow: ReturnType<typeof startWorkflowPart>,
+): Promise<void> {
+  await workflow.openS1();
+  await workflow.agentEvent(skill('wigley:feature', ''));
+  await workflow.agentEvent({ type: 'turnStarted', at: 1 });
+  await workflow.project.write(PLAN_FILE, PLAN);
+  await workflow.agentEvent({
+    type: 'fileWritten',
+    at: 1,
+    agentId: 'main',
+    path: PLAN_FILE,
+  });
+  await workflow.agentEvent({ type: 'turnEnded', at: 1 });
+}
+
 describe('workflowMainPart', () => {
   it('featureTurnWritingAPlan_ReachesPlanReady_AndAutoStartsClearAndMake', async () => {
     const workflow = startWorkflowPart({ ...SETTINGS, autoClearAndMake: true });
-    await workflow.openS1();
 
-    await workflow.agentEvent(skill('wigley:feature', ''));
-    await workflow.agentEvent({ type: 'turnStarted', at: 1 });
-    await workflow.project.write(PLAN_FILE, PLAN);
-    await workflow.agentEvent({
-      type: 'fileWritten',
-      at: 1,
-      agentId: 'main',
-      path: PLAN_FILE,
-    });
-    await workflow.agentEvent({ type: 'turnEnded', at: 1 });
+    await runFeatureTurn(workflow);
 
     const ready = workflow.lastFlow();
     expect(ready).toMatchObject({
@@ -229,6 +236,36 @@ describe('workflowMainPart', () => {
       ['clear', 's1'],
       ['send', 's1', `/wigley:make ${PLAN_DIR}`],
     ]);
+  });
+
+  it.each([
+    {
+      name: 'a subagent started',
+      act: (workflow: ReturnType<typeof startWorkflowPart>) =>
+        workflow.agentEvent({
+          type: 'agentSpawned',
+          at: 1,
+          agentId: 'a1',
+          parentAgentId: 'main',
+          agentType: 'worker',
+          description: 'd',
+        }),
+    },
+    {
+      name: 'autoClearAndMake turned off',
+      act: (workflow: ReturnType<typeof startWorkflowPart>) =>
+        workflow.changeSettings(SETTINGS),
+    },
+  ])('countdownAfter_RunsNothing ($name)', async ({ act }) => {
+    const workflow = startWorkflowPart({ ...SETTINGS, autoClearAndMake: true });
+    await runFeatureTurn(workflow);
+
+    await act(workflow);
+    workflow.time.advance(10_000);
+    await settled();
+
+    expect(workflow.chatCalls).toEqual([]);
+    expect(workflow.lastFlow()?.countdownEndsAt).toBeNull();
   });
 
   it('turnEndedChangingNoField_StillChecksThePlan', async () => {
