@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { DropTarget } from '../../../contracts/drops';
 import type { EditorEvents, EditorHost } from '../../../contracts/editor';
 import type { FocusTarget, PaneDirection } from '../../../contracts/panes';
 import type { Paths } from '../../../contracts/paths';
@@ -123,8 +124,10 @@ type ScopeCall =
 // open and its first follow-up selected. `calls` logs every `setScope`,
 // `setResizeTarget` and `setFocusTarget` call, in call order; `move` presses
 // the core's focus key toward `direction` on the last focus target set.
+// `targets` holds every drop target the view registered.
 async function backlogSetup() {
   const calls: ScopeCall[] = [];
+  const targets: DropTarget[] = [];
   let focusTarget: FocusTarget | null = null;
   const { host, created } = fakeEditorHost();
   const overlays: FakeElement[] = [];
@@ -151,6 +154,13 @@ async function backlogSetup() {
     timers: { set: () => 0, clear: () => undefined },
     log: () => undefined,
     toast: () => undefined,
+    drops: {
+      addTarget: (target) => {
+        targets.push(target);
+        return { dispose: () => undefined };
+      },
+      savePasted: () => Promise.reject(new Error('not used by the backlog')),
+    },
     keys,
     platform: 'macos',
     commands: { exists: () => true, run: () => undefined },
@@ -182,7 +192,7 @@ async function backlogSetup() {
   await settle();
   const move = (direction: PaneDirection) =>
     focusTarget?.move(direction) ?? false;
-  return { view, created, anchors, overlays, sheet, calls, move };
+  return { view, created, anchors, overlays, sheet, calls, move, targets };
 }
 
 function withUser(layout: BacklogLayout) {
@@ -472,4 +482,21 @@ describe('backlog pane targets', () => {
       expect(setup.calls.length > before).toBe(moved);
     },
   );
+});
+
+describe('backlog follow-up editor drop target', () => {
+  beforeEach(() => {
+    installFocusFakeDom((name, value) => vi.stubGlobal(name, value));
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('followupEditor_DropTarget_OnTheSlot', async () => {
+    const { sheet, targets } = await backlogSetup();
+
+    const [slot] = findAll(sheet, 'backlog-editor');
+    expect(targets).toHaveLength(1);
+    expect(asFake(targets[0].element)).toBe(slot);
+  });
 });

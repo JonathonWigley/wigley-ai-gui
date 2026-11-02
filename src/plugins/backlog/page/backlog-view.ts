@@ -1,6 +1,7 @@
 import type { Timers } from '../../../contracts/ambient';
 import type { CommandId } from '../../../contracts/commands';
 import type { Disposable } from '../../../contracts/disposable';
+import type { PageDrops } from '../../../contracts/drops';
 import type { EditorHost, ScrollStep } from '../../../contracts/editor';
 import type { Log } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
@@ -138,6 +139,8 @@ export interface BacklogViewDeps {
   timers: Timers;
   log: Log;
   toast(text: string, tone: ToastTone): void;
+  // Makes the follow-up editor's slot a drop target.
+  drops: Pick<PageDrops, 'addTarget' | 'savePasted'>;
   keys: KeysPageExports;
   platform: Platform;
   // The commands a layout's kit runs by qualified id.
@@ -274,6 +277,8 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     changed: (field, text) => dispatch({ type: 'draftChanged', field, text }),
     element: editorSlot,
     fieldHint,
+    drops: deps.drops,
+    toast: deps.toast,
   });
 
   const split = createSplit({

@@ -1,5 +1,7 @@
 import type { Timers } from '../../../contracts/ambient';
 import type { CommandId } from '../../../contracts/commands';
+import type { Disposable } from '../../../contracts/disposable';
+import type { PageDrops } from '../../../contracts/drops';
 import type { ContentScroll, ScrollStep } from '../../../contracts/editor';
 import type { Log } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
@@ -9,11 +11,15 @@ import type {
   PluginAreas,
   PushedScope,
   ShownLayouts,
+  ToastTone,
 } from '../../../contracts/plugin';
 import type { UiState } from '../../../contracts/ui-state';
 import { callEach } from '../../../shared/call-each';
 import { createConfirmPrompt } from '../../../shared/page/confirm-prompt';
-import type { EditorBoxes } from '../../../shared/page/editor-boxes';
+import {
+  boxDropTake,
+  type EditorBoxes,
+} from '../../../shared/page/editor-boxes';
 import {
   createSessionFormTabs,
   type SessionFormTabs,
@@ -47,7 +53,8 @@ import { sessionTitle } from './view-model';
 // prompt's scope over it. `platform` is the OS key hints are drawn for;
 // `uiState` keeps the rail's dragged width, which every round's rail opens at;
 // `timers` runs each round's split resize prompt linger. `commands` and
-// `contributions` reach every round view's kits and cards.
+// `contributions` reach every round view's kits and cards. Each round view is
+// a drop target through `drops`, typing files into the round's box used last.
 export interface FormsViewDeps {
   areas: Pick<PluginAreas, 'overlay'>;
   sessions: Pick<SessionsPageExports, 'addTab'>;
@@ -65,6 +72,8 @@ export interface FormsViewDeps {
   platform: Platform;
   uiState: UiState;
   timers: Timers;
+  drops: Pick<PageDrops, 'addTarget' | 'savePasted'>;
+  toast(text: string, tone: ToastTone): void;
   log: Log;
 }
 
@@ -131,6 +140,7 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
   });
   areas.overlay.contribute(confirm.element);
   const roundViews = new Map<string, RoundView>();
+  const shownRounds: RoundViews = { views: roundViews, dropTargets: new Map() };
   // Sets the key scope to the state's view, then the resize target to the
   // shown round's split; the core drops the target on each change of the base
   // scope.
@@ -152,7 +162,7 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
       return;
     }
     const state = store.get();
-    syncRoundViews(state, roundViews, tabs, active, deps, dispatch);
+    syncRoundViews(state, shownRounds, tabs, active, deps, dispatch);
     tabs.sync((sessionId) => {
       const round = formOfSession(state, sessionId);
       return round === undefined ? null : sessionTitle(round);
@@ -177,7 +187,7 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
   return {
     forgetSession(sessionId) {
       tabs.forget(sessionId);
-      destroySessionRoundViews(sessionId, store.get(), roundViews, tabs, deps);
+      destroySessionRoundViews(sessionId, store.get(), shownRounds, tabs, deps);
     },
     showForm: (sessionId) => tabs.select(sessionId),
     setLayouts(shown) {
@@ -200,61 +210,93 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
   };
 }
 
+// The open rounds' views, and the drop target each view's element is, by
+// round.
+interface RoundViews {
+  views: Map<string, RoundView>;
+  dropTargets: Map<string, Disposable>;
+}
+
 // A round view per open round, in its session's Form tab: built when the
 // round appears, adding the Form tab when the session has none and taking
-// over the session with it; destroyed with its editors when the round leaves.
+// over the session with it, and registered as a drop target; destroyed with
+// its editors when the round leaves.
 function syncRoundViews(
   state: FormsState,
-  roundViews: Map<string, RoundView>,
+  roundViews: RoundViews,
   tabs: SessionFormTabs,
   active: ActiveLayouts,
   deps: FormsViewDeps,
   dispatch: (action: FormsAction) => void,
 ) {
-  for (const roundId of roundViews.keys()) {
+  for (const roundId of roundViews.views.keys()) {
     if (!state.forms.some((round) => round.formId === roundId)) {
       destroyRoundView(roundId, roundViews, tabs, deps);
     }
   }
   for (const round of state.forms) {
-    if (!roundViews.has(round.formId)) {
-      roundViews.set(
+    if (!roundViews.views.has(round.formId)) {
+      const roundView = showRound(round, tabs, active, deps, dispatch);
+      roundViews.views.set(round.formId, roundView);
+      roundViews.dropTargets.set(
         round.formId,
-        showRound(round, tabs, active, deps, dispatch),
+        addRoundDropTarget(round.formId, roundView, deps),
       );
       tabs.takeOver(round.formId, round.sessionId);
     }
   }
 }
 
+// Files dropped or pasted on the round view go into the round's box used
+// last, else its first shown box.
+function addRoundDropTarget(
+  roundId: string,
+  roundView: RoundView,
+  deps: FormsViewDeps,
+): Disposable {
+  const isShown = (box: BoxRef) => isBoxShown(deps.store.get(), box);
+  return deps.drops.addTarget({
+    element: roundView.element,
+    take: boxDropTake(() => deps.boxes.fileEditor(roundId, isShown), {
+      savePasted: (file) => deps.drops.savePasted(file),
+      toast: (text, tone) => deps.toast(text, tone),
+      log: deps.log,
+      logSource: 'forms',
+    }),
+  });
+}
+
 function destroySessionRoundViews(
   sessionId: string,
   state: FormsState,
-  roundViews: Map<string, RoundView>,
+  roundViews: RoundViews,
   tabs: SessionFormTabs,
   deps: Pick<FormsViewDeps, 'boxes'>,
 ) {
   for (const round of state.forms) {
-    if (round.sessionId === sessionId && roundViews.has(round.formId)) {
+    if (round.sessionId === sessionId && roundViews.views.has(round.formId)) {
       destroyRoundView(round.formId, roundViews, tabs, deps);
     }
   }
 }
 
-// Destroys the round's editors, removes its view, disposes its anchors and
-// stops it following keymap changes, and releases its take over, giving its
-// session back.
+// Destroys the round's editors and forgets its boxes, disposes its drop
+// target, removes its view, disposes its anchors and stops it following
+// keymap changes, and releases its take over, giving its session back.
 function destroyRoundView(
   roundId: string,
-  roundViews: Map<string, RoundView>,
+  roundViews: RoundViews,
   tabs: SessionFormTabs,
   deps: Pick<FormsViewDeps, 'boxes'>,
 ) {
   deps.boxes.destroyForm(roundId);
-  const roundView = roundViews.get(roundId);
+  deps.boxes.forgetForm(roundId);
+  roundViews.dropTargets.get(roundId)?.dispose();
+  roundViews.dropTargets.delete(roundId);
+  const roundView = roundViews.views.get(roundId);
   roundView?.dispose();
   roundView?.element.remove();
-  roundViews.delete(roundId);
+  roundViews.views.delete(roundId);
   tabs.release(roundId);
 }
 

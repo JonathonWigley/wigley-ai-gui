@@ -1,6 +1,6 @@
 # 08 — Docs editor drop target
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 01, 02, 03, 04
 Plan: [plan.md](plan.md)
@@ -132,4 +132,4 @@ space, linked as `<…>`, renders and follows from the rendered doc after `:wq`)
 
 ## Proof
 
-<written by wigley:make: commit sha, proof result, concerns; empty until the group lands>
+Commit e239418 · proof: diff read: every Produces present; docs compiles (typecheck's only errors in 06's in-progress test fakes); lint passes · concerns: AGENTS.md's docs page architecture line doesn't say the editor takes dropped and pasted files (for 09); a non-null assertion on pasteIndexes.shift() in takeFiles

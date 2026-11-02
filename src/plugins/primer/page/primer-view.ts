@@ -1,6 +1,7 @@
 import type { Timers } from '../../../contracts/ambient';
 import type { CommandId } from '../../../contracts/commands';
 import type { Disposable } from '../../../contracts/disposable';
+import type { PageDrops } from '../../../contracts/drops';
 import type { ContentScroll, ScrollStep } from '../../../contracts/editor';
 import type { ViewScope } from '../../../contracts/keymap';
 import type { Log } from '../../../contracts/log';
@@ -15,6 +16,7 @@ import type {
   PluginAreas,
   PushedScope,
   ShownLayouts,
+  ToastTone,
 } from '../../../contracts/plugin';
 import type { UiState } from '../../../contracts/ui-state';
 import { scrollContent } from '../../../shared/content-scroll';
@@ -22,6 +24,7 @@ import { errorText } from '../../../shared/error-text';
 import { createConfirmPrompt } from '../../../shared/page/confirm-prompt';
 import { element } from '../../../shared/page/dom';
 import {
+  boxDropTake,
   type EditorBoxes,
   keepFocusedBox,
 } from '../../../shared/page/editor-boxes';
@@ -122,7 +125,9 @@ import type { PrimerStore } from './primer-store';
 // for. `run` runs a button's command; `commands` is what a layout's
 // `kit.command` reaches. `platform` is the OS the layouts' key hints draw for.
 // `uiState` keeps the tasks and items columns' widths, which every primer's
-// columns open at. `timers` runs the splits' resize prompt linger.
+// columns open at. `timers` runs the splits' resize prompt linger. Each primer
+// view is a drop target through `drops`, typing files into the primer's box
+// used last.
 export interface PrimerViewDeps {
   areas: Pick<PluginAreas, 'overlay'>;
   sessions: Pick<SessionsPageExports, 'addTab'>;
@@ -142,6 +147,8 @@ export interface PrimerViewDeps {
   platform: Platform;
   uiState: UiState;
   timers: Timers;
+  drops: Pick<PageDrops, 'addTarget' | 'savePasted'>;
+  toast(text: string, tone: ToastTone): void;
   log: Log;
 }
 
@@ -266,6 +273,10 @@ export function mountPrimerTab(deps: PrimerViewDeps): PrimerTab {
   const { areas, store, boxes } = deps;
   moveRailWidth(deps.uiState);
   const primerViews = new Map<string, PrimerFormView>();
+  const shownPrimers: PrimerViews = {
+    views: primerViews,
+    dropTargets: new Map(),
+  };
   const focusTarget = primerFocusTarget(deps);
   const setScopeFor = (state: PrimerState) => {
     deps.setScope(scopeOf(state));
@@ -314,7 +325,7 @@ export function mountPrimerTab(deps: PrimerViewDeps): PrimerTab {
     const state = store.get();
     syncPrimerViews(
       state,
-      primerViews,
+      shownPrimers,
       tabs,
       deps,
       dispatch,
@@ -364,7 +375,7 @@ export function mountPrimerTab(deps: PrimerViewDeps): PrimerTab {
       tabs.forget(sessionId);
       for (const primer of store.get().forms) {
         if (primer.sessionId === sessionId) {
-          destroyPrimerView(primer.formId, primerViews, tabs, deps);
+          destroyPrimerView(primer.formId, shownPrimers, tabs, deps);
         }
       }
     },
@@ -421,55 +432,88 @@ function isBoxShown(state: PrimerState, box: PrimerBox): boolean {
   return shownBoxes(state).some((shown) => boxKey(shown) === key);
 }
 
+// The open primers' views, and the drop target each view's element is, by
+// primer.
+interface PrimerViews {
+  views: Map<string, PrimerFormView>;
+  dropTargets: Map<string, Disposable>;
+}
+
 // A primer view per open primer, in its session's Primer tab: built when the
 // primer appears, adding the Primer tab when the session has none and taking
-// over the session with it; destroyed with its editors when the primer leaves.
+// over the session with it, and registered as a drop target; destroyed with
+// its editors when the primer leaves.
 function syncPrimerViews(
   state: PrimerState,
-  primerViews: Map<string, PrimerFormView>,
+  primerViews: PrimerViews,
   tabs: SessionFormTabs,
   deps: PrimerViewDeps,
   dispatch: (action: PrimerAction) => void,
   shown: () => ShownLayouts<PrimerLayout>,
 ) {
-  for (const primerId of primerViews.keys()) {
+  for (const primerId of primerViews.views.keys()) {
     if (!state.forms.some((primer) => primer.formId === primerId)) {
       destroyPrimerView(primerId, primerViews, tabs, deps);
     }
   }
   for (const primer of state.forms) {
-    if (!primerViews.has(primer.formId)) {
-      primerViews.set(
+    if (!primerViews.views.has(primer.formId)) {
+      const primerView = createPrimerFormView(
+        (root) => tabs.mount(primer.sessionId, root),
+        primer,
+        deps,
+        dispatch,
+        shown,
+      );
+      primerViews.views.set(primer.formId, primerView);
+      primerViews.dropTargets.set(
         primer.formId,
-        createPrimerFormView(
-          (root) => tabs.mount(primer.sessionId, root),
-          primer,
-          deps,
-          dispatch,
-          shown,
-        ),
+        addPrimerDropTarget(primer.formId, primerView, deps),
       );
       tabs.takeOver(primer.formId, primer.sessionId);
     }
   }
 }
 
-// Disposes its view's anchors and destroys its editors, removes the view, and
-// releases its take over, giving its session back.
+// Files dropped or pasted on the primer view go into the primer's box used
+// last, else its first shown box.
+function addPrimerDropTarget(
+  primerId: string,
+  primerView: PrimerFormView,
+  deps: PrimerViewDeps,
+): Disposable {
+  const isShown = (box: PrimerBox) => isBoxShown(deps.store.get(), box);
+  return deps.drops.addTarget({
+    element: primerView.element,
+    take: boxDropTake(() => deps.boxes.fileEditor(primerId, isShown), {
+      savePasted: (file) => deps.drops.savePasted(file),
+      toast: (text, tone) => deps.toast(text, tone),
+      log: deps.log,
+      logSource: 'primer',
+    }),
+  });
+}
+
+// Disposes its drop target and its view's anchors, destroys its editors and
+// forgets its boxes, removes the view, and releases its take over, giving its
+// session back.
 function destroyPrimerView(
   primerId: string,
-  primerViews: Map<string, PrimerFormView>,
+  primerViews: PrimerViews,
   tabs: SessionFormTabs,
   deps: Pick<PrimerViewDeps, 'boxes'>,
 ) {
-  const primerView = primerViews.get(primerId);
+  const primerView = primerViews.views.get(primerId);
   if (primerView === undefined) {
     return;
   }
+  primerViews.dropTargets.get(primerId)?.dispose();
+  primerViews.dropTargets.delete(primerId);
   primerView.dispose();
   deps.boxes.destroyForm(primerId);
+  deps.boxes.forgetForm(primerId);
   primerView.element.remove();
-  primerViews.delete(primerId);
+  primerViews.views.delete(primerId);
   tabs.release(primerId);
 }
 

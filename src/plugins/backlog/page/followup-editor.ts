@@ -1,6 +1,9 @@
+import type { PageDrops } from '../../../contracts/drops';
 import type { EditorHost, FocusOptions } from '../../../contracts/editor';
 import type { Log } from '../../../contracts/log';
+import type { ToastTone } from '../../../contracts/plugin';
 import {
+  boxDropTake,
   createEditorBoxes,
   type EditorBoxes,
   stepBox,
@@ -22,10 +25,13 @@ export interface FollowupEditorDeps {
   log: Log;
   changed(field: EditorField, text: string): void;
   // The `div.backlog-editor` slot the editor pane is drawn into; `leave`
-  // focuses it.
+  // focuses it. It is a drop target through `drops`, typing files into the
+  // box used last.
   element: HTMLElement;
   // The box hint the editor moves into the frame of each box it activates.
   fieldHint: HTMLElement;
+  drops: Pick<PageDrops, 'addTarget' | 'savePasted'>;
+  toast(text: string, tone: ToastTone): void;
 }
 
 // The follow-up editor's vim boxes, one per field, mounted into the frames the
@@ -37,7 +43,7 @@ export interface FollowupEditor {
   // field hint when the box activates.
   mount(field: EditorField, frame: HTMLElement, text: string): void;
   isMounted(field: EditorField): boolean;
-  // Destroys every mounted box.
+  // Destroys every mounted box and forgets them.
   destroy(): void;
   focus(field: EditorField, options?: FocusOptions): void;
   step(by: 1 | -1): void;
@@ -77,6 +83,16 @@ export function createFollowupEditor(deps: FollowupEditorDeps): FollowupEditor {
       logSource: 'backlog',
     },
   );
+  // The slot lives as long as the page, so its target is never disposed.
+  deps.drops.addTarget({
+    element: deps.element,
+    take: boxDropTake(() => boxes.fileEditor(FOLLOWUP_FORM_ID, () => true), {
+      savePasted: (file) => deps.drops.savePasted(file),
+      toast: (text, tone) => deps.toast(text, tone),
+      log: deps.log,
+      logSource: 'backlog',
+    }),
+  });
 
   return {
     mount(field, frame, text) {
@@ -86,6 +102,7 @@ export function createFollowupEditor(deps: FollowupEditorDeps): FollowupEditor {
     isMounted: (field) => boxes.isMounted(field),
     destroy() {
       boxes.destroyForm(FOLLOWUP_FORM_ID);
+      boxes.forgetForm(FOLLOWUP_FORM_ID);
       frames.clear();
     },
     focus(field, options) {

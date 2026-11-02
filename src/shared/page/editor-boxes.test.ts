@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { type DroppedFile, NOTHING_TAKES_FILES } from '../../contracts/drops';
 import type {
   EditorEvents,
   EditorHost,
@@ -7,9 +8,11 @@ import type {
 } from '../../contracts/editor';
 import {
   type BoxIdentity,
+  boxDropTake,
   createEditorBoxes,
   keepFocusedBox,
 } from './editor-boxes';
+import { insertionText } from './file-drop/file-chips';
 
 interface TestBox {
   formId: string;
@@ -21,9 +24,11 @@ interface FakeEditor extends TextEditor {
   focusOptions: (FocusOptions | undefined)[];
   blurCalls: number;
   isDestroyed: boolean;
+  inserts: string[];
 }
 
-// Focus and blur fire their events, as a real editor's DOM focus does.
+// Focus and blur fire their events, as a real editor's DOM focus does; every
+// cursor sits after an `x`.
 function fakeHost() {
   const created: { events: EditorEvents; editor: FakeEditor }[] = [];
   const host: EditorHost = {
@@ -33,10 +38,13 @@ function fakeHost() {
         focusOptions: [],
         blurCalls: 0,
         isDestroyed: false,
+        inserts: [],
         text: () => doc,
         setText: () => undefined,
-        insert: () => undefined,
-        charBeforeCursor: () => '',
+        insert: (text) => {
+          editor.inserts.push(text);
+        },
+        charBeforeCursor: () => 'x',
         focus: (options) => {
           editor.focusCalls++;
           editor.focusOptions.push(options);
@@ -268,4 +276,215 @@ describe('keepFocusedBox', () => {
     expect(boxes.active()).toEqual(other);
     expect(created[2].editor.focusOptions).toEqual([]);
   });
+});
+
+describe('fileEditor', () => {
+  it.each<{
+    steps: string;
+    act: (made: ReturnType<typeof setup>) => void;
+    hidden?: TestBox[];
+    expected: TestBox | null;
+  }>([
+    { steps: 'none', act: () => undefined, expected: notes },
+    {
+      steps: 'focus reason, then leave',
+      act: ({ boxes }) => {
+        boxes.focus(reason);
+        boxes.leave();
+      },
+      expected: reason,
+    },
+    {
+      steps: 'focus reason, destroyBox(reason)',
+      act: ({ boxes }) => {
+        boxes.focus(reason);
+        boxes.destroyBox(reason);
+      },
+      expected: notes,
+    },
+    {
+      steps: "focus reason, destroyForm('f1'), mount reason then notes again",
+      act: ({ boxes }) => {
+        boxes.focus(reason);
+        boxes.destroyForm('f1');
+        boxes.mount(parent, reason, '');
+        boxes.mount(parent, notes, '');
+      },
+      expected: reason,
+    },
+    {
+      steps: 'destroyBox(notes), mount notes again (first-mount order kept)',
+      act: ({ boxes }) => {
+        boxes.destroyBox(notes);
+        boxes.mount(parent, notes, '');
+      },
+      expected: notes,
+    },
+    {
+      steps:
+        "nothing focused, destroyForm('f1'), mount reason then notes again (order survives destroyForm)",
+      act: ({ boxes }) => {
+        boxes.destroyForm('f1');
+        boxes.mount(parent, reason, '');
+        boxes.mount(parent, notes, '');
+      },
+      expected: notes,
+    },
+    {
+      steps:
+        "focus reason, destroyForm('f1'), forgetForm('f1'), mount reason then notes again (order and last-used reset)",
+      act: ({ boxes }) => {
+        boxes.focus(reason);
+        boxes.destroyForm('f1');
+        boxes.forgetForm('f1');
+        boxes.mount(parent, reason, '');
+        boxes.mount(parent, notes, '');
+      },
+      expected: reason,
+    },
+    {
+      steps: 'focus reason, leave, reason hidden',
+      act: ({ boxes }) => {
+        boxes.focus(reason);
+        boxes.leave();
+      },
+      hidden: [reason],
+      expected: notes,
+    },
+    {
+      steps: 'nothing focused, notes hidden',
+      act: () => undefined,
+      hidden: [notes],
+      expected: reason,
+    },
+    {
+      steps: 'notes and reason hidden',
+      act: () => undefined,
+      hidden: [notes, reason],
+      expected: null,
+    },
+    {
+      steps: 'focus other',
+      act: ({ boxes }) => boxes.focus(other),
+      expected: notes,
+    },
+    {
+      steps: "destroyForm('f1')",
+      act: ({ boxes }) => boxes.destroyForm('f1'),
+      expected: null,
+    },
+  ])(
+    'fileEditor_PicksLastUsedElseFirst: $steps',
+    ({ act, hidden = [], expected }) => {
+      const made = setup();
+      act(made);
+      const isShown = (box: TestBox) =>
+        !hidden.some((hiddenBox) => hiddenBox.key === box.key);
+
+      const editor = made.boxes.fileEditor('f1', isShown);
+
+      const expectedEditor =
+        expected === null
+          ? null
+          : made.created.find(
+              (entry) =>
+                !entry.editor.isDestroyed &&
+                made.boxes.boxOf(entry.editor) === expected,
+            )?.editor;
+      expect(editor).toBe(expectedEditor);
+    },
+  );
+});
+
+describe('boxDropTake', () => {
+  const SAVED = '/app/pasted/20261102-090000-1.png';
+
+  function droppedFile(name: string, path: string): DroppedFile {
+    return {
+      name,
+      mediaType: '',
+      path,
+      bytes: async () => new Uint8Array(),
+    };
+  }
+
+  async function settle() {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  it.each<{
+    name: string;
+    hasEditor: boolean;
+    files: DroppedFile[];
+    inserts: string[];
+    toasts: [string, string][];
+  }>([
+    {
+      name: 'no editor',
+      hasEditor: false,
+      files: [droppedFile('a.md', '/d/a.md')],
+      inserts: [],
+      toasts: [[NOTHING_TAKES_FILES, 'info']],
+    },
+    {
+      name: 'two files on disk',
+      hasEditor: true,
+      files: [
+        droppedFile('a.md', '/d/a.md'),
+        droppedFile('My File.mp4', '/d/My File.mp4'),
+      ],
+      inserts: [insertionText(['/d/a.md', '/d/My File.mp4'], 'x')],
+      toasts: [],
+    },
+    {
+      name: 'a pasted file',
+      hasEditor: true,
+      files: [droppedFile('image.png', '')],
+      inserts: [insertionText([SAVED], 'x')],
+      toasts: [],
+    },
+    {
+      name: 'a failed save beside a file on disk',
+      hasEditor: true,
+      files: [droppedFile('bad.png', ''), droppedFile('a.md', '/d/a.md')],
+      inserts: [insertionText(['/d/a.md'], 'x')],
+      toasts: [['bad.png not saved: disk full', 'error']],
+    },
+    {
+      name: 'a failed save alone',
+      hasEditor: true,
+      files: [droppedFile('bad.png', '')],
+      inserts: [],
+      toasts: [['bad.png not saved: disk full', 'error']],
+    },
+  ])(
+    'boxDropTake_TakesFilesIntoTheBox: $name',
+    async ({ hasEditor, files, inserts, toasts }) => {
+      const { created } = setup();
+      const editor = created[0].editor;
+      const saved: string[] = [];
+      const shownToasts: [string, string][] = [];
+      const take = boxDropTake(() => (hasEditor ? editor : null), {
+        savePasted: async (file) => {
+          saved.push(file.name);
+          if (file.name === 'bad.png') {
+            throw new Error('disk full');
+          }
+          return SAVED;
+        },
+        toast: (text, tone) => shownToasts.push([text, tone]),
+        log: () => undefined,
+        logSource: 'test',
+      });
+
+      take(files);
+      await settle();
+
+      expect(editor.inserts).toEqual(inserts);
+      expect(shownToasts).toEqual(toasts);
+      if (!hasEditor) {
+        expect(saved).toEqual([]);
+      }
+    },
+  );
 });

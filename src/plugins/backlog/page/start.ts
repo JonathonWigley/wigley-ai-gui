@@ -36,6 +36,7 @@ export const backlogPagePart: PagePart<typeof backlogManifest> = {
       timers: services.timers,
       log: services.log,
       toast: services.toast,
+      drops: api.drops,
       keys,
       platform: api.platform,
       commands: {

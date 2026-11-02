@@ -8,9 +8,11 @@ import {
   vi,
 } from 'vitest';
 import type { CommandId } from '../../../contracts/commands';
-import type { EditorHost } from '../../../contracts/editor';
+import type { DroppedFile, DropTarget } from '../../../contracts/drops';
+import type { EditorHost, TextEditor } from '../../../contracts/editor';
 import type { FocusTarget, ResizeTarget } from '../../../contracts/panes';
 import { createEditorBoxes } from '../../../shared/page/editor-boxes';
+import { insertionText } from '../../../shared/page/file-drop/file-chips';
 import {
   USER_LAYOUT,
   withUser,
@@ -41,25 +43,47 @@ import { createPrimerStore } from './primer-store';
 import { mountPrimerTab } from './primer-view';
 import { presentedPrimer, primerEntry, primerItem } from './test-primers';
 
-const host: EditorHost = {
-  create: (_parent, doc, events) => ({
-    text: () => doc,
-    setText: () => undefined,
-    insert: () => undefined,
-    charBeforeCursor: () => '',
-    focus: () => events.focused(),
-    blur: () => events.blurred(),
-    destroy: () => undefined,
-  }),
-  createDocument: () => {
-    throw new Error('not used by the primer');
-  },
-  contains: () => false,
-  typeInto: () => {},
-  onPendingKeys: () => {},
-  cancelPendingKeys: () => {},
-  setKeymap: () => {},
-};
+// One `insert` call on an editor the host made.
+interface Inserted {
+  editor: TextEditor;
+  text: string;
+}
+
+// An editor host whose editors record each insert into `inserted`; every
+// cursor sits after an `x`.
+function fakeHost(inserted: Inserted[]): EditorHost {
+  return {
+    create: (_parent, doc, events) => {
+      const editor: TextEditor = {
+        text: () => doc,
+        setText: () => undefined,
+        insert: (text) => {
+          inserted.push({ editor, text });
+        },
+        charBeforeCursor: () => 'x',
+        focus: () => events.focused(),
+        blur: () => events.blurred(),
+        destroy: () => undefined,
+      };
+      return editor;
+    },
+    createDocument: () => {
+      throw new Error('not used by the primer');
+    },
+    contains: () => false,
+    typeInto: () => {},
+    onPendingKeys: () => {},
+    cancelPendingKeys: () => {},
+    setKeymap: () => {},
+  };
+}
+
+// A drop target the view registered, and whether its registration was
+// disposed.
+interface RegisteredTarget {
+  target: DropTarget;
+  isDisposed: boolean;
+}
 
 type PrimerCommand = keyof ReturnType<typeof primerCommandHandlers>;
 
@@ -76,8 +100,9 @@ interface NamedAnchor {
 // is p1's tab element and `tabs` every tab element by session. The boxes and the commands are
 // wired as the page wires them; `anchors` holds every anchor the view named,
 // `resizeTargets` every split handed to the resize keys, `focusTargets` every
-// target handed to the focus keys, and `uiWrites` every
-// uiState write over the values `uiState` starts with.
+// target handed to the focus keys, `uiWrites` every
+// uiState write over the values `uiState` starts with, `targets` every drop
+// target the view registered, and `inserted` every insert into a box's editor.
 function primerTabSetup(
   parts: {
     entries?: PrimerEntry[];
@@ -94,8 +119,10 @@ function primerTabSetup(
   );
   const logs: string[] = [];
   const log = (_source: string, message: string) => logs.push(message);
+  const targets: RegisteredTarget[] = [];
+  const inserted: Inserted[] = [];
   const boxes = createEditorBoxes(
-    host,
+    fakeHost(inserted),
     {
       changed: (box, value) =>
         store.dispatch({
@@ -175,6 +202,19 @@ function primerTabSetup(
       },
     },
     timers: { set: () => 0, clear: () => undefined },
+    drops: {
+      addTarget: (target) => {
+        const registered = { target, isDisposed: false };
+        targets.push(registered);
+        return {
+          dispose: () => {
+            registered.isDisposed = true;
+          },
+        };
+      },
+      savePasted: () => Promise.reject(new Error('not used by the primer')),
+    },
+    toast: () => undefined,
     log,
   });
   const tab = tabs.get(presented.sessionId);
@@ -200,6 +240,8 @@ function primerTabSetup(
     resizeTargets,
     focusTargets,
     uiWrites,
+    targets,
+    inserted,
     sessionId: presented.sessionId,
     tab,
     tabs,
@@ -989,5 +1031,45 @@ describe('primer layout', () => {
     ]) {
       expect(anchor.dispose).toHaveBeenCalledOnce();
     }
+  });
+});
+
+describe('primer tab drop target', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const file: DroppedFile = {
+    name: 'a.md',
+    mediaType: 'text/markdown',
+    path: '/d/a.md',
+    bytes: async () => new Uint8Array(),
+  };
+
+  it('primerView_DropTarget_FollowsThePrimer', async () => {
+    const { store, boxes, tab, targets, inserted } = primerTabSetup({
+      others: ['p2'],
+    });
+    const p1Root = pane(tab, 'primer-form');
+    const p1Targets = targets.filter(
+      ({ target }) => asFake(target.element) === p1Root,
+    );
+    expect(p1Targets).toHaveLength(1);
+    const [p1Target] = p1Targets;
+
+    p1Target.target.take([file]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(inserted.map(({ text }) => text)).toEqual([
+      insertionText(['/d/a.md'], 'x'),
+    ]);
+    expect(boxes.boxOf(inserted[0].editor)?.primerId).toBe('p1');
+
+    store.dispatch({ type: 'formClosed', formId: 'p1' });
+
+    expect(targets.map(({ isDisposed }) => isDisposed)).toEqual(
+      targets.map((registered) => registered === p1Target),
+    );
   });
 });
