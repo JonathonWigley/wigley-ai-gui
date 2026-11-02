@@ -49,7 +49,7 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'narrow',
-    why: 'In a narrow window the status line wraps between its groups, the session line clips in its own box, and the right bar lies over the content at its least width.',
+    why: 'In a narrow window the status line wraps between its groups, the session line drops whole items from its end, and the right bar lies over the content at its least width.',
     steps: [
       {
         width: 520,

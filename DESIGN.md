@@ -350,8 +350,10 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
 - **Usage:** the status-bar line is always on and aligned to the end, in `text-12`: the plan rows of the shown
   session's profile, each a meter with its percent in the server's order. Each session's line sits in its own tab bar,
   after the tabs and before the pane controls, in `text-12`: its context bar (`used/limit` against the autocompact
-  limit), its cache countdown and its spend. A session with no usage yet draws no line. A meter takes the existing
-  status colours by the server's severity (`normal`, `warning`, `critical`); the context bar by its share of the limit
+  limit), its cache countdown and its spend. In a narrow bar the line drops whole items from its end (spend, then cache,
+  then the context text), never part of a number, keeping its context bar and a `space-2` gap before `⌘W`. A session
+  with no usage yet draws no line. A meter takes the existing status colours by the server's severity (`normal`,
+  `warning`, `critical`); the context bar by its share of the limit
   (`warning` from 70 %, `critical` from 90 %). The context bar carries no label; a stale profile's rows and a note
   (`plan loading`, `plan unavailable`) draw in `fg-tertiary`. The details bar
   (right bar, `Space v u`) is a section per profile, each a header (the default profile tagged) over its rows with

@@ -20,14 +20,29 @@
   white-space: nowrap;
 }
 
-/* A session's line in its tab bar: one run that never wraps. */
+/* A session's line in its tab bar: one row held to one line's height, so an
+   item that does not fit wraps onto the hidden row below and shows whole or
+   not at all, spend first, then cache, then the context text. */
 [data-layout-owner='usage'][data-layout='default'].usage-session-line {
+  --usage-session-line-height: calc(var(--wg-text-12) * var(--wg-leading-ui));
   align-items: center;
-  display: inline-flex;
+  display: flex;
+  flex-wrap: wrap;
   font-size: var(--wg-text-12);
   font-variant-numeric: tabular-nums;
-  gap: var(--wg-space-1_5);
+  gap: 0 var(--wg-space-1_5);
+  height: var(--usage-session-line-height);
+  line-height: var(--wg-leading-ui);
+  overflow: hidden;
   white-space: nowrap;
+}
+
+/* The meter's row is a full line tall, so a wrapped text starts below it. */
+[data-layout-owner='usage'][data-layout='default'].usage-session-line
+  > .ui-meter {
+  margin-block: calc(
+    (var(--usage-session-line-height) - var(--wg-space-1)) / 2
+  );
 }
 
 [data-layout-owner='usage'][data-layout='default'] .usage-note,

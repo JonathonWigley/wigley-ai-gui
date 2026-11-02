@@ -1,9 +1,9 @@
 // @ts-check
 
 // The built-in usage look: the status-bar line as wrapping groups (each plan
-// meter, or the note), each session's line as one inline run (its context,
-// cache and spend), and the details as a section per profile and one for the
-// shown session.
+// meter, or the note), each session's line as one row (its context, cache and
+// spend) that drops whole items from its end when narrow, and the details as a
+// section per profile and one for the shown session.
 
 /** @type {import('../layout').CompleteLayout} */
 const layout = {

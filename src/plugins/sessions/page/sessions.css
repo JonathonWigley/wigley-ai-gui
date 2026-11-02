@@ -187,20 +187,29 @@
   flex: none;
 }
 
-/* The bar parts give up their width well before the strip does, and are cut
-   hard with no ellipsis; each part styles its own content. After the rule
-   above, so it wins. */
+/* The bar parts give up their width well before the strip does, and each
+   part shrinks and clips in its own box, so a part may drop whole items that
+   no longer fit; each part styles its own content. After the rule above, so
+   it wins. */
 .session-bar-parts {
   display: flex;
   flex: 0 1000 auto;
   align-items: center;
-  gap: var(--wg-space-2);
+  gap: var(--wg-space-1);
   min-width: 0;
   overflow: hidden;
 }
 
 .session-bar-part {
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* With the holder's gap, a part that drew something sits `space-2` from the
+   next part and from `⌘W`, and keeps that gap while it shrinks. */
+.session-bar-part:not(:empty) {
+  margin-right: var(--wg-space-1);
 }
 
 .session-tabs-close,
