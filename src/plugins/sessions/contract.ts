@@ -254,13 +254,15 @@ export interface SessionsPageExports {
 
 // `activeChanged` fires when the focused chat pane's session changes, to
 // null for an empty pane. `sessionAdded` fires once for every row main sends,
-// the rows present at start included, and `sessionRemoved` once when that row
-// leaves. `sessionHostChanged` fires when a kept row's host id changes, after
+// the rows present at start included, carrying the row's `label` as the side
+// bar shows it (`gamma 2`), fixed for the row's life, and `sessionRemoved`
+// once when that row leaves. `sessionHostChanged` fires when a kept row's host id changes, after
 // the `sessionAdded` and `sessionRemoved` events of the same state.
 export interface SessionsPageEvents extends EventShape {
   activeChanged: { sessionId: string | null };
   sessionAdded: {
     sessionId: string;
+    label: string;
     projectDir: string | null;
     harness: Harness | null;
     hostSessionId: string | null;

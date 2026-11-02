@@ -54,8 +54,8 @@ type SessionCommand =
   | 'startFeature'
   | 'dismiss';
 
-// A session the page heard of: its name in the log, its project folder and
-// its host session id.
+// A session the page heard of: its name in the log (its side bar label), its
+// project folder and its host session id.
 interface HeardSession {
   name: string;
   projectDir: string | null;
@@ -168,10 +168,9 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
 
     api.events.on(
       'sessions.sessionAdded',
-      ({ sessionId, projectDir, hostSessionId }) => {
+      ({ sessionId, label, projectDir, hostSessionId }) => {
         heard.set(sessionId, {
-          name:
-            projectDir === null ? sessionId : services.paths.base(projectDir),
+          name: label,
           projectDir,
           hostSessionId,
         });

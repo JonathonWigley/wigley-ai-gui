@@ -508,6 +508,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       for (const row of changes.added) {
         api.events.emit('sessionAdded', {
           sessionId: row.sessionId,
+          label: row.label,
           projectDir: row.projectDir,
           harness: row.harness,
           hostSessionId: row.hostSessionId,

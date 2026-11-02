@@ -4,8 +4,8 @@
 //   and the main action's button. An idle session draws no chip.
 // - `strip`, above the Chat tab's composer, in the composer part's wrapper: the stepper with the current stage lit,
 //   the detail, the countdown and the stage's buttons; in idle (`stage` is `idle`) only a dim Start feature.
-// - `flowTab`, in the session's Flow tab: the plan's title, the stepper, the plan's checklist by wave and every action
-//   of the stage.
+// - `flowTab`, in the session's Flow tab: the stage's label, the stepper, the stage's detail, the plan's checklist by
+//   wave (or, with no plan, an empty state naming the Start feature key) and every action of the stage.
 // The app sets `data-layout-owner="workflow"` and `data-layout="<name>"` on the element each part returns, `<name>`
 // being the layout that drew it, so `[data-layout-owner="workflow"][data-layout="<name>"] …` in a layout's CSS
 // selects only its own parts.
@@ -75,8 +75,8 @@ export interface PlanWaveInput {
   current: boolean;
 }
 
-// As StripInput, with the plan's title (null before a plan is read) and its checklist by wave, empty before a plan
-// is read.
+// As StripInput, with the plan's title (null before a plan is read, or for a plan with no title) and its checklist by
+// wave, empty before a plan is read.
 export interface FlowTabInput {
   stage: string;
   label: string;
