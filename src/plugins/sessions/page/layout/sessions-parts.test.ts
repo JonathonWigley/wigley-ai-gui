@@ -6,7 +6,7 @@ import {
   findAll,
   installFakeDom,
 } from '../../../../shared/page/test-dom';
-import type { SessionRowPart, SessionTabView } from '../../contract';
+import type { SessionPart, SessionTabView } from '../../contract';
 import defaultLayout from '../../layouts/default/layout.js';
 import type { Layout } from '../../layouts/layout';
 import {
@@ -29,9 +29,9 @@ function tabView(id: string): SessionTabView {
   };
 }
 
-// A row part recording `build:<id>:<sessionId>` and
+// A session part recording `build:<id>:<sessionId>` and
 // `dispose:<id>:<sessionId>` into `record`.
-function recordingPart(id: string, record: string[]): SessionRowPart {
+function recordingPart(id: string, record: string[]): SessionPart {
   return {
     id,
     build(_parent, sessionId) {
@@ -41,9 +41,71 @@ function recordingPart(id: string, record: string[]): SessionRowPart {
   };
 }
 
-// The `data-part` of each row part wrapper under `root`.
-function partIds(root: FakeElement): string[] {
-  return findAll(root, 'session-row-part').map(
+// One sessions surface that draws session parts: the store its parts are
+// added to, how the view draws it for `sessionIds` (the first one's tab bar
+// in the pane) and draws it again, the elements each holding one session's
+// parts holder, the holder's and each wrapper's class, and a user layout of
+// that part which never calls `contributedParts`.
+interface Surface {
+  surface: string;
+  store(setup: Setup): Setup['rowParts'];
+  draw(setup: Setup, sessionIds: string[]): void;
+  drawAgain(setup: Setup): void;
+  roots(setup: Setup): FakeElement[];
+  holderClass: string;
+  wrapperClass: string;
+  noun: string;
+  withoutSlot: Layout;
+}
+
+const ROW_SURFACE: Surface = {
+  surface: 'row',
+  store: (setup) => setup.rowParts,
+  draw: ({ view }, sessionIds) =>
+    view.render(stateOf(sessionIds, sessionIds[0])),
+  drawAgain: ({ view }) => view.render(stateOf(['a'], 'a')),
+  roots: ({ sideBar }) => drawnRows(sideBar),
+  holderClass: 'session-row-parts',
+  wrapperClass: 'session-row-part',
+  noun: 'row part',
+  withoutSlot: {
+    row: (parent, input, kit) => {
+      const element = kit.el(parent, 'div', 'bare');
+      kit.el(element, 'span', 'bare-label', input.label);
+      return { element };
+    },
+  },
+};
+
+const BAR_SURFACE: Surface = {
+  surface: 'tab bar',
+  store: (setup) => setup.barParts,
+  draw({ view }, [shown, ...rest]) {
+    view.panes.load(view.panes.focusedPaneId(), shown);
+    for (const sessionId of rest) {
+      view.tabs.add(sessionId, tabView(`tab ${sessionId}`));
+    }
+  },
+  drawAgain: ({ view }) => view.tabs.redrawBars(),
+  // The shown pane's frame sits before the holder of the rest.
+  roots: ({ area }) =>
+    findAll(area, 'session-tabs-host').map((host) => host.children[0]),
+  holderClass: 'session-bar-parts',
+  wrapperClass: 'session-bar-part',
+  noun: 'bar part',
+  withoutSlot: {
+    tabBar: (parent, kit) => {
+      const element = kit.el(parent, 'div', 'bare');
+      return { element, strip: kit.el(element, 'nav', 'bare-strip') };
+    },
+  },
+};
+
+const SURFACES = [ROW_SURFACE, BAR_SURFACE];
+
+// The `data-part` of each of `surface`'s part wrappers under `root`.
+function partIds(surface: Surface, root: FakeElement): string[] {
+  return findAll(root, surface.wrapperClass).map(
     (wrapper) => wrapper.dataset.part,
   );
 }
@@ -233,113 +295,127 @@ describe('sessions parts', () => {
     expect(view.tabs.selectedTabOf('a')).toBe(chat);
   });
 
-  it('rowParts_DefaultRow_BuildsEachPartPerRowInAddOrder', () => {
-    const record: string[] = [];
-    const { view, sideBar, rowParts } = sessionsViewSetup();
-    rowParts.add(recordingPart('p1', record));
-    rowParts.add(recordingPart('p2', record));
-
-    view.render(stateOf(['a', 'b'], 'a'));
-
-    const rows = drawnRows(sideBar);
-    expect(rows.map((row) => findAll(row, 'session-row-parts').length)).toEqual(
-      [1, 1],
-    );
-    expect(rows.map(partIds)).toEqual([
-      ['p1', 'p2'],
-      ['p1', 'p2'],
-    ]);
-    expect(record).toEqual([
-      'build:p1:a',
-      'build:p2:a',
-      'build:p1:b',
-      'build:p2:b',
-    ]);
-  });
-
-  it('rowParts_RenderAgain_DisposesBeforeRebuilding', () => {
-    const record: string[] = [];
-    const { view, rowParts } = sessionsViewSetup();
-    rowParts.add(recordingPart('p1', record));
-
-    view.render(stateOf(['a'], 'a'));
-    view.render(stateOf(['a'], 'a'));
-
-    expect(record).toEqual(['build:p1:a', 'dispose:p1:a', 'build:p1:a']);
-  });
-
-  it('rowParts_UserRowWithoutSlot_AppendsAtRowEnd', () => {
-    const { view, sideBar, rowParts } = sessionsViewSetup();
-    rowParts.add(recordingPart('p1', []));
-    view.setLayouts(
-      withUser<Layout>(defaultLayout, {
-        row: (parent, input, kit) => {
-          const element = kit.el(parent, 'div', 'bare');
-          kit.el(element, 'span', 'bare-label', input.label);
-          return { element };
-        },
-      }),
-    );
-
-    view.render(stateOf(['a'], 'a'));
-
-    const [row] = drawnRows(sideBar);
-    expect(row.dataset.layout).toBe('mine');
-    expect(row.lastElementChild?.classList.contains('session-row-parts')).toBe(
-      true,
-    );
-  });
-
-  it.each<{
-    case: string;
-    bad: SessionRowPart;
-    logLine: string;
-    drawnParts: string[];
-  }>([
-    {
-      case: 'build throws',
-      bad: { id: 'bad', build: fail },
-      logLine: '[sessions] row part bad failed: broken part',
-      drawnParts: ['good'],
-    },
-    {
-      case: 'dispose throws',
-      bad: { id: 'bad', build: () => ({ dispose: fail }) },
-      logLine: '[sessions] row part bad dispose failed: broken part',
-      drawnParts: ['bad', 'good'],
-    },
-  ])(
-    'rowParts_PartThrows_LogsAndOthersRun ($case)',
-    ({ bad, logLine, drawnParts }) => {
+  it.each(SURFACES)(
+    'sessionParts_DefaultLayout_BuildsEachPartInAddOrder ($surface)',
+    (surface) => {
       const record: string[] = [];
-      const { view, sideBar, rowParts, logged } = sessionsViewSetup();
-      rowParts.add(bad);
-      rowParts.add(recordingPart('good', record));
+      const setup = sessionsViewSetup();
+      surface.store(setup).add(recordingPart('p1', record));
+      surface.store(setup).add(recordingPart('p2', record));
 
-      view.render(stateOf(['a'], 'a'));
-      view.render(stateOf(['a'], 'a'));
+      surface.draw(setup, ['a', 'b']);
 
-      expect(logged).toContain(logLine);
+      const roots = surface.roots(setup);
+      expect(
+        roots.map((root) => findAll(root, surface.holderClass).length),
+      ).toEqual([1, 1]);
+      expect(roots.map((root) => partIds(surface, root))).toEqual([
+        ['p1', 'p2'],
+        ['p1', 'p2'],
+      ]);
+      expect(record).toEqual([
+        'build:p1:a',
+        'build:p2:a',
+        'build:p1:b',
+        'build:p2:b',
+      ]);
+    },
+  );
+
+  it.each(SURFACES)(
+    'sessionParts_DrawAgain_DisposesBeforeRebuilding ($surface)',
+    (surface) => {
+      const record: string[] = [];
+      const setup = sessionsViewSetup();
+      surface.store(setup).add(recordingPart('p1', record));
+
+      surface.draw(setup, ['a']);
+      surface.drawAgain(setup);
+
+      expect(record).toEqual(['build:p1:a', 'dispose:p1:a', 'build:p1:a']);
+    },
+  );
+
+  it.each(SURFACES)(
+    'sessionParts_UserLayoutWithoutSlot_AppendsAtEnd ($surface)',
+    (surface) => {
+      const setup = sessionsViewSetup();
+      surface.store(setup).add(recordingPart('p1', []));
+      setup.view.setLayouts(
+        withUser<Layout>(defaultLayout, surface.withoutSlot),
+      );
+
+      surface.draw(setup, ['a']);
+
+      const [root] = surface.roots(setup);
+      expect(root.dataset.layout).toBe('mine');
+      expect(
+        root.lastElementChild?.classList.contains(surface.holderClass),
+      ).toBe(true);
+    },
+  );
+
+  it.each(
+    SURFACES.flatMap((surface) => [
+      {
+        surface,
+        case: 'build throws',
+        bad: { id: 'bad', build: fail } as SessionPart,
+        logLine: `[sessions] ${surface.noun} bad failed: broken part`,
+        drawnParts: ['good'],
+      },
+      {
+        surface,
+        case: 'dispose throws',
+        bad: { id: 'bad', build: () => ({ dispose: fail }) } as SessionPart,
+        logLine: `[sessions] ${surface.noun} bad dispose failed: broken part`,
+        drawnParts: ['bad', 'good'],
+      },
+    ]),
+  )(
+    'sessionParts_PartThrows_LogsAndOthersRun ($surface.surface, $case)',
+    ({ surface, bad, logLine, drawnParts }) => {
+      const record: string[] = [];
+      const setup = sessionsViewSetup();
+      surface.store(setup).add(bad);
+      surface.store(setup).add(recordingPart('good', record));
+
+      surface.draw(setup, ['a']);
+      surface.drawAgain(setup);
+
+      expect(setup.logged).toContain(logLine);
       expect(record).toEqual([
         'build:good:a',
         'dispose:good:a',
         'build:good:a',
       ]);
-      const rows = drawnRows(sideBar);
-      expect(rows.map(partIds)).toEqual([drawnParts]);
-      expect(rowNamed(rows, 'label a').dataset.layout).toBe('default');
+      const roots = surface.roots(setup);
+      expect(roots.map((root) => partIds(surface, root))).toEqual([drawnParts]);
+      expect(roots[0].dataset.layout).toBe('default');
     },
   );
 
-  it('rowParts_AddAndDispose_RedrawsRows', () => {
-    const { view, sideBar, rowParts } = sessionsViewSetup();
-    view.render(stateOf(['a'], 'a'));
+  it.each(SURFACES)(
+    'sessionParts_AddAndDispose_Redraws ($surface)',
+    (surface) => {
+      const setup = sessionsViewSetup();
+      const chat = tabView('chat');
+      setup.view.tabs.add('a', chat);
+      surface.draw(setup, ['a']);
+      const [pane] = findAll(setup.area, 'session-pane');
+      const body = (chat.element as unknown as FakeElement).parentNode;
 
-    const added = rowParts.add(recordingPart('p1', []));
-    const afterAdd = partIds(sideBar).length;
-    added.dispose();
+      const drawnIds = () =>
+        [setup.sideBar, setup.area].flatMap((root) => partIds(surface, root));
 
-    expect(afterAdd).toBe(1);
-    expect(partIds(sideBar)).toEqual([]);
-  });
+      const added = surface.store(setup).add(recordingPart('p1', []));
+      const afterAdd = drawnIds();
+      added.dispose();
+
+      expect(afterAdd).toEqual(['p1']);
+      expect(drawnIds()).toEqual([]);
+      expect(findAll(setup.area, 'session-pane')[0]).toBe(pane);
+      expect((chat.element as unknown as FakeElement).parentNode).toBe(body);
+    },
+  );
 });

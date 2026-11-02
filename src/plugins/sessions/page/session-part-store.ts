@@ -1,17 +1,17 @@
 import type { Disposable } from '../../../contracts/disposable';
-import type { SessionRowPart } from '../contract';
+import type { SessionPart } from '../contract';
 
-// The row parts other plugins added, in add order. `add` throws on an id
-// already held, and its `Disposable` removes the part; `onChanged` hears each
-// add and each removal.
-export interface SessionRowParts {
-  add(part: SessionRowPart): Disposable;
-  parts(): SessionRowPart[];
+// The session parts other plugins added to one sessions surface, in add
+// order. `add` throws on an id already held, and its `Disposable` removes the
+// part; `onChanged` hears each add and each removal.
+export interface SessionPartStore {
+  add(part: SessionPart): Disposable;
+  parts(): SessionPart[];
   onChanged(listener: () => void): Disposable;
 }
 
-export function createSessionRowParts(): SessionRowParts {
-  const held: SessionRowPart[] = [];
+export function createSessionPartStore(): SessionPartStore {
+  const held: SessionPart[] = [];
   const listeners = new Set<() => void>();
   const notify = () => {
     for (const listener of listeners) {
@@ -21,7 +21,7 @@ export function createSessionRowParts(): SessionRowParts {
   return {
     add(part) {
       if (held.some((each) => each.id === part.id)) {
-        throw new Error(`row part ${part.id} is already added`);
+        throw new Error(`part ${part.id} is already added`);
       }
       held.push(part);
       notify();

@@ -39,7 +39,10 @@ import {
   shownElsewhere,
 } from './pane-sessions';
 import { previewToggle } from './preview';
-import { createSessionRowParts, type SessionRowParts } from './row-parts';
+import {
+  createSessionPartStore,
+  type SessionPartStore,
+} from './session-part-store';
 import { mountSessionsView, type SessionsView } from './sessions-view';
 import {
   isRoundToast,
@@ -96,7 +99,8 @@ type PickerChoice = { kind: 'row'; row: SessionRow } | { kind: 'new' };
 function createExports(
   api: SessionsApi,
   view: SessionsView,
-  rowParts: SessionRowParts,
+  rowParts: SessionPartStore,
+  barParts: SessionPartStore,
   activate: (sessionId: string) => void,
   labelOf: (sessionId: string) => string,
 ): SessionsPageExports {
@@ -104,6 +108,7 @@ function createExports(
   return {
     addTab: (sessionId, tab) => view.tabs.add(sessionId, tab),
     addRowPart: (part) => rowParts.add(part),
+    addBarPart: (part) => barParts.add(part),
     selectedSessionId: () => view.panes.focusedSessionId(),
     activate,
     closeSession(sessionId) {
@@ -317,7 +322,8 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       return sessionId === null ? 'empty' : labelOf(sessionId);
     };
 
-    const rowParts = createSessionRowParts();
+    const rowParts = createSessionPartStore();
+    const barParts = createSessionPartStore();
     // A row click closes the side bar's overlay; `activate` reads `mode` only
     // on a click, after `add`.
     const view = mountSessionsView({
@@ -353,8 +359,16 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       },
       log,
       rowParts,
+      barParts,
     });
-    const exports = createExports(api, view, rowParts, activate, labelOf);
+    const exports = createExports(
+      api,
+      view,
+      rowParts,
+      barParts,
+      activate,
+      labelOf,
+    );
 
     // The first mode's `shown` runs inside `add`, before `mode` is assigned.
     const mode = api.modes.add({

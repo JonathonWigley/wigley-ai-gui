@@ -22,7 +22,7 @@ import {
 } from './layout/sessions-parts';
 import { type PaneSessions, shownElsewhere } from './pane-sessions';
 import { PREVIEW_STATE, previewRowState } from './preview';
-import type { SessionRowParts } from './row-parts';
+import type { SessionPartStore } from './session-part-store';
 import {
   mountSessionTabsView,
   type SessionTabsView,
@@ -37,10 +37,12 @@ import { rowStatus, stepSession } from './tabs';
 // after the pane tree or a pane's session changed, and `paneFocused` after
 // focus moved to another pane, a pane tree press or outer pane key included;
 // `rowParts` are the parts each row draws, and adding or removing one draws
-// the rows again; the rest is what the sessions layout's kits read.
+// the rows again; `barParts` are the parts each tab bar draws, and adding or
+// removing one draws the tab bars again; the rest is what the sessions
+// layout's kits read.
 export interface SessionsViewDeps extends Omit<
   SessionsPartsDeps,
-  'keys' | 'rowParts'
+  'keys' | 'rowParts' | 'barParts'
 > {
   activate(sessionId: string): void;
   isModeShown(): boolean;
@@ -49,7 +51,8 @@ export interface SessionsViewDeps extends Omit<
   timers: Timers;
   panesChanged(): void;
   paneFocused(paneId: string): void;
-  rowParts: SessionRowParts;
+  rowParts: SessionPartStore;
+  barParts: SessionPartStore;
 }
 
 // The chat panes and the session each shows. Each change draws the panes and
@@ -227,6 +230,7 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
   };
   drawPanes();
   deps.rowParts.onChanged(() => drawSidebar());
+  deps.barParts.onChanged(() => tabs.redrawBars());
 
   return {
     element: root,

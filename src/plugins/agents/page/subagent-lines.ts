@@ -9,7 +9,7 @@ import {
 } from '../../../shared/page/layout-host/base-kit';
 import type { DrawnPart } from '../../../shared/page/layout-host/draw-part';
 import { createLayoutParts } from '../../../shared/page/layout-host/layout-parts';
-import type { SessionRowPart } from '../../sessions/contract';
+import type { SessionPart } from '../../sessions/contract';
 import type { RunningAgent } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type {
@@ -34,7 +34,7 @@ export interface SubagentLinesDeps {
 // session's list, `[]` once none runs, and redraws its lines; `setLayouts`
 // redraws every session's; `forget` drops a session that left.
 export interface SubagentLines {
-  part: SessionRowPart;
+  part: SessionPart;
   setRunning(sessionId: string, running: RunningAgent[]): void;
   setLayouts(shown: ShownLayouts<Layout>): void;
   forget(sessionId: string): void;

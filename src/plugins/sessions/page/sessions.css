@@ -172,9 +172,10 @@
   min-height: 0;
 }
 
-/* `⌥I ‹`, the strip, `› ⌥O`, then `⌘W` and the pane controls at the bar's
-   end. The bar takes the strip's margin, so the strip sits flush between its
-   prompts; the strip alone shrinks. */
+/* `⌥I ‹`, the strip, `› ⌥O`, other plugins' bar parts, then `⌘W` and the
+   pane controls at the bar's end. The bar takes the strip's margin, so the
+   strip sits flush between its prompts; only the strip and the bar parts
+   shrink. */
 .session-tabs-bar {
   display: flex;
   align-items: center;
@@ -183,6 +184,22 @@
 }
 
 .session-tabs-bar > * {
+  flex: none;
+}
+
+/* The bar parts give up their width well before the strip does, and are cut
+   hard with no ellipsis; each part styles its own content. After the rule
+   above, so it wins. */
+.session-bar-parts {
+  display: flex;
+  flex: 0 1000 auto;
+  align-items: center;
+  gap: var(--wg-space-2);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.session-bar-part {
   flex: none;
 }
 

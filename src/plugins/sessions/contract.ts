@@ -220,11 +220,12 @@ export interface SessionTabHandle {
   isVisible(): boolean;
 }
 
-// A part another plugin draws under every session row. `build` draws into
-// `parent`, its own wrapper in the row; the returned `dispose` runs before the
-// row draws again and when the row leaves. A part that throws is logged and
-// draws nothing; the row still draws.
-export interface SessionRowPart {
+// A part another plugin draws for every session on a sessions surface: under
+// each session row, or in each session's tab bar. `build` draws into `parent`,
+// its own wrapper on that surface; the returned `dispose` runs before the
+// surface draws again and when it leaves. A part that throws is logged and
+// draws nothing; the surface still draws.
+export interface SessionPart {
   id: string;
   build(parent: HTMLElement, sessionId: string): { dispose?(): void };
 }
@@ -234,11 +235,14 @@ export interface SessionRowPart {
 // holds. A tab added before its session's row waits for the row. A session's
 // tabs drop when its row leaves, and `sessionRemoved` says so.
 // `selectedSessionId` is the focused chat pane's session, null for an empty
-// pane, not main's selection. `addRowPart` throws on a part id already added;
-// adding a part and disposing its `Disposable` each redraw the rows.
+// pane, not main's selection. `addRowPart` adds a part under every session
+// row, `addBarPart` one in every session's tab bar. Each throws on a part id
+// already added to its surface; adding a part and disposing its `Disposable`
+// each redraw that surface: the rows or the tab bars.
 export interface SessionsPageExports {
   addTab(sessionId: string, tab: SessionTabView): SessionTabHandle;
-  addRowPart(part: SessionRowPart): Disposable;
+  addRowPart(part: SessionPart): Disposable;
+  addBarPart(part: SessionPart): Disposable;
   selectedSessionId(): string | null;
   activate(sessionId: string): void;
   // Asks each of the session's tabs `beforeClose`, then asks main to close it.

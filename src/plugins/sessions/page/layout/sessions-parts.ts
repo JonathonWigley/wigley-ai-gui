@@ -42,15 +42,18 @@ import type {
   TabBarPane,
 } from '../../layouts/layout';
 import { sessionsManifest } from '../../manifest';
-import type { SessionRowParts } from '../row-parts';
+import type { SessionPart } from '../../contract';
+import type { SessionPartStore } from '../session-part-store';
 
 type SessionsCommand = keyof typeof sessionsManifest.commands & string;
 
 // What every sessions kit reads: the page services and the keys export;
-// `rowParts` holds the parts each row draws.
+// `rowParts` holds the parts each row draws, `barParts` the parts each tab bar
+// draws.
 export interface SessionsPartsDeps extends OwnerKitServices {
   log: Log;
-  rowParts: Pick<SessionRowParts, 'parts'>;
+  rowParts: Pick<SessionPartStore, 'parts'>;
+  barParts: Pick<SessionPartStore, 'parts'>;
 }
 
 // A drawn side bar and the session prompt its kit placed, null when the
@@ -79,7 +82,8 @@ export interface SessionsParts {
   sideBar(parent: HTMLElement): DrawnPart<DrawnSideBar>;
   row(parent: HTMLElement, input: SessionRowInput): DrawnPart<SessionsPart>;
   pane(parent: HTMLElement, input: PaneInput): DrawnPart<PanePart>;
-  tabBar(parent: HTMLElement): DrawnPart<DrawnTabBar>;
+  // `sessionId` is the session whose frame the bar tops.
+  tabBar(parent: HTMLElement, sessionId: string): DrawnPart<DrawnTabBar>;
   tab(parent: HTMLElement, input: SessionTabInput): DrawnPart<SessionsPart>;
   // `pickHint` is the view's own element, which `kit.pickHint` moves in.
   emptyText(
@@ -135,7 +139,14 @@ export function createSessionsParts(deps: SessionsPartsDeps): SessionsParts {
               throw new Error('row placed contributed parts twice');
             }
             isPlaced = true;
-            return placeRowParts(partsParent, input.sessionId, deps, rollback);
+            return placeSessionParts(
+              partsParent,
+              input.sessionId,
+              deps.rowParts.parts(),
+              ROW_PARTS,
+              deps.log,
+              rollback,
+            );
           },
         };
         const row = builder(into, input, kit);
@@ -170,8 +181,9 @@ export function createSessionsParts(deps: SessionsPartsDeps): SessionsParts {
         requireElementIn(pane.element, pane.body, 'pane body');
         return { element: pane.element, body: pane.body };
       }),
-    tabBar: (parent) =>
+    tabBar: (parent, sessionId) =>
       parts.draw('tabBar', parent, (builder, into, rollback) => {
+        let isPlaced = false;
         const placed: Omit<DrawnTabBar, keyof TabBarPane> = {
           previous: null,
           next: null,
@@ -255,8 +267,25 @@ export function createSessionsParts(deps: SessionsPartsDeps): SessionsParts {
             placed.closePane = key;
             return control;
           },
+          contributedParts(partsParent) {
+            if (isPlaced) {
+              throw new Error('tabBar placed contributed parts twice');
+            }
+            isPlaced = true;
+            return placeSessionParts(
+              partsParent,
+              sessionId,
+              deps.barParts.parts(),
+              BAR_PARTS,
+              deps.log,
+              rollback,
+            );
+          },
         };
         const pane = builder(into, kit);
+        if (!isPlaced && deps.barParts.parts().length > 0) {
+          kit.contributedParts(requireElementIn(into, pane.element, 'tabBar'));
+        }
         requireElementIn(pane.element, pane.strip, 'tabBar strip');
         return { element: pane.element, strip: pane.strip, ...placed };
       }),
@@ -276,22 +305,44 @@ export function createSessionsParts(deps: SessionsPartsDeps): SessionsParts {
   };
 }
 
-// `div.session-row-parts` at the end of `parent`, holding one
-// `div.session-row-part` (`data-part="<id>"`) per row part, in add order, each
-// built into its wrapper for `sessionId`. Each built part's dispose is recorded
-// on `rollback`, so it runs before the row draws again; a dispose that throws
+// Where one surface's session parts go: the holder's and each wrapper's
+// class, and the noun its log lines name a part by.
+interface SessionPartsPlace {
+  holderClass: string;
+  wrapperClass: string;
+  noun: string;
+}
+
+const ROW_PARTS: SessionPartsPlace = {
+  holderClass: 'session-row-parts',
+  wrapperClass: 'session-row-part',
+  noun: 'row part',
+};
+
+const BAR_PARTS: SessionPartsPlace = {
+  holderClass: 'session-bar-parts',
+  wrapperClass: 'session-bar-part',
+  noun: 'bar part',
+};
+
+// A `div` of `place.holderClass` at the end of `parent`, holding one `div` of
+// `place.wrapperClass` (`data-part="<id>"`) per part, in add order, each built
+// into its wrapper for `sessionId`. Each built part's dispose is recorded on
+// `rollback`, so it runs before the surface draws again; a dispose that throws
 // is logged and the rest still run. A part whose build throws is logged and
 // its wrapper removed; the rest still draw.
-function placeRowParts(
+function placeSessionParts(
   parent: HTMLElement,
   sessionId: string,
-  deps: Pick<SessionsPartsDeps, 'rowParts' | 'log'>,
+  sessionParts: readonly SessionPart[],
+  place: SessionPartsPlace,
+  log: Log,
   rollback: RollbackDeps,
 ): HTMLElement {
-  const holder = element('div', 'session-row-parts');
+  const holder = element('div', place.holderClass);
   parent.append(holder);
-  for (const part of deps.rowParts.parts()) {
-    const wrapper = element('div', 'session-row-part');
+  for (const part of sessionParts) {
+    const wrapper = element('div', place.wrapperClass);
     wrapper.dataset.part = part.id;
     holder.append(wrapper);
     try {
@@ -300,15 +351,15 @@ function placeRowParts(
         try {
           built.dispose?.();
         } catch (error) {
-          deps.log(
+          log(
             'sessions',
-            `row part ${part.id} dispose failed: ${errorText(error)}`,
+            `${place.noun} ${part.id} dispose failed: ${errorText(error)}`,
           );
         }
       });
     } catch (error) {
       wrapper.remove();
-      deps.log('sessions', `row part ${part.id} failed: ${errorText(error)}`);
+      log('sessions', `${place.noun} ${part.id} failed: ${errorText(error)}`);
     }
   }
   return holder;

@@ -1,7 +1,10 @@
 import { recordingAnchors } from '../../../shared/page/layout-host/test-layouts';
 import { asFake, FakeElement, findAll } from '../../../shared/page/test-dom';
 import type { SessionRow, SessionsState } from '../contract';
-import { createSessionRowParts, type SessionRowParts } from './row-parts';
+import {
+  createSessionPartStore,
+  type SessionPartStore,
+} from './session-part-store';
 import { mountSessionsView } from './sessions-view';
 
 export function sessionRow(sessionId: string): SessionRow {
@@ -24,10 +27,12 @@ export function stateOf(
 
 // A sessions view over fake keys that record each anchor, a log that records
 // each line as `[source] message`, `activated` recording each session a row
-// click activates, and the row parts its rows draw (`rowParts`, a new
-// registry unless one is handed in). Runs under `installFakeDom`.
+// click activates, the row parts its rows draw (`rowParts`, a new store
+// unless one is handed in) and the bar parts its tab bars draw (`barParts`,
+// likewise). Runs under `installFakeDom`.
 export function sessionsViewSetup(
-  rowParts: SessionRowParts = createSessionRowParts(),
+  rowParts: SessionPartStore = createSessionPartStore(),
+  barParts: SessionPartStore = createSessionPartStore(),
 ) {
   const { anchors, keys } = recordingAnchors();
   const logged: string[] = [];
@@ -41,6 +46,7 @@ export function sessionsViewSetup(
     panesChanged: () => undefined,
     paneFocused: () => undefined,
     rowParts,
+    barParts,
     markdown: {
       block: (text) => text,
       inline: (text) => text,
@@ -52,7 +58,16 @@ export function sessionsViewSetup(
   });
   const sideBar = asFake(view.sideBar);
   const area = asFake(view.element);
-  return { view, anchors, logged, activated, sideBar, area, rowParts };
+  return {
+    view,
+    anchors,
+    logged,
+    activated,
+    sideBar,
+    area,
+    rowParts,
+    barParts,
+  };
 }
 
 // The first of `rows` whose text holds `text`.

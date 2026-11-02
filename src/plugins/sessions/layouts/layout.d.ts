@@ -7,10 +7,11 @@ import type { BaseKit } from '../../../shared/page/layout-host/kit';
 // the layout that drew it, so `[data-layout-owner="sessions"][data-layout="<name>"] …` in a layout's CSS selects only
 // its own parts.
 //
-// Panes. `sideBar` draws once per layout set, and `tabBar` once per session per layout set. The app fills the side
-// bar's `rows` with one `row` per session and each tab bar's `strip` with one `tab` per tab of its session, replacing
-// their children on each draw. A pane whose `rows` or `strip` is not a child of its `element` is drawn by `default`
-// instead.
+// Panes. `sideBar` draws once per layout set, and `tabBar` once per session per layout set and again whenever another
+// plugin adds or removes a bar part. The app fills the side bar's `rows` with one `row` per session and each tab bar's
+// `strip` with one `tab` per tab of its session, replacing their children on each draw. A `row` places other plugins'
+// row parts and a `tabBar` their bar parts, each through its kit's `contributedParts`. A pane whose `rows` or `strip`
+// is not a child of its `element` is drawn by `default` instead.
 //
 // Chat panes. Sessions mode splits into panes, each showing one session. `pane` draws each pane's frame, again
 // whenever its input changes; the app fills its `body` with the session's tab bar over its tabs, or with the empty
@@ -115,6 +116,12 @@ export interface TabBarKit extends SessionsKit {
   nextTabEdge(parent: HTMLElement): HTMLElement;
   // `⌘W`: the close prompt, its key alone.
   closeHint(parent: HTMLElement): HTMLElement;
+  // `div.session-bar-parts`, holding one `div.session-bar-part` (`data-part="<id>"`) per part other plugins added
+  // for every tab bar, in the order they were added, each drawn for the bar's session; returns the
+  // `div.session-bar-parts`. Call it once, where the parts go: a bar that leaves it out gets the parts appended at the
+  // end of its element. A part that throws is logged and draws nothing. A second call throws
+  // `tabBar placed contributed parts twice`, so the bar draws with `default`.
+  contributedParts(parent: HTMLElement): HTMLElement;
   // The `split-horizontal` button holding `⌥;`, which splits the pane with the new pane right.
   splitRightHint(parent: HTMLElement): HTMLElement;
   // The `split-vertical` button holding `⌥'`, which splits the pane with the new pane below.
@@ -135,7 +142,8 @@ export interface Layout {
   row?(parent: HTMLElement, input: SessionRowInput, kit: RowKit): SessionsPart;
   // One chat pane's frame around its body.
   pane?(parent: HTMLElement, input: PaneInput, kit: PaneKit): PanePart;
-  // The bar over a session's tabs: the tab strip between its prompts, then the pane controls.
+  // The bar over a session's tabs: the tab strip between its prompts, other plugins' bar parts, then the pane
+  // controls.
   tabBar?(parent: HTMLElement, kit: TabBarKit): TabBarPane;
   tab?(
     parent: HTMLElement,

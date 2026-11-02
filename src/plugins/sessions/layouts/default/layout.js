@@ -4,8 +4,9 @@
 // each row's label (no harness name), attention dot, status line and on-screen mark,
 // then other plugins' row parts (`contributedParts`) under them,
 // each chat pane's frame and focus edges, the tab bar's prompts around its
-// strip and its pane controls, and each tab's icon with no label, in the class
-// names `sessions.css` styles.
+// strip, other plugins' bar parts (`contributedParts`) after them, then its
+// close prompt and pane controls, and each tab's icon with no label, in the
+// class names `sessions.css` styles.
 
 /** @type {import('../layout').CompleteLayout} */
 const layout = {
@@ -52,6 +53,7 @@ const layout = {
     const strip = kit.el(element, 'nav', 'ui-tabs session-tabs');
     strip.setAttribute('aria-label', 'Tabs');
     kit.nextTabEdge(element);
+    kit.contributedParts(element);
     kit.closeHint(element);
     kit.splitRightHint(element);
     kit.splitDownHint(element);

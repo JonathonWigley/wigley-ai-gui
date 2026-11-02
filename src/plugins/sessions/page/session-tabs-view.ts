@@ -38,10 +38,11 @@ interface Tab {
   status: string;
 }
 
-// A session's frame: its tab bar over the sheet holding its tabs' body and
-// the text saying why no tab shows; its tab ids and selection, and its tabs
-// by id in add order.
+// A session's frame: its session, its tab bar over the sheet holding its
+// tabs' body and the text saying why no tab shows; its tab ids and selection,
+// and its tabs by id in add order.
 interface Frame {
+  sessionId: string;
   element: HTMLElement;
   barHost: HTMLElement;
   bar: DrawnPart<DrawnTabBar>;
@@ -77,7 +78,8 @@ interface DrawnPane {
 // `isModeShown` reads whether Sessions mode shows; `changed` runs after any
 // change to a session's tabs, their selection or their statuses; `keys`
 // draws the key beside the text asking for a session to be picked; `parts`
-// draws the panes, the tab bars, the tabs and that text.
+// draws the panes, the tab bars with the bar parts other plugins added, the
+// tabs and that text.
 export interface SessionTabsDeps {
   isModeShown(): boolean;
   changed(): void;
@@ -101,6 +103,10 @@ export interface SessionTabsView {
   // Draws every pane and tab bar again with the parts' current layouts, then
   // the tabs and the texts; the tab bodies and their elements stay as they are.
   redrawPane(): void;
+  // Draws every tab bar again, then the tabs and the texts, for a bar part
+  // added or removed; the panes, the tab bodies and their elements stay as
+  // they are.
+  redrawBars(): void;
   // Scrolls each pane's strip to its selected tab again, for a strip that
   // had no width when the selection changed: the mode was hidden.
   rescroll(): void;
@@ -118,7 +124,8 @@ export interface SessionTabsView {
 // Sessions mode's chat panes, drawn through the sessions layout. Each pane is
 // the `pane` part, whose body holds the frame of the session it shows: the
 // `tabBar` (the session's tab strip between its previous and next tab
-// prompts, the close prompt and the pane controls at the bar's end) on the top
+// prompts, the bar parts other plugins added, the close prompt and the pane
+// controls at the bar's end) on the top
 // edge of a sheet holding the session's tabs, only its selected tab showing,
 // or the `emptyText` saying why no tab shows. An empty pane's body holds a
 // sheet with the empty text alone. The tab prompts hide while the session has
@@ -145,9 +152,18 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
       ? null
       : (panes.get(focusedPaneId)?.sessionId ?? null);
 
-  const drawBar = (frame: Pick<Frame, 'barHost'>): DrawnPart<DrawnTabBar> => {
+  const drawBar = (
+    frame: Pick<Frame, 'sessionId' | 'barHost'>,
+  ): DrawnPart<DrawnTabBar> => {
     frame.barHost.replaceChildren();
-    return parts.tabBar(frame.barHost);
+    return parts.tabBar(frame.barHost, frame.sessionId);
+  };
+
+  const redrawBar = (frame: Frame) => {
+    disposeTabs(frame);
+    frame.bar.dispose();
+    frame.bar = drawBar(frame);
+    frame.scrolledTabId = null;
   };
 
   const frameOf = (sessionId: string): Frame => {
@@ -165,9 +181,10 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     frameElement.append(barHost, bodies);
     holder.append(frameElement);
     const created: Frame = {
+      sessionId,
       element: frameElement,
       barHost,
-      bar: drawBar({ barHost }),
+      bar: drawBar({ sessionId, barHost }),
       bodies,
       body,
       tabs: NO_TABS,
@@ -376,10 +393,7 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     place,
     redrawPane() {
       for (const frame of frames.values()) {
-        disposeTabs(frame);
-        frame.bar.dispose();
-        frame.bar = drawBar(frame);
-        frame.scrolledTabId = null;
+        redrawBar(frame);
       }
       const placed = [...panes].map(([id, pane]) => {
         pane.input = null;
@@ -390,6 +404,12 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
         return;
       }
       place(placed, focusedPaneId, focusedEdges);
+    },
+    redrawBars() {
+      for (const frame of frames.values()) {
+        redrawBar(frame);
+      }
+      draw();
     },
     rescroll() {
       for (const pane of panes.values()) {
