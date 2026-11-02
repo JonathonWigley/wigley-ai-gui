@@ -95,6 +95,14 @@ export interface PaneKit extends SessionsKit {
   focusEdge(parent: HTMLElement, direction: PaneDirection): HTMLElement;
 }
 
+export interface RowKit extends SessionsKit {
+  // `div.session-row-parts`, holding one `div.session-row-part` (`data-part="<id>"`) per part other plugins added
+  // for every row, in the order they were added; returns the `div.session-row-parts`. Call it once, where the parts
+  // go: a row that leaves it out gets the parts appended at the end of its element. A part that throws is logged and
+  // draws nothing. A second call throws `row placed contributed parts twice`, so the row draws with `default`.
+  contributedParts(parent: HTMLElement): HTMLElement;
+}
+
 export interface SideBarKit extends SessionsKit {
   // `⌥⇧I ▲ ▼ ⌥⇧O`: the previous and next session prompts, each chevron on its inner side.
   sessionEdge(parent: HTMLElement): HTMLElement;
@@ -124,11 +132,7 @@ export interface EmptyTextKit extends SessionsKit {
 export interface Layout {
   // The side bar: a header over the session rows.
   sideBar?(parent: HTMLElement, kit: SideBarKit): SideBarPane;
-  row?(
-    parent: HTMLElement,
-    input: SessionRowInput,
-    kit: SessionsKit,
-  ): SessionsPart;
+  row?(parent: HTMLElement, input: SessionRowInput, kit: RowKit): SessionsPart;
   // One chat pane's frame around its body.
   pane?(parent: HTMLElement, input: PaneInput, kit: PaneKit): PanePart;
   // The bar over a session's tabs: the tab strip between its prompts, then the pane controls.

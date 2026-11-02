@@ -4,6 +4,8 @@ import {
   type PaneDirection,
 } from '../../../../contracts/panes';
 import type { ShownLayouts } from '../../../../contracts/plugin';
+import { errorText } from '../../../../shared/error-text';
+import { element } from '../../../../shared/page/dom';
 import { appSlot } from '../../../../shared/page/layout-host/app-slot';
 import {
   createBaseKit,
@@ -29,6 +31,7 @@ import type {
   PaneInput,
   PaneKit,
   PanePart,
+  RowKit,
   SessionRowInput,
   SessionsKit,
   SessionsPart,
@@ -39,12 +42,15 @@ import type {
   TabBarPane,
 } from '../../layouts/layout';
 import { sessionsManifest } from '../../manifest';
+import type { SessionRowParts } from '../row-parts';
 
 type SessionsCommand = keyof typeof sessionsManifest.commands & string;
 
-// What every sessions kit reads: the page services and the keys export.
+// What every sessions kit reads: the page services and the keys export;
+// `rowParts` holds the parts each row draws.
 export interface SessionsPartsDeps extends OwnerKitServices {
   log: Log;
+  rowParts: Pick<SessionRowParts, 'parts'>;
 }
 
 // A drawn side bar and the session prompt its kit placed, null when the
@@ -120,9 +126,24 @@ export function createSessionsParts(deps: SessionsPartsDeps): SessionsParts {
         return { element: pane.element, rows: pane.rows, sessionEdge };
       }),
     row: (parent, input) =>
-      parts.draw('row', parent, (builder, into, rollback) =>
-        builder(into, input, sessionsKit(rollback)),
-      ),
+      parts.draw('row', parent, (builder, into, rollback) => {
+        let isPlaced = false;
+        const kit: RowKit = {
+          ...sessionsKit(rollback),
+          contributedParts(partsParent) {
+            if (isPlaced) {
+              throw new Error('row placed contributed parts twice');
+            }
+            isPlaced = true;
+            return placeRowParts(partsParent, input.sessionId, deps, rollback);
+          },
+        };
+        const row = builder(into, input, kit);
+        if (!isPlaced && deps.rowParts.parts().length > 0) {
+          kit.contributedParts(requireElementIn(into, row.element, 'row'));
+        }
+        return row;
+      }),
     pane: (parent, input) =>
       parts.draw('pane', parent, (builder, into, rollback) => {
         const base = sessionsKit(rollback);
@@ -253,6 +274,44 @@ export function createSessionsParts(deps: SessionsPartsDeps): SessionsParts {
         return builder(into, input, kit);
       }),
   };
+}
+
+// `div.session-row-parts` at the end of `parent`, holding one
+// `div.session-row-part` (`data-part="<id>"`) per row part, in add order, each
+// built into its wrapper for `sessionId`. Each built part's dispose is recorded
+// on `rollback`, so it runs before the row draws again; a dispose that throws
+// is logged and the rest still run. A part whose build throws is logged and
+// its wrapper removed; the rest still draw.
+function placeRowParts(
+  parent: HTMLElement,
+  sessionId: string,
+  deps: Pick<SessionsPartsDeps, 'rowParts' | 'log'>,
+  rollback: RollbackDeps,
+): HTMLElement {
+  const holder = element('div', 'session-row-parts');
+  parent.append(holder);
+  for (const part of deps.rowParts.parts()) {
+    const wrapper = element('div', 'session-row-part');
+    wrapper.dataset.part = part.id;
+    holder.append(wrapper);
+    try {
+      const built = part.build(wrapper, sessionId);
+      rollback.recordBox(() => {
+        try {
+          built.dispose?.();
+        } catch (error) {
+          deps.log(
+            'sessions',
+            `row part ${part.id} dispose failed: ${errorText(error)}`,
+          );
+        }
+      });
+    } catch (error) {
+      wrapper.remove();
+      deps.log('sessions', `row part ${part.id} failed: ${errorText(error)}`);
+    }
+  }
+  return holder;
 }
 
 // The chevron each pane edge points with.

@@ -2,6 +2,7 @@
 
 // The built-in Sessions look: the side bar's "Sessions" header over its rows,
 // each row's label, harness, attention dot, status line and on-screen mark,
+// then other plugins' row parts (`contributedParts`) under them,
 // each chat pane's frame and focus edges, the tab bar's prompts around its
 // strip and its pane controls, and each tab's icon with no label, in the class
 // names `sessions.css` styles.
@@ -31,6 +32,7 @@ const layout = {
     if (input.status !== null) {
       kit.el(element, 'span', 'session-row-status', input.status);
     }
+    kit.contributedParts(element);
     return { element };
   },
 

@@ -6,7 +6,7 @@ import {
   findAll,
   installFakeDom,
 } from '../../../../shared/page/test-dom';
-import type { SessionTabView } from '../../contract';
+import type { SessionRowPart, SessionTabView } from '../../contract';
 import defaultLayout from '../../layouts/default/layout.js';
 import type { Layout } from '../../layouts/layout';
 import {
@@ -27,6 +27,25 @@ function tabView(id: string): SessionTabView {
     beforeClose: () => true,
     shown: () => undefined,
   };
+}
+
+// A row part recording `build:<id>:<sessionId>` and
+// `dispose:<id>:<sessionId>` into `record`.
+function recordingPart(id: string, record: string[]): SessionRowPart {
+  return {
+    id,
+    build(_parent, sessionId) {
+      record.push(`build:${id}:${sessionId}`);
+      return { dispose: () => record.push(`dispose:${id}:${sessionId}`) };
+    },
+  };
+}
+
+// The `data-part` of each row part wrapper under `root`.
+function partIds(root: FakeElement): string[] {
+  return findAll(root, 'session-row-part').map(
+    (wrapper) => wrapper.dataset.part,
+  );
 }
 
 function fail(): never {
@@ -199,5 +218,92 @@ describe('sessions parts', () => {
 
     expect((chat.element as unknown as FakeElement).parentNode).toBe(body);
     expect(view.tabs.selectedTabOf('a')).toBe(chat);
+  });
+
+  it('rowParts_DefaultRow_BuildsEachPartPerRowInAddOrder', () => {
+    const record: string[] = [];
+    const { view, sideBar, rowParts } = sessionsViewSetup();
+    rowParts.add(recordingPart('p1', record));
+    rowParts.add(recordingPart('p2', record));
+
+    view.render(stateOf(['a', 'b'], 'a'));
+
+    const rows = drawnRows(sideBar);
+    expect(rows.map((row) => findAll(row, 'session-row-parts').length)).toEqual(
+      [1, 1],
+    );
+    expect(rows.map(partIds)).toEqual([
+      ['p1', 'p2'],
+      ['p1', 'p2'],
+    ]);
+    expect(record).toEqual([
+      'build:p1:a',
+      'build:p2:a',
+      'build:p1:b',
+      'build:p2:b',
+    ]);
+  });
+
+  it('rowParts_RenderAgain_DisposesBeforeRebuilding', () => {
+    const record: string[] = [];
+    const { view, rowParts } = sessionsViewSetup();
+    rowParts.add(recordingPart('p1', record));
+
+    view.render(stateOf(['a'], 'a'));
+    view.render(stateOf(['a'], 'a'));
+
+    expect(record).toEqual(['build:p1:a', 'dispose:p1:a', 'build:p1:a']);
+  });
+
+  it('rowParts_UserRowWithoutSlot_AppendsAtRowEnd', () => {
+    const { view, sideBar, rowParts } = sessionsViewSetup();
+    rowParts.add(recordingPart('p1', []));
+    view.setLayouts(
+      withUser<Layout>(defaultLayout, {
+        row: (parent, input, kit) => {
+          const element = kit.el(parent, 'div', 'bare');
+          kit.el(element, 'span', 'bare-label', input.label);
+          return { element };
+        },
+      }),
+    );
+
+    view.render(stateOf(['a'], 'a'));
+
+    const [row] = drawnRows(sideBar);
+    expect(row.dataset.layout).toBe('mine');
+    expect(row.lastElementChild?.classList.contains('session-row-parts')).toBe(
+      true,
+    );
+  });
+
+  it('rowParts_PartThrows_LogsAndOthersDraw', () => {
+    const { view, sideBar, rowParts, logged } = sessionsViewSetup();
+    rowParts.add({
+      id: 'bad',
+      build: () => {
+        throw new Error('boom');
+      },
+    });
+    rowParts.add(recordingPart('good', []));
+
+    view.render(stateOf(['a'], 'a'));
+
+    expect(logged).toContain('[sessions] row part bad failed: boom');
+    const rows = drawnRows(sideBar);
+    expect(rows.map(partIds)).toEqual([['good']]);
+    expect(rowNamed(rows, 'label a').dataset.layout).toBe('default');
+  });
+
+  it('rowParts_AddAndDispose_RedrawsRows', () => {
+    const { view, sideBar, rowParts } = sessionsViewSetup();
+    view.render(stateOf(['a'], 'a'));
+
+    const added = rowParts.add(recordingPart('p1', []));
+    const afterAdd = partIds(sideBar).length;
+    added.dispose();
+
+    expect(afterAdd).toBe(1);
+    expect(partIds(sideBar)).toEqual([]);
   });
 });

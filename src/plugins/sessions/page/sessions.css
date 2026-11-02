@@ -149,6 +149,19 @@
   white-space: nowrap;
 }
 
+/* Other plugins' row parts span the row's grid under its lines; each part
+   styles its own content. */
+.session-row-parts {
+  display: flex;
+  flex-direction: column;
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.session-row-part {
+  min-width: 0;
+}
+
 /* A session's frame: the bar holding its tab strip over the sheet of its
    tabs. */
 .session-area {

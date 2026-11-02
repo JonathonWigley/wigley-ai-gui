@@ -1,3 +1,4 @@
+import type { Disposable } from '../../contracts/disposable';
 import type { ChannelShape, EventShape } from '../../contracts/plugin';
 
 // Every agent harness a session can run in; the relay hello's parse reads a
@@ -208,14 +209,25 @@ export interface SessionTabHandle {
   isVisible(): boolean;
 }
 
+// A part another plugin draws under every session row. `build` draws into
+// `parent`, its own wrapper in the row; the returned `dispose` runs before the
+// row draws again and when the row leaves. A part that throws is logged and
+// draws nothing; the row still draws.
+export interface SessionRowPart {
+  id: string;
+  build(parent: HTMLElement, sessionId: string): { dispose?(): void };
+}
+
 // `addTab` attaches the tab's element before returning and selects the tab
 // when it is the session's first; it throws on a tab id the session already
 // holds. A tab added before its session's row waits for the row. A session's
 // tabs drop when its row leaves, and `sessionRemoved` says so.
 // `selectedSessionId` is the focused chat pane's session, null for an empty
-// pane, not main's selection.
+// pane, not main's selection. `addRowPart` throws on a part id already added;
+// adding a part and disposing its `Disposable` each redraw the rows.
 export interface SessionsPageExports {
   addTab(sessionId: string, tab: SessionTabView): SessionTabHandle;
+  addRowPart(part: SessionRowPart): Disposable;
   selectedSessionId(): string | null;
   activate(sessionId: string): void;
   // Asks each of the session's tabs `beforeClose`, then asks main to close it.

@@ -22,6 +22,7 @@ import {
 } from './layout/sessions-parts';
 import { type PaneSessions, shownElsewhere } from './pane-sessions';
 import { PREVIEW_STATE, previewRowState } from './preview';
+import type { SessionRowParts } from './row-parts';
 import {
   mountSessionTabsView,
   type SessionTabsView,
@@ -35,8 +36,12 @@ import { rowStatus, stepSession } from './tabs';
 // prompts; `timers` runs a pane divider's prompt linger; `panesChanged` runs
 // after the pane tree or a pane's session changed, and `paneFocused` after
 // focus moved to another pane, a pane tree press or outer pane key included;
-// the rest is what the sessions layout's kits read.
-export interface SessionsViewDeps extends Omit<SessionsPartsDeps, 'keys'> {
+// `rowParts` are the parts each row draws, and adding or removing one draws
+// the rows again; the rest is what the sessions layout's kits read.
+export interface SessionsViewDeps extends Omit<
+  SessionsPartsDeps,
+  'keys' | 'rowParts'
+> {
   activate(sessionId: string): void;
   isModeShown(): boolean;
   tabsChanged(): void;
@@ -44,6 +49,7 @@ export interface SessionsViewDeps extends Omit<SessionsPartsDeps, 'keys'> {
   timers: Timers;
   panesChanged(): void;
   paneFocused(paneId: string): void;
+  rowParts: SessionRowParts;
 }
 
 // The chat panes and the session each shows. Each change draws the panes and
@@ -220,6 +226,7 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
     outer: treeView.outer,
   };
   drawPanes();
+  deps.rowParts.onChanged(() => drawSidebar());
 
   return {
     element: root,
