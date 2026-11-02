@@ -1246,12 +1246,14 @@ describe('createFakeAgentHarness workflow', () => {
     expect(changed).toEqual([]);
   });
 
-  // Files whose writes and trashes land at once until `hold()`, then wait in
-  // `pending` until the test settles them.
+  // Files whose writes and trashes land at once outside `hold()` and
+  // `release()`, and between them wait in `pending` until the test settles
+  // them. `changes` lists every write and trash in call order.
   function holdableFiles() {
     let isHeld = false;
     const pending: { resolve: () => void; reject: (error: Error) => void }[] =
       [];
+    const changes: string[][] = [];
     const change = () =>
       isHeld
         ? new Promise<void>((resolve, reject) =>
@@ -1259,10 +1261,23 @@ describe('createFakeAgentHarness workflow', () => {
           )
         : Promise.resolve();
     return {
-      files: { write: change, trash: change },
+      files: {
+        write: (path: string, text: string) => {
+          changes.push(['write', path, text]);
+          return change();
+        },
+        trash: (path: string) => {
+          changes.push(['trash', path]);
+          return change();
+        },
+      },
       pending,
+      changes,
       hold: () => {
         isHeld = true;
+      },
+      release: () => {
+        isHeld = false;
       },
     };
   }
@@ -1274,12 +1289,14 @@ describe('createFakeAgentHarness workflow', () => {
     FAKE_WORKFLOW_STEP_TEXT,
   ];
 
+  // `nextChanges` are the changes the next process's `/wigley:make` makes.
   it.each([
     {
       case: 'featureWriteLands',
       landed: [],
       held: FAKE_WORKFLOW_FEATURE_TEXT,
       settle: (change: { resolve: () => void }) => change.resolve(),
+      nextChanges: [['write', planPath, fakeWorkflowPlan(1, 0)]],
     },
     {
       case: 'featureWriteRejects',
@@ -1287,12 +1304,21 @@ describe('createFakeAgentHarness workflow', () => {
       held: FAKE_WORKFLOW_FEATURE_TEXT,
       settle: (change: { reject: (error: Error) => void }) =>
         change.reject(new Error('disk full')),
+      nextChanges: [],
+    },
+    {
+      case: 'makeEditLands',
+      landed: makeSteps.slice(0, 2),
+      held: FAKE_WORKFLOW_STEP_TEXT,
+      settle: (change: { resolve: () => void }) => change.resolve(),
+      nextChanges: [['write', planPath, fakeWorkflowPlan(3, 1)]],
     },
     {
       case: 'makeTrashLands',
       landed: makeSteps,
       held: FAKE_WORKFLOW_STEP_TEXT,
       settle: (change: { resolve: () => void }) => change.resolve(),
+      nextChanges: [],
     },
     {
       case: 'makeTrashRejects',
@@ -1300,12 +1326,13 @@ describe('createFakeAgentHarness workflow', () => {
       held: FAKE_WORKFLOW_STEP_TEXT,
       settle: (change: { reject: (error: Error) => void }) =>
         change.reject(new Error('disk full')),
+      nextChanges: [['trash', planDir]],
     },
   ])(
     'workflowChange_EndBeforeItSettles_EmitsNothingAfterSessionEnded ($case)',
-    async ({ landed, held, settle: settleChange }) => {
-      const { files, pending, hold } = holdableFiles();
-      const { agent, timeline } = await startedProcess(files);
+    async ({ landed, held, settle: settleChange, nextChanges }) => {
+      const { files, pending, changes, hold, release } = holdableFiles();
+      const { harness, agent, timeline } = await startedProcess(files);
       for (const text of landed) {
         agent.send({ text, images: [] });
         await settle();
@@ -1324,6 +1351,14 @@ describe('createFakeAgentHarness workflow', () => {
         'sessionEnded',
         'ended',
       ]);
+
+      release();
+      changes.length = 0;
+      const next = harness.start(request, recordingEvents().events);
+      next.send({ text: `/wigley:make ${planDir}`, images: [] });
+      await settle();
+
+      expect(changes).toEqual(nextChanges);
     },
   );
 

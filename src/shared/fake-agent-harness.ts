@@ -1,6 +1,7 @@
 import {
   MAIN_AGENT_ID,
   type AccountStatus,
+  type AgentEvent,
   type AgentHarness,
   type AgentProcess,
   type AgentProcessEvents,
@@ -323,6 +324,71 @@ export function fakeWorkflowPlan(ticked: number, reviewRounds: number): string {
 // Emits one entry, stamped with its `at`.
 type EmitEntry = (draft: EntryDraft) => void;
 
+type ToolEntryDraft = Extract<EntryDraft, { kind: 'tool' }>;
+
+// A tool entry without its result and raw events.
+type ToolCall = Omit<ToolEntryDraft, 'result' | 'raw'>;
+
+type ToolResult = { text: string; isError: boolean };
+
+const toolStartedEvent = (
+  clock: Clock,
+  agentId: string,
+  call: ToolCall,
+): AgentEvent => ({
+  type: 'toolStarted',
+  at: clock.now(),
+  agentId,
+  toolUseId: call.toolUseId,
+  tool: call.name,
+});
+
+const toolFinishedEvent = (
+  clock: Clock,
+  agentId: string,
+  call: ToolCall,
+  result: ToolResult,
+): AgentEvent => ({
+  type: 'toolFinished',
+  at: clock.now(),
+  agentId,
+  toolUseId: call.toolUseId,
+  ok: !result.isError,
+});
+
+// Emits agent `agentId`'s `call` without its result, raw `[{ fake: tag }]`,
+// then its `toolStarted`.
+function startFakeTool(
+  events: AgentProcessEvents,
+  emitEntry: EmitEntry,
+  clock: Clock,
+  agentId: string,
+  call: ToolCall,
+  tag: string,
+) {
+  emitEntry({ ...call, result: null, raw: [{ fake: tag }] });
+  events.agentEvent(toolStartedEvent(clock, agentId, call));
+}
+
+// Re-sends `call` with `result`, raw `[{ fake: tag }, { fake: tag-result }]`,
+// then its `toolFinished`.
+function finishFakeTool(
+  events: AgentProcessEvents,
+  emitEntry: EmitEntry,
+  clock: Clock,
+  agentId: string,
+  call: ToolCall,
+  tag: string,
+  result: ToolResult,
+) {
+  emitEntry({
+    ...call,
+    result,
+    raw: [{ fake: tag }, { fake: `${tag}-result` }],
+  });
+  events.agentEvent(toolFinishedEvent(clock, agentId, call, result));
+}
+
 // The entries, usage and activity that close turn `turn`.
 function emitTurnEnd(
   events: AgentProcessEvents,
@@ -350,33 +416,18 @@ function emitToolTurn(
   clock: Clock,
   turn: number,
 ) {
-  const tool = {
-    kind: 'tool' as const,
+  const tool: ToolCall = {
+    kind: 'tool',
     id: `tool-${turn}`,
     toolUseId: `fake-tool-${turn}`,
     name: 'Bash',
     input: { command: 'echo fake' },
     summary: 'echo fake',
   };
-  emitEntry({ ...tool, result: null, raw: [{ fake: 'tool' }] });
-  events.agentEvent({
-    type: 'toolStarted',
-    at: clock.now(),
-    agentId: MAIN_AGENT_ID,
-    toolUseId: tool.toolUseId,
-    tool: tool.name,
-  });
-  emitEntry({
-    ...tool,
-    result: { text: 'fake', isError: false },
-    raw: [{ fake: 'tool' }, { fake: 'tool-result' }],
-  });
-  events.agentEvent({
-    type: 'toolFinished',
-    at: clock.now(),
-    agentId: MAIN_AGENT_ID,
-    toolUseId: tool.toolUseId,
-    ok: true,
+  startFakeTool(events, emitEntry, clock, MAIN_AGENT_ID, tool, 'tool');
+  finishFakeTool(events, emitEntry, clock, MAIN_AGENT_ID, tool, 'tool', {
+    text: 'fake',
+    isError: false,
   });
   const reply = 'fake agent ran a tool';
   emitEntry({
@@ -418,32 +469,18 @@ function emitStepsTurn(
 ) {
   FAKE_STEP_TOOLS.forEach((tool, index) => {
     const n = index + 1;
-    const toolUseId = `fake-step-${turn}-${n}`;
-    const result = tool.result ?? { text: 'ok', isError: false };
-    emitEntry({
+    const call: ToolCall = {
       kind: 'tool',
       id: `step-${turn}-${n}`,
-      toolUseId,
+      toolUseId: `fake-step-${turn}-${n}`,
       name: tool.name,
       input: tool.input,
       summary: tool.summary,
-      result,
-      raw: [{ fake: 'step' }],
-    });
-    events.agentEvent({
-      type: 'toolStarted',
-      at: clock.now(),
-      agentId: MAIN_AGENT_ID,
-      toolUseId,
-      tool: tool.name,
-    });
-    events.agentEvent({
-      type: 'toolFinished',
-      at: clock.now(),
-      agentId: MAIN_AGENT_ID,
-      toolUseId,
-      ok: !result.isError,
-    });
+    };
+    const result = tool.result ?? { text: 'ok', isError: false };
+    emitEntry({ ...call, result, raw: [{ fake: 'step' }] });
+    events.agentEvent(toolStartedEvent(clock, MAIN_AGENT_ID, call));
+    events.agentEvent(toolFinishedEvent(clock, MAIN_AGENT_ID, call, result));
   });
   const thought = 'Checking the test output.';
   emitEntry({
@@ -477,11 +514,6 @@ const FAKE_SUBAGENTS = [
     },
   },
 ];
-
-type ToolEntryDraft = Extract<EntryDraft, { kind: 'tool' }>;
-
-// A tool entry without its result and raw events.
-type ToolCall = Omit<ToolEntryDraft, 'result' | 'raw'>;
 
 // A running subagent's Agent tool entry.
 type SubagentEntry = ToolCall;
@@ -520,33 +552,18 @@ function emitAgentsTurn(
   });
   FAKE_SUBAGENTS.forEach(({ tool }, index) => {
     const agentId = spawned[index].toolUseId;
-    const toolCall = {
-      kind: 'tool' as const,
+    const toolCall: ToolCall = {
+      kind: 'tool',
       id: `${spawned[index].id}-tool`,
       toolUseId: `${agentId}-tool`,
       name: tool.name,
       input: tool.input,
       summary: tool.summary,
     };
-    emitEntry({ ...toolCall, result: null, raw: [{ fake: 'tool' }] });
-    events.agentEvent({
-      type: 'toolStarted',
-      at: clock.now(),
-      agentId,
-      toolUseId: toolCall.toolUseId,
-      tool: tool.name,
-    });
-    emitEntry({
-      ...toolCall,
-      result: { text: 'fake', isError: false },
-      raw: [{ fake: 'tool' }, { fake: 'tool-result' }],
-    });
-    events.agentEvent({
-      type: 'toolFinished',
-      at: clock.now(),
-      agentId,
-      toolUseId: toolCall.toolUseId,
-      ok: true,
+    startFakeTool(events, emitEntry, clock, agentId, toolCall, 'tool');
+    finishFakeTool(events, emitEntry, clock, agentId, toolCall, 'tool', {
+      text: 'fake',
+      isError: false,
     });
   });
   return spawned;
@@ -559,7 +576,7 @@ function finishSubagents(
   emitEntry: EmitEntry,
   clock: Clock,
   running: readonly SubagentEntry[],
-  result: { text: string; isError: boolean },
+  result: ToolResult,
 ) {
   for (const entry of running) {
     emitEntry({
@@ -631,53 +648,18 @@ function workflowTurnOf(
   return { kind: 'make', folder, plan };
 }
 
-// Emits tool `n` of workflow turn `turn` without its result, then its
-// `toolStarted`.
-function startWorkflowTool(
-  events: AgentProcessEvents,
-  emitEntry: EmitEntry,
-  clock: Clock,
+// Tool `n` of workflow turn `turn`, run by the main agent.
+function workflowToolCall(
   turn: number,
   n: number,
   tool: Pick<ToolCall, 'name' | 'input' | 'summary'>,
 ): ToolCall {
-  const call: ToolCall = {
+  return {
     kind: 'tool',
     id: `workflow-${turn}-${n}`,
     toolUseId: `fake-workflow-${turn}-${n}`,
     ...tool,
   };
-  emitEntry({ ...call, result: null, raw: [{ fake: 'workflow' }] });
-  events.agentEvent({
-    type: 'toolStarted',
-    at: clock.now(),
-    agentId: MAIN_AGENT_ID,
-    toolUseId: call.toolUseId,
-    tool: call.name,
-  });
-  return call;
-}
-
-// Re-sends `call` with `result`, then its `toolFinished`.
-function finishWorkflowTool(
-  events: AgentProcessEvents,
-  emitEntry: EmitEntry,
-  clock: Clock,
-  call: ToolCall,
-  result: { text: string; isError: boolean },
-) {
-  emitEntry({
-    ...call,
-    result,
-    raw: [{ fake: 'workflow' }, { fake: 'workflow-result' }],
-  });
-  events.agentEvent({
-    type: 'toolFinished',
-    at: clock.now(),
-    agentId: MAIN_AGENT_ID,
-    toolUseId: call.toolUseId,
-    ok: !result.isError,
-  });
 }
 
 // Tool `n` of workflow turn `turn`: a Skill call of `skill`, with its
@@ -690,11 +672,12 @@ function emitWorkflowSkill(
   n: number,
   skill: string,
 ) {
-  const call = startWorkflowTool(events, emitEntry, clock, turn, n, {
+  const call = workflowToolCall(turn, n, {
     name: 'Skill',
     input: { skill },
     summary: skill,
   });
+  startFakeTool(events, emitEntry, clock, MAIN_AGENT_ID, call, 'workflow');
   events.agentEvent({
     type: 'skillStarted',
     at: clock.now(),
@@ -702,7 +685,15 @@ function emitWorkflowSkill(
     skill,
     args: '',
   });
-  finishWorkflowTool(events, emitEntry, clock, call, WORKFLOW_TOOL_OK);
+  finishFakeTool(
+    events,
+    emitEntry,
+    clock,
+    MAIN_AGENT_ID,
+    call,
+    'workflow',
+    WORKFLOW_TOOL_OK,
+  );
 }
 
 function emitEchoTurn(
@@ -866,7 +857,18 @@ export function createFakeAgentHarness(
       path: string,
       change: () => Promise<void>,
     ): Promise<WorkflowChange> => {
-      const call = startWorkflowTool(events, emitEntry, clock, turn, n, tool);
+      const call = workflowToolCall(turn, n, tool);
+      const finish = (result: ToolResult) =>
+        finishFakeTool(
+          events,
+          emitEntry,
+          clock,
+          MAIN_AGENT_ID,
+          call,
+          'workflow',
+          result,
+        );
+      startFakeTool(events, emitEntry, clock, MAIN_AGENT_ID, call, 'workflow');
       try {
         await change();
       } catch (error) {
@@ -874,10 +876,7 @@ export function createFakeAgentHarness(
           return 'ended';
         }
         const message = errorText(error);
-        finishWorkflowTool(events, emitEntry, clock, call, {
-          text: message,
-          isError: true,
-        });
+        finish({ text: message, isError: true });
         emitEntry({
           kind: 'notice',
           id: `notice-${turn}`,
@@ -890,12 +889,13 @@ export function createFakeAgentHarness(
       if (record.ended) {
         return 'ended';
       }
-      finishWorkflowTool(events, emitEntry, clock, call, WORKFLOW_TOOL_OK);
+      finish(WORKFLOW_TOOL_OK);
       return 'landed';
     };
 
     // Workflow tool `n`: `toolName` writes `plan` to `planPath`, then
-    // `fileWritten`; on landing the plan's folder holds `plan` in the map.
+    // `fileWritten`; once the write lands, ended process or not, the plan's
+    // folder holds `plan` in the map.
     const writeWorkflowPlan = async (
       turn: number,
       n: number,
@@ -908,14 +908,15 @@ export function createFakeAgentHarness(
         n,
         { name: toolName, input: { file_path: planPath }, summary: planPath },
         planPath,
-        () =>
-          files.write(
+        async () => {
+          await files.write(
             planPath,
             fakeWorkflowPlan(plan.ticked, plan.reviewRounds),
-          ),
+          );
+          workflowPlans.set(workflowFolderOf(planPath), plan);
+        },
       );
       if (change === 'landed') {
-        workflowPlans.set(workflowFolderOf(planPath), plan);
         events.agentEvent({
           type: 'fileWritten',
           at: clock.now(),
@@ -995,12 +996,12 @@ export function createFakeAgentHarness(
         1,
         { name: 'Bash', input: { command }, summary: command },
         folder,
-        () => files.trash(folder),
+        async () => {
+          await files.trash(folder);
+          workflowPlans.delete(folder);
+          makeFolder = null;
+        },
       );
-      if (change === 'landed') {
-        workflowPlans.delete(folder);
-        makeFolder = null;
-      }
       closeWorkflowTurn(turn, change, 'fake make closed the plan');
     };
     queueMicrotask(() => {
