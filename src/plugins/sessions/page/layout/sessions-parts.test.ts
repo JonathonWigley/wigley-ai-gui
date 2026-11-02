@@ -178,6 +178,19 @@ describe('sessions parts', () => {
       roots: ({ area }) => findAll(area, 'session-tabs-bar'),
     },
     {
+      case: 'tabBar places contributed parts twice',
+      layout: {
+        tabBar: (parent, kit) => {
+          const element = kit.el(parent, 'div', 'bare');
+          kit.contributedParts(element);
+          kit.contributedParts(element);
+          return { element, strip: kit.el(element, 'nav', 'bare-strip') };
+        },
+      },
+      partName: 'tabBar',
+      roots: ({ area }) => findAll(area, 'session-tabs-bar'),
+    },
+    {
       case: 'pane throws',
       layout: { pane: fail },
       partName: 'pane',

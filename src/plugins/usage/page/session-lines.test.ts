@@ -121,6 +121,40 @@ describe('session lines', () => {
     ]);
   });
 
+  it.each([
+    { case: 'AbsentSession', snapshot: snapshotWith() },
+    { case: 'NullUsage', snapshot: snapshotWith(null) },
+  ])('redraw_UsageGone_RemovesLineAndLogsNoneOnce_$case', ({ snapshot }) => {
+    const { lines, logged } = setUp(snapshotWith(usageEvent()));
+    const wrapper = new FakeElement('div');
+    lines.part.build(asHtml(wrapper), SESSION);
+
+    lines.redraw(snapshot, NOW);
+    lines.redraw(snapshot, NOW);
+
+    expect(wrapper.children).toEqual([]);
+    expect(logged).toEqual([
+      'session line s1: context 180k/300k, cache 42m, spend $1.23',
+      'session line s1: none',
+    ]);
+  });
+
+  it('rebuild_BuildThenStaleDispose_KeepsDrawingInNewWrapper', () => {
+    const { lines } = setUp(snapshotWith(usageEvent()));
+    const oldWrapper = new FakeElement('div');
+    const newWrapper = new FakeElement('div');
+    const oldBuilt = lines.part.build(asHtml(oldWrapper), SESSION);
+
+    lines.part.build(asHtml(newWrapper), SESSION);
+    oldBuilt.dispose?.();
+    lines.redraw(snapshotWith(usageEvent({ contextTokens: 210_000 })), NOW);
+
+    expect(findAll(oldWrapper, LINE)).toEqual([]);
+    const drawn = findAll(newWrapper, LINE);
+    expect(drawn).toHaveLength(1);
+    expect(drawn[0].textContent).toContain('210k/300k');
+  });
+
   it('rebuild_DisposeThenBuild_DrawsInNewWrapperAndLogsNothing', () => {
     const { lines, logged } = setUp(snapshotWith(usageEvent()));
     const oldWrapper = new FakeElement('div');
