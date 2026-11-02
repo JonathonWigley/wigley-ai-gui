@@ -25,15 +25,13 @@ interface UsageSelfTestResult {
 }
 
 const TOGGLE = [' ', 'v', 'u'];
-const FRESH_STATUS_LINE =
-  '[usage] status line context 180k/300k, cache 42m, spend $1.23 | work: 5h 42%, Week 61%, Fable 88%';
 const FRESH_DETAILS = '[usage] details shown: work fresh, personal fresh';
 const DETAILS_HIDDEN = '[usage] details hidden';
 
 const GROUPS: SelfTestGroup[] = [
   {
     name: 'details',
-    why: 'Space v u opens the usage details in the right bar and closes them again, and the status line and the bar each fit the minimum width.',
+    why: 'Space v u opens the usage details in the right bar and closes them again, and the status line, the session line and the bar each fit the minimum width.',
     steps: [
       {
         keys: TOGGLE,
@@ -51,7 +49,7 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'narrow',
-    why: 'In a narrow window the status line wraps between its groups and the right bar lies over the content at its least width.',
+    why: 'In a narrow window the status line wraps between its groups, the session line clips in its own box, and the right bar lies over the content at its least width.',
     steps: [
       {
         width: 520,
@@ -69,8 +67,9 @@ const GROUPS: SelfTestGroup[] = [
 ];
 
 // Each run ends the session the run before connected, connects
-// `usage-selftest-<run>`, activates its row so the status line shows it
-// whatever an earlier script left selected, and seeds the fresh fixture on it:
+// `usage-selftest-<run>`, activates its row so that a pane shows the session
+// and its tab bar draws the session line whatever an earlier script left
+// selected, and seeds the fresh fixture on it:
 // the steps wait for exact lines, and the start poll's line is logged before
 // the run begins. The plans the start poll left unread fail the run, so the
 // poll over the harness is still proved. The steps end with the details
@@ -80,7 +79,7 @@ export function usageSelfTestScript(deps: UsageSelfTestDeps): SelfTestScript {
   return {
     pageBinds: [],
     settings: {},
-    scrollsItself: [],
+    scrollsItself: ['.session-bar-parts'],
     open(run) {
       connected?.end();
       const session = deps.sessions.connect({
@@ -105,7 +104,10 @@ export function usageSelfTestScript(deps: UsageSelfTestDeps): SelfTestScript {
         snapshot: deps.snapshot(),
         sessionId,
       };
-      return { shownLine: FRESH_STATUS_LINE, result: Promise.resolve(result) };
+      return {
+        shownLine: `[usage] session line ${sessionId}: context 180k/300k, cache 42m, spend $1.23`,
+        result: Promise.resolve(result),
+      };
     },
     groups: GROUPS,
     problems: (result) => {
