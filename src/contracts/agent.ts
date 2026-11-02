@@ -138,7 +138,7 @@ export interface ExtraUsage {
   currency: string | null;
 }
 
-// One profile's plan usage from one poll: `rows` in the server's order, `at` epoch ms.
+// One profile's plan usage from one poll: `rows` in the server's order, `at` epoch ms when the poll started.
 export interface PlanUsage {
   rows: readonly PlanRow[];
   extraUsage: ExtraUsage | null;

@@ -656,11 +656,13 @@ async function readAuthStatus(
 }
 
 // One `claude -p /usage` poll of `profileDir`. `--no-session-persistence`
-// keeps the poll from saving a transcript of the home folder.
+// keeps the poll from saving a transcript of the home folder. The usage's `at`
+// is when the poll started.
 async function readProfilePlanUsage(
   deps: ClaudeCodeHarnessDeps,
   profileDir: string | null,
 ): Promise<PlanUsage> {
+  const startedAt = deps.clock.now();
   const run = await runCli(
     deps,
     PLAN_USAGE_ARGS,
@@ -673,7 +675,7 @@ async function readProfilePlanUsage(
     );
   }
   try {
-    return readPlanUsage(run.stdout, deps.clock.now());
+    return readPlanUsage(run.stdout, startedAt);
   } catch (error) {
     throw new Error(withStderr(errorText(error), run.stderr));
   }

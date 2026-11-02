@@ -239,7 +239,7 @@ describe('withPollResult held patches', () => {
       ],
     },
     {
-      case: 'FoldedLivePatchRefoldsOverAnOlderPoll',
+      case: 'FoldedLivePatchRefoldsOverAPollStartedBeforeIt',
       given: () =>
         withLiveRows(
           withPollResult(seeded(), PERSONAL.configDir, ok(POLL_1000)),

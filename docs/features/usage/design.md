@@ -97,7 +97,7 @@ profile's `settings.json`, which is why the configured limit is read there.
 
 In `src/contracts/agent.ts`, beside `AgentHarness`:
 
-- `PlanUsage` — `rows: readonly PlanRow[]`, `extraUsage: ExtraUsage | null`, `at` (epoch ms).
+- `PlanUsage` — `rows: readonly PlanRow[]`, `extraUsage: ExtraUsage | null`, `at` (epoch ms, when the poll started).
 - `PlanRow` — `kind`, `group`, `label` (the server's model or surface name for a scoped row, otherwise the
   adapter's name for the kind), `percent` (0–100), `resetsAt` (epoch ms or null), `severity`
   (`'normal' | 'warning' | 'critical'`), `isActive`.

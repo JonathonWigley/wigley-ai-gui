@@ -641,7 +641,10 @@ describe('createClaudeCodeHarness accounts', () => {
 
   // A harness whose spawns hand out `children` in order, recording each
   // spawn's arguments and options.
-  function authHarness(children: ReturnType<typeof authChild>[]) {
+  function authHarness(
+    children: ReturnType<typeof authChild>[],
+    harnessClock = clock,
+  ) {
     const spawned: {
       args: readonly string[];
       options: { cwd: string; env: NodeJS.ProcessEnv };
@@ -663,7 +666,7 @@ describe('createClaudeCodeHarness accounts', () => {
       files: createMemoryFiles(),
       homeDir: '/Users/u',
       paths: posixPaths,
-      clock,
+      clock: harnessClock,
     });
     return { harness, spawned };
   }
@@ -929,13 +932,15 @@ describe('createClaudeCodeHarness accounts', () => {
 
   it('planUsage_MeasuredReport_ResolvesWithProfileEnv', async () => {
     const child = authChild();
-    const { harness, spawned } = authHarness([child]);
+    let now = 1000;
+    const { harness, spawned } = authHarness([child], { now: () => now });
     let isStdinEnded = false;
     child.child.stdin.on('finish', () => {
       isStdinEnded = true;
     });
 
     const usage = harness.planUsage('~/.claude-personal');
+    now = 4000;
     await exitWith(child, `${REPORT_LINE}\n`, 0);
 
     const resolved = await usage;
