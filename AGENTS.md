@@ -89,7 +89,7 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  text, in the file's own shape (triage.md § The project's follow-ups in wigley-ai-marketplace) →
                  pure, no I/O; Backlog and Docs' create dialog both write follow-ups through it
   image-types.ts the image media types the app attaches and pastes (chat and notes share it)
-  page/          page-only DOM builders plugins share: the paste and drop helpers (`pasted-images.ts`), the layout host
+  page/          page-only DOM builders plugins share: the paste and drop helpers (`file-drop/`: the text-paste rule, the file chip pattern, the image shrink), the layout host
                  (`layout-host/`: showing layouts, the pick chain, drawing a part, rollback, `BaseKit` (the kit every
                  owner's kit extends, with the shared `icon`, `chevron`, `edge`, `rowTrailing` and `duration`) and
                  `ownerBaseKitDeps` (the deps an owner's base kit is built from), `layout-parts.ts`
@@ -348,6 +348,13 @@ round; primer: an open primer), since main, not the page, decides.
   function it is given: a view passes its `keys.anchor`, the shell anchors the side bar handle's prompt through the
   keys `shell.setKeys` is given. A `Split` and the side bar's `SplitDivider` have `dispose`, which disconnects the observer, removes
   the drag listeners and disposes the prompt's anchors; a view that drops a split calls it.
+- **A drop target** is how files dropped or pasted reach a plugin's text box: the view registers its element and
+  `take(files)` with `api.drops.addTarget`, which returns a `Disposable`. The page core routes a drop to the innermost
+  target under the pointer and a paste to the innermost target holding focus (else the one that last held it), and
+  cancels every other file drop so the window never navigates. A target inserts at its box's cursor through
+  `TextEditor.insert`, keeping focus and the vim mode. A file's path comes from the Bridge's `pathForFile`; a file with
+  none (a screenshot) is saved through `savePasted` first. What each surface makes of a file is
+  `docs/features/file-drop/design.md`.
 - **Key hints** belong to the `keys` plugin, which reads the merged keymap: which-key after a pending prefix, help on
   `Space ?` (`<Leader>?` in a box, and the title bar's Keys button), and every hint drawn in place. The app has no
   bottom key list: a key shows where it acts, as a game puts a button prompt beside the thing it moves

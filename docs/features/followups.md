@@ -42,8 +42,6 @@ tokens, the platform chord formatter, the active-line band, and the sessions and
 - A Codex harness adapter behind `AgentHarness`, declaring Codex's own session controls (`agent-chat/design.md`).
 - A wigley-harness adapter behind `AgentHarness`, so the app drives the C# harness as it drives Claude Code.
 - A read-only Chat tab for sessions started in a terminal, following the session's transcript file.
-- Files other than images (PDFs, text files) pasted or dropped into the chat's message box; images land in agent-chat
-  plan C.
 - Each dev drive run could build main and preload into its own `.drive/<run>/build` and launch Electron on it directly instead of through `electron-forge start`, so drive runs and the user's `npm start` stop sharing `.vite/build` (forge plugin-vite fixes that folder at `<project>/.vite`). The start lock in `scripts/` covers drive and self-test starts only. Do this if the user's `npm start` keeps getting hit.
 - **Window adapter misses page load 1** — The window adapter numbers page loads from 1 only because both `electronDrivenWindow` calls (`src/main/main.ts`
   `createWindow`, `src/main/selftest.ts` `startSelfTest`) run in the same synchronous pass that starts the first load

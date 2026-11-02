@@ -54,7 +54,7 @@ interview on 2026-10-23; this file is the record of both.
   names for it, `/reset` and `/new` (§ Flow, Clear).
 - **Sign-in** — signing a profile in to its harness account, run by the harness adapter (`claude auth login` for
   Claude) and shown by chat in the sign-in dialog. **Account status** is whether a profile is signed in, and as whom.
-- **Attached image** — an image pasted or dropped into the composer, shown as a thumbnail above the message box and
+- **Attached image** — an image pasted or dropped on the Chat tab, shown as a thumbnail above the message box and
   sent with the next message. A paste whose plain text is more than the name of a pasted file or a single URL is a
   text paste: the text goes to the editor and no image is attached (spreadsheet and word-processor copies carry a
   picture beside the text). Blank text, a file name or a lone URL (a Finder copy, Copy Image) attaches the image.
@@ -322,8 +322,9 @@ interview on 2026-10-23; this file is the record of both.
   agent's, without repeats (§ Slash completion). A handler reports through chat's `notice` channel call, which adds a notice entry
   main keeps, in a resting session too. Chat registers `/login` (the sign-in dialog for the session's profile), `/logout` (signs the profile
   out) and `/status`, each reporting through a notice, never a toast (`/logout`: `Signed out of <profile>`; `/status`: `<profile>: signed in as <account>` or `<profile>: not signed in`).
-- **Images**: pasting an image file into the composer, or dropping one anywhere on the Chat tab, attaches it: PNG, JPEG, GIF and WebP whose base64 text is at most
-  5 MB (the API's per-image limit, which counts that text); any other file is refused with a toast. Attached images show as a strip of
+- **Images**: pasting an image file into the composer, or dropping one anywhere on the Chat tab, attaches it: PNG, JPEG, GIF and WebP;
+  one whose base64 text is over 5 MB (the API's per-image limit, which counts that text) is shrunk to fit first
+  (`docs/features/file-drop/design.md` § Images over 5 MB). Any other file goes into the box as a file chip, its path. Attached images show as a strip of
   thumbnails above the message box, each with a remove button; `<Leader>cx` removes the last one. Send sends the
   text with the images, or the images alone. A sent user entry shows its images as thumbnails under its text;
   clicking one, or Enter on the focused entry, opens the image viewer over the `chat.image` scope: the image fitted
