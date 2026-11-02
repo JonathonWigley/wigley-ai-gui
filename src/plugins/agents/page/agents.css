@@ -1,5 +1,11 @@
 /* The default layout's subagent lines, one per running subagent under a session row. */
 
+/* Sessions' wrapper for this part, whose width the lines' container query
+   reads. */
+.session-row-part[data-part='agents.subagentLines'] {
+  container: agents-lines / inline-size;
+}
+
 .agents-line {
   display: grid;
   /* The type shrinks first, to an ellipsis, and takes at most 40% of the
@@ -15,6 +21,33 @@
   min-width: 0;
   padding-left: 0;
   font-size: var(--wg-text-12);
+}
+
+/* Under 180px (the side bar under about 205px) one row cannot hold a line
+   with a minute-long elapsed time and a double-digit tool count, so the
+   elapsed time and tool count wrap to a second row under the description.
+   The type then takes what the second row leaves, down to its minimum. */
+@container agents-lines (width < 180px) {
+  .agents-line {
+    grid-template-columns: max-content minmax(
+        var(--wg-space-4),
+        max-content
+      ) max-content 1fr;
+  }
+
+  .agents-line-description {
+    grid-column: 3 / -1;
+  }
+
+  .agents-line-elapsed {
+    grid-row: 2;
+    grid-column: 3;
+  }
+
+  .agents-line-tools {
+    grid-row: 2;
+    grid-column: 4;
+  }
 }
 
 .agents-line-type {

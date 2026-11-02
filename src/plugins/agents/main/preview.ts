@@ -34,7 +34,9 @@ interface OpenPreview {
 }
 
 // The sample session's two running subagents, spawned 42 s and 185 s before
-// `now`; the second's description is long enough to end in an ellipsis.
+// `now`; the second's description is long enough to end in an ellipsis. The
+// second is the widest line the agents self-test fits at the side bar's least
+// width, so its elapsed time stays past a minute and its tool count past 9.
 function sampleRoster(now: number): RunningAgent[] {
   return [
     {

@@ -531,19 +531,19 @@ export interface PagePart<M extends PluginManifest = PluginManifest> {
 // that resolves outside it fails the self-test. `expect` is a line the page
 // logs once the write and the keys have run; `checksFit` also checks the page
 // fits the window's minimum width, or, as `'held'`, the width the step holds,
-// for what shows only while the window is wide (a side bar beside the view). `screenshot`, when set, saves a PNG of the
-// window once the step's line has been waited for, as
-// `<pluginId>-<screenshot>.png` in the run's screenshot folder; the name is
-// lowercase letters and digits in words joined by `-`. `why`, when set, says
-// what the step proves, and a failed step prints it after its group's.
-// `width`, when set, sets the window's content width before the write and the
-// keys, `'start'` meaning the width the self-test started on, and holds it,
-// the fit check returning to it, until a later step sets another or the script
-// ends, which restores the start width; a number is a positive integer.
-// `repeat`, when set, presses the keys again after each `expect` line until
-// the `until` line is logged, failing when `max` presses (the first included,
-// at least 2) have not reached it; its `screenshot` saves one PNG per press,
-// as `<pluginId>-<screenshot>-<n>.png`.
+// for what shows only while the window is wide (a side bar beside the view).
+// `screenshot`, when set, saves a PNG of the window once the step's line has
+// been waited for, as `<pluginId>-<screenshot>.png` in the run's screenshot
+// folder; the name is lowercase letters and digits in words joined by `-`.
+// `why`, when set, says what the step proves, and a failed step prints it after
+// its group's. `width`, when set, sets the window's content width before the
+// write and the keys, `'start'` meaning the width the self-test started on, and
+// holds it, the fit check returning to it, until a later step sets another or
+// the script ends, which restores the start width; a number is a positive
+// integer. `repeat`, when set, presses the keys again after each `expect` line
+// until the `until` line is logged, failing when `max` presses (the first
+// included, at least 2) have not reached it; its `screenshot` saves one PNG per
+// press, as `<pluginId>-<screenshot>-<n>.png`.
 export interface SelfTestStep {
   writeFile?: { path: string; text: string };
   keys: string[];

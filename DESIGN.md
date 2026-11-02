@@ -104,8 +104,8 @@ and a broken value is caught by the theme loader instead of shipping in a styles
   built-in base theme (Mocha) its value. A plugin token: declare its kind and default in the
   plugin's `themeTokens`. A one-off value in a stylesheet is a token not yet named.
 - **Raw values** live only in theme files. CSS may still write `0`, `1px` hairlines, percentages,
-  `fr` tracks, viewport units, unitless numbers, and breakpoints inside `@media` (CSS reads no
-  variable there; see **Breakpoints**). Code may write a unitless custom property on an element
+  `fr` tracks, viewport units, unitless numbers, and breakpoints inside `@media` and `@container`
+  (CSS reads no variable there; see **Breakpoints**). Code may write a unitless custom property on an element
   (`--ui-row-depth`, `--ui-split-start`) through `style.setProperty`, which the style check does not
   judge.
 
@@ -178,11 +178,13 @@ means something.
   dialogs and the composer. One radius on everything flattens the hierarchy.
 - **Separation:** gutters between sheets, hairlines on L1 edges, and shadows only on L3. A shadow on
   content makes it float when it should sit.
-- **Breakpoints** (raw in `@media`): `800px` tightens content padding; `680px` lays the side bar
+- **Breakpoints** (raw in `@media` and `@container`): `800px` tightens content padding; `680px` lays the side bar
   over the sheet instead of beside it, drawn no wider than reaches the window's edge while the
   user's width is kept; `640px` stacks a sheet's split panes. Every split pane has a
   least width (the Primer tab's card column `320px`, every other pane `160px` or more): a narrowing
   split gives up its start pane's width down to its least width first, then stacks at any window width.
+  A subagent line narrower than `180px` (its container query) wraps its elapsed time and tool count
+  to a second row under its description.
 
 ## Motion
 

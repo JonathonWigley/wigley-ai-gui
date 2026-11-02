@@ -17,6 +17,12 @@ export interface AgentsSelfTestDeps {
   sessions: Pick<SessionsMainExports, 'activate'>;
 }
 
+// `<Leader>zla` opens the agents layout preview, and closes it while it is
+// open; its session is named by its project folder. Page keys fire only while
+// no editor has focus, so the first opening leaves the box with Esc.
+const PREVIEW_KEYS = [' ', 'z', 'l', 'a'];
+const PREVIEW_NAME = 'Agents preview';
+
 // Types the text in insert mode, Esc to normal mode, where Enter in the box
 // sends.
 const sendKeys = (text: string) => ['i', ...text, 'Escape', 'Enter'];
@@ -37,7 +43,7 @@ const resizeSideBar = (direction: 'Left' | 'Right') => {
 const GROUPS: SelfTestGroup[] = [
   {
     name: 'subagent lines',
-    why: "A session whose agent spawns two subagents draws a line for each under its row (dot, type, description, elapsed, tool count), each fitting its row at the side bar's least width with its description showing, and an interrupt finishes them and the lines go.",
+    why: "A session whose agent spawns two subagents draws a line for each under its row (dot, type, description, elapsed, tool count); at the side bar's least width every line fits its row with its description showing, the preview's minutes-long, double-digit-tool line wrapping its elapsed time and tool count under the description; an interrupt finishes the subagents and their lines go.",
     steps: [
       {
         keys: sendKeys(FAKE_AGENTS_TEXT),
@@ -45,14 +51,20 @@ const GROUPS: SelfTestGroup[] = [
         checksFit: true,
         screenshot: 'subagent-lines',
       },
-      ...Array.from({ length: SIDE_BAR_STEPS_TO_LEAST - 1 }, () =>
+      ...Array.from({ length: SIDE_BAR_STEPS_TO_LEAST }, () =>
         resizeSideBar('Left'),
       ),
       {
-        ...resizeSideBar('Left'),
+        keys: ['Escape', ...PREVIEW_KEYS],
+        expect: `[agents] lines in ${PREVIEW_NAME}: 2`,
         checksFit: 'held',
         screenshot: 'subagent-lines-narrow',
-        why: "The fit check at the minimum width hides the side bar, so the lines are checked at the side bar's least width here.",
+        why: "The preview's sample roster holds the widest line (a long type, an elapsed time past a minute, 12 tools), checked beside this run's lines at the side bar's least width: the fit check at the minimum width hides the side bar.",
+      },
+      {
+        keys: PREVIEW_KEYS,
+        expect: `[sessions] activated ${SELFTEST_PROJECT_NAME}`,
+        why: "Closing the preview ends its row and the pane shows this run's session again, whose box the resize keys and the interrupt reach.",
       },
       ...Array.from({ length: SIDE_BAR_STEPS_TO_LEAST }, () =>
         resizeSideBar('Right'),
@@ -91,13 +103,15 @@ export function agentsSelfTestScript(deps: AgentsSelfTestDeps): SelfTestScript {
     // the transcript's live activity steps (the Agent calls carry the
     // subagents' prompts), end in an ellipsis inside their own boxes, as their
     // CSS says. The side bar handle's resize prompt shows past its box for a
-    // second after each resize step.
+    // second after each resize step, and the split handle of the preview
+    // pane's Docs tab holds its prompt, hidden until hovered, over both panes.
     scrollsItself: [
       '.agents-line-type',
       '.agents-line-description',
       '.session-row-status',
       '.chat-activity-step',
       '.shell-side-bar-handle',
+      '.ui-split-handle',
     ],
     open() {
       made ??= makeProject().catch((error: unknown) => {
