@@ -64,13 +64,15 @@ its saved transcript before its first new turn.
    page: sessionLineInput / rowLineInput — usage or zero line (`0k`), never null
 ```
 
-New session: the adapter's state starts with the context known (0 tokens), so its first `usage` event goes out when
-`get_context_usage` replies: `0k/300k`.
+New session: the adapter's state starts with the context known (0 tokens). It emits `0k` when the profile's settings
+read lands, then `0k/300k` when `get_context_usage` replies.
 
 Decisions:
 
 - Transcript is the restored session's source (round 1). Limit and spend arrive with the process.
 - The zero line reads `0k` (the user's word): `formatTokens(0)` returns `0k`, so a known limit reads `0k/300k`.
+- The transcript read folds every main reply, as the live process does, so the cache TTL an earlier reply wrote
+  survives a last reply that only read the cache.
 - Every row the part draws for gets a line, sessions usage does not track included.
 - The store ignores a `usage` event older (by `at`) than the one it keeps, so a slow transcript read never overwrites
   a live event.

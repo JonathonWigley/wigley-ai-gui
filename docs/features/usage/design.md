@@ -110,7 +110,8 @@ In `src/contracts/agent.ts`, beside `AgentHarness`:
   the profile's last `PlanUsage` by `kind`; a kind the poll has not reported yet is held until it does.
 - `AgentHarness.planUsage(profileDir)` — runs one poll and resolves its `PlanUsage`, or rejects with the reason.
 - `AgentHarness.lastUsage(sessionId, projectDir, profileDir)` — the main agent's `usage` event as the saved session's
-  last main reply left it: `at` is that reply's time, `contextTokens` and `cacheExpiresAt` come from that reply, and
+  main replies left it, folded in order as a live process folds them: `at` is the last main reply's time,
+  `contextTokens` and `cacheExpiresAt` come from those replies, and
   the window, both limits and spend are null, since only a running process knows them. It resolves null when the
   session has no main reply, and rejects, naming the path, when the transcript is missing.
 - `AgentProcessEvents.planUsage(update)` and `AgentProcessEvents.agentEvent(event)`.
