@@ -148,7 +148,7 @@ entry and the scheme; no task adds a `process.platform` check.
 
 ### Wave 1
 - [ ] [Registry announces a live default](01-registry-live-default.md)
-- [ ] [Scheme serves `<owner>/default/`](02-scheme-serves-default.md)
+- [x] [Scheme serves `<owner>/default/`](02-scheme-serves-default.md)
 - [ ] [Page loads a live default](03-page-loads-live-default.md)
 
 ### Wave 2
@@ -163,10 +163,14 @@ entry and the scheme; no task adds a `process.platform` check.
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 46f417b5
 
 ### Groups
+- 02 · 10b8f622 · diff read: both Produces signatures present; layout-url tests 17/17; typecheck clean on its files (worker, and the only tree error is task 03 WIP in draw-part.ts); oxfmt clean · concerns: npm run lint stops at check-styles on agent-strip.css:17 raw 2px, pre-existing at the review base
 ### Contract changes
 ### Rulings
+- layout-url.ts keeps its own private DEFAULT_NAME, as registry, draw-part and layout-parts each do — no shared export exists — a later pass may fold the four copies into one · group 02
+- main.ts passes () => null to serveLayoutScheme until task 04 wires the lookup — per the task doc — none · group 02
+- npm run lint fails at the review base on src/plugins/agent-strip/page/agent-strip.css:17 (check-styles raw-length, from 65d29099, outside this plan); lint proofs this run read check-styles output for the run's own files and run oxlint and oxfmt directly — not this plan's to fix — a real style failure in a run file could hide behind it · lead
 ### Review rounds
 ### Test gate

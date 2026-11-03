@@ -1,6 +1,6 @@
 # 01 — The registry announces a live default from the owner's default folder
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)

@@ -1,6 +1,6 @@
 # 02 — The `wigley-layout:` scheme serves `<owner>/default/` from the owner's default folder
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -59,3 +59,4 @@ These close gaps a cold reader found. Each binds as the Decisions above do.
 
 ## Proof
 
+Commit 10b8f622 · proof: diff read: both Produces signatures present; layout-url tests 17/17; typecheck clean on its files (worker, and the only tree error is task 03 WIP in draw-part.ts); oxfmt clean · concerns: npm run lint stops at check-styles on agent-strip.css:17 raw 2px, pre-existing at the review base

@@ -1,6 +1,6 @@
 # 03 — The page loads a live default, links the default stylesheet, and falls back to the bundled default
 
-Status: not started
+Status: in progress
 Type: Batch
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
