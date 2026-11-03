@@ -164,3 +164,4 @@ Review base: 495866206a2877ebce1a939c301f551fbe01d49b
 - added a Cmd+Enter-during-a-turn clause to § Chat tab beside the Enter session's wording — cost if wrong: drop the clause · group 04 · group 04
 ### Review rounds
 ### Test gate
+- src/plugins/chat, src/main/claude-code, fake-agent-harness.test, keymap.test, src/plugins/keys, agents, agent-lines, settings (the changed seams and every consumer of AgentProcess, the fake harness and the keymap); chat self-test --plugin chat run by group 03 after the main merge; whole self-test not run (anchor gap known, see 03 concerns) · 72 files, 1283 tests pass, no type errors
