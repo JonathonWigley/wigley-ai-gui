@@ -149,7 +149,7 @@ entry and the scheme; no task adds a `process.platform` check.
 ### Wave 1
 - [x] [Registry announces a live default](01-registry-live-default.md)
 - [x] [Scheme serves `<owner>/default/`](02-scheme-serves-default.md)
-- [ ] [Page loads a live default](03-page-loads-live-default.md)
+- [x] [Page loads a live default](03-page-loads-live-default.md)
 
 ### Wave 2
 - [ ] [Main wires the clone and each owner's default folder](04-main-wires-clone-defaults.md) — after 01, 02
@@ -168,6 +168,7 @@ Review base: 46f417b5
 ### Groups
 - 02 · 10b8f622 · diff read: both Produces signatures present; layout-url tests 17/17; typecheck clean on its files (worker, and the only tree error is task 03 WIP in draw-part.ts); oxfmt clean · concerns: npm run lint stops at check-styles on agent-strip.css:17 raw 2px, pre-existing at the review base
 - 01 · 71f55e08 · diff read: defaultFolder: Files | null on LayoutRegistryDeps present, entry rule as planned; registry tests 39/39; oxfmt clean; tree typecheck errors are task 03 WIP only · concerns: a throw from starting the default-folder watch rejects startLayoutRegistry, so the owner user layouts fail to start too (matches the user-folder watch); a default folder missing at start stays unwatched until the next start
+- 03 · e8dfeb96 · diff read: ShowLayoutOptions.defaultStylesheet, LayoutLoaderDeps.defaultStylesheet and DrawnPart.drewPick present; typecheck clean; layout-host, entry-list, primer-view, page-api tests 238/238; oxlint and oxfmt clean on its files (worker) · concerns: renderer.ts (shell) also took defaultStylesheet: null, for task 05 to fill; drawPart tests now overlap the new drewPick table rows, kept for their dataset asserts
 ### Contract changes
 ### Rulings
 - layout-url.ts keeps its own private DEFAULT_NAME, as registry, draw-part and layout-parts each do — no shared export exists — a later pass may fold the four copies into one · group 02
@@ -177,5 +178,10 @@ Review base: 46f417b5
 - the default folder is watched non-recursively, filtered to exactly layout.js and layout.css — none · group 01
 - task 04 waits for task 03 as well as 01 and 02: both edit src/contracts/plugin.ts (03 ShowLayoutOptions, 04 the MainApi layouts.register comment), which the wave check missed — a later 04 start costs only wall time · lead
 - Baseline captures (preflight) at 46f417b5 in worktree .claude/worktrees/live-defaults-baseline, run folder /Users/jonathonwigley/Documents/ai-dev/wigley-ai-gui/.claude/worktrees/live-defaults-baseline/.drive/20261103-003256-d044 (15 owners, screenshots/<name>.png; full replay notes in baseline-replay.md there), 1400x900, catppuccin-mocha, fake harness; drive commands in order, each 'npm run drive -- <cmd>': start ; setting theme '"catppuccin-mocha"' ; setting plugins.disabled '["usage-tab-line"]' ; restart ; resize 1400 900 ; do usage.seed '{"variant":"fresh"}' ; key Escape ; key Space z l a ; screenshot shell-chrome ; screenshot agent-lines-preview ; key Space z l o ; screenshot forms-preview ; key Escape ; key Space z l p ; screenshot primer-preview ; key Escape ; key Space z l c ; screenshot chat-preview ; key Escape ; key Space z l w ; key '<A-o>' ; screenshot workflow-preview ; key Escape ; key Space z l s ; screenshot sessions-preview ; key Escape ; key Space z l s ; key Escape ; key Space z g ; screenshot gallery ; key Escape ; key Space k , ; screenshot settings ; key Escape ; do docs.seed '{}' ; key Space k d ; screenshot docs ; key Escape ; key Space k b ; screenshot backlog ; key Escape ; key Space n n ; screenshot notes ; key Escape ; key Space k s ; key Space v u ; screenshot usage-details ; key Space '?' ; screenshot keys-help ; key Escape ; key Space ; screenshot keys-which-key ; key Escape ; quit. Visual has only the whole-window chat-preview capture (element screenshot failed UnknownVizError); if shell-chrome shows no Agents preview, press Space z l a once more · lead
+- src/renderer/plugins/page-api.test.ts (off the Files line) gained defaultStylesheet: null, since the required field broke its compile — none · group 03
+- chat entry-list adds isBundledView (!drewPick || pick is the bundled object) beside isDefaultView: redrawSlot branches on it, isDefaultView still drives the toast — one more boolean · group 03
+- the default stylesheet link is one element made at loader creation, attached only while it has an href, re-attached before the first user layout link — none · group 03
+- the part check reads plain object as isRecord from read-layout-module.ts — a bundled default holding an array or class instance would have its function members checked too · group 03
+- task 05 (Parallel, 16 owners x 3 files) splits into 9 workers by owner, an owner's three files never split: A agent-lines+agent-strip+src/declarations.d.ts, B backlog+gallery, C chat, D docs, E forms+keys, F notes+primer, G sessions+workflow, H settings+usage, I visual+shell; at most 5 workers run at once with task 04 — 6 files per worker is past the 5-file guide, kept to keep each owner whole · lead
 ### Review rounds
 ### Test gate

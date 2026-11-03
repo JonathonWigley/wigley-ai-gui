@@ -1,6 +1,6 @@
 # 04 — Main learns the clone path and wires each owner's default folder
 
-Status: not started
+Status: in progress
 Type: Batch
 Wave: 2 · Depends on: 01, 02
 Plan: [plan.md](plan.md)

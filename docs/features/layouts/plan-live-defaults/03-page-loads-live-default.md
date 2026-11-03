@@ -1,6 +1,6 @@
 # 03 — The page loads a live default, links the default stylesheet, and falls back to the bundled default
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -152,3 +152,4 @@ These close gaps a cold reader found. Each binds as the Decisions above do.
 
 ## Proof
 
+Commit e8dfeb96 · proof: diff read: ShowLayoutOptions.defaultStylesheet, LayoutLoaderDeps.defaultStylesheet and DrawnPart.drewPick present; typecheck clean; layout-host, entry-list, primer-view, page-api tests 238/238; oxlint and oxfmt clean on its files (worker) · concerns: renderer.ts (shell) also took defaultStylesheet: null, for task 05 to fill; drawPart tests now overlap the new drewPick table rows, kept for their dataset asserts

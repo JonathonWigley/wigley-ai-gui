@@ -1,6 +1,6 @@
 # 05 — Move each default's look CSS into `layouts/default/layout.css`
 
-Status: not started
+Status: in progress
 Type: Parallel
 Wave: 2 · Depends on: 03
 Plan: [plan.md](plan.md)
