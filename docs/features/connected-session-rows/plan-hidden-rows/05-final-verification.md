@@ -1,6 +1,6 @@
 # 05 — Final verification
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 04
 Plan: [plan.md](plan.md)
@@ -30,3 +30,4 @@ Commit:    none, unless a self-test step changes (then one commit for those step
 
 ## Proof
 
+Commit eb6f544b · proof: selftest all passed (818 PASS); full npm test pass; lint clean (c6352d51); live drive checks 1-6 PASS (no row at connect, round adds, submit removes, second round restores, cancel removes, owned keeps), check 7 (round+primer on one connected session) not reachable by drive — owned by presenter close-guard unit behaviour · concerns: cancel via <D-w> logs 'session close kept by main' then 'closeSession for session <id> with no row ignored' — the page's close request arrives after release removed the row; stale drive-actions.ts addAgentFormDriveActions header still says connect adds a row

@@ -113,7 +113,7 @@ through `AgentFormSessions`.
 
 ### Wave 3
 - [x] [Doc re-read](04-doc-re-read.md) — after 02, 03
-- [ ] [Final verification](05-final-verification.md) — after 04
+- [x] [Final verification](05-final-verification.md) — after 04
 
 ## Run log
 
@@ -124,11 +124,16 @@ Review base: d757831
 - 02 · def3f45 · diff read: release on AgentFormSessions present, presenter close releases after formClosed; worker typecheck clean; presenter test 12 pass; tree-wide typecheck re-run after 03 lands · concerns: none; presenter doc comment line runs past the file's width
 - 03 · 367e51d · diff read: four sessions deps typed Pick<'open'|'activate'>, openDocsFixtureSession at every reference; typecheck clean; full npm test 340 files / 5299 pass · concerns: touched docs/main/start.test.ts and usage selftest-script.test.ts outside the list (stubs retyped); open still emits sessions.connected so docs' per-session index source registers for the fixture
 - 04 · 5c54dac · diff read: AGENTS.md relay paragraph and docs-browser sidebar bullet match landed code; drive SKILL.md:62 true, unchanged; typecheck clean · concerns: presenter doc comment rewrap still leaves one line past width; docs-browser design.md sidebar bullet line past 120 cols; preview-round.ts:28 sample finding cites 'mark … with no row ignored', which no path emits now (fictional sample, left)
+- 05 · eb6f544b · selftest all passed (818 PASS); full npm test pass; lint clean (c6352d51); live drive checks 1-6 PASS (no row at connect, round adds, submit removes, second round restores, cancel removes, owned keeps), check 7 (round+primer on one connected session) not reachable by drive — owned by presenter close-guard unit behaviour · concerns: cancel via <D-w> logs 'session close kept by main' then 'closeSession for session <id> with no row ignored' — the page's close request arrives after release removed the row; stale drive-actions.ts addAgentFormDriveActions header still says connect adds a row
 ### Contract changes
 ### Rulings
 - addEntry takes a separate addsRow flag, equal to owned today — keeps the row rule apart from ownership — one redundant parameter if wrong · group 01 · group 01
 - activate on a known row-less session adds the row instead of logging 'activate … with no row ignored' — per the activate decision — a caller relying on that log line loses it · group 01 · group 01
 - presenter test fake logs release into the shared calls log and each close test asserts ['send formClosed','release app-1'] — one assertion covers once, id, order and none-for-gone — a test rewrite if wrong · group 02 · group 02
 - docs drive action keeps the name docs.connectSession and its connected/connects locals — renaming breaks drive scripts and docs — one more rename pass if wrong · group 03 · group 03
+- forms self-test idle Codex session opens owned in the background after the three rounds show, its unknown-layout round asked through a relay joining it — keeps row order and the refusal check — Codex row lands first if form shows go async · group 05
+- primer self-test: submit step expects the Layout preview activation via alsoExpect, the separate <D-w> close step removed — submit now releases the row — none, the run confirms it · group 05
+- lead ran oxfmt on src/plugins/docs/main/start.ts (editor-tooling-only) — lint flagged the import the rename shortened — none · lead
 ### Review rounds
 ### Test gate
+- full npm test at c6352d51 (340 files / 5299 tests; covers the planned picks session-list.test.ts and channel-presenter.test.ts, and the type check of 03) · pass; npm run selftest at eb6f544b · all passed (818 PASS) after the forms/primer step changes; npm run lint · clean after the oxfmt fix c6352d51
