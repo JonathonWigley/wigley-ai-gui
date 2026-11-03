@@ -956,7 +956,7 @@ function startApp() {
       const { store, userConfig } = await loadConfig(inputs.homeDir);
       onSelfTestExit('the config store', () => store.dispose());
       serveDataScheme(inputs.dataRoot, paths);
-      serveLayoutScheme(layoutsFolder(inputs.homeDir), paths);
+      serveLayoutScheme(layoutsFolder(inputs.homeDir), paths, () => null);
       const serveVisual = serveVisualScheme();
       ipcMain.handle(BRIDGE_CHANNELS.serveVisual, (_event, source: string) =>
         serveVisual(source),

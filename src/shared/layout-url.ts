@@ -23,14 +23,20 @@ export function layoutUrl(
   return `${LAYOUT_SCHEME}://${owner}/${encodeURIComponent(name)}/~${revision}/${encodedPath(path)}`;
 }
 
-// The file a `layoutUrl` names, `<layoutsRoot>/<owner>/<name>/<path>` joined
-// by `paths` with the revision dropped; null when `url` is not a layout URL
+// The name served from the owner's default folder rather than `layoutsRoot`.
+const DEFAULT_NAME = 'default';
+
+// The file a `layoutUrl` names, joined by `paths` with the revision dropped:
+// `<defaultFolderOf(owner)>/<path>` for the name `default`, else
+// `<layoutsRoot>/<owner>/<name>/<path>`. Null when `url` is not a layout URL
 // with an owner, a name and a revision, when the owner or the name is not one
-// plain segment, or when `decodedPathSegments` refuses the path.
+// plain segment, when `decodedPathSegments` refuses the path, or when the name
+// is `default` and `defaultFolderOf` returns null.
 export function layoutFilePath(
   url: string,
   layoutsRoot: string,
   paths: Paths,
+  defaultFolderOf: (owner: LayoutOwner) => string | null,
 ): string | null {
   const parsed = parsedSchemeUrl(url, LAYOUT_SCHEME);
   if (parsed === null) {
@@ -47,6 +53,12 @@ export function layoutFilePath(
   const pathSegments = decodedPathSegments(encodedPath);
   if (owner === null || name === null || pathSegments === null) {
     return null;
+  }
+  if (name === DEFAULT_NAME) {
+    const defaultFolder = defaultFolderOf(owner);
+    return defaultFolder === null
+      ? null
+      : paths.join(defaultFolder, ...pathSegments);
   }
   return paths.join(layoutsRoot, owner, name, ...pathSegments);
 }

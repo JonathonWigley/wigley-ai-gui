@@ -2,6 +2,7 @@ import { net, protocol } from 'electron';
 import { stat } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import type { LayoutOwner } from '../../contracts/layouts';
 import type { Paths } from '../../contracts/paths';
 import { DATA_SCHEME, dataFilePath } from '../../shared/data-url';
 import { LAYOUT_SCHEME, layoutFilePath } from '../../shared/layout-url';
@@ -67,11 +68,18 @@ export function serveDataScheme(dataRoot: string, paths: Paths): void {
   serveFiles(DATA_SCHEME, (url) => dataFilePath(url, dataRoot, paths));
 }
 
-// Serves each owner's layouts under `layoutsRoot` as `serveDataScheme` serves
-// plugin data: a URL outside a layout's folder, or naming anything but a
-// file, answers 404.
-export function serveLayoutScheme(layoutsRoot: string, paths: Paths): void {
-  serveFiles(LAYOUT_SCHEME, (url) => layoutFilePath(url, layoutsRoot, paths));
+// Serves each owner's layouts under `layoutsRoot`, and its `default` from the
+// folder `defaultFolderOf` names, as `serveDataScheme` serves plugin data: a
+// URL outside a layout's folder, a `default` whose owner has no default
+// folder, or a URL naming anything but a file, answers 404.
+export function serveLayoutScheme(
+  layoutsRoot: string,
+  paths: Paths,
+  defaultFolderOf: (owner: LayoutOwner) => string | null,
+): void {
+  serveFiles(LAYOUT_SCHEME, (url) =>
+    layoutFilePath(url, layoutsRoot, paths, defaultFolderOf),
+  );
 }
 
 // Serves each visual's document on the default session, kept in memory by
