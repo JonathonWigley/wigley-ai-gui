@@ -56,14 +56,15 @@ or touches their data, so start one whenever a check needs it.
 4. Capture and read: `screenshot` saves the window, or one element by selector, under the run
    folder; Read the PNG. `query` returns a selector's text, box and computed style.
 5. `npm run drive -- quit` when done; it waits for the ui-state write, part disposal and any
-   recording to finish before the app exits, then deletes the run's `home/` and `user-data/`, so
-   its test repos leave the machine's docs index: `screenshots/`, `videos/` and `app.log` stay for
-   reading back. Every `start` deletes each other run folder untouched for over a day whose app is
+   recording to finish and ends the run's Claude sessions before the app exits, then deletes the
+   run's `home/` and `user-data/`, so its test repos leave the machine's docs index: `screenshots/`,
+   `videos/` and `app.log` stay for reading back. Every `start` deletes each other run folder untouched for over a day whose app is
    not running. `.drive/` is git-ignored.
 
 A page edit hot reloads into a running run. A main-process edit needs `restart`, which keeps the
 temp home and the start flags and does not copy the user config again, so a check that something
-survives a restart runs the same way. The docs fixture survives a `restart` as the agent left it;
+survives a restart runs the same way. `restart` also keeps the run's Claude sessions running on
+the session host and re-attaches them. The docs fixture survives a `restart` as the agent left it;
 `docs.seed` and `docs.connectSession` rewrite it (`loadStates: true` on either adds one doc per
 index load state other than `launch`, under `.claude/load-states/`; `indexDelayMs: <ms>` makes the
 stand-in `docs_index.py` wait that long before answering, so an in-app create, rename or trash

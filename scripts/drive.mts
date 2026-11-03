@@ -76,7 +76,7 @@ async function main(invocation: DriveInvocation): Promise<void> {
     await restart(currentRun(invocation.run));
   } else if (invocation.kind === 'quit') {
     const runId = currentRun(invocation.run);
-    await stop(runId);
+    await stop(runId, {});
     removeQuitEntries(runId);
   } else if (invocation.kind === 'help') {
     await printHelp(invocation.run);
@@ -387,11 +387,11 @@ async function sendAndPrint(
   console.log(JSON.stringify(reply.result, null, 2));
 }
 
-// Stops the run's app, then starts it again into the same run folder with the
-// flags its start recorded.
+// Stops the run's app, its hosted processes left running, then starts it again
+// into the same run folder with the flags its start recorded.
 async function restart(runId: string): Promise<void> {
   const { packaged, harness, userConfig } = readStartFile(runId);
-  await stop(runId);
+  await stop(runId, { keepSessions: true });
   await start(runId, { packaged, harness, userConfig }, false);
 }
 
@@ -400,8 +400,12 @@ async function restart(runId: string): Promise<void> {
 // itself stuck, its processes are terminated instead (an app still holding
 // its quit takes that SIGTERM as a second quit and exits). A recorded pid
 // that is alive but no longer the run's, as after a crash left the files
-// behind and the pid was reused, is skipped and named.
-async function stop(runId: string): Promise<void> {
+// behind and the pid was reused, is skipped and named. `quitArgs` are the `quit`
+// command's.
+async function stop(
+  runId: string,
+  quitArgs: { keepSessions?: boolean },
+): Promise<void> {
   const runDir = runDirOf(runId);
   const startFile = readStartFile(runId);
   const drive = readDriveFile(runDir);
@@ -415,7 +419,7 @@ async function stop(runId: string): Promise<void> {
     }
     return !isOthers;
   });
-  await send(runId, 'quit', {}, ANSWER_CHECK_MS);
+  await send(runId, 'quit', quitArgs, ANSWER_CHECK_MS);
   if (!(await waitForExit(pids))) {
     console.log(
       `Run ${runId} did not quit within ${QUIT_TIMEOUT_MS / 1000} s; terminating it`,

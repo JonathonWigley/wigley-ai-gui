@@ -591,6 +591,85 @@ function replyLine(
   };
 }
 
+describe('transcriptEntries before', () => {
+  const T0 = Date.parse('2026-01-01T00:00:00Z');
+  const typed = (uuid: string, at?: number) =>
+    userLine(
+      uuid,
+      uuid,
+      at === undefined ? {} : { timestamp: new Date(at).toISOString() },
+    );
+  const threeLines = [
+    typed('a', T0),
+    typed('b', T0 + 1000),
+    typed('c', T0 + 2000),
+  ];
+  const toolUse = assistantLine(
+    'call',
+    { type: 'tool_use', id: 't1', name: 'Read', input: {} },
+    new Date(T0).toISOString(),
+  );
+  const toolResult = userLine(
+    'answer',
+    [{ type: 'tool_result', tool_use_id: 't1', content: 'done' }],
+    { timestamp: new Date(T0 + 2000).toISOString() },
+  );
+  const A = { id: 'history:a' };
+  const B = { id: 'history:b' };
+
+  it.each([
+    {
+      case: 'none',
+      lines: threeLines,
+      before: null,
+      expected: [A, B, { id: 'history:c' }],
+    },
+    {
+      case: 'between',
+      lines: threeLines,
+      before: T0 + 1500,
+      expected: [A, B],
+    },
+    {
+      case: 'at a line',
+      lines: threeLines,
+      before: T0 + 1000,
+      expected: [A],
+    },
+    {
+      case: 'no timestamp after a cut line',
+      lines: [...threeLines, typed('d')],
+      before: T0 + 1500,
+      expected: [A, B],
+    },
+    {
+      case: 'tool result after the cut',
+      lines: [toolUse, toolResult],
+      before: T0 + 1500,
+      expected: [{ kind: 'tool', toolUseId: 't1', result: null }],
+    },
+    {
+      case: 'unparseable line after a cut line',
+      lines: [...threeLines, 'oops'],
+      before: T0 + 1500,
+      expected: [A, B],
+    },
+    {
+      case: 'unparseable line before the cut',
+      lines: [threeLines[0], 'oops', threeLines[1], threeLines[2]],
+      before: T0 + 1500,
+      expected: [A, { kind: 'raw', id: 'history:line-2', at: T0 }, B],
+    },
+  ])(
+    'transcriptEntries_Before_KeepsLinesRecordedEarlier ($case)',
+    ({ lines, before, expected }) => {
+      expect(transcriptEntries(jsonl(lines), before)).toEqual(
+        expected.map((entry) => expect.objectContaining(entry)),
+      );
+    },
+  );
+});
+
 describe('mainReplies', () => {
   it.each([
     {

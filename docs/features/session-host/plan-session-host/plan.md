@@ -289,7 +289,7 @@ Task 01 sets `replayed: false` at every `ChatAgentEvent` emitter in the tree (ch
 
 ### Wave 2
 - [x] [Claude adapter pipe fold](05-claude-pipe-fold.md) — after 01
-- [ ] [Session host process](06-session-host-process.md) — after 01, 02
+- [x] [Session host process](06-session-host-process.md) — after 01, 02
 - [x] [Session host client](07-session-host-client.md) — after 01, 02
 - [x] [Agents log and workflow skip replayed events](10-agents-replayed.md) — after 01
 
@@ -317,6 +317,7 @@ Review base: 7f956435
 - 03 · marketplace:524438dd · diff read; all Produces present; forms suite 63 tests OK (2 Windows-only skipped); manifest check run after commit; Windows lookup not run (user's check) · concerns: cancel-then-new-call lets that call start the app inside the 30 s window, harmless under the single-instance lock; narrow race leaves such a call needs_manual_open; _reconnecting stays True after close; refused-hello test at 2.0 s does not catch dropping the refusal stop
 - 05 · 5b2ec6e5 · diff read; all Produces present; typecheck clean in claude-code; claude-code tests 404 passed · concerns: a send from idle gives one activity effect where the task says none (required by the activity sync); an error event with a pid now emits idle before ended, not on the task's list, named in the commit; HostedSpawn.id is sessionId until 08 switches to processId; a live init with no slash_commands replays a commands effect holding []; hasEmittedEnded guard cannot trigger today, 08 can drop it
 - 07 · 4a9d6ee0 · diff read; Produces present; typecheck clean in its files; session-host client tests 27 passed; not yet run against task 06's real host · concerns: duplicate-id spawn differs from 01's fake (client replaces events, fake keeps the old ones live); current host's list, subscribe and stopAll have no reply timeout, so task 09's list timeout is the only bound; a detached entry stays in the client's map until host death or close; a corrupt middle log line takes the read-failure path
+- 06 · b4b193de · diff read; typecheck clean in its files; session-host tests 58 passed; worker's packaged asar probe passed; not run on Windows · concerns: a pipe log create or append failure (disk full) ends the host and every session; a known message type missing fields throws and ends the host; close waits on stdio, so a grandchild holding the pipes keeps a process, its host and a stopAll reply past SIGKILL; exit-after-push not run live and a Windows pipe might lose the last closed; a dead older record costs up to 2000 ms each start; session-host-test-doubles.ts is an extra file beside production code
 ### Contract changes
 ### Rulings
 - Marketplace review base is cbd8a9e; git fetch fails in this session (SSH key unavailable), so origin was not checked; neither main showed behind at the last fetch and nothing is pushed — a stale origin would surface at push · lead
@@ -338,5 +339,10 @@ Review base: 7f956435
 - close() flushes with destroySoon and resolves once each socket closes, so a drain or unsubscribe reaches the host — a stopped host with a full buffer could hold close() open, so task 08 bounds it at quit if it awaits it · group 07 · group 07
 - A spawn of an id already held replaces the events like an attach, and the host's refusal closed goes to the new events · group 07 · group 07
 - The older-host sweep on connect skips drained records and never connects to a newer one — a stale record is deleted only by the next list() · group 07 · group 07
+- A process's idle moment counts only on a busy-to-idle change, so a second result line does not restart the keep window — a process could end slightly earlier than a refreshing reading · group 06 · group 06
+- A child error before it ran reads as child.pid undefined; an error with a pid goes to the diagnostic log and close still closes it — such a child that never closes would stay in the table · group 06 · group 06
+- A synchronous spawn throw closes that id and removes its log, since a throw would end the host and every session · group 06 · group 06
+- Keep window delay is capped at 2^31-1 ms, since setTimeout fires at once past it — a window above 24.8 days ends at 24.8 days · group 06 · group 06
+- The uncaught handler and listen failure write the diagnostic log even in a host that does not own the channel — a stray line in a live host's log if wrong · group 06 · group 06
 ### Review rounds
 ### Test gate

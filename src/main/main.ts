@@ -101,6 +101,8 @@ import {
   type LayoutService,
 } from './layouts/layout-service';
 import { resolveCloneDir } from './resolve-clone-dir';
+import { createSessionHostClient } from './session-host/session-host-client';
+import { sessionHostChannel } from './session-host/session-host-channel';
 import { createMainApi } from './plugins/main-api';
 import { createPageLog } from './page-log';
 import { createPastedFiles } from './pasted-files';
@@ -189,15 +191,17 @@ interface ModeServicesContext {
   store: ConfigStore;
   homeDir: string;
   log: Log;
+  sessionHost: SessionHost;
 }
 
 // Claude Code run as the user of `homeDir`, its command and profile folders
-// expanded against that home.
+// expanded against that home, its sessions on `host`.
 function claudeHarness(
   store: ConfigStore,
   homeDir: string,
   env: NodeJS.ProcessEnv,
   log: Log,
+  host: SessionHost,
 ) {
   return createClaudeCodeHarness({
     command: () =>
@@ -205,6 +209,7 @@ function claudeHarness(
     permissionTool: CLAUDE_PERMISSION_TOOL,
     env,
     log,
+    host,
     spawn,
     files,
     homeDir,
@@ -234,10 +239,10 @@ function endpointEnv(endpointHome: string): NodeJS.ProcessEnv {
 function liveServices(): ModeServices {
   return {
     trashItem: (file) => shell.trashItem(file),
-    forWindow: ({ window, store, homeDir, log }) => ({
+    forWindow: ({ window, store, homeDir, log, sessionHost }) => ({
       alerts: createElectronAlerts(window, log),
       agentHarnesses: [
-        claudeHarness(store, homeDir, endpointEnv(homeDir), log),
+        claudeHarness(store, homeDir, endpointEnv(homeDir), log, sessionHost),
       ],
       window: windowService(window),
       openExternal: gateExternalLinks((url) => shell.openExternal(url)),
@@ -276,12 +281,18 @@ function offscreenRunServices(
 // folder in the run's home.
 function driveHarness(
   name: DriveHarnessName,
-  { store, homeDir, log }: ModeServicesContext,
+  { store, homeDir, log, sessionHost }: ModeServicesContext,
 ): AgentHarness {
   if (name === 'fake') {
     return createFakeAgentHarness(clock, files, timers);
   }
-  return claudeHarness(store, os.homedir(), endpointEnv(homeDir), log);
+  return claudeHarness(
+    store,
+    os.homedir(),
+    endpointEnv(homeDir),
+    log,
+    sessionHost,
+  );
 }
 
 function modeServicesOf(environment: RunEnvironment): ModeServices {
@@ -305,16 +316,6 @@ const timers: Timers = {
   clear: (handle) => clearTimeout(handle),
 };
 const modeServices = modeServicesOf(runEnvironment);
-const unwiredSessionHost: SessionHost = {
-  spawn() {
-    throw new Error('no session host is wired yet');
-  },
-  attach: async () => null,
-  list: async () => [],
-  setKeepIdleMinutes() {},
-  stopAll: async () => {},
-};
-
 const files = createNodeFiles({ trashItem: modeServices.trashItem });
 const processes = createNodeProcesses();
 const randomHex: RandomHex = () => randomBytes(4).toString('hex');
@@ -478,6 +479,14 @@ function dataFolder(homeDir: string): string {
   return runMode === 'live'
     ? path.join(app.getPath('userData'), 'plugins')
     : path.join(homeDir, 'plugin-data');
+}
+
+// The session host's folder: the app instance's, or a drive run's, own user data;
+// in the self-test, whose user data every self-test shares, its temp home.
+function sessionHostFolder(homeDir: string): string {
+  return runMode === 'selfTest'
+    ? path.join(homeDir, 'session-host')
+    : path.join(app.getPath('userData'), 'session-host');
 }
 
 // The app's ui-state file; outside a live run it sits inside the run's own
@@ -728,6 +737,7 @@ function createWindow(
   inputs: StartInputs,
   store: ConfigStore,
   userConfig: UserConfig,
+  sessionHost: SessionHost,
 ) {
   const startConfig = store.current();
   const window = createMainWindow(
@@ -776,9 +786,19 @@ function createWindow(
   // On a normal quit a quit task disposes the parts that started; a failed
   // start outside the self-test exits through failStart, which skips the quit
   // tasks. In the self-test each part's dispose joins the teardown as the part
-  // starts, so an exit at any point disposes the parts started by then.
+  // starts, so an exit at any point disposes the parts started by then. A live
+  // quit leaves every hosted process running; a drive run stops them after the
+  // parts' dispose, so chat has detached and sees no `closed`, unless its `quit`
+  // command kept them for a `restart`.
   const startedParts: MainStart<PluginManifest>[] = [];
-  onQuit(() => disposeParts(startedParts));
+  let stopsSessionsOnQuit = runMode === 'drive';
+  onQuit(async () => {
+    await disposeParts(startedParts);
+    if (stopsSessionsOnQuit) {
+      await sessionHost.stopAll();
+    }
+  });
+  onSelfTestExit('the session host', () => sessionHost.stopAll());
   const driveRun =
     inputs.driveRunDir === null
       ? null
@@ -791,7 +811,10 @@ function createWindow(
           processes,
           randomHex,
           configChanged: (listener) => store.onChanged(listener),
-          quit: () => app.quit(),
+          quit: (keepSessions) => {
+            stopsSessionsOnQuit = !keepSessions;
+            app.quit();
+          },
           log,
         });
   if (driveRun !== null) {
@@ -831,12 +854,13 @@ function createWindow(
       images: nativeImageEncoder,
       runMode,
       appInstance,
-      sessionHost: unwiredSessionHost,
+      sessionHost,
       ...modeServices.forWindow({
         window,
         store,
         homeDir: inputs.homeDir,
         log,
+        sessionHost,
       }),
     },
     selfTest,
@@ -1003,7 +1027,23 @@ function startApp() {
       ipcMain.handle(BRIDGE_CHANNELS.serveVisual, (_event, source: string) =>
         serveVisual(source),
       );
-      createWindow(inputs, store, userConfig);
+      const sessionHost = createSessionHostClient({
+        folder: sessionHostFolder(inputs.homeDir),
+        channel: sessionHostChannel(
+          process.platform,
+          inputs.homeDir,
+          os.userInfo().username,
+          appInstance.id,
+        ),
+        hostScript: path.join(__dirname, 'session-host.js'),
+        execPath: process.execPath,
+        env: process.env,
+        spawn,
+        clock,
+        timers,
+        log: pageLog.log,
+      });
+      createWindow(inputs, store, userConfig, sessionHost);
       // After createWindow's quit tasks, so the parts dispose before it.
       onQuit(() => store.dispose());
       app.on('activate', () => mainWindow?.show());

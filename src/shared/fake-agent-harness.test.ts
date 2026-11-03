@@ -13,6 +13,7 @@ import type { Timers } from '../contracts/ambient';
 import type { Files } from '../contracts/files';
 import {
   createFakeAgentHarness,
+  type FakeAttachScript,
   FAKE_AGENTS_TEXT,
   FAKE_END_TEXT,
   FAKE_HISTORY_IMAGES,
@@ -41,6 +42,8 @@ import {
 } from './sample-visuals';
 
 const clock = { now: () => 1000 };
+// The second fake history entry's `at`.
+const FAKE_HISTORY_AT_SECOND = 1767236646000;
 
 const request: AgentStart = {
   processId: 'p-1',
@@ -1297,6 +1300,7 @@ describe('createFakeAgentHarness', () => {
         sessionId: null,
         projectDir: '/a',
         profileDir: '/p',
+        before: null,
       },
     ]);
   });
@@ -1335,30 +1339,47 @@ describe('createFakeAgentHarness', () => {
       'cannot read',
     );
     expect(await harness.history(known, '/a', null, null)).toHaveLength(2);
+    const cut = FAKE_HISTORY_AT_SECOND;
+    expect(
+      (await harness.history(known, '/a', null, cut)).map(
+        (entry) => entry.kind,
+      ),
+    ).toEqual(['user']);
     expect(harness.pastSessionCalls).toEqual([
       {
         method: 'history',
         sessionId: known,
         projectDir: '/a',
         profileDir: null,
+        before: null,
       },
       {
         method: 'history',
         sessionId: 'nope',
         projectDir: '/a',
         profileDir: null,
+        before: null,
       },
       {
         method: 'history',
         sessionId: known,
         projectDir: '/a',
         profileDir: null,
+        before: null,
       },
       {
         method: 'history',
         sessionId: known,
         projectDir: '/a',
         profileDir: null,
+        before: null,
+      },
+      {
+        method: 'history',
+        sessionId: known,
+        projectDir: '/a',
+        profileDir: null,
+        before: FAKE_HISTORY_AT_SECOND,
       },
     ]);
   });
@@ -1440,6 +1461,124 @@ describe('createFakeAgentHarness', () => {
       ),
     ).toBe(true);
     expect(isFakeAgentHarness(other)).toBe(false);
+  });
+});
+
+describe('createFakeAgentHarness attach and detach', () => {
+  const replayedEntry: ChatEntry = {
+    kind: 'notice',
+    id: 'replayed',
+    at: 1000,
+    text: 'replayed',
+    tone: 'info',
+    raw: [],
+  };
+  const replayOne = (events: AgentProcessEvents) => events.entry(replayedEntry);
+
+  function attachRig() {
+    const harness = createFakeAgentHarness(
+      clock,
+      createMemoryFiles(),
+      FAKE_MICROTASK_TIMERS,
+    );
+    return { harness, ...recordingEvents() };
+  }
+
+  it.each([
+    { case: 'no script', script: null, resolved: 'null' },
+    { case: 'null', script: { outcome: 'null' }, resolved: 'null' },
+    {
+      case: 'reject',
+      script: { outcome: 'reject', message: 'gone' },
+      resolved: 'gone',
+    },
+    {
+      case: 'process',
+      script: { outcome: 'process', replay: replayOne },
+      resolved: 'process',
+    },
+  ] as { case: string; script: FakeAttachScript | null; resolved: string }[])(
+    'attach_Scripted_ResolvesAsSet ($case)',
+    async ({ script, resolved }) => {
+      const { harness, events, heard, agentEvents } = attachRig();
+      if (script !== null) {
+        harness.scriptAttach('p-1', script);
+      }
+
+      const outcome = await harness.attach(request, events).then(
+        (process) => (process === null ? 'null' : 'process'),
+        (error: Error) => error.message,
+      );
+      const heardBeforeResolve = [...heard];
+      await flush();
+
+      expect(outcome).toBe(resolved);
+      expect(harness.attachCalls).toEqual([request]);
+      if (resolved === 'process') {
+        expect(heardBeforeResolve).toEqual([['entry', replayedEntry]]);
+        expect(harness.processes[0].attached).toBe(true);
+        expect(agentEvents).toEqual([]);
+        expect(heard).toEqual(heardBeforeResolve);
+      } else {
+        expect(heard).toEqual([]);
+        expect(harness.processes).toEqual([]);
+      }
+    },
+  );
+
+  it('attach_Scripted_ScriptIsUsedOnce', async () => {
+    const { harness, events } = attachRig();
+    harness.scriptAttach('p-1', { outcome: 'process', replay: replayOne });
+
+    await harness.attach(request, events);
+
+    expect(await harness.attach(request, events)).toBeNull();
+    expect(harness.attachCalls).toHaveLength(2);
+  });
+
+  it('attach_Scripted_TurnsContinueTheReplayedIds', async () => {
+    const { harness, events } = attachRig();
+    harness.scriptAttach('p-1', {
+      outcome: 'process',
+      turns: 2,
+      replay: replayOne,
+    });
+
+    const agent = await harness.attach(request, events);
+
+    expect(agent?.send({ text: 'hi', images: [] })).toBe('user-3');
+  });
+
+  it('detach_StopsEventsAndRefusesCalls', async () => {
+    const { agent, heard, agentEvents, record } = await startedProcess();
+    agent.send({ text: FAKE_HOLD_TEXT, images: [] });
+    await flush();
+    agent.interrupt();
+    agent.detach();
+    heard.length = 0;
+    agentEvents.length = 0;
+
+    await flush();
+    expect(() => agent.send({ text: 'hi', images: [] })).toThrow(
+      'fake agent process has detached',
+    );
+    expect(() => agent.interrupt()).toThrow('fake agent process has detached');
+    expect(() => agent.setControl('mode', 'plan')).toThrow(
+      'fake agent process has detached',
+    );
+    agent.kill();
+    await agent.end();
+    await flush();
+
+    expect(heard).toEqual([]);
+    expect(agentEvents).toEqual([]);
+    expect(record.detached).toBe(true);
+    expect(record.calls).toContainEqual({ method: 'detach' });
+    expect(record.calls.slice(0, 3)).toEqual([
+      { method: 'send', text: FAKE_HOLD_TEXT, imageCount: 0 },
+      { method: 'interrupt' },
+      { method: 'detach' },
+    ]);
   });
 });
 

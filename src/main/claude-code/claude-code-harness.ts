@@ -1,6 +1,4 @@
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
-import { createInterface } from 'node:readline';
-import type { Readable } from 'node:stream';
 import {
   type AccountStatus,
   type AgentEvent,
@@ -23,9 +21,15 @@ import type {
   HostedProcess,
   HostedProcessEvents,
   HostedSpawn,
+  IdleRule,
+  PipeLine,
+  SessionHost,
 } from '../../contracts/session-host';
 import { errorText } from '../../shared/error-text';
-import { loadAgentDefinitions } from './agent-definitions';
+import {
+  type AgentDefinitions,
+  loadAgentDefinitions,
+} from './agent-definitions';
 import { readAccountStatus, signInLink } from './claude-auth';
 import { claudeConfigFolder, claudeEnv, claudeLaunch } from './claude-launch';
 import {
@@ -50,6 +54,8 @@ import {
   type FoldStep,
   foldPipeLine,
   foldUsageInput,
+  replayPipeLog,
+  type SessionFoldState,
 } from './session-fold';
 import {
   configuredPercent,
@@ -64,15 +70,17 @@ export type ClaudeSpawn = (
   options: { cwd: string; env: NodeJS.ProcessEnv },
 ) => ChildProcessWithoutNullStreams;
 
-// `command` reads the `claude` binary's path, once per spawned session;
+// `host` runs each session's `claude` process, so it outlives the app; `spawn`
+// runs the one-shot commands, which must not. `command` reads the `claude`
+// binary's path, once per session process;
 // `permissionTool` the MCP tool Claude asks what the session's permission mode
 // would still prompt; `env` the environment the process inherits; `files` reads
 // saved transcripts, `homeDir` holds the default config folder `.claude`, is
 // what a `~` profile folder resolves against and is where `claude auth` and
 // `claude -p /usage` run, and `paths` joins and compares paths by the rules of
-// the OS `claude` runs on; `clock` gives each pipe line its `at`, which stamps
-// the entries and agent events the line folds to; `randomUuid` gives each stdin
-// user message its `uuid`. `files` also
+// the OS `claude` runs on; `clock` gives each line this harness writes its `at`,
+// which stamps the entries and agent events the line folds to; `randomUuid`
+// gives each stdin user message its `uuid`. `files` also
 // reads the profile's `settings.json` and the agent definitions at each session
 // start.
 export interface ClaudeCodeHarnessDeps {
@@ -80,6 +88,7 @@ export interface ClaudeCodeHarnessDeps {
   permissionTool: string;
   env: NodeJS.ProcessEnv;
   log: Log;
+  host: SessionHost;
   spawn: ClaudeSpawn;
   files: Files;
   homeDir: string;
@@ -88,6 +97,8 @@ export interface ClaudeCodeHarnessDeps {
   randomUuid: RandomUuid;
 }
 
+// A stdout line of type `result` ends a turn.
+export const CLAUDE_IDLE_RULE: IdleRule = { key: 'type', value: 'result' };
 // How long `end` waits after closing stdin before SIGTERM, and again before
 // SIGKILL.
 const END_GRACE_MS = 3000;
@@ -133,70 +144,50 @@ function definedEnv(env: NodeJS.ProcessEnv): Record<string, string> {
   );
 }
 
-// The `claude` child as a `HostedProcess`. `seq` counts over stdout and stderr
-// together; `closed` fires once, on an `error` event at once, with or without a
-// pid.
-function spawnDirect(
-  deps: ClaudeCodeHarnessDeps,
-  request: HostedSpawn,
-  events: HostedProcessEvents,
-): HostedProcess {
-  const child = deps.spawn(request.command, request.args, {
-    cwd: request.cwd,
-    env: request.env,
-  });
-  let seq = 0;
-  let hasClosed = false;
-  let isDetached = false;
+// Calls `events` for an effect that only reports; the others call nothing.
+function reportEffect(events: AgentProcessEvents, effect: FoldEffect) {
+  switch (effect.kind) {
+    case 'entry':
+      events.entry(effect.entry);
+      break;
+    case 'agentEvent':
+      events.agentEvent(effect.event);
+      break;
+    case 'controls':
+      events.controls(effect.controls);
+      break;
+    case 'activity':
+      events.activity(effect.activity);
+      break;
+    case 'commands':
+      events.commands(effect.commands);
+      break;
+    case 'planUsage':
+      events.planUsage(effect.update);
+      break;
+    case 'messageDropped':
+      events.messageDropped(effect.entryId);
+      break;
+    case 'requestContextUsage':
+    case 'refuseHostRequest':
+    case 'log':
+      break;
+  }
+}
 
-  const readLines = (input: Readable, dir: 'out' | 'err') => {
-    createInterface({ input }).on('line', (text) => {
-      seq += 1;
-      if (!isDetached) {
-        events.line({ seq, dir, at: deps.clock.now(), text });
-      }
-    });
-  };
-
-  const close = (exit: HostedExit) => {
-    if (hasClosed || isDetached) {
-      return;
-    }
-    hasClosed = true;
-    events.closed(exit);
-  };
-
-  readLines(child.stdout, 'out');
-  readLines(child.stderr, 'err');
-  child.stdin.on('error', (error) => deps.log('claude', errorText(error)));
-  child.on('close', (code: number | null, signal: NodeJS.Signals | null) =>
-    close({ code, signal, error: null }),
-  );
-  child.on('error', (error: Error) =>
-    close({ code: null, signal: null, error: error.message }),
-  );
-
-  return {
-    id: request.id,
-    write(text) {
-      if (!isDetached) {
-        child.stdin.write(`${text}\n`);
-      }
-    },
-    endInput() {
-      if (!isDetached) {
-        child.stdin.end();
-      }
-    },
-    kill(signal) {
-      if (!isDetached) {
-        child.kill(signal);
-      }
-    },
-    detach() {
-      isDetached = true;
-    },
-  };
+// What `start` and `attach` share of one session process: the process object
+// and the parts each calls in its own order.
+interface ClaudeSession {
+  process: AgentProcess;
+  // Fold each line and run its effects, or end the process on `closed`.
+  pipeEvents: HostedProcessEvents;
+  // What a new process emits first, then its first context request.
+  open(): void;
+  // Arms the live grace timer for `state.graceDeadline`.
+  syncGraceTimer(): void;
+  requestContextUsage(): void;
+  // Starts the two reads no pipe line records.
+  readUsageInputs(): void;
 }
 
 // One `claude` process in stream-json mode, its state a fold over its pipe lines
@@ -208,12 +199,19 @@ function spawnDirect(
 // sent message's user entry waits for its `started` line, or for the init that
 // fixes fallback mode; a message ended before it started is reported through
 // `messageDropped`, and one still held when the process closes is dropped
-// silently. Once the process has closed, nothing more is emitted or written.
-function startClaudeProcess(
+// silently. Once the process has closed or detached, nothing more is emitted or
+// written; a detached process keeps running on the host. `connect` gives the
+// hosted process these pipe events go with.
+function createClaudeSession(
   deps: ClaudeCodeHarnessDeps,
   request: AgentStart,
   events: AgentProcessEvents,
-): AgentProcess {
+  state: SessionFoldState,
+  connect: (
+    spawnRequest: HostedSpawn,
+    pipeEvents: HostedProcessEvents,
+  ) => HostedProcess,
+): ClaudeSession {
   const launch = claudeLaunch(
     request,
     deps.permissionTool,
@@ -222,10 +220,17 @@ function startClaudeProcess(
     deps.paths,
   );
   const command = deps.command();
-  const state = createSessionFoldState(request);
+  const spawnRequest: HostedSpawn = {
+    id: request.processId,
+    command,
+    args: launch.args,
+    cwd: launch.cwd,
+    env: definedEnv(launch.env),
+    idleRule: CLAUDE_IDLE_RULE,
+  };
   let isEndCalled = false;
   let hasClosed = false;
-  let hasEmittedEnded = false;
+  let isDetached = false;
   let endPromise: Promise<void> | null = null;
   const closeWaiters: (() => void)[] = [];
   const timers: ReturnType<typeof setTimeout>[] = [];
@@ -234,8 +239,14 @@ function startClaudeProcess(
   let armedGraceDeadline: number | null = null;
 
   // Every emission goes through the microtask queue, so events keep the
-  // order of the calls and lines that caused them.
-  const emit = (emission: () => void) => queueMicrotask(emission);
+  // order of the calls and lines that caused them; one still queued at a detach
+  // is dropped.
+  const emit = (emission: () => void) =>
+    queueMicrotask(() => {
+      if (!isDetached) {
+        emission();
+      }
+    });
 
   const emitAgentEvent = (event: AgentEvent) =>
     emit(() => events.agentEvent(event));
@@ -281,27 +292,6 @@ function startClaudeProcess(
 
   const runEffect = (effect: FoldEffect) => {
     switch (effect.kind) {
-      case 'entry':
-        emit(() => events.entry(effect.entry));
-        break;
-      case 'agentEvent':
-        emitAgentEvent(effect.event);
-        break;
-      case 'controls':
-        emit(() => events.controls(effect.controls));
-        break;
-      case 'activity':
-        emitActivity(effect.activity);
-        break;
-      case 'commands':
-        emit(() => events.commands(effect.commands));
-        break;
-      case 'planUsage':
-        emit(() => events.planUsage(effect.update));
-        break;
-      case 'messageDropped':
-        emit(() => events.messageDropped(effect.entryId));
-        break;
       case 'requestContextUsage':
         if (!isEndCalled && !hasClosed) {
           requestContextUsage();
@@ -320,11 +310,13 @@ function startClaudeProcess(
       case 'log':
         deps.log('claude', effect.text);
         break;
+      default:
+        emit(() => reportEffect(events, effect));
     }
   };
 
   const runStep = (step: FoldStep) => {
-    if (hasClosed) {
+    if (hasClosed || isDetached) {
       return;
     }
     syncGraceTimer();
@@ -358,18 +350,12 @@ function startClaudeProcess(
   };
 
   const requireRunning = () => {
+    if (isDetached) {
+      throw new Error('Claude Code process has detached');
+    }
     if (isEndCalled || hasClosed) {
       throw new Error('Claude Code process has ended');
     }
-  };
-
-  const emitEnded = (end: { code: number | null; error: string | null }) => {
-    if (hasEmittedEnded) {
-      return;
-    }
-    hasEmittedEnded = true;
-    emitAgentEvent({ type: 'sessionEnded', at: deps.clock.now() });
-    emit(() => events.ended(end));
   };
 
   // `end()` resolves after the `ended` emission it follows.
@@ -387,7 +373,7 @@ function startClaudeProcess(
   };
 
   const kill = () => {
-    if (hasClosed) {
+    if (hasClosed || isDetached) {
       return;
     }
     isEndCalled = true;
@@ -395,8 +381,15 @@ function startClaudeProcess(
   };
 
   const pipeEvents: HostedProcessEvents = {
-    line: (line) => runStep(foldPipeLine(state, line)),
+    line(line) {
+      if (!isDetached) {
+        runStep(foldPipeLine(state, line));
+      }
+    },
     closed(exit) {
+      if (isDetached) {
+        return;
+      }
       if (state.activity === 'working') {
         state.activity = 'idle';
         emitActivity('idle');
@@ -405,90 +398,80 @@ function startClaudeProcess(
       const exitFailure = isCleanExit
         ? null
         : exitError(exit.code, exit.signal, state.lastStderr);
-      emitEnded({
+      const end = {
         code: exit.code,
         error:
           exit.error === null
             ? exitFailure
             : spawnError(exit.error, command, launch.cwd),
-      });
+      };
+      emitAgentEvent({ type: 'sessionEnded', at: deps.clock.now() });
+      emit(() => events.ended(end));
       markClosed();
     },
   };
 
-  const pipe = spawnDirect(
-    deps,
-    {
-      id: request.sessionId,
-      command,
-      args: launch.args,
-      cwd: launch.cwd,
-      env: definedEnv(launch.env),
-      idleRule: { key: 'type', value: 'result' },
-    },
-    pipeEvents,
-  );
+  const pipe = connect(spawnRequest, pipeEvents);
 
-  emitAgentEvent({ type: 'sessionStarted', at: deps.clock.now() });
-  emit(() =>
-    events.controls(state.controls.map((control) => ({ ...control }))),
-  );
-  emitActivity('idle');
-  requestContextUsage();
-  // The profile's autocompact override, read once: a change applies to the
-  // next session.
-  const configFolder = claudeConfigFolder(
-    request.profileDir,
-    deps.env,
-    deps.homeDir,
-    deps.paths,
-  );
-  const settingsPath = deps.paths.join(configFolder, 'settings.json');
-  void readIfPresent(deps.files, settingsPath).then(
-    (text) => {
-      runStep(
-        foldUsageInput(
-          state,
-          (usage) => withConfiguredPercent(usage, configuredPercent(text)),
-          deps.clock.now(),
-        ),
-      );
-    },
-    (error: unknown) =>
-      deps.log('claude', `settings.json not read: ${errorText(error)}`),
-  );
-  // A resumed session seeds its context from the saved main replies, unless a
-  // live reply came first.
-  if (request.resume) {
-    void readSavedReplies(
-      deps.files,
-      deps.paths,
-      projectsFolder(deps, request.projectDir, request.profileDir),
-      request.sessionId,
-    ).then(
-      (replies) => {
+  const readUsageInputs = () => {
+    // The profile's autocompact override, read once: a change applies to the
+    // next session.
+    const settingsPath = deps.paths.join(
+      claudeConfigFolder(
+        request.profileDir,
+        deps.env,
+        deps.homeDir,
+        deps.paths,
+      ),
+      'settings.json',
+    );
+    void readIfPresent(deps.files, settingsPath).then(
+      (text) => {
         runStep(
           foldUsageInput(
             state,
-            (usage) => withSavedReplies(usage, replies),
+            (usage) => withConfiguredPercent(usage, configuredPercent(text)),
             deps.clock.now(),
           ),
         );
       },
       (error: unknown) =>
-        deps.log('claude', `saved usage not read: ${errorText(error)}`),
+        deps.log('claude', `settings.json not read: ${errorText(error)}`),
     );
-  }
-  // Read once per session: an agent definition added later applies to the next session.
-  void loadAgentDefinitions(
-    { files: deps.files, paths: deps.paths, log: deps.log },
-    request.projectDir,
-    configFolder,
-  ).then((loaded) => {
-    state.definitions = loaded;
-  });
+    // A resumed session seeds its context from the saved main replies, unless a
+    // live reply came first.
+    if (request.resume) {
+      void readSavedReplies(
+        deps.files,
+        deps.paths,
+        projectsFolder(deps, request.projectDir, request.profileDir),
+        request.sessionId,
+      ).then(
+        (replies) => {
+          runStep(
+            foldUsageInput(
+              state,
+              (usage) => withSavedReplies(usage, replies),
+              deps.clock.now(),
+            ),
+          );
+        },
+        (error: unknown) =>
+          deps.log('claude', `saved usage not read: ${errorText(error)}`),
+      );
+    }
+  };
 
-  return {
+  const open = () => {
+    emitAgentEvent({ type: 'sessionStarted', at: deps.clock.now() });
+    emit(() =>
+      events.controls(state.controls.map((control) => ({ ...control }))),
+    );
+    emitActivity('idle');
+    requestContextUsage();
+  };
+
+  const agentProcess: AgentProcess = {
     send(userInput) {
       requireRunning();
       writeMessage(userMessage(userInput, deps.randomUuid()));
@@ -551,7 +534,7 @@ function startClaudeProcess(
         return endPromise;
       }
       isEndCalled = true;
-      if (hasClosed) {
+      if (hasClosed || isDetached) {
         endPromise = Promise.resolve();
         return endPromise;
       }
@@ -567,9 +550,132 @@ function startClaudeProcess(
     },
     kill,
     detach() {
-      throw new Error('detach is not implemented until task 08');
+      if (hasClosed || isDetached) {
+        return;
+      }
+      isDetached = true;
+      pipe.detach();
+      stopTimers();
+      for (const resolve of closeWaiters.splice(0)) {
+        resolve();
+      }
     },
   };
+
+  return {
+    process: agentProcess,
+    pipeEvents,
+    open,
+    syncGraceTimer,
+    requestContextUsage,
+    readUsageInputs,
+  };
+}
+
+// The session's agent definitions, read once: one added later applies to the
+// next session.
+function loadSessionDefinitions(
+  deps: ClaudeCodeHarnessDeps,
+  request: AgentStart,
+): Promise<AgentDefinitions> {
+  return loadAgentDefinitions(
+    { files: deps.files, paths: deps.paths, log: deps.log },
+    request.projectDir,
+    claudeConfigFolder(request.profileDir, deps.env, deps.homeDir, deps.paths),
+  );
+}
+
+function startClaudeProcess(
+  deps: ClaudeCodeHarnessDeps,
+  request: AgentStart,
+  events: AgentProcessEvents,
+): AgentProcess {
+  const state = createSessionFoldState(request);
+  const session = createClaudeSession(
+    deps,
+    request,
+    events,
+    state,
+    (spawnRequest, pipeEvents) => deps.host.spawn(spawnRequest, pipeEvents),
+  );
+  session.open();
+  session.readUsageInputs();
+  void loadSessionDefinitions(deps, request).then((loaded) => {
+    state.definitions = loaded;
+  });
+  return session.process;
+}
+
+// Attaches to the running process `request.processId`: replays its pipe log on
+// a new fold state, firing the replay's events before the promise resolves, then
+// goes live. `request` carries the `resume` and `controls` the process was
+// launched with, the seeds the fold's usage and controls start from. Writes at
+// most one line: the context request of a turn that ended while no app was
+// attached. Rejects, having detached from the host, when a step after the host's
+// attach fails; it never fires `ended` for that.
+async function attachClaudeProcess(
+  deps: ClaudeCodeHarnessDeps,
+  request: AgentStart,
+  events: AgentProcessEvents,
+): Promise<AgentProcess | null> {
+  // The host may deliver while the definitions load, ahead of the replay.
+  const queuedLines: PipeLine[] = [];
+  let queuedExit: HostedExit | null = null;
+  let live: HostedProcessEvents | null = null;
+  const attached = await deps.host.attach(request.processId, {
+    line(line) {
+      if (live === null) {
+        queuedLines.push(line);
+      } else {
+        live.line(line);
+      }
+    },
+    closed(exit) {
+      if (live === null) {
+        queuedExit = exit;
+      } else {
+        live.closed(exit);
+      }
+    },
+  });
+  if (attached === null) {
+    return null;
+  }
+  try {
+    const state = createSessionFoldState(request);
+    state.definitions = await loadSessionDefinitions(deps, request);
+    const lastLoggedSeq = attached.log.at(-1)?.seq ?? 0;
+    const effects = replayPipeLog(
+      state,
+      [
+        ...attached.log,
+        ...queuedLines.filter((line) => line.seq > lastLoggedSeq),
+      ],
+      deps.clock.now(),
+    );
+    const session = createClaudeSession(
+      deps,
+      request,
+      events,
+      state,
+      () => attached.process,
+    );
+    for (const effect of effects) {
+      reportEffect(events, effect);
+    }
+    live = session.pipeEvents;
+    session.syncGraceTimer();
+    if (queuedExit !== null) {
+      session.pipeEvents.closed(queuedExit);
+    } else if (state.isContextRequestOwed) {
+      session.requestContextUsage();
+    }
+    session.readUsageInputs();
+    return session.process;
+  } catch (error) {
+    attached.process.detach();
+    throw error;
+  }
 }
 
 // A finished `claude` run: its exit code and what it printed, stderr trimmed.
@@ -842,7 +948,8 @@ function projectsFolder(
 }
 
 // The Claude Code CLI behind `AgentHarness`: one `claude` process per
-// session, the only place the app spawns it, the sessions and project folders
+// session on the session host, the one-shot runs, the only place the app asks
+// for either, the sessions and project folders
 // it saved, its `claude auth` sign-in, and each profile's `/usage` poll.
 export function createClaudeCodeHarness(
   deps: ClaudeCodeHarnessDeps,
@@ -850,20 +957,20 @@ export function createClaudeCodeHarness(
   return {
     id: 'claude',
     start: (request, events) => startClaudeProcess(deps, request, events),
-    attach: () =>
-      Promise.reject(new Error('attach is not implemented until task 08')),
+    attach: (request, events) => attachClaudeProcess(deps, request, events),
     listSessions: (projectDir, profileDir) =>
       listPastSessions(
         { files: deps.files, paths: deps.paths, log: deps.log },
         projectsFolder(deps, projectDir, profileDir),
         projectDir,
       ),
-    history: (sessionId, projectDir, profileDir) =>
+    history: (sessionId, projectDir, profileDir, before) =>
       readHistory(
         deps.files,
         deps.paths,
         projectsFolder(deps, projectDir, profileDir),
         sessionId,
+        before,
       ),
     lastUsage: (sessionId, projectDir, profileDir) =>
       readLastUsage(

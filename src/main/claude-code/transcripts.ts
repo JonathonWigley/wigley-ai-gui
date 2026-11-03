@@ -124,11 +124,17 @@ export function sessionTitle(message: string | null): string {
 // become nothing. Each entry's `at` is its line's `timestamp`, or, when the
 // line has none, that of the last line that had one, entry or not (`0` before
 // any); a tool entry keeps its `tool_use` line's time when its result pairs.
-export function transcriptEntries(text: string): ChatEntry[] {
+// With `before` set, a line timed at or after it gives no entry and pairs no
+// tool result; each line is tested alone, since sidechain lines may interleave.
+export function transcriptEntries(
+  text: string,
+  before: number | null = null,
+): ChatEntry[] {
   const entries: ChatEntry[] = [];
   const toolEntries = new Map<string, StampedToolEntry>();
   const lines = text.split('\n');
   let lastAt = 0;
+  const isCut = (at: number) => before !== null && at >= before;
   for (const [index, lineText] of lines.entries()) {
     if (lineText.trim() === '') {
       continue;
@@ -136,12 +142,16 @@ export function transcriptEntries(text: string): ChatEntry[] {
     const lineNumber = index + 1;
     const json = parsed(lineText);
     if (!json.ok) {
-      entries.push(lineRaw(lineNumber, lineText, lastAt));
+      if (!isCut(lastAt)) {
+        entries.push(lineRaw(lineNumber, lineText, lastAt));
+      }
       continue;
     }
     const line = asJson(json.value);
     lastAt = lineAt(line, lastAt);
-    addLineEntries(line, lineNumber, lastAt, entries, toolEntries);
+    if (!isCut(lastAt)) {
+      addLineEntries(line, lineNumber, lastAt, entries, toolEntries);
+    }
   }
   return entries;
 }

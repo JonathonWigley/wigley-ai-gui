@@ -40,7 +40,9 @@ import { typedSkill } from './typed-skill';
 // and subagent events (`agentReplied` included) beside their entries,
 // `taskStarted` and `taskFinished`
 // for background tasks, `turnEnded` when a turn closes or is interrupted, and
-// `sessionEnded` just before each `ended`. The workflow
+// `sessionEnded` just before each `ended`. A process `attach` resolves opens with
+// none of `start`'s emissions: the test's replay stands for them. Once a process
+// has detached, it emits nothing. The workflow
 // sends (`FAKE_WORKFLOW_FEATURE_TEXT`, `/wigley:make <plan folder>`,
 // `FAKE_WORKFLOW_STEP_TEXT`) change a fake plan through the injected `files`.
 
@@ -114,16 +116,33 @@ export type FakeAgentCall =
   | { method: 'interrupt' }
   | { method: 'setControl'; id: string; value: string }
   | { method: 'end' }
-  | { method: 'kill' };
+  | { method: 'kill' }
+  | { method: 'detach' };
 
-// `request` and `events` are the very objects `start` received; `calls` lists
-// every call on the process in call order, refused ones included.
+// `request` and `events` are the very objects `start` or `attach` received;
+// `calls` lists every call on the process in call order, refused ones included.
+// `attached` marks a process `attach` resolved; `detached` one `detach` was called
+// on.
 export interface FakeAgentProcessRecord {
   request: AgentStart;
   events: AgentProcessEvents;
   calls: FakeAgentCall[];
   ended: boolean;
+  attached: boolean;
+  detached: boolean;
 }
+
+// The outcome of one `attach`. `process` fires `replay` before the promise
+// resolves and starts the process's turn counter at `turns` (0 when left out), so
+// its ids follow the ones the replay used.
+export type FakeAttachScript =
+  | {
+      outcome: 'process';
+      turns?: number;
+      replay(events: AgentProcessEvents): void;
+    }
+  | { outcome: 'null' }
+  | { outcome: 'reject'; message: string };
 
 // The sessions `listSessions` returns for every folder and profile, newest
 // first; `history` answers for these ids alone.
@@ -140,17 +159,21 @@ export const FAKE_PAST_SESSIONS: readonly PastSession[] = [
   },
 ];
 
-// One `listSessions` or `history` call; `sessionId` is null for
+// One `listSessions` or `history` call; `sessionId` and `before` are null for
 // `listSessions`.
 export interface FakePastSessionCall {
   method: 'listSessions' | 'history';
   sessionId: string | null;
   projectDir: string;
   profileDir: string | null;
+  before: number | null;
 }
 
-// `processes` holds one record per `start` that did not throw, in start order:
-// the same array for the harness's life, each record changing in place.
+// `processes` holds one record per `start` that did not throw and per `attach`
+// that resolved a process, in call order: the same array for the harness's life,
+// each record changing in place. `attachCalls` lists every `attach` request in
+// call order. `scriptAttach` sets the outcome of the next `attach` for that
+// process id, once, replacing an unused script; with none, `attach` resolves null.
 // `failNextStart` makes the next `start` throw `message`. Every `end` on a
 // process returns the promise its first `end` returned, or, once a
 // `FAKE_END_TEXT` send ended it, the promise of that exit. Between `holdEnd`
@@ -158,8 +181,9 @@ export interface FakePastSessionCall {
 // promise pending; `releaseEnd` emits `ended` for each held process in call
 // order and resolves them. A `FAKE_END_TEXT` exit is never held.
 // `pastSessionCalls` lists every `listSessions` and `history` call in call
-// order, failed ones included; `failNextHistory` makes the next `history`
-// reject `message`. Every profile starts signed in as `fake@example.invalid`;
+// order, failed ones included; `history` returns the entries timed before its
+// `before`, all for null; `failNextHistory` makes the next `history` reject
+// `message`. Every profile starts signed in as `fake@example.invalid`;
 // `logOut` signs it out and a `logIn` given `FAKE_SIGN_IN_CODE` signs it back
 // in. `listProjects` lists the folders `start` ran under the profile, the last
 // started first. `planUsage` resolves `fakePlanUsage` at the clock's time in a
@@ -174,6 +198,8 @@ export interface FakePastSessionCall {
 // turn's tool fails.
 export interface FakeAgentHarness extends AgentHarness {
   readonly processes: readonly FakeAgentProcessRecord[];
+  readonly attachCalls: readonly AgentStart[];
+  scriptAttach(processId: string, script: FakeAttachScript): void;
   readonly pastSessionCalls: readonly FakePastSessionCall[];
   failNextStart(message: string): void;
   failNextHistory(message: string): void;
@@ -390,6 +416,28 @@ export function fakeWorkflowPlan(ticked: number, reviewRounds: number): string {
     ...(roundLines.length > 0 ? ['', ...roundLines] : []),
     '',
   ].join('\n');
+}
+
+// `record`'s events until it detaches, then nothing. `record.events` stays the
+// very object the caller gave.
+function untilDetached(record: FakeAgentProcessRecord): AgentProcessEvents {
+  const { events } = record;
+  const whileAttached = (fire: () => void) => {
+    if (!record.detached) {
+      fire();
+    }
+  };
+  return {
+    entry: (entry) => whileAttached(() => events.entry(entry)),
+    controls: (controls) => whileAttached(() => events.controls(controls)),
+    activity: (activity) => whileAttached(() => events.activity(activity)),
+    commands: (names) => whileAttached(() => events.commands(names)),
+    planUsage: (update) => whileAttached(() => events.planUsage(update)),
+    agentEvent: (event) => whileAttached(() => events.agentEvent(event)),
+    messageDropped: (entryId) =>
+      whileAttached(() => events.messageDropped(entryId)),
+    ended: (end) => whileAttached(() => events.ended(end)),
+  };
 }
 
 // Emits one entry, stamped with its `at`.
@@ -900,6 +948,8 @@ export function createFakeAgentHarness(
   timers: Timers,
 ): FakeAgentHarness {
   const processes: FakeAgentProcessRecord[] = [];
+  const attachCalls: AgentStart[] = [];
+  const attachScripts = new Map<string, FakeAttachScript>();
   const pastSessionCalls: FakePastSessionCall[] = [];
   let nextStartFailure: string | null = null;
   let nextHistoryFailure: string | null = null;
@@ -967,10 +1017,16 @@ export function createFakeAgentHarness(
     };
   }
 
-  function startProcess(record: FakeAgentProcessRecord): AgentProcess {
-    const { events, calls } = record;
+  // `turns` is the turn counter's start. A process `attach` resolved skips the
+  // opening emissions.
+  function startProcess(
+    record: FakeAgentProcessRecord,
+    turns: number,
+  ): AgentProcess {
+    const { calls } = record;
+    const events = untilDetached(record);
     let controls = startingControls(record.request.controls);
-    let turn = 0;
+    let turn = turns;
     let isTurnOpen = false;
     // The Agent entries of the subagents still running, in spawn order.
     let runningSubagents: SubagentEntry[] = [];
@@ -985,6 +1041,9 @@ export function createFakeAgentHarness(
       events.entry(stamp(draft));
     };
     const requireRunning = () => {
+      if (record.detached) {
+        throw new Error('fake agent process has detached');
+      }
       if (record.ended) {
         throw new Error('fake agent process has ended');
       }
@@ -1219,12 +1278,14 @@ export function createFakeAgentHarness(
       );
       closeWorkflowTurn(turn, change, 'fake make closed the plan');
     };
-    queueMicrotask(() => {
-      events.agentEvent({ type: 'sessionStarted', at: clock.now() });
-      events.controls(controls);
-      events.commands(['fake-command']);
-      events.activity('idle');
-    });
+    if (!record.attached) {
+      queueMicrotask(() => {
+        events.agentEvent({ type: 'sessionStarted', at: clock.now() });
+        events.controls(controls);
+        events.commands(['fake-command']);
+        events.activity('idle');
+      });
+    }
     return {
       send(message) {
         const { text, images } = message;
@@ -1379,6 +1440,9 @@ export function createFakeAgentHarness(
         if (endPromise !== null) {
           return endPromise;
         }
+        if (record.detached) {
+          return Promise.resolve();
+        }
         record.ended = true;
         isTurnOpen = false;
         const isHeld = isEndHeld;
@@ -1399,7 +1463,7 @@ export function createFakeAgentHarness(
       kill() {
         calls.push({ method: 'kill' });
         clearVisualHold();
-        if (endPromise !== null) {
+        if (endPromise !== null || record.detached) {
           return;
         }
         record.ended = true;
@@ -1413,7 +1477,9 @@ export function createFakeAgentHarness(
         });
       },
       detach() {
-        throw new Error('detach is not implemented until task 08');
+        calls.push({ method: 'detach' });
+        record.detached = true;
+        clearVisualHold();
       },
     };
   }
@@ -1421,6 +1487,7 @@ export function createFakeAgentHarness(
   const harness: FakeAgentHarness = {
     id: 'claude',
     processes,
+    attachCalls,
     pastSessionCalls,
     start(request, events) {
       if (nextStartFailure !== null) {
@@ -1433,13 +1500,39 @@ export function createFakeAgentHarness(
         events,
         calls: [],
         ended: false,
+        attached: false,
+        detached: false,
       };
       processes.push(record);
       recordStart(request);
-      return startProcess(record);
+      return startProcess(record, 0);
     },
-    attach: () =>
-      Promise.reject(new Error('attach is not implemented until task 08')),
+    async attach(request, events) {
+      attachCalls.push(request);
+      const script = attachScripts.get(request.processId);
+      attachScripts.delete(request.processId);
+      await Promise.resolve();
+      if (script === undefined || script.outcome === 'null') {
+        return null;
+      }
+      if (script.outcome === 'reject') {
+        throw new Error(script.message);
+      }
+      const record: FakeAgentProcessRecord = {
+        request,
+        events,
+        calls: [],
+        ended: false,
+        attached: true,
+        detached: false,
+      };
+      processes.push(record);
+      script.replay(events);
+      return startProcess(record, script.turns ?? 0);
+    },
+    scriptAttach(processId, script) {
+      attachScripts.set(processId, script);
+    },
     failNextStart(message) {
       nextStartFailure = message;
     },
@@ -1449,15 +1542,17 @@ export function createFakeAgentHarness(
         sessionId: null,
         projectDir,
         profileDir,
+        before: null,
       });
       return FAKE_PAST_SESSIONS.map((session) => ({ ...session }));
     },
-    async history(sessionId, projectDir, profileDir) {
+    async history(sessionId, projectDir, profileDir, before) {
       pastSessionCalls.push({
         method: 'history',
         sessionId,
         projectDir,
         profileDir,
+        before,
       });
       if (nextHistoryFailure !== null) {
         const message = nextHistoryFailure;
@@ -1470,7 +1565,9 @@ export function createFakeAgentHarness(
       if (!isSaved) {
         throw new Error(`fake agent has no saved session ${sessionId}`);
       }
-      return fakeHistory(sessionId);
+      return fakeHistory(sessionId).filter(
+        (entry) => before === null || entry.at < before,
+      );
     },
     failNextHistory(message) {
       nextHistoryFailure = message;

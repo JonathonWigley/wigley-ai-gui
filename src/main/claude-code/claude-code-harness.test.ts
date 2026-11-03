@@ -1,6 +1,7 @@
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { EventEmitter } from 'node:events';
-import { PassThrough } from 'node:stream';
+import { createInterface } from 'node:readline';
+import { PassThrough, type Readable } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type {
   AgentEvent,
@@ -10,10 +11,21 @@ import type {
   LogInEvents,
 } from '../../contracts/agent';
 import type { Clock } from '../../contracts/ambient';
-import type { PipeDirection, PipeLine } from '../../contracts/session-host';
+import type { Log } from '../../contracts/log';
+import type {
+  HostedExit,
+  PipeDirection,
+  PipeLine,
+  SessionHost,
+} from '../../contracts/session-host';
+import {
+  createFakeSessionHost,
+  type FakeSessionHost,
+} from '../../shared/fake-session-host';
 import { createMemoryFiles } from '../../shared/memory-files';
 import { posixPaths } from '../../shared/paths/posix-paths';
 import type { Files } from '../../contracts/files';
+import type { Paths } from '../../contracts/paths';
 import {
   createClaudeCodeHarness,
   type ClaudeSpawn,
@@ -71,6 +83,72 @@ function fakeChild() {
 }
 
 const clock = { now: () => 1000 };
+
+// A `SessionHost` whose one process is the fake child: `seq` counts over stdout
+// and stderr together; `closed` fires once, on an `error` event at once.
+function childHost(
+  fake: ReturnType<typeof fakeChild>,
+  hostClock: Clock,
+  log: Log,
+): SessionHost {
+  return {
+    spawn(hostedRequest, events) {
+      const { child } = fake;
+      let seq = 0;
+      let hasClosed = false;
+      let isDetached = false;
+      const readLines = (input: Readable, dir: 'out' | 'err') => {
+        createInterface({ input }).on('line', (text) => {
+          seq += 1;
+          if (!isDetached) {
+            events.line({ seq, dir, at: hostClock.now(), text });
+          }
+        });
+      };
+      const close = (exit: HostedExit) => {
+        if (hasClosed || isDetached) {
+          return;
+        }
+        hasClosed = true;
+        events.closed(exit);
+      };
+      readLines(child.stdout, 'out');
+      readLines(child.stderr, 'err');
+      child.stdin.on('error', (error) => log('claude', error.message));
+      child.on('close', (code: number | null, signal: string | null) =>
+        close({ code, signal, error: null }),
+      );
+      child.on('error', (error: Error) =>
+        close({ code: null, signal: null, error: error.message }),
+      );
+      return {
+        id: hostedRequest.id,
+        write(text) {
+          if (!isDetached) {
+            child.stdin.write(`${text}\n`);
+          }
+        },
+        endInput() {
+          if (!isDetached) {
+            child.stdin.end();
+          }
+        },
+        kill(signal) {
+          if (!isDetached) {
+            child.kill(signal);
+          }
+        },
+        detach() {
+          isDetached = true;
+        },
+      };
+    },
+    attach: async () => null,
+    list: async () => [],
+    setKeepIdleMinutes() {},
+    stopAll: async () => {},
+  };
+}
 
 // Every event the process emits, as `[event name, payload]`, in emit order,
 // except the agent events other than `usage`, which `agentEvents` holds.
@@ -146,11 +224,13 @@ function started(
   const logged: [string, string][] = [];
   const spawn: ClaudeSpawn = () => fake.child;
   let uuidCount = 0;
+  const log: Log = (source, message) => logged.push([source, message]);
   const harness = createClaudeCodeHarness({
     command: () => '/bin/claude',
     permissionTool: 'tool',
     env: {},
-    log: (source, message) => logged.push([source, message]),
+    log,
+    host: childHost(fake, harnessClock, log),
     spawn,
     files,
     homeDir: '/Users/u',
@@ -1630,6 +1710,7 @@ describe('createClaudeCodeHarness past sessions', () => {
       permissionTool: 'tool',
       env,
       log: () => {},
+      host: createFakeSessionHost(clock),
       spawn: () => fakeChild().child,
       files,
       homeDir: '/Users/u',
@@ -1716,6 +1797,7 @@ describe('createClaudeCodeHarness accounts', () => {
       permissionTool: 'tool',
       env: { HOME: '/Users/u', CLAUDECODE: '1' },
       log: () => {},
+      host: createFakeSessionHost(harnessClock),
       spawn: (_command, args, options) => {
         spawned.push({ args, options });
         const next = queue.shift();
@@ -2105,5 +2187,622 @@ describe('createClaudeCodeHarness accounts', () => {
     await exitWith(child, '', 1);
 
     await rejected;
+  });
+});
+
+describe('createClaudeCodeHarness on the session host', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  // A harness on `host`; `spawn` throws, since no session may reach it.
+  function hostHarness(
+    host: SessionHost,
+    harnessClock: Clock,
+    overrides: { env?: NodeJS.ProcessEnv; paths?: Paths; files?: Files } = {},
+  ) {
+    let uuidCount = 0;
+    return createClaudeCodeHarness({
+      command: () => '/bin/claude',
+      permissionTool: 'tool',
+      env: overrides.env ?? {},
+      log: () => {},
+      host,
+      spawn: () => {
+        throw new Error('a session process reached deps.spawn');
+      },
+      files: overrides.files ?? createMemoryFiles(),
+      homeDir: '/Users/u',
+      paths: overrides.paths ?? posixPaths,
+      clock: harnessClock,
+      randomUuid: () => {
+        uuidCount += 1;
+        return `uuid-${uuidCount}`;
+      },
+    });
+  }
+
+  const asText = (line: object | string) =>
+    typeof line === 'string' ? line : JSON.stringify(line);
+
+  // Pipe lines one second apart from 1000, unless a row gives its `at`.
+  function logOf(
+    lines: readonly {
+      dir: PipeDirection;
+      line: object | string;
+      at?: number;
+    }[],
+  ): PipeLine[] {
+    return lines.map(({ dir, line, at }, index) => ({
+      seq: index + 1,
+      dir,
+      at: at ?? 1000 * (index + 1),
+      text: asText(line),
+    }));
+  }
+
+  const SEND_LINE = userMessage({ text: 'hi', images: [] }, 'uuid-1');
+  const interruptRequest = (requestId: string) => ({
+    type: 'control_request',
+    request_id: requestId,
+    request: { subtype: 'interrupt' },
+  });
+  // A send and its turn up to its `started`.
+  const WORKING_LOG = [
+    { dir: 'in', line: SEND_LINE },
+    { dir: 'out', line: lifecycleInit },
+    { dir: 'out', line: lifecycle('uuid-1', 'started') },
+  ] as const;
+  const ENDED_TURN_LOG = [
+    ...WORKING_LOG,
+    { dir: 'out', line: successResult('ok', ['uuid-1']) },
+  ] as const;
+  const running = (log: PipeLine[]) => ({
+    id: 'p-1',
+    startedAt: 1000,
+    current: true,
+    log,
+  });
+  const entriesOf = (timeline: [string, unknown][]) =>
+    timeline.flatMap(([name, payload]) =>
+      name === 'entry' ? [payload as ChatEntry] : [],
+    );
+
+  it('start_SpawnsThroughTheHost', () => {
+    const host = createFakeSessionHost(clock);
+
+    hostHarness(host, clock).start(request, recordingEvents().events);
+
+    expect(host.processes[0].request).toEqual({
+      id: 'p-1',
+      command: '/bin/claude',
+      args: [
+        '-p',
+        '--input-format',
+        'stream-json',
+        '--output-format',
+        'stream-json',
+        '--include-partial-messages',
+        '--verbose',
+        '--session-id',
+        's-1',
+        '--permission-mode',
+        'auto',
+        '--permission-prompt-tool',
+        'tool',
+      ],
+      cwd: '/proj',
+      env: {},
+      idleRule: { key: 'type', value: 'result' },
+    });
+    expect(host.processes[0].writes[0]).toBe(
+      JSON.stringify(contextUsageRequest('wigley-1')),
+    );
+  });
+
+  it('start_EnvWithUndefined_SpawnsWithoutIt', () => {
+    const host = createFakeSessionHost(clock);
+    const env = { KEEP: 'a', DROP: undefined };
+
+    hostHarness(host, clock, { env }).start(request, recordingEvents().events);
+
+    expect(host.processes[0].request?.env).toEqual({ KEEP: 'a' });
+  });
+
+  it('start_HostSpawnFails_EndsWithHint', async () => {
+    const host = createFakeSessionHost(clock);
+    host.failNextSpawn('spawn /bin/claude ENOENT');
+    const { heard, events } = recordingEvents();
+
+    hostHarness(host, clock).start(request, events);
+    await settle();
+
+    const ended = heard.filter(([name]) => name === 'ended');
+    expect(ended).toEqual([
+      [
+        'ended',
+        { code: null, error: expect.stringMatching(/\/bin\/claude.*\/proj/) },
+      ],
+    ]);
+  });
+
+  it('attach_RecordedLiveSession_EqualsTheLiveRun', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    let at = 1000;
+    const stepClock = { now: () => at };
+    const host = createFakeSessionHost(stepClock);
+    const a = recordingEvents();
+    const agent = hostHarness(host, stepClock).start(request, a.events);
+    await settle();
+    const startedAt = at;
+    const step = async (action: () => void) => {
+      at += 1000;
+      action();
+      await settle();
+    };
+    const out = (line: object | string) =>
+      step(() => host.output('p-1', 'out', asText(line)));
+
+    await out(contextReply('wigley-1', 1000000, 967000));
+    await step(() => agent.send({ text: 'hi', images: [] }));
+    await out(lifecycleInit);
+    await out(lifecycle('uuid-1', 'started'));
+    await out(REPLY_LINE);
+    await out(successResult('ok', ['uuid-1']));
+    await step(() => agent.setControl('mode', 'plan'));
+    await out({
+      type: 'control_response',
+      response: { subtype: 'success', request_id: 'wigley-3' },
+    });
+    await step(() => agent.setControl('effort', 'high'));
+    await out(successResult('Set effort level to high', ['00000000-2']));
+    await step(() => agent.send({ text: 'two', images: [] }));
+    await out(lifecycleInit);
+    await out(lifecycle('uuid-3', 'started'));
+    await step(() => agent.interrupt());
+    const interruptedAt = at;
+    await step(() => host.output('p-1', 'err', 'warn'));
+    at = interruptedAt + 5000;
+    vi.advanceTimersByTime(5000);
+    await settle();
+    const record = host.processes[0];
+    const writesBeforeAttach = record.writes.length;
+
+    const b = recordingEvents();
+    const attached = await hostHarness(host, stepClock).attach(
+      request,
+      b.events,
+    );
+    const replayedTimeline = [...b.timeline];
+
+    const lastVersions = (entries: readonly ChatEntry[]) => {
+      const byId = new Map<string, ChatEntry>();
+      for (const entry of entries) {
+        byId.set(entry.id, entry);
+      }
+      return [...byId.values()];
+    };
+    const agentEventsOf = (timeline: [string, unknown][]) =>
+      timeline.flatMap(([name, payload]) =>
+        name === 'agentEvent' ? [payload as AgentEvent] : [],
+      );
+    const lastOf = (name: string) =>
+      a.timeline.filter(([heardName]) => heardName === name).at(-1);
+    const settingsRead: AgentEvent = {
+      type: 'usage',
+      agentId: 'main',
+      at: startedAt,
+      contextTokens: 0,
+      contextWindow: null,
+      autocompact: { configured: null, reported: null },
+      cacheExpiresAt: null,
+      spendUsd: null,
+    };
+
+    expect(replayedTimeline[0]).toEqual([
+      'agentEvent',
+      { type: 'sessionStarted', at: record.log[0].at },
+    ]);
+    expect(entriesOf(replayedTimeline)).toEqual(
+      lastVersions(entriesOf(a.timeline)),
+    );
+    expect(agentEventsOf(a.timeline)).toContainEqual(settingsRead);
+    expect(agentEventsOf(replayedTimeline)).toEqual(
+      agentEventsOf(a.timeline).filter(
+        (event) => JSON.stringify(event) !== JSON.stringify(settingsRead),
+      ),
+    );
+    expect(replayedTimeline.slice(-3)).toEqual([
+      lastOf('controls'),
+      lastOf('commands'),
+      lastOf('activity'),
+    ]);
+    expect(lastOf('controls')?.[1]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'mode', value: 'plan' }),
+        expect.objectContaining({ id: 'effort', value: 'high' }),
+      ]),
+    );
+
+    await settle();
+    expect(b.timeline).toEqual(replayedTimeline);
+    expect(record.writes).toHaveLength(writesBeforeAttach);
+
+    const highestRequest = Math.max(
+      ...record.log.flatMap((line) => {
+        const id = /"request_id":"wigley-(\d+)"/.exec(line.text)?.[1];
+        return line.dir === 'in' && id !== undefined ? [Number(id)] : [];
+      }),
+    );
+    expect(attached?.send({ text: 'three', images: [] })).toBe('user-3');
+    attached?.interrupt();
+    expect(record.writes.at(-1)).toBe(
+      JSON.stringify(interruptRequest(`wigley-${highestRequest + 1}`)),
+    );
+  });
+
+  it.each([
+    {
+      case: 'turn ended while away',
+      goesOn: [],
+      closes: false,
+      requested: true,
+    },
+    {
+      case: 'request already written',
+      goesOn: [{ dir: 'in', line: contextUsageRequest('wigley-1') }],
+      closes: false,
+      requested: false,
+    },
+    {
+      case: 'closed during attach',
+      goesOn: [],
+      closes: true,
+      requested: false,
+    },
+  ] as {
+    case: string;
+    goesOn: { dir: PipeDirection; line: object }[];
+    closes: boolean;
+    requested: boolean;
+  }[])(
+    'attach_TurnEndedWhileDetached_RequestsContextOnce ($case)',
+    async ({ goesOn, closes, requested }) => {
+      const host = createFakeSessionHost(clock);
+      const record = host.addRunning(
+        running(logOf([...ENDED_TURN_LOG, ...goesOn])),
+      );
+
+      const attaching = hostHarness(host, clock).attach(
+        request,
+        recordingEvents().events,
+      );
+      if (closes) {
+        host.close('p-1', { code: 0, signal: null, error: null });
+      }
+      await attaching;
+      await settle();
+
+      expect(record.writes).toEqual(
+        requested ? [JSON.stringify(contextUsageRequest('wigley-1'))] : [],
+      );
+    },
+  );
+
+  it('attach_LoggedSubagent_DecodesWithItsDefinition', async () => {
+    const files = createMemoryFiles();
+    await files.write(
+      '/proj/.claude/agents/mapper.md',
+      '---\nname: mapper\nmodel: sonnet\neffort: high\n---\nYou map.\n',
+    );
+    const host = createFakeSessionHost(clock);
+    host.addRunning(
+      running(
+        logOf([
+          {
+            dir: 'out',
+            line: {
+              type: 'assistant',
+              message: {
+                model: 'claude-opus-5-5',
+                id: 'msg_1',
+                role: 'assistant',
+                content: [
+                  {
+                    type: 'tool_use',
+                    id: 'a1',
+                    name: 'Agent',
+                    input: {
+                      description: 'map',
+                      subagent_type: 'mapper',
+                      prompt: 'x',
+                    },
+                  },
+                ],
+              },
+              parent_tool_use_id: null,
+            },
+          },
+        ]),
+      ),
+    );
+    const { agentEvents, events } = recordingEvents();
+
+    await hostHarness(host, clock, { files }).attach(request, events);
+
+    expect(
+      agentEvents.filter((event) => event.type === 'agentSpawned'),
+    ).toEqual([expect.objectContaining({ model: 'sonnet', effort: 'high' })]);
+  });
+
+  it('attach_DefinitionsReject_DetachesTheHostedProcess', async () => {
+    const host = createFakeSessionHost(clock);
+    const record = host.addRunning(running(logOf(ENDED_TURN_LOG)));
+    const paths: Paths = {
+      ...posixPaths,
+      join(...parts) {
+        if (parts.join('/') === '/proj/.claude/agents') {
+          throw new Error('no join');
+        }
+        return posixPaths.join(...parts);
+      },
+    };
+    const { timeline, events } = recordingEvents();
+
+    await expect(
+      hostHarness(host, clock, { paths }).attach(request, events),
+    ).rejects.toThrow('no join');
+    host.output('p-1', 'out', REPLY_LINE);
+    await settle();
+
+    expect(record.detaches).toBe(1);
+    expect(timeline).toEqual([]);
+  });
+
+  it.each([
+    { case: 'no record', arrange: () => {} },
+    {
+      case: 'not current',
+      arrange: (host: FakeSessionHost) =>
+        host.addRunning({ ...running([]), current: false }),
+    },
+    {
+      case: 'closed',
+      arrange: (host: FakeSessionHost) => {
+        host.addRunning(running([]));
+        host.close('p-1', { code: 0, signal: null, error: null });
+      },
+    },
+  ])('attach_Cases_ResolvesByHostState ($case)', async ({ arrange }) => {
+    const host = createFakeSessionHost(clock);
+    arrange(host);
+    const { timeline, events } = recordingEvents();
+
+    const attached = await hostHarness(host, clock).attach(request, events);
+    await settle();
+
+    expect(attached).toBeNull();
+    expect(timeline).toEqual([]);
+  });
+
+  describe('attach_GraceAcrossTheBoundary', () => {
+    const graceLog = [
+      { dir: 'in', line: SEND_LINE, at: 100 },
+      { dir: 'out', line: lifecycleInit, at: 200 },
+      { dir: 'out', line: lifecycle('uuid-1', 'started'), at: 300 },
+      { dir: 'in', line: interruptRequest('wigley-1'), at: 1000 },
+    ] as const;
+    const graceNotices = (timeline: [string, unknown][]) =>
+      entriesOf(timeline).filter(
+        (entry) => entry.kind === 'notice' && entry.text === GRACE_NOTICE,
+      );
+
+    it('attach_GraceAcrossTheBoundary (expired while away)', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const at60 = { now: () => 60000 };
+      const host = createFakeSessionHost(at60);
+      host.addRunning(running(logOf(graceLog)));
+      const { heard, timeline, events } = recordingEvents();
+
+      await hostHarness(host, at60).attach(request, events);
+
+      expect(graceNotices(timeline).map((entry) => entry.at)).toEqual([6000]);
+      expect(lastActivity(heard)).toBe('idle');
+      const heardAtResolve = timeline.length;
+      await settle();
+      vi.advanceTimersByTime(10000);
+      await settle();
+      // The log holds no usage event, so the settings read reports its first.
+      expect(
+        timeline
+          .slice(heardAtResolve)
+          .map(([name, payload]) =>
+            name === 'agentEvent' ? (payload as AgentEvent).type : name,
+          ),
+      ).toEqual(['usage']);
+    });
+
+    it('attach_GraceAcrossTheBoundary (still pending)', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const at3 = { now: () => 3000 };
+      const host = createFakeSessionHost(at3);
+      host.addRunning(running(logOf(graceLog)));
+      const { heard, timeline, events } = recordingEvents();
+
+      await hostHarness(host, at3).attach(request, events);
+
+      expect(graceNotices(timeline)).toEqual([]);
+      expect(lastActivity(heard)).toBe('working');
+      await settle();
+      vi.advanceTimersByTime(2999);
+      await settle();
+      expect(graceNotices(timeline)).toEqual([]);
+      vi.advanceTimersByTime(1);
+      await settle();
+      expect(graceNotices(timeline).map((entry) => entry.at)).toEqual([6000]);
+      expect(lastActivity(heard)).toBe('idle');
+    });
+  });
+
+  it('attach_LineDuringAttach_FoldsOnce', async () => {
+    const host = createFakeSessionHost(clock);
+    host.addRunning(running(logOf(ENDED_TURN_LOG)));
+    const lateLine = JSON.stringify({
+      type: 'assistant',
+      message: {
+        id: 'msg_2',
+        type: 'message',
+        role: 'assistant',
+        content: [{ type: 'text', text: 'late' }],
+      },
+      parent_tool_use_id: null,
+    });
+    const deliversDuringAttach: SessionHost = {
+      ...host,
+      async attach(id, hostedEvents) {
+        const result = await host.attach(id, hostedEvents);
+        const lastLine = result?.log.at(-1);
+        if (lastLine !== undefined) {
+          hostedEvents.line(lastLine);
+        }
+        host.output(id, 'out', lateLine);
+        return result;
+      },
+    };
+    const { timeline, agentEvents, events } = recordingEvents();
+
+    await hostHarness(deliversDuringAttach, clock).attach(request, events);
+
+    expect(
+      agentEvents.filter((event) => event.type === 'turnEnded'),
+    ).toHaveLength(1);
+    expect(
+      entriesOf(timeline).filter(
+        (entry) => entry.kind === 'assistant' && entry.text === 'late',
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('attach_ClosedDuringAttach_EndsAfterTheReplay', async () => {
+    const host = createFakeSessionHost(clock);
+    host.addRunning(running(logOf(ENDED_TURN_LOG)));
+    const { timeline, events } = recordingEvents();
+
+    const attaching = hostHarness(host, clock).attach(request, events);
+    host.close('p-1', { code: 0, signal: null, error: null });
+    await attaching;
+    await settle();
+
+    expect(timeline[0]).toEqual([
+      'agentEvent',
+      { type: 'sessionStarted', at: 1000 },
+    ]);
+    expect(timeline.slice(-3)).toEqual([
+      ['activity', 'idle'],
+      ['agentEvent', { type: 'sessionEnded', at: 1000 }],
+      ['ended', { code: 0, error: null }],
+    ]);
+  });
+
+  describe('detach', () => {
+    async function startedOnHost() {
+      const host = createFakeSessionHost(clock);
+      const recording = recordingEvents();
+      const agent = hostHarness(host, clock).start(request, recording.events);
+      await settle();
+      const forgetHeard = () => {
+        recording.heard.length = 0;
+        recording.agentEvents.length = 0;
+        recording.timeline.length = 0;
+      };
+      forgetHeard();
+      return {
+        host,
+        agent,
+        record: host.processes[0],
+        forgetHeard,
+        ...recording,
+      };
+    }
+
+    it('detach_ThenOutputAndClose_FiresNothing', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const { host, agent, record, timeline, forgetHeard } =
+        await startedOnHost();
+      agent.send({ text: 'hi', images: [] });
+      agent.interrupt();
+      await settle();
+      forgetHeard();
+
+      agent.detach();
+      agent.detach();
+      host.output('p-1', 'out', REPLY_LINE);
+      host.close('p-1', { code: 0, signal: null, error: null });
+      await settle();
+
+      expect(timeline).toEqual([]);
+      expect(record.detaches).toBe(1);
+      expect(record.kills).toEqual([]);
+      expect(vi.getTimerCount()).toBe(0);
+      expect(() => agent.send({ text: 'x', images: [] })).toThrow(
+        'Claude Code process has detached',
+      );
+      expect(() => agent.interrupt()).toThrow(
+        'Claude Code process has detached',
+      );
+      expect(() => agent.setControl('mode', 'plan')).toThrow(
+        'Claude Code process has detached',
+      );
+      await agent.end();
+      agent.kill();
+      expect(record.kills).toEqual([]);
+    });
+
+    it('detach_PendingEnd_Settles', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const { agent, record, heard } = await startedOnHost();
+
+      const ending = agent.end();
+      agent.detach();
+      await ending;
+      vi.advanceTimersByTime(6000);
+      await settle();
+
+      expect(heard.filter(([name]) => name === 'ended')).toEqual([]);
+      expect(record.kills).toEqual([]);
+    });
+
+    it('detach_QueuedEmission_Dropped', async () => {
+      const { host, agent, timeline } = await startedOnHost();
+
+      host.output('p-1', 'out', REPLY_LINE);
+      agent.detach();
+      await settle();
+
+      expect(timeline).toEqual([]);
+    });
+
+    it('attach_AfterDetach_ReplaysAgain', async () => {
+      const { host, agent } = await startedOnHost();
+      agent.send({ text: 'hi', images: [] });
+      for (const line of [
+        lifecycleInit,
+        lifecycle('uuid-1', 'started'),
+        successResult('ok', ['uuid-1']),
+      ]) {
+        host.output('p-1', 'out', asText(line));
+      }
+      await settle();
+      agent.detach();
+      const { timeline, events } = recordingEvents();
+
+      await hostHarness(host, clock).attach(request, events);
+
+      expect(timeline[0]).toEqual([
+        'agentEvent',
+        { type: 'sessionStarted', at: 1000 },
+      ]);
+      expect(entriesOf(timeline).map((entry) => entry.id)).toContain('user-1');
+    });
   });
 });

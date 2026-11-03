@@ -541,6 +541,7 @@ describe('createChatSessions', () => {
         sessionId: null,
         projectDir: '/w/app',
         profileDir: '~/.claude-personal',
+        before: null,
       },
     ]);
   });

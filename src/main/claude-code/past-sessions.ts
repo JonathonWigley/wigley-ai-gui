@@ -93,9 +93,11 @@ export async function readHistory(
   paths: Paths,
   projectsFolder: string,
   sessionId: string,
+  before: number | null,
 ): Promise<ChatEntry[]> {
   return transcriptEntries(
     await readTranscript(files, paths, projectsFolder, sessionId),
+    before,
   );
 }
 

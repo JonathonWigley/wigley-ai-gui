@@ -1,6 +1,6 @@
 # 06 — Session host process
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01, 02
 Plan: [plan.md](plan.md)
@@ -270,3 +270,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit b4b193de · proof: diff read; typecheck clean in its files; session-host tests 58 passed; worker's packaged asar probe passed; not run on Windows · concerns: a pipe log create or append failure (disk full) ends the host and every session; a known message type missing fields throws and ends the host; close waits on stdio, so a grandchild holding the pipes keeps a process, its host and a stopAll reply past SIGKILL; exit-after-push not run live and a Windows pipe might lose the last closed; a dead older record costs up to 2000 ms each start; session-host-test-doubles.ts is an extra file beside production code

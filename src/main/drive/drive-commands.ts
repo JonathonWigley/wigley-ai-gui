@@ -64,7 +64,8 @@ export interface DriveCommandsDeps {
   recorder: FrameRecorder;
   // Hears each config the app publishes after a settings change.
   configChanged(listener: () => void): Disposable;
-  quit(): void;
+  // `keepSessions`: the run's hosted Claude processes outlive this quit.
+  quit(keepSessions: boolean): void;
   // The run's log, which hears when focus could not be emulated.
   log: Log;
 }
@@ -372,11 +373,13 @@ export function createDriveCommands(deps: DriveCommandsDeps): DriveCommands {
         deps.actions.run(requiredString(args, 'name'), args.args),
     },
     quit: {
-      args: '{}',
-      description: 'quits the app once the reply is sent',
+      args: '{ keepSessions?: boolean }',
+      description:
+        "quits the app once the reply is sent, ending the run's Claude sessions unless `keepSessions`",
       unqueued: true,
-      run: async () => {
-        setImmediate(deps.quit);
+      run: async (args) => {
+        const keepSessions = optionalBoolean(args, 'keepSessions') ?? false;
+        setImmediate(() => deps.quit(keepSessions));
         return {};
       },
     },
