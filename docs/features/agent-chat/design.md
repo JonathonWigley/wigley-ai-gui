@@ -98,7 +98,8 @@ interview on 2026-10-23; this file is the record of both.
 - `src/contracts/agent.ts` holds `AgentHarness`, `AgentProcess`, `ChatEntry` and `SessionControl`, replacing the
   one-shot `AgentClient`. The ACP adapter (`src/main/acp/`), the mock agent (`src/mock-agent/`, its Forge entry) and
   `@agentclientprotocol/sdk` are removed; ACP comes back as an adapter of this contract if a later harness needs it.
-- The Claude adapter is `src/main/claude-code/`, the only place the app spawns `claude`. It runs the installed CLI,
+- The Claude adapter is `src/main/claude-code/`, the only place the app builds the `claude` command; the session host
+  (`docs/features/session-host/design.md`) spawns it. It runs the installed CLI,
   one long-lived process per session, in stream-json mode, with the user's own login, plugins, skills and hooks. It
   is handed to plugins as a main service. The `claude` path is a core setting (`claude.command`) and the profiles a
   chat setting: an app started from the Dock has no shell `PATH` or `CLAUDE_CONFIG_DIR`.
@@ -318,8 +319,8 @@ interview on 2026-10-23; this file is the record of both.
   the user closing its row removes a record; quit, `install-app`, a process exit and a chat plugin reload keep it.
   Plugin data is per app instance, so the stable and dev apps, drive runs and the self-test each keep their own list.
   Quit and `install-app` end no process: the session host keeps each one running, and quitting only disconnects the
-  app from it (`docs/features/session-host/design.md`). `chat.stopAll` (`<Leader>:`) ends every owned session's
-  process and leaves each row resting. On start, chat opens a row for each record, in order and unselected, then
+  app from it (`docs/features/session-host/design.md`). `chat.stopAll` (`<Leader>:`) ends the process of every owned session chat holds
+  and leaves each row resting. On start, chat opens a row for each record, in order and unselected, then
   selects the saved row. A row whose process the host still holds is **re-attached**: the harness replays its pipe
   log, the row shows the transcript up to that process's start and then the process's own entries, and it carries on
   live (`session-host/design.md` § Re-attach). Every other row **rests**, holding no process. A record whose host id is already open, or whose open throws, is skipped and logged; a skipped record that holds queued messages stays in the saved file, so the next start tries it again. A restored

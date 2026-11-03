@@ -297,7 +297,7 @@ Task 01 sets `replayed: false` at every `ChatAgentEvent` emitter in the tree (ch
 - [x] [Claude adapter on the host](08-claude-on-host.md) — after 05, 07
 
 ### Wave 4
-- [ ] [Chat re-attaches and survives quit](09-chat-reattach.md) — after 08
+- [x] [Chat re-attaches and survives quit](09-chat-reattach.md) — after 08
 
 ### Wave 5
 - [ ] [Doc re-read](11-doc-re-read.md) — after 03, 04, 06, 09, 10
@@ -319,6 +319,7 @@ Review base: 7f956435
 - 07 · 4a9d6ee0 · diff read; Produces present; typecheck clean in its files; session-host client tests 27 passed; not yet run against task 06's real host · concerns: duplicate-id spawn differs from 01's fake (client replaces events, fake keeps the old ones live); current host's list, subscribe and stopAll have no reply timeout, so task 09's list timeout is the only bound; a detached entry stays in the client's map until host death or close; a corrupt middle log line takes the read-failure path
 - 06 · b4b193de · diff read; typecheck clean in its files; session-host tests 58 passed; worker's packaged asar probe passed; not run on Windows · concerns: a pipe log create or append failure (disk full) ends the host and every session; a known message type missing fields throws and ends the host; close waits on stdio, so a grandchild holding the pipes keeps a process, its host and a stopAll reply past SIGKILL; exit-after-push not run live and a Windows pipe might lose the last closed; a dead older record costs up to 2000 ms each start; session-host-test-doubles.ts is an extra file beside production code
 - 08 · cdd307d2 · diff read; tsc clean; 779 tests pass across claude-code, session-host, drive, fake harness, chat-sessions · concerns: client connects at construction, so every self-test and fake-harness drive run starts a host (task 12 confirms teardown and startup speed); stopAll has no reply timeout (drive quit held until the CLI's 60 s SIGTERM; self-test capped 5000 ms); closed during attach emits before the caller's await continuation, so isReplaying is true (sessionEnded/activity flagged replayed, ended live); a log with no usage event gets one usage event from settings read after a grace-expired attach; main.ts wiring and drive teardown untested until task 12; docs/features/agent-chat/design.md Agent harness seam stale for task 11
+- 09 · 7880e5b4 · diff read; all Produces present; tsc and lint clean; chat, sessions and keymap tests 1082 passed; stop all listed in selftest-script · concerns: the unheld guard's list() has no reply bound, so a host that stops answering leaves that row's send and loadHistory pending; a closed row whose attach resolves after detachAll is detached, not killed, so that process runs without an owner (plan states this); a send in the gap after a re-attach writes a at idle queues and writes b at once, order kept; the relay's left-while-held path relies on default allowHalfOpen false to close the socket; docs/features/followups.md line 433 names chat.killAll, for task 11
 ### Contract changes
 ### Rulings
 - Marketplace review base is cbd8a9e; git fetch fails in this session (SSH key unavailable), so origin was not checked; neither main showed behind at the last fetch and nothing is pushed — a stale origin would surface at push · lead
@@ -349,5 +350,14 @@ Review base: 7f956435
 - attach still reads deps.command()/claudeLaunch, used only for spawnError hint text · group 08
 - hasEmittedEnded dropped · group 08
 - fake detach follows the task literally: a held end stays pending until releaseEnd, so a task 09 test detaching during holdEnd and awaiting would hang · group 08
+- SessionList extends Omit<SessionsMainExports, 'holdConnects'>, outside the task's Files, since the hold lives in sessions/main/start.ts · group 09
+- chat's deps type needed no widening: start already holds the full SessionsMainExports · group 09
+- loadHistory also waits out a running attach, since a read during the attach would use a cut the attach may drop · group 09
+- writeAtIdle saves after its restart so the new process id reaches the file; otherwise a relaunch looks up the ended id and could start a second process · group 09
+- restAfterFailedAttach also saves and clears background, matching the ended path, and keeps saved queued rows per decision 23 · group 09
+- a rejected attach on a closed row still sets unheldProcessId, so decision 25's log can fire after the wait · group 09
+- an ended during replay is detected by session.exit, not isLive, so a row ended then closed gets no end() call · group 09
+- snapshot() drops a skipped record for good once a held row holds its host id; a plain filter would revive a session the user closed · group 09
+- extra tests beyond the doc: unheldGuard_ClearedRow_LogsAndStartsFresh, restore_SkippedRecord_LeftOutOnceAHeldRowHoldsItsHostId, hold_AfterAWaitEnded_StartsANewWaitWithItsOwnBound · group 09
 ### Review rounds
 ### Test gate

@@ -51,10 +51,13 @@ ends a turn; it falls back to the resting row and `--resume`, as before this fea
   and one **idle rule** (a top-level JSON key and value that marks a stdout line as the end of a turn, for Claude
   `"type": "result"`).
 - A process is **idle** when its last stdout line matches the idle rule, and busy after any later line. While no app
-  is connected, an idle process past the keep window is ended: stdin closed, then a kill after a grace. The app sends
+  is connected, an idle process is ended once the keep window has passed since the later of its turn end and the
+  app's last disconnect: stdin closed, then SIGTERM after a 3 s grace, then SIGKILL after 3 s more. The app sends
   the window (`chat.keepIdleMinutes`, default 60, the prompt cache's life) on connect and on each change.
 - The host's folder is `session-host/` in the app instance's user data folder (the self-test's: in its temporary
-  home, deleted at its teardown): the pipe logs and the channel's record. Its channel is a Unix socket on macOS and a named pipe on Windows, through the same transport the relay
+  home, deleted at its teardown): the pipe logs in `logs/`, the channel's record `host-v<protocol>.json` and the
+  host's own log. A pipe log is deleted when its process closes; a host that starts also deletes each log it holds no
+  process for, unless a host of another protocol answers. Its channel is a Unix socket on macOS and a named pipe on Windows, through the same transport the relay
   channel uses, named with the protocol version so two protocol versions never share a channel.
 - The app starts the host with its own binary as Node (`ELECTRON_RUN_AS_NODE=1`), detached, with no stdio, and
   waits for its channel. The host exits once it holds no process and no app is connected.
@@ -71,7 +74,7 @@ any app can drain any older host. The pipe log format is frozen the same way.
 - `hello` — the host's protocol version.
 - `list` — each hosted process: id, start time, running or its exit code and signal, its pipe log path.
 - `drain` — end each process at its turn end, refuse new ones, exit once empty.
-- `spawn`, `write`, `endInput`, `kill`, `subscribe`, `setKeepIdle`, `stopAll` — the rest, which may change with the
+- `spawn`, `write`, `endInput`, `kill`, `subscribe`, `unsubscribe`, `setKeepIdle`, `stopAll` — the rest, which may change with the
   protocol version.
 
 A pipe log line is `{ seq, dir, at, text }`: `seq` counts from 1 per process, `dir` is `in`, `out` or `err`, `at` is
@@ -86,8 +89,8 @@ lines past the last `seq` it read.
   agree except for what no pipe line records (a notice the app made from a call, such as "Interrupted again").
 - A re-attached row shows the transcript up to its process's start time, then the replayed entries, so no entry
   shows twice: transcript entries and live entries have different ids.
-- A row whose process runs but cannot be attached — it lives in another protocol's host, the host list timed out, or
-  the attach failed — is **unheld**: it refuses a send until that process ends, and before a send or a history read
+- A row whose process runs but cannot be attached — it lives in another protocol's host, the host list timed out, the
+  attach failed, or its profile is missing from chat's profiles setting — is **unheld**: it refuses a send until that process ends, and before a send or a history read
   chat lists the host again and re-attaches when it can, so a session never runs two processes.
 - Events a replay emits are flagged `replayed`, so the agents log appends nothing twice and no alert fires for a
   turn that ended while the app was closed. The row still shows the session's current state.

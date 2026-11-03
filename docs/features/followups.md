@@ -429,10 +429,6 @@ Closed lists that become registrations, so a plugin adds what is hardcoded today
 
 User-facing features, those other work builds on first.
 
-- **Keep sessions running when the app closes** — *needs a feature plan*: closing the app stops every running
-  session (chat main's `dispose` calls `chat.killAll()` on quit, `src/plugins/chat/main/start.ts`). The user wants
-  running sessions to carry on to their turn end, so updating the app and restarting it does not cancel work in
-  progress; if there is a better way to reach that goal, propose it.
 - **Chat holds a scrolled-up position and shows a "new messages" bubble** — *needs a feature plan*: the transcript
   jumps to the bottom only while the user is already there. Scrolled up, the user's position holds through every
   new entry, streaming text and resize, and a "new messages" bubble floats at the bottom of the transcript, above

@@ -1,6 +1,6 @@
 # 09 — Chat re-attaches and survives quit
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 08
 Plan: [plan.md](plan.md)
@@ -546,4 +546,4 @@ Commit:    one commit for the group: "chat: re-attach hosted sessions, keep them
 
 ## Proof
 
-<written by wigley:make: commit sha, proof result, concerns; empty until the group lands>
+Commit 7880e5b4 · proof: diff read; all Produces present; tsc and lint clean; chat, sessions and keymap tests 1082 passed; stop all listed in selftest-script · concerns: the unheld guard's list() has no reply bound, so a host that stops answering leaves that row's send and loadHistory pending; a closed row whose attach resolves after detachAll is detached, not killed, so that process runs without an owner (plan states this); a send in the gap after a re-attach writes a at idle queues and writes b at once, order kept; the relay's left-while-held path relies on default allowHalfOpen false to close the socket; docs/features/followups.md line 433 names chat.killAll, for task 11
