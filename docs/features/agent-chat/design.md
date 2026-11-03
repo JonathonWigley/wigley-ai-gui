@@ -246,9 +246,6 @@ interview on 2026-10-23; this file is the record of both.
   - **No live cost**: Claude reports cost only when the turn ends (`claude-stream.md` § Result), so only the
     finished line shows it. A live estimate from token counts and a price table was rejected for keeping Claude's
     prices out of the app.
-  - **Short tab**: when the composer outgrows its cap, the composer parts give up height first, then the dock, down
-    to one line, so the box and the status line keep their full height inside the tab. The built-in layout drops
-    whole parts from the end: the tool counts, then the action box, keeping the header or the finished line.
 - **Pending messages**: a message sent while the harness reports the session's turn running (the process runs and
   its own activity is not `idle`) is not written to the agent. A turn Claude runs on its own after a background task
   ends counts as running too: the session shows working through it, its messages wait, and the turn-finished alert
