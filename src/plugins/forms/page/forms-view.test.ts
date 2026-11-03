@@ -102,6 +102,7 @@ function formTabSetup(others: string[] = []) {
           remove: () => undefined,
         };
       },
+      setActivity: () => undefined,
     },
     beforeClose: () => true,
     setScope: (view) => calls.push(['setScope', view]),

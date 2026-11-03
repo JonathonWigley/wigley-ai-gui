@@ -163,6 +163,7 @@ function primerTabSetup(
           remove: () => undefined,
         };
       },
+      setActivity: () => undefined,
     },
     beforeClose: () => true,
     setScope: () => undefined,

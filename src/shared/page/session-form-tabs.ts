@@ -34,6 +34,8 @@ export interface SessionFormTabsDeps {
   beforeClose(sessionId: string): boolean;
   // Runs each time one of these tabs becomes the visible tab.
   shown(): void;
+  // Called when a session's form starts or stops showing, so the host can tell the session's row.
+  formShown(sessionId: string, shown: boolean): void;
 }
 
 export interface SessionFormTabs {
@@ -44,7 +46,7 @@ export interface SessionFormTabs {
   takeOver(formId: string, sessionId: string): void;
   release(formId: string): void;
   // For each tab: shows its idle state while `statusOf` is null, and sends its status (`statusOf`, or '' for
-  // null) to the session's row when it changed.
+  // null) to the session's row when it changed, and calls `formShown` when whether a form shows changed.
   sync(statusOf: (sessionId: string) => string | null): void;
   // Drops the session's tab entry once sessions dropped the tab.
   forget(sessionId: string): void;
@@ -61,6 +63,8 @@ interface FormTab {
   element: HTMLElement;
   idle: HTMLElement;
   status: string;
+  // Whether `statusOf` last returned a status, even an empty one.
+  shown: boolean;
 }
 
 // One tab per session that has held a form, each form taking over its
@@ -87,7 +91,13 @@ export function createSessionFormTabs(
       beforeClose: () => deps.beforeClose(sessionId),
       shown: deps.shown,
     });
-    const created: FormTab = { handle, element: tab, idle, status: '' };
+    const created: FormTab = {
+      handle,
+      element: tab,
+      idle,
+      status: '',
+      shown: false,
+    };
     tabs.set(sessionId, created);
     return created;
   };
@@ -113,11 +123,16 @@ export function createSessionFormTabs(
     sync(statusOf) {
       for (const [sessionId, tab] of tabs) {
         const shownStatus = statusOf(sessionId);
-        tab.idle.hidden = shownStatus !== null;
+        const shown = shownStatus !== null;
+        tab.idle.hidden = shown;
         const status = shownStatus ?? '';
         if (tab.status !== status) {
           tab.status = status;
           tab.handle.setStatus(status);
+        }
+        if (tab.shown !== shown) {
+          tab.shown = shown;
+          deps.formShown(sessionId, shown);
         }
       }
     },
