@@ -288,7 +288,7 @@ Task 01 sets `replayed: false` at every `ChatAgentEvent` emitter in the tree (ch
 - [x] [Windows per-version install](04-windows-install-folders.md)
 
 ### Wave 2
-- [ ] [Claude adapter pipe fold](05-claude-pipe-fold.md) — after 01
+- [x] [Claude adapter pipe fold](05-claude-pipe-fold.md) — after 01
 - [ ] [Session host process](06-session-host-process.md) — after 01, 02
 - [ ] [Session host client](07-session-host-client.md) — after 01, 02
 - [x] [Agents log and workflow skip replayed events](10-agents-replayed.md) — after 01
@@ -315,6 +315,7 @@ Review base: 7f956435
 - 02 · c7be320e · diff read; all Produces present; typecheck clean in its files; layer check clean; local-channel and relay tests pass · concerns: any connect rejection counts as stale, so a live listener refusing with EACCES or EAGAIN would lose its socket file; close test waits a fixed 20 ms; readLines assumes Buffer chunks and does not resume a paused stream; followups.md 323 and 331 name relay/endpoint.ts, for task 11
 - 10 · 6b18de64 · diff read; typecheck clean in its files; agents and workflow start tests 25 passed · concerns: the new unlogged-events table drops the old proof that a preview event and a real event log side by side
 - 03 · marketplace:524438dd · diff read; all Produces present; forms suite 63 tests OK (2 Windows-only skipped); manifest check run after commit; Windows lookup not run (user's check) · concerns: cancel-then-new-call lets that call start the app inside the 30 s window, harmless under the single-instance lock; narrow race leaves such a call needs_manual_open; _reconnecting stays True after close; refused-hello test at 2.0 s does not catch dropping the refusal stop
+- 05 · 5b2ec6e5 · diff read; all Produces present; typecheck clean in claude-code; claude-code tests 404 passed · concerns: a send from idle gives one activity effect where the task says none (required by the activity sync); an error event with a pid now emits idle before ended, not on the task's list, named in the commit; HostedSpawn.id is sessionId until 08 switches to processId; a live init with no slash_commands replays a commands effect holding []; hasEmittedEnded guard cannot trigger today, 08 can drop it
 ### Contract changes
 ### Rulings
 - Marketplace review base is cbd8a9e; git fetch fails in this session (SSH key unavailable), so origin was not checked; neither main showed behind at the last fetch and nothing is pushed — a stale origin would surface at push · lead
@@ -329,5 +330,8 @@ Review base: 7f956435
 - agentLog_UnloggedEvents asserts agents.sent on both rows, where the task names only the replayed row — keeps the table free of a per-row branch · group 10 · group 10
 - The poll waits one reconnect_poll before its first try — caps an app that accepts then drops at two connects a second — a restart already listening is seen up to 0.5 s later · group 03 · group 03
 - The cancelled-call test sends the second call before the cancel, the spec's order flakes when a poll check lands between them — the same rule is proved · group 03 · group 03
+- foldUsageInput does not run advanceFold first — the task gives that to foldPipeLine only — a past-deadline grace ends at the next line or timer with the same stamp · group 05 · group 05
+- The interrupt control response no longer syncs activity itself — every fold ends with the sync — an activity effect could come later within one fold if wrong · group 05 · group 05
+- exitText and exitError take signal: string | null — HostedExit.signal is a string · group 05 · group 05
 ### Review rounds
 ### Test gate

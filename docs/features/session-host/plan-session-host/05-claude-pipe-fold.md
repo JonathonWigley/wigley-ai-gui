@@ -1,6 +1,6 @@
 # 05 — Claude adapter pipe fold
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -383,4 +383,4 @@ uuid now starts `00000000-`) and each item of § The harness "Behaviour changes"
 
 ## Proof
 
-<written by wigley:make: commit sha, proof result, concerns; empty until the group lands>
+Commit 5b2ec6e5 · proof: diff read; all Produces present; typecheck clean in claude-code; claude-code tests 404 passed · concerns: a send from idle gives one activity effect where the task says none (required by the activity sync); an error event with a pid now emits idle before ended, not on the task's list, named in the commit; HostedSpawn.id is sessionId until 08 switches to processId; a live init with no slash_commands replays a commands effect holding []; hasEmittedEnded guard cannot trigger today, 08 can drop it
