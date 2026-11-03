@@ -35,7 +35,7 @@ A user title therefore locks out the agent's renames until the user clears it, a
 later titles are still kept underneath. A row with a title shows it as the main text and its folder
 label (`gamma 2`) as dim detail after it; the tooltip carries both.
 
-The limit is the `sessions.titleMaxLength` setting (default 40), counted in code points after
+The limit is the `sessions.titleMaxLength` setting (default 30), counted in code points after
 whitespace runs collapse to one space. A `user` or `agent` title past it is refused, never cut; a
 `firstMessage` title is cut, since nobody chose its words.
 
@@ -53,7 +53,9 @@ user title it saves the agent title and says the user's title shows.
 Claude Code defers MCP tools: an agent sees only the tool's name until it loads it with ToolSearch, so
 the tool's description alone does not prompt a rename. Chat registers one instruction
 (`addInstructions`) that every process start it makes passes with `--append-system-prompt`: set the
-title at the end of the first turn, and again only when the work's focus clearly changes. Chat passes
+title at the end of the first turn, and again only when the work's focus clearly changes. Both the
+instruction and the tool's description ask for a 2 to 4 word heading naming the topic ("Agent Status Line"),
+not a sentence describing the request, so a title fits the row without a cut. Chat passes
 the instruction on every process start, a resume included (`claude-launch.ts`). `agent-chat/design.md`
 § Saved sessions holds that the Claude CLI keeps the system prompt of a conversation's first request on
 resume, so a conversation first started before this feature may never receive the instruction. Such a
