@@ -183,11 +183,8 @@ interview on 2026-10-23; this file is the record of both.
     numerals: `8s`, `42s`, `1m 05s`, `1h 02m`. A live line's time ticks once a second to now, so it covers the
     thinking before the first step; only that line redraws. A finished run that is the last entry ends at its last
     step.
-  - **Live run**: a header (a running dot, the current step's action such as `Bash · npm test`, `· N steps` or
-    `· 1 step`, and its time, dim)
-    over a shortlist of the latest steps, the newest at the bottom and highlighted as current, the oldest dropping
-    off. The built-in layout shows 5 lines; that number is the layout's own, so a user layout changes it, and no
-    setting does.
+  - **Live run**: drawn as a finished run's line that grows as steps arrive, its time ticking; the working block
+    (below) carries the live look.
   - **Finished run**: one dim line, the step count, the tools used and the time, such as
     `6 steps · Read 3 · Bash 2 · Edit · 42s` (most used first, a single use named alone); a failed tool step adds
     `· 1 failed` in the error colour before the time.
@@ -200,6 +197,24 @@ interview on 2026-10-23; this file is the record of both.
   - Permission prompts, notices and the turn result stay entries of their own, and each ends the run before it.
   - The key log lines are `focused activity line`, `expanded activity line` and `collapsed activity line`; a step row
     logs as its entry kind does (`focused tool entry`).
+- **Working block**: while the session works on a turn (the harness reports `working`), one block sits after the
+  last entry and before any pending row, drawn by the layout's `working` part; it goes when the turn ends, leaving
+  the run lines and the result entry. It is not a cursor stop. Settled from the user's sketch in an interview on
+  2026-11-02.
+  - **Header**: the turn's time, the state word, and `…`: `1:05 Working…`. The time counts from the turn's user
+    entry (a queued message from when it was sent) to now, once a second, as `m:ss` (`h:mm:ss` past an hour).
+  - **State**: one of four, the first that holds: **Waiting** while a permission entry in the turn is unanswered,
+    **Working** while a tool in the turn has no result, **Writing** while the last entry is streaming assistant
+    text, else **Thinking**. A pure module picks it, so a layout only words it.
+  - **Action box**: the turn's latest tool calls, oldest first and the newest highlighted, each the tool and what
+    it acted on, a file path as its file name (`Read chat-kit.ts`, `Bash npm test`). The built-in layout shows 5
+    and lists tool calls only: thinking shows as the state, and raw entries only in an open activity line. The
+    part's input carries every step of the turn, so a user layout may list more.
+  - **Tool counts**: every tool the turn used with its count, most used first, always numbered:
+    `Read 3 Edit 1 Bash 2`.
+  - **No cost**: Claude reports cost only when the turn ends (`claude-stream.md` § Result), when the block is gone;
+    the result entry shows the turn's cost in cents, `$0.50`. A live estimate from token counts and a price table
+    was rejected for keeping Claude's prices out of the app.
 - **Pending messages**: a message sent while the harness reports the session's turn running (the process runs and
   its own activity is not `idle`) is not written to the agent. A turn Claude runs on its own after a background task
   ends counts as running too: the session shows working through it, its messages wait, and the turn-finished alert
@@ -381,7 +396,8 @@ interview on 2026-10-23; this file is the record of both.
   layouts are folders in `~/.config/wigley-ai-gui/layouts/chat/`, reloaded on save; an entry that throws is rolled
   back and drawn with the default layout. The `chat.layout` setting names the user's layout.
 - Besides the entries, a layout draws the Chat tab's other surfaces through parts that take `(parent, input, kit)`
-  and return a `PartView`: `activity` (a run of steps, § Activity line), `queuedMessage` (one pending message, § Pending
+  and return a `PartView`: `activity` (a run of steps, § Activity line), `working` (the running turn, § Working
+  block: its state, its steps and its times `startedAt` and `now`, sent again each second), `queuedMessage` (one pending message, § Pending
   messages: its text and how many images it carries), `composer`, `composerBar`, `attachments` (the
   strip of attached images), `pickerRow` (a row of the start prompt and the pickers), `signIn`, `reasonBox` (the deny
   reason), `closeConfirm` (the end-session confirm) and `imageViewer`. The `activity` part's input is the run's steps
@@ -410,6 +426,8 @@ interview on 2026-10-23; this file is the record of both.
 - **Plan F — clear command** (`plan-clear-command/`, settled in an interview on 2026-10-31): `/clear` as an app
   slash command restarting the row's process under a new host id, the sessions plugin's host-id change, and control
   values carried into every process start.
+- **Plan G — working block** (`plan-working-block/`, settled in an interview on 2026-11-02): the turn's working
+  block from the user's sketch, the live run drawn as its summary line, and the result entry's cost in cents.
 
 ## Out of scope
 
