@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentFormOwnerInfo } from '../../../contracts/agent-forms';
+import { NO_FORM_WAKE } from '../../../shared/agent-forms/chat-wake';
 import { createAgentFormService } from '../../../shared/agent-forms/form-service';
 import {
   type AgentFormStore,
@@ -120,6 +121,7 @@ function startSession(info: Partial<AgentFormOwnerInfo> = {}): FormsSession {
       type: roundType,
       presenter,
       store,
+      wake: NO_FORM_WAKE,
       defaultDeadlineSeconds: () => DEFAULT_DEADLINE_SECONDS,
     }),
     () => layoutNames,

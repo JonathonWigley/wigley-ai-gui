@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   AgentFormOwnerInfo,
   AgentFormSession,
+  AgentFormWake,
 } from '../../contracts/agent-forms';
 import { posixPaths } from '../paths/posix-paths';
 import { createAgentFormService } from './form-service';
@@ -61,6 +62,14 @@ let nowMs: number;
 let hexCount: number;
 let presenter: ScriptedFormPresenter<TestForm, TestBody>;
 let store: AgentFormStore;
+// Each `(sessionId, text)` the service woke its session with.
+let wakes: [string, string][];
+
+const wake: AgentFormWake = {
+  formFinishedUnheard: (sessionId, text) => {
+    wakes.push([sessionId, text]);
+  },
+};
 
 function startSession(
   info: Partial<AgentFormOwnerInfo> = {},
@@ -69,6 +78,7 @@ function startSession(
     type: TEST_FORM_TYPE,
     presenter,
     store,
+    wake,
     defaultDeadlineSeconds: () => DEFAULT_DEADLINE_SECONDS,
   }).startSession({ id: 'app-1', info: { ...SESSION, ...info } });
 }
@@ -130,6 +140,7 @@ beforeEach(() => {
   formsDir = mkdtempSync(path.join(tmpdir(), 'wigley-form-service-'));
   nowMs = 1_000_000;
   hexCount = 0;
+  wakes = [];
   presenter = new ScriptedFormPresenter();
   store = createFolderFormStore({
     dir: formsDir,
@@ -665,6 +676,90 @@ describe('hand-back', () => {
     expect(handed.note).toBe('stop here');
     expect(presenter.shown).toHaveLength(1);
   });
+});
+
+describe('the wake', () => {
+  const SUBMITTED_TEXT =
+    'The user submitted the form "Naming decisions" in the forms app. Call collect_last_form for its answers.';
+  const CANCELLED_TEXT =
+    'The user cancelled the form "Naming decisions" in the forms app. Call collect_last_form for its answers.';
+
+  // The naming form left open after its only call returned a draft.
+  async function openPastDraft(session: AgentFormSession<TestPayload>) {
+    const first = session.open(NAMING_ARGS, null, live());
+    const naming = presenter.latest();
+    await expireDeadline();
+    expect((await first).outcome).toBe('draft');
+    return naming.formId;
+  }
+
+  it.each<{
+    case: string;
+    finishWithCallsAround: (
+      session: AgentFormSession<TestPayload>,
+    ) => Promise<void>;
+    expected: [string, string][];
+  }>([
+    {
+      case: 'submitted after its only call returned a draft',
+      finishWithCallsAround: async (session) => {
+        const formId = await openPastDraft(session);
+        presenter.submit(formId, body('choice 1'));
+      },
+      expected: [['app-1', SUBMITTED_TEXT]],
+    },
+    {
+      case: 'submitted while its open call waits',
+      finishWithCallsAround: async (session) => {
+        void session.open(NAMING_ARGS, null, live());
+        presenter.submit(presenter.latest().formId, body('choice 1'));
+      },
+      expected: [],
+    },
+    {
+      case: 'submitted while a collect call waits',
+      finishWithCallsAround: async (session) => {
+        const formId = await openPastDraft(session);
+        void session.collect(true, live());
+        presenter.submit(formId, body('choice 1'));
+      },
+      expected: [],
+    },
+    {
+      case: 'submitted with a re-send of it queued',
+      finishWithCallsAround: async (session) => {
+        void session.open(NAMING_ARGS, null, live());
+        const formId = presenter.latest().formId;
+        void session.open(NAMING_ARGS, null, live());
+        presenter.submit(formId, body('choice 1'));
+      },
+      expected: [],
+    },
+    {
+      case: 'submitted with a call for another form queued',
+      finishWithCallsAround: async (session) => {
+        const formId = await openPastDraft(session);
+        void session.open(PLACEMENT_ARGS, null, live());
+        presenter.submit(formId, body('choice 1'));
+      },
+      expected: [],
+    },
+    {
+      case: 'cancelled after its only call returned a draft',
+      finishWithCallsAround: async (session) => {
+        const formId = await openPastDraft(session);
+        presenter.cancel(formId, body('stop here'));
+      },
+      expected: [['app-1', CANCELLED_TEXT]],
+    },
+  ])(
+    'wakes the session only when no call will return the form: $case',
+    async ({ finishWithCallsAround, expected }) => {
+      await finishWithCallsAround(startSession());
+
+      expect(wakes).toEqual(expected);
+    },
+  );
 });
 
 describe('a call made while another form is open', () => {
@@ -1240,6 +1335,7 @@ describe('a session moved to a new host id', () => {
       type: TEST_FORM_TYPE,
       presenter,
       store,
+      wake,
       defaultDeadlineSeconds: () => DEFAULT_DEADLINE_SECONDS,
     }).startSession({ id: 'app-1', info });
     const moveHost = () => {
@@ -1305,6 +1401,19 @@ describe('a session moved to a new host id', () => {
       fingerprint: fingerprintOf(PLACEMENT_ARGS),
       session_id: 'session-2',
     });
+  });
+
+  it('does not wake the session for an old host id form submitted after the move', async () => {
+    const { session, moveHost } = startMovableSession();
+    const asking = session.open(NAMING_ARGS, null, live());
+    const shown = presenter.latest();
+    await expireDeadline();
+    await asking;
+    moveHost();
+
+    presenter.submit(shown.formId, body('choice 1'));
+
+    expect(wakes).toEqual([]);
   });
 
   it('rejects a call queued under the old id, opening nothing under the new one', async () => {

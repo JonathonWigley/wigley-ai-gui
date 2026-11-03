@@ -20,6 +20,7 @@ function fakeChat(running = true) {
     calls,
     closed: vi.fn<(sessionId: string) => void>(),
     start: () => 'started',
+    hostSessionIdOf: () => 'host-started',
     sessions: () => [
       { sessionId: 'held', projectDir: '/p', running } as ChatSessionState,
     ],
@@ -57,6 +58,15 @@ function chatDriveActions(
 const ALLOWED: ToolResult = { content: [{ type: 'text', text: 'allow' }] };
 
 describe('chat drive actions', () => {
+  it('start returns the session it started and its host session id', async () => {
+    const drive = chatDriveActions(fakeChat());
+
+    expect(await drive.run('start')).toEqual({
+      sessionId: 'started',
+      hostSessionId: 'host-started',
+    });
+  });
+
   it('start closes the session it started when activating its row throws', async () => {
     const chat = fakeChat();
     const drive = chatDriveActions(chat, () => {

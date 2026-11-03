@@ -7,11 +7,16 @@ import type {
   QualifiedEvents,
 } from '../../../contracts/plugin';
 import { createAgentFormChannelPresenter } from '../../../shared/agent-forms/channel-presenter';
+import {
+  createChatFormWake,
+  NO_FORM_WAKE,
+} from '../../../shared/agent-forms/chat-wake';
 import { addAgentFormDriveActions } from '../../../shared/agent-forms/drive-actions';
 import { createAgentFormService } from '../../../shared/agent-forms/form-service';
 import { createFolderFormStore } from '../../../shared/agent-forms/form-store';
 import { createMemoryFormStore } from '../../../shared/agent-forms/memory-form-store';
 import { createAgentFormToolSession } from '../../../shared/agent-forms/tool-session';
+import type { ChatMainExports } from '../../chat/contract';
 import {
   DRIVE_SESSION_DEFAULTS,
   type Harness,
@@ -62,7 +67,8 @@ export function addDriveActions(
 }
 
 // Serves open_primer and collect_last_primer to every agent session, saves
-// each primer in the primer folder and shows it on the page, registers the
+// each primer in the primer folder and shows it on the page, wakes a primer's
+// chat session when the primer finishes with no call waiting, registers the
 // primer layouts, and opens the layout preview on the page's ask over a
 // service of its own whose store is in memory and whose primers go through the
 // presenter's quiet view; in the self-test it hands the driver its script, and
@@ -72,6 +78,7 @@ export const primerMainPart: MainPart<typeof primerManifest> = {
   start(api: PrimerApi) {
     const { services } = api;
     const sessions = api.dependency<SessionsMainExports>('sessions');
+    const chat = api.dependency<ChatMainExports>('chat');
     const store = createFolderFormStore({
       dir: path.join(services.homeDir, '.agents', 'wigley-primer', 'primers'),
       clock: services.clock,
@@ -95,6 +102,7 @@ export const primerMainPart: MainPart<typeof primerManifest> = {
       type: primerType,
       presenter,
       store,
+      wake: createChatFormWake(chat, services.log, 'primer'),
       defaultDeadlineSeconds,
     });
     const preview = createPrimerPreview({
@@ -107,6 +115,7 @@ export const primerMainPart: MainPart<typeof primerManifest> = {
           services.randomHex,
           services.paths,
         ),
+        wake: NO_FORM_WAKE,
         defaultDeadlineSeconds,
       }),
       log: services.log,

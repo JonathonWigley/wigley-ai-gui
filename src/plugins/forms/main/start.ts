@@ -7,12 +7,17 @@ import type {
   QualifiedEvents,
 } from '../../../contracts/plugin';
 import { createAgentFormChannelPresenter } from '../../../shared/agent-forms/channel-presenter';
+import {
+  createChatFormWake,
+  NO_FORM_WAKE,
+} from '../../../shared/agent-forms/chat-wake';
 import { addAgentFormDriveActions } from '../../../shared/agent-forms/drive-actions';
 import { createAgentFormService } from '../../../shared/agent-forms/form-service';
 import { createFolderFormStore } from '../../../shared/agent-forms/form-store';
 import { createMemoryFormStore } from '../../../shared/agent-forms/memory-form-store';
 import { createAgentFormToolSession } from '../../../shared/agent-forms/tool-session';
 import { errorText } from '../../../shared/error-text';
+import type { ChatMainExports } from '../../chat/contract';
 import {
   DRIVE_SESSION_DEFAULTS,
   type Harness,
@@ -45,11 +50,14 @@ const PREVIEW_SAVED_ROUNDS = 20;
 // The agents' FormsService over the saved-round folder, and the layout
 // preview over a FormsService of its own whose store is in memory. Both share
 // one presenter, which owns the channel's `finish` and `draft` handlers; the
-// preview's rounds go through its quiet view. Both services and the preview
-// read `layoutNames` for the layouts a round may name.
+// preview's rounds go through its quiet view. The agents' service wakes the
+// round's chat session when a round finishes with no call waiting; the
+// preview's wakes nothing. Both services and the preview read `layoutNames`
+// for the layouts a round may name.
 function createForms(
   api: FormsApi,
   sessions: SessionsMainExports,
+  chat: ChatMainExports,
   layoutNames: () => readonly string[],
 ): { forms: FormsService; preview: { open(): void } } {
   const { services } = api;
@@ -77,6 +85,7 @@ function createForms(
       type: roundType,
       presenter,
       store,
+      wake: createChatFormWake(chat, services.log, 'forms'),
       defaultDeadlineSeconds,
     }),
     layoutNames,
@@ -92,6 +101,7 @@ function createForms(
           services.randomHex,
           services.paths,
         ),
+        wake: NO_FORM_WAKE,
         defaultDeadlineSeconds,
       }),
       layoutNames,
@@ -168,15 +178,17 @@ export function addDriveActions(
 }
 
 // Serves its two tools to every agent session, shows each session's rounds on
-// the page, registers its layouts and opens the layout preview on the
-// page's ask; in the self-test it writes the fixture layouts and hands the
+// the page, wakes a round's chat session when the round finishes with no call
+// waiting, registers its layouts and opens the layout preview on the page's
+// ask; in the self-test it writes the fixture layouts and hands the
 // driver its script, and in a drive run it adds the drive actions.
 export const formsMainPart: MainPart<typeof formsManifest> = {
   manifest: formsManifest,
   start(api: FormsApi) {
     const sessions = api.dependency<SessionsMainExports>('sessions');
+    const chat = api.dependency<ChatMainExports>('chat');
     const layoutNames = () => api.layouts.names();
-    const { forms, preview } = createForms(api, sessions, layoutNames);
+    const { forms, preview } = createForms(api, sessions, chat, layoutNames);
     api.channel.handle('openPreview', () => preview.open());
     sessions.contributeTools(FORMS_TOOLS, (session) =>
       createAgentFormToolSession(forms.startSession(session), roundType),

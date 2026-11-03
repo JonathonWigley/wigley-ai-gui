@@ -150,24 +150,41 @@ Forms and primer reach chat only through `api.dependency<ChatMainExports>('chat'
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Wake seam in the form service, and the chat adapter](01-wake-seam.md)
-- [ ] [Drive: chat.start returns the session's host id](02-drive-host-id.md)
+- [x] [Wake seam in the form service, and the chat adapter](01-wake-seam.md)
+- [x] [Drive: chat.start returns the session's host id](02-drive-host-id.md)
 
 ### Wave 2
-- [ ] [Wire the wake into forms and the primer](03-wire-forms-primer.md) — after 01
+- [x] [Wire the wake into forms and the primer](03-wire-forms-primer.md) — after 01
 
 ### Wave 3
-- [ ] [Doc re-read](04-doc-re-read.md) — after 01, 02, 03
+- [x] [Doc re-read](04-doc-re-read.md) — after 01, 02, 03
 
 ### Wave 4
-- [ ] [Final verification](05-final-verification.md) — after 02, 03
+- [x] [Final verification](05-final-verification.md) — after 02, 03
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 9b795658
 
 ### Groups
+- 02 · 54f72bb2 · diff read: hostSessionIdOf and the { sessionId, hostSessionId } result present as planned; chat-sessions.test.ts and start.test.ts 152 passed; whole-tree typecheck waits on 01 · concerns: no test row pins chat.start's hostSessionId result or its null throw (plan asked none); worker's nvm prefix was refused, ran on default node (v24.22.1 matches .nvmrc)
+- 01 · d3ba371b · diff read: AgentFormWake, AgentFormServiceDeps.wake, ChatFormWakeTarget, createChatFormWake, NO_FORM_WAKE present as planned; npm run typecheck passes; worker ran the 4 test files, 107 passed · concerns: re-send row has both callers>0 and askTurn set, so it isolates neither clause (each clause pinned by its own row); rejection test's two microtask flushes depend on promise-chain depth
+- 03 · cb955812 + fix 1cac2422 · diff read: dependsOn ['sessions', 'chat', 'keys'] and createChatFormWake on both live services, NO_FORM_WAKE on previews; typecheck and lint pass; plugin-manifests.test.ts passes; selftest --plugin chat,forms,primer failed 92 steps on the first dispatch (start order put chat's left-open chat-second row in forms' wrap steps) and passes after fix 1cac2422 · concerns: first dispatch failed the layer check (forms/primer main may not import chat/contract) and the self-test; the whole self-test is not run, so scripts other than chat that now start before forms are unchecked; forms+primer-only self-test not re-run after the fix
+- 04 · no change · no change: AGENTS.md agent-forms and chat entries, the start-order line (733, generic), drive SKILL.md's chat.start result, and the forms README's wake paragraph (round text character for character, primer noun and tool, replayed collect, cleared conversation, non-chat sessions) all match the landed code · concerns: none
+- 05 · none (verification) · drive run fw05, fake harness, deadlines 5 then restored to 240: (1) round in chat-owned row 447145ea, submitted after the draft → Chat tab shows 'The user submitted the round "Layout preview" in the forms app. Call collect_last_round for its answers.' and the fake echo; (2) 120 s deadline, submit at once → forms.answers submitted, Chat tab empty; (3) primer → 'The user submitted the primer "Sample feature" in the forms app. Call collect_last_primer for its answers.' and echo; round text matches README's The wake line character for character; captures c1/c2/c3 read by the lead · PASS · concerns: cancel path not driven live (pinned by the form-service cancelled row)
 ### Contract changes
 ### Rulings
+- drive SKILL.md stated no chat.start result, so one sentence was added after the chat.start profile line — the Files field expects the skill to state it — one sentence to drop if wrong · group 02 · group 02
+- start.test.ts (outside Files) gains hostSessionIdOf on its fakeChat, no new row — the widened Pick needs it to typecheck — none · group 02 · group 02
+- forms and primer start.ts pass NO_FORM_WAKE to all four services as a placeholder so the tree compiles — group 03 replaces the two live ones with createChatFormWake — if 03 misses it the live app never wakes · group 01 · group 01
+- host-move GIVEN is its own it in the 'a session moved to a new host id' block, not a column of its it.each — that table's second row has a waiting call, so a wake column would pass trivially — one extra test · group 01 · group 01
+- forms' three wrap steps repeat their key until their row activates (stepAcrossWrapTo, max 12), rather than chat's script closing chat-second at its end — scripts here close the previous run's fixture at their next open, and forms must hold any earlier script's rows — fails at the cap past 12 foreign rows · group 03 · group 03
+- forms/main and primer/main LAYERS entries gain src/plugins/chat/contract.ts, as agents/main has — the layer check refused the import — none · group 03 · group 03
+- chat/main/start.ts reformatted with oxfmt on that file only — lint flagged group 02's lines — formatting only · group 03 · group 03
+- README's primer wording ('a primer says primer and names collect_last_primer') left as is — the primer type's heading is its feature name, so the line is true — none · group 04 · group 04
 ### Review rounds
+- round 1 (implementation review, correctness + plan-and-design) · efe615c3 · NEEDS FIXES: 3 Minor — 1 chat.start result unpinned (fix), 2 ROWS_LEFT_OPEN_MAX off by one (fix), 3 'in the forms app' wording (left: text pinned by the user's interview answer, round 1 Q2)
+- round 2 (re-review, correctness on fix 1c0d1a26) · 1c0d1a26 · PASS: findings 1 and 2 closed, nothing broken
 ### Test gate
+- form-service, chat-wake, round-type, primer-type (the wake rows and NO_FORM_WAKE callers), chat-sessions and chat start (hostSessionIdOf, the drive result), plugin-manifests (the start order): 7 files, 323 passed; whole Vitest suite also run since it takes 14 s: 5629 passed, no type errors; selftest --plugin chat,forms,primer passed in 03's fix proof · PASS
+- after fix 1c0d1a26: start.test.ts 26 passed, typecheck and lint pass, selftest --plugin chat,forms,primer all passed · PASS

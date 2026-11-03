@@ -32,7 +32,9 @@ or touches their data, so start one whenever a check needs it.
 2. Seed what the check needs: `npm run drive -- actions` lists every plugin's drive actions, and
    `npm run drive -- do <plugin>.<action> '<json>'` runs one (a session, a round, a chat, docs).
    `chat.start` uses the first profile in chat's `profiles` setting, and only a profile logged in
-   to Claude reaches it under `--harness claude`; `{"profile":"<name>"}` picks another.
+   to Claude reaches it under `--harness claude`; `{"profile":"<name>"}` picks another. It
+   returns `{ sessionId, hostSessionId }`: pass `hostSessionId` as the open actions' `sessionId`
+   to open a form in that chat session.
    `forms.openRound` and `primer.openPrimer` open their form in the live session their own
    plugin opened under that `sessionId`, else in the owned session holding it, else in a new
    row; a `sessions.connect` session is never reused. To put a round and a primer on one row, run

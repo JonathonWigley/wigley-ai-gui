@@ -19,7 +19,7 @@ const choiceCommands = Object.fromEntries(
 // Forms' scopes are its view names, each titled for the key help.
 export const formsManifest = definePlugin({
   id: 'forms',
-  dependsOn: ['sessions', 'keys'],
+  dependsOn: ['sessions', 'chat', 'keys'],
   commands: {
     nextItem: { label: 'next item', group: 'items', runsIn: 'page' },
     prevItem: { label: 'previous item', group: 'items', runsIn: 'page' },

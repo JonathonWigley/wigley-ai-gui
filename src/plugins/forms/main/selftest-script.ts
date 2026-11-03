@@ -152,6 +152,33 @@ function layoutSave(
   };
 }
 
+// The most rows an earlier script may leave open between this script's rows
+// across the sessions list's wrap.
+const ROWS_LEFT_OPEN_MAX = 12;
+
+const SESSION_STEP_COMMANDS = {
+  '<A-S-o>': 'sessions.nextSession',
+  '<A-S-i>': 'sessions.prevSession',
+} as const;
+
+// A step across the sessions list's wrap to `label`'s row, pressing `key`
+// again past each row an earlier script left open. A press logs its command's
+// line and the activation's in one task.
+function stepAcrossWrapTo(
+  key: keyof typeof SESSION_STEP_COMMANDS,
+  label: string,
+): SelfTestStep {
+  return {
+    keys: [key],
+    expect: `[page] ${key} ran ${SESSION_STEP_COMMANDS[key]}`,
+    repeat: {
+      until: `[sessions] activated ${label}`,
+      max: ROWS_LEFT_OPEN_MAX + 1,
+    },
+    why: "The wrap passes the rows earlier scripts left open, which sit outside this script's rows.",
+  };
+}
+
 // The preview steps run first, before any step raises a toast, so no toast
 // covers their screenshots.
 const PREVIEW_ROUND_STEPS: SelfTestStep[] = [
@@ -251,7 +278,7 @@ const GALLERY_STEPS: SelfTestStep[] = [
     expect: '[gallery] shell layout restored',
     screenshot: 'shell-layout-restored',
   },
-  { keys: ['<A-S-o>'], expect: '[sessions] activated selftest' },
+  stepAcrossWrapTo('<A-S-o>', 'selftest'),
 ];
 
 const FINDING_PICKS_STEPS: SelfTestStep[] = [
@@ -624,7 +651,7 @@ const SIDE_BAR_FROM_A_BOX_STEPS: SelfTestStep[] = [
 ];
 
 const CANCELLED_PREVIEW_STEPS: SelfTestStep[] = [
-  { keys: ['<A-S-i>'], expect: '[sessions] activated Layout preview' },
+  stepAcrossWrapTo('<A-S-i>', 'Layout preview'),
   {
     keys: ['<D-w>'],
     expect:
@@ -637,7 +664,7 @@ const CANCELLED_PREVIEW_STEPS: SelfTestStep[] = [
     why: "Cancelling closes the session and selects its left neighbour, the Codex session with no folder, whose only tab is its Docs tab; that tab's first show runs the session source, which knows no folder.",
   },
   { keys: ['<A-o>'], expect: '[sessions] no other tab in Codex session' },
-  { keys: ['<A-S-o>'], expect: '[sessions] activated selftest' },
+  stepAcrossWrapTo('<A-S-o>', 'selftest'),
 ];
 
 const ROUND_LAYOUTS_STEPS: SelfTestStep[] = [

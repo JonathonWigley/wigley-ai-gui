@@ -8,6 +8,7 @@ import type {
   AgentFormService,
   AgentFormSession,
   AgentFormType,
+  AgentFormWake,
 } from '../../contracts/agent-forms';
 import type { AgentFormStore, SavedAgentForm } from './form-store';
 
@@ -15,6 +16,8 @@ export interface AgentFormServiceDeps<Form, Body, Payload> {
   type: AgentFormType<Form, Body, Payload>;
   presenter: AgentFormPresenter<Form, Body>;
   store: AgentFormStore;
+  // Told when the user finishes a form no call will return.
+  wake: AgentFormWake;
   // Reads the soft deadline when the host names none, once per session.
   defaultDeadlineSeconds(): number;
 }
@@ -65,6 +68,7 @@ interface SessionContext<Form, Body, Payload> {
   type: AgentFormType<Form, Body, Payload>;
   presenter: AgentFormPresenter<Form, Body>;
   store: AgentFormStore;
+  wake: AgentFormWake;
   open: OpenForm<Form, Body> | null;
   lastFinished: FinishedForm<Form, Body> | null;
   // Settles once every open call already made has returned; null when none
@@ -340,6 +344,16 @@ function leaveFormsOfPastHost<Form, Body, Payload>(
   closeOpenForm(session);
 }
 
+// The message that points the session at the collect tool for a form the
+// user finished while no call waited on it.
+function formFinishedUnheardText<Form, Body, Payload>(
+  type: AgentFormType<Form, Body, Payload>,
+  form: Form,
+  kind: AgentFormEndKind,
+): string {
+  return `The user ${kind} the ${type.noun} "${type.heading(form)}" in the forms app. Call ${type.collectTool} for its answers.`;
+}
+
 function formListener<Form, Body, Payload>(
   session: SessionContext<Form, Body, Payload>,
   open: OpenForm<Form, Body>,
@@ -354,7 +368,8 @@ function formListener<Form, Body, Payload>(
       session.store.saveBody(open.record, open.latestBody);
     },
     // The store logs a failed finish write rather than throwing, so the
-    // answers still reach the waiting calls.
+    // answers still reach the waiting calls. A form no call will return, made
+    // under the session's current host id, wakes the session.
     finish: (end) => {
       if (open.end !== null || open.closed) {
         return;
@@ -364,7 +379,16 @@ function formListener<Form, Body, Payload>(
       open.latestBody = body;
       session.store.finish(open.record, end.kind, body);
       closeInWindow(open, session.presenter);
+      const noCallWaits = open.callers === 0 && session.askTurn === null;
+      const madeUnderCurrentHost =
+        session.formsHostId === session.info.sessionId;
       wakeWaiters(open);
+      if (noCallWaits && madeUnderCurrentHost) {
+        session.wake.formFinishedUnheard(
+          session.sessionId,
+          formFinishedUnheardText(session.type, open.form, end.kind),
+        );
+      }
     },
   };
 }
@@ -735,6 +759,7 @@ function startSession<Form, Body, Payload>(
     type: deps.type,
     presenter: deps.presenter,
     store: deps.store,
+    wake: deps.wake,
     open: null,
     lastFinished: null,
     askTurn: null,
@@ -753,7 +778,8 @@ function startSession<Form, Body, Payload>(
 }
 
 // Form logic every form source reaches, for one form type: validation,
-// re-send, replay, hand-back, pre-fill, the soft deadline and the saved forms.
+// re-send, replay, hand-back, pre-fill, the soft deadline, the saved forms and
+// the wake for a form no call will return.
 export function createAgentFormService<Form, Body, Payload>(
   deps: AgentFormServiceDeps<Form, Body, Payload>,
 ): AgentFormService<Payload> {
