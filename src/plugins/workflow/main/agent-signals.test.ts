@@ -86,11 +86,23 @@ const ROWS: {
     expected: [],
   },
   {
-    name: "a subagent's fileWritten gives nothing",
+    name: "a subagent's fileWritten of another file gives nothing",
     event: { type: 'fileWritten', at: 1, agentId: 'a1', path: '/r/x.md' },
     flow: FLOW,
     fromCurrentHost: true,
     expected: [],
+  },
+  {
+    name: "a subagent's fileWritten of a plan.md gives its path",
+    event: {
+      type: 'fileWritten',
+      at: 1,
+      agentId: 'a1',
+      path: '/r/plan-a/plan.md',
+    },
+    flow: FLOW,
+    fromCurrentHost: true,
+    expected: [{ type: 'fileWritten', path: '/r/plan-a/plan.md' }],
   },
   {
     name: 'main fileWritten gives its path',

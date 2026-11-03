@@ -57,7 +57,8 @@ Built, in `src/plugins/workflow/`, on the clear, the agent events and the row pa
 - **Dismiss** returns a closed session to idle. A closed session also leaves on its next flow skill.
 
 The last `plan.md` written in a session is its plan. `wigley:make`'s argument names the plan when it is a plan
-folder. Only the main agent moves the stage: a subagent's skill or write is not a signal.
+folder. Only the main agent moves the stage, with one exception: a subagent's write of a `plan-*/plan.md` names the
+plan, since `wigley:feature` drafts the plan in a subagent. Any other skill or write by a subagent is not a signal.
 
 ## Stage modules
 
@@ -99,8 +100,8 @@ Main folds these, for owned sessions only:
 | handed off, dismissed | the Make in new session and Dismiss actions | — |
 
 `skillStarted`, `fileWritten`, `turnStarted` and `turnEnded` are members of `AgentEvent` (`src/contracts/agent.ts`) that
-the Claude adapter and the fake harness emit, so the fold never reads a harness's JSON. A `skillStarted` or
-`fileWritten` of a subagent is no signal. A `sessionEnded` of the flow's current host session (a process that exits
+the Claude adapter and the fake harness emit, so the fold never reads a harness's JSON. A subagent's `skillStarted` is
+no signal, and neither is its `fileWritten` unless the path is a `plan-*/plan.md`. A `sessionEnded` of the flow's current host session (a process that exits
 mid-turn) gives a subagent-finished signal for each running subagent, then a turn-ended signal. A cleared session keeps
 its stage: Clear & make's own clear must not reset plan ready. `sessions.ended` (main's event for a closed row) drops
 the session's flow.

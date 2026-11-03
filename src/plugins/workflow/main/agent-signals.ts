@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { type AgentEvent, MAIN_AGENT_ID } from '../../../contracts/agent';
 import type { SessionFlow, WorkflowSignal } from '../contract';
+import { isPlanFile } from '../flow';
 
 // The signals one agent event gives the session's flow, in fold order; [] for
 // none. `fromCurrentHost` is true when the event came from the host session
@@ -23,10 +24,12 @@ export function signalOf(
             },
           ]
         : [];
-    case 'fileWritten':
-      return event.agentId === MAIN_AGENT_ID
-        ? [{ type: 'fileWritten', path: event.path }]
-        : [];
+    case 'fileWritten': {
+      // wigley:feature drafts plan.md in a subagent.
+      const countsAsSignal =
+        event.agentId === MAIN_AGENT_ID || isPlanFile(event.path);
+      return countsAsSignal ? [{ type: 'fileWritten', path: event.path }] : [];
+    }
     case 'turnStarted':
       return [{ type: 'turnStarted' }];
     case 'turnEnded':
