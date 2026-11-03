@@ -183,5 +183,6 @@ Review base: 9b795658
 - chat/main/start.ts reformatted with oxfmt on that file only — lint flagged group 02's lines — formatting only · group 03 · group 03
 - README's primer wording ('a primer says primer and names collect_last_primer') left as is — the primer type's heading is its feature name, so the line is true — none · group 04 · group 04
 ### Review rounds
+- round 1 (implementation review, correctness + plan-and-design) · efe615c3 · NEEDS FIXES: 3 Minor — 1 chat.start result unpinned (fix), 2 ROWS_LEFT_OPEN_MAX off by one (fix), 3 'in the forms app' wording (left: text pinned by the user's interview answer, round 1 Q2)
 ### Test gate
 - form-service, chat-wake, round-type, primer-type (the wake rows and NO_FORM_WAKE callers), chat-sessions and chat start (hostSessionIdOf, the drive result), plugin-manifests (the start order): 7 files, 323 passed; whole Vitest suite also run since it takes 14 s: 5629 passed, no type errors; selftest --plugin chat,forms,primer passed in 03's fix proof · PASS

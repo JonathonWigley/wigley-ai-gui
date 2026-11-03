@@ -173,7 +173,7 @@ function stepAcrossWrapTo(
     expect: `[page] ${key} ran ${SESSION_STEP_COMMANDS[key]}`,
     repeat: {
       until: `[sessions] activated ${label}`,
-      max: ROWS_LEFT_OPEN_MAX,
+      max: ROWS_LEFT_OPEN_MAX + 1,
     },
     why: "The wrap passes the rows earlier scripts left open, which sit outside this script's rows.",
   };
