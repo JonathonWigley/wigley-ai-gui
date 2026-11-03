@@ -210,6 +210,90 @@ const LAYERS: Record<string, LayerRule> = {
     ],
     packages: [],
   },
+  // Starts the real keys page, whose exports gallery files its anchors under.
+  'src/plugins/gallery/page/start.test.ts': {
+    layers: [
+      'src/shared',
+      'src/shared/page',
+      'src/plugins/gallery/layouts',
+      'src/plugins/gallery/page',
+      'src/plugins/keys/page',
+    ],
+    packages: [],
+  },
+  // Starts the real keys page, whose exports sessions files its anchors under.
+  'src/plugins/sessions/page/start.test.ts': {
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/shared/page',
+      'src/plugins/sessions/contract.ts',
+      'src/plugins/sessions/page',
+      'src/plugins/keys/page',
+    ],
+    packages: [],
+  },
+  // Starts the real keys page, whose exports settings files its anchors under.
+  'src/plugins/settings/page/start.test.ts': {
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/shared/page',
+      'src/plugins/settings/page',
+      'src/plugins/keys/page',
+    ],
+    packages: [],
+  },
+  // Starts the real sessions main, which refuses a tool name contributed twice.
+  'src/plugins/forms/main/start.test.ts': {
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/plugins/forms',
+      'src/plugins/forms/main',
+      'src/plugins/chat/contract.ts',
+      'src/plugins/sessions/contract.ts',
+      'src/plugins/sessions/main',
+    ],
+    packages: [],
+  },
+  // Starts the real sessions and keys pages, whose exports forms files under.
+  'src/plugins/forms/page/start.test.ts': {
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/shared/page',
+      'src/plugins/forms',
+      'src/plugins/forms/page',
+      'src/plugins/sessions/page',
+      'src/plugins/keys/page',
+    ],
+    packages: [],
+  },
+  // Starts the real sessions main, which refuses a tool name contributed twice.
+  'src/plugins/primer/main/start.test.ts': {
+    layers: [
+      'src/shared',
+      'src/plugins/primer/main',
+      'src/plugins/chat/contract.ts',
+      'src/plugins/sessions/contract.ts',
+      'src/plugins/sessions/main',
+    ],
+    packages: [],
+  },
+  // Starts the real sessions and keys pages, whose exports primer files under.
+  'src/plugins/primer/page/start.test.ts': {
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/shared/page',
+      'src/plugins/primer',
+      'src/plugins/primer/page',
+      'src/plugins/sessions/page',
+      'src/plugins/keys/page',
+    ],
+    packages: [],
+  },
   'src/plugins': { layers: ['src/contracts', 'src/shared'], packages: [] },
   'src/plugins/agent-lines': {
     layers: ['src/contracts', 'src/shared'],

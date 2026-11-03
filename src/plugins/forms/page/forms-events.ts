@@ -1,4 +1,4 @@
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import { formById, startFormEvents } from '../../../shared/page/session-forms';
 import type { AnswerStatus, FormsPageEvents, OpenRound } from '../contract';
 import {
@@ -77,7 +77,7 @@ export function startFormsEvents(
 // nothing.
 export function createFormsEventLog(
   getState: () => FormsState,
-  log: Log,
+  log: PluginLog,
 ): (event: FormsPageEvent) => void {
   // Each item's last status and pick, keyed `<roundId> <kind> <index>`.
   const shown = new Map<string, string>();
@@ -90,7 +90,7 @@ export function createFormsEventLog(
             shown.set(itemKey(round.formId, item), statusAndPick(round, item));
           }
         }
-        log('forms', `event roundShown ${event.data.roundId}`);
+        log(`event roundShown ${event.data.roundId}`);
         return;
       }
       case 'answerChanged': {
@@ -105,7 +105,6 @@ export function createFormsEventLog(
         }
         shown.set(key, now);
         log(
-          'forms',
           `event answerChanged ${roundId} ${item.kind} ${item.index} ${loggedStatus(event.data.status)}`,
         );
         return;
@@ -117,15 +116,11 @@ export function createFormsEventLog(
             shown.delete(key);
           }
         }
-        log(
-          'forms',
-          `event roundFinished ${event.data.roundId} ${event.data.outcome}`,
-        );
+        log(`event roundFinished ${event.data.roundId} ${event.data.outcome}`);
         return;
       }
       case 'viewChanged':
         log(
-          'forms',
           `event viewChanged ${event.data.view} ${event.data.roundId ?? 'none'}`,
         );
         return;

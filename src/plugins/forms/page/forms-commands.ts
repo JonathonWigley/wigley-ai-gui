@@ -110,7 +110,7 @@ export function formsCommandHandlers(
     (invoke: () => Promise<unknown>): Handler =>
     () =>
       void invoke().catch((error) => {
-        log('forms', `layout command failed: ${errorText(error)}`);
+        log(`layout command failed: ${errorText(error)}`);
         deps.toast(`Layout command failed: ${errorText(error)}`, 'error');
       });
 
@@ -177,7 +177,7 @@ export function formsCommandHandlers(
     prevBox: (context) => stepFocus(deps, context, -1),
     leaveBox: () => {
       boxes.leave();
-      log('forms', 'left the box');
+      log('left the box');
     },
     lineDown: () => scrollForm(deps, 'line', 1),
     lineUp: () => scrollForm(deps, 'line', -1),
@@ -192,7 +192,7 @@ export function formsCommandHandlers(
       const wasForms = store.get().view === 'forms';
       store.dispatch({ type: 'openReview' });
       if (wasForms && store.get().view === 'review') {
-        log('forms', 'review opened');
+        log('review opened');
       }
     },
     submit: () => finishActiveRound(deps, 'review', 'submitted'),
@@ -256,7 +256,7 @@ function changeAnswer(
   if (before === null || after === null || after.answer === before.answer) {
     return null;
   }
-  deps.log('forms', describe(after.answer, after.item));
+  deps.log(describe(after.answer, after.item));
   return after.answer;
 }
 
@@ -291,7 +291,6 @@ function scrollForm(
 ) {
   const scroll = deps.scrollForm(step, direction);
   deps.log(
-    'forms',
     scroll === null
       ? 'no round to scroll'
       : scrollText('the form', step, direction, scroll),
@@ -328,14 +327,14 @@ function jumpToUnanswered(
   }
   const item = unansweredItem(round, step);
   if (item === null) {
-    deps.log('forms', 'no unanswered item');
+    deps.log('no unanswered item');
     return;
   }
   const focused = focusedItem(round);
   const isFocusedItem =
     focused?.kind === item.kind && focused.index === item.index;
   if (isFocusedItem) {
-    deps.log('forms', 'no other unanswered item');
+    deps.log('no other unanswered item');
     return;
   }
   moveItem(deps, context, {
@@ -343,7 +342,7 @@ function jumpToUnanswered(
     item: railPosition(round.round, item),
   });
   if (jumpMoved(state, deps.store.get())) {
-    deps.log('forms', jumpedToLine(item));
+    deps.log(jumpedToLine(item));
   }
 }
 

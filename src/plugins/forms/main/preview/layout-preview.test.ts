@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 import type {
   AgentSession,
   ConnectedSession,
@@ -35,6 +35,7 @@ const NAMING_GONE = { ...FIRST_SAVED, layout: 'gone' };
 let connects: SessionInfo[];
 let activated: string[];
 let calls: Call[];
+let connectionEnd: Mock<() => void>;
 let logLines: string[];
 let saved: unknown[];
 let layoutNames: readonly string[];
@@ -80,7 +81,7 @@ function connect(info: SessionInfo): ConnectedSession {
   return {
     session,
     call: () => Promise.reject(new Error('the preview calls no tool')),
-    end: () => undefined,
+    end: connectionEnd,
   };
 }
 
@@ -93,7 +94,7 @@ function preview() {
     forms: fakeForms,
     savedArgs: () => saved,
     layoutNames: () => layoutNames,
-    log: (...parts: string[]) => logLines.push(parts.at(-1) ?? ''),
+    log: (message: string) => logLines.push(message),
   });
 }
 
@@ -106,6 +107,7 @@ beforeEach(() => {
   connects = [];
   activated = [];
   calls = [];
+  connectionEnd = vi.fn();
   logLines = [];
   saved = [FIRST_SAVED, SECOND_SAVED];
   layoutNames = ['default'];
@@ -218,4 +220,26 @@ describe('settle', () => {
     expect(connects).toHaveLength(2);
     expect(calls.at(-1)?.args).toBe(PREVIEW_ROUND_ARGS);
   });
+});
+
+describe('dispose', () => {
+  it.each([
+    { state: 'opened, disposed', opens: 1, disposes: 1, ends: 1 },
+    { state: 'opened, disposed twice', opens: 1, disposes: 2, ends: 1 },
+    { state: 'never opened, disposed', opens: 0, disposes: 1, ends: 0 },
+  ])(
+    'dispose ends the connection the preview holds, once ($state)',
+    ({ opens, disposes, ends }) => {
+      const subject = preview();
+      for (let open = 0; open < opens; open++) {
+        subject.open();
+      }
+
+      for (let dispose = 0; dispose < disposes; dispose++) {
+        subject.dispose();
+      }
+
+      expect(connectionEnd).toHaveBeenCalledTimes(ends);
+    },
+  );
 });

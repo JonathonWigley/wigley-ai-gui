@@ -1,11 +1,22 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import type { MainPart } from '../../../contracts/plugin';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
-import type {
-  ConnectedSession,
-  SessionInfo,
-  ToolResult,
+import { createMemoryFiles } from '../../../shared/memory-files';
+import {
+  fakeDependency,
+  startMainPart,
+} from '../../../shared/plugin-part-harness.test-support';
+import { type ChatMainExports, chatMainKey } from '../../chat/contract';
+import {
+  type ConnectedSession,
+  type SessionInfo,
+  type SessionsMainExports,
+  sessionsMainKey,
+  type ToolResult,
 } from '../../sessions/contract';
-import { addDriveActions, registerLayoutsAfter } from './start';
+import { sessionsMainPart } from '../../sessions/main/start';
+import type { formsManifest } from '../manifest';
+import { addDriveActions, formsMainPart, registerLayoutsAfter } from './start';
 
 // Sessions whose `ask_round` calls wait until the test answers them.
 function fakeSessions() {
@@ -162,6 +173,107 @@ function registrationSetup(failure: Error | null = null) {
 function flush(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
+
+const fakeChat = fakeDependency(
+  chatMainKey,
+  () => ({ profileOf: () => null }) as unknown as ChatMainExports,
+);
+
+// Sessions faked so a test sees the `end` of the connection the preview holds.
+function previewSessions() {
+  const end = vi.fn();
+  const dependency = fakeDependency(
+    sessionsMainKey,
+    (consumer) =>
+      ({
+        contributeTools: () => consumer.track({ dispose() {} }),
+        addCloseGuard: () => consumer.track({ dispose() {} }),
+        activate() {},
+        connect: (info: SessionInfo): ConnectedSession => ({
+          session: { id: 'preview-row', info },
+          call: () => Promise.reject(new Error('the preview calls no tool')),
+          end,
+        }),
+      }) as unknown as SessionsMainExports,
+  );
+  return { end, dependency };
+}
+
+describe('forms main part', () => {
+  it('stops with nothing live and starts again', async () => {
+    const harness = startMainPart(formsMainPart, {
+      parts: [sessionsMainPart],
+      dependencies: [fakeChat],
+    });
+    await flush();
+    expect(harness.counts().registrations).toBeGreaterThan(0);
+
+    await harness.stop();
+    expect(harness.counts()).toEqual({
+      registrations: 0,
+      timers: 0,
+      listeners: 0,
+      observers: 0,
+      frames: 0,
+    });
+
+    // The real sessions part throws on a tool name still contributed.
+    await harness.restart();
+    await harness.stop();
+  });
+
+  it("stop ends the open preview's session", async () => {
+    const sessions = previewSessions();
+    const harness = startMainPart(formsMainPart, {
+      dependencies: [fakeChat, sessions.dependency],
+    });
+    harness.invoke('openPreview');
+
+    await harness.stop();
+
+    expect(sessions.end).toHaveBeenCalledTimes(1);
+  });
+
+  it('stop before the fixture write lands registers no layout', async () => {
+    let land: () => void = () => undefined;
+    const written = new Promise<void>((resolve) => {
+      land = resolve;
+    });
+    const register = vi.fn();
+    const spied: MainPart<typeof formsManifest> = {
+      manifest: formsMainPart.manifest,
+      start: (api) =>
+        formsMainPart.start({
+          ...api,
+          layouts: {
+            ...api.layouts,
+            register(options) {
+              register();
+              return api.layouts.register(options);
+            },
+          },
+        }),
+    };
+    const harness = startMainPart(spied, {
+      parts: [sessionsMainPart],
+      dependencies: [fakeChat],
+      services: { files: { ...createMemoryFiles(), write: () => written } },
+    });
+
+    let isStopped = false;
+    const stopping = harness.stop().then(() => {
+      isStopped = true;
+    });
+    await flush();
+    expect(isStopped).toBe(false);
+    land();
+    await stopping;
+
+    expect(register).not.toHaveBeenCalled();
+    expect(harness.counts().registrations).toBe(0);
+    expect(harness.sent).toEqual([]);
+  });
+});
 
 describe('forms layouts registration', () => {
   it('writeLands_ThenDispose_RegistersThenDisposesIt', async () => {

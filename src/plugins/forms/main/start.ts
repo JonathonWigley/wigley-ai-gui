@@ -17,12 +17,13 @@ import { createFolderFormStore } from '../../../shared/agent-forms/form-store';
 import { createMemoryFormStore } from '../../../shared/agent-forms/memory-form-store';
 import { createAgentFormToolSession } from '../../../shared/agent-forms/tool-session';
 import { errorText } from '../../../shared/error-text';
-import type { ChatMainExports } from '../../chat/contract';
+import { chatMainKey, type ChatMainExports } from '../../chat/contract';
 import {
   DRIVE_SESSION_DEFAULTS,
   type Harness,
   type SessionsMainEvents,
   type SessionsMainExports,
+  sessionsMainKey,
 } from '../../sessions/contract';
 import type { FormsChannel, FormsService } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
@@ -53,13 +54,18 @@ const PREVIEW_SAVED_ROUNDS = 20;
 // preview's rounds go through its quiet view. The agents' service wakes the
 // round's chat session when a round finishes with no call waiting; the
 // preview's wakes nothing. Both services and the preview read `layoutNames`
-// for the layouts a round may name.
+// for the layouts a round may name. `dispose` ends every session either service
+// holds.
 function createForms(
   api: FormsApi,
   sessions: SessionsMainExports,
   chat: ChatMainExports,
   layoutNames: () => readonly string[],
-): { forms: FormsService; preview: { open(): void } } {
+): {
+  forms: FormsService;
+  preview: { open(): void } & Disposable;
+  dispose(): void;
+} {
   const { services } = api;
   const store = createFolderFormStore({
     dir: path.join(services.homeDir, '.agents', 'wigley-forms', 'rounds'),
@@ -79,37 +85,39 @@ function createForms(
     sessions,
   });
   const defaultDeadlineSeconds = () => api.settings().deadlineSeconds;
-  const forms = withKnownLayouts(
-    createAgentFormService({
-      type: roundType,
-      presenter,
-      store,
-      wake: createChatFormWake(chat, services.log),
-      defaultDeadlineSeconds,
-    }),
-    layoutNames,
-  );
+  const agentsService = createAgentFormService({
+    type: roundType,
+    presenter,
+    store,
+    wake: createChatFormWake(chat, services.log),
+    defaultDeadlineSeconds,
+  });
+  const previewService = createAgentFormService({
+    type: roundType,
+    presenter: presenter.quiet,
+    store: createMemoryFormStore(
+      services.clock,
+      services.randomHex,
+      services.paths,
+    ),
+    wake: NO_FORM_WAKE,
+    defaultDeadlineSeconds,
+  });
   const preview = createLayoutPreview({
     sessions,
-    forms: withKnownLayouts(
-      createAgentFormService({
-        type: roundType,
-        presenter: presenter.quiet,
-        store: createMemoryFormStore(
-          services.clock,
-          services.randomHex,
-          services.paths,
-        ),
-        wake: NO_FORM_WAKE,
-        defaultDeadlineSeconds,
-      }),
-      layoutNames,
-    ),
+    forms: withKnownLayouts(previewService, layoutNames),
     savedArgs: () => store.recentArgs(PREVIEW_SAVED_ROUNDS),
     layoutNames,
     log: services.log,
   });
-  return { forms, preview };
+  return {
+    forms: withKnownLayouts(agentsService, layoutNames),
+    preview,
+    dispose() {
+      agentsService.dispose();
+      previewService.dispose();
+    },
+  };
 }
 
 // Registers the layouts through `register` once `written` settles, and
@@ -184,10 +192,11 @@ export function addDriveActions(
 export const formsMainPart: MainPart<typeof formsManifest> = {
   manifest: formsManifest,
   start(api: FormsApi) {
-    const sessions = api.dependency<SessionsMainExports>('sessions');
-    const chat = api.dependency<ChatMainExports>('chat');
+    const sessions = api.dependency(sessionsMainKey);
+    const chat = api.dependency(chatMainKey);
     const layoutNames = () => api.layouts.names();
-    const { forms, preview } = createForms(api, sessions, chat, layoutNames);
+    const created = createForms(api, sessions, chat, layoutNames);
+    const { forms, preview } = created;
     api.channel.handle('openPreview', () => preview.open());
     sessions.contributeTools(FORMS_TOOLS, (session) =>
       createAgentFormToolSession(forms.startSession(session), roundType),
@@ -202,7 +211,7 @@ export const formsMainPart: MainPart<typeof formsManifest> = {
     const layouts = registerLayoutsAfter(
       fixtureWritten,
       () => api.layouts.register({ layoutTypes }),
-      (message) => api.services.log('forms', message),
+      api.services.log,
     );
     selfTest?.run(formsSelfTestScript(sessions, api.services.userConfig));
     const driveActions =
@@ -216,6 +225,8 @@ export const formsMainPart: MainPart<typeof formsManifest> = {
     return {
       commands: {},
       dispose: () => {
+        created.dispose();
+        preview.dispose();
         driveActions?.dispose();
         return layouts.dispose();
       },

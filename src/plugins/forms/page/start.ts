@@ -1,5 +1,6 @@
 import '../../../shared/page/markdown.css';
 import './forms.css';
+import type { Disposable } from '../../../contracts/disposable';
 import type {
   PageApi,
   PagePart,
@@ -12,11 +13,12 @@ import {
 } from '../../../shared/page/editor-boxes';
 import { activeForm, formById } from '../../../shared/page/session-forms';
 import { createReducerStore } from '../../../shared/page/reducer-store';
-import type {
-  SessionsPageEvents,
-  SessionsPageExports,
+import {
+  type SessionsPageEvents,
+  type SessionsPageExports,
+  sessionsPageKey,
 } from '../../sessions/contract';
-import type { KeysPageExports } from '../../keys/contract';
+import { keysPageKey } from '../../keys/contract';
 import type {
   FormsChannel,
   FormsPageEvents,
@@ -79,12 +81,13 @@ function createBoxes(api: FormsApi, store: FormsStore): EditorBoxes<BoxRef> {
 // Listeners first: a round shown while openForms is in flight arrives in
 // both, and showing an open round again changes nothing. The active round
 // follows the session the sessions plugin focuses, and a round leaves only when
-// main closes it. Main's forms map to the page's rounds here.
+// main closes it. Main's forms map to the page's rounds here. The `Disposable`
+// stops an `openForms` read still in flight from showing its rounds.
 function listenForRounds(
   api: FormsApi,
   store: FormsStore,
   sessions: SessionsPageExports,
-) {
+): Disposable {
   const { log, toast } = api.services;
   api.channel.on('formShown', (form) =>
     store.dispatch({ type: 'formShown', form: presentedRoundOf(form) }),
@@ -103,16 +106,23 @@ function listenForRounds(
   api.events.on('sessions.activeChanged', ({ sessionId }) =>
     store.dispatch({ type: 'sessionActivated', sessionId }),
   );
+  let isStopped = false;
   void api.channel
     .invoke('openForms')
     .then((forms) => {
+      if (isStopped) {
+        return;
+      }
       for (const form of forms) {
         store.dispatch({ type: 'formShown', form: presentedRoundOf(form) });
       }
     })
-    .catch((error) =>
-      log('forms', `open rounds not read: ${errorText(error)}`),
-    );
+    .catch((error) => log(`open rounds not read: ${errorText(error)}`));
+  return {
+    dispose() {
+      isStopped = true;
+    },
+  };
 }
 
 // Shows each agent round in its session's Form tab and sends the user's answers
@@ -128,7 +138,7 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
   manifest: formsManifest,
   start(api: FormsApi) {
     const { services } = api;
-    const sessions = api.dependency<SessionsPageExports>('sessions');
+    const sessions = api.dependency(sessionsPageKey);
     const store = createReducerStore(
       initialState([], sessions.selectedSessionId()),
       apply,
@@ -155,7 +165,7 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
       store,
       boxes,
       markdown: services.markdown,
-      keys: api.dependency<KeysPageExports>('keys'),
+      keys: api.dependency(keysPageKey),
       run: (command) => api.commands.run(command),
       commands: {
         exists: (command) => api.keys.command(command) !== undefined,
@@ -172,7 +182,7 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
     api.events.on('sessions.sessionRemoved', ({ sessionId }) =>
       view.forgetSession(sessionId),
     );
-    startRoundAutosave({
+    const autosave = startRoundAutosave({
       store,
       save: (roundId, body) => api.channel.invoke('draft', roundId, body),
       delayMs: () => api.settings().autosaveDelayMs,
@@ -185,7 +195,7 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
       logEvent(event);
       api.events.emit(event.name, event.data);
     });
-    listenForRounds(api, store, sessions);
+    const roundsRead = listenForRounds(api, store, sessions);
     const layoutShow = api.layouts.show<Layout>({
       defaultLayout,
       defaultStylesheet,
@@ -195,21 +205,28 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
         store.get().forms.flatMap((round) => roundLayoutNames(round.round)),
       setLayouts: (shown) => view.setLayouts(shown),
     });
-    store.subscribe(() => layoutShow.refresh());
-    const exports: FormsPageExports = {
-      activeRound() {
-        const round = activeForm(store.get());
-        return round === null ? null : openRoundOf(round);
-      },
-      answers(roundId) {
-        const round = formById(store.get(), roundId);
-        return round === undefined ? null : buildBody(round);
-      },
-      addCardPart: (part) => contributions.addCardPart(part),
-      addReviewColumn: (column) => contributions.addReviewColumn(column),
-    };
+    const layoutRefresh = store.subscribe(() => layoutShow.refresh());
     return {
-      exports: () => exports,
+      exports: (consumer): FormsPageExports => ({
+        activeRound() {
+          const round = activeForm(store.get());
+          return round === null ? null : openRoundOf(round);
+        },
+        answers(roundId) {
+          const round = formById(store.get(), roundId);
+          return round === undefined ? null : buildBody(round);
+        },
+        addCardPart: (part) => consumer.track(contributions.addCardPart(part)),
+        addReviewColumn: (column) =>
+          consumer.track(contributions.addReviewColumn(column)),
+      }),
+      dispose() {
+        roundsRead.dispose();
+        autosave.dispose();
+        layoutRefresh.dispose();
+        view.dispose();
+        boxes.dispose();
+      },
       commands: formsCommandHandlers({
         store,
         boxes,

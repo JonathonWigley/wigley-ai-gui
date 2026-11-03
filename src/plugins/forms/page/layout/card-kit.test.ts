@@ -267,10 +267,7 @@ describe('card kit', () => {
 
     const holder = asFake(kit.contributedParts(asHtml(new FakeElement('div'))));
 
-    expect(log).toHaveBeenCalledWith(
-      'forms',
-      expect.stringMatching(/p1.*boom/),
-    );
+    expect(log).toHaveBeenCalledWith(expect.stringMatching(/p1.*boom/));
     expect(
       findAll(holder, 'card-part').map((wrapper) => wrapper.dataset.part),
     ).toEqual(['p2']);
@@ -364,10 +361,7 @@ describe('card kit', () => {
 
     kit.run({ type: 'chooseAction' } as unknown as LayoutAction);
 
-    expect(log).toHaveBeenCalledWith(
-      'forms',
-      expect.stringContaining('chooseAction'),
-    );
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('chooseAction'));
     expect(deps.dispatch).not.toHaveBeenCalled();
     expect(deps.toggleDontAsk).not.toHaveBeenCalled();
   });

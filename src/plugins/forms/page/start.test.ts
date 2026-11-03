@@ -1,0 +1,211 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { EditorHost } from '../../../contracts/editor';
+import type { MarkdownRenderer } from '../../../contracts/markdown';
+import type { PagePart } from '../../../contracts/plugin';
+import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
+import { installFakeDom } from '../../../shared/page/test-dom';
+import { startPagePart } from '../../../shared/plugin-part-harness.test-support';
+import { createRegistrations } from '../../../shared/registrations';
+import { keysPagePart } from '../../keys/page/start';
+import { sessionsPagePart } from '../../sessions/page/start';
+import type { FormsPageExports } from '../contract';
+import { formsPagePart } from './start';
+import { presentedRound, question } from './test-rounds';
+
+// Lets a settled read's `then` run.
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+function deferred<T>() {
+  let resolve: (value: T) => void = () => undefined;
+  const promise = new Promise<T>((settled) => {
+    resolve = settled;
+  });
+  return { promise, resolve };
+}
+
+const MARKDOWN: MarkdownRenderer = {
+  block: (text) => text,
+  inline: (text) => text,
+  document: async (text) => text,
+  ...NO_FENCES,
+};
+
+// An editor host that counts the editors it holds live.
+function countingEditors() {
+  let live = 0;
+  const host: EditorHost = {
+    create(_parent, doc) {
+      live += 1;
+      return {
+        text: () => doc,
+        setText() {},
+        insert() {},
+        charBeforeCursor: () => '',
+        focus() {},
+        blur() {},
+        destroy() {
+          live -= 1;
+        },
+      };
+    },
+    createDocument() {
+      throw new Error('not used by forms');
+    },
+    contains: () => false,
+    typeInto() {},
+    onPendingKeys: () => ({ dispose() {} }),
+    cancelPendingKeys() {},
+    setKeymap() {},
+  };
+  return { host, live: () => live };
+}
+
+// Round r1 as main presents it, with a question whose notes box holds an editor.
+function openForm() {
+  const round = presentedRound('r1', { questions: [question('One')] });
+  return {
+    formId: round.roundId,
+    sessionId: round.sessionId,
+    label: round.label,
+    form: round.round,
+    draft: round.draft,
+  };
+}
+
+// A part started first, so stopped last, which hears `forms.roundShown`. Its
+// `dispose` holds its stop until `release`, so its listener outlives the forms
+// part's stop, where a late read would emit.
+function roundShownProbe() {
+  const heard: unknown[] = [];
+  const held = deferred<void>();
+  const part: PagePart = {
+    manifest: {
+      id: 'probe',
+      dependsOn: { main: [], page: [] },
+      commands: {},
+      scopes: {},
+      settings: {},
+      settingInfo: {},
+      themeTokens: {},
+    },
+    start(api) {
+      (api.events as unknown as { on: typeof api.events.on }).on(
+        'forms.roundShown' as never,
+        (data: unknown) => heard.push(data),
+      );
+      return { commands: {}, dispose: () => held.promise };
+    },
+  };
+  return { part, heard, release: () => held.resolve() };
+}
+
+const PROBE_ID = 'probe';
+
+describe('forms page part', () => {
+  beforeEach(() => {
+    installFakeDom((name, value) => vi.stubGlobal(name, value));
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('stops with nothing live and starts again', async () => {
+    const editors = countingEditors();
+    const harness = startPagePart(formsPagePart, {
+      parts: [sessionsPagePart, keysPagePart],
+      services: { editor: editors.host, markdown: MARKDOWN },
+    });
+    harness.send('formShown', openForm());
+    expect(editors.live()).toBeGreaterThan(0);
+
+    await harness.stop();
+    expect(harness.counts()).toEqual({
+      registrations: 0,
+      timers: 0,
+      listeners: 0,
+      observers: 0,
+      frames: 0,
+    });
+    expect(editors.live()).toBe(0);
+
+    await harness.restart();
+    await harness.stop();
+  });
+
+  it('an open-rounds read that lands after stop shows nothing', async () => {
+    const read = deferred<ReturnType<typeof openForm>[]>();
+    const probe = roundShownProbe();
+    const editors = countingEditors();
+    const harness = startPagePart(formsPagePart, {
+      parts: [probe.part, sessionsPagePart, keysPagePart],
+      invoke: () => read.promise,
+      services: { editor: editors.host, markdown: MARKDOWN },
+    });
+
+    const stopping = harness.stop();
+    await settle();
+    read.resolve([openForm()]);
+    await settle();
+
+    expect(probe.heard).toEqual([]);
+    expect(editors.live()).toBe(0);
+    probe.release();
+    await stopping;
+  });
+
+  it('an open-rounds read that lands before stop shows its round', async () => {
+    const probe = roundShownProbe();
+    probe.release();
+    const editors = countingEditors();
+    const harness = startPagePart(formsPagePart, {
+      parts: [probe.part, sessionsPagePart, keysPagePart],
+      invoke: async () => [openForm()],
+      services: { editor: editors.host, markdown: MARKDOWN },
+    });
+
+    await settle();
+
+    expect(probe.heard).toHaveLength(1);
+    expect(editors.live()).toBeGreaterThan(0);
+    await harness.stop();
+  });
+
+  it.each<{
+    member: string;
+    add(view: FormsPageExports): void;
+  }>([
+    {
+      member: 'addCardPart',
+      add: (view) =>
+        view.addCardPart({
+          id: PROBE_ID,
+          kinds: ['question'],
+          build: () => ({}),
+        }),
+    },
+    {
+      member: 'addReviewColumn',
+      add: (view) =>
+        view.addReviewColumn({ id: PROBE_ID, title: 'Probe', cell: () => '' }),
+    },
+  ])(
+    "a dependent's contribution leaves when the dependent stops ($member)",
+    async ({ add }) => {
+      const harness = startPagePart(formsPagePart, {
+        parts: [sessionsPagePart, keysPagePart],
+      });
+      const started = harness.started();
+      const dependent = createRegistrations();
+      add(started.exports?.(dependent) as FormsPageExports);
+      const nextView = started.exports?.(
+        createRegistrations(),
+      ) as FormsPageExports;
+      expect(() => add(nextView)).toThrow('is already added');
+
+      dependent.dispose();
+
+      expect(() => add(nextView)).not.toThrow();
+      await harness.stop();
+    },
+  );
+});

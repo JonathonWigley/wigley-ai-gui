@@ -131,7 +131,7 @@ describe('review pane', () => {
 
     const { row, log } = drawRow(contributions);
 
-    expect(log).toHaveBeenCalledWith('forms', expect.stringContaining('boom'));
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('boom'));
     expect(findAll(row, 'review-pick')).toHaveLength(1);
     expect(
       findAll(row, 'review-cell').map((cell) => cell.dataset.column),

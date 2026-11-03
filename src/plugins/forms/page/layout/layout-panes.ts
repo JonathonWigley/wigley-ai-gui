@@ -522,10 +522,7 @@ function reviewCells(
       cell.title = column.title;
       cells.push(cell);
     } catch (error) {
-      deps.log(
-        'forms',
-        `review column ${column.id} failed: ${errorText(error)}`,
-      );
+      deps.log(`review column ${column.id} failed: ${errorText(error)}`);
     }
   }
   return cells;

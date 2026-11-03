@@ -510,6 +510,6 @@ function drawLayoutHead(
   } catch (error) {
     disposeAnchors(anchors);
     slot.replaceChildren();
-    deps.log('forms', `layout ${pick.name} head failed: ${errorText(error)}`);
+    deps.log(`layout ${pick.name} head failed: ${errorText(error)}`);
   }
 }

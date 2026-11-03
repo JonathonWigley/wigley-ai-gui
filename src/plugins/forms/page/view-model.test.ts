@@ -579,7 +579,7 @@ describe('pickRailItem', () => {
         current = apply(current, action);
       },
       getState: () => current,
-      log: (source: string, line: string) => logs.push(`[${source}] ${line}`),
+      log: (line: string) => logs.push(line),
     };
     return { deps, dispatched, logs };
   }

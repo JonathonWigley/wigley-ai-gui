@@ -192,7 +192,6 @@ function hostCard(
         if (!isUpdateFailureLogged) {
           isUpdateFailureLogged = true;
           deps.log(
-            'forms',
             `layout ${layoutName} ${item.kind} card update failed: ${errorText(error)}`,
           );
         }

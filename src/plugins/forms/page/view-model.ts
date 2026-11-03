@@ -1,4 +1,4 @@
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import {
   type SaveState,
   saveLabel,
@@ -241,7 +241,7 @@ export function pickRailItem(
   deps: {
     dispatch(action: FormsAction): void;
     getState(): FormsState;
-    log: Log;
+    log: PluginLog;
   },
   view: FormsView,
   item: RailItem,
@@ -255,7 +255,7 @@ export function pickRailItem(
   const before = deps.getState();
   deps.dispatch(action);
   if (jumpMoved(before, deps.getState())) {
-    deps.log('forms', jumpedToLine(item));
+    deps.log(jumpedToLine(item));
   }
 }
 

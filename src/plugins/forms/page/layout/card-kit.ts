@@ -398,10 +398,7 @@ function placeContributedParts(
       });
     } catch (error) {
       wrapper.remove();
-      card.deps.log(
-        'forms',
-        `card part ${part.id} failed: ${errorText(error)}`,
-      );
+      card.deps.log(`card part ${part.id} failed: ${errorText(error)}`);
     }
   }
   return holder;
@@ -414,10 +411,7 @@ function updateContributedPart(part: PlacedPart, deps: CardDeps) {
   } catch (error) {
     if (!part.isUpdateFailureLogged) {
       part.isUpdateFailureLogged = true;
-      deps.log(
-        'forms',
-        `card part ${part.id} update failed: ${errorText(error)}`,
-      );
+      deps.log(`card part ${part.id} update failed: ${errorText(error)}`);
     }
   }
 }
@@ -508,7 +502,7 @@ function appendCardKeys(
 function runLayoutAction(card: CardContext, action: LayoutAction) {
   const formsActions = layoutActions(action, card.position);
   if (formsActions === null) {
-    card.deps.log('forms', `layout action ${action.type} is not known`);
+    card.deps.log(`layout action ${action.type} is not known`);
     return;
   }
   for (const formsAction of formsActions) {

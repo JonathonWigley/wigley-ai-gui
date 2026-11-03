@@ -95,13 +95,15 @@ interface ActiveLayouts {
 // view with the layouts it holds, keeping its answers, as after a card part or
 // review column is added or removed.
 // `scrollBy` scrolls the active round's main column by `step`, down for 1 and
-// up for -1; null when no round is active or it has no view yet.
+// up for -1; null when no round is active or it has no view yet. `dispose`
+// destroys every open round view, giving each session back.
 export interface FormsView {
   forgetSession(sessionId: string): void;
   showForm(sessionId: string): void;
   setLayouts(shown: ShownLayouts<Layout>): void;
   rebuild(): void;
   scrollBy(step: ScrollStep, direction: 1 | -1): ContentScroll | null;
+  dispose(): void;
 }
 
 // The whole forms UI: each round drawn in its session's Form tab, focused or
@@ -214,6 +216,11 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
       const roundView =
         round === null ? undefined : roundViews.get(round.formId);
       return roundView?.scrollBy(step, direction) ?? null;
+    },
+    dispose() {
+      for (const roundId of roundViews.keys()) {
+        destroyRoundView(roundId, shownRounds, tabs, deps);
+      }
     },
   };
 }
