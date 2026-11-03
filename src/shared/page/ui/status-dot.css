@@ -1,4 +1,4 @@
-/* Static: only the streaming indicator moves. */
+/* Static: the dot itself never moves. A plugin may animate the dot it draws, as a session row's running activity does. */
 .ui-dot {
   display: inline-block;
   flex: none;

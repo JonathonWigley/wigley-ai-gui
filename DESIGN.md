@@ -192,11 +192,11 @@ means something.
   closing), `duration-slow` (panels, sheets, the composer).
 - **Easing:** `ease-out` entering, `ease-in` leaving. No bounce and no overshoot.
 - **What moves:** motion answers a user action or reports agent state (the streaming indicator, a
-  tool step settling from running to done). Content does not animate in, and nothing moves on its
+  session row's pulsing running dot, a tool step settling from running to done). Content does not animate in, and nothing moves on its
   own.
 - **Reduced motion:** under `prefers-reduced-motion` `duration-fast`, `duration-base` and
-  `duration-slow` all take `duration-instant` (`1ms` in Mocha) and the streaming indicator is
-  static.
+  `duration-slow` all take `duration-instant` (`1ms` in Mocha) and the streaming indicator and the
+  pulsing dot are static.
 - **A floating panel fades in on open** (`openFloatingPanel`) over `duration-base`; showing a page
   or mode that holds an open panel does not fade it again, and closing is instant.
 
