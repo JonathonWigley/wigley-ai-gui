@@ -1,6 +1,6 @@
 # 04 — Chat saves titles, first-message fallback, the instruction
 
-Status: not started
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -25,3 +25,5 @@ Done when: compiles; the test gate runs the tests above
 Commit:    one commit for the group
 
 ## Proof
+
+Commit e9cb027c · proof: diff read (SavedSession.titles, ResumeRequest.title, ChatSessions.titleChanged, deps widened all present), no type errors in chat, layers clean · concerns: agent-chat design.md saved-sessions field list omits titles (for 07); that doc says a resume keeps the first request's system prompt, so a pre-change conversation may not get the instruction on resume, against the plan's 'a resumed agent may rename once more'

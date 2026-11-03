@@ -1,4 +1,4 @@
-import type { BaseKit } from '../../../shared/page/layout-host/kit';
+import type { BaseKit, DotStatus } from '../../../shared/page/layout-host/kit';
 
 // The sessions layout contract: what a layout in `layouts/sessions/<name>/layout.js` draws Sessions mode's side bar,
 // its chat panes and each session's tab bar with. A layout defines only the parts it changes; every part it leaves out, and every part that throws,
@@ -22,8 +22,8 @@ import type { BaseKit } from '../../../shared/page/layout-host/kit';
 // - the click on each row (activate its session) and each tab (select it), set on the element the part returns with
 //   `ui-row--action` and a mousedown that takes no focus, and dropped while that element is `is-disabled`;
 // - `is-selected` and `aria-current="true"` on the selected row, `is-active` and `aria-current` on the active tab;
-// - the `title` tooltip on each row (`label`, or `label · status`) and each tab (`title`), and each tab's `aria-label`
-//   (`title`), so a tab that draws only its icon keeps its accessible name;
+// - the `title` tooltip on each row (`title · label · status`, each part only when present) and each tab (`title`),
+//   and each tab's `aria-label` (`title`), so a tab that draws only its icon keeps its accessible name;
 // - `is-no-target` on the elements `sessionEdge`, `prevTabEdge`, `nextTabEdge` and `closeHint` return, which hides
 //   each while it has nothing to act on, and on the key inside each of `splitRightHint`, `splitDownHint` and
 //   `closePaneHint`; every tab bar's prompts and those keys take `is-no-target` outside the focused pane, since the
@@ -33,14 +33,19 @@ import type { BaseKit } from '../../../shared/page/layout-host/kit';
 // Every key prompt here has no scope, so it shows in every scope; a layout that leaves a kit prompt out leaves that
 // key unprompted.
 
-// One session row. `harness` is the harness's name, '' for none; `marked` is true while a round waits unopened;
-// `status` is the second line, null for none; `onScreen` is true while the session shows in a pane other than the
-// focused one.
+// One session row. `title` is the session's title as the row shows it (the user's, else the agent's, else the first
+// message cut to the title length), null for none; `label` is the session's folder label (`gamma 2`); `harness` is
+// the harness's name, '' for none; `marked` is true while a round waits unopened; `activity` is what the session is
+// doing, its word and the tone of its dot, null for none, and `default` draws no separate `marked` dot while it is
+// set; `status` is the second line, null for none; `onScreen` is true while the session shows in a pane other than
+// the focused one.
 export interface SessionRowInput {
   sessionId: string;
+  title: string | null;
   label: string;
   harness: string;
   marked: boolean;
+  activity: { word: string; tone: DotStatus } | null;
   status: string | null;
   onScreen: boolean;
 }

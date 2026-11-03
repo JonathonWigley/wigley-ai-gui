@@ -112,14 +112,21 @@
   box-shadow: inset 0 0 0 1px var(--wg-border-strong);
 }
 
-/* A row's first line never wraps: the label shrinks to an ellipsis, the
-   harness sits right after it and the attention dot at the line's end. The
-   status takes the whole second line. Each part has its own column, so a
-   row missing its harness or dot keeps the others in place. Two classes, so
-   the grid beats the row primitive's flex line whichever sheet loads last. */
+/* A row's first line never wraps: the title, then the folder label (the
+   folder label alone for a row with no title), then the trailing cell at the
+   line's end, holding the activity's dot then its word, or the attention dot.
+   The title gives up width first, shrinking to an ellipsis; the folder label
+   ellipsizes only once the title is down to the folder label's share of the
+   line. The trailing cell keeps its full width and never shrinks. The status
+   takes the whole second line. Each part has its own column, so a row missing
+   its folder label or trailing cell keeps the others in place. Two classes,
+   so the grid beats the row primitive's flex line whichever sheet loads
+   last. */
 .ui-row.session-row {
   display: grid;
-  grid-template-columns: minmax(0, max-content) max-content 1fr;
+  grid-template-columns:
+    minmax(0, max-content) minmax(0, max-content)
+    minmax(max-content, 1fr);
   column-gap: 0;
 }
 
@@ -133,9 +140,34 @@
 }
 
 .session-row > .ui-row-trailing {
+  display: flex;
+  align-items: center;
+  gap: var(--wg-space-1);
   grid-column: 3;
   justify-self: end;
   margin-left: var(--wg-space-2);
+}
+
+.session-row-activity {
+  font-size: var(--wg-text-12);
+  white-space: nowrap;
+}
+
+/* A running activity's dot pulses: it reports the agent at work. Reduced
+   motion makes the duration instant, which stops the pulse. */
+@keyframes session-dot-pulse {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0.4;
+  }
+}
+
+.session-row .ui-dot[data-status='running'] {
+  animation: session-dot-pulse var(--wg-duration-slow) var(--wg-ease-out)
+    infinite alternate;
 }
 
 .session-row-status {
@@ -277,4 +309,31 @@
 .sessions-empty {
   display: grid;
   place-content: center;
+}
+
+/* The rename dialog: its box, why a title was refused under it, then the
+   hint. */
+.session-rename-box {
+  background: transparent;
+  border: 0;
+  color: var(--wg-fg);
+  font: inherit;
+  min-width: 0;
+  outline: none;
+  padding: 0;
+  width: 100%;
+}
+
+.session-rename-problem,
+.session-rename-hint {
+  margin: 0;
+  font-size: var(--wg-text-12);
+}
+
+.session-rename-problem {
+  color: var(--wg-status-error);
+}
+
+.session-rename-hint {
+  color: var(--wg-fg-tertiary);
 }

@@ -15,20 +15,22 @@ import {
 } from '../../../shared/page/pane-tree/pane-tree';
 import { createPaneTreeView } from '../../../shared/page/pane-tree/pane-tree-view';
 import type { KeysPageExports } from '../../keys/contract';
-import type { SessionPart, SessionsState } from '../contract';
+import type { RowActivity, SessionPart, SessionsState } from '../contract';
 import type { Layout } from '../layouts/layout';
+import { shownTitle, titleLimit } from '../session-title';
 import {
   createSessionsParts,
   type SessionsPartsDeps,
 } from './layout/sessions-parts';
 import { type PaneSessions, shownElsewhere } from './pane-sessions';
 import { PREVIEW_STATE, previewRowState } from './preview';
+import { createRowActivities } from './row-activities';
 import {
   mountSessionTabsView,
   type SessionTabsView,
 } from './session-tabs-view';
 import { mountSidebarView } from './sidebar-view';
-import { rowStatus, stepSession } from './tabs';
+import { rowChanges, rowStatus, stepSession } from './tabs';
 
 // `activate` runs on a row click; `isModeShown` reads whether Sessions mode
 // shows; `tabsChanged` runs after any change to a session's tabs, their
@@ -38,7 +40,8 @@ import { rowStatus, stepSession } from './tabs';
 // focus moved to another pane, a pane tree press or outer pane key included;
 // `rowParts` are the parts each row draws, and adding or removing one draws
 // the rows again; `barParts` are the parts each tab bar draws, and adding or
-// removing one draws the tab bars again; the rest is what the sessions
+// removing one draws the tab bars again; `titleMaxLength` reads the setting
+// each row draw cuts a first-message title to; the rest is what the sessions
 // layout's kits read.
 export interface SessionsViewDeps extends Omit<
   SessionsPartsDeps,
@@ -53,6 +56,7 @@ export interface SessionsViewDeps extends Omit<
   paneFocused(paneId: string): void;
   rowParts: PartStore<SessionPart>;
   barParts: PartStore<SessionPart>;
+  titleMaxLength(): number;
 }
 
 // The chat panes and the session each shows. Each change draws the panes and
@@ -88,7 +92,11 @@ export interface SessionPanes {
 // the rows, tabs and text from the state the view holds. `showPreview(true)`
 // swaps the side bar's rows for the preview sample, whose selection a row
 // click or `stepPreview` moves without activating anything; `false` draws the
-// real rows again.
+// real rows again. `setActivity` sets a source's activity for a session, as
+// `SessionsPageExports.setActivity` says, drawing the side bar again only when
+// the row's shown activity changed; `render` drops the activities of the rows
+// that left. `redrawRows` draws the side bar's rows again, for a changed
+// title length.
 export interface SessionsView {
   element: HTMLElement;
   sideBar: HTMLElement;
@@ -99,6 +107,12 @@ export interface SessionsView {
   showPreview(isShown: boolean): void;
   isPreviewShown(): boolean;
   stepPreview(by: 1 | -1): void;
+  setActivity(
+    sessionId: string,
+    sourceId: string,
+    activity: RowActivity | null,
+  ): void;
+  redrawRows(): void;
 }
 
 // Sessions mode's two parts: the side bar of session rows, which the shell
@@ -119,12 +133,18 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
     drawSidebar();
   }, parts);
   let state: SessionsState | null = null;
+  const activities = createRowActivities();
   const assigned = new Map<string, string | null>();
   let paneCount = 1;
 
   const drawSidebar = () => {
+    const titleMax = titleLimit(deps.titleMaxLength());
     if (preview !== null) {
-      sidebar.render(preview, previewRowState, new Set());
+      sidebar.render(
+        preview,
+        (row) => previewRowState(row, titleMax),
+        new Set(),
+      );
       return;
     }
     const tree = treeView.tree();
@@ -133,9 +153,11 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
       state === null
         ? null
         : { ...state, selectedSessionId: assigned.get(tree.focusedId) ?? null },
-      (sessionId) => ({
-        status: rowStatus(tabs.statusesOf(sessionId)),
-        onScreen: elsewhere.has(sessionId),
+      (row) => ({
+        title: shownTitle(row.titles, titleMax),
+        activity: activities.top(row.sessionId),
+        status: rowStatus(tabs.statusesOf(row.sessionId)),
+        onScreen: elsewhere.has(row.sessionId),
       }),
       elsewhere,
     );
@@ -239,6 +261,10 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
     tabs,
     panes,
     render(next) {
+      for (const sessionId of rowChanges(state?.rows ?? [], next.rows)
+        .removed) {
+        activities.forget(sessionId);
+      }
       state = next;
       drawSidebar();
       tabs.render(next);
@@ -264,5 +290,11 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
         drawSidebar();
       }
     },
+    setActivity(sessionId, sourceId, activity) {
+      if (activities.set(sessionId, sourceId, activity)) {
+        drawSidebar();
+      }
+    },
+    redrawRows: () => drawSidebar(),
   };
 }

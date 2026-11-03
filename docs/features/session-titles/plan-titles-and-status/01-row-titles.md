@@ -1,6 +1,6 @@
 # 01 — Titles on session rows
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -27,3 +27,5 @@ Done when: compiles; `npm run lint` passes; the test gate runs the tests above
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 3b62145d · proof: diff read (every Produces present), typecheck clean, lint clean per worker · concerns: worktree guard refuses nvm-sourced npm, so npm runs by its absolute v24.22.1 path; per-call limit covered across two table rows rather than one list

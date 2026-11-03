@@ -1,7 +1,9 @@
 // @ts-check
 
 // The built-in Sessions look: the side bar's "Sessions" header over its rows,
-// each row's label (no harness name), attention dot, status line and on-screen mark,
+// each row's title with its folder label after it (the folder label alone for a
+// row with no title; no harness name), its activity's dot and word or, with no
+// activity, its attention dot, its status line and on-screen mark,
 // then other plugins' row parts (`contributedParts`) under them,
 // each chat pane's frame and focus edges, the tab bar's prompts around its
 // strip, other plugins' bar parts (`contributedParts`) after them, then its
@@ -22,12 +24,16 @@ const layout = {
   row(parent, input, kit) {
     const element = kit.row(parent, {
       density: 'list',
-      label: input.label,
-      detail: null,
+      label: input.title ?? input.label,
+      detail: input.title === null ? null : input.label,
     });
     element.classList.add('session-row');
     element.classList.toggle('is-on-screen', input.onScreen);
-    if (input.marked) {
+    if (input.activity !== null) {
+      const trailing = kit.rowTrailing(element);
+      kit.statusDot(trailing, input.activity.tone);
+      kit.el(trailing, 'span', 'session-row-activity', input.activity.word);
+    } else if (input.marked) {
       kit.statusDot(kit.rowTrailing(element), 'attention');
     }
     if (input.status !== null) {

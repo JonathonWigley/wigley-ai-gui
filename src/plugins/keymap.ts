@@ -177,6 +177,7 @@ export const defaultKeymap = {
     '<Leader>a': 'answer',
     '<Leader>n': 'notes',
     '<Leader>w': 'workflow',
+    '<Leader>r': 'rename',
   },
   binds: [
     // ── Windows and modes ──────────────────────────────────────────────────
@@ -201,6 +202,7 @@ export const defaultKeymap = {
     { keys: '<A-i>', scope: 'any', command: 'sessions.prevTab' },
     { keys: '<D-w>', scope: 'any', command: 'sessions.closeSession' },
     { keys: '<Leader>;', scope: 'any', command: 'sessions.closeSession' },
+    { keys: '<Leader>rr', scope: 'any', command: 'sessions.renameSession' },
 
     // ── Workflow ───────────────────────────────────────────────────────────
     { keys: '<Leader>ww', scope: 'any', command: 'workflow.mainAction' },
@@ -250,6 +252,16 @@ export const defaultKeymap = {
       keys: '<Esc>',
       scope: 'sessions.picker',
       command: 'sessions.pickerCancel',
+    },
+    {
+      keys: '<CR>',
+      scope: 'sessions.rename',
+      command: 'sessions.renameAccept',
+    },
+    {
+      keys: '<Esc>',
+      scope: 'sessions.rename',
+      command: 'sessions.renameCancel',
     },
 
     // ── Help ───────────────────────────────────────────────────────────────

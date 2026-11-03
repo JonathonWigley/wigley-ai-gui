@@ -126,12 +126,12 @@ to `DotStatus`.
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Titles on session rows](01-row-titles.md)
+- [x] [Titles on session rows](01-row-titles.md)
 
 ### Wave 2
-- [ ] [The set_session_title tool](02-title-tool.md) — after 01
+- [x] [The set_session_title tool](02-title-tool.md) — after 01
 - [ ] [Row title, activities and the rename dialog](03-row-drawing-and-rename.md) — after 01
-- [ ] [Chat saves titles, first-message fallback, the instruction](04-chat-titles.md) — after 01
+- [x] [Chat saves titles, first-message fallback, the instruction](04-chat-titles.md) — after 01
 
 ### Wave 3
 - [ ] [Chat activities](05-chat-activities.md) — after 03
@@ -148,7 +148,18 @@ to `DotStatus`.
 Review base: e38f1bb7
 
 ### Groups
+- 01 · 3b62145d · diff read (every Produces present), typecheck clean, lint clean per worker · concerns: worktree guard refuses nvm-sourced npm, so npm runs by its absolute v24.22.1 path; per-call limit covered across two table rows rather than one list
+- 02 · 79a46745 · diff read (SET_SESSION_TITLE_TOOL and startTitleTool present, deps as named TitleToolDeps), no type errors in sessions/main · concerns: start test's exactly-once check rests on the list refusing a duplicate name, since tools() is not reachable through exports; fake paths built inline to keep the layer rule
+- 04 · e9cb027c · diff read (SavedSession.titles, ResumeRequest.title, ChatSessions.titleChanged, deps widened all present), no type errors in chat, layers clean · concerns: agent-chat design.md saved-sessions field list omits titles (for 07); that doc says a resume keeps the first request's system prompt, so a pre-change conversation may not get the instruction on resume, against the plan's 'a resumed agent may rename once more'
 ### Contract changes
 ### Rulings
+- setUserTitle(null) clears the user title, as an empty string does — channel type allows null — a caller expecting an error gets a clear · group 01 · group 01
+- titles(id) returns a copy, as state() does — keeps main's object private — none · group 01 · group 01
+- setTitle's unchanged check compares the normalized value — a whitespace-only change is no change — none · group 01 · group 01
+- an ended session is checked before the args — an ended session with bad args reads 'This session has ended.' — none · group 02 · group 02
+- an unknown tool name rejects with 'no sessions tool <name>', matching createAgentFormToolSession — unreachable through routing today — none · group 02 · group 02
+- a resumed title is capped at 200 code points by the same helper as the first message — keeps saved state small — none · group 04 · group 04
+- empty text means text === ''; a whitespace-only message calls setTitle, which normalizes to null — none · group 04 · group 04
+- openRow sets titles for restore, resume and start alike; the titleChanged it fires saves nothing since the row is not yet held, and the following save writes them — none · group 04 · group 04
 ### Review rounds
 ### Test gate

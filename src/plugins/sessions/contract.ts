@@ -262,6 +262,33 @@ export interface SessionPart {
   build(parent: HTMLElement, sessionId: string): { dispose?(): void };
 }
 
+// The tones a row's activity shows in, the members of the page kit's
+// `DotStatus`.
+export type ActivityTone =
+  | 'idle'
+  | 'running'
+  | 'success'
+  | 'warning'
+  | 'attention'
+  | 'error';
+
+// What a session is doing, as one plugin sees it: the word its row shows
+// beside a dot in `tone`. Of a session's activities its row shows the one of
+// highest `rank`.
+export interface RowActivity {
+  word: string;
+  tone: ActivityTone;
+  rank: number;
+}
+
+// A round or primer waiting on the user: the one copy chat, forms and primer
+// set.
+export const NEEDS_YOU_ACTIVITY: RowActivity = {
+  word: 'needs you',
+  tone: 'attention',
+  rank: 40,
+};
+
 // `addTab` attaches the tab's element before returning and selects the tab
 // when it is the session's first; it throws on a tab id the session already
 // holds. A tab added before its session's row waits for the row. A session's
@@ -270,7 +297,12 @@ export interface SessionPart {
 // pane, not main's selection. `addRowPart` adds a part under every session
 // row, `addBarPart` one in every session's tab bar. Each throws on a part id
 // already added to its surface; adding a part and disposing its `Disposable`
-// each redraw that surface: the rows or the tab bars.
+// each redraw that surface: the rows or the tab bars. `setActivity` sets the
+// activity `sourceId` (one per plugin or tab) holds for the session, null
+// removing it; the row shows the highest-ranked one, the latest set winning a
+// tie, and redraws only when that changed. An activity set before the
+// session's row arrives shows once it does; a row leaving drops its
+// activities, and every page load starts with none.
 export interface SessionsPageExports {
   addTab(sessionId: string, tab: SessionTabView): SessionTabHandle;
   addRowPart(part: SessionPart): Disposable;
@@ -279,6 +311,11 @@ export interface SessionsPageExports {
   activate(sessionId: string): void;
   // Asks each of the session's tabs `beforeClose`, then asks main to close it.
   closeSession(sessionId: string): void;
+  setActivity(
+    sessionId: string,
+    sourceId: string,
+    activity: RowActivity | null,
+  ): void;
 }
 
 // `activeChanged` fires when the focused chat pane's session changes, to

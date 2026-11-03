@@ -31,7 +31,7 @@ export function stateOf(
 // each line as `[source] message`, `activated` recording each session a row
 // click activates, the row parts its rows draw (`rowParts`, a new store
 // unless one is handed in) and the bar parts its tab bars draw (`barParts`,
-// likewise). Runs under `installFakeDom`.
+// likewise), and a title length of 40. Runs under `installFakeDom`.
 export function sessionsViewSetup(
   rowParts: PartStore<SessionPart> = createPartStore(),
   barParts: PartStore<SessionPart> = createPartStore(),
@@ -49,6 +49,7 @@ export function sessionsViewSetup(
     paneFocused: () => undefined,
     rowParts,
     barParts,
+    titleMaxLength: () => 40,
     markdown: {
       block: (text) => text,
       inline: (text) => text,
