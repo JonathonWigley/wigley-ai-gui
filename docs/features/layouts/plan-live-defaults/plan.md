@@ -152,7 +152,7 @@ entry and the scheme; no task adds a `process.platform` check.
 - [x] [Page loads a live default](03-page-loads-live-default.md)
 
 ### Wave 2
-- [ ] [Main wires the clone and each owner's default folder](04-main-wires-clone-defaults.md) — after 01, 02
+- [x] [Main wires the clone and each owner's default folder](04-main-wires-clone-defaults.md) — after 01, 02
 - [x] [Default CSS to `layout.css`](05-default-css-to-layout-css.md) — after 03
 
 ### Wave 3
@@ -170,7 +170,9 @@ Review base: 46f417b5
 - 01 · 71f55e08 · diff read: defaultFolder: Files | null on LayoutRegistryDeps present, entry rule as planned; registry tests 39/39; oxfmt clean; tree typecheck errors are task 03 WIP only · concerns: a throw from starting the default-folder watch rejects startLayoutRegistry, so the owner user layouts fail to start too (matches the user-folder watch); a default folder missing at start stays unwatched until the next start
 - 03 · e8dfeb96 · diff read: ShowLayoutOptions.defaultStylesheet, LayoutLoaderDeps.defaultStylesheet and DrawnPart.drewPick present; typecheck clean; layout-host, entry-list, primer-view, page-api tests 238/238; oxlint and oxfmt clean on its files (worker) · concerns: renderer.ts (shell) also took defaultStylesheet: null, for task 05 to fill; drawPart tests now overlap the new drewPick table rows, kept for their dataset asserts
 - 05 · f26de97e · diff read over 9 slices; 16 layout.css files; css_conserve.py per owner: base rules == page CSS + layout.css, lost 0 added 0 for all 16; no defaultStylesheet: null in any show call (test fixtures only); ?url declared; typecheck clean outside src/main (task 04 WIP); layers clean; check-styles and oxfmt flag only the pre-existing agent-strip min-height calc, moved verbatim to agent-strip/layouts/default/layout.css:11 · concerns: cascade ties for task 07 check 5: settings .settings-head vs .ui-section-header (justify-content), notes .notes-markup-group .is-active vs .ui-icon-button.is-active; to look at: agent-strip box vs kit rules, shell .activity-item and .config-problem-badge vs shared button rules, settings .settings-row vs .ui-row if a row ever takes ui-row, sessions .ui-row.session-row:not(.is-selected) vs .ui-row hover background; docs layout.css holds two consecutive .docs-doc-frame rules from the split, unmerged
+- 04 · 61a1518b · diff read: register(owner, layoutTypes, defaultFolder), defaultFolderPath, repoDir on LayoutServiceDeps and declare const WIGLEY_CLONE_DIR present; whole-tree typecheck clean; resolve-clone-dir, layout-service, main-api tests 28/28; oxlint 0; oxfmt clean on its 13 files · concerns: Vite server.watch.ignored behaviour rests on the vite 8.3.4 source, not its docs; the assetsInlineLimit .css check could miss a path carrying a query string (task 07 check 7 checks the package); a drive run or self-test reads defaults from its own repo, uncommitted edits included; install-app baking the main clone has no test until a real install-app run
 ### Contract changes
+- src/main/clone-dir.ts and clone-dir.test.ts (named by the cold-read decision, not a Produces item): planned clone-dir.ts → landed resolve-clone-dir.ts / resolve-clone-dir.test.ts · why: tsc skips a foo.d.ts beside a foo.ts, leaving WIGLEY_CLONE_DIR undeclared; clone-dir.d.ts keeps its Produces name · consumers: none · group 04
 ### Rulings
 - layout-url.ts keeps its own private DEFAULT_NAME, as registry, draw-part and layout-parts each do — no shared export exists — a later pass may fold the four copies into one · group 02
 - main.ts passes () => null to serveLayoutScheme until task 04 wires the lookup — per the task doc — none · group 02
@@ -186,5 +188,7 @@ Review base: 46f417b5
 - task 05 (Parallel, 16 owners x 3 files) splits into 9 workers by owner, an owner's three files never split: A agent-lines+agent-strip+src/declarations.d.ts, B backlog+gallery, C chat, D docs, E forms+keys, F notes+primer, G sessions+workflow, H settings+usage, I visual+shell; at most 5 workers run at once with task 04 — 6 files per worker is past the 5-file guide, kept to keep each owner whole · lead
 - section and split comments copied to both sides, each naming its own subjects; page-CSS file-head comments rewritten where they described moved rules (notes, sessions, settings, usage, visual, workflow) — cosmetic · group 05
 - the pre-existing agent-strip raw 2px/7lh calc and its oxfmt wrap moved verbatim into agent-strip/layouts/default/layout.css, unfixed — the lint failure now names that file · group 05
+- resolveCloneDir checks absoluteness with node:path isAbsolute, keeping the planned (baked, isFolder) signature — a Windows \\foo path counts as absolute, which a baked path never is · group 04
+- AGENTS.md:593 (off the Files line) updated to the three-argument shell register call, as it had gone stale — none · group 04
 ### Review rounds
 ### Test gate

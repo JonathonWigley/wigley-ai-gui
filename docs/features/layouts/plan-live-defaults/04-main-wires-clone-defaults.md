@@ -1,6 +1,6 @@
 # 04 — Main learns the clone path and wires each owner's default folder
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 2 · Depends on: 01, 02
 Plan: [plan.md](plan.md)
@@ -111,3 +111,4 @@ These close gaps a cold reader found. Each binds as the Decisions above do.
 
 ## Proof
 
+Commit 61a1518b · proof: diff read: register(owner, layoutTypes, defaultFolder), defaultFolderPath, repoDir on LayoutServiceDeps and declare const WIGLEY_CLONE_DIR present; whole-tree typecheck clean; resolve-clone-dir, layout-service, main-api tests 28/28; oxlint 0; oxfmt clean on its 13 files · concerns: Vite server.watch.ignored behaviour rests on the vite 8.3.4 source, not its docs; the assetsInlineLimit .css check could miss a path carrying a query string (task 07 check 7 checks the package); a drive run or self-test reads defaults from its own repo, uncommitted edits included; install-app baking the main clone has no test until a real install-app run
