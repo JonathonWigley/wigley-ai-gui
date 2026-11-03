@@ -350,9 +350,9 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   cursor adds the focus ring. In a split whose panes each keep a selection (Settings mode, the docs
   tree, the Primer tab's tasks and items columns), the pane without focus marks itself `is-pane-inactive` and its selected
   row takes `list-inactive-selection-background` instead, so the pane the keys act on reads at a glance.
-  Sessions mode's rows are cards, `card-background` under a `card-border` hairline with `radius-md`, `space-1_5`
-  apart: the title and activity on top, over a footer holding the status then other plugins' row parts, on
-  `block-background` under a `border-subtle` hairline, bleeding to the card's edges and gone while empty. Hover
+  Sessions mode's rows are compact cards, `card-background` under a `card-border` hairline with `radius-md`,
+  `space-1` apart: the title and activity on the first line, and a second line holding the status then other
+  plugins' row parts on one line, the run time and the cache mark at its end, gone while empty. Hover
   strengthens the border to `border-strong`, and the selected card takes `list-active-background` with an
   `accent-tint-strong` border.
 - **Right bar:** L1 dense glass beside the content sheet in every mode, opening at `rightbar-width` and then the

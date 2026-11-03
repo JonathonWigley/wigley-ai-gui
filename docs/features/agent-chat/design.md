@@ -311,7 +311,8 @@ interview on 2026-10-23; this file is the record of both.
     message.
 - **Saved sessions**: every session chat runs — started, resumed, or launched by another plugin — is saved in
   `open-sessions.json` in chat's plugin data: its host session id, folder and profile, its `titles` (the user, agent
-  and first-message titles; a file without them reads as untitled), in row order, with the selected
+  and first-message titles; a file without them reads as untitled), its active time in ms (`activeMs`, the session
+  clock's total at the save, `docs/features/session-clock/design.md`; a file without it reads as 0), in row order, with the selected
   row (null when it names no row chat still holds), whether a message was ever sent, and whether a turn was running. A
   new, resumed or launched session is saved only after its process starts, so a start that fails leaves no record. Only
   the user closing its row removes a record; quit, `install-app`, a process exit and a chat plugin reload keep it.

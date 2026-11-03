@@ -162,8 +162,11 @@ In `src/contracts/agent.ts`, beside `AgentHarness`:
     minute tick. Each surface logs `session line in <name>: <text>` under its own plugin when a session's text
     changes, `<name>` the session's side-bar label (its id while none is known).
   - each session's row line, a sessions row part (`usage.rowLine`, added through `sessions.addRowPart`) under its
-    side-bar row: the session's context meter alone, drawn by the `rowLine` layout part and redrawn like the session
-    line.
+    side-bar row: the session's context meter and its used tokens (`121k`, no limit), drawn by the `rowLine` layout
+    part and redrawn like the session line.
+  - each session's cache mark, a second sessions row part (`usage.rowCache`): a cache icon, `status-error` once the
+    cache is cold, its tooltip the minutes left; nothing while the session has no cache expiry. Drawn by the
+    `rowCache` layout part and redrawn like the session line, so it turns cold at the next minute tick.
   - the details bar in the right bar, toggled by `usage.toggleDetails` (`Space v u`), its open state kept in
     `uiState`: a card per profile, its rows with reset times (5h and Week always, any other row only while used),
     extra usage as `spent / limit` in its currency (only while on and spent), the poll's staleness beside the name

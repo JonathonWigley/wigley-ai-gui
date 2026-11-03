@@ -30,8 +30,10 @@ Planned: `plan-row-clock/` beside this file.
 
 ## Across relaunch
 
-- Chat saves each session's closed total with the session (`SavedSession.activeMs`), at each start and stop of the
-  clock and once more when the app quits. A restored session's clock starts paused at that total.
+- Chat saves each session's total at the moment of the save, the open span included, with the session
+  (`SavedSession.activeMs`). It saves at each start and stop of the clock, at every other save chat makes, and once
+  more when the app quits, so a quit mid-turn keeps the span up to the quit. A restored session's clock starts
+  paused at that total.
 - A session opened from Claude's saved history (the resume picker) starts at zero: no active time was recorded for
   it.
 
@@ -44,7 +46,8 @@ mark at the line's end:
   while the clock runs.
 - `usage.rowCache`, usage's row part, draws the cache mark through usage's `rowCache` layout part: a cache icon,
   `status-error` once the cache is cold, its tooltip the minutes left.
-- The sessions layout's CSS orders the row parts by their `data-part` id.
+- Each plugin orders its own row part's wrapper (`sessions.css`: a part may set its own wrapper's `order`):
+  `usage.rowLine` 2 and `usage.rowCache` 4 in `usage.css`, `chat.rowClock` 3 with `margin-left: auto` in `chat.css`.
 
 ## Decisions
 
@@ -53,6 +56,7 @@ mark at the line's end:
   background events, and could not save the total with the session.
 - **The cache mark is its own usage row part**: the run time sits between the meter and the cache mark, and parts
   from two plugins order only as whole parts.
+- **The second line never wraps**: the status chip ellipsizes and the parts stay whole, so the row stays two lines.
 - **The cache mark turns cold at usage's next redraw**: usage redraws its lines once a minute, so the mark can lag
   the expiry by up to a minute.
 
