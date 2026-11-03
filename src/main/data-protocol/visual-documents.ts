@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { VISUAL_MESSAGES } from '../../shared/visual-messages';
 import { visualHashOf, visualUrl } from '../../shared/visual-url';
+import { decideHeightReport } from './visual-height';
 
 // Each visual's own CSP: inline script and style and `data:` images and fonts,
 // and no network; `default-src 'none'` covers every fetch directive left out.
@@ -8,16 +9,11 @@ const VISUAL_CSP =
   "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:; form-action 'none'; base-uri 'none'";
 
 // Runs in the frame before the visual's own scripts: keeps the root hidden
-// until the page's first theme message and applies each one, reports the
-// height the frame needs on each change of the root's size or the frame's,
-// and reports Esc without stopping it. The root hides vertical overflow: a
-// scrollbar narrows a width-scaled visual, and the frame then holds it at
-// that narrowed height with the scrollbar showing. A visual wider than the
-// frame scrolls sideways, so the height adds the horizontal scrollbar's
-// thickness, `innerHeight` less the root's `clientHeight`, 0 without one. A
-// root that grew by exactly what the frame grew since the last report
-// follows the viewport (`min-height: 100vh`), so that size is not reported:
-// adding the bar again would grow the frame without end.
+// until the page's first theme message and applies each one, measures the
+// root on each change of its size or the frame's and posts the height
+// `decideHeightReport` reports, and reports Esc without stopping it. The root
+// hides vertical overflow: a scrollbar narrows a width-scaled visual, and the
+// frame then holds it at that narrowed height with the scrollbar showing.
 const BOOTSTRAP_SCRIPT = `(() => {
   const messages = ${JSON.stringify(VISUAL_MESSAGES)};
   const root = document.documentElement;
@@ -35,23 +31,21 @@ const BOOTSTRAP_SCRIPT = `(() => {
     root.style.colorScheme = event.data.colorScheme;
     root.style.visibility = '';
   });
-  let reported = -1;
-  let reportedRoot = NaN;
-  let reportedViewport = NaN;
+  const decideHeightReport = ${decideHeightReport.toString()};
+  let baseline = null;
   const reportHeight = () => {
-    const viewport = window.innerHeight;
-    const rootHeight = Math.ceil(root.getBoundingClientRect().height);
-    const height = rootHeight + viewport - root.clientHeight;
-    const followsViewport =
-      viewport !== reportedViewport &&
-      rootHeight - reportedRoot === viewport - reportedViewport;
-    if (height === reported || followsViewport) {
-      return;
+    const decision = decideHeightReport(baseline, {
+      rootHeight: Math.ceil(root.getBoundingClientRect().height),
+      viewport: window.innerHeight,
+      clientHeight: root.clientHeight,
+    });
+    baseline = decision.baseline;
+    if (decision.height !== null) {
+      window.parent.postMessage(
+        { type: messages.height, height: decision.height },
+        '*',
+      );
     }
-    reported = height;
-    reportedRoot = rootHeight;
-    reportedViewport = viewport;
-    window.parent.postMessage({ type: messages.height, height }, '*');
   };
   new ResizeObserver(reportHeight).observe(root);
   window.addEventListener('resize', reportHeight);
