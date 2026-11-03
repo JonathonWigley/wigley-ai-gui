@@ -134,6 +134,7 @@ Review base: d757831
 - forms self-test idle Codex session opens owned in the background after the three rounds show, its unknown-layout round asked through a relay joining it — keeps row order and the refusal check — Codex row lands first if form shows go async · group 05
 - primer self-test: submit step expects the Layout preview activation via alsoExpect, the separate <D-w> close step removed — submit now releases the row — none, the run confirms it · group 05
 - lead ran oxfmt on src/plugins/docs/main/start.ts (editor-tooling-only) — lint flagged the import the rename shortened — none · lead
+- triage 7477add0: the user took every recommendation — #1 fix now (next round re-selects a session released while selected unless the user picked another row), #2 fix now (stale notification click selects only an existing row, adds none), #3 leave it — user note 'take all your suggestions' · lead
 ### Review rounds
 - implementation review · 7477add0 · NEEDS FIXES (1 important, 6 minor, 1 pre-existing; lead-applied f492b3a1)
 ### Test gate
