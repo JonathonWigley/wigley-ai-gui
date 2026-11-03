@@ -70,10 +70,7 @@ describe('startUnplacedLog', () => {
     unplaced.checkSeen();
     unplaced.checkSeen();
 
-    expect(log.mock.calls).toEqual([
-      ['keys', S_LINE],
-      ['keys', T_LINE],
-    ]);
+    expect(log.mock.calls).toEqual([[S_LINE], [T_LINE]]);
   });
 
   it('checkSeen_UnseenScope_LeftOut', () => {
@@ -81,7 +78,7 @@ describe('startUnplacedLog', () => {
 
     unplaced.checkSeen();
 
-    expect(log.mock.calls).toEqual([['keys', S_LINE]]);
+    expect(log.mock.calls).toEqual([[S_LINE]]);
   });
 
   it('checkSeen_AnchorNamedAfterTheScopeLeft_LogsNothing', () => {
@@ -91,7 +88,7 @@ describe('startUnplacedLog', () => {
     placed.add('a.trash');
     unplaced.checkSeen();
 
-    expect(log).not.toHaveBeenCalledWith('keys', S_LINE);
+    expect(log).not.toHaveBeenCalledWith(S_LINE);
   });
 
   it('checkSeen_SameScopeTwice_RecordedOnce', () => {
@@ -109,7 +106,7 @@ describe('startUnplacedLog', () => {
     const { unplaced, log, setScope, setKeymap } = logSetup();
     setScope('a.t');
     unplaced.checkSeen();
-    expect(log).toHaveBeenCalledWith('keys', S_LINE);
+    expect(log).toHaveBeenCalledWith(S_LINE);
 
     setKeymap(
       keymap([
@@ -120,7 +117,6 @@ describe('startUnplacedLog', () => {
     unplaced.checkSeen();
 
     expect(log).toHaveBeenCalledWith(
-      'keys',
       expect.stringMatching(/\bz\b.*a\.trash.*a\.s/),
     );
   });

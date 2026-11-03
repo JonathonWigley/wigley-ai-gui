@@ -12,7 +12,7 @@ type KeysApi = MainApi<typeof keysManifest, ChannelShape>;
 export const keysMainPart: MainPart<typeof keysManifest> = {
   manifest: keysManifest,
   start(api: KeysApi) {
-    const layouts = api.layouts.register({ layoutTypes });
-    return { commands: {}, dispose: () => layouts.dispose() };
+    api.layouts.register({ layoutTypes });
+    return { commands: {} };
   },
 };

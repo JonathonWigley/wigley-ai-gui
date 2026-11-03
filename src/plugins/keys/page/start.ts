@@ -36,8 +36,10 @@ type KeysApi = PageApi<
 // every anchor redraw when the keymap changes.
 // Exports the keys bound to a command, and when they change, and `anchor`,
 // which draws a command's keys into a view's element, shown while its scope is
-// in force and the `showHints` setting is on. Records each scope in force and every anchor
-// named, and checks them for unplaced binds on `PLACEMENT_CHECK_EVENT`.
+// in force and the `showHints` setting is on; each dependent's anchors and
+// listeners are filed under it. Records each scope in force and every anchor
+// named, and checks them for unplaced binds on `PLACEMENT_CHECK_EVENT`, whose
+// `document` listener `dispose` removes.
 export const keysPagePart: PagePart<typeof keysManifest> = {
   manifest: keysManifest,
   start(api: KeysApi) {
@@ -155,18 +157,21 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
       onScopeChanged: (listener) => keys.onScopeChanged(listener),
       log: services.log,
     });
-    document.addEventListener(PLACEMENT_CHECK_EVENT, () =>
-      unplacedLog.checkSeen(),
-    );
+    const checkPlacement = () => unplacedLog.checkSeen();
+    document.addEventListener(PLACEMENT_CHECK_EVENT, checkPlacement);
 
-    const exports: KeysPageExports = {
-      keysFor: (command, scope, where) =>
-        keysFor(keys.keymap(), command, scope, platform, where),
-      onChanged: (listener) => keys.onKeymapChanged(() => listener()),
-      anchor: anchors.anchor,
-    };
     return {
-      exports: () => exports,
+      exports: (consumer): KeysPageExports => ({
+        keysFor: (command, scope, where) =>
+          keysFor(keys.keymap(), command, scope, platform, where),
+        onChanged: (listener) =>
+          consumer.track(keys.onKeymapChanged(() => listener())),
+        anchor: (element, command, options) =>
+          consumer.track(anchors.anchor(element, command, options)),
+      }),
+      dispose() {
+        document.removeEventListener(PLACEMENT_CHECK_EVENT, checkPlacement);
+      },
       commands: {
         toggleHelp(context) {
           if (helpScope !== null) {

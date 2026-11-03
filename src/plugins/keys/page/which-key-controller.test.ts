@@ -60,7 +60,7 @@ function setup(
     timers: clock.timers,
     delayMs,
     timeoutMs: () => timeoutMs,
-    log: (source, message) => logs.push(`[${source}] ${message}`),
+    log: (message) => logs.push(message),
   });
   const pend = (...keys: string[]) =>
     report({ where: 'page', keys, scope: 's' });
@@ -76,7 +76,7 @@ describe('startWhichKey', () => {
     run.runAfter(DELAY_MS);
 
     expect(run.calls).toEqual(['hold', 'show Space']);
-    expect(run.logs).toEqual(['[keys] which-key shows Space']);
+    expect(run.logs).toEqual(['which-key shows Space']);
   });
 
   it('startWhichKey_OpenAndDeeperPrefix_RedrawsAtOnce', () => {
@@ -87,7 +87,7 @@ describe('startWhichKey', () => {
     run.pend('Space', 'a');
 
     expect(run.calls).toEqual(['hold', 'show Space', 'show Space a']);
-    expect(run.logs).toContain('[keys] which-key shows Space a');
+    expect(run.logs).toContain('which-key shows Space a');
   });
 
   it('startWhichKey_NullReport_HidesAndLogsClosed', () => {
@@ -98,7 +98,7 @@ describe('startWhichKey', () => {
     run.end();
 
     expect(run.calls.at(-1)).toBe('hide');
-    expect(run.logs.at(-1)).toBe('[keys] which-key closed');
+    expect(run.logs.at(-1)).toBe('which-key closed');
   });
 
   it('startWhichKey_ClosedBeforeDelay_NeverShowsOrHolds', () => {
@@ -121,7 +121,7 @@ describe('startWhichKey', () => {
     run.runAfter(TIMEOUT_MS);
 
     expect(run.calls).toEqual(['hold', 'show Space', 'cancel', 'hide']);
-    expect(run.logs.at(-1)).toBe('[keys] which-key closed');
+    expect(run.logs.at(-1)).toBe('which-key closed');
   });
 
   it('startWhichKey_TimeoutNull_NeverCancels', () => {

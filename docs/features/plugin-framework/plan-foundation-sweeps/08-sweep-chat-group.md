@@ -1,6 +1,6 @@
 # 08 — Sweep: chat, agents, agent-strip, agent-lines, usage, usage-tab-line, visual
 
-Status: in progress
+Status: done
 Type: Parallel
 Wave: 6 · Depends on: 06, 07
 Plan: [plan.md](plan.md)
@@ -330,3 +330,4 @@ Tests:
 
 ## Proof
 
+Commit 0880e8c2 · proof: Diff read of every changed start, chat-view teardown, preview, session-line-parts and html-fence; whole-tree typecheck clean; lane lint clean, whole-tree lint re-proved at task 10's landing; workers ran 709 tests in chat, 361 across the other six; grep finds no two-argument log or string dependency in the seven folders · concerns: A real row end may reach chat through events the fake does not emit, so stop_EndsRowsAndSavesNothing pins the process-exit path only. A throwing kill skips cancelRunning and the end-wait resolves. A throwing tearDownTab step skips the rest. No test on resolving endWaits or reveal's isDisposed; four tearDownTab steps not mutated, box.destroy likely uncaught. Sessions and keys fakes in chat tests are cast, so a new member fails at run time. Fake chat exports in the small lanes, so real chat views are unexercised there. usage-tab-line's stop test pins exactly 2 registrations.

@@ -1,6 +1,6 @@
 # 09 — Sweep: docs, backlog, notes, workflow
 
-Status: in progress
+Status: done
 Type: Parallel
 Wave: 6 · Depends on: 06, 07
 Plan: [plan.md](plan.md)
@@ -262,3 +262,4 @@ Tests:
 
 ## Proof
 
+Commit e04f6b15 · proof: Diff read of every main and page start, index-sources and contract; whole-tree typecheck clean; lane lint clean, whole-tree lint re-proved at task 10's landing; workers ran 748 tests in docs and backlog, 454 in notes and workflow; grep finds no two-argument log or string dependency in the four folders · concerns: Docs and backlog page tests start a small real stand-in part because the harness shows the first mode during modes.add, read not run. No test pins the tab-before-view order in docs' dispose, and a throwing view skips the rest. A late reply drawing into a disposed docs or backlog view was not traced. Docs main tests skip the fixture path. An open() in flight at notes' stop continues, shows a dialog with no overlay, and its close would call the throwing pop; blurBoxes has no test and real blur on overlay removal was not checked live. addDriveActions and planWatch and countdown dispose keep no production caller. Workflow main's ready.then(sendFlows) can still send after a stop: the late-track rule covers registrations, not sends.

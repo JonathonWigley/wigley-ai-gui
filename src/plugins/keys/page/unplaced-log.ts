@@ -1,6 +1,6 @@
 import type { CommandId } from '../../../contracts/commands';
 import type { Keymap, ViewScope } from '../../../contracts/keymap';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import { unplacedBinds, unplacedLine } from './unplaced';
 
 export interface UnplacedLogDeps {
@@ -8,7 +8,7 @@ export interface UnplacedLogDeps {
   scope(): ViewScope;
   placedIn(scope: ViewScope): ReadonlySet<CommandId>;
   onScopeChanged(listener: (scope: ViewScope) => void): void;
-  log: Log;
+  log: PluginLog;
 }
 
 // `checkSeen` logs, under `[keys]`, each bind with no anchor in every scope
@@ -31,7 +31,7 @@ export function startUnplacedLog(deps: UnplacedLogDeps): UnplacedLog {
           const line = unplacedLine(bind, scope);
           if (!loggedLines.has(line)) {
             loggedLines.add(line);
-            deps.log('keys', line);
+            deps.log(line);
           }
         }
       }

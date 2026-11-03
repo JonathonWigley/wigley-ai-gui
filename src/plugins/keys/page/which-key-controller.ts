@@ -1,6 +1,6 @@
 import type { Timers } from '../../../contracts/ambient';
 import type { PendingKeys } from '../../../contracts/keymap';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type { WhichKeyModel } from './which-key';
 
 export interface WhichKeyView {
@@ -21,7 +21,7 @@ export interface WhichKeyDeps {
   timers: Timers;
   delayMs(): number;
   timeoutMs(): number | null;
-  log: Log;
+  log: PluginLog;
 }
 
 // Opens the panel once a sequence has been pending `delayMs`, holding the
@@ -43,7 +43,7 @@ export function startWhichKey(deps: WhichKeyDeps): void {
 
   const show = (model: WhichKeyModel) => {
     deps.view.show(model);
-    log('keys', `which-key shows ${model.title}`);
+    log(`which-key shows ${model.title}`);
     timeout = clearTimer(timeout);
     const timeoutMs = deps.timeoutMs();
     if (timeoutMs !== null) {
@@ -60,7 +60,7 @@ export function startWhichKey(deps: WhichKeyDeps): void {
     if (isOpen) {
       isOpen = false;
       deps.view.hide();
-      log('keys', 'which-key closed');
+      log('which-key closed');
     }
   };
 
