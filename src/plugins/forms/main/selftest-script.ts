@@ -64,6 +64,8 @@ const LONG_WORD = 'unbroken'.repeat(14);
 const IS_WINDOWS = process.platform === 'win32';
 const CHIP_ONE = IS_WINDOWS ? 'C:\\chips\\one.md' : '/tmp/chips/one.md';
 const CHIP_TWO = IS_WINDOWS ? 'C:\\chips\\two.md' : '/tmp/chips/two.md';
+// The first path with each letter's case toggled, as vim's `~` leaves it.
+const CHIP_ONE_TOGGLED = IS_WINDOWS ? 'c:\\CHIPS\\ONE.MD' : '/TMP/CHIPS/ONE.MD';
 
 // A layout whose question card builds through the kit and throws on every
 // update, whose finding card mounts its notes box and then throws, so the
@@ -319,9 +321,10 @@ const FINDING_PICKS_STEPS: SelfTestStep[] = [
 // marks; visual l steps over a chip, so d takes it and its space and P puts
 // both back; diw on a chip deletes it whole and P puts the whole path back;
 // x on the last chip deletes it whole and p puts it back. A search for text
-// inside the chips lands past the first and n reaches the second, where i
-// types z; visual f into the first chip selects it whole, so ~ and gv~ toggle
-// the whole path's case and back.
+// inside the chips lands on the first chip's start, n steps past it and n
+// again reaches the second, where i types z; visual f into the first chip
+// selects it whole, so ~ toggles the case of the a before it and of the whole
+// path.
 const FILE_CHIPS_STEPS: SelfTestStep[] = [
   { keys: ['a'], expect: '[forms] focused notes on finding 3' },
   {
@@ -336,13 +339,14 @@ const FILE_CHIPS_STEPS: SelfTestStep[] = [
       ...'0wdiwP',
       // $ lands on the last chip.
       ...'$xp',
-      // The search lands past the first chip, so n moves on to the second.
+      // The search lands on the first chip, n steps past it, and n again
+      // moves on to the second.
       ...'0/chips',
       'Enter',
-      ...'niz ',
+      ...'nniz ',
       'Escape',
       // f lands inside the first chip, and the selection takes it whole.
-      ...'0vfc~gv~',
+      ...'0vfc~',
       'Escape',
     ],
     expect: '[forms] left the box',
@@ -1065,11 +1069,11 @@ function payloadProblems(payload: AnswersPayload): string[] {
       `finding 2 took_action_recommendation ${nit?.took_action_recommendation}`,
     ],
     [design?.status === 'answered', `finding 3 status ${design?.status}`],
-    // The B, the z and the two whole paths prove the file chips group's
-    // motions, searches, deletes, pastes and case toggles each took a chip as
-    // one character.
+    // The B, the z, the toggled first path and the whole second path prove
+    // the file chips group's motions, searches, deletes, pastes and case
+    // toggles each took a chip as one character.
     [
-      design?.notes === `a ${CHIP_ONE} B z ${CHIP_TWO}`,
+      design?.notes === `A ${CHIP_ONE_TOGGLED} B z ${CHIP_TWO}`,
       `finding 3 notes ${JSON.stringify(design?.notes)}`,
     ],
     [design?.choice === 2, `finding 3 choice ${design?.choice}`],
@@ -1204,7 +1208,7 @@ export function formsSelfTestScript(
       },
       {
         name: 'file chips',
-        why: 'In a notes box a path is one character to vim: w from a chip lands on the next word, visual l steps over the chip, x and diw delete it whole, and the register holds the whole path, so P and p put it back; n from a search match inside a chip moves on to the next, and a visual f into a chip selects it whole.',
+        why: 'In a notes box a path is one character to vim: w from a chip lands on the next word, visual l steps over the chip, x and diw delete it whole, and the register holds the whole path, so P and p put it back; a search for text inside a chip lands on its start and n steps past it to the next chip, and a visual f into a chip selects it whole, so ~ toggles the case of the whole path.',
         steps: FILE_CHIPS_STEPS,
       },
       {

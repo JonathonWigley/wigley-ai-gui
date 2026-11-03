@@ -2,6 +2,7 @@
 // cursor and deletions treat it as one character.
 import {
   Annotation,
+  type ChangeSpec,
   ChangeSet,
   EditorSelection,
   EditorState,
@@ -9,6 +10,7 @@ import {
   Facet,
   type SelectionRange,
   StateField,
+  type Text,
   type Transaction,
   type TransactionSpec,
 } from '@codemirror/state';
@@ -32,17 +34,30 @@ export interface Span {
   to: number;
 }
 
-// Vim's mode as the chip rules read it.
-export type EditMode = 'insert' | 'visual' | 'normal';
+// Vim's mode as the chip rules read it; `visual` is characterwise visual.
+export type EditMode =
+  | 'insert'
+  | 'visual'
+  | 'visualLine'
+  | 'visualBlock'
+  | 'normal';
 
 export function editModeOf(vim: {
   insertMode: boolean;
   visualMode: boolean;
+  visualLine: boolean;
+  visualBlock: boolean;
 }): EditMode {
   if (vim.insertMode) {
     return 'insert';
   }
-  return vim.visualMode ? 'visual' : 'normal';
+  if (!vim.visualMode) {
+    return 'normal';
+  }
+  if (vim.visualBlock) {
+    return 'visualBlock';
+  }
+  return vim.visualLine ? 'visualLine' : 'visual';
 }
 
 // Marks a transaction that places its own text and selection, as `setText`
@@ -50,14 +65,14 @@ export function editModeOf(vim: {
 export const skipsChipRules = Annotation.define<boolean>();
 
 // Where an empty selection's head lands once `next`, moved from `previous`,
-// falls strictly inside a chip: the chip's end when it moved forward, else its
-// start. In normal mode (`isInsert` false) a chip that ends its line keeps the
-// head at its start, since the chip is then the line's last character.
+// falls strictly inside a chip: its start, except that a forward move goes to
+// the chip's end in insert mode, and in normal mode (`isInsert` false) when
+// `previous` was already on the chip's start, so a search, `;` or `l` from a
+// chip steps past it. A chip's end may be its line's end.
 export function snapHead(
   chips: readonly Span[],
   previous: number,
   next: number,
-  lineEnd: number,
   isInsert: boolean,
 ): number {
   const chip = chips.find((range) => range.from < next && next < range.to);
@@ -65,8 +80,8 @@ export function snapHead(
     return next;
   }
   const movedForward = next > previous;
-  const endsLineInNormalMode = !isInsert && chip.to === lineEnd;
-  return movedForward && !endsLineInNormalMode ? chip.to : chip.from;
+  const stepsPast = isInsert || previous === chip.from;
+  return movedForward && stepsPast ? chip.to : chip.from;
 }
 
 // Vim's characterwise visual selection as offsets: the character under each
@@ -122,11 +137,12 @@ export function fileChipsOf(state: EditorState): readonly FileChipRange[] {
 
 // Chips drawn over every path in the text, rebuilt on each change, and the
 // same ranges made atomic so CodeMirror's own motions step over them. Vim
-// moves and deletes through its own transactions, so a filter applies the
-// chip rules to each, gives vim's own characterwise visual selection the
-// selection they settle on, and notes each delete it widened so the register
-// takes the whole chip. Vim's character and word motions count a chip as one
-// character through `defineChipMotions`.
+// moves, deletes and pastes through its own transactions, so a filter applies
+// the chip rules to each, gives vim's own characterwise visual selection the
+// selection they settle on, notes each delete it widened so the register
+// takes the whole chip, and moves the cursor vim places after a paste the
+// rules moved past a chip along with the paste. Vim's character and word
+// motions count a chip as one character through `defineChipMotions`.
 export function fileChipExtension(drawing: FileChipDrawing): Extension {
   let hostView: EditorView | null = null;
   const tracksView = ViewPlugin.define((view) => {
@@ -145,11 +161,12 @@ export function fileChipExtension(drawing: FileChipDrawing): Extension {
         return tr;
       }
       noteWidenedCut(cm, tr);
-      const rules = chipRulesOf(tr, drawing.paths, editModeOf(vim));
+      const cursorShift = movedPasteShift(cm, tr);
+      noteMovedPaste(cm, tr);
+      const mode = editModeOf(vim);
+      const rules = chipRulesOf(tr, drawing.paths, mode, cursorShift);
       const main = rules.selection?.main;
-      const isVisualCharacterwise =
-        vim.visualMode && !vim.visualBlock && !vim.visualLine;
-      if (isVisualCharacterwise && !tr.docChanged && main && !main.empty) {
+      if (mode === 'visual' && !tr.docChanged && main && !main.empty) {
         placeVimSelection(cm, vim.sel, main);
       }
       return withChipRules(tr, rules);
@@ -158,11 +175,13 @@ export function fileChipExtension(drawing: FileChipDrawing): Extension {
 }
 
 // `tr`, followed when a rule applies by the deletions that take each chip it
-// cut into whole and the selection the rules settle on: an empty selection
-// kept off a chip's inside, as `snapHead` places it; in visual mode a
-// selection settled as `settledVisualSelection` reads it; in normal mode a
-// selection widened over every chip it cuts into. A transaction marked
-// `skipsChipRules` stays as it is.
+// cut into whole, or else by each insertion it made strictly inside a chip
+// moved to that chip's end, and the selection the rules settle on: an empty
+// selection kept off a chip's inside, as `snapHead` places it; in
+// characterwise visual mode a selection settled as `settledVisualSelection`
+// reads it; in normal, linewise and blockwise visual mode a selection widened
+// over every chip it cuts into. A transaction marked `skipsChipRules` stays as
+// it is.
 export function applyChipRules(
   tr: Transaction,
   paths: Paths,
@@ -174,45 +193,58 @@ export function applyChipRules(
   return withChipRules(tr, chipRulesOf(tr, paths, mode));
 }
 
-// What the chip rules add to a transaction: the chip remainders it deletes,
-// and the selection it ends on when the rules move it.
+// What the chip rules add to a transaction: the chip remainders it deletes or
+// the insertions it moves past chips, and the selection it ends on when the
+// rules move it.
 interface ChipRules {
-  remainders: ChangeSet;
+  changes: ChangeSet;
   selection: EditorSelection | undefined;
 }
 
-function chipRulesOf(tr: Transaction, paths: Paths, mode: EditMode): ChipRules {
-  const remainders = ChangeSet.of(
-    chipRemaindersOf(tr, fileChipsOf(tr.startState)),
+// The chip rules for `tr` in `mode`, its cursor first moved on by
+// `cursorShift`, as `movedPasteShift` reads it.
+function chipRulesOf(
+  tr: Transaction,
+  paths: Paths,
+  mode: EditMode,
+  cursorShift = 0,
+): ChipRules {
+  const chipsBefore = fileChipsOf(tr.startState);
+  const remainders = chipRemaindersOf(tr, chipsBefore);
+  const changes = ChangeSet.of(
+    remainders.length > 0
+      ? remainders
+      : insertionsMovedPastChips(tr, chipsBefore),
     tr.newDoc.length,
   );
-  const doc = remainders.apply(tr.newDoc);
-  const isDocUnchanged = !tr.docChanged && remainders.empty;
+  const isDocUnchanged = !tr.docChanged && changes.empty;
   const chips = isDocUnchanged
-    ? fileChipsOf(tr.startState)
-    : fileChipsIn(doc.toString(), paths);
-  const mapped = tr.newSelection.map(remainders);
-  const previous = tr.startState.selection.main.map(tr.changes).map(remainders);
-  const main = settledMain(mapped.main, {
-    chips,
-    previous,
-    lineEnd: doc.lineAt(mapped.main.head).to,
-    mode,
-  });
-  const selection = main.eq(mapped.main)
+    ? chipsBefore
+    : fileChipsIn(changes.apply(tr.newDoc).toString(), paths);
+  const placed = tr.newSelection.map(changes);
+  const isShifted = cursorShift !== 0 && placed.main.empty;
+  const mapped = isShifted
+    ? placed.replaceRange(
+        EditorSelection.cursor(placed.main.head + cursorShift),
+        placed.mainIndex,
+      )
+    : placed;
+  const previous = tr.startState.selection.main.map(tr.changes).map(changes);
+  const main = settledMain(mapped.main, { chips, previous, mode });
+  const selection = main.eq(placed.main)
     ? undefined
     : mapped.replaceRange(main, mapped.mainIndex);
-  return { remainders, selection };
+  return { changes, selection };
 }
 
 function withChipRules(
   tr: Transaction,
-  { remainders, selection }: ChipRules,
+  { changes, selection }: ChipRules,
 ): Transaction | readonly TransactionSpec[] {
-  if (remainders.empty && selection === undefined) {
+  if (changes.empty && selection === undefined) {
     return tr;
   }
-  return [tr, { changes: remainders, selection, sequential: true }];
+  return [tr, { changes, selection, sequential: true }];
 }
 
 class FileChipWidget extends WidgetType {
@@ -305,6 +337,48 @@ function chipRemaindersOf(
   return mergedSpans(remainders);
 }
 
+// An insertion `tr` made strictly inside a chip: where `tr`'s old document had
+// it, where its new document holds it, the text, and the chip.
+interface InsertionInsideChip {
+  at: number;
+  inserted: Span;
+  text: Text;
+  chip: FileChipRange;
+}
+
+function insertionsInsideChips(
+  tr: Transaction,
+  chips: readonly FileChipRange[],
+): InsertionInsideChip[] {
+  const insertions: InsertionInsideChip[] = [];
+  tr.changes.iterChanges((fromA, toA, fromB, toB, text) => {
+    const chip = chips.find((range) => range.from < fromA && fromA < range.to);
+    if (fromA === toA && chip !== undefined) {
+      insertions.push({
+        at: fromA,
+        inserted: { from: fromB, to: toB },
+        text,
+        chip,
+      });
+    }
+  });
+  return insertions;
+}
+
+// Each insertion `tr` made strictly inside a chip, as vim's `p` makes on a
+// chip's start, moved to the chip's end, as changes in `tr`'s new document.
+function insertionsMovedPastChips(
+  tr: Transaction,
+  chips: readonly FileChipRange[],
+): ChangeSpec[] {
+  return insertionsInsideChips(tr, chips).flatMap(
+    ({ inserted, text, chip }) => [
+      inserted,
+      { from: tr.changes.mapPos(chip.to), insert: text },
+    ],
+  );
+}
+
 function mergedSpans(spans: Span[]): Span[] {
   const sorted = [...spans].sort((a, b) => a.from - b.from);
   const merged: Span[] = [];
@@ -321,26 +395,25 @@ function mergedSpans(spans: Span[]): Span[] {
 
 // What the main selection is settled against: the chips in the text it ends
 // on, the main selection the transaction started from, mapped into that text,
-// the end of the line its head is on, and vim's mode.
+// and vim's mode.
 interface SettleContext {
   chips: readonly Span[];
   previous: SelectionRange;
-  lineEnd: number;
   mode: EditMode;
 }
 
 // The main selection with the chip rules applied: an empty one snapped off a
-// chip's inside; in visual mode one settled as `settledVisualSelection`; in
-// normal mode one widened over every chip it cuts into, keeping its
-// direction.
+// chip's inside; in characterwise visual mode one settled as
+// `settledVisualSelection`; in normal, linewise and blockwise visual mode one
+// widened over every chip it cuts into, keeping its direction.
 function settledMain(
   range: SelectionRange,
-  { chips, previous, lineEnd, mode }: SettleContext,
+  { chips, previous, mode }: SettleContext,
 ): SelectionRange {
   const isInsert = mode === 'insert';
   if (range.empty) {
     return EditorSelection.cursor(
-      snapHead(chips, previous.head, range.head, lineEnd, isInsert),
+      snapHead(chips, previous.head, range.head, isInsert),
     );
   }
   if (isInsert) {
@@ -367,10 +440,10 @@ function chipUnder(chips: readonly Span[], at: number): Span | undefined {
 // Vim's visual `selection` with each chip one character, the head moved from
 // `previousHead`. An end on a chip sits on the chip's start when it starts the
 // selection and on its last character when it ends it, so the selection holds
-// the chip whole; with both ends on one chip the selection is that chip. A
-// head that lands on a chip's inside goes past the chip's inside the way it
-// moved, as a normal-mode cursor does, so a search or a `;` from it finds the
-// next match rather than the one inside the chip.
+// the chip whole. With both ends on one chip the selection is that chip,
+// ending on the chip's start when the head moved back, or stayed on the
+// selection's start, so that a backward search or `,` from it starts before
+// the chip. A head on a chip settles as `settledVisualHead` places it.
 function settledVisualSelection(
   chips: readonly Span[],
   { anchor, head }: VimSelection,
@@ -379,12 +452,16 @@ function settledVisualSelection(
   const headChip = chipUnder(chips, head);
   const anchorChip = chipUnder(chips, anchor);
   if (headChip !== undefined && headChip === anchorChip) {
-    return { anchor: headChip.from, head: headChip.to - 1 };
+    const startsOnHead =
+      head < previousHead || (head === previousHead && head < anchor);
+    return startsOnHead
+      ? { anchor: headChip.to - 1, head: headChip.from }
+      : { anchor: headChip.from, head: headChip.to - 1 };
   }
   const settledHead =
     headChip === undefined
       ? head
-      : settledVisualHead(headChip, anchor, head, head > previousHead);
+      : settledVisualHead(headChip, anchor, head, previousHead);
   if (anchorChip === undefined) {
     return { anchor, head: settledHead };
   }
@@ -395,17 +472,29 @@ function settledVisualSelection(
   };
 }
 
-// Where a visual head on `chip`, with the anchor off it, settles. On the
-// chip's start it is on the chip. Inside it, a forward move takes the chip in
-// when the head ends the selection and leaves it out when the head starts it;
-// a backward move the other way round.
+// Where a visual head on `chip`, with the anchor off it, settles once moved
+// from `previousHead`. A head that has not moved stays, as vim re-sends a
+// settled selection before an operator reads it. A head that ends the
+// selection and moved back within the chip it already covered leaves the chip
+// out, so a backward search or `,` from it starts before the chip. Otherwise,
+// on the chip's start the head is on the chip; inside it, a forward move takes
+// the chip in when the head ends the selection and leaves it out when the head
+// starts it, and a backward move the other way round.
 function settledVisualHead(
   chip: Span,
   anchor: number,
   head: number,
-  movedForward: boolean,
+  previousHead: number,
 ): number {
+  if (head === previousHead) {
+    return head;
+  }
   const headEnds = anchor < chip.from;
+  const movedForward = head > previousHead;
+  const coveredChip = chip.from <= previousHead && previousHead < chip.to;
+  if (headEnds && !movedForward && coveredChip) {
+    return chip.from - 1;
+  }
   if (head === chip.from) {
     return headEnds ? chip.to - 1 : chip.from;
   }
@@ -473,6 +562,52 @@ export function noteWidenedCut(cm: VimOperationHolder, tr: Transaction) {
       whole: tr.startState.sliceDoc(whole.from, whole.to),
     };
   }
+}
+
+// A paste a vim command made strictly inside a chip, which the chip rules
+// moved past the chip by `shift`, while the vim operation that made it still
+// runs.
+interface MovedPaste {
+  cm: VimOperationHolder;
+  operation: object;
+  shift: number;
+}
+
+let movedPaste: MovedPaste | null = null;
+
+// Vim places its cursor after a paste from where it put the text, so the
+// paste a vim command makes strictly inside a chip, in a transaction that cuts
+// into no chip, is noted here; the cursor vim places next in the same
+// operation moves on with the paste, as `movedPasteShift` reads it.
+export function noteMovedPaste(cm: VimOperationHolder, tr: Transaction) {
+  const operation = cm.curOp;
+  if (!operation?.isVimOp) {
+    return;
+  }
+  const chips = fileChipsOf(tr.startState);
+  const [moved] = insertionsInsideChips(tr, chips);
+  const cutsNoChip = chipRemaindersOf(tr, chips).length === 0;
+  if (moved !== undefined && cutsNoChip) {
+    movedPaste = { cm, operation, shift: moved.chip.to - moved.at };
+  }
+}
+
+// How far `tr`'s cursor moves on with the paste `noteMovedPaste` noted: the
+// paste's shift when `tr` only places the cursor in the same vim operation,
+// else 0. Reading it ends the note.
+export function movedPasteShift(
+  cm: VimOperationHolder,
+  tr: Transaction,
+): number {
+  const noted = movedPaste;
+  movedPaste = null;
+  const isCursorOfNotedPaste =
+    noted !== null &&
+    noted.cm.curOp === noted.operation &&
+    cm === noted.cm &&
+    !tr.docChanged &&
+    tr.selection !== undefined;
+  return isCursorOfNotedPaste ? noted.shift : 0;
 }
 
 const registersFillingWholeChips = new WeakSet<object>();

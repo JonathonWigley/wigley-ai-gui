@@ -1,11 +1,18 @@
-import { EditorState, type TransactionSpec } from '@codemirror/state';
+import {
+  EditorSelection,
+  EditorState,
+  type TransactionSpec,
+} from '@codemirror/state';
 import { Vim } from '@replit/codemirror-vim';
 import { describe, expect, it } from 'vitest';
 import { CHIP_DRAWING, CHIP_PATHS } from './chip-paths.test-support';
 import {
   applyChipRules,
   type EditMode,
+  editModeOf,
   fileChipExtension,
+  movedPasteShift,
+  noteMovedPaste,
   noteWidenedCut,
   skipsChipRules,
   snapHead,
@@ -18,20 +25,44 @@ const CHIPS = [{ from: 4, to: 20 }];
 
 describe('snapHead', () => {
   it.each([
-    { previous: 3, next: 5, lineEnd: 30, isInsert: false, head: 20 },
-    { previous: 20, next: 19, lineEnd: 30, isInsert: false, head: 4 },
-    { previous: 4, next: 5, lineEnd: 20, isInsert: false, head: 4 },
-    { previous: 3, next: 5, lineEnd: 20, isInsert: true, head: 20 },
-    { previous: 20, next: 19, lineEnd: 30, isInsert: true, head: 4 },
-    { previous: 3, next: 4, lineEnd: 30, isInsert: false, head: 4 },
-    { previous: 19, next: 20, lineEnd: 30, isInsert: true, head: 20 },
-    { previous: 24, next: 25, lineEnd: 30, isInsert: false, head: 25 },
+    { previous: 3, next: 5, isInsert: false, head: 4 },
+    { previous: 4, next: 5, isInsert: false, head: 20 },
+    { previous: 21, next: 19, isInsert: false, head: 4 },
+    { previous: 3, next: 5, isInsert: true, head: 20 },
+    { previous: 21, next: 19, isInsert: true, head: 4 },
+    { previous: 3, next: 4, isInsert: false, head: 4 },
+    { previous: 19, next: 20, isInsert: true, head: 20 },
+    { previous: 24, next: 25, isInsert: false, head: 25 },
   ])(
-    "keeps the cursor off a chip's inside: ($previous → $next, line end $lineEnd, insert $isInsert) → $head",
-    ({ previous, next, lineEnd, isInsert, head }) => {
-      expect(snapHead(CHIPS, previous, next, lineEnd, isInsert)).toBe(head);
+    "keeps the cursor off a chip's inside: ($previous → $next, insert $isInsert) → $head",
+    ({ previous, next, isInsert, head }) => {
+      expect(snapHead(CHIPS, previous, next, isInsert)).toBe(head);
     },
   );
+});
+
+describe('editModeOf', () => {
+  const NORMAL = {
+    insertMode: false,
+    visualMode: false,
+    visualLine: false,
+    visualBlock: false,
+  };
+  it.each([
+    { vim: NORMAL, mode: 'normal' },
+    { vim: { ...NORMAL, insertMode: true }, mode: 'insert' },
+    { vim: { ...NORMAL, visualMode: true }, mode: 'visual' },
+    {
+      vim: { ...NORMAL, visualMode: true, visualLine: true },
+      mode: 'visualLine',
+    },
+    {
+      vim: { ...NORMAL, visualMode: true, visualBlock: true },
+      mode: 'visualBlock',
+    },
+  ])("reads vim's mode: $vim → $mode", ({ vim, mode }) => {
+    expect(editModeOf(vim)).toBe(mode);
+  });
 });
 
 describe('widenRange', () => {
@@ -89,26 +120,38 @@ describe('vimSelectionOf', () => {
 const ONE_CHIP = 'see /tmp/chips/a.md now';
 // The same chip, ending its line.
 const LINE_END_CHIP = 'see /tmp/chips/a.md';
+// The same chip on a second line, spanning 12 to 27.
+const SECOND_LINE_CHIP = `one two\n${ONE_CHIP}`;
+// The chip ending the first of two lines; the second spans 20 to 24.
+const LINE_END_CHIP_THEN_LINE = `${LINE_END_CHIP}\nnext`;
 // The chips `/a/b` and `/c/d` span 2 to 6 and 7 to 11.
 const TWO_CHIPS = 'x /a/b /c/d y';
 
 describe('applyChipRules', () => {
   it.each([
     {
-      name: 'a cursor moved forward into a chip lands past it in normal mode',
+      name: 'a cursor moved forward into a chip lands on its start in normal mode',
+      doc: SECOND_LINE_CHIP,
+      from: { anchor: 5 },
+      to: { anchor: 13 },
+      mode: 'normal' as const,
+      selection: { anchor: 12, head: 12 },
+    },
+    {
+      name: "a cursor moved forward from a chip's start into the chip lands past it in normal mode",
       doc: ONE_CHIP,
       from: { anchor: 4 },
-      to: { anchor: 5 },
+      to: { anchor: 10 },
       mode: 'normal' as const,
       selection: { anchor: 19, head: 19 },
     },
     {
-      name: 'a cursor moved forward into a chip that ends its line lands on its start in normal mode',
+      name: "a cursor moved forward from the start of a chip that ends its line lands on the line's end in normal mode",
       doc: LINE_END_CHIP,
       from: { anchor: 4 },
-      to: { anchor: 5 },
+      to: { anchor: 18 },
       mode: 'normal' as const,
-      selection: { anchor: 4, head: 4 },
+      selection: { anchor: 19, head: 19 },
     },
     {
       name: 'a cursor moved back into a chip lands on its start in normal mode',
@@ -173,6 +216,54 @@ describe('applyChipRules', () => {
       to: { anchor: 1, head: 5 },
       mode: 'visual' as const,
       selection: { anchor: 1, head: 19 },
+    },
+    {
+      name: 'an unchanged visual selection re-sent with its head on a chip comes back unchanged',
+      doc: ONE_CHIP,
+      from: { anchor: 1, head: 19 },
+      to: { anchor: 1, head: 19 },
+      mode: 'visual' as const,
+      selection: { anchor: 1, head: 19 },
+    },
+    {
+      name: 'a visual head moved back onto the start of the chip it ended on leaves the chip out',
+      doc: ONE_CHIP,
+      from: { anchor: 1, head: 19 },
+      to: { anchor: 1, head: 5 },
+      mode: 'visual' as const,
+      selection: { anchor: 1, head: 4 },
+    },
+    {
+      name: "a one-chip visual selection whose head moves back inside the chip ends on the chip's start",
+      doc: ONE_CHIP,
+      from: { anchor: 4, head: 19 },
+      to: { anchor: 4, head: 11 },
+      mode: 'visual' as const,
+      selection: { anchor: 19, head: 4 },
+    },
+    {
+      name: "a one-chip visual selection on the chip's start whose head moves forward inside the chip ends on its last character",
+      doc: ONE_CHIP,
+      from: { anchor: 19, head: 4 },
+      to: { anchor: 19, head: 10 },
+      mode: 'visual' as const,
+      selection: { anchor: 4, head: 19 },
+    },
+    {
+      name: "an unchanged one-chip visual selection on the chip's start keeps its direction",
+      doc: ONE_CHIP,
+      from: { anchor: 19, head: 4 },
+      to: { anchor: 19, head: 4 },
+      mode: 'visual' as const,
+      selection: { anchor: 19, head: 4 },
+    },
+    {
+      name: 'a linewise visual selection moved back up to a line ending in a chip keeps the chip',
+      doc: LINE_END_CHIP_THEN_LINE,
+      from: { anchor: 0, head: 24 },
+      to: { anchor: 0, head: 19 },
+      mode: 'visualLine' as const,
+      selection: { anchor: 0, head: 19 },
     },
     {
       name: 'a visual selection begun on a chip is the chip',
@@ -246,6 +337,20 @@ describe('applyChipRules', () => {
       text: 'see tmp/chips/a.md now',
     },
     {
+      name: 'a paste inside a chip goes in after it',
+      doc: ONE_CHIP,
+      spec: { changes: { from: 5, insert: ' xy' } },
+      mode: 'normal' as const,
+      text: 'see /tmp/chips/a.md xy now',
+    },
+    {
+      name: "a paste on a chip's start goes in before it",
+      doc: ONE_CHIP,
+      spec: { changes: { from: 4, insert: 'xy ' } },
+      mode: 'normal' as const,
+      text: 'see xy /tmp/chips/a.md now',
+    },
+    {
       name: 'typing on the end of a chip deletes nothing',
       doc: ONE_CHIP,
       spec: { changes: { from: 19, insert: 'x' } },
@@ -254,6 +359,83 @@ describe('applyChipRules', () => {
     },
   ])('$name', ({ doc, spec, mode, text }) => {
     expect(settled(doc, { anchor: 0 }, spec, mode).text).toBe(text);
+  });
+
+  it('a blockwise visual selection keeps its ranges, its main range widened over a chip', () => {
+    // `/a/b` spans 3 to 7 and `/c/d` 11 to 15; the block takes columns 1 to 4.
+    const block = EditorSelection.create(
+      [EditorSelection.range(1, 5), EditorSelection.range(9, 13)],
+      1,
+    );
+    const state = EditorState.create({
+      doc: 'ab /a/b\ncd /c/d',
+      selection: block,
+      extensions: [
+        EditorState.allowMultipleSelections.of(true),
+        fileChipExtension(CHIP_DRAWING),
+        EditorState.transactionFilter.of((tr) =>
+          applyChipRules(tr, CHIP_PATHS, 'visualBlock'),
+        ),
+      ],
+    });
+    const { ranges, mainIndex } = state.update({ selection: block }).state
+      .selection;
+    expect({
+      ranges: ranges.map(({ anchor, head }) => ({ anchor, head })),
+      mainIndex,
+    }).toEqual({
+      ranges: [
+        { anchor: 1, head: 5 },
+        { anchor: 9, head: 15 },
+      ],
+      mainIndex: 1,
+    });
+  });
+});
+
+describe('movedPasteShift', () => {
+  it.each([
+    {
+      name: 'the cursor a vim paste inside a chip places next moves on as far as the paste moved past the chip',
+      paste: { from: 5, insert: ' xy' },
+      isVimOp: true,
+      placesLater: false,
+      shift: 14,
+    },
+    {
+      name: 'a cursor placed in a later operation stays where it is placed',
+      paste: { from: 5, insert: ' xy' },
+      isVimOp: true,
+      placesLater: true,
+      shift: 0,
+    },
+    {
+      name: 'a paste outside a vim operation moves no cursor',
+      paste: { from: 5, insert: ' xy' },
+      isVimOp: false,
+      placesLater: false,
+      shift: 0,
+    },
+    {
+      name: "a paste on a chip's start moves no cursor",
+      paste: { from: 4, insert: 'xy ' },
+      isVimOp: true,
+      placesLater: false,
+      shift: 0,
+    },
+  ])('$name', ({ paste, isVimOp, placesLater, shift }) => {
+    const state = EditorState.create({
+      doc: ONE_CHIP,
+      extensions: fileChipExtension(CHIP_DRAWING),
+    });
+    const cm: VimOperationHolder = { curOp: { $d: 0, isVimOp } };
+    const pasted = state.update({ changes: paste });
+    noteMovedPaste(cm, pasted);
+    if (placesLater) {
+      cm.curOp = { $d: 1, isVimOp: true };
+    }
+    const placed = pasted.state.update({ selection: { anchor: 7 } });
+    expect(movedPasteShift(cm, placed)).toBe(shift);
   });
 });
 
