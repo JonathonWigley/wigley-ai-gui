@@ -7,6 +7,7 @@ import type {
   QualifiedEvents,
 } from '../../../contracts/plugin';
 import { createAgentFormChannelPresenter } from '../../../shared/agent-forms/channel-presenter';
+import { NO_FORM_WAKE } from '../../../shared/agent-forms/chat-wake';
 import { addAgentFormDriveActions } from '../../../shared/agent-forms/drive-actions';
 import { createAgentFormService } from '../../../shared/agent-forms/form-service';
 import { createFolderFormStore } from '../../../shared/agent-forms/form-store';
@@ -77,6 +78,7 @@ function createForms(
       type: roundType,
       presenter,
       store,
+      wake: NO_FORM_WAKE,
       defaultDeadlineSeconds,
     }),
     layoutNames,
@@ -92,6 +94,7 @@ function createForms(
           services.randomHex,
           services.paths,
         ),
+        wake: NO_FORM_WAKE,
         defaultDeadlineSeconds,
       }),
       layoutNames,

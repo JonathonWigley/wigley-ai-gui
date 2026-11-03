@@ -1,6 +1,6 @@
 # 02 — Drive: `chat.start` returns the session's host id
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -34,3 +34,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 54f72bb2 · proof: diff read: hostSessionIdOf and the { sessionId, hostSessionId } result present as planned; chat-sessions.test.ts and start.test.ts 152 passed; whole-tree typecheck waits on 01 · concerns: no test row pins chat.start's hostSessionId result or its null throw (plan asked none); worker's nvm prefix was refused, ran on default node (v24.22.1 matches .nvmrc)

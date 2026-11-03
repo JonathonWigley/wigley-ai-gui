@@ -3,6 +3,7 @@ import type {
   AgentFormOwnerInfo,
   AgentFormSession,
 } from '../../../contracts/agent-forms';
+import { NO_FORM_WAKE } from '../../../shared/agent-forms/chat-wake';
 import { createAgentFormService } from '../../../shared/agent-forms/form-service';
 import type { AgentFormStore } from '../../../shared/agent-forms/form-store';
 import { createMemoryFormStore } from '../../../shared/agent-forms/memory-form-store';
@@ -38,6 +39,7 @@ function startSession(): AgentFormSession<PrimerPayload> {
     type: primerType,
     presenter,
     store,
+    wake: NO_FORM_WAKE,
     defaultDeadlineSeconds: () => DEFAULT_DEADLINE_SECONDS,
   }).startSession({ id: 'app-1', info: SESSION });
 }

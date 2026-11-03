@@ -151,7 +151,7 @@ Forms and primer reach chat only through `api.dependency<ChatMainExports>('chat'
 
 ### Wave 1
 - [ ] [Wake seam in the form service, and the chat adapter](01-wake-seam.md)
-- [ ] [Drive: chat.start returns the session's host id](02-drive-host-id.md)
+- [x] [Drive: chat.start returns the session's host id](02-drive-host-id.md)
 
 ### Wave 2
 - [ ] [Wire the wake into forms and the primer](03-wire-forms-primer.md) — after 01
@@ -167,7 +167,10 @@ Forms and primer reach chat only through `api.dependency<ChatMainExports>('chat'
 Review base: 9b795658
 
 ### Groups
+- 02 · 54f72bb2 · diff read: hostSessionIdOf and the { sessionId, hostSessionId } result present as planned; chat-sessions.test.ts and start.test.ts 152 passed; whole-tree typecheck waits on 01 · concerns: no test row pins chat.start's hostSessionId result or its null throw (plan asked none); worker's nvm prefix was refused, ran on default node (v24.22.1 matches .nvmrc)
 ### Contract changes
 ### Rulings
+- drive SKILL.md stated no chat.start result, so one sentence was added after the chat.start profile line — the Files field expects the skill to state it — one sentence to drop if wrong · group 02 · group 02
+- start.test.ts (outside Files) gains hostSessionIdOf on its fakeChat, no new row — the widened Pick needs it to typecheck — none · group 02 · group 02
 ### Review rounds
 ### Test gate

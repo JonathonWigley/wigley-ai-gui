@@ -54,6 +54,13 @@ export interface AgentFormPresenter<Form, Body> {
   close(formId: string): void;
 }
 
+// Tells a session that the user finished one of its forms while no call
+// waited to return it. Must not throw and must return at once: delivery is
+// fire-and-forget.
+export interface AgentFormWake {
+  formFinishedUnheard(sessionId: string, text: string): void;
+}
+
 // A form that left the window. `byFinish` is true when the page's `finish`
 // for the form closed it, false when main closed it on its own.
 export interface AgentFormClosed {
