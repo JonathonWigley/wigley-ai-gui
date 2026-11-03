@@ -596,8 +596,8 @@ round; primer: an open primer), since main, not the page, decides.
   `permissionActions` (Allow once / Deny with their keys), and `images` (a user entry's thumbnails, which open the
   image viewer). Every part takes its parent first. Beside the entries, the layout draws the other Chat tab surfaces
   through parts that take `(parent, input, kit)` and return a `PartView`: `activity` (one run of the agent's steps,
-  `docs/features/agent-chat/design.md` § Activity line), `working` (the running turn, § Working block), `queuedMessage` (one pending message's row, § Pending
-  messages), `composer`, `composerBar`, `attachments`, `pickerRow`, `signIn`, `reasonBox`, `closeConfirm` and
+  `docs/features/agent-chat/design.md` § Activity line), `working` (the running turn, § Working block),
+  `queuedMessage` (one pending message's row, § Pending messages), `composer`, `composerBar`, `attachments`, `pickerRow`, `signIn`, `reasonBox`, `closeConfirm` and
   `imageViewer`, each with a kit that extends the base kit (`activity`, `working`, `queuedMessage` and `imageViewer`
   take the base kit itself).
   A user chat layout defines only the entry builders and the parts it changes: a kind or part it leaves out draws with
