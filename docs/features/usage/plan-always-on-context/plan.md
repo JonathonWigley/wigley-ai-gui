@@ -107,9 +107,9 @@ Promise<UsageAgentEvent | null>`.
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Claude adapter knows a saved session's usage](01-adapter-saved-usage.md)
-- [ ] [Usage store keeps the newest event](02-store-newest-usage.md)
-- [ ] [Page draws a zero line](03-page-zero-line.md)
+- [x] [Claude adapter knows a saved session's usage](01-adapter-saved-usage.md)
+- [x] [Usage store keeps the newest event](02-store-newest-usage.md)
+- [x] [Page draws a zero line](03-page-zero-line.md)
 
 ### Wave 2
 - [ ] [Chat reads a restored row's saved usage](04-chat-restored-usage.md) — after 01
@@ -122,10 +122,22 @@ Promise<UsageAgentEvent | null>`.
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 46f417b5
 
 ### Groups
+- 02 · 7e37654f · diff read matches Decisions; tsc clean on usage-store · concerns: none
+- 03 · 278491fc · diff read matches Decisions; Produces signatures present; tsc clean outside group 01's in-progress files · concerns: brief named a rowLineInput table in usage-view-model.test.ts that did not exist; worker added one
+- 01 · 6dd19915 · diff read matches Decisions; every Produces present; no hasReply left; npm run typecheck clean · concerns: none beyond rulings; resume read logs a rejection even after close (matches the settings read)
 ### Contract changes
+- readTranscript (new export): none → export async function readTranscript(files: Files, paths: Paths, projectsFolder: string, sessionId: string): Promise<string> in past-sessions.ts · why: readHistory, readLastUsage and the harness's resume seed share one session-id check and path · consumers: 01 · group 01
 ### Rulings
+- A session holding no usage takes an incoming usage whatever its at — the Decisions line conditions the skip on a kept usage — none expected · group 02 · group 02
+- Same-state identity is pinned by its own toBe test beside the toEqual table — the table cannot see identity — one extra test · group 02 · group 02
+- Zero meter built by a private zeroContextMeter() through formatTokens(0), fresh object per call — keeps one formatter — one allocation per draw · group 03 · group 03
+- NoSnapshotYet moved out of the build table into build_NoSnapshotYet_DrawsNothing, since the table's other rows now draw — clarity — none · group 03 · group 03
+- Resume seed reads readTranscript + mainReplies + withSavedReplies on the live state rather than calling readLastUsage — the Decisions line folds into the live state — none · group 01 · group 01
+- New session starts as withSavedReplies(EMPTY_SESSION_USAGE, []) rather than a named constant — reuses the empty-list rule — a reviewer may prefer a constant · group 01 · group 01
+- New-session leading events are pinned by extending start_Turn_EmitsUsageEventsAndAsksContextUsage; with its 30% override the second event's configured limit is 300000 — 'both limits null' holds for the first event only — none · group 01 · group 01
+- Fake lastUsage takes a pending fail and hold at call time; a held failing call rejects after release — none · group 01 · group 01
 ### Review rounds
 ### Test gate

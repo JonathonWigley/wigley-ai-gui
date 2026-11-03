@@ -1,6 +1,6 @@
 # 01 — Claude adapter knows a saved session's usage
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -67,3 +67,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 6dd19915 · proof: diff read matches Decisions; every Produces present; no hasReply left; npm run typecheck clean · concerns: none beyond rulings; resume read logs a rejection even after close (matches the settings read)

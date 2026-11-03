@@ -1,6 +1,6 @@
 # 03 — Page draws a zero line
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -33,3 +33,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 278491fc · proof: diff read matches Decisions; Produces signatures present; tsc clean outside group 01's in-progress files · concerns: brief named a rowLineInput table in usage-view-model.test.ts that did not exist; worker added one
