@@ -10,7 +10,19 @@ Planned against the background-tasks plan's landed shape in `.claude/worktrees/b
 `src/plugins/agents/roster.ts` with `Roster { agents: RunningAgent[]; tasks: RunningTask[] }`). Re-read those files on
 `main` before starting; a line this document calls "today" is that tree.
 
-Files:     modify `src/contracts/agent.ts` ·
+**Precondition: probe one Agent call before coding.** Claude Code's Agent tool schema has `name` ("Name for the
+spawned agent"), `model` (enum `sonnet`, `opus`, `haiku`, `fable`) and `effort` (enum `low`, `medium`, `high`,
+`xhigh`, `max`) inputs: verified 2026-11-02 from the tool definition a Claude Code session receives. No stream line
+shows them yet: `docs/features/agent-chat/claude-stream.md` § Subagents lists only `description`, `prompt`,
+`subagent_type` and `run_in_background`. Before writing code, probe them as the background-tasks plan probed its task
+lines: one short `claude -p --output-format stream-json --verbose` turn whose prompt asks for one Agent call with
+`name`, `model: "haiku"` and `effort: "low"` and `run_in_background: true`. Record the Agent `tool_use` line's
+`input` and the launch receipt's `tool_use_result` (with `resolvedModel`) in § Subagents, with the Claude Code version
+and date. When the measured keys or values differ from the ones above, stop and report before coding: the
+`name`, `model` and `effort` rules below rest on them.
+
+Files:     modify `docs/features/agent-chat/claude-stream.md` (the probe's record, § Subagents) ·
+           modify `src/contracts/agent.ts` ·
            modify `src/main/claude-code/stream-decoder.ts` · test `src/main/claude-code/stream-decoder.test.ts` ·
            create `src/main/claude-code/agent-definitions.ts` · test `src/main/claude-code/agent-definitions.test.ts` ·
            create `src/main/claude-code/model-prices.ts` · test `src/main/claude-code/model-prices.test.ts` ·
@@ -44,10 +56,11 @@ Produces:  in `src/contracts/agent.ts`, `AgentEvent` members (plan.md § File St
 
 **Contract** (`src/contracts/agent.ts`). Add the four members above. Comments, one line each where the meaning is not
 the name: `name` is the label the agent was given, its type when none; `model` and `effort` are null when unknown;
-`agentReplied` is one reply of a subagent, `model` that reply's model id, `spendUsd` the agent's estimated spend so far
-(cumulative, not the reply's share), null when its model has no list price; `summary` is the tool call's one-line
-description (the tool ChatEntry's `summary`); `command` is the shell command a task runs, null when the harness links
-the task to none. `agentReplied` sits after `agentFinished` in the union. Fix the `AgentEvent` comment's pointer if it
+`agentReplied` reports a subagent's model and spend so far, on each reply and on its launch receipt; `model` is the
+model id Claude used (the reply's, or the receipt's `resolvedModel`), `spendUsd` the agent's estimated spend so far
+(cumulative, not the reply's share), null before its first reply or when any reply's model has no list price;
+`summary` is the tool call's one-line description (the tool ChatEntry's `summary`); `command` is the shell command a
+task runs, the whole text with no length cap, null when the harness links the task to none. `agentReplied` sits after `agentFinished` in the union. Fix the `AgentEvent` comment's pointer if it
 names only the old members.
 
 **Name.** `asString(input.name)` when not `''`, else the event's `agentType` (which is `subagent_type` or
@@ -55,10 +68,22 @@ names only the old members.
 
 **Model and effort at spawn.** `model` = `asString(input.model)` when not `''`, else the definition's `model`, else
 null. `effort` = `asString(input.effort)` when not `''`, else the definition's `effort`, else null. The Agent tool's
-schema in Claude Code takes optional `model` (`sonnet`, `opus`, `haiku`, `fable`) and `effort` inputs, and an
-explicit input overrides the definition, so the input reads first (agent's decision; see the open question in the
-reply). The value stays verbatim (an alias such as `sonnet`); the first `agentReplied` replaces it with the full id.
-A definition `model` of `inherit` reads as null (the loader maps it).
+schema takes optional `model` and `effort` inputs (see the precondition), and an explicit input overrides the
+definition, so the input reads first. The value stays verbatim (an alias such as `sonnet`). A definition `model` of
+`inherit` reads as null (the loader maps it).
+
+**The model the roster shows, in order.** Each later source replaces the earlier one:
+
+1. `agentSpawned.model`: the Agent call's `model` input, else the definition file's `model`, else null.
+2. The launch receipt's `resolvedModel`: a `user` line's `tool_result` for a decoded Agent call whose
+   `tool_use_result.resolvedModel` is a non-empty string (claude-stream.md § Subagents shows it on the background
+   launch receipt, `status: "async_launched"`, and on a foreground agent's completion receipt). The decoder pushes
+   `{ type: 'agentReplied', agentId: <that tool_use_id>, model: resolvedModel, spendUsd: <the agent's spend so far> }`,
+   the spend computed as for a reply (null when no reply is recorded yet). So the full id replaces the input's alias
+   and the definition's value seconds after the spawn, before the first reply.
+3. Each reply's `message.model` (below).
+
+Effort has no later source: it stays the spawn's value.
 
 **Definition lookup** (`agent-definitions.ts`). `loadAgentDefinitions` builds one map keyed on agent type:
 
@@ -97,22 +122,28 @@ A definition `model` of `inherit` reads as null (the loader maps it).
 `message.usage` is an object: record that usage under the agent (`parent_tool_use_id`) and the message id
 (`message.id`), replacing an earlier record of the same message id, then push
 `{ type: 'agentReplied', agentId, model: message.model, spendUsd }`. `spendUsd` is the sum of `replySpendUsd` over the
-agent's recorded messages, each priced by its own model; null when any of them prices to null. Claude sends one
+agent's recorded messages, each priced by its own model; null when any of them prices to null, and it stays null for
+that agent once an unpriced reply is recorded, whatever replies follow. Claude sends one
 `assistant` line per content block, each with the message's usage, so keying on message id keeps a multi-block reply
 from counting twice. A main-conversation line emits no `agentReplied`; the main agent's spend stays `total_cost_usd`.
 
 `replySpendUsd(model, usage)`:
 
 - Tokens: `input_tokens`; cache writes split by `cache_creation.ephemeral_5m_input_tokens` and
-  `cache_creation.ephemeral_1h_input_tokens`, and when `cache_creation` is not an object, all of
-  `cache_creation_input_tokens` at the 5m rate; `cache_read_input_tokens`; `output_tokens`. A missing number is 0.
+  `cache_creation.ephemeral_1h_input_tokens`; when `cache_creation` is not an object, or neither of those two fields
+  is a number, all of `cache_creation_input_tokens` at the 5m rate; `cache_read_input_tokens`; `output_tokens`. Any
+  other missing number is 0.
 - Spend = Σ tokens × rate per MTok ÷ 1,000,000.
 - Model match: drop one trailing `[…]` suffix (`claude-opus-5-5[1m]`), then the table key equal to the id, or the key
   followed by `-` and eight digits (a dated snapshot, `claude-haiku-4-5-20251001`). No match → null.
 - Claude Haiku 5.5 is priced by prompt length: when `input_tokens + cache writes + cache_read_input_tokens` is over
   100,000, the "over 100,000" row prices every class of that reply.
-- The table is a `Readonly<Record<string, ModelPrice>>` in `model-prices.ts`, with a comment naming the page and date
-  below. No Claude price leaves `src/main/claude-code/` (plan.md boundary rule).
+- The table is a `Readonly<Record<string, readonly PriceRow[]>>` in `model-prices.ts`, with a comment naming the page
+  and date below. `interface PriceRow { maxPromptTokens: number | null; input: number; write5m: number; write1h: number;
+  cacheRead: number; output: number }` (rates per MTok, module-private). A reply takes the first row whose
+  `maxPromptTokens` is null or not below its prompt tokens. Every key holds one row with `maxPromptTokens: null`,
+  except `claude-haiku-5-5`: `[{ maxPromptTokens: 100000, … }, { maxPromptTokens: null, … }]`. No Claude price
+  leaves `src/main/claude-code/` (plan.md boundary rule).
 
 **Pinned prices**, US dollars per million tokens, verbatim from https://platform.claude.com/docs/en/about-claude/pricing
 § Model pricing, fetched 2026-11-02 (docs.claude.com/en/docs/about-claude/pricing redirects there). Model ids from
@@ -150,7 +181,7 @@ built (`toolEntry(block, event)` runs just before it in `decodeAssistant`; pass 
 Bash and a subagent's own Bash): a non-`local_agent` `system/task_started` carries `tool_use_id`, the id of the Bash
 `tool_use` that started it, and that `assistant` line comes before `task_started`. In `startTask`, `command` is
 `asJson(toolEntries.get(asString(event.tool_use_id))?.input).command` when it is a non-empty string, the whole text
-(not the summary's first line); else null (no linked call, or a call with no `command`, as a later task type may
+(not the summary's first line, and no length cap: task 09's open box draws the whole command); else null (no linked call, or a call with no `command`, as a later task type may
 have). The rule reads `input.command` of any tool, not only `Bash`, so a shell tool under another name still links.
 
 **Fake harness** (`src/shared/fake-agent-harness.ts`). It emits what the adapter would:
@@ -219,6 +250,14 @@ named test file gets the fields and nothing else: `name` equal to the literal's 
   - `subagent reply re-sent for a second block` — same message id twice, spend unchanged (catches double counting).
   - `subagent replies of two messages` — spend is the sum (catches spend not cumulative).
   - `subagent reply of an unpriced model` — `claude-mythos-5-1`, `spendUsd: null`.
+  - `subagent replies priced then unpriced` and `subagent replies unpriced then priced` — two message ids of one
+    agent, one `claude-haiku-5-5` and one `claude-mythos-5-1`, in each order; the last `agentReplied` has
+    `spendUsd: null` (catches a sum of the priced replies only).
+  - `launch receipt sets the resolved model` — an Agent call with input `model: 'haiku'`, then its launch receipt
+    shaped after § Subagents' measured 3.47 line (`resolvedModel: 'claude-haiku-5-5'`): `agentSpawned.model` is
+    `'haiku'`, then `agentReplied { model: 'claude-haiku-5-5', spendUsd: null }` (catches the receipt's model dropped).
+  - `receipt of a non-Agent tool` — a Bash `tool_result` whose `tool_use_result` has no `resolvedModel`: no
+    `agentReplied`.
   - `main reply` and `synthetic subagent reply` — no `agentReplied` (catches main spend leaking in).
   - `main background Bash task` — the `tool_use` then `task_started` lines shaped after § Subagents' measured
     `bvrvtgapv` line; `command: 'sleep 6'`.
@@ -233,6 +272,7 @@ named test file gets the fields and nothing else: `name` equal to the literal's 
   | HaikuOverTier | `claude-haiku-5-5` | in 2, read 150000, out 10 | 0.007526 |
   | Opus1hWrite | `claude-opus-5-5` | in 3, 1h 2000, read 40000, out 120 | 0.026412 |
   | NoSplitIsFiveMinute | `claude-sonnet-5-5` | `cache_creation_input_tokens` 1000, no `cache_creation` | 0.0025 |
+  | SplitWithoutFieldsIsFiveMinute | `claude-sonnet-5-5` | `cache_creation_input_tokens` 1000, `cache_creation` `{}` | 0.0025 |
   | DatedSnapshot | `claude-haiku-4-5-20251001` | in 1000, out 1000 | 0.006 |
   | ContextSuffix | `claude-opus-5-5[1m]` | out 1000 | 0.02 |
   | Unpriced | `claude-mythos-5-1` | out 1000 | null |
@@ -252,9 +292,10 @@ named test file gets the fields and nothing else: `name` equal to the literal's 
   `agentReplied` events; the event-order table (the `agentSpawned fake-agent-2-1 …` rows) gains
   `agentReplied fake-agent-2-1` / `-2-2` before each `toolStarted`.
 
-No self-test step: nothing the page draws changes in this task (task 09 draws these facts; task 11 checks them live).
+No self-test step: nothing the page draws changes in this task (task 09 draws these facts; task 11's live check 10
+checks the `name`, `model` and `effort` inputs and the receipt's model on a real session).
 
-Done when: `npm run typecheck`, `npm test` and `npm run lint` pass; `grep -rln "installed_plugins\|replySpendUsd\|ephemeral_1h" src | grep -v src/main/claude-code` prints nothing.
+Done when: `npm run typecheck`, `npm test` and `npm run lint` pass; `grep -rln "installed_plugins\|replySpendUsd\|ephemeral_1h\|resolvedModel" src | grep -v src/main/claude-code` prints nothing.
 Commit:    one commit for the group
 
 ## Proof

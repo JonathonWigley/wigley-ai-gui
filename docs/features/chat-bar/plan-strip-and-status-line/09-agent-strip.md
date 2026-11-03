@@ -14,8 +14,12 @@ Files:
 - create `src/plugins/agent-strip/page/agent-strip.ts` · test `src/plugins/agent-strip/page/agent-strip.test.ts`
 - create `src/plugins/agent-strip/page/layout/read-agent-strip-layout.ts`
 - create `src/plugins/agent-strip/page/agent-strip.css`
-- create `src/plugins/agent-strip/layouts/layout.d.ts`, `src/plugins/agent-strip/layouts/default/layout.js`
+- create `src/plugins/agent-strip/layouts/layout.d.ts`, `src/plugins/agent-strip/layouts/default/layout.js` ·
+  test `src/plugins/agent-strip/layouts/default/layout.test.ts`
 - modify `src/plugins/chat/main/preview/chat-preview.ts` · test `src/plugins/chat/main/preview/chat-preview.test.ts`
+- create `src/plugins/chat/main/preview/preview-agent-events.ts` (the sample's event list)
+- modify `src/plugins/chat/main/start.ts` (wires the preview's `emit`)
+- modify `src/plugins/agents/main/start.ts` · test `src/plugins/agents/main/start.test.ts` (no log for the preview)
 - modify `src/plugins/keymap.ts`, `src/plugins/manifests.ts`, `src/plugins/main.ts`, `src/plugins/page.ts`,
   `scripts/check-layers.mts`
 
@@ -28,7 +32,8 @@ Consumes:
   `toBox(how)`) and `ChatComposerPart.stop?: ComposerStop` in `src/plugins/chat/contract.ts` ← 06
 - `ChatPageExports.addComposerPart`, `KeysPageExports.anchor` / `keysFor`, `sessions.sessionAdded`,
   `sessions.sessionRemoved`, `ChatMainExports.launch` / `closeSessionsIn`, `SessionsMainExports.activate`,
-  `MAIN_AGENT_ID`, `FAKE_AGENTS_TEXT` (tree today)
+  `MAIN_AGENT_ID`, `FAKE_AGENTS_TEXT`, `CHAT_PREVIEW_HOST_ID` and `ChatAgentEvent` in `src/plugins/chat/contract.ts`
+  (tree today)
 - the layout registration shape 07 settles: a main part that only registers layouts (and hands a script) ← 07
 
 Produces:
@@ -65,7 +70,9 @@ Decisions:
   `toggleBox` (`open or close the box`).
 - **Keys** (`src/plugins/keymap.ts`, a new `// Agent strip` banner section after chat's), scope `agent-strip.strip`:
   `h` → `agent-strip.prevBox`, `l` → `agent-strip.nextBox`, `k` → `agent-strip.leave`, `i` → `agent-strip.focusBox`,
-  `a` → `agent-strip.appendBox`, `<CR>` → `agent-strip.toggleBox`. They follow `docs/keymap.md` § Layers (raw keys on
+  `a` → `agent-strip.appendBox`, `<CR>` → `agent-strip.toggleBox`, and `<Esc>` → `agent-strip.leave` as a second bind
+  of the same command (the user's answer, 2026-11-02). `<Esc>` is in
+  `VIM_KEYS` and takes no anchor. They follow `docs/keymap.md` § Layers (raw keys on
   the focused scope, hjkl the direction, `i`/`a` enter the box, Enter acts). No leader group: `docs/keymap.md` needs no
   row. `h`, `l`, `k` and `<CR>` are in `VIM_KEYS` (`src/plugins/keys/page/vim-keys.ts`) and take no anchor. `i` and
   `a` take anchors: the default layout's selected box draws a cursor prompt line, `kit.keyHint(line, 'focusBox', { label: 'to type' })`
@@ -76,9 +83,15 @@ Decisions:
   strip draws above the agent strip. Main order and `builtInManifests`: right after agent-lines (07).
 - **What the strip draws.** `build(parent, sessionId)` holds the wrapper per session (a later build of the same session
   replaces the held one, as `roster-lines.ts` does). While the session's roster lists no box, the wrapper holds
-  nothing. Else it holds one HScroller (`createHScroller()`), its `element` appended to the wrapper and each box part
-  drawn into its `track`, in `orderStripBoxes` order; after each draw it calls `refresh()`, and after a selection
-  change `reveal(<selected box element>)`. `dispose` disposes the box parts and the HScroller. The strip reads the
+  nothing. Else it holds one HScroller, kept across redraws so the user's scroll position and the chevrons survive the
+  once-a-second tick and each roster change:
+  - The first draw with a box creates it (`createHScroller()`) and appends its `element` to the wrapper.
+  - Each redraw disposes the box parts, empties `track`, draws each box part into `track` in `orderStripBoxes` order,
+    then calls `refresh()`. It does not create a new HScroller, so `scrollLeft` stays.
+  - A draw that finds no box disposes the HScroller and removes its `element`; the next draw with a box creates a new
+    one. A later build of the same session and `dispose` dispose it too.
+  - After a selection change it calls `reveal(<selected box element>)`.
+  `dispose` disposes the box parts and the HScroller. The strip reads the
   roster only through `AgentsPageExports`: `roster(sessionId)` at build, and `onRosterChanged(id)` redraws that
   session.
 - **Box inputs** (the Layout contract):
@@ -125,7 +138,8 @@ Decisions:
   - `agentMeta`: `[model, effort, cost]` without nulls, joined with ` · `, cost `$` + `spendUsd.toFixed(2)`; `''` when all
     are null.
   - `taskOwner`: `main` when `task.agentId === MAIN_AGENT_ID`; else the `name` of the roster agent with that id; else
-    `subagent`.
+    `subagent`. The last case is reached by a running task whose owning subagent finished and was dropped by a
+    `userMessage` (task 04 keeps the task, drops the agent): its box then says `subagent` (the user's answer, 2026-11-02).
 - **Keys at run time.** `stop.enter(sessionId, exits)`: no box → return false; else select `entryIndex`, keep
   `{ sessionId, exits }` as the active stop, `api.keys.setScope('strip')`, redraw, reveal, log, return true.
   `prevBox`/`nextBox` step the selection (`stepIndex`) and log only when it moved. `leave` (k) clears the selection,
@@ -133,16 +147,26 @@ Decisions:
   toggles the selected box open. `stop.leave(sessionId)` (chat moved the cursor) clears the selection and sets no
   scope. A roster change while selected re-selects by `reselect`; when it returns null, the strip clears the selection
   and calls `exits.toEntries()`. A command with no active stop does nothing.
-- **The open box.** One open box per session, by key. Enter toggles the selected box; a click on a box toggles that
-  box. Opening one closes the last. It stays open across moves and leaving the strip, and closes when its box leaves
-  the roster.
+- **The open box.** One open box per session, by key. Enter toggles the selected box. Opening one closes the last. It
+  stays open across moves and leaving the strip, and closes when its box leaves the roster.
+  - A mouse click on a box (the user's answer, 2026-11-02): toggles that box open
+    or closed and changes nothing else. The selection stays where it was, the strip's scope is not entered, and focus
+    does not move (the box takes no focus), because only `j` gives a composer part the cursor (task 06).
+  - The open box's height (the user's answer, 2026-11-02): the default layout
+    caps the open box's tool list at `max-height: calc(var(--wg-space-6) * 8)` with `overflow-y: auto`, each tool line
+    one line ellipsized; the track has `align-items: flex-start`, so the other boxes keep their own height. No new
+    token (`--wg-space-6` exists). `.agent-strip-tool` is in
+    `scrollsItself` (it ellipsizes); the tool list scrolls itself, so `.agent-strip-toolList` joins it too.
 - **Time.** A task box's `elapsedMs` is `now - startedAt` while it runs and null once finished: `RosterTask` carries
   no end time. One timer redraws every held strip once a second (`TICK_MS = 1000`) while any held strip shows a running
   task box, and clears when none does.
-- **Logs** (`[agent-strip]`, `<name>` the side-bar label from `sessions.sessionAdded`, else the id), each only when its
-  text changes for that session: `boxes in <name>: <count> (<running> running)`;
-  `selected box <n> of <count> in <name>` (1-based, on enter and each move); `opened box <n> in <name>`,
-  `closed box <n> in <name>`; `left strip in <name>` (k, i, a, or chat's `leave`).
+- **Logs** (`[agent-strip]`, `<name>` the side-bar label from `sessions.sessionAdded`, else the id):
+  - `boxes in <name>: <count> (<running> running)` is a state line, drawn again every second: it logs only when its
+    text changes for that session. A session's first draw with 0 boxes logs nothing; `boxes in <name>: 0 (0 running)`
+    logs only after a non-zero count for that session.
+  - Event lines log on every occurrence, with no dedupe: `selected box <n> of <count> in <name>` (1-based, on enter and
+    each move that moved; `h` at the first box and `l` at the last log nothing), `opened box <n> in <name>`,
+    `closed box <n> in <name>`, `left strip in <name>` (k, i, a, or chat's `leave`).
 - **Self-test** (agent-strip's own script, since its main part exists; keys' steps live in forms' script only because
   keys has no session fixture). Project `agent-strip-selftest` under the self-test home; `open` calls
   `chat.closeSessionsIn(projectDir)`, then `chat.launch` with first message `agent-strip self-test`, then
@@ -151,27 +175,46 @@ Decisions:
   Steps, `N` = `agent-strip-selftest`:
   1. keys `['i', ...FAKE_AGENTS_TEXT, 'Escape', 'Enter']` → `[agent-strip] boxes in N: 4 (4 running)`, `checksFit: true`,
      screenshot `strip`.
-  2. keys `['Escape', 'G', 'j']` → `[agent-strip] selected box 1 of 4 in N`, screenshot `strip-selected`.
+  2. keys `['Escape', 'G', 'j']` → `[agent-strip] selected box 1 of 4 in N`, `alsoExpect`
+     `[chat] composer part agent-strip.strip took the cursor in N` (task 06's handover proof), screenshot
+     `strip-selected`.
   3. `['l']` → `[agent-strip] selected box 2 of 4 in N`.
   4. `['h']` → `[agent-strip] selected box 1 of 4 in N`.
   5. `['Enter']` → `[agent-strip] opened box 1 in N`, screenshot `strip-opened`.
   6. `['Enter']` → `[agent-strip] closed box 1 in N`.
-  7. `['k']` → `[agent-strip] left strip in N`.
+  7. `['k']` → `[agent-strip] left strip in N`, `alsoExpect` `[chat] cursor back on the entries in N`.
   8. `['<C-c>']` → `[agent-strip] boxes in N: 4 (0 running)`, screenshot `strip-finished`.
   9. keys sending `strip cleared` as step 1 sends → `[agent-strip] boxes in N: 0 (0 running)`.
   `scrollsItself`: the box text classes that ellipsize (`.agent-strip-name`, `.agent-strip-description`,
-  `.agent-strip-meta`, `.agent-strip-tool`), the HScroller's track class 02 names, `.chat-activity-step`.
-  Assumption: 06's `j` lands on the strip from the last stop, an activity line included, and the running fake turn
-  keeps `G` on the last entry. If step 2's keys differ under 06's landed rules, fix the keys, not the expect.
+  `.agent-strip-meta`, `.agent-strip-tool`), `.agent-strip-toolList`, the HScroller's track class 02 names,
+  `.chat-activity-step`.
+  Step 2's keys rest on 06's last-stop rule (the user's answer, 2026-11-02): when the fake
+  turn's last run is open, `G` lands on its line and `j` walks its steps first, so step 2 presses `j` once per step
+  after the line. Read the landed rule and the fake turn's entries, then fix the keys, not the expect.
 - **Preview.** AGENTS.md § Architecture (A layout) requires a preview under `Space z l` for a view that needs agent
-  data. agents' `Space z l a` row has no Chat tab, so the strip previews in chat's `Space z l c` sample session instead:
-  chat main's preview (`src/plugins/chat/main/preview/chat-preview.ts`) emits, for its sample session, the same
-  `agentEvent` payloads a live session sends (two subagents — one running with three tool calls and an
-  `agentReplied`, one finished `done` — and one running task with a command). agents main folds them like any session,
-  so the strip draws them. The preview ends its sample session as today, and agents' `sessionEnded` rule clears the
-  roster. Name the emitted events in a pure list beside the preview, and test that it folds (through
-  `foldAgentEvent`) to a roster with 2 agents and 1 task. Add a `chat-preview` screenshot step only if chat's script
-  already saves `chat-chat-preview`: then that screenshot shows the strip.
+  data. agents' `Space z l a` row has no Chat tab, so the strip previews in chat's `Space z l c` sample session instead.
+  - The events: `previewAgentEvents(at: number): AgentEvent[]` in `src/plugins/chat/main/preview/preview-agent-events.ts`
+    (pure) lists two subagents (one running with three tool calls and an `agentReplied`, one finished `done`) and one
+    running task with a command, in event order.
+  - The emit: `agentEvent` is a chat main event (`chat-sessions.ts` emits it; agents main hears `chat.agentEvent`).
+    `ChatPreviewDeps` gains `emit: (event: 'agentEvent', data: ChatAgentEvent) => void`, which chat main's `start.ts`
+    wires to `api.events.emit` as it does for chat-sessions. `open()` emits each listed event once, after
+    `sessionStarted`, with `{ sessionId: <the preview's row id>, profileDir: null, hostSessionId: CHAT_PREVIEW_HOST_ID,
+    event }`. `profileDir` is null: the preview runs no profile folder (`PREVIEW_PROFILE` is a name), and
+    `ChatAgentEvent.profileDir` allows null.
+  - The listeners: agents main folds them like any session, so the strip draws them. agents main's `chat.agentEvent`
+    listener skips `agentLog.append` when `hostSessionId === CHAT_PREVIEW_HOST_ID`, so a preview leaves no log file
+    (agents may import `src/plugins/chat/contract.ts`). usage main reads only `usage` events, which the list holds
+    none of; workflow main maps events of workflow sessions only, and the preview row is none.
+  - The end: the preview ends its sample session as today. agents main drops the row's roster on `sessions.closed` /
+    `sessions.ended`, as for any row (task 04's `sessionEnded` marks running items `failed`; it does not clear).
+  - The test: `chat-preview.test.ts` asserts that `open()` emits the list's events in order with the payload above, and
+    that the list holds two `agentSpawned`, one `agentFinished` (`done`), one `agentReplied` and one `taskStarted` with
+    a command. The test does not fold: `src/plugins/chat/main` may not import `src/plugins/agents/roster.ts`
+    (`scripts/check-layers.mts`), and chat names no other plugin (plan.md boundary rule). Task 11's live check 7 shows
+    the folded strip.
+  - Add a `chat-preview` screenshot step only if chat's script already saves `chat-chat-preview`: then that screenshot
+    shows the strip.
 - **LAYERS:** add `src/plugins/agent-strip` (`src/contracts`, `src/shared`), `src/plugins/agent-strip/layouts`
   (`src/shared/page/layout-host`), `src/plugins/agent-strip/main` (`src/contracts`, `src/shared`,
   `src/plugins/agent-strip`, `src/plugins/agent-strip/layouts`, `src/plugins/chat/contract.ts`,
@@ -207,10 +250,29 @@ Tests:
   - `toggleBox_DrawsToolListInOpenAgentBox` — the open agent box holds a `toolList` part listing every tool.
   - `tick_RunningTaskShown_RedrawsAndStopsWhenNone`.
   - `build_UserLayoutThrows_DrawsDefault` for each part (`it.each` over `agentBox`, `taskBox`, `toolList`).
+  - `prevBox_AtFirst_LogsNothing` — `h` on box 1 keeps the selection and logs no line.
+  - `toggleBox_OpensOneAtATime` — Enter on box 1 then on box 2 (after `l`): box 2 open, box 1 closed; the log has
+    `opened box 1`, then `opened box 2`; a click on an unselected box toggles it and leaves the selection (the user's answer, 2026-11-02).
+  - `rosterDropsOpenBox_Closes` — the open box's item leaves the roster: no box is open.
+  - `stopLeave_ClearsWithoutScope` — `stop.leave(sessionId)` clears the selection, logs `left strip`, and sets no
+    scope.
+  - `redraw_KeepsScrollerAndItsScrollLeft` — a roster change and a tick keep the same HScroller `element` and its
+    `scrollLeft`; an empty roster removes it, and the next box makes a new one.
+  - `log_$case` (it.each) — the first empty draw logs no `boxes` line; 4 boxes then 0 logs `boxes in N: 0 (0 running)`;
+    an unchanged `boxes` text across a tick logs once; `left strip` twice (enter, k, enter, k) logs twice.
+- `strip-boxes.test.ts`, `entryIndex` gains the row: a done subagent, then a running subagent, then a running task →
+  1.
+- `layouts/default/layout.test.ts` (new; chat's `layout.test.ts` is the pattern): `agentBox_$case` and `taskBox_$case`
+  (it.each) — `isDimmed` sets `is-dimmed`; `isSelected` sets `is-selected` and draws the `focusBox` and `appendBox` key
+  hints; not selected draws neither; a task box with `isOpen` draws its `command`, or `no command` when it is null.
+  Catches a lost anchor now that the placement check runs only on the user's ask.
 - `main/start.test.ts`: `start_RegistersLayoutsAndHandsScript`, as 07's.
+- `agents/main/start.test.ts`: `previewEvents_NoLogWritten` — a `chat.agentEvent` whose `hostSessionId` is
+  `CHAT_PREVIEW_HOST_ID` folds into the roster and calls no `agentLog.append`; another host's event still appends.
 
-Done when: `npm run lint` passes; the tests above pass; agent-strip's self-test group `strip keys` passes, and a whole
-run's placement check logs no `[keys] unplaced` line for scope `agent-strip.strip`.
+Done when: `npm run lint` passes; the tests above pass; `npm run selftest -- --plugin agent-strip` passes (group
+`strip keys`). The end-of-run placement check runs only in a whole self-test run, which runs only on the user's ask
+(AGENTS.md § Running and testing); task 11 lists it for the user's ask.
 Commit: one commit for the group.
 
 Runtime looks for task 11: screenshots `agent-strip-strip`, `agent-strip-strip-selected`, `agent-strip-strip-opened`,

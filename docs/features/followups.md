@@ -347,3 +347,13 @@ now, any harness later). Each item names its sites.
 - **A visual may flash light in a dark theme before its first theme post**: the frame's root stays hidden until the
   page's first theme message, but the iframe's own background before that is unproved; check in a real window with a
   dark theme.
+- **Chat sessions get forms' 240 s deadline, not the relay's 300 s** — *agent-ready*: in a session the app's chat
+  started, a round's draft comes back every 240 s (forms' `deadlineSeconds` default), though the wigley plugin entry
+  sets `WIGLEY_FORMS_DEADLINE_SECONDS` to `300` and `relay.py` sends it in its hello. Seen in transcript
+  `99eebe3d-9fae-4e80-a14a-e7727265463f`: `ask_round` at 02:03:28, drafts at 02:07:28 and 02:11:29. Cause: chat opens
+  the row with `deadlineSeconds: null` (`src/plugins/chat/main/chat-sessions.ts`, `sessions.open`), and `connect`
+  joining that owned row (`src/plugins/sessions/main/session-list.ts`, `join`) keeps the row's info and drops the
+  hello's `deadlineSeconds`. Fix: a join takes the hello's `deadlineSeconds` into the owned session's info, as the
+  host id is kept; check that the form service, which reads it once per session in `startSession`
+  (`src/shared/agent-forms/form-service.ts`), starts after the join. Add a row to the session-list join tests: GIVEN an
+  owned row opened with a null deadline WHEN a relay joins with 300 THEN the session's info reads 300.

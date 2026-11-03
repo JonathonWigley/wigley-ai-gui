@@ -12,7 +12,7 @@ Files:     modify `src/plugins/chat/contract.ts`
            · modify `src/plugins/chat/page/chat-view.ts` · modify `src/plugins/chat/page/start.ts`
            · modify `src/plugins/chat/page/chat-commands.ts` · test `src/plugins/chat/page/chat-commands.test.ts`
            · modify `src/plugins/chat/page/chat.css`
-Consumes:  `ChatComposerPart` and `addComposerPart` (`src/plugins/chat/contract.ts`, tree) · `ChatStatusPart` ← 05 ·
+Consumes:  `ChatComposerPart` and `addComposerPart` (`src/plugins/chat/contract.ts`, tree) ·
            the composer redraw and `ChatViewDeps` as 05 leaves them ← 05 · `api.keys.setScope`, `api.keys.scope`,
            `api.keys.onScopeChanged` (`src/contracts/plugin.ts`, tree) · `SessionTabHandle.isVisible` (tree)
 Produces:  in `src/plugins/chat/contract.ts`, as plan.md § File Structure gives them:
@@ -25,9 +25,9 @@ Produces:  in `src/plugins/chat/contract.ts`, as plan.md § File Structure gives
            in `src/plugins/chat/page/entry-list.ts`: `isAtLastStop(): boolean;` on `EntryList`
            in `src/plugins/chat/page/composer-stop-holder.ts`:
              `export interface ComposerStopHolder { offer(parts: readonly ChatComposerPart[]): string | null;`
-               `leave(): void; holding(): string | null }`
+               `leave(): void; holding(): string | null; boxFocused(): void; scopeChanged(isVisible: boolean): void }`
              `export interface ComposerStopHolderDeps { sessionId: string; name: string; toEntries(): void;`
-               `toBox(how: 'insert' | 'append'): void; changed(holding: boolean): void; log: Log }`
+               `toBox(how: 'insert' | 'append'): void; setChatScope(): void; changed(holding: boolean): void; log: Log }`
              `export function createComposerStopHolder(deps: ComposerStopHolderDeps): ComposerStopHolder`
            (`holding()` is the holding part's id, null while none holds; one holder per held tab, in `HeldTab`)
            in `src/plugins/chat/page/chat-view.ts`: `enterStop(): string | null;` on `ChatSession`
@@ -38,12 +38,14 @@ Decisions: see below.
 - **Contract comments** (`contract.ts`), beside the plan's lines: `enter` sets the part's own base scope through its
   own `api.keys.setScope` before it returns true, and changes nothing when it returns false. `leave` sets no scope:
   chat, or the view that took the keys, has set one already. A part calls each exit at most once per `enter`; a call
-  after chat took the cursor back does nothing. A status part's `stop` is never read (see the conflict in the reply).
+  after chat took the cursor back does nothing.
 - **When `j` offers the stops.** `chat.nextEntry` offers them when `session.entries.isAtLastStop()`, else it moves as
   today. `isAtLastStop(focus, ids)` is true when `ids` is empty, or when `focus.entryId` is the last id. It is false
-  for a null `entryId` with ids present, so the first `j` from the start still focuses the last stop. The last stop
-  may be a pending row or an open run's line, as `moveFocus` treats them. `EntryList.isAtLastStop` reads it over the
-  list's stop order.
+  for a null `entryId` with ids present, so the first `j` from the start still focuses the last stop.
+  `EntryList.isAtLastStop` passes the list's stop order, the `order` `moveFocus` steps through
+  (`[...cursorStops(rows, openRuns), ...queuedSlots.keys()]`), so the last stop is that list's last element: a pending
+  row, or, when the last run is open, that run's last step (the user's answer, 2026-11-02). Under that option `G` and `toEntries` still land on the open run's line (`lastStopId()`),
+  and `j` walks the run's steps before it enters the strip.
 - **The offer.** `ChatSession.enterStop()` runs the tab's holder's `offer` with `composerParts.parts()`. `offer` asks each
   part with a `stop`, in part order, and stops at the first whose `enter(sessionId, exits)` returns true. A part whose
   `enter` throws is logged as `[chat] composer part <id> stop failed: <error>` and the next is asked. A stop that takes
@@ -57,7 +59,7 @@ Decisions: see below.
   changes), so the part's scope change loses none.
 - **Exits** (built per `offer`, bound to that offer):
   - `toEntries()`: the holder holds nothing, `changed(false)`, then `deps.setScope('chat')` and `entries.latest()`
-    (the last stop, following). Logs `[chat] cursor back on the entries in <tab name>`.
+    (the stop `G` focuses, following: an open last run's line). Logs `[chat] cursor back on the entries in <tab name>`.
   - `toBox(how)`: the holder holds nothing first, so the box's `focused` listener calls no `leave`; then
     `changed(false)`, `deps.setScope('chat')`, and `box.focus({ insert: true })` for `insert` or
     `box.focus({ insertAtEnd: true })` for `append`. Logs `[chat] focused the box in <tab name>`, as `focusBox` does.
@@ -66,10 +68,19 @@ Decisions: see below.
 - **When chat calls `leave`.** `holder.leave()` calls the holding part's `stop.leave(sessionId)` once, logs
   `[chat] composer part <id> left in <tab name>`, holds nothing and runs `changed(false)`. A throw from the part's
   `leave` is logged and the holder still clears. Chat calls it:
-  - when the box takes focus (the editor's `focused` listener: a mouse click, `fillComposer`, a reveal);
-  - on each scope change (`ChatViewDeps.onScopeChanged`, from `api.keys.onScopeChanged`) while the holding tab is not
-    the visible tab (`handle.isVisible()` false): another tab, pane or mode showed. A pushed scope over the visible tab
-    (help, which-key) keeps the stop;
+  - when the box takes focus (the editor's `focused` listener: a mouse click, `fillComposer`, a reveal), through
+    `holder.boxFocused()`: when the holder holds, it runs `leave()` and then `deps.setChatScope()` (chat's
+    `deps.setScope('chat')`). Nobody else sets the base scope on this path: the tab stays visible, so no `shown` runs,
+    and without it the part's scope would stay in force and `j`, `i` and `G` would be dead in the box's tab. When the
+    holder holds nothing, `boxFocused` does nothing. `toBox` clears the holder before it focuses the box, so its own
+    focus runs no `leave`;
+  - on each scope change (`ChatViewDeps.onScopeChanged`, from `api.keys.onScopeChanged`), through
+    `holder.scopeChanged(handle.isVisible())`: when the holder holds and `isVisible` is false, it runs `leave()`;
+    another tab, pane or mode showed. A pushed scope over the visible tab (help, which-key) keeps the stop. The order
+    holds: a scope change from another view comes from that view's `shown` (or a mode's own scope), and the sessions
+    contract runs `shown` once its tab is already the visible tab (`SessionTabView.shown` in
+    `src/plugins/sessions/contract.ts`), and `isVisible` reads at the moment of the call, so the old tab reads false.
+    The `shown` guard below covers a change missed all the same;
   - in the tab's own `shown`, before `setScope('chat')`, when it still holds (a guard for a missed change);
   - before the tab's composer draws again (layout change, a composer or status part added or removed), since the
     parts are built again: when the tab is visible chat then sets `chat.chat` and runs `entries.latest()`, as
@@ -79,10 +90,10 @@ Decisions: see below.
   bind, which calls `toEntries` (task 09).
 - **Self-test.** A fixture composer part is not practical: chat's self-test script runs in main, and a page part
   cannot tell it runs under the self-test (`runMode` is a main service only). Task 09 adds the step in its plugin's
-  self-test: with a fake subagent running, `Escape`, then `j` on the last entry expects
-  `[chat] composer part agent-strip took the cursor in chat-selftest`, and `k` expects
-  `[chat] cursor back on the entries in chat-selftest`. Until then the chat script's `j` steps prove the path where no
-  stop takes the cursor.
+  self-test (project `agent-strip-selftest`): with a fake subagent running, the step whose `j` enters the strip has
+  `alsoExpect` `[chat] composer part agent-strip.strip took the cursor in agent-strip-selftest`, and the `k` step has
+  `alsoExpect` `[chat] cursor back on the entries in agent-strip-selftest`. Until then the chat script's `j` steps
+  prove the path where no stop takes the cursor.
 
 ## Behaviour
 
@@ -92,7 +103,7 @@ GIVEN two parts whose stops both return true WHEN `j` is pressed on the last ent
 and the second's `enter` is not called.
 GIVEN every stop returns false WHEN `j` is pressed on the last entry THEN the cursor stays on the last entry and logs
 it as today.
-GIVEN a stop holding WHEN the part calls `toEntries` THEN `chat.chat` is in force, the last stop is focused and marked.
+GIVEN a stop holding WHEN the part calls `toEntries` THEN `chat.chat` is in force, the stop `entries.latest()` gives is focused and marked.
 GIVEN a stop holding WHEN the user clicks the box THEN the part's `leave` runs once and the box has focus.
 GIVEN a stop holding WHEN another session's tab shows THEN the part's `leave` runs once.
 GIVEN a stop holding WHEN help opens over the tab THEN `leave` does not run.
@@ -100,7 +111,9 @@ GIVEN a stop holding WHEN help opens over the tab THEN `leave` does not run.
 ## Tests
 
 - `entry-focus.test.ts`: `isAtLastStop_$case` (it.each) — no ids → true; focus on the last id → true; focus on an
-  earlier id → false; null `entryId` with ids → false. Catches `j` entering a stop from mid-list or from the start.
+  earlier id → false; null `entryId` with ids → false; ids ending in an open run's line then its two steps, focus on
+  the line → false (the user's answer, 2026-11-02). Catches `j` entering a stop from
+  mid-list or from the start.
 - `composer-stop-holder.test.ts`:
   - `offer_$case` (it.each) — no part has a stop → null; the first stop returns false and the second true → the
     second's id, both asked in order; two return true → the first's id, the second not asked; the first throws →
@@ -111,11 +124,20 @@ GIVEN a stop holding WHEN help opens over the tab THEN `leave` does not run.
   - `exits_AfterLeaveOrNewerOffer_Ignored` (it.each) — an exit called after `leave`, or an older offer's exit after a
     newer offer, logs the stale line and runs nothing.
   - `leave_Holding_CallsPartLeaveOnce` — `leave` twice calls the part's `leave` once; a throwing `leave` still clears.
+  - `scopeChanged_$case` (it.each) — holding and not visible → the part's `leave` runs once (another tab showed);
+    holding and visible → no `leave` (help over the tab); not holding → nothing. Catches the visible-tab rule
+    inverted.
+  - `boxFocused_$case` (it.each) — holding → the part's `leave` runs once, then `setChatScope` once; not holding →
+    neither runs. Catches a box click that leaves the part's scope in force.
 - `chat-commands.test.ts`: the fake session's `entries` gains `isAtLastStop` and the session `enterStop`.
   `nextEntry_$case` (it.each) — at the last stop and a stop takes it → logs only the took-the-cursor line and does not
   move; at the last stop and none takes it → moves and logs the focused stop; not at the last stop → `enterStop` is
   not called.
 - Self-test: none in this task (see Decisions); task 09's step proves the handover live.
+- Not unit-tested, left to task 11's live check 4: the wiring in `chat-view.ts` that calls `boxFocused`,
+  `scopeChanged`, the `shown` guard, the redraw and `sessionRemoved` leaves, `is-at-stop` and `focusedEntry()` null
+  while holding. There is no `chat-view.ts` test harness, and the decisions those calls make are the holder's, which
+  the rows above pin.
 
 ## Runtime look for task 11
 

@@ -7,7 +7,8 @@ Plan: [plan.md](plan.md)
 
 Files:     create `src/shared/page/ui/h-scroller.ts` · create `src/shared/page/ui/h-scroller.css` ·
            create `src/shared/page/ui/h-scroller-steps.ts` · test `src/shared/page/ui/h-scroller-steps.test.ts` ·
-           modify `src/plugins/gallery/page/gallery-view.ts` · modify `src/plugins/gallery/page/gallery.css`
+           modify `src/plugins/gallery/page/gallery-view.ts` · modify `src/plugins/gallery/page/gallery.css` ·
+           modify `src/plugins/forms/main/selftest-script.ts`
 Consumes:  `iconButton(iconName, label, onClick, size)` in `src/shared/page/ui/icon-button.ts` (tree today) ·
            `element(tag, className, text?)` in `src/shared/page/dom.ts` (tree today) ·
            `tag(text, tone)` in `src/shared/page/ui/tag.ts` (tree today)
@@ -40,7 +41,8 @@ Produces:  in `src/shared/page/ui/h-scroller.ts`, exactly as plan.md § File Str
   - `overflows` is `scrollWidth > clientWidth + EDGE_SLACK`.
   - `back` is `overflows && scrollLeft > EDGE_SLACK`.
   - `forward` is `overflows && scrollLeft + clientWidth < scrollWidth - EDGE_SLACK`.
-- **How the chevrons show.** The root carries `data-overflow="true"` or `"false"`.
+- **How the chevrons show.** The root carries `data-overflow="true"` or `"false"`. `createHScroller` sets
+  `data-overflow="false"` at creation, so both chevrons take no space until the first measure says otherwise.
   - While nothing overflows, both chevrons take no space (`display: none`), so a short row keeps its full width.
   - While the track overflows, each chevron keeps its space, and a chevron with nothing further that way takes
     `is-no-target` and hides (`visibility: hidden`). Keeping the space stops the track width from changing as the
@@ -62,25 +64,34 @@ Produces:  in `src/shared/page/ui/h-scroller.ts`, exactly as plan.md § File Str
   - Otherwise → `scrollLeft` (no move).
   - The result is held in `[0, max(0, scrollWidth - clientWidth)]`.
 - **The handle.**
-  - A chevron click calls `stepTarget` on the current spans and view, and sets the track's `scrollLeft` to it.
-  - `refresh()` reads the view, applies `chevronStates`, and sets `data-overflow` and `is-no-target`.
+  - A chevron click calls `stepTarget` on the current spans and view, and scrolls the track to it with
+    `track.scrollTo({ left, behavior: 'smooth' })` (`'instant'` under reduced motion, see Motion).
+  - `refresh()` first runs a pending reveal when `clientWidth > 0` (below), then reads the view, applies
+    `chevronStates`, and sets `data-overflow` and `is-no-target`. So the chevron state a refresh leaves is the one after
+    its reveal.
   - The track's `scroll` event calls `refresh`, so trackpad scrolling updates the chevrons.
   - One `ResizeObserver` on the track calls `refresh` when the track's size changes.
   - The owner calls `refresh` after it adds, removes or resizes items (plan.md contract). The HScroller does not
     watch the track's children.
-  - `reveal(item)` sets `scrollLeft` to `revealTarget(item span, view)`. While the track is not laid out
+  - `reveal(item)` scrolls the track to `revealTarget(item span, view)` with `behavior: 'smooth'` (`'instant'` under
+    reduced motion). A pending reveal, run by a later `refresh`, always uses `behavior: 'instant'`: no user action
+    asked for that move (DESIGN.md § Motion, what moves), and the sample or strip lands on a settled position at its
+    first layout. While the track is not laid out
     (`clientWidth === 0`, as in a hidden tab or a sample not yet in the document), it keeps `item` as the pending
     reveal, the latest call replacing it, and the next `refresh` that finds `clientWidth > 0` reveals it and clears
     it. A pending item no longer in `track` is dropped.
   - `dispose()` disconnects the observer, removes the scroll listener and drops the pending reveal. The owner
     removes `element`.
-- **Motion.** The track sets `scroll-behavior: smooth`, and `auto` under `@media (prefers-reduced-motion: reduce)`.
-  The track hides its scrollbar (`scrollbar-width: none`); the chevrons and the trackpad scroll it. Vertical wheel
+- **Motion.** The track sets no CSS `scroll-behavior`: each scroll the HScroller makes names its `behavior` in
+  `scrollTo` (above), so a pending reveal can jump while a chevron step animates. Under
+  `prefers-reduced-motion: reduce` (read through `matchMedia` at each scroll) every scroll uses `'instant'`. A chevron
+  click while a smooth scroll still runs computes its step from the in-flight `scrollLeft`; that is accepted. The
+  track hides its scrollbar (`scrollbar-width: none`); the chevrons and the trackpad scroll it. Vertical wheel
   input is not turned into sideways scrolling.
 - **CSS, tokens only** (`DESIGN.md` § Tokens and themes; `scripts/check-styles.mts` judges it). Root: a flex row,
   `align-items: center`, `gap: var(--wg-space-1)`, `min-width: 0`. Track: `display: flex`,
   `gap: var(--wg-space-2)`, `flex: 1`, `min-width: 0`, `overflow-x: auto`, `overflow-y: hidden`. Chevron sizes come
-  from IconButton's `sm` size (`icon-button-sm`). No new token. Class names follow the conventions:
+  from IconButton's `sm` size (the class `ui-icon-button--sm`, which `iconButton(…, 'sm')` sets). No new token. Class names follow the conventions:
   `ui-h-scroller`, `ui-h-scroller-track`, `ui-h-scroller-chevron`.
 - **Not in `BaseKit`.** A layout draws items; the app keeps scrolling (AGENTS.md § Architecture, A layout). Task 09
   builds its strip's HScroller in the app and hands the layout the track to draw boxes into.
@@ -97,6 +108,16 @@ Produces:  in `src/shared/page/ui/h-scroller.ts`, exactly as plan.md § File Str
   a layout. Keep the scrollers each draw makes in a holder, as `KeptSplit` keeps the split sample, and dispose the
   previous draw's scrollers at the start of each draw. Add a gallery CSS rule only if a sample needs one; it uses
   tokens too.
+- **The gallery logs each sample's state.** Each HScroller sample has one `ResizeObserver` of the gallery's own on its
+  `element`. Its first callback with a width above 0 calls the sample's `refresh()` (which runs the pending reveal
+  first), reads the root's `data-overflow` and each chevron's `is-no-target`, logs
+  `[gallery] hscroller <caption>: overflow <true|false> back <true|false> forward <true|false>` (`back` and `forward`
+  true when that chevron shows), and disconnects. The observers join the draw's holder, so a new draw disposes them.
+  Expected lines: `No overflow: overflow false back false forward false`, `At start: overflow true back false forward
+  true`, `In the middle: overflow true back true forward true`, `At end: overflow true back true forward false`.
+- **Forms' gallery steps expect them.** In `src/plugins/forms/main/selftest-script.ts`, the gallery group's first step
+  (the one before the `gallery-full-0` screenshot) gains `alsoExpect` with the four lines above as anchored patterns.
+  So a wrong chevron state or a pending reveal that never runs fails the self-test, not only the user's eye.
 - **DESIGN.md** already lists HScroller (commit `cd16018`); task 10 re-reads it against this code.
 
 ## GIVEN / WHEN / THEN
@@ -149,8 +170,9 @@ Produces:  in `src/shared/page/ui/h-scroller.ts`, exactly as plan.md § File Str
   | `{60,250}` | 0 | 60 (wider than the view: its start) |
   Catches a reveal that cuts the item or moves a visible one.
 
-The DOM wiring (observer, scroll listener, pending reveal, chevron classes) and the look need a laid-out page;
-they go to task 11 through the gallery's HScroller section, which the forms self-test's gallery screenshots
+The DOM wiring (observer, pending reveal, chevron classes) needs a laid-out page: the forms self-test's gallery step
+pins it through the four `[gallery] hscroller …` lines above. The look, the scroll listener and focus staying put on a
+chevron click go to task 11 through the gallery's HScroller section, which the forms self-test's gallery screenshots
 (`forms-gallery-full-*`, `forms-gallery-reduced-*`) capture.
 
 ## Done when

@@ -34,8 +34,15 @@ Produces:  in `src/contracts/git.ts`:
              `export interface ModelEffortInput { model: ComposerControlInput; effort: ComposerControlInput | null }`
              `ComposerInput` without `modeLabel`, with `repo: string; branch: string | null;`
                `modelEffort: ModelEffortInput | null;` (and `controls` holding every other control)
-             `export interface StatusLineKit extends BaseKit` (replaces `ComposerBarKit`): `typeHint`, `modelEffortChip`,
-               `controlChip`, `statusParts`, `running`, `sendButton`
+             `export interface StatusLineKit extends BaseKit` (replaces `ComposerBarKit`), its members exactly:
+               `typeHint(parent: HTMLElement): HTMLElement;`
+               `modelEffortChip(parent: HTMLElement, input: ModelEffortInput): HTMLButtonElement;`
+               `controlChip(parent: HTMLElement, control: ComposerControlInput): HTMLButtonElement;`
+               `statusParts(parent: HTMLElement): HTMLElement;` (returns the slot it appended)
+               `running(parent: HTMLElement): HTMLElement;`
+               `sendButton(parent: HTMLElement): HTMLButtonElement;`
+               (`typeHint`, `controlChip`, `running` and `sendButton` keep `ComposerBarKit`'s signatures and comments.
+               The kit closes over the `ComposerInput`, so no member takes it again.)
              `statusLine?(parent: HTMLElement, input: ComposerInput, kit: StatusLineKit): PartView<ComposerInput>;` on
                `ChatLayout` (replaces `composerBar`)
              `statusLine(parent: HTMLElement): HTMLElement;` on `ComposerKit` (replaces `bar`)
@@ -61,6 +68,9 @@ Decisions: see below.
   `branch: 'main'`, so the preview draws a branch.
 - **Page state.** `chat-view.ts` hears `branch`: it sets the tab's `state.repo` and `state.branch`, draws the status
   line, and logs `[chat] <tab name> is in <repo> on <branch>`, or `[chat] <tab name> is in <repo>, no branch` for null.
+  A `branch` for a session chat holds no tab for is ignored. This handler has no unit test (`chat-view.ts` has no test
+  harness, and the draw from the held state is `composerInputOf`'s, which is tested); task 11's live check 1 proves it
+  by reading these log lines.
 - **How the layout finds model and effort.** `composerInputOf` pairs them by chat's own control ids, the ones its pick
   keys already reach (`CONTROL_IDS` in `control-commands.ts`): the control whose `controlCommand` is `pickModel` is the
   model, `pickEffort` the effort. `modelEffort` is `{ model, effort }` when a model control is declared (`effort` null
@@ -73,7 +83,9 @@ Decisions: see below.
 - **The model · effort chip.** `kit.modelEffortChip(parent, input)` draws the Chip primitive with the model control's
   label as its label (`Model`) and `<model value> · <effort value>` as its value (the model value alone when `effort` is
   null). A click runs `chat.pickModel`. It holds the `chat.pickModel` key span, then the `chat.pickEffort` key span
-  (both from `BarParts.chipKeys`), so `o` and `e` stay anchored. It is disabled while `model.enabled` is false.
+  (both from `BarParts.chipKeys`), so `o` and `e` stay anchored. While `effort` is null it holds the `chat.pickModel`
+  span only: no chip advertises a control that is not declared, as for any absent control today. It is disabled while
+  `model.enabled` is false.
   `controlChip` keeps its rule: a chip holds its pick command's keys when `chipKeyCommands` over `input.controls` gives
   them.
 - **Status parts.** `start.ts` makes `createPartStore<ChatStatusPart>()`; `addStatusPart` adds to it. `ChatViewDeps`
@@ -102,8 +114,10 @@ Decisions: see below.
   because `i` and `a` (`chat.focusBox`, `chat.appendBox`) are not vim's own keys and need an anchor on screen.
 - **CSS** (`chat.css`, tokens only): `.chat-status-line` takes the old bar's flex row, wrap and `space-2` gap;
   `.chat-status-repo` and `.chat-status-branch` are `fg-secondary` at `text-11`; `.chat-status-parts-slot` is
-  `display: contents`; `.chat-status-parts` is an inline flex row with the `space-2` gap. `.chat-running` keeps
-  `margin-left: auto`, so the running dot and Send close the line.
+  `display: contents`; `.chat-status-parts` is an inline flex row with the `space-2` gap, `min-width: 0` and
+  `flex: 0 1 auto`; `.chat-status-part` (each part's wrapper) is `display: flex` with `min-width: 0`. So a status part
+  that drops items as it narrows (usage's line, task 08) gets the width the line can spare and can shrink below its
+  content. `.chat-running` keeps `margin-left: auto`, so the running dot and Send close the line.
 - **Status part contract text.** The `ChatPageExports` comment in `contract.ts` gains: `addStatusPart` throws on an id
   already added; adding or disposing one draws every Chat tab's composer again; a part is built at each composer draw
   and redraws into its wrapper itself when its content changes; it draws in every Chat tab, the preview's included.
@@ -143,7 +157,8 @@ GIVEN a status part added WHEN the box takes focus (a status line draw) THEN the
   draw and two status line draws, and its holder sits in each drawn line. `statusLine_StatusPartsPlacedTwice_Draws
   WithDefault` — a user line calling `statusParts` twice draws with `default` and logs the failure.
   `statusLine_ModelEffortChip_RunsPickModelAndHoldsBothKeys` — the click runs `chat.pickModel`; the chip holds the
-  `pickModel` then the `pickEffort` key spans; it is disabled while the model control is not enabled.
+  `pickModel` then the `pickEffort` key spans; with `effort` null it holds the `pickModel` span only and shows the
+  model value alone; it is disabled while the model control is not enabled.
 - `layout.test.ts`: `SURFACE_PARTS` and `fakeSurfaceKit` move from `composerBar`/`bar` to `statusLine` and gain
   `modelEffortChip` and `statusParts`; `composer_Default_PlacesEachSlotOnce` expects `statusLine` for `bar`. Replace
   `composerBar_Default_ChipsInControlOrderThenRunningThenSend` with `statusLine_Default_RepoBranchChipsPartsRunningSend`
@@ -154,12 +169,14 @@ GIVEN a status part added WHEN the box takes focus (a status line draw) THEN the
 - Self-test (`selftest-script.ts`, `CONTROLS_STEPS`, group `session controls`): add `screenshot: 'status-line'` and
   `checksFit: true` to the existing step `{ keys: ['Escape'], expect: '[chat] picker closed: Model' }`, and add to the
   group's `why`: "the status line draws one model · effort chip". The existing `e` and `o` steps prove both keys still
-  open their pickers; the end-of-run placement check proves both keys are anchored on the joined chip. The self-test's
+  open their pickers; `statusLine_ModelEffortChip_RunsPickModelAndHoldsBothKeys` pins both key spans on the joined
+  chip, and the whole run's placement check (task 11, on the user's ask only) checks their anchors. The self-test's
   project folder sits in the temp home, in no clone, so no `branch` line is logged there; the branch is a task 11 look.
 
 ## Runtime look for task 11
 
-The status line in a real clone: repo and branch, the branch changing after a turn that runs `git checkout`, a detached
+The status line in a real clone: repo and branch, the branch changing after the next turn ends once the clone's branch
+changed (task 11, live check 1, gives the route), a detached
 HEAD's short commit, and the line in a narrow composer (wrapping, the running dot and Send at the end).
 
 Done when: `npm run lint` and the suite pass; the tests above run; the chat self-test group `session controls` passes

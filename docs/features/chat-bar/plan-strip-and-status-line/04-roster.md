@@ -45,14 +45,20 @@ relies on that identity. Lists stay in start order; an item never moves.
 |---|---|
 | `agentSpawned` | Unless its `agentId` is listed (any outcome): append `{ agentId, agentType, name, description, startedAt: at, model, effort, spendUsd: null, tools: [], outcome: 'running' }`. |
 | `agentReplied` | Listed agent: set `model` to the event's `model` and `spendUsd` to its `spendUsd` (replace, not add: the event's spend is cumulative). Same values or unlisted: no change. Applies whatever the agent's outcome, since a reply line may trail its end. |
-| `toolStarted` | `agentId` of a listed agent (never `main`): append `{ toolUseId, tool, summary, outcome: 'running' }` to its `tools` unless that `toolUseId` is listed. Else no change. |
+| `toolStarted` | `agentId` of a listed agent (never `main`) whose `outcome` is `running`: append `{ toolUseId, tool, summary, outcome: 'running' }` to its `tools` unless that `toolUseId` is listed. Else no change: a subagent line that trails the agent's end must not add a running tool nothing will finish. |
 | `toolFinished` | That agent's listed tool, while `running`: `outcome` `done` when `ok`, else `failed`. Else no change. |
 | `agentFinished` | Listed agent while `running`: `outcome` from the event, and each of its tools still `running` becomes `failed` (the decoder already fails them first; this guards a harness that does not). Its tasks are untouched. Else no change. |
 | `taskStarted` | Unless its `taskId` is listed: append `{ taskId, agentId, description, command, startedAt: at, outcome: 'running' }`. |
 | `taskFinished` | Listed task while `running`: `outcome` from the event. Else no change. |
 | `sessionEnded` | Every `running` agent, every `running` tool of any agent, and every `running` task becomes `failed`. Nothing running: no change. |
-| `userMessage` | Drop every agent and every task whose `outcome` is not `running`. A running agent keeps all its tools, finished ones included. Nothing finished: no change. |
+| `userMessage` | Drop every agent and every task whose `outcome` is not `running`. A running agent keeps all its tools, finished ones included. A running task stays even when the agent that owns it is dropped. Nothing finished: no change. |
 | every other event | no change |
+
+**Every tool call is kept** (the user's answer, 2026-11-02).
+`tools` holds every tool call of the agent, unbounded, because the open box lists every tool call (plan.md Design
+Overview) and the line's count is `tools.length`. Each `toolStarted` and `toolFinished` then sends `rosterChanged`
+with the whole roster, so a subagent with a few hundred calls sends a message of a few hundred small objects per call.
+That cost is accepted; say so in a comment on `RosterAgent.tools` in `contract.ts`.
 
 `sessionEnded` marks `failed`, not `done` (agent's decision). Today it drops every item because a process that exits
 mid-run sends neither end; now items stay until the next message, so each needs an outcome. The decoder's rule is
@@ -73,7 +79,7 @@ then tasks of every host, each in the order the hosts' rosters began). Changes:
 
 **Contract comments** (`contract.ts`). Replace the `RunningAgent` / `RunningTask` comments: a `RosterAgent` is a
 subagent of a session, running or finished since the user's last message; `startedAt` is its spawn's `at`; `model` is
-its latest reply's model, else the spawn's; `spendUsd` is the estimate of its latest reply, null before one or for an
+the model of its latest `agentReplied` (a reply or its launch receipt, task 03), else the spawn's; `spendUsd` is the estimate of its latest reply, null before one or for an
 unpriced model; `tools` are its tool calls in start order. A `RosterTask` likewise, `command` null when the harness
 named none. `AgentsChannel`'s comment: `rosters` lists every session's roster that lists any item, finished ones
 included; `rosterChanged` carries the whole roster after each change, both lists empty once a message drops its last
@@ -126,12 +132,14 @@ The design docs that describe the roster (`docs/features/agent-tower/design.md` 
   `SpawnIntoEmpty` (all new fields, `tools: []`, `spendUsd: null`, `running`), `SpawnOfListedFinishedId` (same),
   `RepliedSetsModelAndSpend`, `RepliedReplacesSpend` (not added), `RepliedSameValues` (same),
   `RepliedOnUnlistedId` (same), `ToolStartedAppendsToItsAgent`, `ToolStartedOnMain` (same),
+  `ToolStartedOnFinishedAgent` (same),
   `ToolStartedOnUnlistedId` (same), `ToolStartedOfListedToolId` (same), `ToolFinishedOkIsDone`,
   `ToolFinishedErrorIsFailed`, `ToolFinishedOfFinishedTool` (same), `FinishedMarksOutcome` (agent kept),
   `FinishedFailsItsRunningTools`, `FinishedKeepsItsTask`, `FinishedOfFinishedAgent` (same),
   `TaskStartedCarriesCommand`, `TaskFinishedMarksOutcome` (task kept), `TaskFinishedOnUnlistedId` (same),
   `SessionEndedFailsEveryRunningItem`, `SessionEndedKeepsFinishedOutcomes`, `SessionEndedNothingRunning` (same),
   `UserMessageDropsFinishedAgentsAndTasks`, `UserMessageKeepsRunningAgentsFinishedTools`,
+  `UserMessageKeepsRunningTaskOfFinishedAgent` (the done agent goes, its running task stays),
   `UserMessageNothingFinished` (same). The no-change rows for the other events stay, the `UserMessage` row moving to
   the last case.
 - `start.test.ts`, the `agentsMainPart` table: fixtures become `RosterAgent` / `RosterTask`. Changed rows:

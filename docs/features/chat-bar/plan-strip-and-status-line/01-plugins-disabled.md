@@ -10,10 +10,12 @@ Files:     modify `src/contracts/settings.ts` · modify `src/config/settings.ts`
            modify `src/shared/plugin-manifests.ts` · test `src/shared/plugin-manifests.test.ts` ·
            modify `src/main/config/config-checks.ts` · test `src/main/config/config-store.test.ts` ·
            modify `src/main/main.ts` · modify `src/main/selftest-config.ts` · test `src/main/selftest-config.test.ts` ·
-           modify `src/renderer/renderer.ts` · test `src/plugins/manifests.test.ts` ·
+           modify `src/renderer/renderer.ts` · create `src/renderer/started-config.ts` ·
+           test `src/renderer/started-config.test.ts` · test `src/plugins/manifests.test.ts` ·
+           test `src/main/config/user-config.test.ts` (a new case, and its fixture) ·
            modify `src/plugins/settings/main/selftest-script.ts` ·
            modify (a `Settings` or `AppConfig` fixture gains `plugins: { disabled: [] }`):
-           `src/main/config/user-settings.test.ts`, `src/main/config/user-config.test.ts`,
+           `src/main/config/user-settings.test.ts`,
            `src/renderer/installed-config.test.ts`, `src/renderer/plugins/page-api.test.ts`,
            `src/renderer/config-push.test.ts`, `src/shared/empty-user-files.test.ts`,
            `src/plugins/settings/main/selftest-script.test.ts`
@@ -31,14 +33,17 @@ Produces:  `plugins: { disabled: string[] }` in `Settings`, `src/contracts/setti
            `export function withoutPluginBinds(keymap: Keymap, commands: Record<CommandId, CommandInfo>, pluginIds: readonly string[], side: 'main' | 'page'): Keymap`
              in `src/shared/plugin-manifests.ts`
            `startPlugins(parts, start, known, disabled: readonly string[] = [])` in `src/shared/plugin-host.ts`
+           `export function mainStartList(isSelfTest: boolean, disabled: readonly string[]): readonly string[]`
+             in `src/main/selftest-config.ts`
+           `export function startedPluginsConfig(config: AppConfig, loadList: readonly string[]): AppConfig`
+             in `src/renderer/started-config.ts`
 
 ## Decisions
 
 - **Plugin ids keep their `-`.** `definePlugin` checks ids against `/^[a-z0-9-]+$/` (`src/shared/define-plugin.ts`), and
   the layout service checks owners against the same pattern (`src/main/layouts/layout-service.ts`). Both accept
-  `agent-lines`, `agent-strip` and `usage-tab-line`. Write this ruling in `plan.md`'s Run log, § Rulings, in the task's
-  commit: "Plugin ids keep `-` (`agent-lines`, `agent-strip`, `usage-tab-line`): `definePlugin` and the layout service
-  accept `[a-z0-9-]`." No later task changes its ids.
+  `agent-lines`, `agent-strip` and `usage-tab-line`. This was settled at plan time; `plan.md` § Decided by the agent
+  holds it. No later task changes its ids.
 - **The setting.** `Settings` gains `plugins: { disabled: string[] }`. The default is
   `['agent-lines', 'usage-tab-line']`. The existing settings merge already checks it: an array replaces the default
   whole, and each element must be a string, because the default's first element is a string
@@ -61,11 +66,20 @@ Produces:  `plugins: { disabled: string[] }` in `Settings`, `src/contracts/setti
   over the kept parts' manifests. The config check makes this unreachable from the user's files; the throw guards
   a composition root that hands the host an unchecked list.
 - **Where each process reads the list.**
-  - Main: `startMainParts` passes `store.current().settings.plugins.disabled`, read once at app start, as
-    `disabled`. Keep that list in `main.ts` as the main start list. Under the self-test, pass `[]` (see Self-test,
-    below).
+  - Main: `startMainParts` passes `mainStartList(runMode === 'selfTest', store.current().settings.plugins.disabled)`,
+    read once at app start, as `disabled`. `mainStartList` returns `[]` when `isSelfTest` is true, else `disabled`
+    (see Self-test, below). Keep the result in `main.ts` as the main start list.
   - Page: `renderer.ts` passes `config.settings.plugins.disabled` of the config read at page load. Keep that list for
     the page's life as the page load list. A pushed config does not change it.
+  - A list edited mid-run, then a page reload (pending the user's answer; see the closure question on stranded page
+    parts): with the recommended option, the page load list is the union of the setting and the main start list, so
+    the page never starts a page part whose main part did not start (for example agent-lines removed from the list,
+    then a reload: its page part would show a layout whose contract main never registered). Main hands its start list
+    to the page through the served config: `served()` sets `settings.plugins.disabled` to the union of the file's list
+    and the main start list (the union of two lists the dependency rule accepts also passes it). Under that option the
+    setting's description becomes: `Plugin ids the app does not start. Turning one off takes effect for its page part
+    on the next page load and for its main part on the next app start; turning one on takes effect on the next app
+    start.`
   - `requireListed` and `requireServedSettings` stay as they are. A disabled part is skipped before
     `requireServedSettings` runs, since the host never calls `start` for it.
 - **Manifests merge whole; binds of unstarted plugins drop per process.** A disabled plugin's manifest stays in
@@ -84,10 +98,15 @@ Produces:  `plugins: { disabled: string[] }` in `Settings`, `src/contracts/setti
   - Main: `served()` in `main.ts` returns `applySelfTestConfig(...)` with its keymap passed through
     `withoutPluginBinds(keymap, commands, mainStartList, 'main')`. Every main-side install reads `served()`, so the
     window keybindings, the app menu and the global shortcuts never see those binds.
-  - Page: `renderer.ts` passes the config read at load, and each config the page receives after
-    (`bridge.onConfig`), through `withoutPluginBinds(keymap, commands, pageLoadList, 'page')` before anything reads
-    it. Do this in one local helper at the two entry points. Then the live config, the keys plugin (help, which-key,
-    anchors) and the installed page and editor binds all see only started plugins' binds.
+  - Page: `startedPluginsConfig(config, loadList)` returns `config` with its keymap passed through
+    `withoutPluginBinds(config.keymap, config.commands, loadList, 'page')`, every other field as it was. `renderer.ts`
+    applies it at two points, where the load list is known:
+    - the config `bridge.config()` returns at page load, before anything reads it;
+    - each pushed config when it is applied: the `bridge.onConfig` callback is registered before the load list exists,
+      so it keeps holding a push raw in `heldPush` while `applyPush` is null. `applyPush` is called with
+      `startedPluginsConfig(next, pageLoadList)`, both for a live push and for `heldPush` at the end of `start()`.
+    Then the live config, the keys plugin (help, which-key, anchors) and the installed page and editor binds all see
+    only started plugins' binds.
   - Why the page filters with its own load list, not main with the current list: a list edited mid-run must not
     serve a page bind whose plugin the running page has not started. That bind would fail the page's
     `requireRegistered` and refuse every keymap push until the next page load.
@@ -99,11 +118,13 @@ Produces:  `plugins: { disabled: string[] }` in `Settings`, `src/contracts/setti
 - **Self-test.** The self-test starts every plugin, so the agents and usage steps, and the steps tasks 07 and 08 add,
   see their views:
   - `applySelfTestConfig` sets the served `settings.plugins.disabled` to `[]`. Add this to its comment.
-  - `main.ts` passes `[]` as the main start list when `runMode === 'selfTest'`, with a comment that names
+  - `mainStartList` gives `[]` as the main start list when `runMode === 'selfTest'`; its comment names
     `applySelfTestConfig` as the page's half of the same rule. Main parts start before the scripts are handed over,
     so main cannot read the self-test's served config at that point.
   - A drive run keeps the defaults, so `agent-lines` and `usage-tab-line` are off there until its home's
     `settings.json` turns them on.
+  - `plan.md` § Decided by the agent holds this rule. Tasks 07, 08 and 09 rely on it: agent-lines, usage-tab-line
+    and agent-strip start in every self-test run.
 - **Live stop is out of scope** (plan.md § Out of scope). A list change does nothing to running parts.
 
 ## GIVEN / WHEN / THEN
@@ -147,7 +168,9 @@ Produces:  `plugins: { disabled: string[] }` in `Settings`, `src/contracts/setti
   and page binds only; `side: 'main'` with `['p']` drops p's app, intercept and global binds only; `[]` returns the
   keymap equal to the input; the unknown-command bind stays in every row. Catches a filter that drops the other
   process's binds, or drops a bind `requireRegistered` should still report.
-- `config-store.test.ts`. The test's `DEFAULTS` gains `plugins: { disabled: [] }`.
+- `config-store.test.ts`. The test's `DEFAULTS` gains `plugins: { disabled: ['d'] }`: `checkElements`
+  (`src/main/config/user-settings.ts`) checks no element when the default array is empty, so the default needs a
+  string element for the `[3]` row to give a problem, as the real default has.
   - The `it.each` table `settings.json $text → problem naming $problem` gains two rows:
     `{"plugins":{"disabled":["nope"]}}` → no problem, served `{ settings: { plugins: { disabled: ['nope'] } } }`;
     `{"plugins":{"disabled":[3]}}` → problem naming `plugins.disabled[0]`, served `DEFAULTS`.
@@ -159,7 +182,17 @@ Produces:  `plugins: { disabled: string[] }` in `Settings`, `src/contracts/setti
   Catches a ConfigStore that serves a list a started plugin cannot live with, or rejects an unknown id.
 - `selftest-config.test.ts`, `applySelfTestConfig` test: its fixture's settings gain
   `plugins: { disabled: ['p'] }`, and it asserts `served.settings.plugins.disabled` equals `[]`. Catches a self-test
-  that serves the default list and hides the views its steps wait for.
+  that serves the default list and hides the views its steps wait for. New `it.each` `mainStartList_$case`:
+  self-test with `['a']` → `[]`; not self-test with `['a']` → `['a']`. Catches `main.ts` starting the self-test with
+  the default list.
+- `started-config.test.ts` (new), `startedPluginsConfig_$case` (it.each) over a config whose keymap holds a `page`
+  bind of plugin `p` and one of plugin `q`: load list `['p']` → p's bind gone, q's kept, `settings` and `commands`
+  equal to the input's; `[]` → the keymap equal to the input. Catches a page that installs a bind of a plugin it did
+  not start.
+- `user-config.test.ts`, new case `write_DisablesANeededPlugin_Refused`: with manifests p and q (`dependsOn: ['p']`),
+  Settings mode's write of `plugins.disabled` `["p"]` is refused with the problem text
+  `"plugins.disabled" names "p", which "q" depends on.`, and `settings.json` is unchanged. Catches a write path that
+  skips the shared check.
 - `src/plugins/manifests.test.ts`, new case `manifests_DefaultDisabled_BreaksNoDependency`:
   `disabledDependencyProblem(defaultSettings.plugins.disabled, manifests)` is `null`. Catches a default list that
   breaks a built-in plugin once tasks 07 and 08 add theirs.
@@ -174,7 +207,7 @@ Produces:  `plugins: { disabled: string[] }` in `Settings`, `src/contracts/setti
 
 ## Commit
 
-One commit for the group, with the Run log ruling on plugin ids.
+One commit for the group.
 
 ## Proof
 

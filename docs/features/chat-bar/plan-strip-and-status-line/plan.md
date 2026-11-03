@@ -43,6 +43,9 @@ Re-run each before the first dispatch:
   first or rebase this plan's task documents on its landed code.
 - Nothing in the user config folder overrides the agents, chat or usage layout parts this plan renames:
   `find ~/.config/wigley-ai-gui/layouts -name layout.js` prints no path under `agents/`, `chat/` or `usage/`.
+- No user setting the `layout` setting's move (task 07) breaks: `~/.config/wigley-ai-gui/settings.json`, when present,
+  sets no `layout` key under `agents` (read the file's `agents` object). When it does, tell the user before task 07
+  runs: once the setting leaves agents, that key reads as a settings problem.
 - `git -C <repo> log --oneline -1 -- docs/features/chat-bar/design.md` shows `cd16018` or a later commit.
 - Other sessions work in this tree. Commit only this plan's paths, by name.
 
@@ -124,7 +127,9 @@ Decided by the agent (shown to the user as Decided notices):
 - `G` and a following cursor stay on the last entry; only `j` enters the strip.
 - Each tool call carries its agent's id in the roster only; the transcript stays as it is.
 - A subagent's model and effort at spawn: the Agent call's own `model` / `effort` input first, then its definition
-  file (03).
+  file (03). The model the roster shows then follows, each replacing the last: the spawn's value, the launch
+  receipt's `resolvedModel`, each reply's model (03). Task 03 probes the Agent call's `name`, `model` and `effort`
+  inputs in one stream line before coding.
 - A subagent's spend is null when any of its replies used an unpriced model, rather than a partial sum (03).
 - A finished task box shows no elapsed time: the roster keeps no end time (09).
 - `usage-tab-line` has no layout of its own: it draws usage's session-line part through a usage page export, so the
@@ -133,7 +138,17 @@ Decided by the agent (shown to the user as Decided notices):
   script: only main can register a layout contract (07, 09).
 - The strip previews in chat's `Space z l c` sample session, fed by sample agent events from chat's preview (09).
 - The status line keeps the `i`/`a` type hint after repo and branch: the key placement check needs their anchors (05).
-- The self-test starts every plugin (`plugins.disabled: []`); drive runs keep the defaults (01).
+- The self-test starts every plugin (`plugins.disabled: []`): `applySelfTestConfig` serves `[]` to the page and
+  `mainStartList` gives main `[]`; drive runs keep the defaults (01). So agent-lines, usage-tab-line and agent-strip
+  start in every self-test run, and 07, 08 and 09 write their steps for that.
+- Plugin ids keep their `-` (`agent-lines`, `agent-strip`, `usage-tab-line`): `definePlugin` and the layout service
+  accept `[a-z0-9-]` (01).
+- The whole self-test run, and with it the end-of-run key placement check, runs only on the user's ask: tasks prove
+  their groups with filtered runs, and task 11 lists the whole run for the user's ask (09, 11).
+- A late `toolStarted` for a finished subagent changes nothing in the roster (04).
+- The strip keeps one HScroller per session across redraws, so the scroll position survives the tick (09).
+- A pending reveal jumps; a chevron step and a live reveal scroll smoothly, and every scroll jumps under reduced
+  motion (02).
 
 Out of scope: the running-action list and tool counts (another sketch), a live plugin stop/start
 (`PluginHost.stop`), stopping a task or opening its output, a per-plugin switch UI beyond the Settings row of
@@ -160,7 +175,8 @@ export function createHScroller(): HScroller;
 // src/contracts/agent.ts — AgentEvent members (03); task members as the background-tasks plan landed them
 | { type: 'agentSpawned'; at: number; agentId: string; parentAgentId: string; agentType: string; description: string;
     name: string; model: string | null; effort: string | null }
-| { type: 'agentReplied'; at: number; agentId: string; model: string; spendUsd: number | null }  // spend cumulative per agent
+| { type: 'agentReplied'; at: number; agentId: string; model: string; spendUsd: number | null }
+    // on each subagent reply and on its launch receipt (`resolvedModel`); spend cumulative per agent
 | { type: 'toolStarted'; at: number; agentId: string; toolUseId: string; tool: string; summary: string }
 | { type: 'taskStarted'; at: number; taskId: string; agentId: string; description: string; command: string | null }
 
@@ -207,9 +223,8 @@ export interface ComposerStopExits {
 currentBranch(folder: string): Promise<string | null>;
 ```
 
-Plugin ids `agent-lines`, `agent-strip` and `usage-tab-line` are as the docs name them. Task 01 checks the id rule
-`definePlugin` enforces; when it refuses a `-`, 01 picks the camelCase ids (`agentLines`, `agentStrip`,
-`usageTabLine`), records the ruling in the Run log, and every later task and task 10's doc re-read use them.
+Plugin ids `agent-lines`, `agent-strip` and `usage-tab-line` are as the docs name them: `definePlugin` and the layout
+service accept `[a-z0-9-]` (checked at plan time, § Decided by the agent).
 
 Boundary rules: no Claude field name (`subagent_type`, `parent_tool_use_id`, `task_type`, a model id's price) outside
 `src/main/claude-code/`; agent-lines and agent-strip read the roster only through `AgentsPageExports`; chat names no
