@@ -48,8 +48,9 @@ Sessions contributes `set_session_title` (`{ title: string }`) to every session.
 empty or over-long title with an error naming the limit, so the agent shortens it itself. Over a
 user title it saves the agent title and says the user's title shows.
 
-Claude Code defers MCP tools, so an agent sees only the tool's name until it loads it: the tool's
-description alone does not prompt a rename. Chat adds one instruction to every session it starts
+Claude Code defers MCP tools, so an agent sees only the tool's name until it loads it (seen at plan
+time: a session's MCP tools arrive as names under "deferred tools" and need a ToolSearch before
+use), so the tool's description alone does not prompt a rename. Chat adds one instruction to every session it starts
 (chat's `addInstructions`): set the title at the end of the first turn, and again only when the
 work's focus clearly changes. Terminal sessions get no instruction and keep their folder label
 unless their agent calls the tool on its own.
