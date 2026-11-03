@@ -1,6 +1,6 @@
 # 09 — The agent-strip plugin
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 5 · Depends on: 02, 04, 06, 07, 08
 Plan: [plan.md](plan.md)

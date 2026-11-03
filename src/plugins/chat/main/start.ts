@@ -236,6 +236,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     const preview = createChatPreview({
       sessions,
       send: (message, data) => api.channel.send(message, data),
+      emit: (event, data) => api.events.emit(event, data),
       log: services.log,
       clock: services.clock,
     });

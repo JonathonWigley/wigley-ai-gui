@@ -1,5 +1,6 @@
 import type { PluginManifest } from '../contracts/plugin';
 import { agentLinesManifest } from './agent-lines/manifest';
+import { agentStripManifest } from './agent-strip/manifest';
 import { agentsManifest } from './agents/manifest';
 import { backlogManifest } from './backlog/manifest';
 import { chatManifest } from './chat/manifest';
@@ -28,6 +29,7 @@ export const builtInManifests = [
   chatManifest,
   agentsManifest,
   agentLinesManifest,
+  agentStripManifest,
   keysManifest,
   docsManifest,
   galleryManifest,

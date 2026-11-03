@@ -1,0 +1,95 @@
+/* The agent strip above the Chat composer's box: the app's scroller, then the
+   default layout's boxes under each box's root. */
+
+/* An open box grows taller while the others keep their own height. */
+.agent-strip-scroller > .ui-h-scroller-track {
+  align-items: flex-start;
+}
+
+[data-layout-owner='agent-strip'][data-layout='default'].agent-strip-box {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-1);
+  width: calc(var(--wg-space-6) * 10);
+  padding: var(--wg-space-2);
+  font-size: var(--wg-text-12);
+  color: var(--wg-fg-secondary);
+  cursor: pointer;
+}
+
+[data-layout-owner='agent-strip'][data-layout='default'].agent-strip-box.is-selected {
+  border-color: var(--wg-focus-border);
+}
+
+[data-layout-owner='agent-strip'][data-layout='default'].agent-strip-box.is-dimmed,
+[data-layout-owner='agent-strip'][data-layout='default'].agent-strip-box.is-dimmed
+  .agent-strip-name {
+  color: var(--wg-fg-tertiary);
+}
+
+[data-layout-owner='agent-strip'][data-layout='default'] .agent-strip-head {
+  display: flex;
+  align-items: center;
+  gap: var(--wg-space-1_5);
+  min-width: 0;
+}
+
+[data-layout-owner='agent-strip'][data-layout='default']
+  .agent-strip-task-icon.codicon[class*='codicon-'] {
+  font-size: var(--wg-text-12);
+  color: var(--wg-fg-tertiary);
+}
+
+[data-layout-owner='agent-strip'][data-layout='default'] .agent-strip-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--wg-fg);
+}
+
+[data-layout-owner='agent-strip'][data-layout='default'] .agent-strip-meta,
+[data-layout-owner='agent-strip'][data-layout='default']
+  .agent-strip-description {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-layout-owner='agent-strip'][data-layout='default'] .agent-strip-meta {
+  font-variant-numeric: tabular-nums;
+  color: var(--wg-fg-tertiary);
+}
+
+[data-layout-owner='agent-strip'][data-layout='default'] .agent-strip-tool,
+[data-layout-owner='agent-strip'][data-layout='default'] .agent-strip-command {
+  font-family: var(--wg-font-mono);
+}
+
+[data-layout-owner='agent-strip'][data-layout='default'] .agent-strip-tool {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-layout-owner='agent-strip'][data-layout='default']
+  .agent-strip-tool[data-status='error'] {
+  color: var(--wg-status-error);
+}
+
+/* A command wraps whole inside its box. */
+[data-layout-owner='agent-strip'][data-layout='default'] .agent-strip-command {
+  overflow-wrap: anywhere;
+}
+
+/* The open box's every tool call, scrolled inside its box past eight lines'
+   worth. */
+[data-layout-owner='agent-strip'][data-layout='default'].agent-strip-toolList {
+  max-height: calc(var(--wg-space-6) * 8);
+  overflow-y: auto;
+}
+
+[data-layout-owner='agent-strip'][data-layout='default'] .agent-strip-prompt {
+  display: flex;
+  gap: var(--wg-space-2);
+}

@@ -249,7 +249,7 @@ other plugin; `npm run lint` (layer and style checks) passes, with a `LAYERS` en
 - [x] [The agent-lines plugin, and agents' page exports](07-agent-lines.md) — after 01, 04
 
 ### Wave 4
-- [ ] [Usage in the status line, and the usage-tab-line plugin](08-usage-split.md) — after 01, 05, 07 (shares the plugin lists)
+- [x] [Usage in the status line, and the usage-tab-line plugin](08-usage-split.md) — after 01, 05, 07 (shares the plugin lists)
 
 ### Wave 5
 - [ ] [The agent-strip plugin](09-agent-strip.md) — after 02, 04, 06, 07, 08 (shares the plugin lists)
@@ -272,8 +272,10 @@ Review base: b9ab45db2031275b78977d6ab85e250d4cf49d1f
 - 05 · c3395ad8 · diff read: Git.currentBranch, ChatStatusPart, ChatPageExports.addStatusPart present; vim-mode-label.ts deleted with no reference left; no typecheck error in 05's files; worker's chat, process-git, layout and selftest-script suites pass · concerns: Git fakes in backlog and docs tests changed outside the Files line; composerBar still named at AGENTS.md:607 and agent-chat/design.md:410, left to task 10
 - 07 · 26bf19f6 · diff read: AgentsPageExports roster/onRosterChanged in agents/contract.ts; agent-lines plugin listed in main/page/manifests and LAYERS; tsc clean apart from 06 in flight; worker's 10 test files (109 tests) pass · concerns: the pure renames landed in peer commit d035a2db; npm run lint stops on a peer's sessions.css:188 raw 2s (d95c8c4b)
 - 06 · c22905c9 · diff read: ComposerStop, ComposerStopExits, ChatComposerPart.stop? in chat/contract.ts; no type error under src/plugins/chat (08 in flight elsewhere); worker's 4 test files (124 tests) pass · concerns: oxfmt flags chat/main/start.ts (05's commit, the peer's swept string) — formatting to settle at review; fixed 05's stale 'its bar' comment in createTab
+- 08 · 2db2f106 · diff read: usage page calls chat.addStatusPart(sessionLinePart(...)), no addBarPart left in usage, usage-tab-line listed in manifests/page and LAYERS; typecheck checked; worker's 13 test files (237 tests) pass · concerns: usage self-test waits on sessionUsage with no timeout of its own; check-layers gives usage/main src/shared/paths; usage/design.md edited outside the Files line
 ### Contract changes
 - ChatViewDeps: as planned (05's shape) → gains onScopeChanged(listener: () => void), wired in chat page start.ts; ChatSession.entries Pick gains isAtLastStop; drawComposer/drawStatusLine/setControls take deps · why: the part must leave on a scope change and before a redraw · consumers: 09 · group 06
+- SessionLines.redraw: redraw(snapshot) → redraw() reading latest() itself · why: the argument-free SessionLineParts.redraw had no snapshot to pass · consumers: none outside usage · group 08
 ### Rulings
 - refresh sets data-overflow before a pending reveal and before reading back/forward, departing from the task's order, so the At end sample measures the narrowed track — chevron state would be wrong otherwise — cost if wrong: one extra layout read per refresh · group 02 · group 02
 - track items get flex: none so a long row scrolls rather than squeezes — cost if wrong: a strip box could not shrink · group 02 · group 02
