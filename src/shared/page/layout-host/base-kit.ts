@@ -1,11 +1,13 @@
 import type { CommandId } from '../../../contracts/commands';
 import type { Disposable } from '../../../contracts/disposable';
 import type { ViewScope } from '../../../contracts/keymap';
+import type { Log } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { Platform } from '../../../contracts/platform';
 import type { PluginManifest } from '../../../contracts/plugin';
 import { qualify } from '../../plugin-manifests';
-import { appended, element, markdownElement } from '../dom';
+import { appended, element } from '../dom';
+import { createMarkdownMount, type MarkdownMount } from '../markdown-mount';
 import { textButton } from '../ui/button';
 import { card as cardPart } from '../ui/card';
 import { emptyState } from '../ui/empty-state';
@@ -27,7 +29,9 @@ import type { BaseKit } from './kit';
 // command name into its qualified id, null for a name the owner lacks.
 // `recordAnchor`, the drawing attempt's, takes each anchor the kit names;
 // left out, recording them is the `keys`' job, as forms' recording `keys`
-// does for its own anchors too.
+// does for its own anchors too. `recordMount` takes the kit's markdown mount;
+// left out, nothing disposes it. `log` takes the mount's lines; left out,
+// they are dropped.
 export interface BaseKitDeps {
   markdown: MarkdownRenderer;
   keys: {
@@ -43,6 +47,8 @@ export interface BaseKitDeps {
   commandNamed(short: string): CommandId | null;
   platform: Platform;
   recordAnchor?(anchor: Disposable): void;
+  recordMount?(mount: MarkdownMount): void;
+  log?: Log;
 }
 
 // The page services an owner's base kit reads beside its manifest, its scope
@@ -52,6 +58,7 @@ export interface OwnerKitServices {
   keys: BaseKitDeps['keys'];
   commands: KitCommands;
   platform: Platform;
+  log?: Log;
 }
 
 // The qualified id of the short command name `short` of the plugin of
@@ -71,8 +78,8 @@ export type OwnerScope = string | { qualified: ViewScope };
 
 // The base-kit deps of one part draw by the plugin of `manifest`: its keys in
 // `scope` (null for no scope), its short command names read from the
-// manifest, and each anchor it names recorded through `rollback`, the drawing
-// attempt's.
+// manifest, and each anchor it names and its markdown mount recorded through
+// `rollback`, the drawing attempt's.
 export function ownerBaseKitDeps(
   manifest: Pick<PluginManifest, 'id' | 'commands'>,
   services: OwnerKitServices,
@@ -87,6 +94,8 @@ export function ownerBaseKitDeps(
     scope: qualifiedScope(manifest.id, scope),
     commandNamed: commandNamedIn(manifest),
     recordAnchor: (anchor) => rollback.recordAnchor(anchor),
+    recordMount: (mount) => rollback.recordAnchor(mount),
+    log: services.log,
   };
 }
 
@@ -120,8 +129,10 @@ export function commandRunner(
   return () => commands.run(qualifiedId);
 }
 
-// The parts every owner's layout draws with. It holds no state and builds
-// nothing until a member is called, so an owner makes one per part draw.
+// The parts every owner's layout draws with, so an owner makes one per part
+// draw. It holds one markdown mount, made on its first markdown draw and
+// handed to `deps.recordMount` then; it builds nothing else until a member is
+// called.
 export function createBaseKit(deps: BaseKitDeps): BaseKit {
   const keysFor = (id: CommandId) =>
     deps.scope === null
@@ -134,6 +145,18 @@ export function createBaseKit(deps: BaseKitDeps): BaseKit {
         ? name
         : null
       : deps.commandNamed(name);
+  let markdownMount: MarkdownMount | null = null;
+  const drawMarkdown = (
+    target: HTMLElement,
+    html: string,
+    liveFences = true,
+  ) => {
+    if (markdownMount === null) {
+      markdownMount = createMarkdownMount(deps.markdown, deps.log ?? NO_LOG);
+      deps.recordMount?.(markdownMount);
+    }
+    markdownMount.draw(target, html, { liveFences });
+  };
   const kit: BaseKit = {
     el(parent, tagName, className = '', text) {
       return appended(
@@ -141,28 +164,25 @@ export function createBaseKit(deps: BaseKitDeps): BaseKit {
         element(tagName as keyof HTMLElementTagNameMap, className, text),
       );
     },
-    markdown(parent, text, className = '') {
-      return appended(
-        parent,
-        markdownElement('div', className, deps.markdown.block(text)),
-      );
+    markdown(parent, text, className = '', options = {}) {
+      const node = appended(parent, element('div', className));
+      drawMarkdown(node, deps.markdown.block(text), options.liveFences);
+      return node;
     },
     inlineMarkdown(parent, text, className = '') {
-      return appended(
-        parent,
-        markdownElement('span', className, deps.markdown.inline(text)),
-      );
+      const node = appended(parent, element('span', className));
+      drawMarkdown(node, deps.markdown.inline(text));
+      return node;
     },
     section(parent, label, text) {
       if (text.trim() === '') {
         return null;
       }
-      const section = element('section', 'context');
-      section.append(
-        sectionHeader(label),
-        markdownElement('div', 'context-body md', deps.markdown.block(text)),
-      );
-      return appended(parent, section);
+      const section = appended(parent, element('section', 'context'));
+      const body = element('div', 'context-body md');
+      section.append(sectionHeader(label), body);
+      drawMarkdown(body, deps.markdown.block(text));
+      return section;
     },
     keys(command) {
       const id = commandId(command);
@@ -237,6 +257,8 @@ export function createBaseKit(deps: BaseKitDeps): BaseKit {
   };
   return kit;
 }
+
+const NO_LOG: Log = () => undefined;
 
 function durationText(ms: number): string {
   const seconds = Math.max(0, Math.floor(ms / 1000));

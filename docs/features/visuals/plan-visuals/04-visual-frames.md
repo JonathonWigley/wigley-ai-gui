@@ -1,6 +1,6 @@
 # 04 — Visual frames service
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -307,3 +307,4 @@ the keys back to the page (check 6); a mount redraw that reuses a frame keeps it
 
 ## Proof
 
+Commit cf5e079 · proof: diff read: every Produces present, src set only after serveVisual resolves; lint clean; 25 tests pass filtered; typecheck errors only in task 01's in-flight fakes · concerns: fake-visual-frames.ts sits in src/shared/page beside task 01's files (no file of 01 edited)

@@ -18,7 +18,8 @@ import type {
 import { scrollContent, scrollText } from '../../../shared/content-scroll';
 import { errorText } from '../../../shared/error-text';
 import { fileStamp } from '../../../shared/file-stamp';
-import { element, markdownElement } from '../../../shared/page/dom';
+import { element } from '../../../shared/page/dom';
+import { createMarkdownMount } from '../../../shared/page/markdown-mount';
 import { textLineHeightPx } from '../../../shared/page/text-line';
 import { disposeAnchors } from '../../../shared/page/ui/key-anchors';
 import type { DocsChannel } from '../contract';
@@ -162,14 +163,17 @@ export interface DocView {
   // closes.
   redraw(): void;
   // Ends the prompt, destroys the editor and its drop target, stops the watch
-  // and disposes the pane's anchors and drawn parts.
+  // and disposes the pane's anchors, drawn parts and fence views.
   dispose(): void;
 }
 
+// `liveFences` is false for a file shown as its source, so a fence that runs
+// its source stays code.
 interface Rendered {
   fields: [string, string][];
   html: string;
   bodyStartLine: number;
+  liveFences: boolean;
 }
 
 interface ShownDoc {
@@ -192,7 +196,8 @@ interface Conflict {
 }
 
 // A markdown file renders its body under its frontmatter; any other file
-// renders as one fenced block in its extension's language.
+// renders as one fenced block in its extension's language, with live fences
+// off.
 async function renderText(
   markdown: MarkdownRenderer,
   path: string,
@@ -202,7 +207,12 @@ async function renderText(
   if (path.endsWith('.md')) {
     const split = splitFrontmatter(text);
     const html = await markdown.document(split.body);
-    return { fields: split.fields, html, bodyStartLine: split.bodyStartLine };
+    return {
+      fields: split.fields,
+      html,
+      bodyStartLine: split.bodyStartLine,
+      liveFences: true,
+    };
   }
   const name = paths.base(path);
   const dot = name.lastIndexOf('.');
@@ -211,11 +221,16 @@ async function renderText(
   const html = await markdown.document(
     `${fence}${language}\n${text}\n${fence}`,
   );
-  return { fields: [], html, bodyStartLine: 1 };
+  return { fields: [], html, bodyStartLine: 1, liveFences: false };
 }
 
 function detailRendered(detail: DocDetail): Rendered {
-  return { fields: detail.fields, html: '', bodyStartLine: 1 };
+  return {
+    fields: detail.fields,
+    html: '',
+    bodyStartLine: 1,
+    liveFences: true,
+  };
 }
 
 // The log text for an editor scroll: what `scrollText` says, the line at the
@@ -290,7 +305,8 @@ export function createDocView(deps: DocViewDeps): DocView {
     bodySlot,
     editorSlot,
   );
-  const body = markdownElement('div', 'md docs-body', '');
+  const body = element('div', 'md docs-body');
+  const bodyMount = createMarkdownMount(deps.markdown, deps.log);
   body.addEventListener('click', followLink);
   const editorBox = element('div', 'docs-editor');
 
@@ -461,7 +477,7 @@ export function createDocView(deps: DocViewDeps): DocView {
 
   const drawBody = (rendered: Rendered) => {
     bodyFields = rendered.fields;
-    body.innerHTML = rendered.html;
+    bodyMount.draw(body, rendered.html, { liveFences: rendered.liveFences });
     drawBodyPart();
   };
 
@@ -875,7 +891,12 @@ export function createDocView(deps: DocViewDeps): DocView {
       }
       const count = ++openCount;
       let text = '';
-      let rendered: Rendered = { fields: [], html: '', bodyStartLine: 1 };
+      let rendered: Rendered = {
+        fields: [],
+        html: '',
+        bodyStartLine: 1,
+        liveFences: true,
+      };
       try {
         if (target.detail === null) {
           text = await deps.channel.invoke('readDoc', target.path);
@@ -953,7 +974,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       showDocState();
       drawEmpty();
       drawHeader();
-      drawBody({ fields: [], html: '', bodyStartLine: 1 });
+      drawBody({ fields: [], html: '', bodyStartLine: 1, liveFences: true });
     },
     refreshChips: () => drawHeader(),
     diskChanged(changedPath) {
@@ -1095,6 +1116,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       dropTarget = null;
       watchFile(null, shown?.name ?? 'the doc');
       disposeAnchors(anchors);
+      bodyMount.dispose();
       const drawn = [
         drawnPane,
         drawnEmpty,
@@ -1112,6 +1134,6 @@ export function createDocView(deps: DocViewDeps): DocView {
   showDocState();
   drawPane();
   drawEmpty();
-  drawBody({ fields: [], html: '', bodyStartLine: 1 });
+  drawBody({ fields: [], html: '', bodyStartLine: 1, liveFences: true });
   return view;
 }

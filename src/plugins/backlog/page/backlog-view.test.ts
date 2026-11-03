@@ -25,6 +25,7 @@ import type { BacklogChannel, BacklogRead } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type { BacklogLayout } from '../layouts/layout';
 import { createBacklogView } from './backlog-view';
+import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 
 const ROOT = '/home/repo/docs/features';
 
@@ -155,6 +156,7 @@ async function backlogSetup() {
       block: (text) => text,
       inline: (text) => text,
       document: async (text) => text,
+      ...NO_FENCES,
     },
     paths: { tilde: (path: string) => path } as unknown as Paths,
     homeDir: '/home',

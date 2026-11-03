@@ -22,6 +22,14 @@
   margin: var(--wg-space-2) 0;
 }
 
+.md-fence {
+  margin: var(--wg-space-2) 0;
+}
+
+.md-fence > pre {
+  margin: 0;
+}
+
 .md ul,
 .md ol {
   padding-left: var(--wg-space-6);

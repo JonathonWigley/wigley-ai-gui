@@ -21,6 +21,7 @@ import {
   type GalleryPartsDeps,
   type SampleCell,
 } from './gallery-parts';
+import { NO_FENCES } from '../../../../shared/page/markdown-mount.test-support';
 
 function fakeDeps(
   keys: GalleryPartsDeps['keys'] = recordingAnchors().keys,
@@ -30,6 +31,7 @@ function fakeDeps(
       block: (text) => text,
       inline: (text) => text,
       document: async (text) => text,
+      ...NO_FENCES,
     },
     keys,
     commands: { exists: () => true, run: vi.fn() },

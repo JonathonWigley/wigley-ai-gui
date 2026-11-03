@@ -38,6 +38,7 @@ import { emptyDraft } from '../draft';
 import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
 import { createNotePopup, type NotePopup } from './popup';
+import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
@@ -264,6 +265,7 @@ async function openPopup(draft: NoteDraft = DRAFT): Promise<Harness> {
       block: () => '',
       inline: () => '',
       document: () => Promise.resolve(''),
+      ...NO_FENCES,
     },
     markup: fakeMarkupEditor(markups),
     toast: (text: string, tone: ToastTone) => toasts.push([text, tone]),

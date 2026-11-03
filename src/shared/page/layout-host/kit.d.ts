@@ -61,7 +61,17 @@ export interface BaseKit {
     className?: string,
     text?: string,
   ): HTMLElement;
-  markdown(parent: HTMLElement, text: string, className?: string): HTMLElement;
+  // `div` (with `className`) holding `text` as block markdown, each registered fence drawn live; `liveFences: false`
+  // keeps every fence that runs its source (an html visual) as code, and still draws one that only formats it
+  // (`diff`). A later `markdown` call by the same kit, into the same parent, keeps a fence's view when its language,
+  // source and closed flag are unchanged. To keep a visual loaded across a redraw, draw the new markdown before
+  // removing the old one.
+  markdown(
+    parent: HTMLElement,
+    text: string,
+    className?: string,
+    options?: { liveFences?: boolean },
+  ): HTMLElement;
   inlineMarkdown(
     parent: HTMLElement,
     text: string,

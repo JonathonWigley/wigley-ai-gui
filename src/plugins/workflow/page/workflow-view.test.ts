@@ -21,6 +21,7 @@ import type { PlanProgress } from '../plan-reader';
 import { createStageList } from '../stage-list';
 import { BUILT_IN_PAGE_STAGES } from '../stages';
 import { createWorkflowView } from './workflow-view';
+import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 
 const NOW = 1_000_000;
 const PLAN_DIR = '/p/proj/docs/features/x/plan-x';
@@ -96,6 +97,7 @@ function setUp() {
         block: (text) => text,
         inline: (text) => text,
         document: async (text) => text,
+        ...NO_FENCES,
       },
       keys: recordingAnchors().keys,
       commands: { exists: () => true, run: () => undefined },

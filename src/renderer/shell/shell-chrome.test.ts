@@ -24,6 +24,7 @@ import {
 import defaultLayout from './layouts/default/layout.js';
 import type { Layout } from './layouts/layout';
 import { mountShellChrome } from './shell-chrome';
+import { NO_FENCES } from '../../shared/page/markdown-mount.test-support';
 
 // An area that appends each contribution to `root`, its alignment as
 // `data-align`, in the order contributed.
@@ -90,6 +91,7 @@ function mountChrome() {
         block: (text) => text,
         inline: (text) => text,
         document: async (text) => text,
+        ...NO_FENCES,
       },
       commands: { exists: (id) => id === REGISTERED, run: () => undefined },
       platform: 'macos',

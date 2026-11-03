@@ -3,8 +3,12 @@ import type { Log } from '../../../../contracts/log';
 import type { MarkdownRenderer } from '../../../../contracts/markdown';
 import type { Platform } from '../../../../contracts/platform';
 import { errorText } from '../../../../shared/error-text';
-import { button, element, markdownElement } from '../../../../shared/page/dom';
+import { button, element } from '../../../../shared/page/dom';
 import type { KitCommands } from '../../../../shared/page/layout-host/base-kit';
+import {
+  createMarkdownMount,
+  type MarkdownMount,
+} from '../../../../shared/page/markdown-mount';
 import {
   drawPart,
   requireElementIn,
@@ -70,8 +74,9 @@ import type { LayoutPick } from './layout-resolver';
 // hints are drawn for, the log, the keys bound in a forms scope and the
 // anchors that show them, the forms state and its actions, a forms command,
 // the round's text boxes, the forms view now, which decides what a rail click
-// does, the registered commands `kit.command` checks and runs, and the review
-// columns other plugins added.
+// does, the registered commands `kit.command` checks and runs, the review
+// columns other plugins added, and where each markdown mount a pane makes is
+// recorded for disposal.
 export interface PaneDeps {
   markdown: MarkdownRenderer;
   platform: Platform;
@@ -85,6 +90,7 @@ export interface PaneDeps {
   shownView(): FormsView;
   commands: KitCommands;
   contributions: Pick<FormsContributions, 'reviewColumns'>;
+  recordMount(mount: MarkdownMount): void;
 }
 
 // `update` runs every rail part's updater with the round and the view shown;
@@ -294,6 +300,8 @@ function drawReview(
   const updaters: Updater[] = [];
   const rowElements = new Map<number, HTMLElement>();
   const anchor = scopedAnchor(deps.keys, formsScope('review'));
+  const mount = createMarkdownMount(deps.markdown, deps.log);
+  deps.recordMount(mount);
   // The cursor row's prompt, which each draw of the rows moves to that row.
   const jumpPrompt = element('span', 'review-jump-prompt');
   anchor(jumpPrompt, formsCommand('reviewJump'), true);
@@ -320,7 +328,14 @@ function drawReview(
       updaters.push(() => {
         const rows = changedRows;
         if (rows !== null) {
-          drawReviewRow(entry, rows[row], round.formId, deps, jumpPrompt);
+          drawReviewRow(
+            entry,
+            rows[row],
+            round.formId,
+            deps,
+            mount,
+            jumpPrompt,
+          );
         }
       });
       return entry;
@@ -424,7 +439,7 @@ function appendReviewButton(
 }
 
 // Redraws `entry`'s contents from `row`. A finding's pick reads as its action,
-// then its choice under the number the card gives it; a header pick reads as
+// then its choice, drawn through `mount`, under the number the card gives it; a header pick reads as
 // its action alone, and a row with no pick as its status. The cursor's row
 // takes `jumpPrompt`, the keys that jump to its item, as clicking it does. The
 // row ends with each contributed column's cell.
@@ -433,6 +448,7 @@ function drawReviewRow(
   row: ReviewRow,
   roundId: string,
   deps: PaneDeps,
+  mount: MarkdownMount,
   jumpPrompt: HTMLElement,
 ) {
   entry.dataset.status = row.status;
@@ -448,14 +464,12 @@ function drawReviewRow(
     }
   }
   if (row.choice > 0) {
+    const choiceText = element('span', 'choice-text');
     answer.append(
       element('span', 'choice-number', String(row.entry)),
-      markdownElement(
-        'span',
-        'choice-text',
-        deps.markdown.inline(row.choiceText),
-      ),
+      choiceText,
     );
+    mount.draw(choiceText, deps.markdown.inline(row.choiceText));
   }
   if (row.recommended) {
     answer.append(tag('Recommended', 'accent'));

@@ -23,17 +23,6 @@ export function appended<E extends HTMLElement>(
   return node;
 }
 
-// `html` comes from the MarkdownRenderer, which escapes everything it is given.
-export function markdownElement(
-  tag: 'div' | 'span',
-  className: string,
-  html: string,
-): HTMLElement {
-  const node = element(tag, className);
-  node.innerHTML = html;
-  return node;
-}
-
 // A button that never takes focus, so page keys still drive the page after a
 // click and Enter or Space never re-press it.
 export function button(

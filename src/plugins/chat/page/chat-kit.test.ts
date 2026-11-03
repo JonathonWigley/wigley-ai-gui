@@ -7,6 +7,7 @@ import {
 } from '../../../shared/page/test-dom';
 import { chatCommand } from '../ids';
 import { createEntryKit } from './chat-kit';
+import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 
 describe('createEntryKit', () => {
   beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
@@ -31,6 +32,7 @@ describe('createEntryKit', () => {
           block: (text) => text,
           inline: (text) => text,
           document: (text) => Promise.resolve(text),
+          ...NO_FENCES,
         },
         keys: {
           anchor: (_node, command) => ({

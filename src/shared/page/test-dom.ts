@@ -185,6 +185,12 @@ export class FakeElement {
     );
   }
 
+  // Takes one class selector such as `.md-fence`; every match under this
+  // element, depth first.
+  querySelectorAll(selector: string): FakeElement[] {
+    return findAll(this, selector.slice(1));
+  }
+
   click() {
     this.fire('click');
   }

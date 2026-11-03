@@ -9,6 +9,12 @@ import {
   ownerBaseKitDeps,
 } from './base-kit';
 import { recordingAnchors } from './test-layouts';
+import type { MarkdownMount } from '../markdown-mount';
+import {
+  fencePlaceholder,
+  installMarkdownDom,
+  NO_FENCES,
+} from '../markdown-mount.test-support';
 
 const BOUND: Record<string, string> = {
   'docs.open': 'Mod+O',
@@ -27,6 +33,7 @@ function kitOver(scope: ViewScope | null) {
       block: (text) => `<p>${text}</p>`,
       inline: (text) => text,
       document: async (text) => text,
+      ...NO_FENCES,
     },
     keys: {
       anchor(element, command, options) {
@@ -300,4 +307,90 @@ describe('createBaseKit', () => {
     expect(parent.childNodes).toEqual([section]);
     expect(section.className).toBe('context');
   });
+
+  it('draws markdown through one recorded mount', () => {
+    installMarkdownDom((name, value) => vi.stubGlobal(name, value));
+    const fence = liveFence();
+    const recorded: MarkdownMount[] = [];
+    const kitWith = (recordMount?: (mount: MarkdownMount) => void) =>
+      createBaseKit({
+        ...kitOver(null).deps,
+        markdown: fence.markdown,
+        recordMount,
+      });
+    const kit = kitWith((mount) => recorded.push(mount));
+    const parent = asHtml(new FakeElement('div'));
+
+    kit.markdown(parent, 'a');
+    parent.replaceChildren();
+    kit.markdown(parent, 'a');
+
+    expect(fence.mounts).toBe(1);
+    expect(recorded).toHaveLength(1);
+    recorded[0].dispose();
+    expect(fence.disposals).toBe(1);
+    kitWith().markdown(parent, 'a', '', { liveFences: false });
+    expect(fence.mounts).toBe(1);
+  });
+
+  it('disposes the mount through the rollback ownerBaseKitDeps takes', () => {
+    installMarkdownDom((name, value) => vi.stubGlobal(name, value));
+    const fence = liveFence();
+    const recorded: { dispose(): void }[] = [];
+    const kit = createBaseKit(
+      ownerBaseKitDeps(
+        { id: 'docs', commands: {} },
+        {
+          markdown: fence.markdown,
+          keys: kitOver(null).deps.keys,
+          commands: { exists: () => true, run: () => undefined },
+          platform: 'macos',
+        },
+        null,
+        { recordAnchor: (anchor) => recorded.push(anchor) },
+      ),
+    );
+
+    kit.markdown(asHtml(new FakeElement('div')), 'a');
+    for (const anchor of recorded) {
+      anchor.dispose();
+    }
+
+    expect(fence.disposals).toBe(1);
+  });
 });
+
+// A renderer whose `block` returns one closed `html` placeholder, its live
+// contribution counting mounts and view disposals.
+function liveFence() {
+  const counts = { mounts: 0, disposals: 0 };
+  const contribution = {
+    language: 'html',
+    live: true,
+    mount: () => {
+      counts.mounts += 1;
+      return {
+        element: document.createElement('div'),
+        dispose: () => {
+          counts.disposals += 1;
+        },
+      };
+    },
+  };
+  return {
+    get mounts() {
+      return counts.mounts;
+    },
+    get disposals() {
+      return counts.disposals;
+    },
+    markdown: {
+      block: () => fencePlaceholder('html', true, 'x'),
+      inline: (text: string) => text,
+      document: async (text: string) => text,
+      addFence: () => ({ dispose: () => undefined }),
+      fence: (language: string) =>
+        language === 'html' ? contribution : undefined,
+    },
+  };
+}

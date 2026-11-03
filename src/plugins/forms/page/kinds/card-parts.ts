@@ -1,6 +1,7 @@
 import type { CommandId } from '../../../../contracts/commands';
 import type { MarkdownRenderer } from '../../../../contracts/markdown';
-import { button, element, markdownElement } from '../../../../shared/page/dom';
+import { button, element } from '../../../../shared/page/dom';
+import type { MarkdownMount } from '../../../../shared/page/markdown-mount';
 import { inputFrame } from '../../../../shared/page/ui/input-frame';
 import { boxHint } from '../../../../shared/page/ui/key-anchors';
 import { sectionHeader } from '../../../../shared/page/ui/section-header';
@@ -52,17 +53,16 @@ export function buildItemHead(
 }
 
 // The labelled reason under a choice: why one would pick it, or why it is
-// recommended.
+// recommended, its text drawn through `deps.mount`.
 export function buildChoiceReason(
   label: string,
   text: string,
-  markdown: MarkdownRenderer,
+  deps: { markdown: MarkdownRenderer; mount: MarkdownMount },
 ): HTMLElement {
   const reason = element('div', 'choice-reason');
-  reason.append(
-    element('div', 'choice-reason-label', label),
-    markdownElement('div', 'choice-reason-body md', markdown.block(text)),
-  );
+  const body = element('div', 'choice-reason-body md');
+  reason.append(element('div', 'choice-reason-label', label), body);
+  deps.mount.draw(body, deps.markdown.block(text));
   return reason;
 }
 
@@ -106,7 +106,7 @@ export interface ChoiceList {
 }
 
 // Appends one choice per entry of `choices` to `list`, each inline markdown
-// under its shown `number`, with the anchor for the command that picks that
+// drawn through `deps.mount` under its shown `number`, with the anchor for the command that picks that
 // number; the choice numbered `recommended` is tagged, none when null. `pick`
 // gets the clicked choice's number.
 export function buildChoiceList(
@@ -114,15 +114,20 @@ export function buildChoiceList(
   choices: { text: string; number: number }[],
   recommended: number | null,
   pick: (number: number) => void,
-  deps: Pick<CardDeps, 'markdown'> & { anchor: PartAnchor },
+  deps: Pick<CardDeps, 'markdown'> & {
+    mount: MarkdownMount;
+    anchor: PartAnchor;
+  },
 ): ChoiceList {
   const entries = choices.map(({ text, number }) => {
     const entry = element('li', 'choice');
     const choicePick = button('choice-pick', '', () => pick(number));
+    const choiceText = element('span', 'choice-text');
     choicePick.append(
       element('span', 'choice-number', String(number)),
-      markdownElement('span', 'choice-text', deps.markdown.inline(text)),
+      choiceText,
     );
+    deps.mount.draw(choiceText, deps.markdown.inline(text));
     entry.append(choicePick);
     if (number === recommended) {
       entry.classList.add('is-recommended');

@@ -4,6 +4,7 @@ import {
   requireElementIn,
   type RollbackDeps,
 } from '../../../../shared/page/layout-host/draw-part';
+import type { MarkdownMount } from '../../../../shared/page/markdown-mount';
 import type { KeysPageExports } from '../../../keys/contract';
 import type { ItemKind } from '../../contract';
 import defaultLayout from '../../layouts/default/layout.js';
@@ -65,8 +66,8 @@ export function cardAnswer(
 
 // The item's card at rail `position`, drawn into `parent` by drawPart with
 // the picked layout, or with `default` when the pick lacks the item's kind or
-// its card throws. The boxes the card mounts and the anchors it names are
-// recorded for drawPart's rollback.
+// its card throws. The boxes the card mounts, the anchors it names and its
+// markdown mounts are recorded for drawPart's rollback.
 export function buildLayoutCard(
   pick: LayoutPick,
   parent: HTMLElement,
@@ -99,15 +100,16 @@ export function buildLayoutCard(
 }
 
 // What a layout's card or pane mounts its text boxes and anchors its keys
-// through.
+// through, and where it records each markdown mount it makes.
 interface MountingDeps {
   mountBox(parent: HTMLElement, target: TextTarget, text: string): void;
   destroyBox(target: TextTarget): void;
   keys: Pick<KeysPageExports, 'anchor'>;
+  recordMount(mount: MarkdownMount): void;
 }
 
-// `deps` with each box it mounts and each anchor it names recorded in
-// `rollback`.
+// `deps` with each box it mounts, each anchor it names and each markdown
+// mount it records also recorded in `rollback`.
 export function recordingDeps<D extends MountingDeps>(
   deps: D,
   rollback: RollbackDeps,
@@ -117,6 +119,10 @@ export function recordingDeps<D extends MountingDeps>(
     mountBox(parent: HTMLElement, target: TextTarget, text: string) {
       deps.mountBox(parent, target, text);
       rollback.recordBox(() => deps.destroyBox(target));
+    },
+    recordMount(mount: MarkdownMount) {
+      deps.recordMount(mount);
+      rollback.recordAnchor(mount);
     },
     keys: {
       ...deps.keys,

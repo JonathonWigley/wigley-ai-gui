@@ -22,6 +22,7 @@ import type {
 } from '../layouts/layout';
 import { createChatLayouts } from './chat-layouts';
 import { createEntryList } from './entry-list';
+import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 
 type AnyBuilder = (
   parent: HTMLElement,
@@ -276,6 +277,7 @@ function setUpList(shown: ShownLayouts<ChatLayout>) {
         block: (text) => text,
         inline: (text) => text,
         document: (text) => Promise.resolve(text),
+        ...NO_FENCES,
       },
       keys: {
         anchor: (_node, command) => ({

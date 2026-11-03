@@ -26,6 +26,11 @@ import {
   noAnchor,
   SourceLineFakeElement,
 } from './docs-page-fakes';
+import {
+  fencePlaceholder,
+  installMarkdownDom,
+  NO_FENCES,
+} from '../../../shared/page/markdown-mount.test-support';
 
 // A doc pane marked `marker` that places the scroller.
 function paneLayout(marker: string): Layout {
@@ -46,12 +51,18 @@ interface RecordedTarget {
 
 // A doc view over a channel reading every doc as `# Doc`, drawing with the
 // layouts `layouts` returns, its editor host recording each editor it makes
-// and each text inserted. `writeBytes` answers the channel's `writeBytes`,
+// and each text inserted, rendering through `markdown`. `writeBytes` answers the channel's `writeBytes`,
 // each call recorded in `writes`; `targets` holds each drop target.
 function docViewOver(
   layouts: () => ShownLayouts<Layout>,
   chipsOf: DocViewDeps['chipsOf'] = () => {
     throw new Error('no chips');
+  },
+  markdown: DocViewDeps['markdown'] = {
+    block: (text: string) => text,
+    inline: (text: string) => text,
+    document: async (text: string) => text,
+    ...NO_FENCES,
   },
 ) {
   const { parts } = fakeDocsParts(layouts);
@@ -105,11 +116,7 @@ function docViewOver(
         };
       },
     },
-    markdown: {
-      block: (text: string) => text,
-      inline: (text: string) => text,
-      document: async (text: string) => text,
-    },
+    markdown,
     paths: posixPaths,
     toast: (text: string) => toasts.push(text),
     log: () => undefined,
@@ -512,3 +519,63 @@ function sourceBlock(line: number, top: number): SourceLineFakeElement {
 function settled(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve));
 }
+
+describe('createDocView fences', () => {
+  beforeEach(() =>
+    installMarkdownDom((name, value) => vi.stubGlobal(name, value)),
+  );
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  // A doc view whose every document renders one closed `html` placeholder,
+  // its live contribution counting mounts and view disposals.
+  function fencedDocView() {
+    const counts = { mounts: 0, disposals: 0 };
+    const html = {
+      language: 'html',
+      live: true,
+      mount: () => {
+        counts.mounts += 1;
+        return {
+          element: document.createElement('div'),
+          dispose: () => {
+            counts.disposals += 1;
+          },
+        };
+      },
+    };
+    const { view } = docViewOver(
+      () => withUser(defaultLayout, paneLayout('pane')),
+      undefined,
+      {
+        block: (text: string) => text,
+        inline: (text: string) => text,
+        document: async () => fencePlaceholder('html', true, 'x'),
+        addFence: () => ({ dispose: () => undefined }),
+        fence: (language: string) => (language === 'html' ? html : undefined),
+      },
+    );
+    return { view, counts };
+  }
+
+  it.each([
+    { file: 'a.md', result: 'live', mounts: 1 },
+    { file: 'a.html', result: 'as code', mounts: 0 },
+  ])("draws a $file file's html fence $result", async ({ file, mounts }) => {
+    const { view, counts } = fencedDocView();
+
+    await view.open(target(null, `/home/${file}`));
+
+    expect(counts.mounts).toBe(mounts);
+  });
+
+  it('dispose disposes its fence views', async () => {
+    const { view, counts } = fencedDocView();
+    await view.open(target(null, '/home/a.md'));
+
+    view.dispose();
+
+    expect(counts.disposals).toBe(1);
+  });
+});

@@ -13,6 +13,7 @@ import type { RunningAgent } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
 import { createSubagentLines } from './subagent-lines';
+import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 
 const NOW = 1_000_000;
 const SESSION = 'row-1';
@@ -49,6 +50,7 @@ function setUp() {
         block: (text) => text,
         inline: (text) => text,
         document: async (text) => text,
+        ...NO_FENCES,
       },
       keys: recordingAnchors().keys,
       commands: { exists: () => true, run: () => undefined },

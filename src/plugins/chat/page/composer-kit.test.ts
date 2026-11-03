@@ -19,6 +19,7 @@ import type { ChatLayout, ComposerInput } from '../layouts/layout';
 import { createChatLayouts } from './chat-layouts';
 import { createComposerSurface } from './composer-kit';
 import { createSignInPart } from './dialog-kits';
+import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 
 // The deps every surface takes, drawing with `user` as the user's layout,
 // or with `default` alone when `user` is null, and no composer part until
@@ -38,6 +39,7 @@ function surfaceDeps(user: ChatLayout | null) {
       block: (text: string) => text,
       inline: (text: string) => text,
       document: (text: string) => Promise.resolve(text),
+      ...NO_FENCES,
     },
     keys,
     commands: { exists: () => true, run: () => undefined },

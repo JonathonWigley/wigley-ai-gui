@@ -15,6 +15,7 @@ import { createFormsContributions } from './contributions';
 import { apply, type FormsAction, initialState } from './form-state';
 import { mountFormsView } from './forms-view';
 import { presentedRound } from './test-rounds';
+import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 
 // One `insert` call on an editor the host made.
 interface Inserted {
@@ -116,6 +117,7 @@ function formTabSetup(others: string[] = []) {
       block: (text) => text,
       inline: (text) => text,
       document: async (text) => text,
+      ...NO_FENCES,
     },
     keys: {
       keysFor: () => null,

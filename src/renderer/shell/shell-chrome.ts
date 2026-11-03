@@ -66,6 +66,7 @@ function createShellKit(
     scope: null,
     commandNamed: (name) => (services.commands.exists(name) ? name : null),
     recordAnchor: (anchor) => rollback.recordAnchor(anchor),
+    recordMount: (mount) => rollback.recordAnchor(mount),
   });
 }
 
@@ -127,7 +128,7 @@ export function mountShellChrome(deps: ShellChromeDeps): ShellChrome {
         element: build(
           builder,
           parent,
-          createShellKit(services, keys, rollback),
+          createShellKit({ ...services, log }, keys, rollback),
         ),
       }),
     );

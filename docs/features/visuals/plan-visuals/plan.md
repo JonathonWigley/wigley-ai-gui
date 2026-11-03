@@ -239,7 +239,7 @@ export function visualHashOf(url: string): string | null;
 - [x] [Session instructions through the harness](03-session-instructions.md)
 
 ### Wave 2
-- [ ] [Visual frames service](04-visual-frames.md) — after 02
+- [x] [Visual frames service](04-visual-frames.md) — after 02
 
 ### Wave 3
 - [ ] [Visual plugin: fence, card and session note](05-visual-plugin.md) — after 01, 03, 04
@@ -263,9 +263,12 @@ Review base: d7578311fe99437ccefe407289916bbcfa049eb8
 ### Groups
 - 02 · a224d7a · diff read: every Produces present; typecheck + lint clean; 21 tests pass filtered · concerns: the guard refuses a subframe on about:blank or srcdoc, so 04 sets the iframe src only once serveVisual resolves (live check in 09)
 - 03 · da9a67f · diff read: every Produces present, no --append-system-prompt outside src/main/claude-code; typecheck clean for its files; 262 tests pass filtered · concerns: none
+- 04 · cf5e079 · diff read: every Produces present, src set only after serveVisual resolves; lint clean; 25 tests pass filtered; typecheck errors only in task 01's in-flight fakes · concerns: fake-visual-frames.ts sits in src/shared/page beside task 01's files (no file of 01 edited)
 ### Contract changes
 ### Rulings
 - the served body is doctype, script, source with no trailing newline in the bootstrap — matches the pinned order — whitespace only if wrong · group 02 · group 02
 - registrations held in a Set of {text} objects rather than an array — insertion order kept, identity delete makes a second dispose a no-op, matches drop-targets addTarget — none if wrong · group 03 · group 03
+- src/renderer/visual-frames layer also allows src/shared/page, since its test imports test-dom.ts and check-layers rules cover tests — the adapter itself imports none of it — a reviewer may want a test-only carve-out · group 04 · group 04
+- the load log falls back to an empty hash when visualHashOf returns null — main only serves visual URLs — a blank hash in the log if wrong · group 04 · group 04
 ### Review rounds
 ### Test gate

@@ -4,6 +4,7 @@ import {
   ownerBaseKitDeps,
 } from '../../../shared/page/layout-host/base-kit';
 import { recordingAnchors } from '../../../shared/page/layout-host/test-layouts';
+import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 import {
   type FakeElement,
   ScrollerFakeElement,
@@ -13,10 +14,14 @@ import type { Layout } from '../layouts/layout';
 import { docsManifest } from '../manifest';
 import { createDocsParts } from './layout/docs-parts';
 
-// A ScrollerFakeElement whose `querySelectorAll` takes one data attribute
-// selector (`[data-source-line]`), as the doc pane finds its source blocks.
+// A ScrollerFakeElement whose `querySelectorAll` also takes one data
+// attribute selector (`[data-source-line]`), as the doc pane finds its source
+// blocks.
 export class SourceLineFakeElement extends ScrollerFakeElement {
-  querySelectorAll(selector: string): FakeElement[] {
+  override querySelectorAll(selector: string): FakeElement[] {
+    if (selector.startsWith('.')) {
+      return super.querySelectorAll(selector);
+    }
     const name = /^\[data-([a-z-]+)\]$/.exec(selector)?.[1];
     if (name === undefined) {
       throw new Error(`unsupported selector ${selector}`);
@@ -55,6 +60,7 @@ export function fakeDocsParts(layouts: () => ShownLayouts<Layout>) {
               block: (text) => text,
               inline: (text) => text,
               document: async (text) => text,
+              ...NO_FENCES,
             },
             keys,
             commands: { exists: () => true, run: () => undefined },
