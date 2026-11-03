@@ -1,6 +1,6 @@
 # 03 — Subagent facts in agent events
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 1 · Depends on: none (the background-tasks plan landed, plan.md § Preconditions)
 Plan: [plan.md](plan.md)

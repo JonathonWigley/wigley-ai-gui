@@ -1,0 +1,33 @@
+/* While nothing overflows the chevrons take no space; while the track
+   overflows each keeps its space, and one with nothing further that way
+   hides, so the track's width holds still as it scrolls. */
+.ui-h-scroller {
+  display: flex;
+  align-items: center;
+  gap: var(--wg-space-1);
+  min-width: 0;
+}
+
+.ui-h-scroller-track {
+  position: relative;
+  display: flex;
+  gap: var(--wg-space-2);
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+/* Items keep their width, so a long row scrolls rather than squeezes. */
+.ui-h-scroller-track > * {
+  flex: none;
+}
+
+.ui-h-scroller[data-overflow='false'] > .ui-h-scroller-chevron {
+  display: none;
+}
+
+.ui-h-scroller-chevron.is-no-target {
+  visibility: hidden;
+}

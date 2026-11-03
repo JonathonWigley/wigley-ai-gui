@@ -1,5 +1,7 @@
 import './gallery.css';
 import type { Timers } from '../../../contracts/ambient';
+import type { Disposable } from '../../../contracts/disposable';
+import type { Log } from '../../../contracts/log';
 import type { ResizeTarget } from '../../../contracts/panes';
 import type { Platform } from '../../../contracts/platform';
 import type { ShownLayouts } from '../../../contracts/plugin';
@@ -12,6 +14,7 @@ import { chip } from '../../../shared/page/ui/chip';
 import { createDialog } from '../../../shared/page/ui/dialog';
 import { emptyState } from '../../../shared/page/ui/empty-state';
 import { floatingPanel } from '../../../shared/page/ui/floating-panel';
+import { createHScroller } from '../../../shared/page/ui/h-scroller';
 import { icon } from '../../../shared/page/ui/icon';
 import { iconButton } from '../../../shared/page/ui/icon-button';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
@@ -58,6 +61,11 @@ interface SplitSampleDeps {
 // The split the split sample made last; null until the first draw.
 interface KeptSplit {
   split: Split | null;
+}
+
+// The HScroller samples' scrollers and state observers the last draw made.
+interface KeptHScrollers {
+  disposables: Disposable[];
 }
 
 // `element` is the mode's root: the transparency status line (the layout's
@@ -109,6 +117,7 @@ export function createGalleryView(
   root.append(headSlot, strip, gallerySheet);
 
   const kept: KeptSplit = { split: null };
+  const keptHScrollers: KeptHScrollers = { disposables: [] };
   const specs = sectionSpecs(
     deps.platform,
     {
@@ -117,6 +126,7 @@ export function createGalleryView(
       timers: deps.timers,
     },
     kept,
+    { log: deps.log, kept: keptHScrollers },
   );
   let headInput: GalleryHeadInput = { transparency };
 
@@ -162,11 +172,13 @@ export function createGalleryView(
 }
 
 // Every primitive's block, in the order the sheet shows them. `kept` holds the
-// split the split sample made last.
+// split the split sample made last; `hScrollers` what the HScroller samples
+// log through and the scrollers they made last.
 function sectionSpecs(
   platform: Platform,
   splitDeps: SplitSampleDeps,
   kept: KeptSplit,
+  hScrollers: { log: Log; kept: KeptHScrollers },
 ): SectionSpec[] {
   return [
     section('Materials', materialsCells),
@@ -185,6 +197,7 @@ function sectionSpecs(
     section('Row, tree', treeRowCells),
     section('Tabs', tabsCells),
     framed('Split', () => splitSample(splitDeps, kept)),
+    section('HScroller', () => hScrollerCells(hScrollers.log, hScrollers.kept)),
     section('Card', cardCells),
     section('Collapsible card', collapsibleCells),
     framed('FloatingPanel', () => floatingPanelSample(platform)),
@@ -578,6 +591,59 @@ function splitSample(deps: SplitSampleDeps, kept: KeptSplit): HTMLElement {
     ),
   );
   return split.element;
+}
+
+// Fresh HScroller samples of Tags; they dispose what `kept` holds and keep
+// their own scrollers and observers there. Each sample, once it has a width,
+// refreshes and logs its chevron state:
+// `[gallery] hscroller <caption>: overflow <bool> back <bool> forward <bool>`.
+function hScrollerCells(log: Log, kept: KeptHScrollers): SampleCell[][] {
+  for (const disposable of kept.disposables) {
+    disposable.dispose();
+  }
+  kept.disposables = [];
+  // `revealed` is the 1-based item revealed before the sample has a layout.
+  const sample = (caption: string, count: number, revealed?: number) => {
+    const scroller = createHScroller();
+    for (let item = 1; item <= count; item++) {
+      scroller.track.append(tag(`Item ${item}`));
+    }
+    if (revealed !== undefined) {
+      scroller.reveal(scroller.track.children[revealed - 1] as HTMLElement);
+    }
+    const observer = new ResizeObserver(([observed]) => {
+      if (observed.contentRect.width === 0) {
+        return;
+      }
+      observer.disconnect();
+      scroller.refresh();
+      log(
+        'gallery',
+        `hscroller ${caption}: ${hScrollerState(scroller.element)}`,
+      );
+    });
+    observer.observe(scroller.element);
+    kept.disposables.push(scroller, { dispose: () => observer.disconnect() });
+    return cell(scroller.element, caption, true);
+  };
+  return [
+    [
+      sample('No overflow', 2),
+      sample('At start', 12),
+      sample('In the middle', 12, 6),
+      sample('At end', 12, 12),
+    ],
+  ];
+}
+
+// `overflow <bool> back <bool> forward <bool>`, back and forward true while
+// that chevron shows.
+function hScrollerState(root: HTMLElement): string {
+  const [back, forward] = Array.from(
+    root.querySelectorAll('.ui-h-scroller-chevron'),
+    (chevron) => !chevron.classList.contains('is-no-target'),
+  );
+  return `overflow ${root.dataset.overflow} back ${back} forward ${forward}`;
 }
 
 function cardCells(): SampleCell[][] {

@@ -214,6 +214,13 @@ const GALLERY_STEPS: SelfTestStep[] = [
   {
     keys: [' ', 'z', 'g'],
     expect: '[page] showed Gallery mode',
+    alsoExpect: [
+      /^\[gallery\] hscroller No overflow: overflow false back false forward false$/,
+      /^\[gallery\] hscroller At start: overflow true back false forward true$/,
+      /^\[gallery\] hscroller In the middle: overflow true back true forward true$/,
+      /^\[gallery\] hscroller At end: overflow true back true forward false$/,
+    ],
+    why: 'Each HScroller sample shows the chevrons its scroll position calls for.',
     checksFit: true,
     screenshot: 'gallery-full-0',
   },
