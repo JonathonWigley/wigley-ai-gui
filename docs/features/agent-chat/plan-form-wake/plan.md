@@ -160,7 +160,7 @@ Forms and primer reach chat only through `api.dependency<ChatMainExports>('chat'
 - [x] [Doc re-read](04-doc-re-read.md) — after 01, 02, 03
 
 ### Wave 4
-- [ ] [Final verification](05-final-verification.md) — after 02, 03
+- [x] [Final verification](05-final-verification.md) — after 02, 03
 
 ## Run log
 
@@ -171,6 +171,7 @@ Review base: 9b795658
 - 01 · d3ba371b · diff read: AgentFormWake, AgentFormServiceDeps.wake, ChatFormWakeTarget, createChatFormWake, NO_FORM_WAKE present as planned; npm run typecheck passes; worker ran the 4 test files, 107 passed · concerns: re-send row has both callers>0 and askTurn set, so it isolates neither clause (each clause pinned by its own row); rejection test's two microtask flushes depend on promise-chain depth
 - 03 · cb955812 + fix 1cac2422 · diff read: dependsOn ['sessions', 'chat', 'keys'] and createChatFormWake on both live services, NO_FORM_WAKE on previews; typecheck and lint pass; plugin-manifests.test.ts passes; selftest --plugin chat,forms,primer failed 92 steps on the first dispatch (start order put chat's left-open chat-second row in forms' wrap steps) and passes after fix 1cac2422 · concerns: first dispatch failed the layer check (forms/primer main may not import chat/contract) and the self-test; the whole self-test is not run, so scripts other than chat that now start before forms are unchecked; forms+primer-only self-test not re-run after the fix
 - 04 · no change · no change: AGENTS.md agent-forms and chat entries, the start-order line (733, generic), drive SKILL.md's chat.start result, and the forms README's wake paragraph (round text character for character, primer noun and tool, replayed collect, cleared conversation, non-chat sessions) all match the landed code · concerns: none
+- 05 · none (verification) · drive run fw05, fake harness, deadlines 5 then restored to 240: (1) round in chat-owned row 447145ea, submitted after the draft → Chat tab shows 'The user submitted the round "Layout preview" in the forms app. Call collect_last_round for its answers.' and the fake echo; (2) 120 s deadline, submit at once → forms.answers submitted, Chat tab empty; (3) primer → 'The user submitted the primer "Sample feature" in the forms app. Call collect_last_primer for its answers.' and echo; round text matches README's The wake line character for character; captures c1/c2/c3 read by the lead · PASS · concerns: cancel path not driven live (pinned by the form-service cancelled row)
 ### Contract changes
 ### Rulings
 - drive SKILL.md stated no chat.start result, so one sentence was added after the chat.start profile line — the Files field expects the skill to state it — one sentence to drop if wrong · group 02 · group 02

@@ -1,6 +1,6 @@
 # 05 — Final verification
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 02, 03
 Plan: [plan.md](plan.md)
@@ -37,3 +37,4 @@ Commit:    none (verification only)
 
 ## Proof
 
+Commit none (verification) · proof: drive run fw05, fake harness, deadlines 5 then restored to 240: (1) round in chat-owned row 447145ea, submitted after the draft → Chat tab shows 'The user submitted the round "Layout preview" in the forms app. Call collect_last_round for its answers.' and the fake echo; (2) 120 s deadline, submit at once → forms.answers submitted, Chat tab empty; (3) primer → 'The user submitted the primer "Sample feature" in the forms app. Call collect_last_primer for its answers.' and echo; round text matches README's The wake line character for character; captures c1/c2/c3 read by the lead · PASS · concerns: cancel path not driven live (pinned by the form-service cancelled row)
