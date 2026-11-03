@@ -145,6 +145,7 @@ Review base: 46f417b5
 - Fake lastUsage takes a pending fail and hold at call time; a held failing call rejects after release — none · group 01 · group 01
 - requireHarness() runs inside the async emitSavedUsage, so a missing harness is a logged rejection and restore never throws — keeps restore synchronous — a log line in place of a throw · group 04 · group 04
 - oxfmt --write on chat-sessions.test.ts (43a3c7ec) as lead editor-tooling — one formatter rewrap in group 04's test; agent-strip.css, chat/main/start.ts and sessions/title-tool lint/format failures predate the run (base 46f417b5) and are left — none · lead
+- Check 3 closed after fix 7a2ebec0 (drive 3c): a resumed closed session paints its saved context (49k, cache 4m) then 49k/300k; a 0k line is still logged once for the new row but never painted (page builds the row from the prior snapshot) — removing the log needs a design change the review left as-is — a one-line log · lead
 ### Review rounds
 - implementation review · 2c774d03 · NEEDS FIXES (2 Important, 5 Minor, 3 pre-existing; 1 prose fix lead-applied 38feb604)
 - re-review (correctness) · fix commits 36893a00, 7a2ebec0 · PASS (findings 1, 2, 4-doc, 5, 6, 7 closed; 3, 4-route, 8, 9, 10 to follow-ups fa06fcba)
