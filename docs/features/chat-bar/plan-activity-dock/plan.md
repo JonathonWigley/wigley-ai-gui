@@ -434,5 +434,7 @@ Review base: 46f417b5
 - agent-strip strip keys step why rewritten (G lands on the last entry), beyond the comment-only scope — group 07 · group 07
 - the dispose test proves the part's dispose through its recorded key anchor (PartView has no dispose) — group 06 · group 06
 ### Review rounds
+- R1 implementation review · 70d24747 · NEEDS FIXES (2 Important open, 1 Important + 2 Minor determined; 5 lead-applied in 3bee4a26; 2 pre-existing) · report /tmp/claude-activity-dock/review-70d24747.md
+- R2 re-review (correctness) of fix commits c7e983bb 6b2d57c9 beb90fc4 12226ccf 166f58c5: NEEDS FIXES. R1#1,3,4,6,7 closed. Important: R1#2 repeat (strip floor pushes the box out of tabs under ~553px). Minor: agent-strip/agent-lines SCROLLS_ITSELF lack .chat-working-done (repeat of R1#5); sessions strip contract does not name ui-tabs--scroll. Chat self-test reran: all passed. All three dispatched as fix cycle 2 under the user's standing approval; the lead picked the strip requirement (box always in the tab; floor in tall tabs only) and documenting the scroll variant.
 ### Test gate
 - Picked the 12 test files the range changed plus their areas (src/plugins/chat, src/main/claude-code, fake-agent-harness, agent-strip, agent-lines: 52 files, 1168 tests); the whole vitest suite then ran too, since it takes seconds (381 files, 6200 tests) · all passed; typecheck green; lint fails only on the pre-existing agent-strip.css:17 check-styles error (65d29099)
