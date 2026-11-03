@@ -138,7 +138,8 @@ In `src/contracts/agent.ts`, beside `AgentHarness`:
     from 70 %, `critical` from 90 %); with no autocompact limit it shows tokens alone. A narrow bar drops whole items
     from the line's end (spend, then cache, then the context text) and keeps the context bar. A session with no usage
     event yet draws no line. The line redraws on each snapshot, each `sessions.activeChanged`, each layouts set and the
-    minute tick, and the page logs `session line <session id>: <text>` when a session's text changes.
+    minute tick. Each surface logs `session line in <name>: <text>` under its own plugin when a session's text
+    changes, `<name>` the session's side-bar label (its id while none is known).
   - the details bar in the right bar, toggled by `usage.toggleDetails` (`Space v u`), its open state kept in
     `uiState`: every profile's rows with reset times, extra usage as `spent / limit` in its currency (or `off`), the
     poll's staleness and error, and the shown session's context, both autocompact limits and the marker when they
@@ -163,8 +164,9 @@ contributes to it through `api.areas.rightBar`.
 - **Credits:** spend against the monthly limit when the plan has it; `off` when extra usage is disabled.
 - **Always-on status-bar line, details one key away in a right bar.**
 - **Session numbers sit on the session, plan numbers on the shared bar.** With several panes, one shared line can
-  show only one session's context, so each session's context, cache and spend draw in its own tab bar; the plan rows
-  are account facts every pane shares and stay on the status bar.
+  show only one session's context, so each session's context, cache and spend draw on that session (its Chat status
+  line, and its tab bar with usage-tab-line on); the plan rows are account facts every pane shares and stay on the
+  status bar.
 - **The session line is a part, never chat input.** Usage draws it into chat's `addStatusPart` (the Chat status line,
   the default home since the chat bar, `docs/features/chat-bar/design.md`) and, through the optional `usage-tab-line`
   plugin, into sessions' `addBarPart`, so neither chat nor sessions knows usage. The tab-bar copy is for a user who

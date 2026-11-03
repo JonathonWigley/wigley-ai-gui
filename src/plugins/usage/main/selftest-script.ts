@@ -1,17 +1,28 @@
 import type { Clock } from '../../../contracts/ambient';
+import type { Files } from '../../../contracts/files';
+import type { Paths } from '../../../contracts/paths';
 import type { SelfTestGroup, SelfTestScript } from '../../../contracts/plugin';
-import type {
-  OwnedSession,
-  SessionsMainExports,
-} from '../../sessions/contract';
+import type { ChatMainExports } from '../../chat/contract';
+import type { SessionsMainExports } from '../../sessions/contract';
 import type { UsageSnapshot } from '../contract';
 import { usageFixture } from './usage-fixture';
 
+// The self-test's project folder, made under the self-test's home. Its name
+// names the session in every session line.
+const SELFTEST_PROJECT_NAME = 'usage-selftest';
+
+// `sessionUsage` resolves once the store holds a `usage` event for the
+// session, at once when it already does.
 export interface UsageSelfTestDeps {
-  sessions: Pick<SessionsMainExports, 'open' | 'activate'>;
+  homeDir: string;
+  files: Pick<Files, 'makeFolder' | 'realPath'>;
+  paths: Paths;
+  chat: Pick<ChatMainExports, 'launch' | 'closeSessionsIn'>;
+  sessions: Pick<SessionsMainExports, 'activate'>;
   clock: Clock;
   snapshot(): UsageSnapshot;
   seed(snapshot: UsageSnapshot): void;
+  sessionUsage(sessionId: string): Promise<void>;
 }
 
 // What `open` saw and seeded: `unreadPlans` names the plans with no usage
@@ -27,6 +38,8 @@ interface UsageSelfTestResult {
 const TOGGLE = [' ', 'v', 'u'];
 const FRESH_DETAILS = '[usage] details shown: work fresh, personal fresh';
 const DETAILS_HIDDEN = '[usage] details hidden';
+// The fresh fixture's session line, as each surface logs it.
+const FRESH_LINE = `session line in ${SELFTEST_PROJECT_NAME}: context 180k/300k, cache 42m, spend $1.23`;
 
 const GROUPS: SelfTestGroup[] = [
   {
@@ -36,8 +49,12 @@ const GROUPS: SelfTestGroup[] = [
       {
         keys: TOGGLE,
         expect: FRESH_DETAILS,
+        alsoExpect: [
+          /^\[usage-tab-line\] session line in usage-selftest: context 180k\/300k, cache 42m, spend \$1\.23$/,
+        ],
         screenshot: 'details',
         checksFit: true,
+        why: "usage-tab-line starts in the self-test, so the run's tab bar draws the same line as its Chat status line and logs it under its own name.",
       },
       {
         keys: TOGGLE,
@@ -49,7 +66,7 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'narrow',
-    why: 'In a narrow window the status line wraps between its groups, the session line drops whole items from its end, and the right bar lies over the content at its least width.',
+    why: "In a narrow window the status line wraps between its groups, the Chat status line's usage part drops whole items from its end, and the right bar lies over the content at its least width.",
     steps: [
       {
         width: 520,
@@ -66,51 +83,60 @@ const GROUPS: SelfTestGroup[] = [
   },
 ];
 
-// Each run ends the session the run before opened, opens
-// `usage-selftest-<run>` in the background, activates its row so that a pane
-// shows the session and its tab bar draws the session line whatever an
-// earlier script left selected, and seeds the fresh fixture on it:
-// the steps wait for exact lines, and the start poll's line is logged before
-// the run begins. The plans the start poll left unread fail the run, so the
-// poll over the harness is still proved. The steps end with the details
-// closed, so `uiState` opens none for the next run.
+// Each run closes the sessions an earlier run left in the project folder, so
+// the new row's label stays the folder's name, launches a chat session there,
+// activates its row so that a pane shows its Chat tab, whose status line draws
+// the session line, whatever an earlier script left selected, waits for the
+// fake turn's own usage event, and only then seeds the fresh fixture on it, so
+// that event cannot overwrite the seed: the steps wait for exact lines, and the
+// start poll's line is logged before the run begins. The plans the start poll
+// left unread fail the run, so the poll over the harness is still proved. The
+// steps end with the details closed, so `uiState` opens none for the next run.
 export function usageSelfTestScript(deps: UsageSelfTestDeps): SelfTestScript {
-  let opened: OwnedSession | null = null;
+  const { homeDir, files, paths, chat, sessions } = deps;
+  let made: Promise<string> | null = null;
+
+  async function makeProject(): Promise<string> {
+    const projectDir = paths.join(
+      await files.realPath(homeDir),
+      SELFTEST_PROJECT_NAME,
+    );
+    await files.makeFolder(projectDir);
+    return projectDir;
+  }
+
   return {
     pageBinds: [],
     settings: {},
-    scrollsItself: ['.session-bar-parts'],
-    open(run) {
-      opened?.end();
-      const session = deps.sessions.open(
-        {
-          sessionId: `usage-selftest-${run}`,
-          projectDir: 'usage-selftest',
-          harness: 'claude',
-          deadlineSeconds: null,
+    // The tab bar's parts and the session line clip in their own box.
+    scrollsItself: ['.session-bar-parts', '.usage-session-line'],
+    open() {
+      made ??= makeProject().catch((error: unknown) => {
+        made = null;
+        throw error;
+      });
+      const result = made.then(
+        async (projectDir): Promise<UsageSelfTestResult> => {
+          await chat.closeSessionsIn(projectDir);
+          const sessionId = await chat.launch({
+            projectDir,
+            profile: 'work',
+            message: { text: 'usage self-test', images: [] },
+          });
+          sessions.activate(sessionId);
+          await deps.sessionUsage(sessionId);
+          const { plans } = deps.snapshot();
+          const unreadPlans =
+            plans.length === 0
+              ? null
+              : plans
+                  .filter((plan) => plan.usage === null)
+                  .map((plan) => plan.name);
+          deps.seed(usageFixture('fresh', deps.clock.now(), sessionId));
+          return { unreadPlans, snapshot: deps.snapshot(), sessionId };
         },
-        { select: false },
       );
-      opened = session;
-      const sessionId = session.session.id;
-      deps.sessions.activate(sessionId);
-      const { plans } = deps.snapshot();
-      const unreadPlans =
-        plans.length === 0
-          ? null
-          : plans
-              .filter((plan) => plan.usage === null)
-              .map((plan) => plan.name);
-      deps.seed(usageFixture('fresh', deps.clock.now(), sessionId));
-      const result: UsageSelfTestResult = {
-        unreadPlans,
-        snapshot: deps.snapshot(),
-        sessionId,
-      };
-      return {
-        shownLine: `[usage] session line ${sessionId}: context 180k/300k, cache 42m, spend $1.23`,
-        result: Promise.resolve(result),
-      };
+      return { shownLine: `[usage] ${FRESH_LINE}`, result };
     },
     groups: GROUPS,
     problems: (result) => {

@@ -39,3 +39,19 @@ export interface UsageChannel extends ChannelShape {
   invoke: { snapshot(): UsageSnapshot };
   messages: { changed: UsageSnapshot };
 }
+
+// A part usage draws one session's usage line into: the same { id, build }
+// shape as chat's status part and sessions' bar part.
+export interface UsageLinePart {
+  id: string;
+  build(parent: HTMLElement, sessionId: string): { dispose(): void };
+}
+
+// The page part's exports. `sessionLinePart` returns a part with the given
+// `id` that draws a session's line through usage's layout into the wrapper its
+// host hands it, nothing while the session has no usage, and logs through
+// `log` `session line in <name>: <text>` when a session's text changes, the
+// name its side-bar label. Usage redraws every such part for the page's life.
+export interface UsagePageExports {
+  sessionLinePart(id: string, log: (line: string) => void): UsageLinePart;
+}

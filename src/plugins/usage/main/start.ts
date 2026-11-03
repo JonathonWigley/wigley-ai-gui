@@ -44,7 +44,8 @@ type UsageApi = MainApi<
 // profile), `chat.agentEvent` (the main agent's `usage`) and `sessions.ended`.
 // It hands the self-test its script, and in a drive run it adds the drive
 // actions; a seed from either replaces the snapshot and stops the poller for
-// the run, while live rows and usage events still fold.
+// the run, while live rows and usage events still fold. The script's
+// `sessionUsage` waits for a session's first `usage` event in the store.
 export const usageMainPart: MainPart<typeof usageManifest> = {
   manifest: usageManifest,
   start(api: UsageApi) {
@@ -53,13 +54,33 @@ export const usageMainPart: MainPart<typeof usageManifest> = {
     const chat = api.dependency<ChatMainExports>('chat');
     const sessions = api.dependency<SessionsMainExports>('sessions');
     let state = EMPTY_USAGE_STATE;
+    // `sessionUsage` callers still waiting, each for its session's usage.
+    const usageWaits: { sessionId: string; resolve: () => void }[] = [];
+    const holdsUsage = (sessionId: string) =>
+      state.snapshot.sessions.some(
+        (session) => session.sessionId === sessionId && session.usage !== null,
+      );
+    const resolveUsageWaits = () => {
+      const met = usageWaits.filter((wait) => holdsUsage(wait.sessionId));
+      for (const wait of met) {
+        usageWaits.splice(usageWaits.indexOf(wait), 1);
+        wait.resolve();
+      }
+    };
     const apply = (next: UsageState) => {
       const changed = next.snapshot !== state.snapshot;
       state = next;
       if (changed) {
         channel.send('changed', state.snapshot);
+        resolveUsageWaits();
       }
     };
+    const sessionUsage = (sessionId: string) =>
+      holdsUsage(sessionId)
+        ? Promise.resolve()
+        : new Promise<void>((resolve) => {
+            usageWaits.push({ sessionId, resolve });
+          });
     channel.handle('snapshot', () => state.snapshot);
     apply(withProfiles(state, chat.profiles()));
     events.on('chat.planUsage', ({ profileDir, update }) =>
@@ -123,7 +144,17 @@ export const usageMainPart: MainPart<typeof usageManifest> = {
     poller?.start();
     const snapshot = () => state.snapshot;
     services.selfTest?.run(
-      usageSelfTestScript({ sessions, clock: services.clock, snapshot, seed }),
+      usageSelfTestScript({
+        homeDir: services.homeDir,
+        files: services.files,
+        paths: services.paths,
+        chat,
+        sessions,
+        clock: services.clock,
+        snapshot,
+        seed,
+        sessionUsage,
+      }),
     );
     const driveActions =
       api.drive !== null

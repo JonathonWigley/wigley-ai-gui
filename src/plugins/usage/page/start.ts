@@ -8,17 +8,23 @@ import type {
 import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import { element } from '../../../shared/page/dom';
+import type { ChatPageExports } from '../../chat/contract';
 import type { KeysPageExports } from '../../keys/contract';
 import type {
   SessionsPageEvents,
   SessionsPageExports,
 } from '../../sessions/contract';
-import type { UsageChannel, UsageSnapshot } from '../contract';
+import type {
+  UsageChannel,
+  UsagePageExports,
+  UsageSnapshot,
+} from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
 import { usageManifest } from '../manifest';
 import { readUsageLayout } from './layout/read-usage-layout';
 import { createUsageParts, type Drawn } from './layout/usage-parts';
+import { createSessionLineParts } from './session-line-parts';
 import { createSessionLines } from './session-lines';
 import {
   detailsInput,
@@ -39,13 +45,15 @@ const DETAILS_OPEN_KEY = 'details-open';
 const REDRAW_MS = 60_000;
 
 // Draws the usage status-bar line at the status bar's end for the page's
-// life, each session's line in its tab bar (a sessions bar part), and the
-// usage details in the right bar while they are open (`toggleDetails`, kept
-// in `uiState`), all through the `usage.layout` layout. Hears main's
-// `changed` snapshots (after one `snapshot` read) and
-// `sessions.activeChanged` for the shown session, and redraws all on each,
-// on each layouts set and once a minute for the countdowns; hears
-// `sessions.sessionRemoved` to forget a session's line. Draws nothing
+// life, each session's line in its Chat status line (a chat status part), and
+// the usage details in the right bar while they are open (`toggleDetails`,
+// kept in `uiState`), all through the `usage.layout` layout. Exports
+// `sessionLinePart`, the same line as a part for another surface; every part
+// it made redraws with the page's own. Hears main's `changed` snapshots (after
+// one `snapshot` read) and `sessions.activeChanged` for the shown session, and
+// redraws all on each, on each layouts set and once a minute for the
+// countdowns; hears `sessions.sessionAdded` for each session's name in the log
+// and `sessions.sessionRemoved` to forget a session's lines. Draws nothing
 // until the first snapshot lands. Logs the status line's and each session
 // line's text when it changes, and the details' states when they show, hide
 // or change.
@@ -55,6 +63,7 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
     const { services } = api;
     const log = (line: string) => services.log('usage', line);
     const sessions = api.dependency<SessionsPageExports>('sessions');
+    const chat = api.dependency<ChatPageExports>('chat');
     const keys = api.dependency<KeysPageExports>('keys');
     const parts = createUsageParts({
       defaultLayout,
@@ -84,13 +93,25 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
     let details: Drawn | null = null;
     let lastStatusText: string | null = null;
     let lastDetailsText: string | null = null;
-    const lines = createSessionLines({
-      parts,
-      log,
-      latest: () =>
-        snapshot === null ? null : { snapshot, now: services.clock.now() },
-    });
-    sessions.addBarPart(lines.part);
+    // Each session's name in the log, its side-bar label (`gamma 2`).
+    const names = new Map<string, string>();
+    const lineParts = createSessionLineParts();
+    const sessionLinePart: UsagePageExports['sessionLinePart'] = (
+      id,
+      partLog,
+    ) => {
+      const lines = createSessionLines({
+        id,
+        parts,
+        log: partLog,
+        nameOf: (sessionId) => names.get(sessionId) ?? sessionId,
+        latest: () =>
+          snapshot === null ? null : { snapshot, now: services.clock.now() },
+      });
+      lineParts.add(lines);
+      return lines.part;
+    };
+    chat.addStatusPart(sessionLinePart('usage.sessionLine', log));
 
     // Draws the line again, the last draw disposed first.
     const drawStatusLine = (current: UsageSnapshot) => {
@@ -137,7 +158,7 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
       }
       const now = services.clock.now();
       drawStatusLine(snapshot);
-      lines.redraw(snapshot, now);
+      lineParts.redraw();
       if (!detailsOpen) {
         return;
       }
@@ -186,9 +207,13 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
       shownSessionId = sessionId;
       redraw();
     });
-    api.events.on('sessions.sessionRemoved', ({ sessionId }) =>
-      lines.forget(sessionId),
-    );
+    api.events.on('sessions.sessionAdded', ({ sessionId, label }) => {
+      names.set(sessionId, label);
+    });
+    api.events.on('sessions.sessionRemoved', ({ sessionId }) => {
+      names.delete(sessionId);
+      lineParts.forget(sessionId);
+    });
     const tick = () => {
       redraw();
       services.timers.set(tick, REDRAW_MS);
@@ -220,6 +245,7 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
           }
         },
       },
+      exports: { sessionLinePart } satisfies UsagePageExports,
     };
   },
 };

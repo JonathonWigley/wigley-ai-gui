@@ -1,8 +1,8 @@
 // The usage layout contract: the parts a usage layout draws for the status-bar plan line, each session's line and the
 // right-bar details, and the kit each part gets. The app keeps the status-bar slot (always on, at the bar's end), the
-// right-bar slot (there only while the details are open), each session's bar slot (in that session's tab bar), the
-// open state, the shown session and every redraw: on each snapshot, each change of the shown session, each layouts set
-// and once a minute.
+// right-bar slot (there only while the details are open), each session's line slot (in its Chat status line, and in
+// its tab bar while the usage-tab-line plugin is on), the open state, the shown session and every redraw: on each
+// snapshot, each change of the shown session, each layouts set and once a minute.
 //
 // Every input is already worded for the screen: counts, percents, money and times arrive as text, and each meter's
 // fill and tone beside its text.
@@ -74,7 +74,8 @@ export interface UsageKit extends BaseKit {
 // Each part comes from the first layout that defines it among the `usage.layout` setting and `default`; a part that
 // throws, returns no element appended to `parent`, or appends other nodes beside it is drawn by `default` instead.
 // Every part appends one element to `parent` and returns it. `statusLine` draws the status-bar plan line,
-// `sessionLine` one session's line into the bar slot sessions gives it (drawn only while that session has usage), and
+// `sessionLine` one session's line into the slot its host gives it, a Chat status line or a tab bar while
+// usage-tab-line is on (drawn only while that session has usage), and
 // `details` the right-bar details.
 export interface Layout {
   statusLine?(

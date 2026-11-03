@@ -1,6 +1,6 @@
 # 06 — A composer part's stop on the entry cursor
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 05
 Plan: [plan.md](plan.md)
@@ -150,3 +150,4 @@ Commit:    one commit for the group, its paths by name.
 
 ## Proof
 
+Commit c22905c9 · proof: diff read: ComposerStop, ComposerStopExits, ChatComposerPart.stop? in chat/contract.ts; no type error under src/plugins/chat (08 in flight elsewhere); worker's 4 test files (124 tests) pass · concerns: oxfmt flags chat/main/start.ts (05's commit, the peer's swept string) — formatting to settle at review; fixed 05's stale 'its bar' comment in createTab

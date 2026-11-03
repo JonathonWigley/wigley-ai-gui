@@ -16,6 +16,7 @@ import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 const NOW = 50_000_000;
 const MINUTE = 60_000;
 const SESSION = 's1';
+const NAME = 'gamma 2';
 const LINE = 'usage-session-line';
 
 function usageEvent(overrides: Partial<UsageAgentEvent> = {}): UsageAgentEvent {
@@ -44,9 +45,14 @@ function snapshotWith(usage?: UsageAgentEvent | null): UsageSnapshot {
   };
 }
 
-// Lines over the default layout whose `latest` is `shown` at NOW.
-function setUp(shown: UsageSnapshot | null) {
+// Lines over the default layout whose `latest` is `shown` at NOW until `show`
+// replaces it, naming `s1` `gamma 2` while `names` holds it.
+function setUp(
+  initial: UsageSnapshot | null,
+  names: ReadonlyMap<string, string> = new Map([[SESSION, NAME]]),
+) {
   const logged: string[] = [];
+  let shown = initial;
   const parts = createUsageParts({
     defaultLayout,
     kit: {
@@ -63,11 +69,16 @@ function setUp(shown: UsageSnapshot | null) {
     log: () => undefined,
   });
   const lines = createSessionLines({
+    id: 'usage.sessionLine',
     parts,
     log: (line) => logged.push(line),
+    nameOf: (sessionId) => names.get(sessionId) ?? sessionId,
     latest: () => (shown === null ? null : { snapshot: shown, now: NOW }),
   });
-  return { lines, logged };
+  const show = (snapshot: UsageSnapshot) => {
+    shown = snapshot;
+  };
+  return { lines, logged, show };
 }
 
 beforeEach(() => {
@@ -79,6 +90,22 @@ afterEach(() => {
 });
 
 describe('session lines', () => {
+  it('part_TakesTheGivenId', () => {
+    const { lines } = setUp(null);
+
+    expect(lines.part.id).toBe('usage.sessionLine');
+  });
+
+  it('build_UnknownName_LogsTheSessionId', () => {
+    const { lines, logged } = setUp(snapshotWith(usageEvent()), new Map());
+
+    lines.part.build(asHtml(new FakeElement('div')), SESSION);
+
+    expect(logged).toEqual([
+      'session line in s1: context 180k/300k, cache 42m, spend $1.23',
+    ]);
+  });
+
   it('build_SessionWithUsage_DrawsLineAndLogs', () => {
     const { lines, logged } = setUp(snapshotWith(usageEvent()));
     const wrapper = new FakeElement('div');
@@ -87,7 +114,7 @@ describe('session lines', () => {
 
     expect(findAll(wrapper, LINE)).toHaveLength(1);
     expect(logged).toEqual([
-      'session line s1: context 180k/300k, cache 42m, spend $1.23',
+      'session line in gamma 2: context 180k/300k, cache 42m, spend $1.23',
     ]);
   });
 
@@ -106,20 +133,20 @@ describe('session lines', () => {
   });
 
   it('redraw_TextChanges_RedrawsAndLogsOnce', () => {
-    const { lines, logged } = setUp(snapshotWith(usageEvent()));
+    const { lines, logged, show } = setUp(snapshotWith(usageEvent()));
     const wrapper = new FakeElement('div');
     lines.part.build(asHtml(wrapper), SESSION);
-    const later = snapshotWith(usageEvent({ contextTokens: 210_000 }));
+    show(snapshotWith(usageEvent({ contextTokens: 210_000 })));
 
-    lines.redraw(later, NOW);
-    lines.redraw(later, NOW);
+    lines.redraw();
+    lines.redraw();
 
     const drawn = findAll(wrapper, LINE);
     expect(drawn).toHaveLength(1);
     expect(drawn[0].textContent).toContain('210k/300k');
     expect(logged).toEqual([
-      'session line s1: context 180k/300k, cache 42m, spend $1.23',
-      'session line s1: context 210k/300k, cache 42m, spend $1.23',
+      'session line in gamma 2: context 180k/300k, cache 42m, spend $1.23',
+      'session line in gamma 2: context 210k/300k, cache 42m, spend $1.23',
     ]);
   });
 
@@ -127,29 +154,31 @@ describe('session lines', () => {
     { case: 'AbsentSession', snapshot: snapshotWith() },
     { case: 'NullUsage', snapshot: snapshotWith(null) },
   ])('redraw_UsageGone_RemovesLineAndLogsNoneOnce_$case', ({ snapshot }) => {
-    const { lines, logged } = setUp(snapshotWith(usageEvent()));
+    const { lines, logged, show } = setUp(snapshotWith(usageEvent()));
     const wrapper = new FakeElement('div');
     lines.part.build(asHtml(wrapper), SESSION);
+    show(snapshot);
 
-    lines.redraw(snapshot, NOW);
-    lines.redraw(snapshot, NOW);
+    lines.redraw();
+    lines.redraw();
 
     expect(wrapper.children).toEqual([]);
     expect(logged).toEqual([
-      'session line s1: context 180k/300k, cache 42m, spend $1.23',
-      'session line s1: none',
+      'session line in gamma 2: context 180k/300k, cache 42m, spend $1.23',
+      'session line in gamma 2: none',
     ]);
   });
 
   it('rebuild_BuildThenStaleDispose_KeepsDrawingInNewWrapper', () => {
-    const { lines } = setUp(snapshotWith(usageEvent()));
+    const { lines, show } = setUp(snapshotWith(usageEvent()));
     const oldWrapper = new FakeElement('div');
     const newWrapper = new FakeElement('div');
     const oldBuilt = lines.part.build(asHtml(oldWrapper), SESSION);
 
     lines.part.build(asHtml(newWrapper), SESSION);
-    oldBuilt.dispose?.();
-    lines.redraw(snapshotWith(usageEvent({ contextTokens: 210_000 })), NOW);
+    oldBuilt.dispose();
+    show(snapshotWith(usageEvent({ contextTokens: 210_000 })));
+    lines.redraw();
 
     expect(findAll(oldWrapper, LINE)).toEqual([]);
     const drawn = findAll(newWrapper, LINE);
@@ -158,18 +187,19 @@ describe('session lines', () => {
   });
 
   it('rebuild_DisposeThenBuild_DrawsInNewWrapperAndLogsNothing', () => {
-    const { lines, logged } = setUp(snapshotWith(usageEvent()));
+    const { lines, logged, show } = setUp(snapshotWith(usageEvent()));
     const oldWrapper = new FakeElement('div');
     const newWrapper = new FakeElement('div');
     const built = lines.part.build(asHtml(oldWrapper), SESSION);
 
-    built.dispose?.();
+    built.dispose();
     lines.part.build(asHtml(newWrapper), SESSION);
     const loggedByRebuild = [...logged];
-    lines.redraw(snapshotWith(usageEvent({ contextTokens: 210_000 })), NOW);
+    show(snapshotWith(usageEvent({ contextTokens: 210_000 })));
+    lines.redraw();
 
     expect(loggedByRebuild).toEqual([
-      'session line s1: context 180k/300k, cache 42m, spend $1.23',
+      'session line in gamma 2: context 180k/300k, cache 42m, spend $1.23',
     ]);
     expect(findAll(oldWrapper, LINE)).toEqual([]);
     const drawn = findAll(newWrapper, LINE);
@@ -182,13 +212,13 @@ describe('session lines', () => {
     const wrapper = new FakeElement('div');
     const built = lines.part.build(asHtml(wrapper), SESSION);
 
-    built.dispose?.();
+    built.dispose();
     lines.forget(SESSION);
     lines.part.build(asHtml(new FakeElement('div')), SESSION);
 
     expect(logged).toEqual([
-      'session line s1: context 180k/300k, cache 42m, spend $1.23',
-      'session line s1: context 180k/300k, cache 42m, spend $1.23',
+      'session line in gamma 2: context 180k/300k, cache 42m, spend $1.23',
+      'session line in gamma 2: context 180k/300k, cache 42m, spend $1.23',
     ]);
   });
 });

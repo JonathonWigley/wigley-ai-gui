@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { posixPaths } from '../../../shared/paths/posix-paths';
+import type { LaunchRequest } from '../../chat/contract';
 import type { ProfilePlan, UsageSnapshot } from '../contract';
-import type { OwnedSession, SessionInfo } from '../../sessions/contract';
 import { usageSelfTestScript } from './selftest-script';
 
 const NOW = 7_000_000;
+const HOME = '/home/tester';
+const PROJECT = '/home/tester/usage-selftest';
 
 function plan(name: string, isRead: boolean): ProfilePlan {
   return {
@@ -17,58 +20,99 @@ function plan(name: string, isRead: boolean): ProfilePlan {
   };
 }
 
-// The usage script over fake sessions whose `open` gives run n's session
-// the id `s-<n>`, and a usage store holding `before` until a seed replaces
-// it; `seedOverride` replaces what the store keeps on a seed.
+// The usage script over fake chat and sessions whose `launch` gives launch n
+// the id `s-<n>`, and a usage store holding `before` until a seed replaces it;
+// `seedOverride` replaces what the store keeps on a seed. `calls` records each
+// dep call in order; `sessionUsage` waits until `releaseUsage` runs, or
+// resolves at once while `usageHeld`.
 function setUp(
   before: UsageSnapshot,
-  seedOverride?: (snapshot: UsageSnapshot) => UsageSnapshot,
+  options: {
+    usageHeld?: boolean;
+    seedOverride?: (snapshot: UsageSnapshot) => UsageSnapshot;
+  } = {},
 ) {
-  const opens: SessionInfo[] = [];
-  const activated: string[] = [];
-  const ended: string[] = [];
+  const calls: string[] = [];
+  const launches: LaunchRequest[] = [];
   const seeded: UsageSnapshot[] = [];
+  let releaseUsage: () => void = () => undefined;
   let current = before;
   const script = usageSelfTestScript({
-    sessions: {
-      open(info) {
-        opens.push(info);
-        const id = `s-${opens.length}`;
-        return {
-          session: { id },
-          end: () => ended.push(id),
-        } as unknown as OwnedSession;
+    homeDir: HOME,
+    files: {
+      makeFolder: async (path) => {
+        calls.push(`makeFolder ${path}`);
       },
-      activate: (sessionId) => activated.push(sessionId),
+      realPath: async (path) => path,
     },
+    paths: posixPaths,
+    chat: {
+      closeSessionsIn: async (projectDir) => {
+        calls.push(`closeSessionsIn ${projectDir}`);
+      },
+      launch: async (request) => {
+        launches.push(request);
+        calls.push(`launch ${request.projectDir}`);
+        return `s-${launches.length}`;
+      },
+    },
+    sessions: { activate: (sessionId) => calls.push(`activate ${sessionId}`) },
     clock: { now: () => NOW },
     snapshot: () => current,
     seed(snapshot) {
-      current = seedOverride?.(snapshot) ?? snapshot;
+      calls.push('seed');
+      current = options.seedOverride?.(snapshot) ?? snapshot;
       seeded.push(current);
     },
+    sessionUsage(sessionId) {
+      calls.push(`sessionUsage ${sessionId}`);
+      if (options.usageHeld ?? true) {
+        return Promise.resolve();
+      }
+      return new Promise<void>((resolve) => {
+        releaseUsage = resolve;
+      });
+    },
   });
-  return { script, opens, activated, ended, seeded };
+  return {
+    script,
+    calls,
+    launches,
+    seeded,
+    releaseUsage: () => releaseUsage(),
+  };
 }
 
+const settled = () => new Promise((settle) => setImmediate(settle));
+
 describe('usageSelfTestScript', () => {
-  it('open_OpensActivatesAndSeedsTheRunSession', async () => {
+  it('open_LaunchesActivatesAndSeedsAfterTheTurnsUsage', async () => {
     const before = { plans: [plan('work', true)], sessions: [] };
-    const { script, opens, activated, ended, seeded } = setUp(before);
+    const { script, calls, launches, seeded, releaseUsage } = setUp(before, {
+      usageHeld: false,
+    });
 
-    script.open(1);
-    const { result } = script.open(2);
+    const { shownLine, result } = script.open(1);
+    await settled();
+    const callsBeforeUsage = [...calls];
+    releaseUsage();
 
-    expect(opens.map((info) => info.sessionId)).toEqual([
-      'usage-selftest-1',
-      'usage-selftest-2',
+    expect(shownLine).toBe(
+      '[usage] session line in usage-selftest: context 180k/300k, cache 42m, spend $1.23',
+    );
+    expect(callsBeforeUsage).toEqual([
+      `makeFolder ${PROJECT}`,
+      `closeSessionsIn ${PROJECT}`,
+      `launch ${PROJECT}`,
+      'activate s-1',
+      'sessionUsage s-1',
     ]);
-    expect(ended).toEqual(['s-1']);
-    expect(activated).toEqual(['s-1', 's-2']);
-    expect(seeded[1].sessions.map((session) => session.sessionId)).toEqual([
-      's-2',
+    expect(launches[0]).toMatchObject({ projectDir: PROJECT, profile: 'work' });
+    expect(await result).toMatchObject({ sessionId: 's-1' });
+    expect(calls.at(-1)).toBe('seed');
+    expect(seeded[0].sessions.map((session) => session.sessionId)).toEqual([
+      's-1',
     ]);
-    expect(await result).toMatchObject({ sessionId: 's-2' });
   });
 
   it.each([
@@ -99,7 +143,9 @@ describe('usageSelfTestScript', () => {
   ])('problems_$name', async ({ plans, dropSessions, expected }) => {
     const { script } = setUp(
       { plans, sessions: [] },
-      dropSessions ? (snapshot) => ({ ...snapshot, sessions: [] }) : undefined,
+      dropSessions
+        ? { seedOverride: (snapshot) => ({ ...snapshot, sessions: [] }) }
+        : {},
     );
 
     const { result } = script.open(1);

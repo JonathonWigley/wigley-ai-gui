@@ -12,6 +12,7 @@ import { primerManifest } from './primer/manifest';
 import { sessionsManifest } from './sessions/manifest';
 import { settingsManifest } from './settings/manifest';
 import { usageManifest } from './usage/manifest';
+import { usageTabLineManifest } from './usage-tab-line/manifest';
 import { visualManifest } from './visual/manifest';
 import { workflowManifest } from './workflow/manifest';
 
@@ -34,6 +35,7 @@ export const builtInManifests = [
   backlogManifest,
   notesManifest,
   usageManifest,
+  usageTabLineManifest,
   workflowManifest,
   visualManifest,
 ] as const;

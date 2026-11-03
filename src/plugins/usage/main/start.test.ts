@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type {
   AgentHarness,
   PlanUsage,
@@ -16,8 +16,25 @@ import type {
   SessionsMainExports,
 } from '../../sessions/contract';
 import type { UsageSnapshot } from '../contract';
+import type { UsageSelfTestDeps } from './selftest-script';
 import { usageMainPart } from './start';
 import { usageFixture } from './usage-fixture';
+
+// The deps start last handed the self-test script.
+const selfTest = vi.hoisted(() => ({
+  deps: null as UsageSelfTestDeps | null,
+}));
+
+vi.mock('./selftest-script', async (importOriginal) => {
+  const original = await importOriginal<typeof import('./selftest-script')>();
+  return {
+    ...original,
+    usageSelfTestScript: (deps: UsageSelfTestDeps) => {
+      selfTest.deps = deps;
+      return original.usageSelfTestScript(deps);
+    },
+  };
+});
 
 const PERSONAL: ChatProfile = {
   name: 'personal',
@@ -110,7 +127,7 @@ function startUsagePart(harnesses: Partial<AgentHarness>[]) {
         clear: (id: number) => pendingTimers.delete(id),
       },
       agentHarnesses: harnesses,
-      selfTest: null,
+      selfTest: { run: () => undefined },
     },
     drive: drive.host,
     dependency: (pluginId: string) =>
@@ -260,5 +277,75 @@ describe('usageMainPart', () => {
     await expect(usage.drive.run('pollNow')).rejects.toThrow(
       'usage.seed stopped the poller for this run',
     );
+  });
+});
+
+// The deps the last start handed the script; throws when none was handed.
+function scriptDeps(): UsageSelfTestDeps {
+  if (selfTest.deps === null) {
+    throw new Error('usage start handed the self-test no script');
+  }
+  return selfTest.deps;
+}
+
+// One heard event, emitted for session `sessionId`.
+type Heard =
+  | { kind: 'opened'; sessionId: string }
+  | { kind: 'usage'; sessionId: string };
+
+describe('sessionUsage', () => {
+  it.each<{ case: string; before: Heard[]; after: Heard[]; resolved: boolean }>(
+    [
+      {
+        case: 'EntryWithNullUsage_Waits',
+        before: [{ kind: 'opened', sessionId: 's1' }],
+        after: [],
+        resolved: false,
+      },
+      {
+        case: 'UsageEventAfterNullEntry_Resolves',
+        before: [{ kind: 'opened', sessionId: 's1' }],
+        after: [{ kind: 'usage', sessionId: 's1' }],
+        resolved: true,
+      },
+      {
+        case: 'EntryAlreadyHoldsUsage_ResolvesAtOnce',
+        before: [{ kind: 'usage', sessionId: 's1' }],
+        after: [],
+        resolved: true,
+      },
+      {
+        case: 'OtherSessionsUsage_Waits',
+        before: [{ kind: 'opened', sessionId: 's1' }],
+        after: [{ kind: 'usage', sessionId: 's2' }],
+        resolved: false,
+      },
+    ],
+  )('sessionUsage_$case', async ({ before, after, resolved }) => {
+    const usage = startUsagePart([]);
+    const hear = (heard: Heard) =>
+      heard.kind === 'opened'
+        ? usage.emit('chat.sessionOpened', {
+            sessionId: heard.sessionId,
+            profileDir: '~/.claude-personal',
+          })
+        : usage.emit('chat.agentEvent', {
+            sessionId: heard.sessionId,
+            profileDir: '~/.claude-personal',
+            hostSessionId: 'h1',
+            event: usageEvent('main'),
+          });
+    before.forEach(hear);
+    let isResolved = false;
+
+    void scriptDeps()
+      .sessionUsage('s1')
+      .then(() => {
+        isResolved = true;
+      });
+    after.forEach(hear);
+    await settled();
+
+    expect(isResolved).toBe(resolved);
   });
 });

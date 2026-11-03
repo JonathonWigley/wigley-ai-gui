@@ -12,6 +12,7 @@ import { primerPagePart } from './primer/page/start';
 import { sessionsPagePart } from './sessions/page/start';
 import { settingsPagePart } from './settings/page/start';
 import { usagePagePart } from './usage/page/start';
+import { usageTabLinePagePart } from './usage-tab-line/page/start';
 import { visualPagePart } from './visual/page/start';
 import { workflowPagePart } from './workflow/page/start';
 
@@ -32,5 +33,6 @@ export const pageParts: readonly PagePart[] = [
   backlogPagePart,
   notesPagePart,
   usagePagePart,
+  usageTabLinePagePart,
   visualPagePart,
 ];

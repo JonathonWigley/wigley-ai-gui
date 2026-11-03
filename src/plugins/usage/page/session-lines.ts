@@ -1,27 +1,31 @@
 import { callEach } from '../../../shared/call-each';
-import type { SessionPart } from '../../sessions/contract';
-import type { UsageSnapshot } from '../contract';
+import type { UsageLinePart, UsageSnapshot } from '../contract';
 import type { Drawn, UsageParts } from './layout/usage-parts';
 import { sessionLineInput, sessionLineText } from './usage-view-model';
 
-// `latest` is the page's last snapshot and the time to draw it at, null until
-// the first snapshot lands.
+// `id` is the part's id on its host's surface. `nameOf` is a session's name in
+// the log, its side-bar label, or its id while none is known. `latest` is the
+// page's last snapshot and the time to draw it at, null until the first
+// snapshot lands.
 export interface SessionLinesDeps {
+  id: string;
   parts: Pick<UsageParts, 'sessionLine'>;
   log: (line: string) => void;
+  nameOf(sessionId: string): string;
   latest(): { snapshot: UsageSnapshot; now: number } | null;
 }
 
-// `part` draws a session's usage line into the wrapper sessions hands it in
-// the session's tab bar, nothing while the session has no usage. `redraw`
-// draws every held session's line again; `forget` drops a session that left.
+// `part` draws a session's usage line into the wrapper its host hands it (a
+// Chat status line or a tab bar), nothing while the session has no usage.
+// `redraw` draws every held session's line again from `latest`, nothing before
+// the first snapshot; `forget` drops a session that left.
 export interface SessionLines {
-  part: SessionPart;
-  redraw(snapshot: UsageSnapshot, now: number): void;
+  part: UsageLinePart;
+  redraw(): void;
   forget(sessionId: string): void;
 }
 
-// A wrapper sessions handed `part.build`, and the line drawn into it last.
+// A wrapper the host handed `part.build`, and the line drawn into it last.
 interface HeldWrapper {
   wrapper: HTMLElement;
   line: Drawn | null;
@@ -29,10 +33,11 @@ interface HeldWrapper {
 
 const NO_LINE = 'none';
 
-// Each session's logged text outlives its wrapper, which a tab bar redraw
-// builds and disposes many times. After each draw it logs
-// `session line <id>: <text>` when the text differs from the last one logged
-// for that session, so a tab bar redraw logs nothing new.
+// Each session's logged text outlives its wrapper, which a host redraw builds
+// and disposes many times. After each draw it logs
+// `session line in <name>: <text>` when the text differs from the last one
+// logged for that session, so a host redraw or a name change alone logs
+// nothing new.
 export function createSessionLines(deps: SessionLinesDeps): SessionLines {
   const held = new Map<string, HeldWrapper>();
   const loggedTexts = new Map<string, string>();
@@ -42,7 +47,7 @@ export function createSessionLines(deps: SessionLinesDeps): SessionLines {
       return;
     }
     loggedTexts.set(sessionId, text);
-    deps.log(`session line ${sessionId}: ${text}`);
+    deps.log(`session line in ${deps.nameOf(sessionId)}: ${text}`);
   };
 
   // Draws the line again, the last draw disposed first.
@@ -71,7 +76,7 @@ export function createSessionLines(deps: SessionLinesDeps): SessionLines {
 
   return {
     part: {
-      id: 'usage-session-line',
+      id: deps.id,
       build(wrapper, sessionId) {
         const holder: HeldWrapper = { wrapper, line: null };
         held.set(sessionId, holder);
@@ -91,9 +96,13 @@ export function createSessionLines(deps: SessionLinesDeps): SessionLines {
         };
       },
     },
-    redraw(snapshot, now) {
+    redraw() {
+      const latest = deps.latest();
+      if (latest === null) {
+        return;
+      }
       callEach([...held], ([sessionId, holder]) =>
-        draw(sessionId, holder, snapshot, now),
+        draw(sessionId, holder, latest.snapshot, latest.now),
       );
     },
     forget(sessionId) {
