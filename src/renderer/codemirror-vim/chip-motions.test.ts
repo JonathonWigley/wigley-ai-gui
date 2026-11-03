@@ -45,6 +45,10 @@ describe('chipCharacterTarget', () => {
   });
 });
 
+// Lines with no chip: two words on each, and an empty line between words.
+const TWO_LINES = 'one two\nthree four';
+const EMPTY_LINE = 'one\n\ntwo';
+
 const W = { forward: true, wordEnd: false, bigWord: false };
 const E = { forward: true, wordEnd: true, bigWord: false };
 const B = { forward: false, wordEnd: false, bigWord: false };
@@ -117,6 +121,35 @@ describe('chipWordTarget', () => {
       from: [0, 0],
       motion: BIG_W,
       target: [0, 8],
+    },
+    // From an insert-mode cursor on a chip's end, <C-w> deletes back to b's.
+    { key: 'B', text: 'x /a/b', from: [0, 6], motion: B, target: [0, 2] },
+    // With no chip the motions move as vim's own do.
+    { key: 'w', text: TWO_LINES, from: [0, 0], motion: W, target: [0, 4] },
+    { key: 'w', text: EMPTY_LINE, from: [0, 0], motion: W, target: [1, 0] },
+    { key: 'e', text: EMPTY_LINE, from: [0, 2], motion: E, target: [2, 2] },
+    { key: 'b', text: EMPTY_LINE, from: [2, 0], motion: B, target: [1, 0] },
+    { key: 'ge', text: EMPTY_LINE, from: [2, 0], motion: GE, target: [1, 0] },
+    { key: 'b', text: TWO_LINES, from: [1, 0], motion: B, target: [0, 4] },
+    { key: 'ge', text: TWO_LINES, from: [1, 0], motion: GE, target: [0, 6] },
+    {
+      key: '3w',
+      text: TWO_LINES,
+      from: [0, 0],
+      motion: { ...W, repeat: 3 },
+      target: [1, 6],
+    },
+    { key: 'w', text: 'one two', from: [0, 4], motion: W, target: [0, 7] },
+    { key: 'e', text: 'one two', from: [0, 6], motion: E, target: [0, 6] },
+    { key: 'b', text: 'one two', from: [0, 0], motion: B, target: [0, 0] },
+    { key: 'ge', text: 'one two', from: [0, 0], motion: GE, target: [0, 0] },
+    // Vim reads U+E000, a private-use character, as punctuation.
+    {
+      key: 'w',
+      text: 'a\uE000\uE000b',
+      from: [0, 1],
+      motion: W,
+      target: [0, 3],
     },
   ])(
     "moves as vim's $key with each chip one word: '$text' from $from → $target",

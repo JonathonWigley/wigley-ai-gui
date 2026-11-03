@@ -113,38 +113,47 @@ function chipsOnLine(doc: Text, chips: readonly Span[], line: number): Span[] {
     .map((chip) => ({ from: chip.from - from, to: chip.to - from }));
 }
 
-// Stands for a chip in a collapsed line; no path holds it.
-const CHIP_MARK = '';
+// A line with each chip on it collapsed to one column, which `chipColumns`
+// holds; that column keeps the chip's first character, which no class reads.
+interface CollapsedLine {
+  text: string;
+  chipColumns: ReadonlySet<number>;
+}
 
-// A document's lines, each chip on them collapsed to one CHIP_MARK.
+// A document's lines, each collapsed.
 interface CollapsedLines {
   lastLine: number;
-  text(line: number): string;
+  line(line: number): CollapsedLine;
   chips(line: number): readonly Span[];
 }
+
+const NO_LINE: CollapsedLine = { text: '', chipColumns: new Set() };
 
 function collapsedLines(doc: Text, chips: readonly Span[]): CollapsedLines {
   return {
     lastLine: doc.lines - 1,
-    text: (line) => {
+    line: (line) => {
       if (line < 0 || line >= doc.lines) {
-        return '';
+        return NO_LINE;
       }
       const text = doc.line(line + 1).text;
       let collapsed = '';
+      const chipColumns = new Set<number>();
       let at = 0;
       for (const chip of chipsOnLine(doc, chips, line)) {
-        collapsed += text.slice(at, chip.from) + CHIP_MARK;
+        collapsed += text.slice(at, chip.from);
+        chipColumns.add(collapsed.length);
+        collapsed += text.charAt(chip.from);
         at = chip.to;
       }
-      return collapsed + text.slice(at);
+      return { text: collapsed + text.slice(at), chipColumns };
     },
     chips: (line) => chipsOnLine(doc, chips, line),
   };
 }
 
 // Column `ch` of a line holding `chips` in that line collapsed: a column on
-// a chip is its mark's.
+// a chip is the chip's.
 function toCollapsedColumn(chips: readonly Span[], ch: number): number {
   let removed = 0;
   for (const chip of chips) {
@@ -159,7 +168,7 @@ function toCollapsedColumn(chips: readonly Span[], ch: number): number {
   return ch - removed;
 }
 
-// Collapsed column `column` back in the line holding `chips`: a chip's mark
+// Collapsed column `column` back in the line holding `chips`: a chip's column
 // is the chip's start.
 function fromCollapsedColumn(chips: readonly Span[], column: number): number {
   let removed = 0;
@@ -174,30 +183,32 @@ function fromCollapsedColumn(chips: readonly Span[], column: number): number {
 
 const WHITESPACE = /\s/;
 
-function isChipMark(ch: string): boolean {
-  return ch === CHIP_MARK;
-}
+// Whether column `pos` of a collapsed line is in a character class.
+type CharClass = (line: CollapsedLine, pos: number) => boolean;
 
-function isWordChar(ch: string): boolean {
-  return ch !== CHIP_MARK && CodeMirror.isWordChar(ch);
-}
+const isChip: CharClass = (line, pos) => line.chipColumns.has(pos);
 
-function isPunctuation(ch: string): boolean {
+const isWordChar: CharClass = (line, pos) =>
+  !isChip(line, pos) && CodeMirror.isWordChar(line.text.charAt(pos));
+
+const isPunctuation: CharClass = (line, pos) => {
+  const ch = line.text.charAt(pos);
   return (
+    !isChip(line, pos) &&
     ch !== '' &&
-    ch !== CHIP_MARK &&
     !CodeMirror.isWordChar(ch) &&
     !WHITESPACE.test(ch)
   );
-}
+};
 
-function isNonBlank(ch: string): boolean {
-  return ch !== '' && !WHITESPACE.test(ch);
-}
+const isNonBlank: CharClass = (line, pos) => {
+  const ch = line.text.charAt(pos);
+  return isChip(line, pos) || (ch !== '' && !WHITESPACE.test(ch));
+};
 
 // Vim's character classes for `w`, a chip one of them, and for `W`, where a
 // chip is non-blank like its neighbours.
-const WORD_CLASSES = [isWordChar, isPunctuation, isChipMark];
+const WORD_CLASSES = [isWordChar, isPunctuation, isChip];
 const BIG_WORD_CLASSES = [isNonBlank];
 
 interface Word {
@@ -207,7 +218,7 @@ interface Word {
 }
 
 // Vim's `findWord` over collapsed lines: the next word from `cur` in a
-// direction, one chip mark each word of its own.
+// direction, each chip a word of its own.
 function findWord(
   lines: CollapsedLines,
   cur: LinePos,
@@ -220,35 +231,31 @@ function findWord(
   const classes = bigWord ? BIG_WORD_CLASSES : WORD_CLASSES;
   let lineNum = cur.line;
   let pos = cur.ch;
-  let line = lines.text(lineNum);
-  if (emptyLineIsWord && line === '') {
+  let line = lines.line(lineNum);
+  if (emptyLineIsWord && line.text === '') {
     lineNum += dir;
-    line = lines.text(lineNum);
+    line = lines.line(lineNum);
     if (!isLine(lineNum)) {
       return null;
     }
-    pos = forward ? 0 : line.length;
+    pos = forward ? 0 : line.text.length;
   }
   for (;;) {
-    if (emptyLineIsWord && line === '') {
+    if (emptyLineIsWord && line.text === '') {
       return { from: 0, to: 0, line: lineNum };
     }
-    const stop = dir > 0 ? line.length : -1;
+    const stop = dir > 0 ? line.text.length : -1;
     while (pos !== stop) {
       let foundWord = false;
       for (let i = 0; i < classes.length && !foundWord; i += 1) {
         const inClass = classes[i];
-        if (!inClass(line.charAt(pos))) {
+        if (!inClass(line, pos)) {
           continue;
         }
         const wordStart = pos;
         do {
           pos += dir;
-        } while (
-          pos !== stop &&
-          inClass !== isChipMark &&
-          inClass(line.charAt(pos))
-        );
+        } while (pos !== stop && inClass !== isChip && inClass(line, pos));
         const wordEnd = pos;
         foundWord = true;
         const startedAtWordEnd =
@@ -271,8 +278,8 @@ function findWord(
     if (!isLine(lineNum)) {
       return null;
     }
-    line = lines.text(lineNum);
-    pos = dir > 0 ? 0 : line.length;
+    line = lines.line(lineNum);
+    pos = dir > 0 ? 0 : line.text.length;
   }
 }
 
@@ -290,7 +297,7 @@ function moveToWord(
   for (let i = 0; i < count; i += 1) {
     const word = findWord(lines, at, forward, bigWord, emptyLineIsWord);
     if (!word) {
-      const endCh = lines.text(lines.lastLine).length;
+      const endCh = lines.line(lines.lastLine).text.length;
       words.push(
         forward
           ? { line: lines.lastLine, from: endCh, to: endCh }

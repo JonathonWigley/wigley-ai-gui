@@ -318,7 +318,10 @@ const FINDING_PICKS_STEPS: SelfTestStep[] = [
 // In finding 3's notes box: w from a chip reaches the next word, which ~
 // marks; visual l steps over a chip, so d takes it and its space and P puts
 // both back; diw on a chip deletes it whole and P puts the whole path back;
-// x on the last chip deletes it whole and p puts it back.
+// x on the last chip deletes it whole and p puts it back. A search for text
+// inside the chips lands past the first and n reaches the second, where i
+// types z; visual f into the first chip selects it whole, so ~ and gv~ toggle
+// the whole path's case and back.
 const FILE_CHIPS_STEPS: SelfTestStep[] = [
   { keys: ['a'], expect: '[forms] focused notes on finding 3' },
   {
@@ -333,6 +336,13 @@ const FILE_CHIPS_STEPS: SelfTestStep[] = [
       ...'0wdiwP',
       // $ lands on the last chip.
       ...'$xp',
+      // The search lands past the first chip, so n moves on to the second.
+      ...'0/chips',
+      'Enter',
+      ...'niz ',
+      'Escape',
+      // f lands inside the first chip, and the selection takes it whole.
+      ...'0vfc~gv~',
       'Escape',
     ],
     expect: '[forms] left the box',
@@ -1055,10 +1065,11 @@ function payloadProblems(payload: AnswersPayload): string[] {
       `finding 2 took_action_recommendation ${nit?.took_action_recommendation}`,
     ],
     [design?.status === 'answered', `finding 3 status ${design?.status}`],
-    // The B and the two whole paths prove the file chips group's motions,
-    // deletes and pastes each took a chip as one character.
+    // The B, the z and the two whole paths prove the file chips group's
+    // motions, searches, deletes, pastes and case toggles each took a chip as
+    // one character.
     [
-      design?.notes === `a ${CHIP_ONE} B ${CHIP_TWO}`,
+      design?.notes === `a ${CHIP_ONE} B z ${CHIP_TWO}`,
       `finding 3 notes ${JSON.stringify(design?.notes)}`,
     ],
     [design?.choice === 2, `finding 3 choice ${design?.choice}`],
@@ -1193,7 +1204,7 @@ export function formsSelfTestScript(
       },
       {
         name: 'file chips',
-        why: 'In a notes box a path is one character to vim: w from a chip lands on the next word, visual l steps over the chip, x and diw delete it whole, and the register holds the whole path, so P and p put it back.',
+        why: 'In a notes box a path is one character to vim: w from a chip lands on the next word, visual l steps over the chip, x and diw delete it whole, and the register holds the whole path, so P and p put it back; n from a search match inside a chip moves on to the next, and a visual f into a chip selects it whole.',
         steps: FILE_CHIPS_STEPS,
       },
       {
