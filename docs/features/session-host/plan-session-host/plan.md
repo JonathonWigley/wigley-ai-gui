@@ -59,6 +59,8 @@ reports it as a concern and does not guess.
 
 - wigley-ai-gui `abb19a9a`: `docs/features/session-host/design.md` (new), `docs/features/agent-chat/design.md`,
   `AGENTS.md`, `docs/keymap.md`.
+- wigley-ai-gui `0b3d0266`: gap-fix edits to `docs/features/session-host/design.md` and
+  `docs/features/agent-chat/design.md`.
 - wigley-ai-marketplace `cbd8a9e`: `plugins/wigley/scripts/forms/README.md` § The relay.
 
 The design doc is the source of truth for behaviour. Task 11 re-reads every doc above against the landed code.

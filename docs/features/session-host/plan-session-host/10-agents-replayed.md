@@ -43,12 +43,11 @@ Workflow, how the flag reaches the countdown:
 - Only the `chat.agentEvent` listener passes a third argument: the payload's `replayed` field. The
   other callers of `apply` — the plan watch's `signal`, the actions' `signal`, and the `sessions.hostSessionChanged`
   listener — keep two arguments, so they stay live.
-- **Open — the user decides before this task runs:** a replayed `fileWritten` or `turnEnded` makes the plan watch
-  read `plan.md` later, and the `planChanged` it sends comes through `apply` with no replay flag. When the flow had
-  no plan progress yet (a feature turn that ended while the app was closed), that live `planChanged` enters
-  `planReady` and starts a countdown. (a) Accept it: only the fold of a replayed event starts no countdown; a plan
-  read it triggers is live. (b) Suppress it too, which needs the plan watch to carry the flag of the event that
-  started its read. The lead fills in the user's answer here.
+- A replayed `fileWritten` or `turnEnded` makes the plan watch read `plan.md` later, and the `planChanged` it sends
+  comes through `apply` with no replay flag. When the flow had no plan progress yet (a feature turn that ended while
+  the app was closed), that live `planChanged` enters `planReady` and starts a countdown. This is the user's choice:
+  only the fold of a replayed event starts no countdown; a plan read it triggers is live, and the user can cancel
+  that countdown as usual. The plan watch does not change.
 
 GIVEN a `chat.agentEvent` with `replayed: true` for a real host id WHEN the agents part hears it THEN no line is
 appended to `logs/<hostSessionId>.jsonl` AND the row's roster folds the event AND `rosterChanged` is sent when the
