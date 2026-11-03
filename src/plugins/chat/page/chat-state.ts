@@ -36,10 +36,10 @@ export function oldestPendingPermission(
   return null;
 }
 
-// What an idle session's row still shows of a finished turn until the user
-// views the session or sends a message: `done` for a turn that ended while
-// another session was focused, `error` for a process that stopped mid-turn or
-// with an error.
+// What an idle session's row still shows of the agent's finished work until
+// the user views the session or sends a message: `done` for a turn that ended
+// with no subagent or background task left running while another session was
+// focused, `error` for a process that stopped mid-turn or with an error.
 export type Unseen = 'done' | 'error' | null;
 
 const WORKING_ACTIVITY: RowActivity = {
@@ -50,15 +50,17 @@ const WORKING_ACTIVITY: RowActivity = {
 const DONE_ACTIVITY: RowActivity = { word: 'done', tone: 'success', rank: 10 };
 const ERROR_ACTIVITY: RowActivity = { word: 'error', tone: 'error', rank: 30 };
 
-// The activity chat sets on a session's row; null draws nothing.
+// The activity chat sets on a session's row; null draws nothing. An idle
+// session whose subagents or background tasks still run shows working.
 export function rowActivity(state: {
   activity: ProcessActivity;
+  background: number;
   unseen: Unseen;
 }): RowActivity | null {
   if (state.activity === 'waiting') {
     return NEEDS_YOU_ACTIVITY;
   }
-  if (state.activity === 'working') {
+  if (state.activity === 'working' || state.background > 0) {
     return WORKING_ACTIVITY;
   }
   if (state.unseen === 'done') {
@@ -68,12 +70,17 @@ export function rowActivity(state: {
 }
 
 // An error outlasts the turn's end, which arrives after the process rested; a
-// turn ending in the focused session leaves nothing unseen.
-export function unseenAfterTurnEnd(unseen: Unseen, focused: boolean): Unseen {
+// turn ending in the focused session, or with subagents or background tasks
+// still running, leaves nothing unseen.
+export function unseenAfterTurnEnd(
+  unseen: Unseen,
+  focused: boolean,
+  background: number,
+): Unseen {
   if (unseen === 'error') {
     return 'error';
   }
-  return focused ? null : 'done';
+  return focused || background > 0 ? null : 'done';
 }
 
 // A process resting with an error, or while a turn ran, is an error even in

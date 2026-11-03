@@ -80,6 +80,7 @@ function session(
     entries: [],
     controls: [mode],
     activity: 'working',
+    background: 0,
     commands: [],
     running,
     queued: [],

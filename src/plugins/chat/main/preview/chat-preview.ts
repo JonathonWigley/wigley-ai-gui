@@ -84,6 +84,7 @@ export function createChatPreview(deps: ChatPreviewDeps): ChatPreview {
         entries: previewEntries(),
         controls: previewControls(),
         activity: 'idle',
+        background: 0,
         commands: [],
         running: true,
         queued: [],

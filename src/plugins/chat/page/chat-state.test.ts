@@ -119,30 +119,39 @@ describe('chat state', () => {
   );
 
   it.each([
-    { activity: 'waiting', unseen: null, expected: 'needs you' },
-    { activity: 'waiting', unseen: 'error', expected: 'needs you' },
-    { activity: 'working', unseen: null, expected: 'working' },
-    { activity: 'working', unseen: 'done', expected: 'working' },
-    { activity: 'idle', unseen: 'done', expected: 'done' },
-    { activity: 'idle', unseen: 'error', expected: 'error' },
-    { activity: 'idle', unseen: null, expected: null },
+    { activity: 'waiting', background: 0, unseen: null, expected: 'needs you' },
+    {
+      activity: 'waiting',
+      background: 1,
+      unseen: 'error',
+      expected: 'needs you',
+    },
+    { activity: 'working', background: 0, unseen: null, expected: 'working' },
+    { activity: 'working', background: 0, unseen: 'done', expected: 'working' },
+    { activity: 'idle', background: 2, unseen: null, expected: 'working' },
+    { activity: 'idle', background: 0, unseen: 'done', expected: 'done' },
+    { activity: 'idle', background: 0, unseen: 'error', expected: 'error' },
+    { activity: 'idle', background: 0, unseen: null, expected: null },
   ] as const)(
-    'rowActivity_ActivityAndUnseen_TheRowsWord: $activity, unseen $unseen → $expected',
-    ({ activity, unseen, expected }) => {
-      expect(rowActivity({ activity, unseen })?.word ?? null).toBe(expected);
+    'rowActivity_ActivityBackgroundAndUnseen_TheRowsWord: $activity, background $background, unseen $unseen → $expected',
+    ({ activity, background, unseen, expected }) => {
+      expect(rowActivity({ activity, background, unseen })?.word ?? null).toBe(
+        expected,
+      );
     },
   );
 
   it.each([
-    { unseen: null, focused: false, expected: 'done' },
-    { unseen: null, focused: true, expected: null },
-    { unseen: 'error', focused: false, expected: 'error' },
-    { unseen: 'error', focused: true, expected: 'error' },
-    { unseen: 'done', focused: true, expected: null },
+    { unseen: null, focused: false, background: 0, expected: 'done' },
+    { unseen: null, focused: false, background: 1, expected: null },
+    { unseen: null, focused: true, background: 0, expected: null },
+    { unseen: 'error', focused: false, background: 1, expected: 'error' },
+    { unseen: 'error', focused: true, background: 0, expected: 'error' },
+    { unseen: 'done', focused: true, background: 0, expected: null },
   ] as const)(
-    'unseenAfterTurnEnd_ErrorStaysElseDoneUnlessFocused: $unseen, focused $focused → $expected',
-    ({ unseen, focused, expected }) => {
-      expect(unseenAfterTurnEnd(unseen, focused)).toBe(expected);
+    'unseenAfterTurnEnd_ErrorStaysElseDoneUnlessFocusedOrBackground: $unseen, focused $focused, background $background → $expected',
+    ({ unseen, focused, background, expected }) => {
+      expect(unseenAfterTurnEnd(unseen, focused, background)).toBe(expected);
     },
   );
 

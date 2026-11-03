@@ -399,6 +399,7 @@ describe('createChatSessions', () => {
         entries: [],
         controls: [],
         activity: 'idle',
+        background: 0,
         commands: [],
         running: false,
         queued: [],
@@ -962,6 +963,81 @@ describe('createChatSessions', () => {
 
     expect(test.announced).toHaveLength(1);
     expect(test.marked).toEqual([ROW_ID]);
+  });
+
+  it('turnFinished_backgroundWorkRunning_noAlertUntilLastTurnEnds', async () => {
+    const test = await started();
+    test.setFocused(false);
+    const { events } = test.process;
+
+    test.activity('working');
+    events.agentEvent({
+      type: 'agentSpawned',
+      at: 0,
+      agentId: 'agent-1',
+      parentAgentId: MAIN_AGENT_ID,
+      agentType: 'general-purpose',
+      description: 'review',
+      name: 'review',
+      model: null,
+      effort: null,
+    });
+    events.agentEvent({
+      type: 'taskStarted',
+      at: 0,
+      taskId: 'task-1',
+      agentId: MAIN_AGENT_ID,
+      description: 'build',
+      command: 'npm run build',
+    });
+    test.activity('idle');
+
+    expect(test.announced).toEqual([]);
+    expect(test.marked).toEqual([]);
+    expect(test.chat.sessions()[0].background).toBe(2);
+
+    events.agentEvent({
+      type: 'agentFinished',
+      at: 0,
+      agentId: 'agent-1',
+      outcome: 'done',
+    });
+    events.agentEvent({
+      type: 'taskFinished',
+      at: 0,
+      taskId: 'task-1',
+      outcome: 'done',
+    });
+    test.activity('working');
+    test.activity('idle');
+
+    expect(test.sent('background')).toEqual([
+      { sessionId: ROW_ID, background: 1 },
+      { sessionId: ROW_ID, background: 2 },
+      { sessionId: ROW_ID, background: 1 },
+      { sessionId: ROW_ID, background: 0 },
+    ]);
+    expect(test.announced).toHaveLength(1);
+    expect(test.marked).toEqual([ROW_ID]);
+  });
+
+  it('processExit_BackgroundWorkRunning_ClearsBackground', async () => {
+    const test = await started();
+    test.process.events.agentEvent({
+      type: 'taskStarted',
+      at: 0,
+      taskId: 'task-1',
+      agentId: MAIN_AGENT_ID,
+      description: 'server',
+      command: null,
+    });
+
+    test.process.events.ended({ code: 0, error: null });
+
+    expect(test.sent('background').at(-1)).toEqual({
+      sessionId: ROW_ID,
+      background: 0,
+    });
   });
 
   it('activity_unchanged_sendsNothing', async () => {

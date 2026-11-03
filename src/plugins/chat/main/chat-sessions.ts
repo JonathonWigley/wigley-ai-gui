@@ -1,5 +1,6 @@
 import path from 'node:path';
 import type {
+  AgentEvent,
   AgentHarness,
   AgentProcess,
   AgentProcessEvents,
@@ -208,6 +209,9 @@ interface HeldSession {
   // The read of the earlier conversation while it runs.
   historyRead: Promise<void> | null;
   harnessActivity: ProcessActivity;
+  // Ids of the subagents and background tasks the running process has started
+  // that have not finished.
+  backgroundIds: Set<string>;
   pending: Map<string, PendingPermission>;
   permissionCount: number;
   noticeCount: number;
@@ -464,6 +468,43 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     sessions.mark(sessionId);
   }
 
+  // Keeps the ids of the subagents and background tasks still running, so a
+  // turn that ends while any runs announces nothing.
+  function trackBackground(session: HeldSession, event: AgentEvent) {
+    const ids = session.backgroundIds;
+    if (event.type === 'agentSpawned') {
+      ids.add(event.agentId);
+    }
+    if (event.type === 'taskStarted') {
+      ids.add(event.taskId);
+    }
+    if (event.type === 'agentFinished') {
+      ids.delete(event.agentId);
+    }
+    if (event.type === 'taskFinished') {
+      ids.delete(event.taskId);
+    }
+    if (event.type === 'sessionEnded') {
+      ids.clear();
+    }
+    sendBackground(session);
+  }
+
+  function clearBackground(session: HeldSession) {
+    session.backgroundIds.clear();
+    sendBackground(session);
+  }
+
+  // Sends the count of background work only when it changed.
+  function sendBackground(session: HeldSession) {
+    const background = session.backgroundIds.size;
+    if (background === session.state.background) {
+      return;
+    }
+    session.state.background = background;
+    send('background', { sessionId: session.state.sessionId, background });
+  }
+
   function updateActivity(session: HeldSession) {
     const previous = session.state.activity;
     const activity = shownActivity(session);
@@ -477,7 +518,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     const turnStarted = activity !== 'idle' && previous === 'idle';
     const userIsElsewhere =
       !deps.window.isFocused() || sessions.selectedSessionId() !== sessionId;
-    if (turnFinished && userIsElsewhere) {
+    const workIsOver = session.backgroundIds.size === 0;
+    if (turnFinished && userIsElsewhere && workIsOver) {
       announceTurnFinished(session);
     }
     if (turnFinished || turnStarted) {
@@ -664,6 +706,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
             event,
           });
         }
+        if (isLiveEvent) {
+          trackBackground(session, event);
+        }
         if (isLiveEvent && event.type === 'turnEnded') {
           readBranch(session);
         }
@@ -699,6 +744,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           isCleanExit ? 'info' : 'error',
         );
         send('sessionRested', { sessionId, error });
+        clearBackground(session);
         showRestingIdle(session);
         save();
       },
@@ -754,6 +800,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         entries: opening.entries,
         controls: [],
         activity: 'idle',
+        background: 0,
         commands: [],
         running: false,
         queued: [],
@@ -767,6 +814,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       historyPending: opening.historyPending,
       historyRead: null,
       harnessActivity: 'idle',
+      backgroundIds: new Set(),
       pending: new Map(),
       permissionCount: 0,
       noticeCount: 0,
@@ -836,7 +884,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
 
   // Starts the session's process with the held mode and the confirmed picks,
   // and records the folder; a throw from the harness leaves the session
-  // resting. A pick still pending belongs to the old process and is dropped.
+  // resting. A pick still pending and the background work belong to the old
+  // process and are dropped.
   function startProcess(
     session: HeldSession,
     harness: AgentHarness,
@@ -846,6 +895,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     const { sessionId, projectDir } = session.state;
     session.processStarts += 1;
     session.pendingPicks.clear();
+    clearBackground(session);
     const started: { process: AgentProcess | null } = { process: null };
     const profileDir = profileDirOf(profile);
     const process = harness.start(

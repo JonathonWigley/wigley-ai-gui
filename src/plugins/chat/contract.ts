@@ -73,6 +73,9 @@ export interface ChatSessionState {
   entries: ChatEntry[];
   controls: SessionControl[];
   activity: ProcessActivity;
+  // The subagents and background tasks still running in the session's
+  // process; while any runs, a turn's end does not end the agent's work.
+  background: number;
   // The session's slash commands and skills, as typed after `/`; [] until the
   // harness reports them.
   commands: string[];
@@ -175,6 +178,7 @@ export interface ChatChannel extends ChannelShape {
     entry: { sessionId: string; entry: ChatEntry };
     controls: { sessionId: string; controls: SessionControl[] };
     activity: { sessionId: string; activity: ProcessActivity };
+    background: { sessionId: string; background: number };
     commands: { sessionId: string; names: string[] };
     // Replaces the session's whole entry list, as when restored history
     // arrives.

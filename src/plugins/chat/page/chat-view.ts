@@ -305,7 +305,11 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       if (isTurnEnded) {
         tab.entries.latest();
         const focused = deps.sessions.selectedSessionId() === sessionId;
-        tab.unseen = unseenAfterTurnEnd(tab.unseen, focused);
+        tab.unseen = unseenAfterTurnEnd(
+          tab.unseen,
+          focused,
+          tab.state.background,
+        );
       }
       if (isTurnStarted) {
         tab.unseen = null;
@@ -313,6 +317,14 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       log('chat', `${tab.name} is ${activity}`);
       drawActivity(tab, deps);
       drawStatusLine(tab);
+    }
+  });
+  channel.on('background', ({ sessionId, background }) => {
+    const tab = heldFor('background', sessionId);
+    if (tab !== undefined) {
+      tab.state = { ...tab.state, background };
+      log('chat', `${tab.name} has ${background} running in the background`);
+      drawActivity(tab, deps);
     }
   });
   channel.on('branch', ({ sessionId, repo, branch }) => {
@@ -735,6 +747,7 @@ function drawActivity(
 ) {
   const activity = rowActivity({
     activity: tab.state.activity,
+    background: tab.state.background,
     unseen: tab.unseen,
   });
   if (activity === tab.activity) {
