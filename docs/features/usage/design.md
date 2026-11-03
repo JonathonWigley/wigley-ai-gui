@@ -90,7 +90,8 @@ profile's `settings.json`, which is why the configured limit is read there.
         │ channel: snapshot
         ▼
  usage page ──▶ status bar line (the shown session's profile's plan rows)
-            ──▶ sessions.addBarPart: each session's line in its own tab bar (context, cache, spend)
+            ──▶ chat.addStatusPart: each Chat session's context, cache and spend in its status line
+ usage-tab-line page (optional) ──▶ sessions.addBarPart: the same line in each session's tab bar
             ──▶ right bar details (every profile, the shown session)   toggled by Space v u
 ```
 
@@ -130,7 +131,9 @@ In `src/contracts/agent.ts`, beside `AgentHarness`:
 - **Page** draws, through the `usage` layout:
   - a status-bar line, always on, aligned to the end: the shown session's profile's plan rows (the default profile
     while no session shows). Each meter is tinted by its severity. A stale profile's rows draw muted.
-  - each session's line, a bar part (sessions' `addBarPart`) in that session's tab bar: its context bar
+  - each Chat session's line, a status part (chat's `addStatusPart`) in its Chat status line; the optional
+    `usage-tab-line` plugin (in `plugins.disabled` by default) draws the same line as a bar part (sessions'
+    `addBarPart`) in each session's tab bar. The line: its context bar
     (`used/limit`), its cache countdown and its spend. The context bar is tinted by its share of the limit (`warning`
     from 70 %, `critical` from 90 %); with no autocompact limit it shows tokens alone. A narrow bar drops whole items
     from the line's end (spend, then cache, then the context text) and keeps the context bar. A session with no usage
@@ -162,10 +165,10 @@ contributes to it through `api.areas.rightBar`.
 - **Session numbers sit on the session, plan numbers on the shared bar.** With several panes, one shared line can
   show only one session's context, so each session's context, cache and spend draw in its own tab bar; the plan rows
   are account facts every pane shares and stay on the status bar.
-- **The session line is a sessions bar part, not chat input.** Sessions offers `addBarPart` beside `addRowPart`,
-  and usage draws into it, so sessions and chat know nothing of usage and the next per-session readout plugs in the
-  same way. The tab bar holds it because the frame moves with its session between panes and shows on every tab, Form
-  and Primer included.
+- **The session line is a part, never chat input.** Usage draws it into chat's `addStatusPart` (the Chat status line,
+  the default home since the chat bar, `docs/features/chat-bar/design.md`) and, through the optional `usage-tab-line`
+  plugin, into sessions' `addBarPart`, so neither chat nor sessions knows usage. The tab-bar copy is for a user who
+  wants the line on every tab, Form and Primer included.
 - **A new right bar shell area** rather than a floating panel or a Sessions-only pane: it serves the next plugin and
   covers nothing.
 - **The agent-tower agent event seam is built now,** with `usage` as its first member grown to carry the autocompact
@@ -188,4 +191,5 @@ contributes to it through `api.areas.rightBar`.
   would be a cycle, and each later readout would edit chat's layout contract.
 - **A global data store or data buckets any plugin reads** — a second sharing mechanism beside `dependsOn` exports
   and events.
-- **The session line in the Chat composer bar** — it would hide while a Form or Primer tab shows.
+- **The session line only in the Chat composer** — it would hide while a Form or Primer tab shows; the user took it
+  as the default with the tab-bar line one switch away.

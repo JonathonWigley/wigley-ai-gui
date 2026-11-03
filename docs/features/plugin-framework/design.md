@@ -43,7 +43,8 @@ Each lands green on its own, the self-test passing, and is reviewed on its own.
 - Plugins may publish their own events for other plugins to listen to. One event bus per process; the core forwards
   the core events both sides need; a plugin's cross-process messages use its own channel. The bus lands in A2,
   where sessions publish the first events.
-- Every built-in plugin starts at launch; no enable/disable list until a second case needs one.
+- Every built-in plugin starts at launch unless the core setting `plugins.disabled` names it; the list arrived with
+  the chat bar's optional views (`docs/features/chat-bar/design.md` § Optional plugins).
 - Key scopes are plugin-declared and qualified (`forms.review`); plugin settings live in the manifest under the
   plugin's id (which-key's delay is a setting, 200 ms default); fonts and theme stay core settings.
 - Core: plugin host, shell and areas, commands, key engine (sequences, chords, leader), settings, themes, the

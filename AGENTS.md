@@ -173,9 +173,13 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  `docs/features/session-titles/design.md`
   agents/        manifest.ts, contract.ts, roster.ts (the pure reducer folding agent events into a session's roster),
                  main/ (hears `chat.agentEvent`, keeps each session's roster, appends each event to
-                 `logs/<host session id>.jsonl` in its plugin data, the layout preview), page/ (the running subagent
-                 lines under each session row, through sessions' `addRowPart`), layouts/ (the agents Layout contract
-                 and the built-in `default` layout); `docs/features/agent-tower/design.md`
+                 `logs/<host session id>.jsonl` in its plugin data, the layout preview); draws nothing: its page
+                 part only exports the rosters to the views below; `docs/features/agent-tower/design.md`
+  agent-lines/   page/ (the subagent and task lines under each session row, through sessions' `addRowPart`),
+                 layouts/ (its Layout contract and `default` layout); in `plugins.disabled` by default
+  agent-strip/   page/ (the strip of subagent and task boxes above the Chat composer's box, through chat's
+                 `addComposerPart`, with a stop on chat's entry cursor), layouts/ (its Layout contract and `default`
+                 layout); `docs/features/chat-bar/design.md`
   forms/         manifest.ts, contract.ts, main/ (the round form type, its MCP tools, the preview
                  round), page/ (the Form tab), layouts/ (the Layout contract and the built-in `default` layout)
   primer/        manifest.ts, contract.ts, main/ (the feature primer form type, its MCP tools, fixtures,
@@ -222,7 +226,10 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  `chat.planUsage` and `chat.agentEvent`), page/ (the status-bar plan line, each session's line in
                  its tab bar through sessions' `addBarPart`, and the right-bar details),
                  layouts/ (the usage Layout contract and the built-in `default` layout),
-                 `docs/features/usage/design.md`
+                 `docs/features/usage/design.md`; its session numbers draw in the Chat status line through chat's
+                 `addStatusPart`
+  usage-tab-line/ page/ (each session's usage line in its tab bar through sessions' `addBarPart`), layouts/; in
+                 `plugins.disabled` by default
   workflow/      manifest.ts, contract.ts, flow.ts (the pure fold of signals into a session's flow), plan-reader.ts
                  (ticked, total, wave and review rounds from a plan.md), stages/<stage>/ (one wigley workflow stage
                  each: main.ts its entry rule and main actions, page.ts its look and page actions, registered through
@@ -266,6 +273,10 @@ round; primer: an open primer), since main, not the page, decides.
   builds the served keymap, labels and settings from, and its parts join `src/plugins/main.ts` and
   `src/plugins/page.ts`; a part whose manifest is missing from the list throws at startup. A main part starts once;
   a page part starts on every page load.
+- **A disabled plugin** is one named in the core setting `plugins.disabled`: the plugin host starts none of its parts.
+  A page part follows the list on each page load, a main part on each app start. Naming a plugin that a started
+  plugin depends on is a config problem, so the last good config stays. A view that can be switched off is its own
+  plugin over a data plugin that stays on (`docs/features/chat-bar/design.md` § Optional plugins).
 - **A plugin talks** to its other process over its own channel (`api.channel`), typed by its `contract.ts`, and to
   another plugin through the exported API of a plugin its manifest depends on, or through events. A plugin imports
   only `src/contracts`, `src/shared`, its own folder, and the `contract.ts` of a plugin its manifest depends on,
@@ -309,17 +320,20 @@ round; primer: an open primer), since main, not the page, decides.
 - **A session part** (`SessionPart`) is what a plugin draws for every session on a sessions surface: sessions hands
   it a wrapper and the session id, and the part draws through its own plugin's layout. It has the same shape as forms'
   `addCardPart`. A **row part** draws under every session row in the side bar, through the `sessions` page export
-  `addRowPart`; the agents plugin's subagent lines are one. A **bar part** draws in every session's tab bar, which moves
-  with its session between panes, through `addBarPart`; the usage plugin's per-session context line is one.
+  `addRowPart`; the agent-lines plugin's subagent lines are one. A **bar part** draws in every session's tab bar, which
+  moves with its session between panes, through `addBarPart`; the usage-tab-line plugin's per-session line is one.
   Information about one session goes in a session part, not on a shared bar.
 - **A row activity** is the short state a session's row shows beside its title — a status dot and a word (working,
   needs you, done, error). A page plugin sets one per session under its own source id through the `sessions` page
   export `setActivity`, and the row shows the highest rank, so a new state is a registration in the plugin that knows
   it, never an edit to sessions. A **session title** has three sources (user, agent, first message) kept on the row;
   the agent sets its own through the `set_session_title` tool (`docs/features/session-titles/design.md`).
-- **A composer part** is what a plugin draws above the Chat composer, through the `chat` page export
+- **A composer part** is what a plugin draws above the Chat composer's box, through the `chat` page export
   `addComposerPart`, the same shape as a session part: chat hands each part a wrapper and the session id. The workflow
-  plugin's strip is one.
+  plugin's strip and the agent strip are two. A part may offer a **stop**: `j` on the last transcript entry hands the
+  entry cursor to it, and the part holds its own key scope until it hands the cursor back.
+- **A status part** is what a plugin draws in the Chat status line under the box, through the `chat` page export
+  `addStatusPart`, the same shape; the usage plugin's context, cache and spend are one.
 - **A chat pane** is one pane of Sessions mode's pane tree (`src/shared/page/pane-tree/`, the sessions plugin its
   owner): it shows one whole session, tab bar included, and a session shows in at most one pane. The side bar drives
   the focused pane, and the visible tab, whose `shown` sets the key scope and whose `isVisible` reads true, is the

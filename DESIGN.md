@@ -300,6 +300,8 @@ The primitives, each a builder in `src/shared/page/ui/`:
   outer end pane's least width the sum of the inner two. Each handle draws the resize prompt
   `⌥⇧H ◂ ▸ ⌥⇧L`, centred on it and taking no space, while the pointer is over it, while a drag runs
   and for a moment after each keyboard resize. A view that drops a split calls its `dispose`.
+- **HScroller** (`createHScroller`): a row that scrolls sideways, with an IconButton chevron at each end that scrolls
+  by one item and hides while nothing lies further that way, and a `reveal(item)` that scrolls an item into view.
 - **Card** (`card`, with an `attention` or `error` edge) and the collapsible card
   (`createCollapsibleCard`), whose `plain` variant is a one-line row with no card chrome that opens
   its body in place under it.
@@ -352,7 +354,9 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   the usage plugin does (below). Status colours only on status items. A status belongs on the surface it
   describes: a form's saved state on its rail header, a config problem on the title bar.
 - **Usage:** the status-bar line is always on and aligned to the end, in `text-12`: the plan rows of the shown
-  session's profile, each a meter with its percent in the server's order. Each session's line sits in its own tab bar,
+  session's profile, each a meter with its percent in the server's order. A Chat session's context bar, cache
+  countdown and spend draw in its Chat status line, in the same items and order as the tab-bar line below. With the
+  optional `usage-tab-line` plugin on, each session's line also sits in its own tab bar,
   after the tabs and before the pane controls, in `text-12`: its context bar (`used/limit` against the autocompact
   limit), its cache countdown and its spend. In a narrow bar the line drops whole items from its end (spend, then cache,
   then the context text), never part of a number, keeping its context bar and a `space-2` gap before `⌘W`. A session
@@ -387,8 +391,14 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   summary, `Thinking`, `Raw event`), and a step row opens its input and result in place under it,
   with no card. Permission prompts are cards with a
   `status-attention` edge and plain verbs (Allow once, Deny). The composer floats (L3,
-  `radius-xl`, inset `space-3`) with the transcript scrolling beneath it, and holds the strip of attached images'
-  thumbnails above the box, the box, the session controls as chips, and send. A user turn shows its sent images as
+  `radius-xl`, inset `space-3`) with the transcript scrolling beneath it, and holds, top to bottom: other plugins'
+  composer parts (the workflow strip, the agent strip), the strip of attached images' thumbnails, the box (no mode
+  label: the cursor's shape shows the vim mode), and the status line: repo and branch in `fg-secondary`, one
+  model · effort chip, the other control chips, other plugins' status parts (usage), then the running dot and send.
+  The **agent strip** is an HScroller of boxes, each a `card-background` Card with `radius-md`: a subagent box holds a
+  StatusDot, its name, `model · effort · $cost` in `fg-tertiary`, the description, and its latest three tool calls in
+  mono; a task box a terminal icon, the description, its owning agent and the elapsed time. A finished box dims to
+  `fg-tertiary` with a done or failed dot; the selected box takes the focus ring. A user turn shows its sent images as
   thumbnails under its text.
 - **Visuals:** an agent's html block in any markdown. While it streams it is a Card holding a running StatusDot and
   `drawing visual…` in `text-12` `fg-secondary`. Once closed it is the inline box: the frame as wide as its column in a
