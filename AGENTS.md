@@ -307,10 +307,9 @@ round; primer: an open primer), since main, not the page, decides.
   plugin over a data plugin that stays on (`docs/features/chat-bar/design.md` § Optional plugins).
 - **A plugin talks** to its other process over its own channel (`api.channel`), typed by its `contract.ts`, and to
   another plugin through the exported API of a plugin its manifest depends on, or through events. The manifest's
-  `dependsOn` has a `main` and a `page` list, each naming the plugins whose exports that process reads or whose
-  events it hears there. A plugin reads a dependency with `api.dependency(key)`, where the key is the typed
-  `DependencyKey` the provider's `contract.ts` exports for that process (`sessionsMainKey`, `keysPageKey`). The
-  compiler rejects a key for the other process or for a plugin missing from that process's list. A plugin imports
+  `dependsOn` lists the plugins whose exports it reads or whose events it hears, in either process. A plugin reads
+  a dependency with `api.dependency<Exports>(pluginId)` (`api.dependency<ChatMainExports>('chat')`), typed by the
+  caller from the provider's `contract.ts`. A plugin imports
   only `src/contracts`, `src/shared`, its own folder, and the `contract.ts` of a plugin its manifest depends on,
   which types that plugin's exports, keys and events.
 - **An event** is published with `api.events.emit` under the publishing plugin's id (`activeChanged` in plugin
