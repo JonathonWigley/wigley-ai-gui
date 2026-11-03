@@ -114,10 +114,11 @@ interview on 2026-10-23; this file is the record of both.
   choice; effort then changes only when a `/effort` succeeds, since no event reports it; the model comes from the init
   event and the last successful `/model`, a full model name shown as its alias.
 - **Interrupt**: Ctrl+C ends the running turn by an `interrupt` control request; the process stays open for the next
-  message. A SIGINT would end the process. Ctrl+C always ends working: when neither the turn's result nor an answer
-  that leaves nothing running arrives within 5 s, the adapter drops its turn state, posts a notice and shows idle. A
-  second Ctrl+C while the first is still unanswered and the session still works ends the `claude` process; the row
-  rests and resumes on the next message.
+  message. A SIGINT would end the process. Ctrl+C always ends the running turn (a message queued behind it still
+  runs): when neither the turn's result nor an answer that leaves nothing running arrives within 5 s, the adapter
+  drops its turn state, posts the notice `Claude did not stop within 5 s; showing the session idle.` and shows idle. A
+  second Ctrl+C while that 5 s grace is pending and the session still works posts `Interrupted again; ending the
+  Claude process.` and ends the `claude` process; the row rests and resumes on the next message.
 - A result entry's `costUsd` is the difference between consecutive results, since Claude's `total_cost_usd` is
   cumulative for the process; a total below the last one gives `null`.
 - **Locality**: listing a folder's past sessions and reading a transcript into chat entries are adapter
@@ -225,8 +226,8 @@ interview on 2026-10-23; this file is the record of both.
 - **Pending messages**: a message sent while the harness reports the session's turn running (the process runs and
   its own activity is not `idle`) is not written to the agent. A turn Claude runs on its own after a background task
   ends counts as running too: the session shows working through it, its messages wait, and the turn-finished alert
-  fires when it ends. Written into a running tool turn, Claude would fold a message into it (claude-stream.md
-  § Queued messages). A permission call left waiting after the turn ended
+  fires when it ends. Written into a running tool turn, Claude would fold a message into it with no turn of its own
+  (claude-stream.md § Queued messages), so chat holds it until the turn ends. A permission call left waiting after the turn ended
   queues nothing; a running turn waiting on a permission still queues. Chat main holds the message in the session's
   queue (`ChatSessionState.queued`, oldest first, each with an id of its own; kept across a page reload, dropped on
   quit), and the Chat tab shows it as a pending row after the last entry, drawn by the layout's `queuedMessage` part:

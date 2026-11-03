@@ -64,12 +64,14 @@ export function controlValue(id: ClaudeControlId, reported: string): string {
 
 // One stdin line sending the user's message: plain text content when it has
 // no images, else each image's block in order, then a text block when the
-// text is not empty.
-export function userMessage(message: UserMessage): object {
+// text is not empty. `uuid` is the message's client id, by which Claude
+// reports the message's lifecycle.
+export function userMessage(message: UserMessage, uuid: string): object {
   return {
     type: 'user',
     message: { role: 'user', content: messageContent(message) },
     parent_tool_use_id: null,
+    uuid,
   };
 }
 
@@ -88,18 +90,19 @@ function messageContent(message: UserMessage): string | object[] {
 }
 
 // The stdin line that sets control `id` to `value`: the mode by a control
-// request, effort and model by their slash commands.
+// request, effort and model by their slash commands. `lineId` is the mode
+// request's `request_id`, and the slash command message's `uuid`.
 export function controlMessage(
   id: ClaudeControlId,
   value: string,
-  requestId: string,
+  lineId: string,
 ): object {
   if (id === 'mode') {
     return {
       type: 'control_request',
-      request_id: requestId,
+      request_id: lineId,
       request: { subtype: 'set_permission_mode', mode: value },
     };
   }
-  return userMessage({ text: `/${id} ${value}`, images: [] });
+  return userMessage({ text: `/${id} ${value}`, images: [] }, lineId);
 }

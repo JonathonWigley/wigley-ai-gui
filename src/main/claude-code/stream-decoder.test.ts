@@ -236,6 +236,7 @@ describe('createStreamDecoder', () => {
       permissionMode: 'auto',
       slash_commands: ['/compact', 'model'],
       skills: ['wigley:feature', 'compact'],
+      capabilities: ['msg_lifecycle_v1', 7, 'x'],
     };
 
     const decoded = decoder.decode(line(init));
@@ -245,10 +246,47 @@ describe('createStreamDecoder', () => {
       mode: 'auto',
       model: 'claude-opus-5-5[1m]',
     });
+    expect(decoded.turnStarted).toBe(true);
+    expect(decoded.capabilities).toEqual(['msg_lifecycle_v1', 'x']);
     expect(decoded.entries).toEqual([
       { kind: 'raw', id: 'turn-events-1', raw: [init] },
     ]);
   });
+
+  it('decode_InitWithoutCapabilities_ReportsEmptyCapabilities', () => {
+    const decoder = createStreamDecoder();
+
+    const decoded = decoder.decode(INIT_LINE);
+
+    expect(decoded.turnStarted).toBe(true);
+    expect(decoded.capabilities).toEqual([]);
+  });
+
+  it.each([
+    {
+      name: 'uuid and state',
+      fields: { command_uuid: 'u-1', state: 'started' },
+      lifecycle: { uuid: 'u-1', state: 'started' },
+    },
+    { name: 'no command_uuid', fields: { state: 'queued' }, lifecycle: null },
+  ])(
+    'decode_CommandLifecycle_ReportsStateAndGathers ($name)',
+    ({ fields, lifecycle }) => {
+      const decoder = createStreamDecoder();
+      const init = { type: 'system', subtype: 'init' };
+      const frame = { type: 'command_lifecycle', ...fields };
+      decoder.decode(line(init));
+
+      const decoded = decoder.decode(line(frame));
+
+      expect(decoded.lifecycle).toEqual(lifecycle);
+      expect(decoded.turnStarted).toBe(false);
+      expect(decoded.capabilities).toBeNull();
+      expect(decoded.entries).toEqual([
+        { kind: 'raw', id: 'turn-events-1', raw: [init, frame] },
+      ]);
+    },
+  );
 
   it('decode_StartHooksAndTurnEvents_GatherIntoOneEntryPerTurn', () => {
     const decoder = createStreamDecoder();
@@ -598,6 +636,34 @@ describe('createStreamDecoder', () => {
 
       expect(decoded.turnEnded).toBe(true);
       expect(decoded.turnUnrequested).toBe(isUnrequested);
+    },
+  );
+
+  it.each([
+    {
+      name: 'both keys',
+      fields: { user_message_uuid: 'a', user_message_uuids: ['a', 'b'] },
+      opener: 'a',
+      messages: ['a', 'b'],
+    },
+    { name: 'neither key', fields: {}, opener: null, messages: [] },
+    {
+      name: 'numeric opener',
+      fields: { user_message_uuid: 7, user_message_uuids: ['a'] },
+      opener: null,
+      messages: ['a'],
+    },
+  ])(
+    'decode_ResultMessageUuids_ReportsOpenerAndMessages ($name)',
+    ({ fields, opener, messages }) => {
+      const decoder = createStreamDecoder();
+
+      const decoded = decoder.decode(
+        line({ type: 'result', subtype: 'success', ...fields }),
+      );
+
+      expect(decoded.turnOpener).toBe(opener);
+      expect(decoded.turnMessages).toEqual(messages);
     },
   );
 

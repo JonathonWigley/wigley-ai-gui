@@ -134,6 +134,10 @@ The other keys on the line: `terminal_slash_commands` (4: `doctor`, `color`, `fo
 `fast_mode_state`, `fast_mode_disabled_reason`, `per_turn_effort_active` (`true`), `view_mode`. No key carries the
 effort level (§ Effort).
 
+- The adapter reads `capabilities` on the first init of a process: with `msg_lifecycle_v1` it tracks each message by
+  its `uuid` (§ Message lifecycle); without it, it logs and posts a notice, and the working state follows turn results
+  alone.
+
 - Entries in `slash_commands` have **no** leading `/`, for example `"wigley:feature"`, `"effort"`, `"model"`,
   `"compact"`. Every skill name also appears in `slash_commands`.
 - `tools` grows when a pending MCP server connects: in later probes, once `claude.ai Claude Docs` was `connected`,
@@ -404,7 +408,9 @@ reply as on a running turn and nothing follows it:
 ```
 
 So the plain interrupt cannot tell idle from busy, and a client that waits for a `result` after it waits forever. A
-named interrupt can tell them apart (§ Message lifecycle).
+named interrupt can tell them apart (§ Message lifecycle). The adapter sends the plain one and does not wait for a
+`result`: the reply (success or error) closes every open message when no turn is open, and an interrupt that neither
+a `result` nor such a reply answers within 5 s drops the turn state (design.md § Agent harness seam, Interrupt).
 
 ## Mode change
 
@@ -467,6 +473,7 @@ stdout {"type":"result","subtype":"success","is_error":false,"result":"Usage: /e
   match is init's `per_turn_effort_active: true`. Init, status and result have no effort value, at start or after the
   change.
 - `/model` with no argument prints the effort in its text: `Current model: \`Haiku 5.5\` (effort: low)` (§ Model).
+- The adapter's `/effort <value>` carries a client `uuid`, as every message it writes does (§ Message lifecycle).
 
 ## Model
 
@@ -508,6 +515,7 @@ stdout result/success {"total_cost_usd":0.08671437,…}
   string content is wrapped in `<local-command-stdout>`, then a `control_response` with no `response.response`. It
   prints no `result` and no `system/status` line.
 - `init.model` and `message.model` are full names (`claude-sonnet-5-5`, `claude-haiku-5-5`), never the alias.
+- The adapter's `/model <value>` carries a client `uuid`, as every message it writes does (§ Message lifecycle).
 
 ## Choices
 
@@ -914,7 +922,8 @@ description "read notes" …)`; Explore spawned on the first attempt):
   Each `result` carries `subagent_stats`:
   `{"spawned":1,"requested":{"background":1,"foreground":0,"unset":0},"started_in_background":1,"max_depth":1,"spawned_by_subagents":0,"completed":1,"failed":0,"killed":{"parent":0,"user":0,"system":0},"refused":{…},"by_type":{"general-purpose":1}}`.
   Neither `result` is a user turn: these two come with no stdin message. A message written while such a turn runs
-  folds into it (§ Queued messages).
+  folds into it (§ Queued messages). The adapter shows working from such a turn's `init` to its `result`, as for any
+  turn, with no message of its own to close.
 
 **The subagent's own lines.** `assistant` and `user` events only; **no `stream_event` lines for a subagent** in any
 probe. Every one carries `parent_tool_use_id` equal to the Agent call's `tool_use` id (checked on all subagent lines of

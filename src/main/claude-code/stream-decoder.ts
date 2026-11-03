@@ -30,6 +30,10 @@ import { pairToolResult, type ToolEntry, toolUseEntry } from './tool-entries';
 // them (`controlValue` maps them); `turnFailed` is true on a turn-ending line
 // that reports an error; `turnUnrequested` is true on a `result` whose
 // `origin` marks a turn Claude ran with no stdin message behind it.
+// `turnStarted` is true on a `system/init`, and `capabilities` holds that
+// init's `capabilities` strings, null on any other line; `lifecycle` is a
+// `command_lifecycle` line's `command_uuid` and `state`; `turnOpener` is a
+// `result`'s `user_message_uuid` and `turnMessages` its `user_message_uuids`.
 // `agentEvents` are the line's agent events other than
 // `usage`, not yet stamped with `at`, in the order the line gave them. The
 // usage side channels: `planRows` from a `rate_limit_event`, `replyUsage` from
@@ -43,6 +47,11 @@ export interface DecodedLine {
   turnEnded: boolean;
   turnFailed: boolean;
   turnUnrequested: boolean;
+  turnStarted: boolean;
+  capabilities: string[] | null;
+  lifecycle: { uuid: string; state: string } | null;
+  turnOpener: string | null;
+  turnMessages: string[];
   controlResponse: {
     requestId: string;
     error: string | null;
@@ -121,6 +130,11 @@ function emptyLine(): DecodedLine {
     turnEnded: false,
     turnFailed: false,
     turnUnrequested: false,
+    turnStarted: false,
+    capabilities: null,
+    lifecycle: null,
+    turnOpener: null,
+    turnMessages: [],
     controlResponse: null,
     hostRequest: null,
     planRows: null,
@@ -140,6 +154,11 @@ function commandNames(init: Json): string[] {
     (name) => asString(name).replace(/^\//, ''),
   );
   return [...new Set(names)];
+}
+
+// The string items of a list field; [] when the field is no list.
+function stringItems(value: unknown): string[] {
+  return asArray(value).filter((item) => typeof item === 'string');
 }
 
 // The agent whose line `event` is: a subagent's lines carry its Agent call's id.
@@ -486,6 +505,8 @@ export function createStreamDecoder(
     }
     if (event.subtype === 'init') {
       out.agentEvents.push({ type: 'turnStarted' });
+      out.turnStarted = true;
+      out.capabilities = stringItems(event.capabilities);
       out.commands = commandNames(event);
       if (typeof event.permissionMode === 'string') {
         out.reported.mode = event.permissionMode;
@@ -727,6 +748,11 @@ export function createStreamDecoder(
     out.turnUnrequested = UNREQUESTED_ORIGINS.has(
       asString(asJson(event.origin).kind),
     );
+    out.turnOpener =
+      typeof event.user_message_uuid === 'string'
+        ? event.user_message_uuid
+        : null;
+    out.turnMessages = stringItems(event.user_message_uuids);
     const errorText = asString(event.result);
     if (isError && errorText !== '') {
       out.entries.push(noticeEntry(errorText, 'error', event));
@@ -793,6 +819,14 @@ export function createStreamDecoder(
     out.entries.push(gathered(event));
   }
 
+  function decodeLifecycle(event: Json, out: DecodedLine) {
+    const uuid = asString(event.command_uuid);
+    if (uuid !== '') {
+      out.lifecycle = { uuid, state: asString(event.state) };
+    }
+    out.entries.push(gathered(event));
+  }
+
   const DECODERS: Readonly<
     Record<string, (event: Json, out: DecodedLine) => void>
   > = {
@@ -805,6 +839,7 @@ export function createStreamDecoder(
     control_request: decodeControlRequest,
     tool_progress: decodeToolProgress,
     rate_limit_event: decodeRateLimit,
+    command_lifecycle: decodeLifecycle,
   };
 
   return {

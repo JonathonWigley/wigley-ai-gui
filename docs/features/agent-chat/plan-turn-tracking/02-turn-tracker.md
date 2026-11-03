@@ -1,6 +1,6 @@
 # 02 — Turn tracker
 
-Status: not started
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -106,4 +106,4 @@ Commit:    one commit for the group
 
 ## Proof
 
-<written by wigley:make: commit sha, proof result, concerns; empty until the group lands>
+Commit 0fd04bc9 · proof: diff read: ControlCommand, TurnLine, TurnRead, TurnTracker, createTurnTracker present as planned; typecheck passes · concerns: the explicit turnOpener close in lifecycle mode has no test that fails without it (every measured result lists the opener in turnMessages)
