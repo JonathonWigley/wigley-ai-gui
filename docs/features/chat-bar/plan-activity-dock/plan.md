@@ -388,12 +388,12 @@ setTurn(entries: readonly ChatEntry[], working: boolean): void;
 - [x] [Tool entries carry the agent's id](01-tool-entry-agent-id.md)
 
 ### Wave 2
-- [ ] [Working input's done state and the activityInTranscript flag](02-done-state-and-flag.md) — after 01
+- [x] [Working input's done state and the activityInTranscript flag](02-done-state-and-flag.md) — after 01
 
 ### Wave 3
-- [ ] [The composer's working slot](03-composer-working-slot.md) — after 02
+- [x] [The composer's working slot](03-composer-working-slot.md) — after 02
 - [ ] [The activity dock module](04-activity-dock-module.md) — after 02
-- [ ] [Entry list hides activity rows and drops the working block](05-entry-list-hiding.md) — after 01, 02
+- [x] [Entry list hides activity rows and drops the working block](05-entry-list-hiding.md) — after 01, 02
 
 ### Wave 4
 - [ ] [Wire the dock into the composer and the Chat tab](06-dock-wiring.md) — after 03, 04, 05
@@ -409,10 +409,20 @@ Review base: 46f417b5
 
 ### Groups
 - 01 · 91ff7c11 · diff read: all three Produces present; typecheck green · concerns: permission-turn test literal in fake-agent-harness.test.ts gained agentId though tsc did not flag it (runtime toEqual)
+- 02 · 7d7f06b0 · diff read: every Produces present; typecheck green; check-layers, oxlint, oxfmt clean on touched files · concerns: npm run lint fails in check-styles on agent-strip.css:17 (pre-existing, 65d29099), so the lint script stops before oxlint
+- 03 · 8eebaabd · diff read: ComposerKit.working and the hidden slot present; tree typecheck green at worker's end · concerns: left-out placement uses parentNode?.insertBefore since the test DOM has no before()
+- 05 · 5a2b0c6a · diff read: createEntryList signature and every EntryList member kept, working block gone, isActivityInTranscript read at create and rebuild; typecheck green at worker's end · concerns: chat-view.ts:137 and other 'working block' comments outside the task are stale until tasks 06 and 07
 ### Contract changes
 ### Rulings
 - Preflight: precondition 1's peer AGENTS.md hunk is committed (1b7363b5) and the tree is clean; origin is unreachable from this session (SSH publickey denied), so the run builds on local main at 46f417b5 — lead
 - fake-agent-harness.test agents-turn check asserts every tool emit (start and finish) as [id, agentId] — group 01 · group 01
 - layout.test.ts imports MAIN_AGENT_ID from src/contracts/agent — group 01 · group 01
+- DoneWorkingInput.steps comment leaves out the subagent-filter clause until task 06 writes it (D12) — group 02 · group 02
+- working-turn.ts workingInput returns LiveWorkingInput already (tsc narrowing), matching task 04's signature — group 02 · group 02
+- layout.test.ts uses a local MAIN_AGENT_ID = 'main' since check-layers forbids src/plugins/chat/layouts importing src/contracts; reverses group 01's import ruling — group 02 · group 02
+- left-out working slot placed in drawComposer after placeIfLeftOut, recorded via rollback.recordBox; app-slot.ts unchanged — group 03 · group 03
+- the working-placed-twice row asserts the default fallback and log, not before-box placement — group 03 · group 03
+- the list holds only slotted entries (transcriptEntries) so rows and stops never see a step or result under flag false — group 05 · group 05
+- every fancy buildEntry row builds over activityShown — group 05 · group 05
 ### Review rounds
 ### Test gate

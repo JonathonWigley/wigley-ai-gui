@@ -1,6 +1,6 @@
 # 04 — The activity dock module
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 3 · Depends on: 02
 Plan: [plan.md](plan.md)

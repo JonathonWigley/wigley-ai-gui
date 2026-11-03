@@ -1,6 +1,6 @@
 # 05 — Entry list hides activity rows and drops the working block
 
-Status: not started
+Status: done
 Type: Batch (the `activityInTranscript` hiding; the working block's removal — one file, one test file)
 Wave: 3 · Depends on: 01, 02
 Plan: [plan.md](plan.md)
@@ -83,3 +83,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 5a2b0c6a · proof: diff read: createEntryList signature and every EntryList member kept, working block gone, isActivityInTranscript read at create and rebuild; typecheck green at worker's end · concerns: chat-view.ts:137 and other 'working block' comments outside the task are stale until tasks 06 and 07

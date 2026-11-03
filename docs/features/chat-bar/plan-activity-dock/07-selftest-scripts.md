@@ -1,6 +1,6 @@
 # 07 — Self-test scripts follow the dock
 
-Status: not started
+Status: in progress
 Type: Batch (chat's script groups; the two comment fixes in agent-strip's and agent-lines' scripts)
 Wave: 4 · Depends on: 05
 Plan: [plan.md](plan.md)

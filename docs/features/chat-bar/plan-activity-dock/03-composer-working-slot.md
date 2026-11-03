@@ -1,6 +1,6 @@
 # 03 — The composer's working slot
 
-Status: not started
+Status: done
 Type: Task
 Wave: 3 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -68,3 +68,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 8eebaabd · proof: diff read: ComposerKit.working and the hidden slot present; tree typecheck green at worker's end · concerns: left-out placement uses parentNode?.insertBefore since the test DOM has no before()
