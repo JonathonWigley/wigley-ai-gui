@@ -28,18 +28,23 @@ type MovingParent = Element & {
   moveBefore?(node: Node, child: Node | null): void;
 };
 
-// Appends `node` to `parent`, through `moveBefore` when both are connected,
-// so a frame in it stays loaded.
-export function moveConnected(parent: Element, node: Node): void {
+// Inserts `node` into `parent` before `before`, a child of `parent` (at the
+// end when null), through `moveBefore` when both are connected, so a frame in
+// it stays loaded.
+export function moveConnected(
+  parent: Element,
+  node: Node,
+  before: Node | null = null,
+): void {
   const moving: MovingParent = parent;
   const canMoveConnected =
     typeof moving.moveBefore === 'function' &&
     parent.isConnected &&
     node.isConnected;
   if (canMoveConnected) {
-    moving.moveBefore!(node, null);
+    moving.moveBefore!(node, before);
   } else {
-    parent.append(node);
+    parent.insertBefore(node, before);
   }
 }
 
