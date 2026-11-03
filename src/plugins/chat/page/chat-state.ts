@@ -4,6 +4,7 @@ import type {
   SessionControl,
 } from '../../../contracts/agent';
 import type { Paths } from '../../../contracts/paths';
+import { NEEDS_YOU_ACTIVITY, type RowActivity } from '../../sessions/contract';
 import type { ChatSessionState } from '../contract';
 
 export type PermissionEntry = Extract<ChatEntry, { kind: 'permission' }>;
@@ -35,15 +36,54 @@ export function oldestPendingPermission(
   return null;
 }
 
-const TAB_STATUS: Record<ProcessActivity, string> = {
-  working: 'working',
-  waiting: 'waiting for permission',
-  idle: '',
-};
+// What an idle session's row still shows of a finished turn until the user
+// views the session or sends a message: `done` for a turn that ended while
+// another session was focused, `error` for a process that stopped mid-turn or
+// with an error.
+export type Unseen = 'done' | 'error' | null;
 
-// A session's line in its sidebar row; empty while idle.
-export function tabStatus(activity: ProcessActivity): string {
-  return TAB_STATUS[activity];
+const WORKING_ACTIVITY: RowActivity = {
+  word: 'working',
+  tone: 'running',
+  rank: 20,
+};
+const DONE_ACTIVITY: RowActivity = { word: 'done', tone: 'success', rank: 10 };
+const ERROR_ACTIVITY: RowActivity = { word: 'error', tone: 'error', rank: 30 };
+
+// The activity chat sets on a session's row; null draws nothing.
+export function rowActivity(state: {
+  activity: ProcessActivity;
+  unseen: Unseen;
+}): RowActivity | null {
+  if (state.activity === 'waiting') {
+    return NEEDS_YOU_ACTIVITY;
+  }
+  if (state.activity === 'working') {
+    return WORKING_ACTIVITY;
+  }
+  if (state.unseen === 'done') {
+    return DONE_ACTIVITY;
+  }
+  return state.unseen === 'error' ? ERROR_ACTIVITY : null;
+}
+
+// An error outlasts the turn's end, which arrives after the process rested; a
+// turn ending in the focused session leaves nothing unseen.
+export function unseenAfterTurnEnd(unseen: Unseen, focused: boolean): Unseen {
+  if (unseen === 'error') {
+    return 'error';
+  }
+  return focused ? null : 'done';
+}
+
+// A process resting with an error, or while a turn ran, is an error even in
+// the focused session.
+export function unseenAfterRest(
+  unseen: Unseen,
+  error: string | null,
+  wasActive: boolean,
+): Unseen {
+  return error !== null || wasActive ? 'error' : unseen;
 }
 
 // Whether the session's process works on a turn: waiting for a permission

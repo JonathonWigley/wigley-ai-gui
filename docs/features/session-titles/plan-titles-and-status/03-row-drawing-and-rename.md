@@ -1,6 +1,6 @@
 # 03 — Row title, activities and the rename dialog
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -32,3 +32,5 @@ Done when: compiles; `npm run lint` passes; the test gate runs the tests above a
 Commit:    one commit for the group
 
 ## Proof
+
+Commit f98fa386 · proof: diff read (ActivityTone, RowActivity, NEEDS_YOU_ACTIVITY, setActivity, createRowActivities, SessionRowInput.title/activity, commands, scope, binds present), typecheck clean, lint and sessions self-test passed per worker · concerns: status-dot.css header 'Static: only the streaming indicator moves.' now stale (for 07); .session-rename-box is a third copy of the input reset in .docs-box and .settings-box-input; problem line stays while editing until next Enter; Esc during an in-flight invoke closes but the title still sets and logs

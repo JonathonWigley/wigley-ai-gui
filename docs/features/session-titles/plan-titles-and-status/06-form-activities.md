@@ -1,6 +1,6 @@
 # 06 — Forms and primer set needs you
 
-Status: not started
+Status: done
 Type: Task
 Wave: 3 · Depends on: 03
 Plan: [plan.md](plan.md)
@@ -21,3 +21,5 @@ Done when: compiles; the test gate runs the tests above
 Commit:    one commit for the group
 
 ## Proof
+
+Commit b24de12c · proof: diff read (formShown dep present, forms and primer wired with own source ids), no type errors outside chat's in-progress files · concerns: forms-view.test.ts and primer-view.test.ts stubs gained setActivity, outside the Files list; start.ts files untouched since they pass the whole exports

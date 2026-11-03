@@ -130,12 +130,12 @@ to `DotStatus`.
 
 ### Wave 2
 - [x] [The set_session_title tool](02-title-tool.md) — after 01
-- [ ] [Row title, activities and the rename dialog](03-row-drawing-and-rename.md) — after 01
+- [x] [Row title, activities and the rename dialog](03-row-drawing-and-rename.md) — after 01
 - [x] [Chat saves titles, first-message fallback, the instruction](04-chat-titles.md) — after 01
 
 ### Wave 3
 - [ ] [Chat activities](05-chat-activities.md) — after 03
-- [ ] [Forms and primer set needs you](06-form-activities.md) — after 03
+- [x] [Forms and primer set needs you](06-form-activities.md) — after 03
 
 ### Wave 4
 - [ ] [Doc re-read](07-doc-re-read.md) — after 02, 03, 04, 05, 06
@@ -151,7 +151,11 @@ Review base: e38f1bb7
 - 01 · 3b62145d · diff read (every Produces present), typecheck clean, lint clean per worker · concerns: worktree guard refuses nvm-sourced npm, so npm runs by its absolute v24.22.1 path; per-call limit covered across two table rows rather than one list
 - 02 · 79a46745 · diff read (SET_SESSION_TITLE_TOOL and startTitleTool present, deps as named TitleToolDeps), no type errors in sessions/main · concerns: start test's exactly-once check rests on the list refusing a duplicate name, since tools() is not reachable through exports; fake paths built inline to keep the layer rule
 - 04 · e9cb027c · diff read (SavedSession.titles, ResumeRequest.title, ChatSessions.titleChanged, deps widened all present), no type errors in chat, layers clean · concerns: agent-chat design.md saved-sessions field list omits titles (for 07); that doc says a resume keeps the first request's system prompt, so a pre-change conversation may not get the instruction on resume, against the plan's 'a resumed agent may rename once more'
+- 03 · f98fa386 · diff read (ActivityTone, RowActivity, NEEDS_YOU_ACTIVITY, setActivity, createRowActivities, SessionRowInput.title/activity, commands, scope, binds present), typecheck clean, lint and sessions self-test passed per worker · concerns: status-dot.css header 'Static: only the streaming indicator moves.' now stale (for 07); .session-rename-box is a third copy of the input reset in .docs-box and .settings-box-input; problem line stays while editing until next Enter; Esc during an in-flight invoke closes but the title still sets and logs
+- 06 · b24de12c · diff read (formShown dep present, forms and primer wired with own source ids), no type errors outside chat's in-progress files · concerns: forms-view.test.ts and primer-view.test.ts stubs gained setActivity, outside the Files list; start.ts files untouched since they pass the whole exports
 ### Contract changes
+- createRowActivities(): inline return type → named RowActivities interface, same members · why: readability · consumers: 03 · group 03
+- startTitleTool deps: inline type → named TitleToolDeps, same shape · why: readability · consumers: 02 · group 02
 ### Rulings
 - setUserTitle(null) clears the user title, as an empty string does — channel type allows null — a caller expecting an error gets a clear · group 01 · group 01
 - titles(id) returns a copy, as state() does — keeps main's object private — none · group 01 · group 01
@@ -161,5 +165,11 @@ Review base: e38f1bb7
 - a resumed title is capped at 200 code points by the same helper as the first message — keeps saved state small — none · group 04 · group 04
 - empty text means text === ''; a whitespace-only message calls setTitle, which normalizes to null — none · group 04 · group 04
 - openRow sets titles for restore, resume and start alike; the titleChanged it fires saves nothing since the row is not yet held, and the following save writes them — none · group 04 · group 04
+- activities live in the sessions view; forget runs in view.render for rows that left, from the same rowChanges sessionRemoved uses — none · group 03 · group 03
+- set returns true only when the drawn word or tone changes — a rank-only change does not redraw — none · group 03 · group 03
+- the titleMaxLength settings subscription is never disposed: PageStart has no dispose hook — a hot-reloaded part would hold a stale listener · group 03 · group 03
+- trailing grid column is minmax(max-content, 1fr), not bare max-content, so it sits at the line end without a spacer track — none · group 03 · group 03
+- row-drawing tests live in preview.test.ts under describe('session rows'), since Files named no sessions-view test — none · group 03 · group 03
+- the exact-call-list cases are a new test rather than rows in the existing sync test — reviewers may want them merged · group 06 · group 06
 ### Review rounds
 ### Test gate

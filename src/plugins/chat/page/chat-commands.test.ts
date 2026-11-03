@@ -148,7 +148,8 @@ function box(text: string) {
 // The handlers over one shown session, and the `deps` they run with;
 // `invoked` records each call to chat main, `opened` each picker request,
 // `viewed` each image viewer opening, `revealed` each session the tabs
-// reveal, `toasts` each toast and `toastTones` its tone. Every invoke
+// reveal, `marked` each session the tabs mark sent, `toasts` each toast and
+// `toastTones` its tone. Every invoke
 // resolves, or rejects with `refusal` when one is given. With `visible`
 // false no Chat tab is the visible tab. `slashCommands` holds the app slash
 // commands send matches. `close` removes the session from the tabs.
@@ -165,9 +166,11 @@ function setUp(
   const toastTones: string[] = [];
   const viewed: { images: readonly ChatImage[]; index: number }[] = [];
   const revealed: string[] = [];
+  const marked: string[] = [];
   let isOpen = true;
   const tabs = {
     reveal: (sessionId: string) => revealed.push(sessionId),
+    markSent: (sessionId: string) => marked.push(sessionId),
     visibleSessionId: () => (visible ? shown.sessionId : null),
     session: (sessionId: string) =>
       isOpen && sessionId === shown.sessionId ? shown : undefined,
@@ -210,6 +213,7 @@ function setUp(
     deps,
     invoked,
     revealed,
+    marked,
     opened,
     logs,
     toasts,
@@ -461,6 +465,7 @@ describe('chat commands', () => {
     expect(ran).toEqual([{ sessionId: 'row-1', profile: 'work', args: '' }]);
     expect(run.invoked).toEqual([]);
     expect(message.held.text).toBe('');
+    expect(run.marked).toEqual(['row-1']);
   });
 
   it('send_AppCommandRejects_Toasts', async () => {
@@ -551,6 +556,7 @@ describe('chat commands', () => {
     expect(run.invoked).toEqual([
       ['send', 'row-1', { text: '', images: [png] }],
     ]);
+    expect(run.marked).toEqual(['row-1']);
   });
 
   it('putBack_TwoReturnedOverADraft_OldestOnTopImagesAheadOfAttached', () => {
@@ -618,6 +624,7 @@ describe('chat commands', () => {
       ]);
       expect(shown.attachments.images()).toEqual([]);
       expect(shown.counts.latest).toBe(1);
+      expect(run.marked).toEqual(['row-1']);
     },
   );
 

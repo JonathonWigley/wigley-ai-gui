@@ -312,7 +312,8 @@ function sessionFor(
 // its process in main, and the entries follow the latest one and scroll to
 // the bottom. When main refuses the message, it goes back into the box (see
 // `putBack`). A registered app slash command runs in place of sending and
-// clears the box, leaving the images attached.
+// clears the box, leaving the images attached. Either clears the done or
+// error the session's row shows.
 function send(deps: ChatCommandDeps, session: ChatSession) {
   const { log } = deps;
   const text = session.box.text();
@@ -324,6 +325,7 @@ function send(deps: ChatCommandDeps, session: ChatSession) {
   const matched = deps.slashCommands.match(text);
   if (matched !== null) {
     runSlashCommand(deps, session, matched.command, matched.args);
+    deps.tabs.markSent(session.sessionId);
     return;
   }
   void deps.channel
@@ -335,6 +337,7 @@ function send(deps: ChatCommandDeps, session: ChatSession) {
         log('chat', `put the refused message back in ${session.name}`);
       }
     });
+  deps.tabs.markSent(session.sessionId);
   session.box.setText('');
   session.attachments.clear();
   session.entries.latest();

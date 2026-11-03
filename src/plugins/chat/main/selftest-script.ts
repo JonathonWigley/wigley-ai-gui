@@ -134,11 +134,54 @@ const TWO_SESSIONS_STEPS: SelfTestStep[] = [
   },
 ];
 
+const escapeRegExp = (text: string) =>
+  text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// The line the Chat page logs when chat's activity on the named session's row
+// changes; `none` for no activity.
+const rowActivityLine = (name: string, word: string) =>
+  `[chat] row activity ${name} ${word}`;
+const rowActivityPattern = (name: string, word: string) =>
+  new RegExp(`^${escapeRegExp(rowActivityLine(name, word))}$`);
+
+// The fake's visual turn holds for a second and a half, so the second
+// session's turn ends after the first session's Chat tab shows.
+const ROW_ACTIVITY_STEPS: SelfTestStep[] = [
+  { keys: ['<A-S-i>'], expect: '[chat] Chat tab shown in chat-second' },
+  {
+    keys: [...sendKeys(FAKE_VISUAL_TEXT), '<A-S-o>'],
+    expect: rowActivityLine('chat-second', 'done'),
+    alsoExpect: [
+      rowActivityPattern('chat-second', 'working'),
+      /^\[chat\] Chat tab shown in chat-selftest$/,
+    ],
+    why: 'The turn ends while the first session is focused.',
+  },
+  {
+    keys: ['<A-S-i>'],
+    expect: rowActivityLine('chat-second', 'none'),
+    alsoExpect: [/^\[chat\] Chat tab shown in chat-second$/],
+    why: 'Focusing the session views its finished turn.',
+  },
+  {
+    keys: sendKeys('seen'),
+    expect: rowActivityLine('chat-second', 'none'),
+    alsoExpect: [rowActivityPattern('chat-second', 'working')],
+    why: 'A turn that ends in the focused session skips done.',
+  },
+  { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
+];
+
 // The second session's process ends here, leaving its row resting until the
 // next message there starts it again; its processes' calls are not checked.
 const RESTING_SESSION_STEPS: SelfTestStep[] = [
   { keys: ['<A-S-i>'], expect: '[chat] Chat tab shown in chat-second' },
-  { keys: sendKeys(FAKE_END_TEXT), expect: '[chat] chat-second rested' },
+  {
+    keys: sendKeys(FAKE_END_TEXT),
+    expect: '[chat] chat-second rested',
+    alsoExpect: [rowActivityPattern('chat-second', 'error')],
+    why: 'The process stops while its turn runs, so the row shows error though the session is focused.',
+  },
   {
     keys: [' ', 'c', 'e'],
     expect: '[chat] chat-second has no running process',
@@ -153,7 +196,8 @@ const RESTING_SESSION_STEPS: SelfTestStep[] = [
   {
     keys: sendKeys('again'),
     expect: '[chat] assistant entry added in chat-second',
-    why: 'The send starts the process again in the same row.',
+    alsoExpect: [rowActivityPattern('chat-second', 'none')],
+    why: 'The send starts the process again in the same row and clears its error.',
   },
   { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
 ];
@@ -179,9 +223,6 @@ const CLEAR_STEPS: SelfTestStep[] = [
   },
   { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
 ];
-
-const escapeRegExp = (text: string) =>
-  text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // The line the visual frames service logs when the frame of `source`
 // loads: the first eight hex characters of the source's SHA-256. The source
@@ -250,6 +291,8 @@ const PERMISSION_CARD_STEPS: SelfTestStep[] = [
   {
     keys: ['y'],
     expect: `[forms] form shown: chat-selftest · ${ROUND_HEADING}`,
+    alsoExpect: [rowActivityPattern('chat-selftest', 'none')],
+    why: 'The row showed needs you from the start; the answered permission leaves the focused session idle.',
   },
   { keys: [' ', ' '], expect: '[forms] review opened' },
   {
@@ -556,6 +599,11 @@ const GROUPS: SelfTestGroup[] = [
     name: 'two sessions',
     why: "Each session keeps its own state across switching Chat tabs: y in the second leaves the first's permission alone, a picker closes, the start prompt stays open, and a box left in visual mode keeps its text and cursor across a blur.",
     steps: TWO_SESSIONS_STEPS,
+  },
+  {
+    name: 'row activity',
+    why: 'the row shows working during a turn, done after it in an unfocused session, and nothing once viewed',
+    steps: ROW_ACTIVITY_STEPS,
   },
   {
     name: 'resting session',
