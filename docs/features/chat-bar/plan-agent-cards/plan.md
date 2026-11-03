@@ -63,13 +63,18 @@ Commit `577fd390`: `docs/features/chat-bar/design.md` (§ The agent strip, § De
 **Decisions (from the interview, 2026-11-03):**
 
 - Build on the existing agent strip; no new view.
-- Every box leaves when its process ends, done or failed; `sessionEnded` (interrupt, exit, crash) empties the roster.
+- Every box leaves when its process ends, done or failed; `sessionEnded` (the Claude process exits or crashes) empties
+  the roster. A soft interrupt reaches the roster as the `agentFinished`/`taskFinished` events the adapter already
+  sends, so those boxes leave too.
   No ✕, close key or Clear control. `userMessage` no longer changes the roster.
 - Tags: Subagent, Background agent, Shell. A subagent is Background agent once its launch receipt (`isAsync`) arrives.
   A task is always Shell.
 - Runtime on every box, ticking once a second.
 - Header: name + tag + runtime; description on the next line. A task's name is its owner's: `main`, else the owning
-  subagent's name stored on the task when it starts (no more `subagent` fallback).
+  subagent's name stored on the task when it starts, so it survives that subagent leaving; `subagent` only for a task
+  whose owner was never listed.
+- No user layout overrides `agent-strip` today (`~/.config/wigley-ai-gui/layouts/agent-strip/` holds only the
+  generated `layout.d.ts`, checked 2026-11-03), so the changed box inputs break nothing outside the repo.
 - Subagent: `model · effort` dim line; 3 latest tool lines (opacity 1 newest, 0.7, 0.4; a failed call keeps the error
   colour); context bar + `84k/200k` (warning colour at ≥ 80%; `84k` alone while the window is null); cost `$0.42`
   (left out while null).
@@ -91,9 +96,10 @@ Modified:
 - `src/main/claude-code/stream-decoder.ts`, `stream-decoder.test.ts` (01)
 - `src/shared/fake-agent-harness.ts`, `fake-agent-harness.test.ts` (01)
 - `src/plugins/chat/main/preview/preview-agent-events.ts`, `chat-preview.test.ts` (01)
-- `src/plugins/agents/contract.ts`, `roster.ts`, `roster.test.ts`, `main/preview.ts`, `main/start.test.ts`,
-  `page/rosters.test.ts` (02)
-- `src/plugins/agent-lines/page/running-work.ts`, `running-work.test.ts`, `working-lines.test.ts` (02)
+- `src/plugins/agents/contract.ts`, `roster.ts`, `roster.test.ts`, `main/preview.ts`, `main/preview.test.ts`,
+  `main/start.ts`, `main/start.test.ts`, `page/rosters.test.ts` (02)
+- `src/plugins/agent-lines/page/running-work.ts`, `running-work.test.ts`, `working-lines.test.ts`,
+  `main/selftest-script.ts` (02)
 - `src/plugins/agent-strip/layouts/layout.d.ts`, `layouts/default/layout.js`, `layout.css`, `layout.test.ts`,
   `page/strip-boxes.ts`, `strip-boxes.test.ts`, `page/agent-strip.ts`, `agent-strip.test.ts`,
   `main/selftest-script.ts` (03)

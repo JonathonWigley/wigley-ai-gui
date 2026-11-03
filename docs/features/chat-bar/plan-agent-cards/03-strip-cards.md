@@ -20,32 +20,54 @@ Produces:  in `layout.d.ts`:
            `BoxStatus` and `ToolLineInput` unchanged; `status`, `isDimmed`, `meta` and `owner` removed from the box inputs
 Decisions:
 - Every box ticks once a second while shown: generalise today's running-task tick (`runningTasks`, `updateTaskBox`,
-  `replaceTaskBox`) to every agent and task box, keeping its rules (an `update` that throws switches that kind of part
-  to full redraws until the layouts change; the tick runs only while some box shows). `elapsedMs = now - startedAt`.
+  `replaceTaskBox`) to every agent and task box, keeping its rules (the tick runs only while some box shows).
+  `elapsedMs = now - startedAt`. The "update threw, redraw instead" flag (`updateFailedUnder`) is kept per part kind
+  (`agentBox`, `taskBox`), each reset when the layouts change.
+- An agent box with no `update`, or whose `update` threw, is replaced by drawing it again; when that box is open, its
+  `toolList` is drawn again into the new element and both parts replace the old two in `holder.parts`, so the list
+  shows once and the old parts are disposed.
+- The page log keeps its text `boxes in <name>: <count> (<running> running)`, `running` now always equal to `count`.
+  The `agent-strip.test.ts` row expecting `3 (2 running)` (~line 625) becomes `3 (3 running)`.
 - Rewrite the `layout.d.ts` header comment: no failed or dimmed boxes; every box is running; the tick covers both.
 - `strip-boxes.ts`: remove `boxLook`, `agentMeta`, `taskOwner`, `outcomeOf`; `entryIndex` returns 0 for any non-empty
   strip; `toolLineInput` maps a tool's outcome to `BoxStatus` locally (`running`→`running`, `done`→`success`,
   `failed`→`error`).
-- Default layout, both boxes: head row = running dot (`kit.statusDot(head, 'running')`), name, tag, runtime
-  (`kit.duration(elapsedMs)`, pushed right, mono, tertiary); then description, one line, ellipsis.
-  Tag words: `Subagent`, `Background agent`, `Shell`. Background agent and Shell tags use the accent tint; Subagent the
-  outlined tag.
-- Agent box, under the description: `model · effort` (each null left out; line omitted when both null), dim; while not
-  open, the recent tools block (fixed three-line height, lines bottom-aligned, newest at full opacity, the one before at
-  0.7, the oldest at 0.4, a `data-status="error"` line in the error colour); then the footer: a bar whose fill is
-  `contextTokens / contextWindow`, the text `84k/200k` (tokens rounded to whole thousands, `k` suffix; `1.2M` style at
-  ≥ 1,000,000), and the cost `$0.42` (two decimals). Bar fill takes the warning colour at ≥ 0.8. With `contextWindow`
-  null: no bar, text `84k`. With `contextTokens` null: no bar and no text. With `spendUsd` null: no cost. Footer omitted
-  when it would be empty.
-- Task box, under the description: the command as one mono line in the tools block's surface (`no command` when null);
-  while open, the full command wraps (today's open behaviour). No footer.
+- Default layout, both boxes: head row = running dot (`kit.statusDot(head, 'running')`), name
+  (`agent-strip-name`, shrinks with an ellipsis), tag (`kit.tag(head, <words>, <tone>)`, `flex: none`), runtime
+  (`agent-strip-runtime`, `kit.duration(elapsedMs)`, pushed right, mono, tertiary, `flex: none`); then the
+  description (`agent-strip-description`), one line, ellipsis. Tags: `kit.tag(head, 'Subagent', 'neutral')`,
+  `kit.tag(head, 'Background agent', 'accent')`, `kit.tag(head, 'Shell', 'accent')`. The task box's terminal icon is
+  dropped (and its `.agent-strip-task-icon` CSS).
+- Agent box, under the description: `model · effort` (`agent-strip-model`; each null left out; line omitted when both
+  null), dim; while not open, the recent tools block (`agent-strip-recent`, on `block-background` with `radius-sm` per
+  `DESIGN.md`, always three lines tall even with fewer or no tools, lines bottom-aligned, newest at full opacity, the
+  one before at 0.7, the oldest at 0.4, a `data-status="error"` line in the error colour); then the footer
+  (`agent-strip-footer`).
+- **Footer.** A bar `span.agent-strip-bar` holding `span.agent-strip-bar-fill`; the fill's width comes from the custom
+  property `--agent-strip-percent` set with `style.setProperty('--agent-strip-percent', String(percent))`, where
+  `percent = Math.min(100, Math.round(contextTokens / contextWindow * 100))`. The bar gets `data-tone="warning"` when
+  `contextTokens / contextWindow >= 0.8` (raw ratio), and the CSS colours that fill with the warning colour. Then the
+  text `agent-strip-context`: `84k/200k` (tokens to whole thousands with `k`; at ≥ 1,000,000 one decimal with `M`, as
+  `1.2M`), then the cost `agent-strip-cost` `$0.42` (two decimals). With `contextWindow` null: no bar, text `84k`. With
+  `contextTokens` null: no bar and no context text. With `spendUsd` null: no cost. Footer omitted when it would be empty.
+- Task box, under the description: the command (`agent-strip-command`) as one mono line in the same surface as the
+  recent tools block (`no command` when null); while open, the full command wraps (today's open behaviour). No footer.
 - `update` on both boxes rewrites only the runtime text.
-- Colours, sizes and radii come from the theme variables and `DESIGN.md`; read `DESIGN.md` before the CSS. Remove the
-  `is-dimmed` rules.
-- `selftest-script.ts`: the interrupt step now expects the strip to empty (boxes leave on `sessionEnded`), not dimmed
-  boxes waiting for the next message; its `why` lines say so. Add a check that a box shows its tag and a runtime.
-GIVEN an agent with contextTokens 84000 and contextWindow 200000 WHEN drawn THEN the footer reads `84k/200k` and the bar is 42% wide without the warning class
-GIVEN contextTokens 166000 of 200000 WHEN drawn THEN the bar has the warning class
+- CSS: colours, sizes and radii from the theme variables and `DESIGN.md`; read `DESIGN.md` before the CSS. Remove the
+  `is-dimmed` rules. The closed box's `min-height` calc covers the fullest closed agent box: head, description, model
+  line, three tool lines, footer and the cursor prompt — 8 lines and 7 gaps (today's calc is 7 and 6).
+- `selftest-script.ts`: the fake harness's interrupt sends `agentFinished`/`taskFinished` failed, so the interrupt
+  step now expects the strip to empty (`boxesLine(0, 0)`), not dimmed boxes. Delete the trailing `strip cleared` step
+  (its log line no longer changes, so it would time out) and the group `why`'s "the next message drops them" clause;
+  the `why` lines say an interrupt ends the items and their boxes leave. Add a check that a box shows its tag and a
+  runtime. Update `scrollsItself` to the new classes that clip (`agent-strip-name`, `agent-strip-description`,
+  `agent-strip-tool`, `agent-strip-command`), dropping `agent-strip-meta`.
+- `layout.test.ts`'s `FakeElement` gains a `style.setProperty` recorder so the footer rows can assert the percent.
+GIVEN an agent with contextTokens 84000, contextWindow 200000 and spendUsd 0.4213 WHEN drawn THEN the footer reads `84k/200k` and `$0.42`, the fill's `--agent-strip-percent` is `42`, and the bar has no `data-tone`
+GIVEN contextTokens 166000 of 200000 WHEN drawn THEN the bar has `data-tone="warning"` and percent `83`
+GIVEN contextTokens 250000 of 200000 WHEN drawn THEN percent is `100`
+GIVEN contextTokens 1234000 of 2000000 WHEN drawn THEN the text reads `1.2M/2.0M`
+GIVEN an open agent box under a layout with no `update` WHEN a second passes THEN its tool list shows once
 GIVEN contextWindow null and contextTokens 84000 WHEN drawn THEN the footer reads `84k` with no bar
 GIVEN `isBackground` true WHEN drawn THEN the tag reads `Background agent`; false reads `Subagent`; a task reads `Shell`
 GIVEN a task owned by `kind-fixer` WHEN drawn THEN its name reads `kind-fixer`
