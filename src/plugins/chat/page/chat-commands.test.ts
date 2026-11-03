@@ -13,6 +13,7 @@ import {
   chatCommandHandlers,
   fillComposer,
   putBack,
+  sendQueuedNow,
 } from './chat-commands';
 import type { ChatSession, ChatTabs, PermissionActions } from './chat-view';
 import type { ListStop } from './activity-runs';
@@ -101,6 +102,7 @@ function session(
     state,
     running,
     box: {} as TextEditor,
+    isBoxFocused: () => false,
     attachments: createAttachments(),
     entries,
     enterStop: () => null,
@@ -377,7 +379,12 @@ describe('chat commands', () => {
       const shown = session(true);
       const state = {
         ...shown.state,
-        queued: queued.map((id) => ({ id, text: id, images: [] })),
+        queued: queued.map((id) => ({
+          id,
+          text: id,
+          images: [],
+          sentEntryId: null,
+        })),
       };
       const run = setUp(Object.assign(shown, { state }));
 
@@ -387,6 +394,62 @@ describe('chat commands', () => {
       expect(run.logs).toEqual(logs);
     },
   );
+
+  it.each([
+    {
+      given: 'a pending row focused, the box unfocused',
+      boxFocused: false,
+      typed: 'draft',
+      invoked: [['sendNow', 'row-1', 'q-2']],
+      left: 'draft',
+    },
+    {
+      given: 'a pending row focused, text in the focused box',
+      boxFocused: true,
+      typed: 'now',
+      invoked: [['sendAllNow', 'row-1', { text: 'now', images: [] }]],
+      left: '',
+    },
+    {
+      given: 'a pending row focused, the focused box empty',
+      boxFocused: true,
+      typed: '',
+      invoked: [['sendAllNow', 'row-1', null]],
+      left: '',
+    },
+  ])(
+    'sendNow given $given sends the row or the box',
+    ({ boxFocused, typed, invoked, left }) => {
+      const message = box(typed);
+      const entries = focusedOnStop({
+        kind: 'queued',
+        message: { id: 'q-2', text: 'later', images: [], sentEntryId: null },
+      });
+      const shown = Object.assign(session(true), {
+        box: message,
+        entries: Object.assign(entries, { latest: () => undefined }),
+        isBoxFocused: () => boxFocused,
+      });
+      const run = setUp(shown);
+
+      run.handlers.sendNow({});
+
+      expect(run.invoked).toEqual(invoked);
+      expect(message.held.text).toBe(left);
+    },
+  );
+
+  it('sendQueuedNow_MainRejects_LogsTheFailure', async () => {
+    const run = setUp(session(true), new Error('session gone'));
+
+    sendQueuedNow(run.deps, { sessionId: 'row-1', name: 'app' }, 'q-2');
+    await flush();
+
+    expect(run.logs).toEqual([
+      '[chat] sending a pending message now in app',
+      '[chat] sendNow failed: session gone',
+    ]);
+  });
 
   it.each([
     {

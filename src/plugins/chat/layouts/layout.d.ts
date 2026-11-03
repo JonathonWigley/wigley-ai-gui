@@ -126,10 +126,12 @@ export interface WorkingInput {
   now: number;
 }
 
-// One pending message: its text as typed and how many images it carries.
+// One pending message: its text as typed, how many images it carries, and whether the user sent it into the running
+// turn, so it waits only for the agent to take it in.
 export interface QueuedMessageInput {
   text: string;
   imageCount: number;
+  sent: boolean;
 }
 
 export interface EntryView<K extends EntryKind = EntryKind> {
@@ -388,7 +390,7 @@ export interface ChatLayout {
     kit: BaseKit,
   ): PartView<WorkingInput>;
   // One pending message's row, appended to the entry list after the last entry; the app marks the focused row and
-  // handles its click.
+  // handles its click, and sends the input again when the row turns sent.
   queuedMessage?(
     parent: HTMLElement,
     input: QueuedMessageInput,

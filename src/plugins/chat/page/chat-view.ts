@@ -80,11 +80,13 @@ export interface SessionRef {
 // last sent it, whether its process runs, its message box, the images
 // attached to its next message and its entries. `enterStop` offers the entry
 // cursor to the composer parts' stops, in part order: the id of the part that
-// took it, null when none did.
+// took it, null when none did. `isBoxFocused` says whether the box holds
+// focus now.
 export interface ChatSession extends SessionRef {
   readonly state: ChatSessionState;
   readonly running: boolean;
   box: TextEditor;
+  isBoxFocused(): boolean;
   attachments: Attachments;
   entries: Pick<
     EntryList,
@@ -519,6 +521,7 @@ function sessionOf(
       return tab.state.running;
     },
     box,
+    isBoxFocused: () => tab.isBoxFocused,
     attachments: tab.attachments,
     entries: tab.entries,
   };
