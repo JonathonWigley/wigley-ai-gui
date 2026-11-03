@@ -9,6 +9,7 @@ import type {
   RowLineInput,
   SessionLineInput,
   StatusLineInput,
+  StatusLinePlanInput,
   UsageTone,
 } from '../layouts/layout';
 import {
@@ -27,7 +28,7 @@ const MINUTE_MS = 60_000;
 
 // The status-bar plan line for `shownSessionId` (null while no session
 // shows): the plan of its session's profile, or of the default profile while
-// it has none.
+// it has none, and every profile's plan.
 export function statusLineInput(
   snapshot: UsageSnapshot,
   shownSessionId: string | null,
@@ -35,9 +36,11 @@ export function statusLineInput(
   const plan = shownPlan(snapshot.plans, findSession(snapshot, shownSessionId));
   return {
     profileName: plan?.name ?? null,
-    plans: plan?.usage?.rows.map(rowMeter) ?? [],
-    note: planNote(plan),
-    stale: plan !== null && plan.usage !== null && plan.stale,
+    ...statusLinePlan(plan),
+    profiles: snapshot.plans.map((each) => ({
+      name: each.name,
+      ...statusLinePlan(each),
+    })),
   };
 }
 
@@ -133,6 +136,14 @@ function shownPlan(
       ? undefined
       : plans.find((plan) => plan.profileDir === sessionUsage.profileDir);
   return sessionPlan ?? plans.find((plan) => plan.isDefault) ?? null;
+}
+
+function statusLinePlan(plan: ProfilePlan | null): StatusLinePlanInput {
+  return {
+    plans: plan?.usage?.rows.map(rowMeter) ?? [],
+    note: planNote(plan),
+    stale: plan !== null && plan.usage !== null && plan.stale,
+  };
 }
 
 function planNote(plan: ProfilePlan | null): string | null {

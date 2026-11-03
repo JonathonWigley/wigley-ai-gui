@@ -28,14 +28,22 @@ export interface SessionLineInput {
 export interface RowLineInput {
   context: MeterInput;
 }
-// The status-bar plan line. `profileName` is the shown plan's profile, null when there is no profile at all. `note`
-// (`plan loading`, `plan unavailable`, `no plan rows`, `no profiles`) stands in place of `plans` when set. `stale` is
-// true while the shown plan's last poll failed after a good one.
-export interface StatusLineInput {
-  profileName: string | null;
+// One plan as the status bar shows it. `note` (`plan loading`, `plan unavailable`, `no plan rows`, `no profiles`)
+// stands in place of `plans` when set. `stale` is true while the plan's last poll failed after a good one.
+export interface StatusLinePlanInput {
   plans: readonly MeterInput[];
   note: string | null;
   stale: boolean;
+}
+// One profile's plan on the status bar.
+export interface StatusLineProfileInput extends StatusLinePlanInput {
+  name: string;
+}
+// The status-bar plan line: the shown plan, `profileName` its profile (null when there is no profile at all), and
+// every profile's plan in chat's profile order in `profiles`.
+export interface StatusLineInput extends StatusLinePlanInput {
+  profileName: string | null;
+  profiles: readonly StatusLineProfileInput[];
 }
 // One plan row; `resets` reads `resets in 2h 14m` or `resets now`, null with no reset time.
 export interface DetailsRowInput extends MeterInput {

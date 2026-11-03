@@ -130,7 +130,8 @@ In `src/contracts/agent.ts`, beside `AgentHarness`:
   A poll still running when the next one is due is not doubled.
 - **Page** draws, through the `usage` layout:
   - a status-bar line, always on, aligned to the end: the shown session's profile's plan rows (the default profile
-    while no session shows). Each meter is tinted by its severity. A stale profile's rows draw muted.
+    while no session shows). Each meter is tinted by its severity. A stale profile's rows draw muted. The layout
+    also gets every profile's plan rows, so a user layout can stack them all.
   - each Chat session's line, a status part (chat's `addStatusPart`) in its Chat status line; the optional
     `usage-tab-line` plugin (in `plugins.disabled` by default) draws the same line as a bar part (sessions'
     `addBarPart`) in each session's tab bar. The line: its context bar
@@ -175,7 +176,8 @@ contributes to it through `api.areas.rightBar`.
   covers nothing.
 - **The agent-tower agent event seam is built now,** with `usage` as its first member grown to carry the autocompact
   limits, cache expiry and spend, so there is one forwarding path from adapter to plugins.
-- **Profiles:** the status bar shows the shown session's profile; the details bar lists every profile.
+- **Profiles:** the default status bar shows the shown session's profile, its input carrying every profile for a
+  layout that shows them all; the details bar lists every profile.
 - **Autocompact limit:** the configured override wins, the reported limit shows beside it, and a difference is marked.
 - **Cache time** is the prompt-cache expiry, not an autocompact timer: autocompact fires on tokens alone.
 - **Main gains injected `timers`,** matching the page's, since the poller is main's first periodic work.
