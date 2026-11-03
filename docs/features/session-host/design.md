@@ -53,14 +53,15 @@ ends a turn; it falls back to the resting row and `--resume`, as before this fea
 - A process is **idle** when its last stdout line matches the idle rule, and busy after any later line. While no app
   is connected, an idle process past the keep window is ended: stdin closed, then a kill after a grace. The app sends
   the window (`chat.keepIdleMinutes`, default 60, the prompt cache's life) on connect and on each change.
-- The host's folder is `session-host/` in the app instance's user data folder: the pipe logs and the channel's
-  record. Its channel is a Unix socket on macOS and a named pipe on Windows, through the same transport the relay
+- The host's folder is `session-host/` in the app instance's user data folder (the self-test's: in its temporary
+  home, deleted at its teardown): the pipe logs and the channel's record. Its channel is a Unix socket on macOS and a named pipe on Windows, through the same transport the relay
   channel uses, named with the protocol version so two protocol versions never share a channel.
 - The app starts the host with its own binary as Node (`ELECTRON_RUN_AS_NODE=1`), detached, with no stdio, and
   waits for its channel. The host exits once it holds no process and no app is connected.
 - A host that dies takes its processes with it: each one's pipes close and it exits. The app treats that as a
   process exit.
-- A drive run and the self-test end their host's processes at teardown, since their runs are thrown away.
+- A drive run and the self-test end their host's processes at teardown, since their runs are thrown away. A drive
+  `restart` keeps them, so a drive run can check re-attach; only the run's final quit ends them.
 
 ## Protocol
 
@@ -85,6 +86,9 @@ lines past the last `seq` it read.
   agree except for what no pipe line records (a notice the app made from a call, such as "Interrupted again").
 - A re-attached row shows the transcript up to its process's start time, then the replayed entries, so no entry
   shows twice: transcript entries and live entries have different ids.
+- A row whose process runs but cannot be attached — it lives in another protocol's host, the host list timed out, or
+  the attach failed — is **unheld**: it refuses a send until that process ends, and before a send or a history read
+  chat lists the host again and re-attaches when it can, so a session never runs two processes.
 - Events a replay emits are flagged `replayed`, so the agents log appends nothing twice and no alert fires for a
   turn that ended while the app was closed. The row still shows the session's current state.
 - Chat saves each session's queued messages with its record. A re-attached row shows them again and sends the oldest
@@ -95,8 +99,10 @@ lines past the last `seq` it read.
 ## Older hosts
 
 After an update that changed the protocol, the new app finds the older host's channel, sends it `drain`, and starts
-its own. A row whose process lives in the older host shows a notice that it is finishing in the previous version and
-refuses a send until that process has ended; it then rests and resumes under the new host on the next message.
+its own. A newer protocol's host is never drained: an older app that finds one lists its processes as not current and
+leaves them running. A row whose process lives in another protocol's host shows a notice that it is finishing in
+another app version and refuses a send until that process has ended; it then rests and resumes under the new host on
+the next message.
 
 ## Platforms
 

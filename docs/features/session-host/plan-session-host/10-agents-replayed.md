@@ -8,8 +8,9 @@ Plan: [plan.md](plan.md)
 Read first: `docs/features/session-host/design.md` § Re-attach (the replayed events bullet).
 
 Files:     modify `src/plugins/agents/main/start.ts` · test `src/plugins/agents/main/start.test.ts` ·
-           modify `src/plugins/workflow/main/start.ts` and the workflow file that starts Clear & make's countdown
-           (find it with `grep -rn "countdown" src/plugins/workflow`) · test their existing test files
+           modify `src/plugins/workflow/main/start.ts` · test `src/plugins/workflow/main/start.test.ts`
+           (the countdown starts in `withCountdown`, which `apply` in `start.ts` calls; the plan-ready stage,
+           `src/plugins/workflow/stages/plan-ready/main.ts`, only names `autoCommand` and does not change)
 Consumes:  `ChatAgentEvent.replayed: boolean` in `src/plugins/chat/contract.ts` ← 01
 Produces:  no new name. The `chat.agentEvent` listener in `agentsMainPart.start` appends to `logs/<hostSessionId>.jsonl`
            only when `replayed` is false and the host id is not `CHAT_PREVIEW_HOST_ID`.
@@ -33,27 +34,55 @@ The other `chat.agentEvent` listeners (checked with `grep -rn "chat.agentEvent" 
 | `src/plugins/agent-lines`, `src/plugins/agent-strip` | not a listener | Page plugins. They read the agents plugin's rosters, not `chat.agentEvent`. |
 | chat's own turn-finished alert | task 09 | Chat does not alert on replayed activity. |
 
+Workflow, how the flag reaches the countdown:
+
+- `apply(sessionId, signal)` in `start.ts` gains a third parameter `replayed: boolean`, default `false`. When it is
+  true, `apply` puts the folded flow as it is and skips `withCountdown`. Every other step of `apply` runs as today:
+  the `planWatch.check` on `turnEnded`, the `planWatch.follow` calls, `putFlow` (so `countdown.sync` still runs and a
+  countdown already running stays in step with the flow).
+- Only the `chat.agentEvent` listener passes a third argument: the payload's `replayed` field. The
+  other callers of `apply` — the plan watch's `signal`, the actions' `signal`, and the `sessions.hostSessionChanged`
+  listener — keep two arguments, so they stay live.
+- **Open — the user decides before this task runs:** a replayed `fileWritten` or `turnEnded` makes the plan watch
+  read `plan.md` later, and the `planChanged` it sends comes through `apply` with no replay flag. When the flow had
+  no plan progress yet (a feature turn that ended while the app was closed), that live `planChanged` enters
+  `planReady` and starts a countdown. (a) Accept it: only the fold of a replayed event starts no countdown; a plan
+  read it triggers is live. (b) Suppress it too, which needs the plan watch to carry the flag of the event that
+  started its read. The lead fills in the user's answer here.
+
 GIVEN a `chat.agentEvent` with `replayed: true` for a real host id WHEN the agents part hears it THEN no line is
 appended to `logs/<hostSessionId>.jsonl` AND the row's roster folds the event AND `rosterChanged` is sent when the
 roster changed.
 GIVEN a `chat.agentEvent` with `replayed: false` WHEN the agents part hears it THEN the log appends it as today.
-GIVEN replayed events that move a session's flow into the stage whose entry starts Clear & make's countdown WHEN
-workflow folds them THEN the flow ends on that stage AND no countdown starts. The same events with `replayed: false`
-start the countdown as today.
+GIVEN replayed events whose fold moves a session's flow into `planReady` (the stage whose entry starts Clear &
+make's countdown) WHEN workflow folds them THEN the flow ends on that stage AND no countdown starts. The same events
+with `replayed: false` start the countdown as today.
 
 Tests:
+- Agents (`src/plugins/agents/main/start.test.ts`): the helper becomes
+  `agentEvent(event: AgentEvent, hostSessionId = 'h1', replayed = false)` and puts `replayed` in the payload. Every
+  existing caller keeps its arguments, so every existing event is emitted with `replayed: false`.
 - Turn `previewEvents_NoLogWritten` into an `it.each` named `agentLog_UnloggedEvents_NoLogWritten`, with two rows:
   `{ given: 'the chat preview host', hostSessionId: CHAT_PREVIEW_HOST_ID, replayed: false }` and
-  `{ given: 'a replayed event', hostSessionId: 'h1', replayed: true }`. Each row emits an `agentSpawned` event. Each
-  row asserts that the data folder holds no file under `logs/`. The replayed row also asserts one `rosterChanged`
-  message for its row, holding the spawned agent.
-- `logs each event under its host session id`: its emitted events get `replayed: false`, and its assertions stay.
-- Add a row to the workflow test that pins the countdown start (find it in the workflow tests): the same entry
-  events with `replayed: true` start no countdown; with `replayed: false` they start one.
-- Every other `chat.agentEvent` literal in `start.test.ts` (the helper near line 158) gets `replayed: false`, so the
-  type check passes.
+  `{ given: 'a replayed event', hostSessionId: 'h1', replayed: true }`. Each row emits `spawned` through
+  `agents.agentEvent(spawned, hostSessionId, replayed)`, then `await settled()`. Each row asserts
+  `expect(await agents.data.list('logs')).toEqual([])` (`Files.list` lists a missing folder as `[]`). Each row also
+  asserts `agents.invoke('rosters')` equals `{ s1: roster([runningA]) }`, and the replayed row asserts
+  `agents.sent` equals `[{ sessionId: 's1', roster: roster([runningA]) }]`.
+- `logs each event under its host session id`: unchanged; through the helper's default its events carry
+  `replayed: false`, and its assertions stay.
+- Workflow (`src/plugins/workflow/main/start.test.ts`): its `agentEvent` helper gains the same third parameter
+  `replayed = false`, and `runFeatureTurn(workflow, replayed = false)` passes it to each of its `agentEvent` calls.
+  New test `replayedFeatureTurn_ReachesPlanReady_StartsNoCountdown`: `startWorkflowPart({ ...SETTINGS,
+  autoClearAndMake: true })`, `await runFeatureTurn(workflow, true)`. `workflow.lastFlow()` matches
+  `{ stage: 'planReady', planDir: PLAN_DIR, countdownEndsAt: null }`; after `workflow.time.advance(10_000)` and
+  `await settled()`, `workflow.chatCalls` equals `[]`. `runFeatureTurn` awaits between its events, so the plan watch
+  has read the plan (while the turn was busy, so no entry) before `turnEnded` folds: the entry is the replayed
+  `turnEnded`'s own fold. The existing `featureTurnWritingAPlan_ReachesPlanReady_…` test keeps today's assertions and
+  is the `replayed: false` case.
 
-Done when: `npm run typecheck` passes; the test gate runs `src/plugins/agents/main/start.test.ts`.
+Done when: `npm run typecheck` passes; the test gate runs `src/plugins/agents/main/start.test.ts` and
+`src/plugins/workflow/main/start.test.ts`.
 Commit:    one commit for the group: "agents and workflow: replayed chat events log nothing and start no countdown".
 
 ## Proof

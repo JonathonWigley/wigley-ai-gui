@@ -81,7 +81,7 @@ The design doc is the source of truth for behaviour. Task 11 re-reads every doc 
  app start (main.ts)
    └─ createSessionHostClient ──connect──▶ host channel (session-host-v<N>)
         │  none answers → spawn <app binary> session-host.js, ELECTRON_RUN_AS_NODE=1, detached; wait for channel
-        │  older-version channel answers → send `drain` to it
+        │  a lower-protocol host's record found → send `drain` to it (a newer host is never drained)
         ▼
    services.sessionHost ──▶ chat (list, setKeepIdleMinutes)       harness deps.host ──▶ spawn / attach
  
@@ -90,12 +90,13 @@ The design doc is the source of truth for behaviour. Task 11 re-reads every doc 
      host lists record.processId running, current version ─▶ harness.attach(start, processId, events)
          │    host returns { process, log }; fold replays log (effects off); events fired before attach
          │    resolves are replayed; then live lines
-     host lists it running in an older host ─▶ row rests with "finishing in previous version"; sends refused
-         │                                      until it ends
+     host lists it running in another protocol's host, the list times out, or attach fails
+         ─▶ row is unheld (task 09 decision 24): notice, sends refused until that process ends;
+            a send or history read lists the host first and re-attaches when the process still runs
      otherwise ─▶ row rests (today's path)
 
  session host (own process)
-   spawn ─▶ claude ⇄ stdin/stdout/stderr ─▶ pipe log <user data>/session-host/logs/<id>.jsonl {seq,dir,at,text}
+   spawn ─▶ claude ⇄ stdin/stdout/stderr ─▶ pipe log <user data>/session-host/logs/<pipeLogFile(id)> {seq,dir,at,text}
    last stdout line matches idle rule and no client connected for keepIdleMinutes ─▶ endInput, kill after grace
    no process and no client ─▶ exit
 
@@ -120,11 +121,16 @@ The design doc is the source of truth for behaviour. Task 11 re-reads every doc 
   whose first group is `00000000-`, so a replay tells a control pick (no user entry) from a typed command (a user
   entry). The uuid is the app's own field on its stdin message (task 05).
 - Replay matches live except where 05 names a limit: the "Interrupted again" notice (made by a call, not a line),
-  agent definitions loaded before the replay, and an `in` and `out` line that cross in transit (fallback mode only).
-- Chat saves the controls each process was launched with and passes them to `attach` (task 09).
+  agent definitions loaded before the replay, an `in` and `out` line that cross in transit (a fallback turn end; an
+  interrupt crossing its result), and side inputs no pipe line records (the `settings.json` usage percent, saved
+  replies), which attach reads again after the replay. When a turn ended while no app was attached, attach writes one
+  context request (05, 08).
+- Chat saves the controls and the `resume` value each process was launched with (`launchControls`,
+  `launchResume`) and passes them to `attach` (task 09).
 - Windows installs each build into its own `app-<short sha>` folder (round 1).
 - A host that dies ends its processes; the app treats that as a process exit (round 3 notice).
-- A drive run and the self-test stop their host's processes at teardown.
+- A drive run and the self-test stop their host's processes at teardown. A drive `restart` keeps them; only the
+  run's final `quit` stops them, inside the parts' quit task after `disposeParts` settles (08).
 
 ### Out of scope
 
@@ -171,11 +177,13 @@ export interface HostedProcessInfo {
   id: string;
   startedAt: number;
   running: boolean;
-  current: boolean;               // false: it lives in an older protocol's host that is draining
+  current: boolean;               // false: it lives in another protocol's host (an older one is draining)
 }
 export interface SessionHost {
   spawn(request: HostedSpawn, events: HostedProcessEvents): HostedProcess;
   // The whole pipe log so far, then live lines past its last seq through `events`.
+  // Live lines start in a later macrotask than the one that resolves the promise, so a caller that replays `log`
+  // in the continuation of its `await` has replayed the whole log before the first live line.
   // Null when no current-version host holds a running process with that id.
   attach(id: string, events: HostedProcessEvents): Promise<{ process: HostedProcess; log: readonly PipeLine[] } | null>;
   list(): Promise<HostedProcessInfo[]>;
@@ -188,6 +196,8 @@ export interface SessionHost {
 `SESSION_HOST_PROTOCOL` (a number, starts at 1). The frozen messages `hello`, `list`, `drain` and the frozen
 `PipeLogRecord` (`{ seq, dir, at, text }`, one JSON object per log line) and `SessionHostRecord` (`{ protocol, channel,
 pid }`, the `host-v<N>.json` file a client reads to find an older host) are marked frozen in their doc comments.
+The same module owns every name in the host folder, frozen with the record: `HOST_LOGS_FOLDER`, `hostRecordFile`,
+`hostLogFile`, `hostRecordProtocol` and `pipeLogFile` (a process id percent-encoded to a safe file name).
 The rest: `spawn`, `write`, `endInput`, `kill`, `subscribe`, `unsubscribe`, `setKeepIdle`, `stopAll`, and the host's pushed
 `line` and `closed` events. Task 01 writes the message types; tasks 06 and 07 use them.
 
@@ -227,6 +237,8 @@ Task 01 sets `replayed: false` at every `ChatAgentEvent` emitter in the tree (ch
 | `scripts/check-layers.mts` | 02, 06 | rules for `src/shared/local-channel/`, `src/main/session-host/` and `main.ts`'s new import (02); `src/session-host/` (06) |
 | `forge.config.mts` | 06 | `RunAsNode` fuse on; session host build entry |
 | `src/main/claude-code/claude-code-harness.ts` | 05, 08 | pipe fold (05); host spawn, attach (08) |
+| `src/main/claude-code/claude-controls.ts` | 05 | `CONTROL_COMMAND`, `controlOf` and `isChoice` move here for the fold |
+| `src/main/drive/drive-commands.ts`, `drive-run.ts`, `scripts/drive.mts`, `.agents/skills/drive/SKILL.md` | 08 | `quit` takes `keepSessions`; a `restart` keeps hosted processes |
 | `src/main/claude-code/transcripts.ts`, `past-sessions.ts` | 08 | history `before` cut through `readHistory` |
 | `src/shared/fake-agent-harness.ts` | 08 | `attach`, `history` `before` |
 | `src/main/main.ts` | 08 | build the host client; harness `host` dep; `services.sessionHost`; drive and self-test teardown |
@@ -236,7 +248,7 @@ Task 01 sets `replayed: false` at every `ChatAgentEvent` emitter in the tree (ch
 | `src/plugins/chat/page/chat-commands.ts` | 09 | `chat.stopAll` page handler |
 | `src/plugins/sessions/contract.ts`, `src/plugins/sessions/main/start.ts`, `src/plugins/sessions/main/relay/relay-server.ts` | 09 | `holdConnects`; the relay server awaits the hold before `connect` (02 edits `relay-server.ts` in wave 1) |
 | `src/plugins/agents/main/start.ts` | 10 | skip replayed events in the log |
-| `src/plugins/workflow/main/start.ts` (and the stage that starts Clear & make's countdown) | 10 | a replayed event starts no countdown |
+| `src/plugins/workflow/main/start.ts` | 10 | `apply` takes `replayed`; a replayed event starts no countdown |
 | `scripts/install-steps.mts`, `scripts/install-app.mts` | 04 | Windows per-version folders; the running-app match skips the session host |
 | marketplace `relay.py`, `start_app.py`, their tests, `plugin.json` | 03 | hold the call; newest `app-*` |
 
@@ -244,7 +256,7 @@ Task 01 sets `replayed: false` at every `ChatAgentEvent` emitter in the tree (ch
 
 | File | Task | Why |
 |---|---|---|
-| `src/contracts/session-host.ts`, `session-host-protocol.ts` | 01 | the seam and the wire, shared by host and client |
+| `src/contracts/session-host.ts`, `session-host-protocol.ts`, `session-host-protocol.test.ts` | 01 | the seam and the wire, shared by host and client; the file-name tests |
 | `src/shared/fake-session-host.ts` | 01 | the second adapter: tests |
 | `src/shared/local-channel/` | 02 | one transport for the relay and the host |
 | `src/session-host/` (`session-host.ts` its root, the process table, pipe log, idle timer, server) | 06 | the host process |

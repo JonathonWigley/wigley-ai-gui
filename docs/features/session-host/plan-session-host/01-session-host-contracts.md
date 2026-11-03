@@ -7,7 +7,7 @@ Plan: [plan.md](plan.md)
 
 Files:
 - create `src/contracts/session-host.ts`
-- create `src/contracts/session-host-protocol.ts`
+- create `src/contracts/session-host-protocol.ts` · test `src/contracts/session-host-protocol.test.ts`
 - create `src/shared/fake-session-host.ts` · test `src/shared/fake-session-host.test.ts`
 - modify `src/contracts/agent.ts`
 - modify `src/contracts/plugin.ts`
@@ -24,7 +24,10 @@ Consumes: `Clock` in `src/contracts/ambient.ts` (in the tree).
 
 `src/contracts/session-host.ts`: exactly the block in plan.md § File Structure (`PipeDirection`, `PipeLine`,
 `IdleRule`, `HostedSpawn`, `HostedExit`, `HostedProcessEvents`, `HostedProcess` with `detach(): void`,
-`HostedProcessInfo`, `SessionHost`). Copy it with its comments. Do not change a name.
+`HostedProcessInfo`, `SessionHost`). Copy it with its comments. Do not change a name. Add one sentence to the
+comment above `SessionHost.attach`: "Live lines start in a later macrotask than the one that resolves the promise, so
+a caller that replays `log` in the continuation of its `await` has replayed the whole log before the first live
+line."
 
 `src/contracts/session-host-protocol.ts`:
 
@@ -63,12 +66,20 @@ export interface ClosedEvent { type: 'closed'; id: string; exit: HostedExit; }
 export type ClientMessage = HelloMessage | ListMessage | DrainMessage | SpawnMessage | WriteMessage
   | EndInputMessage | KillMessage | SubscribeMessage | UnsubscribeMessage | SetKeepIdleMessage | StopAllMessage;
 export type HostMessage = HelloReply | ListReply | SubscribeReply | StopAllReply | LineEvent | ClosedEvent;
+
+// The host folder's file names. Tasks 06 and 07 use these and write no name of their own.
+// Frozen: the record and log file names, so any app finds any older host.
+export const HOST_LOGS_FOLDER = 'logs';
+export function hostRecordFile(protocol: number): string;          // `host-v${protocol}.json`
+export function hostLogFile(protocol: number): string;             // `host-v${protocol}.log`
+export function hostRecordProtocol(fileName: string): number | null; // the protocol of a record file name, else null
+export function pipeLogFile(id: string): string;                   // `${safe id}.jsonl` (rule below)
 ```
 
 Each type gets a doc comment that says what it means. The doc comments of `HelloMessage`, `HelloReply`,
-`ListMessage`, `ListedProcess`, `ListReply`, `DrainMessage`, `PipeLogRecord` and `SessionHostRecord` say "Frozen:
-never change this shape". Task 06 owns what the host does with each message; the comments say only what the message
-carries.
+`ListMessage`, `ListedProcess`, `ListReply`, `DrainMessage`, `PipeLogRecord`, `SessionHostRecord`, `hostRecordFile`,
+`hostLogFile` and `hostRecordProtocol` say "Frozen: never change this shape". Task 06 owns what the host does with
+each message; the comments say only what the message carries.
 
 `src/contracts/agent.ts`:
 - `AgentStart` gains `processId: string` (the hosted process id chat chooses for this start). Add it to the
@@ -164,8 +175,20 @@ export function createFakeSessionHost(clock: Clock): FakeSessionHost;
   - `setKeepIdleMinutes(minutes)` appends to `keepIdleMinutes`.
   - `stopAll()` adds 1 to `stopAllCalls`. For each current record that is not closed it appends `'SIGTERM'` to
     `kills` and calls `close(id, { code: null, signal: 'SIGTERM', error: null })`. Then it resolves.
+  - A record is **open** when `closed` is null. `spawn` with an id that an open record holds is a duplicate, as the
+    real host refuses it (task 06): it adds no record, returns a `HostedProcess` whose methods do nothing, and calls
+    `events.closed({ code: null, signal: null, error: 'a process with id <id> already exists' })` in a later
+    microtask. A `spawn` with the id of a closed record adds a new record. `output`, `close` and `attach` act on the
+    last record with the id.
 - `session-host-protocol.ts` imports `PipeDirection`, `PipeLine`, `HostedSpawn` and `HostedExit` from
-  `./session-host`. `src/contracts` imports nothing outside itself.
+  `./session-host`. `src/contracts` imports nothing outside itself. The file-name functions use no import
+  (`isMissingFile` in `src/contracts/files.ts` is the precedent for a function in a contract).
+- **Safe pipe log names.** A process id comes over the wire and is chosen by chat (task 09), so it can hold `:`
+  (an NTFS alternate data stream on Windows), `/` or `..`. `pipeLogFile(id)` keeps each character in `[a-z0-9._-]`
+  and writes every other UTF-8 byte as `%` and two uppercase hex digits. Upper-case letters are encoded too, so two
+  ids that differ only in case get two names on a case-insensitive file system. An empty id is `.jsonl`.
+- `hostRecordProtocol(name)` matches `^host-v(\d+)\.json$` exactly and returns the number; any other name (a temp
+  file such as `host-v1.json.tmp` included) returns null.
 
 ## Behaviour
 
@@ -174,6 +197,9 @@ GIVEN a fake host WHEN a test spawns `a`, the process writes `hi`, and the test 
 GIVEN a record added with `addRunning({ current: false, … })` WHEN `attach` runs for its id THEN it resolves null.
 GIVEN `failNextSpawn('boom')` WHEN `spawn` runs THEN `closed` is not called inside `spawn`, and then fires once with
 `{ code: null, signal: null, error: 'boom' }`.
+GIVEN an open process `a` WHEN a test spawns `a` again THEN the second events get `closed` with error
+`a process with id a already exists` in a later microtask, and no record is added.
+GIVEN the id `x:1` WHEN `pipeLogFile` runs THEN it returns `x%3A1.jsonl`.
 
 ## Tests
 
@@ -187,6 +213,17 @@ GIVEN `failNextSpawn('boom')` WHEN `spawn` runs THEN `closed` is not called insi
   left out.
 - `failNextSpawn_ClosesInALaterMicrotask` — no `closed` inside `spawn`; after `await Promise.resolve()`, one
   `closed` with error `boom`.
+- `spawn_DuplicateOpenId_ClosesInALaterMicrotaskAndAddsNoRecord` — spawn `a`, spawn `a` again: no `closed` inside the
+  second `spawn`; after `await Promise.resolve()`, the second events got one `closed`
+  `{ code: null, signal: null, error: 'a process with id a already exists' }`; `processes.length` is 1; the first
+  events got nothing. After `close('a', …)`, a third `spawn` of `a` adds a second record.
+
+`src/contracts/session-host-protocol.test.ts`:
+- `pipeLogFile_IdCases_EncodesUnsafeCharacters` — table: `a` → `a.jsonl`; `x:1` → `x%3A1.jsonl`; `../y` →
+  `..%2Fy.jsonl`; `A` → `%41.jsonl`; `0b4c-9e.1_2` → `0b4c-9e.1_2.jsonl`; `é` → `%C3%A9.jsonl`.
+- `hostFiles_Protocol_NamesAndParsesBack` — `hostRecordFile(1)` `host-v1.json`; `hostLogFile(1)` `host-v1.log`;
+  `hostRecordProtocol` table: `host-v1.json` → 1; `host-v12.json` → 12; `host-v1.log` → null;
+  `host-v1.json.tmp` → null; `host-v.json` → null.
 - `stopAll_ClosesEveryRunningCurrentProcessWithSigterm` — `kills` `['SIGTERM']`, `closed`
   `{ code: null, signal: 'SIGTERM', error: null }`, `stopAllCalls` 1; a record with `current: false` stays open.
 - `close_Twice_FiresClosedOnce`.

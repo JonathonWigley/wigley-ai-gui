@@ -33,31 +33,49 @@ Produces:  in `relay.py`:
   Insertion order is the re-send order.
 - **A new state flag.** `Relay._reconnecting: bool`, read and written only under `self._lock`. It is True from the
   moment a dropped channel leaves at least one call waiting until the waiting calls are re-sent or answered.
-- **`_drop(channel)`.** Today it clears `_pending` and answers each entry with `APP_GONE`. After: it forgets the
-  channel and closes it as today. When `_pending` is empty, it does nothing more (no poll, no start: the next call
-  starts the app as today). When `_pending` holds calls, it sets `_reconnecting` and starts one daemon thread on a
-  new method `_reconnect()`. It answers no call. `_drop` runs on the reader thread or, from `_forward`'s failed
-  write, on the stdin thread; the thread keeps both free.
-- **`_reconnect()`** (the new method; one runs at a time, guarded by `_reconnecting`):
-  1. Poll: every `reconnect_poll` seconds (0.5 s), for up to `reconnect_wait` seconds (30 s) from the drop, call
-     `self._connect(launch=False)`. It reads the endpoint file each time, since a restarted app rewrites it. Stop
-     at the first True, or when `_refusal` is set.
-  2. Past 30 s with no connection and no refusal: call `self._connect(launch=True)` once. That runs `start_app`
-     as a tool call does, with its own 45 s channel wait.
-  3. Connected: `_open` has already said hello and replayed `initialize` (id `REPLAY_ID`) and
-     `notifications/initialized`. Then, under `self._lock`, write each waiting call's line plus `b"\n"` to the new
-     channel in insertion order, keep them in `_pending`, and set `_reconnecting` to False. A write that fails here
-     goes through `_drop` as today, which starts a new reconnect for the calls still waiting.
+- **`_drop(channel)`.** Today it clears `_pending` and answers each entry with `APP_GONE`. After: under
+  `self._lock` it returns at once when `self._channel is not channel`, as today; else it forgets the channel. It
+  closes the channel outside the lock, as today. It answers no call. Then:
+  - `_pending` is empty: nothing more (no poll, no start: the next call starts the app as today).
+  - `_pending` holds calls and `_reconnecting` is False: it sets `_reconnecting` to True (under the lock) and
+    starts one daemon thread on a new method `_reconnect()`.
+  - `_reconnecting` is already True: nothing more. The running `_reconnect()` thread owns the waiting calls.
+  So a thread starts only when `_drop` flips `_reconnecting` from False to True, and exactly one `_reconnect()`
+  thread exists while `_reconnecting` is True. `_drop` runs on the reader thread, on the stdin thread (from
+  `_forward`'s failed write), or on the `_reconnect()` thread (from a failed re-send, step 3); the reconnect thread
+  keeps the first two free.
+- **`_reconnect()`** (the new method). It loops over steps 1 to 4 until step 3 succeeds or step 4 or 5 ends it:
+  1. Poll: every `reconnect_poll` seconds (0.5 s), for up to `reconnect_wait` seconds (30 s) from the drop that
+     started this round, call `self._connect(launch=False)`. It reads the endpoint file each time, since a restarted
+     app rewrites it. Before each try, check under `self._lock`: when `_pending` is empty (every waiting call was
+     cancelled), set `_reconnecting` to False and return, with no start and no answer. Stop polling at the first
+     True, or when `_refusal` is set.
+  2. Past 30 s with no connection and no refusal: do the same `_pending` check, then call
+     `self._connect(launch=True)` once. That runs `start_app` as a tool call does, with its own 45 s channel wait.
+  3. Connected: first check `self._closed` (step 5). Then `_open` has already said hello and replayed `initialize`
+     (id `REPLAY_ID`) and `notifications/initialized`. Under `self._lock`, read `self._channel`. When it is None
+     (the new channel dropped on its reader thread before this step; that `_drop` saw `_reconnecting` True and did
+     nothing more), release the lock and go back to step 1 with a fresh 30 s budget. Else write each waiting call's
+     line plus `b"\n"` to that channel in insertion order, keep them in `_pending`, and set `_reconnecting` to False.
+     When a write raises OSError, stop writing, leave `_reconnecting` True, release the lock, call `_drop(channel)`
+     (it forgets and closes the channel and starts no thread, since `_reconnecting` is True), and go back to step 1
+     with a fresh 30 s budget. `threading.Lock` is not re-entrant, so `_drop` is never called while this thread holds
+     `self._lock`.
   4. Not connected (refusal, or a failed start): under `self._lock`, take every waiting call, clear `_pending`, and
      set `_reconnecting` to False. Answer each one outside the lock:
      - after a refused hello: the refusal tool error `_answer_alone` sends today for a `tools/call`, with that
        call's tool words. Move that text into a helper both paths call; its wording does not change.
      - otherwise: `_tool_error(request_id, APP_GONE.format(...))` with the call's tool words. The `APP_GONE` text
        does not change.
-  5. `close()` sets a new `threading.Event` (`self._closed`). The poll checks it before each try and stops with no
-     start and no answer when it is set; `close()` already clears `_pending`.
+  5. `close()` sets a new `threading.Event` (`self._closed`) before it takes the channel. The thread checks it
+     before each poll try and before the start, and returns with no start and no answer when it is set. It checks it
+     again each time `_connect` returns True (steps 1 and 2): when set, it takes `self._channel` under the lock, sets
+     it to None, closes that channel outside the lock (as `close()` does), and returns with no re-send and no answer.
+     A `_connect` that is inside `start_app` when `close()` runs can set `_channel` after `close()` cleared it; this
+     check closes that channel. `close()` already clears `_pending`.
 - **A second call that arrives while one waits.** `handle_line` skips its `self._connect(launch=True)` while
-  `_reconnecting` is True, so the relay starts no app inside the 30 s window and never races an install.
+  `_reconnecting` is True (read under `self._lock`), so the relay starts no app inside the 30 s window and never
+  races an install.
   `_forward` checks `_reconnecting` under `self._lock` before it checks the channel: while it is True, a
   `tools/call` with an id joins `_pending` with its line, is not written, and `_forward` returns True (the relay does
   not answer it). The same reconnect re-sends it after the first call, or answers it with the same error. The flag
@@ -67,9 +85,16 @@ Produces:  in `relay.py`:
   error in step 4. Every other host message takes today's no-app path while `_reconnecting` is True: `initialize`,
   `ping` and `tools/list` are answered by the relay (`tools.json`, else `BUILT_IN_TOOLS`); a notification and the
   host's answer to an app request are not forwarded. `notifications/cancelled` still runs `_remember`, which removes
-  the cancelled id from `_pending`: that call is not re-sent and gets no answer.
-- **`_forward`'s write failure.** It calls `_drop(channel)` as today and returns `is_call`. The failed call is
-  already in `_pending`, so it is held and re-sent like any other waiting call.
+  the cancelled id from `_pending`: that call is not re-sent and gets no answer. When that empties `_pending`, the
+  reconnect ends at its next check (step 1 or 2) and starts no app.
+- **`_forward`'s write failure.** It releases the lock, calls `_drop(channel)` as today and returns `is_call`. The
+  failed call is already in `_pending`, so it is held and re-sent like any other waiting call.
+- **After `install-app`.** The old app's `endpoint.json` still names the old app's launch command until the new app
+  writes its own (the sessions plugin writes it each time a plugin contributes tools, at app start). The poll does
+  not depend on it: the channel path is the same for every version of one app instance (`channelPath` in
+  wigley-ai-gui `src/plugins/sessions/main/relay/endpoint.ts` names it by instance, user and home only), so the poll
+  reaches the new app as soon as it listens. Only the start in step 2 reads the launch command; task 04 keeps the
+  install's quit-to-start gap short. The relay does not change for this.
 - **Unchanged.** `connect_if_running`, `_open`, `_replay`, `_say_hello`, `_from_app` (it still removes an answered
   id from `_pending`), the hello timeout, `not_started` and the needs_manual_open path for a call that finds no app
   when nothing waits.
@@ -111,42 +136,70 @@ it, holds it, and sends it after the first call, or answers it with the same err
 
 GIVEN no call waits WHEN the channel drops THEN the relay does not poll; the next call starts the app as today.
 
+GIVEN a call waits through a reconnect WHEN the host cancels it and no other call waits THEN the reconnect ends,
+starts no app and sends the host nothing.
+
 GIVEN `%LOCALAPPDATA%\Programs\wigley-ai-gui\` holds `app-aaa` (modified 100) and `app-bbb` (modified 200) WHEN
 `installed_app_command` runs on win32 THEN it returns the exe in `app-bbb`, with `app-bbb` as the cwd.
 
 ## Tests
 
 In `test_relay.py`. `make_relay` gains `reconnect_wait` (default 0.3) and `reconnect_poll` (default 0.02) and passes
-them to `relay.Relay`. To bring an app back on the same path, a test stops the first `FakeApp`, removes the socket
-file (`os.unlink(self.channel)`), and starts a second `FakeApp`.
+them to `relay.Relay`. `FakeApp` gains `received_raw`, a `queue.Queue` of each line it reads after the hello as raw
+bytes without the newline, beside `received`, and `next_received_raw()`.
 
-- `AppGoneTests.test_a_call_waiting_when_the_app_goes_gets_the_app_gone_error` — change: the relay's start returns
-  `StartResult(False, "gone")` and `reconnect_wait` is 0.1; the host still gets exactly
+Every test that holds a call and ends the first app uses `app.stop()`, not `app.drop()`. `drop()` closes the
+connections but keeps the listener, so the poll's first `_connect(launch=False)` would reconnect to the same app,
+which holds the re-sent call and never answers it. After `stop()` the socket file stays but nothing listens, so a
+connect fails (ECONNREFUSED). To bring an app back on the same path, a test stops the first `FakeApp`, waits with
+`wait_until(lambda: not made.connected)`, removes the socket file (`os.unlink(self.channel)`), and starts a second
+`FakeApp`. Every test below calls `self.write_endpoint()` before it connects: `_connect` reads `endpoint.json` on
+each poll try and after a start, and the file stays in place for the whole test.
+
+A test that asserts no start ran (`self.spawned == []`, or a start count of 0) passes `reconnect_wait=2.0`, so the
+real `start_app` (with the recording spawn) cannot run before the second `FakeApp` listens. With the default 0.3 s it
+would race the second app.
+
+- `AppGoneTests.test_a_call_waiting_when_the_app_goes_gets_the_app_gone_error` — change: end the app with
+  `app.stop()` in place of `app.drop()`; the relay's start returns `StartResult(False, "gone")`; `reconnect_wait` is
+  0.1. The host still gets exactly
   `{"jsonrpc": "2.0", "id": 7, "result": {"content": [{"type": "text", "text": ROUND_APP_GONE}], "isError": True}}`.
-- `AppGoneTests.test_each_waiting_call_gets_the_app_gone_text_of_its_own_tool` — change the same way; the pinned
-  results by id (7: `ROUND_APP_GONE`, 8: `PRIMER_APP_GONE`) stay.
+- `AppGoneTests.test_each_waiting_call_gets_the_app_gone_text_of_its_own_tool` — change the same way (`app.stop()`,
+  the failing start, 0.1); the pinned results by id (7: `ROUND_APP_GONE`, 8: `PRIMER_APP_GONE`) stay.
 - `test_after_the_app_goes_the_next_call_tries_to_start_it_again` and
   `test_a_call_the_host_cancelled_gets_no_app_gone_error` — keep unchanged; they now prove that no call waiting
   means no poll.
 - New class `HeldCallTests`:
-  - `test_a_waiting_call_is_sent_again_to_the_app_that_comes_back` — send `INITIALIZE`, `INITIALIZED`,
-    `tool_call(7)` to a `hold_calls=True` app; stop it; start a second `FakeApp` (no hold) with
-    `reconnect_wait=2.0`. The second app's hello equals `HELLO`; it receives, in order,
-    `{**INITIALIZE, "id": relay.REPLAY_ID}`, `INITIALIZED`, `tool_call(7)`; the host's next message is
+  - `test_a_waiting_call_is_sent_again_to_the_app_that_comes_back` — `reconnect_wait=2.0`. Send `INITIALIZE`,
+    `INITIALIZED`, then the call for id 7 as the raw line `compact(tool_call(7)).rstrip(b"\n")` through
+    `made.handle_line` (the compact spelling differs from `json.dumps`, so a re-encoded line fails the test), to a
+    `hold_calls=True` app; stop it; bring a second `FakeApp` (no hold) back. The second app's hello equals `HELLO`;
+    it receives, in order, `{**INITIALIZE, "id": relay.REPLAY_ID}`, `INITIALIZED`, `tool_call(7)`; its third raw
+    line equals `compact(tool_call(7)).rstrip(b"\n")`; the host's next message is
     `{"jsonrpc": "2.0", "id": 7, "result": FakeApp.ANSWERS["tools/call"]}`; `self.spawned == []`.
-  - `test_an_app_that_stays_gone_is_started_after_the_poll` — `reconnect_wait=0.1`; a `start` that starts a second
-    `FakeApp` and returns ready. Starts counted: exactly 1; the host gets the app's answer for id 7.
-  - `test_a_second_call_while_one_waits_is_held_and_sent_after_it` — hold `tool_call(7)`, stop the app, send
-    `named_tool_call(8, "open_primer")` during the poll, then start a second `FakeApp`. No start ran; the second app
-    receives `tool_call(7)` then `named_tool_call(8, "open_primer")` after the replayed handshake.
-  - `test_a_call_cancelled_while_it_waits_is_not_sent_again` — hold `tool_call(3)`, stop the app, send
-    `notifications/cancelled` for 3, then a second call `tool_call(4)`, then start a second `FakeApp`. The second app
-    receives `tool_call(4)` and never `tool_call(3)`; the host gets no message for id 3.
-  - `test_tools_list_while_a_call_waits_is_answered_by_the_relay` — during the poll, `tools/list` id 5 gets
-    `{"jsonrpc": "2.0", "id": 5, "result": relay.BUILT_IN_TOOLS}` (no `tools.json` in the folder).
-  - `test_a_refused_hello_after_the_drop_answers_with_the_refusal` — the second `FakeApp` answers
-    `{"ok": False, "error": "relay protocol 1, app protocol 2"}`; the host gets a tool error for id 7 whose text holds
-    `relay protocol 1, app protocol 2` and `Send the round again with ask_round`; no start ran.
+  - `test_an_app_that_stays_gone_is_started_after_the_poll` — `reconnect_wait=0.1`; hold `tool_call(7)`, stop the
+    app; a `start` that removes the socket file, starts a second `FakeApp`, appends to a `starts` list and returns
+    `StartResult(True, "The wigley-ai-gui app is ready.")`. `len(starts) == 1`; the host's next message is
+    `{"jsonrpc": "2.0", "id": 7, "result": FakeApp.ANSWERS["tools/call"]}`.
+  - `test_a_second_call_while_one_waits_is_held_and_sent_after_it` — `reconnect_wait=2.0`. Hold `tool_call(7)`,
+    stop the app, send `named_tool_call(8, "open_primer")` during the poll, then bring a second `FakeApp` back.
+    `self.spawned == []`; after the replayed handshake the second app receives `tool_call(7)` then
+    `named_tool_call(8, "open_primer")`.
+  - `test_a_call_cancelled_while_it_waits_is_not_sent_again` — `reconnect_wait=2.0`. Hold `tool_call(3)`, stop the
+    app, send `notifications/cancelled` for 3, then a second call `tool_call(4)`, then bring a second `FakeApp` back.
+    After the replayed handshake the second app's next message is `tool_call(4)`; the host's next message is the
+    answer for id 4, and no message for id 3 reaches the host.
+  - `test_a_reconnect_whose_only_call_is_cancelled_starts_no_app` — `reconnect_wait=0.3`. Hold `tool_call(3)`, stop
+    the app, `wait_until(lambda: not made.connected)`, send `notifications/cancelled` for 3, then `time.sleep(0.6)`.
+    `self.spawned == []` (the endpoint file names `npm start`, so a start would record a spawn) and
+    `self.output.empty()`.
+  - `test_tools_list_while_a_call_waits_is_answered_by_the_relay` — `reconnect_wait=2.0`. Hold `tool_call(7)`, stop
+    the app; during the poll, `tools/list` id 5 gets `{"jsonrpc": "2.0", "id": 5, "result": relay.BUILT_IN_TOOLS}`
+    (no `tools.json` in the folder); `self.spawned == []`.
+  - `test_a_refused_hello_after_the_drop_answers_with_the_refusal` — `reconnect_wait=2.0`. Hold `tool_call(7)`,
+    stop the app; the second `FakeApp` answers `{"ok": False, "error": "relay protocol 1, app protocol 2"}`. The
+    host gets a tool error for id 7 whose text holds `relay protocol 1, app protocol 2` and
+    `Send the round again with ask_round`; `self.spawned == []`.
 
 In `test_start_app.py`, `InstalledAppCommandTests`:
 
@@ -158,13 +211,18 @@ In `test_start_app.py`, `InstalledAppCommandTests`:
 - `test_windows_with_no_app_folder_fails_naming_the_folder` — `app_folders` returns `[]`; the message equals
   `there is no installed wigley-ai-gui app at C:\L\Programs\wigley-ai-gui; run npm run install-app in the wigley-ai-gui repo`.
 - `test_list_app_folders_lists_only_app_folders` — in a temp folder make folder `app-1`, file `app-2`, folder
-  `other`; the names listed are `["app-1"]`; a missing base lists `[]`.
+  `other`; set `app-1`'s modified time with `os.utime(app_1, (100, 100))`. The result equals
+  `[(base / "app-1", 100.0)]`; a missing base lists `[]`. This test runs on every OS, so the real lister and the
+  modified time the win32 branch picks by are proved off Windows; the win32 branch itself is tested through the
+  injected `app_folders`. Its live check needs a Windows machine (see Done when).
 
 ## Done when
 
 Every command in the marketplace `AGENTS.md` § Done passes from the repo root, the forms suite
 (`cd plugins/wigley/scripts/forms && python3 -m unittest discover`) among them, and both manifests carry the new
-version. The live check of a call held across a real restart and `install-app` is task 12's.
+version. The live check of a call held across a real restart is task 12's check 3. Task 12 runs on macOS, so the
+Windows `app-*` lookup and a call held across a Windows `install-app` are checks only the user can run on a Windows
+machine: they go in the run's wrap-up with their steps.
 
 ## Commit
 

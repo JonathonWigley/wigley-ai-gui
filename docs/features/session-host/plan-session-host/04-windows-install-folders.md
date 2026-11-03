@@ -61,19 +61,35 @@ Produces:  in `scripts/install-steps.mts`:
    kind that can exist under that name, since a folder reaches it only through the rename in step 5.
 3. Otherwise stage: delete `stagingDir` (a failed run's leftover), then copy the packaged app to `stagingDir` while
    the stable app still runs.
-4. Record the matched stable processes. When there are any, quit them as today (no force-kill; 15 s; a timeout
-   fails the install and leaves `stagingDir` for the next run to delete). Record the executable of the first matched
-   row as the **previous binary**.
+4. Record the matched stable processes. **Quit only the matched rows whose executable is not inside
+   `installDir`** (compared without case, as `isStableAppProcess` compares). A row inside `installDir` exists only in
+   the same-sha path: the app already runs the build this run installs, so it is left running and not restarted.
+   When rows remain to quit, quit them as today (no force-kill; 15 s; a timeout fails the install and leaves
+   `stagingDir` for the next run to delete). Record the executable of the first quit row as the **previous
+   binary**. In the path that stages, `installDir` does not exist yet, so every matched row is quit, as today.
 5. When staged: `renameRetrying(stagingDir, installDir)`. A failure throws
    `Moving the staged app to <installDir> failed: <reason>`; nothing else changes, so the previous version stays
    installed.
 6. Set `installDir`'s modified time to now (`utimesSync`), so it is the newest `app-*` folder the relay picks, also
    in the same-sha path.
 7. Write the Start menu shortcut: target `binary`, working folder `installDir` (`writeShortcut` as today).
-8. **Clean the install root** (below). A cleanup failure only warns; it never throws or fails the run.
-9. In `finally`, when the app was running: start `binary` when it exists, else the previous binary (a failed move
-   restarts the version that was quit, as today's failed swap does). The start stays detached, in the binary's
-   folder.
+8. In `finally`, **only when step 4 quit a process**: start `binary` when it exists, else the previous binary (a
+   failed move restarts the version that was quit, as today's failed swap does). The start stays detached, in the
+   binary's folder. When step 4 quit nothing (no app ran, or it runs from `installDir`), start nothing: a second
+   start would only meet the app's single-instance lock.
+9. **Clean the install root** (below), after the `try`/`finally` of steps 5 to 8, so it runs only when the install
+   succeeded and only after the app has started again. A cleanup failure only warns; it never throws or fails the
+   run.
+
+**Why the start comes before the cleanup.** A relay that holds a call polls the app's channel for 30 s from the
+moment the app quits, then starts the app with the launch command the old app's `endpoint.json` records (task 03).
+That command is the old `app-<old>\wigley-ai-gui.exe`; the new app rewrites `endpoint.json` when it starts. Deleting
+older folders can take seconds, so it runs after the start, which keeps the quit-to-start gap to the quit, the
+rename, the shortcut and the spawn. When the relay's start still runs first, the old exe is most often gone (its
+folder was renamed and deleted), its spawn fails, and the relay falls back to the newest `app-*` folder. The one
+case that starts the old build is a relay start past 30 s while a session host still holds `app-<old>`; it is
+accepted, and the next `install-app` run quits that app. `install-app` does not edit `endpoint.json`: the app owns
+that file.
 
 The macOS flow keeps its order: stage, quit, swap in through `.old`, start.
 
@@ -108,7 +124,8 @@ GIVEN `app-<old>` holds a running session host WHEN `install-app` installs a new
 `app-<old>` is kept with the pinned warning, and the run exits 0.
 
 GIVEN `app-<12>` for the resolved commit exists WHEN `install-app` runs THEN it does not package, it makes that
-folder the newest, writes the shortcut, cleans the root, and starts the app when it was running.
+folder the newest, writes the shortcut, and cleans the root. An app running from `app-<12>` keeps running and is not
+restarted; an app running from an older folder or the flat install is quit, and `app-<12>`'s exe starts.
 
 GIVEN a session host runs the installed binary WHEN `install-app` quits the stable app (either OS) THEN it does not
 wait on the host.
@@ -145,12 +162,14 @@ In `scripts/install-steps.test.mts`. `COMMIT` = `'0123456789abcdef0123456789abcd
   (`…` is `C:\Users\me\AppData\Local`; write the full paths in the test.)
 
 The I/O in `install-app.mts` (listing processes, quitting, renames, `rmSync`, `utimesSync`, the shortcut, the
-start) has no unit test; task 12 checks it live.
+start) has no unit test; its live check is the user's (see Done when).
 
 ## Done when
 
 `npm test`, `npm run lint` and `npm run typecheck` pass, and the Produces signatures are in
-`scripts/install-steps.mts`. The Windows and macOS live install checks are task 12's.
+`scripts/install-steps.mts`. Task 12 runs on macOS and leaves the user's stable app alone, so the live
+`install-app` checks (the macOS run that must not wait on the host, and every Windows step above) are checks only
+the user can run: they go in the run's wrap-up with their steps.
 
 ## Commit
 

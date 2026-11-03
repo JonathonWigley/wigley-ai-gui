@@ -52,7 +52,14 @@ export function connectToChannel(channel: string): Promise<Socket>  // rejects w
 
 ```ts
 export function readFirstLine(socket: Socket, received: (line: string) => void): void
-export function readLines(stream: Readable, received: (line: string) => void): void
+export interface ReadLinesOptions {
+  flushPartialAtEnd: boolean;   // true: a partial last line at the stream's end is delivered when not empty
+}
+export function readLines(
+  stream: Readable,
+  received: (line: string) => void,
+  options: ReadLinesOptions = { flushPartialAtEnd: false },
+): void
 export function jsonLine(value: unknown): string
 ```
 
@@ -72,12 +79,27 @@ export function jsonLine(value: unknown): string
   `\\.\pipe\`, it makes the socket's folder (`recursive`) and removes a stale socket file before `listen`. It tracks
   each socket and destroys the open ones in `close`. A server `error` calls `handlers.failed`. `listening` never
   rejects.
+- **A live channel is never taken.** Today `startRelayServer` removes the socket file without a check, so a second
+  listener deletes a live listener's socket. `listenOnChannel` removes the file only when it is stale: before the
+  removal it calls `connectToChannel(channel)`. When that connect succeeds, it destroys that socket, removes
+  nothing, calls `handlers.failed` with an `Error` whose `code` is `'EADDRINUSE'` and whose message is
+  `channel <channel> is in use`, and `listening` resolves false. When the connect rejects, it removes the file and
+  listens. A named pipe needs no check: `listen` on a pipe that is in use fails with `EADDRINUSE` itself. For the
+  relay this changes nothing in practice: `main.ts` takes `app.requestSingleInstanceLock()`, so no second listener
+  of the relay channel runs. Two listeners that both find a stale file in the same moment can still race; that
+  window is the time between one removal and one `listen`, and it is accepted.
+- `readLines`, `readFirstLine` and `listenOnChannel` add no `error` listener to a socket or stream they are given.
+  The owner of the socket or stream adds one (the relay keeps its own; tasks 06 and 07 add theirs). `listenOnChannel`
+  adds one to the server only.
 - `readFirstLine` is today's `acceptConnection` reading: it collects bytes up to the first `\n`, pauses the socket,
   stops listening for data, puts the bytes after the newline back (`unshift`), then calls `received` with the line
   as UTF-8. The relay keeps its connection error log, its hello parsing, its refusals and `startSession`.
 - `readLines` calls `received` once per `\n`-ended line, as UTF-8 without the newline, in order. It holds a partial
-  line until its newline comes. It drops a partial line left when the stream ends. A line split across chunks, and a
-  multi-byte character split across chunks, come out whole.
+  line until its newline comes. When the stream ends (`end`), it drops a partial line by default; with
+  `flushPartialAtEnd: true` it delivers a partial line that is not empty, once. Task 06 sets the option for a child
+  process's stdout and stderr, where the last line may have no newline. Sockets use the default: a partial message
+  at a socket's end is cut. A line split across chunks, and a multi-byte character split across chunks, come out
+  whole.
 - `jsonLine(value)` is `` `${JSON.stringify(value)}\n` ``. The relay's `replyLine` uses it.
 - `relay-server.ts` keeps `startRelayServer(deps: RelayServerDeps): { close(): Promise<void> }` with the same
   signature and behaviour. It calls `listenOnChannel` with `connected` = today's accept path and `failed` = today's
@@ -98,6 +120,8 @@ GIVEN suffix `''` WHEN `channelPath('darwin', '/Users/u', 'u', 'wigley-ai-gui', 
 GIVEN a server on a temp socket WHEN a client connects and writes `{"a":1}\n{"b"` then `:2}\n` THEN `readLines` gets
 `{"a":1}` and `{"b":2}`.
 GIVEN a stale socket file at the path WHEN `listenOnChannel` runs THEN `listening` resolves true.
+GIVEN a live listener on the path WHEN `listenOnChannel` runs again THEN `listening` resolves false, `failed` gets
+`EADDRINUSE`, and the first listener still accepts connections.
 
 ## Tests
 
@@ -112,13 +136,19 @@ GIVEN a stale socket file at the path WHEN `listenOnChannel` runs THEN `listenin
   - `listenOnChannel_StaleSocketFile_ListensAndAcceptsAConnection` — `listening` true; `connected` called once.
   - `connectToChannel_NoServer_Rejects` — rejects; the error `code` is `ENOENT` or `ECONNREFUSED`.
   - `close_OpenSocket_DestroysItAndResolves` — the client socket gets `close`.
+  - `listenOnChannel_LiveListener_FailsWithoutTakingTheChannel` — a first server listens; a second
+    `listenOnChannel` on the same path → `failed` once with `code` `'EADDRINUSE'`, `listening` false; a new client
+    connect still reaches the first server's `connected`.
 - `src/shared/local-channel/line-framing.test.ts`:
   - `readLines_ChunkCases_DeliversWholeLines` — table: one chunk with two lines; a line split across two chunks; a
-    `é` split between its two bytes; a trailing partial line at end → dropped.
+    `é` split between its two bytes; a trailing partial line at end → dropped; `a\nb` then end with
+    `flushPartialAtEnd: true` → `a`, `b`; `a\n` then end with `flushPartialAtEnd: true` → `a` only.
   - `readFirstLine_BytesAfterTheNewline_StayOnTheStream` — after `first\nrest`, `received('first')`; a later
     `data` listener reads `rest`.
   - `jsonLine_Object_IsOneLineWithNewline` — `jsonLine({ a: 1 })` is `'{"a":1}\n'`.
-- The existing `relay-server.test.ts` cases pass unchanged but for the import.
+- The existing `relay-server.test.ts` cases pass unchanged but for the import and the `''` suffix. A call that passes
+  `tempDir` as the fifth argument today (`relay-server.test.ts` line 71, the moved `endpoint.test.ts` cases) passes
+  `''` fifth and `tempDir` sixth: both are strings, so the compiler does not catch a missed one.
 
 ## Done when
 

@@ -6,7 +6,8 @@ Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
 
 Files:     create `src/main/claude-code/session-fold.ts` · test `src/main/claude-code/session-fold.test.ts` ·
-           modify `src/main/claude-code/claude-code-harness.ts` · test `src/main/claude-code/claude-code-harness.test.ts`
+           modify `src/main/claude-code/claude-code-harness.ts` · test `src/main/claude-code/claude-code-harness.test.ts` ·
+           modify `src/main/claude-code/claude-controls.ts`
 Consumes:  `PipeLine`, `HostedSpawn`, `HostedExit`, `HostedProcess`, `HostedProcessEvents` in
            `src/contracts/session-host.ts` ← 01. Tree members: `createStreamDecoder`, `StreamDecoder`, `DecodedLine`,
            `AgentEventDraft` (`stream-decoder.ts`); `createTurnTracker`, `TurnTracker`, `ControlCommand`,
@@ -31,6 +32,11 @@ Produces:  in `src/main/claude-code/session-fold.ts`:
            `export function replayPipeLog(state: SessionFoldState, log: readonly PipeLine[], now: number): FoldEffect[];`
            in `src/main/claude-code/claude-code-harness.ts`: `function spawnDirect(deps: ClaudeCodeHarnessDeps, request: HostedSpawn, events: HostedProcessEvents): HostedProcess;`
            (module-private; task 08 moves it into the harness test)
+           in `src/main/claude-code/claude-controls.ts` (moved from `claude-code-harness.ts`, now exported, so the
+           fold and `setControl` share one copy):
+           `export const CONTROL_COMMAND = /^\/(effort|model) (\S+)$/;`
+           `export function controlOf(id: string): (typeof CLAUDE_CONTROLS)[number] | undefined;`
+           `export function isChoice(id: ClaudeControlId, value: string): boolean;`
 
 Read first: `AGENTS.md` (repo root) § Architecture, `docs/features/session-host/design.md` § Re-attach,
 `docs/features/agent-chat/design.md` § Agent harness seam. Load `wigley:writing-code` and
@@ -55,6 +61,7 @@ export interface SessionFoldState {
   lastUsageEvent: UsageAgentEvent | null;
   lastStderr: string | null;
   graceDeadline: number | null;         // the interrupt grace's end, epoch ms; null when none is pending
+  isContextRequestOwed: boolean;        // true from a turn's end until the next `get_context_usage` `in` line
 }
 
 export type FoldEffect =
@@ -81,15 +88,21 @@ export type FoldEffect =
 - **The fold reads `dir`, `at` and `text`. It reads no `seq`.** Live `in` lines the harness folds carry `seq: 0`.
 - **Every time comes from a line.** An entry's `at` is `firstAt.get(id) ?? line.at` (the `createEntryStamp` rule,
   with the line's time for the clock). An agent event's `at`, a usage event's `at`, `foldReply`'s time and a plan
-  update's `at` are `line.at`. The harness no longer calls `createEntryStamp` or `deps.clock` for a session process,
-  except for its `in` lines' `at` and the start's `sessionStarted`.
+  update's `at` are `line.at`. The harness no longer calls `createEntryStamp` for a session process. It reads
+  `deps.clock.now()` only for the times no line supplies:
+  - the `at` of each `in` line it folds, and of each line `spawnDirect` reads;
+  - the start's `sessionStarted`;
+  - the `sessionEnded` of the `closed` path (today's `start_AgentEvents_StampedAtTheClockAndBracketedBySession`
+    pins it at the clock);
+  - the `at` of the `control-notice-kill` entry (the second interrupt, below), with no `firstAt` entry;
+  - the `at` that `foldUsageInput` gets for a side input (below).
 - **`in` lines.** The fold parses the text as JSON. A line that does not parse, and a type not listed, changes
   nothing.
   | Line | State change | Effects |
   |---|---|---|
-  | `type: 'user'` with a string `uuid` that starts with `APP_COMMAND_UUID_PREFIX` | a text `/effort <v>` or `/model <v>` (the `CONTROL_COMMAND` rule): `tracker.written(uuid, { id, value })` | none |
+  | `type: 'user'` with a string `uuid` that starts with `APP_COMMAND_UUID_PREFIX` | a text `/effort <v>` or `/model <v>` (the `CONTROL_COMMAND` rule): `tracker.written(uuid, { id, value })`; any other text (for example auto-compact's `/compact`): `tracker.written(uuid, null)`. No send count, no held message | none |
   | `type: 'user'` with any other string `uuid` (a send) | `sendCount += 1`; draft `{ kind: 'user', id: 'user-<sendCount>', text, images, raw: [the parsed line] }`; skill `typedSkill(text)` when the text is not a control command, else null; held under the uuid outside fallback mode; `tracker.written(uuid, command or null)` | in fallback mode: the user entry, `userMessage`, then `skillStarted` when a skill (today's `emitUserMessage`) |
-  | `type: 'control_request'` with `request_id` `wigley-<n>` | `requestCount = max(requestCount, n)`; `get_context_usage` → pending `contextUsage`; `interrupt` → pending `interrupt`, `graceDeadline = line.at + INTERRUPT_GRACE_MS`; `set_permission_mode` → pending `{ kind: 'mode', value: request.mode }` | `interrupt` only: notice `Interrupted`, tone `info`, raw `[the parsed line]` |
+  | `type: 'control_request'` with `request_id` `wigley-<n>` | `requestCount = max(requestCount, n)`; `get_context_usage` → pending `contextUsage`, `isContextRequestOwed = false`; `interrupt` → pending `interrupt`, `graceDeadline = line.at + INTERRUPT_GRACE_MS`; `set_permission_mode` → pending `{ kind: 'mode', value: request.mode }` | `interrupt` only: notice `Interrupted`, tone `info`, raw `[the parsed line]` |
   | `type: 'control_response'` | none | none |
   The send's `text` and `images` come back from the content `userMessage` built: a string content is the text with no
   images; an array gives each `image` block's `source` as `{ mediaType: media_type, data }` in order, and the text
@@ -97,8 +110,10 @@ export type FoldEffect =
 - **`out` lines** run today's `handleLine` body, in today's order, as effects: the held message release, the
   fallback release, the entries (a control command's own `result` entry left out), the fallback log and notice, the
   agent events, the controls, the commands, the plan update and the usage, the control response, the host request
-  (`refuseHostRequest` effect), the grace clear on `turnEnded`, the `requestContextUsage` effect on `turnEnded`, and
-  the activity sync. A `get_context_usage` failure is a `log` effect (`get_context_usage failed: <error>`).
+  (`refuseHostRequest` effect), the grace clear on `turnEnded`, the `requestContextUsage` effect on `turnEnded`
+  (the fold also sets `isContextRequestOwed = true` there), and the activity sync. A `get_context_usage` failure is
+  a `log` effect (`get_context_usage failed: <error>`). The fold reads `isChoice` and `controlOf` from
+  `claude-controls.ts`.
 - **`err` lines** set `lastStderr = text` and give a `log` effect with the text.
 - **Activity sync**, after every line: when `tracker.activity()` differs from `state.activity`, set it and add an
   `activity` effect. When the result is `idle`, set `graceDeadline = null`.
@@ -127,6 +142,10 @@ export type FoldEffect =
   that deadline. Reason: the expiry then stamps the deadline, as a replay does; and the tests' fixed clock (`1000`)
   with fake timers still ends the grace. Behaviour change: the grace notice's `at` is the deadline, not the time the
   timer ran (within the timer's lag).
+- **A closed process arms no timer and fires nothing.** The harness arms the grace timer only while `!hasClosed`.
+  `markClosed` sets `state.graceDeadline = null` before `stopTimers()`. The timer's callback does nothing when
+  `hasClosed`. Reason: a late stdout line after `close` still folds (its `advanceFold` could see a deadline), and
+  nothing may fire after `ended`.
 - **Across a replay boundary** `replayPipeLog` ends with `advanceFold(state, now)`. A grace whose deadline passed
   while no app was attached ends in the replay: its notice is stamped at the deadline and the final activity is
   `idle`. A grace still pending keeps `graceDeadline`; task 08 arms the live timer for the rest.
@@ -165,8 +184,10 @@ marks them `replayed` (plan.md § File Structure).
   - `child.stdin` `error` → `deps.log('claude', errorText(error))`, as today;
   - `close(code, signal)` → `events.closed({ code, signal, error })` once, `error` being the text of an `error` event
     that came first, else null;
-  - `error` with `child.pid === undefined` → `events.closed({ code: null, signal: null, error: error.message })` at
-    once;
+  - `error`, with a pid or without one → `events.closed({ code: null, signal: null, error: error.message })` at
+    once; a `close` after it gives nothing (`closed` fires once). Reason: today an `error` emits `ended` at once,
+    and `start_ResumedReadSettlesAfterSpawnedChildError_EmitsNothing` (pid 1) needs `ended` before the held read
+    settles;
   - `detach()` → from then on, `events` gets no `line` and no `closed`, and `write`, `endInput` and `kill` do
     nothing; the child keeps running (task 01's `HostedProcess.detach`). Nothing in 05 calls it.
   Reason: task 08 swaps `spawnDirect` for `deps.host.spawn` and changes nothing else.
@@ -183,28 +204,48 @@ marks them `replayed` (plan.md § File Structure).
 - **Running effects, live.** `entry`, `agentEvent`, `controls`, `activity`, `commands`, `planUsage` and
   `messageDropped` emit through `queueMicrotask`, as today. `requestContextUsage` writes a `get_context_usage`
   request when `!isEndCalled && !hasClosed` (today's `isRunning`). `refuseHostRequest` writes today's error
-  `control_response`. `log` calls `deps.log('claude', text)`. After `close`, an `activity` effect is dropped (today's
-  `syncActivity` guard), and after `ended` a usage `agentEvent` is dropped (today's `emitUsage` guard).
+  `control_response`. `log` calls `deps.log('claude', text)`. Once the `closed` path has run, the harness runs no
+  effect of any kind, from a late line's fold or from a side input. This keeps today's two guards (no `activity`
+  after `close`, no usage event after `ended`) and adds the rest: nothing fires after `ended`.
 - **Kept in the harness, outside the fold:** `isEndCalled`, `hasClosed`, `hasEmittedEnded`, `endPromise`,
-  `closeWaiters`, the end grace timers, the grace timer handle, and the pipe. `closed` keeps today's rule: an `idle`
-  activity when `state.activity` is `working`, then `ended` (error text from `exit.error` through `spawnError`, else
-  `exitError(code, signal, state.lastStderr)` unless clean), then `markClosed` (which also clears
-  `state.heldMessages`). `spawnError` takes the error text and tests it for `ENOENT`.
+  `closeWaiters`, the end grace timers, the grace timer handle, and the pipe. `closed` keeps today's rule: when
+  `state.activity` is `working`, set `state.activity = 'idle'` and emit `idle` (today's `emitActivity`); then
+  `sessionEnded` at `deps.clock.now()` and `ended` (error text from `exit.error` through `spawnError`, else
+  `exitError(code, signal, state.lastStderr)` unless clean); then `markClosed` (which also clears
+  `state.heldMessages` and `state.graceDeadline`). `spawnError` takes the error text and tests it for `ENOENT`.
 - **Side inputs that are not lines.** The `settings.json` read and the resumed session's saved replies run as
   today and apply through `foldUsageInput(state, change, deps.clock.now())`. The agent definitions load sets
-  `state.definitions`.
+  `state.definitions`. No pipe line records them, so a replay folds neither. Task 08 runs both again after the
+  replay. `createSessionFoldState(request)` seeds `usage` by today's rule: `request.resume` false →
+  `withSavedReplies(EMPTY_SESSION_USAGE, [])` (the context is known at 0 tokens); true → `EMPTY_SESSION_USAGE`. For a
+  replay, `request.resume` must be the value the process was launched with (task 08).
 - **The second interrupt** stays a call effect, not a fold: the notice `Interrupted again; ending the Claude
   process.` gets the id `control-notice-kill` (outside `noticeCount`, so the notice ids that follow it in a replay
   match the live ones), then `kill()`. It is the one live entry a replay cannot rebuild; the process ends right after.
+  Its `at` is `deps.clock.now()`.
 - **Guards read the state:** `interrupt` reads `state.activity` and `state.graceDeadline !== null` (today's
   `graceTimer !== null`); `setControl` reads `state.activity`.
+- **`CONTROL_COMMAND`, `controlOf` and `isChoice` move to `claude-controls.ts`**, exported (Produces). The fold and
+  `setControl` import them; `claude-code-harness.ts` keeps no copy.
+- **Behaviour changes**, each named in the commit message:
+  - the grace notice's `at` is the deadline (above);
+  - the "Interrupted again" notice's id is `control-notice-kill`, not `control-notice-<n>`, and it does not raise
+    `noticeCount`; existing tests match its text only;
+  - an `error` event with a pid now runs `markClosed` at once (today it waited for `close`): a later `end()`
+    resolves at once and sends no SIGTERM or SIGKILL;
+  - a stdout line after `close` emits nothing (today its entries and agent events still emitted).
 - **Known limits of replay-equals-live**, written in `session-fold.ts`'s header comment:
   - the second-interrupt notice above;
   - the agent definitions: a live line read before the definitions load decodes without them, and a replay
     (task 08) loads them first;
+  - the side inputs: the `settings.json` percent and the resumed session's saved replies are not pipe lines. A
+    replay gets them only from task 08's reads after it, so the live run's usage event from the settings read (and
+    from the saved replies) is not among the replayed events, and the percent is the one the file holds at attach;
   - order: the live fold order is the order the harness wrote and read; the log's is the order the host saw. An `in`
-    and an `out` line that cross in transit can swap. Only fallback mode's turn end (it closes every open uuid) reads
-    that order.
+    and an `out` line that cross in transit can swap. Two cases read that order: fallback mode's turn end (it
+    closes every open uuid), and an interrupt `in` line that crosses its turn's `result`, where the replay puts the
+    `Interrupted` notice after the result's entries and the grace ends in the same fold. The final activity and
+    `graceDeadline` are the same either way.
 
 ### Peer plan: auto-compact task 02
 
@@ -243,19 +284,24 @@ two fit if both land:
 `src/main/claude-code/session-fold.test.ts` (style of `turn-tracker.test.ts`; lines built with `userMessage`,
 `controlMessage` and the fixtures in `claude-code-harness.test.ts`, copied or exported as the implementer prefers):
 
-- `foldPipeLine_InLines_RebuildStdinState ($case)`, one `in` line on a fresh state from a request with
-  `controls: {}`:
-  | case | line | state after | effects |
-  |---|---|---|---|
-  | send | `userMessage({ text: 'hi', images: [] }, 'u1')` | `sendCount` 1, `heldMessages` keys `['u1']`, tracker `working` | none |
-  | send with an image | content `[image block, text block 'see']` | held draft `text: 'see'`, `images: [{ mediaType: 'image/png', data: 'AAA' }]` | none |
-  | app pick | `controlMessage('effort', 'high', '00000000-1')` | `sendCount` 0, no held message, tracker `working` | none |
-  | typed command | `userMessage({ text: '/effort high', images: [] }, 'u2')` | `sendCount` 1, held draft text `/effort high`, skill null | none |
-  | context request | `contextUsageRequest('wigley-4')` | `requestCount` 4, pending `wigley-4` `contextUsage` | none |
-  | interrupt | interrupt request `wigley-2` at 1000 | pending `interrupt`, `graceDeadline` 6000, `noticeCount` 1 | entry `{ kind: 'notice', id: 'control-notice-1', at: 1000, text: 'Interrupted', tone: 'info' }` |
-  | mode | `controlMessage('mode', 'plan', 'wigley-3')` | pending `{ kind: 'mode', value: 'plan' }` | none |
-  | refusal | a `control_response` error line | unchanged | none |
-  | not JSON | `oops` | unchanged | none |
+- `foldPipeLine_InLines_RebuildStdinState ($case)`, on a fresh state from a request with `controls: {}`: the row's
+  setup lines (folded first, their effects not asserted), then the row's line:
+  | case | setup | line | state after | effects |
+  |---|---|---|---|---|
+  | send | none | `userMessage({ text: 'hi', images: [] }, 'u1')` | `sendCount` 1, `heldMessages` keys `['u1']`, tracker `working` | none |
+  | send with an image | none | content `[image block, text block 'see']` | held draft `text: 'see'`, `images: [{ mediaType: 'image/png', data: 'AAA' }]` | none |
+  | app pick | none | `controlMessage('effort', 'high', '00000000-1')` | `sendCount` 0, no held message, tracker `working` | none |
+  | app command, not a pick | none | `userMessage({ text: '/compact', images: [] }, '00000000-1')` | `sendCount` 0, no held message, tracker `working` | none |
+  | typed command | none | `userMessage({ text: '/effort high', images: [] }, 'u2')` | `sendCount` 1, held draft text `/effort high`, skill null | none |
+  | context request | none | `contextUsageRequest('wigley-4')` | `requestCount` 4, pending `wigley-4` `contextUsage`, `isContextRequestOwed` false | none |
+  | interrupt | the send `u1` at 500 | interrupt request `wigley-2` at 1000 | pending `interrupt`, `graceDeadline` 6000, `noticeCount` 1, `activity` `working` | entry `{ kind: 'notice', id: 'control-notice-1', at: 1000, text: 'Interrupted', tone: 'info' }` |
+  | interrupt while idle | none | interrupt request `wigley-2` at 1000 | pending `interrupt`, `graceDeadline` null (the idle sync clears it), `noticeCount` 1 | the same notice entry |
+  | mode | none | `controlMessage('mode', 'plan', 'wigley-3')` | pending `{ kind: 'mode', value: 'plan' }` | none |
+  | refusal | none | a `control_response` error line | unchanged | none |
+  | not JSON | none | `oops` | unchanged | none |
+- `foldPipeLine_TurnEnd_OwesAContextRequest`: send `u1`, `lifecycleInit`, `lifecycle('u1', 'started')`,
+  `successResult('ok', ['u1'])` → `isContextRequestOwed` true and one `requestContextUsage` effect; then
+  `contextUsageRequest('wigley-2')` (`in`) → `isContextRequestOwed` false.
 - `foldPipeLine_FallbackSend_EmitsTheUserMessage`: `plainInit` (`out`), then a send `in` → effects entry `user-1`,
   then `agentEvent` `userMessage`.
 - `foldPipeLine_StampsWithTheLineTime`: an `out` text delta at 7000, then the same entry's next delta at 9000 → both
@@ -268,11 +314,17 @@ two fit if both land:
   | before the deadline | working, interrupt at 1000 | 5999 | none | 6000 |
   | at the deadline | the same | 6000 | notice at 6000, `log`, `activity` `idle` | null |
   | idle at the deadline | interrupt answered (`interruptReply(null)`) | 6000 | none | null |
-- `replayPipeLog_Emissions_CollapsedAndFiltered`: a log with three deltas of one assistant entry, a
-  `rate_limit_event` line, a `result` (so a `requestContextUsage` effect), and a host request line → the returned
-  effects open with `sessionStarted` at the first line's `at`; that entry id comes once, with the last delta's text
-  and the first delta's `at`; no `planUsage`, `requestContextUsage`, `refuseHostRequest` or `log` effect; the last
-  three effects are `controls`, `commands`, `activity` `idle`.
+- `replayPipeLog_Emissions_CollapsedAndFiltered`: a log of `out` lines at 1000, 2000, 3000 and on, 1000 apart:
+  `{ type: 'system', subtype: 'init', capabilities: ['msg_lifecycle_v1'], slash_commands: ['/compact'] }`; a
+  `message_start` and three `text_delta`s `a`, `b`, `c` of one assistant message (the `stream_event` helpers of
+  `stream-decoder.test.ts`); `RATE_LIMIT_LINE`; `successResult('ok')` (so a `requestContextUsage` effect); a host
+  request `{ type: 'control_request', request_id: 'r-1', request: { subtype: 'can_use_tool' } }`; and an `err` line
+  `warn`. `now` 60000. Assert:
+  - the first effect is `{ kind: 'agentEvent', event: { type: 'sessionStarted', at: 1000 } }`;
+  - the assistant entry's id comes in one `entry` effect, with text `abc` and `at` the first delta's time;
+  - no effect has the kind `planUsage`, `requestContextUsage`, `refuseHostRequest`, `log` or `messageDropped`;
+  - exactly one effect each has the kind `controls`, `commands` and `activity`, and these are the last three, in
+    that order: `controls` with every control's `value` null; `commands` `['compact']`; `activity` `idle`.
 - `replayPipeLog_GraceAcrossTheBoundary ($case)`: log = send, `lifecycleInit`, `lifecycle('u1', 'started')`,
   interrupt at 1000:
   | case | `now` | grace notice | final `activity` | `graceDeadline` |
@@ -285,36 +337,49 @@ two fit if both land:
 
 - `replayPipeLog_RecordedLiveSession_EqualsTheLiveRun` — the central test. A recorder wraps the fake child's
   `stdin.write` and the test's `writeLine` so each line joins one `PipeLine` list in call order, `at` the test
-  clock's time; the test settles after every step. Script, the clock moving 1000 per step: start; the context reply
-  `wigley-1`; send `hi`; `lifecycleInit`, `lifecycle('uuid-1', 'started')`, `REPLY_LINE`, `successResult('ok',
-  ['uuid-1'])`; `setControl('mode', 'plan')` and its success response; `setControl('effort', 'high')` and its
-  `Set effort level to high` result; send `two`, `lifecycleInit`, `lifecycle('uuid-3', 'started')`; `interrupt()`; a
-  stderr line `warn`; advance the fake timers 5000. Then `replayPipeLog(createSessionFoldState(request), recorded,
-  <the clock>)`. Assert: the replay's entries, by id in first-appearance order with their last versions, equal the
-  live run's; its `agentEvent`s equal the live `agentEvents` and usage events in order; its final `controls` and
-  `activity` equal the live run's last ones (mode `plan`, effort `high`, `idle`); the replayed state's `sendCount`
-  is 2, `requestCount` equals the highest `wigley-<n>` the child read, `lastStderr` is `warn`, `graceDeadline` is
-  null; the entry ids include `user-1`, `user-2`, `control-notice-1` and `control-notice-2`.
+  clock's time; the test settles after every step. Fake timers fake only `setTimeout` and `clearTimeout` (as
+  `end_EscalatesToSigtermThenSigkill` does), so `settle` still runs. `request` has `resume: false`; the memory files
+  hold no `settings.json`. Script, a settable clock moving 1000 per step: start; the context reply `wigley-1`; send
+  `hi`; `lifecycleInit`, `lifecycle('uuid-1', 'started')`, `REPLY_LINE`, `successResult('ok', ['uuid-1'])`;
+  `setControl('mode', 'plan')` and its success response; `setControl('effort', 'high')` and
+  `successResult('Set effort level to high', ['00000000-2'])`; send `two`, `lifecycleInit`,
+  `lifecycle('uuid-3', 'started')`; `interrupt()` at clock `T`; a stderr line `warn`; set the clock to `T + 5000`,
+  then advance the fake timers 5000 (the live grace notice fires, stamped `T + 5000`). Then
+  `replayPipeLog(createSessionFoldState(request), recorded, T + 5000)`. Assert:
+  - the replay's entries, by id in first-appearance order with their last versions, equal the live run's;
+  - the replay's `agentEvent`s equal the live `agentEvents` and usage events in emit order, after one event is
+    taken out of the live list: the usage event the `settings.json` read emitted during the start step,
+    `{ type: 'usage', agentId: 'main', at: <the start's clock>, contextTokens: 0, contextWindow: null, autocompact:
+    { configured: null, reported: null }, cacheExpiresAt: null, spendUsd: null }`. The test asserts that this event
+    is in the live list before it takes it out (05 § Known limits: side inputs);
+  - the replay's final `controls` and `activity` equal the live run's last ones (mode `plan`, effort `high`, `idle`);
+  - the replayed state's `sendCount` is 2, `requestCount` equals the highest `wigley-<n>` the child read,
+    `lastStderr` is `warn`, `graceDeadline` is null, `isContextRequestOwed` false;
+  - the entry ids include `user-1`, `user-2`, `control-notice-1` and `control-notice-2`, and the
+    `control-notice-2` entry's `at` is `T + 5000` in both runs.
 - Changed row: `setControl_Effort_SetsValueOnCommandResult` expects `controlMessage('effort', 'high', '00000000-1')`
   in `written`.
-- `end_ThenClose_ClearsEveryTimer`: with fake timers, `interrupt()` while working, then `end()`, then `close` →
-  `vi.getTimerCount()` is 0 (the grace timer and the end grace timers are cleared by `stopTimers`).
+- `end_ThenClose_ClearsEveryTimer ($case)`: with fake timers, `interrupt()` while working, then `end()`, then `close`:
+  | case | after `close` | then |
+  |---|---|---|
+  | no late line | nothing | `vi.getTimerCount()` is 0 |
+  | a late line | the stdout line `lifecycleInit` | `vi.getTimerCount()` is 0; advance the fake timers 10000 → nothing is heard after `ended` (no grace notice, no entry, no `activity`) |
 - Every other case in `describe('createClaudeCodeHarness', …)` passes unchanged. With `stream-decoder.test.ts`,
   `turn-tracker.test.ts` and `session-usage.test.ts` (unchanged files), they pin the live behaviour this task keeps.
 
 ## Done when
 
 - The Produces signatures are in their files. `claude-code-harness.ts` holds no `createEntryStamp` call and no
-  `INTERRUPT_GRACE_MS` definition. `grep -n "deps.spawn" src/main/claude-code/claude-code-harness.ts` finds
+  `INTERRUPT_GRACE_MS`, `CONTROL_COMMAND`, `controlOf` or `isChoice` definition. `grep -n "deps.spawn" src/main/claude-code/claude-code-harness.ts` finds
   `spawnDirect` and `spawnCli` only.
 - `npm test`, `npm run typecheck` and `npm run lint` pass.
 - Runtime checks wait for task 12 "Final verification".
 
 ## Commit
 
-One commit for the group, by pathspec, the four files above. Example message: `Fold each Claude session's state over
-its pipe lines; replay a pipe log with the same fold`. The message names the wire change: an effort or model pick's
-uuid now starts `00000000-`.
+One commit for the group, by pathspec, the five files above. Example message: `Fold each Claude session's state over
+its pipe lines; replay a pipe log with the same fold`. The message names the wire change (an effort or model pick's
+uuid now starts `00000000-`) and each item of § The harness "Behaviour changes".
 
 ## Proof
 
