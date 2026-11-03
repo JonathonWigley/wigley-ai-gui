@@ -29,15 +29,19 @@ entry joins the transcript when the agent takes the message in, not when it is w
 - `<Leader>cs` is unbound: `grep -n "Leader>cs" src/plugins/keymap.ts` → no match.
 - The Claude adapter already decodes lifecycle lines: `grep -n "lifecycle" src/main/claude-code/stream-decoder.ts`
   → `DecodedLine.lifecycle: { uuid; state } | null`.
-- **Peer work in the tree**: at plan time a peer's uncommitted edits sat in `src/contracts/agent.ts`,
-  `src/main/claude-code/stream-decoder.ts` and others (`git status --short`). Before task 01, run
-  `git status --short src/contracts/agent.ts src/main/claude-code/`. If those files are still modified, stop and ask
-  the user: the peer's hunks are never committed or reverted on the peer's behalf.
+- **The chat-bar run lands first**: a peer's `wigley:make` run of `docs/features/chat-bar/plan-strip-and-status-line/`
+  edits `src/plugins/chat/contract.ts`, `chat/page/{entry-list,chat-view,chat-commands}.ts`, `chat/main/start.ts`,
+  `src/plugins/keymap.ts` and the docs, all of which this plan touches. Start only once that plan folder is gone
+  (`test -d docs/features/chat-bar/plan-strip-and-status-line && echo still running`) and
+  `git status --short src/` is empty. Otherwise stop and ask the user. A peer's hunks are never committed or reverted
+  on the peer's behalf.
+- **Commits use explicit pathspecs** (`git commit -m … -- <paths>`): another session may have files staged in this
+  tree.
 
 ## Docs written ahead
 
-Commit `2445145b`: `docs/features/agent-chat/design.md` § Pending messages (Sending, Send now, Pulling back,
-Interrupt and exit) and `docs/keymap.md` (the `c` leader row's `cs`). They are the spec for every task below.
+Commits `2445145b`, `d035a2db` and the plan's own last commit: `docs/features/agent-chat/design.md` § Pending messages (Sending, Send now, Pulling back,
+Interrupt and exit, and the `queuedMessage` part line) and `docs/keymap.md` (the `c` leader row's `cs`). They are the spec for every task below.
 
 ## Mandatory Reads
 
@@ -95,13 +99,17 @@ Modified:
 
 - `src/contracts/agent.ts` — `AgentProcess.send(message: UserMessage): string`; `AgentProcessEvents.messageDropped(entryId: string): void`; doc comments
 - `src/main/claude-code/claude-code-harness.ts` (+ `.test.ts`) — entry on `started`, `messageDropped`
+- `src/main/claude-code/turn-tracker.ts` (+ `.test.ts`) — `mode()`
 - `src/shared/fake-agent-harness.ts` (+ `.test.ts`) — returns its entry id
 - `src/plugins/chat/contract.ts` — `QueuedMessage.sentEntryId: string | null`; channel `sendNow(sessionId: string, queuedId: string): void`
-- `src/plugins/chat/main/chat-sessions.ts` (+ `.test.ts`) — `sendNow`, sent rows, held messages, dropped and exit returns
-- `src/plugins/chat/page/chat-commands.ts` (+ test if one exists) — Cmd+Enter on a pending row, `sendQueuedNow`
-- `src/plugins/chat/page/entry-list.ts` — `queuedInput` passes `sent`
+- `src/plugins/chat/main/chat-sessions.ts` (+ `.test.ts`) — 01's `messageDropped` stub; 02's `sendNow`, sent rows, held messages, dropped and exit returns
+- `src/plugins/chat/main/start.ts` (+ `start.test.ts`) — the `sendNow` channel handler, ignored in the preview
+- `src/plugins/chat/page/chat-commands.ts` (+ `.test.ts`) — Cmd+Enter on a pending row, `sendQueuedNow`
+- `src/plugins/chat/page/chat-view.ts` — `ChatSession.isBoxFocused()`
+- `src/plugins/chat/page/entry-list.ts` (+ `.test.ts`) — `queuedInput` and `isQueuedChanged` carry `sent`
+- `src/plugins/chat/main/selftest-script.ts` — a Cmd+Enter send-now step
 - `src/plugins/chat/manifest.ts`, `src/plugins/keymap.ts` — `chat.sendQueuedNow`, `<Leader>cs`
-- `src/plugins/chat/layouts/layout.d.ts`, `src/plugins/chat/layouts/default/*` (+ `layout.test.ts`) — `QueuedMessageInput.sent: boolean`, label
+- `src/plugins/chat/layouts/layout.d.ts`, `src/plugins/chat/layouts/default/layout.js` (+ `layout.test.ts`) — `QueuedMessageInput.sent: boolean`, label
 
 No new files. Boundary rule: nothing outside `src/main/claude-code/` names lifecycle states or Claude.
 

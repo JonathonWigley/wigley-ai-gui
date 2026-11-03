@@ -5,32 +5,49 @@ Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
 
-Files:     modify `src/plugins/chat/contract.ts` · modify `src/plugins/chat/main/chat-sessions.ts` · test `src/plugins/chat/main/chat-sessions.test.ts`
+Files:     modify `src/plugins/chat/contract.ts` · modify `src/plugins/chat/main/chat-sessions.ts` · modify `src/plugins/chat/main/start.ts` · test `src/plugins/chat/main/chat-sessions.test.ts` · test `src/plugins/chat/main/start.test.ts`
 Consumes:  `send(message: UserMessage): string` on `AgentProcess` ← 01 · `messageDropped(entryId: string): void` on `AgentProcessEvents` ← 01
 Produces:  `sentEntryId: string | null` on `QueuedMessage` in `src/plugins/chat/contract.ts`
            `sendNow(sessionId: string, queuedId: string): void` on `ChatChannel['invoke']` in `src/plugins/chat/contract.ts`
-           `sendNow(sessionId: string, queuedId: string): void` on the chat sessions interface in `src/plugins/chat/main/chat-sessions.ts` (beside `pullBack`), wired to the channel where `pullBack` is
+           `sendNow(sessionId: string, queuedId: string): void` on the chat sessions interface in `src/plugins/chat/main/chat-sessions.ts`, beside `pullBack`
+           `api.channel.handle('sendNow', …)` in `src/plugins/chat/main/start.ts`, through `ignoredInPreview('sendNow', sessionId)` as `pullBack` is
 Decisions:
-- `QueuedMessage.sentEntryId`: null while the row waits; the id `send` returned once the user sent it now. Comment on the field says so. `queue` creates rows with null.
-- `sendNow`: unknown session → log as `pullBack` does; no row with that id, or the row's `sentEntryId` is not null → log `queued message <id> no longer queued`, nothing else. Otherwise `process.send` the row's message; on success set `sentEntryId` and `sendQueued(session)`; a throw leaves the row unsent and logs `queued message <id> not sent: <error>`. The row stays in place in the queue.
-- **Held messages**: chat main keeps every message it writes — `deliver`'s idle sends, `writeNextQueued`'s writes and `sendNow`'s — keyed by the entry id `send` returned, until that entry arrives. Idle and next-queued writes are held without a row; send-now writes are the sent row itself.
-- `entry` callback: an entry whose `id` (the harness id, before `rowEntryOf`) matches a held message drops the hold, and when a sent row carries that id, drops the row and `sendQueued(session)`.
-- `messageDropped(entryId)`: the held message goes back to the box through the `returned` message (as pull-back does), its sent row is dropped, and it logs `sent message <entryId> returned: never taken in`. An id chat holds nothing for is ignored with a log.
-- `writeNextQueued` writes the oldest **unsent** row; sent rows are skipped and stay.
-- `pullBack` on a sent row: does nothing and logs `queued message <id> already sent`.
+- `QueuedMessage.sentEntryId`: null while the row waits; the id `send` returned once the user sent it now. `queue` creates rows with null.
+- `deliver` returns the entry id `process.send` returned. Each caller records what it wrote: the idle send and `writeNextQueued` record a **held message** (no row); `sendNow` sets the row's `sentEntryId`. `sendNow` does not repeat `deliver`'s first-message work (`sent`, the first-message title, `save()`): a queued row exists only after a message was already sent.
+- **Held messages**: a map per session from entry id (the harness id, before `rowEntryOf`) to the message written, in write order, kept until that entry arrives. It is emptied at exit and at the clear's process swap, since harness ids (`user-1`) restart per process.
+- `sendNow`: unknown session → log as `pullBack` does; no row with that id, or the row's `sentEntryId` is not null → log `queued message <id> no longer queued` and nothing else. Otherwise deliver the row's message; on success set `sentEntryId` and `sendQueued(session)`; a throw leaves the row unsent and logs `queued message <id> not sent: <error>`. The row keeps its place in the queue.
+- `entry` callback, only when `isLive`: an entry whose harness id matches a held message or a sent row drops it. For a sent row it then sends `queued` (the queue without the row), and nothing else.
+- `messageDropped(entryId)`, only when `isLive`:
+  - a sent row: drop the row, `sendQueued`, then `returned` with its message (pull-back's order); log `sent message <entryId> returned: never taken in`
+  - a held message with no row: `returned` with it, no `queued`; same log
+  - an id chat holds nothing for: log `dropped message <entryId> not held` and nothing else
+- `writeNextQueued` takes the oldest **unsent** row. On a throw it goes back at its original index, so sent rows keep their places.
+- `pullBack` on a sent row: nothing, and log `queued message <id> already sent`.
 - Interrupt: returns every unsent row, oldest first, as today; sent rows stay.
-- Process exit (and the clear's process swap, which returns queued messages today): returns every row, sent ones included, plus every held message without a row, oldest write first.
-- The queue's persistence across a page reload carries `sentEntryId` with the rest of the row.
-- Activity needs no change: the tracker keeps the session working while a sent uuid is open (task 01 leaves it as is).
+- Exit and the clear's process swap share one return helper (it replaces `returnAllQueued`). It sends one `returned` whose `messages` are the held messages with no row, in write order, then every row, sent and unsent, in queue order. It sends that `returned` whenever the list is not empty, even with an empty queue. Then it empties the queue and the held messages.
+- The queue's persistence across a page reload already carries `sentEntryId` through `copyState`.
+- Update, in the same edit, the comments the change makes false. In `chat-sessions.ts`: the interface comments on `send`, `interrupt`, `clear` and `pullBack`, and the comments on `returnAllQueued` (or its replacement) and `writeNextQueued`. In `contract.ts`: the `QueuedMessage` comment, and the channel comments on `send`, `interrupt`, `clear` and `pullBack`.
 
 GIVEN a running turn and two queued rows WHEN `sendNow` runs on the newer one THEN `send` is called with its message, its row stays with `sentEntryId` set, and the older row stays unsent
-GIVEN a sent row WHEN the entry with its `sentEntryId` arrives THEN the row is dropped and a `queued` message carries the queue without it
-GIVEN a sent row WHEN `messageDropped` fires with its id THEN `returned` carries its message and the row is gone
+GIVEN a sent row WHEN the entry with its `sentEntryId` arrives THEN the row is dropped and one `queued` carries the queue without it
+GIVEN a sent row WHEN `messageDropped` fires with its id THEN `queued` (without it) then `returned` (its message) are sent
+GIVEN a sent row WHEN `pullBack` names it THEN nothing is sent and the log reads `queued message <id> already sent`
 GIVEN a sent row and an unsent row WHEN the user interrupts THEN `returned` carries only the unsent message and the sent row stays
-GIVEN a sent row WHEN the process exits THEN `returned` carries it
+GIVEN an idle send not yet taken in and one sent row WHEN the process exits THEN one `returned` carries the idle send's message, then the sent row's
 
-Tests:     add rows to the existing pull-back and queue tests in `chat-sessions.test.ts` (search `pullBack` and `queued`) rather than new files. One table test for `sendNow`'s refusals: unknown id, already sent, already written by an idle → each logs `queued message <id> no longer queued` and calls no `send`; one for the throwing write → row unsent, log matches `not sent`. Rows for: entry drops the row; `messageDropped` returns it; interrupt keeps sent rows; exit returns them; `writeNextQueued` skips a sent row; an idle send that is dropped returns to the box. Fakes record `send` calls and return ids the test chose.
-Done when: typecheck passes; the tests above pass under vitest filtered to `chat-sessions.test.ts`.
+Tests:     extend the existing queue, pull-back, interrupt and exit tests in `chat-sessions.test.ts` (search `pullBack`, `queued`, `returned`) with rows rather than new files. The fake from 01 returns `user-<turn>` and emits that entry on a microtask. So a test reads a sent row's id from `sessions()[0].queued[n].sentEntryId` (an idle send's is `user-<turn>`), and fires `test.process.events.messageDropped(id)` or asserts the exit and interrupt rows **before** any `flush()`. A test that needs the entry later calls `process.events.entry({ kind: 'user', id, … })` itself. Rows:
+           - `sendNow` refusals, one table: unknown id, already sent, already written at an idle → each logs `queued message <id> no longer queued` and calls no `send`
+           - `sendNow` whose write throws → row unsent, log matches `not sent`
+           - entry drops a sent row (one `queued`, no `returned`)
+           - `messageDropped` on a sent row (`queued` then `returned`); on a held idle send (`returned` only); on an unknown id (log only)
+           - `pullBack` on a sent row (log `already sent`, nothing sent)
+           - interrupt keeps sent rows
+           - exit returns held, then rows, in that order; with an empty queue and one held message it still returns it
+           - clear's swap returns sent and held messages the same way
+           - `writeNextQueued` skips a sent row ahead of it; on its throw, the unsent row goes back at its index
+           - after a clear, an old process's `entry` or `messageDropped` changes nothing
+           `start.test.ts`: add `{ method: 'sendNow', args: ['queued-1'] }` to the preview-ignored table beside `pullBack`.
+Done when: the repo's typecheck passes; the tests above pass under vitest, filtered to `chat-sessions.test.ts` and `start.test.ts`.
 Commit:    one commit for the group
 
 ## Proof

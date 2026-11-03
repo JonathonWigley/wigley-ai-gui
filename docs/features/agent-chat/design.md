@@ -425,7 +425,7 @@ interview on 2026-10-23; this file is the record of both.
 - Besides the entries, a layout draws the Chat tab's other surfaces through parts that take `(parent, input, kit)`
   and return a `PartView`: `activity` (a run of steps, § Activity line), `working` (the running turn, § Working
   block: its state, its steps and its times `startedAt` and `now`, sent again each second), `queuedMessage` (one pending message, § Pending
-  messages: its text and how many images it carries), `composer`, `composerBar`, `attachments` (the
+  messages: its text, how many images it carries, and whether it was sent now), `composer`, `composerBar`, `attachments` (the
   strip of attached images), `pickerRow` (a row of the start prompt and the pickers), `signIn`, `reasonBox` (the deny
   reason), `closeConfirm` (the end-session confirm) and `imageViewer`. The `activity` part's input is the run's steps
   (each the step's entry input), the current step (the last), whether the run is live, whether it is open, and its times:
