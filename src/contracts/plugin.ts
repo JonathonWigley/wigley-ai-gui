@@ -593,9 +593,9 @@ export interface SelfTestScript {
 
 // Each plugin's part calls `run` at most once, during its `start`, and the
 // script's page binds and settings join the config. The driver runs the handed
-// scripts in hand-over order on each run. `run` throws on a plugin's second
-// script or after the parts have started, and a self-test that got no script
-// fails.
+// scripts in hand-over order, each cut after its last kept group on a filtered
+// run. `run` throws on a plugin's second script or after the parts have
+// started, and a self-test that got no script fails.
 export interface SelfTestHost {
   run(script: SelfTestScript): void;
 }

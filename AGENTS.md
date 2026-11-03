@@ -393,9 +393,9 @@ round; primer: an open primer), since main, not the page, decides.
     only; a view may still anchor one, as Accept does with Enter. An anchor prints the command's first bind that is
     not one of vim's own keys, or its first bind when every bind is; the user's binds come before the defaults. Leader
     sequences show in which-key.
-  - **Every other bind has an anchor.** At the end of a self-test run (the `keys-check-placement` page event, named
-    with the line's prefix in `src/shared/placement-check.ts`, which the runner and the plugin share) the
-    plugin logs `[keys] unplaced <keys> <command> in <scope>`, once per scope and bind, for each bind firing in a
+  - **Every other bind has an anchor.** At the end of a whole self-test run (a filtered run skips it; the
+    `keys-check-placement` page event, named with the line's prefix in `src/shared/placement-check.ts`, which the
+    runner and the plugin share) the plugin logs `[keys] unplaced <keys> <command> in <scope>`, once per scope and bind, for each bind firing in a
     scope that was in force during the page load whose command no anchor named during the page load, in that scope or
     with no scope, on an element seen on the page (connected when the anchor drew, hid or showed, was disposed, or at
     the check). Leader sequences and vim's own keys are left out. The self-test fails on that line, so a new
