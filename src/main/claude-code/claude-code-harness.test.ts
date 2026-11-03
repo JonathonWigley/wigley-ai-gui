@@ -777,6 +777,13 @@ describe('createClaudeCodeHarness', () => {
       isKilled: false,
     },
     {
+      name: 'answered with nothing running',
+      texts: ['one'],
+      lines: [interruptReply(null)],
+      textsAfter: ['two'],
+      isKilled: false,
+    },
+    {
       name: 'first turn ended, a message queued behind',
       texts: ['one', 'two'],
       lines: [lifecycleInit, interruptedResult],

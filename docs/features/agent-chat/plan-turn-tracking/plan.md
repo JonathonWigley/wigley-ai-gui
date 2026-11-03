@@ -253,5 +253,6 @@ Review base: 578c0d08ecda7909910ef4254a06d47fef5e0f55
 - review 1 triage on the user's standing word to take every recommendation: #1 fix now (clear the grace on the interrupted turn's result), #4 and #5 fix now, #2 leave it (fallback clear-all is the plan's decision and chat never has two messages in flight), #3 follow-up (interruptAnswered could keep a started uuid open) — lead
 ### Review rounds
 - 1 · 089c6ae0 · NEEDS FIXES (1 Important: grace timer survives the interrupted turn's result; 4 Minor)
+- 2 (re-review, correctness on 867cbd59) · 867cbd59 · NEEDS FIXES → both Minor determined and applied by the lead: design.md Interrupt bullet says Ctrl+C ends the running turn; test row pins the idle clear of the grace (a repeat on the grace lifetime, stacked on round 1 #1; closed by test only, no behaviour change)
 ### Test gate
 - stream-decoder, turn-tracker, claude-code-harness, claude-controls tests (the files 01–03 changed) and chat-sessions.test.ts (chat main reads the emitted activity); npm run typecheck, npm run lint; npm run selftest -- --plugin chat · 291/291 tests pass, typecheck and lint clean, selftest all passed
