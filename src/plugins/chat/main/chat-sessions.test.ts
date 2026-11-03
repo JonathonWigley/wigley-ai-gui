@@ -316,6 +316,9 @@ function assistant(id: string, text: string): ChatEntry {
   return { kind: 'assistant', id, at: 1000, text, streaming: false, raw: [] };
 }
 
+const IDLE_SEND: UserMessage = { text: 'idle send', images: [] };
+const PENDING: UserMessage = { text: 'pending', images: [] };
+
 // Two messages sent while the session's harness reports `working`.
 function queueTwo(
   test: Awaited<ReturnType<typeof started>>,
@@ -329,6 +332,51 @@ function queueTwo(
   test.chat.send(ROW_ID, first);
   test.chat.send(ROW_ID, second);
   return [first, second];
+}
+
+// The entry id the `index`th queued row was sent now under.
+function sentEntryIdOf(test: ReturnType<typeof setUp>, index: number): string {
+  const { sentEntryId } = test.chat.sessions()[0].queued[index];
+  if (sentEntryId === null) {
+    throw new Error(`queued row ${index} was not sent now`);
+  }
+  return sentEntryId;
+}
+
+function userEntry(id: string, text: string): ChatEntry {
+  return { kind: 'user', id, at: 1000, text, images: [], raw: [] };
+}
+
+const REFUSED_TEXT = 'refused write';
+
+// A started session whose process throws on a write of REFUSED_TEXT.
+async function startedRefusing() {
+  const fake = createFakeAgentHarness(
+    { now: () => 1000 },
+    createMemoryFiles(),
+    FAKE_MICROTASK_TIMERS,
+  );
+  const refusing: FakeAgentHarness = {
+    ...fake,
+    start: (request, events) => {
+      const process = fake.start(request, events);
+      return {
+        ...process,
+        send: (message) => {
+          if (message.text === REFUSED_TEXT) {
+            throw new Error('write refused');
+          }
+          return process.send(message);
+        },
+      };
+    },
+  };
+  const test = setUp({ harnesses: [refusing] });
+  test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+  await flush();
+  const process = fake.processes[0];
+  const activity = (value: ProcessActivity) => process.events.activity(value);
+  return { ...test, process, activity };
 }
 
 function sendCall(message: UserMessage) {
@@ -1361,7 +1409,7 @@ describe('createChatSessions', () => {
     ]);
     expect(test.sent('queued').at(-1)).toEqual({
       sessionId: ROW_ID,
-      queued: [{ ...first, id: firstId }],
+      queued: [{ ...first, id: firstId, sentEntryId: null }],
     });
 
     test.activity('idle');
@@ -1418,6 +1466,342 @@ describe('createChatSessions', () => {
       expect(test.harness.processes[1].calls).toEqual([sendCall(again)]);
     },
   );
+
+  it('sendNow_NewerOfTwoRows_WritesItAndKeepsItMarkedSent', async () => {
+    const test = await started();
+    const [first, second] = queueTwo(test);
+
+    test.chat.sendNow(ROW_ID, 'queued-2');
+
+    const queued = [
+      { ...first, id: 'queued-1', sentEntryId: null },
+      { ...second, id: 'queued-2', sentEntryId: expect.any(String) },
+    ];
+    expect(test.process.calls).toEqual([sendCall(second)]);
+    expect(test.chat.sessions()[0].queued).toEqual(queued);
+    expect(test.sent('queued').at(-1)).toEqual({ sessionId: ROW_ID, queued });
+  });
+
+  it.each([
+    {
+      case: 'an unknown id',
+      queuedId: 'queued-9',
+      arrange: () => {},
+      reason: 'no longer queued',
+    },
+    {
+      case: 'a row already sent now',
+      queuedId: 'queued-1',
+      arrange: (test: Awaited<ReturnType<typeof started>>) =>
+        test.chat.sendNow(ROW_ID, 'queued-1'),
+      reason: 'already sent',
+    },
+    {
+      case: 'a row already written at an idle',
+      queuedId: 'queued-1',
+      arrange: (test: Awaited<ReturnType<typeof started>>) =>
+        test.activity('idle'),
+      reason: 'no longer queued',
+    },
+  ])('sendNow_NotQueued_LogsAndWritesNothing: $case', async (row) => {
+    const test = await started();
+    queueTwo(test);
+    row.arrange(test);
+    const callsBefore = test.process.calls.length;
+    const sentBefore = test.messages.length;
+
+    test.chat.sendNow(ROW_ID, row.queuedId);
+
+    expect(test.process.calls).toHaveLength(callsBefore);
+    expect(test.messages).toHaveLength(sentBefore);
+    expect(test.logged).toContain(
+      `[chat] queued message ${row.queuedId} ${row.reason}`,
+    );
+  });
+
+  it('sendNow_WriteThrows_RowStaysUnsent', async () => {
+    const test = await started();
+    queueTwo(test);
+    test.process.ended = true;
+
+    test.chat.sendNow(ROW_ID, 'queued-1');
+
+    expect(
+      test.chat.sessions()[0].queued.map((row) => row.sentEntryId),
+    ).toEqual([null, null]);
+    expect(test.logged).toContainEqual(
+      expect.stringMatching(/queued message queued-1 not sent: .*ended/),
+    );
+  });
+
+  it('entry_OfASentRow_DropsTheRowAndReturnsNothing', async () => {
+    const test = await started();
+    const [first, second] = queueTwo(test);
+    test.chat.sendNow(ROW_ID, 'queued-2');
+    const entryId = sentEntryIdOf(test, 1);
+    const queuedBefore = test.sent('queued').length;
+
+    test.process.events.entry(userEntry(entryId, second.text));
+
+    expect(test.sent('queued').slice(queuedBefore)).toEqual([
+      {
+        sessionId: ROW_ID,
+        queued: [{ ...first, id: 'queued-1', sentEntryId: null }],
+      },
+    ]);
+    expect(test.sent('returned')).toEqual([]);
+  });
+
+  it.each([
+    {
+      case: 'a sent row',
+      arrange: (test: Awaited<ReturnType<typeof started>>) => {
+        const [first, second] = queueTwo(test);
+        test.chat.sendNow(ROW_ID, 'queued-2');
+        return {
+          entryId: sentEntryIdOf(test, 1),
+          sends: [
+            {
+              message: 'queued',
+              data: {
+                sessionId: ROW_ID,
+                queued: [{ ...first, id: 'queued-1', sentEntryId: null }],
+              },
+            },
+            {
+              message: 'returned',
+              data: { sessionId: ROW_ID, messages: [second] },
+            },
+          ],
+          log: `[chat] sent message ${sentEntryIdOf(test, 1)} returned: never taken in`,
+        };
+      },
+    },
+    {
+      case: 'an idle send',
+      arrange: (test: Awaited<ReturnType<typeof started>>) => {
+        const message: UserMessage = { text: 'idle send', images: [] };
+        test.chat.send(ROW_ID, message);
+        return {
+          entryId: 'user-1',
+          sends: [
+            {
+              message: 'returned',
+              data: { sessionId: ROW_ID, messages: [message] },
+            },
+          ],
+          log: '[chat] sent message user-1 returned: never taken in',
+        };
+      },
+    },
+    {
+      case: 'an id chat holds nothing for',
+      arrange: () => ({
+        entryId: 'user-9',
+        sends: [],
+        log: '[chat] dropped message user-9 not held',
+      }),
+    },
+  ])('messageDropped_ReturnsWhatChatHolds: $case', async (row) => {
+    const test = await started();
+    const { entryId, sends, log } = row.arrange(test);
+    const sentBefore = test.messages.length;
+
+    test.process.events.messageDropped(entryId);
+
+    expect(test.messages.slice(sentBefore)).toEqual(sends);
+    expect(test.logged).toContain(log);
+  });
+
+  it('pullBack_SentRow_LogsAndSendsNothing', async () => {
+    const test = await started();
+    queueTwo(test);
+    test.chat.sendNow(ROW_ID, 'queued-1');
+    const sentBefore = test.messages.length;
+
+    test.chat.pullBack(ROW_ID, 'queued-1');
+
+    expect(test.messages).toHaveLength(sentBefore);
+    expect(test.logged).toContain(
+      '[chat] queued message queued-1 already sent',
+    );
+  });
+
+  it('interrupt_SentAndUnsentRows_ReturnsOnlyTheUnsent', async () => {
+    const test = await started();
+    const [first, second] = queueTwo(test);
+    test.chat.sendNow(ROW_ID, 'queued-1');
+
+    test.chat.interrupt(ROW_ID);
+
+    expect(test.sent('returned')).toEqual([
+      { sessionId: ROW_ID, messages: [second] },
+    ]);
+    expect(test.chat.sessions()[0].queued).toEqual([
+      { ...first, id: 'queued-1', sentEntryId: expect.any(String) },
+    ]);
+  });
+
+  it.each([
+    { outcome: 'the write lands', writeRow: true },
+    { outcome: 'the write throws', writeRow: false },
+  ])(
+    'activityIdle_SentRowAhead_WritesTheNextUnsent ($outcome)',
+    async ({ writeRow }) => {
+      const test = await started();
+      const [first, second] = queueTwo(test);
+      test.chat.sendNow(ROW_ID, 'queued-1');
+      if (!writeRow) {
+        test.process.ended = true;
+      }
+
+      test.activity('idle');
+
+      expect(test.process.calls).toEqual([sendCall(first), sendCall(second)]);
+      const sentRow = {
+        ...first,
+        id: 'queued-1',
+        sentEntryId: expect.any(String),
+      };
+      const unsentRow = { ...second, id: 'queued-2', sentEntryId: null };
+      expect(test.chat.sessions()[0].queued).toEqual(
+        writeRow ? [sentRow] : [sentRow, unsentRow],
+      );
+    },
+  );
+
+  it.each([
+    {
+      given: 'an idle send, then a sent row',
+      hold: (test: Awaited<ReturnType<typeof started>>) => {
+        test.chat.send(ROW_ID, IDLE_SEND);
+        test.activity('working');
+        test.chat.send(ROW_ID, PENDING);
+        test.chat.sendNow(ROW_ID, 'queued-1');
+        return [IDLE_SEND, PENDING];
+      },
+    },
+    {
+      given: 'an idle send and an empty queue',
+      hold: (test: Awaited<ReturnType<typeof started>>) => {
+        test.chat.send(ROW_ID, IDLE_SEND);
+        return [IDLE_SEND];
+      },
+    },
+    {
+      given: 'a sent row older than the row the idle wrote',
+      hold: (test: Awaited<ReturnType<typeof started>>) => {
+        const [first, second] = queueTwo(test);
+        test.chat.sendNow(ROW_ID, 'queued-1');
+        test.activity('idle');
+        return [first, second];
+      },
+    },
+  ])(
+    'processExit_WrittenMessagesAndRows_ReturnedInWriteOrder ($given)',
+    async ({ hold }) => {
+      const test = await started();
+      const held = hold(test);
+
+      test.process.events.ended({ code: 0, error: null });
+
+      expect(test.sent('returned')).toEqual([
+        { sessionId: ROW_ID, messages: held },
+      ]);
+      expect(test.chat.sessions()[0].queued).toEqual([]);
+    },
+  );
+
+  it.each([
+    {
+      case: 'at an idle with a message',
+      running: false,
+      rows: [],
+      box: true,
+      written: ['box'],
+      queuedRows: [],
+      queuedSends: 0,
+      log: null,
+    },
+    {
+      case: 'mid-turn with two rows and a message',
+      running: true,
+      rows: ['first', 'second'],
+      box: true,
+      written: ['first', 'second', 'box'],
+      queuedRows: [
+        ['first', true],
+        ['second', true],
+        ['box', true],
+      ],
+      queuedSends: 1,
+      log: null,
+    },
+    {
+      case: 'mid-turn with a null message',
+      running: true,
+      rows: ['first', 'second'],
+      box: false,
+      written: ['first', 'second'],
+      queuedRows: [
+        ['first', true],
+        ['second', true],
+      ],
+      queuedSends: 1,
+      log: null,
+    },
+    {
+      case: 'mid-turn with nothing unsent and a null message',
+      running: true,
+      rows: [],
+      box: false,
+      written: [],
+      queuedRows: [],
+      queuedSends: 0,
+      log: /nothing to send now in row-1/,
+    },
+    {
+      case: 'mid-turn with the second write throwing',
+      running: true,
+      rows: ['first', REFUSED_TEXT],
+      box: true,
+      written: ['first'],
+      queuedRows: [
+        ['first', true],
+        [REFUSED_TEXT, false],
+        ['box', false],
+      ],
+      queuedSends: 1,
+      log: /queued message queued-2 not sent: write refused/,
+    },
+  ])('sendAllNow_WritesInTheOrderWritten: $case', async (row) => {
+    const test = await startedRefusing();
+    if (row.running) {
+      test.activity('working');
+    }
+    for (const text of row.rows) {
+      test.chat.send(ROW_ID, { text, images: [] });
+    }
+    const queuedBefore = test.sent('queued').length;
+    const box: UserMessage | null = row.box
+      ? { text: 'box', images: [] }
+      : null;
+
+    void test.chat.sendAllNow(ROW_ID, box);
+
+    const written = test.process.calls.flatMap((call) =>
+      call.method === 'send' ? [call.text] : [],
+    );
+    const queuedRows = test.chat
+      .sessions()[0]
+      .queued.map((queued) => [queued.text, queued.sentEntryId !== null]);
+    expect(written).toEqual(row.written);
+    expect(queuedRows).toEqual(row.queuedRows);
+    expect(test.sent('queued').length - queuedBefore).toBe(row.queuedSends);
+    if (row.log !== null) {
+      expect(test.logged).toContainEqual(expect.stringMatching(row.log));
+    }
+  });
 
   it('notice_AddsEntryKeptBySessions', async () => {
     const test = await started();
@@ -2693,6 +3077,45 @@ describe('createChatSessions clear', () => {
       test.harness.processes[1].calls.filter((call) => call.method === 'send'),
     ).toEqual([]);
   });
+
+  it('clear_WrittenAndSentMessages_ReturnedInWriteOrder', async () => {
+    const test = await started();
+    const idleSend: UserMessage = { text: 'idle send', images: [] };
+    test.chat.send(ROW_ID, idleSend);
+    const [first, second] = queueTwo(test);
+    test.chat.sendNow(ROW_ID, 'queued-1');
+
+    test.chat.clear(ROW_ID);
+
+    expect(test.sent('returned')).toEqual([
+      { sessionId: ROW_ID, messages: [idleSend, first, second] },
+    ]);
+    expect(test.chat.sessions()[0].queued).toEqual([]);
+  });
+
+  it.each([{ event: 'entry' }, { event: 'messageDropped' }])(
+    'clear_OldProcessEventForAReusedId_ChangesNothing: $event',
+    async ({ event }) => {
+      const test = await started();
+      const old = test.process;
+      test.chat.clear(ROW_ID);
+      await flush();
+      const fresh = test.harness.processes[1];
+      const message: UserMessage = { text: 'after clear', images: [] };
+      test.chat.send(ROW_ID, message);
+
+      if (event === 'entry') {
+        old.events.entry(userEntry('user-1', 'stale'));
+      } else {
+        old.events.messageDropped('user-1');
+      }
+      fresh.events.ended({ code: 0, error: null });
+
+      expect(test.sent('returned')).toEqual([
+        { sessionId: ROW_ID, messages: [message] },
+      ]);
+    },
+  );
 
   it('clear_StartThrows_RowRestsUnderNewIdAndRethrows', async () => {
     const test = setUp();

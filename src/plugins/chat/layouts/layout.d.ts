@@ -126,10 +126,12 @@ export interface WorkingInput {
   now: number;
 }
 
-// One pending message: its text as typed and how many images it carries.
+// One pending message: its text as typed, how many images it carries, and whether the user sent it into the running
+// turn, so it waits only for the agent to take it in.
 export interface QueuedMessageInput {
   text: string;
   imageCount: number;
+  sent: boolean;
 }
 
 export interface EntryView<K extends EntryKind = EntryKind> {
@@ -270,7 +272,7 @@ export interface StatusLineKit extends BaseKit {
   // slot. Call it once: a status line that leaves it out gets the slot at the end of its element. A second call throws
   // `status line placed status parts twice`, so the line draws with `default`.
   statusParts(parent: HTMLElement): HTMLElement;
-  // A running dot and the interrupt keys; hidden, keeping its space, while not working.
+  // A running dot, the interrupt keys and the send-now keys; hidden, keeping its space, while not working.
   running(parent: HTMLElement): HTMLElement;
   // Send with its keys.
   sendButton(parent: HTMLElement): HTMLButtonElement;
@@ -388,7 +390,7 @@ export interface ChatLayout {
     kit: BaseKit,
   ): PartView<WorkingInput>;
   // One pending message's row, appended to the entry list after the last entry; the app marks the focused row and
-  // handles its click.
+  // handles its click, and sends the input again when the row turns sent.
   queuedMessage?(
     parent: HTMLElement,
     input: QueuedMessageInput,

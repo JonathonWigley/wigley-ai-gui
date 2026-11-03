@@ -368,7 +368,7 @@ export const defaultKeymap = {
     { keys: 'y', scope: 'chat.chat', command: 'chat.allowPermission' },
     { keys: 'n', scope: 'chat.chat', command: 'chat.denyPermission' },
     { keys: '<C-c>', scope: 'chat.chat', command: 'chat.interrupt' },
-    { keys: '<D-Enter>', scope: 'chat.chat', command: 'chat.send' },
+    { keys: '<D-Enter>', scope: 'chat.chat', command: 'chat.sendNow' },
     { keys: 'm', scope: 'chat.chat', command: 'chat.pickMode' },
     { keys: 'e', scope: 'chat.chat', command: 'chat.pickEffort' },
     { keys: 'o', scope: 'chat.chat', command: 'chat.pickModel' },

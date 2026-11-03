@@ -311,6 +311,8 @@ describe('chat main part', () => {
     },
     { method: 'loadHistory', args: [] },
     { method: 'pullBack', args: ['queued-1'] },
+    { method: 'sendNow', args: ['queued-1'] },
+    { method: 'sendAllNow', args: [{ text: 'hi', images: [] }] },
   ])(
     'calls_PreviewSession_AreIgnoredWithNoError: $method',
     async ({ method, args }) => {

@@ -434,6 +434,35 @@ const INTERRUPT_AND_CLOSE_STEPS: SelfTestStep[] = [
     expect: '[chat] chat-selftest is working',
   },
   {
+    keys: sendKeys('row now'),
+    expect: '[chat] 1 pending message(s) in chat-selftest',
+  },
+  {
+    keys: ['Escape', 'G', '<D-Enter>'],
+    expect: '[chat] sending a pending message now in chat-selftest',
+    alsoExpect: [/^\[chat\] result entry added in chat-selftest$/],
+    why: 'Cmd+Enter on the focused pending row, off the box, writes it into the held turn, which the fake takes in and answers, ending the turn.',
+  },
+  {
+    keys: sendKeys(FAKE_HOLD_TEXT),
+    expect: '[chat] chat-selftest is working',
+  },
+  {
+    keys: sendKeys(FAKE_HOLD_TEXT),
+    expect: '[chat] 1 pending message(s) in chat-selftest',
+  },
+  {
+    keys: ['i', ...'box now', '<D-Enter>'],
+    expect: '[chat] sending now in chat-selftest',
+    alsoExpect: [/^\[chat\] result entry added in chat-selftest$/],
+    why: 'Cmd+Enter in the box writes the pending hold and then the box into the held turn; the box message ends the turn.',
+  },
+  { keys: ['Escape', 'Escape'], expect: '[chat] left the box' },
+  {
+    keys: sendKeys(FAKE_HOLD_TEXT),
+    expect: '[chat] chat-selftest is working',
+  },
+  {
     keys: sendKeys('pending one'),
     expect: '[chat] 1 pending message(s) in chat-selftest',
   },
@@ -672,7 +701,7 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'interrupt and close',
-    why: "Ctrl+c in the box ends a held turn with the fake's notice; messages sent during a held turn wait as pending rows, Enter on one and Ctrl+c pull them back into the box, the oldest on top, and none reaches the process; Cmd+W on a working session asks before y ends it.",
+    why: "Ctrl+c in the box ends a held turn with the fake's notice; messages sent during a held turn wait as pending rows; Cmd+Enter on a focused row writes that row into the turn, and Cmd+Enter in the box writes every pending row then the box; Enter on one and Ctrl+c pull them back into the box, the oldest on top, and none reaches the process; Cmd+W on a working session asks before y ends it.",
     steps: INTERRUPT_AND_CLOSE_STEPS,
   },
   {
@@ -743,6 +772,11 @@ const EXPECTED_CALLS: FakeAgentCall[] = [
   { method: 'setControl', id: 'effort', value: 'low' },
   { method: 'send', text: FAKE_HOLD_TEXT, imageCount: 0 },
   { method: 'interrupt' },
+  { method: 'send', text: FAKE_HOLD_TEXT, imageCount: 0 },
+  { method: 'send', text: 'row now', imageCount: 0 },
+  { method: 'send', text: FAKE_HOLD_TEXT, imageCount: 0 },
+  { method: 'send', text: FAKE_HOLD_TEXT, imageCount: 0 },
+  { method: 'send', text: 'box now', imageCount: 0 },
   { method: 'send', text: FAKE_HOLD_TEXT, imageCount: 0 },
   { method: 'interrupt' },
   { method: 'send', text: 'pending one\npending two', imageCount: 0 },

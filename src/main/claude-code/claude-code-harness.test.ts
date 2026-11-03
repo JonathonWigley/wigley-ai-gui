@@ -306,20 +306,7 @@ describe('createClaudeCodeHarness', () => {
 
     const message = userMessage({ text: 'hi', images: [] }, 'uuid-1');
     expect(run.written).toEqual([contextUsageRequest('wigley-1'), message]);
-    expect(run.heard).toEqual([
-      [
-        'entry',
-        {
-          kind: 'user',
-          id: 'user-1',
-          at: 1000,
-          text: 'hi',
-          images: [],
-          raw: [message],
-        },
-      ],
-      ['activity', 'working'],
-    ]);
+    expect(run.heard).toEqual([['activity', 'working']]);
   });
 
   // The timeline's user entries, user-message and skill events, drops and
@@ -352,10 +339,12 @@ describe('createClaudeCodeHarness', () => {
   // `abandon` interrupts and lets the grace run out; `close` ends the process.
   type SendStep = object | 'abandon' | 'close';
 
+  // `init` is the line read before the sends, null for none; one message is
+  // sent per text.
   it.each<{
     name: string;
-    init: object;
-    text: string;
+    init: object | null;
+    texts: string[];
     after: SendStep[];
     atWrite: unknown[][];
     expected: unknown[][];
@@ -363,7 +352,7 @@ describe('createClaudeCodeHarness', () => {
     {
       name: 'lifecycle, started',
       init: lifecycleInit,
-      text: 'hi',
+      texts: ['hi'],
       after: [lifecycle('uuid-1', 'queued'), lifecycle('uuid-1', 'started')],
       atWrite: [],
       expected: [
@@ -374,7 +363,7 @@ describe('createClaudeCodeHarness', () => {
     {
       name: 'lifecycle, typed skill, started',
       init: lifecycleInit,
-      text: '/wigley:feature',
+      texts: ['/wigley:feature'],
       after: [lifecycle('uuid-1', 'started')],
       atWrite: [],
       expected: [
@@ -386,7 +375,7 @@ describe('createClaudeCodeHarness', () => {
     ...['cancelled', 'discarded', 'refused'].map((state) => ({
       name: `lifecycle, ${state} before started`,
       init: lifecycleInit,
-      text: 'hi',
+      texts: ['hi'],
       after: [
         successResult('turn'),
         lifecycle('uuid-1', 'queued'),
@@ -401,7 +390,7 @@ describe('createClaudeCodeHarness', () => {
     {
       name: 'lifecycle, started after the interrupt grace',
       init: lifecycleInit,
-      text: 'hi',
+      texts: ['hi'],
       after: ['abandon', lifecycle('uuid-1', 'started')],
       atWrite: [],
       expected: [
@@ -413,7 +402,7 @@ describe('createClaudeCodeHarness', () => {
     {
       name: 'lifecycle, process ends holding the message',
       init: lifecycleInit,
-      text: 'hi',
+      texts: ['hi'],
       after: ['close', lifecycle('uuid-1', 'started')],
       atWrite: [],
       expected: [['activity', 'idle']],
@@ -421,7 +410,7 @@ describe('createClaudeCodeHarness', () => {
     {
       name: 'fallback',
       init: plainInit,
-      text: 'hi',
+      texts: ['hi'],
       after: [],
       atWrite: [
         ['entry', 'user-1', 1000],
@@ -429,19 +418,50 @@ describe('createClaudeCodeHarness', () => {
       ],
       expected: [],
     },
+    ...[
+      [lifecycle('uuid-1', 'started'), lifecycleInit],
+      [lifecycleInit, lifecycle('uuid-1', 'started')],
+    ].map((after, index) => ({
+      name: `before any init, lifecycle, started ${index === 0 ? 'before' : 'after'} the init`,
+      init: null,
+      texts: ['hi'],
+      after,
+      atWrite: [['activity', 'working']],
+      expected: [
+        ['entry', 'user-1', 2000],
+        ['userMessage', 2000],
+      ],
+    })),
+    {
+      name: 'before any init, fallback',
+      init: null,
+      texts: ['hi', 'there'],
+      after: [plainInit],
+      atWrite: [['activity', 'working']],
+      expected: [
+        ['entry', 'user-1', 2000],
+        ['userMessage', 2000],
+        ['entry', 'user-2', 2000],
+        ['userMessage', 2000],
+      ],
+    },
   ])(
     'send_DuringATurn_EmitsTheUserEntryWhenTakenIn ($name)',
-    async ({ init, text, after, atWrite, expected }) => {
+    async ({ init, texts, after, atWrite, expected }) => {
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
       let now = 1000;
       const run = started(fakeChild(), createMemoryFiles(), {
         now: () => now,
       });
-      writeLine(run.stdout, init);
+      if (init !== null) {
+        writeLine(run.stdout, init);
+      }
       await settle();
       run.timeline.length = 0;
 
-      const entryId = run.agent.send({ text, images: [] });
+      const entryIds = texts.map((text) =>
+        run.agent.send({ text, images: [] }),
+      );
       await settle();
       const heardAtWrite = sendTimeline(run.timeline);
       run.timeline.length = 0;
@@ -458,7 +478,7 @@ describe('createClaudeCodeHarness', () => {
         await settle();
       }
 
-      expect(entryId).toBe('user-1');
+      expect(entryIds).toEqual(texts.map((_, index) => `user-${index + 1}`));
       expect(heardAtWrite).toEqual(atWrite);
       expect(sendTimeline(run.timeline)).toEqual(expected);
     },
@@ -1077,6 +1097,8 @@ describe('createClaudeCodeHarness', () => {
   it('start_AgentEvents_StampedAtTheClockAndBracketedBySession', async () => {
     let at = 1000;
     const run = started(fakeChild(), createMemoryFiles(), { now: () => at });
+    writeLine(run.stdout, plainInit);
+    await settle();
     run.agent.send({ text: 'hi', images: [] });
     await settle();
 
@@ -1104,6 +1126,7 @@ describe('createClaudeCodeHarness', () => {
 
     expect(run.agentEvents).toEqual([
       { type: 'sessionStarted', at: 1000 },
+      { type: 'turnStarted', at: 1000 },
       { type: 'userMessage', at: 1000 },
       {
         type: 'toolStarted',
@@ -1203,15 +1226,14 @@ describe('createClaudeCodeHarness', () => {
     },
   ])('send_SlashText_EmitsSkillStarted ($case)', async ({ text, expected }) => {
     const run = started();
+    writeLine(run.stdout, plainInit);
     await settle();
+    run.agentEvents.length = 0;
 
     run.agent.send({ text, images: [] });
     await settle();
 
-    expect(run.agentEvents).toEqual([
-      { type: 'sessionStarted', at: 1000 },
-      ...expected,
-    ]);
+    expect(run.agentEvents).toEqual(expected);
   });
 
   it('kill_SendsSigtermAtOnceAndEndsClean', async () => {

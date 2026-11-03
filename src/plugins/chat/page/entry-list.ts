@@ -705,18 +705,26 @@ function queuedStopId(queuedId: string): string {
 }
 
 function queuedInput(message: QueuedMessage): QueuedMessageInput {
-  return { text: message.text, imageCount: message.images.length };
+  return {
+    text: message.text,
+    imageCount: message.images.length,
+    sent: message.sentEntryId !== null,
+  };
 }
 
 function isQueuedChanged(
   last: QueuedMessageInput,
   next: QueuedMessageInput,
 ): boolean {
-  return last.text !== next.text || last.imageCount !== next.imageCount;
+  return (
+    last.text !== next.text ||
+    last.imageCount !== next.imageCount ||
+    last.sent !== next.sent
+  );
 }
 
 // A pending row's slot, its row drawn, a click on it pulling the message
-// back.
+// back; main refuses a row already sent.
 function buildQueuedSlot(
   message: QueuedMessage,
   input: QueuedMessageInput,

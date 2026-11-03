@@ -277,12 +277,18 @@ function fillWorking(block, input) {
   );
 }
 
-/** @param {number} imageCount */
-function queuedLabel(imageCount) {
+// `pending`, or `sending` once the row is sent, then its image count:
+// `sending · 2 images`.
+/**
+ * @param {number} imageCount
+ * @param {boolean} sent
+ */
+function queuedLabel(imageCount, sent) {
+  const state = sent ? 'sending' : 'pending';
   if (imageCount === 0) {
-    return 'pending';
+    return state;
   }
-  return `pending · ${imageCount} ${imageCount === 1 ? 'image' : 'images'}`;
+  return `${state} · ${imageCount} ${imageCount === 1 ? 'image' : 'images'}`;
 }
 
 /**
@@ -291,7 +297,7 @@ function queuedLabel(imageCount) {
  * @param {import('../layout').QueuedMessageInput} input
  */
 function showQueued(label, text, input) {
-  label.textContent = queuedLabel(input.imageCount);
+  label.textContent = queuedLabel(input.imageCount, input.sent);
   text.textContent = input.text;
 }
 

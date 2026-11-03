@@ -150,6 +150,7 @@ export function chatCommandHandlers(
       log('chat', 'left the box');
     }),
     send: inSession((session) => send(deps, session)),
+    sendNow: inSession((session) => sendNow(deps, session)),
     interrupt: inRunningSession((session) => {
       if (session.state.activity === 'idle') {
         log('chat', `nothing to interrupt in ${session.name}`);
@@ -262,7 +263,9 @@ export function chatCommandHandlers(
       });
     }),
     pullBackQueued: inSession((session) => {
-      const newest = session.state.queued.at(-1);
+      const newest = session.state.queued.findLast(
+        (queued) => queued.sentEntryId === null,
+      );
       if (newest === undefined) {
         log('chat', `no pending message in ${session.name}`);
         return;
@@ -324,36 +327,111 @@ function sessionFor(
 // clears the row's done or error at once.
 function send(deps: ChatCommandDeps, session: ChatSession) {
   const { log } = deps;
-  const text = session.box.text();
-  const images = session.attachments.images();
-  if (text.trim() === '' && images.length === 0) {
+  const message = boxMessage(session);
+  if (message === null) {
     log('chat', 'nothing to send');
     return;
   }
-  const matched = deps.slashCommands.match(text);
-  if (matched !== null) {
-    runSlashCommand(deps, session, matched.command, matched.args);
-    deps.tabs.markSent(session.sessionId);
+  if (ranSlashCommand(deps, session, message.text)) {
     return;
   }
   void deps.channel
-    .invoke('send', session.sessionId, { text, images })
+    .invoke('send', session.sessionId, message)
     .then(() => {
       deps.tabs.markSent(session.sessionId);
     })
-    .catch((error: unknown) => {
-      log('chat', `send failed: ${errorText(error)}`);
-      deps.toast(`Message not sent: ${errorText(error)}`, 'error');
-      if (putBack(deps, session, [{ text, images }])) {
-        log('chat', `put the refused message back in ${session.name}`);
+    .catch(refused(deps, session, 'send', message));
+  clearBox(session);
+  const withImages =
+    message.images.length === 0
+      ? ''
+      : ` with ${message.images.length} image(s)`;
+  log('chat', `sent a message${withImages} in ${session.name}`);
+}
+
+// Cmd+Enter: with the box unfocused and a pending row focused, sends that row
+// now (see `sendQueuedNow`), leaving the box alone. Otherwise asks main to
+// send the box and every pending row now: into the running turn, or as `send`
+// does when none runs. The box is read, cleared and put back on a refusal as
+// `send` does, and an app slash command runs as there. An empty box sends the
+// unsent pending rows alone, leaving the box and entries as they are, and
+// with no unsent row sends nothing.
+function sendNow(deps: ChatCommandDeps, session: ChatSession) {
+  const focused = session.entries.focused();
+  if (!session.isBoxFocused() && focused?.kind === 'queued') {
+    sendQueuedNow(deps, session, focused.message.id);
+    return;
+  }
+  const message = boxMessage(session);
+  const hasUnsent = session.state.queued.some(
+    (queued) => queued.sentEntryId === null,
+  );
+  if (message === null && !hasUnsent) {
+    deps.log('chat', 'nothing to send');
+    return;
+  }
+  if (message !== null && ranSlashCommand(deps, session, message.text)) {
+    return;
+  }
+  void deps.channel
+    .invoke('sendAllNow', session.sessionId, message)
+    .then(() => {
+      if (message !== null) {
+        deps.tabs.markSent(session.sessionId);
       }
-    });
+    })
+    .catch(refused(deps, session, 'sendAllNow', message));
+  if (message !== null) {
+    clearBox(session);
+  }
+  deps.log('chat', `sending now in ${session.name}`);
+}
+
+// The box's text as typed with the attached images; null when both are empty.
+function boxMessage(session: ChatSession): UserMessage | null {
+  const text = session.box.text();
+  const images = session.attachments.images();
+  return text.trim() === '' && images.length === 0 ? null : { text, images };
+}
+
+// Runs the registered app slash command `text` names, if any, and clears the
+// row's done or error; whether one ran.
+function ranSlashCommand(
+  deps: ChatCommandDeps,
+  session: ChatSession,
+  text: string,
+): boolean {
+  const matched = deps.slashCommands.match(text);
+  if (matched === null) {
+    return false;
+  }
+  runSlashCommand(deps, session, matched.command, matched.args);
+  deps.tabs.markSent(session.sessionId);
+  return true;
+}
+
+// Empties the box and its attachments, and follows the latest entry.
+function clearBox(session: ChatSession) {
   session.box.setText('');
   session.attachments.clear();
   session.entries.latest();
-  const withImages =
-    images.length === 0 ? '' : ` with ${images.length} image(s)`;
-  log('chat', `sent a message${withImages} in ${session.name}`);
+}
+
+// The handler for main refusing `method`: logs and toasts the failure, and
+// puts the message, when there was one, back into the box.
+function refused(
+  deps: ChatCommandDeps,
+  session: ChatSession,
+  method: 'send' | 'sendAllNow',
+  message: UserMessage | null,
+) {
+  return (error: unknown) => {
+    deps.log('chat', `${method} failed: ${errorText(error)}`);
+    deps.toast(`Message not sent: ${errorText(error)}`, 'error');
+    if (message !== null && putBack(deps, session, [message])) {
+      deps.log('chat', `put the refused message back in ${session.name}`);
+    }
+  };
 }
 
 // Puts messages, oldest first, back into their session's box, ahead of
@@ -416,6 +494,22 @@ export function pullBackQueued(
       deps.log('chat', `pullBack failed: ${errorText(error)}`),
     );
   deps.log('chat', `pulling back a pending message in ${session.name}`);
+}
+
+// Asks main to write the queued message into the running turn now; its row
+// stays, drawn as sending, until the agent takes it in. Main refuses a row
+// already sent.
+export function sendQueuedNow(
+  deps: { channel: ChatInvoke; log: Log },
+  session: SessionRef,
+  queuedId: string,
+) {
+  void deps.channel
+    .invoke('sendNow', session.sessionId, queuedId)
+    .catch((error: unknown) =>
+      deps.log('chat', `sendNow failed: ${errorText(error)}`),
+    );
+  deps.log('chat', `sending a pending message now in ${session.name}`);
 }
 
 // Runs the command for the session and clears the box; a run that throws or

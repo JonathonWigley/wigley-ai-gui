@@ -229,6 +229,7 @@ const queued = (id: string): QueuedMessage => ({
   id,
   text: `text of ${id}`,
   images: [],
+  sentEntryId: null,
 });
 const pendingStop = (id: string) => ({ kind: 'queued', message: queued(id) });
 
@@ -726,6 +727,33 @@ describe('pending rows', () => {
     put(tool('t3'));
 
     expect(list.focused()).toEqual(line);
+  });
+
+  it('pending_RowTurnsSent_UpdatesThePartWithSent', () => {
+    const calls: { how: 'draw' | 'update'; sent: boolean }[] = [];
+    const shown = withUser<ChatLayout>(
+      defaultLayout,
+      {
+        queuedMessage(parent, input, kit) {
+          calls.push({ how: 'draw', sent: input.sent });
+          return {
+            element: kit.el(parent, 'div', 'fancy-queued'),
+            update: (next) => calls.push({ how: 'update', sent: next.sent }),
+          };
+        },
+      },
+      'fancy',
+    );
+    const { list, put } = setUpList(shown);
+    put(user('u1'));
+    list.setQueued([queued('q1')]);
+
+    list.setQueued([{ ...queued('q1'), sentEntryId: 'user-2' }]);
+
+    expect(calls).toEqual([
+      { how: 'draw', sent: false },
+      { how: 'update', sent: true },
+    ]);
   });
 });
 

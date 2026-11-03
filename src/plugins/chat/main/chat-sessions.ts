@@ -125,19 +125,23 @@ export interface ChatSessions {
   // so the read holds none of this turn. After `killAll` a resting session
   // starts no process and the message is dropped. While the harness reports
   // its turn running the message is queued instead, and each `idle` the
-  // harness reports writes the oldest queued message until none is left; a
-  // permission call left waiting after the turn ended queues nothing. The
-  // first message written in a row with no first-message title sets it.
+  // harness reports writes the oldest queued message not sent now until none
+  // is left; a permission call left waiting after the turn ended queues
+  // nothing. A written message is held until its entry arrives, and returned
+  // when the harness reports it dropped. The first message written in a row
+  // with no first-message title sets it.
   send(sessionId: string, message: UserMessage): Promise<void>;
   // Adds an app notice to the session's entries and sends it as harness
   // entries travel, so `sessions()` keeps it.
   notice(sessionId: string, text: string, tone: 'info' | 'error'): void;
-  // Returns every queued message, then interrupts the process.
+  // Returns every queued message not sent now, then interrupts the process;
+  // messages sent now stay queued.
   interrupt(sessionId: string): void;
   // Ends the session's process, interrupting a running turn first, and starts a
   // fresh one at once under a new host session id with the row's held mode and
   // the model and effort the user picked that a report confirmed. Waiting
-  // permission calls are cancelled and queued messages returned; the old
+  // permission calls are cancelled, and messages written but not taken in
+  // and every queued message returned in the order written; the old
   // process raises no exit notice and no turn-finished alert. The entries
   // become one `Conversation cleared` notice. A resting session just starts its
   // fresh process. Throws before changing anything when the profile or harness
@@ -146,8 +150,18 @@ export interface ChatSessions {
   // or after `killAll`.
   clear(sessionId: string): void;
   // Takes the queued message out of the queue and returns it; logs and sends
-  // nothing for one no longer queued.
+  // nothing for one no longer queued or already sent now.
   pullBack(sessionId: string, queuedId: string): void;
+  // Writes the queued message at once and keeps its row, marked with the
+  // entry id the write returned, until that entry arrives; logs and sends
+  // nothing for one no longer queued or already sent now, and a write that
+  // throws leaves the row unsent.
+  sendNow(sessionId: string, queuedId: string): void;
+  // While the harness reports the turn running, writes every queued message
+  // not sent now, oldest first, then `message` as a new last row, each as
+  // `sendNow` does, stopping at a write that throws. Otherwise sends
+  // `message` as `send` does, and a null `message` does nothing.
+  sendAllNow(sessionId: string, message: UserMessage | null): Promise<void>;
   // Throws for a session chat no longer holds or that has no running process,
   // as the process's own `setControl` throws for a value it refuses, so the
   // caller learns the change was not made. A model or effort set this way is
@@ -194,6 +208,11 @@ interface PendingPermission {
   onAbort(): void;
 }
 
+interface WrittenMessage {
+  message: UserMessage;
+  order: number;
+}
+
 // `process` is null whenever the session rests, and while the harness's
 // `start` runs.
 interface HeldSession {
@@ -217,6 +236,15 @@ interface HeldSession {
   noticeCount: number;
   // Messages ever queued in this row, numbering their ids.
   queuedCount: number;
+  // Messages ever queued, or written with no queued row, in this row,
+  // stamping each with its place in the order written.
+  heldCount: number;
+  // Each queued row → its stamp from `heldCount`.
+  rowOrders: WeakMap<QueuedMessage, number>;
+  // Harness entry id → each message written with no queued row, with its
+  // stamp from `heldCount`, until its entry arrives; ids restart with each
+  // process.
+  writtenMessages: Map<string, WrittenMessage>;
   // Processes started in this row, the one running included.
   processStarts: number;
   // Ids of the controls whose pick in this row a report confirmed; a start
@@ -321,6 +349,18 @@ function userMessageOf(queued: QueuedMessage): UserMessage {
   return { text: queued.text, images: queued.images };
 }
 
+function rowOrderOf(session: HeldSession, row: QueuedMessage): number {
+  const order = session.rowOrders.get(row);
+  if (order === undefined) {
+    throw new Error(`queued message ${row.id} has no write order`);
+  }
+  return order;
+}
+
+function isUnsent(queued: QueuedMessage): boolean {
+  return queued.sentEntryId === null;
+}
+
 function sameNames(held: readonly string[], names: readonly string[]): boolean {
   return (
     held.length === names.length &&
@@ -357,7 +397,8 @@ function firstMessageTitleOf(text: string): string {
 
 // Chat's owned sessions: each one's agent process while it runs, its chat
 // entries, controls and commands, the activity it shows, the permission
-// calls waiting on the user, and the messages queued behind its running turn;
+// calls waiting on the user, the messages queued behind its running turn, and
+// the messages written to the agent it has not taken in yet;
 // the folder's saved sessions it can resume; and
 // the open sessions it saves and restores across a relaunch. Every state
 // change reaches the page over `send`.
@@ -412,6 +453,11 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       session.state.running &&
       session.processStarts === processStart
     );
+  }
+
+  // The harness reports the turn running, so a message sent now waits.
+  function isTurnRunning(session: HeldSession): boolean {
+    return session.state.running && session.harnessActivity !== 'idle';
   }
 
   // The session's held state while its process runs, or null after logging
@@ -569,39 +615,123 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     });
   }
 
-  // Empties the queue and sends every message it held back to the page,
-  // oldest first; sends nothing when it is already empty.
-  function returnAllQueued(session: HeldSession) {
+  // Empties the queue and the written messages, and sends every message they
+  // held back to the page in the order written, rows sent now or not; sends
+  // nothing when both are empty.
+  function returnAllHeld(session: HeldSession) {
     const { queued } = session.state;
-    if (queued.length === 0) {
+    const held: WrittenMessage[] = [
+      ...session.writtenMessages.values(),
+      ...queued.map((row) => ({
+        message: userMessageOf(row),
+        order: rowOrderOf(session, row),
+      })),
+    ];
+    const messages = held
+      .sort((a, b) => a.order - b.order)
+      .map((written) => written.message);
+    session.writtenMessages.clear();
+    if (queued.length > 0) {
+      session.state.queued = [];
+      sendQueued(session);
+    }
+    if (messages.length > 0) {
+      send('returned', { sessionId: session.state.sessionId, messages });
+    }
+  }
+
+  // Takes every row not sent now out of the queue and sends its message back
+  // to the page, oldest first; sends nothing when none is unsent.
+  function returnUnsent(session: HeldSession) {
+    const { queued } = session.state;
+    const unsent = queued.filter(isUnsent);
+    if (unsent.length === 0) {
       return;
     }
-    session.state.queued = [];
+    session.state.queued = queued.filter((row) => !isUnsent(row));
     sendQueued(session);
     send('returned', {
       sessionId: session.state.sessionId,
-      messages: queued.map(userMessageOf),
+      messages: unsent.map(userMessageOf),
     });
   }
 
-  // Writes the oldest queued message to the agent; false when none is queued
-  // or the write throws, which leaves it at the queue's head.
+  // Writes the oldest queued message not sent now to the agent; false when
+  // none is queued or the write throws, which puts it back at its place.
   function writeNextQueued(session: HeldSession): boolean {
-    const [next, ...rest] = session.state.queued;
-    if (next === undefined) {
+    const index = session.state.queued.findIndex(isUnsent);
+    if (index === -1) {
       return false;
     }
-    session.state.queued = rest;
+    const next = session.state.queued[index];
+    session.state.queued = session.state.queued.filter((row) => row !== next);
     sendQueued(session);
     try {
-      deliver(session, userMessageOf(next));
+      deliverWritten(session, userMessageOf(next), rowOrderOf(session, next));
     } catch (error) {
-      session.state.queued = [next, ...rest];
+      const restored = [...session.state.queued];
+      restored.splice(index, 0, next);
+      session.state.queued = restored;
       sendQueued(session);
       log('chat', `queued message ${next.id} not sent: ${errorText(error)}`);
       return false;
     }
     return true;
+  }
+
+  // Writes the row's message and marks it with the entry id the write
+  // returned; false when the write throws, which leaves it unsent.
+  function writeRowNow(session: HeldSession, row: QueuedMessage): boolean {
+    let sentEntryId: string;
+    try {
+      sentEntryId = deliver(session, userMessageOf(row));
+    } catch (error) {
+      log('chat', `queued message ${row.id} not sent: ${errorText(error)}`);
+      return false;
+    }
+    const sentRow = { ...row, sentEntryId };
+    session.rowOrders.set(sentRow, rowOrderOf(session, row));
+    session.state.queued = session.state.queued.map((queued) =>
+      queued === row ? sentRow : queued,
+    );
+    return true;
+  }
+
+  // The agent took in the message written under `entryId`: a sent row for it
+  // leaves the queue, and a written message is held no longer.
+  function takeIn(session: HeldSession, entryId: string) {
+    session.writtenMessages.delete(entryId);
+    const { queued } = session.state;
+    if (queued.some((row) => row.sentEntryId === entryId)) {
+      session.state.queued = queued.filter(
+        (row) => row.sentEntryId !== entryId,
+      );
+      sendQueued(session);
+    }
+  }
+
+  // The agent dropped the message written under `entryId` without taking it
+  // in: its sent row leaves the queue, and the message goes back to the page.
+  function returnDropped(session: HeldSession, entryId: string) {
+    const { sessionId } = session.state;
+    const row = session.state.queued.find(
+      (queued) => queued.sentEntryId === entryId,
+    );
+    const written = session.writtenMessages.get(entryId);
+    if (row !== undefined) {
+      session.state.queued = session.state.queued.filter(
+        (queued) => queued !== row,
+      );
+      sendQueued(session);
+      send('returned', { sessionId, messages: [userMessageOf(row)] });
+    } else if (written !== undefined) {
+      session.writtenMessages.delete(entryId);
+      send('returned', { sessionId, messages: [written.message] });
+    } else {
+      log('chat', `dropped message ${entryId} not held`);
+      return;
+    }
+    log('chat', `sent message ${entryId} returned: never taken in`);
   }
 
   // The state is dropped first, so every later event for the session is
@@ -657,6 +787,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       entry(entry) {
         if (isLive(session, processStart)) {
           sendEntry(session, rowEntryOf(entry, processStart));
+          takeIn(session, entry.id);
         }
       },
       controls(controls) {
@@ -713,8 +844,12 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           readBranch(session);
         }
       },
-      // Chat main returns a dropped message in task 02 of plan-send-now.
-      messageDropped() {},
+      // Returns a written message the agent let go without taking it in.
+      messageDropped(entryId) {
+        if (isLive(session, processStart)) {
+          returnDropped(session, entryId);
+        }
+      },
       ended({ code, error }) {
         // A close drops the row before its process ends, so the exit is
         // recorded for the row's latest process whether or not it is live.
@@ -736,7 +871,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         session.process = null;
         showPendingCancelled(session);
         cancelPending(session);
-        returnAllQueued(session);
+        returnAllHeld(session);
         const isCleanExit = code === 0 && error === null;
         addNotice(
           session,
@@ -819,6 +954,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       permissionCount: 0,
       noticeCount: 0,
       queuedCount: 0,
+      heldCount: 0,
+      rowOrders: new WeakMap(),
+      writtenMessages: new Map(),
       processStarts: 0,
       userSetControls: new Set(),
       pendingPicks: new Map(),
@@ -996,12 +1134,17 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       log('chat', `send for unknown session ${sessionId} ignored`);
       return;
     }
-    const isTurnRunning =
-      session.state.running && session.harnessActivity !== 'idle';
-    if (isTurnRunning) {
+    if (isTurnRunning(session)) {
       queue(session, message);
       return;
     }
+    await writeAtIdle(session, message);
+  }
+
+  // Writes `message` to a session whose harness runs no turn, starting a
+  // resting session's process first.
+  async function writeAtIdle(session: HeldSession, message: UserMessage) {
+    const { sessionId } = session.state;
     if (!session.state.running) {
       const profile = profileNamed(session.state.profile);
       const harness = requireHarness();
@@ -1024,26 +1167,89 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         startProcess(session, harness, profile, session.sent);
       }
     }
-    deliver(session, message);
+    deliverWritten(session, message);
+  }
+
+  async function sendAllNow(sessionId: string, message: UserMessage | null) {
+    const session = held.get(sessionId);
+    if (session === undefined) {
+      log('chat', `sendAllNow for unknown session ${sessionId} ignored`);
+      return;
+    }
+    if (!isTurnRunning(session)) {
+      if (message !== null) {
+        await writeAtIdle(session, message);
+      }
+      return;
+    }
+    const hasUnsent = session.state.queued.some(isUnsent);
+    if (!hasUnsent && message === null) {
+      log('chat', `nothing to send now in ${sessionId}`);
+      return;
+    }
+    if (message !== null) {
+      appendQueued(session, message);
+    }
+    let isChanged = message !== null;
+    for (const row of session.state.queued.filter(isUnsent)) {
+      if (!writeRowNow(session, row)) {
+        break;
+      }
+      isChanged = true;
+    }
+    if (isChanged) {
+      sendQueued(session);
+    }
   }
 
   function queue(session: HeldSession, message: UserMessage) {
-    session.queuedCount += 1;
-    session.state.queued = [
-      ...session.state.queued,
-      { ...message, id: `queued-${session.queuedCount}` },
-    ];
+    appendQueued(session, message);
     sendQueued(session);
     log('chat', `queued a message in session ${session.state.sessionId}`);
   }
 
-  function deliver(session: HeldSession, message: UserMessage) {
-    session.process?.send(message);
+  function appendQueued(session: HeldSession, message: UserMessage) {
+    session.queuedCount += 1;
+    const row = {
+      ...message,
+      id: `queued-${session.queuedCount}`,
+      sentEntryId: null,
+    };
+    session.rowOrders.set(row, nextHeldOrder(session));
+    session.state.queued = [...session.state.queued, row];
+  }
+
+  function nextHeldOrder(session: HeldSession): number {
+    session.heldCount += 1;
+    return session.heldCount;
+  }
+
+  // Writes `message` to the agent and returns the id of the entry the agent
+  // adds when it takes it in.
+  function deliver(session: HeldSession, message: UserMessage): string {
+    const { process } = session;
+    if (process === null) {
+      throw new Error(
+        `session ${session.state.sessionId} has no running process`,
+      );
+    }
+    const entryId = process.send(message);
     if (!session.sent) {
       session.sent = true;
       setFirstMessageTitle(session, message.text);
       save();
     }
+    return entryId;
+  }
+
+  // Delivers a message that has no queued row, holding it until its entry
+  // arrives under `order`, a new stamp when none is given.
+  function deliverWritten(
+    session: HeldSession,
+    message: UserMessage,
+    order = nextHeldOrder(session),
+  ) {
+    session.writtenMessages.set(deliver(session, message), { message, order });
   }
 
   // A row whose first-message title is already set, such as a cleared one,
@@ -1071,7 +1277,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       }
     }
     const session = startNew(request, { select: false });
-    deliver(session, request.message);
+    deliverWritten(session, request.message);
     const { sessionId } = session.state;
     log('chat', `launched session ${sessionId} in ${request.projectDir}`);
     return sessionId;
@@ -1375,7 +1581,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     const harness = requireHarness();
     endForClear(session);
     cancelPending(session);
-    returnAllQueued(session);
+    returnAllHeld(session);
     const oldHostId = session.hostId;
     const newHostId = deps.randomUuid();
     session.owned.setHostSessionId(newHostId);
@@ -1444,7 +1650,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       if (session === null) {
         return;
       }
-      returnAllQueued(session);
+      returnUnsent(session);
       session.process?.interrupt();
     },
     clear,
@@ -1461,12 +1667,36 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         log('chat', `queued message ${queuedId} no longer queued`);
         return;
       }
+      if (!isUnsent(pulled)) {
+        log('chat', `queued message ${queuedId} already sent`);
+        return;
+      }
       session.state.queued = session.state.queued.filter(
         (queued) => queued !== pulled,
       );
       sendQueued(session);
       send('returned', { sessionId, messages: [userMessageOf(pulled)] });
     },
+    sendNow(sessionId, queuedId) {
+      const session = held.get(sessionId);
+      if (session === undefined) {
+        log('chat', `sendNow for unknown session ${sessionId} ignored`);
+        return;
+      }
+      const row = session.state.queued.find((queued) => queued.id === queuedId);
+      if (row === undefined) {
+        log('chat', `queued message ${queuedId} no longer queued`);
+        return;
+      }
+      if (!isUnsent(row)) {
+        log('chat', `queued message ${queuedId} already sent`);
+        return;
+      }
+      if (writeRowNow(session, row)) {
+        sendQueued(session);
+      }
+    },
+    sendAllNow,
     setControl(sessionId, controlId, value) {
       const session = held.get(sessionId);
       if (session === undefined || !session.state.running) {

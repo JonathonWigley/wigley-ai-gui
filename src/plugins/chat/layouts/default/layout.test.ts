@@ -744,13 +744,15 @@ describe('default chat layout queuedMessage', () => {
   });
 
   it.each([
-    { imageCount: 0, label: 'pending' },
-    { imageCount: 1, label: 'pending · 1 image' },
-    { imageCount: 3, label: 'pending · 3 images' },
+    { imageCount: 0, sent: false, label: 'pending' },
+    { imageCount: 1, sent: false, label: 'pending · 1 image' },
+    { imageCount: 3, sent: false, label: 'pending · 3 images' },
+    { imageCount: 0, sent: true, label: 'sending' },
+    { imageCount: 2, sent: true, label: 'sending · 2 images' },
   ])(
-    'queuedMessage_Default_Label ($imageCount → $label)',
-    ({ imageCount, label }) => {
-      const view = drawQueued({ text: 'fix the tests', imageCount });
+    'queuedMessage_Default_Label ($imageCount, sent $sent → $label)',
+    ({ imageCount, sent, label }) => {
+      const view = drawQueued({ text: 'fix the tests', imageCount, sent });
 
       expect(describeChildren(asFake(view.element))).toEqual([
         `div.chat-queued-label:${label}`,
@@ -760,10 +762,14 @@ describe('default chat layout queuedMessage', () => {
   );
 
   it('queuedMessage_Default_UpdateRedrawsInPlace', () => {
-    const view = drawQueued({ text: 'fix the tests', imageCount: 0 });
+    const view = drawQueued({
+      text: 'fix the tests',
+      imageCount: 0,
+      sent: false,
+    });
     const row = view.element;
 
-    view.update?.({ text: 'and the lint', imageCount: 2 });
+    view.update?.({ text: 'and the lint', imageCount: 2, sent: false });
 
     expect(view.element).toBe(row);
     expect(describeChildren(asFake(row))).toEqual([

@@ -21,13 +21,19 @@ export const chatManifest = definePlugin({
     },
     leaveBox: { label: 'leave the box', group: 'box', runsIn: 'page' },
     send: { label: 'send the message', group: 'box', runsIn: 'page' },
+    sendNow: {
+      label:
+        'send now: the focused pending row, or the box with every pending message',
+      group: 'box',
+      runsIn: 'page',
+    },
     removeImage: {
       label: 'remove the last attached image',
       group: 'box',
       runsIn: 'page',
     },
     pullBackQueued: {
-      label: 'pull back the newest pending message',
+      label: 'pull back the newest unsent pending message',
       group: 'box',
       runsIn: 'page',
     },

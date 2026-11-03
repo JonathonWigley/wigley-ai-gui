@@ -301,8 +301,9 @@ function createStatusLineParts(
   const typeHint = element('span', 'chat-type-hint');
   typeHint.append(typeKey, appendKey);
   const interruptKey = element('span', 'chat-running-key');
+  const sendNowKey = element('span', 'chat-running-key');
   const running = element('span', 'chat-running');
-  running.append(statusDot('running'), interruptKey);
+  running.append(statusDot('running'), interruptKey, sendNowKey);
   const sendKey = element('span', 'chat-send-key');
   const send = textButton('Send', () => deps.run(chatCommand('send')), {
     variant: 'ghost',
@@ -314,6 +315,10 @@ function createStatusLineParts(
     deps.keys.anchor(interruptKey, chatCommand('interrupt'), {
       ...scope,
       label: 'stop',
+    }),
+    deps.keys.anchor(sendNowKey, chatCommand('sendNow'), {
+      ...scope,
+      label: 'send now',
     }),
     deps.keys.anchor(typeKey, chatCommand('focusBox'), {
       ...scope,
