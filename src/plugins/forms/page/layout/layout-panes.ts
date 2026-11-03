@@ -439,10 +439,11 @@ function appendReviewButton(
 }
 
 // Redraws `entry`'s contents from `row`. A finding's pick reads as its action,
-// then its choice, drawn through `mount`, under the number the card gives it; a header pick reads as
-// its action alone, and a row with no pick as its status. The cursor's row
-// takes `jumpPrompt`, the keys that jump to its item, as clicking it does. The
-// row ends with each contributed column's cell.
+// then its choice, drawn through `mount`, under the number the card gives
+// it; a header pick reads as its action alone, and a row with no pick as its
+// status. The cursor's row takes `jumpPrompt`, the keys that jump to its
+// item, as clicking it does. The row ends with each contributed column's
+// cell.
 function drawReviewRow(
   entry: HTMLElement,
   row: ReviewRow,

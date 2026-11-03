@@ -51,8 +51,9 @@ interface RecordedTarget {
 
 // A doc view over a channel reading every doc as `# Doc`, drawing with the
 // layouts `layouts` returns, its editor host recording each editor it makes
-// and each text inserted, rendering through `markdown`. `writeBytes` answers the channel's `writeBytes`,
-// each call recorded in `writes`; `targets` holds each drop target.
+// and each text inserted, rendering through `markdown`. `writeBytes` answers
+// the channel's `writeBytes`, each call recorded in `writes`; `targets` holds
+// each drop target.
 function docViewOver(
   layouts: () => ShownLayouts<Layout>,
   chipsOf: DocViewDeps['chipsOf'] = () => {
@@ -570,12 +571,26 @@ describe('createDocView fences', () => {
     expect(counts.mounts).toBe(mounts);
   });
 
-  it('dispose disposes its fence views', async () => {
+  it.each([
+    {
+      name: 'keeps its fence view once drawn',
+      isDisposed: false,
+      disposals: 0,
+    },
+    {
+      name: 'disposes its fence view on dispose',
+      isDisposed: true,
+      disposals: 1,
+    },
+  ])('$name', async ({ isDisposed, disposals }) => {
     const { view, counts } = fencedDocView();
     await view.open(target(null, '/home/a.md'));
+    await settled();
 
-    view.dispose();
+    if (isDisposed) {
+      view.dispose();
+    }
 
-    expect(counts.disposals).toBe(1);
+    expect(counts.disposals).toBe(disposals);
   });
 });

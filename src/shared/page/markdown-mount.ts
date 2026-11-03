@@ -6,6 +6,7 @@ import type {
   MarkdownRenderer,
 } from '../../contracts/markdown';
 import { errorText } from '../error-text';
+import { moveConnected } from './dom';
 
 // `liveFences` false keeps every fence whose contribution runs its source as
 // code; one that only formats it still draws. True when left out.
@@ -14,10 +15,14 @@ export interface MarkdownDrawOptions {
 }
 
 // Draws MarkdownRenderer HTML into an element and owns the fence views it
-// hydrates. A later draw into the same target, or into a target in the same
-// parent, keeps a view whose fence's language, closed flag and source are
-// unchanged; a view no later draw took is disposed once the task's
-// microtasks run. `dispose` disposes every view it holds.
+// hydrates. A later draw keeps a view whose fence's language, closed flag and
+// source are unchanged when it draws into the view's target, or into a target
+// in the same parent that the view's target was removed from or redrew
+// without. A sibling that still shows the view keeps it unless it is removed
+// before the task's microtasks run. Once they run, a view no draw took, or
+// whose target was removed from its parent, is disposed; a target moved to
+// another parent keeps its views. A target drawn with no parent is never
+// swept as removed. `dispose` disposes every view it holds.
 export interface MarkdownMount extends Disposable {
   draw(target: HTMLElement, html: string, options?: MarkdownDrawOptions): void;
 }
@@ -31,17 +36,19 @@ interface Fence {
 }
 
 // A view lent to another target's placeholder while its own target may still
-// show it; the sweep settles it.
+// show it; the sweep settles it. `fallback` is what the placeholder held.
 interface Borrow {
   oldPlaceholder: HTMLElement;
   fence: Fence;
+  fallback: Node[];
   target: HTMLElement;
   host: ParentNode | null;
   liveFences: boolean;
 }
 
 // One live view: its fence's key, the target it sits in and that target's
-// parent at its draw (`host`, null when it had none).
+// parent (`host`, null when it was drawn with none) as of the last draw or
+// sweep.
 interface ViewRecord {
   language: string;
   closed: boolean;
@@ -58,12 +65,6 @@ interface Candidate {
   record: ViewRecord;
   isBorrowed: boolean;
 }
-
-// `moveBefore` keeps an iframe loaded as it moves; lib.dom declares it only
-// on Document.
-type MovingParent = HTMLElement & {
-  moveBefore?(node: Node, child: Node | null): void;
-};
 
 const PLACEHOLDER = '.md-fence';
 
@@ -127,20 +128,23 @@ export function createMarkdownMount(
   };
 
   // Gives a borrowed view back to its own target when that target still
-  // shows, mounting a new one into the borrowing placeholder; else hands the
-  // record to the borrowing target.
+  // shows it, putting the borrowing placeholder's code back and mounting a
+  // new view over it; else hands the record to the borrowing target, which
+  // supersedes it when the borrowing placeholder is no longer drawn.
   const settle = (record: ViewRecord, borrow: Borrow): void => {
     record.borrow = null;
-    const isOwnTargetGone = record.target.parentNode !== record.host;
-    if (isOwnTargetGone) {
+    const { fence } = borrow;
+    const isStillDrawn = borrow.target.contains(fence.placeholder);
+    const isOwnTargetDone = isRemoved(record) || record.isSuperseded;
+    if (isOwnTargetDone) {
       record.target = borrow.target;
       record.host = borrow.host;
+      record.isSuperseded = !isStillDrawn;
       return;
     }
     moveInto(borrow.oldPlaceholder, record.view.element);
-    const { fence } = borrow;
+    fence.placeholder.replaceChildren(...borrow.fallback);
     const contribution = contributionFor(fence, borrow.liveFences);
-    const isStillDrawn = borrow.target.contains(fence.placeholder);
     if (contribution !== undefined && isStillDrawn) {
       mountNew(fence, contribution, borrow.target);
     }
@@ -158,15 +162,29 @@ export function createMarkdownMount(
     }
     const kept: ViewRecord[] = [];
     for (const record of records) {
-      const hasLeftHost =
-        record.host !== null && record.target.parentNode !== record.host;
-      if (record.isSuperseded || hasLeftHost) {
+      if (record.isSuperseded || isRemoved(record)) {
         disposeView(record);
-      } else {
-        kept.push(record);
+        continue;
       }
+      if (record.host !== null) {
+        record.host = record.target.parentNode;
+      }
+      kept.push(record);
     }
     records = kept;
+  };
+
+  // Marks every record of `target` that this draw did not take superseded,
+  // a lent one included.
+  const supersedeUntaken = (
+    target: HTMLElement,
+    taken: Set<ViewRecord>,
+  ): void => {
+    for (const record of records) {
+      if (record.target === target && !taken.has(record)) {
+        record.isSuperseded = true;
+      }
+    }
   };
 
   const queueSweep = (): void => {
@@ -176,8 +194,9 @@ export function createMarkdownMount(
     }
   };
 
-  // Own records first, then those whose target left `target`'s parent or
-  // was superseded, then the live siblings', which a draw only borrows.
+  // Own records first, then those whose target was removed from `target`'s
+  // parent or was superseded, then the live siblings', which a draw only
+  // borrows.
   const candidatesFor = (target: HTMLElement): Candidate[] => {
     const parent = target.parentNode;
     const own: Candidate[] = [];
@@ -190,7 +209,7 @@ export function createMarkdownMount(
       const isInParent = parent !== null && record.host === parent;
       if (record.target === target) {
         own.push({ record, isBorrowed: false });
-      } else if (isInParent && record.target.parentNode !== parent) {
+      } else if (isInParent && isRemoved(record)) {
         left.push({ record, isBorrowed: false });
       } else if (isInParent && record.isSuperseded) {
         left.push({ record, isBorrowed: false });
@@ -232,12 +251,14 @@ export function createMarkdownMount(
     for (const { candidate, fence } of placed) {
       const { record } = candidate;
       const oldPlaceholder = record.view.element.parentNode as HTMLElement;
+      const fallback = [...fence.placeholder.childNodes];
       moveInto(fence.placeholder, record.view.element);
       record.isSuperseded = false;
       if (candidate.isBorrowed) {
         record.borrow = {
           oldPlaceholder,
           fence,
+          fallback,
           target,
           host: target.parentNode,
           liveFences,
@@ -250,11 +271,7 @@ export function createMarkdownMount(
     for (const node of shown) {
       node.remove();
     }
-    for (const record of records) {
-      if (record.target === target && !taken.has(record)) {
-        record.isSuperseded = true;
-      }
-    }
+    supersedeUntaken(target, taken);
     for (const { fence, contribution } of fresh) {
       mountNew(fence, contribution, target);
     }
@@ -273,6 +290,7 @@ export function createMarkdownMount(
       if (isDisposed) {
         return;
       }
+      supersedeUntaken(target, new Set());
       for (const fence of fencesIn(target)) {
         const contribution = contributionFor(fence, liveFences);
         if (contribution !== undefined) {
@@ -315,18 +333,14 @@ function hasKeyOf(record: ViewRecord, fence: Fence): boolean {
   );
 }
 
-// Puts `element`, which sits in another placeholder, alone in `placeholder`,
-// through `moveBefore` when both are connected, so a frame in it stays
-// loaded.
-function moveInto(placeholder: MovingParent, element: HTMLElement): void {
-  const canMoveConnected =
-    typeof placeholder.moveBefore === 'function' &&
-    placeholder.isConnected &&
-    element.isConnected;
-  if (canMoveConnected) {
-    placeholder.replaceChildren();
-    placeholder.moveBefore!(element, null);
-  } else {
-    placeholder.replaceChildren(element);
-  }
+// True when the record's target was drawn in a parent and has since been
+// removed from it, rather than moved to another.
+function isRemoved(record: ViewRecord): boolean {
+  return record.host !== null && record.target.parentNode === null;
+}
+
+// Puts `element`, which sits in another placeholder, alone in `placeholder`.
+function moveInto(placeholder: HTMLElement, element: HTMLElement): void {
+  placeholder.replaceChildren();
+  moveConnected(placeholder, element);
 }

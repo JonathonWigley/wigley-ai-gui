@@ -157,7 +157,8 @@ function closesAt(
 
 // markdown-it's `highlight` option is synchronous, so every fence is
 // highlighted between parse and render; a fence the highlighter rejects
-// renders plain.
+// renders plain. A contributed fence is highlighted too, inside its
+// placeholder, unless its contribution is not live and so always draws.
 async function renderDocument(
   md: Md,
   highlighter: CodeHighlighter,
@@ -193,8 +194,8 @@ async function highlightFences(
       continue;
     }
     const language = fenceLanguage(token, unescapeAll);
-    const isContributed = contributed.has(language.toLowerCase());
-    if (language !== '' && !isContributed) {
+    const formatsItself = contributed.get(fenceKey(language))?.live === false;
+    if (language !== '' && !formatsItself) {
       fences.push({ token, language });
     }
   }
@@ -444,20 +445,28 @@ function installBlockRules(md: Md, fences: Fences): void {
   rules.heading_open = (tokens, idx) =>
     `<p class="md-h md-${tokens[idx].tag}">`;
   rules.heading_close = () => '</p>\n';
-  installFenceRule(md, fences, rules.fence!);
+  const { escapeHtml } = md.utils;
+  installFenceRule(
+    md,
+    fences,
+    (token) => escapeHtml(token.content),
+    rules.fence!,
+  );
 }
 
 // A fence whose language has a contribution renders as the markdown mount's
-// placeholder; any other renders through `uncontributed`.
+// placeholder, its code as `codeOf` gives it; any other renders through
+// `uncontributed`.
 function installFenceRule(
   md: Md,
   fences: Fences,
+  codeOf: (token: Token, env: unknown) => string,
   uncontributed: RenderRule,
 ): void {
   const { escapeHtml, unescapeAll } = md.utils;
   md.renderer.rules.fence = (tokens, idx, options, env, self) => {
     const token = tokens[idx];
-    const language = fenceLanguage(token, unescapeAll).toLowerCase();
+    const language = fenceKey(fenceLanguage(token, unescapeAll));
     if (!fences.has(language)) {
       return uncontributed(tokens, idx, options, env, self);
     }
@@ -465,7 +474,7 @@ function installFenceRule(
     const closed = token.meta?.closed === true;
     return (
       `<div class="md-fence" data-fence-language="${shownLanguage}" data-fence-closed="${closed}"${self.renderAttrs(token)}>` +
-      `<pre><code class="${options.langPrefix}${shownLanguage}">${escapeHtml(token.content)}</code></pre></div>\n`
+      `<pre><code class="${options.langPrefix}${shownLanguage}">${codeOf(token, env)}</code></pre></div>\n`
     );
   };
 }
@@ -494,17 +503,17 @@ function installDocumentRules(md: Md, fences: Fences): void {
     );
     return `<span class="md-image">${escapeHtml(alt)}</span>`;
   };
-  installFenceRule(md, fences, (tokens, idx, options, env, self) => {
+  const codeOf = (token: Token, env: unknown) =>
+    (env as DocumentEnv).highlighted.get(token) ?? escapeHtml(token.content);
+  installFenceRule(md, fences, codeOf, (tokens, idx, options, env, self) => {
     const token = tokens[idx];
     const language = fenceLanguage(token, unescapeAll);
     const attrs = self.renderAttrs(token);
-    const { highlighted } = env as DocumentEnv;
-    const code = highlighted.get(token) ?? escapeHtml(token.content);
     const languageClass =
       language === ''
         ? ''
         : ` class="${options.langPrefix}${escapeHtml(language)}"`;
-    return `<pre${attrs}><code${languageClass}>${code}</code></pre>\n`;
+    return `<pre${attrs}><code${languageClass}>${codeOf(token, env)}</code></pre>\n`;
   });
 }
 

@@ -52,7 +52,7 @@ function fakeFences() {
     fmt: contribution('fmt', false),
   };
   const fences = { fence: (language: string) => registered[language] };
-  return { fences, mounts, views };
+  return { fences, registered, mounts, views };
 }
 
 const html = (source: string, closed = true) =>
@@ -62,22 +62,30 @@ function newElement(): HTMLElement {
   return document.createElement('div');
 }
 
+// A new element appended to `target`'s parent.
+function siblingOf(target: HTMLElement): HTMLElement {
+  const sibling = newElement();
+  (target.parentNode as HTMLElement).append(sibling);
+  return sibling;
+}
+
 function placeholdersIn(target: HTMLElement): FakeElement[] {
   return asFake(target).querySelectorAll('.md-fence');
 }
 
 // The index in `views` of the view each placeholder in `target` holds; -1
-// for a placeholder still holding its code.
-function viewsIn(target: HTMLElement, views: FakeView[]): number[] {
-  return placeholdersIn(target).map((placeholder) =>
-    views.findIndex(
-      (view) => asFake(view.element) === placeholder.childNodes[0],
-    ),
-  );
+// for a placeholder still holding its code, null for an empty one.
+function viewsIn(target: HTMLElement, views: FakeView[]): (number | null)[] {
+  return placeholdersIn(target).map((placeholder) => {
+    const held = placeholder.childNodes[0];
+    if (held === undefined) {
+      return null;
+    }
+    return views.findIndex((view) => asFake(view.element) === held);
+  });
 }
 
 describe('createMarkdownMount', () => {
-  let moves: { element: unknown; to: unknown }[];
   let logs: [string, string][];
   let fake: ReturnType<typeof fakeFences>;
   let mount: MarkdownMount;
@@ -85,9 +93,7 @@ describe('createMarkdownMount', () => {
   let target: HTMLElement;
 
   beforeEach(() => {
-    ({ moves } = installMarkdownDom((name, value) =>
-      vi.stubGlobal(name, value),
-    ));
+    installMarkdownDom((name, value) => vi.stubGlobal(name, value));
     logs = [];
     fake = fakeFences();
     mount = createMarkdownMount(fake.fences, (source, message) =>
@@ -136,39 +142,39 @@ describe('createMarkdownMount', () => {
       first: html('a'),
       redraw: (draw: MarkdownMount['draw'], old: HTMLElement) => {
         draw(old, html('a'));
-        return old;
+        return [old];
       },
       mounts: [{ source: 'a', closed: true }],
       disposals: [0],
-      holds: [0],
+      holds: [[0]],
     },
     {
       name: 'a changed source mounts a new view and disposes the old',
       first: html('a'),
       redraw: (draw: MarkdownMount['draw'], old: HTMLElement) => {
         draw(old, html('b'));
-        return old;
+        return [old];
       },
       mounts: [
         { source: 'a', closed: true },
         { source: 'b', closed: true },
       ],
       disposals: [1, 0],
-      holds: [1],
+      holds: [[1]],
     },
     {
       name: 'a block that closes mounts a new view and disposes the open one',
       first: html('a', false),
       redraw: (draw: MarkdownMount['draw'], old: HTMLElement) => {
         draw(old, html('a'));
-        return old;
+        return [old];
       },
       mounts: [
         { source: 'a', closed: false },
         { source: 'a', closed: true },
       ],
       disposals: [1, 0],
-      holds: [1],
+      holds: [[1]],
     },
     {
       name: 'a new target drawn before the old one is removed keeps the view',
@@ -178,11 +184,11 @@ describe('createMarkdownMount', () => {
         (old.parentNode as HTMLElement).append(next);
         draw(next, html('a'));
         old.remove();
-        return next;
+        return [next];
       },
       mounts: [{ source: 'a', closed: true }],
       disposals: [0],
-      holds: [0],
+      holds: [[0]],
     },
     {
       name: 'a new target drawn after the parent was emptied keeps the view',
@@ -193,25 +199,155 @@ describe('createMarkdownMount', () => {
         const next = newElement();
         host.append(next);
         draw(next, html('a'));
-        return next;
+        return [next];
       },
       mounts: [{ source: 'a', closed: true }],
       disposals: [0],
-      holds: [0],
+      holds: [[0]],
     },
     {
       name: 'two equal fences keep a view each',
       first: html('a') + html('a'),
       redraw: (draw: MarkdownMount['draw'], old: HTMLElement) => {
         draw(old, html('a') + html('a'));
-        return old;
+        return [old];
       },
       mounts: [
         { source: 'a', closed: true },
         { source: 'a', closed: true },
       ],
       disposals: [0, 0],
-      holds: [0, 1],
+      holds: [[0, 1]],
+    },
+    {
+      name: 'a staying sibling gets its view back and the new target a new one',
+      first: html('a'),
+      redraw: (draw: MarkdownMount['draw'], old: HTMLElement) => {
+        const next = siblingOf(old);
+        draw(next, html('a'));
+        return [old, next];
+      },
+      mounts: [
+        { source: 'a', closed: true },
+        { source: 'a', closed: true },
+      ],
+      disposals: [0, 0],
+      holds: [[0], [1]],
+    },
+    {
+      name: 'a new target takes the view of a sibling that redrew without it',
+      first: html('a'),
+      redraw: (draw: MarkdownMount['draw'], old: HTMLElement) => {
+        draw(old, '<p>none</p>');
+        const next = siblingOf(old);
+        draw(next, html('a'));
+        return [old, next];
+      },
+      mounts: [{ source: 'a', closed: true }],
+      disposals: [0],
+      holds: [[], [0]],
+    },
+    {
+      name: 'two new targets beside a staying sibling get a view each',
+      first: html('a'),
+      redraw: (draw: MarkdownMount['draw'], old: HTMLElement) => {
+        const first = siblingOf(old);
+        const second = siblingOf(old);
+        draw(first, html('a'));
+        draw(second, html('a'));
+        return [old, first, second];
+      },
+      mounts: [
+        { source: 'a', closed: true },
+        { source: 'a', closed: true },
+        { source: 'a', closed: true },
+      ],
+      disposals: [0, 0, 0],
+      holds: [[0], [2], [1]],
+    },
+    {
+      name: 'a target moved to another parent keeps its view',
+      first: html('a'),
+      redraw: (_draw: MarkdownMount['draw'], old: HTMLElement) => {
+        newElement().append(old);
+        return [old];
+      },
+      mounts: [{ source: 'a', closed: true }],
+      disposals: [0],
+      holds: [[0]],
+    },
+    {
+      name: 'a target removed with no draw taking its view disposes it',
+      first: html('a'),
+      redraw: (draw: MarkdownMount['draw'], old: HTMLElement) => {
+        const next = siblingOf(old);
+        draw(next, '<p>none</p>');
+        old.remove();
+        return [next];
+      },
+      mounts: [{ source: 'a', closed: true }],
+      disposals: [1],
+      holds: [[]],
+    },
+    {
+      name: 'a lent view stays with its borrower once its target redraws without it',
+      first: html('a'),
+      redraw: (draw: MarkdownMount['draw'], old: HTMLElement) => {
+        const next = siblingOf(old);
+        draw(next, html('a'));
+        draw(old, '<p>none</p>');
+        return [old, next];
+      },
+      mounts: [{ source: 'a', closed: true }],
+      disposals: [0],
+      holds: [[], [0]],
+    },
+    {
+      name: 'a lent view is disposed once its borrower redrew and its target left',
+      first: html('a'),
+      redraw: (draw: MarkdownMount['draw'], old: HTMLElement) => {
+        const next = siblingOf(old);
+        draw(next, html('a'));
+        draw(next, html('a'));
+        old.remove();
+        return [next];
+      },
+      mounts: [
+        { source: 'a', closed: true },
+        { source: 'a', closed: true },
+      ],
+      disposals: [1, 0],
+      holds: [[1]],
+    },
+    {
+      name: 'a lent view stays with its borrower once its target redrew and left',
+      first: html('a') + html('b'),
+      redraw: (draw: MarkdownMount['draw'], old: HTMLElement) => {
+        const next = siblingOf(old);
+        draw(next, html('a'));
+        draw(old, html('b'));
+        old.remove();
+        return [next];
+      },
+      mounts: [
+        { source: 'a', closed: true },
+        { source: 'b', closed: true },
+      ],
+      disposals: [0, 1],
+      holds: [[0]],
+    },
+    {
+      name: 'a view given back leaves its borrower its code when nothing mounts there',
+      first: html('a'),
+      redraw: (draw: MarkdownMount['draw'], old: HTMLElement) => {
+        const next = siblingOf(old);
+        draw(next, html('a'));
+        delete fake.registered.html;
+        return [old, next];
+      },
+      mounts: [{ source: 'a', closed: true }],
+      disposals: [0],
+      holds: [[0], [-1]],
     },
   ])('$name', async ({ first, redraw, mounts, disposals, holds }) => {
     mount.draw(target, first);
@@ -222,45 +358,7 @@ describe('createMarkdownMount', () => {
       fake.mounts.map(({ source, closed }) => ({ source, closed })),
     ).toEqual(mounts);
     expect(fake.views.map((view) => view.disposals)).toEqual(disposals);
-    expect(viewsIn(shown, fake.views)).toEqual(holds);
-  });
-
-  it('gives a staying sibling its view back and mounts a new one', async () => {
-    mount.draw(target, html('a'));
-    const next = newElement();
-    parent.append(next);
-    mount.draw(next, html('a'));
-    await Promise.resolve();
-
-    expect(fake.mounts).toHaveLength(2);
-    expect(fake.views.map((view) => view.disposals)).toEqual([0, 0]);
-    expect(viewsIn(target, fake.views)).toEqual([0]);
-    expect(viewsIn(next, fake.views)).toEqual([1]);
-  });
-
-  it.each([
-    { rule: 'moveBefore', case: 'both targets are connected', connected: true },
-    {
-      rule: 'replaceChildren',
-      case: 'the parent is not connected',
-      connected: false,
-    },
-  ])('moves a kept view with $rule when $case', async ({ connected }) => {
-    asFake(parent).isPageRoot = connected;
-    mount.draw(target, html('a'));
-    const next = newElement();
-    parent.append(next);
-    mount.draw(next, html('a'));
-    target.remove();
-    await Promise.resolve();
-
-    const placeholder = placeholdersIn(next)[0];
-    expect(placeholder.childNodes).toEqual([asFake(fake.views[0].element)]);
-    expect(moves).toEqual(
-      connected
-        ? [{ element: asFake(fake.views[0].element), to: placeholder }]
-        : [],
-    );
+    expect(shown.map((each) => viewsIn(each, fake.views))).toEqual(holds);
   });
 
   it.each([

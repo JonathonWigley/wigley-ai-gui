@@ -4,8 +4,8 @@ import type { Disposable } from './disposable';
 // links as literal text; `document` renders a whole doc with links as anchors,
 // heading anchors and highlighted fences, raw HTML still escaped. `block` and
 // `document` emit a placeholder for each fence whose language has a
-// contribution; the markdown mount (`src/shared/page/markdown-mount.ts`)
-// hydrates it.
+// contribution, `document` highlighting a live one's code inside it; the
+// markdown mount (`src/shared/page/markdown-mount.ts`) hydrates it.
 export interface MarkdownRenderer {
   block(text: string): string;
   inline(text: string): string;
@@ -20,9 +20,10 @@ export interface FenceView {
   dispose(): void;
 }
 
-// `closed` is false while the block's closing fence has not arrived (a streaming reply).
-// `live` is true when the view runs the source (html), false when it only formats it (diff).
-// A draw with liveFences: false skips live contributions only.
+// `closed` is false while the block's closing fence has not arrived (a
+// streaming reply). `live` is true when the view runs the source (html), false
+// when it only formats it (diff). A draw with liveFences: false skips live
+// contributions only.
 export interface FenceContribution {
   language: string;
   live: boolean;

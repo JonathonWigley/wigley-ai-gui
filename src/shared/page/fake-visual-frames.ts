@@ -7,7 +7,8 @@ export interface FakeVisualFrame {
 }
 
 // A `VisualFrames` for plugin tests: `opened` holds each frame opened, in
-// order, with its source and whether it was disposed.
+// order, with its source and whether it was disposed; a frame's `dispose`
+// removes its element, as the contract's does.
 export function fakeVisualFrames(): {
   frames: VisualFrames;
   opened: FakeVisualFrame[];
@@ -24,6 +25,7 @@ export function fakeVisualFrames(): {
         element,
         dispose: () => {
           record.disposed = true;
+          element.remove();
         },
       };
     },

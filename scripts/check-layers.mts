@@ -923,7 +923,17 @@ const LAYERS: Record<string, LayerRule> = {
     packages: ['fabric'],
   },
   'src/renderer/visual-frames': {
-    layers: ['src/contracts', 'src/shared', 'src/shared/page'],
+    layers: ['src/contracts', 'src/shared'],
+    packages: [],
+  },
+  // Drives the frames over the shared page fake DOM.
+  'src/renderer/visual-frames/visual-frames.test.ts': {
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/shared/page',
+      'src/renderer/visual-frames',
+    ],
     packages: [],
   },
   'src/renderer/renderer.ts': {

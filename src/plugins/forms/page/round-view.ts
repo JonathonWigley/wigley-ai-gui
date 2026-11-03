@@ -108,8 +108,9 @@ export interface RoundViewDeps {
 // `scrollBy` scrolls the main column by `step`, down for 1 and up for -1.
 // `resizeTarget` is the view's rail | main split, which the resize keys move
 // while the round shows.
-// `dispose` disposes every anchor and markdown mount the view made and its split, and stops it
-// following keymap changes; its owner calls it when it drops the view.
+// `dispose` disposes every anchor and markdown mount the view made and its
+// split, and stops it following keymap changes; its owner calls it when it
+// drops the view.
 export interface RoundView {
   element: HTMLElement;
   update(round: RoundState, view: FormsView): void;
@@ -124,8 +125,8 @@ export interface RoundView {
 interface RoundParts {
   main: HTMLElement;
   layoutHead: HTMLElement | null;
-  // Disposes the head's anchors and mounts and draws the layout's head again in its
-  // slot; nothing for a layout with no head.
+  // Disposes the head's anchors and mounts and draws the layout's head again
+  // in its slot; nothing for a layout with no head.
   redrawLayoutHead(): void;
   railHead: RailHead;
   rail: RailPane;
@@ -133,7 +134,8 @@ interface RoundParts {
   itemsPane: HTMLElement;
   itemCards: ItemCard[];
   review: ReviewPane;
-  // Disposes every anchor and markdown mount the build made, the head's included.
+  // Disposes every anchor and markdown mount the build made, the head's
+  // included.
   dispose(): void;
 }
 

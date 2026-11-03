@@ -23,6 +23,26 @@ export function appended<E extends HTMLElement>(
   return node;
 }
 
+// lib.dom declares `moveBefore` only on Document.
+type MovingParent = Element & {
+  moveBefore?(node: Node, child: Node | null): void;
+};
+
+// Appends `node` to `parent`, through `moveBefore` when both are connected,
+// so a frame in it stays loaded.
+export function moveConnected(parent: Element, node: Node): void {
+  const moving: MovingParent = parent;
+  const canMoveConnected =
+    typeof moving.moveBefore === 'function' &&
+    parent.isConnected &&
+    node.isConnected;
+  if (canMoveConnected) {
+    moving.moveBefore!(node, null);
+  } else {
+    parent.append(node);
+  }
+}
+
 // A button that never takes focus, so page keys still drive the page after a
 // click and Enter or Space never re-press it.
 export function button(

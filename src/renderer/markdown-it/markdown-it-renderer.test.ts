@@ -509,13 +509,19 @@ describe('document()', () => {
     );
   });
 
-  it('asks the highlighter for no contributed fence', async () => {
-    const withHtml = createMarkdownItRenderer(highlighter);
-    withHtml.addFence(htmlFence);
+  it('highlights a live contributed fence inside its placeholder, and no diff', async () => {
+    const withTs = createMarkdownItRenderer(highlighter);
+    withTs.addFence({ ...htmlFence, language: 'ts' });
 
-    await withHtml.document('```html\nx\n```\n\n```diff\n+ a\n```');
+    const html = await withTs.document(
+      '```ts\nconst\n```\n\n```diff\n+ a\n```',
+    );
 
-    expect(highlightCalls).toEqual([]);
+    expect(html).toContain(
+      '<div class="md-fence" data-fence-language="ts" data-fence-closed="true" data-source-line="1">' +
+        '<pre><code class="language-ts"><span class="tok-keyword">const\n</span></code></pre></div>\n',
+    );
+    expect(highlightCalls).toEqual([{ code: 'const\n', language: 'ts' }]);
   });
 
   it('highlights a fence inside details', async () => {

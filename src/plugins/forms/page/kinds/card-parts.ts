@@ -106,9 +106,9 @@ export interface ChoiceList {
 }
 
 // Appends one choice per entry of `choices` to `list`, each inline markdown
-// drawn through `deps.mount` under its shown `number`, with the anchor for the command that picks that
-// number; the choice numbered `recommended` is tagged, none when null. `pick`
-// gets the clicked choice's number.
+// drawn through `deps.mount` under its shown `number`, with the anchor for
+// the command that picks that number; the choice numbered `recommended` is
+// tagged, none when null. `pick` gets the clicked choice's number.
 export function buildChoiceList(
   list: HTMLElement,
   choices: { text: string; number: number }[],
