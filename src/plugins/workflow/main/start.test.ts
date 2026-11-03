@@ -161,13 +161,17 @@ function startWorkflowPart(
     }
     await settled();
   };
-  const agentEvent = (event: AgentEvent, hostSessionId = 'h1') =>
+  const agentEvent = (
+    event: AgentEvent,
+    hostSessionId = 'h1',
+    replayed = false,
+  ) =>
     emit('chat.agentEvent', {
       sessionId: 's1',
       profileDir: '~/.claude',
       hostSessionId,
       event,
-      replayed: false,
+      replayed,
     });
   const openS1 = async () => {
     await emit('sessions.connected', session('s1', 'h1'));
@@ -203,21 +207,27 @@ function skill(name: string, args: string): AgentEvent {
   return { type: 'skillStarted', at: 1, agentId: 'main', skill: name, args };
 }
 
-// Opens s1 and runs a wigley:feature turn that writes the plan and ends.
+// Opens s1 and runs a wigley:feature turn that writes the plan and ends, its
+// events flagged `replayed` as given.
 async function runFeatureTurn(
   workflow: ReturnType<typeof startWorkflowPart>,
+  replayed = false,
 ): Promise<void> {
   await workflow.openS1();
-  await workflow.agentEvent(skill('wigley:feature', ''));
-  await workflow.agentEvent({ type: 'turnStarted', at: 1 });
+  await workflow.agentEvent(skill('wigley:feature', ''), 'h1', replayed);
+  await workflow.agentEvent({ type: 'turnStarted', at: 1 }, 'h1', replayed);
   await workflow.project.write(PLAN_FILE, PLAN);
-  await workflow.agentEvent({
-    type: 'fileWritten',
-    at: 1,
-    agentId: 'main',
-    path: PLAN_FILE,
-  });
-  await workflow.agentEvent({ type: 'turnEnded', at: 1 });
+  await workflow.agentEvent(
+    {
+      type: 'fileWritten',
+      at: 1,
+      agentId: 'main',
+      path: PLAN_FILE,
+    },
+    'h1',
+    replayed,
+  );
+  await workflow.agentEvent({ type: 'turnEnded', at: 1 }, 'h1', replayed);
 }
 
 describe('workflowMainPart', () => {
@@ -261,6 +271,21 @@ describe('workflowMainPart', () => {
       ]);
     },
   );
+
+  it('replayedFeatureTurn_ReachesPlanReady_StartsNoCountdown', async () => {
+    const workflow = startWorkflowPart({ ...SETTINGS, autoClearAndMake: true });
+
+    await runFeatureTurn(workflow, true);
+
+    expect(workflow.lastFlow()).toMatchObject({
+      stage: 'planReady',
+      planDir: PLAN_DIR,
+      countdownEndsAt: null,
+    });
+    workflow.time.advance(10_000);
+    await settled();
+    expect(workflow.chatCalls).toEqual([]);
+  });
 
   it.each([
     {

@@ -125,8 +125,13 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       sendFlows();
     };
 
-    // The one change path every fold takes.
-    function apply(sessionId: string, signal: WorkflowSignal): void {
+    // The one change path every fold takes. A replayed event's fold starts no
+    // countdown.
+    function apply(
+      sessionId: string,
+      signal: WorkflowSignal,
+      replayed = false,
+    ): void {
       const flow = store.get(sessionId);
       if (flow === null) {
         return;
@@ -141,7 +146,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       if (folded === flow) {
         return;
       }
-      const next = withCountdown(flow, folded);
+      const next = replayed ? folded : withCountdown(flow, folded);
       putFlow(next);
       if (next.planDir !== flow.planDir) {
         planWatch.follow(sessionId, next.planDir);
@@ -223,23 +228,26 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
         sendFlows();
       });
     });
-    events.on('chat.agentEvent', ({ sessionId, hostSessionId, event }) => {
-      void ready.then(() => {
-        const flow = store.get(sessionId);
-        if (flow === null) {
-          return;
-        }
-        const fromCurrentHost = store.hostIdOf(sessionId) === hostSessionId;
-        for (const signal of signalOf(event, flow, fromCurrentHost)) {
-          apply(sessionId, signal);
-          if (signal.type === 'turnEnded') {
-            for (const listener of turnEndedListeners) {
-              listener(sessionId);
+    events.on(
+      'chat.agentEvent',
+      ({ sessionId, hostSessionId, event, replayed }) => {
+        void ready.then(() => {
+          const flow = store.get(sessionId);
+          if (flow === null) {
+            return;
+          }
+          const fromCurrentHost = store.hostIdOf(sessionId) === hostSessionId;
+          for (const signal of signalOf(event, flow, fromCurrentHost)) {
+            apply(sessionId, signal, replayed);
+            if (signal.type === 'turnEnded') {
+              for (const listener of turnEndedListeners) {
+                listener(sessionId);
+              }
             }
           }
-        }
-      });
-    });
+        });
+      },
+    );
 
     const settingsListener = api.onSettingsChanged((settings) => {
       void ready.then(() => {

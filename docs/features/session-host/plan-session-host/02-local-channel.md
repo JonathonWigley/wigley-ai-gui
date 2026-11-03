@@ -1,6 +1,6 @@
 # 02 — Local channel transport
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -159,3 +159,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit c7be320e · proof: diff read; all Produces present; typecheck clean in its files; layer check clean; local-channel and relay tests pass · concerns: any connect rejection counts as stale, so a live listener refusing with EACCES or EAGAIN would lose its socket file; close test waits a fixed 20 ms; readLines assumes Buffer chunks and does not resume a paused stream; followups.md 323 and 331 name relay/endpoint.ts, for task 11

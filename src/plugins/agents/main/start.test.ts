@@ -154,12 +154,17 @@ function startAgentsPart() {
       listener(payload);
     }
   };
-  const agentEvent = (event: AgentEvent, hostSessionId = 'h1') =>
+  const agentEvent = (
+    event: AgentEvent,
+    hostSessionId = 'h1',
+    replayed = false,
+  ) =>
     emit('chat.agentEvent', {
       sessionId: 's1',
       profileDir: null,
       hostSessionId,
       event,
+      replayed,
     });
   const invoke = (name: string) => handlers.get(name)?.();
   return { sent, data, emit, agentEvent, invoke };
@@ -307,23 +312,28 @@ describe('agentsMainPart', () => {
     );
   });
 
-  it('previewEvents_NoLogWritten', async () => {
-    const agents = startAgentsPart();
+  it.each([
+    {
+      given: 'the chat preview host',
+      hostSessionId: CHAT_PREVIEW_HOST_ID,
+      replayed: false,
+    },
+    { given: 'a replayed event', hostSessionId: 'h1', replayed: true },
+  ])(
+    'agentLog_UnloggedEvents_NoLogWritten ($given)',
+    async ({ hostSessionId, replayed }) => {
+      const agents = startAgentsPart();
 
-    agents.agentEvent(spawnedB, CHAT_PREVIEW_HOST_ID);
-    agents.agentEvent(spawned);
-    await settled();
+      agents.agentEvent(spawned, hostSessionId, replayed);
+      await settled();
 
-    expect(agents.invoke('rosters')).toEqual({
-      s1: roster([runningB, runningA]),
-    });
-    await expect(
-      agents.data.read(`logs/${CHAT_PREVIEW_HOST_ID}.jsonl`),
-    ).rejects.toThrow();
-    expect(await agents.data.read('logs/h1.jsonl')).toBe(
-      JSON.stringify(spawned) + '\n',
-    );
-  });
+      expect(await agents.data.list('logs')).toEqual([]);
+      expect(agents.invoke('rosters')).toEqual({ s1: roster([runningA]) });
+      expect(agents.sent).toEqual([
+        { sessionId: 's1', roster: roster([runningA]) },
+      ]);
+    },
+  );
 
   it('rosters copies each live list and merges the preview roster', () => {
     const agents = startAgentsPart();
