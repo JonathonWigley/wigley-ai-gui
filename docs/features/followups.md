@@ -210,12 +210,6 @@ Defects seen in a drive run, a transcript or the user's own use.
 - **Missed rebuild on a rules folder write** — *agent-ready*: in a drive run, a doc written into the temp home's
   `.claude/rules/` from outside the app started no rebuild until Rescan. Check whether the docs watches cover that
   folder or the change was debounced away (`src/plugins/docs/main/view-watches.ts`, which watches one file per view).
-- **Chat self-test session tabs overflow the minimum width** — *agent-ready*: `npm run selftest -- --plugin chat` fails
-  8 fits-the-minimum-width steps with `nav.ui-tabs.session-tabs holds 120px in 99px`; the same failure occurs at
-  46f417b5, before the live-defaults work, so it predates that change. Find which change made the session tabs need
-  120px (or shrank the column to 99px), and either let the tabs shrink or overflow within the column, or correct the
-  self-test's minimum when the new width is intended.
-  Source session: Claude Code eb4e38a7-3b4f-4519-a0f6-31da367ff30f in /Users/jonathonwigley/Documents/ai-dev.
 
 ## Harness seams
 
@@ -553,11 +547,6 @@ Duplication and drift with no user-visible defect.
   check as `isBundledView: !drawn.drewPick || pick.layout === defaultLayout` (`src/plugins/chat/page/entry-list.ts`),
   copying `isBundledPick` in `src/shared/page/layout-host/draw-part.ts`. Have `drawPart` report whether the bundled
   default object drew (e.g. `drewBundled` on `DrawnPart`) and use it in chat, so the rule lives in one place.
-  Source session: Claude Code eb4e38a7-3b4f-4519-a0f6-31da367ff30f in /Users/jonathonwigley/Documents/ai-dev.
-- **Agent-strip box height uses raw lengths** — *agent-ready*: the `min-height: calc(7lh + … + 2px)` rule in
-  `src/plugins/agent-strip/layouts/default/layout.css` (moved there verbatim from the page CSS, from 65d29099) uses
-  raw `7lh` and `2px`, so `npm run lint` fails check-styles and oxfmt on it. Express the line count and border through
-  the design tokens check-styles accepts (or a named custom property), keeping the computed height, and run oxfmt.
   Source session: Claude Code eb4e38a7-3b4f-4519-a0f6-31da367ff30f in /Users/jonathonwigley/Documents/ai-dev.
 
 ## Latent defects and tests
