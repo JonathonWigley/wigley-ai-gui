@@ -8,6 +8,7 @@
   layers, the relay and agent sessions, and where a new plugin, shell area, mode, session tab, key, event, setting,
   user config file, theme, plugin data, layout, agent harness, session control, agent form type, MCP tool or
   third-party tool goes, and the layer check.
+- **Review** — every review recommendation taken without a form round.
 - **Running and testing** — the stable and dev apps side by side, `npm run install-app` and the app icon, Node
   version, the self-test and the drive run the agent may start any time, and the checks only a real keyboard proves.
 - **Dev quirks** — the startup reload, a session's stale forms schema, and the login-shell PATH.
@@ -659,6 +660,16 @@ round; primer: an open primer), since main, not the page, decides.
 - It also runs `scripts/check-styles.mts`, which fails on a raw colour, length, duration or font stack in CSS or an
   inline style under `src/`, and on `backdrop-filter` outside `src/shared/page/ui/materials.css`. It judges every file under
   `src/` and takes no argument.
+
+## Review
+
+The user takes every recommendation in a review of this repo, so a review here — `wigley:review`, or `wigley:make`'s
+step 6 — sends no `wigley-forms` round for its findings and questions. Each item takes its recommended pick, and the
+run carries on as if the user had submitted the round with every item on its recommendation: `Fix now` and
+`Step back` dispatched and re-reviewed, `Follow-up` appended to the follow-ups, `Leave it` left. Follow-up rounds
+after the fixes land are taken the same way. The reply lists the pick each item took beside the round's notices, so
+the user can still overrule one. A pick that would push, install third-party code or destroy the user's state still
+stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
 
 ## Running and testing
 
