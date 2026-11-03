@@ -2,13 +2,20 @@ import type {
   ChatEntry,
   PastSession,
   ProjectFolder,
+  UsageAgentEvent,
 } from '../../contracts/agent';
 import type { Files } from '../../contracts/files';
 import type { Log } from '../../contracts/log';
 import type { Paths } from '../../contracts/paths';
 import { errorText } from '../../shared/error-text';
 import {
+  EMPTY_SESSION_USAGE,
+  usageEvent,
+  withSavedReplies,
+} from './session-usage';
+import {
   endsInsideLine,
+  mainReplies,
   readTranscriptHead,
   SESSION_ID,
   sessionTitle,
@@ -86,12 +93,44 @@ export async function readHistory(
   projectsFolder: string,
   sessionId: string,
 ): Promise<ChatEntry[]> {
+  return transcriptEntries(
+    await readTranscript(files, paths, projectsFolder, sessionId),
+  );
+}
+
+// The main agent's `usage` event as the saved session's main replies left it,
+// at the last one's time; null when it has none. Rejects before any read for
+// an id that is not a session id, as `readHistory` does.
+export async function readLastUsage(
+  files: Files,
+  paths: Paths,
+  projectsFolder: string,
+  sessionId: string,
+): Promise<UsageAgentEvent | null> {
+  const replies = mainReplies(
+    await readTranscript(files, paths, projectsFolder, sessionId),
+  );
+  if (replies.length === 0) {
+    return null;
+  }
+  return usageEvent(
+    withSavedReplies(EMPTY_SESSION_USAGE, replies),
+    replies[replies.length - 1].at,
+  );
+}
+
+// The saved session's transcript text. Rejects before any read for an id that
+// is not a session id, since the id becomes part of a path.
+export async function readTranscript(
+  files: Files,
+  paths: Paths,
+  projectsFolder: string,
+  sessionId: string,
+): Promise<string> {
   if (!SESSION_ID.test(sessionId)) {
     throw new Error(`not a Claude session id: ${sessionId}`);
   }
-  return transcriptEntries(
-    await files.read(transcriptPath(paths, projectsFolder, sessionId)),
-  );
+  return files.read(transcriptPath(paths, projectsFolder, sessionId));
 }
 
 // The session id a `<id>.jsonl` file name carries, or null for any other file.

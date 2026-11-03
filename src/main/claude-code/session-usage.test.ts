@@ -11,6 +11,7 @@ import {
   type SessionUsageState,
   usageEvent,
   withConfiguredPercent,
+  withSavedReplies,
 } from './session-usage';
 
 // REPLY_LINE's `message.usage`, docs/features/agent-chat/claude-stream.md § Usage.
@@ -173,7 +174,71 @@ describe('session usage', () => {
     expect(event?.autocompact.configured).toBe(configured);
   });
 
-  it('usageEvent_NoReplyFolded_Null', () => {
+  // `reply` holding `contextTokens` tokens.
+  const sized = (
+    contextTokens: number,
+    cacheTtlMs: number | null,
+    readsCache: boolean,
+  ): ReplyUsage => ({ ...reply(cacheTtlMs, readsCache), contextTokens });
+
+  it.each([
+    {
+      name: 'UnknownWithReplies_FoldsEach',
+      start: EMPTY_SESSION_USAGE,
+      replies: [
+        { reply: sized(1000, 300_000, false), at: 2000 },
+        { reply: sized(3000, null, false), at: 5000 },
+      ],
+      expected: {
+        isContextKnown: true,
+        contextTokens: 3000,
+        cacheExpiresAt: 302_000,
+      },
+    },
+    {
+      name: 'UnknownWithNone_KnownAtZero',
+      start: EMPTY_SESSION_USAGE,
+      replies: [],
+      expected: {
+        isContextKnown: true,
+        contextTokens: 0,
+        cacheExpiresAt: null,
+      },
+    },
+    {
+      name: 'Known_Kept',
+      start: foldReply(EMPTY_SESSION_USAGE, sized(8000, null, false), 1000),
+      replies: [{ reply: sized(1000, 300_000, false), at: 2000 }],
+      expected: {
+        isContextKnown: true,
+        contextTokens: 8000,
+        cacheExpiresAt: null,
+      },
+    },
+    {
+      name: 'WriteThenReadOnly_KeepsTheWrittenLifetime',
+      start: EMPTY_SESSION_USAGE,
+      replies: [
+        { reply: sized(1000, 3_600_000, false), at: 2000 },
+        { reply: sized(4000, null, true), at: 9000 },
+      ],
+      expected: {
+        isContextKnown: true,
+        contextTokens: 4000,
+        cacheExpiresAt: 3_609_000,
+      },
+    },
+  ])('withSavedReplies_$name', ({ start, replies, expected }) => {
+    const state = withSavedReplies(start, replies);
+
+    expect({
+      isContextKnown: state.isContextKnown,
+      contextTokens: state.contextTokens,
+      cacheExpiresAt: state.cacheExpiresAt,
+    }).toEqual(expected);
+  });
+
+  it('usageEvent_ContextNotKnown_Null', () => {
     const state = withConfiguredPercent(
       foldTurn(EMPTY_SESSION_USAGE, { contextWindow: 1_000_000, spendUsd: 1 }),
       30,

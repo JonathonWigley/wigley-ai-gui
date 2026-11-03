@@ -380,6 +380,14 @@ export interface AgentHarness {
     projectDir: string,
     profileDir: string | null,
   ): Promise<ChatEntry[]>;
+  // The main agent's `usage` event as the saved session's main replies left it: `at` is the last main reply's time;
+  // the window, both limits and spend are null. Null when the session has no main reply. Rejects naming the path when
+  // the transcript is missing.
+  lastUsage(
+    sessionId: string,
+    projectDir: string,
+    profileDir: string | null,
+  ): Promise<UsageAgentEvent | null>;
   // Whether `profileDir` (as `AgentStart` holds it) is signed in, and as whom.
   accountStatus(profileDir: string | null): Promise<AccountStatus>;
   // Starts a sign-in to `profileDir`.

@@ -40,6 +40,8 @@ import {
   listPastSessions,
   listProjectFolders,
   readHistory,
+  readLastUsage,
+  readTranscript,
 } from './past-sessions';
 import { readPlanUsage } from './plan-usage';
 import {
@@ -51,13 +53,14 @@ import {
   foldTurn,
   usageEvent,
   withConfiguredPercent,
+  withSavedReplies,
 } from './session-usage';
 import {
   type AgentEventDraft,
   createStreamDecoder,
   type DecodedLine,
 } from './stream-decoder';
-import { projectFolderName } from './transcripts';
+import { mainReplies, projectFolderName } from './transcripts';
 import {
   type ControlCommand,
   createTurnTracker,
@@ -210,7 +213,11 @@ function startClaudeProcess(
   const timers: ReturnType<typeof setTimeout>[] = [];
   // Pending from an interrupt until a turn's result or idle.
   let graceTimer: ReturnType<typeof setTimeout> | null = null;
-  let usage = EMPTY_SESSION_USAGE;
+  // A new session knows its context from the start; a resumed one waits for
+  // its transcript or its first live reply.
+  let usage = request.resume
+    ? EMPTY_SESSION_USAGE
+    : withSavedReplies(EMPTY_SESSION_USAGE, []);
   let lastUsageEvent: UsageAgentEvent | null = null;
 
   // Every emission goes through the microtask queue, so events keep the
@@ -586,6 +593,26 @@ function startClaudeProcess(
     (error: unknown) =>
       deps.log('claude', `settings.json not read: ${errorText(error)}`),
   );
+  // A resumed session seeds its context from the saved main replies, unless a
+  // live reply came first.
+  if (request.resume) {
+    void readTranscript(
+      deps.files,
+      deps.paths,
+      projectsFolder(deps, request.projectDir, request.profileDir),
+      request.sessionId,
+    ).then(
+      (text) => {
+        if (hasClosed) {
+          return;
+        }
+        usage = withSavedReplies(usage, mainReplies(text));
+        emitUsage();
+      },
+      (error: unknown) =>
+        deps.log('claude', `saved usage not read: ${errorText(error)}`),
+    );
+  }
   // Read once per session: an agent definition added later applies to the next session.
   void loadAgentDefinitions(
     { files: deps.files, paths: deps.paths, log: deps.log },
@@ -1012,6 +1039,13 @@ export function createClaudeCodeHarness(
       ),
     history: (sessionId, projectDir, profileDir) =>
       readHistory(
+        deps.files,
+        deps.paths,
+        projectsFolder(deps, projectDir, profileDir),
+        sessionId,
+      ),
+    lastUsage: (sessionId, projectDir, profileDir) =>
+      readLastUsage(
         deps.files,
         deps.paths,
         projectsFolder(deps, projectDir, profileDir),

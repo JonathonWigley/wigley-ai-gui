@@ -587,15 +587,27 @@ describe('createClaudeCodeHarness', () => {
     writeLine(run.stdout, contextReply('wigley-2', 200_000, 167_000));
     await settle();
 
-    const first = {
+    // A new session knows its context from the start: the settings read and
+    // the start's `get_context_usage` reply each report 0 tokens.
+    const settingsRead = {
       type: 'usage',
       agentId: 'main',
       at: 1000,
-      contextTokens: 42123,
+      contextTokens: 0,
+      contextWindow: null,
+      autocompact: { configured: null, reported: null },
+      cacheExpiresAt: null,
+      spendUsd: null,
+    };
+    const contextReplied = {
+      ...settingsRead,
       contextWindow: 1000000,
       autocompact: { configured: 300000, reported: 967000 },
+    };
+    const first = {
+      ...contextReplied,
+      contextTokens: 42123,
       cacheExpiresAt: 3601000,
-      spendUsd: null,
     };
     const second = { ...first, spendUsd: 0.25 };
     const third = {
@@ -607,12 +619,143 @@ describe('createClaudeCodeHarness', () => {
       run.heard
         .filter(([name]) => name === 'agentEvent')
         .map(([, event]) => event),
-    ).toEqual([first, second, third]);
+    ).toEqual([settingsRead, contextReplied, first, second, third]);
     expect(run.written).toEqual([
       contextUsageRequest('wigley-1'),
       userMessage({ text: 'hi', images: [] }, 'uuid-1'),
       contextUsageRequest('wigley-2'),
     ]);
+  });
+
+  describe('resumed session usage', () => {
+    const SAVED_ID = 'aaaaaaaa-0000-4000-8000-000000000001';
+    const TRANSCRIPT = `/Users/u/.claude/projects/-proj/${SAVED_ID}.jsonl`;
+    const resumeRequest: AgentStart = {
+      ...request,
+      sessionId: SAVED_ID,
+      resume: true,
+    };
+    const SAVED_USER_LINE = JSON.stringify({
+      type: 'user',
+      timestamp: '2026-10-27T16:07:00.000Z',
+      message: { role: 'user', content: 'hi' },
+    });
+    // A saved main reply of 12123 tokens that wrote the 1 h cache.
+    const SAVED_REPLY_LINE = JSON.stringify({
+      type: 'assistant',
+      timestamp: '2026-10-27T16:07:09.193Z',
+      message: {
+        model: 'claude-opus-5-5',
+        role: 'assistant',
+        content: [{ type: 'text', text: 'ok' }],
+        usage: {
+          input_tokens: 3,
+          cache_creation_input_tokens: 2000,
+          cache_read_input_tokens: 10000,
+          output_tokens: 120,
+          cache_creation: { ephemeral_1h_input_tokens: 2000 },
+        },
+      },
+    });
+    const seeded = (contextTokens: number, cacheExpiresAt: number | null) => ({
+      type: 'usage',
+      agentId: 'main',
+      at: 1000,
+      contextTokens,
+      contextWindow: null,
+      autocompact: { configured: null, reported: null },
+      cacheExpiresAt,
+      spendUsd: null,
+    });
+
+    // Memory files holding `transcript` whose transcript read waits for
+    // `release`.
+    async function heldTranscript(transcript: string) {
+      const stored = createMemoryFiles();
+      await stored.write(TRANSCRIPT, transcript);
+      let release = () => {};
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const files: Files = {
+        ...stored,
+        read: async (path) => {
+          if (path === TRANSCRIPT) {
+            await gate;
+          }
+          return stored.read(path);
+        },
+      };
+      return { files, release: () => release() };
+    }
+
+    const usageEvents = (heard: [string, unknown][]) =>
+      heard.filter(([name]) => name === 'agentEvent').map(([, event]) => event);
+
+    it.each([
+      {
+        name: 'MainReplies_SeedsTheirContext',
+        lines: [SAVED_USER_LINE, SAVED_REPLY_LINE],
+        expected: [seeded(12123, 1793120829193)],
+      },
+      {
+        name: 'NoMainReply_ZeroTokens',
+        lines: [SAVED_USER_LINE],
+        expected: [seeded(0, null)],
+      },
+    ])('start_Resumed_$name', async ({ lines, expected }) => {
+      const files = createMemoryFiles();
+      await files.write(TRANSCRIPT, lines.join('\n'));
+
+      const run = started(fakeChild(), files, clock, resumeRequest);
+      await settle();
+
+      expect(usageEvents(run.heard)).toEqual(expected);
+    });
+
+    it('start_ResumedLiveReplyBeforeTheRead_KeepsTheLiveContext', async () => {
+      const held = await heldTranscript(SAVED_REPLY_LINE);
+      const run = started(fakeChild(), held.files, clock, resumeRequest);
+      await settle();
+
+      run.stdout.write(`${REPLY_LINE}\n`);
+      await settle();
+      held.release();
+      await settle();
+
+      expect(usageEvents(run.heard)).toEqual([seeded(42123, 3601000)]);
+    });
+
+    it('start_ResumedReadRejects_LogsAndEmitsNothingBeforeAReply', async () => {
+      const run = started(
+        fakeChild(),
+        createMemoryFiles(),
+        clock,
+        resumeRequest,
+      );
+      await settle();
+
+      run.stdout.write(`${CONTEXT_REPLY_LINE}\n`);
+      await settle();
+
+      expect(usageEvents(run.heard)).toEqual([]);
+      expect(run.logged).toContainEqual([
+        'claude',
+        expect.stringMatching(/^saved usage not read: .*\.jsonl/),
+      ]);
+    });
+
+    it('start_ResumedReadSettlesAfterClose_EmitsNothing', async () => {
+      const held = await heldTranscript(SAVED_REPLY_LINE);
+      const run = started(fakeChild(), held.files, clock, resumeRequest);
+      await settle();
+
+      run.emitter.emit('close', 0, null);
+      held.release();
+      await settle();
+
+      expect(usageEvents(run.heard)).toEqual([]);
+    });
   });
 
   it('controlResponse_OwnContextUsageReply_StaysOutOfTurnEvents', async () => {

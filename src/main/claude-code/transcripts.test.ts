@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   endsInsideLine,
+  mainReplies,
   projectFolderName,
   readTranscriptHead,
   sessionTitle,
+  SYNTHETIC_MODEL,
   transcriptEntries,
 } from './transcripts';
 
@@ -563,5 +565,87 @@ describe('transcriptEntries', () => {
     const entries = transcriptEntries(jsonl(lines));
 
     expect(entries.map((entry) => [entry.id, entry.at])).toEqual(expected);
+  });
+});
+
+// An `assistant` reply line from `model` whose context is `inputTokens` plus
+// 7 output tokens.
+function replyLine(
+  uuid: string,
+  inputTokens: number,
+  extra: object = {},
+  model = 'claude-opus-5-5',
+) {
+  return {
+    type: 'assistant',
+    uuid,
+    isSidechain: false,
+    message: {
+      model,
+      role: 'assistant',
+      content: [{ type: 'text', text: 'ok' }],
+      usage: { input_tokens: inputTokens, output_tokens: 7 },
+    },
+    ...extra,
+  };
+}
+
+describe('mainReplies', () => {
+  it.each([
+    {
+      name: 'SidechainAndSyntheticAfter_MainRepliesAlone',
+      lines: [
+        replyLine('a1', 1000, { timestamp: AT_ONE_TEXT }),
+        replyLine('a2', 3000, { timestamp: AT_TWO_TEXT }),
+        replyLine('a3', 9000, {
+          isSidechain: true,
+          timestamp: '2026-10-27T16:08:00.000Z',
+        }),
+        replyLine('a4', 0, {}, SYNTHETIC_MODEL),
+      ],
+      expected: [
+        [1007, AT_ONE],
+        [3007, AT_TWO],
+      ],
+    },
+    {
+      name: 'NoMainReply_Empty',
+      lines: [
+        userLine('u1', 'hi', { timestamp: AT_ONE_TEXT }),
+        replyLine('a1', 0, {}, SYNTHETIC_MODEL),
+        assistantLine('a2', { type: 'text', text: 'no usage' }, AT_TWO_TEXT),
+      ],
+      expected: [],
+    },
+    {
+      name: 'MalformedLineBetween_Skipped',
+      lines: [
+        replyLine('a1', 1000, { timestamp: AT_ONE_TEXT }),
+        '{"type":"assistant",',
+        replyLine('a2', 3000, { timestamp: AT_TWO_TEXT }),
+      ],
+      expected: [
+        [1007, AT_ONE],
+        [3007, AT_TWO],
+      ],
+    },
+    {
+      name: 'NoTimestamp_TakesTheLastLineSeen',
+      lines: [
+        replyLine('a1', 1000, { timestamp: AT_ONE_TEXT }),
+        userLine('u1', 'sub', { isSidechain: true, timestamp: AT_TWO_TEXT }),
+        replyLine('a2', 3000),
+      ],
+      expected: [
+        [1007, AT_ONE],
+        [3007, AT_TWO],
+      ],
+    },
+  ])('mainReplies_$name', ({ lines, expected }) => {
+    const replies = mainReplies(jsonl(lines));
+
+    expect(replies.map(({ reply, at }) => [reply.contextTokens, at])).toEqual(
+      expected,
+    );
   });
 });

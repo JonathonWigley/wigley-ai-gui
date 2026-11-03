@@ -29,10 +29,16 @@ export interface ContextUsage {
   reported: number | null;
 }
 
-// One process's usage so far. `hasReply` is false until a reply was folded; `cacheTtlMs` is the last lifetime a
-// reply wrote; `configuredPercent` is the profile's autocompact override, `reported` the harness's limit.
+// A main reply a saved transcript holds, `at` its line's time.
+export interface SavedReply {
+  reply: ReplyUsage;
+  at: number;
+}
+
+// One process's usage so far. `isContextKnown` is false until the state knows the context; `cacheTtlMs` is the last
+// lifetime a reply wrote; `configuredPercent` is the profile's autocompact override, `reported` the harness's limit.
 export interface SessionUsageState {
-  hasReply: boolean;
+  isContextKnown: boolean;
   contextTokens: number;
   contextWindow: number | null;
   cacheTtlMs: number | null;
@@ -43,7 +49,7 @@ export interface SessionUsageState {
 }
 
 export const EMPTY_SESSION_USAGE: SessionUsageState = {
-  hasReply: false,
+  isContextKnown: false,
   contextTokens: 0,
   contextWindow: null,
   cacheTtlMs: null,
@@ -72,11 +78,27 @@ export function foldReply(
   }
   return {
     ...state,
-    hasReply: true,
+    isContextKnown: true,
     contextTokens: reply.contextTokens,
     cacheTtlMs,
     cacheExpiresAt,
   };
+}
+
+// A known state is kept: a live reply came first. Otherwise every saved reply folds in order, so a last reply that
+// only read the cache keeps the lifetime an earlier one wrote; no reply leaves the state known at 0 tokens.
+export function withSavedReplies(
+  state: SessionUsageState,
+  replies: readonly SavedReply[],
+): SessionUsageState {
+  if (state.isContextKnown) {
+    return state;
+  }
+  let folded: SessionUsageState = { ...state, isContextKnown: true };
+  for (const { reply, at } of replies) {
+    folded = foldReply(folded, reply, at);
+  }
+  return folded;
 }
 
 // A null window keeps the kept one; a spend below the kept one (a local command's 0) keeps the process's total.
@@ -113,12 +135,12 @@ export function withConfiguredPercent(
   return { ...state, configuredPercent: percent };
 }
 
-// The main agent's `usage` event at `at`; null until a reply was folded.
+// The main agent's `usage` event at `at`; null while the state does not know the context.
 export function usageEvent(
   state: SessionUsageState,
   at: number,
 ): UsageAgentEvent | null {
-  if (!state.hasReply) {
+  if (!state.isContextKnown) {
     return null;
   }
   const { configuredPercent, contextWindow } = state;
