@@ -39,6 +39,8 @@ export function foldAgentEvent(
     case 'fileWritten':
     case 'turnStarted':
     case 'turnEnded':
+    case 'taskStarted':
+    case 'taskFinished':
       return running;
   }
   return event satisfies never;

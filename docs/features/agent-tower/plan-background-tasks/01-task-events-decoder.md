@@ -1,6 +1,6 @@
 # 01 — Task events in the contract and the Claude decoder
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)

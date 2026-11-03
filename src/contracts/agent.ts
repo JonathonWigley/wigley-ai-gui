@@ -202,6 +202,22 @@ export type AgentEvent =
       agentId: string;
       outcome: 'done' | 'failed';
     }
+  // A process an agent started that runs apart from its turn (a background command). `agentId` is the agent that
+  // started it, MAIN_AGENT_ID or a subagent's id. A task outlives its turn and its agent: it ends only on its own `taskFinished` or `sessionEnded`.
+  | {
+      type: 'taskStarted';
+      at: number;
+      taskId: string;
+      agentId: string;
+      description: string;
+    }
+  // A task's end; nothing else ends a task but `sessionEnded`.
+  | {
+      type: 'taskFinished';
+      at: number;
+      taskId: string;
+      outcome: 'done' | 'failed';
+    }
   | {
       type: 'toolStarted';
       at: number;
