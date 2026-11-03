@@ -1,10 +1,10 @@
-// The agents layout contract: what a layout in `layouts/agents/<name>/layout.js` draws a session's running subagents
-// and running tasks with. Under each session row, in the row part's wrapper, the app draws one `agentLine` per subagent
-// the session runs and one `taskLine` per task, in start order; a task a listed subagent started is drawn right after
-// that subagent's line, with `isNested` set, and every other task (the main agent's, or one whose subagent finished)
-// takes its own place in start order. The app sets `data-layout-owner="agents"` and `data-layout="<name>"` on the
-// element each line returns, `<name>` being the layout that drew it, so `[data-layout-owner="agents"][data-layout="<name>"] …`
-// in a layout's CSS selects only its own lines.
+// The agent-lines layout contract: what a layout in `layouts/agent-lines/<name>/layout.js` draws a session's running
+// subagents and running tasks with. Under each session row, in the row part's wrapper, the app draws one `agentLine` per
+// subagent the session runs and one `taskLine` per task, in start order; a task a listed subagent started is drawn right
+// after that subagent's line, with `isNested` set, and every other task (the main agent's, or one whose subagent
+// finished) takes its own place in start order. The app sets `data-layout-owner="agent-lines"` and
+// `data-layout="<name>"` on the element each line returns, `<name>` being the layout that drew it, so
+// `[data-layout-owner="agent-lines"][data-layout="<name>"] …` in a layout's CSS selects only its own lines.
 //
 // The app keeps:
 // - the click on a line, which is the session row's own: it selects the session;
@@ -30,27 +30,27 @@ export interface TaskLineInput {
   isNested: boolean;
 }
 
-// The kit every agents part gets.
-export interface AgentsKit extends BaseKit {}
+// The kit every agent-lines part gets.
+export interface AgentLinesKit extends BaseKit {}
 
 // What a part returns: its root, appended to `parent`.
-export interface AgentsPart {
+export interface AgentLinesPart {
   element: HTMLElement;
 }
 
-// Each part comes from the first layout that defines it among the `agents.layout` setting and `default`; a part that
+// Each part comes from the first layout that defines it among the `agent-lines.layout` setting and `default`; a part that
 // throws, returns no element appended to `parent`, or appends other nodes beside it is drawn by `default` instead.
 export interface Layout {
   agentLine?(
     parent: HTMLElement,
     input: AgentLineInput,
-    kit: AgentsKit,
-  ): AgentsPart;
+    kit: AgentLinesKit,
+  ): AgentLinesPart;
   taskLine?(
     parent: HTMLElement,
     input: TaskLineInput,
-    kit: AgentsKit,
-  ): AgentsPart;
+    kit: AgentLinesKit,
+  ): AgentLinesPart;
 }
 // Every member of Layout, required: the built-in `default` defines them all.
 export interface CompleteLayout extends Required<Layout> {}

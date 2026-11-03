@@ -1,6 +1,6 @@
 # 05 — Chat status line, branch and status parts
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 03
 Plan: [plan.md](plan.md)
@@ -185,3 +185,4 @@ Commit:    one commit for the group, its paths by name.
 
 ## Proof
 
+Commit c3395ad8 · proof: diff read: Git.currentBranch, ChatStatusPart, ChatPageExports.addStatusPart present; vim-mode-label.ts deleted with no reference left; no typecheck error in 05's files; worker's chat, process-git, layout and selftest-script suites pass · concerns: Git fakes in backlog and docs tests changed outside the Files line; composerBar still named at AGENTS.md:607 and agent-chat/design.md:410, left to task 10

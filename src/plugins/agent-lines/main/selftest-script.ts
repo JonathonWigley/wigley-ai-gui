@@ -7,9 +7,9 @@ import type { SessionsMainExports } from '../../sessions/contract';
 
 // The self-test's project folder, made under the self-test's home. Its name
 // names the session in every page line.
-const SELFTEST_PROJECT_NAME = 'agents-selftest';
+const SELFTEST_PROJECT_NAME = 'agent-lines-selftest';
 
-export interface AgentsSelfTestDeps {
+export interface AgentLinesSelfTestDeps {
   homeDir: string;
   files: Pick<Files, 'makeFolder' | 'realPath'>;
   paths: Paths;
@@ -17,7 +17,7 @@ export interface AgentsSelfTestDeps {
   sessions: Pick<SessionsMainExports, 'activate'>;
 }
 
-// `<Leader>zla` opens the agents layout preview, and closes it while it is
+// `<Leader>zla` opens agents' sample session, and closes it while it is
 // open; its session is named by its project folder. Page keys fire only while
 // no editor has focus, so the first opening leaves the box with Esc.
 const PREVIEW_KEYS = [' ', 'z', 'l', 'a'];
@@ -47,7 +47,7 @@ const GROUPS: SelfTestGroup[] = [
     steps: [
       {
         keys: sendKeys(FAKE_AGENTS_TEXT),
-        expect: `[agents] lines in ${SELFTEST_PROJECT_NAME}: 4`,
+        expect: `[agent-lines] lines in ${SELFTEST_PROJECT_NAME}: 4`,
         checksFit: true,
         screenshot: 'subagent-lines',
       },
@@ -56,7 +56,7 @@ const GROUPS: SelfTestGroup[] = [
       ),
       {
         keys: ['Escape', ...PREVIEW_KEYS],
-        expect: `[agents] lines in ${PREVIEW_NAME}: 4`,
+        expect: `[agent-lines] lines in ${PREVIEW_NAME}: 4`,
         checksFit: 'held',
         screenshot: 'subagent-lines-narrow',
         why: "The preview's sample roster holds the widest lines (a subagent with a long type, one with an elapsed time past a minute and 12 tools, and a long task nested under it), checked beside this run's lines at the side bar's least width: the fit check at the minimum width hides the side bar.",
@@ -71,7 +71,7 @@ const GROUPS: SelfTestGroup[] = [
       ),
       {
         keys: ['<C-c>'],
-        expect: `[agents] lines in ${SELFTEST_PROJECT_NAME}: 0`,
+        expect: `[agent-lines] lines in ${SELFTEST_PROJECT_NAME}: 0`,
         why: 'Interrupt ends each running subagent and task, so the roster marks them finished and the page draws no line for them.',
       },
     ],
@@ -84,7 +84,9 @@ const GROUPS: SelfTestGroup[] = [
 // waiting.
 // An earlier run's row stays open, its lines gone after its interrupt; only
 // the new row's count changes, so the waits stay exact.
-export function agentsSelfTestScript(deps: AgentsSelfTestDeps): SelfTestScript {
+export function agentLinesSelfTestScript(
+  deps: AgentLinesSelfTestDeps,
+): SelfTestScript {
   const { homeDir, files, paths, chat, sessions } = deps;
   let made: Promise<string> | null = null;
 
@@ -108,8 +110,8 @@ export function agentsSelfTestScript(deps: AgentsSelfTestDeps): SelfTestScript {
     // after each resize step, and the split handle of the preview pane's Docs
     // tab holds its prompt, hidden until hovered, over both panes.
     scrollsItself: [
-      '.agents-line-type',
-      '.agents-line-description',
+      '.agent-lines-line-type',
+      '.agent-lines-line-description',
       '.session-row-status',
       '.session-bar-parts',
       '.chat-working-action',
@@ -125,7 +127,7 @@ export function agentsSelfTestScript(deps: AgentsSelfTestDeps): SelfTestScript {
         const sessionId = await chat.launch({
           projectDir,
           profile: 'work',
-          message: { text: 'agents self-test', images: [] },
+          message: { text: 'agent-lines self-test', images: [] },
         });
         sessions.activate(sessionId);
       });

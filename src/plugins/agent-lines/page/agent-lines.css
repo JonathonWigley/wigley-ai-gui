@@ -2,11 +2,11 @@
 
 /* Sessions' wrapper for this part, whose width the lines' container query
    reads. */
-.session-row-part[data-part='agents.rosterLines'] {
-  container: agents-lines / inline-size;
+.session-row-part[data-part='agent-lines.rosterLines'] {
+  container: agent-lines / inline-size;
 }
 
-.agents-line {
+.agent-lines-line {
   display: grid;
   /* The type shrinks first, to an ellipsis, and takes at most 40% of the
      line; the description keeps a minimum width; the dot, elapsed time and
@@ -25,15 +25,15 @@
 
 /* A task line stays on one row at every width: the icon, a description
    that ellipsizes, then the elapsed time. */
-.agents-task-line {
+.agent-lines-task-line {
   grid-template-columns: max-content minmax(0, 1fr) max-content;
 }
 
-.agents-task-line-nested {
+.agent-lines-task-line-nested {
   padding-left: var(--wg-space-4);
 }
 
-.agents-task-icon.codicon[class*='codicon-'] {
+.agent-lines-task-icon.codicon[class*='codicon-'] {
   font-size: var(--wg-text-12);
   color: var(--wg-fg-tertiary);
 }
@@ -43,30 +43,30 @@
    count, so the elapsed time and tool count wrap to a second row under the
    description. The type then takes what the second row leaves, down to its
    minimum. */
-@container agents-lines (width < 180px) {
-  .agents-line:not(.agents-task-line) {
+@container agent-lines (width < 180px) {
+  .agent-lines-line:not(.agent-lines-task-line) {
     grid-template-columns: max-content minmax(
         var(--wg-space-4),
         max-content
       ) max-content 1fr;
   }
 
-  .agents-line:not(.agents-task-line) .agents-line-description {
+  .agent-lines-line:not(.agent-lines-task-line) .agent-lines-line-description {
     grid-column: 3 / -1;
   }
 
-  .agents-line:not(.agents-task-line) .agents-line-elapsed {
+  .agent-lines-line:not(.agent-lines-task-line) .agent-lines-line-elapsed {
     grid-row: 2;
     grid-column: 3;
   }
 
-  .agents-line-tools {
+  .agent-lines-line-tools {
     grid-row: 2;
     grid-column: 4;
   }
 }
 
-.agents-line-type {
+.agent-lines-line-type {
   min-width: var(--wg-space-4);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -75,7 +75,7 @@
   color: var(--wg-fg-secondary);
 }
 
-.agents-line-description {
+.agent-lines-line-description {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -83,8 +83,8 @@
   color: var(--wg-fg-secondary);
 }
 
-.agents-line-elapsed,
-.agents-line-tools {
+.agent-lines-line-elapsed,
+.agent-lines-line-tools {
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
   color: var(--wg-fg-tertiary);

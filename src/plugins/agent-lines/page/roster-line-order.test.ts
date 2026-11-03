@@ -5,7 +5,7 @@ import type {
   RosterAgent,
   RosterOutcome,
   RosterTask,
-} from '../contract';
+} from '../../agents/contract';
 import { orderRosterLines } from './roster-line-order';
 
 function agent(

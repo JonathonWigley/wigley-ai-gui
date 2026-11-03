@@ -242,7 +242,7 @@ other plugin; `npm run lint` (layer and style checks) passes, with a `LAYERS` en
 
 ### Wave 2
 - [x] [The roster keeps finished items, tools, model, effort and spend](04-roster.md) — after 03
-- [ ] [Chat status line, branch and status parts](05-status-line.md) — after 03 (shares `chat-sessions.test.ts`)
+- [x] [Chat status line, branch and status parts](05-status-line.md) — after 03 (shares `chat-sessions.test.ts`)
 
 ### Wave 3
 - [ ] [A composer part's stop on the entry cursor](06-composer-stop.md) — after 05
@@ -269,6 +269,7 @@ Review base: b9ab45db2031275b78977d6ab85e250d4cf49d1f
 - 01 · a9fc20b5 · diff read: plugins.disabled in Settings and defaults, startPlugins disabled param, disabledDependencyProblem, mainStartList, applySelfTestConfig serves []; no typecheck error outside 03's in-flight files; worker's 13 test files pass · concerns: the six listed fixture files needed no plugins member (partial casts, compiler flags none); check-layers lets manifests.test.ts import src/config; settings selftest comments renamed to the timeout-reset group
 - 03 · 602263b9 · diff read: agentSpawned name/model/effort, agentReplied, toolStarted summary, taskStarted command in agent.ts; whole-tree tsc clean; worker's 23 test files (626 tests) pass · concerns: Done-when grep for installed_plugins.json also hits five pre-existing docs-plugin readers — a second reader of that file now exists beside the new loader, layer rules stop reuse; probe ran a live claude -p haiku turn
 - 04 · b7219da4 · diff read: RosterOutcome, RosterTool, RosterAgent, RosterTask, Roster in agents/contract.ts as planned; no typecheck error outside 05's in-flight chat files; worker's 5 test files (71 tests) pass · concerns: Done-when grep for RunningAgent matches three plan-chosen test names; RosterAgent.spendUsd comment says 'estimate of its latest reply' where the value is cumulative
+- 05 · c3395ad8 · diff read: Git.currentBranch, ChatStatusPart, ChatPageExports.addStatusPart present; vim-mode-label.ts deleted with no reference left; no typecheck error in 05's files; worker's chat, process-git, layout and selftest-script suites pass · concerns: Git fakes in backlog and docs tests changed outside the Files line; composerBar still named at AGENTS.md:607 and agent-chat/design.md:410, left to task 10
 ### Contract changes
 ### Rulings
 - refresh sets data-overflow before a pending reveal and before reading back/forward, departing from the task's order, so the At end sample measures the narrowed track — chevron state would be wrong otherwise — cost if wrong: one extra layout read per refresh · group 02 · group 02
@@ -277,5 +278,7 @@ Review base: b9ab45db2031275b78977d6ab85e250d4cf49d1f
 - page config pushes are filtered by wrapping applyPush once with startedPluginsConfig(next, pageLoadList) — cost if wrong: none beyond the wrapper · group 01 · group 01
 - on a foreground completion receipt agentReplied comes before agentFinished — cost if wrong: 04's fold must accept a reply for an agent about to finish · group 03 · group 03
 - the start.test row 'a message drops a cleared host's finished items' built from its GIVEN/WHEN/THEN (old host has an agent that fails on its sessionEnded, the new host's userMessage drops it), since the step list tested nothing — cost if wrong: none · group 04 · group 04
+- peer commit d035a2db (send-now plan) swept 07's staged agents→agent-lines renames; they stay there, 07's commit carries its content edits, and the review range is this run's explicit commit list rather than base..HEAD — cost if wrong: the review misses the pure renames, which carry no content · lead
+- group 05's commit c3395ad8 swept the session-titles session's SESSION_TITLE_INSTRUCTION edit in chat/main/start.ts (folder pathspec); that session chose to keep it there, no revert — the review should treat that string as outside this plan · lead
 ### Review rounds
 ### Test gate

@@ -1,5 +1,6 @@
 // The agents plugin's records and its channel between its main and page parts.
 
+import type { Disposable } from '../../contracts/disposable';
 import type { ChannelShape } from '../../contracts/plugin';
 
 // Whether a roster item is still running, or how it ended.
@@ -49,10 +50,18 @@ export interface Roster {
   tasks: RosterTask[];
 }
 
+// What agents' page part exports to the views that draw the rosters. `roster` is a session's latest roster, both lists
+// empty for a session with none; `onRosterChanged` calls `listener` with a session's id each time its roster changes,
+// the first `rosters` read included.
+export interface AgentsPageExports {
+  roster(sessionId: string): Roster;
+  onRosterChanged(listener: (sessionId: string) => void): Disposable;
+}
+
 // Rosters are keyed by the app's sessionId (the session row's id). `rosters` returns every session's roster that
 // lists any item, finished ones included; `rosterChanged` carries a session's whole roster after each change, both
-// lists empty once a message drops its last finished item or the row ends. `openPreview` opens the layout preview's
-// sample session, or ends it while it is open.
+// lists empty once a message drops its last finished item or the row ends. `openPreview` opens agents' sample
+// session, or ends it while it is open.
 export interface AgentsChannel extends ChannelShape {
   invoke: { rosters(): Record<string, Roster>; openPreview(): void };
   messages: { rosterChanged: { sessionId: string; roster: Roster } };

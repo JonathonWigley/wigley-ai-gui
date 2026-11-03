@@ -1,6 +1,6 @@
 # 07 — The agent-lines plugin, and agents' page exports
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 3 · Depends on: 01, 04
 Plan: [plan.md](plan.md)

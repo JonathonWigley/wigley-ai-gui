@@ -1,21 +1,13 @@
-import './agents.css';
 import type {
   PageApi,
   PagePart,
   QualifiedEvents,
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
-import type { KeysPageExports } from '../../keys/contract';
-import type {
-  SessionsPageEvents,
-  SessionsPageExports,
-} from '../../sessions/contract';
-import type { AgentsChannel } from '../contract';
-import defaultLayout from '../layouts/default/layout.js';
-import type { Layout } from '../layouts/layout';
+import type { SessionsPageEvents } from '../../sessions/contract';
+import type { AgentsChannel, AgentsPageExports } from '../contract';
 import { agentsManifest } from '../manifest';
-import { readAgentsLayout } from './layout/read-agents-layout';
-import { createRosterLines } from './roster-lines';
+import { createPageRosters } from './rosters';
 
 type AgentsApi = PageApi<
   typeof agentsManifest,
@@ -24,74 +16,33 @@ type AgentsApi = PageApi<
   QualifiedEvents<'sessions', SessionsPageEvents>
 >;
 
-// Draws each session's running subagents and tasks under its row, one line each,
-// through sessions' row parts and the `agents.layout` layout. Hears main's
-// `rosterChanged`, filled in by one `rosters` read, and names each session by
-// its side-bar label for the page log. `openPreview` asks main for the layout
-// preview's sample session.
+// Keeps each session's roster and exports it; draws nothing. Hears main's
+// `rosterChanged`, filled in by one `rosters` read, which a `rosterChanged`
+// landing while it runs wins over for that session, and drops a removed
+// session's roster. `openPreview` asks main for agents' sample session.
 export const agentsPagePart: PagePart<typeof agentsManifest> = {
   manifest: agentsManifest,
   start(api: AgentsApi) {
     const { services } = api;
     const log = (line: string) => services.log('agents', line);
-    const sessions = api.dependency<SessionsPageExports>('sessions');
-    const keys = api.dependency<KeysPageExports>('keys');
-    // Each session's name in the log, its side-bar label (`gamma 2`).
-    const names = new Map<string, string>();
-    const lines = createRosterLines({
-      kit: {
-        markdown: services.markdown,
-        keys: { anchor: keys.anchor, keysFor: keys.keysFor },
-        commands: {
-          exists: (id) => api.keys.command(id) !== undefined,
-          run: (id) => api.commands.run(id),
-        },
-        platform: api.platform,
-      },
-      log: services.log,
-      clock: services.clock,
-      timers: services.timers,
-      nameOf: (sessionId) => names.get(sessionId) ?? sessionId,
-    });
-    sessions.addRowPart(lines.part);
+    const rosters = createPageRosters({ log });
 
-    api.events.on('sessions.sessionAdded', ({ sessionId, label }) => {
-      names.set(sessionId, label);
-    });
     api.events.on('sessions.sessionRemoved', ({ sessionId }) => {
-      names.delete(sessionId);
-      lines.forget(sessionId);
+      rosters.forget(sessionId);
     });
-
-    // A rosters read is stale for each session a rosterChanged touched since
-    // the read began; null once the read settles.
-    let changedSinceRead: Set<string> | null = new Set<string>();
     api.channel.on('rosterChanged', ({ sessionId, roster }) => {
-      changedSinceRead?.add(sessionId);
-      lines.setRoster(sessionId, roster);
+      rosters.set(sessionId, roster);
     });
-    api.channel
-      .invoke('rosters')
-      .then(
-        (rosters) => {
-          for (const [sessionId, roster] of Object.entries(rosters)) {
-            if (!changedSinceRead?.has(sessionId)) {
-              lines.setRoster(sessionId, roster);
-            }
-          }
-        },
-        (error: unknown) => log(`rosters not read: ${errorText(error)}`),
-      )
-      .finally(() => {
-        changedSinceRead = null;
-      });
-
-    api.layouts.show<Layout>({
-      defaultLayout,
-      read: readAgentsLayout,
-      userLayout: () => api.settings().layout,
-      setLayouts: (shown) => lines.setLayouts(shown),
-    });
+    api.channel.invoke('rosters').then(
+      (read) => {
+        rosters.fill(read);
+        rosters.settle();
+      },
+      (error: unknown) => {
+        log(`rosters not read: ${errorText(error)}`);
+        rosters.settle();
+      },
+    );
 
     return {
       commands: {
@@ -104,6 +55,10 @@ export const agentsPagePart: PagePart<typeof agentsManifest> = {
             );
           }),
       },
+      exports: {
+        roster: rosters.roster,
+        onRosterChanged: rosters.onRosterChanged,
+      } satisfies AgentsPageExports,
     };
   },
 };

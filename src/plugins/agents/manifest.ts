@@ -1,26 +1,20 @@
 import { definePlugin } from '../../shared/define-plugin';
 
 // The subagents and tasks each session runs: main hears chat's agent events, folds each into its session's roster and
-// logs it in plugin data, and the page draws one line per running subagent and task under each session row through
-// sessions' row parts, through the `layout` setting's agents layout. It names `keys` for its layout's key hints.
+// logs it in plugin data, and the page keeps every session's roster and exports it to the plugins that draw it
+// (agent-lines, agent-strip). It draws nothing itself.
 export const agentsManifest = definePlugin({
   id: 'agents',
-  dependsOn: ['sessions', 'chat', 'keys'],
+  dependsOn: ['sessions', 'chat'],
   commands: {
     openPreview: {
-      label: 'open the agents layout preview',
+      label: 'open the agents sample session',
       group: 'debug',
       runsIn: 'page',
     },
   },
   scopes: {},
-  settings: { layout: 'default' },
-  settingInfo: {
-    layout: {
-      label: 'Layout',
-      description:
-        "The agents layout the subagent and task lines under each session row draw in: a folder name in agents' layouts folder, or default.",
-    },
-  },
+  settings: {},
+  settingInfo: {},
   themeTokens: {},
 });

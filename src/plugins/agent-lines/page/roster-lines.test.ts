@@ -10,7 +10,7 @@ import {
   installFakeDom,
 } from '../../../shared/page/test-dom';
 import { MAIN_AGENT_ID } from '../../../contracts/agent';
-import type { Roster, RosterAgent, RosterTask } from '../contract';
+import type { Roster, RosterAgent, RosterTask } from '../../agents/contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type { Layout, TaskLineInput } from '../layouts/layout';
 import { createRosterLines } from './roster-lines';
@@ -91,8 +91,9 @@ const WITH_TASKS: Roster = {
 };
 
 // Lines over a clock at `now` whose timers record each `set` (its handle the
-// set's count) and each `clear`; `nameOf` reads every session as `proj`.
-function setUp() {
+// set's count) and each `clear`; `nameOf` reads every session as `proj`, and
+// `roster` hands `current` for every session.
+function setUp(current: Roster = { agents: [], tasks: [] }) {
   let now = NOW;
   const sets: { run: () => void; handle: number }[] = [];
   const clears: number[] = [];
@@ -120,6 +121,7 @@ function setUp() {
       clear: (handle) => clears.push(handle),
     },
     nameOf: () => 'proj',
+    roster: () => current,
   });
   const wrapper = new FakeElement('div');
   const advance = (ms: number) => {
@@ -147,15 +149,17 @@ describe('roster lines', () => {
     built.dispose?.();
     lines.part.build(asHtml(wrapper), SESSION);
 
-    const drawn = findAll(wrapper, 'agents-line');
+    const drawn = findAll(wrapper, 'agent-lines-line');
     expect(drawn.map((line) => line.dataset.layoutOwner)).toEqual([
-      'agents',
-      'agents',
-      'agents',
-      'agents',
+      'agent-lines',
+      'agent-lines',
+      'agent-lines',
+      'agent-lines',
     ]);
     expect(
-      drawn.map((line) => line.classList.contains('agents-task-line-nested')),
+      drawn.map((line) =>
+        line.classList.contains('agent-lines-task-line-nested'),
+      ),
     ).toEqual([false, true, false, false]);
     expect(
       drawn.map((line) => findAll(line, 'codicon-terminal').length),
@@ -169,7 +173,29 @@ describe('roster lines', () => {
     expect(drawn[3].textContent).toContain('Explore');
     expect(drawn[3].textContent).toContain('42s');
     expect(drawn[3].textContent).toContain('1 tool');
-    expect(logged).toEqual(['[agents] lines in proj: 4']);
+    expect(logged).toEqual(['[agent-lines] lines in proj: 4']);
+  });
+
+  // A row built before any `setRoster` named its session draws the roster
+  // `deps.roster` holds: one running and one done subagent, so one line.
+  it('build_NothingSet_DrawsTheDepsRoster', () => {
+    const { lines, wrapper, logged } = setUp({
+      agents: [
+        runningAgent('agent-1', 'Explore', 'Map the callers', 42_000, 1),
+        {
+          ...runningAgent('agent-2', 'Plan', 'Read the contract', 9_000, 3),
+          outcome: 'done',
+        },
+      ],
+      tasks: [],
+    });
+
+    lines.part.build(asHtml(wrapper), SESSION);
+
+    expect(
+      findAll(wrapper, 'agent-lines-line').map((line) => line.textContent),
+    ).toEqual([expect.stringContaining('Map the callers')]);
+    expect(logged).toEqual(['[agent-lines] lines in proj: 1']);
   });
 
   it('tick_LinesShown_RedrawsElapsedAndStopsWhenEmpty', () => {
@@ -180,7 +206,7 @@ describe('roster lines', () => {
 
     advance(1000);
     sets[0].run();
-    const afterTick = findAll(wrapper, 'agents-line');
+    const afterTick = findAll(wrapper, 'agent-lines-line');
     const afterTickText = {
       nestedTask: afterTick[1].textContent,
       newestAgent: afterTick[3].textContent,
@@ -193,10 +219,10 @@ describe('roster lines', () => {
     expect(afterTickText.sets).toBe(2);
     expect(clears).toEqual([sets[1].handle]);
     expect(sets).toHaveLength(2);
-    expect(findAll(wrapper, 'agents-line')).toEqual([]);
+    expect(findAll(wrapper, 'agent-lines-line')).toEqual([]);
     expect(logged).toEqual([
-      '[agents] lines in proj: 4',
-      '[agents] lines in proj: 0',
+      '[agent-lines] lines in proj: 4',
+      '[agent-lines] lines in proj: 0',
     ]);
   });
 
@@ -216,7 +242,7 @@ describe('roster lines', () => {
     lines.part.build(asHtml(wrapper), SESSION);
 
     expect(
-      findAll(wrapper, 'agents-line').map((line) => line.dataset.layout),
+      findAll(wrapper, 'agent-lines-line').map((line) => line.dataset.layout),
     ).toEqual(['default', 'default', 'default', 'default']);
     expect(wrapper.children).toHaveLength(4);
   });
@@ -241,6 +267,6 @@ describe('roster lines', () => {
       ['npm test --watch', true],
       ['npm run build', false],
     ]);
-    expect(logged).toEqual(['[agents] lines in proj: 4']);
+    expect(logged).toEqual(['[agent-lines] lines in proj: 4']);
   });
 });

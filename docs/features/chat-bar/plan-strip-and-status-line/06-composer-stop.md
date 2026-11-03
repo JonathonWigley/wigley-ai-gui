@@ -1,6 +1,6 @@
 # 06 — A composer part's stop on the entry cursor
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 3 · Depends on: 05
 Plan: [plan.md](plan.md)

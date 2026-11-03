@@ -144,10 +144,8 @@ function startAgentsPart() {
     services: {
       log: () => undefined,
       clock: { now: () => 50_000 },
-      selfTest: null,
     },
     dependency: (pluginId: string) => (pluginId === 'sessions' ? sessions : {}),
-    layouts: { register: () => ({ dispose: () => undefined }) },
   } as unknown as Parameters<typeof agentsMainPart.start>[0];
   agentsMainPart.start(api);
   const emit = (event: string, payload: unknown) => {

@@ -1,4 +1,4 @@
-import type { Roster, RosterAgent, RosterTask } from '../contract';
+import type { Roster, RosterAgent, RosterTask } from '../../agents/contract';
 
 // One line under a session row: a running subagent, or a running task, nested
 // when it sits under the subagent that started it.
