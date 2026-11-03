@@ -41,9 +41,10 @@ harness and read by the workflow plugin (`docs/features/workflow/design.md`).
   `task_started` whose `task_type` is not `local_agent`; a subagent is a task too in Claude's stream, but the app
   calls it a subagent and never a task).
 - **Roster** — a session's agents and tasks as the agents plugin tracks them from its events: each subagent with its
-  type, name, description, start time, model, effort, spend, every tool call (name, summary, outcome) and outcome, and
-  each task with its owning agent, description, command, start time and outcome. An item that ends done leaves at
-  once; a failed item stays, outcome set, until the session's next `userMessage` drops it.
+  type, name, description, start time, whether it runs in the background, model, effort, spend, context tokens and
+  window, and every tool call (name, summary, outcome), and each task with its owning agent's id and name,
+  description, command and start time. Every listed item is running: an item leaves the moment it ends, done or
+  failed, and `sessionEnded` empties the roster.
 - **Plan step** — one step of the session's task plan, one floor of the tower. Chat's **step** (a tool, thinking or
   raw entry, `agent-chat/design.md` § Vocabulary) is a different thing; the tower always says plan step.
 
@@ -58,7 +59,8 @@ unchanged. Each event carries `at`, epoch milliseconds from the adapter's inject
 |---|---|---|
 | `sessionStarted` / `sessionEnded` | — | enter the tower / results screen |
 | `agentSpawned` | agent id, parent agent id, agent type, description, name (the label the agent was given, its type when none), model and effort (each null when unknown) | a party member joins |
-| `agentReplied` | agent id, model (the reply's, or the launch receipt's resolved model), the subagent's estimated spend so far in USD (cumulative; null before its first reply or when any reply used an unpriced model) | — |
+| `agentReplied` | agent id, model (the reply's, or the launch receipt's resolved model), the subagent's estimated spend so far in USD (cumulative; null before its first reply or when any reply used an unpriced model), context tokens of its latest reply (null before its first reply), its model's context window (null until the harness reports it) | — |
+| `agentLaunched` | agent id; the subagent runs in the background | — |
 | `agentFinished` | agent id, done or failed | the member steps back |
 | `taskStarted` | task id, agent id (the agent that started it), description, command (null when the harness names none) | — |
 | `taskFinished` | task id, done or failed | — |
@@ -102,8 +104,10 @@ would emit the same events into `chat.agentEvent`'s payload shape.
   `sessionEnded`. Foreground Bash calls of a subagent get a task too (`is_backgrounded: false`) and show the same way.
 - **`agentReplied`** is sent on a subagent's reply and on its launch receipt's `resolvedModel`; on a foreground
   completion receipt it comes before `agentFinished`. The roster takes the reply's model and spend.
-- **Page** draws nothing. It keeps every session's roster, failed items included, and exports `roster(sessionId)`
-  and `onRosterChanged(listener)` to the views that draw it. A message drops a cleared host's failed items.
+- **`agentLaunched`** is sent on a background Agent call's launch receipt (`isAsync`); the roster marks that subagent
+  as running in the background.
+- **Page** draws nothing. It keeps every session's roster and exports `roster(sessionId)` and
+  `onRosterChanged(listener)` to the views that draw it.
 - **`agent-lines`** (a separate plugin, in `plugins.disabled` by default; its `layout` setting is `agent-lines.layout`)
   adds a row part through sessions' `addRowPart` and draws, under each session row, one `workingLine` while the
   session runs any subagent or task: a running dot and the elapsed time since the earliest running item started. The

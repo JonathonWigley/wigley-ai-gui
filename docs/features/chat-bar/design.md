@@ -62,17 +62,20 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
 
 - **What it lists:** every subagent and every task in the session's roster (agents plugin), in start order. A task is
   any process Claude reports that is not a subagent (`agent-tower/design.md` § The agents plugin, Tasks).
-- **A subagent box:** a status dot, the name (the Agent call's `name` when given, else its agent type), then
-  `model · effort · $cost`, the description, and the latest 3 tool calls as mono lines.
-- **A task box:** a terminal icon, the description, the owning agent's name (or `main`) and, while it runs, the
-  elapsed time.
-- **Lifetime:** a running box shows a running dot. A box that ends done leaves the strip at once. A failed box stays,
-  dimmed, with a failed dot, until the user sends the next message (`userMessage`); the roster then drops it.
+- **Every box:** a running dot, a name, a kind tag (Subagent, Background agent or Shell) and the elapsed time since
+  it started, ticking once a second, then the description on its own line.
+- **A subagent box:** the name is the Agent call's `name` when given, else its agent type. Under the description,
+  `model · effort` dim, the latest 3 tool calls as mono lines (the two older ones fading), then a context bar with
+  `84k/200k` (the warning colour at 80% or more; `84k` alone until the window is known) and the estimated cost.
+  The tag reads Background agent once Claude's launch receipt says the call runs in the background, else Subagent.
+- **A task box:** the name is the owning agent's (or `main`), kept on the task when it starts, so it survives that
+  agent leaving; the tag reads Shell; the command shows as one mono line. A task has no context or cost.
+- **Lifetime:** a box leaves the strip the moment its subagent or task ends, done or failed, and every box leaves
+  when the session's process exits. Nothing stays to be closed, so the strip has no close control.
 - **Scrolling:** the strip scrolls sideways; `‹` and `›` buttons at its ends scroll it by one box and hide when there
   is nothing further that way. The trackpad scrolls it too.
 - **Keys:** the strip is a stop in the chat's entry cursor. `j` on the entry cursor's last stop (the newest pending
-  row, else the last entry or an open last run's last step) selects the strip's first running box (else its first
-  box); the strip then holds its own key scope: `h`/`l` move between boxes, `k` returns to the last entry, `i` and `a` focus the chat box, Enter opens the selected box in place to list every tool call of that
+  row, else the last entry or an open last run's last step) selects the strip's first box; the strip then holds its own key scope: `h`/`l` move between boxes, `k` returns to the last entry, `i` and `a` focus the chat box, Enter opens the selected box in place to list every tool call of that
   subagent (a task shows its command), and Enter again closes it. `G` and a following cursor stay on the last entry,
   so new output never moves the cursor into the strip. The selected box takes the focus ring.
 
@@ -147,8 +150,14 @@ Only the Claude adapter knows Claude's shapes, so it alone fills these into agen
   this on 2026-11-02.
 - **The strip joins the entry cursor through a general stop.** Any composer part may offer one, so chat names no
   plugin.
-- **Done boxes leave at once; failed boxes stay until the next message.** Done boxes are clutter, and a failure is
-  the one end worth a glance; the user chose this on 2026-11-03.
+- **Every box leaves when its process ends, failed ones included.** The user wants the strip to show only live work
+  and to close nothing by hand; a failure still shows in the transcript. Chosen on 2026-11-03, replacing the earlier
+  rule that kept failed boxes until the next message.
+- **A box shows its kind, runtime, context and cost.** The user wants to tell a subagent, a background agent and a
+  shell apart at a glance, and to watch each agent's context fill and spend (design A, 2026-11-03).
+- **Subagent context is its latest reply's prompt tokens over its model's window.** Input, cache write and cache
+  read of that reply; Claude names a model's window only in a turn result's `modelUsage`, so the adapter learns it
+  there and sends it on the subagent's next `agentReplied`, or at once to every running subagent on that model.
 - **Subagent cost is estimated in dollars from tokens.** Claude reports cost only per process.
 - **The status line replaces the composer bar.** One line; model and effort share one chip.
 - **The tab-bar usage line and the sidebar's working line start switched off**, one setting away.
