@@ -37,7 +37,7 @@ Consumes:
 
 Produces:
 - In `src/plugins/chat/contract.ts`, verbatim from `plan.md` § File Structure:
-  - `export interface SendGateInput { sessionId: string; hostSessionId: string; profileDir: string; now: number }`
+  - `export interface SendGateInput { sessionId: string; hostSessionId: string; profileDir: string; text: string; now: number }`
   - `export interface SendGateVerdict { action: 'compact'; reason: string }`
   - `export type SendGate = (input: SendGateInput) => SendGateVerdict | null;`
   - `export interface SessionCompaction { trigger: CompactionTrigger; reason: string | null; startedAt: number }`
@@ -404,5 +404,39 @@ GIVEN a registered reader returning 150000 WHEN chat starts a session's process 
 Tests:     one `it.each` in `chat-sessions.test.ts` over the fake harness's recorded start requests: rows "reader
            150000 → 150000", "no reader → null", "reader removed → null".
 
-## Proof
+## Cold read fixes
 
+These override any earlier line of this task that they contradict.
+
+- **`SendGateInput.text`.** The input carries the message text as the user wrote it (plan.md's shape). `writeAtIdle`
+  passes it; the gate test asserts it is passed.
+- **Slash commands** are skipped by the plugin, not by chat (task 07 reads `text`), so chat keeps one gate rule:
+  ask on every idle write.
+- **Re-check after the history read.** In `writeAtIdle`, after the awaited history read and the process start,
+  re-evaluate `waits` and `queue(session, message)` when it is true: two sends to a restored resting row give one
+  verdict, one `compact()` call and two queued rows. Test row for that.
+- **Typecheck.** Done when: typecheck errors only in files task 06 owns (`read-chat-layout.ts`, `entry-list.ts`,
+  `chat-layouts.ts`, `layout.d.ts` consumers, `composer-input.test.ts`, `layouts/default/layout.test.ts`); the proof
+  lists them.
+- **Test harness setup.** Rows that assert a mid-hold state (`queued`, `calls`) call `test.harness.holdCompactions()`
+  before the send. A row that needs an outcome the fake cannot give (`failed` with the process alive) emits the end
+  by hand and asserts before the next flush, or releases with `releaseCompactions()` afterwards. The interrupt tests
+  use the fake's own `compactionEnded interrupted`, never a hand-emitted one.
+- **Skip siblings.** `sendNow` on an unsent row that is not the held row writes it now, as today. `sendAllNow`'s idle
+  branch tests `waits` minus the hold: with a compaction up and no hold it writes every unsent row and the message
+  now, as for a running turn, and asks no gate. A null message with a hold up skips like decision 19. Rows for the
+  first two.
+- **`compact()` throws.** Remove the held row and call `deliverWritten` directly, so a throwing write rejects `send`
+  as today and the page puts the text back. Row: `compact()` and then `send` both throw → `send` rejects, no row left.
+- **Compaction without a hold.** Decision 13.1 sends `compaction` only when it was not null. New rows: queued rows, a
+  `manual` `compactionStarted`, `activity('idle')` → nothing written; then `compactionEnded` with the harness idle →
+  the oldest row is written. A second `compactionEnded` with no start → no message sent.
+- **Citations.** Decision 26's "adapter.md § 2" means task 02's `compact()` decision. `chat-sessions.test.ts` holds
+  one state literal (line 466, measured at plan time, re-verify); `chat-commands.test.ts`'s `session()` gets the
+  override; the `AgentStart` literals gain `idleCompactMinTokens: null`.
+- **Threshold reader.** Only the newest registered reader is asked; a throw counts as null and older readers are not
+  asked. Produces also: `ChatSessions.addIdleCompactThreshold(read): () => void` in `chat-sessions.ts` and the
+  `exports.addIdleCompactThreshold` line in `start.ts`.
+
+
+## Proof

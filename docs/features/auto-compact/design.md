@@ -65,7 +65,7 @@ harness ─▶ adapter ─▶ compactionStarted{trigger} ──────┤�
 - `AgentProcess.compact()` starts a compaction with trigger `app`. It throws after `end` and while a turn runs. It
   makes no user entry.
 - Chat main's export `addSendGate(gate: SendGate): () => void`, with
-  `SendGate = (input: SendGateInput) => SendGateVerdict | null`, `SendGateInput { sessionId, profileDir, now }`, and
+  `SendGate = (input: SendGateInput) => SendGateVerdict | null`, `SendGateInput { sessionId, hostSessionId, profileDir, text, now }`, and
   `SendGateVerdict { action: 'compact'; reason: string }`.
 - `ChatSessionState.compaction: { trigger, reason, startedAt } | null` and `QueuedMessage.holdReason: string | null`.
 - The usage snapshot's `SessionUsage.compaction: { trigger, startedAt } | null`, and the session line input's
@@ -73,7 +73,8 @@ harness ─▶ adapter ─▶ compactionStarted{trigger} ──────┤�
 
 ## Rules
 
-- The gate holds a send only when all hold: the session is idle; the plugin has a main-agent `usage` event for it;
+- The gate holds a send only when all hold: the session is idle; the message is not a slash command (its trimmed
+  text does not start with `/`; a `/compact` is the user's own instruction and would compact twice); the plugin has a main-agent `usage` event for it;
   that event's `cacheExpiresAt` is not null and is at or before now; its `contextTokens` is above
   `minTokens`; and `minTokens` is not 0. Its reason reads
   `auto · cache cold · <tokens>`, the tokens in the usage plugin's `182k` format.

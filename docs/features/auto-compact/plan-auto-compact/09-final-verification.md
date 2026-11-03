@@ -21,14 +21,14 @@ Each check is tagged **expected** (the change doing what it was made to do) or *
 likely), with its reason.
 
 1. **Expected — app hold, end to end.** With the auto-compact plugin on at its default setting: `chat.holdCompactions`,
-   send `fake: cold`, then send `next message`. The held row reads `sends after compaction · ⌃C skips`. The dock reads
+   send `fake: cold`, wait for the log `<name> is idle`, then send `next message`. The held row reads `sends after compaction · ⌃C skips`. The dock reads
    `0:0x Compacting… auto · cache cold · 200k` over the bar, with no tool card. The usage line opens with
    `compacting · auto` and its meter pulses. Then `chat.releaseCompactions`: the row is written, the dock follows the
    new turn, and the transcript shows `Compacted 200k → 24k · auto · <time>` (first `Compacted 200k · auto · <time>`
    until the next reply's usage). Reason: the whole flow crosses four tasks; only a live run shows them together.
-2. **Expected — manual trigger.** Send `/compact` with compactions held: the dock reads `Compacting… /compact`, the
+2. **Expected — manual trigger.** In a fresh session (its latest main usage small), send `/compact` with compactions held: the dock reads `Compacting… /compact`, the
    chip reads `compacting`, and the divider after release reads `… · manual · …`.
-3. **Expected — harness trigger.** Send `fake: compact` with compactions held: the dock reads `Compacting… autocompact`
+3. **Expected — harness trigger.** In a fresh session, send `fake: compact` with compactions held: the dock reads `Compacting… autocompact`
    with no tool card, the chip reads `compacting · autocompact`, and the divider reads `… · autocompact · …`.
 4. **Expected — ⌃C skips.** Repeat check 1 up to the held row, then press `⌃C`: the compaction ends, the held row is
    written, and a second row queued behind it is written after it, in order. Repeat with `⌘↩` on the held row.
@@ -36,7 +36,7 @@ likely), with its reason.
 6. **Expected — the interrupt hint.** During check 1's hold, the status line shows the running interrupt keys while
    the session's activity reads idle.
 7. **Low-confidence — the release moment.** Capture frames across `chat.releaseCompactions` in check 1. The dock must
-   go from `Compacting…` to the new turn with no flash of the done line or a hidden dock. Reason: the `compaction`,
+   reach the new turn's live line within 500 ms, with no done line or hidden dock left standing. Reason: the `compaction`,
    `entry` and `activity` messages arrive in an order the page does not control (task 06).
 8. **Low-confidence — narrow tab bar.** Turn the `usage-tab-line` plugin on, narrow the pane, and run check 3: the
    line drops whole items from its end and keeps the context bar beside `compacting · autocompact`. Reason: the chip

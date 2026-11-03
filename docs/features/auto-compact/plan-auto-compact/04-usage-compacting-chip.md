@@ -171,5 +171,23 @@ accent tint. Task 09 checks the live pulse and reduced motion.
 One commit for the group: "Usage line shows a compacting chip and pulses its meter; formatTokens moves to
 src/shared".
 
+## Cold read fixes
+
+These override any earlier line of this task that they contradict.
+
+- **The layout's chip is tested.** Create `src/plugins/usage/layouts/default/layout.test.ts` in the shape of
+  `src/plugins/chat/layouts/default/layout.test.ts` (a fake kit, the default layout module, its `sessionLine` part).
+  `sessionLine_Compacting_DrawsChipFirst`: a session line input with `compacting: 'compacting · auto'` draws a root
+  with class `is-compacting` whose first child is the `kit.tag` element with text `compacting · auto`; with
+  `compacting: null` the root has no `is-compacting` class and no tag. The pulse itself stays a task 09 check.
+- **Comments that go untrue.** In the same edit, rewrite: the `sessionLine` comment in `layout.d.ts` (it says the
+  line is drawn only while the session has usage; the host draws a zero line too, as `contract.ts` and
+  `session-lines.ts` say), the `sessionLineText` doc comment (its example log text gains the chip), the
+  `sessionLineInput` comment, the `SessionUsage` comment in `contract.ts`, the `layout.js` header, the `usage-store.ts`
+  header, and the `start.ts` comment that lists `chat.agentEvent (the main agent's usage)`.
+- **The self-test hold.** The `compacting` group's `open` also calls `release()` in its promise's catch. A run that
+  skips the result step leaves the hold set for the rest of that self-test process; that is harmless, since no
+  later script sends `FAKE_COMPACT_TEXT`. Record that in the step's comment.
+
 ## Proof
 

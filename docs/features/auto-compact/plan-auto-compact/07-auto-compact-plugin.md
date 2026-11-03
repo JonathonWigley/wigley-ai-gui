@@ -17,7 +17,7 @@ Files:
 Consumes:
 - `export function formatTokens(tokens: number): string` ← 04, in `src/shared/format-tokens.ts`
 - In `src/plugins/chat/contract.ts` ← 05:
-  - `export interface SendGateInput { sessionId: string; hostSessionId: string; profileDir: string; now: number }`
+  - `export interface SendGateInput { sessionId: string; hostSessionId: string; profileDir: string; text: string; now: number }`
   - `export interface SendGateVerdict { action: 'compact'; reason: string }`
   - `export type SendGate = (input: SendGateInput) => SendGateVerdict | null;`
   - `ChatMainExports.addSendGate(gate: SendGate): () => void`
@@ -168,6 +168,24 @@ Decisions:
   Dispose removes it with the send gate.
 - With `minTokens` 0 the reader gives null, so Claude's idle compaction keeps its own default.
 Tests:     rows in the wiring test: the reader gives `150000` for the default setting and `null` for `minTokens: 0`.
+
+## Cold read fixes
+
+These override any earlier line of this task that they contradict.
+
+- **Layers.** Add `modify scripts/check-layers.mts` to Files: entries `src/plugins/auto-compact` (`src/contracts`,
+  `src/shared`) and `src/plugins/auto-compact/main` (`src/contracts`, `src/shared`, `src/plugins/auto-compact`,
+  `src/plugins/chat/contract.ts`), modelled on `usage/main`, and the plugin's paths in the manifests and `main.ts`
+  layer lists. `npm run lint` fails without them.
+- **`sessionEnded` keeps the usage.** Chat re-emits saved usage only at app restore and on resume from history, not
+  when a resting row's next send starts a process, so dropping it would leave the gate blind in the case the design
+  names (a session whose process ended). The fold keeps the entry on `sessionEnded`; the map holds one event per host
+  session per app run. The `SessionEndedDrops` row becomes `SessionEndedKeeps`.
+- **`compactionEnded done` drops the usage.** Any trigger: the host session's entry is removed, so stale
+  pre-compaction usage never holds a send; the next reply's `usage` refills it. Rows `CompactionEndedDropsDone`, and
+  `CompactionEndedFailedKeeps` with `failed` and `interrupted` cases.
+- **Slash commands pass.** `sendGateVerdict` returns null when `input.text.trimStart()` starts with `/`. Row
+  `SlashCommand_NotHeld` (`/compact` on a cold 200k session).
 
 ## Proof
 

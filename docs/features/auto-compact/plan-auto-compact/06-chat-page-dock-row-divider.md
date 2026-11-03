@@ -262,5 +262,17 @@ Add rows to the existing tests. Update each existing helper and literal input fo
 Commit: one commit for the group, naming the dock's `Compacting…` state, the held row label, the divider entry, the
 `ChatKit.tokens` helper and the self-test step.
 
+## Cold read fixes
+
+These override any earlier line of this task that they contradict.
+
+- **Self-test strings.** Task 05's fixture gate answers `selftest · cache cold`. Expect
+  `[chat] chat-selftest compacting: selftest · cache cold` in a step after 05's `behind hold` step and before its
+  `<C-c>` step, and `[chat] chat-selftest compaction ended` as an `alsoExpect` on the `<C-c>` step: the interrupt ends
+  the compaction. No mid-script release exists.
+- **The release moment.** A brief done-line or hidden-dock frame between the `compaction: null` message and the next
+  `activity` message is accepted; the Behaviour rows stand as written. Reason: holding `Compacting…` until the next
+  `activity` adds a second state rule for one frame.
+
 ## Proof
 

@@ -198,6 +198,23 @@ Probe F, run in the background (it can take up to 65 minutes of wall time):
 - Task 02 reads it as trigger `harness` in every case. When it never fires, record that: the app's gate then covers
   every cold send alone.
 
+## Cold read fixes
+
+These override any earlier line of this task that they contradict.
+
+- **Filling the context.** Claude's Read tool caps one call near 25k tokens, so no probe fills the context by reading
+  a file. Probe A's fallback and probe F put the bulk in the turn-1 stdin message itself: about 100k tokens of plain
+  text (110k for F) followed by `reply ok`. Before turn 2 or the idle wait starts, check that turn 1's `result`
+  `usage` shows the intended size; when it does not, fix the bulk and rerun turn 1.
+- **Probe A logs from spawn.** Record every line from the process's start, not from turn 2's `init`. A
+  `compact_boundary` anywhere counts as success, and the fallback runs only when none came. A turn-1 `compacting`
+  status followed by `compact_result: failed` is a finding: record it, since it bears on task 02's no-compaction path.
+- **Probe F's outcomes.** Add a row to the what-task-02-does table: when idle compaction never fires under
+  stream-json (the binary's `no_host` outcome suggests `-p` may have no host), task 02 still ships the env
+  pass-through (harmless), and this task's report tells the lead, who rewords design.md § Decisions and plan.md before
+  wave 2 dispatches. Probe F's subsection in `claude-stream.md` is `Idle compaction`. Set
+  `CLAUDE_CODE_PROMPT_CACHE_TTL=1h`; when the binary rejects that value, record the value that worked.
+
 ## Proof
 
 <written by wigley:make: commit sha, proof result, concerns; empty until the group lands>

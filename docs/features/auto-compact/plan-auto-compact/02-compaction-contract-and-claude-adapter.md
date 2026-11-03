@@ -365,6 +365,36 @@ GIVEN `idleCompactMinTokens: null` and the same inherited value WHEN the launch 
 Tests:     two rows in the launch test that owns the stripped-variable rule (find it beside `claude-launch.ts`), each
            asserting the child env's `CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS` (`'150000'`, then absent).
 
+## Cold read fixes
+
+These override any earlier line of this task that they contradict.
+
+- **Interrupt before the first status.** When `interrupt()` runs while an `app` or `manual` uuid is armed and no
+  compaction has taken it, the harness arms the 5 s compaction grace for that uuid. At grace expiry with still no
+  compaction, it sends `compactionStarted` then `compactionEnded interrupted` for it. Reason: chat releases a held row
+  only on `compactionEnded`, and a ⌃C right after `compact()` is the common skip.
+- **Stale state.** Wherever the tracker closes uuids (`abandon`, `interruptAnswered` with no turn open, the grace's
+  expiry) the harness also clears its armed uuids and any kept compaction whose end was already sent. A grace-ended
+  compaction waits only for its boundary entry; it never blocks a new start, and a `compacting` status that arrives
+  after its end was sent starts a new compaction.
+- **Harness end.** Any `result` ends an open `harness` compaction as `failed` when no boundary came, including a
+  `turnUnrequested` result. Turns are serial, so the result closes the turn the compaction began in; a stuck dock is
+  worse than an early `failed`.
+- **The failed notice stays.** The decoder's `Compaction failed: <compact_error>` notice shows on every failed
+  `compact_result`, after an interrupt too: the decoder stays stateless. When task 01's probe B shows a distinct
+  interrupt text, 01's table gets a row that drops the notice for that text.
+- **Env placement.** A separate `const` list beside `NESTED_SESSION_ENV`, with its own comment (the variable is the
+  app's setting, not a parent session's), holds `CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS`. `claudeEnv` strips it, so
+  `spawnCli` never passes a stale value; `claudeLaunch` sets it after `claudeEnv` when `idleCompactMinTokens` is not
+  null. With null the user's own value is dropped too. Update `NESTED_SESSION_ENV`'s comment so it no longer says
+  every other `CLAUDE_CODE_*` name passes through, and `claude-stream.md` § Launch if it lists env handling.
+- **Rows added** (one each, events listed in the row): fallback trigger rule 3 (oldest armed uuid); the fallback end
+  on any `result`; the fallback no-compaction start-and-fail on a `result`; a `harness` end on a bare `result`; a
+  `harness` end on a `turnUnrequested` result; the end by a terminal lifecycle frame; a typed `/compact` refused with
+  no compaction; `compact(), interrupt()`, no lines, advance 5000 → `compactionStarted app` then `compactionEnded
+  interrupted`; a stale armed uuid after `abandon`, then a harness `compacting` status → trigger `harness`; a second
+  `compacting` status after a grace-ended compaction → a new `compactionStarted`.
+
 ## Proof
 
 <written by wigley:make: commit sha, proof result, concerns; empty until the group lands>

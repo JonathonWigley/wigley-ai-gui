@@ -150,7 +150,7 @@ Fake harness (task 03), in `src/shared/fake-agent-harness.ts`:
 `src/plugins/chat/contract.ts` (task 05):
 
 ```ts
-export interface SendGateInput { sessionId: string; hostSessionId: string; profileDir: string; now: number }
+export interface SendGateInput { sessionId: string; hostSessionId: string; profileDir: string; text: string; now: number }
 export interface SendGateVerdict { action: 'compact'; reason: string }
 export type SendGate = (input: SendGateInput) => SendGateVerdict | null;
 export interface SessionCompaction { trigger: CompactionTrigger; reason: string | null; startedAt: number }

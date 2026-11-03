@@ -170,5 +170,25 @@ existing line changes.
 One commit for the group: "Fake harness runs compactions: compact(), /compact, fake: compact, fake: cold, hold and
 release".
 
+## Cold read fixes
+
+These override any earlier line of this task that they contradict.
+
+- **Compaction state.** Keep one `openCompaction` record (trigger, start time, held flag), separate from
+  `isTurnOpen`. `send`, `interrupt`, `end` and `kill` mark it ended synchronously, at call time, and drop it from the
+  held list at the same moment. Each emission microtask first checks that its compaction is still the open one and
+  emits nothing otherwise. The done finish that a `send` runs never sets `isTurnOpen`: the send's own turn owns it.
+  `compact()`'s busy check reads both `isTurnOpen` and `openCompaction`. Reason: one `compactionEnded` per
+  `compactionStarted` is the fake's contract with task 05, whatever the call order.
+- **Rows added to `heldCompaction_$case`:** `send(FAKE_HOLD_TEXT)` during a held compaction, then `interrupt()` —
+  one `compactionEnded done`, then the hold turn's interrupt as today; `compact(); interrupt()` in the same tick —
+  exactly one `compactionStarted` and one `compactionEnded interrupted`; `end()` under `holdEnd`, then
+  `releaseCompactions()`, then `releaseEnd()` — exactly one `compactionEnded failed`.
+- **Notice id.** The interrupt notice id is `notice-compaction-<n>` for every trigger. Add one `interrupt` row for
+  `manual` and one for `harness`.
+- **Duration and before-size.** One `heldCompaction` row uses a clock that starts at 1000 and advances 3000 before
+  the ending call. It asserts the whole `compactionEnded` payload: `durationMs: 3000`, and `beforeTokens: null` for
+  the `interrupt`, `end` and release cases.
+
 ## Proof
 
