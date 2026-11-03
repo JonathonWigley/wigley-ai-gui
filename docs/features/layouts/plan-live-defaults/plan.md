@@ -194,5 +194,6 @@ Review base: 46f417b5
 - AGENTS.md:593 (off the Files line) updated to the three-argument shell register call, as it had gone stale — none · group 04
 - no doc text added for the cascade tie-break or the never-resetting revision, as no listed line contradicted the code there — a missing note only · group 06
 ### Review rounds
+- 1 · 61288a54 · NEEDS FIXES · 2 Important, 13 Minor, 2 pre-existing; lead applied #2 #7 #8 #10 #11 #14 #15 in 87834842; dispatched #1 #3 #4 #6 #12; #13 #16 #17 to follow-ups; #5 #9 left
 ### Test gate
 - npm test (whole Vitest suite: every owner page start.ts, the shared layout host and main layouts changed) · 380 files, 6220 tests passed, no type errors; npm run selftest -- --plugin for each owner with a script (agent-lines, agent-strip, backlog, chat, docs, forms, notes, primer, sessions, settings, usage, workflow), the layout-host change reaching every owner page · 10 pass; chat fails 8 fits-the-minimum-width steps (nav.ui-tabs.session-tabs holds 120px in 99px) and primer fails activated Layout preview, both identical at the review base 46f417b5 (chat re-run there by the lead), so neither is this plan's
