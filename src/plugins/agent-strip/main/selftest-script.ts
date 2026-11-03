@@ -46,7 +46,7 @@ const GROUPS: SelfTestGroup[] = [
           /^\[chat\] composer part agent-strip\.strip took the cursor in agent-strip-selftest$/,
         ],
         screenshot: 'strip-selected',
-        why: "G lands on the open turn's activity line, the last stop while the line is closed, and j from there hands the cursor to the strip.",
+        why: 'G lands on the last entry, the last stop, and j from there hands the cursor to the strip.',
       },
       { keys: ['l'], expect: selectedLine(2) },
       { keys: ['h'], expect: selectedLine(1) },
@@ -121,7 +121,7 @@ export function agentStripSelfTestScript(
     settings: {},
     // A box's name, model line, description and tool lines end in an
     // ellipsis inside their own boxes and an open box's tool list scrolls
-    // inside its box, as their CSS says. The working block's tool calls (the
+    // inside its box, as their CSS says. The activity dock's tool calls (the
     // Agent calls carry the subagents' prompts) and the session row's status
     // end in an ellipsis inside their own boxes; the tab bar's parts clip in
     // their own box.

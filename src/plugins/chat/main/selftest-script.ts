@@ -269,11 +269,10 @@ const VISUAL_STEPS: SelfTestStep[] = [
     screenshot: 'visuals',
     why: "The mockup's block closes while the reply streams, and the flowchart's closes with the final entry after the fake's hold; both frames load before the screenshot.",
   },
-  { keys: ['Escape'], expect: '[chat] left the box' },
   {
-    keys: ['k'],
-    expect: '[chat] focused assistant entry',
-    why: 'The reply holding both visuals sits above the result.',
+    keys: ['Escape'],
+    expect: '[chat] left the box',
+    why: 'The result is no stop, so focus follows the reply holding both visuals.',
   },
   { keys: ['v'], expect: '[visual] visual overlay showing 1 of 2' },
   { keys: ['l'], expect: '[visual] visual overlay showing 2 of 2' },
@@ -317,50 +316,40 @@ const PERMISSION_CARD_STEPS: SelfTestStep[] = [
   },
 ];
 
+// The dock draws its finished line before the idle line is logged.
 const TRANSCRIPT_FOCUS_STEPS: SelfTestStep[] = [
   {
     keys: sendKeys(FAKE_TOOL_TEXT),
-    expect: '[chat] result entry added in chat-selftest',
+    expect: '[chat] chat-selftest is idle',
+    alsoExpect: [/^\[chat\] result entry added in chat-selftest$/],
+    checksFit: true,
+    screenshot: 'dock-done',
   },
   { keys: ['Escape'], expect: '[chat] left the box' },
-  { keys: ['k'], expect: '[chat] focused assistant entry' },
-  { keys: ['k'], expect: '[chat] focused activity line' },
+  { keys: ['k'], expect: '[chat] focused user entry' },
   { keys: ['j'], expect: '[chat] focused assistant entry' },
-  { keys: ['k'], expect: '[chat] focused activity line' },
-  {
-    keys: ['Enter'],
-    expect: '[chat] expanded activity line',
-    checksFit: true,
-    screenshot: 'activity-open',
-  },
-  { keys: ['j'], expect: '[chat] focused tool entry' },
-  {
-    keys: ['Enter'],
-    expect: '[chat] expanded tool entry',
-    checksFit: true,
-    screenshot: 'step-open',
-  },
-  { keys: ['k'], expect: '[chat] focused activity line' },
-  { keys: ['Enter'], expect: '[chat] collapsed activity line' },
   { keys: ['g', 'g'], expect: '[chat] focused the first entry' },
   { keys: ['G'], expect: '[chat] following the latest entry' },
 ];
 
 // The steps turn's last step is its one thought, so the thought's line marks
 // the whole run arrived.
-const ACTIVITY_LINE_STEPS: SelfTestStep[] = [
+const ACTIVITY_DOCK_STEPS: SelfTestStep[] = [
   {
     keys: sendKeys(FAKE_STEPS_TEXT),
     expect: '[chat] thinking entry added in chat-selftest',
-    screenshot: 'activity-live',
+    checksFit: true,
+    screenshot: 'dock-live',
   },
-  { keys: ['<C-c>'], expect: NOTICE_LINE },
-  { keys: ['Escape'], expect: '[chat] left the box' },
   {
-    keys: ['k'],
-    expect: '[chat] focused activity line',
-    screenshot: 'activity-finished',
+    keys: ['<C-c>'],
+    expect: '[chat] chat-selftest is idle',
+    alsoExpect: [new RegExp(`^${escapeRegExp(NOTICE_LINE)}$`)],
+    screenshot: 'dock-after-interrupt',
+    why: "The fake's notice lands before the idle line, and the dock hides before the idle line is logged.",
   },
+  { keys: ['Escape'], expect: '[chat] left the box' },
+  { keys: ['k'], expect: '[chat] focused user entry' },
   { keys: ['G'], expect: '[chat] following the latest entry' },
 ];
 
@@ -681,13 +670,13 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'transcript focus',
-    why: "A tool turn's entries are user, tool, assistant and result, focus following the result, the tool sitting in an activity line: k and j walk them, Enter opens the line into its step rows, opens the tool's step and closes the line again, gg focuses the first entry and G follows the latest.",
+    why: "A tool turn's transcript holds its user and assistant entries only, focus following the assistant: k and j walk them, gg focuses the first entry and G follows the latest; the activity dock shows the finished turn's one line.",
     steps: TRANSCRIPT_FOCUS_STEPS,
   },
   {
-    name: 'activity line',
-    why: "A held steps turn draws the live summary line and the working block with the box focused (no frame, no marked entry); Ctrl+C ends it into the finished line with its failed count; Esc shows the focused entry's left bar; k focuses the finished line and G follows the latest again.",
-    steps: ACTIVITY_LINE_STEPS,
+    name: 'activity dock',
+    why: "A held steps turn draws the live activity dock in the composer (the time and state word, the main agent's 3 latest tool calls, the counts) with the box focused; Ctrl+C ends it with the fake's notice and no result, so the dock hides; Esc shows the focused entry's left bar; k focuses the user entry and G follows the latest again.",
+    steps: ACTIVITY_DOCK_STEPS,
   },
   {
     name: 'transcript scroll',
