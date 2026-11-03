@@ -204,8 +204,10 @@ interview on 2026-10-23; this file is the record of both.
   last entry and before any pending row, drawn by the layout's `working` part; it goes when the turn ends, leaving
   the run lines and the result entry. It is not a cursor stop. Settled from the user's sketch in an interview on
   2026-11-02.
-  - **Header**: the turn's time, the state word, and `…`: `1:05 Working…`. The time counts from the turn's user
-    entry (a queued message from when it was sent) to now, once a second, as `m:ss` (`h:mm:ss` past an hour).
+  - **Header**: the turn's time, the state word, and `…`: `1:05 Working…`. The time counts from the turn's first
+    entry to now: the later of the last user entry (a queued message from when it was sent) and the entry after the
+    last result, so a turn Claude starts on its own after a background task counts from its own start. It ticks
+    once a second, as `m:ss` (`h:mm:ss` past an hour).
   - **State**: one of four, the first that holds: **Waiting** while a permission entry in the turn is unanswered,
     **Working** while a tool in the turn has no result, **Writing** while the last entry is streaming assistant
     text, else **Thinking**. A pure module picks it, so a layout only words it.
@@ -214,7 +216,7 @@ interview on 2026-10-23; this file is the record of both.
     and lists tool calls only: thinking shows as the state, and raw entries only in an open activity line. The
     part's input carries every step of the turn, so a user layout may list more.
   - **Tool counts**: every tool the turn used with its count, most used first, always numbered:
-    `Read 3 Edit 1 Bash 2`.
+    `Read 3 Bash 2 Edit 1`.
   - **No cost**: Claude reports cost only when the turn ends (`claude-stream.md` § Result), when the block is gone;
     the result entry shows the turn's cost in cents, `$0.50`. A live estimate from token counts and a price table
     was rejected for keeping Claude's prices out of the app.

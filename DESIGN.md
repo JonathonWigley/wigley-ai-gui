@@ -381,13 +381,14 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   comment box) while the items column has focus. A review pane of every answer opens before it sends.
 - **Chat:** user turns are a `card-background` block, not a bubble. Assistant prose is markdown on
   the sheet. The agent's steps (tool calls, thinking, raw events) between two other entries form
-  one **activity line**. While the session works on it, the line is a header (a running StatusDot,
-  the current action in mono, such as `Bash · npm test`, `· N steps` and the time) over a shortlist of the
-  latest five steps, the newest at the bottom in `fg` and the older ones in `fg-tertiary`. Once
-  finished it is one dim `fg-tertiary` line: the step count and the tools used, such as
+  one **activity line**: one dim `fg-tertiary` line, live or finished: the step count and the tools used, such as
   `6 steps · Read 3 · Bash 2 · Edit · 42s`, with `· 1 failed` in `status-error` before the time when a step failed.
-  The time is compact in tabular numerals (`8s`, `1m 05s`, `1h 02m`) and dim; a live line's ticks once a second. Opened,
-  it lists one plain row per step (the plain collapsible: a tool's status dot and its mono
+  The time is compact in tabular numerals (`8s`, `1m 05s`, `1h 02m`) and dim; a live line's ticks once a second.
+  While the session works on a turn, a **working block** sits under the last entry: a header (the turn's time as
+  `m:ss` in tabular numerals and a state word, `1:05 Working…`), a `radius-md` card listing the latest five tool
+  calls in mono (the newest in `fg`, the older ones in `fg-tertiary`, a failed one in `status-error`), and the
+  turn's tool counts, dim (`Read 3 Bash 2 Edit 1`). An opened activity line
+  lists one plain row per step (the plain collapsible: a tool's status dot and its mono
   summary, `Thinking`, `Raw event`), and a step row opens its input and result in place under it,
   with no card. Permission prompts are cards with a
   `status-attention` edge and plain verbs (Allow once, Deny). The composer floats (L3,

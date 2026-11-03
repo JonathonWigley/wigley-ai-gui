@@ -34,11 +34,22 @@ Each was verified at plan time on 2026-11-02. `wigley:make` runs each again befo
 - The entry list ticks only a live run today: `grep -n "const runTick" src/plugins/chat/page/entry-list.ts` → one hit.
 - The self-test's chat script takes the `activity-live` screenshot:
   `grep -n "activity-live" src/plugins/chat/main/selftest-script.ts` → one hit.
+- The default layout is typed complete, so a new part needs a default:
+  `grep -n "CompleteChatLayout" src/plugins/chat/layouts/default/layout.js` → one hit.
+- The agents self-test lists the live shortlist's ellipsis box:
+  `grep -n "'.chat-activity-step'" src/plugins/agents/main/selftest-script.ts` → one hit.
+- `npm test` is `vitest run` only; typecheck and lint are their own scripts:
+  `grep -n '"test"\|"typecheck"\|"lint"' package.json` → three hits.
+- `plan-turn-tracking/` (another plan in this feature folder) changes only main-side files in
+  `src/main/claude-code/` and `src/main/main.ts`, so it shares no file with this plan:
+  `grep -n "Systems touched" docs/features/agent-chat/plan-turn-tracking/plan.md`. Its fix makes a turn Claude starts
+  on its own show as working; task 01's turn rule covers that turn.
 
 ## Docs written ahead
 
 `docs/features/agent-chat/design.md` — § Chat plugin › Activity line (Live run), the new § Working block, § Layouts
-(the `working` part) and § Plans (Plan G). Commit: the commit that adds this plan folder.
+(the `working` part) and § Plans (Plan G); `DESIGN.md` § Surfaces, the Chat bullet. Commits: `44bf74fd` and the
+commit that closes the cold read's gaps.
 
 ## Mandatory Reads
 
@@ -50,7 +61,8 @@ Each was verified at plan time on 2026-11-02. `wigley:make` runs each again befo
 
 ```
 session entries ──► working-turn.ts  workingInput(entries, now)
-   (chat-view)          │   turn = entries from the last user entry
+   (chat-view)          │   turn = from the later of the last user entry
+                        │          and the entry after the last result
                         │   state = waiting > working > writing > thinking
                         ▼
 entry-list.ts ── while working: one working slot after the last entry,
@@ -65,7 +77,7 @@ layout `working` part (default: layout.js)
    │ │ Edit design.md                   │ │       newest highlighted
    │ │ Bash npm test                    │ │
    │ └──────────────────────────────────┘ │
-   │ Read 3 Edit 1 Bash 2                  │  counts: most used first
+   │ Read 3 Bash 2 Edit 1                  │  counts: most used first
    └──────────────────────────────────────┘
 layout `activity` part: live or finished, one summary line
 layout `result` entry: `end_turn · $0.50 · 4.2 s`
@@ -88,6 +100,9 @@ Decisions:
 - Timer `m:ss`, `h:mm:ss` past an hour. Box shows 5 lines. Counts always carry a number. File paths show as file
   names. All Decided notices, not overridden.
 - The live run's activity line draws the summary line (Decided, round 2).
+- The turn starts at the later of the last user entry and the entry after the last result, so a turn Claude starts
+  on its own gets a fresh time (cold read).
+- The newest box line is highlighted even after its tool finishes (cold read).
 - The block sits before the pending rows, and is not a cursor stop (Decided, round 2).
 - The time starts at the turn's user entry (Decided, round 2).
 
@@ -96,8 +111,11 @@ Decisions:
 Modified:
 
 - `src/plugins/chat/layouts/layout.d.ts` — `WorkingState`, `WorkingInput`, the `working?` part on `ChatLayout`.
-- `src/plugins/chat/page/read-chat-layout.ts` — `working: true` in `PART_SET`.
+- `src/plugins/chat/page/read-chat-layout.ts` and its test — `working: true` in `PART_SET`.
 - `src/plugins/chat/page/entry-list.ts` and `entry-list.test.ts` — the working slot and its tick.
+- `src/plugins/chat/page/chat-view.ts` — one comment.
+- `src/plugins/agents/main/selftest-script.ts` — `.chat-working-action` replaces `.chat-activity-step` in
+  `scrollsItself`.
 - `src/plugins/chat/layouts/default/layout.js` and `layout.test.ts` — the `working` part, the summary-only
   `activity` part, the result line's cost format.
 - `src/plugins/chat/page/chat.css` — the working block's classes; the live shortlist's classes go.
@@ -124,6 +142,8 @@ only its input and the base kit.
 
 ### Wave 3
 - [ ] [Doc re-read](04-doc-re-read.md) — after 02, 03
+
+### Wave 4
 - [ ] [Final verification](05-final-verification.md) — after 04
 
 ## Run log
