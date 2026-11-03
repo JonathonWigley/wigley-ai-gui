@@ -174,6 +174,11 @@ export function previousHostLogFile(protocol: number): string {
   return `host-v${protocol}.previous.log`;
 }
 
+// The file in the host folder where a host records its children, so the next host can end what it leaves.
+export function hostChildrenFile(protocol: number): string {
+  return `host-v${protocol}.children.json`;
+}
+
 // Frozen: never change this shape. The protocol a `hostRecordFile` name holds; null for any other name.
 export function hostRecordProtocol(fileName: string): number | null {
   const match = HOST_RECORD_NAME.exec(fileName);

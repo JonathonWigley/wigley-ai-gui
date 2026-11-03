@@ -1,7 +1,14 @@
 import { spawn } from 'node:child_process';
+import path from 'node:path';
 import type { Clock, Timers } from '../contracts/ambient';
+import {
+  hostChildrenFile,
+  SESSION_HOST_PROTOCOL,
+} from '../contracts/session-host-protocol';
 import { createDiagnosticLog } from './diagnostic-log';
+import { createHostChildren } from './host-children';
 import { startSessionHost } from './host-server';
+import { createOsProcesses } from './os-processes';
 
 const folder = process.argv[2];
 const channel = process.argv[3];
@@ -12,10 +19,20 @@ const timers: Timers = {
   set: (run, ms) => setTimeout(run, ms)[Symbol.toPrimitive](),
   clear: (handle) => clearTimeout(handle),
 };
+const diagnostics = createDiagnosticLog(folder, clock);
+const children = createHostChildren({
+  file: path.join(folder, hostChildrenFile(SESSION_HOST_PROTOCOL)),
+  spawn: (command, args, options) =>
+    spawn(command, args, { ...options, windowsHide: true }),
+  processes: createOsProcesses(process.platform),
+  timers,
+  report: (message) => diagnostics.append(message),
+});
 
 process.on('uncaughtException', (error) => {
   try {
-    createDiagnosticLog(folder, clock).append(`uncaught: ${error.stack}`);
+    children.killAll();
+    diagnostics.append(`uncaught: ${error.stack}`);
   } finally {
     process.exit(1);
   }
@@ -25,8 +42,7 @@ void startSessionHost({
   folder,
   channel,
   pid: process.pid,
-  spawn: (command, args, options) =>
-    spawn(command, args, { ...options, windowsHide: true }),
+  children,
   clock,
   timers,
   exit: (code) => process.exit(code),

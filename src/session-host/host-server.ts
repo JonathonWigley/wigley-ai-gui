@@ -1,11 +1,4 @@
-import {
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import type { Socket } from 'node:net';
 import path from 'node:path';
 import type { Clock, Timers } from '../contracts/ambient';
@@ -22,16 +15,19 @@ import {
 } from '../contracts/session-host-protocol';
 import { jsonLine, readLines } from '../shared/local-channel/line-framing';
 import {
+  connectFoundNoListener,
   connectToChannel,
   listenOnChannel,
 } from '../shared/local-channel/local-channel';
 import { createDiagnosticLog, type DiagnosticLog } from './diagnostic-log';
+import type { HostChildren } from './host-children';
 import {
   createProcessTable,
   type HostSpawn,
   type ProcessSubscriber,
   type ProcessTable,
 } from './process-table';
+import { replaceFile } from './replace-file';
 
 const HELLO_WAIT_MS = 2000;
 const FIRST_CLIENT_WAIT_MS = 30_000;
@@ -58,12 +54,16 @@ const NON_CLIENT_MESSAGE_TYPES: ReadonlySet<ClientMessage['type']> = new Set([
   'list',
   'drain',
 ]);
+// Answered while a new host ends what the last one left. The rest wait, in order: each may act on a process whose
+// `spawn` is waiting, and a `drain` or `stopAll` must see it. The table is empty, so these answer truly.
+const SERVED_WHILE_ENDING_LEFTOVERS: ReadonlySet<ClientMessage['type']> =
+  new Set(['hello', 'list', 'subscribe', 'setKeepIdle']);
 
 export interface SessionHostDeps {
   folder: string;
   channel: string;
   pid: number;
-  spawn: HostSpawn;
+  children: HostChildren;
   clock: Clock;
   timers: Timers;
   exit(code: number): void;
@@ -87,24 +87,25 @@ function helloReplyProtocol(line: string): number | null {
   }
 }
 
-// The protocol of the host on `channel`; null when none answers within `HELLO_WAIT_MS`.
-function helloProtocol(
+// What a `hello` on a channel found: the protocol that answered; `none` when the connect proved no listener; `silent`
+// when one is possible, since the connect failed some other way or no protocol came within `HELLO_WAIT_MS`.
+function askHello(
   channel: string,
   timers: Timers,
-): Promise<number | null> {
+): Promise<number | 'none' | 'silent'> {
   return new Promise((resolve) => {
     let socket: Socket | null = null;
     let settled = false;
-    const settle = (protocol: number | null) => {
+    const settle = (answer: number | 'none' | 'silent') => {
       if (settled) {
         return;
       }
       settled = true;
       timers.clear(timer);
       socket?.destroy();
-      resolve(protocol);
+      resolve(answer);
     };
-    const timer = timers.set(() => settle(null), HELLO_WAIT_MS);
+    const timer = timers.set(() => settle('silent'), HELLO_WAIT_MS);
     connectToChannel(channel).then(
       (connected) => {
         if (settled) {
@@ -112,22 +113,25 @@ function helloProtocol(
           return;
         }
         socket = connected;
-        connected.on('error', () => settle(null));
-        connected.on('close', () => settle(null));
-        readLines(connected, (line) => settle(helloReplyProtocol(line)));
+        connected.on('error', () => settle('silent'));
+        connected.on('close', () => settle('silent'));
+        readLines(connected, (line) =>
+          settle(helloReplyProtocol(line) ?? 'silent'),
+        );
         const hello: HelloMessage = { type: 'hello', requestId: 1 };
         connected.write(jsonLine(hello));
       },
-      () => settle(null),
+      (error: unknown) =>
+        settle(connectFoundNoListener(error) ? 'none' : 'silent'),
     );
   });
 }
 
 function writeRecord(folder: string, record: SessionHostRecord) {
-  const file = path.join(folder, hostRecordFile(record.protocol));
-  const temp = `${file}.tmp`;
-  writeFileSync(temp, JSON.stringify(record));
-  renameSync(temp, file);
+  replaceFile(
+    path.join(folder, hostRecordFile(record.protocol)),
+    JSON.stringify(record),
+  );
 }
 
 function recordedChannel(file: string): string | null {
@@ -139,7 +143,7 @@ function recordedChannel(file: string): string | null {
   }
 }
 
-async function anotherHostAnswers(
+async function anotherHostMayListen(
   folder: string,
   timers: Timers,
 ): Promise<boolean> {
@@ -149,7 +153,7 @@ async function anotherHostAnswers(
   });
   for (const name of otherRecords) {
     const channel = recordedChannel(path.join(folder, name));
-    if (channel !== null && (await helloProtocol(channel, timers)) !== null) {
+    if (channel !== null && (await askHello(channel, timers)) !== 'none') {
       return true;
     }
   }
@@ -162,7 +166,7 @@ async function sweepLogs(
   table: ProcessTable,
   timers: Timers,
 ) {
-  if (await anotherHostAnswers(folder, timers)) {
+  if (await anotherHostMayListen(folder, timers)) {
     return;
   }
   const heldNames = new Set(table.list().map(({ id }) => pipeLogFile(id)));
@@ -187,6 +191,9 @@ function createConnections(deps: ConnectionsDeps) {
   const { diagnostics } = deps;
   const clients = new Set<Socket>();
   let draining = false;
+  let isEndingLeftovers = true;
+  let exitRuleWaits = false;
+  const heldMessages: (() => void)[] = [];
   const table = createProcessTable({
     spawn: deps.spawn,
     clock: deps.clock,
@@ -197,9 +204,23 @@ function createConnections(deps: ConnectionsDeps) {
   });
 
   function checkExitRule() {
+    if (isEndingLeftovers) {
+      exitRuleWaits = true;
+      return;
+    }
     const holdsNoProcess = table.list().length === 0;
     if (holdsNoProcess && (draining || clients.size === 0)) {
       deps.shutDown();
+    }
+  }
+
+  function serveHeldMessages() {
+    isEndingLeftovers = false;
+    for (const serve of heldMessages.splice(0)) {
+      serve();
+    }
+    if (exitRuleWaits) {
+      checkExitRule();
     }
   }
 
@@ -303,28 +324,39 @@ function createConnections(deps: ConnectionsDeps) {
       if (!NON_CLIENT_MESSAGE_TYPES.has(message.type)) {
         markClient(socket);
       }
-      // A known type can still carry bad fields, and a throw here would end the host and every session.
-      try {
-        handleMessage(message, subscriber, push);
-      } catch (error) {
-        diagnostics.append(
-          `message ${message.type}: ${(error as Error).message}`,
-        );
+      const serve = () => {
+        // A known type can still carry bad fields, and a throw here would end the host and every session.
+        try {
+          handleMessage(message, subscriber, push);
+        } catch (error) {
+          diagnostics.append(
+            `message ${message.type}: ${(error as Error).message}`,
+          );
+        }
+      };
+      if (
+        isEndingLeftovers &&
+        !SERVED_WHILE_ENDING_LEFTOVERS.has(message.type)
+      ) {
+        heldMessages.push(serve);
+      } else {
+        serve();
       }
     });
   }
 
-  return { connected, checkExitRule, table };
+  return { connected, checkExitRule, serveHeldMessages, table };
 }
 
 // Runs the start steps. A host that finds the channel owned, or cannot listen, calls `deps.exit` and is done;
-// one that owns the channel serves until the exit rule calls `deps.exit`. Resolves once the log sweep has finished.
+// one that owns the channel ends what the last host left before it serves a `spawn`, and serves until the exit rule
+// calls `deps.exit`. Resolves once the log sweep has finished.
 export async function startSessionHost(deps: SessionHostDeps): Promise<void> {
   const { folder, channel, clock, timers } = deps;
   const logsFolder = path.join(folder, HOST_LOGS_FOLDER);
   mkdirSync(logsFolder, { recursive: true });
 
-  if ((await helloProtocol(channel, timers)) === SESSION_HOST_PROTOCOL) {
+  if ((await askHello(channel, timers)) === SESSION_HOST_PROTOCOL) {
     deps.exit(0);
     return;
   }
@@ -333,7 +365,7 @@ export async function startSessionHost(deps: SessionHostDeps): Promise<void> {
   const diagnostics = createDiagnosticLog(folder, clock);
   let shuttingDown = false;
   const connections = createConnections({
-    spawn: deps.spawn,
+    spawn: deps.children.spawn,
     clock,
     timers,
     logsFolder,
@@ -382,6 +414,8 @@ export async function startSessionHost(deps: SessionHostDeps): Promise<void> {
     pid: deps.pid,
   });
   timers.set(connections.checkExitRule, FIRST_CLIENT_WAIT_MS);
+  await deps.children.endLeftovers();
+  connections.serveHeldMessages();
   await sweepLogs(folder, snapshot, connections.table, timers).catch(
     (error: Error) => diagnostics.append(`log sweep: ${error.message}`),
   );

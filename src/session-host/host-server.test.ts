@@ -1,4 +1,5 @@
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -73,7 +74,10 @@ function tempFolder() {
   return { folder, channel };
 }
 
-function host(existing?: { folder: string; channel: string }) {
+function host(
+  existing?: { folder: string; channel: string },
+  endLeftovers: () => Promise<void> = () => Promise.resolve(),
+) {
   const { folder, channel } = existing ?? tempFolder();
   const time = manualTime();
   const spawned: FakeChild[] = [];
@@ -82,10 +86,14 @@ function host(existing?: { folder: string; channel: string }) {
     folder,
     channel,
     pid: 4242,
-    spawn: () => {
-      const fake = fakeChild();
-      spawned.push(fake);
-      return fake.child;
+    children: {
+      spawn: () => {
+        const fake = fakeChild();
+        spawned.push(fake);
+        return fake.child;
+      },
+      endLeftovers,
+      killAll: () => {},
     },
     clock: time.clock,
     timers: time.timers,
@@ -111,8 +119,11 @@ async function stopHost(running: Host) {
   }
 }
 
-async function runningHost(existing?: { folder: string; channel: string }) {
-  const running = host(existing);
+async function runningHost(
+  existing?: { folder: string; channel: string },
+  endLeftovers?: () => Promise<void>,
+) {
+  const running = host(existing, endLeftovers);
   cleanups.push(() => stopHost(running));
   await vi.waitFor(() =>
     expect(existsSync(path.join(running.folder, 'host-v1.json'))).toBe(true),
@@ -664,7 +675,7 @@ describe('host start', () => {
     );
   });
 
-  it('start_RecordAndSweep: a spawn while the sweep waits keeps its log and the old one goes', async () => {
+  it('start_RecordAndSweep: a silent host behind host-v0.json keeps the old log, and a spawn does not wait for it', async () => {
     const seeded = tempFolder();
     seedOldLog(seeded.folder);
     const older = otherChannel(seeded.folder);
@@ -673,23 +684,117 @@ describe('host start', () => {
     writeOtherRecord(seeded.folder, older);
     const running = await runningHost(seeded);
     const connection = await client(running.channel);
-    const fake = await spawned(running, connection, 'new');
-    fake.stdout.write('hello\n');
-    const newLog = path.join(running.folder, 'logs', 'new.jsonl');
-    await vi.waitFor(() =>
-      expect(readFileSync(newLog, 'utf8')).toContain('hello'),
-    );
-    expect(existsSync(path.join(running.folder, 'logs', 'old.jsonl'))).toBe(
-      true,
-    );
+    await spawned(running, connection, 'new');
 
     running.time.advanceTo(2000);
     await running.started;
 
     expect(existsSync(path.join(running.folder, 'logs', 'old.jsonl'))).toBe(
+      true,
+    );
+  });
+
+  it.skipIf(process.platform === 'win32')(
+    'start_RecordAndSweep: a host that denies the connect behind host-v0.json keeps the old log',
+    async () => {
+      const seeded = tempFolder();
+      seedOldLog(seeded.folder);
+      const older = otherChannel(seeded.folder);
+      const server = liveListener(older, 0);
+      await server.listening;
+      chmodSync(older, 0o000);
+      writeOtherRecord(seeded.folder, older);
+
+      const running = await runningHost(seeded);
+      await running.started;
+
+      expect(existsSync(path.join(running.folder, 'logs', 'old.jsonl'))).toBe(
+        true,
+      );
+    },
+  );
+
+  it('start_RecordAndSweep: a record whose channel has no listener takes the old log', async () => {
+    const seeded = tempFolder();
+    seedOldLog(seeded.folder);
+    writeOtherRecord(seeded.folder, otherChannel(seeded.folder));
+
+    const running = await runningHost(seeded);
+    await running.started;
+
+    expect(existsSync(path.join(running.folder, 'logs', 'old.jsonl'))).toBe(
       false,
     );
-    expect(readFileSync(newLog, 'utf8')).toContain('hello');
+  });
+
+  function leftoversEndedByTest() {
+    let finish = () => {};
+    const ended = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    return { endLeftovers: () => ended, finish };
+  }
+
+  it('start_EndingLeftovers_HoldsASpawnAndWhatFollowsIt', async () => {
+    const seeded = tempFolder();
+    seedOldLog(seeded.folder);
+    writeFileSync(path.join(seeded.folder, 'logs', 'new.jsonl'), 'stale\n');
+    const { endLeftovers, finish } = leftoversEndedByTest();
+    const running = await runningHost(seeded, endLeftovers);
+    const connection = await client(running.channel);
+
+    connection.send({ type: 'spawn', request: spawnRequest('new') });
+    connection.send({ type: 'write', id: 'new', text: 'hi' });
+    const list = await replyTo(connection, { type: 'list', requestId: 1 });
+
+    expect(list).toEqual({ type: 'list', requestId: 1, processes: [] });
+    expect(running.spawned).toEqual([]);
+
+    finish();
+    await running.started;
+
+    expect(running.spawned).toHaveLength(1);
+    const newLog = readFileSync(
+      path.join(running.folder, 'logs', 'new.jsonl'),
+      'utf8',
+    );
+    expect(newLog).toContain('"text":"hi"');
+    expect(newLog).not.toContain('stale');
+    expect(existsSync(path.join(running.folder, 'logs', 'old.jsonl'))).toBe(
+      false,
+    );
+  });
+
+  it.each([
+    {
+      label: 'the last client leaves',
+      leave: async (connection: Client) => {
+        connection.socket.destroy();
+        await vi.waitFor(() => expect(hostSockets[0].destroyed).toBe(true));
+      },
+    },
+    {
+      label: 'a drain comes',
+      leave: async (connection: Client) => {
+        connection.send({ type: 'drain' });
+        await settled(connection);
+      },
+    },
+  ])('start_EndingLeftovers_ExitWaitsForThem: $label', async ({ leave }) => {
+    const { endLeftovers, finish } = leftoversEndedByTest();
+    const running = await runningHost(undefined, endLeftovers);
+    const connection = await client(running.channel);
+    connection.send({ type: 'setKeepIdle', minutes: 60 });
+    await settled(connection);
+
+    await leave(connection);
+    // Time for an exit already under way: closing the server takes a few turns of the loop.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(running.exits).toEqual([]);
+
+    finish();
+
+    await vi.waitFor(() => expect(running.exits).toEqual([0]));
   });
 
   it('start_RecordAndSweep: a listen error other than EADDRINUSE exits 1 with no record', async () => {
