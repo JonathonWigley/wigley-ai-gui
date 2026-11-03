@@ -476,8 +476,10 @@ round; primer: an open primer), since main, not the page, decides.
   events and `at`, the time it first appeared (stamped through the injected `Clock`, or read from the transcript for
   history), so a chat layout can show any field and the chat never parses a harness's JSON. The Claude adapter's
   readings of the CLI (`docs/features/agent-chat/claude-stream.md`): it reports permission mode `manual` as
-  `default`, no event reports effort, `total_cost_usd` is cumulative per process, and only a `control_request`
-  interrupt keeps the process alive (SIGINT ends it). Listing a folder's saved sessions and reading one into chat
+  `default`, no event reports effort, `total_cost_usd` is cumulative per process, only a `control_request`
+  interrupt keeps the process alive (SIGINT ends it), and a message written during a tool turn folds into that turn
+  with no `result` of its own, so the adapter tracks each message by its client `uuid` (§ Message lifecycle) rather
+  than counting results. Listing a folder's saved sessions and reading one into chat
   entries are adapter calls too (`listSessions`, `history`), so Claude's transcript format stays in
   `src/main/claude-code/transcripts.ts`. That format is undocumented and was measured on the installed CLI, so a
   resume that lists nothing or draws raw entries starts with `transcripts.ts` and a fresh look at a transcript's line
