@@ -19,6 +19,8 @@ export interface SavedSession {
   processId: string | null;
   // The row's queued messages not yet sent, oldest first, images included.
   queued: UserMessage[];
+  // The messages returned to the box that the page had not placed, oldest first, images included.
+  returned: UserMessage[];
   // The `AgentStart.controls` the row's last process start passed; {} when the row never started one.
   launchControls: Record<string, string>;
   // The `AgentStart.resume` the row's last process start passed; false when the row never started one.
@@ -44,6 +46,7 @@ type LaterSavedField =
   | 'titles'
   | 'processId'
   | 'queued'
+  | 'returned'
   | 'launchControls'
   | 'launchResume'
   | 'controls'
@@ -98,7 +101,7 @@ function isOptionalProcessId(value: unknown): boolean {
   return value === undefined || value === null || typeof value === 'string';
 }
 
-function isOptionalQueue(value: unknown): boolean {
+function isOptionalMessages(value: unknown): boolean {
   return (
     value === undefined || (Array.isArray(value) && value.every(isSavedMessage))
   );
@@ -154,7 +157,8 @@ function isStoredSession(value: unknown): value is StoredSession {
     typeof value.busy === 'boolean' &&
     (value.titles === undefined || isSessionTitles(value.titles)) &&
     isOptionalProcessId(value.processId) &&
-    isOptionalQueue(value.queued) &&
+    isOptionalMessages(value.queued) &&
+    isOptionalMessages(value.returned) &&
     isOptionalLaunchControls(value.launchControls) &&
     (value.launchResume === undefined ||
       typeof value.launchResume === 'boolean') &&
@@ -191,6 +195,7 @@ function parseSavedSessions(text: string): SavedSessions {
       titles: stored.titles ?? NO_TITLES,
       processId: stored.processId ?? null,
       queued: stored.queued ?? [],
+      returned: stored.returned ?? [],
       launchControls: stored.launchControls ?? {},
       launchResume: stored.launchResume ?? false,
       controls: stored.controls ?? [],

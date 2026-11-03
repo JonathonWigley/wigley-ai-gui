@@ -19,6 +19,7 @@ const TWO_SESSIONS: SavedSessions = {
       titles: { user: null, agent: 'Plan review', firstMessage: 'hi there' },
       processId: 's-alpha-1-1000',
       queued: [],
+      returned: [],
       launchControls: { effort: 'high' },
       launchResume: true,
       controls: [
@@ -41,6 +42,7 @@ const TWO_SESSIONS: SavedSessions = {
       titles: { user: 'Mine', agent: null, firstMessage: null },
       processId: null,
       queued: [{ text: 'next', images: [] }],
+      returned: [{ text: 'returned', images: [] }],
       launchControls: {},
       launchResume: false,
       controls: [],
@@ -62,6 +64,7 @@ const ONE_SESSION: SavedSessions = {
       titles: { user: null, agent: null, firstMessage: 'gamma work' },
       processId: null,
       queued: [],
+      returned: [],
       launchControls: {},
       launchResume: false,
       controls: [],
@@ -122,6 +125,7 @@ describe('createOpenSessions', () => {
             launchControls: {},
             launchResume: false,
             queued: [],
+            returned: [],
             controls: [],
             userSetControls: [],
             returnedDrops: [],
@@ -219,6 +223,12 @@ describe('createOpenSessions', () => {
       file: 'userSetControls holding a number',
       text: withSessions([
         { ...TWO_SESSIONS.sessions[0], userSetControls: [1] },
+      ]),
+    },
+    {
+      file: 'returned holding a message whose text is a number',
+      text: withSessions([
+        { ...TWO_SESSIONS.sessions[0], returned: [{ text: 1 }] },
       ]),
     },
     {

@@ -335,6 +335,11 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
         chat.pullBack(sessionId, queuedId);
       }
     });
+    api.channel.handle('returnedPlaced', (sessionId, returnedIds) => {
+      if (!ignoredInPreview('returnedPlaced', sessionId)) {
+        chat.returnedPlaced(sessionId, returnedIds);
+      }
+    });
     api.channel.handle('sendNow', (sessionId, queuedId) => {
       if (!ignoredInPreview('sendNow', sessionId)) {
         chat.sendNow(sessionId, queuedId);

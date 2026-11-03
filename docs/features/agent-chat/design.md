@@ -291,6 +291,12 @@ interview on 2026-10-23; this file is the record of both.
     that comes live after it, and one the replay left held when the process closes. The saved record keeps the ids
     returned for its process, so a replay of a drop already returned logs `dropped message <id> already returned` and
     returns nothing.
+  - **Returned messages**: every return (a pull-back, an interrupt, a clear, a process end, a drop) stays with the row
+    until the page puts it in the box, because the `returned` message is lost when no page or tab hears it, as during
+    a re-attach's replay at startup. Main holds each message in `ChatSessionState.returned` (each with an id of its
+    own) and in the saved record. The page puts them in the box when the `returned` message arrives, or when the tab
+    mounts for those its state holds, then calls `returnedPlaced`, and main drops them from the state and the record.
+    A quit before that keeps them: the relaunched row returns them to the box again.
   - **Pulling back**: a pending row is a cursor stop after the last entry, so `G` and a following focus land on the
     newest pending row when any exist. Three routes pull a message back: Enter on the focused row, a click on it, and
     `<Leader>cp` in the box, which pulls back the newest unsent. Each logs `pulling back a pending message in
@@ -301,7 +307,7 @@ interview on 2026-10-23; this file is the record of both.
     <session>` for a refused send. A pull-back for a message no longer queued (already written to the agent, returned,
     or pulled back) does nothing and logs `queued message <id> no longer queued`; one for a sent row, which the agent
     already holds, does nothing and logs `queued message <id> already sent`. A `returned` for a session with no tab logs
-    `returned for unknown session <id> ignored`. The key log lines are `focused pending message` for `j` / `k` onto a pending row and
+    `returned for unknown session <id> ignored`, and main holds it for the tab's mount. The key log lines are `focused pending message` for `j` / `k` onto a pending row and
     `following the latest entry` for `G`.
   - **Interrupt and exit**: Ctrl+C returns every unsent queued message, oldest first, then interrupts the running
     turn; the oldest ends at the top of the box. A sent row stays: Claude's interrupt cancels nothing it holds, so the
@@ -317,7 +323,7 @@ interview on 2026-10-23; this file is the record of both.
   clock's total at the save, `docs/features/session-clock/design.md`; a file without it reads as 0), its last process's
   id, the controls and resume flag that process launched with, the controls the row holds and the ids of those the user
   picked, the entry ids of the messages that process dropped which already went back to the box, and its unsent queued
-  messages with their images (a file without any of these reads as none), in row order, with the selected
+  messages and the returned messages the page has not placed, with their images (a file without any of these reads as none), in row order, with the selected
   row (null when it names no row chat still holds), whether a message was ever sent, and whether a turn was running. A
   new, resumed or launched session is saved only after its process starts, so a start that fails leaves no record. Only
   the user closing its row removes a record; quit, `install-app`, a process exit and a chat plugin reload keep it.
@@ -327,7 +333,7 @@ interview on 2026-10-23; this file is the record of both.
   and leaves each row resting. On start, chat opens a row for each record, in order and unselected, then
   selects the saved row. A row whose process the host still holds is **re-attached**: the harness replays its pipe
   log, the row shows the transcript up to that process's start and then the process's own entries, and it carries on
-  live (`session-host/design.md` § Re-attach). Every other row **rests**, holding no process. A record whose host id is already open, or whose open throws, is skipped and logged; a skipped record that holds queued messages stays in the saved file, so the next start tries it again. A restored
+  live (`session-host/design.md` § Re-attach). Every other row **rests**, holding no process. A record whose host id is already open, or whose open throws, is skipped and logged; a skipped record that holds queued or returned messages stays in the saved file, so the next start tries it again. A restored
   row that was ever sent to has its earlier conversation read from its transcript once, on the first show of its Chat
   tab or the first send, whichever comes first, while its profile is in the settings, so start reads no transcripts; a
   send reads it before starting the process, so the read never holds the new turn. The first message sent in a resting

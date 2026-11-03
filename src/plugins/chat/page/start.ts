@@ -27,7 +27,6 @@ import {
   chatCommandHandlers,
   createPermissionActions,
   fillComposer,
-  putBack,
 } from './chat-commands';
 import { createCloseConfirm, createReasonBox } from './chat-dialogs';
 import { createChatLayouts } from './chat-layouts';
@@ -188,20 +187,6 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       timers: services.timers,
       clock: services.clock,
       drops: api.drops,
-    });
-    // Messages pulled back out of a session's queue go back into its box.
-    api.channel.on('returned', ({ sessionId, messages }) => {
-      const session = view.session(sessionId);
-      if (session !== undefined) {
-        if (putBack({ tabs: view }, session, messages)) {
-          services.log(
-            'chat',
-            `pulled back ${messages.length} message(s) in ${session.name}`,
-          );
-        }
-        return;
-      }
-      services.log('chat', `returned for unknown session ${sessionId} ignored`);
     });
     api.layouts.show<ChatLayout>({
       defaultLayout,

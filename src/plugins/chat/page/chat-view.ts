@@ -31,7 +31,7 @@ import {
   createAttachments,
   takeChatFiles,
 } from './attachments';
-import { pullBackQueued } from './chat-commands';
+import { placeReturned, pullBackQueued } from './chat-commands';
 import type { CloseConfirm } from './chat-dialogs';
 import type { ChatLayouts, SurfaceKitDeps } from './chat-layouts';
 import {
@@ -204,7 +204,8 @@ interface HeldTab {
 // added or removed draws every tab's composer again, each box keeping its
 // text, vim mode and focus. Each session's row shows what its
 // process does (needs you, working) and, once idle, a turn the user has not
-// seen end (done, error).
+// seen end (done, error). Messages main returned go into their session's box:
+// as they arrive, and those main still holds when a tab mounts.
 export function mountChatView(deps: ChatViewDeps): ChatTabs {
   const { log } = deps;
   const tabs = new Map<string, HeldTab>();
@@ -268,6 +269,11 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       beforeClose: (closing) => mayClose(closing, deps),
     });
     tabs.set(state.sessionId, tab);
+    placeReturned(
+      { tabs: view, channel, log },
+      state.sessionId,
+      state.returned,
+    );
     if (pendingReveal === tab.sessionId) {
       showRevealed(tab);
     }
@@ -285,6 +291,9 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
   // `sessionStarted` is already held, and adding it again changes nothing.
   const { channel } = deps;
   channel.on('sessionStarted', add);
+  channel.on('returned', ({ sessionId, messages }) =>
+    placeReturned({ tabs: view, channel, log }, sessionId, messages),
+  );
   channel.on('entry', ({ sessionId, entry }) => {
     const tab = heldFor('entry', sessionId);
     if (tab !== undefined) {
@@ -453,7 +462,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       ? undefined
       : sessionOf(tab, tab.box, deps.composerParts);
 
-  return {
+  const view: ChatTabs = {
     reveal(sessionId) {
       pendingReveal = sessionId;
       const tab = tabs.get(sessionId);
@@ -473,6 +482,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       asSession([...tabs.values()].find((tab) => tab.box === editor)),
     markSent: clearUnseen,
   };
+  return view;
 }
 
 // Draws the tab's composer through the chat layout in place of its last draw,

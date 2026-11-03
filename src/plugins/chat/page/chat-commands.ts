@@ -17,6 +17,7 @@ import type {
   AppSlashCommand,
   ChatChannel,
   SlashCommandContext,
+  ReturnedMessage,
 } from '../contract';
 import type { chatManifest } from '../manifest';
 import type { CloseConfirm, ReasonBox } from './chat-dialogs';
@@ -469,6 +470,42 @@ export function putBack(
     session.attachments.add(image);
   }
   return true;
+}
+
+// Puts messages main returned into their session's box and tells main they are
+// placed. Main keeps any for a session with no tab, which its tab reads at mount.
+export function placeReturned(
+  deps: Pick<ChatCommandDeps, 'tabs' | 'channel' | 'log'>,
+  sessionId: string,
+  messages: readonly ReturnedMessage[],
+) {
+  if (messages.length === 0) {
+    return;
+  }
+  const session = deps.tabs.session(sessionId);
+  if (session === undefined) {
+    deps.log('chat', `returned for unknown session ${sessionId} ignored`);
+    return;
+  }
+  if (!putBack(deps, session, messages)) {
+    return;
+  }
+  deps.log(
+    'chat',
+    `pulled back ${messages.length} message(s) in ${session.name}`,
+  );
+  void deps.channel
+    .invoke(
+      'returnedPlaced',
+      sessionId,
+      messages.map((message) => message.id),
+    )
+    .catch((error: unknown) =>
+      deps.log(
+        'chat',
+        `returned messages in ${session.name} not reported placed: ${errorText(error)}`,
+      ),
+    );
 }
 
 // Replaces the session's draft with `text`, leaving its attached images, then

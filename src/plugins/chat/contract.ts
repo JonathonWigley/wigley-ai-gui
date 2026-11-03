@@ -65,6 +65,12 @@ export interface QueuedMessage extends UserMessage {
   sentEntryId: string | null;
 }
 
+// A message on its way back into its session's box; `id` is unique within the
+// session.
+export interface ReturnedMessage extends UserMessage {
+  id: string;
+}
+
 // `sessionId` is the sessions plugin's id for the row. A session's row lasts
 // until the user closes it, across a relaunch, where it comes back resting
 // with its earlier conversation read again; a closed session's state is
@@ -88,6 +94,9 @@ export interface ChatSessionState {
   // The messages waiting for the running turn to end, and those sent now not
   // yet taken in, oldest first; [] while nothing waits.
   queued: QueuedMessage[];
+  // The messages returned to the box that the page has not placed yet, oldest
+  // first; a page mounting the session's tab puts them in its box.
+  returned: ReturnedMessage[];
   // The name of the clone's top folder holding `projectDir`; the folder's own
   // name outside a clone, and until the first read.
   repo: string;
@@ -168,6 +177,9 @@ export interface ChatChannel extends ChannelShape {
     // Takes the queued message out of the queue, arriving as `returned`; does
     // nothing for one already written to the agent or sent now.
     pullBack(sessionId: string, queuedId: string): void;
+    // The page put these messages from `returned` into the session's box, so
+    // main holds them no longer.
+    returnedPlaced(sessionId: string, returnedIds: string[]): void;
     // Writes the queued message to the agent at once, ahead of the rest of the
     // queue; its row stays, arriving in `queued` with `sentEntryId` set, until
     // the agent takes it in. Does nothing for one already written or sent now.
@@ -210,8 +222,9 @@ export interface ChatChannel extends ChannelShape {
     // turn ends.
     branch: { sessionId: string; repo: string; branch: string | null };
     // Messages taken out of the queue, or written and never taken in by the
-    // agent, in the order written, for the page to put back into the box.
-    returned: { sessionId: string; messages: UserMessage[] };
+    // agent, in the order written, for the page to put back into the box. Main
+    // holds each in `ChatSessionState.returned` until `returnedPlaced`.
+    returned: { sessionId: string; messages: ReturnedMessage[] };
     // The page the user opens to finish sign-in `id`.
     logInLink: { id: number; profile: string; url: string };
     // `status` is null when the status could not be read; `error` is null

@@ -43,6 +43,7 @@ import {
   type PermissionAnswer,
   type QueuedMessage,
   type ResumeRequest,
+  type ReturnedMessage,
   type StartRequest,
 } from '../contract';
 import type { ArchivedSessions } from './archived-sessions';
@@ -102,13 +103,14 @@ export interface ChatSessions {
   // an image chat would refuse to attach.
   launch(request: LaunchRequest): string;
   // Opens a row for each saved session in order, unselected, with its saved
-  // titles and queued messages, then activates the saved selection. A row whose
+  // titles, queued messages and returned messages, then activates the saved selection. A row whose
   // process `hosted` lists running in the current host re-attaches to it; any
   // other row rests, unheld when the host may still run its process (`hosted`
   // null: the host list is unknown). With the list unknown a saved busy turn may
   // still run, so it adds no quit-during-turn notice. A record already open in
-  // the app is skipped, and stays saved while it holds queued messages, until a
-  // row chat holds opens under its host id and takes them over behind its own.
+  // the app is skipped, and stays saved while it holds queued or returned
+  // messages, until a row chat holds opens under its host id and takes them over
+  // behind its own.
   // Saving starts here: nothing is saved before it runs.
   restore(
     saved: SavedSessions,
@@ -184,6 +186,9 @@ export interface ChatSessions {
   // Takes the queued message out of the queue and returns it; logs and sends
   // nothing for one no longer queued or already sent now.
   pullBack(sessionId: string, queuedId: string): void;
+  // The page put these returned messages into the session's box: the row holds
+  // and saves them no longer.
+  returnedPlaced(sessionId: string, returnedIds: readonly string[]): void;
   // Writes the queued message at once and keeps its row, marked with the
   // entry id the write returned, until that entry arrives; logs and sends
   // nothing for one no longer queued or already sent now, and a write that
@@ -277,6 +282,8 @@ interface HeldSession {
   noticeCount: number;
   // Messages ever queued in this row, numbering their ids.
   queuedCount: number;
+  // Messages ever returned to the box in this row, numbering their ids.
+  returnedCount: number;
   // Messages ever queued, or written with no queued row, in this row,
   // stamping each with its place in the order written.
   heldCount: number;
@@ -384,6 +391,7 @@ function copyState(state: ChatSessionState): ChatSessionState {
     controls: [...state.controls],
     commands: [...state.commands],
     queued: [...state.queued],
+    returned: [...state.returned],
   };
 }
 
@@ -424,8 +432,8 @@ function confirmPicks(
   }
 }
 
-function userMessageOf(queued: QueuedMessage): UserMessage {
-  return { text: queued.text, images: queued.images };
+function userMessageOf(held: UserMessage): UserMessage {
+  return { text: held.text, images: held.images };
 }
 
 function rowOrderOf(session: HeldSession, row: QueuedMessage): number {
@@ -464,6 +472,7 @@ function savedSessionOf(
     titles,
     processId: session.processId,
     queued: session.state.queued.filter(isUnsent).map(userMessageOf),
+    returned: session.state.returned.map(userMessageOf),
     launchControls: session.launchControls,
     launchResume: session.launchResume,
     controls: session.state.controls,
@@ -502,7 +511,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   // before they are read; it stops for good at `detachAll`.
   let isRestored = false;
   let isDetached = false;
-  // Records the restore skipped that hold queued messages, saved unchanged so
+  // Records the restore skipped that hold queued or returned messages, saved unchanged so
   // the next app start tries them again.
   let skippedRecords: SavedSession[] = [];
   // One object per `addInstructions` call, in registration order.
@@ -709,6 +718,25 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     save();
   }
 
+  // Sends messages back to the page for the box. Each stays in the row's state
+  // and record until the page reports it placed: with no page to hear this send,
+  // the page reads it at mount.
+  function returnToBox(session: HeldSession, messages: readonly UserMessage[]) {
+    const returned = messages.map((message): ReturnedMessage => {
+      session.returnedCount += 1;
+      return {
+        ...userMessageOf(message),
+        id: `returned-${session.returnedCount}`,
+      };
+    });
+    session.state.returned = [...session.state.returned, ...returned];
+    send('returned', {
+      sessionId: session.state.sessionId,
+      messages: returned,
+    });
+    save();
+  }
+
   // Empties the queue and the written messages, and sends every message they
   // held back to the page in the order written, rows sent now or not; sends
   // nothing when both are empty.
@@ -730,7 +758,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       sendQueued(session);
     }
     if (messages.length > 0) {
-      send('returned', { sessionId: session.state.sessionId, messages });
+      returnToBox(session, messages);
     }
   }
 
@@ -744,10 +772,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     }
     session.state.queued = queued.filter((row) => !isUnsent(row));
     sendQueued(session);
-    send('returned', {
-      sessionId: session.state.sessionId,
-      messages: unsent.map(userMessageOf),
-    });
+    returnToBox(session, unsent);
   }
 
   // Writes the oldest queued message not sent now to the agent; false when
@@ -825,12 +850,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       );
       sendQueued(session);
     }
-    send('returned', {
-      sessionId: session.state.sessionId,
-      messages: [message],
-    });
+    returnToBox(session, [message]);
     log('chat', `sent message ${entryId} returned: never taken in`);
-    save();
   }
 
   // The state is dropped first, so every later event for the session is
@@ -1062,6 +1083,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         commands: [],
         running: false,
         queued: [],
+        returned: [],
         repo: path.basename(projectDir),
         branch: null,
       },
@@ -1077,6 +1099,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       permissionCount: 0,
       noticeCount: 0,
       queuedCount: 0,
+      returnedCount: 0,
       heldCount: 0,
       rowOrders: new WeakMap(),
       writtenMessages: new Map(),
@@ -1111,7 +1134,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   }
 
   // The row's own record replaces any skipped one for its host id, and the row
-  // takes over what that record had queued.
+  // takes over the messages that record held.
   function takeOverSkipped(session: HeldSession) {
     const { hostId } = session;
     const records = skippedRecords.filter(
@@ -1120,22 +1143,26 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     skippedRecords = skippedRecords.filter(
       (record) => record.hostSessionId !== hostId,
     );
-    appendSavedQueued(session, records);
+    takeSavedMessages(session, records);
   }
 
-  // Queues what `records` saved, behind any row the session holds.
-  function appendSavedQueued(
+  // Queues what `records` saved, behind any row the session holds, and returns
+  // to the box what they saved as not yet placed.
+  function takeSavedMessages(
     session: HeldSession,
     records: readonly SavedSession[],
   ) {
-    const messages = records.flatMap((record) => record.queued);
-    if (messages.length === 0) {
-      return;
+    const queued = records.flatMap((record) => record.queued);
+    if (queued.length > 0) {
+      for (const message of queued) {
+        appendQueued(session, message);
+      }
+      sendQueued(session);
     }
-    for (const message of messages) {
-      appendQueued(session, message);
+    const returned = records.flatMap((record) => record.returned);
+    if (returned.length > 0) {
+      returnToBox(session, returned);
     }
-    sendQueued(session);
   }
 
   // Reads the row's repo and branch, and sends `branch` when either changed.
@@ -1821,15 +1848,17 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     );
   }
 
-  // A skipped record holding queued messages stays saved, so they are not lost.
+  // A skipped record holding queued or returned messages stays saved, so they
+  // are not lost.
   function keepSkipped(record: SavedSession) {
-    if (record.queued.length === 0) {
+    const heldCount = record.queued.length + record.returned.length;
+    if (heldCount === 0) {
       return;
     }
     skippedRecords.push(record);
     log(
       'chat',
-      `session ${record.hostSessionId} not restored; its ${record.queued.length} queued message(s) stay saved`,
+      `session ${record.hostSessionId} not restored; its ${heldCount} queued or returned message(s) stay saved`,
     );
   }
 
@@ -1841,7 +1870,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     const holder = holding(hostSessionId);
     if (holder !== undefined) {
       log('chat', `session ${hostSessionId} already open; not restored`);
-      appendSavedQueued(holder, [record]);
+      takeSavedMessages(holder, [record]);
       return;
     }
     if (isOpenOnOtherRow(hostSessionId)) {
@@ -1878,7 +1907,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       keepSkipped(record);
       return;
     }
-    appendSavedQueued(session, [record]);
+    takeSavedMessages(session, [record]);
     const entry = hosted?.find((listed) => listed.id === record.processId);
     const runsHere = entry !== undefined && entry.running && entry.current;
     const runsElsewhere =
@@ -2447,7 +2476,18 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         (queued) => queued !== pulled,
       );
       sendQueued(session);
-      send('returned', { sessionId, messages: [userMessageOf(pulled)] });
+      returnToBox(session, [pulled]);
+    },
+    returnedPlaced(sessionId, returnedIds) {
+      const session = held.get(sessionId);
+      if (session === undefined) {
+        log('chat', `returnedPlaced for unknown session ${sessionId} ignored`);
+        return;
+      }
+      session.state.returned = session.state.returned.filter(
+        (message) => !returnedIds.includes(message.id),
+      );
+      save();
     },
     sendNow(sessionId, queuedId) {
       const session = held.get(sessionId);

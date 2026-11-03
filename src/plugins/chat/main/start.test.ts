@@ -395,6 +395,7 @@ describe('chat main part', () => {
     },
     { method: 'loadHistory', args: [] },
     { method: 'pullBack', args: ['queued-1'] },
+    { method: 'returnedPlaced', args: [['returned-1']] },
     { method: 'sendNow', args: ['queued-1'] },
     { method: 'sendAllNow', args: [{ text: 'hi', images: [] }] },
   ])(

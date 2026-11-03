@@ -87,6 +87,7 @@ function session(
     commands: [],
     running,
     queued: [],
+    returned: [],
     repo: 'app',
     branch: 'main',
   };

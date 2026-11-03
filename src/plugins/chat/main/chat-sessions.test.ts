@@ -122,6 +122,7 @@ function record(
     launchControls: {},
     launchResume: false,
     queued: [],
+    returned: [],
     controls: [],
     userSetControls: [],
     returnedDrops: [],
@@ -319,6 +320,20 @@ function setUp(
       messages
         .filter((sent) => sent.message === message)
         .map((sent) => sent.data as ChatChannel['messages'][K]),
+    // Each `returned` sent, with its messages' ids left out.
+    sentReturned: () =>
+      messages
+        .filter((sent) => sent.message === 'returned')
+        .map((sent) => {
+          const data = sent.data as ChatChannel['messages']['returned'];
+          return {
+            sessionId: data.sessionId,
+            messages: data.messages.map(({ text, images }) => ({
+              text,
+              images,
+            })),
+          };
+        }),
   };
 }
 
@@ -484,6 +499,7 @@ describe('createChatSessions', () => {
         commands: [],
         running: false,
         queued: [],
+        returned: [],
         repo: 'app',
         branch: null,
       },
@@ -1608,7 +1624,7 @@ describe('createChatSessions', () => {
 
     test.chat.pullBack(ROW_ID, secondId);
 
-    expect(test.sent('returned')).toEqual([
+    expect(test.sentReturned()).toEqual([
       { sessionId: ROW_ID, messages: [second] },
     ]);
     expect(test.sent('queued').at(-1)).toEqual({
@@ -1632,7 +1648,7 @@ describe('createChatSessions', () => {
 
     test.chat.interrupt(ROW_ID);
 
-    expect(test.sent('returned')).toEqual([
+    expect(test.sentReturned()).toEqual([
       { sessionId: ROW_ID, messages: [first, second] },
     ]);
     expect(test.sent('queued').at(-1)).toEqual({
@@ -1657,7 +1673,7 @@ describe('createChatSessions', () => {
       }
       test.process.events.ended({ code: 0, error: null });
 
-      expect(test.sent('returned')).toEqual([
+      expect(test.sentReturned()).toEqual([
         { sessionId: ROW_ID, messages: [first, second] },
       ]);
       const kinds = test.messages.map((sent) => sent.message);
@@ -1753,7 +1769,7 @@ describe('createChatSessions', () => {
         queued: [{ ...first, id: 'queued-1', sentEntryId: null }],
       },
     ]);
-    expect(test.sent('returned')).toEqual([]);
+    expect(test.sentReturned()).toEqual([]);
   });
 
   it.each([
@@ -1775,7 +1791,10 @@ describe('createChatSessions', () => {
             },
             {
               message: 'returned',
-              data: { sessionId: ROW_ID, messages: [second] },
+              data: {
+                sessionId: ROW_ID,
+                messages: [{ ...second, id: 'returned-1' }],
+              },
             },
           ],
           log: `[chat] sent message ${sentEntryIdOf(test, 1)} returned: never taken in`,
@@ -1793,7 +1812,10 @@ describe('createChatSessions', () => {
           sends: [
             {
               message: 'returned',
-              data: { sessionId: ROW_ID, messages: [message] },
+              data: {
+                sessionId: ROW_ID,
+                messages: [{ ...message, id: 'returned-1' }],
+              },
             },
           ],
           log: '[chat] sent message user-1 returned: never taken in',
@@ -1810,7 +1832,10 @@ describe('createChatSessions', () => {
           sends: [
             {
               message: 'returned',
-              data: { sessionId: ROW_ID, messages: [message] },
+              data: {
+                sessionId: ROW_ID,
+                messages: [{ ...message, id: 'returned-1' }],
+              },
             },
           ],
           log: '[chat] sent message user-9 returned: never taken in',
@@ -1849,7 +1874,7 @@ describe('createChatSessions', () => {
 
     test.chat.interrupt(ROW_ID);
 
-    expect(test.sent('returned')).toEqual([
+    expect(test.sentReturned()).toEqual([
       { sessionId: ROW_ID, messages: [second] },
     ]);
     expect(test.chat.sessions()[0].queued).toEqual([
@@ -1920,7 +1945,7 @@ describe('createChatSessions', () => {
 
       test.process.events.ended({ code: 0, error: null });
 
-      expect(test.sent('returned')).toEqual([
+      expect(test.sentReturned()).toEqual([
         { sessionId: ROW_ID, messages: held },
       ]);
       expect(test.chat.sessions()[0].queued).toEqual([]);
@@ -2650,6 +2675,7 @@ describe('createChatSessions saved sessions', () => {
         titles: { ...NO_TITLES, firstMessage: sent ? 'hi' : null },
         processId: 'uuid-1-1-1000',
         queued: [],
+        returned: [],
         launchControls: {},
         launchResume: false,
         controls: test.chat.sessions()[0].controls,
@@ -3421,6 +3447,7 @@ describe('createChatSessions clear', () => {
           titles: { ...NO_TITLES, firstMessage: 'first' },
           processId: 'uuid-2-2-1000',
           queued: [],
+          returned: [],
           launchControls: { mode: 'auto', model: 'fake-large' },
           launchResume: false,
           controls: test.chat.sessions()[0].controls,
@@ -3494,7 +3521,7 @@ describe('createChatSessions clear', () => {
     await flush();
 
     expect(test.chat.sessions()[0].queued).toEqual([]);
-    expect(test.sent('returned')).toEqual([
+    expect(test.sentReturned()).toEqual([
       { sessionId: ROW_ID, messages: [first, second] },
     ]);
     expect(
@@ -3511,7 +3538,7 @@ describe('createChatSessions clear', () => {
 
     test.chat.clear(ROW_ID);
 
-    expect(test.sent('returned')).toEqual([
+    expect(test.sentReturned()).toEqual([
       { sessionId: ROW_ID, messages: [idleSend, first, second] },
     ]);
     expect(test.chat.sessions()[0].queued).toEqual([]);
@@ -3535,7 +3562,7 @@ describe('createChatSessions clear', () => {
       }
       fresh.events.ended({ code: 0, error: null });
 
-      expect(test.sent('returned')).toEqual([
+      expect(test.sentReturned()).toEqual([
         { sessionId: ROW_ID, messages: [message] },
       ]);
     },
@@ -4062,17 +4089,18 @@ describe('createChatSessions restoring hosted processes', () => {
   });
 
   it.each([
-    { queued: [{ text: 'a', images: [] }], kept: true },
-    { queued: [], kept: false },
+    { queued: [{ text: 'a', images: [] }], returned: [], kept: true },
+    { queued: [], returned: [{ text: 'b', images: [] }], kept: true },
+    { queued: [], returned: [], kept: false },
   ])(
-    'restore_SkippedRecordWithQueued_StaysSaved given $queued.length queued',
-    ({ queued, kept }) => {
+    'restore_SkippedRecordHoldingMessages_StaysSaved given $queued.length queued, $returned.length returned',
+    ({ queued, returned, kept }) => {
       const test = setUp();
       test.chat.sessionConnected(connected('row-relay', 'host-a'));
 
       test.chat.restore(
         {
-          sessions: [record('host-a', { queued }), record('host-b')],
+          sessions: [record('host-a', { queued, returned }), record('host-b')],
           selectedHostSessionId: null,
         },
         [],
@@ -4083,10 +4111,11 @@ describe('createChatSessions restoring hosted processes', () => {
         kept ? ['host-b', 'host-a'] : ['host-b'],
       );
       const line =
-        '[chat] session host-a not restored; its 1 queued message(s) stay saved';
+        '[chat] session host-a not restored; its 1 queued or returned message(s) stay saved';
       expect(test.logged.includes(line)).toBe(kept);
       if (kept) {
         expect(saved[1].queued).toEqual(queued);
+        expect(saved[1].returned).toEqual(returned);
       }
     },
   );
@@ -4095,14 +4124,18 @@ describe('createChatSessions restoring hosted processes', () => {
     { given: 'the start succeeding', startFails: false },
     { given: 'the start throwing', startFails: true },
   ])(
-    'restore_SkippedRecord_ANewHeldRowTakesOverItsQueued given $given',
+    'restore_SkippedRecord_ANewHeldRowTakesOverItsMessages given $given',
     async ({ startFails }) => {
       const test = setUp();
       const hostId = PAST_ONE.sessionId;
       const queued = [{ text: 'saved', images: [] }];
+      const returned = [{ text: 'not placed', images: [] }];
       test.chat.sessionConnected(connected('row-relay', hostId));
       test.chat.restore(
-        { sessions: [record(hostId, { queued })], selectedHostSessionId: null },
+        {
+          sessions: [record(hostId, { queued, returned })],
+          selectedHostSessionId: null,
+        },
         [],
       );
       test.chat.sessionEnded('row-relay');
@@ -4125,8 +4158,10 @@ describe('createChatSessions restoring hosted processes', () => {
       expect(test.sent('queued')[0].queued.map((row) => row.text)).toEqual([
         'saved',
       ]);
+      expect(test.sentReturned()[0].messages).toEqual(returned);
       const saved = test.saved.last()?.sessions ?? [];
       expect(saved.map((each) => each.hostSessionId)).toEqual([hostId]);
+      expect(saved[0].returned).toEqual(returned);
       if (startFails) {
         expect(test.chat.sessions()).toEqual([]);
         expect(saved[0].queued).toEqual(queued);
@@ -4335,7 +4370,7 @@ describe('createChatSessions attaching', () => {
       await flush();
       dropTimes(attachedOf(test)[0].events, live);
 
-      expect(test.sent('returned')).toEqual(
+      expect(test.sentReturned()).toEqual(
         Array.from({ length: returned }, () => ({
           sessionId: ROW_ID,
           messages: [WRITTEN_BEFORE_QUIT],
@@ -4344,6 +4379,100 @@ describe('createChatSessions attaching', () => {
       expect(test.saved.last()?.sessions[0].returnedDrops).toEqual(['user-1']);
     },
   );
+
+  it.each([
+    {
+      path: 'a pull-back',
+      returns: (test: Awaited<ReturnType<typeof started>>) =>
+        test.chat.pullBack(ROW_ID, 'queued-1'),
+      texts: ['first'],
+    },
+    {
+      path: 'an interrupt',
+      returns: (test: Awaited<ReturnType<typeof started>>) =>
+        test.chat.interrupt(ROW_ID),
+      texts: ['first', 'second'],
+    },
+    {
+      path: 'a clear',
+      returns: (test: Awaited<ReturnType<typeof started>>) =>
+        test.chat.clear(ROW_ID),
+      texts: ['first', 'second'],
+    },
+    {
+      path: 'the process ending',
+      returns: (test: Awaited<ReturnType<typeof started>>) =>
+        test.process.events.ended({ code: 0, error: null }),
+      texts: ['first', 'second'],
+    },
+    {
+      path: 'a drop',
+      returns: (test: Awaited<ReturnType<typeof started>>) =>
+        test.process.events.messageDropped('user-9', {
+          text: 'dropped',
+          images: [],
+        }),
+      texts: ['dropped'],
+    },
+  ])(
+    'returned_EveryPath_HeldAndSavedUntilThePagePlacesIt: $path',
+    async ({ returns, texts }) => {
+      const test = await started();
+      test.chat.restore({ sessions: [], selectedHostSessionId: null }, []);
+      queueTwo(test);
+
+      returns(test);
+
+      const heldTexts = () =>
+        test.chat.sessions()[0].returned.map((held) => held.text);
+      const savedTexts = () =>
+        test.saved.last()?.sessions[0].returned.map((held) => held.text);
+      expect(heldTexts()).toEqual(texts);
+      expect(savedTexts()).toEqual(texts);
+
+      test.chat.returnedPlaced(ROW_ID, [
+        test.chat.sessions()[0].returned[0].id,
+      ]);
+
+      expect(heldTexts()).toEqual(texts.slice(1));
+      expect(savedTexts()).toEqual(texts.slice(1));
+    },
+  );
+
+  it('returned_DropInReplayAcrossRelaunches_HeldUntilPlacedThenGone', async () => {
+    const relaunch = async (saved: SavedSession) => {
+      const test = setUp();
+      test.harness.scriptAttach('p1', {
+        outcome: 'process',
+        turns: 0,
+        replay: (events) =>
+          events.messageDropped('user-1', WRITTEN_BEFORE_QUIT),
+      });
+      restoreOne(test, saved, [hostedP1()]);
+      await flush();
+      return test;
+    };
+
+    // No page heard the first return; the app quits before one places it.
+    const noPage = await relaunch(hostedRecord());
+    const quitRecord = noPage.saved.last()?.sessions[0];
+    expect(quitRecord?.returned).toEqual([WRITTEN_BEFORE_QUIT]);
+    expect(quitRecord?.returnedDrops).toEqual(['user-1']);
+
+    // The next relaunch holds it once, though the replay finds the drop again.
+    const held = await relaunch(quitRecord as SavedSession);
+    const [{ id, ...message }] = held.chat.sessions()[0].returned;
+    expect(message).toEqual(WRITTEN_BEFORE_QUIT);
+    expect(held.chat.sessions()[0].returned).toHaveLength(1);
+
+    // The page places it, and it never comes back.
+    held.chat.returnedPlaced(ROW_ID, [id]);
+    const placedRecord = held.saved.last()?.sessions[0];
+    expect(placedRecord?.returned).toEqual([]);
+    const after = await relaunch(placedRecord as SavedSession);
+    expect(after.chat.sessions()[0].returned).toEqual([]);
+    expect(after.sent('returned')).toEqual([]);
+  });
 
   it('startProcess_NewProcess_ForgetsTheOldProcessesDrops', async () => {
     const test = setUp();
@@ -4354,7 +4483,7 @@ describe('createChatSessions attaching', () => {
     await flush();
     test.harness.processes[0].events.messageDropped('user-1', message);
 
-    expect(test.sent('returned')).toEqual([
+    expect(test.sentReturned()).toEqual([
       { sessionId: ROW_ID, messages: [message] },
     ]);
   });
@@ -4517,7 +4646,7 @@ describe('createChatSessions attaching', () => {
     restoreOne(test, hostedRecord({ queued }), [hostedP1()]);
     await flush();
 
-    expect(test.sent('returned')).toEqual([]);
+    expect(test.sentReturned()).toEqual([]);
     expect(test.chat.sessions()[0].queued.map((row) => row.text)).toEqual([
       'a',
     ]);
@@ -4865,7 +4994,7 @@ describe('createChatSessions stopAll', () => {
     expect(test.process.calls).toEqual([{ method: 'kill' }]);
     expect(test.announced).toEqual([]);
     expect(test.marked).toEqual([]);
-    expect(test.sent('returned')).toEqual([
+    expect(test.sentReturned()).toEqual([
       { sessionId: ROW_ID, messages: [queued] },
     ]);
     expect(noticesOf(test).map((notice) => notice.text)).toEqual([
