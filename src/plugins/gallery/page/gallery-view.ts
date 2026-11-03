@@ -1,7 +1,7 @@
 import './gallery.css';
 import type { Timers } from '../../../contracts/ambient';
 import type { Disposable } from '../../../contracts/disposable';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type { ResizeTarget } from '../../../contracts/panes';
 import type { Platform } from '../../../contracts/platform';
 import type { ShownLayouts } from '../../../contracts/plugin';
@@ -75,13 +75,16 @@ interface KeptHScrollers {
 // and every section again in the new layouts, with fresh samples, at the same
 // scroll position. `resizeTarget` is the split sample the last draw made,
 // which the resize keys move while the mode shows; each `setLayouts` makes a
-// new one, so the caller reads it again after.
+// new one, so the caller reads it again after. `dispose` disposes the HScroller
+// samples' scrollers and observers and the split sample the last draw made; a
+// second `dispose` does nothing.
 export interface GalleryView {
   element: HTMLElement;
   sheet: HTMLElement;
   showTransparency(overridden: Transparency): void;
   setLayouts(shown: ShownLayouts<Layout>): void;
   resizeTarget(): ResizeTarget;
+  dispose(): void;
 }
 
 // The transparency override in force, null when the setting decides.
@@ -168,6 +171,11 @@ export function createGalleryView(
       }
       return kept.split;
     },
+    dispose() {
+      disposeHScrollers(keptHScrollers);
+      kept.split?.dispose();
+      kept.split = null;
+    },
   };
 }
 
@@ -178,7 +186,7 @@ function sectionSpecs(
   platform: Platform,
   splitDeps: SplitSampleDeps,
   kept: KeptSplit,
-  hScrollers: { log: Log; kept: KeptHScrollers },
+  hScrollers: { log: PluginLog; kept: KeptHScrollers },
 ): SectionSpec[] {
   return [
     section('Materials', materialsCells),
@@ -593,15 +601,19 @@ function splitSample(deps: SplitSampleDeps, kept: KeptSplit): HTMLElement {
   return split.element;
 }
 
-// Fresh HScroller samples of Tags; they dispose what `kept` holds and keep
-// their own scrollers and observers there. Each sample, once it has a width,
-// refreshes and logs its chevron state:
-// `[gallery] hscroller <caption>: overflow <bool> back <bool> forward <bool>`.
-function hScrollerCells(log: Log, kept: KeptHScrollers): SampleCell[][] {
+function disposeHScrollers(kept: KeptHScrollers) {
   for (const disposable of kept.disposables) {
     disposable.dispose();
   }
   kept.disposables = [];
+}
+
+// Fresh HScroller samples of Tags; they dispose what `kept` holds and keep
+// their own scrollers and observers there. Each sample, once it has a width,
+// refreshes and logs its chevron state:
+// `[gallery] hscroller <caption>: overflow <bool> back <bool> forward <bool>`.
+function hScrollerCells(log: PluginLog, kept: KeptHScrollers): SampleCell[][] {
+  disposeHScrollers(kept);
   // `revealed` is the 1-based item revealed before the sample has a layout.
   const sample = (caption: string, count: number, revealed?: number) => {
     const scroller = createHScroller();
@@ -617,10 +629,7 @@ function hScrollerCells(log: Log, kept: KeptHScrollers): SampleCell[][] {
       }
       observer.disconnect();
       scroller.refresh();
-      log(
-        'gallery',
-        `hscroller ${caption}: ${hScrollerState(scroller.element)}`,
-      );
+      log(`hscroller ${caption}: ${hScrollerState(scroller.element)}`);
     });
     observer.observe(scroller.element);
     kept.disposables.push(scroller, { dispose: () => observer.disconnect() });

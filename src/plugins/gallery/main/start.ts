@@ -12,7 +12,7 @@ type GalleryApi = MainApi<typeof galleryManifest, ChannelShape>;
 export const galleryMainPart: MainPart<typeof galleryManifest> = {
   manifest: galleryManifest,
   start(api: GalleryApi) {
-    const layouts = api.layouts.register({ layoutTypes });
-    return { commands: {}, dispose: () => layouts.dispose() };
+    api.layouts.register({ layoutTypes });
+    return { commands: {} };
   },
 };

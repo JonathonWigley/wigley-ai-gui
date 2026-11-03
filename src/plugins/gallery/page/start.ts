@@ -3,7 +3,7 @@ import type { ScrollStep } from '../../../contracts/editor';
 import type { PageApi, PagePart } from '../../../contracts/plugin';
 import { scrollContent, scrollText } from '../../../shared/content-scroll';
 import { textLineHeightPx } from '../../../shared/page/text-line';
-import type { KeysPageExports } from '../../keys/contract';
+import { keysPageKey } from '../../keys/contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { Layout } from '../layouts/layout';
@@ -32,7 +32,7 @@ export const galleryPagePart: PagePart<typeof galleryManifest> = {
   manifest: galleryManifest,
   start(api: GalleryApi) {
     const { log } = api.services;
-    const keys = api.dependency<KeysPageExports>('keys');
+    const keys = api.dependency(keysPageKey);
     const view = createGalleryView(
       {
         platform: api.platform,
@@ -93,10 +93,11 @@ export const galleryPagePart: PagePart<typeof galleryManifest> = {
         direction,
         textLineHeightPx(view.sheet),
       );
-      log('gallery', scrollText('the gallery', step, direction, scroll));
+      log(scrollText('the gallery', step, direction, scroll));
     };
 
     return {
+      dispose: () => view.dispose(),
       commands: {
         showMode() {
           if (!mode.isShown()) {
@@ -107,25 +108,25 @@ export const galleryPagePart: PagePart<typeof galleryManifest> = {
           const next = nextTransparency(api.transparency.overridden());
           api.transparency.override(next);
           view.showTransparency(next);
-          log('gallery', `transparency ${next}`);
+          log(`transparency ${next}`);
         },
         swapShellLayout() {
           if (swappedLayout === null) {
             swappedLayout = api.shell.setLayout(testShellLayout);
-            log('gallery', 'shell layout swapped');
+            log('shell layout swapped');
             return;
           }
           swappedLayout.dispose();
           swappedLayout = null;
-          log('gallery', 'shell layout restored');
+          log('shell layout restored');
         },
         scrollTop() {
           scrollSheetTo(0);
-          log('gallery', 'scrolled to the top');
+          log('scrolled to the top');
         },
         scrollEnd() {
           scrollSheetTo(view.sheet.scrollHeight);
-          log('gallery', 'scrolled to the end');
+          log('scrolled to the end');
         },
         lineDown: () => scrollSheet('line', 1),
         lineUp: () => scrollSheet('line', -1),
