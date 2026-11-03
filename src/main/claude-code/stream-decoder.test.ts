@@ -154,7 +154,8 @@ const taskStarted = (
     task_id: taskId,
     tool_use_id: toolUseId,
     description: 'Sleep 6 seconds in background',
-    is_backgrounded: true,
+    // The measured subagent-owned line carries `false`.
+    is_backgrounded: parentTaskId === undefined,
     ...(parentTaskId === undefined
       ? {}
       : { parent_task_id: parentTaskId, owned_by_subagent: true }),
@@ -1501,6 +1502,23 @@ describe('createStreamDecoder', () => {
         taskBegan('bvrvtgapv'),
         TURN_ENDED,
         taskEnded('bvrvtgapv', 'done'),
+      ],
+    },
+    {
+      case: 'task outlives its subagent',
+      lines: [
+        agentCall('a1'),
+        launchReceipt('a1'),
+        taskStarted('a8e9e7aad968da282', 'a1', 'local_agent'),
+        taskStarted('bpdumb7hy', 'tb2', 'local_bash', 'a8e9e7aad968da282'),
+        taskNotification('a1', 'completed', 'a8e9e7aad968da282'),
+        taskNotification('tb2', 'completed', 'bpdumb7hy'),
+      ],
+      expected: [
+        spawned('a1'),
+        taskBegan('bpdumb7hy', 'a1'),
+        finished('a1', 'done'),
+        taskEnded('bpdumb7hy', 'done'),
       ],
     },
     {
