@@ -985,7 +985,8 @@ function startApp() {
         serveVisual(source),
       );
       createWindow(inputs, store, userConfig);
-      // After createWindow's quit tasks, so the parts dispose before it.
+      // Starts with createWindow's quit tasks, ahead of every part but the first
+      // to stop; `current` still answers after it, for the parts still stopping.
       onQuit(() => store.dispose());
       app.on('activate', () => mainWindow?.show());
     })

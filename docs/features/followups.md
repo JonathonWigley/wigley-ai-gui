@@ -44,8 +44,8 @@ Core seams that most items below assume.
   plugins the user switches on and off rather than settings inside the plugin they change. Builds on
   disposable registrations landed (plan-foundation-sweeps).
 - **Quit does not hold for a plugin's suspending dispose** — *agent-ready*: quit runs `stopAll` on the main parts
-  (`src/main/main.ts`), but a live quit does not wait for it, so a `dispose` that really suspends (chat's, forms' on an
-  unfinished write) is cut off and the parts after it never stop. Hold the quit until `stopAll` settles, and prove it
+  (`src/main/main.ts`), but a live quit does not wait for it, so a `dispose` that really suspends (forms' on an
+  unfinished layout write, sessions' `relay.close`) is cut off and the parts after it never stop. Hold the quit until `stopAll` settles, and prove it
   in a live quit, which a drive run cannot show because it holds the quit itself. Two gaps ride on the same path:
   `stop` and `stopAll` have no guard against running together, and on Windows zeroing the alert counts at quit may
   call `setOverlayIcon` on a destroyed window, so `stopAll` would reject.
@@ -566,8 +566,8 @@ because the earlier items rewrite many of these tests anyway.
 - **Disposed services still start work** — *agent-ready*: after `dispose`, the agent form service's `startSession` and
   the layout preview's `show` can still start a session or open a preview, because neither checks that it was disposed. Make a disposed service refuse, as `track` does for a registration made after the stop.
 - **A throwing teardown step skips the rest** — *agent-ready*: a tool-session end in the live tool list
-  (`src/plugins/sessions/main/mcp`) skips the remaining ends and the `list_changed` notice; chat's throwing `kill` skips
-  `cancelRunning` and leaves the end-wait resolved; a throwing `tearDownTab` step skips the rest; and
+  (`withdrawContribution`, `src/plugins/sessions/main/session-list.ts`) skips the remaining ends and the `list_changed`
+  notice; chat's throwing `kill` skips the remaining kills, `cancelRunning` and resolving the end-waits; a throwing `tearDownTab` step skips the rest; and
   `EditorBoxes.dispose` stops at an editor whose `destroy` throws. Run the remaining steps and rethrow the first
   error, the way `Registrations.dispose` does.
 - **A viewport-sized wide visual ends one scrollbar tall after it grows** — a visual whose root follows the viewport
