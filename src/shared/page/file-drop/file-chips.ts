@@ -16,7 +16,10 @@ const WHITESPACE = /\s/;
 const LINE_BREAK = /[\r\n]/;
 
 // Every absolute path of two or more segments in `text`, left to right: a
-// double-quoted span on one line, or a run of text up to whitespace or a quote.
+// double-quoted span on one line, or a run of text up to whitespace or a quote
+// that holds no quote. A quote opens a span wherever it stands, except inside a
+// run that began as an absolute path: there it belongs to the path, and the
+// path draws no chip.
 export function fileChipsIn(text: string, paths: Paths): FileChipRange[] {
   const chips: FileChipRange[] = [];
   let index = 0;
@@ -39,9 +42,10 @@ export function fileChipsIn(text: string, paths: Paths): FileChipRange[] {
         index += 1;
       }
     } else {
-      const end = tokenEnd(text, index);
-      const path = text.slice(index, end).replace(TRAILING_PUNCTUATION, '');
-      if (isChipPath(path, paths)) {
+      const end = tokenEnd(text, index, paths);
+      const token = text.slice(index, end);
+      const path = token.replace(TRAILING_PUNCTUATION, '');
+      if (!token.includes('"') && isChipPath(path, paths)) {
         chips.push({
           from: index,
           to: index + path.length,
@@ -57,14 +61,17 @@ export function fileChipsIn(text: string, paths: Paths): FileChipRange[] {
 
 // `filePaths` as text to insert after `charBefore`: joined by spaces, each
 // quoted when an unquoted chip would not read it whole, and spaced off a
-// character before it that is not whitespace.
+// character before it that is not whitespace. A path holding a quote goes in
+// unquoted and reads back as no chip. The caller spaces the text off the
+// character after it.
 export function insertionText(
   filePaths: readonly string[],
   charBefore: string,
 ): string {
   const written = filePaths.map((path) => {
     const needsQuotes =
-      WHITESPACE.test(path) || TRAILING_PUNCTUATION.test(path);
+      !path.includes('"') &&
+      (WHITESPACE.test(path) || TRAILING_PUNCTUATION.test(path));
     return needsQuotes ? `"${path}"` : path;
   });
   const needsLeadingSpace = charBefore !== '' && !WHITESPACE.test(charBefore);
@@ -85,14 +92,17 @@ function closingQuoteAfter(text: string, open: number): number {
   return -1;
 }
 
-function tokenEnd(text: string, start: number): number {
+// The end of the unquoted run at `start`: the next whitespace, or the first
+// quote before it when the run before that quote is no absolute path.
+function tokenEnd(text: string, start: number, paths: Paths): number {
   let end = start;
-  while (
-    end < text.length &&
-    text[end] !== '"' &&
-    !WHITESPACE.test(text[end])
-  ) {
+  while (end < text.length && !WHITESPACE.test(text[end])) {
     end += 1;
+  }
+  const quote = text.indexOf('"', start);
+  const quoteInRun = quote !== -1 && quote < end;
+  if (quoteInRun && !paths.isAbsolute(text.slice(start, quote))) {
+    return quote;
   }
   return end;
 }

@@ -14,6 +14,7 @@ import type { Roster } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type { Layout, TaskLineInput } from '../layouts/layout';
 import { createRosterLines } from './roster-lines';
+import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 
 const NOW = 1_000_000;
 const SESSION = 'row-1';
@@ -73,6 +74,7 @@ function setUp() {
         block: (text) => text,
         inline: (text) => text,
         document: async (text) => text,
+        ...NO_FENCES,
       },
       keys: recordingAnchors().keys,
       commands: { exists: () => true, run: () => undefined },

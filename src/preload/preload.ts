@@ -32,6 +32,8 @@ const bridge: Bridge = {
       (_event, owner: string, set: LayoutSet) => listener(owner, set),
     );
   },
+  serveVisual: (source) =>
+    ipcRenderer.invoke(BRIDGE_CHANNELS.serveVisual, source),
   uiState: () => ipcRenderer.invoke(BRIDGE_CHANNELS.uiStateRead),
   setUiState: (key, value) => {
     ipcRenderer.send(BRIDGE_CHANNELS.uiStateWrite, key, value);

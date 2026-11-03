@@ -63,7 +63,9 @@ function defaultConfigFolder(homeDir: string, paths: Paths): string {
 // stream-json both ways, partial messages streamed, the request's `mode`
 // control as the permission mode (auto without one) with what it would still
 // prompt sent to `permissionTool`, its `model` and `effort` controls as
-// `--model` and `--effort`, and `claudeEnv`'s environment.
+// `--model` and `--effort`, and the request's `instructions`, when there are
+// any, as one `--append-system-prompt` joined with a blank line, and
+// `claudeEnv`'s environment.
 export function claudeLaunch(
   request: AgentStart,
   permissionTool: string,
@@ -75,6 +77,10 @@ export function claudeLaunch(
   const { model, effort, mode } = request.controls;
   const modelArgs = model === undefined ? [] : ['--model', model];
   const effortArgs = effort === undefined ? [] : ['--effort', effort];
+  const instructionArgs =
+    request.instructions.length === 0
+      ? []
+      : ['--append-system-prompt', request.instructions.join('\n\n')];
   return {
     args: [
       '-p',
@@ -93,6 +99,7 @@ export function claudeLaunch(
       permissionTool,
       ...modelArgs,
       ...effortArgs,
+      ...instructionArgs,
     ],
     cwd: request.projectDir,
     env: claudeEnv(env, request.profileDir, homeDir, paths),

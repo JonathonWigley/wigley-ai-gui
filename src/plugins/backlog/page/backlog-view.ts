@@ -26,7 +26,8 @@ import {
   type ConfirmBodyParts,
   createConfirmPrompt,
 } from '../../../shared/page/confirm-prompt';
-import { appended, element, markdownElement } from '../../../shared/page/dom';
+import { appended, element } from '../../../shared/page/dom';
+import { createMarkdownMount } from '../../../shared/page/markdown-mount';
 import { keepFocusedBox } from '../../../shared/page/editor-boxes';
 import { appSlot } from '../../../shared/page/layout-host/app-slot';
 import type {
@@ -503,6 +504,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     editorDraw?.dispose();
     editorDraw = null;
     followupEditor.destroy();
+    followupEditor.forget();
     editorSlot.replaceChildren();
     editorSlot.hidden = true;
   };
@@ -753,7 +755,8 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     );
   };
 
-  // Draws a read doc: its rendered `html`, or `problem`, the read's error.
+  // Draws a read doc: its rendered `html`, through a markdown mount the
+  // draw's rollback disposes, or `problem`, the read's error.
   const drawDocDetail = (
     path: string,
     html: string,
@@ -765,6 +768,8 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
       detailBody,
       (docDetail, into, rollback) => {
         const kit = kitFor('detail', rollback);
+        const mount = createMarkdownMount(deps.markdown, deps.log);
+        rollback.recordAnchor(mount);
         const root = docDetail(
           into,
           { path, shownPath: tilde(path), problem },
@@ -774,7 +779,9 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
               if (problem !== null) {
                 return kit.emptyState(parent, problem);
               }
-              return appended(parent, markdownElement('div', 'md', html));
+              const node = appended(parent, element('div', 'md'));
+              mount.draw(node, html);
+              return node;
             },
           },
         );

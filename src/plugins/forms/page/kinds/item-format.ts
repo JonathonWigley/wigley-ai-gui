@@ -7,6 +7,7 @@ import type { LayoutCards } from '../../layouts/layout';
 import type { FormsContributions } from '../contributions';
 import type { FormsAction, RoundState, TextTarget } from '../form-state';
 import type { KitCommands } from '../../../../shared/page/layout-host/base-kit';
+import type { MarkdownMount } from '../../../../shared/page/markdown-mount';
 
 // One item's pane, built once; `update` shows the round's current answers.
 export interface ItemCard {
@@ -18,8 +19,9 @@ export interface ItemCard {
 // Don't-ask command, which also focuses the reason box, the keys bound in a
 // scope and the anchors that show them (a card reads and anchors in the forms
 // view's), the platform key hints are drawn for, the log, the registered
-// commands `kit.command` checks and runs, and the card parts other plugins
-// added.
+// commands `kit.command` checks and runs, the card parts other plugins
+// added, and where each markdown mount the card makes is recorded for
+// disposal.
 export interface CardDeps {
   markdown: MarkdownRenderer;
   mountBox(parent: HTMLElement, target: TextTarget, text: string): void;
@@ -31,6 +33,7 @@ export interface CardDeps {
   log: Log;
   commands: KitCommands;
   contributions: Pick<FormsContributions, 'cardParts'>;
+  recordMount(mount: MarkdownMount): void;
 }
 
 // Each kind's card input and kit, as the layout's card builder takes them.

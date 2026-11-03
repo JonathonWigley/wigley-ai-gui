@@ -433,6 +433,12 @@ export const defaultKeymap = {
       where: 'box',
     },
 
+    // ── Visual ─────────────────────────────────────────────────────────────
+    { keys: 'v', scope: 'chat.chat', command: 'visual.openVisuals' },
+    { keys: 'h', scope: 'visual.overlay', command: 'visual.prevVisual' },
+    { keys: 'l', scope: 'visual.overlay', command: 'visual.nextVisual' },
+    { keys: '<Esc>', scope: 'visual.overlay', command: 'visual.closeVisual' },
+
     // ── Docs ───────────────────────────────────────────────────────────────
     { keys: 'j', scope: 'docs.tree', command: 'docs.treeDown' },
     { keys: 'k', scope: 'docs.tree', command: 'docs.treeUp' },

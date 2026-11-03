@@ -17,10 +17,14 @@ import {
   type SessionControl,
   type UsageAgentEvent,
 } from '../contracts/agent';
-import type { Clock } from '../contracts/ambient';
+import type { Clock, Timers } from '../contracts/ambient';
 import type { Files } from '../contracts/files';
 import { createEntryStamp, type EntryDraft } from './entry-stamp';
 import { errorText } from './error-text';
+import {
+  SAMPLE_VISUALS_OPEN_TEXT,
+  SAMPLE_VISUALS_TEXT,
+} from './sample-visuals';
 import { typedSkill } from './typed-skill';
 
 // A scripted harness behind `AgentHarness`, for the tests and the self-test.
@@ -43,6 +47,12 @@ import { typedSkill } from './typed-skill';
 export const FAKE_HOLD_TEXT = 'fake: hold';
 // A send of this text runs one tool before the reply.
 export const FAKE_TOOL_TEXT = 'fake: tool';
+// A send of this text streams a reply holding two visuals, holds it with the
+// second block still open for `FAKE_VISUAL_HOLD_MS`, then sends the whole
+// reply; an interrupt during the hold ends the turn as a held turn's does,
+// and a send, end or kill during it drops the rest of the reply.
+export const FAKE_VISUAL_TEXT = 'fake: visual';
+export const FAKE_VISUAL_HOLD_MS = 1500;
 // A send of this text runs six finished tools, one failed, and a thought, then
 // stays open as `FAKE_HOLD_TEXT`'s turn does.
 export const FAKE_STEPS_TEXT = 'fake: steps';
@@ -134,6 +144,7 @@ export interface FakePastSessionCall {
 // in. `listProjects` lists the folders `start` ran under the profile, the last
 // started first. `planUsage` resolves `fakePlanUsage` at the clock's time in a
 // later microtask; `failNextPlanUsage` makes the next one reject `message`.
+// `timers` runs the `fake: visual` hold.
 export interface FakeAgentHarness extends AgentHarness {
   readonly processes: readonly FakeAgentProcessRecord[];
   readonly pastSessionCalls: readonly FakePastSessionCall[];
@@ -143,6 +154,28 @@ export interface FakeAgentHarness extends AgentHarness {
   holdEnd(): void;
   releaseEnd(): void;
 }
+
+// Timers for tests that never look at a fake's hold: each `set` runs its `run`
+// in a microtask, whatever its `ms`, unless `clear` took its handle first.
+export const FAKE_MICROTASK_TIMERS: Timers = (() => {
+  let lastHandle = 0;
+  const cleared = new Set<number>();
+  return {
+    set(run) {
+      lastHandle += 1;
+      const handle = lastHandle;
+      queueMicrotask(() => {
+        if (!cleared.has(handle)) {
+          run();
+        }
+      });
+      return handle;
+    },
+    clear(handle) {
+      cleared.add(handle);
+    },
+  };
+})();
 
 const fakeHarnesses = new WeakSet<AgentHarness>();
 
@@ -798,6 +831,7 @@ function fakeHistory(sessionId: string): ChatEntry[] {
 export function createFakeAgentHarness(
   clock: Clock,
   files: Pick<Files, 'write' | 'trash'>,
+  timers: Timers,
 ): FakeAgentHarness {
   const processes: FakeAgentProcessRecord[] = [];
   const pastSessionCalls: FakePastSessionCall[] = [];
@@ -874,6 +908,7 @@ export function createFakeAgentHarness(
     // The plan folder this process's make run works on.
     let makeFolder: string | null = null;
     let endPromise: Promise<void> | null = null;
+    let visualHold: number | null = null;
     const stamp = createEntryStamp(clock);
     const emitEntry: EmitEntry = (draft) => {
       events.entry(stamp(draft));
@@ -885,6 +920,43 @@ export function createFakeAgentHarness(
     };
     const emitSessionEnded = () => {
       events.agentEvent({ type: 'sessionEnded', at: clock.now() });
+    };
+    const clearVisualHold = () => {
+      if (visualHold !== null) {
+        timers.clear(visualHold);
+        visualHold = null;
+      }
+    };
+
+    // The reply with its second visual's block open, then, after the hold, the
+    // whole reply and the turn's end.
+    const emitVisualTurn = (turn: number) => {
+      const first = { fake: 'assistant', text: SAMPLE_VISUALS_OPEN_TEXT };
+      emitEntry({
+        kind: 'assistant',
+        id: `assistant-${turn}`,
+        text: SAMPLE_VISUALS_OPEN_TEXT,
+        streaming: true,
+        raw: [first],
+      });
+      visualHold = timers.set(() => {
+        visualHold = null;
+        isTurnOpen = false;
+        emitEntry({
+          kind: 'assistant',
+          id: `assistant-${turn}`,
+          text: SAMPLE_VISUALS_TEXT,
+          streaming: false,
+          raw: [
+            first,
+            {
+              fake: 'assistant',
+              text: SAMPLE_VISUALS_TEXT.slice(SAMPLE_VISUALS_OPEN_TEXT.length),
+            },
+          ],
+        });
+        emitTurnEnd(events, emitEntry, clock, turn);
+      }, FAKE_VISUAL_HOLD_MS);
     };
 
     // Runs `change` between workflow tool `n`'s call and its result; a
@@ -1054,6 +1126,7 @@ export function createFakeAgentHarness(
         const { text, images } = message;
         calls.push({ method: 'send', text, imageCount: images.length });
         requireRunning();
+        clearVisualHold();
         turn += 1;
         const sentTurn = turn;
         // The user entry and its events; `startsTurn` is false for a send
@@ -1098,7 +1171,8 @@ export function createFakeAgentHarness(
         const isHold = text === FAKE_HOLD_TEXT;
         const isSteps = text === FAKE_STEPS_TEXT;
         const isAgents = text === FAKE_AGENTS_TEXT;
-        isTurnOpen = isHold || isSteps || isAgents;
+        const isVisual = text === FAKE_VISUAL_TEXT;
+        isTurnOpen = isHold || isSteps || isAgents || isVisual;
         queueMicrotask(() => {
           finishSubagents(events, emitEntry, clock, runningSubagents, {
             text: 'fake subagent done',
@@ -1133,6 +1207,8 @@ export function createFakeAgentHarness(
             emitStepsTurn(events, emitEntry, clock, sentTurn);
           } else if (text === FAKE_TOOL_TEXT) {
             emitToolTurn(events, emitEntry, clock, sentTurn);
+          } else if (isVisual) {
+            emitVisualTurn(sentTurn);
           } else {
             emitEchoTurn(events, emitEntry, clock, sentTurn, text);
           }
@@ -1144,6 +1220,7 @@ export function createFakeAgentHarness(
         if (!isTurnOpen) {
           return;
         }
+        clearVisualHold();
         isTurnOpen = false;
         const interruptedTurn = turn;
         queueMicrotask(() => {
@@ -1190,6 +1267,7 @@ export function createFakeAgentHarness(
       },
       end() {
         calls.push({ method: 'end' });
+        clearVisualHold();
         if (endPromise !== null) {
           return endPromise;
         }
@@ -1212,6 +1290,7 @@ export function createFakeAgentHarness(
       },
       kill() {
         calls.push({ method: 'kill' });
+        clearVisualHold();
         if (endPromise !== null) {
           return;
         }

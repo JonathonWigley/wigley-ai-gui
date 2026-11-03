@@ -22,6 +22,7 @@ import type {
 } from '../layouts/layout';
 import { createChatLayouts } from './chat-layouts';
 import { createEntryList } from './entry-list';
+import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 
 type AnyBuilder = (
   parent: HTMLElement,
@@ -276,6 +277,7 @@ function setUpList(shown: ShownLayouts<ChatLayout>) {
         block: (text) => text,
         inline: (text) => text,
         document: (text) => Promise.resolve(text),
+        ...NO_FENCES,
       },
       keys: {
         anchor: (_node, command) => ({
@@ -723,5 +725,93 @@ describe('pending rows', () => {
     put(tool('t3'));
 
     expect(list.focused()).toEqual(line);
+  });
+});
+
+// Each ResizeObserver the code builds: its callback and the elements it
+// observes now.
+interface StubObserver {
+  callback: () => void;
+  observed: Set<unknown>;
+}
+
+describe('slots and focus', () => {
+  let observers: StubObserver[];
+  beforeEach(() => {
+    installFakeDom((name, value) => vi.stubGlobal(name, value));
+    observers = [];
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        private record: StubObserver;
+        constructor(callback: () => void) {
+          this.record = { callback, observed: new Set() };
+          observers.push(this.record);
+        }
+        observe(target: unknown) {
+          this.record.observed.add(target);
+        }
+        unobserve(target: unknown) {
+          this.record.observed.delete(target);
+        }
+        disconnect() {
+          this.record.observed.clear();
+        }
+      },
+    );
+    vi.stubGlobal('getComputedStyle', () => ({
+      lineHeight: '20px',
+      fontSize: '14px',
+      getPropertyValue: () => '',
+    }));
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it.each([
+    { name: 'following', scrolledUp: false, scrollTop: 500 },
+    { name: 'scrolled up', scrolledUp: true, scrollTop: 280 },
+  ])(
+    'followsGrowth_SlotResizes_ScrollsOnlyWhileFollowing $name',
+    ({ scrolledUp, scrollTop }) => {
+      const { list, put } = setUpList(defaultShown());
+      const scroller = asFake(list.element) as FakeElement & {
+        scrollHeight: number;
+        clientHeight: number;
+      };
+      scroller.scrollHeight = 400;
+      scroller.clientHeight = 100;
+      put(assistant('a visual'));
+      // A browser clamps the bottom scroll to the height less the box's.
+      scroller.scrollTop = 300;
+      if (scrolledUp) {
+        list.scrollBy('line', -1);
+      }
+      const slot = asFake(list.element).children[0];
+
+      scroller.scrollHeight = 500;
+      for (const observer of observers) {
+        if (observer.observed.has(slot)) {
+          observer.callback();
+        }
+      }
+
+      expect(scroller.scrollTop).toBe(scrollTop);
+    },
+  );
+
+  it('focusedElement_Stops_ReturnsTheFocusedSlot', () => {
+    const empty = setUpList(defaultShown());
+    expect(empty.list.focusedElement()).toBeNull();
+
+    const { list, put } = setUpList(defaultShown());
+    put(user('u1'));
+    put(assistant('hi'));
+    const [userSlot, assistantSlot] = asFake(list.element).children;
+
+    expect(list.focusedElement()).toBe(assistantSlot);
+    list.move(-1);
+    expect(list.focusedElement()).toBe(userSlot);
   });
 });

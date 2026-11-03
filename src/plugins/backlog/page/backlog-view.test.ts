@@ -25,6 +25,7 @@ import type { BacklogChannel, BacklogRead } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type { BacklogLayout } from '../layouts/layout';
 import { createBacklogView } from './backlog-view';
+import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 
 const ROOT = '/home/repo/docs/features';
 
@@ -155,6 +156,7 @@ async function backlogSetup() {
       block: (text) => text,
       inline: (text) => text,
       document: async (text) => text,
+      ...NO_FENCES,
     },
     paths: { tilde: (path: string) => path } as unknown as Paths,
     homeDir: '/home',
@@ -518,5 +520,28 @@ describe('backlog follow-up editor drop target', () => {
     expect(asFake(targets[0].element)).toBe(slot);
     const [title] = liveEditors(created, 'title');
     expect(title.inserted).toEqual([insertionText(['/d/a.md'], 'x')]);
+  });
+
+  it('followupEditor_DropAfterRedraw_GoesToTheBoxUsedLast', async () => {
+    const { view, created, targets } = await backlogSetup();
+    const file: DroppedFile = {
+      name: 'a.md',
+      mediaType: 'text/markdown',
+      path: '/d/a.md',
+      bytes: async () => new Uint8Array(),
+    };
+    view.commands.create();
+    const [body] = liveEditors(created, 'body');
+    body.events.focused();
+    body.events.blurred();
+
+    view.setLayouts(withUser(titleOnlyEditor));
+    targets[0].take([file]);
+    await settle();
+
+    const [remountedBody] = liveEditors(created, 'body');
+    const [remountedTitle] = liveEditors(created, 'title');
+    expect(remountedBody.inserted).toEqual([insertionText(['/d/a.md'], 'x')]);
+    expect(remountedTitle.inserted).toEqual([]);
   });
 });

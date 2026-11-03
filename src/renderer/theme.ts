@@ -1,20 +1,24 @@
 import type { Settings } from '../contracts/settings';
 import type { Theme } from '../contracts/theme';
+import type { VisualTheme } from '../shared/visual-messages';
 import { FONT_TOKENS, themeVariable } from '../shared/theme-variables';
 
 // `apply` writes the theme's tokens to the root as CSS variables, the
 // `reduced` overrides over them while transparency is reduced, and the set
 // font settings over their tokens; views and editors read every token through
-// those variables.
+// those variables. It then hands `onApplied` what it wrote.
 export interface ThemeApplier {
   apply(theme: Theme, settings: Pick<Settings, 'transparency' | 'fonts'>): void;
 }
 
 // `reducedTransparency` is the OS's reduce-transparency preference, which
 // re-applies the last theme when it changes under the `system` setting.
+// `onApplied` hears each custom property `apply` wrote, in write order, and
+// the colour scheme.
 export function createThemeApplier(
   root: HTMLElement,
   reducedTransparency: Pick<MediaQueryList, 'matches' | 'addEventListener'>,
+  onApplied: (applied: VisualTheme) => void,
 ): ThemeApplier {
   let last: {
     theme: Theme;
@@ -26,20 +30,20 @@ export function createThemeApplier(
     settings: Pick<Settings, 'transparency' | 'fonts'>,
   ) {
     last = { theme, settings };
-    for (const [token, value] of Object.entries(theme.tokens)) {
-      root.style.setProperty(themeVariable(token), value);
-    }
     const isReduced =
       settings.transparency === 'reduced' ||
       (settings.transparency === 'system' && reducedTransparency.matches);
-    if (isReduced) {
-      for (const [token, value] of Object.entries(theme.reduced)) {
-        root.style.setProperty(themeVariable(token), value);
-      }
+    const properties: [name: string, value: string][] = [
+      ...tokenProperties(theme.tokens),
+      ...(isReduced ? tokenProperties(theme.reduced) : []),
+      ...fontProperties(settings.fonts),
+    ];
+    for (const [name, value] of properties) {
+      root.style.setProperty(name, value);
     }
-    applyFonts(root, settings.fonts);
     root.dataset.transparency = isReduced ? 'reduced' : 'full';
     root.style.setProperty('color-scheme', theme.colorScheme);
+    onApplied({ properties, colorScheme: theme.colorScheme });
   }
 
   reducedTransparency.addEventListener('change', () => {
@@ -50,27 +54,34 @@ export function createThemeApplier(
   return { apply };
 }
 
-function applyFonts(root: HTMLElement, fonts: Settings['fonts']) {
+function tokenProperties(
+  tokens: Record<string, string>,
+): [name: string, value: string][] {
+  return Object.entries(tokens).map(([token, value]) => [
+    themeVariable(token),
+    value,
+  ]);
+}
+
+function fontProperties(
+  fonts: Settings['fonts'],
+): [name: string, value: string][] {
   const { ui, mono, uiSize, monoSize, proseSize } = fonts;
+  const properties: [name: string, value: string][] = [];
   if (ui !== undefined) {
-    root.style.setProperty(themeVariable(FONT_TOKENS.ui), ui);
+    properties.push([themeVariable(FONT_TOKENS.ui), ui]);
   }
   if (mono !== undefined) {
-    root.style.setProperty(themeVariable(FONT_TOKENS.mono), mono);
+    properties.push([themeVariable(FONT_TOKENS.mono), mono]);
   }
   if (uiSize !== undefined) {
-    root.style.setProperty(themeVariable(FONT_TOKENS.uiSize), `${uiSize}px`);
+    properties.push([themeVariable(FONT_TOKENS.uiSize), `${uiSize}px`]);
   }
   if (monoSize !== undefined) {
-    root.style.setProperty(
-      themeVariable(FONT_TOKENS.monoSize),
-      `${monoSize}px`,
-    );
+    properties.push([themeVariable(FONT_TOKENS.monoSize), `${monoSize}px`]);
   }
   if (proseSize !== undefined) {
-    root.style.setProperty(
-      themeVariable(FONT_TOKENS.proseSize),
-      `${proseSize}px`,
-    );
+    properties.push([themeVariable(FONT_TOKENS.proseSize), `${proseSize}px`]);
   }
+  return properties;
 }

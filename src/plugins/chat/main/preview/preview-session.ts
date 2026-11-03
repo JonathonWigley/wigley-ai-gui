@@ -1,5 +1,6 @@
 import type { ChatEntry, SessionControl } from '../../../../contracts/agent';
 import { FAKE_HISTORY_IMAGES } from '../../../../shared/fake-agent-harness';
+import { SAMPLE_VISUALS_TEXT } from '../../../../shared/sample-visuals';
 
 // The row label and the Chat tab's name are this folder's basename.
 export const PREVIEW_PROJECT_DIR = 'Chat preview';
@@ -16,6 +17,15 @@ const ASSISTANT_TEXT = [
   '```',
 ].join('\n');
 
+// A reply still streaming, its html block not closed yet.
+const STREAMING_TEXT = [
+  'Still writing…',
+  '',
+  '```html',
+  '<!doctype html>',
+  '<html>',
+].join('\n');
+
 // The `at` of the preview's first entry; each entry after it is two seconds
 // later, so the finished lines read stable times.
 const PREVIEW_START_AT = 1767225600000;
@@ -25,7 +35,8 @@ const previewAt = (index: number) =>
   PREVIEW_START_AT + index * PREVIEW_ENTRY_STEP_MS;
 
 // One entry of every kind, a tool and a permission in each of their states,
-// both notice tones, and a streaming reply last.
+// both notice tones, a reply holding two visuals, and a streaming reply last,
+// its visual still open.
 export function previewEntries(): ChatEntry[] {
   return [
     {
@@ -147,7 +158,15 @@ export function previewEntries(): ChatEntry[] {
       kind: 'assistant',
       id: 'preview-14',
       at: previewAt(13),
-      text: 'Still writing…',
+      text: SAMPLE_VISUALS_TEXT,
+      streaming: false,
+      raw: [{ preview: 'visuals' }],
+    },
+    {
+      kind: 'assistant',
+      id: 'preview-15',
+      at: previewAt(14),
+      text: STREAMING_TEXT,
       streaming: true,
       raw: [{ preview: 'assistant' }],
     },

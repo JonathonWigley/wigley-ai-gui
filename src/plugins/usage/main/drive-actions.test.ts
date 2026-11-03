@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentHarness } from '../../../contracts/agent';
-import { createFakeAgentHarness } from '../../../shared/fake-agent-harness';
+import {
+  createFakeAgentHarness,
+  FAKE_MICROTASK_TIMERS,
+} from '../../../shared/fake-agent-harness';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import type { UsageSnapshot } from '../contract';
@@ -100,6 +103,7 @@ describe('usage drive actions', () => {
     const fake = createFakeAgentHarness(
       { now: () => NOW },
       createMemoryFiles(),
+      FAKE_MICROTASK_TIMERS,
     );
     const { drive } = setUp({ harnesses: [realHarness, fake] });
 

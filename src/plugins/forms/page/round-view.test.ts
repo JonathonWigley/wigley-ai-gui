@@ -12,12 +12,18 @@ import {
 } from '../../../shared/page/layout-host/test-layouts';
 import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
+import type { MarkdownRenderer } from '../../../contracts/markdown';
 import { type BoxRef, FORMS_BOX_IDENTITY } from './boxes';
 import { createFormsContributions } from './contributions';
 import { apply, type FormsState, initialState } from './form-state';
 import { asFake, findAll, installFakeDom } from '../../../shared/page/test-dom';
 import { createRoundView } from './round-view';
 import { presentedRound } from './test-rounds';
+import {
+  fencePlaceholder,
+  installMarkdownDom,
+  NO_FENCES,
+} from '../../../shared/page/markdown-mount.test-support';
 
 interface CreatedEditor {
   events: EditorEvents;
@@ -90,8 +96,17 @@ const bareLayout: Layout = {
 
 // Round r1, two questions, open and active, shown in the forms view by a round
 // view over editor boxes; `main` is the scrolled main column, and `anchors`
-// holds every anchor the keys named, in call order.
-function roundViewSetup() {
+// holds every anchor the keys named, in call order. It draws with `layout`
+// over `default` and renders through `markdown`.
+function roundViewSetup(
+  layout: Layout = bareLayout,
+  markdown: MarkdownRenderer = {
+    block: (text) => text,
+    inline: (text) => text,
+    document: async (text) => text,
+    ...NO_FENCES,
+  },
+) {
   const { boxes, created } = setup();
   const { anchors, keys } = recordingAnchors();
   const presented = presentedRound('r1');
@@ -103,13 +118,9 @@ function roundViewSetup() {
   const view = createRoundView(
     () => undefined,
     round,
-    withUser(defaultLayout, bareLayout),
+    withUser(defaultLayout, layout),
     {
-      markdown: {
-        block: (text) => text,
-        inline: (text) => text,
-        document: async (text) => text,
-      },
+      markdown,
       boxes,
       keys: { ...keys, onChanged: () => ({ dispose: () => undefined }) },
       dispatch: vi.fn(),
@@ -205,5 +216,46 @@ describe('round view rebuild', () => {
       true,
     );
     expect(anchors.every((anchor) => anchor.isDisposed)).toBe(true);
+  });
+});
+
+describe('round view fences', () => {
+  beforeEach(() =>
+    installMarkdownDom((name, value) => vi.stubGlobal(name, value)),
+  );
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('dispose disposes the fence views its cards drew', () => {
+    const disposals: number[] = [];
+    const html = {
+      language: 'html',
+      live: true,
+      mount: () => {
+        const index = disposals.push(0) - 1;
+        return {
+          element: document.createElement('div'),
+          dispose: () => {
+            disposals[index] += 1;
+          },
+        };
+      },
+    };
+    const { view } = roundViewSetup(
+      {},
+      {
+        block: () => fencePlaceholder('html', true, 'x'),
+        inline: (text) => text,
+        document: async (text) => text,
+        addFence: () => ({ dispose: () => undefined }),
+        fence: (language) => (language === 'html' ? html : undefined),
+      },
+    );
+
+    view.dispose();
+
+    expect(disposals.length).toBeGreaterThan(0);
+    expect(disposals.every((count) => count === 1)).toBe(true);
   });
 });

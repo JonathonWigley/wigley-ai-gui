@@ -8,6 +8,7 @@ import type { PageDrops } from './drops';
 import type { EditorHost, TextEditor } from './editor';
 import type { Files } from './files';
 import type { Git } from './git';
+import type { ImageEncoder } from './images';
 import type {
   InterceptBind,
   KeyBind,
@@ -27,6 +28,7 @@ import type { ProcessRunner } from './processes';
 import type { TokenDecl } from './theme';
 import type { UiState } from './ui-state';
 import type { UserConfig } from './user-config';
+import type { VisualFrames } from './visual-frames';
 
 export type ProcessName = 'page' | 'main';
 
@@ -395,6 +397,8 @@ export interface PageServices {
   editor: EditorHost;
   markdown: MarkdownRenderer;
   markup: MarkupEditor;
+  // Opens a visual's html in a sandboxed frame (`src/contracts/visual-frames.ts`).
+  visualFrames: VisualFrames;
   toast(text: string, tone: ToastTone): void;
   log: Log;
   timers: Timers;
@@ -537,7 +541,8 @@ export interface PagePart<M extends PluginManifest = PluginManifest> {
 // logs once the write and the keys have run, and `alsoExpect`, when set, holds
 // patterns that each match a line logged after the step began, before or
 // after `expect`, for a line carrying a value the script cannot know, such as
-// a random id; a repeating step takes none. `checksFit` also checks the page
+// a random id, or a second line the step's keys cause, in either order; a
+// repeating step takes none. `checksFit` also checks the page
 // fits the window's minimum width, or, as `'held'`, the width the step holds,
 // for what shows only while the window is wide (a side bar beside the view).
 // `screenshot`, when set, saves a PNG of the window once the step's line has
@@ -593,9 +598,9 @@ export interface SelfTestScript {
 
 // Each plugin's part calls `run` at most once, during its `start`, and the
 // script's page binds and settings join the config. The driver runs the handed
-// scripts in hand-over order on each run. `run` throws on a plugin's second
-// script or after the parts have started, and a self-test that got no script
-// fails.
+// scripts in hand-over order, each cut after its last kept group on a filtered
+// run. `run` throws on a plugin's second script or after the parts have
+// started, and a self-test that got no script fails.
 export interface SelfTestHost {
   run(script: SelfTestScript): void;
 }
@@ -640,7 +645,8 @@ export interface DriveHost {
 // paths, none in the self-test; a folder inside one is scratch space.
 // `userConfig` reads and writes the user's `settings.json` and `keymap.json`
 // layers through the ConfigStore's checks. `appInstance` names which app runs,
-// the stable or the dev one.
+// the stable or the dev one. `images` re-encodes an image smaller, as PNG or
+// JPEG only, for `shrinkToFit`.
 export interface MainServices {
   files: Files;
   processes: ProcessRunner;
@@ -655,6 +661,7 @@ export interface MainServices {
   userConfig: UserConfig;
   paths: Paths;
   alerts: Alerts;
+  images: ImageEncoder;
   agentHarnesses: readonly AgentHarness[];
   window: {
     show(): void;

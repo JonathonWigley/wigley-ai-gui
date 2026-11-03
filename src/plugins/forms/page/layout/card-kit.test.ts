@@ -23,6 +23,7 @@ import {
   findAll,
   installFakeDom,
 } from '../../../../shared/page/test-dom';
+import { NO_FENCES } from '../../../../shared/page/markdown-mount.test-support';
 
 function choice(text: string, action: FindingChoice['action']): FindingChoice {
   return { text, reason: `${text} reason`, action };
@@ -158,6 +159,7 @@ function fakeCardDeps(contributions: FormsContributions) {
       block: (text) => text,
       inline: (text) => text,
       document: async (text) => text,
+      ...NO_FENCES,
     },
     mountBox: vi.fn(),
     destroyBox: vi.fn(),
@@ -168,6 +170,7 @@ function fakeCardDeps(contributions: FormsContributions) {
     log,
     commands: { exists: (id) => id === 'demo.run', run },
     contributions,
+    recordMount: () => {},
   };
   return { deps, keysFor, anchor, run, log };
 }

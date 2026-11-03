@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatImage } from '../../../contracts/agent';
 import type { DroppedFile } from '../../../contracts/drops';
+import type { ImageEncoder } from '../../../contracts/images';
 import { insertionText } from '../../../shared/page/file-drop/file-chips';
-import {
-  type ImageEncoder,
-  SHRINK_REFUSED,
-} from '../../../shared/page/file-drop/shrink-image';
+import { SHRINK_REFUSED } from '../../../shared/shrink-image';
 import { MAX_IMAGE_BASE64, refusalOf } from '../image-rules';
 import {
   type ChatDropDeps,
@@ -90,7 +88,8 @@ type ReportCall =
   | ['inserted', readonly string[]];
 
 // Deps that record what a take did: a box answering `charBeforeCursor` 'x',
-// a `savePasted` answering SAVED_PATH unless given an Error to reject with.
+// a `savePasted` answering SAVED_PATH unless given an Error to reject with,
+// and a session held until `close`.
 function recordingDeps(
   options: { encoder?: ImageEncoder; saveError?: Error } = {},
 ) {
@@ -98,6 +97,10 @@ function recordingDeps(
   const inserts: string[] = [];
   const saved: string[] = [];
   const reported: ReportCall[] = [];
+  let held = true;
+  const close = () => {
+    held = false;
+  };
   const deps: ChatDropDeps = {
     attachments: { add: (image) => attached.push(image) },
     box: {
@@ -118,8 +121,9 @@ function recordingDeps(
         reported.push(['failed', name, what, error]),
       inserted: (paths) => reported.push(['inserted', paths]),
     },
+    isHeld: () => held,
   };
-  return { deps, attached, inserts, saved, reported };
+  return { deps, attached, inserts, saved, reported, close };
 }
 
 const threeBytes = new Uint8Array([1, 2, 3]);
@@ -285,6 +289,71 @@ describe('takeChatFiles', () => {
       expect(taken.inserts).toEqual(
         paths.length > 0 ? [insertionText(paths, 'x')] : [],
       );
+    },
+  );
+
+  // A take of [v.mp4 on disk, `closing`, a pasted n.txt, a GIF], where
+  // `closing` closes the session while it is read or saved; with
+  // `closesLast`, the take ends at `closing`.
+  it.each([
+    {
+      label: 'an image read as the session closes',
+      closing: 'a.png',
+      closesLast: false,
+      saveError: undefined,
+      saved: [],
+    },
+    {
+      label: 'a pasted file saved as the session closes',
+      closing: 't.txt',
+      closesLast: false,
+      saveError: undefined,
+      saved: ['t.txt'],
+    },
+    {
+      label: 'a pasted file whose save fails as the session closes',
+      closing: 't.txt',
+      closesLast: false,
+      saveError: new Error('disk full'),
+      saved: ['t.txt'],
+    },
+    {
+      label: 'the last file saved as the session closes',
+      closing: 't.txt',
+      closesLast: true,
+      saveError: undefined,
+      saved: ['t.txt'],
+    },
+  ])(
+    'takeChatFiles_SessionClosesMidTake_TakesNoMore: $label',
+    async ({ closing, closesLast, saveError, saved }) => {
+      const taken = recordingDeps({ saveError });
+      const savePasted = taken.deps.savePasted;
+      taken.deps.savePasted = (file) => {
+        if (file.name === closing) {
+          taken.close();
+        }
+        return savePasted(file);
+      };
+      const closingImage: DroppedFile = {
+        ...fileOf('a.png', 'image/png', '/d/a.png'),
+        bytes: () => {
+          taken.close();
+          return Promise.resolve(threeBytes);
+        },
+      };
+      const files = [
+        fileOf('v.mp4', 'video/mp4', '/d/v.mp4'),
+        closing === 'a.png' ? closingImage : fileOf('t.txt', 'text/plain', ''),
+        ...(closesLast ? [] : [fileOf('n.txt', 'text/plain', ''), gifAfter]),
+      ];
+
+      await takeChatFiles(files, taken.deps);
+
+      expect(taken.attached).toEqual([]);
+      expect(taken.inserts).toEqual([]);
+      expect(taken.saved).toEqual(saved);
+      expect(taken.reported).toEqual([]);
     },
   );
 });

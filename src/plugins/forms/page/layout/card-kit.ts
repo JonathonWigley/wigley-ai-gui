@@ -1,13 +1,16 @@
 import type { CommandId } from '../../../../contracts/commands';
 import type { ViewScope } from '../../../../contracts/keymap';
-import type { MarkdownRenderer } from '../../../../contracts/markdown';
-import { button, element, markdownElement } from '../../../../shared/page/dom';
+import { button, element } from '../../../../shared/page/dom';
 import { textButton } from '../../../../shared/page/ui/button';
 import { errorText } from '../../../../shared/error-text';
 import {
   type BaseKitDeps,
   createBaseKit,
 } from '../../../../shared/page/layout-host/base-kit';
+import {
+  createMarkdownMount,
+  type MarkdownMount,
+} from '../../../../shared/page/markdown-mount';
 import { sectionHeader } from '../../../../shared/page/ui/section-header';
 import { tag as tagPart } from '../../../../shared/page/ui/tag';
 import type { ItemKind } from '../../contract';
@@ -59,9 +62,10 @@ interface ItemTextBox {
 }
 
 // What every part of one card's kit shares: the item and its round, its
-// deps, the base kit's deps and the anchor over the forms view's keys, its
-// boxes, the updaters the parts that show answer state register, and the
-// contributed parts once placed, null before.
+// deps, the base kit's deps and the anchor over the forms view's keys, the
+// markdown mount its own parts draw through, its boxes, the updaters the
+// parts that show answer state register, and the contributed parts once
+// placed, null before.
 interface CardContext {
   roundId: string;
   item: RailItem;
@@ -69,6 +73,7 @@ interface CardContext {
   deps: CardDeps;
   kitDeps: BaseKitDeps;
   anchor: ScopedAnchor;
+  mount: MarkdownMount;
   boxes: Map<TextBoxField, ItemTextBox>;
   mounted: Set<TextBoxField>;
   updaters: ((round: RoundState) => void)[];
@@ -255,9 +260,13 @@ export function answerableOf(item: RailItem): AnswerableItem | null {
 }
 
 // The base kit's deps for a card or pane whose keys fire in `scope`, its short
-// command names being forms commands.
+// command names being forms commands, its markdown mount recorded through
+// `deps.recordMount`.
 export function baseKitDepsFor(
-  deps: Pick<CardDeps, 'markdown' | 'platform' | 'commands' | 'keys'>,
+  deps: Pick<
+    CardDeps,
+    'markdown' | 'platform' | 'commands' | 'keys' | 'recordMount' | 'log'
+  >,
   scope: ViewScope,
 ): BaseKitDeps {
   return {
@@ -267,6 +276,8 @@ export function baseKitDepsFor(
     scope,
     commandNamed: formsCommandNamed,
     platform: deps.platform,
+    recordMount: (mount) => deps.recordMount(mount),
+    log: deps.log,
   };
 }
 
@@ -314,6 +325,8 @@ export function createCardKit<K extends ItemKind>(
   deps: CardDeps,
 ): CardKit<K> {
   const item = { kind, index };
+  const mount = createMarkdownMount(deps.markdown, deps.log);
+  deps.recordMount(mount);
   const card: CardContext = {
     roundId: round.formId,
     item,
@@ -321,6 +334,7 @@ export function createCardKit<K extends ItemKind>(
     deps,
     kitDeps: baseKitDepsFor(deps, formsScope('forms')),
     anchor: scopedAnchor(deps.keys, formsScope('forms')),
+    mount,
     boxes: itemTextBoxes(round, item),
     mounted: new Set(),
     updaters: [],
@@ -581,7 +595,11 @@ function buildQuestionKit(
         choices,
         input.recommend,
         (number) => kit.run({ type: 'choose', number }),
-        { markdown: card.deps.markdown, anchor: card.anchor },
+        {
+          markdown: card.deps.markdown,
+          mount: card.mount,
+          anchor: card.anchor,
+        },
       );
       const recommended = entries[input.recommend - 1];
       if (reasons !== 'none' && recommended !== undefined) {
@@ -589,7 +607,7 @@ function buildQuestionKit(
           recommended,
           'Why recommended',
           input.rationale,
-          card.deps.markdown,
+          card,
         );
       }
       card.updaters.push((current) => {
@@ -647,10 +665,15 @@ function appendChoiceReason(
   entry: HTMLElement,
   label: string,
   text: string,
-  markdown: MarkdownRenderer,
+  card: CardContext,
 ) {
   if (text.trim() !== '') {
-    entry.append(buildChoiceReason(label, text, markdown));
+    entry.append(
+      buildChoiceReason(label, text, {
+        markdown: card.deps.markdown,
+        mount: card.mount,
+      }),
+    );
   }
 }
 
@@ -704,7 +727,7 @@ function appendGroupChoices(
   card: CardContext,
 ): DrawnPick[] {
   section.append(sectionHeader(group.label));
-  appendGroupReason(section, group.reason, card.deps.markdown);
+  appendGroupReason(section, group.reason, card);
   const list = element('ol', 'choices');
   section.append(list);
   const recommended = group.choices.find((choice) => choice.isRecommended);
@@ -713,13 +736,13 @@ function appendGroupChoices(
     group.choices,
     recommended?.number ?? null,
     (number) => kit.run({ type: 'choose', number }),
-    { markdown: card.deps.markdown, anchor: card.anchor },
+    { markdown: card.deps.markdown, mount: card.mount, anchor: card.anchor },
   );
   return group.choices.map((choice, i) => {
     const isReasonShown =
       reasons === 'all' || (reasons === 'recommended' && choice.isRecommended);
     if (isReasonShown) {
-      appendChoiceReason(entries[i], 'Why', choice.reason, card.deps.markdown);
+      appendChoiceReason(entries[i], 'Why', choice.reason, card);
     }
     return { number: choice.number, element: entries[i] };
   });
@@ -751,7 +774,7 @@ function appendGroupPick(
   appendPickKeys(pick, number, card.anchor);
   head.append(pick);
   section.append(head);
-  appendGroupReason(head, group.reason, card.deps.markdown);
+  appendGroupReason(head, group.reason, card);
   return { number, element: head };
 }
 
@@ -760,12 +783,12 @@ function appendGroupPick(
 function appendGroupReason(
   parent: HTMLElement,
   reason: string | null,
-  markdown: MarkdownRenderer,
+  card: CardContext,
 ) {
   if (reason !== null) {
-    parent.append(
-      markdownElement('div', 'choice-group-reason md', markdown.block(reason)),
-    );
+    const node = element('div', 'choice-group-reason md');
+    parent.append(node);
+    card.mount.draw(node, card.deps.markdown.block(reason));
   }
 }
 
@@ -803,15 +826,9 @@ function buildVerdict(
   appendCardKeys(card, accept, formsCommand('acceptRecommendation'));
   const buttons = element('div', 'verdict-buttons');
   buttons.append(accept);
-  block.append(
-    chips,
-    markdownElement(
-      'div',
-      'verdict-impact md',
-      deps.markdown.block(input.impact),
-    ),
-    buttons,
-  );
+  const impact = element('div', 'verdict-impact md');
+  block.append(chips, impact, buttons);
   parent.append(block);
+  card.mount.draw(impact, deps.markdown.block(input.impact));
   return block;
 }

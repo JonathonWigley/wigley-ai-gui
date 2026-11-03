@@ -175,6 +175,7 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
       deps.panesChanged();
     },
     focused: (paneId) => deps.paneFocused(paneId),
+    leaving: (paneIds) => tabs.vacate(paneIds),
   });
   assigned.set('pane-1', null);
   root.append(treeView.element, tabs.holder);

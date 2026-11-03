@@ -1,6 +1,9 @@
 import MarkdownIt from 'markdown-it';
 import type { CodeHighlighter } from '../../contracts/highlight';
-import type { MarkdownRenderer } from '../../contracts/markdown';
+import type {
+  FenceContribution,
+  MarkdownRenderer,
+} from '../../contracts/markdown';
 
 type Md = InstanceType<typeof MarkdownIt>;
 type BlockRule = Parameters<Md['block']['ruler']['before']>[2];
@@ -9,6 +12,9 @@ type RenderRule = NonNullable<Md['renderer']['rules']['th_open']>;
 type Token = ReturnType<Md['parse']>[number];
 type EscapeHtml = (text: string) => string;
 type UnescapeAll = (text: string) => string;
+// The registered fence contributions, keyed by their language trimmed and
+// lowercased.
+type Fences = Map<string, FenceContribution>;
 
 // Per-render state of one `document` call.
 type DocumentEnv = {
@@ -45,48 +51,124 @@ const DIFF_LANGUAGE = 'diff';
 const SOURCE_LINE = 'data-source-line';
 const SLUG_DROPPED = /[^\p{L}\p{M}\p{N}\s_-]/gu;
 const WHITESPACE = /\s/g;
+// markdown-it's own `alt` list for its fence rule.
+const FENCE_ALT = ['paragraph', 'reference', 'blockquote', 'list'];
 
 export function createMarkdownItRenderer(
   highlighter: CodeHighlighter,
 ): MarkdownRenderer {
+  const fences: Fences = new Map();
   const md = createWigleyMarkdown();
   md.disable(['link', 'image', 'autolink', 'linkify', 'reference']);
-  md.set({
-    highlight: (code, lang) => highlightFence(code, lang, md.utils.escapeHtml),
-  });
-  installBlockRules(md.renderer.rules);
+  installBlockRules(md, fences);
   const documentMd = createWigleyMarkdown();
-  installDocumentRules(documentMd);
-  return {
+  installDocumentRules(documentMd, fences);
+  const renderer: MarkdownRenderer = {
     block: (text) => md.render(text),
     inline: (text) => md.renderInline(text),
-    document: (text) => renderDocument(documentMd, highlighter, text),
+    document: (text) => renderDocument(documentMd, highlighter, fences, text),
+    addFence: (fence) => addFence(fences, fence),
+    fence: (language) => fences.get(fenceKey(language)),
+  };
+  renderer.addFence(diffFence(md.utils.escapeHtml));
+  return renderer;
+}
+
+function fenceKey(language: string): string {
+  return language.trim().toLowerCase();
+}
+
+// Its Disposable removes `fence` only while it is still the one registered.
+function addFence(fences: Fences, fence: FenceContribution) {
+  const key = fenceKey(fence.language);
+  if (fences.has(key)) {
+    throw new Error(`fence ${key} is already registered`);
+  }
+  fences.set(key, fence);
+  return {
+    dispose() {
+      if (fences.get(key) === fence) {
+        fences.delete(key);
+      }
+    },
+  };
+}
+
+// The built-in `diff` contribution: a `pre.md-diff` colouring its `+`, `-`
+// and `~` lines.
+function diffFence(escapeHtml: EscapeHtml): FenceContribution {
+  return {
+    language: DIFF_LANGUAGE,
+    live: false,
+    mount(source) {
+      const element = document.createElement('pre');
+      element.className = 'md-diff';
+      element.innerHTML = diffCode(source, escapeHtml);
+      return { element, dispose: () => undefined };
+    },
   };
 }
 
 // Raw HTML escaped and bare URLs left as text, with the wigley blocks, table
-// alignment classes and the `diff` fence.
+// alignment classes and the fence's closed flag.
 function createWigleyMarkdown(): Md {
   const md = new MarkdownIt({ html: false, linkify: false });
   md.block.ruler.before('fence', 'wigley_blocks', wigleyBlock, {
-    alt: ['paragraph', 'reference', 'blockquote', 'list'],
+    alt: FENCE_ALT,
   });
+  installClosedFlag(md);
   installSharedRules(md.renderer.rules);
   return md;
 }
 
+// Wraps markdown-it's fence rule so each fence token's `meta.closed` says
+// whether its closing fence is present.
+function installClosedFlag(md: Md): void {
+  const ruler = md.block.ruler;
+  const stock = ruler.__rules__[ruler.__find__('fence')].fn;
+  const withClosedFlag: BlockRule = (state, startLine, endLine, silent) => {
+    const isFence = stock(state, startLine, endLine, silent);
+    if (isFence && !silent) {
+      const token = state.tokens[state.tokens.length - 1];
+      token.meta = { closed: closesAt(state, startLine, token.markup) };
+    }
+    return isFence;
+  };
+  ruler.at('fence', withClosedFlag, { alt: FENCE_ALT });
+}
+
+// True when the fence opened at `startLine` with `markup` ended on a closing
+// fence: its last line, past the opener, is a fence mark of the same kind and
+// no shorter, indented less than four columns.
+function closesAt(
+  state: StateBlock,
+  startLine: number,
+  markup: string,
+): boolean {
+  const line = state.line - 1;
+  if (line <= startLine) {
+    return false;
+  }
+  const isIndentedCode = state.sCount[line] - state.blkIndent >= 4;
+  const text = lineText(state, line);
+  const mark = FENCE_MARK.exec(text)?.[1] ?? null;
+  return !isIndentedCode && closesFence(markup, mark, text);
+}
+
 // markdown-it's `highlight` option is synchronous, so every fence is
 // highlighted between parse and render; a fence the highlighter rejects
-// renders plain.
+// renders plain. A contributed fence is highlighted too, inside its
+// placeholder, unless its contribution is not live and so always draws.
 async function renderDocument(
   md: Md,
   highlighter: CodeHighlighter,
+  fences: Fences,
   text: string,
 ): Promise<string> {
   const env: DocumentEnv = { slugs: new Set(), highlighted: new Map() };
   const tokens = md.parse(text, env);
   markSourceLines(tokens);
-  await highlightFences(tokens, highlighter, md.utils.unescapeAll, env);
+  await highlightFences(tokens, highlighter, fences, md.utils.unescapeAll, env);
   return md.renderer.render(tokens, md.options, env);
 }
 
@@ -102,6 +184,7 @@ function markSourceLines(tokens: Token[]): void {
 async function highlightFences(
   tokens: Token[],
   highlighter: CodeHighlighter,
+  contributed: Fences,
   unescapeAll: UnescapeAll,
   env: DocumentEnv,
 ): Promise<void> {
@@ -111,7 +194,8 @@ async function highlightFences(
       continue;
     }
     const language = fenceLanguage(token, unescapeAll);
-    if (language !== '' && language !== DIFF_LANGUAGE) {
+    const formatsItself = contributed.get(fenceKey(language))?.live === false;
+    if (language !== '' && !formatsItself) {
       fences.push({ token, language });
     }
   }
@@ -356,13 +440,46 @@ function installSharedRules(rules: Md['renderer']['rules']): void {
   rules.md_details_close = () => '</details>\n';
 }
 
-function installBlockRules(rules: Md['renderer']['rules']): void {
+function installBlockRules(md: Md, fences: Fences): void {
+  const rules = md.renderer.rules;
   rules.heading_open = (tokens, idx) =>
     `<p class="md-h md-${tokens[idx].tag}">`;
   rules.heading_close = () => '</p>\n';
+  const { escapeHtml } = md.utils;
+  installFenceRule(
+    md,
+    fences,
+    (token) => escapeHtml(token.content),
+    rules.fence!,
+  );
 }
 
-function installDocumentRules(md: Md): void {
+// A fence whose language has a contribution renders as the markdown mount's
+// placeholder, its code as `codeOf` gives it; any other renders through
+// `uncontributed`.
+function installFenceRule(
+  md: Md,
+  fences: Fences,
+  codeOf: (token: Token, env: unknown) => string,
+  uncontributed: RenderRule,
+): void {
+  const { escapeHtml, unescapeAll } = md.utils;
+  md.renderer.rules.fence = (tokens, idx, options, env, self) => {
+    const token = tokens[idx];
+    const language = fenceKey(fenceLanguage(token, unescapeAll));
+    if (!fences.has(language)) {
+      return uncontributed(tokens, idx, options, env, self);
+    }
+    const shownLanguage = escapeHtml(language);
+    const closed = token.meta?.closed === true;
+    return (
+      `<div class="md-fence" data-fence-language="${shownLanguage}" data-fence-closed="${closed}"${self.renderAttrs(token)}>` +
+      `<pre><code class="${options.langPrefix}${shownLanguage}">${codeOf(token, env)}</code></pre></div>\n`
+    );
+  };
+}
+
+function installDocumentRules(md: Md, fences: Fences): void {
   const { escapeHtml, unescapeAll } = md.utils;
   const rules = md.renderer.rules;
   // Every render of this instance goes through `renderDocument`'s env.
@@ -386,21 +503,18 @@ function installDocumentRules(md: Md): void {
     );
     return `<span class="md-image">${escapeHtml(alt)}</span>`;
   };
-  rules.fence = (tokens, idx, options, env, self) => {
+  const codeOf = (token: Token, env: unknown) =>
+    (env as DocumentEnv).highlighted.get(token) ?? escapeHtml(token.content);
+  installFenceRule(md, fences, codeOf, (tokens, idx, options, env, self) => {
     const token = tokens[idx];
     const language = fenceLanguage(token, unescapeAll);
     const attrs = self.renderAttrs(token);
-    if (language === DIFF_LANGUAGE) {
-      return `<pre class="md-diff"${attrs}>${diffCode(token.content, escapeHtml)}</pre>\n`;
-    }
-    const { highlighted } = env as DocumentEnv;
-    const code = highlighted.get(token) ?? escapeHtml(token.content);
     const languageClass =
       language === ''
         ? ''
         : ` class="${options.langPrefix}${escapeHtml(language)}"`;
-    return `<pre${attrs}><code${languageClass}>${code}</code></pre>\n`;
-  };
+    return `<pre${attrs}><code${languageClass}>${codeOf(token, env)}</code></pre>\n`;
+  });
 }
 
 // GitHub's slug: the heading's plain text, lowercased, with every character but
@@ -442,18 +556,6 @@ const alignedCell: RenderRule = (tokens, idx, options, _env, self) => {
   }
   return self.renderToken(tokens, idx, options);
 };
-
-// A `diff` fence colours its `+`, `-` and `~` lines; `''` keeps markdown-it's default fence.
-function highlightFence(
-  code: string,
-  lang: string,
-  escapeHtml: EscapeHtml,
-): string {
-  if (lang !== DIFF_LANGUAGE) {
-    return '';
-  }
-  return `<pre class="md-diff">${diffCode(code, escapeHtml)}</pre>`;
-}
 
 function diffCode(code: string, escapeHtml: EscapeHtml): string {
   const lines = code

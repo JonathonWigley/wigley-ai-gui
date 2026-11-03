@@ -1,5 +1,5 @@
 import type { PaneDirection } from '../../../contracts/panes';
-import { element } from '../../../shared/page/dom';
+import { element, moveConnected } from '../../../shared/page/dom';
 import type { DrawnPart } from '../../../shared/page/layout-host/draw-part';
 import { rowAction } from '../../../shared/page/ui/row';
 import { sheet } from '../../../shared/page/ui/sheet';
@@ -100,6 +100,9 @@ export interface SessionTabsView {
     focusedPaneId: string,
     edges: readonly PaneDirection[],
   ): void;
+  // Moves the frames panes `paneIds` show into the holder, while their slots
+  // are still in the document, ahead of those slots leaving it.
+  vacate(paneIds: readonly string[]): void;
   // Draws every pane and tab bar again with the parts' current layouts, then
   // the tabs and the texts; the tab bodies and their elements stay as they are.
   redrawPane(): void;
@@ -127,11 +130,14 @@ export interface SessionTabsView {
 // prompts, the bar parts other plugins added, the close prompt and the pane
 // controls at the bar's end) on the top edge of a sheet holding the session's
 // tabs, only its selected tab showing, or the `emptyText` saying why no tab
-// shows. An empty pane's body holds a sheet with the empty text alone. The tab prompts hide while the session has
-// no other tab, and every tab bar's prompts and pane control keys hide outside
-// the focused pane, whose keys they are. A tab's element fills its frame's
-// sheet, and a frame moves between panes as the same element. A frame no pane
-// shows, a session's with no row yet included, waits in the hidden holder.
+// shows. An empty pane's body holds a sheet with the empty text alone. The tab
+// prompts hide while the session has no other tab, and every tab bar's prompts
+// and pane control keys hide outside the focused pane, whose keys they are. A
+// tab's element fills its frame's sheet, and a frame moves between panes, the
+// holder and a redrawn pane part as the same element, by a connected move that
+// keeps a visual in it loaded; a closing pane's frame moves to the holder
+// (`vacate`) before its slot leaves the document. A frame no pane shows, a
+// session's with no row yet included, waits in the hidden holder.
 // Until `render` hands it main's first state, it shows no text either. The
 // view keeps each tab's click, its tooltip and the active tab's mark.
 export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
@@ -282,7 +288,9 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
   };
 
   // Draws `pane`'s part again when `input` differs from the one it drew with,
-  // or when it was marked for a redraw.
+  // or when it was marked for a redraw. The new part draws beside the old one,
+  // takes the old body's content by a connected move, then the old part
+  // leaves, so a visual in the content stays loaded.
   const drawPanePart = (pane: DrawnPane, input: PaneInput) => {
     if (
       pane.part !== null &&
@@ -291,11 +299,19 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     ) {
       return pane.part.built.body;
     }
-    pane.part?.dispose();
-    pane.slot.replaceChildren();
+    const old = pane.part;
     pane.part = parts.pane(pane.slot, input);
     pane.input = input;
-    return pane.part.built.body;
+    const { element: drawn, body } = pane.part.built;
+    if (old !== null) {
+      // `children` is live: each move shrinks it.
+      for (const content of Array.from(old.built.body.children)) {
+        moveConnected(body, content);
+      }
+      old.dispose();
+    }
+    removeChildrenExcept(pane.slot, drawn);
+    return body;
   };
 
   const place = (
@@ -313,7 +329,7 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
         panes.delete(paneId);
       }
     }
-    const shown = new Set<HTMLElement>();
+    const shown = new Map<HTMLElement, HTMLElement>();
     for (const { id, slot, sessionId } of placed) {
       let pane = panes.get(id);
       if (pane === undefined || pane.slot !== slot) {
@@ -336,17 +352,36 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
       });
       const content =
         sessionId === null ? pane.empty : frameOf(sessionId).element;
-      shown.add(content);
-      if (body.children[0] !== content || body.children.length !== 1) {
-        body.replaceChildren(content);
+      shown.set(content, body);
+      if (content.parentNode !== body) {
+        moveConnected(body, content);
       }
     }
     for (const frame of frames.values()) {
       if (!shown.has(frame.element) && frame.element.parentNode !== holder) {
-        holder.append(frame.element);
+        moveConnected(holder, frame.element);
       }
     }
+    for (const [content, body] of shown) {
+      removeChildrenExcept(body, content);
+    }
     draw();
+  };
+
+  const vacate = (paneIds: readonly string[]) => {
+    for (const paneId of paneIds) {
+      const pane = panes.get(paneId);
+      if (pane === undefined || pane.sessionId === null) {
+        continue;
+      }
+      const frame = frames.get(pane.sessionId);
+      const isShownInPane =
+        frame !== undefined &&
+        frame.element.parentNode === pane.part?.built.body;
+      if (isShownInPane) {
+        moveConnected(holder, frame.element);
+      }
+    }
   };
 
   const changed = () => {
@@ -390,6 +425,7 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
       draw();
     },
     place,
+    vacate,
     redrawPane() {
       for (const frame of frames.values()) {
         redrawBar(frame);
@@ -502,6 +538,14 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     },
     select,
   };
+}
+
+function removeChildrenExcept(parent: HTMLElement, kept: HTMLElement): void {
+  for (const child of Array.from(parent.children)) {
+    if (child !== kept) {
+      child.remove();
+    }
+  }
 }
 
 function isSameInput(a: PaneInput, b: PaneInput): boolean {

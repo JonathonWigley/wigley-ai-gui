@@ -1,0 +1,9 @@
+/* A visual's frame: the column's full width, and the height its content
+   reports through `--visual-frame-height` (unitless pixels), 0 until the
+   first report. */
+.visual-frame-document {
+  display: block;
+  width: 100%;
+  height: calc(var(--visual-frame-height, 0) * 1px);
+  border: none;
+}

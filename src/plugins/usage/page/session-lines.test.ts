@@ -11,6 +11,7 @@ import type { UsageSnapshot } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import { createUsageParts } from './layout/usage-parts';
 import { createSessionLines } from './session-lines';
+import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 
 const NOW = 50_000_000;
 const MINUTE = 60_000;
@@ -53,6 +54,7 @@ function setUp(shown: UsageSnapshot | null) {
         block: (text) => text,
         inline: (text) => text,
         document: async (text) => text,
+        ...NO_FENCES,
       },
       keys: recordingAnchors().keys,
       commands: { exists: () => true, run: () => undefined },

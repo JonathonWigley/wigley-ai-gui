@@ -27,7 +27,12 @@ file goes in as its path, which the agent opens itself; Chat keeps sending image
   path, and a draft or `setText` keeps the chip. A path with a space is written in double quotes
   (`"/Users/me/My File.md"`). Any absolute path of two or more segments in a box's text draws as a chip, typed or dropped, so
   a slash command (`/compact`) stays text.
-  In vim a chip is one character: the cursor steps over it and `x` deletes it whole.
+  In vim a chip is one character: the cursor steps over it and `x` deletes it whole. A move that
+  lands inside a chip rests on its start, and the next one from there (`n`, `;`, `l`) steps past
+  it, to the line's end when the chip ends the line; `p` on a chip pastes after the whole chip.
+  A chip is drawn from the text, so typing that joins it to other characters dissolves it or
+  redraws it as a different path; a quoted chip's ends are its quotes.
+  A path holding a `"` goes in as plain text, with no chip.
 - **Pasted file** — a file with no path on disk: a screenshot on the clipboard, or an image
   dragged out of a browser. It is saved first, so it has a path.
 
@@ -35,8 +40,9 @@ file goes in as its path, which the agent opens itself; Chat keeps sending image
 
 - **Drop**: the innermost registered target under the pointer takes the files; a one-line
   `<input>` or `<textarea>` under the pointer is innermost of all and takes plain paths at its
-  caret. A drop on no target and no input shows the toast `Nothing here takes files`, and no drop
-  ever opens the file in the window (the core cancels every
+  caret. A drop on no target and no input shows the toast `Nothing here takes files`; a file drag
+  that carries no file (a folder the OS hands none for) shows `This drag carried no files` wherever
+  it lands; and no drop ever opens the file in the window (the core cancels every
   file `dragover` and `drop` on the page).
 - **Paste**: a focused one-line input takes it as plain paths; else the innermost target holding
   the focused element takes it; with no focused
@@ -79,8 +85,10 @@ The API caps one image at 5 MB of base64 text. An image over it is scaled down a
 stepping down until it fits, each step scaling to 0.75 of the one before: JPEG and WebP re-encode as themselves at quality 0.9, PNG and GIF as
 PNG (a GIF keeps its first frame). An image still over the cap after six steps is refused with the toast `Image could not be shrunk under 5 MB`. Chat shrinks an
 image when it is attached; the Notes popup shrinks a pasted or dropped one when it joins the Images
-field. A GUI capture is not shrunk. Notes stores every image as PNG, so it converts first and shrinks the PNG form
-it stores: a large JPEG loses more resolution there than in Chat.
+field. Notes main shrinks every image again as it sends it to a session, so a GUI capture and an image flattened with its markup
+fit the cap too; a follow-up files its images at full size, on disk where no cap applies; main re-encodes through Electron's `nativeImage`, behind the `images` main service. Notes stores
+every image as PNG, so it converts first and shrinks the PNG form it stores: a large JPEG loses more resolution there
+than in Chat.
 
 ## Seams
 

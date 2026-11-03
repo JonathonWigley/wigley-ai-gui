@@ -71,6 +71,7 @@ function startNotesPart() {
       homeDir: '/home/me',
       paths: posixPaths,
       window: { capture: () => Promise.resolve(CAPTURED) },
+      images: { encode: () => Promise.reject(new Error('not reached')) },
       selfTest: { run: () => undefined },
     },
     dependency: (pluginId: string) =>

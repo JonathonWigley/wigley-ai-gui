@@ -14,7 +14,8 @@ type Listener = (event: unknown) => void;
 
 // The fake DOM's element with what the pane tree view reads beyond it: a
 // client rect the test sets, pointer capture as a set of pointer ids, and
-// listeners `dispatch` runs with the event fields it is given.
+// listeners `dispatch` runs with the event fields it is given, and
+// `moveBefore` between connected elements, as Chromium's, recorded in `moves`.
 class PaneFakeElement extends FocusFakeElement {
   rect = { left: 0, top: 0, width: 0, height: 0 };
   captured = new Set<number>();
@@ -22,6 +23,16 @@ class PaneFakeElement extends FocusFakeElement {
 
   override getBoundingClientRect() {
     return this.rect;
+  }
+
+  moveBefore(node: PaneFakeElement, reference: PaneFakeElement | null) {
+    if (!this.isConnected || !node.isConnected) {
+      const error = new Error('moveBefore needs connected nodes');
+      error.name = 'HierarchyRequestError';
+      throw error;
+    }
+    this.insertBefore(node, reference);
+    moves.push({ element: node, to: this });
   }
 
   setPointerCapture(id: number) {
@@ -83,6 +94,8 @@ function row(ratio: number, first: PaneNode, second: PaneNode): PaneNode {
 }
 
 let doc: FocusFakeDocument;
+// Each `moveBefore` that ran: the node moved and the element it moved into.
+let moves: { element: PaneFakeElement; to: PaneFakeElement }[];
 let fakeWin: ReturnType<typeof fakeWindow>;
 // Runs the callback of the last ResizeObserver built, as a resize of the box
 // it observes does.
@@ -90,6 +103,7 @@ let resized: () => void;
 
 beforeEach(() => {
   doc = installFocusFakeDom(vi.stubGlobal, PaneFakeElement);
+  moves = [];
   fakeWin = fakeWindow();
   vi.stubGlobal('window', fakeWin);
   resized = () => undefined;
@@ -123,6 +137,7 @@ function viewOf(tree: PaneTree) {
     timers,
     changed: (next) => changed.push(next),
     focused: (id) => focused.push(id),
+    leaving: () => undefined,
   });
   view.restore(tree);
   asFake(view.element).isPageRoot = true;
@@ -196,6 +211,53 @@ describe('createPaneTreeView draw', () => {
 
     expect(doc.activeElement).toBe(input);
   });
+
+  it.each([
+    {
+      name: 'a split, into the new split box',
+      tree: { root: leaf('a'), focusedId: 'a' },
+      moved: 'a',
+      act: (view: PaneTreeView) => {
+        asPane(view.slot('a')).rect = {
+          left: 0,
+          top: 0,
+          width: 1504,
+          height: 0,
+        };
+        view.split('row', 'b');
+      },
+      into: (root: PaneFakeElement) => findAll(root, 'pane-tree-split')[0],
+    },
+    {
+      name: 'a close of its sibling, into the tree box',
+      tree: { root: row(0.5, leaf('a'), leaf('b')), focusedId: 'a' },
+      moved: 'a',
+      act: (view: PaneTreeView) => view.close('b'),
+      into: (root: PaneFakeElement) => root,
+    },
+    {
+      name: 'a swap out of a nested split, into the outer split box',
+      tree: {
+        root: row(0.5, row(0.5, leaf('a'), leaf('b')), leaf('c')),
+        focusedId: 'b',
+      },
+      moved: 'b',
+      act: (view: PaneTreeView) => view.swap('right'),
+      into: (root: PaneFakeElement) => findAll(root, 'pane-tree-split')[0],
+    },
+  ])(
+    'moves a slot through moveBefore, so a frame in it stays loaded: $name',
+    ({ tree, moved, act, into }) => {
+      const { view } = viewOf(tree);
+      const slot = asPane(view.slot(moved));
+
+      act(view);
+
+      expect(
+        moves.filter((move) => move.element === slot).map((move) => move.to),
+      ).toEqual([into(asPane(view.element))]);
+    },
+  );
 });
 
 describe('createPaneTreeView divider limits', () => {

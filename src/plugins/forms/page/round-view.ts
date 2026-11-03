@@ -108,8 +108,9 @@ export interface RoundViewDeps {
 // `scrollBy` scrolls the main column by `step`, down for 1 and up for -1.
 // `resizeTarget` is the view's rail | main split, which the resize keys move
 // while the round shows.
-// `dispose` disposes every anchor the view named and its split, and stops it
-// following keymap changes; its owner calls it when it drops the view.
+// `dispose` disposes every anchor and markdown mount the view made and its
+// split, and stops it following keymap changes; its owner calls it when it
+// drops the view.
 export interface RoundView {
   element: HTMLElement;
   update(round: RoundState, view: FormsView): void;
@@ -124,8 +125,8 @@ export interface RoundView {
 interface RoundParts {
   main: HTMLElement;
   layoutHead: HTMLElement | null;
-  // Disposes the head's anchors and draws the layout's head again in its
-  // slot; nothing for a layout with no head.
+  // Disposes the head's anchors and mounts and draws the layout's head again
+  // in its slot; nothing for a layout with no head.
   redrawLayoutHead(): void;
   railHead: RailHead;
   rail: RailPane;
@@ -133,7 +134,8 @@ interface RoundParts {
   itemsPane: HTMLElement;
   itemCards: ItemCard[];
   review: ReviewPane;
-  // Disposes every anchor the build named, the head's included.
+  // Disposes every anchor and markdown mount the build made, the head's
+  // included.
   dispose(): void;
 }
 
@@ -281,8 +283,8 @@ function recordingKeys(keys: AnchorKeys, anchors: Disposable[]): AnchorKeys {
 // item pager, the items pane of cards, and the review pane, each card and pane
 // drawn by its pick in `picks`. A rail click acts on the forms view the state
 // holds as it lands, the cancel prompt included. Every part anchors its keys
-// through one recording `keys`, the head through its own, so `dispose`
-// reaches them all.
+// through one recording `keys` and records its markdown mounts beside those
+// anchors, the head into its own, so `dispose` reaches them all.
 function buildRoundParts(
   split: Split,
   round: RoundState,
@@ -310,6 +312,7 @@ function buildRoundParts(
     shownView: () => deps.getState().view,
     commands: deps.commands,
     contributions: deps.contributions,
+    recordMount: (mount) => anchors.push(mount),
   };
   const railHead = buildRailHead(split.start, keys);
   const rail = buildRailPane(picks.panes.rail, split.start, round, paneDeps);
@@ -318,7 +321,11 @@ function buildRoundParts(
 
   const headDeps: HeadDeps = {
     ...baseKitDepsFor(
-      { ...deps, keys: recordingKeys(deps.keys, headAnchors) },
+      {
+        ...deps,
+        keys: recordingKeys(deps.keys, headAnchors),
+        recordMount: (mount) => headAnchors.push(mount),
+      },
       formsScope('forms'),
     ),
     log: deps.log,
@@ -345,6 +352,7 @@ function buildRoundParts(
     log: deps.log,
     commands: deps.commands,
     contributions: deps.contributions,
+    recordMount: (mount) => anchors.push(mount),
   };
   const itemCards = items.map((item, position) =>
     buildLayoutCard(

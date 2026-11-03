@@ -1,7 +1,9 @@
 import type { ChatImage } from '../../../contracts/agent';
+import type { EncodableImage, ImageEncoder } from '../../../contracts/images';
 import type { Log } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import { errorText } from '../../../shared/error-text';
+import { SHRINK_REFUSED, shrinkToFit } from '../../../shared/shrink-image';
 import type {
   BacklogMainExports,
   BacklogWriteResult,
@@ -14,9 +16,12 @@ import { sessionLine } from '../session-ref';
 import type { DraftStore } from './draft-store';
 import { firstSentence, followupText, launchText } from './note-text';
 
-// `homeDir` is the real home path, its links resolved.
+// `homeDir` is the real home path, its links resolved. `images` shrinks each
+// image over the API's cap before a session send; a follow-up files them as
+// they are.
 export interface NoteSenderDeps {
   store: DraftStore;
+  images: ImageEncoder;
   backlog: Pick<BacklogMainExports, 'fileNote'>;
   chat: Pick<ChatMainExports, 'launch' | 'profileNames' | 'profileOf'>;
   launchBrief(): string;
@@ -28,6 +33,10 @@ export interface NoteSenderDeps {
 // Sends the kept draft and clears it once the send succeeded; a refused or
 // failed send keeps it. `flattened` holds one entry per draft image, in strip
 // order: the PNG with its markup drawn in, or null to send the stored image.
+// A follow-up files the images at full size, on disk where no API cap
+// applies. A session send shrinks each image over the API's cap first; one
+// that will not shrink under it, or that the encoder rejects, refuses the send
+// with SHRINK_REFUSED.
 // Each throws when `flattened` and the draft hold different image counts.
 export interface NoteSender {
   toFollowup(
@@ -44,8 +53,9 @@ function refused(reason: string): NoteSendResult {
   return { type: 'refused', reason };
 }
 
-// The bytes to send for each draft image, in strip order.
-function imagesToSend(
+// The PNG bytes of each draft image, in strip order: the flattened PNG, else
+// the stored one. Throws when `flattened` and the draft differ in count.
+async function draftPngs(
   store: DraftStore,
   draft: NoteDraft,
   flattened: readonly (Uint8Array | null)[],
@@ -60,6 +70,34 @@ function imagesToSend(
       (image, index) => flattened[index] ?? store.image(image.id),
     ),
   );
+}
+
+// Each PNG shrunk under the API's cap; null when one will not shrink under it
+// or the encoder rejects one, logging the rejection.
+async function fitToCap(
+  pngs: readonly Uint8Array[],
+  encoder: ImageEncoder,
+  log: Log,
+): Promise<Uint8Array[] | null> {
+  let fitted: (EncodableImage | null)[];
+  try {
+    fitted = await Promise.all(
+      pngs.map((bytes) =>
+        shrinkToFit({ bytes, mediaType: 'image/png' }, encoder),
+      ),
+    );
+  } catch (error) {
+    log('notes', `image not shrunk: ${errorText(error)}`);
+    return null;
+  }
+  const sent: Uint8Array[] = [];
+  for (const image of fitted) {
+    if (image === null) {
+      return null;
+    }
+    sent.push(image.bytes);
+  }
+  return sent;
 }
 
 function followupTarget(
@@ -130,7 +168,7 @@ export function createNoteSender(deps: NoteSenderDeps): NoteSender {
       if (home === null) {
         throw new Error('sendRefusal passed a draft with no target');
       }
-      const images = await imagesToSend(store, draft, flattened);
+      const images = await draftPngs(store, draft, flattened);
       const line = await lineOf(draft);
       const target = followupTarget(draft, request);
       let result: BacklogWriteResult;
@@ -158,7 +196,11 @@ export function createNoteSender(deps: NoteSenderDeps): NoteSender {
       if (refusal !== null) {
         return refused(refusal);
       }
-      const images = await imagesToSend(store, draft, flattened);
+      const pngs = await draftPngs(store, draft, flattened);
+      const images = await fitToCap(pngs, deps.images, log);
+      if (images === null) {
+        return refused(SHRINK_REFUSED);
+      }
       const owner =
         draft.session === null ? null : chat.profileOf(draft.session.sessionId);
       const profile = owner ?? chat.profileNames().at(0);

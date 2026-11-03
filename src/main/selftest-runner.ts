@@ -1,7 +1,11 @@
 import { writeFile } from 'node:fs/promises';
 import { setTimeout as wait } from 'node:timers/promises';
 import type { Files } from '../contracts/files';
-import type { SelfTestGroup, SelfTestStep } from '../contracts/plugin';
+import type {
+  SelfTestGroup,
+  SelfTestScript,
+  SelfTestStep,
+} from '../contracts/plugin';
 import { errorText } from '../shared/error-text';
 import {
   PLACEMENT_CHECK_EVENT,
@@ -21,7 +25,7 @@ import {
   waitForNewLogLine,
   withPrimitiveEllipsis,
 } from './drive/page-driver';
-import type { HandedScript } from './selftest-config';
+import type { ScriptRun } from './selftest-config';
 
 // Runs one plugin's self-test script over a driven window: opens its fixture,
 // walks its groups of steps, sets and holds the widths steps set, writes the
@@ -398,11 +402,15 @@ function reportWhys(group: SelfTestGroup, step: SelfTestStep) {
 // script's `scrollsItself` and the primitives' ellipsis parts clip. `load` is
 // the page load the run belongs to, which the fixture opens under, and
 // `isCurrent` (`isOnLoad` of it) whether the run still owns the window.
-// Returns how many checks failed, or null when a reload interrupted the run.
+// Without `checksResult` the result is left unchecked, a skip line saying so,
+// unless it has rejected by the time the script ends, which rejects with its
+// error: a script cut short is the run's last (`selectScripts`), so that is the
+// end of the run. Returns how many checks failed, or null when a reload
+// interrupted the run.
 export async function runScript(
   window: DrivenWindow,
   homeFiles: Files,
-  { pluginId, script }: HandedScript,
+  { pluginId, script, checksResult }: ScriptRun,
   screenshots: ReadonlyMap<SelfTestStep, readonly string[]>,
   startWidth: number,
   load: number,
@@ -427,6 +435,13 @@ export async function runScript(
     return null;
   }
   const { shownLine, result } = script.open(load);
+  const settled: { hasRejected: boolean; error?: unknown } = {
+    hasRejected: false,
+  };
+  result.catch((error: unknown) => {
+    settled.hasRejected = true;
+    settled.error = error;
+  });
   // Rejects with the result's error and otherwise never settles, so a wait
   // raced against it ends as soon as the result rejects.
   const rejection = result.then(() => new Promise<never>(() => {}));
@@ -472,28 +487,65 @@ export async function runScript(
       }
     }
   }
-  const outcome = await settleWithin(result, stepTimeoutMs);
+  failures += await checkResult(
+    pluginId,
+    script,
+    result,
+    checksResult,
+    stepTimeoutMs,
+    isCurrent,
+  );
   if (!isCurrent()) {
     return null;
+  }
+  if (!(await restoreStartWidth(window, pluginId, startWidth, isCurrent))) {
+    failures++;
+  }
+  if (!isCurrent()) {
+    return null;
+  }
+  // A skipped result, or a checked one that timed out in `settleWithin`, that
+  // has rejected by now: a checked one that rejected in time rejected there.
+  if (settled.hasRejected) {
+    throw settled.error;
+  }
+  return failures;
+}
+
+// Checks the script's result once it settles within `stepTimeoutMs`, reporting
+// it under `pluginId`, or without `checksResult` prints that it was skipped;
+// returns how many checks failed. Reports nothing once the run stands down.
+async function checkResult(
+  pluginId: string,
+  script: SelfTestScript,
+  result: Promise<unknown>,
+  checksResult: boolean,
+  stepTimeoutMs: number,
+  isCurrent: () => boolean,
+): Promise<number> {
+  if (!checksResult) {
+    if (isCurrent()) {
+      console.log(
+        `[selftest] SKIP ${pluginId} result: the run left out its later groups`,
+      );
+    }
+    return 0;
+  }
+  const outcome = await settleWithin(result, stepTimeoutMs);
+  if (!isCurrent()) {
+    return 0;
   }
   if (outcome.timedOut) {
     report(
       false,
       `${pluginId} result did not settle within ${stepTimeoutMs} ms`,
     );
-    failures++;
-  } else {
-    const problems = script.problems(outcome.value);
-    report(
-      problems.length === 0,
-      `${pluginId} result ${problems.join(', ') || 'as expected'}`,
-    );
-    if (problems.length > 0) {
-      failures++;
-    }
+    return 1;
   }
-  if (!(await restoreStartWidth(window, pluginId, startWidth, isCurrent))) {
-    failures++;
-  }
-  return isCurrent() ? failures : null;
+  const problems = script.problems(outcome.value);
+  report(
+    problems.length === 0,
+    `${pluginId} result ${problems.join(', ') || 'as expected'}`,
+  );
+  return problems.length > 0 ? 1 : 0;
 }

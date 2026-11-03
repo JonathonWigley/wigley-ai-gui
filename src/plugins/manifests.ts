@@ -11,6 +11,7 @@ import { primerManifest } from './primer/manifest';
 import { sessionsManifest } from './sessions/manifest';
 import { settingsManifest } from './settings/manifest';
 import { usageManifest } from './usage/manifest';
+import { visualManifest } from './visual/manifest';
 import { workflowManifest } from './workflow/manifest';
 
 // The digits that pick forms' numbered choices, which the default keymap binds.
@@ -32,6 +33,7 @@ export const builtInManifests = [
   notesManifest,
   usageManifest,
   workflowManifest,
+  visualManifest,
 ] as const;
 
 // Every built-in plugin's manifest: main builds the served keymap, command

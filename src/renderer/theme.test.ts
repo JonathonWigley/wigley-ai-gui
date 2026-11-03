@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Settings } from '../contracts/settings';
 import type { Theme } from '../contracts/theme';
+import type { VisualTheme } from '../shared/visual-messages';
 import { createThemeApplier } from './theme';
 
 function fakeRoot() {
@@ -57,7 +58,10 @@ describe('createThemeApplier', () => {
   it('writes every token as its variable', () => {
     const { root, properties } = fakeRoot();
 
-    createThemeApplier(root, fakeQuery(false)).apply(theme, settings('full'));
+    createThemeApplier(root, fakeQuery(false), () => {}).apply(
+      theme,
+      settings('full'),
+    );
 
     expect(properties.get('--wg-fg')).toBe('#111111');
     expect(properties.get('--wg-forms-origin-caused')).toBe('var(--wg-fg)');
@@ -66,7 +70,7 @@ describe('createThemeApplier', () => {
 
   it('writes the reduced overrides when transparency is reduced', () => {
     const reduced = fakeRoot();
-    createThemeApplier(reduced.root, fakeQuery(false)).apply(
+    createThemeApplier(reduced.root, fakeQuery(false), () => {}).apply(
       theme,
       settings('reduced'),
     );
@@ -75,7 +79,7 @@ describe('createThemeApplier', () => {
     expect(reduced.root.dataset.transparency).toBe('reduced');
 
     const full = fakeRoot();
-    createThemeApplier(full.root, fakeQuery(true)).apply(
+    createThemeApplier(full.root, fakeQuery(true), () => {}).apply(
       theme,
       settings('full'),
     );
@@ -87,7 +91,11 @@ describe('createThemeApplier', () => {
   it('follows the OS under system', () => {
     const { root, properties } = fakeRoot();
     const query = fakeQuery(true);
-    createThemeApplier(root, query).apply(theme, settings('system'));
+    const heard: VisualTheme[] = [];
+    createThemeApplier(root, query, (applied) => heard.push(applied)).apply(
+      theme,
+      settings('system'),
+    );
 
     expect(properties.get('--wg-material-chrome-bg')).toBe('#222222');
 
@@ -96,11 +104,45 @@ describe('createThemeApplier', () => {
 
     expect(properties.get('--wg-material-chrome-bg')).toBe('#22222280');
     expect(root.dataset.transparency).toBe('full');
+    const lastHeard = heard.at(-1)?.properties ?? [];
+    expect(lastHeard).toContainEqual(['--wg-material-chrome-bg', '#22222280']);
+    expect(lastHeard).not.toContainEqual([
+      '--wg-material-chrome-bg',
+      '#222222',
+    ]);
+  });
+
+  it('hands onApplied every property it wrote, in write order', () => {
+    const { root } = fakeRoot();
+    const heard: VisualTheme[] = [];
+
+    createThemeApplier(root, fakeQuery(false), (applied) =>
+      heard.push(applied),
+    ).apply(theme, settings('reduced', { ui: 'Inter', uiSize: 15 }));
+
+    expect(heard).toEqual([
+      {
+        properties: [
+          ['--wg-fg', '#111111'],
+          ['--wg-material-chrome-bg', '#22222280'],
+          ['--wg-forms-origin-caused', 'var(--wg-fg)'],
+          ['--wg-font-ui', 'System'],
+          ['--wg-font-mono', 'Mono'],
+          ['--wg-text-ui', '13px'],
+          ['--wg-text-mono', '13px'],
+          ['--wg-text-prose', '14px'],
+          ['--wg-material-chrome-bg', '#222222'],
+          ['--wg-font-ui', 'Inter'],
+          ['--wg-text-ui', '15px'],
+        ],
+        colorScheme: 'dark',
+      },
+    ]);
   });
 
   it('overrides the font tokens with the font settings and restores them', () => {
     const { root, properties } = fakeRoot();
-    const applier = createThemeApplier(root, fakeQuery(false));
+    const applier = createThemeApplier(root, fakeQuery(false), () => {});
 
     applier.apply(
       theme,

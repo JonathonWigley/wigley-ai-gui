@@ -76,9 +76,10 @@ import {
 } from './config/config-store';
 import { createUserConfig } from './config/user-config';
 import {
-  registerFileSchemes,
+  registerAppSchemes,
   serveDataScheme,
   serveLayoutScheme,
+  serveVisualScheme,
 } from './data-protocol/data-protocol';
 import { type DriveRun, startDriveRun } from './drive/drive-run';
 import { electronDrivenWindow } from './electron-driven-window';
@@ -102,10 +103,11 @@ import { createMainApi } from './plugins/main-api';
 import { createPageLog } from './page-log';
 import { createPastedFiles } from './pasted-files';
 import { createPluginChannels } from './plugins/plugin-channel';
+import { nativeImageEncoder } from './images/native-image-encoder';
 import { createNodeProcesses } from './processes/node-processes';
 import { failSelfTest, type SelfTestDriver, startSelfTest } from './selftest';
 import { createSelfTestTeardown } from './selftest-teardown';
-import { applySelfTestConfig } from './selftest-config';
+import { applySelfTestConfig, selfTestFilterOf } from './selftest-config';
 import { tempFolders } from './temp-folders';
 import {
   type DriveHarnessName,
@@ -150,7 +152,7 @@ const appInstance = appInstanceOf(app.isPackaged);
 const driveRunDir =
   runEnvironment.mode === 'drive' ? runEnvironment.runDir : null;
 
-registerFileSchemes();
+registerAppSchemes();
 
 // Read while the app gets ready, and applied before any plugin starts. A
 // terminal start, the self-test and a drive run keep the PATH of the shell
@@ -269,7 +271,7 @@ function driveHarness(
   { store, homeDir, log }: ModeServicesContext,
 ): AgentHarness {
   if (name === 'fake') {
-    return createFakeAgentHarness(clock, files);
+    return createFakeAgentHarness(clock, files, timers);
   }
   return claudeHarness(store, os.homedir(), endpointEnv(homeDir), log);
 }
@@ -280,7 +282,7 @@ function modeServicesOf(environment: RunEnvironment): ModeServices {
       return liveServices();
     case 'selfTest':
       return offscreenRunServices('the self-test', () =>
-        createFakeAgentHarness(clock, files),
+        createFakeAgentHarness(clock, files, timers),
       );
     case 'drive':
       return offscreenRunServices('a drive run', (context) =>
@@ -726,6 +728,7 @@ function createWindow(
           scopedFiles(files, inputs.homeDir, paths),
           cleanUpSelfTest,
           path.join(app.getAppPath(), '.selftest', 'screenshots'),
+          selfTestFilterOf(process.env),
         )
       : null;
   // On a normal quit a quit task disposes the parts that started; a failed
@@ -774,6 +777,7 @@ function createWindow(
       tempFolders: inputs.tempFolders,
       userConfig,
       paths,
+      images: nativeImageEncoder,
       runMode,
       appInstance,
       ...modeServices.forWindow({
@@ -934,6 +938,10 @@ function startApp() {
       onSelfTestExit('the config store', () => store.dispose());
       serveDataScheme(inputs.dataRoot, paths);
       serveLayoutScheme(layoutsFolder(inputs.homeDir), paths);
+      const serveVisual = serveVisualScheme();
+      ipcMain.handle(BRIDGE_CHANNELS.serveVisual, (_event, source: string) =>
+        serveVisual(source),
+      );
       createWindow(inputs, store, userConfig);
       // After createWindow's quit tasks, so the parts dispose before it.
       onQuit(() => store.dispose());

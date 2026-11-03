@@ -10,6 +10,7 @@ import type {
 } from '../../../contracts/agent';
 import type { Alerts } from '../../../contracts/alerts';
 import type { Clock, RandomUuid } from '../../../contracts/ambient';
+import type { Disposable } from '../../../contracts/disposable';
 import type { Log } from '../../../contracts/log';
 import type { MainChannel, PluginEvents } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
@@ -161,6 +162,10 @@ export interface ChatSessions {
   sessionEnded(sessionId: string): void;
   // The `start` chat hands `sessions.contributeTools` with PERMISSION_TOOLS.
   permissionToolSession(session: AgentSession): ToolSession;
+  // Registers `text` for every process start from now on, in registration
+  // order; a running process keeps what it started with. Disposing the
+  // registration drops it from later starts; a second dispose does nothing.
+  addInstructions(text: string): Disposable;
 }
 
 type PermissionEntry = Extract<ChatEntry, { kind: 'permission' }>;
@@ -337,6 +342,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   // before they are read; it stops for good at `killAll`.
   let isRestored = false;
   let isKilled = false;
+  // One object per `addInstructions` call, in registration order.
+  const instructionRegistrations = new Set<{ text: string }>();
 
   function snapshot(): SavedSessions {
     const records = [...held.values()].map(savedSessionOf);
@@ -755,6 +762,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         controls: controlValuesOf(
           session.state.controls,
           session.userSetControls,
+        ),
+        instructions: [...instructionRegistrations].map(
+          (registration) => registration.text,
         ),
       },
       processEvents(session, session.processStarts, started, profileDir),
@@ -1325,6 +1335,15 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     },
     sessionEnded(sessionId) {
       openHostIds.delete(sessionId);
+    },
+    addInstructions(text) {
+      const registration = { text };
+      instructionRegistrations.add(registration);
+      return {
+        dispose() {
+          instructionRegistrations.delete(registration);
+        },
+      };
     },
     // The chat state is looked up on every call: sessions builds the tool
     // session inside `open`, before `openRow` stores the state.

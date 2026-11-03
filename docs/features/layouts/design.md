@@ -79,18 +79,20 @@ stays in themes.
 | --- | --- | --- |
 | `shell` | `shell.layout` | the title bar's context, dev tag and config problems; each mode's activity bar item; the five chrome frames take the layout's CSS |
 | `forms` | `forms.layout` | question, finding and notice cards; head, rail and review panes |
-| `chat` | `chat.layout` | chat entries; the activity line (a run of the agent's steps); the composer and its bar, the attachments, the picker rows (start prompt and pickers), the sign-in, deny-reason and end-session dialogs, the image viewer |
+| `chat` | `chat.layout` | chat entries; the activity line (a run of the agent's steps); the composer and its status line, the attachments, the picker rows (start prompt and pickers), the sign-in, deny-reason and end-session dialogs, the image viewer |
 | `primer` | `primer.layout` | feature, task and item cards; tasks, items and review panes |
 | `docs` | `docs.layout` | the tree and its rows, the rendered doc, its header, disk banner and editor frame, the box and confirm dialogs, the create dialog's completion and picker rows |
 | `backlog` | `backlog.layout` | the repo and home side bar, the follow-up list and its rows, the detail and editor panes, plans and features, the picker rows and the confirm body |
 | `settings` | `settings.layout` | the section list, the setting, key, leader and advanced rows, the problem line, the picker rows |
 | `notes` | `notes.layout` | the note popup: fields, tags, images, target, session, actions, markup toolbar, the confirm and picker rows |
 | `sessions` | `sessions.layout` | the session rows in the side bar, each session's tab strip, and where other plugins' row and bar parts sit |
-| `agents` | `agents.layout` | the running subagent and task lines under each session row |
+| `agent-lines` | `agent-lines.layout` | the running subagent and task lines under each session row |
+| `agent-strip` | `agent-strip.layout` | the agent strip above the Chat composer's box: subagent and task boxes, a box opened in place |
 | `gallery` | `gallery.layout` | each primitive's sample block |
-| `usage` | `usage.layout` | the status-bar line (plan rows), each session's line in its tab bar (context bar, cache countdown, spend) and the right-bar details |
+| `usage` | `usage.layout` | the status-bar line (plan rows), each session's usage line (context bar, cache countdown, spend), drawn in the Chat status line and, through the optional `usage-tab-line` plugin, in each tab bar; the right-bar details |
 | `keys` | `keys.layout` | the help overlay, the which-key panel, the title bar's Keys button |
 | `workflow` | `workflow.layout` | the stage chip under each session row, the strip above the Chat composer (stepper and actions), the Flow tab (stepper, plan checklist by wave, actions) |
+| `visual` | `visual.layout` | the "drawing visual…" card of an open html block, each closed block's visual around its frame with its expand control, and the full-size overlay |
 
 Each owner's `layout.d.ts` names its parts exactly.
 
@@ -105,7 +107,7 @@ can be iterated in place. The sample sends nothing and raises no notification or
 | `Space z l p` | primer: a sample primer holding every field and need |
 | `Space z l c` | chat: a session of every entry kind, its steps grouped into finished activity lines |
 | `Space z l s` | sessions: rows in every state |
-| `Space z l a` | agents: a sample session with two running subagents and two running tasks |
+| `Space z l a` | agents: a sample session with two running subagents |
 | `Space z l w` | workflow: a sample session in every stage, the plan-ready countdown included |
 
 ## The primer's columns

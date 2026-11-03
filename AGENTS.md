@@ -77,10 +77,15 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
   layout-url.ts  the `wigley-layout:` URLs that serve layout files to the page
   visual-url.ts  the `wigley-visual:` URLs that serve a visual's document by its source hash
   visual-messages.ts the messages between a visual's frame and the page: theme in, height and `Esc` out
+  sample-visuals.ts the sample UI mockup and flowchart the fake harness's `fake: visual` reply and the chat layout
+                 preview draw
   file-url.ts    what `layout-url.ts` and `data-url.ts` share: per-segment encoding, scheme and revision checks,
                  and per-segment decoding that refuses an encoded `/`
   agent-forms/   the agent form lifecycle every agent form type shares (forms' rounds, the primer): the service with
-                 its per-session open form, deadline, re-attach and hand-back, the saved-form folder and memory stores,
+                 its per-session open form, deadline, re-attach and hand-back, the wake (a form the user finishes
+                 while no call waits on it sends its session a message naming the collect tool, through the
+                 `AgentFormWake` the service is handed: chat's `send` for a session chat owns, nothing for any
+                 other), the saved-form folder and memory stores,
                  the channel and scripted presenters, the MCP tool session, the drive actions that open a
                  form type's forms in a drive run's sessions, and the layout preview helper
                  (`agent-form-preview.ts`: a form type's sample in a session of its own, its form asked again and a
@@ -91,12 +96,13 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  text, in the file's own shape (triage.md § The project's follow-ups in wigley-ai-marketplace) →
                  pure, no I/O; Backlog and Docs' create dialog both write follow-ups through it
   image-types.ts the image media types the app attaches and pastes (chat and notes share it), the 5 MB base64 cap `MAX_IMAGE_BASE64`, and the helpers `extensionOf`, `base64LengthOf` and `base64Of`
-  page/          page-only DOM builders plugins share: the paste and drop helpers (`file-drop/`: the text-paste rule, the file chip pattern, the image shrink and its canvas encoder), the layout host
+  shrink-image.ts `shrinkToFit`: steps an image over the 5 MB cap down until it fits, through an `ImageEncoder` (the page's canvas adapter, or main's `services.images`)
+  page/          page-only DOM builders plugins share: the paste and drop helpers (`file-drop/`: the text-paste rule, the file chip pattern, the canvas adapter behind `ImageEncoder`), the layout host
                  (`layout-host/`: showing layouts, the pick chain, drawing a part, rollback, `BaseKit` (the kit every
                  owner's kit extends, with the shared `icon`, `chevron`, `edge`, `rowTrailing` and `duration`) and
                  `ownerBaseKitDeps` (the deps an owner's base kit is built from), the markdown mount
                  (`markdown-mount.ts`: draws markdown into an element, hydrates each registered fence's placeholder
-                 through its contribution, reuses a mounted fence view while its language and source are unchanged, and
+                 through its contribution, reuses a mounted fence view while its language, closed flag and source are unchanged, and
                  disposes the rest; `kit.markdown` and the docs view draw through it), `fake-visual-frames.ts` (the visual
                  frames fake plugin tests open visuals through), `layout-parts.ts`
                  (`createLayoutParts`: an owner's shown layouts and its draws, kept by slot), `app-slot.ts` (where an
@@ -122,6 +128,7 @@ src/main/        core main process; main.ts is its composition root
   ui-state/      the uiState file: app-written view state (`ui-state.json`) in the app instance's user data folder
   alerts/        native notification, Dock bounce or taskbar flash, and the badge, behind Alerts; the badge sums the
                  open counts each source sets
+  images/        Electron's nativeImage behind ImageEncoder: re-encodes an image smaller, as PNG or JPEG only
   claude-code/   Claude Code CLI adapter behind AgentHarness, which also lists and reads Claude's saved sessions and
                  project folders, runs `claude auth` sign-in, sign-out and status and `claude -p /usage` (the plan usage
                  poll), and asks each session for `get_context_usage` → the only place the app spawns `claude`
@@ -159,17 +166,24 @@ src/renderer/    core page; renderer.ts is its composition root
                  flattened to a PNG                         → the only fabric import
 src/plugins/     every plugin, one folder each; manifests.ts lists every built-in manifest, keymap.ts holds
                  every built-in default key, main.ts and page.ts the parts each root starts
-  sessions/      manifest.ts, contract.ts, main/ (the session list — rows, the selected session, tool routing — relay,
-                 endpoint files, MCP adapter → the only @modelcontextprotocol import), page/ (Sessions mode: the
-                 sidebar, the pane tree of whole sessions with its split, swap and close commands and the shared
-                 list picker's `picker` scope, each session's tabs, the row and bar parts other plugins add, and the
-                 layout preview rows),
-                 layouts/ (the sessions Layout contract and the built-in `default` layout)
+  sessions/      manifest.ts, contract.ts, session-title.ts (the title rules main and page share), main/ (the
+                 session list — rows, their titles, the selected session, tool routing — the `set_session_title`
+                 tool, relay, endpoint files, MCP adapter → the only @modelcontextprotocol import), page/ (Sessions
+                 mode: the sidebar, the pane tree of whole sessions with its split, swap and close commands and the
+                 shared list picker's `picker` scope, each session's tabs, the row and bar parts other plugins add,
+                 each row's activities, the rename dialog, and the layout preview rows),
+                 layouts/ (the sessions Layout contract and the built-in `default` layout);
+                 `docs/features/session-titles/design.md`
   agents/        manifest.ts, contract.ts, roster.ts (the pure reducer folding agent events into a session's roster),
                  main/ (hears `chat.agentEvent`, keeps each session's roster, appends each event to
-                 `logs/<host session id>.jsonl` in its plugin data, the layout preview), page/ (the running subagent and task
-                 lines under each session row, through sessions' `addRowPart`), layouts/ (the agents Layout contract
-                 and the built-in `default` layout); `docs/features/agent-tower/design.md`
+                 `logs/<host session id>.jsonl` in its plugin data, the layout preview); draws nothing: its page
+                 part only exports the rosters to the views below; `docs/features/agent-tower/design.md`
+  agent-lines/   main/ (registers its layouts, hands the lines' self-test script), page/ (the subagent and task
+                 lines under each session row, through sessions' `addRowPart`), layouts/ (its Layout contract and
+                 `default` layout); in `plugins.disabled` by default
+  agent-strip/   main/ (registers its layouts, hands its self-test script), page/ (the strip of subagent and task boxes above the Chat composer's box, through chat's
+                 `addComposerPart`, with a stop on chat's entry cursor), layouts/ (its Layout contract and `default`
+                 layout); `docs/features/chat-bar/design.md`
   forms/         manifest.ts, contract.ts, main/ (the round form type, its MCP tools, the preview
                  round), page/ (the Form tab), layouts/ (the Layout contract and the built-in `default` layout)
   primer/        manifest.ts, contract.ts, main/ (the feature primer form type, its MCP tools, fixtures,
@@ -196,7 +210,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  the start prompt with its folder, profile, sign-in and session steps), layouts/ (the chat Layout contract
                  and the built-in `default` chat layout); `image-rules.ts` at the root holds the attach rules both
                  parts share; main exports `launch` (a background session with a first message), `profileNames` and
-                 `profileOf` to notes, and `addInstructions` (text every session chat starts carries to its harness)
+                 `profileOf` to notes, `send` and `profileOf` to forms and the primer (the form wake), and `addInstructions` (text every session chat starts carries to its harness)
                  to visual; page exports `focusedEntry` (the focused entry's element) to visual
   keys/          manifest.ts, contract.ts, main/ (registers the layouts only), page/ (which-key, the help overlay,
                  the title bar's Keys button, and the hint anchors and keys-for-command lookup it exports), layouts/
@@ -216,7 +230,11 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  `chat.planUsage` and `chat.agentEvent`), page/ (the status-bar plan line, each session's line in
                  its tab bar through sessions' `addBarPart`, and the right-bar details),
                  layouts/ (the usage Layout contract and the built-in `default` layout),
-                 `docs/features/usage/design.md`
+                 `docs/features/usage/design.md`; its session numbers draw in the Chat status line through chat's
+                 `addStatusPart`
+  usage-tab-line/ page/ only (each session's usage line in its tab bar through sessions' `addBarPart`, drawn by
+                 usage's own session-line part through a usage page export, so the line has one look); in
+                 `plugins.disabled` by default
   workflow/      manifest.ts, contract.ts, flow.ts (the pure fold of signals into a session's flow), plan-reader.ts
                  (ticked, total, wave and review rounds from a plan.md), stages/<stage>/ (one wigley workflow stage
                  each: main.ts its entry rule and main actions, page.ts its look and page actions, registered through
@@ -225,8 +243,10 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  Flow tab, the preview), layouts/ (the workflow Layout contract and the built-in `default` layout);
                  `docs/features/workflow/design.md`
   visual/        manifest.ts, contract.ts, main/ (the session note it hands chat's `addInstructions`, the layout
-                 registration), page/ (the `html` fence contribution: the "drawing visual…" card for an open block, a
-                 visual frame for a closed one; the full-size overlay and its `v` key on chat's focused entry),
+                 registration), page/ (`html-fence.ts`, the `html` fence contribution: the "drawing visual…" card for
+                 an open block, a visual frame for a closed one; `visual-registry.ts` the source of each closed
+                 visual on the page; `visual-overlay.ts` and `visual-commands.ts` the full-size overlay and its `v` key on chat's
+                 focused entry, `h`/`l` between visuals and `Esc` to close),
                  layouts/ (the visual Layout contract and the built-in `default` layout);
                  `docs/features/visuals/design.md`
 ```
@@ -237,8 +257,12 @@ the `retro` skill reads, and the relay's side of the channel). A change to eithe
 lands in both repos together. Each relay connection is one agent session, owned by the `sessions` plugin. A
 connected session (one the app did not start, such as a terminal `claude` or Codex session) has no row in the sessions
 sidebar until a plugin needs the user there: `mark` or `activate` adds its row, as a form opening does, and `release` closes it
-again once every close guard allows, as the form presenter does when the session's last form closes, by submit,
-cancel or any other close. The user may also close the row; it leaves when the session disconnects. A session the
+again once every close guard allows, as the form presenter does after every form close, by submit, cancel or
+any other close (the close guard of a session's other open form keeps the row). The user may also close the row,
+which `mark` or `activate` brings back; it leaves for good when the session disconnects. A row `release` closed
+while selected comes back selected when the session's next form marks it within 30 seconds (a back-to-back
+round), unless the user picked another row first; later, it comes back marked. A form's notification click
+selects only a row its session still holds (`activateExistingRow`), so a stale click adds none. A session the
 app starts (`open`) is an owned session: its row exists from start, the relay connection whose hello carries its
 host session id joins that row instead of adding one (a newer relay takes the join from an older one still
 connected, as when the harness restarts its MCP connection), and the row ends when its owner ends it: chat keeps
@@ -258,6 +282,10 @@ round; primer: an open primer), since main, not the page, decides.
   builds the served keymap, labels and settings from, and its parts join `src/plugins/main.ts` and
   `src/plugins/page.ts`; a part whose manifest is missing from the list throws at startup. A main part starts once;
   a page part starts on every page load.
+- **A disabled plugin** is one named in the core setting `plugins.disabled`: the plugin host starts none of its parts.
+  A page part follows the list on each page load, a main part on each app start. Naming a plugin that a started
+  plugin depends on is a config problem, so the last good config stays. A view that can be switched off is its own
+  plugin over a data plugin that stays on (`docs/features/chat-bar/design.md` § Optional plugins).
 - **A plugin talks** to its other process over its own channel (`api.channel`), typed by its `contract.ts`, and to
   another plugin through the exported API of a plugin its manifest depends on, or through events. A plugin imports
   only `src/contracts`, `src/shared`, its own folder, and the `contract.ts` of a plugin its manifest depends on,
@@ -301,12 +329,21 @@ round; primer: an open primer), since main, not the page, decides.
 - **A session part** (`SessionPart`) is what a plugin draws for every session on a sessions surface: sessions hands
   it a wrapper and the session id, and the part draws through its own plugin's layout. It has the same shape as forms'
   `addCardPart`. A **row part** draws under every session row in the side bar, through the `sessions` page export
-  `addRowPart`; the agents plugin's subagent and task lines are one. A **bar part** draws in every session's tab bar, which moves
-  with its session between panes, through `addBarPart`; the usage plugin's per-session context line is one.
+  `addRowPart`; the agent-lines plugin's subagent and task lines are one. A **bar part** draws in every session's tab
+  bar, which moves with its session between panes, through `addBarPart`; the usage-tab-line plugin's per-session line
+  is one.
   Information about one session goes in a session part, not on a shared bar.
-- **A composer part** is what a plugin draws above the Chat composer, through the `chat` page export
+- **A row activity** is the short state a session's row shows beside its title — a status dot and a word (working,
+  needs you, done, error). A page plugin sets one per session under its own source id through the `sessions` page
+  export `setActivity`, and the row shows the highest rank, so a new state is a registration in the plugin that knows
+  it, never an edit to sessions. A **session title** has three sources (user, agent, first message) kept on the row;
+  the agent sets its own through the `set_session_title` tool (`docs/features/session-titles/design.md`).
+- **A composer part** is what a plugin draws above the Chat composer's box, through the `chat` page export
   `addComposerPart`, the same shape as a session part: chat hands each part a wrapper and the session id. The workflow
-  plugin's strip is one.
+  plugin's strip and the agent strip are two. A part may offer a **stop**: `j` on the last transcript entry hands the
+  entry cursor to it, and the part holds its own key scope until it hands the cursor back.
+- **A status part** is what a plugin draws in the Chat status line under the box, through the `chat` page export
+  `addStatusPart`, the same shape; the usage plugin's context, cache and spend are one.
 - **A chat pane** is one pane of Sessions mode's pane tree (`src/shared/page/pane-tree/`, the sessions plugin its
   owner): it shows one whole session, tab bar included, and a session shows in at most one pane. The side bar drives
   the focused pane, and the visible tab, whose `shown` sets the key scope and whose `isVisible` reads true, is the
@@ -393,9 +430,9 @@ round; primer: an open primer), since main, not the page, decides.
     only; a view may still anchor one, as Accept does with Enter. An anchor prints the command's first bind that is
     not one of vim's own keys, or its first bind when every bind is; the user's binds come before the defaults. Leader
     sequences show in which-key.
-  - **Every other bind has an anchor.** At the end of a self-test run (the `keys-check-placement` page event, named
-    with the line's prefix in `src/shared/placement-check.ts`, which the runner and the plugin share) the
-    plugin logs `[keys] unplaced <keys> <command> in <scope>`, once per scope and bind, for each bind firing in a
+  - **Every other bind has an anchor.** At the end of a whole self-test run (a filtered run skips it; the
+    `keys-check-placement` page event, named with the line's prefix in `src/shared/placement-check.ts`, which the
+    runner and the plugin share) the plugin logs `[keys] unplaced <keys> <command> in <scope>`, once per scope and bind, for each bind firing in a
     scope that was in force during the page load whose command no anchor named during the page load, in that scope or
     with no scope, on an element seen on the page (connected when the anchor drew, hid or showed, was disposed, or at
     the check). Leader sequences and vim's own keys are left out. The self-test fails on that line, so a new
@@ -463,13 +500,15 @@ round; primer: an open primer), since main, not the page, decides.
   events and `at`, the time it first appeared (stamped through the injected `Clock`, or read from the transcript for
   history), so a chat layout can show any field and the chat never parses a harness's JSON. The Claude adapter's
   readings of the CLI (`docs/features/agent-chat/claude-stream.md`): it reports permission mode `manual` as
-  `default`, no event reports effort, `total_cost_usd` is cumulative per process, and only a `control_request`
-  interrupt keeps the process alive (SIGINT ends it). Listing a folder's saved sessions and reading one into chat
+  `default`, no event reports effort, `total_cost_usd` is cumulative per process, only a `control_request`
+  interrupt keeps the process alive (SIGINT ends it), and a message written during a tool turn folds into that turn
+  with no `result` of its own, so the adapter tracks each message by its client `uuid` (§ Message lifecycle) rather
+  than counting results. Listing a folder's saved sessions and reading one into chat
   entries are adapter calls too (`listSessions`, `history`), so Claude's transcript format stays in
   `src/main/claude-code/transcripts.ts`. That format is undocumented and was measured on the installed CLI, so a
   resume that lists nothing or draws raw entries starts with `transcripts.ts` and a fresh look at a transcript's line
   shapes.
-- **An agent event** — a subagent spawned or finished, a task started or finished, a tool call, context usage, a compaction, a user message — is
+- **An agent event** — a subagent spawned or finished, a tool call, context usage, a compaction, a user message — is
   the harness-neutral record (`AgentEvent` in `src/contracts/agent.ts`) the adapter sends through
   `AgentProcessEvents.agentEvent` beside the chat entries, naming its agent (`main` or a subagent's id). Chat main
   forwards each owned session's as `chat.agentEvent`; the agents plugin and the Agent Tower read only these, never a
@@ -495,7 +534,7 @@ round; primer: an open primer), since main, not the page, decides.
 - **An MCP tool** is contributed to the `sessions` plugin by the plugin that runs it, with a handler per session;
   sessions writes every contributed tool into `tools.json` and routes each call by tool name, so its MCP adapter
   names no tool.
-- **An ambient service** — the clock, timers, ids, the home folder, files (with watching), processes, git (main only), opening a link in the default browser, how the app was started (`runMode`: live, self-test or drive) — reaches a plugin
+- **An ambient service** — the clock, timers, ids, the home folder, files (with watching), processes, git (main only), image re-encoding (`images`, main only), opening a link in the default browser, how the app was started (`runMode`: live, self-test or drive) — reaches a plugin
   through `api.services`, filled in by the composition root, so a test hands the plugin a fake. The page's home folder
   is the real path of main's, served in the config, so every view shows a folder under it as `~` through
   `services.homeDir`.
@@ -652,14 +691,24 @@ round; primer: an open primer), since main, not the page, decides.
   (`typecheck` in `vitest.config.mts`), and runs them once more at run time. Two adapters of one contract run one
   suite of shared cases, kept in a `*.test-support.ts` module (the Files contract in
   `src/shared/files-contract.test-support.ts`).
-- `npm run selftest` is the agent's loop, and the user allows the agent to run it any time. It renders the window
+- `npm run selftest` is the agent's loop, and the user allows the agent to run it any time. An agent proving a change
+  runs the touched plugins' groups, and runs the whole self-test only when the user asks for it, since a whole run
+  takes half an hour or more: `npm run selftest -- --plugin <id>` runs only that plugin's script (repeat the flag or
+  give a comma list), and `--group <name>` (repeatable) runs that group, named `<plugin>: <name>` as the report prints
+  it or bare for that name in every script (a name several scripts share usually needs its `<plugin>: ` prefix, since a
+  bare name that cuts an earlier script short is refused), together with the groups before it in its script, since a
+  group starts from the page they left. A filtered run serves the page every script's binds and settings, checks a script's result
+  only when the run reaches the script's last group, and skips the end-of-run placement check. It fails before any
+  step on a plugin or group no script holds, naming the known ones, and on a filter that cuts a script short of its
+  last group and keeps a script after it, since the cut script leaves its fixture open: run that script's groups on
+  their own. A cut script's result that rejects by the end of the run still fails it. It renders the window
   offscreen as an accessory app, so it never takes the user's foreground; the core's driver (`src/main/selftest.ts`,
   its step runner in `src/main/selftest-runner.ts`) runs the script a plugin hands it — the forms plugin's opens
   fixture sessions through `sessions` and their rounds through `FormsService` — drives keys with
   `sendInputEvent`, checks the lines each step adds to the page's log and the result the script checks, and exits
   non-zero on a failure. A key behaviour the agent adds or fixes gets a step in its plugin's self-test script
   (`src/plugins/forms/main/selftest-script.ts` for forms, `src/plugins/primer/main/selftest-script.ts` for the
-  primer, `src/plugins/agents/main/selftest-script.ts` for agents, `src/plugins/workflow/main/selftest-script.ts` for
+  primer, `src/plugins/agent-lines/main/selftest-script.ts` for the sidebar lines, `src/plugins/agent-strip/main/selftest-script.ts` for the strip, `src/plugins/workflow/main/selftest-script.ts` for
   workflow); a step with no keys waits for its line, and a step's `writeFile` writes a file under the self-test's temp
   home before its keys, as an outside change on disk, and a step's `screenshot` (a lowercase name in words joined by
   `-`) saves a PNG of the window, once the step's line has been waited for, to
@@ -677,7 +726,8 @@ round; primer: an open primer), since main, not the page, decides.
   the cap without `until` fails. It reports one line, `<keys> ×<presses> -> <until>`, and its `screenshot` saves one
   PNG per press, `<plugin>-<name>-<n>.png`, file n after press n. A step's `alsoExpect` holds patterns that must each
   match a line logged after the step began, before or after `expect`, for a line carrying a value the script cannot
-  know (chat's clear step matches the notes line naming the row's random new host id). The self-test's user config
+  know (chat's clear step matches the notes line naming the row's random new host id) or a second line the step's keys
+  cause, in either order. The self-test's user config
   folder sits in its temp home. The script's `settings` override plugin settings in the config main serves the page
   (forms' sets a short `keys.whichKeyTimeoutMs`, so a step can wait out the panel); main parts start on the
   ConfigStore's config, which under the self-test is the empty config folder in its temp home, so the defaults, with

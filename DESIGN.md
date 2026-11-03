@@ -281,8 +281,9 @@ The primitives, each a builder in `src/shared/page/ui/`:
 - **IconButton** (`iconButton`): a square Codicon button, sizes `sm` and `md`.
 - **Chip** (`chip`): a session control's label and value; a button when given a click handler.
 - **Tag** (`tag`): a small static label in a tone.
-- **File chip**: a file's path drawn inside a vim box as a pill: `block-background`, `radius-sm`, `space-1` padding,
-  a file Codicon in `fg-secondary`, then the file's name. The CodeMirror adapter draws it; it is not a builder
+- **File chip**: a file's path drawn inside a vim box as a pill: `block-background`, `radius-sm`, `space-1` padding
+  on the sides only so the box keeps its line height, `font-mono`, a file Codicon in `fg-secondary`, then the file's
+  name. The CodeMirror adapter draws it; it is not a builder
   (`docs/features/file-drop/design.md`).
 - **ToggleMark** (`toggleMark`): a small square on/off mark beside a row's label, such as an included item, with a check
   when on; a click calls the view's handler and the view sets the new state with `setToggleMark`, and the key that
@@ -300,6 +301,8 @@ The primitives, each a builder in `src/shared/page/ui/`:
   outer end pane's least width the sum of the inner two. Each handle draws the resize prompt
   `⌥⇧H ◂ ▸ ⌥⇧L`, centred on it and taking no space, while the pointer is over it, while a drag runs
   and for a moment after each keyboard resize. A view that drops a split calls its `dispose`.
+- **HScroller** (`createHScroller`): a row that scrolls sideways, with an IconButton chevron at each end that scrolls
+  by one item and hides while nothing lies further that way, and a `reveal(item)` that scrolls an item into view.
 - **Card** (`card`, with an `attention` or `error` edge) and the collapsible card
   (`createCollapsibleCard`), whose `plain` variant is a one-line row with no card chrome that opens
   its body in place under it.
@@ -352,7 +355,9 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   the usage plugin does (below). Status colours only on status items. A status belongs on the surface it
   describes: a form's saved state on its rail header, a config problem on the title bar.
 - **Usage:** the status-bar line is always on and aligned to the end, in `text-12`: the plan rows of the shown
-  session's profile, each a meter with its percent in the server's order. Each session's line sits in its own tab bar,
+  session's profile, each a meter with its percent in the server's order. A Chat session's context bar, cache
+  countdown and spend draw in its Chat status line, in the same items and order as the tab-bar line below. With the
+  optional `usage-tab-line` plugin on, each session's line also sits in its own tab bar,
   after the tabs and before the pane controls, in `text-12`: its context bar (`used/limit` against the autocompact
   limit), its cache countdown and its spend. In a narrow bar the line drops whole items from its end (spend, then cache,
   then the context text), never part of a number, keeping its context bar and a `space-2` gap before `⌘W`. A session
@@ -377,19 +382,32 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   comment box) while the items column has focus. A review pane of every answer opens before it sends.
 - **Chat:** user turns are a `card-background` block, not a bubble. Assistant prose is markdown on
   the sheet. The agent's steps (tool calls, thinking, raw events) between two other entries form
-  one **activity line**. While the session works on it, the line is a header (a running StatusDot,
-  the current action in mono, such as `Bash · npm test`, `· N steps` and the time) over a shortlist of the
-  latest five steps, the newest at the bottom in `fg` and the older ones in `fg-tertiary`. Once
-  finished it is one dim `fg-tertiary` line: the step count and the tools used, such as
+  one **activity line**: one dim `fg-tertiary` line, live or finished: the step count and the tools used, such as
   `6 steps · Read 3 · Bash 2 · Edit · 42s`, with `· 1 failed` in `status-error` before the time when a step failed.
-  The time is compact in tabular numerals (`8s`, `1m 05s`, `1h 02m`) and dim; a live line's ticks once a second. Opened,
-  it lists one plain row per step (the plain collapsible: a tool's status dot and its mono
+  The time is compact in tabular numerals (`8s`, `1m 05s`, `1h 02m`) and dim; a live line's ticks once a second.
+  While the session works on a turn, a **working block** sits under the last entry: a header (the turn's time as
+  `m:ss` in tabular numerals and a state word, `1:05 Working…`), a `radius-md` card listing the latest five tool
+  calls in mono (the newest in `fg`, the older ones in `fg-tertiary`, a failed one in `status-error`), and the
+  turn's tool counts, dim (`Read 3 Bash 2 Edit 1`). An opened activity line
+  lists one plain row per step (the plain collapsible: a tool's status dot and its mono
   summary, `Thinking`, `Raw event`), and a step row opens its input and result in place under it,
   with no card. Permission prompts are cards with a
   `status-attention` edge and plain verbs (Allow once, Deny). The composer floats (L3,
-  `radius-xl`, inset `space-3`) with the transcript scrolling beneath it, and holds the strip of attached images'
-  thumbnails above the box, the box, the session controls as chips, and send. A user turn shows its sent images as
+  `radius-xl`, inset `space-3`) with the transcript scrolling beneath it, and holds, top to bottom: other plugins'
+  composer parts (the workflow strip, the agent strip), the strip of attached images' thumbnails, the box (no mode
+  label: the cursor's shape shows the vim mode), and the status line: repo and branch in `fg-secondary`, one
+  model · effort chip, the other control chips, other plugins' status parts (usage), then the running dot and send.
+  The **agent strip** is an HScroller of boxes, each a `card-background` Card with `radius-md`: a subagent box holds a
+  StatusDot, its name, `model · effort · $cost` in `fg-tertiary`, the description, and its latest three tool calls in
+  mono; a task box a terminal icon, the description, its owning agent and the elapsed time. A finished box dims to
+  `fg-tertiary` with a done or failed dot; the selected box takes the focus ring. A user turn shows its sent images as
   thumbnails under its text.
+- **Visuals:** an agent's html block in any markdown. While it streams it is a Card holding a running StatusDot and
+  `drawing visual…` in `text-12` `fg-secondary`. Once closed it is the inline box: the frame as wide as its column in a
+  `radius-md` box that clips it, over a bar holding the small expand icon button at its end, the button's `v` hint on
+  a chat entry's first visual only. The full-size overlay sits over the `scrim` with `space-8` padding: the overlay
+  body fills it, a `radius-lg` sheet on `transcript-background` that scrolls a visual taller than the window, with the
+  count (`2 of 3`, `text-12` `fg` in tabular numerals) under it, hidden for a single visual.
 - **Docs:** in Docs mode the tree is the side bar; in a session's Docs tab it is the left pane of a
   split in the sheet. Rendered docs use the prose style; code blocks are solid `block-background`
   with `radius-md` and no border.
@@ -409,7 +427,8 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   empty state `No plan yet — Space w f starts a feature`, and a read plan with no boxes shows none. A disabled action
   draws disabled.
 - **Floating:** pickers, which-key, help and dialogs use the floating material with `row-list` rows
-  and key hints right-aligned in `fg-tertiary`; dialogs, and chat's full-size image viewer, sit over the `scrim`.
+  and key hints right-aligned in `fg-tertiary`; dialogs, chat's full-size image viewer and the full-size visual
+  overlay sit over the `scrim`.
 - **Empty states:** one line saying what to do, and the key or action that does it. No
   illustrations.
 - **Splits** resize by drag and by `Alt+Shift+h`/`Alt+Shift+l` (`docs/keymap.md`), the side bar too, and
@@ -435,7 +454,7 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   Docs (`docs-docs-*`) in both transparency settings, the docs kind picker, completion list and
   session Docs tab (`docs-kind-picker`, `docs-completion`, `docs-session-tab`), the shell layout
   swap (`forms-shell-layout-*`) and the layout previews (`forms-preview-*`, `primer-preview*`,
-  `chat-chat-preview`) and the workflow strip and Flow tab (`workflow-strip-*`, `workflow-flow-tab-plan-ready`). The
+  `chat-chat-preview`), chat's visuals (`chat-visuals`) and the workflow strip and Flow tab (`workflow-strip-*`, `workflow-flow-tab-plan-ready`). The
   gallery's and the keys plugin's main parts hand no self-test script, so forms' script saves the gallery's pages and
   the shell swap, and no screenshot shows keys' overlays. The agent checks them against
   this file — density, the one accent, each surface on its layer

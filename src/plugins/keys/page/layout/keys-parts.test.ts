@@ -15,6 +15,7 @@ import type { Layout } from '../../layouts/layout';
 import { mountHelpView } from '../help-view';
 import { mountWhichKeyView } from '../which-key-view';
 import { createKeysParts } from './keys-parts';
+import { NO_FENCES } from '../../../../shared/page/markdown-mount.test-support';
 
 // A part drawer whose kits record each anchor they name in `anchors`.
 function fakeKeysParts() {
@@ -26,6 +27,7 @@ function fakeKeysParts() {
         block: (text) => text,
         inline: (text) => text,
         document: async (text) => text,
+        ...NO_FENCES,
       },
       keys,
       commands: { exists: () => true, run: () => undefined },

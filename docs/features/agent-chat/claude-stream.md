@@ -1,6 +1,7 @@
 Measured on `claude --version` → `2.1.304 (Claude Code)`, 2026-10-20, macOS.
 
-§ Subagents and § Compaction measured on 2.1.316, 2026-11-01.
+§ Subagents and § Compaction measured on 2.1.316, 2026-11-01. § Queued messages, § Message lifecycle and § Interrupt's
+idle case measured on 2.1.317, 2026-11-02.
 
 # Claude Code stream-json wire facts
 
@@ -292,6 +293,8 @@ Local command (§ Effort): `{"type":"result","subtype":"success","is_error":fals
   `modelUsage` `{"claude-sonnet-5-5":0.0828254,"claude-haiku-5-5":0.00388897}` after the haiku turn. A per-turn cost
   is the difference between consecutive results. `usage` is per turn.
 - `result_index` counts the process's results from 0.
+- One `result` can answer more than one message written: a message folded into a running tool turn gets no `result`
+  of its own (§ Queued messages). A turn Claude runs on its own answers none (§ Subagents).
 - `stop_reason` is `null` after a SIGINT and on local commands. It is `"tool_use"` after a control interrupt that
   landed after a tool call.
 
@@ -389,6 +392,19 @@ There was no `control_response`. **The process then exited on its own with code 
 could not be sent. SIGINT ends the session as well as the turn.
 
 The interrupt marker is a `user` event with text content `[Request interrupted by user]`, and no `tool_result`.
+
+**Idle process.** Measured on 2.1.317. After a turn's `result`, with nothing running, the control request gets the same
+reply as on a running turn and nothing follows it:
+
+```
+ 1.41 {"type":"result","subtype":"success","result":"ok","result_index":0,…}
+ 3.42 IN  {"type":"control_request","request_id":"probe-idle","request":{"subtype":"interrupt"}}
+ 3.42 {"type":"control_response","response":{"subtype":"success","request_id":"probe-idle","response":{"still_queued":[]}}}
+      (no line for 10 s; a later message ran a normal turn)
+```
+
+So the plain interrupt cannot tell idle from busy, and a client that waits for a `result` after it waits forever. A
+named interrupt can tell them apart (§ Message lifecycle).
 
 ## Mode change
 
@@ -696,11 +712,42 @@ message. The request is
 
 ## Queued messages
 
-A message written while a turn runs is queued: it runs as its own turn after the running one, with its own `init` and
-its own `result`. Claude never folds it into the running turn. An `interrupt` ends only the running turn; the queued
-message still runs.
+A message written while a turn runs is queued. Where it runs depends on the running turn:
 
-Measured 2026-10-20 on `2.1.304`, one process, in a fresh project folder holding `notes.txt`. Launch as in § How
+- **A turn that makes tool calls folds it in.** At the turn's next model request after the message arrives, the CLI
+  takes it in with the tool results and the model answers it inside the running turn. It gets no `system/init` and no
+  `result` of its own, so results and messages written stop matching one to one. The transcript records it as a
+  `queued_command` attachment and a `queue-operation` `remove` with `reason` `absorbed_mid_turn`. A turn Claude runs on
+  its own after a background task ends (§ Subagents) folds a message in the same way.
+- **A turn with no tool call does not.** It makes no later model request to fold into, so the message runs as its own
+  turn after it, with its own `init` and its own `result`.
+
+An `interrupt` ends only the running turn; a queued message still runs.
+
+**Folded into a tool turn.** Measured 2026-11-02 on `2.1.317`, as § How every probe ran. `T` is
+U(Use the Bash tool to run \`sleep 4\`, then use the Bash tool to run \`cat notes.txt\`, then reply with the single word
+done.):
+
+```
+ 0.00 IN  U(T)
+ 0.45 system/init
+ 1.83 assistant [tool_use Bash "sleep 4"]
+ 1.84 IN  U(Reply with the single word two.)          ← written here
+ 2.10 assistant [tool_use Bash "cat notes.txt"]
+ 4.95 user [tool_result "spike"]
+ 8.95 user [tool_result "(Bash completed with no output)"]
+ 8.97 system/status requesting                         ← no system/init: "two" folded in here
+10.82 assistant [text "two"]
+10.85 {"type":"result","subtype":"success","result":"two","num_turns":3,"result_index":0,"queued_turn_count":0,…}
+      (no second init and no second result)
+```
+
+- No stdout line marks the fold unless each message carries a client `uuid` (§ Message lifecycle). With
+  `--replay-user-messages` the folded message replays (`isReplay:true`) right after the last `tool_result`, with the
+  same fields as a replay that opens a turn: only its place, with no `init` since the last `result`, tells them apart.
+- `result.result` holds only the turn's last text ("two"); the model never wrote "done".
+
+**Queued behind turns with no tool call.** Measured 2026-10-20 on `2.1.304`, one process, in a fresh project folder holding `notes.txt`. Launch as in § How
 every probe ran: base plus cheap flags, the § Launch nested-session variables stripped. Each phase wrote
 `U(Count from 1 to 200, one number per line.)` and, at the turn's first `stream_event` (`message_start`), wrote the
 queued line(s) below; it ended after 10 s with no output. Seconds are counted from spawn; excerpts trimmed as above.
@@ -739,14 +786,68 @@ millisecond after it, `{"type":"control_request","request_id":"probe-1","request
 30.23 {"type":"result","subtype":"success","result":"Set effort level to medium (this session only): …","num_turns":0,"local_command":"effort","result_index":5,"queued_turn_count":0,…}
 ```
 
-- One `result` per message written, in write order, local commands included: results match writes first in, first
-  out.
+- Behind turns with no tool call, one `result` per message written, in write order, local commands included: results
+  match writes first in, first out. A fold into a tool turn breaks this (above). Re-measured on 2.1.317: a message
+  queued behind the count turn still ran as its own turn with its own `init` and `result`.
 - The interrupt's `still_queued` was `[]` although `U(four)` was queued, and `U(four)` ran afterwards. The plain
   `interrupt` request cancels nothing queued; init's `interrupt_cancel_queued_v1` capability names some other request
   shape, not measured.
 - Every `result` carried `"queued_turn_count":0`, even the A turn's result with `U(two)` waiting behind it, so the
   field does not count queued messages. A queued local command's `result` also carries `"local_command":"effort"`.
 - The process exited with code 0 when stdin closed after phase C.
+
+## Message lifecycle
+
+Measured 2026-11-02 on `2.1.317`, as § How every probe ran. A client `uuid` on a stdin user message makes the CLI
+report what happens to that message. No flag is needed: the field alone turns it on.
+
+- Stdin `{"type":"user","message":{…},"parent_tool_use_id":null,"uuid":"<uuid4>"}` → `command_lifecycle` frames for
+  that message: `{"type":"command_lifecycle","command_uuid":"<uuid4>","state":…}`. `state` is `queued` (it entered
+  the queue), `started` (it was taken into a turn), then one terminal state: `completed`, `cancelled`, `discarded` or
+  `refused`. A message written with no `uuid` gets no frames.
+- `result`, `assistant`, `system/status` and the first stream event of a turn carry `user_message_uuid` (the message
+  that opened the turn) and `user_message_uuids` (every message the turn took in, the folded ones after the opener).
+  A turn Claude runs on its own was not measured with uuids.
+- init's `capabilities` advertises this as `msg_lifecycle_v1` (§ Init).
+- The CLI's own schema marks `command_lifecycle`, `for_user_message_uuids` and the interrupt reply's `turn` as
+  `@internal`; the public Agent SDK pages document none of them. `user_message_uuid(s)` and `priority` carry no mark
+  but are not in the public pages either.
+
+**A message folded into a tool turn** (the § Queued messages tool probe, with uuids `…-0001` on `T` and `…-0002` on
+U(two)):
+
+```
+ 0.53 command_lifecycle -0001 queued
+ 0.54 command_lifecycle -0001 started
+ 0.58 system/init
+ 0.58 system/status {"status":"requesting","user_message_uuids":["…-0001"]}
+ 1.51 IN  U(two) uuid -0002
+ 1.51 command_lifecycle -0002 queued
+ 8.71 command_lifecycle -0002 started                  ← no init after it: folded
+ 8.71 system/status {"status":"requesting","user_message_uuids":["…-0001","…-0002"]}
+10.65 command_lifecycle -0002 completed                ← before the turn's result
+10.66 {"type":"result","result":"two","user_message_uuid":"…-0001","user_message_uuids":["…-0001","…-0002"],…}
+10.66 command_lifecycle -0001 completed                ← after the result
+```
+
+**A message with its own turn** (queued behind the count turn): `started` comes right after the earlier turn's
+`result` and is followed by `system/init`, and its `completed` comes after its own `result`, whose
+`user_message_uuids` lists only it.
+
+**A local slash command** (`/effort high`, `/model sonnet`, `/status`, `/mcp`, `/context`, `/compact`, each sent alone
+on an idle process with a uuid) takes the same shape as a message with its own turn: `queued`, `started`,
+`system/init`, a `result` with `num_turns` 0 whose `user_message_uuid` is the command's uuid and whose
+`user_message_uuids` lists only it, then `completed`. `local_command` names the command (`effort`, `model`, `mcp`,
+`context`, `compact`), and is null for `/status`. `/compact` took 6.5 s from `started` to its init.
+
+- A message whose turn is interrupted gets `cancelled` after the error `result`.
+- `"priority":"later"` on the stdin message kept it out of a running tool turn: it ran as its own turn (one sample).
+- A named interrupt, `{"subtype":"interrupt","for_user_message_uuids":["<uuid of the turn's opener>"]}`, replies
+  `"turn":"idle"` when no turn runs (and no `result` follows) and `"turn":"stopped"` when it ended one (its `result`
+  follows). The CLI's strings also define `"spared"`: the interrupt named no message of the running turn and stopped
+  nothing.
+- The process exited with code 1, not 0, when stdin closed right after an interrupted turn with nothing after it (one
+  sample).
 
 ## Subagents
 
@@ -812,8 +913,8 @@ description "read notes" …)`; Explore spawned on the first attempt):
   then a second `init` and an empty `result` (`"result":""`, `"num_turns":0`, `"origin":{"kind":"task-notification","producer":"session-task","runId":"0mvylzfvo-dc6760e4"}`).
   Each `result` carries `subagent_stats`:
   `{"spawned":1,"requested":{"background":1,"foreground":0,"unset":0},"started_in_background":1,"max_depth":1,"spawned_by_subagents":0,"completed":1,"failed":0,"killed":{"parent":0,"user":0,"system":0},"refused":{…},"by_type":{"general-purpose":1}}`.
-  Neither `result` is a user turn: § Result counts one `result` per message written, and these two come with no stdin
-  message.
+  Neither `result` is a user turn: these two come with no stdin message. A message written while such a turn runs
+  folds into it (§ Queued messages).
 
 **The subagent's own lines.** `assistant` and `user` events only; **no `stream_event` lines for a subagent** in any
 probe. Every one carries `parent_tool_use_id` equal to the Agent call's `tool_use` id (checked on all subagent lines of

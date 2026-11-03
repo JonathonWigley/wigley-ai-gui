@@ -6,6 +6,7 @@ import { recordingAnchors } from '../../../shared/page/layout-host/test-layouts'
 import { asFake, FakeElement, findAll } from '../../../shared/page/test-dom';
 import type { SessionPart, SessionRow, SessionsState } from '../contract';
 import { mountSessionsView } from './sessions-view';
+import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 
 export function sessionRow(sessionId: string): SessionRow {
   return {
@@ -51,6 +52,7 @@ export function sessionsViewSetup(
       block: (text) => text,
       inline: (text) => text,
       document: async (text) => text,
+      ...NO_FENCES,
     },
     platform: 'macos',
     commands: { exists: () => true, run: () => undefined },

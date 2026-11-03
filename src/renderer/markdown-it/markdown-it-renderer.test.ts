@@ -1,6 +1,16 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CodeHighlighter } from '../../contracts/highlight';
+import type { FenceContribution } from '../../contracts/markdown';
 import { createMarkdownItRenderer } from './markdown-it-renderer';
+
+// A live `html` contribution that is never mounted here.
+const htmlFence: FenceContribution = {
+  language: 'html',
+  live: true,
+  mount: () => {
+    throw new Error('not mounted in adapter tests');
+  },
+};
 
 // Knows only `ts`, which it wraps whole in a keyword span.
 const highlightCalls: { code: string; language: string }[] = [];
@@ -108,26 +118,134 @@ describe('fences', () => {
     );
   });
 
-  it('colours a diff fence’s added, removed and changed lines', () => {
-    expect(block('```diff\n+ a\n- b\n~ c\n same\n```')).toBe(
-      '<pre class="md-diff"><code>' +
+  it.each([
+    {
+      name: 'added, removed and changed lines',
+      source: '+ a\n- b\n~ c\n same\n',
+      code:
+        '<code>' +
         '<span class="md-diff-add">+ a</span>\n' +
         '<span class="md-diff-del">- b</span>\n' +
         '<span class="md-diff-mod">~ c</span>\n' +
-        ' same</code></pre>\n',
-    );
-  });
+        ' same</code>',
+    },
+    {
+      name: 'escaped lines',
+      source: '+ <b>&\n',
+      code: '<code><span class="md-diff-add">+ &lt;b&gt;&amp;</span></code>',
+    },
+  ])('draws a diff fence’s $name', ({ source, code }) => {
+    vi.stubGlobal('document', {
+      createElement: (tag: string) => ({
+        tagName: tag.toUpperCase(),
+        className: '',
+        innerHTML: '',
+      }),
+    });
+    try {
+      const view = markdown.fence('diff')!.mount(source, true);
 
-  it('escapes a diff fence’s lines', () => {
-    expect(block('```diff\n+ <b>&\n```')).toBe(
-      '<pre class="md-diff"><code><span class="md-diff-add">+ &lt;b&gt;&amp;</span></code></pre>\n',
-    );
+      expect(view.element.className).toBe('md-diff');
+      expect(view.element.innerHTML).toBe(code);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('keeps a block opener inside a fence as code', () => {
     expect(block('```\n:::changes\n```')).toBe(
       '<pre><code>:::changes\n</code></pre>\n',
     );
+  });
+});
+
+describe('fence contributions', () => {
+  const withHtml = createMarkdownItRenderer(highlighter);
+  withHtml.addFence(htmlFence);
+  const placeholder = (closed: boolean, code: string, attrs = '') =>
+    `<div class="md-fence" data-fence-language="html" data-fence-closed="${closed}"${attrs}>` +
+    `<pre><code class="language-html">${code}</code></pre></div>\n`;
+
+  it.each([
+    {
+      name: 'a closed block',
+      text: '```html\n<b>x</b>\n```',
+      html: placeholder(true, '&lt;b&gt;x&lt;/b&gt;\n'),
+    },
+    {
+      name: 'a block with no closing fence',
+      text: '```html\n<b>x</b>\n',
+      html: placeholder(false, '&lt;b&gt;x&lt;/b&gt;\n'),
+    },
+    {
+      name: 'a block whose closer is indented four spaces',
+      text: '```html\nx\n    ```\n',
+      html: placeholder(false, 'x\n    ```\n'),
+    },
+    {
+      name: 'a block in a blockquote',
+      text: '> ```html\n> x\n> ```',
+      html: `<blockquote>\n${placeholder(true, 'x\n')}</blockquote>\n`,
+    },
+    {
+      name: 'an opener alone',
+      text: '```html',
+      html: placeholder(false, ''),
+    },
+    {
+      name: 'an empty closed block',
+      text: '```html\n```',
+      html: placeholder(true, ''),
+    },
+    {
+      name: 'a tilde block',
+      text: '~~~html\nx\n~~~',
+      html: placeholder(true, 'x\n'),
+    },
+    {
+      name: 'a block whose closer is longer than its opener',
+      text: '```html\nx\n`````',
+      html: placeholder(true, 'x\n'),
+    },
+    {
+      name: 'an upper-case info string',
+      text: '```HTML\nx\n```',
+      html: placeholder(true, 'x\n'),
+    },
+  ])('emits a placeholder for $name', ({ text, html }) => {
+    expect(withHtml.block(text)).toBe(html);
+  });
+
+  it('emits a placeholder for a closed document fence', async () => {
+    expect(await withHtml.document('```html\nx\n```')).toBe(
+      placeholder(true, 'x\n', ' data-source-line="1"'),
+    );
+  });
+
+  it('registers, refuses a second and unregisters a fence', () => {
+    const renderer = createMarkdownItRenderer(highlighter);
+    const first = renderer.addFence(htmlFence);
+
+    expect(renderer.fence('html')).toBe(htmlFence);
+    expect(renderer.fence(' HTML ')).toBe(htmlFence);
+    expect(() => renderer.addFence({ ...htmlFence })).toThrow(
+      'fence html is already registered',
+    );
+    expect(() => renderer.addFence({ ...htmlFence, language: 'Html' })).toThrow(
+      'fence html is already registered',
+    );
+    expect(() => renderer.addFence({ ...htmlFence, language: 'diff' })).toThrow(
+      'fence diff is already registered',
+    );
+    first.dispose();
+    expect(renderer.fence('html')).toBeUndefined();
+    expect(renderer.block('```html\nx\n```')).toBe(
+      '<pre><code class="language-html">x\n</code></pre>\n',
+    );
+    const second = { ...htmlFence };
+    renderer.addFence(second);
+    first.dispose();
+    expect(renderer.fence('html')).toBe(second);
   });
 });
 
@@ -391,15 +509,19 @@ describe('document()', () => {
     );
   });
 
-  it('keeps the diff fence', async () => {
-    expect(await render('```diff\n+ a\n- b\n~ c\n same\n```')).toBe(
-      '<pre class="md-diff" data-source-line="1"><code>' +
-        '<span class="md-diff-add">+ a</span>\n' +
-        '<span class="md-diff-del">- b</span>\n' +
-        '<span class="md-diff-mod">~ c</span>\n' +
-        ' same</code></pre>\n',
+  it('highlights a live contributed fence inside its placeholder, and no diff', async () => {
+    const withTs = createMarkdownItRenderer(highlighter);
+    withTs.addFence({ ...htmlFence, language: 'ts' });
+
+    const html = await withTs.document(
+      '```ts\nconst\n```\n\n```diff\n+ a\n```',
     );
-    expect(highlightCalls).toEqual([]);
+
+    expect(html).toContain(
+      '<div class="md-fence" data-fence-language="ts" data-fence-closed="true" data-source-line="1">' +
+        '<pre><code class="language-ts"><span class="tok-keyword">const\n</span></code></pre></div>\n',
+    );
+    expect(highlightCalls).toEqual([{ code: 'const\n', language: 'ts' }]);
   });
 
   it('highlights a fence inside details', async () => {

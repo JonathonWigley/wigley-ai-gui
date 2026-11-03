@@ -42,6 +42,7 @@ import {
 import { createPrimerStore } from './primer-store';
 import { mountPrimerTab } from './primer-view';
 import { presentedPrimer, primerEntry, primerItem } from './test-primers';
+import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 
 // One `insert` call on an editor the host made.
 interface Inserted {
@@ -177,6 +178,7 @@ function primerTabSetup(
       block: (text) => text,
       inline: (text) => text,
       document: async (text) => text,
+      ...NO_FENCES,
     },
     keys: {
       anchor: (element, command, options) => {

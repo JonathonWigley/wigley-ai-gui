@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentHarness, ProjectFolder } from '../../../contracts/agent';
-import { createFakeAgentHarness } from '../../../shared/fake-agent-harness';
+import {
+  createFakeAgentHarness,
+  FAKE_MICROTASK_TIMERS,
+} from '../../../shared/fake-agent-harness';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import type { ChatProfile, RecentFolder } from '../contract';
@@ -21,7 +24,11 @@ function harnessListing(
   listed: Record<string, ProjectFolder[] | Error>,
 ): AgentHarness {
   return {
-    ...createFakeAgentHarness({ now: () => 1000 }, createMemoryFiles()),
+    ...createFakeAgentHarness(
+      { now: () => 1000 },
+      createMemoryFiles(),
+      FAKE_MICROTASK_TIMERS,
+    ),
     async listProjects(profileDir) {
       const answer = listed[profileDir ?? ''] ?? [];
       if (answer instanceof Error) {

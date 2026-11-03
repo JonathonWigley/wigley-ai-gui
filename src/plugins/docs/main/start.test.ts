@@ -5,7 +5,7 @@ import { fakeDriveHost } from '../../../shared/fake-drive-host';
 import { FakeProcesses } from '../../../shared/fake-processes';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
-import type { ConnectedSession, SessionInfo } from '../../sessions/contract';
+import type { OwnedSession, SessionInfo } from '../../sessions/contract';
 import type { DocsMainExports, IndexDocument } from '../contract';
 import { MACHINE_INDEX_FILE } from './index-sources';
 import { addDriveActions, docsMainPart, startDocs } from './start';
@@ -61,9 +61,9 @@ describe('startDocs', () => {
   });
 });
 
-// The docs drive actions over a fresh home, whose sessions throw on connect,
+// The docs drive actions over a fresh home, whose sessions throw on open,
 // once `started` settles. `sent` holds each channel message, in order.
-async function driveConnectingNothing(
+async function driveOpeningNothing(
   started: Promise<unknown> = Promise.resolve(),
 ) {
   const files = await setUpFiles();
@@ -76,7 +76,7 @@ async function driveConnectingNothing(
     paths: posixPaths,
     sessions: {
       activate: () => undefined,
-      connect: () => {
+      open: () => {
         throw new Error('not reached');
       },
     },
@@ -86,7 +86,7 @@ async function driveConnectingNothing(
 }
 
 describe('docs drive actions', () => {
-  it('dispose removes the actions and ends each session connectSession connected', async () => {
+  it('dispose removes the actions and ends each session connectSession opened', async () => {
     const files = await setUpFiles();
     const ended: string[] = [];
     const drive = fakeDriveHost();
@@ -98,12 +98,12 @@ describe('docs drive actions', () => {
       channel: { send: () => undefined },
       sessions: {
         activate: () => undefined,
-        connect(info: SessionInfo): ConnectedSession {
+        open(info: SessionInfo): OwnedSession {
           const id = `row-${String(info.sessionId)}`;
           return {
             session: { id, info },
-            call: () => Promise.reject(new Error('no tools')),
             end: () => ended.push(id),
+            setHostSessionId: () => undefined,
           };
         },
       },
@@ -118,7 +118,7 @@ describe('docs drive actions', () => {
   });
 
   it('connectSession rejects a sessionId that is not a string', async () => {
-    const drive = await driveConnectingNothing();
+    const drive = await driveOpeningNothing();
 
     await expect(drive.run('connectSession', { sessionId: 3 })).rejects.toThrow(
       'sessionId',
@@ -129,13 +129,13 @@ describe('docs drive actions', () => {
     ['seed', -1, 'indexDelayMs'],
     ['connectSession', 'slow', 'indexDelayMs'],
   ])('%s rejects indexDelayMs %j', async (action, indexDelayMs, message) => {
-    const drive = await driveConnectingNothing();
+    const drive = await driveOpeningNothing();
 
     await expect(drive.run(action, { indexDelayMs })).rejects.toThrow(message);
   });
 
   it('driveOpenDoc_SendsOpenDocMessage', async () => {
-    const drive = await driveConnectingNothing();
+    const drive = await driveOpeningNothing();
 
     await drive.run('openDoc', { path: CLAUDE_MD });
 
@@ -145,7 +145,7 @@ describe('docs drive actions', () => {
   it.each([0, 1.5])(
     'driveOpenDoc_LineNotPositiveWhole_Rejects (%j)',
     async (line) => {
-      const drive = await driveConnectingNothing();
+      const drive = await driveOpeningNothing();
 
       await expect(
         drive.run('openDoc', { path: CLAUDE_MD, line }),
@@ -156,7 +156,7 @@ describe('docs drive actions', () => {
 
   it('driveOpenDoc_WaitsForStart', async () => {
     const started = Promise.withResolvers<void>();
-    const drive = await driveConnectingNothing(started.promise);
+    const drive = await driveOpeningNothing(started.promise);
 
     const running = drive.run('openDoc', { path: CLAUDE_MD, line: 3 });
     await Promise.resolve();

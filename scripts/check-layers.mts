@@ -89,6 +89,7 @@ const LAYERS: Record<string, LayerRule> = {
     packages: [],
   },
   'src/main/alerts': { layers: ['src/contracts'], packages: ['electron'] },
+  'src/main/images': { layers: ['src/contracts'], packages: ['electron'] },
   'src/main/files': { layers: ['src/contracts'], packages: ['node:'] },
   // Runs the Files contract suite, which the memory adapter runs too.
   'src/main/files/node-files.test.ts': {
@@ -143,6 +144,7 @@ const LAYERS: Record<string, LayerRule> = {
       'src/main/config',
       'src/main/ui-state',
       'src/main/alerts',
+      'src/main/images',
       'src/main/files',
       'src/main/processes',
       'src/main/git',
@@ -527,6 +529,41 @@ const LAYERS: Record<string, LayerRule> = {
     ],
     packages: [],
   },
+  'src/plugins/visual': {
+    layers: ['src/contracts', 'src/shared'],
+    packages: [],
+  },
+  'src/plugins/visual/contract.ts': { layers: ['src/contracts'], packages: [] },
+  'src/plugins/visual/main': {
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/plugins/visual',
+      'src/plugins/visual/contract.ts',
+      'src/plugins/chat/contract.ts',
+      'src/plugins/visual/layouts',
+    ],
+    packages: [],
+  },
+  'src/plugins/visual/layouts': {
+    layers: ['src/shared/page/layout-host'],
+    packages: [],
+  },
+  'src/plugins/visual/page': {
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/shared/page',
+      'src/shared/page/ui',
+      'src/shared/page/layout-host',
+      'src/plugins/visual',
+      'src/plugins/visual/contract.ts',
+      'src/plugins/visual/layouts',
+      'src/plugins/keys/contract.ts',
+      'src/plugins/chat/contract.ts',
+    ],
+    packages: [],
+  },
   'src/plugins/settings': {
     layers: [
       'src/contracts',
@@ -785,6 +822,8 @@ const LAYERS: Record<string, LayerRule> = {
       'src/plugins/keys/main',
       'src/plugins/usage',
       'src/plugins/usage/main',
+      'src/plugins/visual',
+      'src/plugins/visual/main',
       'src/plugins/workflow',
       'src/plugins/workflow/main',
     ],
@@ -806,6 +845,7 @@ const LAYERS: Record<string, LayerRule> = {
       'src/plugins/sessions',
       'src/plugins/settings',
       'src/plugins/usage',
+      'src/plugins/visual',
       'src/plugins/workflow',
     ],
     packages: [],
@@ -839,6 +879,8 @@ const LAYERS: Record<string, LayerRule> = {
       'src/plugins/settings/page',
       'src/plugins/usage',
       'src/plugins/usage/page',
+      'src/plugins/visual',
+      'src/plugins/visual/page',
       'src/plugins/workflow',
       'src/plugins/workflow/page',
     ],
@@ -882,6 +924,20 @@ const LAYERS: Record<string, LayerRule> = {
     layers: ['src/contracts', 'src/shared'],
     packages: ['fabric'],
   },
+  'src/renderer/visual-frames': {
+    layers: ['src/contracts', 'src/shared'],
+    packages: [],
+  },
+  // Drives the frames over the shared page fake DOM.
+  'src/renderer/visual-frames/visual-frames.test.ts': {
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/shared/page',
+      'src/renderer/visual-frames',
+    ],
+    packages: [],
+  },
   'src/renderer/renderer.ts': {
     layers: [
       'src/contracts',
@@ -891,8 +947,10 @@ const LAYERS: Record<string, LayerRule> = {
       'src/renderer/codemirror-vim',
       'src/renderer/markdown-it',
       'src/renderer/fabric',
+      'src/renderer/visual-frames',
       'src/plugins/page.ts',
       'src/plugins/manifests.ts',
+      'src/shared/page',
       'src/shared/page/ui',
       'src/shared/page/layout-host',
       'src/renderer/shell/layouts',

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { AgentStart } from '../../../contracts/agent';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
 import type { ToolResult } from '../../sessions/contract';
 import type { ChatMainExports, ChatSessionState } from '../contract';
@@ -123,7 +124,8 @@ describe('chat drive actions', () => {
 // and an owned session's end emits `sessions.ended`, recorded in `ended`.
 // `invoke` calls the page channel's handler for `name`; `sent` holds each
 // channel message, `logged` each log line, and `starts` counts the harness's
-// process starts. `processEvents` holds each process's events, by start, and
+// process starts and `startInstructions` each start's instructions, in start
+// order. `processEvents` holds each process's events, by start, and
 // `holdProcessEnds` keeps every process's `end` pending until the function it
 // returns is called. Paths compare equal ignoring a trailing `/`.
 // `exports` is the part's main exports.
@@ -134,6 +136,7 @@ function startChatPart() {
   const sent: { message: string; data: unknown }[] = [];
   const logged: string[] = [];
   const starts = { count: 0 };
+  const startInstructions: (readonly string[])[] = [];
   const processEvents: {
     ended: (exit: { code: number; error: string | null }) => void;
   }[] = [];
@@ -148,8 +151,9 @@ function startChatPart() {
   const harness = {
     id: 'claude',
     logIn: () => ({ sendCode: () => undefined, cancel: cancelLogIn }),
-    start: (_options: unknown, events: (typeof processEvents)[number]) => {
+    start: (request: AgentStart, events: (typeof processEvents)[number]) => {
       starts.count += 1;
+      startInstructions.push(request.instructions);
       processEvents.push(events);
       return {
         send: processSends,
@@ -229,6 +233,7 @@ function startChatPart() {
     sent,
     logged,
     starts,
+    startInstructions,
     processEvents,
     holdProcessEnds,
     ended,
@@ -340,6 +345,15 @@ describe('chat main part', () => {
     await chat.exports.send('row-1', message);
 
     expect(chat.processSends).toHaveBeenCalledExactlyOnceWith(message);
+  });
+
+  it('exports_AddInstructions_ReachTheNextStart', () => {
+    const chat = startChatPart();
+    chat.exports.addInstructions('visual note');
+
+    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+
+    expect(chat.startInstructions).toEqual([['visual note']]);
   });
 
   it('exports_Clear_ResolvesAfterTheFreshStart', async () => {

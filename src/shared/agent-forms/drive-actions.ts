@@ -19,7 +19,8 @@ export interface AgentFormDriveSession extends AgentFormToolSession {
 }
 
 export interface AgentFormDriveSessions<Harness extends string> {
-  // Adds a row for the host session id, or joins the owned session holding it.
+  // Connects a session for the host session id, with no row until a form
+  // shows, or joins the owned session holding it.
   connect(info: {
     sessionId: string;
     projectDir: string | null;
@@ -86,7 +87,8 @@ function sessionArgsText(harnesses: readonly string[]): string {
 // result. The open action reuses the live session it connected before under
 // `sessionId`; otherwise it connects that id, which joins an owned session
 // holding it (one `sessions.open` opened, so a round and a primer share one
-// row) or adds a row. A session's id is `drive-<pluginId>-<n>` unless the
+// row) or connects a session with no row, which the form's showing adds.
+// A session's id is `drive-<pluginId>-<n>` unless the
 // caller names one. `onSessionEnded` hears each session that ends, by its row
 // id. Disposing removes the actions and ends every live session it connected.
 export function addAgentFormDriveActions<Harness extends string>(deps: {

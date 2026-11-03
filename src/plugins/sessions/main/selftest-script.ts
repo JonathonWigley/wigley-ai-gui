@@ -1,7 +1,7 @@
 import type { SelfTestScript, SelfTestStep } from '../../../contracts/plugin';
 import {
-  type ConnectedSession,
   DRIVE_SESSION_DEFAULTS,
+  type OwnedSession,
   type SessionsMainExports,
   type SessionsState,
 } from '../contract';
@@ -62,37 +62,40 @@ const CANCEL_AND_CLOSE_STEPS: SelfTestStep[] = [
   { keys: ['<A-w>'], expect: '[sessions] pane closed' },
 ];
 
-// Each run ends the sessions the run before connected and connects three in
-// project dirs `panes-a`, `panes-b` and `panes-c`, in that row order, then
+// Each run ends the sessions the run before opened and opens three in project
+// dirs `panes-a`, `panes-b` and `panes-c`, unselected, in that row order, then
 // activates panes-a's row. The result check reads main's state: every pane
 // key left all three sessions in place. It then ends them, so the scripts
 // after this one start with no pane but the last.
 export function sessionsSelfTestScript(
-  sessions: Pick<SessionsMainExports, 'connect' | 'activate'>,
+  sessions: Pick<SessionsMainExports, 'open' | 'activate'>,
   state: () => SessionsState,
 ): SelfTestScript {
-  let connected: ConnectedSession[] = [];
-  const endConnected = () => {
-    for (const session of connected) {
+  let opened: OwnedSession[] = [];
+  const endOpened = () => {
+    for (const session of opened) {
       session.end();
     }
-    connected = [];
+    opened = [];
   };
   return {
     pageBinds: [],
     settings: {},
     scrollsItself: [],
     open(run) {
-      endConnected();
-      connected = PROJECT_DIRS.map((projectDir) =>
-        sessions.connect({
-          sessionId: `${projectDir}-${run}`,
-          projectDir,
-          harness: DRIVE_SESSION_DEFAULTS.harness,
-          deadlineSeconds: DRIVE_SESSION_DEFAULTS.deadlineSeconds,
-        }),
+      endOpened();
+      opened = PROJECT_DIRS.map((projectDir) =>
+        sessions.open(
+          {
+            sessionId: `${projectDir}-${run}`,
+            projectDir,
+            harness: DRIVE_SESSION_DEFAULTS.harness,
+            deadlineSeconds: DRIVE_SESSION_DEFAULTS.deadlineSeconds,
+          },
+          { select: false },
+        ),
       );
-      sessions.activate(connected[0].session.id);
+      sessions.activate(opened[0].session.id);
       return {
         shownLine: '[sessions] activated panes-a',
         result: Promise.resolve(null),
@@ -122,10 +125,10 @@ export function sessionsSelfTestScript(
     ],
     problems: () => {
       const rowIds = new Set(state().rows.map((row) => row.sessionId));
-      const problems = connected
+      const problems = opened
         .filter((session) => !rowIds.has(session.session.id))
         .map((session) => `session ${session.session.id} left main's rows`);
-      endConnected();
+      endOpened();
       return problems;
     },
   };

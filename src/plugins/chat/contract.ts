@@ -242,6 +242,10 @@ export interface ChatMainExports {
   // asking the close guards: for a self-test that starts its project over.
   // Resolves once each one's owned session has ended and its row is gone.
   closeSessionsIn(projectDir: string): Promise<void>;
+  // Text every session chat starts from now on carries to its harness, after
+  // the texts registered before it; a running session keeps what it started
+  // with. Disposing it leaves later starts without it.
+  addInstructions(text: string): Disposable;
 }
 
 // The session an app slash command was sent in: `args` is the trimmed text
@@ -278,8 +282,12 @@ export interface ChatComposerPart {
 // which is at a layout change and at a part add or removal, not on each bar
 // change, so a part whose content changes redraws into its wrapper itself. A
 // part is drawn in every Chat tab, the layout preview's included.
+// `focusedEntry` is the visible Chat tab's focused stop's slot element (an
+// entry, an activity line or a pending row); null with no visible Chat tab or
+// no focused stop.
 export interface ChatPageExports {
   addSlashCommand(command: AppSlashCommand): Disposable;
   fillComposer(sessionId: string, text: string): void;
   addComposerPart(part: ChatComposerPart): Disposable;
+  focusedEntry(): HTMLElement | null;
 }

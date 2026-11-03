@@ -9,6 +9,7 @@ import {
 } from '../../../contracts/agent';
 import {
   createFakeAgentHarness,
+  FAKE_MICROTASK_TIMERS,
   FAKE_PAST_SESSIONS,
   type FakeAgentHarness,
   fakePlanRowUpdate,
@@ -117,7 +118,11 @@ function setUp(
   options: { harnesses?: FakeAgentHarness[]; clockNow?: number } = {},
 ) {
   const clock = { now: () => options.clockNow ?? 1000 };
-  const harness = createFakeAgentHarness(clock, createMemoryFiles());
+  const harness = createFakeAgentHarness(
+    clock,
+    createMemoryFiles(),
+    FAKE_MICROTASK_TIMERS,
+  );
   const harnesses = options.harnesses ?? [harness];
   const data = createMemoryFiles();
   const logged: string[] = [];
@@ -342,6 +347,7 @@ describe('createChatSessions', () => {
         projectDir: PROJECT_DIR,
         profileDir: '~/.claude-personal',
         controls: {},
+        instructions: [],
       },
     ]);
     expect(test.sent('sessionStarted')).toEqual([
@@ -361,6 +367,42 @@ describe('createChatSessions', () => {
     expect(test.chat.sessions()[0].running).toBe(true);
     expect(JSON.parse(await test.data.read(RECENT_FOLDERS_FILE))).toEqual([
       { projectDir: PROJECT_DIR, profile: 'personal', lastUsed: 1000 },
+    ]);
+  });
+
+  it('addInstructions_EachStartCarriesTheRegisteredOnes', async () => {
+    const test = setUp();
+    const first = test.chat.addInstructions('first note');
+    test.chat.addInstructions('second note');
+
+    test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+    await flush();
+    expect(test.harness.processes[0].request.instructions).toEqual([
+      'first note',
+      'second note',
+    ]);
+
+    first.dispose();
+    first.dispose();
+    test.chat.send(ROW_ID, { text: 'hi', images: [] });
+    await flush();
+    test.harness.processes[0].events.ended({ code: 0, error: null });
+    test.chat.send(ROW_ID, { text: 'again', images: [] });
+    await flush();
+    expect(test.harness.processes[1].request.instructions).toEqual([
+      'second note',
+    ]);
+
+    test.chat.addInstructions('third note');
+    test.chat.clear(ROW_ID);
+    await flush();
+    expect(test.harness.processes[2].request.instructions).toEqual([
+      'second note',
+      'third note',
+    ]);
+    expect(test.harness.processes[0].request.instructions).toEqual([
+      'first note',
+      'second note',
     ]);
   });
 
@@ -497,6 +539,7 @@ describe('createChatSessions', () => {
       projectDir: '/w/app',
       profileDir: '~/.claude',
       controls: {},
+      instructions: [],
     });
     expect(test.uuidCalls()).toBe(0);
     expect(JSON.parse(await test.data.read(RECENT_FOLDERS_FILE))).toEqual([
@@ -1019,6 +1062,7 @@ describe('createChatSessions', () => {
     const fake = createFakeAgentHarness(
       { now: () => 1000 },
       createMemoryFiles(),
+      FAKE_MICROTASK_TIMERS,
     );
     const failingExit: FakeAgentHarness = {
       ...fake,
@@ -1046,6 +1090,7 @@ describe('createChatSessions', () => {
     const fake = createFakeAgentHarness(
       { now: () => 1000 },
       createMemoryFiles(),
+      FAKE_MICROTASK_TIMERS,
     );
     const failingEnd: FakeAgentHarness = {
       ...fake,
@@ -1689,6 +1734,7 @@ describe('createChatSessions saved sessions', () => {
           projectDir: '/w/app',
           profileDir: '~/.claude',
           controls: {},
+          instructions: [],
         },
       ]);
       expect(test.sent('sessionRunning')).toEqual([{ sessionId: ROW_ID }]);

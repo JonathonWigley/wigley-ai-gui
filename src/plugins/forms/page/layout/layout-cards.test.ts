@@ -21,6 +21,7 @@ import {
   FakeElement,
   installFakeDom,
 } from '../../../../shared/page/test-dom';
+import { NO_FENCES } from '../../../../shared/page/markdown-mount.test-support';
 
 // A round of one finding, open and active.
 function findingRound(): RoundState {
@@ -40,6 +41,7 @@ function fakeCardDeps(contributions: FormsContributions): CardDeps {
       block: (text) => text,
       inline: (text) => text,
       document: async (text) => text,
+      ...NO_FENCES,
     },
     mountBox: vi.fn(),
     destroyBox: vi.fn(),
@@ -53,6 +55,7 @@ function fakeCardDeps(contributions: FormsContributions): CardDeps {
     log: vi.fn(),
     commands: { exists: () => false, run: vi.fn() },
     contributions,
+    recordMount: () => {},
   };
 }
 

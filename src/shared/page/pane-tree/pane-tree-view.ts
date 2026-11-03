@@ -5,7 +5,7 @@ import {
   PANE_RESIZE_COMMANDS,
   type PaneDirection,
 } from '../../../contracts/panes';
-import { element } from '../dom';
+import { element, moveConnected } from '../dom';
 import type { AnchorNamer } from '../ui/key-anchors';
 import { createDividerHandle, type DividerHandle } from '../ui/split';
 import {
@@ -46,13 +46,14 @@ export interface PaneTreeView {
   // Throws when `id` is not a leaf.
   slot(id: string): HTMLElement;
   // Draws `tree` in place of the current one; slots of leaves it drops leave
-  // the document.
+  // the document, after `leaving`.
   restore(tree: PaneTree): void;
   // Splits the focused pane, the new pane `newId` right of it (`row`) or below
   // it (`column`) and focused. False, with nothing changed, when either half
   // would fall under the least pane size. Throws when `newId` is a leaf.
   split(axis: SplitAxis, newId: string): boolean;
-  // Closes pane `id`, its slot leaving the document; false for the last pane.
+  // Closes pane `id`, its slot leaving the document after `leaving`; false for
+  // the last pane.
   close(id: string): boolean;
   // Focuses pane `id`; throws when `id` is not a leaf.
   focus(id: string): void;
@@ -73,6 +74,9 @@ export interface PaneTreeViewOptions {
   timers: Timers;
   changed(tree: PaneTree): void;
   focused(id: string): void;
+  // Runs with the ids of the leaves a close or `restore` drops while their
+  // slots are still in the document, before they leave it.
+  leaving(ids: readonly string[]): void;
 }
 
 // A split drawn: its box (`first`, handle, `second`), the node it draws now,
@@ -85,6 +89,13 @@ interface SplitBox {
   split: PaneSplit;
   drawnRatio: number;
   divider: DividerHandle;
+}
+
+// One draw's record: the keys of the split boxes it drew, and how many
+// children each element it filled keeps once every node is placed.
+interface DrawPass {
+  used: Set<string>;
+  childCounts: Map<HTMLElement, number>;
 }
 
 // A box's size in pixels.
@@ -186,27 +197,31 @@ export function createPaneTreeView(options: PaneTreeViewOptions): PaneTreeView {
     return drawn;
   };
 
-  // `node`'s element, `size` in pixels with handles `handle` pixels across
-  // and growing by `grow` (its parent split's drawn share for it, '' for the
-  // root), its split boxes kept under `path` (`0` for `first`, `1` for
-  // `second` at each level) and recorded in `used`. Each split draws its
-  // ratio clamped so each side keeps its least in `size`, the tree's ratio
-  // left as it is.
-  const drawnNode = (
+  // Places `node`'s element at `index` in `parent`, then its sides in it, so
+  // a split's box is in the document before the slots move into it. The
+  // element is `size` in pixels with handles `handle` pixels across and
+  // grows by `grow` (its parent split's drawn share for it, '' for the root);
+  // its split boxes are kept under `path` (`0` for `first`, `1` for `second`
+  // at each level) and recorded in `pass`. Each split draws its ratio clamped
+  // so each side keeps its least in `size`, the tree's ratio left as it is.
+  const placeNode = (
     node: PaneNode,
     size: Size,
     handle: number,
     grow: string,
     path: string,
-    used: Set<string>,
-  ): HTMLElement => {
+    parent: HTMLElement,
+    index: number,
+    pass: DrawPass,
+  ): void => {
     if (node.kind === 'leaf') {
       const slot = slotFor(node.id);
       slot.style.flexGrow = grow;
-      return slot;
+      placeChild(parent, slot, index);
+      return;
     }
     const key = `${path}:${node.axis}`;
-    used.add(key);
+    pass.used.add(key);
     let box = boxes.get(key);
     if (box === undefined) {
       box = createBox(node.axis, node);
@@ -215,32 +230,35 @@ export function createPaneTreeView(options: PaneTreeViewOptions): PaneTreeView {
     box.split = node;
     box.drawnRatio = ratioDrawnIn(node, size, handle);
     box.element.style.flexGrow = grow;
+    placeChild(parent, box.element, index);
+    pass.childCounts.set(box.element, 3);
     const [firstSize, secondSize] = sideSizes(
       node.axis,
       size,
       box.drawnRatio,
       handle,
     );
-    placeChildren(box.element, [
-      drawnNode(
-        node.first,
-        firstSize,
-        handle,
-        String(box.drawnRatio),
-        `${path}0`,
-        used,
-      ),
-      box.handle,
-      drawnNode(
-        node.second,
-        secondSize,
-        handle,
-        String(1 - box.drawnRatio),
-        `${path}1`,
-        used,
-      ),
-    ]);
-    return box.element;
+    placeNode(
+      node.first,
+      firstSize,
+      handle,
+      String(box.drawnRatio),
+      `${path}0`,
+      box.element,
+      0,
+      pass,
+    );
+    placeChild(box.element, box.handle, 1);
+    placeNode(
+      node.second,
+      secondSize,
+      handle,
+      String(1 - box.drawnRatio),
+      `${path}1`,
+      box.element,
+      2,
+      pass,
+    );
   };
 
   // Draws `current` in the tree's box as it is now. An element focused in the
@@ -250,13 +268,17 @@ export function createPaneTreeView(options: PaneTreeViewOptions): PaneTreeView {
     const active = document.activeElement;
     const focusedInTree =
       active instanceof HTMLElement && root.contains(active) ? active : null;
-    const used = new Set<string>();
+    const pass: DrawPass = {
+      used: new Set(),
+      childCounts: new Map([[root, 1]]),
+    };
     const { width, height } = root.getBoundingClientRect();
     // A box with no size, the tree hidden, draws the stored ratios.
     const handle = width > 0 || height > 0 ? handleSize(root) : 0;
-    placeChildren(root, [
-      drawnNode(current.root, { width, height }, handle, '', '', used),
-    ]);
+    placeNode(current.root, { width, height }, handle, '', '', root, 0, pass);
+    for (const [parent, count] of pass.childCounts) {
+      dropChildrenPast(parent, count);
+    }
     if (
       focusedInTree?.isConnected === true &&
       document.activeElement !== focusedInTree
@@ -264,7 +286,7 @@ export function createPaneTreeView(options: PaneTreeViewOptions): PaneTreeView {
       focusedInTree.focus({ preventScroll: true });
     }
     for (const [key, box] of boxes) {
-      if (!used.has(key)) {
+      if (!pass.used.has(key)) {
         box.element.remove();
         box.divider.dispose();
         boxes.delete(key);
@@ -281,11 +303,14 @@ export function createPaneTreeView(options: PaneTreeViewOptions): PaneTreeView {
 
   const dropSlotsMissingFrom = (tree: PaneTree) => {
     const ids = new Set(leafIds(tree));
-    for (const [id, slot] of slots) {
-      if (!ids.has(id)) {
-        slot.remove();
-        slots.delete(id);
-      }
+    const dropped = [...slots].filter(([id]) => !ids.has(id));
+    if (dropped.length === 0) {
+      return;
+    }
+    options.leaving(dropped.map(([id]) => id));
+    for (const [id, slot] of dropped) {
+      slot.remove();
+      slots.delete(id);
     }
   };
 
@@ -474,16 +499,18 @@ function handleSize(root: HTMLElement): number {
   return /^\d+(\.\d+)?px$/.test(token) ? parseFloat(token) : 0;
 }
 
-// Makes `wanted` the children of `parent` in order, moving only the elements
-// not already in their place.
-function placeChildren(parent: HTMLElement, wanted: HTMLElement[]): void {
-  wanted.forEach((child, index) => {
-    const present = parent.children[index] ?? null;
-    if (present !== child) {
-      parent.insertBefore(child, present);
-    }
-  });
-  while (parent.children.length > wanted.length) {
+// Makes `child` the child at `index` of `parent`, whose children before it are
+// already placed, moving it only when it is not there.
+function placeChild(parent: HTMLElement, child: HTMLElement, index: number) {
+  const present = parent.children[index] ?? null;
+  if (present !== child) {
+    moveConnected(parent, child, present);
+  }
+}
+
+// Removes the children of `parent` past its first `count`.
+function dropChildrenPast(parent: HTMLElement, count: number): void {
+  while (parent.children.length > count) {
     parent.lastElementChild?.remove();
   }
 }

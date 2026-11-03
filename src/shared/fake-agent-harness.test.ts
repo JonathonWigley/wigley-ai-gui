@@ -9,6 +9,7 @@ import {
   type ChatEntry,
   type LogInEvents,
 } from '../contracts/agent';
+import type { Timers } from '../contracts/ambient';
 import type { Files } from '../contracts/files';
 import {
   createFakeAgentHarness,
@@ -16,11 +17,14 @@ import {
   FAKE_END_TEXT,
   FAKE_HISTORY_IMAGES,
   FAKE_HOLD_TEXT,
+  FAKE_MICROTASK_TIMERS,
   FAKE_PAST_SESSIONS,
   FAKE_SIGN_IN_CODE,
   FAKE_SIGN_IN_URL,
   FAKE_STEPS_TEXT,
   FAKE_TOOL_TEXT,
+  FAKE_VISUAL_HOLD_MS,
+  FAKE_VISUAL_TEXT,
   FAKE_WORKFLOW_FEATURE_TEXT,
   FAKE_WORKFLOW_STEP_TEXT,
   fakePlanRowUpdate,
@@ -30,6 +34,10 @@ import {
   isFakeAgentHarness,
 } from './fake-agent-harness';
 import { createMemoryFiles } from './memory-files';
+import {
+  SAMPLE_VISUALS_OPEN_TEXT,
+  SAMPLE_VISUALS_TEXT,
+} from './sample-visuals';
 
 const clock = { now: () => 1000 };
 
@@ -39,6 +47,7 @@ const request: AgentStart = {
   projectDir: '/p',
   profileDir: null,
   controls: {},
+  instructions: [],
 };
 
 // Every event the process emits, as `[event name, payload]`, in emit order,
@@ -95,11 +104,34 @@ const flush = async () => {
   await Promise.resolve();
 };
 
+// Timers that run nothing themselves: each `set` is recorded with a fresh
+// handle for the test to run, and each `clear` records its handle.
+function heldTimers() {
+  const set: { run: () => void; ms: number; handle: number }[] = [];
+  const cleared: number[] = [];
+  const timers: Timers = {
+    set(run, ms) {
+      const handle = set.length + 1;
+      set.push({ run, ms, handle });
+      return handle;
+    },
+    clear(handle) {
+      cleared.push(handle);
+    },
+  };
+  return { timers, set, cleared };
+}
+
+// How many lines of `text` equal `line`.
+const linesEqualTo = (text: string, line: string) =>
+  text.split('\n').filter((each) => each === line).length;
+
 // A started process with its start events flushed and cleared.
 async function startedProcess(
   files: Pick<Files, 'write' | 'trash'> = createMemoryFiles(),
+  timers: Timers = FAKE_MICROTASK_TIMERS,
 ) {
-  const harness = createFakeAgentHarness(clock, files);
+  const harness = createFakeAgentHarness(clock, files, timers);
   const { heard, agentEvents, timeline, events } = recordingEvents();
   const agent = harness.start(request, events);
   await flush();
@@ -118,7 +150,11 @@ async function startedProcess(
 
 describe('createFakeAgentHarness', () => {
   it('start_RecordsRequestAndEvents_ThenControlsCommandsIdle', async () => {
-    const harness = createFakeAgentHarness(clock, createMemoryFiles());
+    const harness = createFakeAgentHarness(
+      clock,
+      createMemoryFiles(),
+      FAKE_MICROTASK_TIMERS,
+    );
     const { heard, events } = recordingEvents();
 
     harness.start(request, events);
@@ -145,7 +181,11 @@ describe('createFakeAgentHarness', () => {
   });
 
   it('start_RequestControls_ReplaceStartingValues', async () => {
-    const harness = createFakeAgentHarness(clock, createMemoryFiles());
+    const harness = createFakeAgentHarness(
+      clock,
+      createMemoryFiles(),
+      FAKE_MICROTASK_TIMERS,
+    );
     const { heard, events } = recordingEvents();
 
     harness.start({ ...request, controls: { effort: 'high' } }, events);
@@ -163,7 +203,11 @@ describe('createFakeAgentHarness', () => {
   });
 
   it('failNextStart_ThrowsOnce', () => {
-    const harness = createFakeAgentHarness(clock, createMemoryFiles());
+    const harness = createFakeAgentHarness(
+      clock,
+      createMemoryFiles(),
+      FAKE_MICROTASK_TIMERS,
+    );
     harness.failNextStart('no claude');
 
     expect(() => harness.start(request, recordingEvents().events)).toThrow(
@@ -306,6 +350,133 @@ describe('createFakeAgentHarness', () => {
       ['activity', 'working'],
     ]);
   });
+
+  it('send_VisualText_StreamsAnOpenBlockThenBothVisuals', async () => {
+    const timers = heldTimers();
+    const { agent, heard } = await startedProcess(
+      createMemoryFiles(),
+      timers.timers,
+    );
+
+    agent.send({ text: FAKE_VISUAL_TEXT, images: [] });
+    await flush();
+
+    const first = { fake: 'assistant', text: SAMPLE_VISUALS_OPEN_TEXT };
+    expect(timers.set.map(({ ms }) => ms)).toEqual([FAKE_VISUAL_HOLD_MS]);
+    expect(heard.slice(2)).toEqual([
+      [
+        'entry',
+        {
+          kind: 'assistant',
+          id: 'assistant-1',
+          at: 1000,
+          text: SAMPLE_VISUALS_OPEN_TEXT,
+          streaming: true,
+          raw: [first],
+        },
+      ],
+    ]);
+
+    timers.set[0].run();
+    await flush();
+
+    expect(heard.slice(3)).toEqual([
+      [
+        'entry',
+        {
+          kind: 'assistant',
+          id: 'assistant-1',
+          at: 1000,
+          text: SAMPLE_VISUALS_TEXT,
+          streaming: false,
+          raw: [
+            first,
+            {
+              fake: 'assistant',
+              text: SAMPLE_VISUALS_TEXT.slice(SAMPLE_VISUALS_OPEN_TEXT.length),
+            },
+          ],
+        },
+      ],
+      [
+        'entry',
+        {
+          kind: 'result',
+          id: 'result-1',
+          at: 1000,
+          stopReason: 'end_turn',
+          costUsd: null,
+          durationMs: null,
+          raw: [{ fake: 'result' }],
+        },
+      ],
+      ['agentEvent', fakeUsageEvent(1, 1000)],
+      ['planUsage', fakePlanRowUpdate(1, 1000)],
+      ['activity', 'idle'],
+    ]);
+    const fenceShape = (text: string) => [
+      linesEqualTo(text, '```html'),
+      linesEqualTo(text, '```'),
+    ];
+    expect(fenceShape(SAMPLE_VISUALS_OPEN_TEXT)).toEqual([2, 1]);
+    expect(fenceShape(SAMPLE_VISUALS_TEXT)).toEqual([2, 2]);
+    expect(SAMPLE_VISUALS_TEXT.startsWith(SAMPLE_VISUALS_OPEN_TEXT)).toBe(true);
+  });
+
+  const streamingVisualEntry = {
+    kind: 'assistant',
+    id: 'assistant-1',
+    at: 1000,
+    text: SAMPLE_VISUALS_OPEN_TEXT,
+    streaming: true,
+  };
+
+  it.each([
+    {
+      case: 'interrupt',
+      call: (agent: AgentProcess) => agent.interrupt(),
+      lastEntry: {
+        kind: 'notice',
+        id: 'notice-1',
+        text: 'Interrupted',
+        tone: 'info',
+      },
+    },
+    {
+      case: 'end',
+      call: (agent: AgentProcess) => agent.end(),
+      lastEntry: streamingVisualEntry,
+    },
+    {
+      case: 'kill',
+      call: (agent: AgentProcess) => agent.kill(),
+      lastEntry: streamingVisualEntry,
+    },
+    {
+      case: 'send',
+      call: (agent: AgentProcess) => agent.send({ text: 'hi', images: [] }),
+      lastEntry: { kind: 'result', id: 'result-2' },
+    },
+  ])(
+    'visualHold_CutShort_ClearsTheTimer ($case)',
+    async ({ call, lastEntry }) => {
+      const timers = heldTimers();
+      const { agent, heard } = await startedProcess(
+        createMemoryFiles(),
+        timers.timers,
+      );
+      agent.send({ text: FAKE_VISUAL_TEXT, images: [] });
+      await flush();
+
+      await call(agent);
+      await flush();
+
+      expect(timers.cleared).toEqual(timers.set.map(({ handle }) => handle));
+      expect(timers.set).toHaveLength(1);
+      const entries = heard.filter(([name]) => name === 'entry');
+      expect(entries.at(-1)?.[1]).toMatchObject(lastEntry);
+    },
+  );
 
   it('send_HoldText_HoldsTurnOpen', async () => {
     const { agent, heard } = await startedProcess();
@@ -676,10 +847,11 @@ describe('createFakeAgentHarness', () => {
       case: 'start',
       run: async () => {
         const { agentEvents, events } = recordingEvents();
-        createFakeAgentHarness(clock, createMemoryFiles()).start(
-          request,
-          events,
-        );
+        createFakeAgentHarness(
+          clock,
+          createMemoryFiles(),
+          FAKE_MICROTASK_TIMERS,
+        ).start(request, events);
         await flush();
         return agentEvents;
       },
@@ -921,7 +1093,11 @@ describe('createFakeAgentHarness', () => {
   });
 
   it('listSessions_ReturnsTheFakeSessionsAndRecords', async () => {
-    const harness = createFakeAgentHarness(clock, createMemoryFiles());
+    const harness = createFakeAgentHarness(
+      clock,
+      createMemoryFiles(),
+      FAKE_MICROTASK_TIMERS,
+    );
 
     const sessions = await harness.listSessions('/a', '/p');
 
@@ -938,7 +1114,11 @@ describe('createFakeAgentHarness', () => {
   });
 
   it('history_KnownUnknownAndFailNext', async () => {
-    const harness = createFakeAgentHarness(clock, createMemoryFiles());
+    const harness = createFakeAgentHarness(
+      clock,
+      createMemoryFiles(),
+      FAKE_MICROTASK_TIMERS,
+    );
     const known = '00000000-0000-4000-8000-000000000001';
 
     expect(await harness.history(known, '/a', null)).toEqual([
@@ -994,7 +1174,11 @@ describe('createFakeAgentHarness', () => {
   });
 
   it('planUsage_ResolvesFakeRows_FailNextRejectsOnce', async () => {
-    const harness = createFakeAgentHarness(clock, createMemoryFiles());
+    const harness = createFakeAgentHarness(
+      clock,
+      createMemoryFiles(),
+      FAKE_MICROTASK_TIMERS,
+    );
 
     expect(await harness.planUsage('/p')).toEqual(fakePlanUsage(1000));
     harness.failNextPlanUsage('offline');
@@ -1005,11 +1189,21 @@ describe('createFakeAgentHarness', () => {
   it('isFakeAgentHarness_TellsTheFakeFromAnother', () => {
     // A copy has every member of the fake but is not the object it made.
     const other: AgentHarness = {
-      ...createFakeAgentHarness(clock, createMemoryFiles()),
+      ...createFakeAgentHarness(
+        clock,
+        createMemoryFiles(),
+        FAKE_MICROTASK_TIMERS,
+      ),
     };
 
     expect(
-      isFakeAgentHarness(createFakeAgentHarness(clock, createMemoryFiles())),
+      isFakeAgentHarness(
+        createFakeAgentHarness(
+          clock,
+          createMemoryFiles(),
+          FAKE_MICROTASK_TIMERS,
+        ),
+      ),
     ).toBe(true);
     expect(isFakeAgentHarness(other)).toBe(false);
   });
@@ -1027,7 +1221,11 @@ describe('createFakeAgentHarness accounts and projects', () => {
   }
 
   it('logIn_RightCode_SignsIn', async () => {
-    const harness = createFakeAgentHarness(clock, createMemoryFiles());
+    const harness = createFakeAgentHarness(
+      clock,
+      createMemoryFiles(),
+      FAKE_MICROTASK_TIMERS,
+    );
     await harness.logOut('/p');
     const { heard, events } = recordingLogIn();
 
@@ -1045,7 +1243,11 @@ describe('createFakeAgentHarness accounts and projects', () => {
   });
 
   it('logIn_WrongCodeThenCancel_EndsOnceWithStatusUnchanged', async () => {
-    const harness = createFakeAgentHarness(clock, createMemoryFiles());
+    const harness = createFakeAgentHarness(
+      clock,
+      createMemoryFiles(),
+      FAKE_MICROTASK_TIMERS,
+    );
     const { heard, events } = recordingLogIn();
 
     const login = harness.logIn(null, events);
@@ -1066,7 +1268,11 @@ describe('createFakeAgentHarness accounts and projects', () => {
   });
 
   it('logOut_ThenStatus_SignedOut', async () => {
-    const harness = createFakeAgentHarness(clock, createMemoryFiles());
+    const harness = createFakeAgentHarness(
+      clock,
+      createMemoryFiles(),
+      FAKE_MICROTASK_TIMERS,
+    );
     expect(await harness.accountStatus(null)).toEqual({
       signedIn: true,
       account: 'fake@example.invalid',
@@ -1082,7 +1288,11 @@ describe('createFakeAgentHarness accounts and projects', () => {
   });
 
   it('listProjects_StartedFolders_NewestFirst', async () => {
-    const harness = createFakeAgentHarness(clock, createMemoryFiles());
+    const harness = createFakeAgentHarness(
+      clock,
+      createMemoryFiles(),
+      FAKE_MICROTASK_TIMERS,
+    );
     const { events } = recordingEvents();
     harness.start({ ...request, projectDir: '/a', profileDir: '/p' }, events);
     harness.start({ ...request, projectDir: '/b', profileDir: '/p' }, events);
@@ -1188,7 +1398,7 @@ describe('createFakeAgentHarness workflow', () => {
 
   it('workflowRun_FeatureThenMake_WalksEveryStage', async () => {
     const files = createMemoryFiles();
-    const harness = createFakeAgentHarness(clock, files);
+    const harness = createFakeAgentHarness(clock, files, FAKE_MICROTASK_TIMERS);
     const planText = async () =>
       (await files.stat(planDir)) === null ? null : files.read(planPath);
     const first = recordingEvents();

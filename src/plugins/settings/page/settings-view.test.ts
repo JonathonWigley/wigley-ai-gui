@@ -22,6 +22,7 @@ import type { SettingsChannel } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type { SettingsLayout } from '../layouts/layout';
 import { createSettingsView, type SettingsView } from './settings-view';
+import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 
 // One plugin section: a string leaf, then a choice leaf defaulting to `a`.
 const SCHEMA: UserConfigSchema = {
@@ -100,6 +101,7 @@ async function shownView(isSideBarShown = true) {
       block: (text) => text,
       inline: (text) => text,
       document: async (text) => text,
+      ...NO_FENCES,
     },
     keys,
     commands: { exists: () => true, run: () => undefined },

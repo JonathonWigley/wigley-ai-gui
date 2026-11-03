@@ -1,5 +1,6 @@
 import type { DroppedFile, PageDrops } from '../../../contracts/drops';
 import type { TextEditor } from '../../../contracts/editor';
+import type { ImageEncoder } from '../../../contracts/images';
 import type { Platform } from '../../../contracts/platform';
 import type {
   CommandsRunIn,
@@ -16,11 +17,7 @@ import { element } from '../../../shared/page/dom';
 import type { KitCommands } from '../../../shared/page/layout-host/base-kit';
 import { insertionText } from '../../../shared/page/file-drop/file-chips';
 import { pathOf } from '../../../shared/page/file-drop/file-path';
-import {
-  type ImageEncoder,
-  SHRINK_REFUSED,
-  shrinkToFit,
-} from '../../../shared/page/file-drop/shrink-image';
+import { SHRINK_REFUSED, shrinkToFit } from '../../../shared/shrink-image';
 import { createListPicker } from '../../../shared/page/list-picker';
 import { createReducerStore } from '../../../shared/page/reducer-store';
 import { textBoxInput } from '../../../shared/page/text-box';
@@ -160,6 +157,8 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
   let inFlight: DraftOperation | null = null;
   // An open() whose body focus waits for the operation in flight.
   let focusBodyWhenFree = false;
+  // Counts the drafts put into the boxes, so a take can tell its draft left.
+  let draftsLoaded = 0;
   // While a draft operation is in flight no send, discard, image change,
   // picker or autosave starts, and no box takes focus; typing in a box already
   // focused still lands.
@@ -680,6 +679,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
 
   // Puts the draft main answered with into the page, as saved.
   const loadDraft = (draft: NoteDraft) => {
+    draftsLoaded += 1;
     dispatch({ type: 'loaded', draft });
     titleInput.value = draft.title;
     body.setText(draft.body);
@@ -1128,12 +1128,11 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
   };
 
   // Puts the paths of `files` into the Body at its cursor, unless the popup
-  // changed while they were saved: `isOwnAttach` tells whether an 'attach' in
-  // flight is the same take's.
-  const insertPaths = async (
-    files: readonly DroppedFile[],
-    isOwnAttach: () => boolean,
-  ) => {
+  // changed while they were saved — its fields hidden, another draft loaded,
+  // or an operation other than an 'attach' holding the draft: then the paths
+  // are toasted instead.
+  const insertPaths = async (files: readonly DroppedFile[]) => {
+    const draftAtTake = draftsLoaded;
     const filePaths: string[] = [];
     for (const file of files) {
       const path = await pathOf(file, deps.drops.savePasted, saveFailed);
@@ -1144,10 +1143,12 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     if (filePaths.length === 0) {
       return;
     }
-    const isDraftFree =
-      inFlight === null || (inFlight === 'attach' && isOwnAttach());
-    if (!fieldsShown() || !isDraftFree) {
-      log('notes', `paths not inserted, popup changed: ${filePaths.join(' ')}`);
+    const isBodyFree = inFlight === null || inFlight === 'attach';
+    const isSameDraft = draftsLoaded === draftAtTake;
+    if (!fieldsShown() || !isBodyFree || !isSameDraft) {
+      const message = `Paths not inserted, popup changed: ${filePaths.join(' ')}`;
+      toast(message, 'info');
+      log('notes', message);
       return;
     }
     body.insert(insertionText(filePaths, body.charBeforeCursor()));
@@ -1167,19 +1168,11 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     const otherFiles = files.filter(
       (file) => !IMAGE_TYPES.includes(file.mediaType),
     );
-    let isAttaching = false;
     if (imageFiles.length > 0) {
-      isAttaching = true;
-      void runDraftOperation('attach', async () => {
-        try {
-          await attachEach(imageFiles);
-        } finally {
-          isAttaching = false;
-        }
-      });
+      void runDraftOperation('attach', () => attachEach(imageFiles));
     }
     if (otherFiles.length > 0) {
-      void insertPaths(otherFiles, () => isAttaching);
+      void insertPaths(otherFiles);
     }
   };
   // The popup lives as long as the page, so it keeps no target to dispose.

@@ -6,6 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Files } from '../contracts/files';
 import type { SelfTestScript } from '../contracts/plugin';
 import type { DrivenWindow } from './drive/driven-window';
+import type { ScriptRun, SelfTestFilter } from './selftest-config';
+
+const NO_FILTER: SelfTestFilter = { plugins: [], groups: [] };
 
 const exit = vi.hoisted(() => vi.fn());
 vi.mock('electron', () => ({ app: { exit } }));
@@ -150,7 +153,7 @@ describe('runScript', () => {
           contentSize: () => ({ width: 800, height: 600 }),
         } as unknown as DrivenWindow,
         {} as Files,
-        { pluginId: 'plugin', script },
+        { pluginId: 'plugin', script, checksResult: true },
         new Map(),
         800,
         1,
@@ -185,6 +188,7 @@ describe('runScript', () => {
           scrollsItself: [],
           problems: () => [],
         },
+        checksResult: true,
       },
       new Map(),
       800,
@@ -200,7 +204,88 @@ describe('runScript', () => {
 
     expect(failures).toBe(1);
   });
+
+  it('leaves the result unchecked when the run left out later groups', async () => {
+    const lines: string[] = [];
+    vi.spyOn(console, 'log').mockImplementation((line: string) => {
+      lines.push(line);
+    });
+    const { runScript } = await import('./selftest-runner');
+    waitForNewLogLine.mockResolvedValueOnce(true);
+    const problems = vi.fn(() => ['never checked']);
+
+    const failures = await runScript(
+      {
+        contentSize: () => ({ width: 800, height: 600 }),
+      } as unknown as DrivenWindow,
+      {} as Files,
+      uncheckedRun(new Promise(() => {}), problems),
+      new Map(),
+      800,
+      1,
+      () => true,
+    );
+
+    expect(failures).toBe(0);
+    expect(problems).not.toHaveBeenCalled();
+    expect(lines).toContain(
+      '[selftest] SKIP plugin result: the run left out its later groups',
+    );
+  });
+
+  it('rejects when an unchecked result rejects after the last kept step', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const { runScript } = await import('./selftest-runner');
+    waitForNewLogLine.mockResolvedValueOnce(true);
+    let rejectResult = (_error: Error) => {};
+    const result = new Promise<never>((_resolve, reject) => {
+      rejectResult = reject;
+    });
+    // The second width read is the one after the result's skip line.
+    let widthReads = 0;
+    const window = {
+      contentSize: () => {
+        widthReads++;
+        if (widthReads === 2) {
+          rejectResult(new Error('fixture failed late'));
+        }
+        return { width: 800, height: 600 };
+      },
+    } as unknown as DrivenWindow;
+
+    await expect(
+      runScript(
+        window,
+        {} as Files,
+        uncheckedRun(result, () => []),
+        new Map(),
+        800,
+        1,
+        () => true,
+      ),
+    ).rejects.toThrow('fixture failed late');
+    expect(widthReads).toBe(2);
+  });
 });
+
+// A run of a script with no groups, cut short so its result goes unchecked.
+function uncheckedRun(
+  result: Promise<unknown>,
+  problems: SelfTestScript['problems'],
+): ScriptRun {
+  return {
+    pluginId: 'plugin',
+    script: {
+      pageBinds: [],
+      settings: {},
+      open: () => ({ shownLine: '[plugin] shown', result }),
+      groups: [],
+      scrollsItself: [],
+      problems,
+    },
+    checksResult: false,
+  };
+}
 
 // A window whose `did-finish-load` listeners land in `loaded`, for the test to
 // fire as page loads.
@@ -270,6 +355,7 @@ describe('startSelfTest', () => {
       {} as Files,
       async () => {},
       screenshotFolder,
+      NO_FILTER,
     );
     driver.hostFor('plugin').run(script);
     driver.closeHandover();
@@ -300,6 +386,7 @@ describe('startSelfTest', () => {
       {} as Files,
       async () => {},
       screenshotFolder,
+      NO_FILTER,
     );
     driver.hostFor('plugin').run({
       pageBinds: [],
@@ -331,31 +418,81 @@ describe('startSelfTest', () => {
     ]);
   });
 
-  it('startSelfTest fails the run on an unplaced line logged before the first script', async () => {
+  it.each([
+    {
+      run: 'a whole run',
+      filter: NO_FILTER,
+      code: 1,
+      line: '[selftest] FAIL [keys] unplaced x a.trash in a.s',
+    },
+    {
+      run: 'a filtered run',
+      filter: { plugins: ['plugin'], groups: [] },
+      code: 0,
+      line: '[selftest] SKIP every key placed: a filtered run leaves out the binds of the scripts and groups it skips',
+    },
+  ])(
+    'startSelfTest on $run checks the unplaced lines logged before the first script only when whole',
+    async ({ filter, code, line }) => {
+      vi.resetModules();
+      const { startSelfTest } = await import('./selftest');
+      pageLog.lines = ['[keys] unplaced x a.trash in a.s'];
+      waitForNewLogLine.mockResolvedValueOnce(true);
+      const { window, loaded } = windowFiringLoads();
+      const driver = startSelfTest(
+        window,
+        {} as Files,
+        async () => {},
+        screenshotFolder,
+        filter,
+      );
+      driver.hostFor('plugin').run({
+        pageBinds: [],
+        settings: {},
+        open: () => ({
+          shownLine: '[plugin] shown',
+          result: Promise.resolve(),
+        }),
+        groups: [],
+        scrollsItself: [],
+        problems: () => [],
+      });
+      driver.closeHandover();
+
+      loaded[0]();
+      await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(code));
+
+      expect(lines).toContain(line);
+    },
+  );
+
+  it('startSelfTest fails a filter naming an unknown plugin before any page load runs', async () => {
     vi.resetModules();
     const { startSelfTest } = await import('./selftest');
-    pageLog.lines = ['[keys] unplaced x a.trash in a.s'];
-    waitForNewLogLine.mockResolvedValueOnce(true);
+    const open = vi.fn();
     const { window, loaded } = windowFiringLoads();
     const driver = startSelfTest(
       window,
       {} as Files,
       async () => {},
       screenshotFolder,
+      { plugins: ['nope'], groups: [] },
     );
     driver.hostFor('plugin').run({
       pageBinds: [],
       settings: {},
-      open: () => ({ shownLine: '[plugin] shown', result: Promise.resolve() }),
+      open,
       groups: [],
       scrollsItself: [],
       problems: () => [],
     });
     driver.closeHandover();
 
-    loaded[0]();
     await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(1));
-
-    expect(lines).toContain('[selftest] FAIL [keys] unplaced x a.trash in a.s');
+    expect(loaded).toEqual([]);
+    expect(open).not.toHaveBeenCalled();
+    expect(lines.join('\n')).toMatch(
+      /FAIL the self-test filter: .*nope.*plugin/,
+    );
   });
 });

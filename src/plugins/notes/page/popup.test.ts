@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DropTarget, DroppedFile } from '../../../contracts/drops';
 import type { EditorEvents, TextEditor } from '../../../contracts/editor';
+import type { ImageEncoder } from '../../../contracts/images';
 import type { MarkupEditor, MarkupSession } from '../../../contracts/markup';
 import type {
   PageChannel,
@@ -9,10 +10,7 @@ import type {
   ToastTone,
 } from '../../../contracts/plugin';
 import { insertionText } from '../../../shared/page/file-drop/file-chips';
-import {
-  type ImageEncoder,
-  SHRINK_REFUSED,
-} from '../../../shared/page/file-drop/shrink-image';
+import { SHRINK_REFUSED } from '../../../shared/shrink-image';
 import { MAX_IMAGE_BASE64 } from '../../../shared/image-types';
 import {
   recordingAnchors,
@@ -38,6 +36,7 @@ import { emptyDraft } from '../draft';
 import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
 import { createNotePopup, type NotePopup } from './popup';
+import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
@@ -264,6 +263,7 @@ async function openPopup(draft: NoteDraft = DRAFT): Promise<Harness> {
       block: () => '',
       inline: () => '',
       document: () => Promise.resolve(''),
+      ...NO_FENCES,
     },
     markup: fakeMarkupEditor(markups),
     toast: (text: string, tone: ToastTone) => toasts.push([text, tone]),
@@ -482,39 +482,77 @@ describe('note popup', () => {
   it.each([
     {
       change: 'popup closed',
-      act: (harness: Harness) => harness.popup.commands.close(),
+      act: (harness: Harness) => {
+        harness.popup.commands.close();
+        return Promise.resolve();
+      },
     },
     {
       change: 'send started',
-      act: (harness: Harness) => harness.popup.commands.sendFollowup(),
+      act: (harness: Harness) => {
+        harness.popup.commands.sendFollowup();
+        return Promise.resolve();
+      },
     },
     {
-      change: "another take's attach in flight",
-      act(harness: Harness) {
-        harness.fakes.addImage = () => new Promise(() => undefined);
-        harness.take([png('other.png')]);
+      change: 'popup reopened on its draft',
+      act: async (harness: Harness) => {
+        harness.popup.commands.close();
+        harness.popup.commands.open();
+        await settle();
       },
     },
   ])(
-    'take_StateChangedDuringSave_InsertsNothing ($change)',
+    'take_StateChangedDuringSave_ToastsPathsInsertsNothing ($change)',
     async ({ act }) => {
       const harness = await openPopup({
         ...DRAFT,
         target: '/home/me/a',
         title: 'A note',
       });
-      harness.fakes.savePasted = () => {
-        act(harness);
-        return Promise.resolve(PASTED_PATH);
+      harness.fakes.savePasted = async () => {
+        await act(harness);
+        return PASTED_PATH;
       };
 
       harness.take([droppedFile('n.txt', 'text/plain', '')]);
       await settle();
+      await settle();
 
       expect(harness.inserts).toEqual([]);
-      expect(harness.logged.some((line) => line.includes(PASTED_PATH))).toBe(
-        true,
-      );
+      expect(
+        harness.toasts.filter(([text]) => text.includes(PASTED_PATH)),
+      ).toEqual([[expect.stringContaining(PASTED_PATH), 'info']]);
+    },
+  );
+
+  // Each row's attach hangs in main while the pasted file saves.
+  it.each([
+    {
+      attaching: 'this take',
+      files: [png('own.png')],
+      duringSave: () => undefined,
+    },
+    {
+      attaching: 'another take',
+      files: [],
+      duringSave: (harness: Harness) => harness.take([png('other.png')]),
+    },
+  ])(
+    'take_AttachInFlightDuringSave_InsertsPaths ($attaching)',
+    async ({ files, duringSave }) => {
+      const harness = await openPopup();
+      harness.fakes.addImage = () => new Promise(() => undefined);
+      harness.fakes.savePasted = () => {
+        duringSave(harness);
+        return Promise.resolve(PASTED_PATH);
+      };
+
+      harness.take([...files, droppedFile('n.txt', 'text/plain', '')]);
+      await settle();
+
+      expect(harness.inserts).toEqual([insertionText([PASTED_PATH], '')]);
+      expect(harness.toasts).toEqual([]);
     },
   );
 
