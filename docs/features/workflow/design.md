@@ -106,6 +106,11 @@ mid-turn) gives a subagent-finished signal for each running subagent, then a tur
 its stage: Clear & make's own clear must not reset plan ready. `sessions.ended` (main's event for a closed row) drops
 the session's flow.
 
+A re-attach replays its process's whole log, each event flagged `replayed`, over the saved flow. `flows.json` holds each
+flow's save time, stamped by a change from a live event or an action, not by a plan read or a replay. A replayed event
+at or before that time is already in the flow, so it updates only the running turn and subagents; a later one, from a
+turn that ended while the app was closed, folds as usual. A flow saved without the time counts as saved when it loaded.
+
 ## Where it draws
 
 Everything draws through the `workflow` layout, its built-in `default`, and the preview on `Space z l w`.
@@ -122,7 +127,8 @@ Everything draws through the `workflow` layout, its built-in `default`, and the 
 
 With `workflow.autoClearAndMake` on (default off), plan ready starts a countdown of `workflow.autoStartSeconds`
 (default 10) on the strip and the row chip. During it the main action is Cancel. At zero, Clear & make runs. A turn
-that starts, a clear, or a Cancel stops it.
+that starts, a clear, a Cancel or a replayed event stops it. A replayed event starts none, and neither does the plan
+read a replayed turn end causes, until a live turn starts or ends.
 
 ## Keys
 

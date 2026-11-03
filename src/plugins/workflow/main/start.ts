@@ -18,7 +18,7 @@ import type {
   WorkflowMainExports,
   WorkflowSignal,
 } from '../contract';
-import { foldFlow, isPlanFile } from '../flow';
+import { foldFlow, foldRunningState, isPlanFile } from '../flow';
 import { workflowManifest } from '../manifest';
 import { createStageList } from '../stage-list';
 import { BUILT_IN_MAIN_STAGES } from '../stages';
@@ -28,6 +28,11 @@ import { createCountdown } from './countdown';
 import { createFlowStore } from './flow-store';
 import { createPlanWatch } from './plan-watch';
 import { workflowSelfTestScript } from './selftest-script';
+
+// Where a fold's signal came from. Only 'live' stamps the flow's save time: the
+// time a replayed event is compared against says how far the flow has heard the
+// log, and neither a replay nor a read of the plan file adds to that.
+type SignalOrigin = 'live' | 'replay' | 'planRead';
 
 type WorkflowApi = MainApi<
   typeof workflowManifest,
@@ -49,7 +54,8 @@ export interface WorkflowSelfTestHooks {
 
 // Folds each owned Chat-tab session's agent events and session events into its
 // flow through the registered stages, keeps the flows in `flows.json` keyed by
-// host session id, watches each flow's plan folder, runs the main-side
+// host session id, folds a re-attach's replay only past the flow's last save,
+// watches each flow's plan folder, runs the main-side
 // workflow commands for the page and the plan-ready auto-start countdown, and
 // sends every flow to the page on each change. Exports `addStage`.
 export const workflowMainPart: MainPart<typeof workflowManifest> = {
@@ -65,6 +71,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       files: api.data,
       log,
       paths: services.paths,
+      clock,
     });
     const ready = store.load().catch((error: unknown) => {
       log(
@@ -79,6 +86,9 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       { hostSessionId: string; projectDir: string }
     >();
     const turnEndedListeners = new Set<(sessionId: string) => void>();
+    // Sessions whose last turn end was replayed, until a live turn starts: the
+    // plan read such a turn causes settles after its replay, as a plain signal.
+    const replayedTurnEnds = new Set<string>();
 
     const sendFlows = () => channel.send('flows', store.all());
     const stageOf = (flow: SessionFlow) =>
@@ -87,7 +97,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     const planWatch = createPlanWatch({
       files: services.files,
       log,
-      signal: (sessionId, signal) => apply(sessionId, signal),
+      signal: (sessionId, signal) => apply(sessionId, signal, 'planRead'),
     });
     const countdown = createCountdown({
       timers: services.timers,
@@ -98,7 +108,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       chat,
       log,
       flowOf: (sessionId) => store.get(sessionId),
-      signal: (sessionId, signal) => apply(sessionId, signal),
+      signal: (sessionId, signal) => apply(sessionId, signal, 'live'),
       cancelCountdown: (sessionId) => cancelCountdown(sessionId),
     });
 
@@ -106,6 +116,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     const withCountdown = (flow: SessionFlow, next: SessionFlow) => {
       const settings = api.settings();
       const startsCountdown =
+        !replayedTurnEnds.has(flow.sessionId) &&
         next.stage !== flow.stage &&
         stageOf(next)?.autoCommand !== undefined &&
         next.countdownEndsAt === null &&
@@ -119,18 +130,38 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
         : next;
     };
 
-    const putFlow = (next: SessionFlow) => {
-      store.put(next);
+    const putFlow = (next: SessionFlow, origin: SignalOrigin = 'live') => {
+      if (origin === 'live') {
+        store.put(next);
+      } else {
+        store.putKeepingSavedAt(next);
+      }
       countdown.sync(next);
       sendFlows();
     };
 
-    // The one change path every fold takes. A replayed event's fold starts no
-    // countdown.
+    const noteTurnBoundary = (
+      sessionId: string,
+      signal: WorkflowSignal,
+      replayed: boolean,
+    ) => {
+      if (signal.type === 'turnEnded' && replayed) {
+        replayedTurnEnds.add(sessionId);
+      }
+      const isLiveBoundary =
+        !replayed &&
+        (signal.type === 'turnStarted' || signal.type === 'turnEnded');
+      if (isLiveBoundary) {
+        replayedTurnEnds.delete(sessionId);
+      }
+    };
+
+    // The one change path every full fold takes. A replayed event's fold starts
+    // no countdown.
     function apply(
       sessionId: string,
       signal: WorkflowSignal,
-      replayed = false,
+      origin: SignalOrigin,
     ): void {
       const flow = store.get(sessionId);
       if (flow === null) {
@@ -146,10 +177,30 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       if (folded === flow) {
         return;
       }
-      const next = replayed ? folded : withCountdown(flow, folded);
-      putFlow(next);
+      const next = origin === 'replay' ? folded : withCountdown(flow, folded);
+      putFlow(next, origin);
       if (next.planDir !== flow.planDir) {
         planWatch.follow(sessionId, next.planDir);
+      }
+    }
+
+    // A replayed event at or before the flow's last save is already in the flow,
+    // apart from the running state a loaded flow drops.
+    function applyReplayed(
+      sessionId: string,
+      signal: WorkflowSignal,
+      at: number,
+    ): void {
+      if (at > store.savedAtOf(sessionId)) {
+        apply(sessionId, signal, 'replay');
+        return;
+      }
+      const flow = store.get(sessionId);
+      if (flow !== null) {
+        const next = foldRunningState(flow, signal);
+        if (next !== flow) {
+          putFlow(next, 'replay');
+        }
       }
     }
 
@@ -216,7 +267,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
         if (hostSessionId !== null) {
           store.rekey(id, hostSessionId);
         }
-        apply(id, { type: 'cleared' });
+        apply(id, { type: 'cleared' }, 'live');
       });
     });
     events.on('sessions.ended', ({ sessionId }) => {
@@ -224,6 +275,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
         connected.delete(sessionId);
         countdown.stop(sessionId);
         planWatch.follow(sessionId, null);
+        replayedTurnEnds.delete(sessionId);
         store.drop(sessionId);
         sendFlows();
       });
@@ -236,9 +288,19 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
           if (flow === null) {
             return;
           }
+          // The open's plan read can arm a countdown before the replay says a
+          // turn still runs.
+          if (replayed && flow.countdownEndsAt !== null) {
+            putFlow({ ...flow, countdownEndsAt: null }, 'replay');
+          }
           const fromCurrentHost = store.hostIdOf(sessionId) === hostSessionId;
           for (const signal of signalOf(event, flow, fromCurrentHost)) {
-            apply(sessionId, signal, replayed);
+            noteTurnBoundary(sessionId, signal, replayed);
+            if (replayed) {
+              applyReplayed(sessionId, signal, event.at);
+            } else {
+              apply(sessionId, signal, 'live');
+            }
             if (signal.type === 'turnEnded') {
               for (const listener of turnEndedListeners) {
                 listener(sessionId);
@@ -279,6 +341,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
           for (const sessionId of store.forgetFlows(projectDir)) {
             countdown.stop(sessionId);
             planWatch.follow(sessionId, null);
+            replayedTurnEnds.delete(sessionId);
           }
           sendFlows();
         },

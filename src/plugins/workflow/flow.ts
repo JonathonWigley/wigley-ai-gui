@@ -57,11 +57,22 @@ export function foldFlow(
   return sameFlow(flow, next) ? flow : next;
 }
 
-function applyBookkeeping(next: SessionFlow, signal: WorkflowSignal): void {
+// Applies only what `signal` says about the running turn and subagents: every
+// other field stays, and no stage rule runs. Returns `flow` itself when neither
+// changed.
+export function foldRunningState(
+  flow: SessionFlow,
+  signal: WorkflowSignal,
+): SessionFlow {
+  const next: SessionFlow = { ...flow };
+  applyRunningState(next, signal);
+  return sameFlow(flow, next) ? flow : next;
+}
+
+function applyRunningState(next: SessionFlow, signal: WorkflowSignal): void {
   switch (signal.type) {
     case 'turnStarted':
       next.turnRunning = true;
-      next.countdownEndsAt = null;
       break;
     case 'turnEnded':
       next.turnRunning = false;
@@ -75,6 +86,21 @@ function applyBookkeeping(next: SessionFlow, signal: WorkflowSignal): void {
       next.runningSubagents = next.runningSubagents.filter(
         (agentId) => agentId !== signal.agentId,
       );
+      break;
+    default:
+      break;
+  }
+}
+
+function applyBookkeeping(next: SessionFlow, signal: WorkflowSignal): void {
+  applyRunningState(next, signal);
+  switch (signal.type) {
+    case 'turnStarted':
+      next.countdownEndsAt = null;
+      break;
+    case 'turnEnded':
+    case 'subagentStarted':
+    case 'subagentFinished':
       break;
     case 'fileWritten':
       if (isPlanFile(signal.path)) {
