@@ -102,9 +102,10 @@ Only the Claude adapter knows Claude's shapes, so it alone fills these into agen
 
 - The core setting `plugins.disabled` lists plugin ids the plugin host does not start. Its default lists
   `agent-lines` and `usage-tab-line`. Settings mode shows it.
-- A disabled plugin's page part starts again on the next page load once removed from the list; a main part on the next
-  app start. A plugin that another started plugin depends on cannot be disabled: the config check reports it as a
-  config problem and keeps the last good config.
+- Turning a plugin off takes effect for its page part on the next page load and for its main part on the next app
+  start; turning one on takes effect on the next app start, since a page part never starts without its main part (the
+  page reads the union of the setting and main's start list). A plugin that another started plugin depends on cannot
+  be disabled: the config check reports it as a config problem and keeps the last good config.
 - `agents` keeps the roster, the event log and its channel, and draws nothing. `agent-lines` draws the sidebar lines;
   `agent-strip` draws the strip. Both read the agents roster.
 - `usage` keeps the polls, the status-bar plan line, the right bar and the status part. `usage-tab-line` draws usage's
@@ -116,7 +117,9 @@ Only the Claude adapter knows Claude's shapes, so it alone fills these into agen
 - **Views are plugins the user switches off.** A view and its data split: the data plugin stays on, each view is its
   own plugin, so turning one view off never starves another (the follow-up's "a behaviour is a plugin to enable").
 - **A disable list read at start, not a live stop.** A live `PluginHost.stop` is a framework change of its own; the
-  setting is the switch it will act on when it lands.
+  setting is the switch it will act on when it lands. Live on/off is its own feature plan, built on the tracked
+  unloading follow-ups (`docs/features/followups.md` § Extensibility review: Unloading and reload); the user chose
+  this on 2026-11-02.
 - **The strip joins the entry cursor through a general stop.** Any composer part may offer one, so chat names no
   plugin.
 - **Finished boxes stay until the next message.** A burst of parallel agents finishing does not vanish mid-glance.

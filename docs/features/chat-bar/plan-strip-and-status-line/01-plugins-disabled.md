@@ -71,13 +71,13 @@ Produces:  `plugins: { disabled: string[] }` in `Settings`, `src/contracts/setti
     (see Self-test, below). Keep the result in `main.ts` as the main start list.
   - Page: `renderer.ts` passes `config.settings.plugins.disabled` of the config read at page load. Keep that list for
     the page's life as the page load list. A pushed config does not change it.
-  - A list edited mid-run, then a page reload (pending the user's answer; see the closure question on stranded page
-    parts): with the recommended option, the page load list is the union of the setting and the main start list, so
+  - A list edited mid-run, then a page reload (the user's answer, 2026-11-02; live on/off is its own later
+    feature plan): the page load list is the union of the setting and the main start list, so
     the page never starts a page part whose main part did not start (for example agent-lines removed from the list,
     then a reload: its page part would show a layout whose contract main never registered). Main hands its start list
     to the page through the served config: `served()` sets `settings.plugins.disabled` to the union of the file's list
-    and the main start list (the union of two lists the dependency rule accepts also passes it). Under that option the
-    setting's description becomes: `Plugin ids the app does not start. Turning one off takes effect for its page part
+    and the main start list (the union of two lists the dependency rule accepts also passes it). The setting's
+    description is: `Plugin ids the app does not start. Turning one off takes effect for its page part
     on the next page load and for its main part on the next app start; turning one on takes effect on the next app
     start.`
   - `requireListed` and `requireServedSettings` stay as they are. A disabled part is skipped before
@@ -114,7 +114,7 @@ Produces:  `plugins: { disabled: string[] }` in `Settings`, `src/contracts/setti
   array setting the `json` control. Settings mode draws its value as JSON on the row
   (`["agent-lines","usage-tab-line"]`) and edits it in the JSON document box. Its row needs only `settingInfo`:
   - label: `Disabled plugins`
-  - description: `Plugin ids the app does not start. A page part follows on the next page load, a main part on the next app start.`
+  - description: `Plugin ids the app does not start. Turning one off takes effect for its page part on the next page load and for its main part on the next app start; turning one on takes effect on the next app start.`
 - **Self-test.** The self-test starts every plugin, so the agents and usage steps, and the steps tasks 07 and 08 add,
   see their views:
   - `applySelfTestConfig` sets the served `settings.plugins.disabled` to `[]`. Add this to its comment.
