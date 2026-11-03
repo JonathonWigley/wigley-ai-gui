@@ -1,7 +1,10 @@
 // How the usage page words its numbers.
 
-// `842`, `180k`, `1.3M`.
+// `0k`, `842`, `180k`, `1.3M`.
 export function formatTokens(tokens: number): string {
+  if (tokens === 0) {
+    return '0k';
+  }
   if (tokens < 1000) {
     return String(tokens);
   }

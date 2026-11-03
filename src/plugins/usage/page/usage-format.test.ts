@@ -9,7 +9,7 @@ import {
 
 describe('usage-format', () => {
   it.each([
-    { case: 'Zero', tokens: 0, expected: '0' },
+    { case: 'Zero', tokens: 0, expected: '0k' },
     { case: 'BelowAThousand', tokens: 999, expected: '999' },
     { case: 'AThousand', tokens: 1000, expected: '1k' },
     { case: 'Thousands', tokens: 180_000, expected: '180k' },

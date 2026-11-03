@@ -44,25 +44,31 @@ export function statusLineInput(
   };
 }
 
-// `sessionId`'s line: its context, cache and spend; null while the snapshot
-// holds no such session or it has no usage yet.
+// `sessionId`'s line: its context, cache and spend; the zero line (context
+// `0k`, no cache or spend) while the snapshot holds no such session or it has
+// no usage yet.
 export function sessionLineInput(
   snapshot: UsageSnapshot,
   sessionId: string,
   now: number,
-): SessionLineInput | null {
+): SessionLineInput {
   const usage = findSession(snapshot, sessionId)?.usage ?? null;
-  return usage === null ? null : sessionLine(usage, now);
+  if (usage === null) {
+    return { context: zeroContextMeter(), cache: null, spend: null };
+  }
+  return sessionLine(usage, now);
 }
 
-// `sessionId`'s side-bar row line: its context; null while the snapshot holds
+// `sessionId`'s side-bar row line: its context, `0k` while the snapshot holds
 // no such session or it has no usage yet.
 export function rowLineInput(
   snapshot: UsageSnapshot,
   sessionId: string,
-): RowLineInput | null {
+): RowLineInput {
   const usage = findSession(snapshot, sessionId)?.usage ?? null;
-  return usage === null ? null : { context: contextMeter(usage) };
+  return {
+    context: usage === null ? zeroContextMeter() : contextMeter(usage),
+  };
 }
 
 // A row line as the page log writes it: `context 180k/300k`.
@@ -196,6 +202,16 @@ function contextMeter(usage: UsageAgentEvent): MeterInput {
     text: `${formatTokens(used)}/${formatTokens(limit)}`,
     percent: Math.min(100, share),
     tone: contextTone(share),
+  };
+}
+
+// The context meter of a session with no usage.
+function zeroContextMeter(): MeterInput {
+  return {
+    label: 'Context',
+    text: formatTokens(0),
+    percent: 0,
+    tone: 'normal',
   };
 }
 

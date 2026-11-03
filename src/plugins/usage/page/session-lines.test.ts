@@ -121,9 +121,18 @@ describe('session lines', () => {
   it.each([
     { case: 'AbsentSession', snapshot: snapshotWith() },
     { case: 'NullUsage', snapshot: snapshotWith(null) },
-    { case: 'NoSnapshotYet', snapshot: null },
-  ])('build_SessionWithoutUsage_DrawsNothing_$case', ({ snapshot }) => {
+  ])('build_SessionWithoutUsage_DrawsZeroLine_$case', ({ snapshot }) => {
     const { lines, logged } = setUp(snapshot);
+    const wrapper = new FakeElement('div');
+
+    lines.part.build(asHtml(wrapper), SESSION);
+
+    expect(findAll(wrapper, LINE)).toHaveLength(1);
+    expect(logged).toEqual(['session line in gamma 2: context 0k']);
+  });
+
+  it('build_NoSnapshotYet_DrawsNothing', () => {
+    const { lines, logged } = setUp(null);
     const wrapper = new FakeElement('div');
 
     lines.part.build(asHtml(wrapper), SESSION);
@@ -153,7 +162,7 @@ describe('session lines', () => {
   it.each([
     { case: 'AbsentSession', snapshot: snapshotWith() },
     { case: 'NullUsage', snapshot: snapshotWith(null) },
-  ])('redraw_UsageGone_RemovesLineAndLogsNoneOnce_$case', ({ snapshot }) => {
+  ])('redraw_UsageGone_ZeroLineReplacesItLoggedOnce_$case', ({ snapshot }) => {
     const { lines, logged, show } = setUp(snapshotWith(usageEvent()));
     const wrapper = new FakeElement('div');
     lines.part.build(asHtml(wrapper), SESSION);
@@ -162,10 +171,12 @@ describe('session lines', () => {
     lines.redraw();
     lines.redraw();
 
-    expect(wrapper.children).toEqual([]);
+    const drawn = findAll(wrapper, LINE);
+    expect(drawn).toHaveLength(1);
+    expect(drawn[0].textContent).not.toContain('180k');
     expect(logged).toEqual([
       'session line in gamma 2: context 180k/300k, cache 42m, spend $1.23',
-      'session line in gamma 2: none',
+      'session line in gamma 2: context 0k',
     ]);
   });
 
