@@ -1,6 +1,6 @@
 # 06 — Re-read the docs written ahead against the landed code
 
-Status: not started
+Status: done
 Type: Task
 Wave: 3 · Depends on: 01, 02, 03, 04, 05
 Plan: [plan.md](plan.md)
@@ -28,3 +28,4 @@ Commit:    one commit for the doc fixes, or none when no line is stale (record t
 
 ## Proof
 
+Commit 246bfbdb · proof: diff read: 3 design.md § Live defaults bullets (Reload, CSS, Fallback) and the AGENTS.md layout bullet fixed against the code; 20 listed lines and the grep hits already true; oxfmt clean on AGENTS.md (docs/features is oxfmt-ignored) · concerns: the equal-specificity tie-break of moved rules is documented nowhere; worth a DESIGN.md line if task 07 check 5 finds it matters

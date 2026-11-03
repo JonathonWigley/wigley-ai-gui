@@ -156,7 +156,7 @@ entry and the scheme; no task adds a `process.platform` check.
 - [x] [Default CSS to `layout.css`](05-default-css-to-layout-css.md) — after 03
 
 ### Wave 3
-- [ ] [Doc re-read](06-doc-re-read.md) — after 01, 02, 03, 04, 05
+- [x] [Doc re-read](06-doc-re-read.md) — after 01, 02, 03, 04, 05
 
 ### Wave 4
 - [ ] [Final verification](07-final-verification.md) — after 01, 02, 03, 04, 05, 06
@@ -171,6 +171,7 @@ Review base: 46f417b5
 - 03 · e8dfeb96 · diff read: ShowLayoutOptions.defaultStylesheet, LayoutLoaderDeps.defaultStylesheet and DrawnPart.drewPick present; typecheck clean; layout-host, entry-list, primer-view, page-api tests 238/238; oxlint and oxfmt clean on its files (worker) · concerns: renderer.ts (shell) also took defaultStylesheet: null, for task 05 to fill; drawPart tests now overlap the new drewPick table rows, kept for their dataset asserts
 - 05 · f26de97e · diff read over 9 slices; 16 layout.css files; css_conserve.py per owner: base rules == page CSS + layout.css, lost 0 added 0 for all 16; no defaultStylesheet: null in any show call (test fixtures only); ?url declared; typecheck clean outside src/main (task 04 WIP); layers clean; check-styles and oxfmt flag only the pre-existing agent-strip min-height calc, moved verbatim to agent-strip/layouts/default/layout.css:11 · concerns: cascade ties for task 07 check 5: settings .settings-head vs .ui-section-header (justify-content), notes .notes-markup-group .is-active vs .ui-icon-button.is-active; to look at: agent-strip box vs kit rules, shell .activity-item and .config-problem-badge vs shared button rules, settings .settings-row vs .ui-row if a row ever takes ui-row, sessions .ui-row.session-row:not(.is-selected) vs .ui-row hover background; docs layout.css holds two consecutive .docs-doc-frame rules from the split, unmerged
 - 04 · 61a1518b · diff read: register(owner, layoutTypes, defaultFolder), defaultFolderPath, repoDir on LayoutServiceDeps and declare const WIGLEY_CLONE_DIR present; whole-tree typecheck clean; resolve-clone-dir, layout-service, main-api tests 28/28; oxlint 0; oxfmt clean on its 13 files · concerns: Vite server.watch.ignored behaviour rests on the vite 8.3.4 source, not its docs; the assetsInlineLimit .css check could miss a path carrying a query string (task 07 check 7 checks the package); a drive run or self-test reads defaults from its own repo, uncommitted edits included; install-app baking the main clone has no test until a real install-app run
+- 06 · 246bfbdb · diff read: 3 design.md § Live defaults bullets (Reload, CSS, Fallback) and the AGENTS.md layout bullet fixed against the code; 20 listed lines and the grep hits already true; oxfmt clean on AGENTS.md (docs/features is oxfmt-ignored) · concerns: the equal-specificity tie-break of moved rules is documented nowhere; worth a DESIGN.md line if task 07 check 5 finds it matters
 ### Contract changes
 - src/main/clone-dir.ts and clone-dir.test.ts (named by the cold-read decision, not a Produces item): planned clone-dir.ts → landed resolve-clone-dir.ts / resolve-clone-dir.test.ts · why: tsc skips a foo.d.ts beside a foo.ts, leaving WIGLEY_CLONE_DIR undeclared; clone-dir.d.ts keeps its Produces name · consumers: none · group 04
 ### Rulings
@@ -190,5 +191,6 @@ Review base: 46f417b5
 - the pre-existing agent-strip raw 2px/7lh calc and its oxfmt wrap moved verbatim into agent-strip/layouts/default/layout.css, unfixed — the lint failure now names that file · group 05
 - resolveCloneDir checks absoluteness with node:path isAbsolute, keeping the planned (baked, isFolder) signature — a Windows \\foo path counts as absolute, which a baked path never is · group 04
 - AGENTS.md:593 (off the Files line) updated to the three-argument shell register call, as it had gone stale — none · group 04
+- no doc text added for the cascade tie-break or the never-resetting revision, as no listed line contradicted the code there — a missing note only · group 06
 ### Review rounds
 ### Test gate
