@@ -760,13 +760,20 @@ describe('composer surface activity dock', () => {
     vi.spyOn(defaultLayout, 'working').mockImplementation(() => {
       throw new Error('broken default');
     });
-    const { surface, slot, logs } = setUpSurface(null);
+    const { surface, slot, logs, armed, drawComposer } = setUpSurface(null);
+    const failures = () =>
+      logs.filter(
+        (line) => line === 'default layout working failed: broken default',
+      ).length;
 
     surface.setTurn([userEntry('u1', 1000), readEntry('t1', 2000, true)], true);
+    [...armed.values()].forEach((run) => run());
+    const failuresBeforeComposerDraw = failures();
+    drawComposer();
 
     expect(slot.hidden).toBe(true);
     expect(slot.children).toEqual([]);
-    expect(logs).toContain('default layout working failed: broken default');
+    expect([failuresBeforeComposerDraw, failures()]).toEqual([1, 2]);
   });
 
   it('working_Dispose_DisposesThePartAndClearsTheTick', () => {

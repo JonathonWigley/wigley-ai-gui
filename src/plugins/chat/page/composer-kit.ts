@@ -74,11 +74,13 @@ export interface ComposerPieces {
 // other plugins' composer parts and status parts are built again by each
 // composer draw, not by a status line draw. The working slot holds the
 // activity dock: the `working` part, drawn with what the tab's activity dock
-// shows and hidden while it shows nothing.
+// shows and hidden while it shows nothing or while the default `working` draw
+// has failed since the last composer draw.
 export interface ComposerSurface {
   // Draws the composer into `parent` in place of its last draw, then the
   // status line with `input`, the last attached images and the activity dock
-  // afresh; returns the composer's root.
+  // afresh, retrying a failed default `working` draw; returns the composer's
+  // root.
   drawComposer(parent: HTMLElement, input: ComposerInput): HTMLElement;
   // Runs the composer's update with `input`, then draws the status line with
   // it in place of its last draw. Returns false, drawing no status line, when
@@ -140,6 +142,7 @@ export function createComposerSurface(
   let attachments: DrawnPart<BuiltPart<AttachmentsInput>> | null = null;
   let workingPart: DrawnPart<BuiltPart<WorkingInput>> | null = null;
   let images: readonly ChatImage[] = [];
+  let isWorkingFailed = false;
 
   const clearWorking = () => {
     workingPart?.dispose();
@@ -148,10 +151,11 @@ export function createComposerSurface(
     workingSlot.hidden = true;
   };
   // Draws the `working` part afresh with `input`, or leaves the slot hidden
-  // for null; a default that fails is logged and leaves it hidden.
+  // for null; a default that fails is logged once and leaves it hidden until
+  // the next composer draw.
   const drawWorking = (input: WorkingInput | null) => {
     clearWorking();
-    if (input === null) {
+    if (input === null || isWorkingFailed) {
       return;
     }
     workingSlot.hidden = false;
@@ -162,6 +166,7 @@ export function createComposerSurface(
       });
     } catch (error) {
       deps.log('chat', `default layout working failed: ${errorText(error)}`);
+      isWorkingFailed = true;
       clearWorking();
     }
   };
@@ -243,6 +248,7 @@ export function createComposerSurface(
       });
       drawStatusLinePart(input);
       surface.drawAttachments(images);
+      isWorkingFailed = false;
       drawWorking(dock.input());
       return composer.built.element;
     },

@@ -301,8 +301,9 @@ function fakeTimers() {
   return { timers, armed, fireAll };
 }
 
-// A list over `shown`, its logs, toasts, disposed anchors, timers, a clock
-// whose `time` the test sets, and the ids each pending row click pulled back.
+// A list over `shown`, its layouts, logs, toasts, disposed anchors, timers, a
+// clock whose `time` the test sets, and the ids each pending row click pulled
+// back.
 // `put` puts an entry into the session's list, replacing the one holding its
 // id.
 function setUpList(shown: ShownLayouts<ChatLayout>) {
@@ -359,6 +360,7 @@ function setUpList(shown: ShownLayouts<ChatLayout>) {
     armed,
     fireAll,
     clock,
+    layouts,
     put,
     entries,
   };
@@ -839,6 +841,7 @@ describe('activity hidden', () => {
     slots: string[];
     kinds: string[];
     stops: string[];
+    focused: string | null;
   }>([
     {
       case: 'default layout, rebuilt',
@@ -852,6 +855,7 @@ describe('activity hidden', () => {
       ],
       kinds: ['chat-user', 'chat-assistant', 'chat-permission', 'chat-notice'],
       stops: ['u1', 'a1', 'p1', 'n1'],
+      focused: 'n1',
     },
     {
       case: 'activity in the transcript, rebuilt',
@@ -878,6 +882,58 @@ describe('activity hidden', () => {
         'chat-notice',
       ],
       stops: ['u1', 'activity:t1', 'a1', 'p1', 'r1', 'n1'],
+      focused: 'n1',
+    },
+    {
+      case: 'activity in the transcript, focus on the activity line, then the default layout, rebuilt',
+      shown: () => activityShown(),
+      act: ({ list, put, entries, layouts }) => {
+        everyKind.forEach(put);
+        list.first();
+        list.move(1);
+        layouts.set(defaultShown());
+        list.rebuild(entries());
+      },
+      slots: [
+        'chat-entry-slot',
+        'chat-entry-slot',
+        'chat-entry-slot',
+        'chat-entry-slot is-cursor',
+      ],
+      kinds: ['chat-user', 'chat-assistant', 'chat-permission', 'chat-notice'],
+      stops: ['u1', 'a1', 'p1', 'n1'],
+      focused: 'n1',
+    },
+    {
+      case: 'default layout, then activity in the transcript, rebuilt',
+      shown: defaultShown,
+      act: ({ list, put, entries, layouts }) => {
+        everyKind.forEach(put);
+        layouts.set(activityShown());
+        list.rebuild(entries());
+      },
+      slots: [
+        'chat-entry-slot',
+        'chat-entry-slot chat-activity-slot',
+        'chat-entry-slot chat-step-slot hidden',
+        'chat-entry-slot chat-step-slot hidden',
+        'chat-entry-slot',
+        'chat-entry-slot',
+        'chat-entry-slot',
+        'chat-entry-slot is-cursor',
+      ],
+      kinds: [
+        'chat-user',
+        'chat-activity',
+        'chat-tool',
+        'chat-thinking',
+        'chat-assistant',
+        'chat-permission',
+        'chat-result',
+        'chat-notice',
+      ],
+      stops: ['u1', 'activity:t1', 'a1', 'p1', 'r1', 'n1'],
+      focused: 'n1',
     },
     {
       case: 'default layout, a tool put then given its result',
@@ -889,13 +945,16 @@ describe('activity hidden', () => {
       slots: [],
       kinds: [],
       stops: [],
+      focused: null,
     },
   ])('hidden_ActivityNotInTranscript ($case)', (row) => {
     const setUp = setUpList(row.shown());
     const { list } = setUp;
 
     row.act(setUp);
+    const focused = list.focused();
 
+    expect(focused === null ? null : stopId(focused)).toBe(row.focused);
     expect(slotClasses(list.element)).toEqual(row.slots);
     expect(
       asFake(list.element).children.map((slot) =>
