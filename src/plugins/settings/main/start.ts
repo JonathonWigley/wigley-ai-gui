@@ -24,7 +24,7 @@ export const settingsMainPart: MainPart<typeof settingsManifest> = {
     channel.handle('writeKeymap', (layer, expectedText) =>
       userConfig.writeKeymap(layer, expectedText),
     );
-    const layouts = api.layouts.register({ layoutTypes });
+    api.layouts.register({ layoutTypes });
     const changed = userConfig.onChanged(() => channel.send('changed', null));
     const show = () => {
       services.window.show();
@@ -33,10 +33,7 @@ export const settingsMainPart: MainPart<typeof settingsManifest> = {
     services.selfTest?.run(settingsSelfTestScript({ userConfig, show }));
     return {
       commands: { show },
-      dispose() {
-        layouts.dispose();
-        changed.dispose();
-      },
+      dispose: () => changed.dispose(),
     };
   },
 };

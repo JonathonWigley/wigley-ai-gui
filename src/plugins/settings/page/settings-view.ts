@@ -262,8 +262,7 @@ interface OpenBox {
 }
 
 export function createSettingsView(deps: SettingsViewDeps): SettingsView {
-  const { channel } = deps;
-  const log = (message: string) => deps.log('settings', message);
+  const { channel, log } = deps;
   const anchored = (
     command: SettingsCommand,
     scope: 'sections' | 'rows',
@@ -282,7 +281,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
   const parts = createLayoutParts<SettingsLayout, CompleteSettingsLayout>({
     owner: 'settings',
     defaultLayout,
-    log: deps.log,
+    log,
   });
 
   // `parts` seen through the row parts alone, each keyed to its input, so a
@@ -354,7 +353,7 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
 
   const picker: ListPicker = createListPicker({
     pushScope: () => deps.pushScope('picker'),
-    log: deps.log,
+    log,
   });
   deps.addOverlay(picker.element);
 
@@ -680,7 +679,8 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
     }
     const held = openBox;
     openBox = null;
-    held.scope.pop();
+    // A write landing after the plugin stopped closes here too, so no `pop`.
+    held.scope.dispose();
     box.destroy();
     log(`box closed ${box.key}`);
     markCursor();

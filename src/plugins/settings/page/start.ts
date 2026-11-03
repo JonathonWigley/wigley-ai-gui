@@ -2,7 +2,7 @@ import './settings.css';
 import type { PageApi, PagePart } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { qualify } from '../../../shared/plugin-manifests';
-import type { KeysPageExports } from '../../keys/contract';
+import { keysPageKey } from '../../keys/contract';
 import type { SettingsChannel } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
@@ -25,7 +25,7 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
   start(api: SettingsApi) {
     const { services } = api;
     const { log } = services;
-    const keys = api.dependency<KeysPageExports>('keys');
+    const keys = api.dependency(keysPageKey);
     const view = createSettingsView({
       channel: api.channel,
       editor: services.editor,
@@ -65,7 +65,7 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
       sideBar: view.sideBar,
       shown() {
         view.shown();
-        log('settings', 'shown');
+        log('shown');
       },
       hidden: () => undefined,
       sideBarHidden: () => view.sideBarHidden(),
@@ -82,7 +82,7 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
     api.channel.on('changed', () => view.reread());
     api.channel.on('show', () => mode.show());
     view.load().catch((error) => {
-      log('settings', `not loaded: ${errorText(error)}`);
+      log(`not loaded: ${errorText(error)}`);
       services.toast(errorText(error), 'error');
     });
 
