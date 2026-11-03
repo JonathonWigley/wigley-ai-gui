@@ -128,7 +128,7 @@ No new files. Boundary rule: nothing outside `src/main/claude-code/` names lifec
 - [x] [Chat main: sendNow and sent rows](02-chat-main.md) — after 01
 
 ### Wave 3
-- [ ] [Chat page: key routes and the sending label](03-chat-page.md) — after 02
+- [x] [Chat page: key routes and the sending label](03-chat-page.md) — after 02
 
 ### Wave 4
 - [ ] [Doc re-read](04-doc-re-read.md) — after 03
@@ -143,6 +143,7 @@ Review base: 495866206a2877ebce1a939c301f551fbe01d49b
 ### Groups
 - 01 · 2db2f106 · diff read: send(): string and messageDropped on AgentProcess/AgentProcessEvents in agent.ts, TurnTracker.mode() and TurnMode exported; whole-tree tsc clean; worker's three test files pass (159 tests) · concerns: chat-sessions stub comment names the plan (task 02 replaces it); whole-tree lint stops on peer files outside this task, oxfmt clean on the 8 touched files
 - 02 · f9ab864e · diff read: sentEntryId on QueuedMessage, sendNow and sendAllNow on ChatChannel invoke and ChatSessions, both start.ts handlers via ignoredInPreview present; whole-tree tsc clean; worker's chat-sessions and start tests pass (195) · concerns: worker ran npx prettier (downloaded to ~/.npm/_npx/b388654678d519d9, hard-gate breach, reported to user) then restored formatting with the repo's oxfmt; sentEntryId: null added to fakes in page/entry-list.test.ts and page/chat-commands.test.ts (03's files); start.ts SESSION_TITLE_INSTRUCTION line not oxfmt-clean at HEAD either
+- 03 · 2583f5b8 · diff read: chat.sendNow in manifest, <D-Enter> chat.chat bound to chat.sendNow, exported sendQueuedNow, ChatSession.isBoxFocused, QueuedMessageInput.sent all present; tsc clean; worker's 3 test files (138) pass; chat self-test (--plugin chat) passes both new steps · concerns: <D-Enter> chat.sendNow has no key anchor (Send button anchors chat.send, which now has no chat.chat bind) — the whole self-test's anchor check would fail; design call for triage; oxfmt flags start.ts/title-tool files outside the task; keymap.md and design.md still name <Leader>cs (task 04)
 ### Contract changes
 - TurnTracker exports: mode() and TurnMode → plus TERMINAL_STATES exported · why: the adapter reads the same terminal set rather than copying it · consumers: none · group 01
 - sendAllNow on ChatChannel invoke and ChatSessions: void → Promise<void> · why: the idle path is send's async path, which may start a process and reject; matches send's shape · consumers: 03 · group 02
@@ -155,5 +156,9 @@ Review base: 495866206a2877ebce1a939c301f551fbe01d49b
 - launch's first message is recorded as a written message, so a dropped launch message returns to the box — cost if wrong: a returned message in a box the user never typed in · group 02 · group 02
 - deliver throws 'session <id> has no running process' instead of skipping through ?. — cost if wrong: a not-sent log or rejected send where a message used to vanish silently · group 02 · group 02
 - returnAllHeld sends queued before returned (pull-back's order); entry callback sends the entry before dropping the matching row — cost if wrong: message order on the page only · group 02 · group 02
+- an app slash command in the box runs as send does on the sendNow box route, without invoking sendAllNow — cost if wrong: pending rows not sent alongside a slash command · group 03 · group 03
+- send and sendNow share boxMessage/ranSlashCommand/clearBox/refused; a refused sendAllNow toasts and puts the message back as send does — cost if wrong: an extra toast · group 03 · group 03
+- markSent after sendAllNow only when the box held a message — cost if wrong: a row's done/error stays after a rows-only Cmd+Enter · group 03 · group 03
+- self-test: the box-route step queues FAKE_HOLD_TEXT so one result line follows; both new steps also wait on 'result entry added'; an Escape step follows since the box stays in insert mode; EXPECTED_CALLS gains the five fake sends — cost if wrong: self-test flakiness only · group 03 · group 03
 ### Review rounds
 ### Test gate

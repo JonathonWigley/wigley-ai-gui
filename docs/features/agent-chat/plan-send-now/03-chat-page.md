@@ -1,6 +1,6 @@
 # 03 — Chat page: key routes and the sending label
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -39,3 +39,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 2583f5b8 · proof: diff read: chat.sendNow in manifest, <D-Enter> chat.chat bound to chat.sendNow, exported sendQueuedNow, ChatSession.isBoxFocused, QueuedMessageInput.sent all present; tsc clean; worker's 3 test files (138) pass; chat self-test (--plugin chat) passes both new steps · concerns: <D-Enter> chat.sendNow has no key anchor (Send button anchors chat.send, which now has no chat.chat bind) — the whole self-test's anchor check would fail; design call for triage; oxfmt flags start.ts/title-tool files outside the task; keymap.md and design.md still name <Leader>cs (task 04)
