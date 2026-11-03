@@ -491,7 +491,7 @@ function syncPrimerViews(
 }
 
 // Files dropped or pasted on the primer view go into the primer's box used
-// last, else its first box the view draws, whether or not its pane has focus.
+// last, else its first box mounted, whether or not its pane has focus.
 function addPrimerDropTarget(
   primerId: string,
   primerView: PrimerFormView,

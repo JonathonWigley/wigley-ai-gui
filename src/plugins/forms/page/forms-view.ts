@@ -248,7 +248,7 @@ function syncRoundViews(
 }
 
 // Files dropped or pasted on the round view go into the round's box used
-// last, else its first box the view draws, whether or not its pane has focus.
+// last, else its first box mounted, whether or not its pane has focus.
 function addRoundDropTarget(
   roundId: string,
   roundView: RoundView,

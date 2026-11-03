@@ -519,4 +519,27 @@ describe('backlog follow-up editor drop target', () => {
     const [title] = liveEditors(created, 'title');
     expect(title.inserted).toEqual([insertionText(['/d/a.md'], 'x')]);
   });
+
+  it('followupEditor_DropAfterRedraw_GoesToTheBoxUsedLast', async () => {
+    const { view, created, targets } = await backlogSetup();
+    const file: DroppedFile = {
+      name: 'a.md',
+      mediaType: 'text/markdown',
+      path: '/d/a.md',
+      bytes: async () => new Uint8Array(),
+    };
+    view.commands.create();
+    const [body] = liveEditors(created, 'body');
+    body.events.focused();
+    body.events.blurred();
+
+    view.setLayouts(withUser(titleOnlyEditor));
+    targets[0].take([file]);
+    await settle();
+
+    const [remountedBody] = liveEditors(created, 'body');
+    const [remountedTitle] = liveEditors(created, 'title');
+    expect(remountedBody.inserted).toEqual([insertionText(['/d/a.md'], 'x')]);
+    expect(remountedTitle.inserted).toEqual([]);
+  });
 });
