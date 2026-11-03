@@ -234,7 +234,7 @@ uuid keys; the `AgentHarness` contract is unchanged.
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 578c0d08ecda7909910ef4254a06d47fef5e0f55
 
 ### Groups
 ### Contract changes
