@@ -448,7 +448,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         return;
       }
       sessionDocs.delete(sessionId);
-      held.tab?.remove();
+      held.tab?.dispose();
       held.view.dispose();
     });
     // Main replaces a session's index source when its host id changes.

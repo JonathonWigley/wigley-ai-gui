@@ -27,6 +27,7 @@ import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { Layout } from '../layouts/layout';
 import { sessionsManifest } from '../manifest';
+import { sessionsPageView } from './consumer-view';
 import { readSessionsLayout } from './layout/read-sessions-layout';
 import {
   type ActivationTarget,
@@ -785,7 +786,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         renameAccept: () => renameDialog.accept(),
         renameCancel: () => renameDialog.cancel(),
       },
-      exports: () => exports,
+      exports: (consumer) => sessionsPageView(exports, consumer),
     };
   },
 };

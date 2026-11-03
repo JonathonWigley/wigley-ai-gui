@@ -7,6 +7,7 @@ import type {
   QualifiedEvents,
 } from '../../../contracts/plugin';
 import { appEndpointDir } from '../../../shared/app-endpoint-dir';
+import { errorText } from '../../../shared/error-text';
 import {
   argsObject,
   nullableNumberOr,
@@ -29,6 +30,7 @@ import {
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { sessionsManifest } from '../manifest';
 import { titleLimit } from '../session-title';
+import { sessionsMainView } from './consumer-view';
 import { serveMcp } from './mcp/mcp-server';
 import {
   channelPath,
@@ -73,7 +75,7 @@ function createList(api: SessionsApi): SessionList {
 }
 
 // Opens the channel relay.py connects to, each relay connecting one session
-// served the tools contributed so far. A relay that finds the app gone starts
+// served the live tool list. A relay that finds the app gone starts
 // it again, except a drive run's, which stays ended and names the run's home.
 function openRelay(api: SessionsApi, list: SessionList) {
   const channel = channelPath(
@@ -85,7 +87,7 @@ function openRelay(api: SessionsApi, list: SessionList) {
   const relay = startRelayServer({
     channel,
     connect: (info) => list.connect(info),
-    serve: (streams, session) => serveMcp(streams, session, list.tools()),
+    serve: (streams, session) => serveMcp(streams, session, list),
     log: api.services.log,
   });
   const endpoint: RelayEndpoint = {
@@ -226,8 +228,12 @@ export function addDriveActions(
 // Owns agent sessions: the relay they connect through, the tools other
 // plugins contribute for them and its own `set_session_title`, their sidebar
 // rows, and the sessions layouts.
-// Each contribution rewrites the endpoint files, so a relay that starts the
-// app finds every tool listed. In the self-test it opens no relay and writes
+// A contribution reaches every live session, and each one added rewrites the
+// endpoint files, so a relay that starts the app finds every tool listed. A
+// disposal and a stop leave the files, which a relay serves while the app is
+// away. A failed write is logged and keeps the contribution. Each dependent gets
+// its own view of the exports, which files its registrations under it. In the
+// self-test it opens no relay and writes
 // no file, and hands its pane keys' script; a drive run opens it in the run's
 // own home and gets the drive actions.
 export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
@@ -243,10 +249,15 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
     );
     const exports: SessionsMainExports = {
       contributeTools(tools, start) {
-        list.contributeTools(tools, start);
+        const contribution = list.contributeTools(tools, start);
         if (opened !== null) {
-          writeEndpointFiles(endpointDir, opened.endpoint, list.tools());
+          try {
+            writeEndpointFiles(endpointDir, opened.endpoint, list.tools());
+          } catch (error) {
+            api.services.log(`endpoint files not written: ${errorText(error)}`);
+          }
         }
+        return contribution;
       },
       connect: (info) => list.connect(info),
       open: (info, options) => list.open(info, options),
@@ -283,7 +294,7 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
     );
     return {
       commands: {},
-      exports: () => exports,
+      exports: (consumer) => sessionsMainView(exports, consumer),
       dispose: () => {
         layouts.dispose();
         driveActions?.dispose();

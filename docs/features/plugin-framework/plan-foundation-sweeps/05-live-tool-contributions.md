@@ -1,6 +1,6 @@
 # 05 — Tool contributions reach live sessions
 
-Status: not started
+Status: in progress
 Type: Batch
 Wave: 4 · Depends on: 01, 04
 Plan: [plan.md](plan.md)

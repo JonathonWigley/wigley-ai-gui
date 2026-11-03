@@ -1,17 +1,20 @@
 import { createInterface } from 'node:readline';
 import { PassThrough } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createListeners } from '../../../../shared/listeners';
 import type {
   ToolCallContext,
   ToolDefinition,
   ToolResult,
   ToolSession,
 } from '../../contract';
-import { serveMcp } from './mcp-server';
+import { type LiveTools, serveMcp } from './mcp-server';
 
 interface RpcResponse {
-  id: number;
+  id?: number;
+  method?: string;
   result?: {
+    capabilities?: unknown;
     tools?: ToolDefinition[];
     content?: { type: string; text: string }[];
     structuredContent?: unknown;
@@ -75,6 +78,34 @@ function fakeSession(
   return { session, calls };
 }
 
+// A live list holding `TOOLS` until `change`, counting its live listeners.
+function fakeLiveTools() {
+  let tools = TOOLS;
+  let listenerCount = 0;
+  const listeners = createListeners<void>();
+  const live: LiveTools = {
+    tools: () => tools,
+    onToolsChanged(listener) {
+      listenerCount++;
+      const added = listeners.add(listener);
+      return {
+        dispose() {
+          listenerCount--;
+          added.dispose();
+        },
+      };
+    },
+  };
+  return {
+    live,
+    change(next: ToolDefinition[]) {
+      tools = next;
+      listeners.tell();
+    },
+    listenerCount: () => listenerCount,
+  };
+}
+
 const servers: { close(): Promise<void> }[] = [];
 
 afterEach(async () => {
@@ -87,9 +118,15 @@ function connect(session: ToolSession, before: object[] = []) {
   const input = new PassThrough();
   const output = new PassThrough();
   const answered = new Map<number, (response: RpcResponse) => void>();
+  const notified: string[] = [];
   createInterface({ input: output }).on('line', (line) => {
     const response = JSON.parse(line) as RpcResponse;
-    answered.get(response.id)?.(response);
+    if (response.method !== undefined) {
+      notified.push(response.method);
+    }
+    if (response.id !== undefined) {
+      answered.get(response.id)?.(response);
+    }
   });
   const send = (message: object) => input.write(`${JSON.stringify(message)}\n`);
   const response = (id: number) =>
@@ -98,8 +135,10 @@ function connect(session: ToolSession, before: object[] = []) {
     input.pause();
     before.forEach(send);
   }
-  servers.push(serveMcp({ input, output }, session, TOOLS));
-  return { send, response };
+  const liveTools = fakeLiveTools();
+  const server = serveMcp({ input, output }, session, liveTools.live);
+  servers.push(server);
+  return { send, response, notified, liveTools, server };
 }
 
 async function initialized(client: ReturnType<typeof connect>) {
@@ -107,6 +146,15 @@ async function initialized(client: ReturnType<typeof connect>) {
   client.send(INITIALIZE);
   await reply;
   client.send(INITIALIZED);
+}
+
+function listTools(
+  client: ReturnType<typeof connect>,
+  id: number,
+): Promise<RpcResponse> {
+  const reply = client.response(id);
+  client.send({ jsonrpc: '2.0', id, method: 'tools/list', params: {} });
+  return reply;
 }
 
 function callTool(
@@ -120,13 +168,43 @@ function callTool(
 }
 
 describe('serveMcp', () => {
-  it('lists the tools it was given', async () => {
+  it('lists the tools the live list holds', async () => {
     const client = connect(fakeSession().session);
     await initialized(client);
-    const reply = client.response(2);
-    client.send({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} });
 
-    expect((await reply).result?.tools).toEqual(TOOLS);
+    expect((await listTools(client, 2)).result?.tools).toEqual(TOOLS);
+  });
+
+  it('advertises tools.listChanged when the client initializes', async () => {
+    const client = connect(fakeSession().session);
+    const reply = client.response(1);
+    client.send(INITIALIZE);
+
+    expect((await reply).result?.capabilities).toEqual({
+      tools: { listChanged: true },
+    });
+  });
+
+  it('notifies the client when the live list changes and lists the new tools', async () => {
+    const client = connect(fakeSession().session);
+    await initialized(client);
+
+    client.liveTools.change([TOOLS[1]]);
+
+    await vi.waitFor(() =>
+      expect(client.notified).toEqual(['notifications/tools/list_changed']),
+    );
+    expect((await listTools(client, 2)).result?.tools).toEqual([TOOLS[1]]);
+  });
+
+  it('stops listening to the live list once closed', async () => {
+    const client = connect(fakeSession().session);
+    await initialized(client);
+    expect(client.liveTools.listenerCount()).toBe(1);
+
+    await client.server.close();
+
+    expect(client.liveTools.listenerCount()).toBe(0);
   });
 
   it('calls the session with the tool name, arguments and tool-use id', async () => {
@@ -192,18 +270,29 @@ describe('serveMcp', () => {
     ]);
   });
 
-  it('answers an unknown tool with a tool error naming the valid tools', async () => {
+  it('hands a call for any tool name to the session', async () => {
     const { session, calls } = fakeSession();
     const client = connect(session);
     await initialized(client);
 
-    const reply = await callTool(client, 2, { name: 'ask', arguments: {} });
+    await callTool(client, 2, { name: 'ask', arguments: {} });
+
+    expect(calls[0].name).toBe('ask');
+  });
+
+  it('answers a call the session rejects as unknown with the error text', async () => {
+    const { session } = fakeSession(() =>
+      Promise.reject(new Error('Unknown tool: x. Valid tools are .')),
+    );
+    const client = connect(session);
+    await initialized(client);
+
+    const reply = await callTool(client, 2, { name: 'x', arguments: {} });
 
     expect(reply.result?.isError).toBe(true);
-    expect(reply.result?.content?.[0].text).toMatch(
-      /ask.*ask_round.*collect_last_round/,
-    );
-    expect(calls).toEqual([]);
+    expect(reply.result?.content).toEqual([
+      { type: 'text', text: 'Error: Unknown tool: x. Valid tools are .' },
+    ]);
   });
 
   it('aborts the session call when the host cancels the request', async () => {

@@ -76,7 +76,14 @@ function fakeSessions(calls: string[]) {
     mark: (sessionId) => calls.push(`mark ${sessionId}`),
     activateExistingRow: (sessionId) =>
       calls.push(`activateExistingRow ${sessionId}`),
-    addCloseGuard: (mayClose) => guards.push(mayClose),
+    addCloseGuard: (mayClose) => {
+      guards.push(mayClose);
+      return {
+        dispose: () => {
+          guards.splice(guards.indexOf(mayClose), 1);
+        },
+      };
+    },
     release: (sessionId) => calls.push(`release ${sessionId}`),
   };
   const mayClose = (sessionId: string) =>

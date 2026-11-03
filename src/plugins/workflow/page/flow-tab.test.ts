@@ -36,7 +36,7 @@ function setUp() {
         setStatus: () => undefined,
         select: () => undefined,
         takeOver: () => ({ release: () => undefined }),
-        remove: () => held.delete(tab.id),
+        dispose: () => held.delete(tab.id),
         isVisible: () => false,
       };
     },

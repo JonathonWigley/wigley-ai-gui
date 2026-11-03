@@ -407,7 +407,7 @@ Tasks 08, 09 and 10 apply this to each of their plugins, part by part:
 - [x] [Page-side handles and recording](02-page-handles.md) — after 01
 
 ### Wave 3
-- [ ] [Main-side handles, service views and scoped log](04-main-handles.md) — after 02
+- [x] [Main-side handles, service views and scoped log](04-main-handles.md) — after 02
 
 ### Wave 4
 - [ ] [Tool contributions reach live sessions](05-live-tool-contributions.md) — after 04
@@ -439,6 +439,7 @@ Review base: 7f956435
 - 03 · 29a16d1 · marketplace branch foundation-sweeps; diff read; forms unittest 52 pass, 2 Windows-only skipped; check_manifests, check_pointers, claude plugin validate pass; check_manifests --against origin/main passes after commit; git fetch skipped (SSH access), compared with last fetched origin/main at 1.14.0 · concerns: README's test-suite list (515-516) omits the notice; host needs for listChanged unproven; no test for _drop's early return; a host may refetch twice around a connect
 - 01 · 27f4cba7 · diff read; typecheck and lint clean; every Produces found, 14 keys by grep; worker ran the 14 named test files, 310 pass. Start orders equal before and after — main: keys sessions chat forms primer agents agent-lines agent-strip docs settings backlog notes usage workflow visual gallery; page: keys sessions chat forms primer agents agent-lines docs workflow agent-strip gallery settings backlog notes usage usage-tab-line visual · concerns: live quit does not hold, so a dispose that really suspends (chat's, forms' on an unfinished write) cuts off later parts, and task 14 check 4's drive run holds the quit so cannot show it; self-test teardown can close layout watches twice until task 04's disposeRegistration guard; stop and stopAll have no overlap guard; disabledDependencyProblem may name a different id when two dependencies are disabled; dependency overload written inline in both APIs
 - 02 · 8eda568a · diff read; typecheck and lint clean; every handle in the plan's table returns Disposable; worker ran 22 named and fake-owning test files, 342 pass · concerns: preload onMessage dispose across contextBridge has no test or live check; track mutates a handle's dispose, unread for shell.setLayout and createDropTargets; a listener added during a tell now waits at five more sites; a stopped plugin's late pop throws; markedId keeps a disposed id until the next markMode; spreading editor and markdown would lose prototype methods on a class host
+- 04 · 5a86c47e · diff read; typecheck and lint clean; every handle in the plan's table returns Disposable, service views and pluginLog present; worker ran 13 named test files, 286 pass; second disposeRegistration is a no-op, pinned by a watch-count test · concerns: on Windows, zeroing alert counts at quit may call setOverlayIcon on a destroyed window, so stopAll would reject; a stale channel handle disposed after re-registering the same function drops the new one; spreading files and userConfig would lose prototype methods on a class; FakeProcesses settles a few microtasks later with a signal; no live quit run
 ### Contract changes
 ### Rulings
 - Worktree run on branch foundation-sweeps in both repos, on the user's word; marketplace review base is cbd8a9e; git fetch fails on SSH access in both repos, so origin was not checked and the run builds on local main; a stale origin would surface at push · lead
@@ -450,5 +451,8 @@ Review base: 7f956435
 - Disposing the last mode also hides the side bar and clears the title bar context, which the task does not name · group 02 · group 02
 - keys.pushScope's onBaseChanged is forwarded rather than filed in the store, and ScopeStack.onBaseChange stays void as not in Produces · group 02 · group 02
 - The page transparency override's module is unchanged, following the task document over plan.md's file list · group 02 · group 02
+- trackedFiles holds live watches in a nested createRegistrations store, as trackedEditor does · group 04 · group 04
+- abortableProcesses always passes a signal, using AbortSignal.any with the caller's own · group 04 · group 04
+- channel-presenter.test.ts changed beyond the Files list, since its fake handle must return a Disposable to compile · group 04 · group 04
 ### Review rounds
 ### Test gate

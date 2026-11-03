@@ -463,6 +463,7 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
       frame.entries.set(view.id, tab);
       frame.body.append(view.element);
       changed();
+      let latestTakeOver: { release(): void } | null = null;
       return {
         setStatus(status) {
           if (liveTab(sessionId, tab) !== undefined) {
@@ -483,7 +484,7 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
           const taken = tabsAfterTakeOver(live.tabs, view.id);
           setTabs(live, taken.tabs);
           let isReleased = false;
-          return {
+          latestTakeOver = {
             release() {
               const stillLive = liveTab(sessionId, tab);
               if (isReleased || stillLive === undefined) {
@@ -496,8 +497,10 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
               );
             },
           };
+          return latestTakeOver;
         },
-        remove() {
+        dispose() {
+          latestTakeOver?.release();
           const live = liveTab(sessionId, tab);
           if (live !== undefined) {
             remove(live, tab);

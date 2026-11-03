@@ -80,7 +80,7 @@ export function createFlowTabs(deps: FlowTabsDeps): FlowTabs {
     try {
       drawing = deps.draw(body, sessionId);
     } catch (error) {
-      handle.remove();
+      handle.dispose();
       throw error;
     }
     tabs.set(sessionId, { handle, body, drawing });
@@ -97,7 +97,7 @@ export function createFlowTabs(deps: FlowTabsDeps): FlowTabs {
     try {
       tab.drawing.dispose();
     } finally {
-      tab.handle.remove();
+      tab.handle.dispose();
     }
   };
 

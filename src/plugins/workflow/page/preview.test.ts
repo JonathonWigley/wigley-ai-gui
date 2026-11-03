@@ -57,7 +57,7 @@ function setUpPreview() {
         setStatus: () => undefined,
         select: () => undefined,
         takeOver: () => ({ release: () => undefined }),
-        remove: () => undefined,
+        dispose: () => undefined,
         isVisible: () => false,
       };
     },

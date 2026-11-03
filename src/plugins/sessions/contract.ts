@@ -128,13 +128,16 @@ export interface OpenOptions {
 }
 
 export interface SessionsMainExports {
-  // A contribution reaches only sessions that connect after it, so a plugin
-  // contributes during its start. Throws on a tool name another contribution
-  // already holds, or one this contribution lists twice.
+  // Starts the contribution's tool session in every live session, and in each
+  // session that connects later. The handle's `dispose` ends those tool
+  // sessions and frees the tool names; a second `dispose` does nothing. Throws
+  // on a tool name another contribution already holds, or one this contribution
+  // lists twice. A `start` that throws for a live session ends the tool sessions
+  // already started, leaves no contribution, and rethrows.
   contributeTools(
     tools: ToolDefinition[],
     start: (session: AgentSession) => ToolSession,
-  ): void;
+  ): Disposable;
   // Connects the session with no row, sending no state, or joins the owned
   // session whose host id the info carries; `mark` or `activate` adds a
   // connected session's row, and `release` closes it. A newer relay for that
@@ -173,8 +176,9 @@ export interface SessionsMainExports {
   // The user closing a session's row, or `release`, asks every guard first,
   // and the row stays while any answers false; once every guard allows, the
   // row goes and `closed` is emitted. A session that ends loses its row
-  // regardless.
-  addCloseGuard(mayClose: (sessionId: string) => boolean): void;
+  // regardless. Each call is its own registration, which its handle removes,
+  // so one function added twice keeps guarding until both handles are disposed.
+  addCloseGuard(mayClose: (sessionId: string) => boolean): Disposable;
   // Stores the source's title, normalized, or clears it for null or a string
   // that normalizes to empty; checks no limit, which callers own. A changed
   // value sends the state when the session has a row and emits `titleChanged`
@@ -270,13 +274,13 @@ export interface SessionTabView {
 // first release selects the tab selected before the take over, unless a tab
 // was selected since (by the user or `select`, even back to this one), another
 // tab's take over holds the session, or that tab is gone. `isVisible` reads,
-// at the moment of the call, whether this tab is the visible tab. Each call on
-// a tab already dropped does nothing.
-export interface SessionTabHandle {
+// at the moment of the call, whether this tab is the visible tab. `dispose`
+// releases the latest take over this handle gave out, then removes the tab.
+// Each call on a tab already dropped does nothing.
+export interface SessionTabHandle extends Disposable {
   setStatus(status: string): void;
   select(): void;
   takeOver(): { release(): void };
-  remove(): void;
   isVisible(): boolean;
 }
 

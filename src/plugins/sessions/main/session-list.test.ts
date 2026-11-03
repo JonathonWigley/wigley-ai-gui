@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import type { Disposable } from '../../../contracts/disposable';
 import type {
   AgentSession,
   ConnectedSession,
@@ -182,7 +183,7 @@ describe('createSessionList', () => {
           signal: new AbortController().signal,
         },
       ),
-    ).rejects.toThrow(/"zz"/);
+    ).rejects.toThrow('Unknown tool: zz. Valid tools are a.');
   });
 
   it('throws on a tool name two contributions share', () => {
@@ -566,6 +567,131 @@ describe('createSessionList', () => {
     roundOpen = false;
     expect(list.closeSession(id)).toBe(true);
     expect(list.state().rows).toEqual([]);
+    list.mark(id);
+    const refusing = list.addCloseGuard(() => false);
+    expect(list.closeSession(id)).toBe(false);
+    refusing.dispose();
+    expect(list.closeSession(id)).toBe(true);
+  });
+
+  it('keeps a row while one registration of the same guard remains', () => {
+    const { list } = setUp();
+    const id = connectWithRow(list, info('/work/x')).session.id;
+    const refuse = () => false;
+    const first = list.addCloseGuard(refuse);
+    const second = list.addCloseGuard(refuse);
+
+    first.dispose();
+    expect(list.closeSession(id)).toBe(false);
+
+    second.dispose();
+    expect(list.closeSession(id)).toBe(true);
+  });
+
+  it('starts a contribution added after a session connected, and routes its calls', async () => {
+    const { list } = setUp();
+    const connected = list.connect(info('/work/x'));
+    const contribution = fakeContribution();
+
+    list.contributeTools([tool('a')], contribution.start);
+
+    expect(contribution.started).toEqual([connected.session]);
+    await expect(connected.call('a', {}, CONTEXT)).resolves.toBe(RESULT);
+    expect(contribution.calls.map((call) => call.name)).toEqual(['a']);
+  });
+
+  it('ends a disposed contribution in every live session and frees its names', async () => {
+    const { list } = setUp();
+    const connected = list.connect(info('/work/x'));
+    list.open(owned('host-1'));
+    const contribution = fakeContribution();
+    const handle = list.contributeTools([tool('a')], contribution.start);
+
+    handle.dispose();
+
+    expect(contribution.ends()).toBe(2);
+    await expect(connected.call('a', {}, CONTEXT)).rejects.toThrow(
+      'Unknown tool: a. Valid tools are .',
+    );
+    expect(list.tools()).toEqual([]);
+    expect(() =>
+      list.contributeTools([tool('a')], fakeContribution().start),
+    ).not.toThrow();
+    handle.dispose();
+    expect(contribution.ends()).toBe(2);
+  });
+
+  it('undoes a live contribution whose start throws for one session, and rethrows', () => {
+    const { list } = setUp();
+    list.connect(info('/work/x'));
+    list.connect(info('/work/y'));
+    const first = fakeContribution();
+    let starts = 0;
+    const toolsChanged = vi.fn();
+    list.onToolsChanged(toolsChanged);
+
+    expect(() =>
+      list.contributeTools([tool('a')], (session) => {
+        starts++;
+        if (starts === 2) {
+          throw new Error('no tools for the second');
+        }
+        return first.start(session);
+      }),
+    ).toThrow('no tools for the second');
+
+    expect(first.ends()).toBe(1);
+    expect(list.tools()).toEqual([]);
+    expect(toolsChanged).not.toHaveBeenCalled();
+    expect(() =>
+      list.contributeTools([tool('a')], fakeContribution().start),
+    ).not.toThrow();
+  });
+
+  it.each<{
+    change: string;
+    act(list: SessionList, listening: Disposable): void;
+    calls: number;
+  }>([
+    {
+      change: 'an added contribution',
+      act: (list) =>
+        list.contributeTools([tool('a')], fakeContribution().start),
+      calls: 1,
+    },
+    {
+      change: 'a disposed contribution',
+      act: (list) =>
+        list.contributeTools([tool('a')], fakeContribution().start).dispose(),
+      calls: 2,
+    },
+    {
+      change: 'a second dispose',
+      act: (list) => {
+        const handle = list.contributeTools(
+          [tool('a')],
+          fakeContribution().start,
+        );
+        handle.dispose();
+        handle.dispose();
+      },
+      calls: 2,
+    },
+    {
+      change: 'a listener disposed before the add',
+      act: (list, listening) => {
+        listening.dispose();
+        list.contributeTools([tool('a')], fakeContribution().start);
+      },
+      calls: 0,
+    },
+  ])('calls onToolsChanged once for $change', ({ act, calls }) => {
+    const { list } = setUp();
+    const listener = vi.fn();
+
+    act(list, list.onToolsChanged(listener));
+
+    expect(listener).toHaveBeenCalledTimes(calls);
   });
 
   it('drops the row of a session that ends whatever the close guards say', () => {

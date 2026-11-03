@@ -1,7 +1,9 @@
 import path from 'node:path';
 import type { Clock, RandomHex } from '../../../contracts/ambient';
+import type { Disposable } from '../../../contracts/disposable';
 import type { Log } from '../../../contracts/log';
 import type { PluginEvents } from '../../../contracts/plugin';
+import { createListeners } from '../../../shared/listeners';
 import type {
   AgentSession,
   ConnectedSession,
@@ -29,9 +31,12 @@ export interface SessionListDeps {
   activated(sessionId: string): void;
 }
 
-// The session list and its rows. `tools` lists every contributed tool in contribution order.
+// The session list and its rows. `tools` lists every contributed tool in
+// contribution order; `onToolsChanged` hears each contribution added and each
+// one disposed, once each.
 export interface SessionList extends SessionsMainExports {
   tools(): ToolDefinition[];
+  onToolsChanged(listener: () => void): Disposable;
   state(): SessionsState;
   // The user's close, which every close guard must allow; returns whether the
   // row is closed, true for a row already closed, emitting `closed` only for a
@@ -60,7 +65,7 @@ interface SessionEntry {
   group: string;
   // 1 for the first of its group, which reads without a number.
   number: number;
-  toolSessions: ToolSession[];
+  toolSessions: Map<Contribution, ToolSession>;
   toolRoutes: Map<string, ToolSession>;
   // Started by `open`; `joinedBy` names the relay handle holding the join,
   // null while no relay is joined.
@@ -120,26 +125,46 @@ function rowOf(entry: SessionEntry): SessionRow {
   };
 }
 
-// A start that throws ends the tool sessions already started, then rethrows.
+// One tool session per item; a start that throws ends the tool sessions already
+// started, then rethrows.
+function startAllOrNone<Item>(
+  items: Iterable<Item>,
+  start: (item: Item) => ToolSession,
+): Map<Item, ToolSession> {
+  const started = new Map<Item, ToolSession>();
+  try {
+    for (const item of items) {
+      started.set(item, start(item));
+    }
+  } catch (error) {
+    for (const toolSession of started.values()) {
+      toolSession.end();
+    }
+    throw error;
+  }
+  return started;
+}
+
+function routeTools(
+  toolRoutes: Map<string, ToolSession>,
+  contribution: Contribution,
+  toolSession: ToolSession,
+) {
+  for (const tool of contribution.tools) {
+    toolRoutes.set(tool.name, toolSession);
+  }
+}
+
 function startToolSessions(
   contributions: Contribution[],
   session: AgentSession,
 ): Pick<SessionEntry, 'toolSessions' | 'toolRoutes'> {
-  const toolSessions: ToolSession[] = [];
+  const toolSessions = startAllOrNone(contributions, (contribution) =>
+    contribution.start(session),
+  );
   const toolRoutes = new Map<string, ToolSession>();
-  try {
-    for (const contribution of contributions) {
-      const toolSession = contribution.start(session);
-      toolSessions.push(toolSession);
-      for (const tool of contribution.tools) {
-        toolRoutes.set(tool.name, toolSession);
-      }
-    }
-  } catch (error) {
-    for (const started of toolSessions) {
-      started.end();
-    }
-    throw error;
+  for (const [contribution, toolSession] of toolSessions) {
+    routeTools(toolRoutes, contribution, toolSession);
   }
   return { toolSessions, toolRoutes };
 }
@@ -152,8 +177,9 @@ function routeCall(
 ): Promise<ToolResult> {
   const toolSession = entry.toolRoutes.get(name);
   if (toolSession === undefined) {
+    const names = [...entry.toolRoutes.keys()];
     return Promise.reject(
-      new Error(`No plugin contributed the tool "${name}"`),
+      new Error(`Unknown tool: ${name}. Valid tools are ${names.join(', ')}.`),
     );
   }
   return toolSession.call(name, args, context);
@@ -185,8 +211,10 @@ function routeCall(
 // while the session does.
 export function createSessionList(deps: SessionListDeps): SessionList {
   const contributions: Contribution[] = [];
-  const closeGuards: ((sessionId: string) => boolean)[] = [];
+  // Each registration its own object, so one function added twice is two.
+  const closeGuards = new Set<{ mayClose(sessionId: string): boolean }>();
   const toolNames = new Set<string>();
+  const toolsChanged = createListeners<void>();
   const entries = new Map<string, SessionEntry>();
   const rows: SessionRow[] = [];
   let selectedSessionId: string | null = null;
@@ -237,7 +265,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     if (reselectOnReturn?.sessionId === entry.session.id) {
       reselectOnReturn = null;
     }
-    for (const toolSession of entry.toolSessions) {
+    for (const toolSession of entry.toolSessions.values()) {
       toolSession.end();
     }
     const index = rowIndex(entry.session.id);
@@ -255,7 +283,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
   };
 
   const everyGuardAllows = (sessionId: string) =>
-    closeGuards.every((mayClose) => mayClose(sessionId));
+    [...closeGuards].every((guard) => guard.mayClose(sessionId));
 
   // The user's pick of the row at `index`: reports `activated`, then selects
   // it and clears its mark.
@@ -300,6 +328,23 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     [...entries.values()].filter(
       (entry) => entry.session.info.sessionId === hostId,
     );
+
+  // Ends the contribution's tool session in every live entry and frees its
+  // tool names.
+  const withdrawContribution = (contribution: Contribution) => {
+    contributions.splice(contributions.indexOf(contribution), 1);
+    for (const tool of contribution.tools) {
+      toolNames.delete(tool.name);
+    }
+    for (const entry of entries.values()) {
+      const toolSession = entry.toolSessions.get(contribution);
+      entry.toolSessions.delete(contribution);
+      for (const tool of contribution.tools) {
+        entry.toolRoutes.delete(tool.name);
+      }
+      toolSession?.end();
+    }
+  };
 
   // Changes `sessionId` inside the session's one info object, so every holder
   // of it sees the new id. The relay joined under the old id loses its join.
@@ -415,10 +460,30 @@ export function createSessionList(deps: SessionListDeps): SessionList {
         }
         namesInThisContribution.add(tool.name);
       }
+      const contribution: Contribution = { tools, start };
+      const started = startAllOrNone(entries.values(), (entry) =>
+        contribution.start(entry.session),
+      );
       for (const tool of tools) {
         toolNames.add(tool.name);
       }
-      contributions.push({ tools, start });
+      contributions.push(contribution);
+      for (const [entry, toolSession] of started) {
+        entry.toolSessions.set(contribution, toolSession);
+        routeTools(entry.toolRoutes, contribution, toolSession);
+      }
+      toolsChanged.tell();
+      let isDisposed = false;
+      return {
+        dispose() {
+          if (isDisposed) {
+            return;
+          }
+          isDisposed = true;
+          withdrawContribution(contribution);
+          toolsChanged.tell();
+        },
+      };
     },
     connect(info): ConnectedSession {
       const hostId = info.sessionId;
@@ -558,7 +623,13 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       closeRow(index, sessionId);
     },
     addCloseGuard(mayClose) {
-      closeGuards.push(mayClose);
+      const guard = { mayClose };
+      closeGuards.add(guard);
+      return {
+        dispose: () => {
+          closeGuards.delete(guard);
+        },
+      };
     },
     closeSession(sessionId) {
       if (!entries.has(sessionId)) {
@@ -601,6 +672,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       setTitle(sessionId, 'user', title);
     },
     tools: () => contributions.flatMap((contribution) => contribution.tools),
+    onToolsChanged: (listener) => toolsChanged.add(listener),
     state,
   };
 }

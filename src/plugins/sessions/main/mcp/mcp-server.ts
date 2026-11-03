@@ -1,12 +1,19 @@
 import type { Readable, Writable } from 'node:stream';
 import { Server } from '@modelcontextprotocol/server';
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
+import type { Disposable } from '../../../../contracts/disposable';
 import type { ToolDefinition, ToolResult, ToolSession } from '../../contract';
 
 // The `_meta` key Claude Code sends a tools/call's calling tool_use id under.
 const TOOL_USE_ID_META_KEY = 'claudecode/toolUseId';
 
 const SERVER_INFO = { name: 'wigley-forms', version: '1.0.0' };
+
+// The tool list a connection serves, read on each `tools/list`.
+export interface LiveTools {
+  tools(): ToolDefinition[];
+  onToolsChanged(listener: () => void): Disposable;
+}
 
 function errorResult(message: string): ToolResult {
   return { content: [{ type: 'text', text: message }], isError: true };
@@ -17,21 +24,14 @@ function toolUseId(meta: Record<string, unknown> | undefined): string | null {
   return typeof value === 'string' && value !== '' ? value : null;
 }
 
-// A name outside `tools` never reaches the session; a thrown Error becomes an
-// error result naming its type.
+// A thrown Error becomes an error result naming its type.
 async function callTool(
   session: ToolSession,
-  toolNames: string[],
   name: string,
   args: unknown,
   meta: Record<string, unknown> | undefined,
   signal: AbortSignal,
 ): Promise<ToolResult> {
-  if (!toolNames.includes(name)) {
-    return errorResult(
-      `Unknown tool: ${name}. Valid tools are ${toolNames.join(', ')}.`,
-    );
-  }
   try {
     return await session.call(name, args, {
       toolUseId: toolUseId(meta),
@@ -45,19 +45,21 @@ async function callTool(
   }
 }
 
-// One MCP server for one connection, listing `tools` and sending each call of
-// one of them to `session`; `input` may arrive paused, holding bytes sent
-// before the server existed.
+// One MCP server for one connection, listing the live `tools`, telling the
+// client when they change, and sending every call to `session`, which rejects
+// an unknown name; `input` may arrive paused, holding bytes sent before the
+// server existed.
 export function serveMcp(
   streams: { input: Readable; output: Writable },
   session: ToolSession,
-  tools: ToolDefinition[],
+  tools: LiveTools,
 ): { close(): Promise<void> } {
-  const server = new Server(SERVER_INFO, { capabilities: { tools: {} } });
-  const toolNames = tools.map((tool) => tool.name);
+  const server = new Server(SERVER_INFO, {
+    capabilities: { tools: { listChanged: true } },
+  });
   server.setRequestHandler('tools/list', async () => ({
     // MCP's tool type requires the literal `type: 'object'` on every schema.
-    tools: tools.map((tool) => ({
+    tools: tools.tools().map((tool) => ({
       ...tool,
       inputSchema: { ...tool.inputSchema, type: 'object' as const },
     })),
@@ -66,14 +68,7 @@ export function serveMcp(
     const { name, arguments: args, _meta: meta } = request.params;
     // The SDK's result type has a string index signature, which an interface lacks.
     return {
-      ...(await callTool(
-        session,
-        toolNames,
-        name,
-        args,
-        meta,
-        ctx.mcpReq.signal,
-      )),
+      ...(await callTool(session, name, args, meta, ctx.mcpReq.signal)),
     };
   });
   const connected = server
@@ -81,8 +76,13 @@ export function serveMcp(
     .then(() => {
       streams.input.resume();
     });
+  // A notice that rejects found the connection closing.
+  const toolsChanged = tools.onToolsChanged(() => {
+    connected.then(() => server.sendToolListChanged()).catch(() => undefined);
+  });
   return {
     close: async () => {
+      toolsChanged.dispose();
       await connected;
       await server.close();
     },

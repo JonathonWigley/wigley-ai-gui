@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
 import { createRegistrations } from '../../../shared/registrations';
@@ -6,6 +9,8 @@ import type {
   OwnedSession,
   SessionInfo,
   SessionsMainExports,
+  ToolResult,
+  ToolSession,
 } from '../contract';
 import { addDriveActions, sessionsMainPart } from './start';
 import { SET_SESSION_TITLE_TOOL, startTitleTool } from './title-tool';
@@ -161,9 +166,48 @@ describe('sessions drive actions', () => {
   });
 });
 
-// Sessions' main part started over a fake `MainApi` with no relay, no drive
-// and no self-test script, its titles limited to `titleMaxLength`.
-function startSessionsPart(titleMaxLength: number): SessionsMainExports {
+const CONTEXT = { toolUseId: null, signal: new AbortController().signal };
+
+const ASK_TOOL = { name: 'ask', description: 'Ask.', inputSchema: {} };
+
+const ASK_RESULT: ToolResult = { content: [{ type: 'text', text: 'asked' }] };
+
+function hostInfo(sessionId: string): SessionInfo {
+  return {
+    sessionId,
+    projectDir: null,
+    deadlineSeconds: null,
+    harness: 'claude',
+  };
+}
+
+// A contribution's start whose tool sessions answer and count their ends.
+function fakeAskStart() {
+  let ends = 0;
+  const start = (): ToolSession => ({
+    call: async () => ASK_RESULT,
+    end: () => {
+      ends++;
+    },
+  });
+  return { start, ends: () => ends };
+}
+
+// Sessions' main part started over a fake `MainApi` with no drive and no
+// self-test script, its titles limited to `titleMaxLength`. It opens no relay
+// unless `runMode` says so, with its files under `homeDir`.
+function startSessionsPart(
+  titleMaxLength: number,
+  {
+    runMode = 'selfTest',
+    homeDir = '/home',
+    log = () => undefined,
+  }: {
+    runMode?: 'selfTest' | 'live';
+    homeDir?: string;
+    log?: (message: string) => void;
+  } = {},
+) {
   let hex = 0;
   const api = {
     channel: { handle: () => undefined, send: () => undefined },
@@ -171,24 +215,29 @@ function startSessionsPart(titleMaxLength: number): SessionsMainExports {
     settings: () => ({ layout: 'default', titleMaxLength }),
     services: {
       randomHex: () => (++hex).toString(16),
-      log: () => undefined,
-      runMode: 'selfTest',
+      log,
+      runMode,
       paths: { join: (...parts: string[]) => parts.join('/') },
-      homeDir: '/home',
+      homeDir,
       appInstance: { id: 'app', isDev: false },
       selfTest: null,
     },
     drive: null,
     layouts: { register: () => ({ dispose: () => undefined }) },
   } as unknown as Parameters<typeof sessionsMainPart.start>[0];
-  return sessionsMainPart
-    .start(api)
-    .exports?.(createRegistrations()) as SessionsMainExports;
+  return sessionsMainPart.start(api);
+}
+
+function viewOf(
+  started: ReturnType<typeof startSessionsPart>,
+  consumer = createRegistrations(),
+): SessionsMainExports {
+  return started.exports?.(consumer) as SessionsMainExports;
 }
 
 describe('sessions main part', () => {
   it('contributes set_session_title once, titling the calling session at the setting limit', async () => {
-    const exports = startSessionsPart(10);
+    const exports = viewOf(startSessionsPart(10));
     const connected = exports.connect({
       sessionId: 'host-1',
       projectDir: null,
@@ -221,5 +270,56 @@ describe('sessions main part', () => {
         }),
       ),
     ).toThrow('Two tool contributions both name the tool "set_session_title"');
+  });
+
+  it('disposes what a dependent registered through its view when its registrations dispose', async () => {
+    const started = startSessionsPart(10);
+    const dependent = createRegistrations();
+    const bystanderView = viewOf(started);
+    const dependentView = viewOf(started, dependent);
+    const ask = fakeAskStart();
+    const hostOne = bystanderView.connect(hostInfo('host-1'));
+    dependentView.contributeTools([ASK_TOOL], ask.start);
+    const ownedId = dependentView.open(hostInfo('host-owned')).session.id;
+    const connectedId = dependentView.connect(hostInfo('host-dep')).session.id;
+
+    dependent.dispose();
+
+    expect(ask.ends()).toBe(3);
+    await expect(hostOne.call('ask', {}, CONTEXT)).rejects.toThrow(
+      'Unknown tool: ask. Valid tools are set_session_title.',
+    );
+    expect(bystanderView.titles(ownedId)).toBeNull();
+    expect(bystanderView.titles(connectedId)).toBeNull();
+    expect(bystanderView.titles(hostOne.session.id)).not.toBeNull();
+  });
+
+  it('keeps a contribution live when the endpoint files cannot be written', async () => {
+    const homeDir = mkdtempSync(path.join(os.tmpdir(), 'sessions-start-'));
+    const logged: string[] = [];
+    const started = startSessionsPart(10, {
+      runMode: 'live',
+      homeDir,
+      log: (message) => logged.push(message),
+    });
+    try {
+      const view = viewOf(started);
+      const connected = view.connect(hostInfo('host-1'));
+      const endpointDir = path.join(homeDir, '.agents', 'app');
+      rmSync(endpointDir, { recursive: true });
+      writeFileSync(endpointDir, 'not a folder');
+
+      view.contributeTools([ASK_TOOL], fakeAskStart().start);
+
+      await expect(connected.call('ask', {}, CONTEXT)).resolves.toBe(
+        ASK_RESULT,
+      );
+      expect(logged.filter((line) => line.includes('endpoint files'))).toEqual([
+        expect.stringContaining('endpoint files not written'),
+      ]);
+    } finally {
+      await started.dispose?.();
+      rmSync(homeDir, { recursive: true });
+    }
   });
 });

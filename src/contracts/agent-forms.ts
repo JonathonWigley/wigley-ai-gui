@@ -1,3 +1,4 @@
+import type { Disposable } from './disposable';
 import type { ChannelShape } from './plugin';
 
 // The shapes every agent form type shares: forms' rounds, the feature primer.
@@ -148,7 +149,7 @@ export interface AgentFormSessions {
   mark(sessionId: string): void;
   // Selects the session's row only when it holds one.
   activateExistingRow(sessionId: string): void;
-  addCloseGuard(mayClose: (sessionId: string) => boolean): void;
+  addCloseGuard(mayClose: (sessionId: string) => boolean): Disposable;
   // Closes a connected session's row once every close guard allows; any other
   // session is left alone.
   release(sessionId: string): void;

@@ -102,7 +102,7 @@ function formTabSetup(others: string[] = []) {
           select: () => undefined,
           takeOver: () => ({ release: () => undefined }),
           isVisible: () => true,
-          remove: () => undefined,
+          dispose: () => undefined,
         };
       },
       setActivity: (sessionId, sourceId, activity) =>
