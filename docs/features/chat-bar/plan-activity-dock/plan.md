@@ -400,8 +400,8 @@ setTurn(entries: readonly ChatEntry[], working: boolean): void;
 - [x] [Self-test scripts follow the dock](07-selftest-scripts.md) — after 05
 
 ### Wave 5
-- [ ] [Doc re-read](08-doc-re-read.md) — after 06, 07
-- [ ] [Final verification](09-final-verification.md) — after 06, 07
+- [x] [Doc re-read](08-doc-re-read.md) — after 06, 07
+- [x] [Final verification](09-final-verification.md) — after 06, 07
 
 ## Run log
 
@@ -415,6 +415,8 @@ Review base: 46f417b5
 - 04 · c3a7867b · diff read: workingInput, isTurnEmpty, doneInput, ActivityDockDeps, ActivityDock, createActivityDock present as planned; typecheck green · concerns: isStepsChanged now duplicated in activity-dock.ts and entry-list.ts; LiveWorkingInput.startedAt comment still says held block (task 06)
 - 07 · 32bc4b7d · diff read: VISUAL_STEPS, TRANSCRIPT_FOCUS_STEPS, ACTIVITY_DOCK_STEPS and the transcript focus / activity dock groups present; typecheck green at worker's end; self-test runs in 09 · concerns: dock-done and dock-after-interrupt captures depend on task 06 calling drawTurn before the idle log line
 - 06 · a0119dbc · diff read: ComposerSurfaceDeps clock/timers and ComposerSurface.setTurn present; drawTurn at putEntry, entries, activity, sessionRunning, sessionRested, createTab; typecheck green · concerns: a default working draw that keeps throwing retries and logs once per tick; the slot hides and shows within one synchronous draw
+- 08 · b97c085d · diff read: one fix (layouts design Space z l c row); DESIGN.md, agent-chat and chat-bar designs, AGENTS.md paragraph checked true; working-block grep shows history only · concerns: none
+- 09 · none · checks 1-7 passed from captures (chat-dock-live, chat-dock-done, chat-dock-after-interrupt, agent-strip-strip, drive activity-on-done, chat-chat-preview); agent-strip and agent-lines self-tests pass; chat self-test 8 fails, all one fit check nav.ui-tabs.session-tabs holds 120px in 99px at minimum width, also in groups this run did not touch (forms takeover, session controls, interrupt and close) · concerns: session-tabs fit failure at minimum width looks pre-existing (tab bar, not the dock); agent-strip strip boxes render as thin edges in the capture; sign-in toasts overlap the preview composer
 ### Contract changes
 ### Rulings
 - Preflight: precondition 1's peer AGENTS.md hunk is committed (1b7363b5) and the tree is clean; origin is unreachable from this session (SSH publickey denied), so the run builds on local main at 46f417b5 — lead
