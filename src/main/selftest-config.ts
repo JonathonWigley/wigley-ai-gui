@@ -1,5 +1,6 @@
 import type { SelfTestScript, SelfTestStep } from '../contracts/plugin';
 import type { AppConfig } from '../contracts/settings';
+import { errorText } from '../shared/error-text';
 import { overrideSettings } from '../shared/plugin-manifests';
 import { SCREENSHOT_NAME } from './drive/page-driver';
 
@@ -181,9 +182,12 @@ export const SELFTEST_FILTER_ENV = 'PROOF_SELFTEST_FILTER';
 // Which scripts a self-test run runs: every group of each plugin in `plugins`,
 // and each group `groups` names, as `<plugin>: <name>` or as a bare name that
 // names the group of that name in every script. Both empty runs everything.
+// `malformed`, set when the environment's value is not a filter's JSON, says
+// why, and `selectScripts` throws it.
 export interface SelfTestFilter {
   plugins: string[];
   groups: string[];
+  malformed?: string;
 }
 
 // A handed script as a run runs it: `script.groups` holds the groups the run
@@ -193,16 +197,41 @@ export interface ScriptRun extends HandedScript {
   checksResult: boolean;
 }
 
-// The filter `env` carries, or an empty one when it carries none.
+// The filter `env` carries, or an empty one when it carries none. A value
+// that is not the JSON of an object whose `plugins` and `groups`, each
+// optional, are lists of strings gives an empty filter marked `malformed`.
 export function selfTestFilterOf(env: NodeJS.ProcessEnv): SelfTestFilter {
   const json = env[SELFTEST_FILTER_ENV];
   if (!json) {
     return { plugins: [], groups: [] };
   }
-  const { plugins = [], groups = [] } = JSON.parse(
-    json,
-  ) as Partial<SelfTestFilter>;
+  const malformed = (why: string): SelfTestFilter => ({
+    plugins: [],
+    groups: [],
+    malformed: `${SELFTEST_FILTER_ENV} ${JSON.stringify(json)} ${why}`,
+  });
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json);
+  } catch (error) {
+    return malformed(`is not JSON: ${errorText(error)}`);
+  }
+  const isObject =
+    typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed);
+  if (!isObject) {
+    return malformed('is not a JSON object');
+  }
+  const { plugins = [], groups = [] } = parsed as Record<string, unknown>;
+  if (!isStringList(plugins) || !isStringList(groups)) {
+    return malformed('holds plugins or groups that are not lists of strings');
+  }
   return { plugins, groups };
+}
+
+function isStringList(value: unknown): value is string[] {
+  return (
+    Array.isArray(value) && value.every((item) => typeof item === 'string')
+  );
 }
 
 export function isFiltered(filter: SelfTestFilter): boolean {
@@ -213,12 +242,18 @@ export function isFiltered(filter: SelfTestFilter): boolean {
 // whole. A script with a group `groups` names runs from its first group
 // through the last named one, since a group's steps start from the page the
 // groups before it left; its result is checked only when that reaches its last
-// group. Throws, naming the known ones, on a plugin no handed script belongs
-// to and on a group name no script holds.
+// group. Throws on a `malformed` filter; on a plugin no handed script belongs
+// to and on a group name no script holds, naming the known ones; and on a
+// script cut short of its last group with a kept script after it, naming the
+// cut script, since it leaves its fixture open on the page the next script
+// would start on.
 export function selectScripts(
   handed: readonly HandedScript[],
   filter: SelfTestFilter,
 ): ScriptRun[] {
+  if (filter.malformed !== undefined) {
+    throw new Error(filter.malformed);
+  }
   if (!isFiltered(filter)) {
     return handed.map((entry) => ({ ...entry, checksResult: true }));
   }
@@ -243,7 +278,7 @@ export function selectScripts(
       );
     }
   }
-  return handed.flatMap(({ pluginId, script }) => {
+  const runs = handed.flatMap(({ pluginId, script }): ScriptRun[] => {
     if (filter.plugins.includes(pluginId)) {
       return [{ pluginId, script, checksResult: true }];
     }
@@ -262,6 +297,16 @@ export function selectScripts(
       },
     ];
   });
+  const cutIndex = runs.findIndex((run) => !run.checksResult);
+  const isCutBeforeAKeptScript = cutIndex !== -1 && cutIndex < runs.length - 1;
+  if (isCutBeforeAKeptScript) {
+    const cut = runs[cutIndex];
+    const lastGroup = cut.script.groups.at(-1)?.name ?? '';
+    throw new Error(
+      `The self-test filter cuts the ${cut.pluginId} script after its group ${JSON.stringify(lastGroup)} and keeps ${runs[cutIndex + 1].pluginId} after it, which would start on the page the cut script left; run the ${cut.pluginId} groups on their own`,
+    );
+  }
+  return runs;
 }
 
 // Whether `name` from a filter names group `groupName` of plugin `pluginId`'s

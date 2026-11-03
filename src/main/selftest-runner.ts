@@ -402,8 +402,11 @@ function reportWhys(group: SelfTestGroup, step: SelfTestStep) {
 // script's `scrollsItself` and the primitives' ellipsis parts clip. `load` is
 // the page load the run belongs to, which the fixture opens under, and
 // `isCurrent` (`isOnLoad` of it) whether the run still owns the window.
-// Without `checksResult` the result is left unchecked, a skip line saying so.
-// Returns how many checks failed, or null when a reload interrupted the run.
+// Without `checksResult` the result is left unchecked, a skip line saying so,
+// unless it has rejected by the time the script ends, which rejects with its
+// error: a script cut short is the run's last (`selectScripts`), so that is the
+// end of the run. Returns how many checks failed, or null when a reload
+// interrupted the run.
 export async function runScript(
   window: DrivenWindow,
   homeFiles: Files,
@@ -432,6 +435,13 @@ export async function runScript(
     return null;
   }
   const { shownLine, result } = script.open(load);
+  const settled: { hasRejected: boolean; error?: unknown } = {
+    hasRejected: false,
+  };
+  result.catch((error: unknown) => {
+    settled.hasRejected = true;
+    settled.error = error;
+  });
   // Rejects with the result's error and otherwise never settles, so a wait
   // raced against it ends as soon as the result rejects.
   const rejection = result.then(() => new Promise<never>(() => {}));
@@ -491,7 +501,15 @@ export async function runScript(
   if (!(await restoreStartWidth(window, pluginId, startWidth, isCurrent))) {
     failures++;
   }
-  return isCurrent() ? failures : null;
+  if (!isCurrent()) {
+    return null;
+  }
+  // Reached only by a result checkResult skipped: a checked one that rejects
+  // rejects there.
+  if (settled.hasRejected) {
+    throw settled.error;
+  }
+  return failures;
 }
 
 // Checks the script's result once it settles within `stepTimeoutMs`, reporting

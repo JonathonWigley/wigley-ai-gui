@@ -1,8 +1,9 @@
 // `npm run selftest`: runs the app's self-test through Electron Forge, its
 // output passed through, and exits 0 only when the self-test reports that all
 // its steps passed. `--plugin` and `--group` narrow the run
-// (`selftest-args.mts`), passed to the app in its environment. It holds `.drive/start.lock` from before the spawn, since
-// every `electron-forge start` rewrites the shared `.vite/build` and the
+// (`selftest-args.mts`), passed to the app in its environment. It holds
+// `.drive/start.lock` from before the spawn, since every
+// `electron-forge start` rewrites the shared `.vite/build` and the
 // page's startup reload reads its preload from there, until the self-test
 // prints that the page load after that reload starts its run, or
 // `STARTUP_RELOAD_WAIT_MS` after the first load's run started when no reload

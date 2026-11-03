@@ -416,20 +416,11 @@ describe('selectScripts', () => {
     {
       filter: 'a bare group, in every script holding it',
       plugins: [],
-      groups: ['side bar'],
+      groups: ['side bar', 'review', 'keymap'],
       runs: [
-        ['forms', ['gallery', 'side bar'], false],
-        ['settings', ['side bar'], false],
-        ['docs', ['editor', 'pickers', 'side bar'], false],
-      ],
-    },
-    {
-      filter: "a script's last group",
-      plugins: [],
-      groups: ['keymap', 'forms: gallery'],
-      runs: [
-        ['forms', ['gallery'], false],
+        ['forms', ['gallery', 'side bar', 'review'], true],
         ['settings', ['side bar', 'keymap'], true],
+        ['docs', ['editor', 'pickers', 'side bar'], false],
       ],
     },
     {
@@ -459,6 +450,25 @@ describe('selectScripts', () => {
       message:
         /"settings: review".*forms: gallery.*settings: keymap.*docs: stars/,
     },
+    {
+      name: 'a cut script before a kept one',
+      plugins: [],
+      groups: ['forms: gallery', 'keymap'],
+      message:
+        /cuts the forms script.*"gallery".*keeps settings.*forms groups on their own/,
+    },
+    {
+      name: 'a bare group that cuts an earlier script',
+      plugins: [],
+      groups: ['side bar'],
+      message: /cuts the forms script.*"side bar".*keeps settings/,
+    },
+    {
+      name: 'a cut script before a whole plugin',
+      plugins: ['docs'],
+      groups: ['settings: side bar'],
+      message: /cuts the settings script.*keeps docs/,
+    },
   ])(
     'throws on $name, naming the known ones',
     ({ plugins, groups, message }) => {
@@ -483,4 +493,23 @@ describe('selfTestFilterOf', () => {
   ])('reads $env', ({ env, filter }) => {
     expect(selfTestFilterOf(env)).toEqual(filter);
   });
+
+  it.each([
+    { value: '{"plugins":', why: /is not JSON/ },
+    { value: '["forms"]', why: /is not a JSON object/ },
+    { value: 'null', why: /is not a JSON object/ },
+    { value: '{"plugins":"forms"}', why: /not lists of strings/ },
+    { value: '{"groups":[1]}', why: /not lists of strings/ },
+  ])(
+    'makes selectScripts throw on the malformed value $value, naming it',
+    ({ value, why }) => {
+      const filter = selfTestFilterOf({ [SELFTEST_FILTER_ENV]: value });
+
+      const select = () => selectScripts([withGroups('forms', [])], filter);
+
+      expect(select).toThrow(SELFTEST_FILTER_ENV);
+      expect(select).toThrow(JSON.stringify(value));
+      expect(select).toThrow(why);
+    },
+  );
 });

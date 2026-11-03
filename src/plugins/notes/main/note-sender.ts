@@ -1,5 +1,5 @@
 import type { ChatImage } from '../../../contracts/agent';
-import type { ImageEncoder } from '../../../contracts/images';
+import type { EncodableImage, ImageEncoder } from '../../../contracts/images';
 import type { Log } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import { errorText } from '../../../shared/error-text';
@@ -35,7 +35,8 @@ export interface NoteSenderDeps {
 // order: the PNG with its markup drawn in, or null to send the stored image.
 // A follow-up files the images at full size, on disk where no API cap
 // applies. A session send shrinks each image over the API's cap first; one
-// that will not shrink under it refuses the send with SHRINK_REFUSED.
+// that will not shrink under it, or that the encoder rejects, refuses the send
+// with SHRINK_REFUSED.
 // Each throws when `flattened` and the draft hold different image counts.
 export interface NoteSender {
   toFollowup(
@@ -71,16 +72,24 @@ async function draftPngs(
   );
 }
 
-// Each PNG shrunk under the API's cap; null when one will not shrink under it.
+// Each PNG shrunk under the API's cap; null when one will not shrink under it
+// or the encoder rejects one, logging the rejection.
 async function fitToCap(
   pngs: readonly Uint8Array[],
   encoder: ImageEncoder,
+  log: Log,
 ): Promise<Uint8Array[] | null> {
-  const fitted = await Promise.all(
-    pngs.map((bytes) =>
-      shrinkToFit({ bytes, mediaType: 'image/png' }, encoder),
-    ),
-  );
+  let fitted: (EncodableImage | null)[];
+  try {
+    fitted = await Promise.all(
+      pngs.map((bytes) =>
+        shrinkToFit({ bytes, mediaType: 'image/png' }, encoder),
+      ),
+    );
+  } catch (error) {
+    log('notes', `image not shrunk: ${errorText(error)}`);
+    return null;
+  }
   const sent: Uint8Array[] = [];
   for (const image of fitted) {
     if (image === null) {
@@ -188,7 +197,7 @@ export function createNoteSender(deps: NoteSenderDeps): NoteSender {
         return refused(refusal);
       }
       const pngs = await draftPngs(store, draft, flattened);
-      const images = await fitToCap(pngs, deps.images);
+      const images = await fitToCap(pngs, deps.images, log);
       if (images === null) {
         return refused(SHRINK_REFUSED);
       }

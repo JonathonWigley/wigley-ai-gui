@@ -16,9 +16,9 @@ type NotesApi = MainApi<typeof notesManifest, NotesChannel>;
 
 // Registers notes' layouts, keeps the note draft in notes' data folder and
 // serves it to the page, with the window capture, Backlog's homes and tags,
-// and the two sends, each image shrunk under the API's cap: a follow-up
-// through Backlog and a new session through chat. It hands the self-test its
-// script, and in a drive run it adds the drive actions.
+// and the two sends: a follow-up through Backlog, its images at full size, and
+// a new session through chat, each image shrunk under the API's cap. It hands
+// the self-test its script, and in a drive run it adds the drive actions.
 export const notesMainPart: MainPart<typeof notesManifest> = {
   manifest: notesManifest,
   start(api: NotesApi) {

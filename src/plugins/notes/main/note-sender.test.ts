@@ -186,18 +186,29 @@ describe('toSession', () => {
     },
   );
 
-  it('toSession_ImageWillNotShrinkUnderCap_RefusesAndKeepsDraft', async () => {
-    const note = await setUp({
-      images: [PNG_A, OVER_CAP_PNG],
+  it.each([
+    {
+      kind: 'will not shrink under the cap',
       encoder: fakeEncoder(OVER_CAP_PNG),
-    });
+    },
+    {
+      kind: 'the encoder rejects',
+      encoder: {
+        encode: () => Promise.reject(new Error('Could not decode the image')),
+      },
+    },
+  ])(
+    'toSession_ImageOverCap_RefusesAndKeepsDraft: $kind',
+    async ({ encoder }) => {
+      const note = await setUp({ images: [PNG_A, OVER_CAP_PNG], encoder });
 
-    const result = await note.sender.toSession('/home/me/repo', [null, null]);
+      const result = await note.sender.toSession('/home/me/repo', [null, null]);
 
-    expect(result).toEqual({ type: 'refused', reason: SHRINK_REFUSED });
-    expect(note.launched).toEqual([]);
-    expect((await note.saved())?.images).toHaveLength(2);
-  });
+      expect(result).toEqual({ type: 'refused', reason: SHRINK_REFUSED });
+      expect(note.launched).toEqual([]);
+      expect((await note.saved())?.images).toHaveLength(2);
+    },
+  );
 
   it('toSession_LaunchRejects_KeepsDraftAndPassesText', async () => {
     const note = await setUp({

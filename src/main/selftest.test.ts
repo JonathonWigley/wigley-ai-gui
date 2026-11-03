@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Files } from '../contracts/files';
 import type { SelfTestScript } from '../contracts/plugin';
 import type { DrivenWindow } from './drive/driven-window';
-import type { SelfTestFilter } from './selftest-config';
+import type { ScriptRun, SelfTestFilter } from './selftest-config';
 
 const NO_FILTER: SelfTestFilter = { plugins: [], groups: [] };
 
@@ -219,21 +219,7 @@ describe('runScript', () => {
         contentSize: () => ({ width: 800, height: 600 }),
       } as unknown as DrivenWindow,
       {} as Files,
-      {
-        pluginId: 'plugin',
-        script: {
-          pageBinds: [],
-          settings: {},
-          open: () => ({
-            shownLine: '[plugin] shown',
-            result: new Promise(() => {}),
-          }),
-          groups: [],
-          scrollsItself: [],
-          problems,
-        },
-        checksResult: false,
-      },
+      uncheckedRun(new Promise(() => {}), problems),
       new Map(),
       800,
       1,
@@ -246,7 +232,60 @@ describe('runScript', () => {
       '[selftest] SKIP plugin result: the run left out its later groups',
     );
   });
+
+  it('rejects when an unchecked result rejects after the last kept step', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const { runScript } = await import('./selftest-runner');
+    waitForNewLogLine.mockResolvedValueOnce(true);
+    let rejectResult = (_error: Error) => {};
+    const result = new Promise<never>((_resolve, reject) => {
+      rejectResult = reject;
+    });
+    // The second width read is the one after the result's skip line.
+    let widthReads = 0;
+    const window = {
+      contentSize: () => {
+        widthReads++;
+        if (widthReads === 2) {
+          rejectResult(new Error('fixture failed late'));
+        }
+        return { width: 800, height: 600 };
+      },
+    } as unknown as DrivenWindow;
+
+    await expect(
+      runScript(
+        window,
+        {} as Files,
+        uncheckedRun(result, () => []),
+        new Map(),
+        800,
+        1,
+        () => true,
+      ),
+    ).rejects.toThrow('fixture failed late');
+    expect(widthReads).toBe(2);
+  });
 });
+
+// A run of a script with no groups, cut short so its result goes unchecked.
+function uncheckedRun(
+  result: Promise<unknown>,
+  problems: SelfTestScript['problems'],
+): ScriptRun {
+  return {
+    pluginId: 'plugin',
+    script: {
+      pageBinds: [],
+      settings: {},
+      open: () => ({ shownLine: '[plugin] shown', result }),
+      groups: [],
+      scrollsItself: [],
+      problems,
+    },
+    checksResult: false,
+  };
+}
 
 // A window whose `did-finish-load` listeners land in `loaded`, for the test to
 // fire as page loads.

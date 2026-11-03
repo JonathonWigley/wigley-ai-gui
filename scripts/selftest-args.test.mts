@@ -29,6 +29,8 @@ describe('parseSelfTestArgs', () => {
     { argv: ['--plugins', 'settings'], message: 'Unknown argument --plugins' },
     { argv: ['--plugin'], message: '--plugin takes a value' },
     { argv: ['--group', '--plugin', 'x'], message: '--group takes a value' },
+    { argv: ['--plugin', ' , '], message: '--plugin takes a value' },
+    { argv: ['--group', ' '], message: '--group takes a value' },
   ])('throws on $argv', ({ argv, message }) => {
     expect(() => parseSelfTestArgs(argv)).toThrow(message);
   });

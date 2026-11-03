@@ -660,8 +660,10 @@ round; primer: an open primer), since main, not the page, decides.
   give a comma list), and `--group <name>` (repeatable) runs that group, named `<plugin>: <name>` as the report prints
   it or bare for that name in every script, together with the groups before it in its script, since a group starts
   from the page they left. A filtered run serves the page every script's binds and settings, checks a script's result
-  only when the run reaches the script's last group, skips the end-of-run placement check, and fails before any step
-  on a plugin or group no script holds, naming the known ones. It renders the window
+  only when the run reaches the script's last group, and skips the end-of-run placement check. It fails before any
+  step on a plugin or group no script holds, naming the known ones, and on a filter that cuts a script short of its
+  last group and keeps a script after it, since the cut script leaves its fixture open: run that script's groups on
+  their own. A cut script's result that rejects by the end of the run still fails it. It renders the window
   offscreen as an accessory app, so it never takes the user's foreground; the core's driver (`src/main/selftest.ts`,
   its step runner in `src/main/selftest-runner.ts`) runs the script a plugin hands it — the forms plugin's opens
   fixture sessions through `sessions` and their rounds through `FormsService` — drives keys with

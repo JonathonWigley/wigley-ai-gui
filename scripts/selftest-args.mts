@@ -16,7 +16,7 @@ export const SELFTEST_USAGE =
 // The plugins and groups `argv` (the arguments after `npm run selftest --`)
 // names: `--plugin` takes an id or a comma list of ids, `--group` one group
 // name, `<plugin>: <name>` or bare, and each repeats. Throws on any other
-// argument and on a flag with no value.
+// argument and on a flag with no value, a `--plugin` list of no id included.
 export function parseSelfTestArgs(argv: readonly string[]): SelfTestArgs {
   const args: SelfTestArgs = { plugins: [], groups: [] };
   for (let index = 0; index < argv.length; index++) {
@@ -25,17 +25,21 @@ export function parseSelfTestArgs(argv: readonly string[]): SelfTestArgs {
       throw new Error(`Unknown argument ${flag}; usage: ${SELFTEST_USAGE}`);
     }
     const value = argv[index + 1]?.trim() ?? '';
+    const takesNoValue = () =>
+      new Error(`${flag} takes a value; usage: ${SELFTEST_USAGE}`);
     if (value === '' || value.startsWith('--')) {
-      throw new Error(`${flag} takes a value; usage: ${SELFTEST_USAGE}`);
+      throw takesNoValue();
     }
     index++;
     if (flag === '--plugin') {
-      args.plugins.push(
-        ...value
-          .split(',')
-          .map((id) => id.trim())
-          .filter((id) => id !== ''),
-      );
+      const ids = value
+        .split(',')
+        .map((id) => id.trim())
+        .filter((id) => id !== '');
+      if (ids.length === 0) {
+        throw takesNoValue();
+      }
+      args.plugins.push(...ids);
     } else {
       args.groups.push(value);
     }

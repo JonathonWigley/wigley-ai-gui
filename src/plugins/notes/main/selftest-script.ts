@@ -1,4 +1,6 @@
+import { randomBytes } from 'node:crypto';
 import path from 'node:path';
+import { crc32, deflateSync } from 'node:zlib';
 import type { AgentHarness } from '../../../contracts/agent';
 import type { Files } from '../../../contracts/files';
 import type { Paths } from '../../../contracts/paths';
@@ -8,6 +10,7 @@ import {
   markRun,
   type RunMark,
 } from '../../../shared/fake-agent-harness';
+import { base64LengthOf, MAX_IMAGE_BASE64 } from '../../../shared/image-types';
 import type {
   ConnectedSession,
   SessionsMainExports,
@@ -21,7 +24,7 @@ export interface NotesSelfTestDeps {
   paths: Paths;
   sessions: Pick<SessionsMainExports, 'connect' | 'activate'>;
   harnesses: readonly AgentHarness[];
-  store: Pick<DraftStore, 'clear'>;
+  store: Pick<DraftStore, 'clear' | 'addImage'>;
   // Resolves at the next send to a new session that main reports sent.
   nextSessionSend(): Promise<void>;
 }
@@ -31,8 +34,16 @@ interface NotesSelfTestResult {
   folder: string;
   // The fixture home's `followups.md` once the steps sent.
   followups: string;
-  // The first message of the session the steps launched in `folder`.
-  send: { text: string; imageCount: number } | null;
+  // The first message of each session the steps launched in `folder`, in
+  // launch order.
+  sends: LaunchedSend[];
+  // The base64 length of the over-cap PNG the fixture put in the draft.
+  overCapBase64: number;
+}
+
+interface LaunchedSend {
+  text: string;
+  imageCount: number;
 }
 
 // The fixture session's host id, which the step lines name.
@@ -48,6 +59,12 @@ const LAUNCH_BRIEF =
   'A nitpick to fix, noted while working. Make the change, then report.';
 
 const FRESH_LINE = `[notes] popup shown: title "", 0 images, target ${REPO}, session ${SESSION_ID}`;
+const SESSION_SENT_LINE = `[notes] sent: Session started in ~/dev/${REPO}`;
+// The over-cap image's size: RGB noise, which deflate cannot shrink, whose
+// base64 text is over the API's cap at full size and under it at the first
+// shrink step's 0.75 scale.
+const NOISE_WIDTH = 1600;
+const NOISE_HEIGHT = 1000;
 const OPEN = [' ', 'n', 'n'];
 
 const GROUPS: SelfTestGroup[] = [
@@ -130,7 +147,21 @@ const GROUPS: SelfTestGroup[] = [
       { keys: OPEN, expect: FRESH_LINE },
       {
         keys: [...'Launch me.', 'Escape', ' ', 'n', 's'],
-        expect: `[notes] sent: Session started in ~/dev/${REPO}`,
+        expect: SESSION_SENT_LINE,
+      },
+    ],
+  },
+  {
+    name: 'shrunk image',
+    why: "A session send re-encodes an image over the API's cap smaller through main's native image encoder, so the new session gets it under the cap; the fixture adds the over-cap PNG once the last group's send went out.",
+    steps: [
+      {
+        keys: OPEN,
+        expect: `[notes] popup shown: title "", 1 images, target ${REPO}, session ${SESSION_ID}`,
+      },
+      {
+        keys: [...'Shrink me.', 'Escape', ' ', 'n', 's'],
+        expect: SESSION_SENT_LINE,
       },
     ],
   },
@@ -149,19 +180,54 @@ const GROUPS: SelfTestGroup[] = [
   },
 ];
 
-// The first message of the first fake process this run started in `folder`.
-function launchedSend(
+// The first message of each fake process this run started in `folder`, in
+// start order.
+function launchedSends(
   marks: readonly RunMark[],
   folder: string,
   paths: Paths,
-): NotesSelfTestResult['send'] {
-  const launched: FakeAgentProcessRecord | undefined = marks
+): LaunchedSend[] {
+  const launched: FakeAgentProcessRecord[] = marks
     .flatMap((mark) => mark.harness.processes.slice(mark.processes))
-    .find((record) => paths.samePath(record.request.projectDir, folder));
-  const send = launched?.calls.find((call) => call.method === 'send');
-  return send === undefined
-    ? null
-    : { text: send.text, imageCount: send.imageCount };
+    .filter((record) => paths.samePath(record.request.projectDir, folder));
+  return launched.flatMap((record) => {
+    const send = record.calls.find((call) => call.method === 'send');
+    return send === undefined
+      ? []
+      : [{ text: send.text, imageCount: send.imageCount }];
+  });
+}
+
+// A PNG of `width` by `height` RGB noise, each row unfiltered.
+function noisePng(width: number, height: number): Uint8Array {
+  const rowLength = 1 + width * 3;
+  const pixels = randomBytes(rowLength * height);
+  for (let row = 0; row < height; row++) {
+    pixels[row * rowLength] = 0;
+  }
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
+  // Bit depth 8, colour type 2 (RGB), then default compression, filter and
+  // interlace.
+  header.set([8, 2, 0, 0, 0], 8);
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk('IHDR', header),
+    pngChunk('IDAT', deflateSync(pixels, { level: 1 })),
+    pngChunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+// A PNG chunk: its data's length, its type, the data, and the CRC of the type
+// and data.
+function pngChunk(type: string, data: Buffer): Buffer {
+  const typed = Buffer.concat([Buffer.from(type, 'latin1'), data]);
+  const length = Buffer.alloc(4);
+  length.writeUInt32BE(data.length);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(typed));
+  return Buffer.concat([length, typed, crc]);
 }
 
 function countOf(text: string, part: string): number {
@@ -199,8 +265,9 @@ function followupProblems(followups: string): string[] {
   return problems;
 }
 
-function sendProblems({ folder, send }: NotesSelfTestResult): string[] {
-  if (send === null) {
+function sendProblems({ folder, sends }: NotesSelfTestResult): string[] {
+  const send = sends.at(0);
+  if (send === undefined) {
     return [`no session launched in ${folder}`];
   }
   const problems: string[] = [];
@@ -217,16 +284,46 @@ function sendProblems({ folder, send }: NotesSelfTestResult): string[] {
   return problems;
 }
 
+function shrunkSendProblems({
+  folder,
+  sends,
+  overCapBase64,
+}: NotesSelfTestResult): string[] {
+  const problems: string[] = [];
+  if (overCapBase64 <= MAX_IMAGE_BASE64) {
+    problems.push(
+      `fixture image ${String(overCapBase64)} base64, not over the cap`,
+    );
+  }
+  const send = sends.at(1);
+  if (send === undefined) {
+    return [...problems, `no second session launched in ${folder}`];
+  }
+  if (!send.text.includes('Shrink me.')) {
+    problems.push(`second launched message ${send.text}`);
+  }
+  // Chat refuses to launch with an image over the cap, so one that arrived is
+  // under it.
+  if (send.imageCount !== 1) {
+    problems.push(
+      `second launched message carries ${String(send.imageCount)} images, expected 1`,
+    );
+  }
+  return problems;
+}
+
 // Each run ends the last run's fixture session, clears the draft, and
 // connects the session `notes-selftest` in docs' fixture repo, activating its
-// row so the popup attaches it. The result waits for the steps' send to a new
-// session, then reads the fixture home's follow-ups and that session's first
-// message.
+// row so the popup attaches it. Once the steps' first send to a new session
+// went out it adds an over-cap noise PNG to the cleared draft, for the shrunk
+// image group, and the result waits for the second send, then reads the
+// fixture home's follow-ups and each launched session's first message.
 export function notesSelfTestScript(deps: NotesSelfTestDeps): SelfTestScript {
   const { homeDir, files, paths, sessions, harnesses, store } = deps;
   let previous: ConnectedSession | null = null;
 
   async function run(sent: Promise<void>): Promise<NotesSelfTestResult> {
+    const overCapPng = noisePng(NOISE_WIDTH, NOISE_HEIGHT);
     await store.clear();
     const home = await files.realPath(homeDir);
     const folder = path.join(home, 'dev', REPO);
@@ -241,10 +338,20 @@ export function notesSelfTestScript(deps: NotesSelfTestDeps): SelfTestScript {
     sessions.activate(connected.session.id);
     const marks = markRun(harnesses);
     await sent;
+    // Registered before the image is added, so it waits for the send after
+    // `sent`.
+    const shrunkSent = deps.nextSessionSend();
+    await store.addImage(overCapPng);
+    await shrunkSent;
     const followups = await files.read(
       path.join(home, 'wigley-features', REPO, 'followups.md'),
     );
-    return { folder, followups, send: launchedSend(marks, folder, paths) };
+    return {
+      folder,
+      followups,
+      sends: launchedSends(marks, folder, paths),
+      overCapBase64: base64LengthOf(overCapPng.length),
+    };
   }
 
   return {
@@ -260,7 +367,11 @@ export function notesSelfTestScript(deps: NotesSelfTestDeps): SelfTestScript {
     groups: GROUPS,
     problems: (result) => {
       const ran = result as NotesSelfTestResult;
-      return [...followupProblems(ran.followups), ...sendProblems(ran)];
+      return [
+        ...followupProblems(ran.followups),
+        ...sendProblems(ran),
+        ...shrunkSendProblems(ran),
+      ];
     },
   };
 }
