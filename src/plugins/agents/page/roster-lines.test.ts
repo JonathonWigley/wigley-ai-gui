@@ -106,9 +106,11 @@ afterEach(() => {
 });
 
 describe('roster lines', () => {
-  it('build_TwoRunning_DrawsLineEachAndLogsCount', () => {
+  // Lines in `orderRosterLines`' order: agent-2, its task-1 nested, the main
+  // agent's task-2, agent-1.
+  it('build_WithTasks_DrawsLineEachAndLogsCount', () => {
     const { lines, wrapper, logged } = setUp();
-    lines.setRoster(SESSION, TWO_RUNNING);
+    lines.setRoster(SESSION, WITH_TASKS);
 
     const built = lines.part.build(asHtml(wrapper), SESSION);
     built.dispose?.();
@@ -118,35 +120,50 @@ describe('roster lines', () => {
     expect(drawn.map((line) => line.dataset.layoutOwner)).toEqual([
       'agents',
       'agents',
+      'agents',
+      'agents',
     ]);
+    expect(
+      drawn.map((line) => line.classList.contains('agents-task-line-nested')),
+    ).toEqual([false, true, false, false]);
+    expect(
+      drawn.map((line) => findAll(line, 'codicon-terminal').length),
+    ).toEqual([0, 1, 1, 0]);
     expect(drawn[0].textContent).toContain('3m 05s');
-    expect(drawn[1].textContent).toContain('Explore');
-    expect(drawn[1].textContent).toContain('42s');
-    expect(drawn[1].textContent).toContain('1 tool');
-    expect(logged).toEqual(['[agents] lines in proj: 2']);
+    expect(drawn[1].textContent).toContain('npm test --watch');
+    expect(drawn[1].textContent).toContain('30s');
+    expect(drawn[2].textContent).toContain('npm run build');
+    expect(drawn[2].textContent).toContain('1m 30s');
+    expect(drawn[3].textContent).toContain('Explore');
+    expect(drawn[3].textContent).toContain('42s');
+    expect(drawn[3].textContent).toContain('1 tool');
+    expect(logged).toEqual(['[agents] lines in proj: 4']);
   });
 
   it('tick_LinesShown_RedrawsElapsedAndStopsWhenEmpty', () => {
     const { lines, wrapper, sets, clears, logged, advance } = setUp();
-    lines.setRoster(SESSION, TWO_RUNNING);
+    lines.setRoster(SESSION, WITH_TASKS);
     lines.part.build(asHtml(wrapper), SESSION);
     expect(sets).toHaveLength(1);
 
     advance(1000);
     sets[0].run();
-    const afterTick = {
-      newest: findAll(wrapper, 'agents-line')[1].textContent,
+    const afterTick = findAll(wrapper, 'agents-line');
+    const afterTickText = {
+      nestedTask: afterTick[1].textContent,
+      newestAgent: afterTick[3].textContent,
       sets: sets.length,
     };
     lines.setRoster(SESSION, { agents: [], tasks: [] });
 
-    expect(afterTick.newest).toContain('43s');
-    expect(afterTick.sets).toBe(2);
+    expect(afterTickText.nestedTask).toContain('31s');
+    expect(afterTickText.newestAgent).toContain('43s');
+    expect(afterTickText.sets).toBe(2);
     expect(clears).toEqual([sets[1].handle]);
     expect(sets).toHaveLength(2);
     expect(findAll(wrapper, 'agents-line')).toEqual([]);
     expect(logged).toEqual([
-      '[agents] lines in proj: 2',
+      '[agents] lines in proj: 4',
       '[agents] lines in proj: 0',
     ]);
   });
