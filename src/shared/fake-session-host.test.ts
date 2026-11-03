@@ -267,4 +267,17 @@ describe('createFakeSessionHost', () => {
     host.setList(null);
     expect((await host.list()).map((info) => info.id)).toEqual(['a']);
   });
+
+  it('failList_Error_ListRejectsUntilCleared', async () => {
+    const host = createFakeSessionHost(clock);
+    host.addRunning({ id: 'a', startedAt: 1, current: true, log: [] });
+    host.setList([]);
+
+    host.failList('no host');
+    await expect(host.list()).rejects.toThrow('no host');
+
+    host.failList(null);
+    host.setList(null);
+    expect((await host.list()).map((info) => info.id)).toEqual(['a']);
+  });
 });

@@ -7,11 +7,14 @@ import type {
   HostMessage,
   LineEvent,
 } from '../../contracts/session-host-protocol';
-import { connectToChannel } from '../../shared/local-channel/local-channel';
+import {
+  connectFoundNoListener,
+  connectToChannel,
+} from '../../shared/local-channel/local-channel';
 import { jsonLine, readLines } from '../../shared/local-channel/line-framing';
 
 export const LOG_SOURCE = 'session-host';
-// How long any `hello` and any other host's `list` wait for their reply.
+// How long a `hello`, a `list` and a `subscribe` wait for their reply.
 export const HOST_REPLY_LIMIT_MS = 1000;
 
 // One connection to a session host.
@@ -27,21 +30,18 @@ export interface HostLink {
   // Closes once what was sent has been written.
   end(): void;
   destroy(): void;
-  // Resolves once the socket has closed.
-  readonly closed: Promise<void>;
 }
 
 export interface HostLinkDeps {
   timers: Timers;
   log: Log;
-  opened(link: HostLink): void;
   pushed(message: LineEvent | ClosedEvent): void;
   disconnected(link: HostLink): void;
 }
 
 export type HostAnswer =
-  | { kind: 'unreachable' } // the connect rejected
-  | { kind: 'silent' } // connected, but no `hello` reply in time
+  | { kind: 'unreachable' } // the connect proved no listener
+  | { kind: 'silent' } // a listener is possible: no `hello` reply in time, or the connect rejected for another reason
   | { kind: 'answered'; link: HostLink; protocol: number };
 
 interface PendingRequest {
@@ -67,14 +67,11 @@ function createHostLink(socket: Socket, deps: HostLinkDeps): HostLink {
     pending.get(message.requestId)?.settle(message);
   };
 
-  const closed = new Promise<void>((resolve) => {
-    socket.on('close', () => {
-      for (const request of pending.values()) {
-        request.settle(null);
-      }
-      deps.disconnected(link);
-      resolve();
-    });
+  socket.on('close', () => {
+    for (const request of pending.values()) {
+      request.settle(null);
+    }
+    deps.disconnected(link);
   });
 
   const link: HostLink = {
@@ -115,14 +112,12 @@ function createHostLink(socket: Socket, deps: HostLinkDeps): HostLink {
     destroy() {
       socket.destroy();
     },
-    closed,
   };
 
   socket.on('error', (error) => {
     deps.log(LOG_SOURCE, `host connection error: ${error.message}`);
   });
   readLines(socket, received);
-  deps.opened(link);
   return link;
 }
 
@@ -134,8 +129,10 @@ export async function openHostLink(
   let socket: Socket;
   try {
     socket = await connectToChannel(channel);
-  } catch {
-    return { kind: 'unreachable' };
+  } catch (error) {
+    return connectFoundNoListener(error)
+      ? { kind: 'unreachable' }
+      : { kind: 'silent' };
   }
   const link = createHostLink(socket, deps);
   const reply = await link.request(

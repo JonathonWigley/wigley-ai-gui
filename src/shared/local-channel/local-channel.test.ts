@@ -1,5 +1,12 @@
 import { once } from 'node:events';
-import { mkdirSync, mkdtempSync, renameSync, rmSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  renameSync,
+  rmSync,
+} from 'node:fs';
 import { createServer, type Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -101,6 +108,22 @@ describe('listenOnChannel', () => {
     client.write('reached');
     await vi.waitFor(() => expect(reachedFirst).toEqual(['reached']));
   });
+
+  it.skipIf(channelIsPipe)(
+    'listenOnChannel_ConnectDeniedOnASocketFile_CountsAsInUseAndKeepsTheFile',
+    async () => {
+      const channel = tempChannel();
+      await leaveStaleSocket(channel);
+      chmodSync(channel, 0o000);
+      const failed = vi.fn<(error: Error) => void>();
+
+      const server = listen(channel, { failed });
+
+      expect(await server.listening).toBe(false);
+      expect(failed.mock.calls[0][0]).toMatchObject({ code: 'EADDRINUSE' });
+      expect(existsSync(channel)).toBe(true);
+    },
+  );
 
   it.skipIf(channelIsPipe)(
     'close_WhileCheckingASocketFile_NeverListens',

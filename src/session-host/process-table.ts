@@ -7,13 +7,14 @@ import type {
   PipeDirection,
   PipeLine,
 } from '../contracts/session-host';
-import type { ListedProcess } from '../contracts/session-host-protocol';
+import {
+  HOST_END_GRACE_MS,
+  type ListedProcess,
+} from '../contracts/session-host-protocol';
 import { readLines } from '../shared/local-channel/line-framing';
 import type { DiagnosticLog } from './diagnostic-log';
 import { createPipeLog, type PipeLog } from './pipe-log';
 
-// The grace of `END_GRACE_MS` in `claude-code-harness.ts`.
-const END_GRACE_MS = 3000;
 const DEFAULT_KEEP_IDLE_MINUTES = 60;
 const MS_PER_MINUTE = 60_000;
 // `setTimeout` fires at once past this delay.
@@ -48,12 +49,17 @@ export interface ProcessTable {
   write(id: string, text: string): void;
   endInput(id: string): void;
   kill(id: string, signal: 'SIGTERM' | 'SIGKILL'): void;
-  // Replaces any earlier subscriber, and returns the log's path; null for an id the table does not hold.
-  subscribe(id: string, subscriber: ProcessSubscriber): string | null;
+  // Replaces any earlier subscriber, and returns the log's path. `log` is null, and nothing is subscribed, when the
+  // process is unknown or ending (`running` false) or its log is incomplete (`running` true).
+  subscribe(
+    id: string,
+    subscriber: ProcessSubscriber,
+  ): { running: boolean; log: string | null };
   // Does nothing unless `subscriber` is process `id`'s.
   unsubscribe(id: string, subscriber: ProcessSubscriber): void;
   dropSubscriber(subscriber: ProcessSubscriber): void;
   list(): ListedProcess[];
+  // Refuses a value that is not finite, keeping the window it has.
   setKeepIdleMinutes(minutes: number): void;
   // The keep window runs only while this is false, the state the table starts in.
   setClientConnected(connected: boolean): void;
@@ -92,6 +98,17 @@ function isIgnored(value: unknown, ignoredValues: readonly string[]): boolean {
   return typeof value === 'string' && ignoredValues.includes(value);
 }
 
+// Every line reads the rule, so a bad one would otherwise throw far from the request that carried it.
+function requireIdleRule({ id, idleRule }: HostedSpawn) {
+  const isWellFormed =
+    typeof idleRule?.key === 'string' &&
+    Array.isArray(idleRule.ignoredStdoutValues) &&
+    Array.isArray(idleRule.ignoredStdinValues);
+  if (!isWellFormed) {
+    throw new Error(`process ${id} has no well-formed idle rule`);
+  }
+}
+
 export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
   const { clock, timers, diagnostics } = deps;
   const processes = new Map<string, TableProcess>();
@@ -118,7 +135,13 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
       keepIdleMinutes * MS_PER_MINUTE;
     const delay = Math.max(0, deadline - clock.now());
     hosted.keepTimer = timers.set(
-      () => endProcess(hosted),
+      () => {
+        if (clock.now() < deadline) {
+          armKeepTimer(hosted);
+        } else {
+          endProcess(hosted);
+        }
+      },
       Math.min(delay, MAX_TIMER_DELAY_MS),
     );
   }
@@ -134,9 +157,9 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
       timers.set(() => {
         hosted.child.kill('SIGTERM');
         hosted.signalTimers.push(
-          timers.set(() => hosted.child.kill('SIGKILL'), END_GRACE_MS),
+          timers.set(() => hosted.child.kill('SIGKILL'), HOST_END_GRACE_MS),
         );
-      }, END_GRACE_MS),
+      }, HOST_END_GRACE_MS),
     );
   }
 
@@ -205,15 +228,6 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
 
   function wireChild(hosted: TableProcess) {
     const { child } = hosted;
-    logStreamErrors(hosted, 'stdin', child.stdin);
-    logStreamErrors(hosted, 'stdout', child.stdout);
-    logStreamErrors(hosted, 'stderr', child.stderr);
-    readLines(child.stdout, (text) => childLine(hosted, 'out', text), {
-      flushPartialAtEnd: true,
-    });
-    readLines(child.stderr, (text) => childLine(hosted, 'err', text), {
-      flushPartialAtEnd: true,
-    });
     child.on('error', (error) => {
       // A child with no pid never ran, and no other event tells of it; a later error leaves `close` to come.
       if (child.pid === undefined) {
@@ -229,6 +243,25 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
     child.on('close', (code, signal) =>
       closeProcess(hosted, { code, signal, error: null }),
     );
+    // A grandchild can hold the pipes past the exit, and `close` waits for them.
+    child.once('exit', () => {
+      hosted.signalTimers.push(
+        timers.set(() => {
+          child.stdout.destroy();
+          child.stderr.destroy();
+        }, HOST_END_GRACE_MS),
+      );
+    });
+    // After the `error` listener: a child refused at EMFILE has no pipes, and its `error` still comes.
+    logStreamErrors(hosted, 'stdin', child.stdin);
+    logStreamErrors(hosted, 'stdout', child.stdout);
+    logStreamErrors(hosted, 'stderr', child.stderr);
+    readLines(child.stdout, (text) => childLine(hosted, 'out', text), {
+      flushPartialAtEnd: true,
+    });
+    readLines(child.stderr, (text) => childLine(hosted, 'err', text), {
+      flushPartialAtEnd: true,
+    });
   }
 
   function refusalOf(id: string): string | null {
@@ -240,48 +273,44 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
 
   return {
     spawn(request, subscriber) {
+      const refuse = (error: string) =>
+        subscriber.closed(request.id, { code: null, signal: null, error });
       const refusal = refusalOf(request.id);
       if (refusal !== null) {
-        subscriber.closed(request.id, {
-          code: null,
-          signal: null,
-          error: refusal,
-        });
+        refuse(refusal);
         return;
       }
-      const log = createPipeLog(deps.logsFolder, request.id, clock);
-      let child: ChildProcessWithoutNullStreams;
+      let log: PipeLog | null = null;
       try {
-        child = deps.spawn(request.command, request.args, {
+        requireIdleRule(request);
+        log = createPipeLog(deps.logsFolder, request.id, clock, (message) =>
+          diagnostics.append(message),
+        );
+        const child = deps.spawn(request.command, request.args, {
           cwd: request.cwd,
           env: request.env,
         });
+        const startedAt = clock.now();
+        const hosted: TableProcess = {
+          id: request.id,
+          child,
+          log,
+          idleRule: request.idleRule,
+          startedAt,
+          subscriber,
+          isIdle: true,
+          idleSince: startedAt,
+          keepTimer: null,
+          signalTimers: [],
+          isEnding: false,
+        };
+        wireChild(hosted);
+        processes.set(request.id, hosted);
+        armKeepTimer(hosted);
       } catch (error) {
-        log.remove();
-        subscriber.closed(request.id, {
-          code: null,
-          signal: null,
-          error: (error as Error).message,
-        });
-        return;
+        log?.remove();
+        refuse((error as Error).message);
       }
-      const startedAt = clock.now();
-      const hosted: TableProcess = {
-        id: request.id,
-        child,
-        log,
-        idleRule: request.idleRule,
-        startedAt,
-        subscriber,
-        isIdle: true,
-        idleSince: startedAt,
-        keepTimer: null,
-        signalTimers: [],
-        isEnding: false,
-      };
-      processes.set(request.id, hosted);
-      wireChild(hosted);
-      armKeepTimer(hosted);
     },
     write(id, text) {
       const hosted = processes.get(id);
@@ -303,11 +332,14 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
     },
     subscribe(id, subscriber) {
       const hosted = processes.get(id);
-      if (hosted === undefined) {
-        return null;
+      if (hosted === undefined || hosted.isEnding) {
+        return { running: false, log: null };
+      }
+      if (!hosted.log.isComplete) {
+        return { running: true, log: null };
       }
       hosted.subscriber = subscriber;
-      return hosted.log.file;
+      return { running: true, log: hosted.log.file };
     },
     unsubscribe(id, subscriber) {
       const hosted = processes.get(id);
@@ -326,13 +358,17 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
       return [...processes.values()].map((hosted) => ({
         id: hosted.id,
         startedAt: hosted.startedAt,
-        running: true,
+        running: !hosted.isEnding,
         code: null,
         signal: null,
         log: hosted.log.file,
       }));
     },
     setKeepIdleMinutes(minutes) {
+      if (!Number.isFinite(minutes)) {
+        diagnostics.append(`refused keep window: ${minutes}`);
+        return;
+      }
       keepIdleMinutes = minutes;
       for (const hosted of processes.values()) {
         armKeepTimer(hosted);
@@ -364,7 +400,7 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
       for (const hosted of processes.values()) {
         hosted.child.kill('SIGTERM');
         hosted.signalTimers.push(
-          timers.set(() => hosted.child.kill('SIGKILL'), END_GRACE_MS),
+          timers.set(() => hosted.child.kill('SIGKILL'), HOST_END_GRACE_MS),
         );
       }
     },

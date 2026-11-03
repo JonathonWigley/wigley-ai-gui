@@ -5,9 +5,14 @@ import {
   readFileSync,
   rmSync,
 } from 'node:fs';
+import {
+  type ChildProcessWithoutNullStreams,
+  spawn as spawnChild,
+} from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { HOST_END_GRACE_MS } from '../contracts/session-host-protocol';
 import { createProcessTable, type HostSpawn } from './process-table';
 import {
   type FakeChild,
@@ -47,7 +52,7 @@ function setUp(start = 0, spawnOverride?: HostSpawn) {
     logsFolder,
     diagnostics: {
       append: (message) => diagnosticLines.push(message),
-      empty: () => {},
+      setAsidePrevious: () => {},
     },
     processClosed: () => {},
   });
@@ -337,19 +342,110 @@ describe('process table', () => {
     expect(children[0].stdin.writableEnded).toBe(true);
   });
 
+  it('setKeepIdle_WindowPastTheTimerCap_EndsOnlyAtTheDeadline', () => {
+    const { table, time, children } = setUp();
+    const minutes = 2 * Math.ceil(2 ** 31 / 60_000);
+    table.spawn(spawnRequest('a'), recordingSubscriber().subscriber);
+
+    table.setKeepIdleMinutes(minutes);
+    time.advanceTo(minutes * 60_000 - 1);
+    expect(children[0].stdin.writableEnded).toBe(false);
+
+    time.advanceTo(minutes * 60_000);
+    expect(children[0].stdin.writableEnded).toBe(true);
+  });
+
+  it.each([
+    { label: 'NaN', minutes: Number.NaN },
+    { label: 'Infinity', minutes: Number.POSITIVE_INFINITY },
+    { label: 'null off the wire', minutes: null as unknown as number },
+  ])('setKeepIdle_NotFinite_KeepsTheWindow: $label', ({ minutes }) => {
+    const { table, time, children, diagnosticLines } = setUp();
+    table.spawn(spawnRequest('a'), recordingSubscriber().subscriber);
+
+    table.setKeepIdleMinutes(minutes);
+    time.advanceTo(HOUR_MS - 1);
+    expect(children[0].stdin.writableEnded).toBe(false);
+
+    time.advanceTo(HOUR_MS);
+    expect(children[0].stdin.writableEnded).toBe(true);
+    expect(diagnosticLines).toHaveLength(1);
+  });
+
+  it('keepWindow_Ending_ListsNotRunningAndRefusesAnAttach', async () => {
+    const { table, time, children } = setUp();
+    const first = recordingSubscriber();
+    table.spawn(spawnRequest('a'), first.subscriber);
+    expect(table.list()[0].running).toBe(true);
+
+    time.advanceTo(HOUR_MS);
+    const late = recordingSubscriber();
+
+    expect(table.list()[0].running).toBe(false);
+    expect(table.subscribe('a', late.subscriber)).toEqual({
+      running: false,
+      log: null,
+    });
+    children[0].stdout.write('last\n');
+    await streamsDelivered();
+    expect(late.lines).toEqual([]);
+    expect(first.lines.map(({ text }) => text)).toEqual(['last']);
+  });
+
   it('close_EndsPendingSignals_AndDeletesTheLog', () => {
     const { table, time, children, logFile } = setUp();
     table.spawn(spawnRequest('a'), recordingSubscriber().subscriber);
     time.advanceTo(HOUR_MS);
 
     time.advanceTo(3_601_000);
+    children[0].exit();
     children[0].close();
     time.advanceTo(HOUR_MS + 6000);
 
     expect(children[0].signals).toEqual([]);
+    expect(children[0].stdout.destroyed).toBe(false);
     expect(existsSync(logFile('a.jsonl'))).toBe(false);
     expect(table.list()).toEqual([]);
   });
+
+  it.skipIf(process.platform === 'win32')(
+    'exit_AGrandchildHoldsThePipes_ClosesAfterTheGrace',
+    async () => {
+      let child: ChildProcessWithoutNullStreams | null = null;
+      const { table, time } = setUp(0, (command, args) => {
+        child = spawnChild(command, args);
+        return child;
+      });
+      const { subscriber, closed } = recordingSubscriber();
+
+      table.spawn(
+        {
+          ...spawnRequest('a'),
+          command: '/bin/sh',
+          // The grandchild inherits the pipes and ends by itself.
+          args: ['-c', 'sleep 5 & exit 3'],
+          cwd: tmpdir(),
+        },
+        subscriber,
+      );
+      await vi.waitFor(() =>
+        expect((child as ChildProcessWithoutNullStreams | null)?.exitCode).toBe(
+          3,
+        ),
+      );
+      await streamsDelivered();
+      expect(closed).toEqual([]);
+
+      time.advanceTo(HOST_END_GRACE_MS);
+
+      await vi.waitFor(() =>
+        expect(closed).toEqual([
+          { id: 'a', exit: { code: 3, signal: null, error: null } },
+        ]),
+      );
+      expect(table.list()).toEqual([]);
+    },
+  );
 
   it.each([
     {
@@ -398,18 +494,101 @@ describe('process table', () => {
     expect(table.list()).toEqual([]);
   });
 
-  it('spawn_ThrowsOnBadArguments_ClosesWithTheMessageAndNoLog', () => {
-    const { table, logFile } = setUp(0, () => {
-      throw new Error('bad argument');
-    });
+  it.each([
+    {
+      label: 'the spawn throws',
+      spawnFails: (): ChildProcessWithoutNullStreams => {
+        throw new Error('bad argument');
+      },
+      request: spawnRequest('a'),
+      error: 'bad argument',
+    },
+    {
+      label: 'a refused child has no pipes',
+      spawnFails: () =>
+        Object.assign(fakeChild().child, {
+          stdout: undefined,
+        }) as unknown as ChildProcessWithoutNullStreams,
+      request: spawnRequest('a'),
+      error: 'undefined',
+    },
+    {
+      label: 'the idle rule is missing',
+      spawnFails: () => fakeChild().child,
+      request: { ...spawnRequest('a'), idleRule: undefined as never },
+      error: 'idle rule',
+    },
+  ])(
+    'spawn_Throws_ClosesWithTheMessageAndKeepsNoEntry: $label',
+    ({ spawnFails, request, error }) => {
+      const { table, logFile } = setUp(0, spawnFails);
+      const { subscriber, closed } = recordingSubscriber();
+
+      table.spawn(request, subscriber);
+
+      expect(closed).toHaveLength(1);
+      expect(closed[0].exit.error).toContain(error);
+      expect(existsSync(logFile('a.jsonl'))).toBe(false);
+      expect(table.list()).toEqual([]);
+    },
+  );
+
+  it('spawn_LogCannotBeCreated_ClosesOnlyThatProcess', async () => {
+    const { table, children, logFile } = setUp();
+    const other = recordingSubscriber();
+    table.spawn(spawnRequest('other'), other.subscriber);
+    mkdirSync(logFile('bad.jsonl'));
     const { subscriber, closed } = recordingSubscriber();
 
-    table.spawn(spawnRequest('a'), subscriber);
+    table.spawn(spawnRequest('bad'), subscriber);
 
-    expect(closed).toEqual([
-      { id: 'a', exit: { code: null, signal: null, error: 'bad argument' } },
+    expect(closed.map(({ id }) => id)).toEqual(['bad']);
+    expect(closed[0].exit.error).toContain('bad.jsonl');
+    expect(children).toHaveLength(1);
+    children[0].stdout.write('later\n');
+    await streamsDelivered();
+    expect(other.lines.map(({ text }) => text)).toEqual(['later']);
+  });
+
+  it('appendFailure_OneProcess_DeliversItsLinesAndRefusesItsAttach', async () => {
+    const { table, children, logFile, logRecords, diagnosticLines } = setUp();
+    const broken = recordingSubscriber();
+    const healthy = recordingSubscriber();
+    table.spawn(spawnRequest('broken'), broken.subscriber);
+    table.spawn(spawnRequest('healthy'), healthy.subscriber);
+    rmSync(logFile('broken.jsonl'));
+    mkdirSync(logFile('broken.jsonl'));
+
+    children[0].stdout.write('one\ntwo\n');
+    children[1].stdout.write('fine\n');
+    await streamsDelivered();
+
+    expect(broken.lines.map(({ text }) => text)).toEqual(['one', 'two']);
+    expect(healthy.lines.map(({ text }) => text)).toEqual(['fine']);
+    expect(logRecords('healthy.jsonl')).toContain('fine');
+    expect(diagnosticLines).toHaveLength(1);
+    expect(diagnosticLines[0]).toContain('broken');
+    const late = recordingSubscriber();
+    expect(table.subscribe('broken', late.subscriber)).toEqual({
+      running: true,
+      log: null,
+    });
+    expect(table.subscribe('healthy', late.subscriber)).toEqual({
+      running: true,
+      log: logFile('healthy.jsonl'),
+    });
+    expect(table.list().map(({ id, running }) => [id, running])).toEqual([
+      ['broken', true],
+      ['healthy', true],
     ]);
-    expect(existsSync(logFile('a.jsonl'))).toBe(false);
+    children[0].stdout.write('three\n');
+    await streamsDelivered();
+    expect(broken.lines.map(({ text }) => text)).toEqual([
+      'one',
+      'two',
+      'three',
+    ]);
+    expect(late.lines).toEqual([]);
   });
 
   it('childError_AfterItRan_LogsAndWaitsForClose', () => {

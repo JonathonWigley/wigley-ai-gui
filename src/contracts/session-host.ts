@@ -52,12 +52,20 @@ export interface SessionHost {
   // The whole pipe log so far, then live lines past its last seq through `events`.
   // Live lines start in a later macrotask than the one that resolves the promise, so a caller that replays `log`
   // in the continuation of its `await` has replayed the whole log before the first live line.
-  // Null when no current-version host holds a running process with that id.
+  // Null only when the current-version host answered that it holds no running process with that id. Rejects when the
+  // process may still run: the host did not start, its connection dropped, it did not answer in time, or it cannot
+  // replay the process because the pipe log is unreadable or incomplete.
   attach(
     id: string,
     events: HostedProcessEvents,
   ): Promise<{ process: HostedProcess; log: readonly PipeLine[] } | null>;
+  // Every process the hosts answered with, so `[]` means they hold none. Rejects when it could not ask: the current host
+  // did not start, its connection dropped, or it or another host with a record did not answer in time. A record whose
+  // channel has no listener counts as no host. `running` is false for a process past its keep window and ending: a
+  // caller may start its session again, since that process reads no more input.
   list(): Promise<HostedProcessInfo[]>;
   setKeepIdleMinutes(minutes: number): void;
+  // Never rejects. Resolves once the current host has stopped every process, or could not be reached, or its reply
+  // limit ran out.
   stopAll(): Promise<void>;
 }

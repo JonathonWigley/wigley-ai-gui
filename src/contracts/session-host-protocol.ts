@@ -20,8 +20,8 @@ export interface ListMessage {
   type: 'list';
   requestId: number;
 }
-// Frozen: never change this shape. One process a host holds: `startedAt` is epoch ms; `code` and `signal` are its
-// exit, null while it runs; `log` is its pipe log's absolute path.
+// Frozen: never change this shape. One process a host holds: `startedAt` is epoch ms; `running` is false once it is
+// ending; `code` and `signal` are its exit, null until then; `log` is its pipe log's absolute path.
 export interface ListedProcess {
   id: string;
   startedAt: number;
@@ -57,6 +57,9 @@ export interface SessionHostRecord {
 
 // Versioned: the messages below may change with SESSION_HOST_PROTOCOL.
 
+// A host's wait at each step of ending a process, and from a process's exit to destroying pipes still held open.
+export const HOST_END_GRACE_MS = 3000;
+
 // Asks the host to start the process `request` describes.
 export interface SpawnMessage {
   type: 'spawn';
@@ -85,8 +88,9 @@ export interface SubscribeMessage {
   requestId: number;
   id: string;
 }
-// Answers the `subscribe` with `requestId`: `running` is whether process `id` runs; `log` its pipe log's absolute path,
-// null when the host holds no such process.
+// Answers the `subscribe` with `requestId`: `running` is whether process `id` runs and is not ending; `log` its pipe
+// log's absolute path. A null `log` means this connection was not subscribed: with `running` false the host holds no
+// such running process; with `running` true the log is incomplete, since an append failed.
 export interface SubscribeReply {
   type: 'subscribe';
   requestId: number;
@@ -163,6 +167,11 @@ export function hostRecordFile(protocol: number): string {
 // Frozen: never change this shape. The name of a host's own log file in the host folder.
 export function hostLogFile(protocol: number): string {
   return `host-v${protocol}.log`;
+}
+
+// The name the next host gives a `hostLogFile`, keeping a dead host's last words.
+export function previousHostLogFile(protocol: number): string {
+  return `host-v${protocol}.previous.log`;
 }
 
 // Frozen: never change this shape. The protocol a `hostRecordFile` name holds; null for any other name.

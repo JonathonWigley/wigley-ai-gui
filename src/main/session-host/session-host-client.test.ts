@@ -1,4 +1,5 @@
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -18,6 +19,7 @@ import type {
 } from '../../contracts/session-host';
 import {
   type ClientMessage,
+  HOST_END_GRACE_MS,
   type HostMessage,
   hostRecordFile,
   type ListedProcess,
@@ -32,7 +34,6 @@ import {
 } from '../../shared/local-channel/local-channel';
 import {
   createSessionHostClient,
-  type SessionHostClient,
   type SessionHostSpawn,
 } from './session-host-client';
 
@@ -62,6 +63,7 @@ function testChannel(dir: string, suffix: string): string {
 interface ManualTimers extends Timers {
   fire(ms: number): void;
   pending(ms?: number): number;
+  delays(): number[];
 }
 
 function manualTimers(): ManualTimers {
@@ -89,6 +91,9 @@ function manualTimers(): ManualTimers {
         (timer) => ms === undefined || timer.ms === ms,
       ).length;
     },
+    delays() {
+      return [...armed.values()].map((timer) => timer.ms);
+    },
   };
 }
 
@@ -96,6 +101,7 @@ interface HostScript {
   protocol?: number;
   silent?: boolean; // answers nothing at all
   processes?: ListedProcess[];
+  listAnswered?: boolean;
   stopAllAnswered?: boolean;
   subscribed?(message: SubscribeMessage, host: ScriptedHost): void;
 }
@@ -139,7 +145,7 @@ async function startScriptedHost(
           protocol: script.protocol ?? SESSION_HOST_PROTOCOL,
         }),
       );
-    } else if (message.type === 'list') {
+    } else if (message.type === 'list' && script.listAnswered !== false) {
       socket.write(
         jsonLine({
           type: 'list',
@@ -200,8 +206,8 @@ function clientRig(
       on: (_event, listener) => listeners.push(listener),
     };
   };
-  const create = (): SessionHostClient => {
-    const client = createSessionHostClient({
+  const create = () =>
+    createSessionHostClient({
       folder,
       channel,
       hostScript: '/build/session-host.js',
@@ -212,9 +218,6 @@ function clientRig(
       timers,
       log: (_source, message) => logged.push(message),
     });
-    cleanups.push(() => client.close());
-    return client;
-  };
   return {
     folder,
     timers,
@@ -286,12 +289,13 @@ function replySubscribed(
   host: ScriptedHost,
   message: SubscribeMessage,
   log: string | null,
+  running = log !== null,
 ) {
   host.push({
     type: 'subscribe',
     requestId: message.requestId,
     id: message.id,
-    running: log !== null,
+    running,
     log,
   });
 }
@@ -429,7 +433,10 @@ describe('createSessionHostClient', () => {
     const client = rig.create();
     const queued = recordedEvents();
     client.spawn(spawnRequest('a'), queued.events);
-    const listing = client.list();
+    const listing = expect(client.list()).rejects.toThrow('did not start');
+    const attaching = expect(
+      client.attach('b', recordedEvents().events),
+    ).rejects.toThrow('did not start');
 
     await vi.waitFor(() => expect(rig.timers.pending(POLL_MS)).toBe(1));
     rig.moveClock(START_LIMIT_MS - 1);
@@ -442,7 +449,8 @@ describe('createSessionHostClient', () => {
 
     await vi.waitFor(() => expect(queued.closed).toHaveLength(1));
     expect(queued.errors()[0]).toMatch(/^the session host did not start:/);
-    await expect(listing).resolves.toEqual([]);
+    await listing;
+    await attaching;
     expect(rig.spawnCalls).toHaveLength(1);
   });
 
@@ -521,31 +529,148 @@ describe('createSessionHostClient', () => {
   );
 
   it.each([
-    { name: 'reply running false', log: null, unsubscribes: [] },
+    {
+      name: 'the host holds no running process',
+      log: null,
+      running: false,
+      rejection: null,
+      unsubscribes: [],
+    },
+    {
+      name: 'the host refuses an incomplete log',
+      log: null,
+      running: true,
+      rejection: 'incomplete',
+      unsubscribes: [{ type: 'unsubscribe', id: 'a' }],
+    },
     {
       name: 'the log file missing',
       log: '/no/such/file.jsonl',
+      running: true,
+      rejection: 'cannot read',
       unsubscribes: [{ type: 'unsubscribe', id: 'a' }],
     },
-  ])('attach_Cases_ResolvesNull: $name', async ({ log, unsubscribes }) => {
+  ])(
+    'attach_Cases_NullOnlyWhenTheHostSaysSo: $name',
+    async ({ log, running, rejection, unsubscribes }) => {
+      const dir = tempFolder();
+      const channel = testChannel(dir, '');
+      const host = await startScriptedHost(channel, {
+        subscribed: (message, scripted) => {
+          replySubscribed(scripted, message, log, running);
+          scripted.push(linePush('a', 1));
+        },
+      });
+      const rig = clientRig(dir, channel);
+      const client = rig.create();
+      const attached = recordedEvents();
+
+      const attaching = client.attach('a', attached.events);
+      if (rejection === null) {
+        await expect(attaching).resolves.toBeNull();
+      } else {
+        await expect(attaching).rejects.toThrow(rejection);
+      }
+      await client.list();
+
+      rig.timers.fire(0);
+      expect(sentOfType(host, 'unsubscribe')).toEqual(unsubscribes);
+      expect(attached.lines).toEqual([]);
+    },
+  );
+
+  it('silentHost_AfterHello_ListAndAttachReject', async () => {
     const dir = tempFolder();
     const channel = testChannel(dir, '');
     const host = await startScriptedHost(channel, {
-      subscribed: (message, scripted) => {
-        replySubscribed(scripted, message, log);
-        scripted.push(linePush('a', 1));
-      },
+      listAnswered: false,
+      subscribed: () => {},
     });
     const rig = clientRig(dir, channel);
     const client = rig.create();
     const attached = recordedEvents();
 
-    await expect(client.attach('a', attached.events)).resolves.toBeNull();
+    const listing = expect(client.list()).rejects.toThrow('did not answer');
+    const attaching = expect(
+      client.attach('a', attached.events),
+    ).rejects.toThrow('did not answer');
+    await vi.waitFor(() => {
+      expect(sentOfType(host, 'list')).toHaveLength(1);
+      expect(sentOfType(host, 'subscribe')).toHaveLength(1);
+    });
+    expect(rig.timers.pending(REPLY_LIMIT_MS)).toBe(2);
+    rig.timers.fire(REPLY_LIMIT_MS);
+    await listing;
+    await attaching;
+
+    await vi.waitFor(() =>
+      expect(sentOfType(host, 'unsubscribe')).toEqual([
+        { type: 'unsubscribe', id: 'a' },
+      ]),
+    );
+    host.push(linePush('a', 1));
+    await client.stopAll();
+    expect(attached.lines).toEqual([]);
+  });
+
+  it('silentHost_AfterHello_StopAllResolvesPastTheKillSteps', async () => {
+    const dir = tempFolder();
+    const channel = testChannel(dir, '');
+    const host = await startScriptedHost(channel, { stopAllAnswered: false });
+    const rig = clientRig(dir, channel);
+    const client = rig.create();
+
+    const stopping = client.stopAll();
+    await vi.waitFor(() => expect(sentOfType(host, 'stopAll')).toHaveLength(1));
+
+    const [limit] = rig.timers.delays();
+    expect(limit).toBeGreaterThan(2 * HOST_END_GRACE_MS);
+    rig.timers.fire(limit);
+    await stopping;
+    expect(rig.logged.some((line) => line.includes('stop all'))).toBe(true);
+  });
+
+  it('spawn_LiveEntryUnderThatId_ClosesTheNewEventsAndLeavesTheEntry', async () => {
+    const dir = tempFolder();
+    const channel = testChannel(dir, '');
+    const host = await startScriptedHost(channel);
+    const rig = clientRig(dir, channel);
+    const client = rig.create();
+    const first = recordedEvents();
+    const second = recordedEvents();
+    client.spawn(spawnRequest('a'), first.events);
+
+    const duplicate = client.spawn(spawnRequest('a'), second.events);
+    expect(second.closed).toEqual([]);
+    await Promise.resolve();
+    expect(second.errors()).toEqual(['a process with id a already exists']);
+
+    duplicate.write('ignored');
+    duplicate.detach();
+    await client.list();
+    expect(sentOfType(host, 'spawn')).toHaveLength(1);
+    expect(sentOfType(host, 'write')).toEqual([]);
+    expect(sentOfType(host, 'unsubscribe')).toEqual([]);
+    host.push(linePush('a', 1));
+    await vi.waitFor(() => expect(first.seqs()).toEqual([1]));
+    expect(second.lines).toEqual([]);
+    expect(first.closed).toEqual([]);
+  });
+
+  it('spawn_DetachedEntryUnderThatId_LeavesTheAnswerToTheHost', async () => {
+    const dir = tempFolder();
+    const channel = testChannel(dir, '');
+    const host = await startScriptedHost(channel);
+    const rig = clientRig(dir, channel);
+    const client = rig.create();
+    const second = recordedEvents();
+    client.spawn(spawnRequest('a'), recordedEvents().events).detach();
+
+    client.spawn(spawnRequest('a'), second.events);
     await client.list();
 
-    rig.timers.fire(0);
-    expect(sentOfType(host, 'unsubscribe')).toEqual(unsubscribes);
-    expect(attached.lines).toEqual([]);
+    expect(sentOfType(host, 'spawn')).toHaveLength(2);
+    expect(second.closed).toEqual([]);
   });
 
   it('list_CurrentAndOtherHosts_MergesWithTheCurrentFlag', async () => {
@@ -589,6 +714,7 @@ describe('createSessionHostClient', () => {
       content: 'dead',
       kept: false,
       logged: false,
+      rejects: false,
     },
     {
       name: 'a server that never replies',
@@ -596,6 +722,15 @@ describe('createSessionHostClient', () => {
       content: 'silent',
       kept: true,
       logged: false,
+      rejects: true,
+    },
+    {
+      name: 'a host that never answers its list',
+      file: hostRecordFile(0),
+      content: 'unlisted',
+      kept: true,
+      logged: false,
+      rejects: true,
     },
     {
       name: 'a file that does not parse',
@@ -603,6 +738,7 @@ describe('createSessionHostClient', () => {
       content: '{ not json',
       kept: true,
       logged: true,
+      rejects: false,
     },
     {
       name: 'a temporary file',
@@ -610,10 +746,11 @@ describe('createSessionHostClient', () => {
       content: '{ not json',
       kept: true,
       logged: false,
+      rejects: false,
     },
   ])(
     'otherRecord_Cases_DeletesOnlyWhenTheConnectFails: $name',
-    async ({ file, content, kept, logged }) => {
+    async ({ file, content, kept, logged, rejects }) => {
       const dir = tempFolder();
       const channel = testChannel(dir, '');
       const other = testChannel(dir, '-other');
@@ -621,9 +758,12 @@ describe('createSessionHostClient', () => {
       if (content === 'silent') {
         await startScriptedHost(other, { silent: true });
       }
+      if (content === 'unlisted') {
+        await startScriptedHost(other, { listAnswered: false, protocol: 0 });
+      }
       const rig = clientRig(dir, channel);
       const record = path.join(rig.folder, file);
-      const isChannelRow = content === 'dead' || content === 'silent';
+      const isChannelRow = ['dead', 'silent', 'unlisted'].includes(content);
       writeFileSync(
         record,
         isChannelRow
@@ -633,23 +773,61 @@ describe('createSessionHostClient', () => {
       const client = rig.create();
 
       let merged: unknown = null;
-      void client.list().then((result) => {
-        merged = result;
-      });
+      client.list().then(
+        (result) => {
+          merged = result;
+        },
+        () => {
+          merged = 'rejected';
+        },
+      );
       await vi.waitFor(() => {
         rig.timers.fire(REPLY_LIMIT_MS);
         expect(merged).not.toBeNull();
       });
 
-      expect(merged).toEqual([
-        { id: 'a', startedAt: 1, running: true, current: true },
-      ]);
+      expect(merged).toEqual(
+        rejects
+          ? 'rejected'
+          : [{ id: 'a', startedAt: 1, running: true, current: true }],
+      );
       expect(existsSync(record)).toBe(kept);
       expect(rig.logged.some((line) => line.includes(file))).toBe(
         logged || !kept,
       );
     },
   );
+
+  it.skipIf(process.platform === 'win32')(
+    'otherRecord_ConnectDenied_KeepsTheRecordAndRejects',
+    async () => {
+      const dir = tempFolder();
+      const channel = testChannel(dir, '');
+      const other = testChannel(dir, '-other');
+      await startScriptedHost(channel);
+      await startScriptedHost(other, { protocol: 0 });
+      chmodSync(other, 0o000);
+      const rig = clientRig(dir, channel);
+      const record = writeRecord(rig.folder, 0, other);
+      const client = rig.create();
+
+      await expect(client.list()).rejects.toThrow('did not answer');
+
+      expect(existsSync(record)).toBe(true);
+    },
+  );
+
+  it('list_HostFolderUnreadable_Rejects', async () => {
+    const dir = tempFolder();
+    const channel = testChannel(dir, '');
+    await startScriptedHost(channel);
+    const rig = clientRig(dir, channel);
+    rmSync(rig.folder, { recursive: true });
+    writeFileSync(rig.folder, '');
+    const client = rig.create();
+
+    await expect(client.list()).rejects.toThrow();
+  });
 
   it('hostExits_OpenProcesses_CloseWithAnError', async () => {
     const dir = tempFolder();
@@ -700,11 +878,12 @@ describe('createSessionHostClient', () => {
     expect(attached.errors()).toEqual([EXITED]);
   });
 
-  it('hostExits_PendingCalls_ResolveEmpty', async () => {
+  it('hostExits_PendingCalls_ListAndAttachRejectAndStopAllResolves', async () => {
     const dir = tempFolder();
     const channel = testChannel(dir, '');
     let stopping = false;
     const host = await startScriptedHost(channel, {
+      listAnswered: false,
       stopAllAnswered: false,
       subscribed: () => {
         stopping = true;
@@ -714,13 +893,18 @@ describe('createSessionHostClient', () => {
     const client = rig.create();
     const attached = recordedEvents();
 
-    const attach = client.attach('a', attached.events);
+    const attach = expect(
+      client.attach('a', attached.events),
+    ).rejects.toThrow();
+    const listing = expect(client.list()).rejects.toThrow();
     const stopAll = client.stopAll();
     await vi.waitFor(() => expect(stopping).toBe(true));
     await vi.waitFor(() => expect(sentOfType(host, 'stopAll')).toHaveLength(1));
+    await vi.waitFor(() => expect(sentOfType(host, 'list')).toHaveLength(1));
     await host.stop();
 
-    await expect(attach).resolves.toBeNull();
+    await attach;
+    await listing;
     await expect(stopAll).resolves.toBeUndefined();
     expect(attached.closed).toEqual([]);
   });
@@ -735,32 +919,6 @@ describe('createSessionHostClient', () => {
     await client.stopAll();
 
     expect(sentOfType(host, 'stopAll')).toHaveLength(1);
-  });
-
-  it('close_OpenProcesses_FiresNoClosed', async () => {
-    const dir = tempFolder();
-    const channel = testChannel(dir, '');
-    const host = await startScriptedHost(channel);
-    const rig = clientRig(dir, channel);
-    const client = rig.create();
-    const opened = recordedEvents();
-    const process = client.spawn(spawnRequest('a'), opened.events);
-    await client.list();
-
-    await client.close();
-
-    await vi.waitFor(() => expect(host.sockets).toEqual([]));
-    expect(opened.closed).toEqual([]);
-    expect(rig.timers.pending()).toBe(0);
-    const late = recordedEvents();
-    const lateProcess = client.spawn(spawnRequest('b'), late.events);
-    lateProcess.write('x');
-    process.write('x');
-    await expect(client.attach('a', opened.events)).resolves.toBeNull();
-    await expect(client.list()).resolves.toEqual([]);
-    await expect(client.stopAll()).resolves.toBeUndefined();
-    expect(late.closed).toEqual([]);
-    expect(sentOfType(host, 'write')).toEqual([]);
   });
 
   it('detach_ThenAttach_SendsUnsubscribeAndDeliversToTheNewEventsOnly', async () => {

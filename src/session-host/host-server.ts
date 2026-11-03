@@ -258,17 +258,14 @@ function createConnections(deps: ConnectionsDeps) {
       case 'kill':
         table.kill(message.id, message.signal);
         break;
-      case 'subscribe': {
-        const log = table.subscribe(message.id, subscriber);
+      case 'subscribe':
         push({
           type: 'subscribe',
           requestId: message.requestId,
           id: message.id,
-          running: log !== null,
-          log,
+          ...table.subscribe(message.id, subscriber),
         });
         break;
-      }
       case 'unsubscribe':
         table.unsubscribe(message.id, subscriber);
         break;
@@ -306,7 +303,14 @@ function createConnections(deps: ConnectionsDeps) {
       if (!NON_CLIENT_MESSAGE_TYPES.has(message.type)) {
         markClient(socket);
       }
-      handleMessage(message, subscriber, push);
+      // A known type can still carry bad fields, and a throw here would end the host and every session.
+      try {
+        handleMessage(message, subscriber, push);
+      } catch (error) {
+        diagnostics.append(
+          `message ${message.type}: ${(error as Error).message}`,
+        );
+      }
     });
   }
 
@@ -371,12 +375,14 @@ export async function startSessionHost(deps: SessionHostDeps): Promise<void> {
   }
 
   ownsChannel = true;
-  diagnostics.empty();
+  diagnostics.setAsidePrevious();
   writeRecord(folder, {
     protocol: SESSION_HOST_PROTOCOL,
     channel,
     pid: deps.pid,
   });
   timers.set(connections.checkExitRule, FIRST_CLIENT_WAIT_MS);
-  await sweepLogs(folder, snapshot, connections.table, timers);
+  await sweepLogs(folder, snapshot, connections.table, timers).catch(
+    (error: Error) => diagnostics.append(`log sweep: ${error.message}`),
+  );
 }

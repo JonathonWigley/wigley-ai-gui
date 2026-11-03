@@ -56,10 +56,16 @@ ends a turn; it falls back to the resting row and `--resume`, as before this fea
   leaves the state alone. While no app is connected, an idle process is ended once the keep window has passed since
   the later of its turn end and the app's last disconnect: stdin closed, then SIGTERM after a 3 s grace, then SIGKILL after 3 s more. The app sends
   the window (`chat.keepIdleMinutes`, default 60, the prompt cache's life) on connect and on each change. The host sees
-  only pipe lines, so a background shell that stays silent past the window ends with its process.
+  only pipe lines, so a background shell that stays silent past the window ends with its process. A process ending
+  this way, or through a drain, lists as not running and refuses an attach: its stdin is closed, so its row rests and
+  the next message resumes the session.
+- The host outlives its logs: a pipe log that cannot be created fails only that spawn; one whose append fails stops
+  appending, keeps delivering lines live, and refuses an attach, since it can no longer rebuild the state, so the
+  process runs on with its row unheld.
 - The host's folder is `session-host/` in the app instance's user data folder (the self-test's: in its temporary
   home, deleted at its teardown): the pipe logs in `logs/`, the channel's record `host-v<protocol>.json` and the
-  host's own log. A pipe log is deleted when its process closes; a host that starts also deletes each log it holds no
+  host's own log `host-v<protocol>.log`, which the next host renames to `host-v<protocol>.previous.log`, so a crash
+  report outlives the restart that follows it. A pipe log is deleted when its process closes; a host that starts also deletes each log it holds no
   process for, unless a host of another protocol answers. Its channel is a Unix socket on macOS and a named pipe on Windows, through the same transport the relay
   channel uses, named with the protocol version so two protocol versions never share a channel.
 - The app starts the host with its own binary as Node (`ELECTRON_RUN_AS_NODE=1`), detached, with no stdio, and
@@ -75,7 +81,8 @@ Newline-delimited JSON over the channel. `hello`, `list` and `drain` keep their 
 any app can drain any older host. The pipe log format is frozen the same way.
 
 - `hello` — the host's protocol version.
-- `list` — each hosted process: id, start time, running or its exit code and signal, its pipe log path.
+- `list` — each hosted process: id, start time, running (false once it is ending) or its exit code and signal, its
+  pipe log path.
 - `drain` — end each process at its turn end, refuse new ones, exit once empty.
 - `spawn`, `write`, `endInput`, `kill`, `subscribe`, `unsubscribe`, `setKeepIdle`, `stopAll` — the rest, which may change with the
   protocol version.
@@ -91,6 +98,8 @@ lines past the last `seq` it read.
   On attach the fold replays the log with its effects off, then goes live. Replay and live share one fold, so they
   agree except for what no pipe line records (a notice the app made from a call, such as "Interrupted again") and the
   order of an `in` and an `out` line that crossed.
+- `list` and `attach` reject when they could not ask a host (one did not start, dropped or stayed silent past the reply
+  limit); `[]` and a null attach mean only what a host answered, so a row never rests on a process it could not check.
 - A re-attached row shows the transcript up to its process's start time, then the replayed entries, so no entry
   shows twice: transcript entries and live entries have different ids.
 - A row whose process runs but cannot be attached — it lives in another protocol's host, the host list timed out, the

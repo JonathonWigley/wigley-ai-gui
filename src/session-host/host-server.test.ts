@@ -464,6 +464,36 @@ describe('host protocol', () => {
   });
 });
 
+describe('host messages with bad fields', () => {
+  it('spawn_NoRequest_IsLoggedAndTheHostKeepsServing', async () => {
+    const running = await runningHost();
+    const connection = await client(running.channel);
+
+    connection.send({ type: 'spawn' });
+    await settled(connection);
+
+    expect(
+      readFileSync(path.join(running.folder, 'host-v1.log'), 'utf8'),
+    ).toContain('message spawn');
+    expect(running.exits).toEqual([]);
+    await spawned(running, connection, 'a');
+  });
+
+  it('spawn_NoIdleRule_SendsClosedToThatSubscriber', async () => {
+    const running = await runningHost();
+    const connection = await client(running.channel);
+
+    connection.send({ type: 'spawn', request: { id: 'a' } });
+    await vi.waitFor(() =>
+      expect(connection.received.map(({ type }) => type)).toContain('closed'),
+    );
+
+    expect(running.spawned).toEqual([]);
+    const list = await replyTo(connection, { type: 'list', requestId: 1 });
+    expect(list).toEqual({ type: 'list', requestId: 1, processes: [] });
+  });
+});
+
 describe('host lifetime', () => {
   it('drain_IdleAndBusy_EndsEachAtTurnEndThenExits', async () => {
     const running = await runningHost();
@@ -596,7 +626,7 @@ describe('host start', () => {
     );
   }
 
-  it('start_RecordAndSweep: no other host writes the record, empties the log and sweeps', async () => {
+  it('start_RecordAndSweep: no other host writes the record, sets the last log aside and sweeps', async () => {
     const seeded = tempFolder();
     seedOldLog(seeded.folder);
     writeFileSync(path.join(seeded.folder, 'host-v1.log'), 'previous\n');
@@ -609,9 +639,10 @@ describe('host start', () => {
         readFileSync(path.join(running.folder, 'host-v1.json'), 'utf8'),
       ),
     ).toEqual({ protocol: 1, channel: running.channel, pid: 4242 });
-    expect(readFileSync(path.join(running.folder, 'host-v1.log'), 'utf8')).toBe(
-      '',
-    );
+    expect(
+      readFileSync(path.join(running.folder, 'host-v1.previous.log'), 'utf8'),
+    ).toBe('previous\n');
+    expect(existsSync(path.join(running.folder, 'host-v1.log'))).toBe(false);
     expect(existsSync(path.join(running.folder, 'logs', 'old.jsonl'))).toBe(
       false,
     );

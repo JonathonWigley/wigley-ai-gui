@@ -42,6 +42,8 @@ export interface FakeSessionHost extends SessionHost {
   failNextSpawn(error: string): void;
   // What `list()` resolves from now on; null goes back to listing the records.
   setList(infos: readonly HostedProcessInfo[] | null): void;
+  // What `list()` rejects with from now on, ahead of `setList`; null goes back to resolving.
+  failList(error: string | null): void;
 }
 
 function appendLine(
@@ -102,6 +104,7 @@ export function createFakeSessionHost(clock: Clock): FakeSessionHost {
   let stopAllCalls = 0;
   let nextSpawnError: string | null = null;
   let listedInfos: readonly HostedProcessInfo[] | null = null;
+  let listError: string | null = null;
 
   const lastRecordOf = (id: string): FakeHostedProcessRecord | undefined =>
     processes.findLast((record) => record.id === id);
@@ -166,6 +169,9 @@ export function createFakeSessionHost(clock: Clock): FakeSessionHost {
       };
     },
     async list() {
+      if (listError !== null) {
+        throw new Error(listError);
+      }
       if (listedInfos !== null) {
         return [...listedInfos];
       }
@@ -229,6 +235,9 @@ export function createFakeSessionHost(clock: Clock): FakeSessionHost {
     },
     setList(infos) {
       listedInfos = infos;
+    },
+    failList(error) {
+      listError = error;
     },
   };
 }

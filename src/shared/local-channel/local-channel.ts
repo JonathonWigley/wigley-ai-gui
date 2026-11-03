@@ -30,18 +30,25 @@ export function connectToChannel(channel: string): Promise<Socket> {
   });
 }
 
+// Whether a `connectToChannel` rejection proves no listener. Any other code, such as EACCES or EAGAIN, leaves one
+// possible, so its socket file or record must stay.
+export function connectFoundNoListener(error: unknown): boolean {
+  const { code } = error as NodeJS.ErrnoException;
+  return code === 'ECONNREFUSED' || code === 'ENOENT';
+}
+
 function isSocketFile(channel: string): boolean {
   const file = lstatSync(channel, { throwIfNoEntry: false });
   return file?.isSocket() ?? false;
 }
 
-async function channelAnswers(channel: string): Promise<boolean> {
+async function channelMayHaveListener(channel: string): Promise<boolean> {
   try {
     const socket = await connectToChannel(channel);
     socket.destroy();
     return true;
-  } catch {
-    return false;
+  } catch (error) {
+    return !connectFoundNoListener(error);
   }
 }
 
@@ -52,8 +59,8 @@ function channelInUse(channel: string): Error {
 }
 
 // Listens on `channel`, making a socket's folder and removing its stale file
-// first. A socket file with a live listener is left alone and fails with
-// `EADDRINUSE`, as `listen` on a pipe in use does.
+// first. A socket file that may have a live listener is left alone and fails
+// with `EADDRINUSE`, as `listen` on a pipe in use does.
 export function listenOnChannel(
   channel: string,
   handlers: ChannelHandlers,
@@ -81,7 +88,8 @@ export function listenOnChannel(
       if (!channel.startsWith(PIPE_PREFIX)) {
         mkdirSync(path.dirname(channel), { recursive: true });
         // Only a socket file can have a listener.
-        const isLive = isSocketFile(channel) && (await channelAnswers(channel));
+        const isLive =
+          isSocketFile(channel) && (await channelMayHaveListener(channel));
         if (closing) {
           return;
         }

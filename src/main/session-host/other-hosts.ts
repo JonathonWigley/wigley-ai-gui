@@ -7,12 +7,7 @@ import {
   SESSION_HOST_PROTOCOL,
   type SessionHostRecord,
 } from '../../contracts/session-host-protocol';
-import {
-  HOST_REPLY_LIMIT_MS,
-  type HostAnswer,
-  type HostLink,
-  LOG_SOURCE,
-} from './host-link';
+import { HOST_REPLY_LIMIT_MS, type HostAnswer, LOG_SOURCE } from './host-link';
 
 export interface OtherHostsDeps {
   folder: string;
@@ -22,9 +17,10 @@ export interface OtherHostsDeps {
 
 // The hosts of other protocols, found through their record files in the host folder.
 export interface OtherHosts {
-  // Sends `drain` to each older host that answers, once per record for the life of this object.
+  // Sends `drain` to each older host that answers, once per record for the life of this object. Never rejects.
   drainOlder(): Promise<void>;
-  // The processes of every other host that answers, older and newer, lowest protocol first.
+  // The processes of every other host, older and newer, lowest protocol first. Rejects when the host folder cannot be
+  // read, or a host with a record did not answer; a record whose channel has no listener is deleted and counts as none.
   list(): Promise<HostedProcessInfo[]>;
 }
 
@@ -34,15 +30,15 @@ interface OtherRecord {
   channel: string;
 }
 
-async function hostFolderNames(folder: string, log: Log): Promise<string[]> {
+async function hostFolderNames(folder: string): Promise<string[]> {
   try {
     return await readdir(folder);
   } catch (error) {
     // The first host of this folder has not made it yet.
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-      log(LOG_SOURCE, `cannot read ${folder}: ${(error as Error).message}`);
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return [];
     }
-    return [];
+    throw error;
   }
 }
 
@@ -69,7 +65,7 @@ async function readOtherRecords(
   log: Log,
 ): Promise<OtherRecord[]> {
   const others: { file: string; protocol: number }[] = [];
-  for (const name of await hostFolderNames(folder, log)) {
+  for (const name of await hostFolderNames(folder)) {
     const protocol = hostRecordProtocol(name);
     if (protocol !== null && protocol !== SESSION_HOST_PROTOCOL) {
       others.push({ file: path.join(folder, name), protocol });
@@ -98,38 +94,41 @@ export function createOtherHosts(deps: OtherHostsDeps): OtherHosts {
   const drained = new Set<string>();
   const loggedNewer = new Set<string>();
 
-  const linkOf = async (record: OtherRecord): Promise<HostLink | null> => {
+  const openRecorded = async (record: OtherRecord): Promise<HostAnswer> => {
     const answer = await deps.open(record.channel);
     if (answer.kind === 'unreachable') {
       await deleteStaleRecord(record.file, deps.log);
     }
-    return answer.kind === 'answered' ? answer.link : null;
+    return answer;
   };
 
   const drain = async (record: OtherRecord) => {
-    const link = await linkOf(record);
-    if (link === null) {
+    const answer = await openRecorded(record);
+    if (answer.kind !== 'answered') {
       return;
     }
     if (!drained.has(record.file)) {
       drained.add(record.file);
-      link.send({ type: 'drain' });
+      answer.link.send({ type: 'drain' });
     }
-    link.end();
+    answer.link.end();
   };
 
   const listOf = async (record: OtherRecord): Promise<HostedProcessInfo[]> => {
-    const link = await linkOf(record);
-    if (link === null) {
+    const answer = await openRecorded(record);
+    if (answer.kind === 'unreachable') {
       return [];
     }
-    const reply = await link.request(
+    if (answer.kind === 'silent') {
+      throw new Error(`the host of ${record.file} did not answer`);
+    }
+    const reply = await answer.link.request(
       (requestId) => ({ type: 'list', requestId }),
       HOST_REPLY_LIMIT_MS,
     );
-    link.end();
+    answer.link.end();
     if (reply?.type !== 'list') {
-      return [];
+      throw new Error(`the host of ${record.file} did not answer its list`);
     }
     return reply.processes.map(({ id, startedAt, running }) => ({
       id,
@@ -141,7 +140,16 @@ export function createOtherHosts(deps: OtherHostsDeps): OtherHosts {
 
   return {
     async drainOlder() {
-      const records = await readOtherRecords(deps.folder, deps.log);
+      let records: OtherRecord[];
+      try {
+        records = await readOtherRecords(deps.folder, deps.log);
+      } catch (error) {
+        deps.log(
+          LOG_SOURCE,
+          `cannot read ${deps.folder}: ${(error as Error).message}`,
+        );
+        return;
+      }
       const older: OtherRecord[] = [];
       for (const record of records) {
         if (record.protocol < SESSION_HOST_PROTOCOL) {

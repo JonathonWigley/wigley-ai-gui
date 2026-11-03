@@ -88,6 +88,9 @@ export function fakeChild(ran = true) {
     stdout,
     stderr,
     signals,
+    exit(code: number | null = 0, signal: string | null = null) {
+      emitter.emit('exit', code, signal);
+    },
     close(code: number | null = 0, signal: string | null = null) {
       emitter.emit('close', code, signal);
     },

@@ -13,11 +13,13 @@ import type {
 import {
   type ClientMessage,
   type ClosedEvent,
+  HOST_END_GRACE_MS,
   type LineEvent,
   type PipeLogRecord,
   SESSION_HOST_PROTOCOL,
 } from '../../contracts/session-host-protocol';
 import {
+  HOST_REPLY_LIMIT_MS,
   type HostAnswer,
   type HostLink,
   LOG_SOURCE,
@@ -29,6 +31,8 @@ const HOST_POLL_MS = 100;
 const HOST_START_LIMIT_MS = 10_000;
 // The host's own starting value.
 const DEFAULT_KEEP_IDLE_MINUTES = 60;
+// SIGTERM, the grace to SIGKILL, the grace from an exit to destroying held pipes, and a margin for the reply.
+const STOP_ALL_REPLY_LIMIT_MS = 2 * HOST_END_GRACE_MS + 2000;
 
 export type SessionHostSpawn = (
   command: string,
@@ -50,11 +54,6 @@ export interface SessionHostClientDeps {
   clock: Clock;
   timers: Timers;
   log: Log;
-}
-
-export interface SessionHostClient extends SessionHost {
-  // Disconnects from every host. Kills nothing; fires no `closed`.
-  close(): Promise<void>;
 }
 
 // One events object a `spawn` or an `attach` was given.
@@ -81,32 +80,8 @@ interface ConnectAttempt {
   wake: (() => void) | null; // ends the wait for the next poll
 }
 
-// Called with the link once connected; with null and the reason when the attempt failed or the client closed.
+// Called with the link once connected; with null and the reason when the attempt failed.
 type ConnectedRun = (link: HostLink | null, failure: string) => void;
-
-function trackedTimers(timers: Timers): Timers & { clearAll(): void } {
-  const handles = new Set<number>();
-  return {
-    set(run, ms) {
-      const handle = timers.set(() => {
-        handles.delete(handle);
-        run();
-      }, ms);
-      handles.add(handle);
-      return handle;
-    },
-    clear(handle) {
-      handles.delete(handle);
-      timers.clear(handle);
-    },
-    clearAll() {
-      for (const handle of handles) {
-        timers.clear(handle);
-      }
-      handles.clear();
-    },
-  };
-}
 
 function endEntry(processes: Map<string, ProcessEntry>, entry: ProcessEntry) {
   entry.ended = true;
@@ -157,15 +132,13 @@ async function readPipeLog(file: string): Promise<PipeLine[]> {
 
 export function createSessionHostClient(
   deps: SessionHostClientDeps,
-): SessionHostClient {
-  const timers = trackedTimers(deps.timers);
+): SessionHost {
+  const { timers } = deps;
   const processes = new Map<string, ProcessEntry>();
-  const openLinks = new Set<HostLink>();
   let current: HostLink | null = null;
   let attempt: ConnectAttempt | null = null;
   let waiting: ConnectedRun[] = [];
   let keepIdleMinutes = DEFAULT_KEEP_IDLE_MINUTES;
-  let closedByCaller = false;
 
   const pushed = (message: LineEvent | ClosedEvent) => {
     const entry = processes.get(message.id);
@@ -208,7 +181,6 @@ export function createSessionHostClient(
   };
 
   const disconnected = (link: HostLink) => {
-    openLinks.delete(link);
     if (current === link) {
       current = null;
       hostDied();
@@ -219,13 +191,6 @@ export function createSessionHostClient(
     openHostLink(channel, {
       timers,
       log: deps.log,
-      opened(link) {
-        // The connect was still in flight when `close` ran.
-        if (closedByCaller) {
-          link.destroy();
-        }
-        openLinks.add(link);
-      },
       pushed,
       disconnected,
     });
@@ -343,7 +308,7 @@ export function createSessionHostClient(
   };
 
   const startConnecting = () => {
-    if (attempt === null && !closedByCaller) {
+    if (attempt === null) {
       attempt = { ended: false, wake: null };
       void runAttempt(attempt);
     }
@@ -351,7 +316,7 @@ export function createSessionHostClient(
 
   // Runs `run` at once when the state is settled; else keeps the order of calls until the attempt ends.
   const whenConnected = (run: ConnectedRun) => {
-    if (closedByCaller || current !== null) {
+    if (current !== null) {
       run(current, '');
       return;
     }
@@ -375,9 +340,6 @@ export function createSessionHostClient(
       attaching,
       detached: false,
     };
-    if (closedByCaller) {
-      return { entry: { id, ended: true, subscriber: null }, subscriber };
-    }
     const entry = processes.get(id) ?? { id, ended: false, subscriber: null };
     processes.set(id, entry);
     entry.subscriber = subscriber;
@@ -411,8 +373,13 @@ export function createSessionHostClient(
     };
   };
 
-  const abandonSubscriber = (entry: ProcessEntry, subscriber: Subscriber) => {
+  const abandonAttach = (
+    link: HostLink,
+    entry: ProcessEntry,
+    subscriber: Subscriber,
+  ) => {
     if (entry.subscriber === subscriber) {
+      link.send({ type: 'unsubscribe', id: entry.id });
       entry.subscriber = null;
     }
   };
@@ -423,39 +390,37 @@ export function createSessionHostClient(
     subscriber: Subscriber,
   ) => {
     const { id } = entry;
-    const reply = await link.request((requestId) => ({
-      type: 'subscribe',
-      requestId,
-      id,
-    }));
+    const reply = await link.request(
+      (requestId) => ({ type: 'subscribe', requestId, id }),
+      HOST_REPLY_LIMIT_MS,
+    );
     if (reply?.type !== 'subscribe') {
-      abandonSubscriber(entry, subscriber);
-      return null;
+      abandonAttach(link, entry, subscriber);
+      throw new Error(`the session host did not answer the attach of ${id}`);
     }
-    if (!reply.running || reply.log === null) {
+    if (!reply.running) {
       if (entry.subscriber === subscriber) {
         entry.subscriber = null;
         endEntry(processes, entry);
       }
       return null;
     }
+    if (reply.log === null) {
+      abandonAttach(link, entry, subscriber);
+      throw new Error(`the pipe log of ${id} is incomplete`);
+    }
     let log: PipeLine[];
     try {
       log = await readPipeLog(reply.log);
     } catch (error) {
-      if (entry.subscriber === subscriber) {
-        link.send({ type: 'unsubscribe', id });
-        entry.subscriber = null;
-      }
-      deps.log(
-        LOG_SOURCE,
+      abandonAttach(link, entry, subscriber);
+      throw new Error(
         `cannot read the pipe log of ${id}: ${(error as Error).message}`,
       );
-      return null;
     }
     if (link !== current) {
-      abandonSubscriber(entry, subscriber);
-      return null;
+      abandonAttach(link, entry, subscriber);
+      throw new Error(`the connection dropped during the attach of ${id}`);
     }
     subscriber.attaching = false;
     for (const line of log) {
@@ -466,17 +431,14 @@ export function createSessionHostClient(
   };
 
   const listAllHosts = async (link: HostLink): Promise<HostedProcessInfo[]> => {
-    const reply = await link.request((requestId) => ({
-      type: 'list',
-      requestId,
-    }));
+    const reply = await link.request(
+      (requestId) => ({ type: 'list', requestId }),
+      HOST_REPLY_LIMIT_MS,
+    );
     if (reply?.type !== 'list') {
-      return [];
+      throw new Error('the session host did not answer its list');
     }
     const others = await otherHosts.list();
-    if (closedByCaller) {
-      return [];
-    }
     const own = reply.processes.map(({ id, startedAt, running }) => ({
       id,
       startedAt,
@@ -490,6 +452,25 @@ export function createSessionHostClient(
 
   return {
     spawn(request, events) {
+      if (processes.get(request.id)?.subscriber) {
+        queueMicrotask(() =>
+          events.closed({
+            code: null,
+            signal: null,
+            error: `a process with id ${request.id} already exists`,
+          }),
+        );
+        return hostedProcess(
+          { id: request.id, ended: true, subscriber: null },
+          {
+            events,
+            lastSeq: 0,
+            buffer: null,
+            attaching: false,
+            detached: true,
+          },
+        );
+      }
       const { entry, subscriber } = subscribe(request.id, events, false);
       whenConnected((link, failure) => {
         if (link !== null) {
@@ -509,36 +490,30 @@ export function createSessionHostClient(
       return hostedProcess(entry, subscriber);
     },
     attach(id, events) {
-      if (closedByCaller) {
-        return Promise.resolve(null);
-      }
       const { entry, subscriber } = subscribe(id, events, true);
-      return new Promise((resolve) => {
-        whenConnected((link) => {
+      return new Promise((resolve, reject) => {
+        whenConnected((link, failure) => {
           if (link === null) {
-            abandonSubscriber(entry, subscriber);
-            resolve(null);
+            entry.subscriber = null;
+            reject(new Error(`the session host did not start: ${failure}`));
             return;
           }
-          void attachOver(link, entry, subscriber).then(resolve);
+          attachOver(link, entry, subscriber).then(resolve, reject);
         });
       });
     },
     list() {
-      return new Promise((resolve) => {
-        whenConnected((link) => {
+      return new Promise((resolve, reject) => {
+        whenConnected((link, failure) => {
           if (link === null) {
-            resolve([]);
+            reject(new Error(`the session host did not start: ${failure}`));
             return;
           }
-          void listAllHosts(link).then(resolve);
+          listAllHosts(link).then(resolve, reject);
         });
       });
     },
     setKeepIdleMinutes(minutes) {
-      if (closedByCaller) {
-        return;
-      }
       keepIdleMinutes = minutes;
       if (current !== null) {
         current.send({ type: 'setKeepIdle', minutes });
@@ -555,29 +530,18 @@ export function createSessionHostClient(
             return;
           }
           void link
-            .request((requestId) => ({ type: 'stopAll', requestId }))
-            .then(() => resolve());
+            .request(
+              (requestId) => ({ type: 'stopAll', requestId }),
+              STOP_ALL_REPLY_LIMIT_MS,
+            )
+            .then((reply) => {
+              if (reply === null) {
+                deps.log(LOG_SOURCE, 'stop all ended with no host reply');
+              }
+              resolve();
+            });
         });
       });
-    },
-    async close() {
-      closedByCaller = true;
-      current = null;
-      if (attempt !== null) {
-        endAttempt(attempt);
-      }
-      for (const entry of processes.values()) {
-        entry.ended = true;
-        entry.subscriber = null;
-      }
-      processes.clear();
-      runWaiting(null, '');
-      timers.clearAll();
-      const links = [...openLinks];
-      for (const link of links) {
-        link.end();
-      }
-      await Promise.all(links.map((link) => link.closed));
     },
   };
 }
