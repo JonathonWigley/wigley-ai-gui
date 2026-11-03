@@ -303,7 +303,7 @@ Task 01 sets `replayed: false` at every `ChatAgentEvent` emitter in the tree (ch
 - [x] [Doc re-read](11-doc-re-read.md) — after 03, 04, 06, 09, 10
 
 ### Wave 6
-- [ ] [Final verification](12-final-verification.md) — after 11
+- [x] [Final verification](12-final-verification.md) — after 11
 
 ## Run log
 
@@ -321,7 +321,9 @@ Review base: 7f956435
 - 08 · cdd307d2 · diff read; tsc clean; 779 tests pass across claude-code, session-host, drive, fake harness, chat-sessions · concerns: client connects at construction, so every self-test and fake-harness drive run starts a host (task 12 confirms teardown and startup speed); stopAll has no reply timeout (drive quit held until the CLI's 60 s SIGTERM; self-test capped 5000 ms); closed during attach emits before the caller's await continuation, so isReplaying is true (sessionEnded/activity flagged replayed, ended live); a log with no usage event gets one usage event from settings read after a grace-expired attach; main.ts wiring and drive teardown untested until task 12; docs/features/agent-chat/design.md Agent harness seam stale for task 11
 - 09 · 7880e5b4 · diff read; all Produces present; tsc and lint clean; chat, sessions and keymap tests 1082 passed; stop all listed in selftest-script · concerns: the unheld guard's list() has no reply bound, so a host that stops answering leaves that row's send and loadHistory pending; a closed row whose attach resolves after detachAll is detached, not killed, so that process runs without an owner (plan states this); a send in the gap after a re-attach writes a at idle queues and writes b at once, order kept; the relay's left-while-held path relies on default allowHalfOpen false to close the socket; docs/features/followups.md line 433 names chat.killAll, for task 11
 - 11 · 14a6a1b5 · diff read against the task; marketplace forms README checked unchanged; no killAll or isKilled left outside plan folders · concerns: forms README App gone mid-call names the app-closed error, while relay.py _fail_waiting_calls sends the refusal text when the app refused the hello: incomplete rather than untrue, left
+- 12 · 73bdb0c8 · selftest 864 PASS, host exited; checks 2, 5, 6, 8 passed; check 1 passed but for the alert (user's check); check 4 failed, fixed in 73bdb0c8, re-run passed; check 3 failed on installed plugin 1.14.0, passed with the clone's relay (needs the marketplace push); check 7 passed as written with an orphan · concerns: host death leaves a mid-tool claude running, which wrote into the session beside the resumed process, against 'a session never runs two processes', and design.md's 'its pipes close and it exits'; a system line between turns (mode change, then quit) reads busy until the next result, so that process and host stay alive; _answer_alone's not_started payload is rejected by Claude as a permission reply; one drive restart took 37 s with a prompt waiting on the old relay, not reproduced; Mode/Effort/Model read unset in the log after a resume on a row set to Auto, not investigated; the older-host notice stays after the old process ends until the next send; closed during attach and a host that stops answering not exercised
 ### Contract changes
+- IdleRule (01, 05, 06, 08): { key, value } → { key, value, ignoredStdoutValues, ignoredStdinValues } · why: live check 4, Claude's bookkeeping lines read busy so no process ever rested idle; stdin needs its own list since the app writes get_context_usage after every result · consumers: 06, 08, landed in 73bdb0c8
 ### Rulings
 - Marketplace review base is cbd8a9e; git fetch fails in this session (SSH key unavailable), so origin was not checked; neither main showed behind at the last fetch and nothing is pushed — a stale origin would surface at push · lead
 - Cleanup deletes leftovers before older app-* folders, so a stale deleting-app-x cannot block a rename and print a false warning — only delete order differs if wrong · group 04 · group 04
@@ -360,5 +362,7 @@ Review base: 7f956435
 - an ended during replay is detected by session.exit, not isLive, so a row ended then closed gets no end() call · group 09
 - snapshot() drops a skipped record for good once a held row holds its host id; a plain filter would revive a session the user closed · group 09
 - extra tests beyond the doc: unheldGuard_ClearedRow_LogsAndStartsFresh, restore_SkippedRecord_LeftOutOnceAHeldRowHoldsItsHostId, hold_AfterAWaitEnded_StartsANewWaitWithItsOwnBound · group 09
+- Check 4's fix went to a worker on the lead's ruling that the host stays harness-free and an unknown line reads busy · lead
 ### Review rounds
 ### Test gate
+- Whole gui suite: 394 files, 6583 tests passed at 73bdb0c8, tsc and lint clean; self-test 864 PASS at 14a6a1b5 (before the idle fix, which touched no self-test path); marketplace forms suite 63 passed, 2 Windows-only skipped. Picked whole suite since the change reaches main, chat, sessions and the harness

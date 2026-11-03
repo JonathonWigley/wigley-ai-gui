@@ -1,6 +1,6 @@
 # 12 — Final verification
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 6 · Depends on: 11
 Plan: [plan.md](plan.md)
@@ -66,3 +66,4 @@ Commit:    none, unless a fix lands through its owning task.
 
 ## Proof
 
+Commit 73bdb0c8 · proof: selftest 864 PASS, host exited; checks 2, 5, 6, 8 passed; check 1 passed but for the alert (user's check); check 4 failed, fixed in 73bdb0c8, re-run passed; check 3 failed on installed plugin 1.14.0, passed with the clone's relay (needs the marketplace push); check 7 passed as written with an orphan · concerns: host death leaves a mid-tool claude running, which wrote into the session beside the resumed process, against 'a session never runs two processes', and design.md's 'its pipes close and it exits'; a system line between turns (mode change, then quit) reads busy until the next result, so that process and host stay alive; _answer_alone's not_started payload is rejected by Claude as a permission reply; one drive restart took 37 s with a prompt waiting on the old relay, not reproduced; Mode/Effort/Model read unset in the log after a resume on a row set to Auto, not investigated; the older-host notice stays after the old process ends until the next send; closed during attach and a host that stops answering not exercised
