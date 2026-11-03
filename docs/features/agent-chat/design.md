@@ -169,7 +169,7 @@ interview on 2026-10-23; this file is the record of both.
 - `src/plugins/chat/`, depending on `sessions` and `keys`. Main keeps every owned session's entries, so a page
   reload redraws the chat whole (the dev server reloads twice at start).
 - **Chat tab**: the entries under a floating composer: a vim message box, the box's vim mode, each control's value
-  as a chip, and send (changed by ui-design plan C). Enter sends in insert and normal mode, Shift+Enter in insert mode adds a line, Cmd+Enter sends from any mode. `i` /
+  as a chip, and send (changed by ui-design plan C). Enter sends in insert and normal mode, Shift+Enter in insert mode adds a line, Cmd+Enter sends from any mode, and while a turn runs sends the pending messages with it (§ Pending messages, Send now). `i` /
   `a` focus the box, `j` / `k` move between entries, `Enter` opens or closes the focused entry or activity line and pulls
   back a focused pending message, `G` jumps to the latest, Ctrl+C interrupts and pulls back every pending message
   (§ Pending messages). The agent's steps show as activity lines (§ Activity line). While the box
@@ -243,18 +243,25 @@ interview on 2026-10-23; this file is the record of both.
     transcript as its user entry when the agent takes it in, at the place it really ran: the Claude adapter adds the
     entry on the message's `started` lifecycle line (claude-stream.md § Message lifecycle), or at the write when the
     CLI reports no lifecycle. `AgentProcess.send` returns the id that entry will carry.
-  - **Send now**: Cmd+Enter on the focused pending row, or `<Leader>cs` in the box for the newest, writes that one
-    message to the agent at once, ahead of the rest of the queue, which keeps waiting in order. Claude folds it into a
-    running tool turn at the turn's next model request, or runs it as its own turn straight after a turn with no tool
-    call (claude-stream.md § Queued messages). Each route logs `sending a pending message now in <session>`
-    (`no pending message in <session>` for `<Leader>cs` with none). Main writes it and keeps its row in the queue,
+  - **Send now**: two routes write a message to the agent at once, ahead of the rest of the queue. Cmd+Enter on the
+    focused pending row, with the box unfocused, sends that row only (`chat.sendNow`, bound to `<D-Enter>` in
+    `chat.chat`); the rest of the queue keeps waiting in order. Cmd+Enter in the box, while the harness reports the turn
+    running, sends every unsent pending message in the order written, then the box's text and images as a last
+    message; with the box empty it sends the pending messages alone. While the session is idle it sends the box as
+    Enter does, and an app slash command in the box runs as on Enter. Claude folds a message sent now into a running
+    tool turn at the turn's next model request, or runs it as its own turn straight after a turn with no tool call
+    (claude-stream.md § Queued messages). The page logs `sending a pending message now in <session>` for a row and
+    `sending now in <session>` for the box; a refused call logs `sendNow failed: <error>` or `sendAllNow failed:
+    <error>`, and a refused box message goes back into the box. Main logs `nothing to send now in <session>` when
+    the box call finds nothing unsent and no message. Main writes each message and keeps its row in the queue,
     marked sent (`QueuedMessage.sentEntryId`, the id `send` returned), and the row's label reads `sending` until the
     entry with that id arrives, which drops the row. A send-now for a message no longer queued, or already sent, does
-    nothing and logs `queued message <id> no longer queued`. A write that throws leaves the row unsent and logs
-    `queued message <id> not sent: <error>`. When the harness reports the agent dropped a sent message without taking
+    nothing and logs `queued message <id> no longer queued`. A write that throws leaves the row unsent, logs
+    `queued message <id> not sent: <error>` and stops the box call there. When the harness reports the agent dropped a sent message without taking
     it in (`AgentProcessEvents.messageDropped`: Claude's `cancelled`, `discarded` or `refused` with no `started`
-    before it), main returns it to the box and logs `sent message <id> returned: never taken in`; main holds every
-    message it writes, idle sends included, until its entry arrives, so a dropped idle send returns the same way.
+    before it), main returns it to the box and logs `sent message <id> returned: never taken in` (`dropped message
+    <id> not held` for one main does not hold); main holds every message it writes, idle sends included, until its
+    entry arrives, so a dropped idle send returns the same way.
   - **Pulling back**: a pending row is a cursor stop after the last entry, so `G` and a following focus land on the
     newest pending row when any exist. Three routes pull a message back: Enter on the focused row, a click on it, and
     `<Leader>cp` in the box, which pulls back the newest. Each logs `pulling back a pending message in <session>`
@@ -269,9 +276,9 @@ interview on 2026-10-23; this file is the record of both.
     `following the latest entry` for `G`.
   - **Interrupt and exit**: Ctrl+C returns every unsent queued message, oldest first, then interrupts the running
     turn; the oldest ends at the top of the box. A sent row stays: Claude's interrupt cancels nothing it holds, so the
-    message runs as its own turn straight after (claude-stream.md § Queued messages, B). A process that exits returns
-    every queued message, sent rows included, the same way, so nothing is written to a process started later without
-    the user sending it again.
+    message runs as its own turn straight after (claude-stream.md § Queued messages, B). A process that exits, and Clear,
+    return every queued message, sent rows included, and every written message not yet taken in, so nothing is
+    written to a process started later without the user sending it again.
   - App slash commands run at once, working or not, and never queue; the agent's slash commands queue like any
     message.
 - **Saved sessions**: every session chat runs — started, resumed, or launched by another plugin — is saved in
