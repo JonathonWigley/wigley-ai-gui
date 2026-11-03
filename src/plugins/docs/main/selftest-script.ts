@@ -7,7 +7,7 @@ import type {
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import type {
-  ConnectedSession,
+  OwnedSession,
   SessionsMainExports,
 } from '../../sessions/contract';
 import { type DocsFixtureOptions, writeDocsFixture } from './selftest-fixture';
@@ -16,7 +16,7 @@ export interface DocsSelfTestDeps {
   files: Files;
   // `services.homeDir`, the self-test's temp home.
   homeDir: string;
-  sessions: Pick<SessionsMainExports, 'connect' | 'activate'>;
+  sessions: Pick<SessionsMainExports, 'open' | 'activate'>;
   paths: Paths;
 }
 
@@ -760,41 +760,44 @@ const SCROLLS_ITSELF = [
   '.session-row-status',
 ];
 
-// Rewrites the fixture under `homeDir` with `options` and connects a session
-// with host id `sessionId` in the fixture's repo, then activates its row,
-// which shows its only tab, the Docs tab. A failed activation ends the session
-// it connected.
-export async function connectDocsFixtureSession(
+// Rewrites the fixture under `homeDir` with `options` and opens a session in
+// the background with host id `sessionId` in the fixture's repo, then
+// activates its row, which shows its only tab, the Docs tab. A failed
+// activation ends the session it opened.
+export async function openDocsFixtureSession(
   files: Files,
   homeDir: string,
-  sessions: Pick<SessionsMainExports, 'connect' | 'activate'>,
+  sessions: Pick<SessionsMainExports, 'open' | 'activate'>,
   sessionId: string,
   paths: Paths,
   options: DocsFixtureOptions = { loadStates: false },
-): Promise<ConnectedSession> {
+): Promise<OwnedSession> {
   await writeDocsFixture(files, homeDir, paths, options);
   const home = await files.realPath(homeDir);
-  const connected = sessions.connect({
-    sessionId,
-    projectDir: paths.join(home, 'dev', 'selftest-repo'),
-    deadlineSeconds: null,
-    harness: 'claude',
-  });
+  const opened = sessions.open(
+    {
+      sessionId,
+      projectDir: paths.join(home, 'dev', 'selftest-repo'),
+      deadlineSeconds: null,
+      harness: 'claude',
+    },
+    { select: false },
+  );
   try {
-    sessions.activate(connected.session.id);
+    sessions.activate(opened.session.id);
   } catch (error) {
-    connected.end();
+    opened.end();
     throw error;
   }
-  return connected;
+  return opened;
 }
 
-// Each run ends the previous run's docs session and connects a fresh one over
-// a rewritten fixture. The result is null once that chain has run, else the
+// Each run ends the previous run's docs session and opens a fresh one over a
+// rewritten fixture. The result is null once that chain has run, else the
 // error it failed with.
 export function docsSelfTestScript(deps: DocsSelfTestDeps): SelfTestScript {
   const { files, homeDir, sessions, paths } = deps;
-  let previous: ConnectedSession | null = null;
+  let previous: OwnedSession | null = null;
   return {
     pageBinds: [],
     settings: {},
@@ -804,7 +807,7 @@ export function docsSelfTestScript(deps: DocsSelfTestDeps): SelfTestScript {
       previous = null;
       const result = (async (): Promise<string | null> => {
         try {
-          previous = await connectDocsFixtureSession(
+          previous = await openDocsFixtureSession(
             files,
             homeDir,
             sessions,

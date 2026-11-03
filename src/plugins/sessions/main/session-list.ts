@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { RandomHex } from '../../../contracts/ambient';
+import type { Clock, RandomHex } from '../../../contracts/ambient';
 import type { Log } from '../../../contracts/log';
 import type { PluginEvents } from '../../../contracts/plugin';
 import type {
@@ -19,6 +19,7 @@ import type {
 
 export interface SessionListDeps {
   randomHex: RandomHex;
+  clock: Clock;
   log: Log;
   emit: PluginEvents<SessionsMainEvents>['emit'];
   stateChanged(state: SessionsState): void;
@@ -31,7 +32,8 @@ export interface SessionList extends SessionsMainExports {
   tools(): ToolDefinition[];
   state(): SessionsState;
   // The user's close, which every close guard must allow; returns whether the
-  // row closed, emitting `closed` when it did. The session stays connected.
+  // row is closed, true for a row already closed, emitting `closed` only for a
+  // row it closes. The session stays connected.
   closeSession(sessionId: string): boolean;
 }
 
@@ -59,6 +61,10 @@ interface SessionEntry {
   // is refused.
   retiredHostIds: Set<string>;
 }
+
+// A mark this soon after `release` closed the session's selected row is a
+// back-to-back round, not one arriving after the user moved on.
+export const RESELECT_WINDOW_MS = 30_000;
 
 const NO_FOLDER_LABEL = 'session';
 const CODEX_NO_FOLDER_LABEL = 'Codex session';
@@ -142,19 +148,27 @@ function routeCall(
 }
 
 // Connected and owned sessions and the sidebar rows main holds for them. A
-// connected session gets its row at connect, unselected; an owned session gets
-// its row at open, selected unless opened with `select` false, is joined by
-// each relay carrying its host id without a row of its own, a newer relay
-// taking the join from an older one, moves to a new host id by its
-// `setHostSessionId()`, which retires the old id and its relay, and ends only
-// by its `end()`. Each
-// session keeps its label while it lasts; a closed row comes back at the end
-// with the session's next mark. `mark`, `activate` and `closeSession` send the
-// whole state only when it changed, and log and ignore a session they cannot
-// act on; `closeSession` logs and keeps a row a close guard refuses, returning
-// false for every row it leaves open, and emits `closed` for a row it closes.
-// Every state sent with a selection other than the last sent emits `selected`
-// after it.
+// connected session has no row until `mark` or `activate` adds it at the end,
+// and `release` closes that row again; an owned session gets its row at open,
+// selected unless opened with `select` false, is joined by each relay carrying
+// its host id without a row of its own, a newer relay taking the join from an
+// older one, moves to a new host id by its `setHostSessionId()`, which retires
+// the old id and its relay, and ends only by its `end()`. Each session keeps
+// its label while it lasts; a closed row comes back at the end with the
+// session's next mark or activate. A row `release` closed while selected
+// comes back selected when the session's next mark comes within
+// RESELECT_WINDOW_MS of the release, unless in between the user activated a
+// row, a row was opened selected, a mark selected another session from none,
+// or `release` closed another selected row. `activateExistingRow` selects
+// only a row the session holds and logs and ignores one with none. `mark`,
+// `activate`, `activateExistingRow`, `release` and `closeSession` send the
+// whole state only when it changed; `mark`, `activate`, `activateExistingRow`
+// and `closeSession` log and ignore an unknown session, `release` silently
+// ignores a session it cannot act on. `release` and `closeSession` log and
+// keep a row a close guard refuses, and emit `closed` for a row they close;
+// `closeSession` returns true for a row it closes and for a known session
+// whose row is already closed, false otherwise. Every state sent with a
+// selection other than the last sent emits `selected` after it.
 export function createSessionList(deps: SessionListDeps): SessionList {
   const contributions: Contribution[] = [];
   const closeGuards: ((sessionId: string) => boolean)[] = [];
@@ -162,6 +176,12 @@ export function createSessionList(deps: SessionListDeps): SessionList {
   const entries = new Map<string, SessionEntry>();
   const rows: SessionRow[] = [];
   let selectedSessionId: string | null = null;
+  // The session whose selected row `release` closed, and when: its next mark
+  // selects the row again within RESELECT_WINDOW_MS. Null after that mark, an
+  // activate or activateExistingRow, a selecting open, the session's end, or a
+  // mark that selects another session from none; a release of another
+  // selected row replaces it.
+  let reselectOnReturn: { sessionId: string; releasedAt: number } | null = null;
 
   const state = (): SessionsState => ({
     rows: rows.map((row) => ({ ...row })),
@@ -196,29 +216,12 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     }
   };
 
-  // The index of the session's row, or null after logging why it was ignored.
-  const knownRow = (method: string, sessionId: string): number | null => {
-    if (!entries.has(sessionId)) {
-      deps.log(
-        'sessions',
-        `${method} for unknown session ${sessionId} ignored`,
-      );
-      return null;
-    }
-    const index = rowIndex(sessionId);
-    if (index === -1) {
-      deps.log(
-        'sessions',
-        `${method} for session ${sessionId} with no row ignored`,
-      );
-      return null;
-    }
-    return index;
-  };
-
   const end = (entry: SessionEntry) => {
     if (!entries.delete(entry.session.id)) {
       return;
+    }
+    if (reselectOnReturn?.sessionId === entry.session.id) {
+      reselectOnReturn = null;
     }
     for (const toolSession of entry.toolSessions) {
       toolSession.end();
@@ -231,8 +234,37 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     deps.emit('ended', { sessionId: entry.session.id });
   };
 
-  // Builds the session's entry and adds its row at the end; a throwing
-  // contribution start leaves neither.
+  // The index of the session's row, adding it at the end when it has none.
+  const rowIndexAdding = (entry: SessionEntry): number => {
+    const index = rowIndex(entry.session.id);
+    return index === -1 ? rows.push(rowOf(entry)) - 1 : index;
+  };
+
+  const everyGuardAllows = (sessionId: string) =>
+    closeGuards.every((mayClose) => mayClose(sessionId));
+
+  // The user's pick of the row at `index`: reports `activated`, then selects
+  // it and clears its mark.
+  const activateRow = (sessionId: string, index: number) => {
+    deps.activated(sessionId);
+    reselectOnReturn = null;
+    const row = rows[index];
+    if (sessionId === selectedSessionId && !row.marked) {
+      return;
+    }
+    select(row);
+    sendState();
+  };
+
+  // Removes the row, sends the state, then emits `closed`.
+  const closeRow = (index: number, sessionId: string) => {
+    removeRow(index);
+    sendState();
+    deps.emit('closed', { sessionId });
+  };
+
+  // Builds and holds the session's entry, adding no row; a throwing
+  // contribution start leaves no entry.
   const addEntry = (info: SessionInfo, owned: boolean): SessionEntry => {
     const session: AgentSession = { id: deps.randomHex(), info };
     const group = groupOf(info);
@@ -246,7 +278,6 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       retiredHostIds: new Set(),
     };
     entries.set(session.id, entry);
-    rows.push(rowOf(entry));
     return entry;
   };
 
@@ -377,7 +408,6 @@ export function createSessionList(deps: SessionListDeps): SessionList {
         );
       }
       const entry = addEntry(info, false);
-      sendState();
       deps.emit('connected', entry.session);
       return {
         session: entry.session,
@@ -394,8 +424,10 @@ export function createSessionList(deps: SessionListDeps): SessionList {
         throw new Error(`Host session ${hostId} is already open`);
       }
       const entry = addEntry(info, true);
+      rows.push(rowOf(entry));
       if (options?.select !== false) {
         select(rows.at(-1));
+        reselectOnReturn = null;
       }
       sendState();
       deps.emit('connected', entry.session);
@@ -411,17 +443,22 @@ export function createSessionList(deps: SessionListDeps): SessionList {
         deps.log('sessions', `mark for unknown session ${sessionId} ignored`);
         return;
       }
-      // A row the user closed comes back at the end, then is selected or
-      // marked like any other.
-      let index = rowIndex(sessionId);
-      if (index === -1) {
-        index = rows.push(rowOf(entry)) - 1;
+      // A connected session with no row, or a row the user closed, gets its
+      // row at the end, then is selected or marked like any other.
+      const row = rows[rowIndexAdding(entry)];
+      const releasedSelected =
+        reselectOnReturn?.sessionId === sessionId ? reselectOnReturn : null;
+      const isReturningToSelection =
+        releasedSelected !== null &&
+        deps.clock.now() - releasedSelected.releasedAt <= RESELECT_WINDOW_MS;
+      if (releasedSelected !== null) {
+        reselectOnReturn = null;
       }
-      const row = rows[index];
       if (sessionId === selectedSessionId) {
         return;
       }
-      if (selectedSessionId === null) {
+      if (selectedSessionId === null || isReturningToSelection) {
+        reselectOnReturn = null;
         select(row);
         sendState();
         return;
@@ -433,36 +470,78 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       sendState();
     },
     activate(sessionId) {
-      const index = knownRow('activate', sessionId);
-      if (index === null) {
+      const entry = entries.get(sessionId);
+      if (entry === undefined) {
+        deps.log(
+          'sessions',
+          `activate for unknown session ${sessionId} ignored`,
+        );
         return;
       }
-      deps.activated(sessionId);
-      const row = rows[index];
-      if (sessionId === selectedSessionId && !row.marked) {
+      // A connected session with no row, or a row the user closed, gets its
+      // row at the end, then is selected like any other.
+      activateRow(sessionId, rowIndexAdding(entry));
+    },
+    activateExistingRow(sessionId) {
+      if (!entries.has(sessionId)) {
+        deps.log(
+          'sessions',
+          `activateExistingRow for unknown session ${sessionId} ignored`,
+        );
         return;
       }
-      select(row);
-      sendState();
+      const index = rowIndex(sessionId);
+      if (index === -1) {
+        deps.log(
+          'sessions',
+          `activateExistingRow for session ${sessionId} with no row ignored`,
+        );
+        return;
+      }
+      activateRow(sessionId, index);
+    },
+    release(sessionId) {
+      const entry = entries.get(sessionId);
+      const index = rowIndex(sessionId);
+      const isReleasable = entry !== undefined && !entry.owned && index !== -1;
+      if (!isReleasable) {
+        return;
+      }
+      if (!everyGuardAllows(sessionId)) {
+        deps.log(
+          'sessions',
+          `release for session ${sessionId} kept by a close guard`,
+        );
+        return;
+      }
+      if (sessionId === selectedSessionId) {
+        reselectOnReturn = { sessionId, releasedAt: deps.clock.now() };
+      }
+      closeRow(index, sessionId);
     },
     addCloseGuard(mayClose) {
       closeGuards.push(mayClose);
     },
     closeSession(sessionId) {
-      const index = knownRow('closeSession', sessionId);
-      if (index === null) {
+      if (!entries.has(sessionId)) {
+        deps.log(
+          'sessions',
+          `closeSession for unknown session ${sessionId} ignored`,
+        );
         return false;
       }
-      if (!closeGuards.every((mayClose) => mayClose(sessionId))) {
+      const index = rowIndex(sessionId);
+      if (index === -1) {
+        return true;
+      }
+      if (!everyGuardAllows(sessionId)) {
         deps.log(
           'sessions',
           `closeSession for session ${sessionId} kept by a close guard`,
         );
         return false;
       }
-      removeRow(index);
-      sendState();
-      deps.emit('closed', { sessionId });
+      closeRow(index, sessionId);
       return true;
     },
     selectedSessionId: () => selectedSessionId,

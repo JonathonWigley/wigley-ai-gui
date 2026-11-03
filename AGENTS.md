@@ -255,8 +255,12 @@ the `retro` skill reads, and the relay's side of the channel). A change to eithe
 lands in both repos together. Each relay connection is one agent session, owned by the `sessions` plugin. A
 connected session (one the app did not start, such as a terminal `claude` or Codex session) has no row in the sessions
 sidebar until a plugin needs the user there: `mark` or `activate` adds its row, as a form opening does, and `release` closes it
-again once every close guard allows, as the form presenter does when the session's last form closes, by submit,
-cancel or any other close. The user may also close the row; it leaves when the session disconnects. A session the
+again once every close guard allows, as the form presenter does after every form close, by submit, cancel or
+any other close (the close guard of a session's other open form keeps the row). The user may also close the row,
+which `mark` or `activate` brings back; it leaves for good when the session disconnects. A row `release` closed
+while selected comes back selected when the session's next form marks it within 30 seconds (a back-to-back
+round), unless the user picked another row first; later, it comes back marked. A form's notification click
+selects only a row its session still holds (`activateExistingRow`), so a stale click adds none. A session the
 app starts (`open`) is an owned session: its row exists from start, the relay connection whose hello carries its
 host session id joins that row instead of adding one (a newer relay takes the join from an older one still
 connected, as when the harness restarts its MCP connection), and the row ends when its owner ends it: chat keeps
@@ -719,7 +723,8 @@ round; primer: an open primer), since main, not the page, decides.
   the cap without `until` fails. It reports one line, `<keys> ×<presses> -> <until>`, and its `screenshot` saves one
   PNG per press, `<plugin>-<name>-<n>.png`, file n after press n. A step's `alsoExpect` holds patterns that must each
   match a line logged after the step began, before or after `expect`, for a line carrying a value the script cannot
-  know (chat's clear step matches the notes line naming the row's random new host id). The self-test's user config
+  know (chat's clear step matches the notes line naming the row's random new host id) or a second line the step's keys
+  cause, in either order. The self-test's user config
   folder sits in its temp home. The script's `settings` override plugin settings in the config main serves the page
   (forms' sets a short `keys.whichKeyTimeoutMs`, so a step can wait out the panel); main parts start on the
   ConfigStore's config, which under the self-test is the empty config folder in its temp home, so the defaults, with

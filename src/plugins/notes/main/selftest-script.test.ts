@@ -1,17 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import type { ConnectedSession } from '../../sessions/contract';
+import type { OwnedSession } from '../../sessions/contract';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import type { NoteDraft } from '../contract';
 import { notesSelfTestScript } from './selftest-script';
 
-// The notes script over fakes that count its fixture folders, connects and
-// image adds;
-// `sendGoesOut` resolves every waiting `nextSessionSend` at once, as main's
-// sent session send does. With `holdsFolder` each `makeFolder` waits for
-// `folderMade`.
+// The notes script over fakes that count its fixture folders, opens and image
+// adds; `sendGoesOut` resolves every waiting `nextSessionSend` at once, as
+// main's sent session send does. With `holdsFolder` each `makeFolder` waits
+// for `folderMade`.
 function setUp(holdsFolder: boolean) {
   const madeFolders: string[] = [];
-  const connected: unknown[] = [];
+  const opened: unknown[] = [];
   const addedImages: Uint8Array[] = [];
   const sendWaiters: (() => void)[] = [];
   const folderWaiters: (() => void)[] = [];
@@ -32,12 +31,12 @@ function setUp(holdsFolder: boolean) {
     },
     paths: posixPaths,
     sessions: {
-      connect(info) {
-        connected.push(info);
+      open(info) {
+        opened.push(info);
         return {
-          session: { id: `s-${connected.length}` },
+          session: { id: `s-${opened.length}` },
           end: () => undefined,
-        } as unknown as ConnectedSession;
+        } as unknown as OwnedSession;
       },
       activate: () => undefined,
     },
@@ -67,7 +66,7 @@ function setUp(holdsFolder: boolean) {
   return {
     script,
     madeFolders,
-    connected,
+    opened,
     addedImages,
     sendGoesOut,
     folderMade,
@@ -82,15 +81,15 @@ describe('notesSelfTestScript', () => {
       name: 'BeforeItsDraftCleared',
       reopensAt: 'start',
       folders: 1,
-      connects: 1,
+      opens: 1,
     },
-    { name: 'ParkedOnItsFolder', reopensAt: 'folder', folders: 2, connects: 1 },
-    { name: 'ParkedOnItsSend', reopensAt: 'send', folders: 2, connects: 2 },
+    { name: 'ParkedOnItsFolder', reopensAt: 'folder', folders: 2, opens: 1 },
+    { name: 'ParkedOnItsSend', reopensAt: 'send', folders: 2, opens: 2 },
   ])(
     'open_ReplacedRunWritesNothingMore_$name',
-    async ({ reopensAt, folders, connects }) => {
+    async ({ reopensAt, folders, opens }) => {
       const fixture = setUp(reopensAt === 'folder');
-      const { script, madeFolders, connected, addedImages } = fixture;
+      const { script, madeFolders, opened, addedImages } = fixture;
 
       script.open(1);
       if (reopensAt !== 'start') {
@@ -104,7 +103,7 @@ describe('notesSelfTestScript', () => {
       await settle();
 
       expect(madeFolders).toHaveLength(folders);
-      expect(connected).toHaveLength(connects);
+      expect(opened).toHaveLength(opens);
       expect(addedImages).toHaveLength(1);
     },
   );

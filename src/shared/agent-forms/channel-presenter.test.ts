@@ -73,8 +73,10 @@ function fakeSessions(calls: string[]) {
   const guards: ((sessionId: string) => boolean)[] = [];
   const sessions: AgentFormSessions = {
     mark: (sessionId) => calls.push(`mark ${sessionId}`),
-    activate: (sessionId) => calls.push(`activate ${sessionId}`),
+    activateExistingRow: (sessionId) =>
+      calls.push(`activateExistingRow ${sessionId}`),
     addCloseGuard: (mayClose) => guards.push(mayClose),
+    release: (sessionId) => calls.push(`release ${sessionId}`),
   };
   const mayClose = (sessionId: string) =>
     guards.every((guard) => guard(sessionId));
@@ -187,7 +189,7 @@ describe('createAgentFormChannelPresenter', () => {
 
     attention.announced[0].onClick();
 
-    expect(calls).toEqual(['activate app-1']);
+    expect(calls).toEqual(['activateExistingRow app-1']);
     expect(window.shown()).toBe(1);
   });
 
@@ -239,17 +241,19 @@ describe('createAgentFormChannelPresenter', () => {
   });
 
   it('ends a form the page finishes and drops what arrives after', () => {
-    const { page, attention, presenter, openForms, finish, saveDraft } =
+    const { calls, page, attention, presenter, openForms, finish, saveDraft } =
       setUp();
     const { listener, drafts, finishes } = fakeListener();
     presenter.show(FORM, listener);
     const end: TestEnd = { kind: 'submitted', body: BODY };
+    calls.length = 0;
 
     finish('form-1', end);
     saveDraft('form-1', BODY);
     finish('form-1', end);
 
     expect(finishes).toEqual([end]);
+    expect(calls).toEqual(['send formClosed', 'release app-1']);
     expect(drafts).toEqual([]);
     expect(openForms()).toEqual([]);
     expect(attention.counts).toEqual([
@@ -297,12 +301,14 @@ describe('createAgentFormChannelPresenter', () => {
   });
 
   it('closes an open form on the page, not by its finish, and ignores a form already gone', () => {
-    const { page, attention, presenter, openForms } = setUp();
+    const { calls, page, attention, presenter, openForms } = setUp();
     presenter.show(FORM, fakeListener().listener);
+    calls.length = 0;
 
     presenter.close('form-1');
     presenter.close('form-1');
 
+    expect(calls).toEqual(['send formClosed', 'release app-1']);
     expect(page.sent.slice(1)).toEqual([
       ['formClosed', { formId: 'form-1', byFinish: false }],
     ]);
