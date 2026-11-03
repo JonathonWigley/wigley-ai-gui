@@ -21,8 +21,8 @@ import type {
   EntryView,
   PartView,
   QueuedMessageInput,
+  LiveWorkingInput,
   StepInput,
-  WorkingInput,
 } from '../layouts/layout';
 import type { BaseKit } from '../../../shared/page/layout-host/kit';
 import {
@@ -192,7 +192,7 @@ type RunRow = Extract<ListRow, { kind: 'run' }>;
 // The parts a list slot of its own draws, by the input each takes.
 interface SlotPartInputs {
   activity: ActivityInput;
-  working: WorkingInput;
+  working: LiveWorkingInput;
   queuedMessage: QueuedMessageInput;
 }
 
@@ -663,7 +663,10 @@ function isActivityChanged(last: ActivityInput, next: ActivityInput): boolean {
 // Whether a block drawn with `last` shows something else with `next`: any
 // step replaced, added or gone, or the turn's state or start. `now` changes
 // only on a tick.
-function isWorkingChanged(last: WorkingInput, next: WorkingInput): boolean {
+function isWorkingChanged(
+  last: LiveWorkingInput,
+  next: LiveWorkingInput,
+): boolean {
   return (
     isStepsChanged(last.steps, next.steps) ||
     last.state !== next.state ||

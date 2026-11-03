@@ -18,9 +18,11 @@ import type {
   WorkingInput,
   WorkingState,
 } from '../layout';
-import { MAIN_AGENT_ID } from '../../../../contracts/agent';
 import type { KitRowOptions } from '../../../../shared/page/layout-host/kit';
 import layout from './layout.js';
+
+// The main agent's id; this layer may not import the agent contract.
+const MAIN_AGENT_ID = 'main';
 
 // The DOM surface the default layout uses. This layer may not import the
 // page's shared fake DOM.
@@ -599,6 +601,17 @@ function workingTurn(
   return { state, steps, startedAt, now };
 }
 
+// A finished turn of `steps` from `startedAt` to `endedAt`.
+function doneTurn(
+  stopReason: string,
+  steps: StepInput[],
+  startedAt: number,
+  endedAt: number,
+  costUsd: number | null,
+): WorkingInput {
+  return { state: 'done', steps, startedAt, endedAt, stopReason, costUsd };
+}
+
 function drawWorking(input: WorkingInput): PartView<WorkingInput> {
   const parent = new FakeElement('div');
   const view = layout.working(asHtml(parent), input, fakeKit().kit);
@@ -676,8 +689,6 @@ describe('default chat layout working', () => {
       lines: [
         'chat-working',
         'span.chat-working-time:1:05 span.chat-working-state:Working…',
-        'div.chat-working-action:Bash ls',
-        'div.chat-working-action:Edit a.ts',
         'div.chat-working-action:Read c.ts',
         'div.chat-working-action is-failed:Grep todo',
         'div.chat-working-action is-current:Bash npm test',
@@ -712,6 +723,48 @@ describe('default chat layout working', () => {
         'span.chat-working-time:0:00 span.chat-working-state:Thinking…',
       ],
     },
+    {
+      name: 'DoneWithCost',
+      input: doneTurn(
+        'end_turn',
+        [
+          toolStep('Bash', 'ls'),
+          toolStep('Bash', 'npm test'),
+          toolStep('Read', 'a.ts'),
+        ],
+        0,
+        65000,
+        0.574,
+      ),
+      lines: [
+        'chat-working is-done',
+        'div.chat-working-done:Done · 65s · $0.57 · Bash 2 · Read 1',
+      ],
+    },
+    {
+      name: 'DoneNoCostOtherReason',
+      input: doneTurn('max_tokens', [toolStep('Read', 'a.ts')], 0, 4000, null),
+      lines: [
+        'chat-working is-done',
+        'div.chat-working-done:max_tokens · 4s · Read 1',
+      ],
+    },
+    {
+      name: 'DoneSuccess',
+      input: doneTurn('success', [toolStep('Bash', 'ls')], 0, 1000, null),
+      lines: [
+        'chat-working is-done',
+        'div.chat-working-done:Done · 1s · Bash 1',
+      ],
+    },
+    {
+      name: 'DoneNoTools',
+      input: doneTurn('end_turn', [thinkingStep('t1')], 0, 2000, 0.1),
+      lines: [
+        'chat-working is-done',
+        'div.chat-working-done:Done · 2s · $0.10',
+      ],
+    },
   ])('working_draws ($name)', ({ input, lines }) => {
     expect(workingLines(drawWorking(input))).toEqual(lines);
   });
@@ -726,6 +779,23 @@ describe('default chat layout working', () => {
     expect(workingLines(view)[1]).toBe(
       'span.chat-working-time:1:01 span.chat-working-state:Thinking…',
     );
+  });
+
+  it('working_update_LiveToDone_KeepsTheRootAndDrawsTheLine', () => {
+    const view = drawWorking(
+      workingTurn('working', [toolStep('Bash', 'ls', null)], 3000),
+    );
+    const block = view.element;
+
+    view.update?.(
+      doneTurn('end_turn', [toolStep('Bash', 'ls')], 0, 5000, null),
+    );
+
+    expect(view.element).toBe(block);
+    expect(workingLines(view)).toEqual([
+      'chat-working is-done',
+      'div.chat-working-done:Done · 5s · Bash 1',
+    ]);
   });
 });
 
@@ -820,7 +890,10 @@ function fakeSurfaceKit() {
   return { kit, rows, cursorEnd: asHtml(cursorEnd) };
 }
 
-type SurfacePart = Exclude<keyof ChatLayout, 'entries'>;
+type SurfacePart = Exclude<
+  keyof ChatLayout,
+  'entries' | 'activityInTranscript'
+>;
 
 // Every part beside the entries; a part left out fails to compile.
 const SURFACE_PARTS: Record<SurfacePart, true> = {

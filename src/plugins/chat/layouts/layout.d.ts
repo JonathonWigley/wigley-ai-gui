@@ -115,7 +115,7 @@ export interface ActivityInput {
 export type WorkingState = 'thinking' | 'writing' | 'working' | 'waiting';
 
 // The running turn. Times are epoch ms.
-export interface WorkingInput {
+export interface LiveWorkingInput {
   // What the turn is doing now.
   state: WorkingState;
   // Every step of the turn in entry order, each the step's entry input; the layout picks the ones it shows.
@@ -126,6 +126,24 @@ export interface WorkingInput {
   // The time of this draw or update; the turn's time is `now - startedAt`.
   now: number;
 }
+
+// The finished turn: every entry from the user's last message to its last result. Times are epoch ms.
+export interface DoneWorkingInput {
+  state: 'done';
+  // Every step since the user's last message in entry order, each the step's entry input.
+  steps: StepInput[];
+  // The user's last message's `at`; the first entry's with no user entry. It can be earlier than the live turn's
+  // start, when the turn holds a result before its last one.
+  startedAt: number;
+  // The last result's `at`.
+  endedAt: number;
+  // The last result's stop reason.
+  stopReason: string;
+  // The sum of the results' non-null costs; null when none has one.
+  costUsd: number | null;
+}
+
+export type WorkingInput = LiveWorkingInput | DoneWorkingInput;
 
 // One pending message: its text as typed, how many images it carries, and whether the user sent it into the running
 // turn, so it waits only for the agent to take it in.
@@ -375,6 +393,8 @@ export type EntryBuilder<K extends EntryKind> = (
 // a part or entry kind left out draws with `default`. A dialog part draws into the dialog's body; the app keeps the
 // dialog's frame and title.
 export interface ChatLayout {
+  // Left out, the layout takes `default`'s.
+  activityInTranscript?: boolean;
   entries?: { [K in EntryKind]?: EntryBuilder<K> };
   // One run of the agent's steps (tool, thinking, raw entries between two other entries), drawn into its slot; the
   // app keeps the cursor, the click that opens it and the step rows.

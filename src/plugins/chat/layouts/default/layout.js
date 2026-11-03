@@ -8,7 +8,7 @@
 
 // The tool calls the working block's box lists; a user layout sets its own
 // box's length.
-const WORKING_ACTION_LINES = 5;
+const WORKING_ACTION_LINES = 3;
 
 // The input field holding the file a tool acts on, by tool name.
 /** @type {Record<string, string | undefined>} */
@@ -241,14 +241,42 @@ function workingBox(tools) {
   return box;
 }
 
-// The header (time, state), then, once the turn has a tool call, the box and
-// the tool counts.
+// The finished turn's one line: the word, the time, the cost when known, then
+// each tool's count, all joined with ` · `.
+/**
+ * @param {import('../layout').DoneWorkingInput} input
+ * @param {import('../layout').BaseKit} kit
+ */
+function doneLine(input, kit) {
+  const isFinished =
+    input.stopReason === 'end_turn' || input.stopReason === 'success';
+  const parts = [
+    isFinished ? 'Done' : input.stopReason,
+    kit.duration(input.endedAt - input.startedAt),
+  ];
+  if (input.costUsd !== null) {
+    parts.push(`$${input.costUsd.toFixed(2)}`);
+  }
+  for (const [name, count] of toolCounts(input.steps)) {
+    parts.push(`${name} ${count}`);
+  }
+  return parts.join(' · ');
+}
+
+// A finished turn's one line; a running turn's header (time, state), then,
+// once the turn has a tool call, the box and the tool counts.
 /**
  * @param {HTMLElement} block
  * @param {import('../layout').WorkingInput} input
+ * @param {import('../layout').BaseKit} kit
  */
-function fillWorking(block, input) {
+function fillWorking(block, input, kit) {
   block.replaceChildren();
+  block.classList.toggle('is-done', input.state === 'done');
+  if (input.state === 'done') {
+    block.append(el('div', 'chat-working-done', doneLine(input, kit)));
+    return;
+  }
   const head = el('div', 'chat-working-head');
   head.append(
     el('span', 'chat-working-time', turnTime(input.now - input.startedAt)),
@@ -324,6 +352,7 @@ function showImage(picture, counter, input) {
 
 /** @type {import('../layout').CompleteChatLayout} */
 const layout = {
+  activityInTranscript: false,
   entries: {
     user(parent, input, kit) {
       const entry = root(parent, 'chat-entry chat-user');
@@ -494,14 +523,15 @@ const layout = {
       },
     };
   },
-  // Every update draws the block afresh, as `activity` does.
-  working(parent, input) {
+  // Every update draws the block afresh, as `activity` does; a `done` input
+  // draws the finished turn's one line.
+  working(parent, input, kit) {
     const block = root(parent, 'chat-working');
-    fillWorking(block, input);
+    fillWorking(block, input, kit);
     return {
       element: block,
       update(next) {
-        fillWorking(block, next);
+        fillWorking(block, next, kit);
       },
     };
   },

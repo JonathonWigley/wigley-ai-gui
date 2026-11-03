@@ -13,6 +13,8 @@ describe('readChatLayout', () => {
     { layout: { working: builder } },
     { layout: { queuedMessage: builder } },
     { layout: { statusLine: builder } },
+    { layout: { activityInTranscript: true } },
+    { layout: { activityInTranscript: false, working: builder } },
   ])(
     'readChatLayout_PartsItChanges_ReturnsTheDefaultExport ($layout)',
     ({ layout }) => {
@@ -42,6 +44,10 @@ describe('readChatLayout', () => {
     {
       layout: { queuedMessage: 'row' },
       error: 'queuedMessage is not a function',
+    },
+    {
+      layout: { activityInTranscript: 'yes' },
+      error: 'activityInTranscript is not a boolean',
     },
   ])(
     'readChatLayout_Malformed_ThrowsNamingIt ($error)',

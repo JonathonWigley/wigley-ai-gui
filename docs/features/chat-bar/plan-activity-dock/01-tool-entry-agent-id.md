@@ -1,6 +1,6 @@
 # 01 — Tool entries carry the agent's id
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -74,3 +74,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 91ff7c11 · proof: diff read: all three Produces present; typecheck green · concerns: permission-turn test literal in fake-agent-harness.test.ts gained agentId though tsc did not flag it (runtime toEqual)

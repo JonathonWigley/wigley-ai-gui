@@ -1,6 +1,6 @@
 # 02 — Working input's done state and the activityInTranscript flag
 
-Status: not started
+Status: in progress
 Type: Batch (the `WorkingInput` union with the default `working` part; the layout flag with its reader and pick)
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)

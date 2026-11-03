@@ -385,7 +385,7 @@ setTurn(entries: readonly ChatEntry[], working: boolean): void;
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Tool entries carry the agent's id](01-tool-entry-agent-id.md)
+- [x] [Tool entries carry the agent's id](01-tool-entry-agent-id.md)
 
 ### Wave 2
 - [ ] [Working input's done state and the activityInTranscript flag](02-done-state-and-flag.md) — after 01
@@ -405,10 +405,14 @@ setTurn(entries: readonly ChatEntry[], working: boolean): void;
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 46f417b5
 
 ### Groups
+- 01 · 91ff7c11 · diff read: all three Produces present; typecheck green · concerns: permission-turn test literal in fake-agent-harness.test.ts gained agentId though tsc did not flag it (runtime toEqual)
 ### Contract changes
 ### Rulings
+- Preflight: precondition 1's peer AGENTS.md hunk is committed (1b7363b5) and the tree is clean; origin is unreachable from this session (SSH publickey denied), so the run builds on local main at 46f417b5 — lead
+- fake-agent-harness.test agents-turn check asserts every tool emit (start and finish) as [id, agentId] — group 01 · group 01
+- layout.test.ts imports MAIN_AGENT_ID from src/contracts/agent — group 01 · group 01
 ### Review rounds
 ### Test gate

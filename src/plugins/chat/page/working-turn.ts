@@ -1,5 +1,5 @@
 import type { ChatEntry } from '../../../contracts/agent';
-import type { WorkingInput, WorkingState } from '../layouts/layout';
+import type { LiveWorkingInput, WorkingState } from '../layouts/layout';
 import { isStep } from './activity-runs';
 
 // The running turn's block input. The turn starts at the later of the last
@@ -8,7 +8,7 @@ import { isStep } from './activity-runs';
 export function workingInput(
   entries: readonly ChatEntry[],
   now: number,
-): WorkingInput {
+): LiveWorkingInput {
   const turn = entries.slice(turnStart(entries));
   return {
     state: turnState(turn),
