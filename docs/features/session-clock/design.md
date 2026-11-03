@@ -36,6 +36,8 @@ Planned: `plan-row-clock/` beside this file.
   paused at that total.
 - A session opened from Claude's saved history (the resume picker) starts at zero: no active time was recorded for
   it.
+- `/clear` resets the clock to zero: the run time describes the conversation in the row, as the title, transcript,
+  context and cache do, and `/clear` starts a new conversation.
 
 ## The side-bar row
 
