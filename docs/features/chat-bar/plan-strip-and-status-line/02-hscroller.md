@@ -1,6 +1,6 @@
 # 02 — The HScroller primitive
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -186,3 +186,4 @@ One commit for the group.
 
 ## Proof
 
+Commit 7dab784a · proof: diff read: HScroller interface and createHScroller present in h-scroller.ts; worker's h-scroller-steps test 20 rows pass; no typecheck error in 02's files (03 in flight) · concerns: gallery self-test lines unproven live until the test gate

@@ -20,6 +20,7 @@ const DEFAULTS: Settings = {
   keySequenceTimeoutMs: 1000,
   claude: { command: 'claude' },
   shell: { layout: 'default' },
+  plugins: { disabled: [] },
 };
 
 const DEFAULT_KEYMAP: DefaultKeymap = {
@@ -62,6 +63,16 @@ const quietPlugin = definePlugin({
   themeTokens: {},
 });
 
+const dependentPlugin = definePlugin({
+  id: 'q',
+  dependsOn: ['p'],
+  commands: {},
+  scopes: {},
+  settings: {},
+  settingInfo: {},
+  themeTokens: {},
+});
+
 const CHECK_DEPS: ConfigCheckDeps = {
   defaults: DEFAULTS,
   optionalSettings: { 'fonts.ui': 'string' },
@@ -89,9 +100,13 @@ const CORE_INFO = {
   'fonts.ui': { label: 'UI font', description: 'A font.' },
 };
 
-async function create(files: MemoryFiles): Promise<UserConfig> {
+async function create(
+  files: MemoryFiles,
+  manifests = CHECK_DEPS.manifests,
+): Promise<UserConfig> {
   const store = await loadConfigStore({
     ...CHECK_DEPS,
+    manifests,
     files,
     folder: FOLDER,
     platform: 'macos',
@@ -105,6 +120,7 @@ async function create(files: MemoryFiles): Promise<UserConfig> {
   });
   return createUserConfig({
     ...CHECK_DEPS,
+    manifests,
     files,
     folder: FOLDER,
     store,
@@ -206,6 +222,23 @@ describe('createUserConfig', () => {
     expect(result).toEqual({
       type: 'refused',
       problem: '"keySequenceTimeoutMs" must be a number, not a string.',
+    });
+    expect(await files.read(`${FOLDER}/settings.json`)).toBe('{}');
+  });
+
+  it('write_DisablesANeededPlugin_Refused', async () => {
+    const files = createMemoryFiles();
+    await files.write(`${FOLDER}/settings.json`, '{}');
+    const userConfig = await create(files, [listPlugin, dependentPlugin]);
+
+    const result = await userConfig.writeSettings(
+      { plugins: { disabled: ['p'] } },
+      '{}',
+    );
+
+    expect(result).toEqual({
+      type: 'refused',
+      problem: '"plugins.disabled" names "p", which "q" depends on.',
     });
     expect(await files.read(`${FOLDER}/settings.json`)).toBe('{}');
   });

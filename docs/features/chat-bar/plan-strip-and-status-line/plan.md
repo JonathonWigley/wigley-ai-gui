@@ -237,7 +237,7 @@ other plugin; `npm run lint` (layer and style checks) passes, with a `LAYERS` en
 
 ### Wave 1
 - [ ] [The plugins.disabled setting](01-plugins-disabled.md)
-- [ ] [The HScroller primitive](02-hscroller.md)
+- [x] [The HScroller primitive](02-hscroller.md)
 - [ ] [Subagent facts in agent events](03-agent-event-facts.md)
 
 ### Wave 2
@@ -265,7 +265,10 @@ other plugin; `npm run lint` (layer and style checks) passes, with a `LAYERS` en
 Review base: b9ab45db2031275b78977d6ab85e250d4cf49d1f
 
 ### Groups
+- 02 · 7dab784a · diff read: HScroller interface and createHScroller present in h-scroller.ts; worker's h-scroller-steps test 20 rows pass; no typecheck error in 02's files (03 in flight) · concerns: gallery self-test lines unproven live until the test gate
 ### Contract changes
 ### Rulings
+- refresh sets data-overflow before a pending reveal and before reading back/forward, departing from the task's order, so the At end sample measures the narrowed track — chevron state would be wrong otherwise — cost if wrong: one extra layout read per refresh · group 02 · group 02
+- track items get flex: none so a long row scrolls rather than squeezes — cost if wrong: a strip box could not shrink · group 02 · group 02
 ### Review rounds
 ### Test gate

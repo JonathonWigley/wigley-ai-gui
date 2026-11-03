@@ -21,6 +21,7 @@ import { errorText } from '../../shared/error-text';
 import { requireUnambiguousKeymap } from '../../shared/keymap-checks';
 import {
   commandInfos,
+  disabledDependencyProblem,
   mergeKeymap,
   pluginOptionalSettings,
   pluginSettings,
@@ -110,19 +111,28 @@ export function configSchema(deps: ConfigCheckDeps): ConfigSchema {
 }
 
 // The settings `text`, a `settings.json`, merges over the defaults. Throws an
-// Error whose message is the first problem found, as the user reads it. The
-// theme it names is not resolved here.
+// Error whose message is the first problem found, as the user reads it: in
+// the file, or a `plugins.disabled` naming a plugin a started one depends on.
+// The theme it names is not resolved here.
 export function checkSettingsText(
   text: string,
   deps: ConfigCheckDeps,
   schema: ConfigSchema,
 ): UserSettings {
-  return mergeUserSettings(text, {
+  const merged = mergeUserSettings(text, {
     defaults: deps.defaults,
     pluginDefaults: schema.pluginDefaults,
     optionalSettings: schema.optionalSettings,
     settingChoices: deps.settingChoices,
   });
+  const problem = disabledDependencyProblem(
+    merged.settings.plugins.disabled,
+    deps.manifests,
+  );
+  if (problem !== null) {
+    throw new Error(problem);
+  }
+  return merged;
 }
 
 // The keymap the user's `text`, a `keymap.json`, merges into over the default

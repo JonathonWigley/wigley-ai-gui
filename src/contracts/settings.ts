@@ -39,6 +39,8 @@ export interface Settings {
   // The layout the shell chrome draws with: a folder in `layouts/shell/`, or
   // `default`.
   shell: { layout: string };
+  // Plugin ids neither process starts; an id no plugin has disables nothing.
+  plugins: { disabled: string[] };
 }
 
 // A config file that could not be applied, and why.

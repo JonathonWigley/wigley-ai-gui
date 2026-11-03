@@ -9,6 +9,7 @@ export const defaultSettings: Settings = {
   keySequenceTimeoutMs: 1000,
   claude: { command: '~/.local/bin/claude' },
   shell: { layout: 'default' },
+  plugins: { disabled: ['agent-lines', 'usage-tab-line'] },
 };
 
 // The JSON kind of each core setting `defaultSettings` leaves unset, by its
@@ -94,5 +95,10 @@ export const settingInfo: SettingInfos<Settings> = {
     label: 'Shell layout',
     description:
       'The layout that draws the title bar, activity bar, side bar, right bar and status bar: a folder in the layouts/shell folder, or default.',
+  },
+  'plugins.disabled': {
+    label: 'Disabled plugins',
+    description:
+      'Plugin ids the app does not start. Turning one off takes effect for its page part on the next page load and for its main part on the next app start; turning one on takes effect on the next app start.',
   },
 };

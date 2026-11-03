@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { pluginSettingInfo } from '../shared/plugin-manifests';
+import { defaultSettings } from '../config/settings';
+import {
+  disabledDependencyProblem,
+  pluginSettingInfo,
+} from '../shared/plugin-manifests';
 import { manifests } from './manifests';
 
 // The shipped manifests are the subject here: a leaf setting without a
@@ -7,5 +11,11 @@ import { manifests } from './manifests';
 describe('manifests', () => {
   it('manifests_SettingInfo_DeclaresEveryLeafSetting', () => {
     expect(() => pluginSettingInfo(manifests)).not.toThrow();
+  });
+
+  it('manifests_DefaultDisabled_BreaksNoDependency', () => {
+    expect(
+      disabledDependencyProblem(defaultSettings.plugins.disabled, manifests),
+    ).toBeNull();
   });
 });

@@ -62,6 +62,56 @@ export function dependencyOrder(
   return ordered;
 }
 
+// The problem with a `plugins.disabled` list: the first plugin it names that
+// a plugin it leaves started depends on, walking `manifests` in list order and
+// each one's `dependsOn` in order. Null when no started plugin depends on a
+// disabled one; an id no manifest has disables nothing.
+export function disabledDependencyProblem(
+  disabled: readonly string[],
+  manifests: readonly PluginManifest[],
+): string | null {
+  for (const manifest of manifests) {
+    if (disabled.includes(manifest.id)) {
+      continue;
+    }
+    const dependency = manifest.dependsOn.find((id) => disabled.includes(id));
+    if (dependency !== undefined) {
+      return `"plugins.disabled" names "${dependency}", which "${manifest.id}" depends on.`;
+    }
+  }
+  return null;
+}
+
+// `keymap` without the binds of `side`'s process whose command belongs to a
+// plugin in `pluginIds`: on `main` its app, intercept and global binds, on
+// `page` its editor and page binds. A bind whose command is not in `commands`
+// stays, so the keymap check still reports it.
+export function withoutPluginBinds(
+  keymap: Keymap,
+  commands: Record<CommandId, CommandInfo>,
+  pluginIds: readonly string[],
+  side: 'main' | 'page',
+): Keymap {
+  const isKept = (bind: { command: CommandId }) =>
+    !(
+      Object.hasOwn(commands, bind.command) &&
+      pluginIds.includes(commands[bind.command].plugin)
+    );
+  if (side === 'main') {
+    return {
+      ...keymap,
+      app: keymap.app.filter(isKept),
+      intercept: keymap.intercept.filter(isKept),
+      global: keymap.global.filter(isKept),
+    };
+  }
+  return {
+    ...keymap,
+    editor: { ...keymap.editor, binds: keymap.editor.binds.filter(isKept) },
+    page: keymap.page.filter(isKept),
+  };
+}
+
 type SameBind<B> = (a: B, b: B) => boolean;
 
 // How the merge tells that a later layer's bind replaces an earlier one, for

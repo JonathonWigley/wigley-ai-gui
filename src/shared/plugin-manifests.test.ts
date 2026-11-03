@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import type { DefaultKeymap, KeyBind } from '../contracts/keymap';
-import type { PluginManifest } from '../contracts/plugin';
+import type { DefaultKeymap, KeyBind, Keymap } from '../contracts/keymap';
+import type { CommandInfo, PluginManifest } from '../contracts/plugin';
 import {
   commandInfos,
   defaultBindLines,
   defaultBindStanding,
   dependencyOrder,
+  disabledDependencyProblem,
   expandBind,
   mergeKeymap,
   overrideSettings,
@@ -15,6 +16,7 @@ import {
   pluginThemeTokens,
   requireListed,
   scopeInfos,
+  withoutPluginBinds,
 } from './plugin-manifests';
 
 function manifest(
@@ -645,6 +647,79 @@ describe('dependencyOrder', () => {
     ]);
 
     expect(ordered.map((each) => each.id)).toEqual(['b', 'c', 'a']);
+  });
+});
+
+describe('disabledDependencyProblem', () => {
+  const chain = [
+    manifest('a'),
+    manifest('b', { dependsOn: ['a'] }),
+    manifest('c', { dependsOn: ['b'] }),
+  ];
+
+  it.each([
+    { disabled: [], expected: null },
+    {
+      disabled: ['a'],
+      expected: '"plugins.disabled" names "a", which "b" depends on.',
+    },
+    {
+      disabled: ['a', 'b'],
+      expected: '"plugins.disabled" names "b", which "c" depends on.',
+    },
+    { disabled: ['a', 'b', 'c'], expected: null },
+    { disabled: ['c'], expected: null },
+    { disabled: ['zzz'], expected: null },
+  ])('disabled $disabled → $expected', ({ disabled, expected }) => {
+    expect(disabledDependencyProblem(disabled, chain)).toBe(expected);
+  });
+});
+
+describe('withoutPluginBinds', () => {
+  function command(id: string, plugin: string): CommandInfo {
+    return { id, label: id, group: 'Test', runsIn: 'page', plugin };
+  }
+  const commands = {
+    'p.go': command('p.go', 'p'),
+    'q.go': command('q.go', 'q'),
+  };
+  const pEditor = { keys: 'g', scope: 'any', command: 'p.go' };
+  const pPage = { keys: ['g'], scope: 'any', command: 'p.go' };
+  const qPage = { keys: ['h'], scope: 'any', command: 'q.go' };
+  const unknownPage = { keys: ['u'], scope: 'any', command: 'gone.go' };
+  const pApp = { accelerator: 'CommandOrControl+G', command: 'p.go' };
+  const pIntercept = { key: 'g', meta: true, command: 'p.go' };
+  const pGlobal = { accelerator: 'Alt+G', command: 'p.go' };
+  const keymap: Keymap = {
+    editor: { leader: '<Space>', remaps: [], binds: [pEditor] },
+    page: [pPage, qPage, unknownPage],
+    app: [pApp],
+    intercept: [pIntercept],
+    global: [pGlobal],
+    groups: { '<Leader>g': 'Go' },
+  };
+
+  it.each([
+    {
+      side: 'page' as const,
+      pluginIds: ['p'],
+      expected: {
+        ...keymap,
+        editor: { ...keymap.editor, binds: [] },
+        page: [qPage, unknownPage],
+      },
+    },
+    {
+      side: 'main' as const,
+      pluginIds: ['p'],
+      expected: { ...keymap, app: [], intercept: [], global: [] },
+    },
+    { side: 'page' as const, pluginIds: [], expected: keymap },
+    { side: 'main' as const, pluginIds: [], expected: keymap },
+  ])('$side without $pluginIds', ({ side, pluginIds, expected }) => {
+    expect(withoutPluginBinds(keymap, commands, pluginIds, side)).toEqual(
+      expected,
+    );
   });
 });
 

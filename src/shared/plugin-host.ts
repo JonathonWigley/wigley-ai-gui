@@ -1,4 +1,5 @@
 import type { PluginManifest } from '../contracts/plugin';
+import { disabledDependencyProblem } from './plugin-manifests';
 
 function requireUniqueIds(manifests: readonly PluginManifest[]) {
   const seen = new Set<string>();
@@ -41,13 +42,14 @@ function dependencyFor(
   };
 }
 
-// Starts every part, each after the parts its manifest depends on and otherwise
-// in list order, handing it the exports of those dependencies. `known` is every
-// plugin's manifest, those with no part in this process included; a dependency
-// in `known` with no part here, such as a page-only plugin in main, starts
-// nowhere in this process. Returns what each start returned, by plugin id, in
-// start order. Throws on a duplicate id, a dependency not in `known`, or a
-// dependency cycle.
+// Starts every part whose id `disabled` does not name, each after the parts
+// its manifest depends on and otherwise in list order, handing it the exports
+// of those dependencies. `known` is every plugin's manifest, those with no
+// part in this process included; a dependency in `known` with no part here,
+// such as a page-only plugin in main, starts nowhere in this process. Returns
+// what each start returned, by plugin id, in start order. Throws on a
+// duplicate id, a dependency not in `known`, a kept part depending on a
+// disabled plugin, or a dependency cycle.
 export function startPlugins<
   Part extends { manifest: PluginManifest },
   Started extends { exports?: unknown },
@@ -55,13 +57,19 @@ export function startPlugins<
   parts: readonly Part[],
   start: (part: Part, dependency: <E>(pluginId: string) => E) => Started,
   known: readonly PluginManifest[] = parts.map((part) => part.manifest),
+  disabled: readonly string[] = [],
 ): Map<string, Started> {
-  const manifests = parts.map((part) => part.manifest);
+  const kept = parts.filter((part) => !disabled.includes(part.manifest.id));
+  const manifests = kept.map((part) => part.manifest);
   requireUniqueIds(manifests);
   requireDependenciesListed(manifests, known);
+  const problem = disabledDependencyProblem(disabled, manifests);
+  if (problem !== null) {
+    throw new Error(problem);
+  }
   const partIds = new Set(manifests.map((manifest) => manifest.id));
   const started = new Map<string, Started>();
-  let pending = [...parts];
+  let pending = [...kept];
   while (pending.length > 0) {
     const ready = pending.find((part) =>
       part.manifest.dependsOn.every(

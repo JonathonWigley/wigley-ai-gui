@@ -29,6 +29,7 @@ const DEFAULTS: Settings = {
   keySequenceTimeoutMs: 1000,
   claude: { command: 'claude' },
   shell: { layout: 'default' },
+  plugins: { disabled: ['d'] },
 };
 
 const DEFAULT_KEYMAP: DefaultKeymap = {
@@ -294,6 +295,16 @@ describe('loadConfigStore', () => {
       problem: null,
       served: { pluginSettings: { p: { list: ['a', 'b'], timeout: 5 } } },
     },
+    {
+      text: '{"plugins":{"disabled":["nope"]}}',
+      problem: null,
+      served: { settings: { plugins: { disabled: ['nope'] } } },
+    },
+    {
+      text: '{"plugins":{"disabled":[3]}}',
+      problem: 'plugins.disabled[0]',
+      served: { settings: DEFAULTS },
+    },
   ])(
     'settings.json $text → problem naming $problem',
     async ({ text, problem, served }) => {
@@ -312,6 +323,35 @@ describe('loadConfigStore', () => {
       );
     },
   );
+
+  it('keeps the last good settings when the list disables a needed plugin', async () => {
+    const dependent = definePlugin({
+      id: 'q',
+      dependsOn: ['p'],
+      commands: {},
+      scopes: {},
+      settings: {},
+      settingInfo: {},
+      themeTokens: {},
+    });
+    const files = createMemoryFiles();
+    await files.write(
+      `${FOLDER}/settings.json`,
+      '{"plugins":{"disabled":["p"]}}',
+    );
+
+    const config = (
+      await load(files, { manifests: [listPlugin, dependent] })
+    ).current();
+
+    expect(config.settings).toEqual(DEFAULTS);
+    expect(config.problems).toEqual([
+      {
+        file: 'settings.json',
+        message: '"plugins.disabled" names "p", which "q" depends on.',
+      },
+    ]);
+  });
 
   it('keeps the last good settings on invalid JSON', async () => {
     const files = createMemoryFiles();

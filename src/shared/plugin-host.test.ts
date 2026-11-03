@@ -26,13 +26,18 @@ function part(
   };
 }
 
-// Starts each part, recording its id in start order.
-function startRecording(parts: TestPart[]): string[] {
+// Starts each part `disabled` does not name, recording its id in start order.
+function startRecording(parts: TestPart[], disabled: string[] = []): string[] {
   const order: string[] = [];
-  startPlugins(parts, (started) => {
-    order.push(started.manifest.id);
-    return { exports: started.exports };
-  });
+  startPlugins(
+    parts,
+    (started) => {
+      order.push(started.manifest.id);
+      return { exports: started.exports };
+    },
+    parts.map((each) => each.manifest),
+    disabled,
+  );
   return order;
 }
 
@@ -90,6 +95,34 @@ describe('startPlugins', () => {
     expect(() => startRecording([part('a', ['b']), part('b', ['a'])])).toThrow(
       /cycle: a, b/,
     );
+  });
+
+  it('skips a disabled part and starts the rest in order', () => {
+    const parts = [part('a'), part('b'), part('c')];
+    const order: string[] = [];
+
+    const started = startPlugins(
+      parts,
+      (each) => {
+        order.push(each.manifest.id);
+        return {};
+      },
+      parts.map((each) => each.manifest),
+      ['b'],
+    );
+
+    expect(order).toEqual(['a', 'c']);
+    expect(started.has('b')).toBe(false);
+  });
+
+  it('rejects a kept part that depends on a disabled one', () => {
+    expect(() => startRecording([part('a'), part('b', ['a'])], ['a'])).toThrow(
+      /"a".*"b"/,
+    );
+  });
+
+  it('ignores a disabled id with no part', () => {
+    expect(startRecording([part('a')], ['z'])).toEqual(['a']);
   });
 
   it('rejects a dependency the manifest did not declare', () => {

@@ -52,6 +52,7 @@ import { readShellLayout } from './shell/read-shell-layout';
 import { mountShell } from './shell/shell';
 import { mountShellChrome } from './shell/shell-chrome';
 import { defaultShellLayout } from './shell/shell-layout';
+import { startedPluginsConfig } from './started-config';
 import { createThemeApplier } from './theme';
 import { createToasts } from './toasts';
 import { overrideTransparency } from './transparency-override';
@@ -96,7 +97,11 @@ async function start() {
       applyPush(next);
     }
   });
-  const config = await bridge.config();
+  // Read once at page load: a changed list reaches the page parts on the next
+  // load.
+  const served = await bridge.config();
+  const pageLoadList = served.settings.plugins.disabled;
+  const config = startedPluginsConfig(served, pageLoadList);
   // Read before the plugins start, so each reads its state as it starts.
   const uiState = createPageUiState(await bridge.uiState(), (key, value) =>
     bridge.setUiState(key, value),
@@ -284,6 +289,7 @@ async function start() {
       return started;
     },
     manifests,
+    pageLoadList,
   );
   const keysExports = started.get(KEYS_PLUGIN_ID)?.exports;
   if (keysExports !== undefined) {
@@ -307,7 +313,7 @@ async function start() {
   pageKeys = installed;
 
   announceNewProblems(config.problems, [], toasts, log);
-  applyPush = createConfigPush(
+  const applyStartedPush = createConfigPush(
     {
       editor: keymap.editor,
       page: keymap.page,
@@ -331,6 +337,8 @@ async function start() {
       log,
     },
   );
+  applyPush = (next) =>
+    applyStartedPush(startedPluginsConfig(next, pageLoadList));
   if (heldPush !== null) {
     applyPush(heldPush);
     heldPush = null;

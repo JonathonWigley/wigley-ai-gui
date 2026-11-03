@@ -59,6 +59,7 @@ import {
   pluginThemeTokens,
   qualify,
   requireListed,
+  withoutPluginBinds,
 } from '../shared/plugin-manifests';
 import { posixPaths } from '../shared/paths/posix-paths';
 import { windowsPaths } from '../shared/paths/windows-paths';
@@ -107,7 +108,11 @@ import { nativeImageEncoder } from './images/native-image-encoder';
 import { createNodeProcesses } from './processes/node-processes';
 import { failSelfTest, type SelfTestDriver, startSelfTest } from './selftest';
 import { createSelfTestTeardown } from './selftest-teardown';
-import { applySelfTestConfig, selfTestFilterOf } from './selftest-config';
+import {
+  applySelfTestConfig,
+  mainStartList,
+  selfTestFilterOf,
+} from './selftest-config';
 import { tempFolders } from './temp-folders';
 import {
   type DriveHarnessName,
@@ -617,8 +622,8 @@ function serveLayouts(
   return service;
 }
 
-// Starts every plugin's main part, each with its own API over one plugin
-// channel router to the window's page, the settings `store` serves with no
+// Starts every plugin's main part `disabled` does not name, each with its own
+// API over one plugin channel router to the window's page, the settings `store` serves with no
 // self-test layer, one event bus, the shared `services`, its own host from
 // `selfTest` (null outside the self-test), its own host from `driveRun` (null
 // outside a drive run), its data folder under `dataRoot`, and its layouts in
@@ -632,6 +637,7 @@ function startMainParts(
   services: Omit<MainServices, 'selfTest'>,
   selfTest: SelfTestDriver | null,
   driveRun: DriveRun | null,
+  disabled: readonly string[],
   onStarted: (pluginId: string, part: MainStart<PluginManifest>) => void,
 ) {
   const channels = createPluginChannels(ipcMain, () => livePage(window));
@@ -658,7 +664,30 @@ function startMainParts(
       return started;
     },
     manifests,
+    disabled,
   );
+}
+
+// `config` with the plugins main did not start, `startList`, added to its
+// `plugins.disabled`, so the page starts no page part whose main part did not
+// start, and without those plugins' main binds.
+function withMainStartList(
+  config: AppConfig,
+  startList: readonly string[],
+): AppConfig {
+  const disabled = [
+    ...new Set([...config.settings.plugins.disabled, ...startList]),
+  ];
+  return {
+    ...config,
+    settings: { ...config.settings, plugins: { disabled } },
+    keymap: withoutPluginBinds(
+      config.keymap,
+      config.commands,
+      startList,
+      'main',
+    ),
+  };
 }
 
 function registerPartCommands(
@@ -760,6 +789,11 @@ function createWindow(
   const layouts = serveLayouts(window, inputs.homeDir, log);
   // The service's dispose on quit ends the registration.
   layouts.register('shell', shellLayoutTypes);
+  // Read once: a changed list reaches main's parts on the next app start.
+  const startList = mainStartList(
+    runMode === 'selfTest',
+    store.current().settings.plugins.disabled,
+  );
   const started = startMainParts(
     window,
     store,
@@ -790,6 +824,7 @@ function createWindow(
     },
     selfTest,
     driveRun,
+    startList,
     (pluginId, part) => {
       startedParts.push(part);
       onSelfTestExit(`plugin ${pluginId}`, () => part.dispose?.());
@@ -810,7 +845,11 @@ function createWindow(
   registerPartCommands(commands, started);
   // Read at each request, so a page reload after a config edit starts on the
   // current config.
-  const served = () => applySelfTestConfig(store.current(), selfTestConfig);
+  const served = () =>
+    withMainStartList(
+      applySelfTestConfig(store.current(), selfTestConfig),
+      startList,
+    );
   const startServed = served();
   ipcMain.handle(BRIDGE_CHANNELS.config, () => served());
   serveUiState(inputs.uiStatePath, log);

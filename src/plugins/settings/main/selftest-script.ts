@@ -26,7 +26,7 @@ const SETTINGS_FILE = '.config/wigley-ai-gui/settings.json';
 const ADDED_KEYS = '<Leader>zh';
 
 // The key sequence timeout written on disk under the open box; it stays in
-// settings.json until the last step resets it.
+// settings.json until the timeout reset group resets it.
 const STALE_TIMEOUT_MS = 900;
 
 // Settings mode opens on the first section, Core, with focus on the side bar.
@@ -132,6 +132,13 @@ const TIMEOUT_RESET_STEPS: SelfTestStep[] = [
   },
 ];
 
+const DISABLED_PLUGINS_STEPS: SelfTestStep[] = [
+  {
+    keys: ['/', ...'disabled', 'Enter'],
+    expect: '[settings] filter "disabled" first row plugins.disabled',
+  },
+];
+
 const GROUPS: SelfTestGroup[] = [
   {
     name: 'side bar',
@@ -162,6 +169,11 @@ const GROUPS: SelfTestGroup[] = [
     name: 'timeout reset',
     why: 'Back in Core, r on the key sequence timeout clears the stale timeout from settings.json.',
     steps: TIMEOUT_RESET_STEPS,
+  },
+  {
+    name: 'disabled plugins',
+    why: 'Filtering Core on disabled finds the plugins.disabled row.',
+    steps: DISABLED_PLUGINS_STEPS,
   },
 ];
 
@@ -196,8 +208,9 @@ function resultProblems(read: UserConfigRead): string[] {
 // `open` empties both user files, then shows Settings mode as
 // `settings.show` does. The result is the user config read on the first
 // change after which settings.json no longer holds the stale timeout that
-// follows one where it did: only the last step changes it, and `problems`
-// expects both layers empty then. It rejects when this open's emptying fails.
+// follows one where it did: only the timeout reset group's last step, the
+// last step that writes, changes it, and `problems` expects both layers empty
+// then. It rejects when this open's emptying fails.
 // An open superseded by a later one before its files are emptied shows
 // nothing, and its result settles only by rejecting, when its own emptying
 // fails.

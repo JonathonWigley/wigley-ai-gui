@@ -186,9 +186,15 @@ const LAYERS: Record<string, LayerRule> = {
     ],
     packages: [],
   },
-  // Checks the built-in manifests' setting declarations.
+  // Checks the built-in manifests' setting declarations, and that the default
+  // disabled list breaks none of their dependencies.
   'src/plugins/manifests.test.ts': {
-    layers: ['src/contracts', 'src/shared', 'src/plugins/manifests.ts'],
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/config',
+      'src/plugins/manifests.ts',
+    ],
     packages: [],
   },
   // Opens a round and a primer on one owned session through the three
