@@ -57,9 +57,12 @@ export interface ResumeRequest {
 }
 
 // A message sent while its session's turn ran, held by chat main until the
-// turn ends; `id` is unique within its session.
+// turn ends or the user sends it now; `id` is unique within its session.
+// `sentEntryId` is null while it waits, and once sent now the id of the user
+// entry the agent adds when it takes the message in, which drops the row.
 export interface QueuedMessage extends UserMessage {
   id: string;
+  sentEntryId: string | null;
 }
 
 // `sessionId` is the sessions plugin's id for the row. A session's row lasts
@@ -79,8 +82,8 @@ export interface ChatSessionState {
   // True while the session's process runs; false while it rests, with no
   // process yet or its process exited.
   running: boolean;
-  // The messages waiting for the running turn to end, oldest first; [] while
-  // nothing waits.
+  // The messages waiting for the running turn to end, and those sent now not
+  // yet taken in, oldest first; [] while nothing waits.
   queued: QueuedMessage[];
   // The name of the clone's top folder holding `projectDir`; the folder's own
   // name outside a clone, and until the first read.
@@ -125,8 +128,9 @@ export interface ChatChannel extends ChannelShape {
     // earlier conversation still pending is read first, arriving as
     // `entries`. While the agent reports the session's turn running the
     // message is queued, arriving as `queued`, and written to the agent when
-    // the turns before it end; a permission call left waiting after its turn
-    // ended queues nothing.
+    // the turns before it end, unless sent now first; a permission call left
+    // waiting after its turn ended queues nothing. A written message the agent
+    // never takes in arrives back as `returned`.
     send(sessionId: string, message: UserMessage): Promise<void>;
     // Reads a restored session's earlier conversation, arriving as `entries`.
     // While its profile is missing a call reads nothing and a later call
@@ -149,17 +153,28 @@ export interface ChatChannel extends ChannelShape {
     // is not the running sign-in.
     cancelLogIn(id: number): void;
     logOut(profile: string): Promise<void>;
-    // Returns every queued message, arriving as `returned`, then interrupts the
-    // running turn.
+    // Returns every queued message not sent now, arriving as `returned`, then
+    // interrupts the running turn; messages sent now stay queued.
     interrupt(sessionId: string): void;
     // Ends the session's process and starts a fresh one under a new host
     // session id; the entries become one `Conversation cleared` notice, sent
-    // as `entries`, and every queued message arrives as `returned`. Rejects
-    // when the fresh process cannot start, leaving the row resting.
+    // as `entries`, and every message written but not taken in, then every
+    // queued message, arrives as `returned`. Rejects when the fresh process
+    // cannot start, leaving the row resting.
     clear(sessionId: string): void;
     // Takes the queued message out of the queue, arriving as `returned`; does
-    // nothing for one already written to the agent.
+    // nothing for one already written to the agent or sent now.
     pullBack(sessionId: string, queuedId: string): void;
+    // Writes the queued message to the agent at once, ahead of the rest of the
+    // queue; its row stays, arriving in `queued` with `sentEntryId` set, until
+    // the agent takes it in. Does nothing for one already written or sent now.
+    sendNow(sessionId: string, queuedId: string): void;
+    // While the agent reports the session's turn running, writes every queued
+    // message not sent now, oldest first, then `message` as a new last row,
+    // each as `sendNow` does; a write that throws leaves that row and every
+    // later one unsent. Otherwise sends `message` as `send` does, and a null
+    // `message` does nothing.
+    sendAllNow(sessionId: string, message: UserMessage | null): Promise<void>;
     setControl(sessionId: string, controlId: string, value: string): void;
     answerPermission(
       sessionId: string,
@@ -188,8 +203,8 @@ export interface ChatChannel extends ChannelShape {
     // The session's repo or branch changed: read at its open and after each
     // turn ends.
     branch: { sessionId: string; repo: string; branch: string | null };
-    // Messages taken out of the queue, oldest first, for the page to put back
-    // into the box.
+    // Messages taken out of the queue, or written and never taken in by the
+    // agent, in the order written, for the page to put back into the box.
     returned: { sessionId: string; messages: UserMessage[] };
     // The page the user opens to finish sign-in `id`.
     logInLink: { id: number; profile: string; url: string };

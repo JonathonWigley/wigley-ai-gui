@@ -347,7 +347,7 @@ describe('chat commands', () => {
   it('toggleEntry_pendingRow_pullsItBack', () => {
     const entries = focusedOnStop({
       kind: 'queued',
-      message: { id: 'q-2', text: 'later', images: [] },
+      message: { id: 'q-2', text: 'later', images: [], sentEntryId: null },
     });
     const shown = Object.assign(session(true), { entries });
     const run = setUp(shown);

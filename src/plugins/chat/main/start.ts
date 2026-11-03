@@ -298,6 +298,16 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
         chat.pullBack(sessionId, queuedId);
       }
     });
+    api.channel.handle('sendNow', (sessionId, queuedId) => {
+      if (!ignoredInPreview('sendNow', sessionId)) {
+        chat.sendNow(sessionId, queuedId);
+      }
+    });
+    api.channel.handle('sendAllNow', async (sessionId, message) => {
+      if (!ignoredInPreview('sendAllNow', sessionId)) {
+        await chat.sendAllNow(sessionId, message);
+      }
+    });
     api.channel.handle('setControl', (sessionId, controlId, value) => {
       if (!ignoredInPreview('setControl', sessionId)) {
         chat.setControl(sessionId, controlId, value);
