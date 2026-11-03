@@ -834,6 +834,12 @@ U(two)):
 `result` and is followed by `system/init`, and its `completed` comes after its own `result`, whose
 `user_message_uuids` lists only it.
 
+**A local slash command** (`/effort high`, `/model sonnet`, `/status`, `/mcp`, `/context`, `/compact`, each sent alone
+on an idle process with a uuid) takes the same shape as a message with its own turn: `queued`, `started`,
+`system/init`, a `result` with `num_turns` 0 whose `user_message_uuid` is the command's uuid and whose
+`user_message_uuids` lists only it, then `completed`. `local_command` names the command (`effort`, `model`, `mcp`,
+`context`, `compact`), and is null for `/status`. `/compact` took 6.5 s from `started` to its init.
+
 - A message whose turn is interrupted gets `cancelled` after the error `result`.
 - `"priority":"later"` on the stdin message kept it out of a running tool turn: it ran as its own turn (one sample).
 - A named interrupt, `{"subtype":"interrupt","for_user_message_uuids":["<uuid of the turn's opener>"]}`, replies
