@@ -1,6 +1,6 @@
 # 06 — Shared modules take a plugin log and dispose
 
-Status: not started
+Status: in progress
 Type: Batch
 Wave: 5 · Depends on: 05
 Plan: [plan.md](plan.md)

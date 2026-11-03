@@ -1,6 +1,6 @@
 # 05 — Tool contributions reach live sessions
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 4 · Depends on: 01, 04
 Plan: [plan.md](plan.md)
@@ -259,3 +259,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 06a5e4ff · proof: diff read; typecheck and lint clean; contributeTools, addCloseGuard and SessionTabHandle produce Disposables, consumer views on both sides; worker ran 10 named test files, 212 pass, and a wider 643 across sessions and neighbours; SDK's sendToolListChanged confirmed in version 2.3.1 · concerns: a throwing tool-session end skips the remaining ends and the notice; at quit chat's sessions end during its registrations' disposal with its listeners live, read as safe, and hosts get list_changed with a shrinking list; a notice can precede initialize; a consumer's tracked session end stays filed after the session ends itself; contributeTools fakes returning void were not read one by one; write-failure test opens a real socket

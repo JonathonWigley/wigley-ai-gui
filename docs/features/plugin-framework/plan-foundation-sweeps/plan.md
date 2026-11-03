@@ -410,7 +410,7 @@ Tasks 08, 09 and 10 apply this to each of their plugins, part by part:
 - [x] [Main-side handles, service views and scoped log](04-main-handles.md) — after 02
 
 ### Wave 4
-- [ ] [Tool contributions reach live sessions](05-live-tool-contributions.md) — after 04
+- [x] [Tool contributions reach live sessions](05-live-tool-contributions.md) — after 04
 - [ ] [Plugin part test harness](07-part-harness.md) — after 04
 
 ### Wave 5
@@ -440,6 +440,7 @@ Review base: 7f956435
 - 01 · 27f4cba7 · diff read; typecheck and lint clean; every Produces found, 14 keys by grep; worker ran the 14 named test files, 310 pass. Start orders equal before and after — main: keys sessions chat forms primer agents agent-lines agent-strip docs settings backlog notes usage workflow visual gallery; page: keys sessions chat forms primer agents agent-lines docs workflow agent-strip gallery settings backlog notes usage usage-tab-line visual · concerns: live quit does not hold, so a dispose that really suspends (chat's, forms' on an unfinished write) cuts off later parts, and task 14 check 4's drive run holds the quit so cannot show it; self-test teardown can close layout watches twice until task 04's disposeRegistration guard; stop and stopAll have no overlap guard; disabledDependencyProblem may name a different id when two dependencies are disabled; dependency overload written inline in both APIs
 - 02 · 8eda568a · diff read; typecheck and lint clean; every handle in the plan's table returns Disposable; worker ran 22 named and fake-owning test files, 342 pass · concerns: preload onMessage dispose across contextBridge has no test or live check; track mutates a handle's dispose, unread for shell.setLayout and createDropTargets; a listener added during a tell now waits at five more sites; a stopped plugin's late pop throws; markedId keeps a disposed id until the next markMode; spreading editor and markdown would lose prototype methods on a class host
 - 04 · 5a86c47e · diff read; typecheck and lint clean; every handle in the plan's table returns Disposable, service views and pluginLog present; worker ran 13 named test files, 286 pass; second disposeRegistration is a no-op, pinned by a watch-count test · concerns: on Windows, zeroing alert counts at quit may call setOverlayIcon on a destroyed window, so stopAll would reject; a stale channel handle disposed after re-registering the same function drops the new one; spreading files and userConfig would lose prototype methods on a class; FakeProcesses settles a few microtasks later with a signal; no live quit run
+- 05 · 06a5e4ff · diff read; typecheck and lint clean; contributeTools, addCloseGuard and SessionTabHandle produce Disposables, consumer views on both sides; worker ran 10 named test files, 212 pass, and a wider 643 across sessions and neighbours; SDK's sendToolListChanged confirmed in version 2.3.1 · concerns: a throwing tool-session end skips the remaining ends and the notice; at quit chat's sessions end during its registrations' disposal with its listeners live, read as safe, and hosts get list_changed with a shrinking list; a notice can precede initialize; a consumer's tracked session end stays filed after the session ends itself; contributeTools fakes returning void were not read one by one; write-failure test opens a real socket
 ### Contract changes
 ### Rulings
 - Worktree run on branch foundation-sweeps in both repos, on the user's word; marketplace review base is cbd8a9e; git fetch fails on SSH access in both repos, so origin was not checked and the run builds on local main; a stale origin would surface at push · lead
@@ -454,5 +455,7 @@ Review base: 7f956435
 - trackedFiles holds live watches in a nested createRegistrations store, as trackedEditor does · group 04 · group 04
 - abortableProcesses always passes a signal, using AbortSignal.any with the caller's own · group 04 · group 04
 - channel-presenter.test.ts changed beyond the Files list, since its fake handle must return a Disposable to compile · group 04 · group 04
+- A live contribution starts every tool session before committing names and routes, through a shared startAllOrNone, so a start reading list.tools() does not see its own tools · group 05 · group 05
+- channel-presenter.ts needed no edit, since it already ignores addCloseGuard's return · group 05 · group 05
 ### Review rounds
 ### Test gate
