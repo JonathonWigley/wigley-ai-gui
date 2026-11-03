@@ -384,6 +384,7 @@ describe('watch', () => {
     { saved: 'layout.js', started: ['layout.js', 'layout.css'], hasCss: true },
     { saved: 'layout.css', started: ['layout.js', 'layout.css'], hasCss: true },
     { saved: 'layout.css', started: ['layout.js'], hasCss: true },
+    { saved: 'layout.js', started: ['layout.test.ts'], hasCss: false },
   ])(
     'watch_SaveInDefaultFolder_RaisesTheDefaultRevision ($saved, from $started)',
     async ({ saved, started, hasCss }) => {
@@ -431,22 +432,6 @@ describe('watch', () => {
       expect(sent[0].changed).toBe('alpha');
     },
   );
-
-  it('watch_DefaultLayoutJsWrittenLater_SendsTheLiveDefault', async () => {
-    await writeDefaultFiles('layout.test.ts');
-    await startWithDefault();
-
-    await writeDefaultFiles('layout.js');
-
-    await vi.waitFor(() => expect(sent).toHaveLength(1));
-    expect(sent[0].changed).toBe('default');
-    expect(defaultIn(sent[0])).toEqual({
-      name: 'default',
-      revision: 2,
-      hasCss: false,
-      builtIn: false,
-    });
-  });
 
   it('watch_DefaultLayoutJsRemovedThenWritten_BuiltInThenHigherRevision', async () => {
     await writeDefaultFiles('layout.js');
