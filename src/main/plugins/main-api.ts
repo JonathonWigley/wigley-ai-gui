@@ -69,7 +69,11 @@ export function createMainApi(
     drive: deps.driveFor(manifest.id),
     layouts: {
       register: (options) =>
-        deps.layouts.register(manifest.id, options.layoutTypes),
+        deps.layouts.register(
+          manifest.id,
+          options.layoutTypes,
+          `src/plugins/${manifest.id}/layouts/default`,
+        ),
       names: () => deps.layouts.names(manifest.id),
     },
   };

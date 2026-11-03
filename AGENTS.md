@@ -590,7 +590,7 @@ round; primer: an open primer), since main, not the page, decides.
   core LayoutService watches that folder and announces each owner's set of layouts, each with its own revision, so
   saving one reloads only that one. A plugin's main part registers its contract text with `api.layouts.register` and its
   page part draws with `api.layouts.show`, handing over its built-in `default` layout, its reader and its setting; the
-  shell registers with the core (`layouts.register('shell', shellLayoutTypes)` in `main.ts`) and shows through the page
+  shell registers with the core (`layouts.register('shell', shellLayoutTypes, 'src/renderer/shell/layouts/default')` in `main.ts`) and shows through the page
   host in `renderer.ts`. Each app writes `layouts/kit.d.ts` (the shared kit types) and `layouts/<owner>/layout.d.ts` at
   start. The page's layout host (`src/shared/page/layout-host/`) picks the layout (the owner's setting —
   `<plugin>.layout`, or the core `shell.layout` — and `default` when unset), checks it with the owner's reader, draws

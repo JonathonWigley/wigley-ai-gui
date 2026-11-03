@@ -6,6 +6,8 @@ import { createLayoutService, type LayoutService } from './layout-service';
 
 const FOLDER = '/c/layouts';
 const KIT_TYPES = 'export interface BaseKit {}';
+const CLONE = '/clone';
+const FORMS_DEFAULT = `${CLONE}/src/plugins/forms/layouts/default`;
 
 let files: MemoryFiles;
 let sent: [LayoutOwner, LayoutSet][];
@@ -15,15 +17,20 @@ beforeEach(() => {
   sent = [];
 });
 
-function createService(): LayoutService {
+function createService(repoDir: string | null = null): LayoutService {
   return createLayoutService({
     files,
     paths: posixPaths,
     folder: FOLDER,
+    repoDir,
     kitTypes: KIT_TYPES,
     send: (owner, set) => sent.push([owner, set]),
     log: () => undefined,
   });
+}
+
+function defaultFolderOf(owner: LayoutOwner): string {
+  return `src/plugins/${owner}/layouts/default`;
 }
 
 function namesIn(set: LayoutSet): string[] {
@@ -32,7 +39,11 @@ function namesIn(set: LayoutSet): string[] {
 
 // Registers `owner` and waits for its first set.
 async function registered(service: LayoutService, owner: LayoutOwner) {
-  const registration = service.register(owner, `// ${owner} types`);
+  const registration = service.register(
+    owner,
+    `// ${owner} types`,
+    defaultFolderOf(owner),
+  );
   await vi.waitFor(() =>
     expect(sent.some(([sentTo]) => sentTo === owner)).toBe(true),
   );
@@ -85,19 +96,19 @@ describe('createLayoutService', () => {
 
   it('register_SameOwnerTwice_Throws', () => {
     const service = createService();
-    service.register('forms', '');
+    service.register('forms', '', defaultFolderOf('forms'));
 
-    expect(() => service.register('forms', '')).toThrow(
-      'layouts of forms already registered',
-    );
+    expect(() =>
+      service.register('forms', '', defaultFolderOf('forms')),
+    ).toThrow('layouts of forms already registered');
   });
 
   it.each(['', 'a/b', '..', 'Forms'])(
     'register_BadOwner_Throws: %j',
     (owner) => {
-      expect(() => createService().register(owner, '')).toThrow(
-        `${owner} is no layout owner`,
-      );
+      expect(() =>
+        createService().register(owner, '', defaultFolderOf(owner)),
+      ).toThrow(`${owner} is no layout owner`);
     },
   );
 
@@ -122,23 +133,27 @@ describe('createLayoutService', () => {
       registration: 'none',
       names: ['default'],
       set: null,
+      defaultFolderPath: null,
     },
     {
       state: 'registered but not listed',
       registration: 'unlisted',
       names: ['default'],
       set: null,
+      defaultFolderPath: FORMS_DEFAULT,
     },
     {
       state: 'registration disposed',
       registration: 'disposed',
       names: ['default'],
       set: null,
+      defaultFolderPath: null,
     },
     {
       state: 'listed',
       registration: 'listed',
       names: ['default', 'f'],
+      defaultFolderPath: FORMS_DEFAULT,
       set: {
         layouts: [
           { name: 'default', revision: 1, hasCss: false, builtIn: true },
@@ -149,11 +164,11 @@ describe('createLayoutService', () => {
     },
   ] as const)(
     'names_And_read_FollowTheOwnersRegistration: $state',
-    async ({ registration, names, set }) => {
+    async ({ registration, names, set, defaultFolderPath }) => {
       await files.write(`${FOLDER}/forms/f/layout.js`, '// f');
-      const service = createService();
+      const service = createService(CLONE);
       if (registration === 'unlisted') {
-        service.register('forms', '');
+        service.register('forms', '', defaultFolderOf('forms'));
       }
       if (registration === 'disposed') {
         (await registered(service, 'forms')).dispose();
@@ -164,6 +179,54 @@ describe('createLayoutService', () => {
 
       expect(service.names('forms')).toEqual(names);
       expect(await service.read('forms')).toEqual(set);
+      expect(service.defaultFolderPath('forms')).toBe(defaultFolderPath);
+    },
+  );
+
+  it.each([
+    {
+      state: 'clone holds the default, listed',
+      repoDir: CLONE,
+      waitsForFirstSet: true,
+      defaultBuiltIn: false,
+      defaultFolderPath: FORMS_DEFAULT,
+    },
+    {
+      state: 'clone holds the default, not yet listed',
+      repoDir: CLONE,
+      waitsForFirstSet: false,
+      defaultBuiltIn: null,
+      defaultFolderPath: FORMS_DEFAULT,
+    },
+    {
+      state: 'no clone, listed',
+      repoDir: null,
+      waitsForFirstSet: true,
+      defaultBuiltIn: true,
+      defaultFolderPath: null,
+    },
+  ])(
+    'register_DefaultFolder_ReadFromTheClone: $state',
+    async ({
+      repoDir,
+      waitsForFirstSet,
+      defaultBuiltIn,
+      defaultFolderPath,
+    }) => {
+      await files.write(`${FORMS_DEFAULT}/layout.js`, '// live default');
+      const service = createService(repoDir);
+
+      if (waitsForFirstSet) {
+        await registered(service, 'forms');
+      } else {
+        service.register('forms', '', defaultFolderOf('forms'));
+      }
+
+      const firstDefault = sent[0]?.[1].layouts.find(
+        (entry) => entry.name === 'default',
+      );
+      expect(firstDefault?.builtIn ?? null).toBe(defaultBuiltIn);
+      expect(service.defaultFolderPath('forms')).toBe(defaultFolderPath);
     },
   );
 

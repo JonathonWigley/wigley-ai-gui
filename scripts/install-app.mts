@@ -3,6 +3,8 @@
 // copies the app beside the install while the stable app still runs, then
 // quits that app, swaps the copy in, and starts the app again when it was
 // running, even after a failed swap, on whichever version is then installed.
+// The build bakes in this clone's path, never the build worktree's, so the
+// stable app reads each live default layout from this clone.
 // `scripts/install-steps.mts` holds the paths and the argument parsing.
 import { type SpawnSyncOptions, spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -45,7 +47,10 @@ async function main(ref: string): Promise<void> {
   const commit = resolveCommit(ref);
   checkOutBuildWorktree(paths.buildDir, commit);
   installDependenciesWhenDue(paths.buildDir);
-  runNpmStep('npm run package', paths.buildDir);
+  runNpmStep('npm run package', paths.buildDir, {
+    ...process.env,
+    WIGLEY_CLONE_DIR: REPO_DIR,
+  });
   if (!existsSync(paths.packagedApp)) {
     throw new Error(`npm run package left no app at ${paths.packagedApp}`);
   }
@@ -107,10 +112,16 @@ function runStep(
 
 // Runs an npm command line through the shell, as one string with no args:
 // Node spawns npm's Windows `.cmd` only through a shell, and warns (DEP0190)
-// when a shell spawn is handed args.
-function runNpmStep(commandLine: string, cwd: string): void {
+// when a shell spawn is handed args. `env`, when given, is the command's whole
+// environment; else it inherits this script's.
+function runNpmStep(
+  commandLine: string,
+  cwd: string,
+  env?: NodeJS.ProcessEnv,
+): void {
   runStep(commandLine, commandLine, [], {
     cwd,
+    env,
     stdio: 'inherit',
     shell: true,
   });

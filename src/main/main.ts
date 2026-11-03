@@ -99,6 +99,7 @@ import {
   createLayoutService,
   type LayoutService,
 } from './layouts/layout-service';
+import { resolveCloneDir } from './resolve-clone-dir';
 import { createMainApi } from './plugins/main-api';
 import { createPageLog } from './page-log';
 import { createPastedFiles } from './pasted-files';
@@ -313,6 +314,9 @@ const git = createProcessGit({ processes, files, paths });
 
 let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;
+// The window's layouts service, which the `wigley-layout:` scheme asks for
+// each owner's default folder; null until the window makes it.
+let layoutService: LayoutService | null = null;
 
 // The work the app does as it quits, started in the order it was added.
 const quitTasks: (() => unknown)[] = [];
@@ -394,6 +398,9 @@ interface StartInputs {
   tempFolders: readonly string[];
   // The drive run's folder; null outside a drive run.
   driveRunDir: string | null;
+  // The repo clone each owner's live `default` layout is read from:
+  // `WIGLEY_CLONE_DIR` when that is a folder, else null.
+  repoDir: string | null;
 }
 
 // The OS as the served config names it.
@@ -510,6 +517,10 @@ async function readStartInputs(): Promise<StartInputs> {
     pastedFolder: pastedFolder(homeDir),
     tempFolders: await runTempFolders(),
     driveRunDir,
+    repoDir: await resolveCloneDir(
+      WIGLEY_CLONE_DIR,
+      async (folder) => (await files.stat(folder))?.isFolder ?? false,
+    ),
   };
 }
 
@@ -600,17 +611,28 @@ function serveUiState(filePath: string, log: Log) {
   onSelfTestExit('the ui-state file', async () => (await load()).close());
 }
 
-// The core layouts service over the layouts folder in `homeDir`, sending each
-// owner's set to the window's page and answering the page's reads.
+// The core layouts service over the layouts folder in `homeDir` and each
+// owner's default folder in `repoDir`, sending each owner's set to the
+// window's page and answering the page's reads; held in `layoutService` for
+// the `wigley-layout:` scheme. With no `repoDir` it logs once under source
+// `layouts`.
 function serveLayouts(
   window: BrowserWindow,
   homeDir: string,
+  repoDir: string | null,
   log: Log,
 ): LayoutService {
+  if (repoDir === null) {
+    log(
+      'layouts',
+      `clone folder ${WIGLEY_CLONE_DIR} is missing; each default draws its bundled copy`,
+    );
+  }
   const service = createLayoutService({
     files,
     paths,
     folder: layoutsFolder(homeDir),
+    repoDir,
     kitTypes,
     send: (owner, set) =>
       livePage(window)?.send(BRIDGE_CHANNELS.layoutsChanged, owner, set),
@@ -619,6 +641,7 @@ function serveLayouts(
   ipcMain.handle(BRIDGE_CHANNELS.layoutsRead, (_event, owner: string) =>
     service.read(owner),
   );
+  layoutService = service;
   return service;
 }
 
@@ -765,9 +788,13 @@ function createWindow(
     onQuit(() => driveRun.dispose());
     driveRun.listening.catch(failStart);
   }
-  const layouts = serveLayouts(window, inputs.homeDir, log);
+  const layouts = serveLayouts(window, inputs.homeDir, inputs.repoDir, log);
   // The service's dispose on quit ends the registration.
-  layouts.register('shell', shellLayoutTypes);
+  layouts.register(
+    'shell',
+    shellLayoutTypes,
+    'src/renderer/shell/layouts/default',
+  );
   // Read once: a changed list reaches main's parts on the next app start.
   const startList = mainStartList(
     runMode === 'selfTest',
@@ -956,7 +983,11 @@ function startApp() {
       const { store, userConfig } = await loadConfig(inputs.homeDir);
       onSelfTestExit('the config store', () => store.dispose());
       serveDataScheme(inputs.dataRoot, paths);
-      serveLayoutScheme(layoutsFolder(inputs.homeDir), paths, () => null);
+      serveLayoutScheme(
+        layoutsFolder(inputs.homeDir),
+        paths,
+        (owner) => layoutService?.defaultFolderPath(owner) ?? null,
+      );
       const serveVisual = serveVisualScheme();
       ipcMain.handle(BRIDGE_CHANNELS.serveVisual, (_event, source: string) =>
         serveVisual(source),

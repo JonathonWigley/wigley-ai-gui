@@ -16,6 +16,9 @@ export interface LayoutServiceDeps {
   paths: Paths;
   // The absolute `layouts` folder in the user config folder.
   folder: string;
+  // The absolute repo clone each owner's live `default` is read from; null
+  // when the clone is missing.
+  repoDir: string | null;
   // The text of `src/shared/page/layout-host/kit.d.ts`.
   kitTypes: string;
   send(owner: LayoutOwner, set: LayoutSet): void;
@@ -24,16 +27,25 @@ export interface LayoutServiceDeps {
 
 // The core's layouts folder, one registry per registered owner over its own
 // `<folder>/<owner>/`. `register` starts the owner's registry, which writes
-// the owner's `layout.d.ts`, and sends the owner's first set once it has
-// listed, then each set the registry announces; it throws
+// the owner's `layout.d.ts` and also watches the owner's `defaultFolder`
+// (relative to `repoDir`, `/`-separated) for a live `default`, and sends the
+// owner's first set once it has listed, then each set the registry announces;
+// with no `repoDir` the `default` stays built in. It throws
 // `<owner> is no layout owner` for an owner that is not lowercase letters,
 // digits and `-`, and `layouts of <owner> already registered` while the owner
-// holds a registration. Disposing a registration closes its watch and drops
+// holds a registration. Disposing a registration closes its watches and drops
 // the owner. `names` reads `['default']` and `read` resolves null for an
-// owner not registered or not yet listed. `dispose` drops every owner.
+// owner not registered or not yet listed. `defaultFolderPath` is the absolute
+// default folder of a registered owner, listed or not; null for an owner not
+// registered or with no `repoDir`. `dispose` drops every owner.
 export interface LayoutService {
-  register(owner: LayoutOwner, layoutTypes: string): Disposable;
+  register(
+    owner: LayoutOwner,
+    layoutTypes: string,
+    defaultFolder: string,
+  ): Disposable;
   names(owner: LayoutOwner): string[];
+  defaultFolderPath(owner: LayoutOwner): string | null;
   read(owner: LayoutOwner): Promise<LayoutSet | null>;
   dispose(): void;
 }
@@ -45,10 +57,12 @@ const DEFAULT_NAME = 'default';
 // The log source of the service's own lines.
 const LOG_SOURCE = 'layouts';
 
-// One owner's registration: its registry once it has listed, until disposed.
+// One owner's registration: its registry once it has listed, until disposed,
+// and its absolute default folder, null with no clone.
 interface Registration {
   registry: LayoutRegistry | null;
   isDisposed: boolean;
+  defaultFolderPath: string | null;
 }
 
 // Writes `kitTypes` to `<folder>/kit.d.ts` at once; a failed write is logged
@@ -72,18 +86,27 @@ export function createLayoutService(deps: LayoutServiceDeps): LayoutService {
   };
 
   return {
-    register(owner, layoutTypes) {
+    register(owner, layoutTypes, defaultFolder) {
       if (!OWNER.test(owner)) {
         throw new Error(`${owner} is no layout owner`);
       }
       if (registrations.has(owner)) {
         throw new Error(`layouts of ${owner} already registered`);
       }
-      const held: Registration = { registry: null, isDisposed: false };
+      const defaultFolderPath =
+        deps.repoDir === null ? null : paths.join(deps.repoDir, defaultFolder);
+      const held: Registration = {
+        registry: null,
+        isDisposed: false,
+        defaultFolderPath,
+      };
       registrations.set(owner, held);
       startLayoutRegistry({
         folder: scopedFiles(files, paths.join(deps.folder, owner), paths),
-        defaultFolder: null,
+        defaultFolder:
+          defaultFolderPath === null
+            ? null
+            : scopedFiles(files, defaultFolderPath, paths),
         send: (set) => {
           if (!held.isDisposed) {
             deps.send(owner, set);
@@ -108,6 +131,8 @@ export function createLayoutService(deps: LayoutServiceDeps): LayoutService {
     },
     names: (owner) =>
       registrations.get(owner)?.registry?.names() ?? [DEFAULT_NAME],
+    defaultFolderPath: (owner) =>
+      registrations.get(owner)?.defaultFolderPath ?? null,
     read: async (owner) =>
       registrations.get(owner)?.registry?.current() ?? null,
     dispose() {

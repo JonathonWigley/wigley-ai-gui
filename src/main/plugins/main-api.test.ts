@@ -188,8 +188,8 @@ describe('createMainApi', () => {
   it('createMainApi_Layouts_RunUnderThePluginId', () => {
     const calls: unknown[][] = [];
     const layouts = {
-      register: (owner: string, layoutTypes: string) => {
-        calls.push(['register', owner, layoutTypes]);
+      register: (owner: string, layoutTypes: string, defaultFolder: string) => {
+        calls.push(['register', owner, layoutTypes, defaultFolder]);
         return { dispose: () => undefined };
       },
       names: (owner: string) => {
@@ -203,7 +203,7 @@ describe('createMainApi', () => {
     const names = api.layouts.names();
 
     expect(calls).toEqual([
-      ['register', 'p', 'types'],
+      ['register', 'p', 'types', 'src/plugins/p/layouts/default'],
       ['names', 'p'],
     ]);
     expect(names).toEqual(['default', 'mine']);
