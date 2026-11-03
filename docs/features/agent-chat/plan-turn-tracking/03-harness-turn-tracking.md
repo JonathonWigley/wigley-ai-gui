@@ -1,6 +1,6 @@
 # 03 — Harness tracks turns by uuid
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 3 · Depends on: 01, 02
 Plan: [plan.md](plan.md)

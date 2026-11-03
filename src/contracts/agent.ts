@@ -263,7 +263,9 @@ export interface AgentProcessEvents {
 
 // `send`, `interrupt` and `setControl` throw after `end`. `setControl` also
 // throws for a control or choice the harness did not declare, or when the
-// harness cannot change that control now.
+// harness cannot change that control now. `interrupt` always ends working: the
+// adapter shows idle within a grace period whatever the agent answers, and a
+// second `interrupt` while still working ends the process.
 export interface AgentProcess {
   send(message: UserMessage): void;
   interrupt(): void;

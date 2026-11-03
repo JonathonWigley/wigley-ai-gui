@@ -221,7 +221,7 @@ uuid keys; the `AgentHarness` contract is unchanged.
 - [x] [Decoder reads turn lifecycle](01-decoder-turn-lifecycle.md)
 
 ### Wave 2
-- [ ] [Turn tracker](02-turn-tracker.md) — after 01
+- [x] [Turn tracker](02-turn-tracker.md) — after 01
 
 ### Wave 3
 - [ ] [Harness tracks turns by uuid](03-harness-turn-tracking.md) — after 01, 02
@@ -238,8 +238,10 @@ Review base: 578c0d08ecda7909910ef4254a06d47fef5e0f55
 
 ### Groups
 - 01 · 38ee7cc9 · diff read: five DecodedLine fields and command_lifecycle in DECODERS present; typecheck passes · concerns: none
+- 02 · 0fd04bc9 · diff read: ControlCommand, TurnLine, TurnRead, TurnTracker, createTurnTracker present as planned; typecheck passes · concerns: the explicit turnOpener close in lifecycle mode has no test that fails without it (every measured result lists the opener in turnMessages)
 ### Contract changes
 ### Rulings
 - stringItems(value) helper shared by init capabilities and result user_message_uuids — one filter rule — inline it back if unwanted · group 01 · group 01
+- a lifecycle turn end with turnOpener null returns null and still closes every turnMessages uuid — the rule and the folded-uuid row need it — a folded message would wait for its completed frame if wrong · group 02 · group 02
 ### Review rounds
 ### Test gate

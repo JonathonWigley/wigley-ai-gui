@@ -15,7 +15,7 @@ import {
   type SessionControl,
   type UsageAgentEvent,
 } from '../../contracts/agent';
-import type { Clock } from '../../contracts/ambient';
+import type { Clock, RandomUuid } from '../../contracts/ambient';
 import { type Files, readIfPresent } from '../../contracts/files';
 import type { Log } from '../../contracts/log';
 import type { Paths } from '../../contracts/paths';
@@ -54,6 +54,7 @@ import {
   type DecodedLine,
 } from './stream-decoder';
 import { projectFolderName } from './transcripts';
+import { type ControlCommand, createTurnTracker } from './turn-tracker';
 
 export type ClaudeSpawn = (
   command: string,
@@ -68,7 +69,8 @@ export type ClaudeSpawn = (
 // what a `~` profile folder resolves against and is where `claude auth` and
 // `claude -p /usage` run, and `paths` joins and compares paths by the rules of
 // the OS `claude` runs on; `clock` stamps each live entry's and agent event's
-// `at`. `files` also reads the profile's `settings.json` at each session start.
+// `at`; `randomUuid` gives each stdin user message its `uuid`. `files` also
+// reads the profile's `settings.json` at each session start.
 export interface ClaudeCodeHarnessDeps {
   command(): string;
   permissionTool: string;
@@ -79,11 +81,15 @@ export interface ClaudeCodeHarnessDeps {
   homeDir: string;
   paths: Paths;
   clock: Clock;
+  randomUuid: RandomUuid;
 }
 
 // How long `end` waits after closing stdin before SIGTERM, and again before
 // SIGKILL.
 const END_GRACE_MS = 3000;
+// How long an interrupt waits for the turn to end before the session shows
+// idle.
+const INTERRUPT_GRACE_MS = 5000;
 // A typed `/effort <value>` or `/model <value>` sets that control.
 const CONTROL_COMMAND = /^\/(effort|model) (\S+)$/;
 // How long a `claude -p /usage` poll may run before it is killed.
@@ -101,10 +107,6 @@ type PendingRequest =
   | { kind: 'mode'; value: string }
   | { kind: 'interrupt' }
   | { kind: 'contextUsage' };
-interface ControlCommand {
-  id: 'effort' | 'model';
-  value: string;
-}
 
 function controlOf(id: string) {
   return CLAUDE_CONTROLS.find((control) => control.id === id);
@@ -173,12 +175,7 @@ function startClaudeProcess(
   const decoder = createStreamDecoder(
     (requestId) => pendingRequests.get(requestId)?.kind === 'contextUsage',
   );
-  // One item per message written and not yet answered by a `result`, in
-  // write order: Claude queues a message sent mid-turn and answers each with
-  // its own `result`. A `result` of a turn Claude ran on its own, after a
-  // background subagent ends, answers none of them. The item is the effort or
-  // model command the message carries, or null.
-  const pendingTurns: (ControlCommand | null)[] = [];
+  const tracker = createTurnTracker();
   let lastStderr: string | null = null;
   let isEndCalled = false;
   let hasClosed = false;
@@ -186,6 +183,8 @@ function startClaudeProcess(
   let endPromise: Promise<void> | null = null;
   const closeWaiters: (() => void)[] = [];
   const timers: ReturnType<typeof setTimeout>[] = [];
+  // Pending while an interrupt waits for the turn to end.
+  let graceTimer: ReturnType<typeof setTimeout> | null = null;
   let usage = EMPTY_SESSION_USAGE;
   let lastUsageEvent: UsageAgentEvent | null = null;
 
@@ -198,9 +197,25 @@ function startClaudeProcess(
     emit(() => events.controls(reported));
   };
 
-  const setActivity = (next: ProcessActivity) => {
+  const emitActivity = (next: ProcessActivity) => {
     activity = next;
     emit(() => events.activity(next));
+  };
+
+  // Emits the tracker's activity when it changed; a line read after `close`
+  // emits nothing, so no activity follows `ended`.
+  const syncActivity = () => {
+    if (hasClosed) {
+      return;
+    }
+    const next = tracker.activity();
+    if (next !== activity) {
+      emitActivity(next);
+    }
+    if (next === 'idle' && graceTimer !== null) {
+      clearTimeout(graceTimer);
+      graceTimer = null;
+    }
   };
 
   const emitEntry = (draft: EntryDraft) => {
@@ -318,6 +333,8 @@ function startClaudeProcess(
           response,
         );
       }
+      tracker.interruptAnswered();
+      syncActivity();
       return;
     }
     if (response.error !== null) {
@@ -379,13 +396,24 @@ function startClaudeProcess(
   // value that is not among the control's choices leaves the control unknown.
   const handleLine = (line: string) => {
     const decoded = decoder.decode(line);
-    const answersSend = decoded.turnEnded && !decoded.turnUnrequested;
-    const command = answersSend ? (pendingTurns.shift() ?? null) : null;
+    const turn = tracker.read(decoded);
+    const { command } = turn;
     for (const entry of decoded.entries) {
       const isCommandResult = command !== null && entry.kind === 'result';
       if (!isCommandResult) {
         emitEntry(entry);
       }
+    }
+    if (turn.fellBack) {
+      deps.log(
+        'claude',
+        'msg_lifecycle_v1 missing from init capabilities; tracking turns by results',
+      );
+      harnessNotice(
+        'This Claude Code version reports no message lifecycle; the working state follows turn results only.',
+        'info',
+        line,
+      );
     }
     for (const draft of decoded.agentEvents) {
       emitAgentEvent(draft);
@@ -419,9 +447,15 @@ function startClaudeProcess(
     if (decoded.turnEnded && isRunning) {
       requestContextUsage();
     }
-    if (decoded.turnEnded && pendingTurns.length === 0) {
-      setActivity('idle');
+    syncActivity();
+  };
+
+  const kill = () => {
+    if (hasClosed) {
+      return;
     }
+    isEndCalled = true;
+    child.kill('SIGTERM');
   };
 
   createInterface({ input: child.stdout }).on('line', handleLine);
@@ -431,9 +465,8 @@ function startClaudeProcess(
   });
   child.stdin.on('error', (error) => deps.log('claude', errorText(error)));
   child.on('close', (code: number | null, signal: NodeJS.Signals | null) => {
-    pendingTurns.length = 0;
     if (activity === 'working') {
-      setActivity('idle');
+      emitActivity('idle');
     }
     const isCleanExit = code === 0 || isEndCalled;
     emitEnded({
@@ -455,7 +488,7 @@ function startClaudeProcess(
 
   emitAgentEvent({ type: 'sessionStarted' });
   emitControls();
-  setActivity('idle');
+  emitActivity('idle');
   requestContextUsage();
   // The profile's autocompact override, read once: a change applies to the
   // next session.
@@ -475,7 +508,8 @@ function startClaudeProcess(
   return {
     send(userInput) {
       requireRunning();
-      const message = userMessage(userInput);
+      const uuid = deps.randomUuid();
+      const message = userMessage(userInput, uuid);
       write(message);
       sendCount += 1;
       emitEntry({
@@ -496,16 +530,30 @@ function startClaudeProcess(
           ...skill,
         });
       }
-      pendingTurns.push(
+      tracker.written(
+        uuid,
         typed === null
           ? null
           : { id: typed[1] as ControlCommand['id'], value: typed[2] },
       );
-      setActivity('working');
+      syncActivity();
     },
     interrupt() {
       requireRunning();
       if (activity !== 'working') {
+        return;
+      }
+      if (graceTimer !== null) {
+        harnessNotice(
+          'Interrupted again; ending the Claude process.',
+          'info',
+          null,
+        );
+        deps.log(
+          'claude',
+          'second interrupt while working; killing the process',
+        );
+        kill();
         return;
       }
       const requestId = nextRequestId();
@@ -517,6 +565,24 @@ function startClaudeProcess(
       pendingRequests.set(requestId, { kind: 'interrupt' });
       write(message);
       harnessNotice('Interrupted', 'info', message);
+      graceTimer = setTimeout(() => {
+        graceTimer = null;
+        if (activity !== 'working') {
+          return;
+        }
+        tracker.abandon();
+        harnessNotice(
+          'Claude did not stop within 5 s; showing the session idle.',
+          'info',
+          null,
+        );
+        deps.log(
+          'claude',
+          'interrupt unanswered after 5 s; dropping turn state',
+        );
+        syncActivity();
+      }, INTERRUPT_GRACE_MS);
+      timers.push(graceTimer);
     },
     setControl(id, value) {
       requireRunning();
@@ -538,10 +604,10 @@ function startClaudeProcess(
           `Claude is working; change ${control.label} when the turn ends`,
         );
       }
-      // A slash command carries no request id.
-      write(controlMessage(control.id, value, ''));
-      pendingTurns.push({ id: control.id, value });
-      setActivity('working');
+      const uuid = deps.randomUuid();
+      write(controlMessage(control.id, value, uuid));
+      tracker.written(uuid, { id: control.id, value });
+      syncActivity();
     },
     end() {
       if (endPromise !== null) {
@@ -562,13 +628,7 @@ function startClaudeProcess(
       );
       return endPromise;
     },
-    kill() {
-      if (hasClosed) {
-        return;
-      }
-      isEndCalled = true;
-      child.kill('SIGTERM');
-    },
+    kill,
   };
 }
 

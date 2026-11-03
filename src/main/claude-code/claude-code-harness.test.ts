@@ -130,6 +130,7 @@ function started(
 ) {
   const logged: [string, string][] = [];
   const spawn: ClaudeSpawn = () => fake.child;
+  let uuidCount = 0;
   const harness = createClaudeCodeHarness({
     command: () => '/bin/claude',
     permissionTool: 'tool',
@@ -140,6 +141,10 @@ function started(
     homeDir: '/Users/u',
     paths: posixPaths,
     clock: harnessClock,
+    randomUuid: () => {
+      uuidCount += 1;
+      return `uuid-${uuidCount}`;
+    },
   });
   const { heard, agentEvents, events } = recordingEvents();
   const agent = harness.start(startRequest, events);
@@ -165,7 +170,13 @@ const errorResult = {
   result: 'boom',
 };
 
-function successResult(result: string) {
+// A success `result`; `uuids` name the messages its turn took in, the opener
+// first.
+function successResult(result: string, uuids: string[] = []) {
+  const taken =
+    uuids.length === 0
+      ? {}
+      : { user_message_uuid: uuids[0], user_message_uuids: uuids };
   return {
     type: 'result',
     subtype: 'success',
@@ -173,7 +184,50 @@ function successResult(result: string) {
     result,
     total_cost_usd: 0,
     num_turns: 0,
+    ...taken,
   };
+}
+
+const lifecycleInit = {
+  type: 'system',
+  subtype: 'init',
+  capabilities: ['msg_lifecycle_v1'],
+};
+
+// An init from a Claude Code version with no message lifecycle.
+const plainInit = { type: 'system', subtype: 'init' };
+
+const lifecycle = (uuid: string, state: string) => ({
+  type: 'command_lifecycle',
+  command_uuid: uuid,
+  state,
+});
+
+const ownTurnResult = {
+  ...successResult('background done'),
+  origin: { kind: 'task-notification' },
+};
+
+const GRACE_NOTICE =
+  'Claude did not stop within 5 s; showing the session idle.';
+
+function noticeTexts(heard: [string, unknown][]) {
+  return heard
+    .map(([, payload]) => payload as { kind?: string; text?: string })
+    .filter((entry) => entry.kind === 'notice')
+    .map((entry) => entry.text);
+}
+
+function activities(heard: [string, unknown][]) {
+  return heard.filter(([name]) => name === 'activity').map(([, a]) => a);
+}
+
+function interruptRequests(written: unknown[]) {
+  return written.filter(
+    (line) =>
+      (line as { request?: { subtype?: string } }).request?.subtype ===
+      'interrupt',
+  );
 }
 
 function lastActivity(heard: [string, unknown][]) {
@@ -239,7 +293,7 @@ describe('createClaudeCodeHarness', () => {
     run.agent.send({ text: 'hi', images: [] });
     await settle();
 
-    const message = userMessage({ text: 'hi', images: [] });
+    const message = userMessage({ text: 'hi', images: [] }, 'uuid-1');
     expect(run.written).toEqual([contextUsageRequest('wigley-1'), message]);
     expect(run.heard).toEqual([
       [
@@ -307,7 +361,7 @@ describe('createClaudeCodeHarness', () => {
 
     expect(run.written).toEqual([
       contextUsageRequest('wigley-1'),
-      controlMessage('effort', 'high', ''),
+      controlMessage('effort', 'high', 'uuid-1'),
       contextUsageRequest('wigley-2'),
     ]);
     expect(
@@ -383,7 +437,7 @@ describe('createClaudeCodeHarness', () => {
     ).toEqual([first, second, third]);
     expect(run.written).toEqual([
       contextUsageRequest('wigley-1'),
-      userMessage({ text: 'hi', images: [] }),
+      userMessage({ text: 'hi', images: [] }, 'uuid-1'),
       contextUsageRequest('wigley-2'),
     ]);
   });
@@ -445,11 +499,13 @@ describe('createClaudeCodeHarness', () => {
     run.agent.send({ text: 'one', images: [] });
     run.agent.send({ text: 'two', images: [] });
 
-    writeLine(run.stdout, successResult('1'));
+    writeLine(run.stdout, lifecycleInit);
+    writeLine(run.stdout, successResult('1', ['uuid-1']));
     await settle();
     expect(lastActivity(run.heard)).toBe('working');
 
-    writeLine(run.stdout, successResult('2'));
+    writeLine(run.stdout, lifecycleInit);
+    writeLine(run.stdout, successResult('2', ['uuid-2']));
     await settle();
     expect(lastActivity(run.heard)).toBe('idle');
   });
@@ -458,7 +514,8 @@ describe('createClaudeCodeHarness', () => {
     const run = await startedQuiet();
     run.agent.send({ text: 'one', images: [] });
     run.agent.send({ text: 'two', images: [] });
-    writeLine(run.stdout, successResult('1'));
+    writeLine(run.stdout, lifecycleInit);
+    writeLine(run.stdout, successResult('1', ['uuid-1']));
     await settle();
 
     run.agent.interrupt();
@@ -475,12 +532,17 @@ describe('createClaudeCodeHarness', () => {
     run.agent.send({ text: 'one', images: [] });
     run.agent.send({ text: '/effort high', images: [] });
 
-    writeLine(run.stdout, successResult('1'));
+    writeLine(run.stdout, lifecycleInit);
+    writeLine(run.stdout, successResult('1', ['uuid-1']));
     await settle();
     expect(effortValue(run.heard)).toBeNull();
     expect(resultEntries(run.heard)).toHaveLength(1);
 
-    writeLine(run.stdout, successResult('Set effort level to high'));
+    writeLine(run.stdout, lifecycleInit);
+    writeLine(
+      run.stdout,
+      successResult('Set effort level to high', ['uuid-2']),
+    );
     await settle();
 
     expect(effortValue(run.heard)).toBe('high');
@@ -497,13 +559,18 @@ describe('createClaudeCodeHarness', () => {
       const run = await startedQuiet();
       run.agent.send({ text: '/effort high', images: [] });
 
+      writeLine(run.stdout, lifecycleInit);
       writeLine(run.stdout, { ...successResult('done'), origin });
       await settle();
       expect(lastActivity(run.heard)).toBe('working');
       expect(effortValue(run.heard)).toBeNull();
       expect(resultEntries(run.heard)).toHaveLength(1);
 
-      writeLine(run.stdout, successResult('Set effort level to high'));
+      writeLine(run.stdout, lifecycleInit);
+      writeLine(
+        run.stdout,
+        successResult('Set effort level to high', ['uuid-1']),
+      );
       await settle();
       expect(effortValue(run.heard)).toBe('high');
       expect(resultEntries(run.heard)).toHaveLength(1);
@@ -523,6 +590,212 @@ describe('createClaudeCodeHarness', () => {
     await settle();
 
     expect(effortValue(run.heard)).toBeNull();
+  });
+
+  it.each([
+    { mode: 'lifecycle', init: lifecycleInit, withLifecycle: true },
+    { mode: 'fallback', init: plainInit, withLifecycle: false },
+  ])(
+    'activity_MessageFoldedIntoClaudesOwnTurn_EndsIdle ($mode)',
+    async ({ init, withLifecycle }) => {
+      const run = await startedQuiet();
+      run.agent.send({ text: 'one', images: [] });
+      writeLine(run.stdout, init);
+      writeLine(run.stdout, successResult('1', ['uuid-1']));
+      await settle();
+      expect(lastActivity(run.heard)).toBe('idle');
+
+      run.agent.send({ text: 'two', images: [] });
+      writeLine(run.stdout, init);
+      if (withLifecycle) {
+        for (const state of ['queued', 'started', 'completed']) {
+          writeLine(run.stdout, lifecycle('uuid-2', state));
+        }
+      }
+      writeLine(run.stdout, ownTurnResult);
+      await settle();
+
+      expect(lastActivity(run.heard)).toBe('idle');
+    },
+  );
+
+  it('activity_ClaudesOwnTurn_ShowsWorkingThenIdle', async () => {
+    const run = await startedQuiet();
+
+    writeLine(run.stdout, lifecycleInit);
+    await settle();
+    expect(lastActivity(run.heard)).toBe('working');
+
+    writeLine(run.stdout, ownTurnResult);
+    await settle();
+    expect(lastActivity(run.heard)).toBe('idle');
+  });
+
+  const interruptReply = (error: string | null) =>
+    error === null
+      ? {
+          type: 'control_response',
+          response: {
+            subtype: 'success',
+            request_id: 'wigley-2',
+            response: { still_queued: [] },
+          },
+        }
+      : {
+          type: 'control_response',
+          response: { subtype: 'error', request_id: 'wigley-2', error },
+        };
+
+  it.each([
+    {
+      name: 'no turn, success',
+      turnOpen: false,
+      error: null,
+      notice: null,
+    },
+    {
+      name: 'no turn, error',
+      turnOpen: false,
+      error: 'busy',
+      notice: 'Could not interrupt: busy',
+    },
+    { name: 'turn open', turnOpen: true, error: null, notice: null },
+  ])(
+    'interrupt_Answered_EndsIdleOnlyWhenNoTurnIsOpen ($name)',
+    async ({ turnOpen, error, notice }) => {
+      const run = await startedQuiet();
+      if (turnOpen) {
+        writeLine(run.stdout, lifecycleInit);
+        await settle();
+      }
+      run.agent.send({ text: 'one', images: [] });
+
+      run.agent.interrupt();
+      writeLine(run.stdout, interruptReply(error));
+      await settle();
+
+      if (notice !== null) {
+        expect(noticeTexts(run.heard)).toContain(notice);
+      }
+      if (!turnOpen) {
+        expect(lastActivity(run.heard)).toBe('idle');
+        return;
+      }
+      expect(lastActivity(run.heard)).toBe('working');
+      writeLine(run.stdout, {
+        ...errorResult,
+        user_message_uuid: 'uuid-1',
+        user_message_uuids: ['uuid-1'],
+      });
+      await settle();
+      expect(lastActivity(run.heard)).toBe('idle');
+    },
+  );
+
+  it.each([
+    { advanceMs: 5000, activity: 'idle', hasNotice: true },
+    { advanceMs: 4999, activity: 'working', hasNotice: false },
+  ])(
+    'interrupt_UnansweredForTheGrace_ShowsIdleWithNotice ($advanceMs ms)',
+    async ({ advanceMs, activity, hasNotice }) => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const run = await startedQuiet();
+      run.agent.send({ text: 'one', images: [] });
+      run.agent.interrupt();
+      await settle();
+
+      vi.advanceTimersByTime(advanceMs);
+      await settle();
+
+      expect(lastActivity(run.heard)).toBe(activity);
+      expect(noticeTexts(run.heard).includes(GRACE_NOTICE)).toBe(hasNotice);
+    },
+  );
+
+  it('interrupt_AnsweredWithinTheGrace_PostsNoGraceNotice', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const run = await startedQuiet();
+    run.agent.send({ text: 'one', images: [] });
+    run.agent.interrupt();
+    writeLine(run.stdout, errorResult);
+    await settle();
+
+    vi.advanceTimersByTime(5000);
+    await settle();
+
+    expect(noticeTexts(run.heard)).not.toContain(GRACE_NOTICE);
+    expect(activities(run.heard)).toEqual(['working', 'idle']);
+  });
+
+  it.each([
+    { name: 'unanswered', answerFirst: false, signals: ['SIGTERM'] },
+    { name: 'first answered', answerFirst: true, signals: [] },
+  ])(
+    'interrupt_SecondWhileWorking_KillsTheProcess ($name)',
+    async ({ answerFirst, signals }) => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const run = await startedQuiet();
+      run.agent.send({ text: 'one', images: [] });
+      run.agent.interrupt();
+      if (answerFirst) {
+        writeLine(run.stdout, errorResult);
+        await settle();
+        run.agent.send({ text: 'two', images: [] });
+      }
+
+      run.agent.interrupt();
+      await settle();
+
+      expect(run.signals).toEqual(signals);
+      const killNotice = 'Interrupted again; ending the Claude process.';
+      expect(noticeTexts(run.heard).includes(killNotice)).toBe(!answerFirst);
+      expect(interruptRequests(run.written)).toHaveLength(answerFirst ? 2 : 1);
+    },
+  );
+
+  it('activity_RepeatedWorkingLines_EmitsOnlyChanges', async () => {
+    const run = await startedQuiet();
+    run.agent.send({ text: 'one', images: [] });
+    writeLine(run.stdout, lifecycleInit);
+    writeLine(run.stdout, lifecycle('uuid-1', 'started'));
+    await settle();
+
+    expect(activities(run.heard)).toEqual(['working']);
+  });
+
+  it('start_InitWithoutLifecycleCapability_PostsOneNotice', async () => {
+    const run = await startedQuiet();
+    run.agent.send({ text: 'one', images: [] });
+
+    writeLine(run.stdout, plainInit);
+    writeLine(run.stdout, plainInit);
+    await settle();
+
+    const notice =
+      'This Claude Code version reports no message lifecycle; the working state follows turn results only.';
+    expect(noticeTexts(run.heard).filter((text) => text === notice)).toEqual([
+      notice,
+    ]);
+    const missing =
+      'msg_lifecycle_v1 missing from init capabilities; tracking turns by results';
+    expect(run.logged.filter(([, message]) => message === missing)).toEqual([
+      ['claude', missing],
+    ]);
+  });
+
+  it('activity_LineAfterClose_EmitsNothingAfterEnded', async () => {
+    const run = await startedQuiet();
+    run.agent.send({ text: 'one', images: [] });
+    await settle();
+
+    run.emitter.emit('close', 0, null);
+    writeLine(run.stdout, lifecycleInit);
+    await settle();
+
+    const names = run.heard.map(([name]) => name);
+    const endedAt = names.indexOf('ended');
+    expect(endedAt).toBeGreaterThan(-1);
+    expect(names.slice(endedAt)).not.toContain('activity');
   });
 
   it('stderrAndExit_LogsAndEnds', async () => {
@@ -723,6 +996,7 @@ describe('createClaudeCodeHarness past sessions', () => {
       homeDir: '/Users/u',
       paths: posixPaths,
       clock,
+      randomUuid: () => 'uuid-1',
     });
     const sessions = await harness.listSessions('/w/app', profileDir);
     return sessions.map((session) => session.sessionId);
@@ -815,6 +1089,7 @@ describe('createClaudeCodeHarness accounts', () => {
       homeDir: '/Users/u',
       paths: posixPaths,
       clock: harnessClock,
+      randomUuid: () => 'uuid-1',
     });
     return { harness, spawned };
   }
