@@ -1,6 +1,6 @@
 # 07 — Final verification: live defaults in the running app
 
-Status: not started
+Status: done
 Type: Task
 Wave: 4 · Depends on: 01, 02, 03, 04, 05, 06
 Plan: [plan.md](plan.md)
@@ -105,3 +105,4 @@ These close gaps a cold reader found. Each binds as the Decisions above do.
 
 ## Proof
 
+Commit 246bfbdb · proof: live checks on a dev drive run (report /tmp/claude-live-defaults/reports/07-1.md): 1 pass (keys and shell layout.js redraw, revision 2, load unchanged); 2 pass (outline rgb(255,0,0) at revision 3); 3 pass (deleted .keys-title-bar-button rule gone, one live link ~4); 4 pass (syntax-error and missing-part toasts, throwing part logged once and bundled part drawn, revert at revision 13); 5 pass (backlog, docs, gallery, notes, settings pixel-identical; rest differ only by caret, pulse dot, elapsed text; Agents meter gap traced to replay seed order); 6: 10 of 12 self-tests pass, chat and primer fail but both fail the same at the review base; 7 pass (package bakes the WIGLEY_CLONE_DIR or worktree path, 16 separate layout css files, no data:text/css); every default edit reverted · concerns: not compared in check 5: .config-problem-badge and the sessions row hover, neither shown by the replay; the notes markup toolbar was read with query, not on screen
