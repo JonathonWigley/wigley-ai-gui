@@ -48,11 +48,13 @@ ends a turn; it falls back to the resting row and `--resume`, as before this fea
 
 - The host spawns a command with args, folder and environment, writes lines to its stdin, closes its stdin, kills
   it, and logs every pipe line. It knows no harness: the Claude adapter, and a Codex adapter later, hand it a command
-  and one **idle rule** (a top-level JSON key and value that marks a stdout line as the end of a turn, for Claude
-  `"type": "result"`).
-- A process is **idle** when its last stdout line matches the idle rule, and busy after any later line. While no app
-  is connected, an idle process is ended once the keep window has passed since the later of its turn end and the
-  app's last disconnect: stdin closed, then SIGTERM after a 3 s grace, then SIGKILL after 3 s more. The app sends
+  and one **idle rule**: a top-level JSON key and the value that marks a stdout line as the end of a turn (for Claude
+  `"type": "result"`), and the values of that key that are bookkeeping on each pipe (for Claude `command_lifecycle` and
+  `control_response` on stdout, `control_request` on stdin).
+- A process starts **idle**, turns idle on a stdout line that ends a turn, and reads busy after any other line
+  on stdin or stdout, so an unknown line keeps a process alive rather than ending it mid-turn. A bookkeeping line
+  leaves the state alone. While no app is connected, an idle process is ended once the keep window has passed since
+  the later of its turn end and the app's last disconnect: stdin closed, then SIGTERM after a 3 s grace, then SIGKILL after 3 s more. The app sends
   the window (`chat.keepIdleMinutes`, default 60, the prompt cache's life) on connect and on each change.
 - The host's folder is `session-host/` in the app instance's user data folder (the self-test's: in its temporary
   home, deleted at its teardown): the pipe logs in `logs/`, the channel's record `host-v<protocol>.json` and the

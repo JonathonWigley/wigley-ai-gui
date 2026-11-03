@@ -1,6 +1,6 @@
 # 11 — Doc re-read against the landed code
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 5 · Depends on: 03, 04, 06, 09, 10
 Plan: [plan.md](plan.md)
@@ -36,3 +36,4 @@ Commit:    one commit per repo, naming each doc fixed and what was untrue.
 
 ## Proof
 
+Commit 14a6a1b5 · proof: diff read against the task; marketplace forms README checked unchanged; no killAll or isKilled left outside plan folders · concerns: forms README App gone mid-call names the app-closed error, while relay.py _fail_waiting_calls sends the refusal text when the app refused the hello: incomplete rather than untrue, left

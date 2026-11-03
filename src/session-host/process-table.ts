@@ -77,17 +77,19 @@ interface TableProcess {
   isEnding: boolean;
 }
 
-function endsTurn(text: string, rule: IdleRule): boolean {
+function valueAtKey(text: string, key: string): unknown {
   try {
     const parsed: unknown = JSON.parse(text);
-    return (
-      typeof parsed === 'object' &&
-      parsed !== null &&
-      (parsed as Record<string, unknown>)[rule.key] === rule.value
-    );
+    return typeof parsed === 'object' && parsed !== null
+      ? (parsed as Record<string, unknown>)[key]
+      : undefined;
   } catch {
-    return false;
+    return undefined;
   }
+}
+
+function isIgnored(value: unknown, ignoredValues: readonly string[]): boolean {
+  return typeof value === 'string' && ignoredValues.includes(value);
 }
 
 export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
@@ -162,9 +164,11 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
     if (dir !== 'out') {
       return;
     }
-    if (endsTurn(text, hosted.idleRule)) {
+    const rule = hosted.idleRule;
+    const value = valueAtKey(text, rule.key);
+    if (value === rule.value) {
       turnIdle(hosted);
-    } else {
+    } else if (!isIgnored(value, rule.ignoredStdoutValues)) {
       turnBusy(hosted);
     }
   }
@@ -285,7 +289,10 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
         return;
       }
       hosted.log.append('in', text);
-      turnBusy(hosted);
+      const value = valueAtKey(text, hosted.idleRule.key);
+      if (!isIgnored(value, hosted.idleRule.ignoredStdinValues)) {
+        turnBusy(hosted);
+      }
       hosted.child.stdin.write(`${text}\n`);
     },
     endInput(id) {

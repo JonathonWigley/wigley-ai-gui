@@ -108,6 +108,48 @@ describe('process table', () => {
       idle: false,
     },
     {
+      label: 'ignored out after the rule',
+      steps: [
+        ['in', 'hi'],
+        ['out', '{"type":"result"}'],
+        ['out', '{"type":"note"}'],
+      ],
+      idle: true,
+    },
+    {
+      label: 'ignored in after the rule, then its answer',
+      steps: [
+        ['in', 'hi'],
+        ['out', '{"type":"result"}'],
+        ['in', '{"type":"ask"}'],
+        ['out', '{"type":"note"}'],
+      ],
+      idle: true,
+    },
+    {
+      label: 'ignored in at start',
+      steps: [['in', '{"type":"ask"}']],
+      idle: true,
+    },
+    {
+      label: 'ignored out while busy',
+      steps: [
+        ['in', 'hi'],
+        ['out', '{"type":"note"}'],
+      ],
+      idle: false,
+    },
+    {
+      label: 'in on only the stdout list',
+      steps: [['in', '{"type":"note"}']],
+      idle: false,
+    },
+    {
+      label: 'out on only the stdin list',
+      steps: [['out', '{"type":"ask"}']],
+      idle: false,
+    },
+    {
       label: 'out not JSON',
       steps: [
         ['in', 'hi'],
@@ -236,6 +278,43 @@ describe('process table', () => {
     time.advanceTo(HOUR_MS + 1000);
     expect(children[0].stdin.writableEnded).toBe(true);
   });
+
+  it('keepWindow_IgnoredLinesAfterTheTurnEnd_CountsFromTheTurnEnd', async () => {
+    const { table, time, children } = setUp();
+    table.spawn(spawnRequest('a'), recordingSubscriber().subscriber);
+    table.write('a', 'hi');
+    time.advanceTo(1000);
+    children[0].stdout.write('{"type":"result"}\n');
+    await streamsDelivered();
+
+    time.advanceTo(2000);
+    table.write('a', '{"type":"ask"}');
+    children[0].stdout.write('{"type":"note"}\n');
+    await streamsDelivered();
+
+    time.advanceTo(HOUR_MS + 999);
+    expect(children[0].stdin.writableEnded).toBe(false);
+    time.advanceTo(HOUR_MS + 1000);
+    expect(children[0].stdin.writableEnded).toBe(true);
+  });
+
+  it.each([
+    { label: 'ignored', afterTurn: '{"type":"note"}', ends: true },
+    { label: 'unlisted', afterTurn: '{"type":"assistant"}', ends: false },
+  ])(
+    'drain_LineAfterTheTurnEnd_EndsOnlyAnIdleProcess: $label → ends $ends',
+    async ({ afterTurn, ends }) => {
+      const { table, children } = setUp();
+      table.spawn(spawnRequest('a'), recordingSubscriber().subscriber);
+      table.write('a', 'hi');
+      children[0].stdout.write(`{"type":"result"}\n${afterTurn}\n`);
+      await streamsDelivered();
+
+      table.drain();
+
+      expect(children[0].stdin.writableEnded).toBe(ends);
+    },
+  );
 
   it('setKeepIdle_LongerWindow_ReArmsTheTimer', () => {
     const { table, time, children } = setUp();

@@ -9,7 +9,12 @@ import type {
 } from '../contracts/session-host';
 import type { ProcessSubscriber } from './process-table';
 
-export const IDLE_RULE = { key: 'type', value: 'result' };
+export const IDLE_RULE = {
+  key: 'type',
+  value: 'result',
+  ignoredStdoutValues: ['note'],
+  ignoredStdinValues: ['ask'],
+};
 
 export function spawnRequest(id: string): HostedSpawn {
   return {

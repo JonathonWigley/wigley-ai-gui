@@ -17,7 +17,12 @@ function spawnRequest(id: string): HostedSpawn {
     args: [],
     cwd: '/p',
     env: {},
-    idleRule: { key: 'type', value: 'result' },
+    idleRule: {
+      key: 'type',
+      value: 'result',
+      ignoredStdoutValues: [],
+      ignoredStdinValues: [],
+    },
   };
 }
 

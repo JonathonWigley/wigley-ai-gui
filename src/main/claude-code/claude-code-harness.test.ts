@@ -27,6 +27,7 @@ import { posixPaths } from '../../shared/paths/posix-paths';
 import type { Files } from '../../contracts/files';
 import type { Paths } from '../../contracts/paths';
 import {
+  CLAUDE_IDLE_RULE,
   createClaudeCodeHarness,
   type ClaudeSpawn,
   PLAN_USAGE_TIMEOUT_MS,
@@ -2293,11 +2294,29 @@ describe('createClaudeCodeHarness on the session host', () => {
       ],
       cwd: '/proj',
       env: {},
-      idleRule: { key: 'type', value: 'result' },
+      idleRule: {
+        key: 'type',
+        value: 'result',
+        ignoredStdoutValues: expect.arrayContaining([
+          'command_lifecycle',
+          'control_response',
+        ]),
+        ignoredStdinValues: expect.arrayContaining(['control_request']),
+      },
     });
     expect(host.processes[0].writes[0]).toBe(
       JSON.stringify(contextUsageRequest('wigley-1')),
     );
+  });
+
+  it('idleRule_LinesOfARunningTurn_AreNotIgnored', () => {
+    const turnLines = ['assistant', 'stream_event', 'user', 'system'];
+    const ignored = [
+      ...CLAUDE_IDLE_RULE.ignoredStdoutValues,
+      ...CLAUDE_IDLE_RULE.ignoredStdinValues,
+    ];
+
+    expect(ignored.filter((value) => turnLines.includes(value))).toEqual([]);
   });
 
   it('start_EnvWithUndefined_SpawnsWithoutIt', () => {

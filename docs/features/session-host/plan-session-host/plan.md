@@ -300,7 +300,7 @@ Task 01 sets `replayed: false` at every `ChatAgentEvent` emitter in the tree (ch
 - [x] [Chat re-attaches and survives quit](09-chat-reattach.md) — after 08
 
 ### Wave 5
-- [ ] [Doc re-read](11-doc-re-read.md) — after 03, 04, 06, 09, 10
+- [x] [Doc re-read](11-doc-re-read.md) — after 03, 04, 06, 09, 10
 
 ### Wave 6
 - [ ] [Final verification](12-final-verification.md) — after 11
@@ -320,6 +320,7 @@ Review base: 7f956435
 - 06 · b4b193de · diff read; typecheck clean in its files; session-host tests 58 passed; worker's packaged asar probe passed; not run on Windows · concerns: a pipe log create or append failure (disk full) ends the host and every session; a known message type missing fields throws and ends the host; close waits on stdio, so a grandchild holding the pipes keeps a process, its host and a stopAll reply past SIGKILL; exit-after-push not run live and a Windows pipe might lose the last closed; a dead older record costs up to 2000 ms each start; session-host-test-doubles.ts is an extra file beside production code
 - 08 · cdd307d2 · diff read; tsc clean; 779 tests pass across claude-code, session-host, drive, fake harness, chat-sessions · concerns: client connects at construction, so every self-test and fake-harness drive run starts a host (task 12 confirms teardown and startup speed); stopAll has no reply timeout (drive quit held until the CLI's 60 s SIGTERM; self-test capped 5000 ms); closed during attach emits before the caller's await continuation, so isReplaying is true (sessionEnded/activity flagged replayed, ended live); a log with no usage event gets one usage event from settings read after a grace-expired attach; main.ts wiring and drive teardown untested until task 12; docs/features/agent-chat/design.md Agent harness seam stale for task 11
 - 09 · 7880e5b4 · diff read; all Produces present; tsc and lint clean; chat, sessions and keymap tests 1082 passed; stop all listed in selftest-script · concerns: the unheld guard's list() has no reply bound, so a host that stops answering leaves that row's send and loadHistory pending; a closed row whose attach resolves after detachAll is detached, not killed, so that process runs without an owner (plan states this); a send in the gap after a re-attach writes a at idle queues and writes b at once, order kept; the relay's left-while-held path relies on default allowHalfOpen false to close the socket; docs/features/followups.md line 433 names chat.killAll, for task 11
+- 11 · 14a6a1b5 · diff read against the task; marketplace forms README checked unchanged; no killAll or isKilled left outside plan folders · concerns: forms README App gone mid-call names the app-closed error, while relay.py _fail_waiting_calls sends the refusal text when the app refused the hello: incomplete rather than untrue, left
 ### Contract changes
 ### Rulings
 - Marketplace review base is cbd8a9e; git fetch fails in this session (SSH key unavailable), so origin was not checked; neither main showed behind at the last fetch and nothing is pushed — a stale origin would surface at push · lead
