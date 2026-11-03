@@ -396,7 +396,7 @@ setTurn(entries: readonly ChatEntry[], working: boolean): void;
 - [x] [Entry list hides activity rows and drops the working block](05-entry-list-hiding.md) — after 01, 02
 
 ### Wave 4
-- [ ] [Wire the dock into the composer and the Chat tab](06-dock-wiring.md) — after 03, 04, 05
+- [x] [Wire the dock into the composer and the Chat tab](06-dock-wiring.md) — after 03, 04, 05
 - [x] [Self-test scripts follow the dock](07-selftest-scripts.md) — after 05
 
 ### Wave 5
@@ -414,6 +414,7 @@ Review base: 46f417b5
 - 05 · 5a2b0c6a · diff read: createEntryList signature and every EntryList member kept, working block gone, isActivityInTranscript read at create and rebuild; typecheck green at worker's end · concerns: chat-view.ts:137 and other 'working block' comments outside the task are stale until tasks 06 and 07
 - 04 · c3a7867b · diff read: workingInput, isTurnEmpty, doneInput, ActivityDockDeps, ActivityDock, createActivityDock present as planned; typecheck green · concerns: isStepsChanged now duplicated in activity-dock.ts and entry-list.ts; LiveWorkingInput.startedAt comment still says held block (task 06)
 - 07 · 32bc4b7d · diff read: VISUAL_STEPS, TRANSCRIPT_FOCUS_STEPS, ACTIVITY_DOCK_STEPS and the transcript focus / activity dock groups present; typecheck green at worker's end; self-test runs in 09 · concerns: dock-done and dock-after-interrupt captures depend on task 06 calling drawTurn before the idle log line
+- 06 · a0119dbc · diff read: ComposerSurfaceDeps clock/timers and ComposerSurface.setTurn present; drawTurn at putEntry, entries, activity, sessionRunning, sessionRested, createTab; typecheck green · concerns: a default working draw that keeps throwing retries and logs once per tick; the slot hides and shows within one synchronous draw
 ### Contract changes
 ### Rulings
 - Preflight: precondition 1's peer AGENTS.md hunk is committed (1b7363b5) and the tree is clean; origin is unreachable from this session (SSH publickey denied), so the run builds on local main at 46f417b5 — lead
@@ -429,5 +430,7 @@ Review base: 46f417b5
 - a no-change set keeps the shown input (old now) rather than swapping in the equal new one — group 04 · group 04
 - the tick returns without sending when it fires while not live (guard) — group 04 · group 04
 - agent-strip strip keys step why rewritten (G lands on the last entry), beyond the comment-only scope — group 07 · group 07
+- the dispose test proves the part's dispose through its recorded key anchor (PartView has no dispose) — group 06 · group 06
 ### Review rounds
 ### Test gate
+- Picked the 12 test files the range changed plus their areas (src/plugins/chat, src/main/claude-code, fake-agent-harness, agent-strip, agent-lines: 52 files, 1168 tests); the whole vitest suite then ran too, since it takes seconds (381 files, 6200 tests) · all passed; typecheck green; lint fails only on the pre-existing agent-strip.css:17 check-styles error (65d29099)

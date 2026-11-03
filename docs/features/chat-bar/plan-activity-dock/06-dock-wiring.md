@@ -1,6 +1,6 @@
 # 06 — Wire the dock into the composer and the Chat tab
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 03, 04, 05 (05 makes the flag comment's hiding sentence true)
 Plan: [plan.md](plan.md)
@@ -113,3 +113,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit a0119dbc · proof: diff read: ComposerSurfaceDeps clock/timers and ComposerSurface.setTurn present; drawTurn at putEntry, entries, activity, sessionRunning, sessionRested, createTab; typecheck green · concerns: a default working draw that keeps throwing retries and logs once per tick; the slot hides and shows within one synchronous draw

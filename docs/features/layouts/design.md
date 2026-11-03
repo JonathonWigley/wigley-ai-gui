@@ -133,7 +133,7 @@ can be iterated in place. The sample sends nothing and raises no notification or
 | --- | --- |
 | `Space z l o` | forms: the preview round, then each saved real round |
 | `Space z l p` | primer: a sample primer holding every field and need |
-| `Space z l c` | chat: a session of every entry kind, its finished turn in the activity dock (its steps grouped into finished activity lines and its result entry drawn only under a layout that sets `activityInTranscript`), and the agent strip above the composer |
+| `Space z l c` | chat: a session of every entry kind, idle after a finished turn, so the activity dock shows that turn's finished line (the preview holds a `result` entry); its steps, grouped into finished activity lines, and its result entry show in the transcript only under a layout that sets `activityInTranscript`; and the agent strip above the composer |
 | `Space z l s` | sessions: rows in every state |
 | `Space z l a` | agents: a sample session with two running subagents and two tasks; with the default `plugins.disabled` the row opens with no working line, and `agent-lines` on draws it |
 | `Space z l w` | workflow: a sample session in every stage, the plan-ready countdown included |
