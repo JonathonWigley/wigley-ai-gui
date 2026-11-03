@@ -134,13 +134,21 @@
 
 /* The activity dock: while the turn runs, its time and state, a card of its
    latest tool calls (the newest in fg), then its tool counts, dim; once it
-   ends, one dim line. */
+   ends, one dim line. In a short slot, a part that does not fit wraps to a
+   column on the left, which the slot clips and nothing scrolls to: the counts
+   go first, then the card. */
 .chat-working {
   display: flex;
   flex-direction: column;
+  flex-wrap: wrap-reverse;
   font-family: var(--wg-font-ui);
   font-size: var(--wg-text-ui);
   gap: var(--wg-space-1);
+  min-height: 0;
+}
+
+.chat-working > * {
+  width: 100%;
 }
 
 .chat-working-head {
@@ -266,12 +274,13 @@
 }
 
 /* Other plugins' composer parts; a Chat tab with none shows no space. They
-   give up height first and scroll, so the box and the status line keep theirs
-   in a short pane. A part's own CSS may raise the composer's cap to give them
-   room, and holds them to no floor. */
+   give up height first and scroll, ahead of the activity dock, so the box and
+   the status line keep theirs in a short pane. A part's own CSS may raise the
+   composer's cap to give them room, and holds them to no floor. */
 .chat-composer-parts {
   display: flex;
   flex-direction: column;
+  flex-shrink: 1000;
   min-height: 0;
   overflow-y: auto;
 }
@@ -280,10 +289,13 @@
   display: none;
 }
 
-/* The activity dock keeps its height in a short pane, as the attachments
-   do. */
+/* The activity dock gives up height after the composer parts, down to one
+   line, and clips what its draw cannot fit. */
 .chat-working-slot {
-  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: calc(var(--wg-text-ui) * var(--wg-leading-ui));
+  overflow: hidden;
 }
 
 .chat-attachments {
