@@ -72,6 +72,7 @@ interview on 2026-10-23; this file is the record of both.
                                             --include-partial-messages --verbose --session-id <id> (--resume <id> on resume)
                                             --permission-mode <the row's mode, auto without one> --permission-prompt-tool <chat's tool>
                                             (--model <m> and --effort <e> when the user picked them and Claude confirmed)
+                                            (--append-system-prompt <the registered instructions>, none when no plugin added any)
                  │ claude starts the wigley plugin's relay.py, whose hello carries the same session id
                  ▼
  sessions relay ─► connect(info) finds the owned session by host id ─► joins its row (no second row)
@@ -251,6 +252,11 @@ interview on 2026-10-23; this file is the record of both.
   pinned id), which the chip shows as its alias, is never narrowed to the alias. So a row resumed after its process
   exits, or cleared, keeps its mode and the model and effort the user picked, and its chips show them from the start; a
   restored row holds none until its process reports them, and passes no model or effort until the user picks one again.
+  Every start also passes `AgentStart.instructions`, the text plugins registered through `addInstructions` in
+  registration order, as one `--append-system-prompt` value joined with a blank line; no flag when none are
+  registered. On a resume the Claude CLI sends the system prompt it recorded on the conversation's first request until
+  compaction (`--system-prompt-snapshot`, on by default), so a resumed conversation keeps the instructions of its
+  first launch.
   A session whose process exits while the app runs rests the same way, a notice in its chat giving the exit and its
   reason. A restored session whose turn was running at quit gets a notice that the app quit during that turn; one whose
   profile is no longer in the settings gets a notice naming it, and a send there toasts that the message was not sent

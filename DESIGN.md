@@ -435,7 +435,7 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   Docs (`docs-docs-*`) in both transparency settings, the docs kind picker, completion list and
   session Docs tab (`docs-kind-picker`, `docs-completion`, `docs-session-tab`), the shell layout
   swap (`forms-shell-layout-*`) and the layout previews (`forms-preview-*`, `primer-preview*`,
-  `chat-chat-preview`) and the workflow strip and Flow tab (`workflow-strip-*`, `workflow-flow-tab-plan-ready`). The
+  `chat-chat-preview`), chat's visuals (`chat-visuals`) and the workflow strip and Flow tab (`workflow-strip-*`, `workflow-flow-tab-plan-ready`). The
   gallery's and the keys plugin's main parts hand no self-test script, so forms' script saves the gallery's pages and
   the shell swap, and no screenshot shows keys' overlays. The agent checks them against
   this file — density, the one accent, each surface on its layer

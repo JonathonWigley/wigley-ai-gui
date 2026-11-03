@@ -77,6 +77,8 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
   layout-url.ts  the `wigley-layout:` URLs that serve layout files to the page
   visual-url.ts  the `wigley-visual:` URLs that serve a visual's document by its source hash
   visual-messages.ts the messages between a visual's frame and the page: theme in, height and `Esc` out
+  sample-visuals.ts the sample UI mockup and flowchart the fake harness's `fake: visual` reply and the chat layout
+                 preview draw
   file-url.ts    what `layout-url.ts` and `data-url.ts` share: per-segment encoding, scheme and revision checks,
                  and per-segment decoding that refuses an encoded `/`
   agent-forms/   the agent form lifecycle every agent form type shares (forms' rounds, the primer): the service with
@@ -96,7 +98,7 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  owner's kit extends, with the shared `icon`, `chevron`, `edge`, `rowTrailing` and `duration`) and
                  `ownerBaseKitDeps` (the deps an owner's base kit is built from), the markdown mount
                  (`markdown-mount.ts`: draws markdown into an element, hydrates each registered fence's placeholder
-                 through its contribution, reuses a mounted fence view while its language and source are unchanged, and
+                 through its contribution, reuses a mounted fence view while its language, closed flag and source are unchanged, and
                  disposes the rest; `kit.markdown` and the docs view draw through it), `fake-visual-frames.ts` (the visual
                  frames fake plugin tests open visuals through), `layout-parts.ts`
                  (`createLayoutParts`: an owner's shown layouts and its draws, kept by slot), `app-slot.ts` (where an
@@ -225,8 +227,10 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  Flow tab, the preview), layouts/ (the workflow Layout contract and the built-in `default` layout);
                  `docs/features/workflow/design.md`
   visual/        manifest.ts, contract.ts, main/ (the session note it hands chat's `addInstructions`, the layout
-                 registration), page/ (the `html` fence contribution: the "drawing visual…" card for an open block, a
-                 visual frame for a closed one; the full-size overlay and its `v` key on chat's focused entry),
+                 registration), page/ (`html-fence.ts`, the `html` fence contribution: the "drawing visual…" card for
+                 an open block, a visual frame for a closed one; `visual-registry.ts` the source of each closed
+                 visual on the page; `visual-overlay.ts` and `visual-commands.ts` the full-size overlay and its `v` key on chat's
+                 focused entry, `h`/`l` between visuals and `Esc` to close),
                  layouts/ (the visual Layout contract and the built-in `default` layout);
                  `docs/features/visuals/design.md`
 ```

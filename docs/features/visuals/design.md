@@ -26,7 +26,7 @@ agent reply ── ```html … ``` ──► markdown adapter (MarkdownRenderer)
                                           ▼
                                  markdown mount (core page)
                                    innerHTML, then hydrates each placeholder through its fence contribution;
-                                   reuses a mounted view when a later draw holds the same language and source
+                                   reuses a mounted view when a later draw holds the same language, closed flag and source
                                           │
                        visual plugin's html fence contribution
                          open block  → "drawing visual…" card
@@ -48,8 +48,8 @@ points at the `wigley:visuals` skill in wigley-ai-marketplace, which holds the h
 - **An html code block, not a tool.** A fence works with any agent harness and reads as code in a terminal. A tool
   would tie visuals to an MCP server every harness must load.
 - **Scripts run; the network does not.** The frame's sandbox has `allow-scripts` and no `allow-same-origin`, so it
-  has an opaque origin: no Bridge, no parent DOM. Its CSP allows inline script, inline style and `data:` images and
-  nothing else, and main refuses any frame navigation off the scheme, since CSP does not cover navigation.
+  has an opaque origin: no Bridge, no parent DOM. Its CSP allows inline script, inline style and `data:` images and fonts
+  and nothing else, and main refuses any frame navigation off the scheme, since CSP does not cover navigation.
   WebRTC is the one route CSP and the sandbox leave open; it stays open because a frame holds nothing but the
   source the agent already wrote.
 - **A served document, not `srcdoc`.** A `srcdoc`, `data:` or `blob:` frame inherits the page's CSP, which forbids
@@ -57,15 +57,17 @@ points at the `wigley:visuals` skill in wigley-ai-marketplace, which holds the h
 - **Kept by content hash, in memory.** The same source always gets the same URL, so a redraw or a page reload
   serves it again with no state to sync. Nothing is written to disk.
 - **Everywhere markdown renders, except the user's own messages.** Agent replies, forms rounds, the primer and the
-  docs browser all render visuals, since an agent may put a mockup in any of them. A user message keeps its html
-  block as code, so pasting a snippet into chat does not run it.
-- **One fence registry in the core.** `addFence` on the markdown service is the extension point; html is its first
-  visual contribution and `diff` moves onto it, so one fence rule serves chat-style and document rendering.
+  docs browser all render visuals, since an agent may put a mockup in any of them. A user message and a
+  non-markdown file in the docs browser keep their html block as code (`liveFences: false`), so pasting a snippet into
+  chat or opening an `.html` file does not run it.
+- **One fence registry in the core.** `addFence` on the markdown service is the extension point; html is a live
+  contribution (it runs its source) and the built-in `diff` a non-live one (it only formats), so one fence rule
+  serves chat-style and document rendering. A draw with `liveFences: false` skips only the live contributions.
 - **The adapter stays strings; the mount owns the DOM.** `MarkdownRenderer` stays the markdown-it adapter and
   returns HTML text. One page module draws markdown into an element and owns the live parts: hydrating fences,
   reusing them across redraws, disposing them.
 - **Loaded once per source.** Replies stream, and the default chat layout redraws the whole entry on each chunk. A
-  mounted view is reused while its source is unchanged, and an open block shows a "drawing visual…" card, so the
+  mounted view is reused while its language, closed flag and source are unchanged, and an open block shows a "drawing visual…" card, so the
   frame loads exactly once, when its source is complete.
 - **No height cap.** The frame takes its content's full height, reported from inside, and the transcript stays
   pinned to the bottom as it grows. The full-size overlay is for visuals wider than the column.

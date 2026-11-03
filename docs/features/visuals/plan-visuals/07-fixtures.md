@@ -1,6 +1,6 @@
 # 07 — Test fixtures: mockup and flowchart
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 5 · Depends on: 03, 06
 Plan: [plan.md](plan.md)
@@ -353,4 +353,4 @@ Commit:    one commit for the group
 
 ## Proof
 
-<empty — wigley:make writes it>
+Commit 69395151 · proof: diff read: every Produces present, all 21 createFakeAgentHarness calls pass timers; typecheck + lint clean; 239 filtered tests pass; self-test steps run at 09 · concerns: the self-test's frame-loaded waits hash each sample source plus a trailing newline, matching what the mount's textContent hands main — the waits time out at 5 s if wrong; a send reaching the process during the 1.5 s hold does not clear it

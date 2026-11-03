@@ -248,7 +248,7 @@ export function visualHashOf(url: string): string | null;
 - [x] [Overlay, key and chat wiring](06-overlay-and-chat.md) — after 05
 
 ### Wave 5
-- [ ] [Test fixtures: mockup and flowchart](07-fixtures.md) — after 03, 06
+- [x] [Test fixtures: mockup and flowchart](07-fixtures.md) — after 03, 06
 
 ### Wave 6
 - [ ] [Doc re-read](08-doc-re-read.md) — after 07
@@ -267,6 +267,7 @@ Review base: d7578311fe99437ccefe407289916bbcfa049eb8
 - 01 · 2a9c0ef · diff read: every Produces present, markdownElement gone; typecheck + lint clean; filtered tests 2779 pass · concerns: AGENTS.md says the mount reuses by language and source, but the key also holds the closed flag (for 08); a target redrawn without a view it lent out costs one extra mount
 - 05 · 9e07f590 · diff read: every Produces present; typecheck + lint clean; 15 tests pass filtered · concerns: DESIGN.md Surfaces lacks the visual card and box; a user layout that appends its root after kit.frame reloads the visual on a layouts change; visualMainPart start order before keys not run live
 - 06 · 93a87a8f · diff read: every Produces present, the v bind in keymap.ts, updates draw new markdown before removing the old; typecheck + lint clean; 1577 filtered tests pass · concerns: registry.sourcesIn(host) never matches the root itself, so the tests read it around the host (matches real use under chat's slot); the self-test logs 'unplaced v visual.openVisuals in chat.chat' until 07 draws a visual; one edit made by a python3 heredoc; overlay look untested until 09
+- 07 · 69395151 · diff read: every Produces present, all 21 createFakeAgentHarness calls pass timers; typecheck + lint clean; 239 filtered tests pass; self-test steps run at 09 · concerns: the self-test's frame-loaded waits hash each sample source plus a trailing newline, matching what the mount's textContent hands main — the waits time out at 5 s if wrong; a send reaching the process during the 1.5 s hold does not clear it
 ### Contract changes
 - MarkdownRenderer fakes: 22 files → 23 (composer-kit.test.ts too) · why: plan-time count missed it · consumers: none · group 01
 - shell kit log: from createShellChrome → from mountShellChrome · why: createShellChrome does not exist · consumers: none · group 01
@@ -287,5 +288,6 @@ Review base: d7578311fe99437ccefe407289916bbcfa049eb8
 - blurFocusedElement moved unchanged to src/shared/page/dom.ts and chat's three callers repointed, rather than copied — writing-code reuse rule — four chat files carry an import-only change · group 06 · group 06
 - installFakeDom's ResizeObserver stub gains an empty unobserve — existing entry-list tests threw without it — none · group 06 · group 06
 - overlay CSS sets .visual-draw to display: contents under the scrim and pads the scrim with --wg-space-8 — the parts host puts a div between scrim and part root — the overlay look if wrong (09) · group 06 · group 06
+- sample hash includes the trailing newline markdown-it leaves in the fence content — both ends keep it — self-test timeouts if wrong · group 07 · group 07
 ### Review rounds
 ### Test gate
