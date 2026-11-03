@@ -133,6 +133,7 @@ Review base: 46f417b5
 - 06 · none · drive run 20261103-004411-8700 (real Claude, ~$0.31+): check 1 PASS (0k then 0k/300k in row and status); check 2 PASS (restored row 49k, status 49k cache 3m before any send; row line is context-only by design, the check's 'cache in both' wording was wrong); check 3 on an open row only activates it (chat-sessions.ts:1517) — rerun 3b on a closed row: limit arrives, but both lines flash 0k before the transcript seed lands (to the review) · concerns: resume of a closed session draws the page zero line until the adapter seed lands — plan expected no 0k between; restored entry header reads '1 step · 498246h 44m' (epoch-start duration, code this run did not touch)
 ### Contract changes
 - readTranscript (new export): none → export async function readTranscript(files: Files, paths: Paths, projectsFolder: string, sessionId: string): Promise<string> in past-sessions.ts · why: readHistory, readLastUsage and the harness's resume seed share one session-id check and path · consumers: 01 · group 01
+- readTranscript: exported → module-private; readSavedReplies(files, paths, projectsFolder, sessionId): Promise<SavedReply[]> exported in past-sessions.ts · why: review finding 6, one place reads a saved session's main replies · consumers: readLastUsage, the harness's resume seed · review fix
 ### Rulings
 - A session holding no usage takes an incoming usage whatever its at — the Decisions line conditions the skip on a kept usage — none expected · group 02 · group 02
 - Same-state identity is pinned by its own toBe test beside the toEqual table — the table cannot see identity — one extra test · group 02 · group 02
@@ -145,5 +146,7 @@ Review base: 46f417b5
 - requireHarness() runs inside the async emitSavedUsage, so a missing harness is a logged rejection and restore never throws — keeps restore synchronous — a log line in place of a throw · group 04 · group 04
 - oxfmt --write on chat-sessions.test.ts (43a3c7ec) as lead editor-tooling — one formatter rewrap in group 04's test; agent-strip.css, chat/main/start.ts and sessions/title-tool lint/format failures predate the run (base 46f417b5) and are left — none · lead
 ### Review rounds
+- implementation review · 2c774d03 · NEEDS FIXES (2 Important, 5 Minor, 3 pre-existing; 1 prose fix lead-applied 38feb604)
+- re-review (correctness) · fix commits 36893a00, 7a2ebec0 · PASS (findings 1, 2, 4-doc, 5, 6, 7 closed; 3, 4-route, 8, 9, 10 to follow-ups fa06fcba)
 ### Test gate
 - vitest src/main/claude-code, src/shared/fake-agent-harness.test.ts, src/plugins/usage, src/plugins/usage-tab-line, src/plugins/chat (every touched module and the usage line's other host) · 1260 passed; selftest --plugin usage,chat,agent-lines (the zero line changes first-draw logging in the usage, chat status and side-bar row lines) · usage and agent-lines pass; chat's 8 minimum-width fit checks (nav.ui-tabs.session-tabs holds 120px in 99px) fail identically on base 46f417b5, pre-existing; npm run typecheck clean; oxlint/oxfmt clean on the run's files (agent-strip.css, chat/main/start.ts, sessions/title-tool predate the run)
