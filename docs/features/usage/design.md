@@ -91,7 +91,8 @@ profile's `settings.json`, which is why the configured limit is read there.
         ▼
  usage page ──▶ status bar line (the shown session's profile's plan rows)
             ──▶ chat.addStatusPart: each Chat session's context, cache and spend in its status line
-            ──▶ sessions.addRowPart (usage.rowLine): each session's context meter under its side-bar row
+            ──▶ sessions.addRowPart (usage.rowLine): each session's context meter and used tokens under its side-bar row
+            ──▶ sessions.addRowPart (usage.rowCache): each session's cache mark, warm or cold, under its side-bar row
  usage-tab-line page (optional) ──▶ sessions.addBarPart: the same line in each session's tab bar
             ──▶ right bar details (every profile, the shown session)   toggled by Space v u
 ```
