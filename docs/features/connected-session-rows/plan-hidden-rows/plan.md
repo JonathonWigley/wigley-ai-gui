@@ -105,10 +105,10 @@ through `AgentFormSessions`.
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Session list: hidden connected rows and release](01-session-list-release.md)
+- [x] [Session list: hidden connected rows and release](01-session-list-release.md)
 
 ### Wave 2
-- [ ] [Presenter releases the session on close](02-presenter-release.md) — after 01
+- [x] [Presenter releases the session on close](02-presenter-release.md) — after 01
 - [ ] [Row-only fixtures open owned sessions](03-fixtures-open-owned.md) — after 01
 
 ### Wave 3
@@ -120,7 +120,12 @@ through `AgentFormSessions`.
 Review base: d757831
 
 ### Groups
+- 01 · 6145731 · diff read: release on SessionsMainExports, list and exports present; typecheck clean; sessions tests 230 pass · concerns: SessionEntry.group comment still says fixed at connect (label, left); activate no longer logs 'with no row ignored' for a known session — forms preview-round.ts:28 still cites the 'mark … with no row ignored' line, which no path emits; selftest pane fixtures now owned host ids
+- 02 · def3f45 · diff read: release on AgentFormSessions present, presenter close releases after formClosed; worker typecheck clean; presenter test 12 pass; tree-wide typecheck re-run after 03 lands · concerns: none; presenter doc comment line runs past the file's width
 ### Contract changes
 ### Rulings
+- addEntry takes a separate addsRow flag, equal to owned today — keeps the row rule apart from ownership — one redundant parameter if wrong · group 01 · group 01
+- activate on a known row-less session adds the row instead of logging 'activate … with no row ignored' — per the activate decision — a caller relying on that log line loses it · group 01 · group 01
+- presenter test fake logs release into the shared calls log and each close test asserts ['send formClosed','release app-1'] — one assertion covers once, id, order and none-for-gone — a test rewrite if wrong · group 02 · group 02
 ### Review rounds
 ### Test gate

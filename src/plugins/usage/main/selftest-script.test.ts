@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ProfilePlan, UsageSnapshot } from '../contract';
-import type { ConnectedSession, SessionInfo } from '../../sessions/contract';
+import type { OwnedSession, SessionInfo } from '../../sessions/contract';
 import { usageSelfTestScript } from './selftest-script';
 
 const NOW = 7_000_000;
@@ -17,27 +17,27 @@ function plan(name: string, isRead: boolean): ProfilePlan {
   };
 }
 
-// The usage script over fake sessions whose `connect` gives run n's session
+// The usage script over fake sessions whose `open` gives run n's session
 // the id `s-<n>`, and a usage store holding `before` until a seed replaces
 // it; `seedOverride` replaces what the store keeps on a seed.
 function setUp(
   before: UsageSnapshot,
   seedOverride?: (snapshot: UsageSnapshot) => UsageSnapshot,
 ) {
-  const connects: SessionInfo[] = [];
+  const opens: SessionInfo[] = [];
   const activated: string[] = [];
   const ended: string[] = [];
   const seeded: UsageSnapshot[] = [];
   let current = before;
   const script = usageSelfTestScript({
     sessions: {
-      connect(info) {
-        connects.push(info);
-        const id = `s-${connects.length}`;
+      open(info) {
+        opens.push(info);
+        const id = `s-${opens.length}`;
         return {
           session: { id },
           end: () => ended.push(id),
-        } as unknown as ConnectedSession;
+        } as unknown as OwnedSession;
       },
       activate: (sessionId) => activated.push(sessionId),
     },
@@ -48,18 +48,18 @@ function setUp(
       seeded.push(current);
     },
   });
-  return { script, connects, activated, ended, seeded };
+  return { script, opens, activated, ended, seeded };
 }
 
 describe('usageSelfTestScript', () => {
-  it('open_ConnectsActivatesAndSeedsTheRunSession', async () => {
+  it('open_OpensActivatesAndSeedsTheRunSession', async () => {
     const before = { plans: [plan('work', true)], sessions: [] };
-    const { script, connects, activated, ended, seeded } = setUp(before);
+    const { script, opens, activated, ended, seeded } = setUp(before);
 
     script.open(1);
     const { result } = script.open(2);
 
-    expect(connects.map((info) => info.sessionId)).toEqual([
+    expect(opens.map((info) => info.sessionId)).toEqual([
       'usage-selftest-1',
       'usage-selftest-2',
     ]);

@@ -9,7 +9,7 @@ import {
   type RunMark,
 } from '../../../shared/fake-agent-harness';
 import type {
-  ConnectedSession,
+  OwnedSession,
   SessionsMainExports,
 } from '../../sessions/contract';
 import type { DraftStore } from './draft-store';
@@ -19,7 +19,7 @@ export interface NotesSelfTestDeps {
   homeDir: string;
   files: Pick<Files, 'read' | 'realPath' | 'makeFolder'>;
   paths: Paths;
-  sessions: Pick<SessionsMainExports, 'connect' | 'activate'>;
+  sessions: Pick<SessionsMainExports, 'open' | 'activate'>;
   harnesses: readonly AgentHarness[];
   store: Pick<DraftStore, 'clear'>;
   // Resolves at the next send to a new session that main reports sent.
@@ -217,28 +217,31 @@ function sendProblems({ folder, send }: NotesSelfTestResult): string[] {
   return problems;
 }
 
-// Each run ends the last run's fixture session, clears the draft, and
-// connects the session `notes-selftest` in docs' fixture repo, activating its
-// row so the popup attaches it. The result waits for the steps' send to a new
-// session, then reads the fixture home's follow-ups and that session's first
-// message.
+// Each run ends the last run's fixture session, clears the draft, and opens
+// the session `notes-selftest` in docs' fixture repo in the background,
+// activating its row so the popup attaches it. The result waits for the
+// steps' send to a new session, then reads the fixture home's follow-ups and
+// that session's first message.
 export function notesSelfTestScript(deps: NotesSelfTestDeps): SelfTestScript {
   const { homeDir, files, paths, sessions, harnesses, store } = deps;
-  let previous: ConnectedSession | null = null;
+  let previous: OwnedSession | null = null;
 
   async function run(sent: Promise<void>): Promise<NotesSelfTestResult> {
     await store.clear();
     const home = await files.realPath(homeDir);
     const folder = path.join(home, 'dev', REPO);
     await files.makeFolder(folder);
-    const connected = sessions.connect({
-      sessionId: SESSION_ID,
-      projectDir: folder,
-      deadlineSeconds: null,
-      harness: 'claude',
-    });
-    previous = connected;
-    sessions.activate(connected.session.id);
+    const opened = sessions.open(
+      {
+        sessionId: SESSION_ID,
+        projectDir: folder,
+        deadlineSeconds: null,
+        harness: 'claude',
+      },
+      { select: false },
+    );
+    previous = opened;
+    sessions.activate(opened.session.id);
     const marks = markRun(harnesses);
     await sent;
     const followups = await files.read(

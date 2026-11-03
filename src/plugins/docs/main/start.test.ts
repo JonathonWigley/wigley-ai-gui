@@ -5,7 +5,7 @@ import { fakeDriveHost } from '../../../shared/fake-drive-host';
 import { FakeProcesses } from '../../../shared/fake-processes';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
-import type { ConnectedSession, SessionInfo } from '../../sessions/contract';
+import type { OwnedSession, SessionInfo } from '../../sessions/contract';
 import type { DocsMainExports, IndexDocument } from '../contract';
 import { MACHINE_INDEX_FILE } from './index-sources';
 import { addDriveActions, docsMainPart, startDocs } from './start';
@@ -61,7 +61,7 @@ describe('startDocs', () => {
   });
 });
 
-// The docs drive actions over a fresh home, whose sessions throw on connect,
+// The docs drive actions over a fresh home, whose sessions throw on open,
 // once `started` settles. `sent` holds each channel message, in order.
 async function driveConnectingNothing(
   started: Promise<unknown> = Promise.resolve(),
@@ -76,7 +76,7 @@ async function driveConnectingNothing(
     paths: posixPaths,
     sessions: {
       activate: () => undefined,
-      connect: () => {
+      open: () => {
         throw new Error('not reached');
       },
     },
@@ -86,7 +86,7 @@ async function driveConnectingNothing(
 }
 
 describe('docs drive actions', () => {
-  it('dispose removes the actions and ends each session connectSession connected', async () => {
+  it('dispose removes the actions and ends each session connectSession opened', async () => {
     const files = await setUpFiles();
     const ended: string[] = [];
     const drive = fakeDriveHost();
@@ -98,12 +98,12 @@ describe('docs drive actions', () => {
       channel: { send: () => undefined },
       sessions: {
         activate: () => undefined,
-        connect(info: SessionInfo): ConnectedSession {
+        open(info: SessionInfo): OwnedSession {
           const id = `row-${String(info.sessionId)}`;
           return {
             session: { id, info },
-            call: () => Promise.reject(new Error('no tools')),
             end: () => ended.push(id),
+            setHostSessionId: () => undefined,
           };
         },
       },

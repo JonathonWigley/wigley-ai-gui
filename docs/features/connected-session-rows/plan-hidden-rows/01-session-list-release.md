@@ -1,6 +1,6 @@
 # 01 — Session list: hidden connected rows and release
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -63,3 +63,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 6145731 · proof: diff read: release on SessionsMainExports, list and exports present; typecheck clean; sessions tests 230 pass · concerns: SessionEntry.group comment still says fixed at connect (label, left); activate no longer logs 'with no row ignored' for a known session — forms preview-round.ts:28 still cites the 'mark … with no row ignored' line, which no path emits; selftest pane fixtures now owned host ids

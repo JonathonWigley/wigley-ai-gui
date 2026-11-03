@@ -20,7 +20,7 @@ import { errorText } from '../../../shared/error-text';
 import type { JsonObject } from '../../../shared/json';
 import type {
   AgentSession,
-  ConnectedSession,
+  OwnedSession,
   SessionsMainEvents,
   SessionsMainExports,
 } from '../../sessions/contract';
@@ -50,8 +50,8 @@ import {
 import { readPluginStatus } from './plugin-status';
 import { writeDocsFixture } from './selftest-fixture';
 import {
-  connectDocsFixtureSession,
   docsSelfTestScript,
+  openDocsFixtureSession,
 } from './selftest-script';
 import { createViewWatches } from './view-watches';
 
@@ -131,7 +131,7 @@ interface DocsDriveDeps {
   files: Files;
   // `services.homeDir`, the drive run's temp home.
   homeDir: string;
-  sessions: Pick<SessionsMainExports, 'connect' | 'activate'>;
+  sessions: Pick<SessionsMainExports, 'open' | 'activate'>;
   // Settles once docs has started, so a seed never races the start's fixture.
   started: Promise<unknown>;
   paths: Paths;
@@ -159,17 +159,17 @@ function lineArg(args: JsonObject): number | null {
 }
 
 // `docs.seed` rewrites the fixture; `docs.connectSession` rewrites it and
-// connects a session in its repo, whose row shows its Docs tab. Each takes
+// opens a session in its repo, whose row shows its Docs tab. Each takes
 // `loadStates` to add a doc per non-launch index load state and
 // `indexDelayMs` to make the stand-in index script wait before answering.
 // `docs.openDoc` asks the page to open a doc in Docs mode. Disposing removes
-// the actions and ends every session `docs.connectSession` connected.
+// the actions and ends every session `docs.connectSession` opened.
 export function addDriveActions(
   drive: DriveHost,
   deps: DocsDriveDeps,
 ): Disposable {
   const { files, homeDir, sessions, started, paths, channel } = deps;
-  const connected: ConnectedSession[] = [];
+  const connected: OwnedSession[] = [];
   let connects = 0;
   const actions = [
     drive.add('seed', {
@@ -190,7 +190,7 @@ export function addDriveActions(
     }),
     drive.add('connectSession', {
       description:
-        'Rewrites the docs fixture and connects a session in its repo, activating the row on its Docs tab; sessionId defaults to drive-docs-<n>; loadStates and indexDelayMs as docs.seed takes them.',
+        'Rewrites the docs fixture and opens a session in its repo in the background, activating its row on its Docs tab; sessionId defaults to drive-docs-<n>; loadStates and indexDelayMs as docs.seed takes them.',
       args: '{ sessionId?: string, loadStates?: boolean, indexDelayMs?: number }',
       async run(rawArgs) {
         await started;
@@ -200,7 +200,7 @@ export function addDriveActions(
           optionalString(args, 'sessionId') ?? `drive-docs-${String(connects)}`;
         const loadStates = optionalBoolean(args, 'loadStates') ?? false;
         const indexDelayMs = indexDelayMsArg(args);
-        const session = await connectDocsFixtureSession(
+        const session = await openDocsFixtureSession(
           files,
           homeDir,
           sessions,

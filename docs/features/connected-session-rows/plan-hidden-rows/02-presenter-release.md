@@ -1,6 +1,6 @@
 # 02 — Presenter releases the session on close
 
-Status: not started
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -33,3 +33,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit def3f45 · proof: diff read: release on AgentFormSessions present, presenter close releases after formClosed; worker typecheck clean; presenter test 12 pass; tree-wide typecheck re-run after 03 lands · concerns: none; presenter doc comment line runs past the file's width
