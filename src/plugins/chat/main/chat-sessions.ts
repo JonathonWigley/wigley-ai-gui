@@ -1334,6 +1334,39 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     if (profile === undefined) {
       addNotice(session, missingProfileText(record.profile), 'error');
     }
+    if (record.sent && profile !== undefined) {
+      emitSavedUsage(session, profile).catch((error: unknown) =>
+        log(
+          'chat',
+          `saved usage of ${hostSessionId} not read: ${errorText(error)}`,
+        ),
+      );
+    }
+  }
+
+  // Emits the session's saved usage as its row's `agentEvent`, unless the row
+  // closed or cleared, or chat stopped, while it was read.
+  async function emitSavedUsage(session: HeldSession, profile: ChatProfile) {
+    const { sessionId } = session.state;
+    const { hostId } = session;
+    const profileDir = profileDirOf(profile);
+    const event = await requireHarness().lastUsage(
+      hostId,
+      session.state.projectDir,
+      profileDir,
+    );
+    if (event === null || isKilled) {
+      return;
+    }
+    if (isClosedOrCleared(session, sessionId, hostId)) {
+      return;
+    }
+    deps.emit('agentEvent', {
+      sessionId,
+      profileDir,
+      hostSessionId: hostId,
+      event,
+    });
   }
 
   function restore(saved: SavedSessions) {
@@ -1400,6 +1433,16 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     return session.historyRead;
   }
 
+  // Whether the row `sessionId` no longer holds `session`, or `session` left
+  // `hostId` for a new one.
+  function isClosedOrCleared(
+    session: HeldSession,
+    sessionId: string,
+    hostId: string,
+  ): boolean {
+    return held.get(sessionId) !== session || session.hostId !== hostId;
+  }
+
   async function prependHistory(
     session: HeldSession,
     profile: ChatProfile,
@@ -1413,9 +1456,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       session.state.projectDir,
       profileDirOf(profile),
     );
-    const isClosedOrCleared =
-      held.get(sessionId) !== session || session.hostId !== hostId;
-    if (isClosedOrCleared) {
+    if (isClosedOrCleared(session, sessionId, hostId)) {
       return;
     }
     session.state.entries = [...history, ...session.state.entries];
