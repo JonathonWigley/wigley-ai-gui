@@ -20,8 +20,8 @@ the rule for which key an action takes.
 A user's request to change how the app looks or behaves goes into the repo's built-in `default` layout (and the
 contract or kit part when the look needs one), because the user is the app's only user and wants every change in the
 shipped app. Both apps read each `default`'s `layout.js` and `layout.css` live from the repo clone, so the edit shows
-at once with no rebuild; CSS for parts the app draws itself still ships only with a rebuild. A user layout in `~/.config/wigley-ai-gui/layouts/<owner>/<name>/` is written only when the user asks for
-one. `settings.json` can still pick a user layout for an owner (`"<plugin>": { "layout": "<name>" }`, or the core
+at once with no rebuild; CSS for parts the app draws itself still ships only with a rebuild. A user layout in
+`~/.config/wigley-ai-gui/layouts/<owner>/<name>/` is written only when the user asks for one. `settings.json` can still pick a user layout for an owner (`"<plugin>": { "layout": "<name>" }`, or the core
 `shell.layout`), which hides a `default` change from the user's screen: check it before the change, apply the change
 to that layout too, and name it in the report.
 
@@ -598,7 +598,8 @@ round; primer: an open primer), since main, not the page, decides.
   each config change. A layout draws every pane and every repeated row, card or entry; the app keeps selection, keys,
   scrolling, split widths, text boxes and editors. The root of every part a layout draws carries `data-layout="<name>"`
   and `data-layout-owner="<owner>"`, and each loaded layout gets its own stylesheet link, so a layout's CSS selects
-  under its own name and restyles nothing another layout drew. A loaded layout stays available while its revision is
+  under its own name and restyles nothing another layout drew; the default's CSS is one link of its own, ahead of
+  them. A loaded layout stays available while its revision is
   current, so a round naming one another round loaded draws with it at once. A view that needs agent data to show
   anything has a preview sample under `Space z l` for iterating its layout in place. `docs/features/layouts/design.md`
   lists every owner and its surfaces.

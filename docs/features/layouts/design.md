@@ -74,16 +74,21 @@ edit shows at once, and the committed edit ships as the next build's bundled cop
 - **The folder.** A plugin's default is `src/plugins/<id>/layouts/default/` in the clone, derived from its plugin id;
   the shell names `src/renderer/shell/layouts/default/` when it registers. A user folder named `default` stays
   ignored.
-- **Reload.** Main watches each owner's default folder beside its user folder, and a saved `layout.js` or
-  `layout.css` raises the default's revision like any layout's; the page loads it on the same `wigley-layout:`
-  scheme, as `<owner>/default/`, and redraws.
-- **CSS.** A default's `layout.css` holds the rules for what that layout draws, and loads through the same
-  stylesheet link as a user layout's. The bundled copy of that file ships as a file the loader links while no live
-  default is loaded, and the loader swaps it for the live one, so a rule deleted live is gone. CSS for parts the app
-  draws itself (slots, panes, editors, text boxes) stays in the plugin's page CSS and still needs a rebuild.
-- **Fallback.** A missing clone, a default that fails to load or read, and a part that throws or is missing all draw
-  the bundled default. A load, read or missing-part failure raises the toast a failed user layout raises; a part
-  that throws while drawing logs, as a user layout's part does.
+- **Reload.** Main watches each owner's default folder beside its user folder, only when the folder exists at start,
+  and a saved `layout.js` or `layout.css` raises the default's revision like any layout's; a folder that gains
+  `layout.js` after start goes live at revision 2. The page loads it on the same `wigley-layout:` scheme, as
+  `<owner>/default/`, and redraws. The renderer dev server ignores `**/layouts/default/**`, so this path is the only
+  redraw of a default in either app.
+- **CSS.** A default's `layout.css` holds the rules for what that layout draws. It loads through one stylesheet link
+  of its own, kept whichever layout is picked (a user layout draws its missing parts from the default), and placed
+  before the user layouts' links. The link carries the live `layout.css` while a live default is loaded, else the
+  bundled copy, which ships as a file the loader links and the build never inlines; the link is attached only while it
+  has an href, so a rule deleted live is gone. CSS for parts the app draws itself (slots, panes, editors, text boxes)
+  stays in the plugin's page CSS and still needs a rebuild.
+- **Fallback.** A missing clone and a default that fails to load or read draw the bundled default. A live default
+  must define every function part the bundled default defines; a missing part fails the load with
+  `layout default has no <part>`. A load, read or missing-part failure raises the toast a failed user layout raises;
+  a part that throws while drawing logs and draws the bundled part, as a user layout's part does.
 
 ## What a layout draws
 
