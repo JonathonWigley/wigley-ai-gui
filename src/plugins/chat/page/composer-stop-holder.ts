@@ -9,8 +9,8 @@ import type {
 // One Chat tab's hold on the composer part whose stop took its entry cursor.
 // `offer` asks each part with a stop, in order, until one takes the cursor,
 // and returns its id; null when none does. A part whose `enter` throws is
-// logged and the next asked. An offer while a part holds leaves that part
-// first. `leave` calls the holding part's `leave` once and holds nothing.
+// logged, its `leave` called and chat's scope set again, and the next asked.
+// An offer while a part holds leaves that part first. `leave` calls the holding part's `leave` once and holds nothing.
 // `holding` is the holding part's id, null while none holds. `boxFocused`
 // leaves the holding part and sets chat's scope again; `scopeChanged` leaves it
 // when the tab is no longer the visible tab. Each does nothing while none
@@ -81,17 +81,21 @@ export function createComposerStopHolder(
     return exits;
   };
 
+  const leavePart = (id: string, stop: ComposerStop) => {
+    try {
+      stop.leave(deps.sessionId);
+    } catch (error: unknown) {
+      log('chat', `composer part ${id} leave failed: ${errorText(error)}`);
+    }
+  };
+
   const leave = () => {
     if (held === null) {
       return;
     }
     const { id, stop } = held;
     held = null;
-    try {
-      stop.leave(deps.sessionId);
-    } catch (error: unknown) {
-      log('chat', `composer part ${id} leave failed: ${errorText(error)}`);
-    }
+    leavePart(id, stop);
     log('chat', `composer part ${id} left in ${name}`);
     deps.changed(false);
   };
@@ -104,6 +108,8 @@ export function createComposerStopHolder(
       }
     } catch (error: unknown) {
       log('chat', `composer part ${id} stop failed: ${errorText(error)}`);
+      leavePart(id, stop);
+      deps.setChatScope();
       return false;
     }
     held = { id, stop, exits };

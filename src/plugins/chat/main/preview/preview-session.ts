@@ -173,7 +173,7 @@ export function previewEntries(): ChatEntry[] {
   ];
 }
 
-// Every chip state the composer bar draws: a set value, the unset state, and
+// Every chip state the status line draws: a set value, the unset state, and
 // `verbosity`, which no pick key reaches.
 export function previewControls(): SessionControl[] {
   return [

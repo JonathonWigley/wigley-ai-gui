@@ -336,6 +336,15 @@ User-facing features, those other work builds on first.
   session (chat main's `dispose` calls `chat.killAll()` on quit, `src/plugins/chat/main/start.ts`). The user wants
   running sessions to carry on to their turn end, so updating the app and restarting it does not cancel work in
   progress; if there is a better way to reach that goal, propose it.
+- **Chat holds a scrolled-up position and shows a "new messages" bubble** — *needs a feature plan*: the transcript
+  jumps to the bottom only while the user is already there. Scrolled up, the user's position holds through every
+  new entry, streaming text and resize, and a "new messages" bubble floats at the bottom of the transcript, above
+  the composer; clicking it, or scrolling back to the bottom, jumps down, follows again and hides the bubble.
+  Today: any scroll that rests off the bottom stops following (`focusAfterScrollEvent`,
+  `src/plugins/chat/page/entry-list.ts`), but nothing shows that new entries arrived below. Open for the plan: what
+  counts as new (an entry, an assistant message only, or streaming growth too), whether the bubble shows a count,
+  its key binding, and its draw through the chat layout contract (`src/plugins/chat/layouts/layout.d.ts`). Settle it
+  with **One rule for the chat cursor, scroll and keys** (Bugs seen in use), which covers the same following rule.
 - **Command palette and fuzzy finders** — *needs a feature plan*: a command palette, and `Space f f` (find a file) and
   `Space f s` (search text), all ranked by the `FuzzyMatcher` page service (Foundations; `docs/keymap.md` reserves
   the keys). Builds on the runtime command API (command labels) and the core picker service. Deferred from the docs

@@ -7,6 +7,7 @@ import type {
   CompleteLayout,
   DetailsInput,
   Layout,
+  RowLineInput,
   SessionLineInput,
   StatusLineInput,
 } from '../../layouts/layout';
@@ -33,6 +34,7 @@ export interface UsagePartsDeps {
 export interface UsageParts {
   statusLine(parent: HTMLElement, input: StatusLineInput): Drawn;
   sessionLine(parent: HTMLElement, input: SessionLineInput): Drawn;
+  rowLine(parent: HTMLElement, input: RowLineInput): Drawn;
   details(parent: HTMLElement, input: DetailsInput): Drawn;
   setLayouts(shown: ShownLayouts<Layout>): void;
 }
@@ -79,6 +81,11 @@ export function createUsageParts(deps: UsagePartsDeps): UsageParts {
     sessionLine(parent, input) {
       return draw('sessionLine', parent, (sessionLine, slot, rollback) =>
         sessionLine(slot, input, createUsageKit(deps.kit, rollback)),
+      );
+    },
+    rowLine(parent, input) {
+      return draw('rowLine', parent, (rowLine, slot, rollback) =>
+        rowLine(slot, input, createUsageKit(deps.kit, rollback)),
       );
     },
     details(parent, input) {

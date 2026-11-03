@@ -76,9 +76,12 @@ export function sessionsViewSetup(
   };
 }
 
-// The first of `rows` whose text holds `text`.
+// The first of `rows` whose text or tooltip holds `text`: the tooltip names
+// the folder label a titled row does not draw.
 export function rowNamed(rows: FakeElement[], text: string): FakeElement {
-  const found = rows.find((row) => row.textContent.includes(text));
+  const found = rows.find(
+    (row) => row.textContent.includes(text) || row.title.includes(text),
+  );
   if (found === undefined) {
     throw new Error(`no row holds ${text}`);
   }

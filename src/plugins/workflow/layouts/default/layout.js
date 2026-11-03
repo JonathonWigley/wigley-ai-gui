@@ -1,7 +1,7 @@
 // @ts-check
 
 // The built-in workflow look: a one-line chip under the session row (the
-// stage as an accent tag, its detail, the countdown and the main action), a
+// stage as an accent tag and the countdown), a
 // strip above the composer (the stepper, the detail, the countdown and every
 // action), and the Flow tab (the stage's label, the stepper, the detail, the
 // checklist by wave and every action).
@@ -11,15 +11,8 @@ const layout = {
   chip(parent, input, kit) {
     const chip = kit.el(parent, 'div', 'workflow-chip');
     kit.tag(chip, input.label, 'accent');
-    kit.el(chip, 'span', 'workflow-chip-detail', input.detail);
     if (input.countdown !== null) {
       kit.countdown(chip, input.countdown);
-    }
-    if (input.mainAction !== null) {
-      kit.actionButton(chip, input.mainAction, {
-        anchor: false,
-        variant: 'ghost',
-      });
     }
     return { element: chip };
   },

@@ -54,7 +54,7 @@ export function createHScroller(): HScroller {
     forward.classList.toggle('is-no-target', !states.forward);
   };
   const refresh = () => {
-    if (pendingReveal !== null && track.clientWidth > 0) {
+    if (pendingReveal !== null && isLaidOut(track)) {
       const item = pendingReveal;
       pendingReveal = null;
       if (item.parentElement === track) {
@@ -77,7 +77,7 @@ export function createHScroller(): HScroller {
     element: root,
     track,
     reveal(item) {
-      if (track.clientWidth === 0) {
+      if (!isLaidOut(track)) {
         pendingReveal = item;
         return;
       }
@@ -101,6 +101,11 @@ function chevron(
   const node = iconButton(iconName, label, onClick, 'sm');
   node.classList.add('ui-h-scroller-chevron', 'is-no-target');
   return node;
+}
+
+// A track with no width yet, detached or unlaid, has no layout to scroll in.
+function isLaidOut(track: HTMLElement): boolean {
+  return track.clientWidth > 0;
 }
 
 function viewOf(track: HTMLElement): ScrollView {

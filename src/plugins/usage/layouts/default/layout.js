@@ -3,8 +3,8 @@
 // The built-in usage look: the status-bar line as wrapping groups (each plan
 // meter, or the note), each session's line as one row (its context, cache and
 // spend) in its Chat status line or tab bar that drops whole items from its
-// end when narrow, and the details as a section per profile and one for the
-// shown session.
+// end when narrow, each session's row line as its context meter and text, and
+// the details as a section per profile and one for the shown session.
 
 /** @type {import('../layout').CompleteLayout} */
 const layout = {
@@ -32,6 +32,12 @@ const layout = {
     if (input.spend !== null) {
       kit.el(line, 'span', 'usage-text', input.spend);
     }
+    return line;
+  },
+  rowLine(parent, input, kit) {
+    const line = kit.el(parent, 'span', 'usage-row-line');
+    kit.meter(line, input.context.percent, input.context.tone);
+    kit.el(line, 'span', 'usage-text', input.context.text);
     return line;
   },
   details(parent, input, kit) {

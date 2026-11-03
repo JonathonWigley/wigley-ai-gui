@@ -86,10 +86,10 @@ stays in themes.
 | `settings` | `settings.layout` | the section list, the setting, key, leader and advanced rows, the problem line, the picker rows |
 | `notes` | `notes.layout` | the note popup: fields, tags, images, target, session, actions, markup toolbar, the confirm and picker rows |
 | `sessions` | `sessions.layout` | the session rows in the side bar, each session's tab strip, where other plugins' row and bar parts sit, the rename dialog |
-| `agent-lines` | `agent-lines.layout` | the running subagent and task lines under each session row |
+| `agent-lines` | `agent-lines.layout` | the working line under each session row while it runs a subagent or task |
 | `agent-strip` | `agent-strip.layout` | the agent strip above the Chat composer's box: subagent and task boxes, a box opened in place |
 | `gallery` | `gallery.layout` | each primitive's sample block |
-| `usage` | `usage.layout` | the status-bar line (plan rows), each session's usage line (context bar, cache countdown, spend), drawn in the Chat status line and, through the optional `usage-tab-line` plugin, in each tab bar; the right-bar details |
+| `usage` | `usage.layout` | the status-bar line (plan rows), each session's context meter under its row, each session's usage line (context bar, cache countdown, spend), drawn in the Chat status line and, through the optional `usage-tab-line` plugin, in each tab bar; the right-bar details |
 | `keys` | `keys.layout` | the help overlay, the which-key panel, the title bar's Keys button |
 | `workflow` | `workflow.layout` | the stage chip under each session row, the strip above the Chat composer (stepper and actions), the Flow tab (stepper, plan checklist by wave, actions) |
 | `visual` | `visual.layout` | the "drawing visual…" card of an open html block, each closed block's visual around its frame with its expand control, and the full-size overlay |
@@ -105,9 +105,9 @@ can be iterated in place. The sample sends nothing and raises no notification or
 | --- | --- |
 | `Space z l o` | forms: the preview round, then each saved real round |
 | `Space z l p` | primer: a sample primer holding every field and need |
-| `Space z l c` | chat: a session of every entry kind, its steps grouped into finished activity lines |
+| `Space z l c` | chat: a session of every entry kind, its steps grouped into finished activity lines, and the agent strip above the composer |
 | `Space z l s` | sessions: rows in every state |
-| `Space z l a` | agents: a sample session with two running subagents |
+| `Space z l a` | agents: a sample session with two running subagents and two tasks; with the default `plugins.disabled` the row opens with no working line, and `agent-lines` on draws it |
 | `Space z l w` | workflow: a sample session in every stage, the plan-ready countdown included |
 
 ## The primer's columns

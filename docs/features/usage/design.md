@@ -91,6 +91,7 @@ profile's `settings.json`, which is why the configured limit is read there.
         ▼
  usage page ──▶ status bar line (the shown session's profile's plan rows)
             ──▶ chat.addStatusPart: each Chat session's context, cache and spend in its status line
+            ──▶ sessions.addRowPart (usage.rowLine): each session's context meter under its side-bar row
  usage-tab-line page (optional) ──▶ sessions.addBarPart: the same line in each session's tab bar
             ──▶ right bar details (every profile, the shown session)   toggled by Space v u
 ```
@@ -130,7 +131,8 @@ In `src/contracts/agent.ts`, beside `AgentHarness`:
   A poll still running when the next one is due is not doubled.
 - **Page** draws, through the `usage` layout:
   - a status-bar line, always on, aligned to the end: the shown session's profile's plan rows (the default profile
-    while no session shows). Each meter is tinted by its severity. A stale profile's rows draw muted.
+    while no session shows). Each meter is tinted by its severity. A stale profile's rows draw muted. The layout
+    also gets every profile's plan rows, so a user layout can stack them all.
   - each Chat session's line, a status part (chat's `addStatusPart`) in its Chat status line; the optional
     `usage-tab-line` plugin (in `plugins.disabled` by default) draws the same line as a bar part (sessions'
     `addBarPart`) in each session's tab bar. The line: its context bar
@@ -140,6 +142,9 @@ In `src/contracts/agent.ts`, beside `AgentHarness`:
     event yet draws no line. The line redraws on each snapshot, each `sessions.activeChanged`, each layouts set and the
     minute tick. Each surface logs `session line in <name>: <text>` under its own plugin when a session's text
     changes, `<name>` the session's side-bar label (its id while none is known).
+  - each session's row line, a sessions row part (`usage.rowLine`, added through `sessions.addRowPart`) under its
+    side-bar row: the session's context meter alone, drawn by the `rowLine` layout part and redrawn like the session
+    line.
   - the details bar in the right bar, toggled by `usage.toggleDetails` (`Space v u`), its open state kept in
     `uiState`: every profile's rows with reset times, extra usage as `spent / limit` in its currency (or `off`), the
     poll's staleness and error, and the shown session's context, both autocompact limits and the marker when they
@@ -175,7 +180,8 @@ contributes to it through `api.areas.rightBar`.
   covers nothing.
 - **The agent-tower agent event seam is built now,** with `usage` as its first member grown to carry the autocompact
   limits, cache expiry and spend, so there is one forwarding path from adapter to plugins.
-- **Profiles:** the status bar shows the shown session's profile; the details bar lists every profile.
+- **Profiles:** the default status bar shows the shown session's profile, its input carrying every profile for a
+  layout that shows them all; the details bar lists every profile.
 - **Autocompact limit:** the configured override wins, the reported limit shows beside it, and a difference is marked.
 - **Cache time** is the prompt-cache expiry, not an autocompact timer: autocompact fires on tokens alone.
 - **Main gains injected `timers`,** matching the page's, since the poller is main's first periodic work.

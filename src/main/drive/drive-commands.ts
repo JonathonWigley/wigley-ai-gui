@@ -42,7 +42,7 @@ import {
   waitFor,
   waitForNewLogLine,
   waitForRedraw,
-  withPrimitiveEllipsis,
+  withPrimitiveClipping,
 } from './page-driver';
 
 // How long a command waits for the page to be ready for keys, long enough to
@@ -327,7 +327,7 @@ export function createDriveCommands(deps: DriveCommandsDeps): DriveCommands {
         problems: await cutOffAtWidth(
           window,
           optionalNumber(args, 'width') ?? window.minimumWidth(),
-          withPrimitiveEllipsis(
+          withPrimitiveClipping(
             optionalStringList(args, 'scrollsItself') ?? [],
           ),
         ),

@@ -42,24 +42,24 @@ const resizeSideBar = (direction: 'Left' | 'Right') => {
 
 const GROUPS: SelfTestGroup[] = [
   {
-    name: 'roster lines',
-    why: "A session whose agent spawns two subagents and starts two tasks draws a line for each under its row (a subagent's dot, type, description, elapsed, tool count; a task's terminal icon, description, elapsed); at the side bar's least width every line fits its row with its description showing, the preview's minutes-long, double-digit-tool subagent line wrapping its elapsed time and tool count under the description while each task line stays on one row; an interrupt ends the session's subagents and tasks and their lines go.",
+    name: 'working line',
+    why: "A session whose agent spawns two subagents and starts two tasks draws one working line under its row (a running dot and the oldest item's elapsed time, counting all four); at the side bar's least width the line fits its row; an interrupt ends the session's subagents and tasks and the line goes.",
     steps: [
       {
         keys: sendKeys(FAKE_AGENTS_TEXT),
-        expect: `[agent-lines] lines in ${SELFTEST_PROJECT_NAME}: 4`,
+        expect: `[agent-lines] running in ${SELFTEST_PROJECT_NAME}: 4`,
         checksFit: true,
-        screenshot: 'subagent-lines',
+        screenshot: 'working-line',
       },
       ...Array.from({ length: SIDE_BAR_STEPS_TO_LEAST }, () =>
         resizeSideBar('Left'),
       ),
       {
         keys: ['Escape', ...PREVIEW_KEYS],
-        expect: `[agent-lines] lines in ${PREVIEW_NAME}: 4`,
+        expect: `[agent-lines] running in ${PREVIEW_NAME}: 4`,
         checksFit: 'held',
-        screenshot: 'subagent-lines-narrow',
-        why: "The preview's sample roster holds the widest lines (a subagent with a long type, one with an elapsed time past a minute and 12 tools, and a long task nested under it), checked beside this run's lines at the side bar's least width: the fit check at the minimum width hides the side bar.",
+        screenshot: 'working-line-narrow',
+        why: "The preview's sample roster holds an elapsed time past a minute, checked beside this run's line at the side bar's least width: the fit check at the minimum width hides the side bar.",
       },
       {
         keys: PREVIEW_KEYS,
@@ -71,8 +71,8 @@ const GROUPS: SelfTestGroup[] = [
       ),
       {
         keys: ['<C-c>'],
-        expect: `[agent-lines] lines in ${SELFTEST_PROJECT_NAME}: 0`,
-        why: 'Interrupt ends each running subagent and task, so the roster marks them finished and the page draws no line for them.',
+        expect: `[agent-lines] running in ${SELFTEST_PROJECT_NAME}: 0`,
+        why: 'Interrupt ends each running subagent and task, so the roster marks them finished and the page draws no line.',
       },
     ],
   },
@@ -80,9 +80,9 @@ const GROUPS: SelfTestGroup[] = [
 
 // Each run launches a new chat session in the project folder with a plain
 // first message, and the steps send the agents text by keys: a launch that
-// spawned the subagents and tasks would log the lines before any step began
+// spawned the subagents and tasks would log the count before any step began
 // waiting.
-// An earlier run's row stays open, its lines gone after its interrupt; only
+// An earlier run's row stays open, its line gone after its interrupt; only
 // the new row's count changes, so the waits stay exact.
 export function agentLinesSelfTestScript(
   deps: AgentLinesSelfTestDeps,
@@ -102,16 +102,13 @@ export function agentLinesSelfTestScript(
   return {
     pageBinds: [],
     settings: {},
-    // A line's type and description (a task line's too), its session row's
-    // status, and each of the working block's tool calls (the Agent calls
+    // A session row's status, and each of the working block's tool calls (the Agent calls
     // carry the subagents' prompts), end in an ellipsis inside their own
     // boxes, as their CSS says. The tab bar's parts clip in their own box.
     // The side bar handle's resize prompt shows past its box for a second
     // after each resize step, and the split handle of the preview pane's Docs
     // tab holds its prompt, hidden until hovered, over both panes.
     scrollsItself: [
-      '.agent-lines-line-type',
-      '.agent-lines-line-description',
       '.session-row-status',
       '.session-bar-parts',
       '.chat-working-action',

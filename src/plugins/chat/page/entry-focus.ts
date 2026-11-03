@@ -62,6 +62,16 @@ export function focusAfterScroll(
   return { entryId: focus.entryId, following };
 }
 
+// After the list scrolled by any means (wheel, trackpad, scrollbar, keys) and
+// came to rest `isAtBottom` or not: it follows only at the bottom; the focused
+// entry stays.
+export function focusAfterScrollEvent(
+  focus: EntryFocus,
+  isAtBottom: boolean,
+): EntryFocus {
+  return { entryId: focus.entryId, following: isAtBottom };
+}
+
 // After the list changed: a focus on an entry still listed stays, and a
 // following one only while it sits on `lastStopId`, the stop a following focus
 // may rest on (the newest pending row, else the last row's stop: an open last

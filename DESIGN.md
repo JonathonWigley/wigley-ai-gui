@@ -183,9 +183,6 @@ means something.
   user's width is kept; `640px` stacks a sheet's split panes. Every split pane has a
   least width (the Primer tab's card column `320px`, every other pane `160px` or more): a narrowing
   split gives up its start pane's width down to its least width first, then stacks at any window width.
-  A subagent line narrower than `180px` (its container query) wraps its elapsed time and tool count
-  to a second row under its description; a task line stays on one row at every width, its description
-  ending in an ellipsis, and a task under its subagent's line is indented `space-4`.
 
 ## Motion
 
@@ -396,8 +393,9 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   `status-attention` edge and plain verbs (Allow once, Deny). The composer floats (L3,
   `radius-xl`, inset `space-3`) with the transcript scrolling beneath it, and holds, top to bottom: other plugins'
   composer parts (the workflow strip, the agent strip), the strip of attached images' thumbnails, the box (no mode
-  label: the cursor's shape shows the vim mode), and the status line: repo and branch in `fg-secondary`, one
-  model · effort chip, the other control chips, other plugins' status parts (usage), then the running dot and send.
+  label: the cursor's shape shows the vim mode), and the status line, drawn in this order: repo and branch in `fg-secondary`, the `i`/`a`
+  type hint, one model · effort chip, every other control's chip, the status parts other plugins add (usage: context,
+  cache, spend), the running dot, then Send.
   The **agent strip** is an HScroller of boxes, each a `card-background` Card with `radius-md`: a subagent box holds a
   StatusDot, its name, `model · effort · $cost` in `fg-tertiary`, the description, and its latest three tool calls in
   mono; a task box a terminal icon, the description, its owning agent and the elapsed time. A finished box dims to

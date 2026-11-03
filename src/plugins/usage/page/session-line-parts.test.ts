@@ -11,7 +11,11 @@ import type { UsageSnapshot } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import { createUsageParts } from './layout/usage-parts';
 import { createSessionLineParts } from './session-line-parts';
-import { createSessionLines, type SessionLines } from './session-lines';
+import {
+  createSessionLines,
+  type SessionLines,
+  sessionLineKind,
+} from './session-lines';
 
 const NOW = 50_000_000;
 const MINUTE = 60_000;
@@ -59,7 +63,7 @@ function setUp() {
   const instances = (['a', 'b'] as const).map((id): SessionLines => {
     const lines = createSessionLines({
       id,
-      parts,
+      line: sessionLineKind(parts),
       log: (line) => logged[id].push(line),
       nameOf: (sessionId) => sessionId,
       latest: () => (shown === null ? null : { snapshot: shown, now: NOW }),

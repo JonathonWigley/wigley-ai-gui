@@ -7,29 +7,19 @@ import {
   type OwnerKitServices,
   ownerBaseKitDeps,
 } from '../../../shared/page/layout-host/base-kit';
-import type {
-  DrawnPart,
-  RollbackDeps,
-} from '../../../shared/page/layout-host/draw-part';
+import type { DrawnPart } from '../../../shared/page/layout-host/draw-part';
 import { createLayoutParts } from '../../../shared/page/layout-host/layout-parts';
 import type { SessionPart } from '../../sessions/contract';
 import type { Roster } from '../../agents/contract';
 import defaultLayout from '../layouts/default/layout.js';
-import type {
-  AgentLineInput,
-  AgentLinesKit,
-  AgentLinesPart,
-  CompleteLayout,
-  Layout,
-  TaskLineInput,
-} from '../layouts/layout';
+import type { AgentLinesPart, CompleteLayout, Layout } from '../layouts/layout';
 import { agentLinesManifest } from '../manifest';
-import { orderRosterLines, type RosterLine } from './roster-line-order';
+import { type RunningWork, runningWork } from './running-work';
 
 // `nameOf` is the session's name in the page log line; `roster` is a
 // session's current roster, drawn by a row built before any `setRoster` named
 // it.
-export interface RosterLinesDeps {
+export interface WorkingLinesDeps {
   kit: OwnerKitServices;
   log: Log;
   clock: Clock;
@@ -38,89 +28,77 @@ export interface RosterLinesDeps {
   roster(sessionId: string): Roster;
 }
 
-// `part` draws a session's running subagents and tasks, one line each, in
-// `orderRosterLines`' order, into the wrapper sessions hands it under the
-// session's row. `setRoster` replaces a session's roster, both lists empty
-// once nothing runs, and redraws its lines; `setLayouts` redraws every
-// session's; `forget` drops a session that left.
-export interface RosterLines {
+// `part` draws a session's working line, while it runs any subagent or task,
+// into the wrapper sessions hands it under the session's row. `setRoster`
+// replaces a session's roster and redraws its line; `setLayouts` redraws
+// every session's; `forget` drops a session that left.
+export interface WorkingLines {
   part: SessionPart;
   setRoster(sessionId: string, roster: Roster): void;
   setLayouts(shown: ShownLayouts<Layout>): void;
   forget(sessionId: string): void;
 }
 
-// A wrapper sessions handed `part.build`, and the lines drawn into it last.
+// A wrapper sessions handed `part.build`, and the line drawn into it last.
 interface HeldWrapper {
   wrapper: HTMLElement;
-  lines: DrawnPart<AgentLinesPart>[];
+  line: DrawnPart<AgentLinesPart> | null;
 }
 
 const TICK_MS = 1000;
 
-// Each session's roster outlives its wrapper, which a row redraw builds and
-// disposes many times. While any line shows, one tick a second redraws
+// Each session's running work outlives its wrapper, which a row redraw builds
+// and disposes many times. While any line shows, one tick a second redraws
 // every line, since a line has no hook to update its elapsed time alone.
-// After each draw it logs `lines in <name>: <count>`, counting subagent and
-// task lines together, when the count differs from the last one logged for
-// that session, so a row redraw or a tick logs nothing new.
-export function createRosterLines(deps: RosterLinesDeps): RosterLines {
+// After each draw it logs `running in <name>: <count>`, counting running
+// subagents and tasks together, when the count differs from the last one
+// logged for that session, so a row redraw or a tick logs nothing new.
+export function createWorkingLines(deps: WorkingLinesDeps): WorkingLines {
   const { clock, timers } = deps;
   const layoutParts = createLayoutParts<Layout, CompleteLayout>({
     owner: agentLinesManifest.id,
     defaultLayout,
     log: deps.log,
   });
-  const orderedLines = new Map<string, RosterLine[]>();
+  const works = new Map<string, RunningWork>();
   const held = new Map<string, HeldWrapper>();
   const loggedCounts = new Map<string, number>();
   let pendingTick: number | null = null;
 
-  const disposeLines = (holder: HeldWrapper) => {
-    const lines = holder.lines;
-    holder.lines = [];
-    callEach(lines, (line) => line.dispose());
+  const disposeLine = (holder: HeldWrapper) => {
+    const line = holder.line;
+    holder.line = null;
+    line?.dispose();
   };
 
-  const kitFor = (rollback: RollbackDeps): AgentLinesKit =>
-    createBaseKit(
-      ownerBaseKitDeps(agentLinesManifest, deps.kit, null, rollback),
+  const drawLine = (holder: HeldWrapper, work: RunningWork, now: number) =>
+    layoutParts.draw(
+      'workingLine',
+      holder.wrapper,
+      (workingLine, slot, rollback) =>
+        workingLine(
+          slot,
+          {
+            elapsedMs: now - work.startedAt,
+            agentCount: work.agentCount,
+            taskCount: work.taskCount,
+          },
+          createBaseKit(
+            ownerBaseKitDeps(agentLinesManifest, deps.kit, null, rollback),
+          ),
+        ),
     );
-
-  const drawAgentLine = (holder: HeldWrapper, input: AgentLineInput) =>
-    layoutParts.draw('agentLine', holder.wrapper, (agentLine, slot, rollback) =>
-      agentLine(slot, input, kitFor(rollback)),
-    );
-
-  const drawTaskLine = (holder: HeldWrapper, input: TaskLineInput) =>
-    layoutParts.draw('taskLine', holder.wrapper, (taskLine, slot, rollback) =>
-      taskLine(slot, input, kitFor(rollback)),
-    );
-
-  const drawLine = (holder: HeldWrapper, line: RosterLine, now: number) =>
-    line.kind === 'agent'
-      ? drawAgentLine(holder, {
-          agentType: line.agent.agentType,
-          description: line.agent.description,
-          elapsedMs: now - line.agent.startedAt,
-          toolCalls: line.agent.tools.length,
-        })
-      : drawTaskLine(holder, {
-          description: line.task.description,
-          elapsedMs: now - line.task.startedAt,
-          isNested: line.isNested,
-        });
 
   const logCount = (sessionId: string, count: number) => {
     if (count === (loggedCounts.get(sessionId) ?? 0)) {
       return;
     }
     loggedCounts.set(sessionId, count);
-    deps.log('agent-lines', `lines in ${deps.nameOf(sessionId)}: ${count}`);
+    deps.log('agent-lines', `running in ${deps.nameOf(sessionId)}: ${count}`);
   };
 
   const isLineShown = () =>
-    [...held.values()].some((holder) => holder.lines.length > 0);
+    [...held.values()].some((holder) => holder.line !== null);
 
   // Sets the tick while a line shows and none is pending; clears a pending
   // one once no line shows.
@@ -136,15 +114,18 @@ export function createRosterLines(deps: RosterLinesDeps): RosterLines {
 
   const draw = (sessionId: string, holder: HeldWrapper) => {
     try {
-      disposeLines(holder);
+      disposeLine(holder);
     } finally {
       holder.wrapper.replaceChildren();
     }
-    const now = clock.now();
-    for (const line of orderedLines.get(sessionId) ?? []) {
-      holder.lines.push(drawLine(holder, line, now));
+    const work = works.get(sessionId);
+    if (work !== undefined) {
+      holder.line = drawLine(holder, work, clock.now());
     }
-    logCount(sessionId, holder.lines.length);
+    logCount(
+      sessionId,
+      work === undefined ? 0 : work.agentCount + work.taskCount,
+    );
   };
 
   const drawAll = () => {
@@ -160,23 +141,23 @@ export function createRosterLines(deps: RosterLinesDeps): RosterLines {
     drawAll();
   };
 
-  const storeLines = (sessionId: string, roster: Roster) => {
-    const lines = orderRosterLines(roster);
-    if (lines.length === 0) {
-      orderedLines.delete(sessionId);
+  const storeWork = (sessionId: string, roster: Roster) => {
+    const work = runningWork(roster);
+    if (work === null) {
+      works.delete(sessionId);
     } else {
-      orderedLines.set(sessionId, lines);
+      works.set(sessionId, work);
     }
   };
 
   return {
     part: {
-      id: 'agent-lines.rosterLines',
+      id: 'agent-lines.workingLine',
       build(wrapper, sessionId) {
-        const holder: HeldWrapper = { wrapper, lines: [] };
+        const holder: HeldWrapper = { wrapper, line: null };
         held.set(sessionId, holder);
-        if (!orderedLines.has(sessionId)) {
-          storeLines(sessionId, deps.roster(sessionId));
+        if (!works.has(sessionId)) {
+          storeWork(sessionId, deps.roster(sessionId));
         }
         try {
           draw(sessionId, holder);
@@ -189,7 +170,7 @@ export function createRosterLines(deps: RosterLinesDeps): RosterLines {
               held.delete(sessionId);
             }
             try {
-              disposeLines(holder);
+              disposeLine(holder);
             } finally {
               updateTicker();
             }
@@ -198,7 +179,7 @@ export function createRosterLines(deps: RosterLinesDeps): RosterLines {
       },
     },
     setRoster(sessionId, roster) {
-      storeLines(sessionId, roster);
+      storeWork(sessionId, roster);
       const holder = held.get(sessionId);
       if (holder === undefined) {
         return;
@@ -214,7 +195,7 @@ export function createRosterLines(deps: RosterLinesDeps): RosterLines {
       drawAll();
     },
     forget(sessionId) {
-      orderedLines.delete(sessionId);
+      works.delete(sessionId);
       loggedCounts.delete(sessionId);
     },
   };

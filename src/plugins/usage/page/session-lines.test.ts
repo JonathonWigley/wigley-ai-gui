@@ -10,7 +10,7 @@ import {
 import type { UsageSnapshot } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import { createUsageParts } from './layout/usage-parts';
-import { createSessionLines } from './session-lines';
+import { createSessionLines, sessionLineKind } from './session-lines';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 
 const NOW = 50_000_000;
@@ -70,7 +70,7 @@ function setUp(
   });
   const lines = createSessionLines({
     id: 'usage.sessionLine',
-    parts,
+    line: sessionLineKind(parts),
     log: (line) => logged.push(line),
     nameOf: (sessionId) => names.get(sessionId) ?? sessionId,
     latest: () => (shown === null ? null : { snapshot: shown, now: NOW }),

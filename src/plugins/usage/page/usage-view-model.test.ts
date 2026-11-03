@@ -165,6 +165,31 @@ describe('statusLineInput', () => {
     },
   );
 
+  it('statusLineInput_Profiles_EveryProfileInOrder', () => {
+    const [work, personal] = twoProfiles([]).plans;
+    const snapshot: UsageSnapshot = {
+      plans: [work, { ...personal, stale: true }],
+      sessions: [],
+    };
+
+    const input = statusLineInput(snapshot, null);
+
+    expect(input.profiles).toEqual([
+      {
+        name: 'work',
+        plans: [{ label: '5h', text: '42%', percent: 42, tone: 'normal' }],
+        note: null,
+        stale: false,
+      },
+      {
+        name: 'personal',
+        plans: [{ label: 'Week', text: '61%', percent: 61, tone: 'normal' }],
+        note: null,
+        stale: true,
+      },
+    ]);
+  });
+
   it.each([
     {
       case: 'PlanLoading',
@@ -471,6 +496,7 @@ function lineInput(overrides: Partial<StatusLineInput>): StatusLineInput {
     plans: [{ label: '5h', text: '42%', percent: 42, tone: 'normal' }],
     note: null,
     stale: false,
+    profiles: [],
     ...overrides,
   };
 }

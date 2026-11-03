@@ -49,12 +49,8 @@ const GROUPS: SelfTestGroup[] = [
       {
         keys: TOGGLE,
         expect: FRESH_DETAILS,
-        alsoExpect: [
-          /^\[usage-tab-line\] session line in usage-selftest: context 180k\/300k, cache 42m, spend \$1\.23$/,
-        ],
         screenshot: 'details',
         checksFit: true,
-        why: "usage-tab-line starts in the self-test, so the run's tab bar draws the same line as its Chat status line and logs it under its own name.",
       },
       {
         keys: TOGGLE,
@@ -136,7 +132,15 @@ export function usageSelfTestScript(deps: UsageSelfTestDeps): SelfTestScript {
           return { unreadPlans, snapshot: deps.snapshot(), sessionId };
         },
       );
-      return { shownLine: `[usage] ${FRESH_LINE}`, result };
+      // usage-tab-line starts in the self-test, so the seed also draws the
+      // line in the run's tab bar, logged under usage-tab-line's name.
+      return {
+        shownLine: `[usage] ${FRESH_LINE}`,
+        alsoShown: [
+          /^\[usage-tab-line\] session line in usage-selftest: context 180k\/300k, cache 42m, spend \$1\.23$/,
+        ],
+        result,
+      };
     },
     groups: GROUPS,
     problems: (result) => {

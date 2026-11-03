@@ -1,16 +1,24 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ChatEntry } from '../../../../contracts/agent';
 import type { SessionInfo } from '../../../sessions/contract';
-import { CHAT_PREVIEW_HOST_ID, type ChatSessionState } from '../../contract';
+import {
+  CHAT_PREVIEW_HOST_ID,
+  type ChatAgentEvent,
+  type ChatSessionState,
+} from '../../contract';
 import { createChatPreview } from './chat-preview';
+import { previewAgentEvents } from './preview-agent-events';
 
 // A preview over sessions whose `open` hands out rows `row-1`, `row-2`, …;
 // `sent` holds each channel message, `ends` each row whose owned session
-// ended.
+// ended, `emitted` each agent event published, `order` each message sent and
+// event emitted by name.
 function setUp() {
   const opened: [SessionInfo, unknown][] = [];
   const ends: string[] = [];
   const sent: { message: string; data: unknown }[] = [];
+  const emitted: ChatAgentEvent[] = [];
+  const order: string[] = [];
   const activate = vi.fn<(sessionId: string) => void>();
   const preview = createChatPreview({
     sessions: {
@@ -25,7 +33,14 @@ function setUp() {
       },
       activate,
     },
-    send: (message, data) => sent.push({ message, data }),
+    send(message, data) {
+      sent.push({ message, data });
+      order.push(message);
+    },
+    emit(event, data) {
+      emitted.push(data);
+      order.push(event);
+    },
     log: () => undefined,
     clock: { now: () => 5000 },
   });
@@ -37,7 +52,16 @@ function setUp() {
     sent
       .filter((held) => held.message === 'entry')
       .map((held) => (held.data as { entry: ChatEntry }).entry);
-  return { preview, opened, ends, activate, started, entries };
+  return {
+    preview,
+    opened,
+    ends,
+    activate,
+    started,
+    entries,
+    emitted,
+    order,
+  };
 }
 
 describe('chat preview', () => {
@@ -81,7 +105,7 @@ describe('chat preview', () => {
   });
 
   it('open_SecondPress_ActivatesTheSameRow', () => {
-    const { preview, opened, activate, started } = setUp();
+    const { preview, opened, activate, started, emitted } = setUp();
 
     preview.open();
     preview.open();
@@ -89,6 +113,49 @@ describe('chat preview', () => {
     expect(opened).toHaveLength(1);
     expect(activate.mock.calls).toEqual([['row-1'], ['row-1']]);
     expect(started()).toHaveLength(1);
+    expect(emitted).toHaveLength(previewAgentEvents(5000).length);
+  });
+
+  it('open_FirstPress_EmitsTheSampleAgentEventsAfterStarting', () => {
+    const { preview, emitted, order } = setUp();
+
+    preview.open();
+
+    const events = previewAgentEvents(5000);
+    expect(order).toEqual([
+      'sessionStarted',
+      ...events.map(() => 'agentEvent'),
+    ]);
+    expect(emitted).toEqual(
+      events.map((event) => ({
+        sessionId: 'row-1',
+        profileDir: null,
+        hostSessionId: CHAT_PREVIEW_HOST_ID,
+        event,
+      })),
+    );
+  });
+
+  it('previewAgentEvents_ListsTwoSubagentsOneFinishedAndATaskWithACommand', () => {
+    const events = previewAgentEvents(5000);
+    const count = (type: string) =>
+      events.filter((event) => event.type === type).length;
+
+    expect({
+      agentSpawned: count('agentSpawned'),
+      agentReplied: count('agentReplied'),
+      agentFinished: events.flatMap((event) =>
+        event.type === 'agentFinished' ? [event.outcome] : [],
+      ),
+      tasksWithCommand: events.filter(
+        (event) => event.type === 'taskStarted' && event.command !== null,
+      ).length,
+    }).toEqual({
+      agentSpawned: 2,
+      agentReplied: 1,
+      agentFinished: ['done'],
+      tasksWithCommand: 1,
+    });
   });
 
   it('closed_PreviewRow_EndsItAndAllowsANewOne', () => {

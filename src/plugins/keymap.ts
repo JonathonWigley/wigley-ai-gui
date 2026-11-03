@@ -452,6 +452,20 @@ export const defaultKeymap = {
       where: 'box',
     },
 
+    // ── Agent strip ────────────────────────────────────────────────────────
+    // `k` and Esc both hand the cursor back to the entries.
+    { keys: 'h', scope: 'agent-strip.strip', command: 'agent-strip.prevBox' },
+    { keys: 'l', scope: 'agent-strip.strip', command: 'agent-strip.nextBox' },
+    { keys: 'k', scope: 'agent-strip.strip', command: 'agent-strip.leave' },
+    { keys: '<Esc>', scope: 'agent-strip.strip', command: 'agent-strip.leave' },
+    { keys: 'i', scope: 'agent-strip.strip', command: 'agent-strip.focusBox' },
+    { keys: 'a', scope: 'agent-strip.strip', command: 'agent-strip.appendBox' },
+    {
+      keys: '<CR>',
+      scope: 'agent-strip.strip',
+      command: 'agent-strip.toggleBox',
+    },
+
     // ── Visual ─────────────────────────────────────────────────────────────
     { keys: 'v', scope: 'chat.chat', command: 'visual.openVisuals' },
     { keys: 'h', scope: 'visual.overlay', command: 'visual.prevVisual' },

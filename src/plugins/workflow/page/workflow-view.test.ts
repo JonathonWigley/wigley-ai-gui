@@ -210,7 +210,7 @@ describe('workflow view', () => {
       busy: 'subagent',
       countdownMs: null,
       fields: { progress: progressOf(1, [3]) },
-      actions: ['resumeMake:false', 'openPlan:true'],
+      actions: ['openPlan:true'],
     },
     {
       stage: 'primer',
@@ -293,6 +293,16 @@ describe('workflow view', () => {
 
   it('button_ChipOfUnselectedSession_RunsForItsOwnSession', async () => {
     const { view, put, invoked } = setUp();
+    const withButton: Layout = {
+      chip(parent, input, kit) {
+        const chip = kit.el(parent, 'div', 'button-chip');
+        if (input.mainAction !== null) {
+          kit.actionButton(chip, input.mainAction, { anchor: false });
+        }
+        return { element: chip };
+      },
+    };
+    view.setLayouts(withUser<Layout>(defaultLayout, withButton));
     const chips = { a: new FakeElement('div'), b: new FakeElement('div') };
     put(flowIn('planReady', {}, 'a'));
     put(flowIn('planReady', {}, 'b'));

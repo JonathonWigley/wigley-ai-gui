@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MAIN_AGENT_ID, type AgentEvent } from '../../../contracts/agent';
 import { createMemoryFiles } from '../../../shared/memory-files';
+import { CHAT_PREVIEW_HOST_ID } from '../../chat/contract';
 import type { SessionsMainExports } from '../../sessions/contract';
 import type { Roster, RosterAgent, RosterTask } from '../contract';
 import { agentsMainPart } from './start';
@@ -294,6 +295,24 @@ describe('agentsMainPart', () => {
 
     expect(await agents.data.read('logs/h1.jsonl')).toBe(
       JSON.stringify(spawned) + '\n' + JSON.stringify(userMessage) + '\n',
+    );
+  });
+
+  it('previewEvents_NoLogWritten', async () => {
+    const agents = startAgentsPart();
+
+    agents.agentEvent(spawnedB, CHAT_PREVIEW_HOST_ID);
+    agents.agentEvent(spawned);
+    await settled();
+
+    expect(agents.invoke('rosters')).toEqual({
+      s1: roster([runningB, runningA]),
+    });
+    await expect(
+      agents.data.read(`logs/${CHAT_PREVIEW_HOST_ID}.jsonl`),
+    ).rejects.toThrow();
+    expect(await agents.data.read('logs/h1.jsonl')).toBe(
+      JSON.stringify(spawned) + '\n',
     );
   });
 

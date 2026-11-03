@@ -122,8 +122,10 @@
    longest word no longer fit one line, the folder label drops and the title
    takes the line. The status takes the whole second line. Each part has its
    own column, so a row missing its folder label or trailing cell keeps the
-   others in place. Two classes, so the grid beats the row primitive's flex
-   line whichever sheet loads last. */
+   others in place. The trailing column's least width is the trailing cell's
+   own, so the status and the parts line, which span every column, ellipsize
+   or wrap inside the row rather than widen it. Two classes, so the grid beats
+   the row primitive's flex line whichever sheet loads last. */
 .session-sidebar {
   container: session-rows / inline-size;
 }
@@ -134,7 +136,7 @@
   display: grid;
   grid-template-columns:
     minmax(auto, max-content) minmax(auto, max-content)
-    minmax(max-content, 1fr);
+    minmax(auto, 1fr);
   column-gap: 0;
 }
 
@@ -204,11 +206,14 @@
   white-space: nowrap;
 }
 
-/* Other plugins' row parts span the row's grid under its lines; each part
-   styles its own content. */
+/* Other plugins' row parts share one line under the row's lines, wrapping
+   when it is full; each part styles its own content and may set its own
+   wrapper's `order`. */
 .session-row-parts {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--wg-space-3);
   grid-column: 1 / -1;
   min-width: 0;
 }

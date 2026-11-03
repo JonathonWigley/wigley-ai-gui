@@ -5,7 +5,7 @@
 - **Status** — what is built now and what waits.
 - **Vocabulary** — agent event, agent id, roster, plan step.
 - **Agent events** — the record every view reads, who emits it, and where it is logged.
-- **The agents plugin** — the roster, the event log and the sidebar's subagent and task lines.
+- **The agents plugin** — the roster, the event log and the views that draw it (`agent-lines`, `agent-strip`).
 - **The tower** — the game view the seams are built for: constraints, inputs and phases.
 
 A gamified view of a session's agents: each plan step is a floor of a tower, and chibi characters fight their way up
@@ -21,8 +21,11 @@ Built:
   (`src/main/claude-code/stream-decoder.ts`, `claude-code-harness.ts`) and by the fake harness
 - chat main forwarding each owned session's events as `chat.agentEvent`, carrying
   `{ sessionId, profileDir, hostSessionId, event }`
-- the `agents` plugin: each session's roster, one JSON-lines event log per host session, one line per running subagent
-  and per running task under its session's row through sessions' `addRowPart`, and the `Space z l a` layout preview
+- the `agents` plugin: each session's roster, one JSON-lines event log per host session, and the `Space z l a` layout
+  preview. It draws nothing; its page exports the rosters to the views that do
+- the `agent-lines` plugin (in `plugins.disabled` by default): one working line under its session's row while the
+  session runs any subagent or task, through sessions' `addRowPart`
+- the `agent-strip` plugin: the subagent and task boxes above the Chat composer's box (`docs/features/chat-bar/design.md`)
 
 Waits: plan, plan step, retry and watcher events wait for a producer; replay and the tower view wait for the tower
 itself. `skillStarted`, `fileWritten`, `turnStarted` and `turnEnded` are emitted by the Claude adapter and the fake
@@ -37,27 +40,29 @@ harness and read by the workflow plugin (`docs/features/workflow/design.md`).
 - **Task** — a process an agent started that runs apart from its turn, such as a background shell command (Claude: a
   `task_started` whose `task_type` is not `local_agent`; a subagent is a task too in Claude's stream, but the app
   calls it a subagent and never a task).
-- **Roster** — a session's agents and tasks as the agents plugin tracks them from its events: each running subagent
-  with its type, description, start time and tool-call count, and each running task with its owning agent,
-  description and start time.
+- **Roster** — a session's agents and tasks as the agents plugin tracks them from its events: each subagent with its
+  type, name, description, start time, model, effort, spend, every tool call (name, summary, outcome) and outcome, and
+  each task with its owning agent, description, command, start time and outcome. A finished item stays, outcome set,
+  until the session's next `userMessage` drops it.
 - **Plan step** — one step of the session's task plan, one floor of the tower. Chat's **step** (a tool, thinking or
   raw entry, `agent-chat/design.md` § Vocabulary) is a different thing; the tower always says plan step.
 
 ## Agent events
 
 The harness adapter alone reads its harness's output, so it alone turns that output into agent events, sent through
-`AgentProcessEvents.agentEvent` beside the chat entries. Every view — the sidebar lines now, the tower and replay
+`AgentProcessEvents.agentEvent` beside the chat entries. Every view — the sidebar working line and the strip now, the tower and replay
 later — reads agent events and nothing else, so a Codex or wigley-harness adapter that emits them drives every view
 unchanged. Each event carries `at`, epoch milliseconds from the adapter's injected clock.
 
 | Event | Carries | Drives in the tower |
 |---|---|---|
 | `sessionStarted` / `sessionEnded` | — | enter the tower / results screen |
-| `agentSpawned` | agent id, parent agent id, agent type, description | a party member joins |
+| `agentSpawned` | agent id, parent agent id, agent type, description, name (the label the agent was given, its type when none), model and effort (each null when unknown) | a party member joins |
+| `agentReplied` | agent id, model (the reply's, or the launch receipt's resolved model), the subagent's estimated spend so far in USD (cumulative; null before its first reply or when any reply used an unpriced model) | — |
 | `agentFinished` | agent id, done or failed | the member steps back |
-| `taskStarted` | task id, agent id (the agent that started it), description | — |
+| `taskStarted` | task id, agent id (the agent that started it), description, command (null when the harness names none) | — |
 | `taskFinished` | task id, done or failed | — |
-| `toolStarted` / `toolFinished` | agent id, tool call id, tool name, success or failure | attack / player hurt |
+| `toolStarted` / `toolFinished` | agent id, tool call id, tool name, one-line summary (started only), success or failure (finished only) | attack / player hurt |
 | `usage` | agent id, context tokens used, context window size (null until the harness reports it), autocompact limit (configured and reported, each tokens or null), cache expiry (null when unknown), session spend in USD (null until the first result) | fatigue bar (context fill) |
 | `compacted` | context tokens before and after, each null when the harness does not report it (Claude reports no after-size; the next `usage` carries it) | rest / heal |
 | `userMessage` | — | "message from HQ" |
@@ -95,12 +100,16 @@ would emit the same events into `chat.agentEvent`'s payload shape.
   subagent's Agent call through the subagent's own `task_started`), or `main`. A task outlives the turn and the
   subagent that started it: neither a `result` nor an agent's end finishes it, only its own end event or
   `sessionEnded`. Foreground Bash calls of a subagent get a task too (`is_backgrounded: false`) and show the same way.
-- **Page** adds a row part through sessions' `addRowPart` and draws, under each session row, one line per running
-  subagent and one per running task through the `agents` layout, in start order, each task right under its owning
-  subagent's line, indented, while that subagent runs. A subagent line shows a working dot, the agent type, the
-  description, the elapsed time and the tool-call count; a task line a terminal icon, the description and the
-  elapsed time. A line goes when its subagent or task finishes. The lines take no keys and no focus; a click on one
+- **`agentReplied`** is sent on a subagent's reply and on its launch receipt's `resolvedModel`; on a foreground
+  completion receipt it comes before `agentFinished`. The roster takes the reply's model and spend.
+- **Page** draws nothing. It keeps every session's roster, finished items included, and exports `roster(sessionId)`
+  and `onRosterChanged(listener)` to the views that draw it. A message drops a cleared host's finished items.
+- **`agent-lines`** (a separate plugin, in `plugins.disabled` by default; its `layout` setting is `agent-lines.layout`)
+  adds a row part through sessions' `addRowPart` and draws, under each session row, one `workingLine` while the
+  session runs any subagent or task: a running dot and the elapsed time since the earliest running item started. The
+  layout input also carries the counts of running subagents and tasks, for a user layout to draw. The line goes when none runs. It takes no keys and no focus; a click on it
   selects its session, as the row does. The elapsed time ticks once a second while any line shows.
+- **`agent-strip`** draws the same roster as boxes above the Chat composer's box (`docs/features/chat-bar/design.md`).
 
 The same reducer folds a logged session's events, so replay drives the views with the code a live session uses.
 

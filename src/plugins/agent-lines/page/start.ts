@@ -15,7 +15,7 @@ import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
 import { agentLinesManifest } from '../manifest';
 import { readAgentLinesLayout } from './layout/read-agent-lines-layout';
-import { createRosterLines } from './roster-lines';
+import { createWorkingLines } from './working-lines';
 
 type AgentLinesApi = PageApi<
   typeof agentLinesManifest,
@@ -24,11 +24,11 @@ type AgentLinesApi = PageApi<
   QualifiedEvents<'sessions', SessionsPageEvents>
 >;
 
-// Draws each session's running subagents and tasks under its row, one line
-// each, through sessions' row parts and the `agent-lines.layout` layout. Reads
-// the rosters from agents' page exports, redrawing a session's lines each time
-// its roster changes, and names each session by its side-bar label for the
-// page log.
+// Draws a working line under each session's row while it runs any subagent
+// or task, through sessions' row parts and the `agent-lines.layout` layout.
+// Reads the rosters from agents' page exports, redrawing a session's line each
+// time its roster changes, and names each session by its side-bar label for
+// the page log.
 export const agentLinesPagePart: PagePart<typeof agentLinesManifest> = {
   manifest: agentLinesManifest,
   start(api: AgentLinesApi) {
@@ -38,7 +38,7 @@ export const agentLinesPagePart: PagePart<typeof agentLinesManifest> = {
     const keys = api.dependency<KeysPageExports>('keys');
     // Each session's name in the log, its side-bar label (`gamma 2`).
     const names = new Map<string, string>();
-    const lines = createRosterLines({
+    const lines = createWorkingLines({
       kit: {
         markdown: services.markdown,
         keys: { anchor: keys.anchor, keysFor: keys.keysFor },

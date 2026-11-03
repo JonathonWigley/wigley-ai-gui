@@ -16,7 +16,8 @@ export interface RosterTool {
 
 // A subagent of a session, running or finished since the user's last message. `startedAt` is its spawn's `at`, epoch
 // milliseconds. `model` is the model of its latest `agentReplied` (a reply or its launch receipt), else the spawn's;
-// `spendUsd` is the estimate of its latest reply, null before one or for an unpriced model.
+// `spendUsd` is its estimated spend so far from its latest `agentReplied` (cumulative), null before its first reply or
+// once any reply's model has no list price.
 export interface RosterAgent {
   agentId: string;
   agentType: string;
@@ -52,7 +53,8 @@ export interface Roster {
 
 // What agents' page part exports to the views that draw the rosters. `roster` is a session's latest roster, both lists
 // empty for a session with none; `onRosterChanged` calls `listener` with a session's id each time its roster changes,
-// the first `rosters` read included.
+// the first `rosters` read included. A removed session's roster is dropped without a call: views hear
+// `sessions.sessionRemoved`.
 export interface AgentsPageExports {
   roster(sessionId: string): Roster;
   onRosterChanged(listener: (sessionId: string) => void): Disposable;
