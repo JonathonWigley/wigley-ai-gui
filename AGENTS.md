@@ -178,9 +178,10 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  main/ (hears `chat.agentEvent`, keeps each session's roster, appends each event to
                  `logs/<host session id>.jsonl` in its plugin data, the layout preview); draws nothing: its page
                  part only exports the rosters to the views below; `docs/features/agent-tower/design.md`
-  agent-lines/   page/ (the subagent and task lines under each session row, through sessions' `addRowPart`),
-                 layouts/ (its Layout contract and `default` layout); in `plugins.disabled` by default
-  agent-strip/   page/ (the strip of subagent and task boxes above the Chat composer's box, through chat's
+  agent-lines/   main/ (registers its layouts, hands the lines' self-test script), page/ (the subagent and task
+                 lines under each session row, through sessions' `addRowPart`), layouts/ (its Layout contract and
+                 `default` layout); in `plugins.disabled` by default
+  agent-strip/   main/ (registers its layouts, hands its self-test script), page/ (the strip of subagent and task boxes above the Chat composer's box, through chat's
                  `addComposerPart`, with a stop on chat's entry cursor), layouts/ (its Layout contract and `default`
                  layout); `docs/features/chat-bar/design.md`
   forms/         manifest.ts, contract.ts, main/ (the round form type, its MCP tools, the preview
@@ -231,7 +232,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  layouts/ (the usage Layout contract and the built-in `default` layout),
                  `docs/features/usage/design.md`; its session numbers draw in the Chat status line through chat's
                  `addStatusPart`
-  usage-tab-line/ page/ (each session's usage line in its tab bar through sessions' `addBarPart`), layouts/; in
+  usage-tab-line/ page/ only (each session's usage line in its tab bar through sessions' `addBarPart`, drawn by
+                 usage's own session-line part through a usage page export, so the line has one look); in
                  `plugins.disabled` by default
   workflow/      manifest.ts, contract.ts, flow.ts (the pure fold of signals into a session's flow), plan-reader.ts
                  (ticked, total, wave and review rounds from a plan.md), stages/<stage>/ (one wigley workflow stage
@@ -705,7 +707,7 @@ round; primer: an open primer), since main, not the page, decides.
   `sendInputEvent`, checks the lines each step adds to the page's log and the result the script checks, and exits
   non-zero on a failure. A key behaviour the agent adds or fixes gets a step in its plugin's self-test script
   (`src/plugins/forms/main/selftest-script.ts` for forms, `src/plugins/primer/main/selftest-script.ts` for the
-  primer, `src/plugins/agents/main/selftest-script.ts` for agents, `src/plugins/workflow/main/selftest-script.ts` for
+  primer, `src/plugins/agent-lines/main/selftest-script.ts` for the sidebar lines, `src/plugins/agent-strip/main/selftest-script.ts` for the strip, `src/plugins/workflow/main/selftest-script.ts` for
   workflow); a step with no keys waits for its line, and a step's `writeFile` writes a file under the self-test's temp
   home before its keys, as an outside change on disk, and a step's `screenshot` (a lowercase name in words joined by
   `-`) saves a PNG of the window, once the step's line has been waited for, to
