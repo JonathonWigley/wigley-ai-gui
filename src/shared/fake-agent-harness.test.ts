@@ -76,6 +76,7 @@ function recordingEvents() {
       agentEvents.push(event);
       timeline.push(['agentEvent', event]);
     },
+    messageDropped: (entryId) => hear('messageDropped', entryId),
     ended: (end) => hear('ended', end),
   };
   return { heard, agentEvents, timeline, events };
@@ -222,9 +223,10 @@ describe('createFakeAgentHarness', () => {
   it('send_PlainText_StreamsReplyThenResult', async () => {
     const { agent, heard, record } = await startedProcess();
 
-    agent.send({ text: 'hi', images: [] });
+    const entryId = agent.send({ text: 'hi', images: [] });
     await flush();
 
+    expect(entryId).toBe('user-1');
     expect(heard).toEqual([
       [
         'entry',

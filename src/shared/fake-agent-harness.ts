@@ -1282,7 +1282,7 @@ export function createFakeAgentHarness(
               resolve();
             });
           });
-          return;
+          return `user-${sentTurn}`;
         }
         const isHold = text === FAKE_HOLD_TEXT;
         const isSteps = text === FAKE_STEPS_TEXT;
@@ -1332,6 +1332,7 @@ export function createFakeAgentHarness(
             emitEchoTurn(events, emitEntry, clock, sentTurn, text);
           }
         });
+        return `user-${sentTurn}`;
       },
       interrupt() {
         calls.push({ method: 'interrupt' });

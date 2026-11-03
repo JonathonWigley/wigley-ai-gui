@@ -668,6 +668,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           readBranch(session);
         }
       },
+      // Chat main returns a dropped message in task 02 of plan-send-now.
+      messageDropped() {},
       ended({ code, error }) {
         // A close drops the row before its process ends, so the exit is
         // recorded for the row's latest process whether or not it is live.

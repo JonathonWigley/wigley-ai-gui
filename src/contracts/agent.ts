@@ -293,6 +293,9 @@ export interface AgentProcessEvents {
   // Plan rows the session saw between polls.
   planUsage(update: PlanRowUpdate): void;
   agentEvent(event: AgentEvent): void;
+  // The agent let the message `send` returned `entryId` for go without taking
+  // it in; no entry with that id follows.
+  messageDropped(entryId: string): void;
   ended(end: { code: number | null; error: string | null }): void;
 }
 
@@ -302,7 +305,13 @@ export interface AgentProcessEvents {
 // turn: the adapter ends it within a grace period whatever the agent answers,
 // and a second `interrupt` while that grace is pending ends the process.
 export interface AgentProcess {
-  send(message: UserMessage): void;
+  // Returns the id of the user entry the harness emits for `message`. That
+  // entry arrives through `entry` once the agent takes the message in, which
+  // may be later than the call and is never before `send` returns. A send
+  // during a running turn hands the message to the agent at once, and the
+  // agent decides when its turn takes it in. `messageDropped` names an id
+  // whose entry will never come, and also arrives only after `send` returns.
+  send(message: UserMessage): string;
   interrupt(): void;
   setControl(id: string, value: string): void;
   // Resolves once the process has exited, after `ended` has fired.

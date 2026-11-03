@@ -8,7 +8,8 @@ REQUIRED SUB-SKILL: Use wigley:make to implement this plan
 ## Goal
 
 The user sends a pending (queued) chat message now, mid-turn, instead of waiting for the turn to end: Cmd+Enter on
-the focused pending row, or `<Leader>cs` in the box for the newest. Claude takes it into the running turn. Every user
+the focused pending row sends that row; Cmd+Enter in the box sends the box and every unsent pending message, in the
+order written (as Enter while idle). Claude takes it into the running turn. Every user
 entry joins the transcript when the agent takes the message in, not when it is written.
 
 ## Architecture
@@ -18,6 +19,7 @@ entry joins the transcript when the agent takes the message in, not when it is w
   without taking in. Adapters: Claude Code (`src/main/claude-code/claude-code-harness.ts`) and the fake
   (`src/shared/fake-agent-harness.ts`).
 - **Chat main** (`src/plugins/chat/main/chat-sessions.ts`, channel in `src/plugins/chat/contract.ts`): a `sendNow`
+  and a `sendAllNow`
   invoke; sent rows held in the queue until their entry arrives; dropped messages returned to the box.
 - **Chat page** (`src/plugins/chat/page/`, `manifest.ts`, `src/plugins/keymap.ts`) and the chat layout
   (`src/plugins/chat/layouts/`): the two key routes and the `sending` label.
@@ -54,7 +56,7 @@ Interrupt and exit, and the `queuedMessage` part line) and `docs/keymap.md` (the
 ## Design Overview
 
 ```
-box / pending row ──Cmd+Enter / <Leader>cs──► page sendQueuedNow(id)
+pending row ──Cmd+Enter──► page sendQueuedNow(id)      (box ──Cmd+Enter──► sendAllNow: every unsent row, then the box)
         │                                          │ invoke sendNow(sessionId, queuedId)
         ▼                                          ▼
                                    chat main: row unsent? ─no─► log, nothing
@@ -83,7 +85,8 @@ Decisions (rounds 1–2 and the design review):
 
 - Cmd+Enter on a focused pending row sends it now; anywhere else Cmd+Enter is unchanged (round 1 notice)
 - Only that message jumps the queue (round 1 notice)
-- `<Leader>cs` in the box sends the newest pending message now (round 1, Q1)
+- ~~`<Leader>cs` in the box sends the newest pending message now (round 1, Q1)~~ — replaced in round 3
+- Round 3 (user, relayed by session ai-dev-2e during the run): Cmd+Enter in the box, while busy, sends the box text plus every unsent pending message into the running turn in the order written; while idle, as Enter. Cmd+Enter on a focused pending row still sends that row only. No `<Leader>cs`, no `chat.sendQueuedNow`
 - The user entry lands when the agent takes the message in, for every send (round 1, Q2)
 - `send` returns the entry id; chat matches rows by it (round 2 notice)
 - A sent row reads `sending` and cannot be pulled back (round 2 notice)
@@ -101,14 +104,14 @@ Modified:
 - `src/main/claude-code/claude-code-harness.ts` (+ `.test.ts`) — entry on `started`, `messageDropped`
 - `src/main/claude-code/turn-tracker.ts` (+ `.test.ts`) — `mode()`
 - `src/shared/fake-agent-harness.ts` (+ `.test.ts`) — returns its entry id
-- `src/plugins/chat/contract.ts` — `QueuedMessage.sentEntryId: string | null`; channel `sendNow(sessionId: string, queuedId: string): void`
+- `src/plugins/chat/contract.ts` — `QueuedMessage.sentEntryId: string | null`; channel `sendNow(sessionId: string, queuedId: string): void` and `sendAllNow(sessionId, message | null): void`
 - `src/plugins/chat/main/chat-sessions.ts` (+ `.test.ts`) — 01's `messageDropped` stub; 02's `sendNow`, sent rows, held messages, dropped and exit returns
 - `src/plugins/chat/main/start.ts` (+ `start.test.ts`) — the `sendNow` channel handler, ignored in the preview
 - `src/plugins/chat/page/chat-commands.ts` (+ `.test.ts`) — Cmd+Enter on a pending row, `sendQueuedNow`
 - `src/plugins/chat/page/chat-view.ts` — `ChatSession.isBoxFocused()`
 - `src/plugins/chat/page/entry-list.ts` (+ `.test.ts`) — `queuedInput` and `isQueuedChanged` carry `sent`
 - `src/plugins/chat/main/selftest-script.ts` — a Cmd+Enter send-now step
-- `src/plugins/chat/manifest.ts`, `src/plugins/keymap.ts` — `chat.sendQueuedNow`, `<Leader>cs`
+- `src/plugins/chat/manifest.ts`, `src/plugins/keymap.ts` — `chat.sendNow`, Cmd+Enter in `chat.chat` bound to it
 - `src/plugins/chat/layouts/layout.d.ts`, `src/plugins/chat/layouts/default/layout.js` (+ `layout.test.ts`) — `QueuedMessageInput.sent: boolean`, label
 
 No new files. Boundary rule: nothing outside `src/main/claude-code/` names lifecycle states or Claude.
@@ -135,10 +138,11 @@ No new files. Boundary rule: nothing outside `src/main/claude-code/` names lifec
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 495866206a2877ebce1a939c301f551fbe01d49b
 
 ### Groups
 ### Contract changes
 ### Rulings
+- Round 3 key routes folded into 02–05 (user decision relayed by session ai-dev-2e): <Leader>cs and chat.sendQueuedNow dropped; Cmd+Enter in the box runs chat.sendNow → sendAllNow (every unsent row then the box message while busy, as Enter while idle); 02 gains sendAllNow because the box route needs main support; Enter/Shift+Enter in insert mode left to ai-dev-2e's own change — cost if wrong: 02/03 rework before they start · lead
 ### Review rounds
 ### Test gate

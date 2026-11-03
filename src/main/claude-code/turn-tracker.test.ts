@@ -4,6 +4,7 @@ import {
   type ControlCommand,
   createTurnTracker,
   type TurnLine,
+  type TurnMode,
   type TurnTracker,
 } from './turn-tracker';
 
@@ -267,31 +268,43 @@ describe('createTurnTracker', () => {
     },
   );
 
-  it.each<{ name: string; capabilities: string[] | null; expected: boolean[] }>(
-    [
-      { name: 'no capabilities', capabilities: null, expected: [true, false] },
-      {
-        name: 'without msg_lifecycle_v1',
-        capabilities: ['interrupt_cancel_queued_v1'],
-        expected: [true, false],
-      },
-      {
-        name: 'with msg_lifecycle_v1',
-        capabilities: ['interrupt_cancel_queued_v1', 'msg_lifecycle_v1'],
-        expected: [false, false],
-      },
-    ],
-  )(
+  it.each<{
+    name: string;
+    capabilities: string[] | null;
+    expected: boolean[];
+    mode: TurnMode;
+  }>([
+    {
+      name: 'no capabilities',
+      capabilities: null,
+      expected: [true, false],
+      mode: 'fallback',
+    },
+    {
+      name: 'without msg_lifecycle_v1',
+      capabilities: ['interrupt_cancel_queued_v1'],
+      expected: [true, false],
+      mode: 'fallback',
+    },
+    {
+      name: 'with msg_lifecycle_v1',
+      capabilities: ['interrupt_cancel_queued_v1', 'msg_lifecycle_v1'],
+      expected: [false, false],
+      mode: 'lifecycle',
+    },
+  ])(
     'read_FirstInit_FallsBackOnceWithoutLifecycleCapability ($name)',
-    ({ capabilities, expected }) => {
+    ({ capabilities, expected, mode }) => {
       const tracker = createTurnTracker();
       const init = line({ turnStarted: true, capabilities });
+      const modeBefore = tracker.mode();
 
       const fellBack = [tracker.read(init), tracker.read(init)].map(
         (read) => read.fellBack,
       );
 
       expect(fellBack).toEqual(expected);
+      expect([modeBefore, tracker.mode()]).toEqual(['unknown', mode]);
     },
   );
 });

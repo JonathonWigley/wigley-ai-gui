@@ -7,9 +7,10 @@ import type { DecodedLine } from './stream-decoder';
 // - `written` opens a message's uuid. A turn opens on a line with
 //   `turnStarted` and closes on one with `turnEnded`. Activity is `working`
 //   while the turn or any uuid is open, so Claude's own turns show working.
-// - The first `turnStarted` line fixes the mode: `lifecycle` when its
-//   `capabilities` include `msg_lifecycle_v1`, else `fallback`; that read
-//   alone returns `fellBack: true`.
+// - The first `turnStarted` line fixes the mode, which `mode` reports and
+//   which is `unknown` before it: `lifecycle` when its `capabilities` include
+//   `msg_lifecycle_v1`, else `fallback`; the read that fixes `fallback` alone
+//   returns `fellBack: true`. The mode never changes after.
 // - Lifecycle: a terminal `lifecycle` state closes its uuid; a turn's end
 //   returns the command of the uuid `turnOpener` names and closes it and every
 //   uuid in `turnMessages`.
@@ -50,17 +51,19 @@ export interface TurnTracker {
   // Closes the turn and every open uuid.
   abandon(): void;
   activity(): ProcessActivity;
+  mode(): TurnMode;
 }
 
 const LIFECYCLE_CAPABILITY = 'msg_lifecycle_v1';
-const TERMINAL_STATES: ReadonlySet<string> = new Set([
+// The lifecycle states that end a message.
+export const TERMINAL_STATES: ReadonlySet<string> = new Set([
   'completed',
   'cancelled',
   'discarded',
   'refused',
 ]);
 
-type TurnMode = 'unknown' | 'lifecycle' | 'fallback';
+export type TurnMode = 'unknown' | 'lifecycle' | 'fallback';
 
 export function createTurnTracker(): TurnTracker {
   let turnOpen = false;
@@ -123,6 +126,9 @@ export function createTurnTracker(): TurnTracker {
     },
     activity() {
       return turnOpen || open.size > 0 ? 'working' : 'idle';
+    },
+    mode() {
+      return mode;
     },
   };
 }

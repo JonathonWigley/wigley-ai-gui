@@ -21,7 +21,7 @@ import type { Log } from '../../contracts/log';
 import type { Paths } from '../../contracts/paths';
 import { errorText } from '../../shared/error-text';
 import { isSameJson } from '../../shared/json';
-import { typedSkill } from '../../shared/typed-skill';
+import { type TypedSkill, typedSkill } from '../../shared/typed-skill';
 import {
   type AgentDefinitions,
   loadAgentDefinitions,
@@ -58,7 +58,11 @@ import {
   type DecodedLine,
 } from './stream-decoder';
 import { projectFolderName } from './transcripts';
-import { type ControlCommand, createTurnTracker } from './turn-tracker';
+import {
+  type ControlCommand,
+  createTurnTracker,
+  TERMINAL_STATES,
+} from './turn-tracker';
 
 export type ClaudeSpawn = (
   command: string,
@@ -108,6 +112,13 @@ const PLAN_USAGE_ARGS = [
   '--no-session-persistence',
 ];
 
+// A sent message's user entry and the skill it starts (null for none), held
+// until the CLI takes the message in.
+interface HeldMessage {
+  draft: EntryDraft;
+  skill: TypedSkill | null;
+}
+
 type PendingRequest =
   | { kind: 'mode'; value: string }
   | { kind: 'interrupt' }
@@ -148,7 +159,10 @@ function spawnError(error: Error, command: string, cwd: string): string {
 // One `claude` process in stream-json mode. Events a call causes are emitted
 // in a microtask, never inside the call, as the fake harness does. Its agent
 // events open with `sessionStarted` and close with `sessionEnded`, just before
-// `ended`; a subagent still running then gets no `agentFinished`.
+// `ended`; a subagent still running then gets no `agentFinished`. In
+// lifecycle mode a sent message's user entry waits for its `started` line; a
+// message ended before it started is reported through `messageDropped`, and
+// one still held when the process closes is dropped silently.
 function startClaudeProcess(
   deps: ClaudeCodeHarnessDeps,
   request: AgentStart,
@@ -176,6 +190,8 @@ function startClaudeProcess(
   let requestCount = 0;
   let noticeCount = 0;
   const pendingRequests = new Map<string, PendingRequest>();
+  // Keyed by the message's uuid; filled only in lifecycle mode.
+  const heldMessages = new Map<string, HeldMessage>();
   // The session's agent definitions, empty until their load resolves.
   let definitions: AgentDefinitions = new Map();
   // The adapter's own `get_context_usage` replies stay out of the chat.
@@ -240,6 +256,37 @@ function startClaudeProcess(
   const emitAgentEvent = (draft: AgentEventDraft) => {
     const event = { ...draft, at: deps.clock.now() } as AgentEvent;
     emit(() => events.agentEvent(event));
+  };
+
+  const emitUserMessage = ({ draft, skill }: HeldMessage) => {
+    emitEntry(draft);
+    emitAgentEvent({ type: 'userMessage' });
+    if (skill !== null) {
+      emitAgentEvent({
+        type: 'skillStarted',
+        agentId: MAIN_AGENT_ID,
+        ...skill,
+      });
+    }
+  };
+
+  // Emits a held message's entry on its `started` line, and reports one that
+  // ended without starting as dropped.
+  const releaseHeldMessage = (
+    lifecycle: NonNullable<DecodedLine['lifecycle']>,
+  ) => {
+    const held = heldMessages.get(lifecycle.uuid);
+    if (held === undefined) {
+      return;
+    }
+    if (lifecycle.state === 'started') {
+      heldMessages.delete(lifecycle.uuid);
+      emitUserMessage(held);
+    } else if (TERMINAL_STATES.has(lifecycle.state)) {
+      heldMessages.delete(lifecycle.uuid);
+      const entryId = held.draft.id;
+      emit(() => events.messageDropped(entryId));
+    }
   };
 
   // Emits the usage event when it differs from the last one in any field but
@@ -311,6 +358,7 @@ function startClaudeProcess(
   // `end()` resolves after the `ended` emission it follows.
   const markClosed = () => {
     hasClosed = true;
+    heldMessages.clear();
     for (const timer of timers) {
       clearTimeout(timer);
     }
@@ -412,6 +460,9 @@ function startClaudeProcess(
     const decoded = decoder.decode(line);
     const turn = tracker.read(decoded);
     const { command } = turn;
+    if (decoded.lifecycle !== null) {
+      releaseHeldMessage(decoded.lifecycle);
+    }
     for (const entry of decoded.entries) {
       const isCommandResult = command !== null && entry.kind === 'result';
       if (!isCommandResult) {
@@ -540,23 +591,25 @@ function startClaudeProcess(
       const message = userMessage(userInput, uuid);
       write(message);
       sendCount += 1;
-      emitEntry({
-        kind: 'user',
-        id: `user-${sendCount}`,
-        text: userInput.text,
-        images: userInput.images,
-        raw: [message],
-      });
-      emitAgentEvent({ type: 'userMessage' });
+      const entryId = `user-${sendCount}`;
       const typed = CONTROL_COMMAND.exec(userInput.text);
-      // Claude prints no line for a sent message, so a typed skill starts here.
-      const skill = typedSkill(userInput.text);
-      if (skill !== null && typed === null) {
-        emitAgentEvent({
-          type: 'skillStarted',
-          agentId: MAIN_AGENT_ID,
-          ...skill,
-        });
+      // Claude prints no skill line for a typed skill, so it starts with the
+      // message.
+      const skill = typed === null ? typedSkill(userInput.text) : null;
+      const sent: HeldMessage = {
+        draft: {
+          kind: 'user',
+          id: entryId,
+          text: userInput.text,
+          images: userInput.images,
+          raw: [message],
+        },
+        skill,
+      };
+      if (tracker.mode() === 'lifecycle') {
+        heldMessages.set(uuid, sent);
+      } else {
+        emitUserMessage(sent);
       }
       tracker.written(
         uuid,
@@ -565,6 +618,7 @@ function startClaudeProcess(
           : { id: typed[1] as ControlCommand['id'], value: typed[2] },
       );
       syncActivity();
+      return entryId;
     },
     interrupt() {
       requireRunning();

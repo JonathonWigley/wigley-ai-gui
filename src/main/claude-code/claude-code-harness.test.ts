@@ -70,22 +70,33 @@ const clock = { now: () => 1000 };
 
 // Every event the process emits, as `[event name, payload]`, in emit order,
 // except the agent events other than `usage`, which `agentEvents` holds.
+// `timeline` holds every event, those included, in emit order.
 function recordingEvents() {
   const heard: [string, unknown][] = [];
   const agentEvents: AgentEvent[] = [];
-  const events: AgentProcessEvents = {
-    entry: (entry) => heard.push(['entry', entry]),
-    controls: (controls) => heard.push(['controls', controls]),
-    activity: (activity) => heard.push(['activity', activity]),
-    commands: (names) => heard.push(['commands', names]),
-    planUsage: (update) => heard.push(['planUsage', update]),
-    agentEvent: (event) =>
-      event.type === 'usage'
-        ? heard.push(['agentEvent', event])
-        : agentEvents.push(event),
-    ended: (end) => heard.push(['ended', end]),
+  const timeline: [string, unknown][] = [];
+  const hear = (name: string, payload: unknown) => {
+    heard.push([name, payload]);
+    timeline.push([name, payload]);
   };
-  return { heard, agentEvents, events };
+  const events: AgentProcessEvents = {
+    entry: (entry) => hear('entry', entry),
+    controls: (controls) => hear('controls', controls),
+    activity: (activity) => hear('activity', activity),
+    commands: (names) => hear('commands', names),
+    planUsage: (update) => hear('planUsage', update),
+    agentEvent: (event) => {
+      if (event.type === 'usage') {
+        hear('agentEvent', event);
+        return;
+      }
+      agentEvents.push(event);
+      timeline.push(['agentEvent', event]);
+    },
+    messageDropped: (entryId) => hear('messageDropped', entryId),
+    ended: (end) => hear('ended', end),
+  };
+  return { heard, agentEvents, timeline, events };
 }
 
 // Measured lines, docs/features/agent-chat/claude-stream.md § Usage and § Other events.
@@ -146,9 +157,9 @@ function started(
       return `uuid-${uuidCount}`;
     },
   });
-  const { heard, agentEvents, events } = recordingEvents();
+  const { heard, agentEvents, timeline, events } = recordingEvents();
   const agent = harness.start(startRequest, events);
-  return { ...fake, agent, heard, agentEvents, logged };
+  return { ...fake, agent, heard, agentEvents, timeline, logged };
 }
 
 // A started process with its start events settled and cleared.
@@ -310,6 +321,148 @@ describe('createClaudeCodeHarness', () => {
       ['activity', 'working'],
     ]);
   });
+
+  // The timeline's user entries, user-message and skill events, drops and
+  // activity, each as a short tuple.
+  function sendTimeline(timeline: [string, unknown][]): unknown[][] {
+    return timeline.flatMap(([name, payload]) => {
+      const event = payload as {
+        kind?: string;
+        type?: string;
+        id?: string;
+        at?: number;
+        skill?: string;
+      };
+      if (name === 'entry' && event.kind === 'user') {
+        return [['entry', event.id, event.at]];
+      }
+      if (name === 'agentEvent' && event.type === 'userMessage') {
+        return [['userMessage', event.at]];
+      }
+      if (name === 'agentEvent' && event.type === 'skillStarted') {
+        return [['skillStarted', event.skill, event.at]];
+      }
+      if (name === 'messageDropped' || name === 'activity') {
+        return [[name, payload]];
+      }
+      return [];
+    });
+  }
+
+  // `abandon` interrupts and lets the grace run out; `close` ends the process.
+  type SendStep = object | 'abandon' | 'close';
+
+  it.each<{
+    name: string;
+    init: object;
+    text: string;
+    after: SendStep[];
+    atWrite: unknown[][];
+    expected: unknown[][];
+  }>([
+    {
+      name: 'lifecycle, started',
+      init: lifecycleInit,
+      text: 'hi',
+      after: [lifecycle('uuid-1', 'queued'), lifecycle('uuid-1', 'started')],
+      atWrite: [],
+      expected: [
+        ['entry', 'user-1', 2000],
+        ['userMessage', 2000],
+      ],
+    },
+    {
+      name: 'lifecycle, typed skill, started',
+      init: lifecycleInit,
+      text: '/wigley:feature',
+      after: [lifecycle('uuid-1', 'started')],
+      atWrite: [],
+      expected: [
+        ['entry', 'user-1', 2000],
+        ['userMessage', 2000],
+        ['skillStarted', 'wigley:feature', 2000],
+      ],
+    },
+    ...['cancelled', 'discarded', 'refused'].map((state) => ({
+      name: `lifecycle, ${state} before started`,
+      init: lifecycleInit,
+      text: 'hi',
+      after: [
+        successResult('turn'),
+        lifecycle('uuid-1', 'queued'),
+        lifecycle('uuid-1', state),
+      ],
+      atWrite: [],
+      expected: [
+        ['messageDropped', 'user-1'],
+        ['activity', 'idle'],
+      ],
+    })),
+    {
+      name: 'lifecycle, started after the interrupt grace',
+      init: lifecycleInit,
+      text: 'hi',
+      after: ['abandon', lifecycle('uuid-1', 'started')],
+      atWrite: [],
+      expected: [
+        ['activity', 'idle'],
+        ['entry', 'user-1', 2000],
+        ['userMessage', 2000],
+      ],
+    },
+    {
+      name: 'lifecycle, process ends holding the message',
+      init: lifecycleInit,
+      text: 'hi',
+      after: ['close', lifecycle('uuid-1', 'started')],
+      atWrite: [],
+      expected: [['activity', 'idle']],
+    },
+    {
+      name: 'fallback',
+      init: plainInit,
+      text: 'hi',
+      after: [],
+      atWrite: [
+        ['entry', 'user-1', 1000],
+        ['userMessage', 1000],
+      ],
+      expected: [],
+    },
+  ])(
+    'send_DuringATurn_EmitsTheUserEntryWhenTakenIn ($name)',
+    async ({ init, text, after, atWrite, expected }) => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      let now = 1000;
+      const run = started(fakeChild(), createMemoryFiles(), {
+        now: () => now,
+      });
+      writeLine(run.stdout, init);
+      await settle();
+      run.timeline.length = 0;
+
+      const entryId = run.agent.send({ text, images: [] });
+      await settle();
+      const heardAtWrite = sendTimeline(run.timeline);
+      run.timeline.length = 0;
+      now = 2000;
+      for (const step of after) {
+        if (step === 'abandon') {
+          run.agent.interrupt();
+          vi.advanceTimersByTime(5000);
+        } else if (step === 'close') {
+          run.emitter.emit('close', 0, null);
+        } else {
+          writeLine(run.stdout, step);
+        }
+        await settle();
+      }
+
+      expect(entryId).toBe('user-1');
+      expect(heardAtWrite).toEqual(atWrite);
+      expect(sendTimeline(run.timeline)).toEqual(expected);
+    },
+  );
 
   it('setControl_Mode_WritesRequestAndReportsOnResponse', async () => {
     const run = await startedQuiet();

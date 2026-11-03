@@ -1,6 +1,6 @@
 # 01 — Harness seam: entry on take-in, send returns its id
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
