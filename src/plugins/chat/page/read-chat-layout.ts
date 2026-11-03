@@ -49,7 +49,7 @@ const PART_SET: Record<ChatPartName, true> = {
   working: true,
   queuedMessage: true,
   composer: true,
-  composerBar: true,
+  statusLine: true,
   attachments: true,
   pickerRow: true,
   signIn: true,

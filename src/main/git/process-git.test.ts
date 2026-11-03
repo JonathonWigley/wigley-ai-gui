@@ -53,6 +53,44 @@ describe('createProcessGit', () => {
     expect(await test.git.topLevel('/tmp/x')).toBeNull();
   });
 
+  it.each([
+    {
+      case: 'on a branch',
+      symbolicRef: exited(0, 'main\n'),
+      revParse: null,
+      branch: 'main',
+    },
+    {
+      case: 'detached',
+      symbolicRef: exited(1),
+      revParse: exited(0, 'abc1234\n'),
+      branch: 'abc1234',
+    },
+    {
+      case: 'in no clone',
+      symbolicRef: exited(128, '', 'fatal: not a git repository'),
+      revParse: exited(128, '', 'fatal: not a git repository'),
+      branch: null,
+    },
+  ])('currentBranch_$case', async ({ symbolicRef, revParse, branch }) => {
+    const test = setUp();
+    const shortCommit = git('rev-parse', '--short', 'HEAD');
+    test.processes.script(
+      'git',
+      git('symbolic-ref', '--short', '-q', 'HEAD'),
+      symbolicRef,
+    );
+    if (revParse !== null) {
+      test.processes.script('git', shortCommit, revParse);
+    }
+
+    expect(await test.git.currentBranch(ROOT)).toBe(branch);
+    const ranRevParse = test.processes.runs.some(
+      (run) => JSON.stringify(run.args) === JSON.stringify(shortCommit),
+    );
+    expect(ranRevParse).toBe(revParse !== null);
+  });
+
   it('isLinkedWorktree_GitDirIsNotCommonDir_True', async () => {
     const test = setUp();
     test.processes.script(
@@ -409,6 +447,24 @@ describe('createProcessGit over a real clone', () => {
         'Edit glob file\n\na*.md\n',
       );
       expect(await run('status', '--porcelain=v1')).toBe(' M ab.md\n');
+    },
+  );
+
+  it.skipIf(!gitOnPath)(
+    'currentBranch_RealClone_BranchThenShortCommitWhenDetached',
+    async () => {
+      isolateGitConfig();
+      root = mkdtempSync(path.join(tmpdir(), 'process-git-'));
+      await run('init', '--quiet', '--initial-branch=trunk');
+      writeFileSync(path.join(root, 'a.md'), '');
+      await run('add', '--', 'a.md');
+      await run('commit', '--quiet', '-m', 'first');
+
+      expect(await adapter.currentBranch(root)).toBe('trunk');
+
+      await run('checkout', '--quiet', '--detach');
+      const shortCommit = (await run('rev-parse', '--short', 'HEAD')).trim();
+      expect(await adapter.currentBranch(root)).toBe(shortCommit);
     },
   );
 

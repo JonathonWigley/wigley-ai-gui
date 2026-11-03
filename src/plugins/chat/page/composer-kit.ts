@@ -11,6 +11,7 @@ import { appended, element } from '../../../shared/page/dom';
 import { appSlot } from '../../../shared/page/layout-host/app-slot';
 import {
   type DrawnPart,
+  type RollbackDeps,
   requireElementIn,
 } from '../../../shared/page/layout-host/draw-part';
 import type { BaseKit } from '../../../shared/page/layout-host/kit';
@@ -20,15 +21,15 @@ import { floatingPanel } from '../../../shared/page/ui/floating-panel';
 import { iconButton } from '../../../shared/page/ui/icon-button';
 import { disposeAnchors } from '../../../shared/page/ui/key-anchors';
 import { statusDot } from '../../../shared/page/ui/status-dot';
-import type { ChatComposerPart } from '../contract';
+import type { ChatComposerPart, ChatStatusPart } from '../contract';
 import { type ChatCommandName, chatCommand, chatScope } from '../ids';
 import type {
   AttachmentsInput,
   AttachmentsKit,
-  ComposerBarKit,
   ComposerInput,
   ComposerKit,
   PartView,
+  StatusLineKit,
 } from '../layouts/layout';
 import { imageUrl } from './attachments';
 import {
@@ -41,11 +42,13 @@ import { chipKeyCommands } from './composer-input';
 import { controlCommand } from './control-commands';
 
 // `run` runs a command, as the chips and Send do; `composerParts` holds the
-// parts other plugins added above every composer.
+// parts other plugins added above every composer, `statusParts` those added
+// to every status line.
 export interface ComposerSurfaceDeps extends SurfaceKitDeps {
   layouts: ChatLayouts;
   run(command: CommandId): void;
   composerParts: Pick<PartStore<ChatComposerPart>, 'parts'>;
+  statusParts: Pick<PartStore<ChatStatusPart>, 'parts'>;
   log: Log;
 }
 
@@ -59,22 +62,24 @@ export interface ComposerPieces {
 }
 
 // One Chat tab's composer, drawn through the chat layout. The box, the
-// attachments and bar slots, and the bar's key-holding parts are built once
-// and placed again by each draw; other plugins' composer parts are built
-// again by each composer draw.
+// attachments and status line slots, the status parts' slot and the status
+// line's key-holding parts are built once and placed again by each draw;
+// other plugins' composer parts and status parts are built again by each
+// composer draw, not by a status line draw.
 export interface ComposerSurface {
-  // Draws the composer into `parent` in place of its last draw, then the bar
-  // with `input` and the last attached images; returns the composer's root.
+  // Draws the composer into `parent` in place of its last draw, then the
+  // status line with `input` and the last attached images; returns the
+  // composer's root.
   drawComposer(parent: HTMLElement, input: ComposerInput): HTMLElement;
-  // Runs the composer's update with `input`, then draws the bar with it in
-  // place of its last draw. Returns false, drawing no bar, when the update
-  // threw: the composer then draws with `default` until the layouts change,
-  // and the caller draws it again.
-  drawBar(input: ComposerInput): boolean;
+  // Runs the composer's update with `input`, then draws the status line with
+  // it in place of its last draw. Returns false, drawing no status line, when
+  // the update threw: the composer then draws with `default` until the
+  // layouts change, and the caller draws it again.
+  drawStatusLine(input: ComposerInput): boolean;
   // Draws the attachments in place of their last draw; the slot hides while
   // `images` is empty.
   drawAttachments(images: readonly ChatImage[]): void;
-  // Disposes every draw and the bar's anchors.
+  // Disposes every draw and the status line's anchors.
   dispose(): void;
 }
 
@@ -83,10 +88,11 @@ interface BuiltPart<I> {
   view: PartView<I>;
 }
 
-// The bar's parts holding keys, each anchored once in `chat.chat`: the type
-// hint (`i` and `a`), the running indicator (dot and interrupt keys), Send,
-// and a key span per pick command, which the first chip running it holds.
-interface BarParts {
+// The status line's parts holding keys, each anchored once in `chat.chat`:
+// the type hint (`i` and `a`), the running indicator (dot and interrupt
+// keys), Send, and a key span per pick command, which the first chip running
+// it holds.
+interface StatusLineParts {
   typeHint: HTMLElement;
   running: HTMLElement;
   send: HTMLButtonElement;
@@ -107,13 +113,14 @@ export function createComposerSurface(
 ): ComposerSurface {
   const attachmentsSlot = element('div', 'chat-attachments-slot');
   attachmentsSlot.hidden = true;
-  const barSlot = element('div', 'chat-composer-bar-slot');
-  const parts = createBarParts(deps);
+  const statusLineSlot = element('div', 'chat-status-line-slot');
+  const statusPartsSlot = element('span', 'chat-status-parts-slot');
+  const parts = createStatusLineParts(deps);
   const composerDraws = chatPartDraws(deps.layouts, 'composer', deps.log);
-  const barDraws = chatPartDraws(deps.layouts, 'composerBar', deps.log);
+  const statusLineDraws = chatPartDraws(deps.layouts, 'statusLine', deps.log);
   const attachmentsDraws = chatPartDraws(deps.layouts, 'attachments', deps.log);
   let composer: DrawnPart<BuiltPart<ComposerInput>> | null = null;
-  let bar: DrawnPart<BuiltPart<ComposerInput>> | null = null;
+  let statusLine: DrawnPart<BuiltPart<ComposerInput>> | null = null;
   let attachments: DrawnPart<BuiltPart<AttachmentsInput>> | null = null;
   let images: readonly ChatImage[] = [];
 
@@ -124,7 +131,16 @@ export function createComposerSurface(
       composer = composerDraws.draw(parent, (builder, at, rollback) => {
         const box = appSlot(pieces.box, 'box', rollback);
         const attachmentsAt = appSlot(attachmentsSlot, 'attachments', rollback);
-        const barAt = appSlot(barSlot, 'bar', rollback);
+        const statusLineAt = appSlot(statusLineSlot, 'statusLine', rollback);
+        statusPartsSlot.replaceChildren();
+        placeContributedParts(
+          statusPartsSlot,
+          pieces.sessionId,
+          deps.statusParts.parts(),
+          STATUS_PARTS,
+          deps.log,
+          rollback,
+        );
         let arePartsPlaced = false;
         const kit: ComposerKit = {
           ...surfaceBaseKit(deps, 'chat', rollback),
@@ -132,7 +148,7 @@ export function createComposerSurface(
             appended(panelParent, floatingPanel()),
           box: (boxParent) => box.place(boxParent),
           attachments: (slotParent) => attachmentsAt.place(slotParent),
-          bar: (slotParent) => barAt.place(slotParent),
+          statusLine: (slotParent) => statusLineAt.place(slotParent),
           contributedParts(partsParent) {
             if (arePartsPlaced) {
               throw new Error('composer placed contributed parts twice');
@@ -156,17 +172,17 @@ export function createComposerSurface(
         box.placeIfLeftOut(root);
         return { element: root, view };
       });
-      drawBarPart(input);
+      drawStatusLinePart(input);
       surface.drawAttachments(images);
       return composer.built.element;
     },
-    drawBar(input) {
+    drawStatusLine(input) {
       const isComposerStale =
         composer !== null && composerDraws.update(composer, input) === 'threw';
       if (isComposerStale) {
         return false;
       }
-      drawBarPart(input);
+      drawStatusLinePart(input);
       return true;
     },
     drawAttachments(next) {
@@ -204,25 +220,31 @@ export function createComposerSurface(
     },
     dispose() {
       composer?.dispose();
-      bar?.dispose();
+      statusLine?.dispose();
       attachments?.dispose();
       disposeAnchors(parts.anchors);
     },
   };
 
-  const drawBarPart = (input: ComposerInput) => {
-    bar?.dispose();
-    barSlot.replaceChildren();
-    bar = barDraws.draw(barSlot, (builder, at, rollback) => {
-      const kit = composerBarKit(
-        surfaceBaseKit(deps, 'chat', rollback),
-        parts,
-        input,
-        deps.run,
-      );
-      const view = builder(at, input, kit);
-      return { element: view.element, view };
-    });
+  const drawStatusLinePart = (input: ComposerInput) => {
+    statusLine?.dispose();
+    statusLineSlot.replaceChildren();
+    statusLine = statusLineDraws.draw(
+      statusLineSlot,
+      (builder, at, rollback) => {
+        const statusPartsAt = statusPartsPlacement(statusPartsSlot, rollback);
+        const kit = statusLineKit(
+          surfaceBaseKit(deps, 'chat', rollback),
+          parts,
+          input,
+          deps.run,
+          statusPartsAt.place,
+        );
+        const view = builder(at, input, kit);
+        statusPartsAt.placeIfLeftOut(view.element);
+        return { element: view.element, view };
+      },
+    );
   };
 
   return surface;
@@ -235,9 +257,45 @@ const COMPOSER_PARTS: ContributedPartsPlace = {
   wrapperClass: 'chat-composer-part',
 };
 
-function createBarParts(
+const STATUS_PARTS: ContributedPartsPlace = {
+  owner: 'chat',
+  noun: 'status part',
+  holderClass: 'chat-status-parts',
+  wrapperClass: 'chat-status-part',
+};
+
+// The status parts' slot for one status line drawing attempt: `place`
+// appends it and throws on a second call; `placeIfLeftOut` appends it to the
+// line's end when no call placed it. The attempt's rollback detaches it.
+function statusPartsPlacement(
+  slot: HTMLElement,
+  rollback: Pick<RollbackDeps, 'recordBox'>,
+): {
+  place(parent: HTMLElement): HTMLElement;
+  placeIfLeftOut(line: HTMLElement): void;
+} {
+  let isPlaced = false;
+  const place = (parent: HTMLElement) => {
+    if (isPlaced) {
+      throw new Error('status line placed status parts twice');
+    }
+    isPlaced = true;
+    rollback.recordBox(() => slot.remove());
+    return appended(parent, slot);
+  };
+  return {
+    place,
+    placeIfLeftOut(line) {
+      if (!isPlaced) {
+        place(line);
+      }
+    },
+  };
+}
+
+function createStatusLineParts(
   deps: Pick<ComposerSurfaceDeps, 'keys' | 'run'>,
-): BarParts {
+): StatusLineParts {
   const typeKey = element('span', 'chat-type-key');
   const appendKey = element('span', 'chat-type-key');
   const typeHint = element('span', 'chat-type-hint');
@@ -276,21 +334,42 @@ function createBarParts(
   return { typeHint, running, send, chipKeys, anchors };
 }
 
-// The bar's kit for one draw: each key-holding part places the tab's own
-// element, shown for `input`; a chip holds its command's keys when
+// The status line's kit for one draw: each key-holding part places the tab's
+// own element, shown for `input`; the model · effort chip holds the model and
+// effort pick keys, and any other chip its command's keys when
 // `chipKeyCommands` gives them to its control.
-function composerBarKit(
+function statusLineKit(
   base: BaseKit,
-  parts: BarParts,
+  parts: StatusLineParts,
   input: ComposerInput,
   run: (command: CommandId) => void,
-): ComposerBarKit {
+  placeStatusParts: (parent: HTMLElement) => HTMLElement,
+): StatusLineKit {
   const keyCommands = chipKeyCommands(input.controls);
+  const holdKeys = (holder: HTMLElement, command: ChatCommandName) => {
+    const key = parts.chipKeys.get(command);
+    if (key !== undefined) {
+      holder.append(key);
+    }
+  };
   return {
     ...base,
     typeHint(parent) {
       parts.typeHint.classList.toggle('is-box-focused', input.isBoxFocused);
       return appended(parent, parts.typeHint);
+    },
+    modelEffortChip(parent, { model, effort }) {
+      const value =
+        effort === null ? model.value : `${model.value} · ${effort.value}`;
+      const modelEffortChip = chip(model.label, value, () =>
+        run(chatCommand('pickModel')),
+      ) as HTMLButtonElement;
+      modelEffortChip.disabled = !model.enabled;
+      holdKeys(modelEffortChip, 'pickModel');
+      if (effort !== null) {
+        holdKeys(modelEffortChip, 'pickEffort');
+      }
+      return appended(parent, modelEffortChip);
     },
     controlChip(parent, control) {
       const command = controlCommand(control.id);
@@ -300,12 +379,12 @@ function composerBarKit(
       controlChip.disabled = !control.enabled;
       const index = input.controls.findIndex((held) => held.id === control.id);
       const keyed = index === -1 ? null : keyCommands[index];
-      const key = keyed === null ? undefined : parts.chipKeys.get(keyed);
-      if (key !== undefined) {
-        controlChip.append(key);
+      if (keyed !== null) {
+        holdKeys(controlChip, keyed);
       }
       return appended(parent, controlChip);
     },
+    statusParts: placeStatusParts,
     running(parent) {
       parts.running.classList.toggle('is-idle', !input.working);
       return appended(parent, parts.running);

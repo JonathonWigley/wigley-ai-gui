@@ -206,16 +206,28 @@ export interface ComposerControlInput {
   value: string;
   enabled: boolean;
 }
+// The session's model control and its effort control, which the status line shows as one chip; `effort` is null when
+// the session declares no effort control.
+export interface ModelEffortInput {
+  model: ComposerControlInput;
+  effort: ComposerControlInput | null;
+}
 export interface ComposerInput {
   // The tab's name.
   session: string;
-  // The box's vim mode as the status line prints it; `PAGE` while the box has no focus.
-  modeLabel: string;
+  // The name of the clone's top folder holding the session's folder; the folder's own name outside a clone.
+  repo: string;
+  // The clone's checked-out branch, or its short commit on a detached HEAD; null outside a clone.
+  branch: string | null;
   isBoxFocused: boolean;
   // The session's process runs.
   running: boolean;
   // Running, and a turn is in progress.
   working: boolean;
+  // The model and effort controls; null when the session declares no model control, and an effort control then stays
+  // in `controls`.
+  modelEffort: ModelEffortInput | null;
+  // Every other control, in the order the session declares them.
   controls: ComposerControlInput[];
 }
 // The composer's pieces. Each slot and the box mounts once per draw: a second call throws `<part> placed twice`, and
@@ -227,8 +239,8 @@ export interface ComposerKit extends BaseKit {
   box(parent: HTMLElement): HTMLElement;
   // The slot the `attachments` part draws into; the app hides it while no image is attached.
   attachments(parent: HTMLElement): HTMLElement;
-  // The slot the `composerBar` part draws into.
-  bar(parent: HTMLElement): HTMLElement;
+  // The slot the `statusLine` part draws into.
+  statusLine(parent: HTMLElement): HTMLElement;
   // `div.chat-composer-parts`, holding one `div.chat-composer-part` (`data-part="<id>"`) per part other plugins added
   // for every Chat tab, in the order they were added, each drawn for the tab's session; returns the
   // `div.chat-composer-parts`. Call it once, where the parts go: a composer that leaves it out gets the parts first in
@@ -236,16 +248,28 @@ export interface ComposerKit extends BaseKit {
   // `composer placed contributed parts twice`, so the composer draws with `default`.
   contributedParts(parent: HTMLElement): HTMLElement;
 }
-// The bar's pieces that hold keys. Each places the same element on every draw.
-export interface ComposerBarKit extends BaseKit {
+// The status line's pieces. Each piece holding keys places the same element on every draw.
+export interface StatusLineKit extends BaseKit {
   // The `i` and `a` prompts; hidden, keeping its space, while the box has focus.
   typeHint(parent: HTMLElement): HTMLElement;
+  // One chip for the model and effort: the model control's label, then `<model> · <effort>` (the model alone while
+  // `effort` is null). It opens the model picker and holds the model and effort pick keys (the model's alone while
+  // `effort` is null); disabled while the model control is not `enabled`.
+  modelEffortChip(
+    parent: HTMLElement,
+    input: ModelEffortInput,
+  ): HTMLButtonElement;
   // A chip showing the control's label and value that opens its picker; disabled while not `enabled`. The first chip
   // whose command opens a picker holds that command's keys.
   controlChip(
     parent: HTMLElement,
     control: ComposerControlInput,
   ): HTMLButtonElement;
+  // The slot holding `div.chat-status-parts`: one `div.chat-status-part` (`data-part="<id>"`) per status part other
+  // plugins added for every Chat tab, in the order they were added, each drawn for the tab's session; returns the
+  // slot. Call it once: a status line that leaves it out gets the slot at the end of its element. A second call throws
+  // `status line placed status parts twice`, so the line draws with `default`.
+  statusParts(parent: HTMLElement): HTMLElement;
   // A running dot and the interrupt keys; hidden, keeping its space, while not working.
   running(parent: HTMLElement): HTMLElement;
   // Send with its keys.
@@ -376,11 +400,11 @@ export interface ChatLayout {
     input: ComposerInput,
     kit: ComposerKit,
   ): PartView<ComposerInput>;
-  // The bar under the box, drawn into the composer's bar slot again on each change.
-  composerBar?(
+  // The status line under the box, drawn into the composer's status line slot again on each change.
+  statusLine?(
     parent: HTMLElement,
     input: ComposerInput,
-    kit: ComposerBarKit,
+    kit: StatusLineKit,
   ): PartView<ComposerInput>;
   // The attached images, drawn into the composer's attachments slot again on each change.
   attachments?(

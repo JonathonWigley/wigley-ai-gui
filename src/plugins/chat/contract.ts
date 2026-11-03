@@ -82,6 +82,12 @@ export interface ChatSessionState {
   // The messages waiting for the running turn to end, oldest first; [] while
   // nothing waits.
   queued: QueuedMessage[];
+  // The name of the clone's top folder holding `projectDir`; the folder's own
+  // name outside a clone, and until the first read.
+  repo: string;
+  // The clone's checked-out branch, or its short commit on a detached HEAD;
+  // null outside a clone, and until the first read.
+  branch: string | null;
 }
 
 export interface PermissionAnswer {
@@ -179,6 +185,9 @@ export interface ChatChannel extends ChannelShape {
     sessionRested: { sessionId: string; error: string | null };
     // Replaces the session's whole queue.
     queued: { sessionId: string; queued: QueuedMessage[] };
+    // The session's repo or branch changed: read at its open and after each
+    // turn ends.
+    branch: { sessionId: string; repo: string; branch: string | null };
     // Messages taken out of the queue, oldest first, for the page to put back
     // into the box.
     returned: { sessionId: string; messages: UserMessage[] };
@@ -275,6 +284,13 @@ export interface ChatComposerPart {
   build(parent: HTMLElement, sessionId: string): { dispose?(): void };
 }
 
+// What a plugin draws in every Chat tab's status line, after the control
+// chips: chat hands it a wrapper and the tab's session id.
+export interface ChatStatusPart {
+  id: string;
+  build(parent: HTMLElement, sessionId: string): { dispose?(): void };
+}
+
 // The page part's exports. `addSlashCommand` registers an app slash command
 // until its `dispose`, and throws when the name is already registered.
 // `fillComposer` replaces the session's draft, leaving its attached images,
@@ -282,9 +298,14 @@ export interface ChatComposerPart {
 // unknown session is logged and ignored. `addComposerPart` throws on an id
 // already added; adding a part and disposing its `Disposable` each draw every
 // Chat tab's composer again. A part is built each time the composer draws,
-// which is at a layout change and at a part add or removal, not on each bar
-// change, so a part whose content changes redraws into its wrapper itself. A
-// part is drawn in every Chat tab, the layout preview's included.
+// which is at a layout change and at a part add or removal, not on each status
+// line draw, so a part whose content changes redraws into its wrapper itself.
+// A part is drawn in every Chat tab, the layout preview's included.
+// `addStatusPart` follows the same rules for a status part: it throws on an id
+// already added; adding one and disposing its `Disposable` each draw every
+// Chat tab's composer again; a status part is built at each composer draw and
+// redraws into its wrapper itself when its content changes; it draws in every
+// Chat tab, the preview's included.
 // `focusedEntry` is the visible Chat tab's focused stop's slot element (an
 // entry, an activity line or a pending row); null with no visible Chat tab or
 // no focused stop.
@@ -292,5 +313,6 @@ export interface ChatPageExports {
   addSlashCommand(command: AppSlashCommand): Disposable;
   fillComposer(sessionId: string, text: string): void;
   addComposerPart(part: ChatComposerPart): Disposable;
+  addStatusPart(part: ChatStatusPart): Disposable;
   focusedEntry(): HTMLElement | null;
 }

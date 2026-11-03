@@ -11,6 +11,7 @@ import type {
 import type { Alerts } from '../../../contracts/alerts';
 import type { Clock, RandomUuid } from '../../../contracts/ambient';
 import type { Disposable } from '../../../contracts/disposable';
+import type { Git } from '../../../contracts/git';
 import type { Log } from '../../../contracts/log';
 import type { MainChannel, PluginEvents } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
@@ -74,6 +75,8 @@ export interface ChatSessionsDeps {
   emit: PluginEvents<ChatMainEvents>['emit'];
   alerts: Pick<Alerts, 'announce'>;
   window: { show(): void; isFocused(): boolean };
+  // Reads each row's repo and branch at its open and after each turn.
+  git: Pick<Git, 'topLevel' | 'currentBranch'>;
   log: Log;
   // Stamps the `at` of the notices and permission entries chat makes itself.
   clock: Clock;
@@ -220,6 +223,8 @@ interface HeldSession {
   pendingPicks: Map<string, string>;
   // How the process exited, once its `ended` arrives; a user close logs it.
   exit: { code: number | null; error: string | null } | null;
+  // Branch reads started in this row, numbering them; only the latest applies.
+  branchReads: number;
 }
 
 const QUIT_DURING_TURN_TEXT =
@@ -650,13 +655,17 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         // A closed row's process still ends, and its log and roster close on
         // its `sessionEnded`.
         const endsTheSession = event.type === 'sessionEnded';
-        if (isLive(session, processStart) || endsTheSession) {
+        const isLiveEvent = isLive(session, processStart);
+        if (isLiveEvent || endsTheSession) {
           deps.emit('agentEvent', {
             sessionId,
             profileDir,
             hostSessionId,
             event,
           });
+        }
+        if (isLiveEvent && event.type === 'turnEnded') {
+          readBranch(session);
         }
       },
       ended({ code, error }) {
@@ -746,6 +755,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         commands: [],
         running: false,
         queued: [],
+        repo: path.basename(projectDir),
+        branch: null,
       },
       owned,
       hostId,
@@ -762,6 +773,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       userSetControls: new Set(),
       pendingPicks: new Map(),
       exit: null,
+      branchReads: 0,
     };
     held.set(sessionId, session);
     if (profileDir !== null) {
@@ -773,7 +785,51 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       selectedHostId = hostId;
     }
     send('sessionStarted', copyState(session.state));
+    readBranch(session);
     return session;
+  }
+
+  // Reads the row's repo and branch, and sends `branch` when either changed.
+  // A read that a later one started after, or that settles after the row
+  // closed, changes nothing.
+  function readBranch(session: HeldSession) {
+    session.branchReads += 1;
+    const read = session.branchReads;
+    const { projectDir } = session.state;
+    const folderName = path.basename(projectDir);
+    repoAndBranchOf(projectDir, folderName).then(
+      ({ repo, branch }) => {
+        const isLatestRead =
+          held.get(session.state.sessionId) === session &&
+          session.branchReads === read;
+        const changed =
+          repo !== session.state.repo || branch !== session.state.branch;
+        if (!isLatestRead || !changed) {
+          return;
+        }
+        session.state.repo = repo;
+        session.state.branch = branch;
+        send('branch', { sessionId: session.state.sessionId, repo, branch });
+      },
+      (error: unknown) =>
+        log('chat', `branch not read in ${folderName}: ${errorText(error)}`),
+    );
+  }
+
+  // The clone's top folder's name and its branch; the folder's own name and
+  // no branch outside a clone.
+  async function repoAndBranchOf(
+    projectDir: string,
+    folderName: string,
+  ): Promise<{ repo: string; branch: string | null }> {
+    const top = await deps.git.topLevel(projectDir);
+    if (top === null) {
+      return { repo: folderName, branch: null };
+    }
+    return {
+      repo: path.basename(top),
+      branch: await deps.git.currentBranch(projectDir),
+    };
   }
 
   // Starts the session's process with the held mode and the confirmed picks,

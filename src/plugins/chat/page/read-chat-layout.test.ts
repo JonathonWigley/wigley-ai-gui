@@ -12,6 +12,7 @@ describe('readChatLayout', () => {
     { layout: { activity: builder } },
     { layout: { working: builder } },
     { layout: { queuedMessage: builder } },
+    { layout: { statusLine: builder } },
   ])(
     'readChatLayout_PartsItChanges_ReturnsTheDefaultExport ($layout)',
     ({ layout }) => {
@@ -32,6 +33,10 @@ describe('readChatLayout', () => {
     },
     { layout: { composer: 'panel' }, error: 'composer is not a function' },
     { layout: { compose: builder }, error: 'compose is not a layout part' },
+    {
+      layout: { composerBar: builder },
+      error: 'composerBar is not a layout part',
+    },
     { layout: { activity: 'line' }, error: 'activity is not a function' },
     { layout: { working: 'block' }, error: 'working is not a function' },
     {

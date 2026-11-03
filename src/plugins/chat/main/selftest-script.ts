@@ -412,7 +412,12 @@ const CONTROLS_STEPS: SelfTestStep[] = [
   { keys: ['m'], expect: '[chat] picker shown: Mode' },
   { keys: ['Escape'], expect: '[chat] picker closed: Mode' },
   { keys: ['o'], expect: '[chat] picker shown: Model' },
-  { keys: ['Escape'], expect: '[chat] picker closed: Model' },
+  {
+    keys: ['Escape'],
+    expect: '[chat] picker closed: Model',
+    screenshot: 'status-line',
+    checksFit: true,
+  },
   { keys: ['c'], expect: '[chat] picker shown: Controls' },
   { keys: ['Escape'], expect: '[chat] picker closed: Controls' },
 ];
@@ -661,7 +666,7 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'session controls',
-    why: "The Effort picker sets the session's effort from the transcript and from the box's normal mode, its filter included; Mode, Model and Controls open and close.",
+    why: "The Effort picker sets the session's effort from the transcript and from the box's normal mode, its filter included; Mode, Model and Controls open and close; the status line draws one model · effort chip.",
     steps: CONTROLS_STEPS,
   },
   {

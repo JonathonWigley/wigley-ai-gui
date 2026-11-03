@@ -1,9 +1,11 @@
 import type { SessionControl } from '../../../contracts/agent';
-import type { VimMode } from '../../../contracts/editor';
-import { modeLabel } from '../../../shared/vim-mode-label';
 import type { ChatSessionState } from '../contract';
 import type { ChatCommandName } from '../ids';
-import type { ComposerInput } from '../layouts/layout';
+import type {
+  ComposerControlInput,
+  ComposerInput,
+  ModelEffortInput,
+} from '../layouts/layout';
 import { valueLabel } from './chat-state';
 import { controlCommand } from './control-commands';
 
@@ -11,23 +13,53 @@ import { controlCommand } from './control-commands';
 // process runs and is not idle, and the chips are enabled only while it runs.
 export function composerInputOf(tab: {
   name: string;
-  state: Pick<ChatSessionState, 'running' | 'activity' | 'controls'>;
+  state: Pick<
+    ChatSessionState,
+    'running' | 'activity' | 'controls' | 'repo' | 'branch'
+  >;
   isBoxFocused: boolean;
-  boxMode: VimMode;
 }): ComposerInput {
   const { running, activity } = tab.state;
+  const controls = tab.state.controls.map((control) => ({
+    id: control.id,
+    label: control.label,
+    value: valueLabel(control),
+    enabled: running,
+  }));
+  const { modelEffort, others } = pairModelAndEffort(controls);
   return {
     session: tab.name,
-    modeLabel: modeLabel(tab.isBoxFocused ? tab.boxMode : null),
+    repo: tab.state.repo,
+    branch: tab.state.branch,
     isBoxFocused: tab.isBoxFocused,
     running,
     working: running && activity !== 'idle',
-    controls: tab.state.controls.map((control) => ({
-      id: control.id,
-      label: control.label,
-      value: valueLabel(control),
-      enabled: running,
-    })),
+    modelEffort,
+    controls: others,
+  };
+}
+
+// The controls the model and effort pick keys reach, as one pair, and every
+// other control in order; with no model control there is no pair, and an
+// effort control stays with the others.
+function pairModelAndEffort(controls: readonly ComposerControlInput[]): {
+  modelEffort: ModelEffortInput | null;
+  others: ComposerControlInput[];
+} {
+  const model = controls.find(
+    (control) => controlCommand(control.id) === 'pickModel',
+  );
+  if (model === undefined) {
+    return { modelEffort: null, others: [...controls] };
+  }
+  const effort =
+    controls.find((control) => controlCommand(control.id) === 'pickEffort') ??
+    null;
+  return {
+    modelEffort: { model, effort },
+    others: controls.filter(
+      (control) => control !== model && control !== effort,
+    ),
   };
 }
 

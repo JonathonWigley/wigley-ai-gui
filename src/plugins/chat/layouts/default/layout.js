@@ -515,28 +515,36 @@ const layout = {
     };
   },
   // The glass panel: other plugins' parts, the attached images, the box, then
-  // the bar.
+  // the status line.
   composer(parent, _input, kit) {
     const panel = kit.floatingPanel(parent);
     panel.classList.add('chat-composer');
     kit.contributedParts(panel);
     kit.attachments(panel);
     kit.box(panel);
-    kit.bar(panel);
+    kit.statusLine(panel);
     return { element: panel };
   },
-  // The box's mode, the type hint, a chip per control, then the running
-  // indicator and send at the end.
-  composerBar(parent, input, kit) {
-    const bar = root(parent, 'chat-composer-bar');
-    bar.append(el('span', 'chat-box-mode', input.modeLabel));
-    kit.typeHint(bar);
-    for (const control of input.controls) {
-      kit.controlChip(bar, control);
+  // The repo and branch, the type hint, the model · effort chip, a chip per
+  // other control, other plugins' status parts, then the running indicator
+  // and send at the end.
+  statusLine(parent, input, kit) {
+    const line = root(parent, 'chat-status-line');
+    line.append(el('span', 'chat-status-repo', input.repo));
+    if (input.branch !== null) {
+      line.append(el('span', 'chat-status-branch', input.branch));
     }
-    kit.running(bar);
-    kit.sendButton(bar);
-    return { element: bar };
+    kit.typeHint(line);
+    if (input.modelEffort !== null) {
+      kit.modelEffortChip(line, input.modelEffort);
+    }
+    for (const control of input.controls) {
+      kit.controlChip(line, control);
+    }
+    kit.statusParts(line);
+    kit.running(line);
+    kit.sendButton(line);
+    return { element: line };
   },
   attachments(parent, input, kit) {
     const strip = root(parent, 'chat-attachments');

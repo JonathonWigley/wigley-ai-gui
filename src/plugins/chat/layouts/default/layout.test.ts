@@ -4,7 +4,7 @@ import type {
   ChatKit,
   ChatLayout,
   CollapsibleCardOptions,
-  ComposerBarKit,
+  ComposerInput,
   ComposerKit,
   EntryInput,
   EntryKind,
@@ -13,6 +13,7 @@ import type {
   PickerRowKit,
   QueuedMessageInput,
   SignInKit,
+  StatusLineKit,
   StepInput,
   WorkingInput,
   WorkingState,
@@ -784,10 +785,13 @@ function fakeSurfaceKit() {
     attachments: (parent: HTMLElement) => part(parent, 'div', 'attachments'),
     contributedParts: (parent: HTMLElement) =>
       part(parent, 'div', 'contributedParts'),
-    bar: (parent: HTMLElement) => part(parent, 'div', 'bar'),
+    statusLine: (parent: HTMLElement) => part(parent, 'div', 'statusLine'),
     typeHint: (parent: HTMLElement) => part(parent, 'span', 'typeHint'),
+    modelEffortChip: (parent: HTMLElement) =>
+      part(parent, 'button', 'modelEffort'),
     controlChip: (parent: HTMLElement, control: { id: string }) =>
       part(parent, 'button', `chip:${control.id}`),
+    statusParts: (parent: HTMLElement) => part(parent, 'span', 'statusParts'),
     running: (parent: HTMLElement) => part(parent, 'span', 'running'),
     sendButton: (parent: HTMLElement) => part(parent, 'button', 'send'),
     row(parent: HTMLElement, options: KitRowOptions) {
@@ -800,7 +804,7 @@ function fakeSurfaceKit() {
     actions: (parent: HTMLElement) => part(parent, 'div', 'actions'),
   };
   const kit = parts as unknown as ComposerKit &
-    ComposerBarKit &
+    StatusLineKit &
     PickerRowKit &
     SignInKit;
   return { kit, rows, cursorEnd: asHtml(cursorEnd) };
@@ -814,7 +818,7 @@ const SURFACE_PARTS: Record<SurfacePart, true> = {
   working: true,
   queuedMessage: true,
   composer: true,
-  composerBar: true,
+  statusLine: true,
   attachments: true,
   pickerRow: true,
   signIn: true,
@@ -859,16 +863,22 @@ describe('default chat layout surfaces', () => {
     vi.unstubAllGlobals();
   });
 
-  const composerInput = {
+  const model = { id: 'model', label: 'Model', value: 'Small', enabled: true };
+  const effort = {
+    id: 'effort',
+    label: 'Effort',
+    value: 'High',
+    enabled: true,
+  };
+  const composerInput: ComposerInput = {
     session: 'repo',
-    modeLabel: 'PAGE',
+    repo: 'repo',
+    branch: 'main',
     isBoxFocused: false,
     running: true,
     working: false,
-    controls: [
-      { id: 'mode', label: 'Mode', value: 'Auto', enabled: true },
-      { id: 'effort', label: 'Effort', value: 'High', enabled: true },
-    ],
+    modelEffort: { model, effort },
+    controls: [{ id: 'mode', label: 'Mode', value: 'Auto', enabled: true }],
   };
 
   it('composer_Default_PlacesEachSlotOnce', () => {
@@ -882,24 +892,61 @@ describe('default chat layout surfaces', () => {
       'contributedParts',
       'attachments',
       'box',
-      'bar',
+      'statusLine',
     ]);
   });
 
-  it('composerBar_Default_ChipsInControlOrderThenRunningThenSend', () => {
-    const { kit } = fakeSurfaceKit();
+  it.each([
+    {
+      case: 'full input',
+      input: composerInput,
+      line: [
+        'span.chat-status-repo:repo',
+        'span.chat-status-branch:main',
+        'typeHint',
+        'modelEffort',
+        'chip:mode',
+        'statusParts',
+        'running',
+        'send',
+      ],
+    },
+    {
+      case: 'branch null',
+      input: { ...composerInput, branch: null },
+      line: [
+        'span.chat-status-repo:repo',
+        'typeHint',
+        'modelEffort',
+        'chip:mode',
+        'statusParts',
+        'running',
+        'send',
+      ],
+    },
+    {
+      case: 'modelEffort null',
+      input: { ...composerInput, modelEffort: null },
+      line: [
+        'span.chat-status-repo:repo',
+        'span.chat-status-branch:main',
+        'typeHint',
+        'chip:mode',
+        'statusParts',
+        'running',
+        'send',
+      ],
+    },
+  ])(
+    'statusLine_Default_RepoBranchChipsPartsRunningSend ($case)',
+    ({ input, line }) => {
+      const { kit } = fakeSurfaceKit();
 
-    const view = drawSurface('composerBar', composerInput, kit);
+      const view = drawSurface('statusLine', input, kit);
 
-    expect(describeChildren(asFake(view.element))).toEqual([
-      'span.chat-box-mode:PAGE',
-      'typeHint',
-      'chip:mode',
-      'chip:effort',
-      'running',
-      'send',
-    ]);
-  });
+      expect(describeChildren(asFake(view.element))).toEqual(line);
+    },
+  );
 
   it('pickerRow_Default_PlacesCursorEnd', () => {
     const { kit, rows, cursorEnd } = fakeSurfaceKit();

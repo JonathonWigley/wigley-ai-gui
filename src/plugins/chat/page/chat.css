@@ -294,17 +294,36 @@
   border-color: var(--wg-input-border);
 }
 
-.chat-composer-bar {
+.chat-status-line {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
   gap: var(--wg-space-2);
 }
 
-.chat-box-mode {
+.chat-status-repo,
+.chat-status-branch {
   color: var(--wg-fg-secondary);
   font-size: var(--wg-text-11);
-  font-weight: var(--wg-weight-semibold);
+}
+
+.chat-status-parts-slot {
+  display: contents;
+}
+
+/* Status parts take the width the line can spare and may shrink below their
+   content, so a part that drops items as it narrows can. */
+.chat-status-parts {
+  align-items: center;
+  display: inline-flex;
+  flex: 0 1 auto;
+  gap: var(--wg-space-2);
+  min-width: 0;
+}
+
+.chat-status-part {
+  display: flex;
+  min-width: 0;
 }
 
 /* `i` and `a` are vim's inside the box, so the type hint hides, keeping its
@@ -318,7 +337,7 @@
   visibility: hidden;
 }
 
-/* The running indicator sits at the bar's end before send, and keeps its
+/* The running indicator sits at the line's end before send, and keeps its
    space while idle, so a turn starting or ending moves no chip. */
 .chat-running {
   align-items: center;

@@ -16,6 +16,7 @@ import type {
   ChatChannel,
   ChatComposerPart,
   ChatPageExports,
+  ChatStatusPart,
 } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type { ChatLayout } from '../layouts/layout';
@@ -144,6 +145,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       confirm.keep();
     };
     const composerParts = createPartStore<ChatComposerPart>();
+    const statusParts = createPartStore<ChatStatusPart>();
     const view = mountChatView({
       channel: api.channel,
       paths: services.paths,
@@ -168,6 +170,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       platform: api.platform,
       layouts,
       composerParts,
+      statusParts,
       permissions,
       confirm,
       viewer,
@@ -220,6 +223,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       fillComposer: (sessionId, text) =>
         fillComposer({ tabs: view, log: services.log }, sessionId, text),
       addComposerPart: (part) => composerParts.add(part),
+      addStatusPart: (part) => statusParts.add(part),
       focusedEntry: () => view.focusedEntry(),
     };
     return {

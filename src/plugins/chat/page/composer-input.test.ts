@@ -1,17 +1,31 @@
 import { describe, expect, it } from 'vitest';
-import type { ProcessActivity } from '../../../contracts/agent';
-import type { VimMode } from '../../../contracts/editor';
+import type { ProcessActivity, SessionControl } from '../../../contracts/agent';
 import { chipKeyCommands, composerInputOf } from './composer-input';
 
-const INSERT: VimMode = { mode: 'insert', subMode: '' };
-const controls = [
-  {
-    id: 'effort',
-    label: 'Effort',
-    choices: [{ value: 'high', label: 'High' }],
-    value: 'high',
-  },
-];
+// A control with one choice, picked, whose label is `<label> value`.
+function control(id: string, label: string): SessionControl {
+  return {
+    id,
+    label,
+    choices: [{ value: `${id}-value`, label: `${label} value` }],
+    value: `${id}-value`,
+  };
+}
+
+const MODE = control('mode', 'Mode');
+const EFFORT = control('effort', 'Effort');
+const MODEL = control('model', 'Model');
+const VERBOSITY = control('verbosity', 'Verbosity');
+
+// The control as its chip shows it while the process runs.
+function chipOf(held: SessionControl) {
+  return {
+    id: held.id,
+    label: held.label,
+    value: `${held.label} value`,
+    enabled: true,
+  };
+}
 
 describe('composerInputOf', () => {
   it.each([
@@ -21,7 +35,6 @@ describe('composerInputOf', () => {
       isBoxFocused: false,
       enabled: true,
       working: false,
-      modeLabel: 'PAGE',
     },
     {
       running: true,
@@ -29,7 +42,6 @@ describe('composerInputOf', () => {
       isBoxFocused: false,
       enabled: true,
       working: true,
-      modeLabel: 'PAGE',
     },
     {
       running: true,
@@ -37,7 +49,6 @@ describe('composerInputOf', () => {
       isBoxFocused: false,
       enabled: true,
       working: true,
-      modeLabel: 'PAGE',
     },
     {
       running: false,
@@ -45,7 +56,6 @@ describe('composerInputOf', () => {
       isBoxFocused: true,
       enabled: false,
       working: false,
-      modeLabel: 'INSERT',
     },
   ] satisfies {
     running: boolean;
@@ -53,25 +63,72 @@ describe('composerInputOf', () => {
     isBoxFocused: boolean;
     enabled: boolean;
     working: boolean;
-    modeLabel: string;
   }[])(
     'composerInputOf_SessionStates_EnablesAndShowsWork (running $running, $activity, focused $isBoxFocused)',
-    ({ running, activity, isBoxFocused, enabled, working, modeLabel }) => {
+    ({ running, activity, isBoxFocused, enabled, working }) => {
       const input = composerInputOf({
-        name: 'repo',
-        state: { running, activity, controls },
+        name: 'tab',
+        state: {
+          running,
+          activity,
+          controls: [EFFORT],
+          repo: 'clone',
+          branch: 'main',
+        },
         isBoxFocused,
-        boxMode: INSERT,
       });
 
       expect(input).toEqual({
-        session: 'repo',
-        modeLabel,
+        session: 'tab',
+        repo: 'clone',
+        branch: 'main',
         isBoxFocused,
         running,
         working,
-        controls: [{ id: 'effort', label: 'Effort', value: 'High', enabled }],
+        modelEffort: null,
+        controls: [
+          { id: 'effort', label: 'Effort', value: 'Effort value', enabled },
+        ],
       });
+    },
+  );
+
+  it.each([
+    {
+      case: 'Mode, Effort, Model, Verbosity',
+      controls: [MODE, EFFORT, MODEL, VERBOSITY],
+      modelEffort: { model: chipOf(MODEL), effort: chipOf(EFFORT) },
+      others: [chipOf(MODE), chipOf(VERBOSITY)],
+    },
+    {
+      case: 'no Model',
+      controls: [MODE, EFFORT, VERBOSITY],
+      modelEffort: null,
+      others: [chipOf(MODE), chipOf(EFFORT), chipOf(VERBOSITY)],
+    },
+    {
+      case: 'Model with no Effort',
+      controls: [MODEL, MODE],
+      modelEffort: { model: chipOf(MODEL), effort: null },
+      others: [chipOf(MODE)],
+    },
+  ])(
+    'composerInputOf_Controls_PairsModelAndEffort ($case)',
+    ({ controls, modelEffort, others }) => {
+      const input = composerInputOf({
+        name: 'tab',
+        state: {
+          running: true,
+          activity: 'idle',
+          controls,
+          repo: 'clone',
+          branch: null,
+        },
+        isBoxFocused: false,
+      });
+
+      expect(input.modelEffort).toEqual(modelEffort);
+      expect(input.controls).toEqual(others);
     },
   );
 });

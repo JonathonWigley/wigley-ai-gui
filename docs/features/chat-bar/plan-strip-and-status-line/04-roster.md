@@ -1,6 +1,6 @@
 # 04 — The roster keeps finished items, tools, model, effort and spend
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 03
 Plan: [plan.md](plan.md)
@@ -167,3 +167,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit b7219da4 · proof: diff read: RosterOutcome, RosterTool, RosterAgent, RosterTask, Roster in agents/contract.ts as planned; no typecheck error outside 05's in-flight chat files; worker's 5 test files (71 tests) pass · concerns: Done-when grep for RunningAgent matches three plan-chosen test names; RosterAgent.spendUsd comment says 'estimate of its latest reply' where the value is cumulative

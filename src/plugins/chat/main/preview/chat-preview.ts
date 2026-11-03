@@ -81,6 +81,8 @@ export function createChatPreview(deps: ChatPreviewDeps): ChatPreview {
         commands: [],
         running: true,
         queued: [],
+        repo: PREVIEW_PROJECT_DIR,
+        branch: 'main',
       };
       preview = { owned, state, noticeCount: 0 };
       // `select` picks the row; only `activate` shows the sessions mode.

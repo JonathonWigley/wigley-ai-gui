@@ -1,6 +1,6 @@
 // A clone's git state and the one write the app makes to it. `root` is a
 // clone's top folder, as `topLevel` returns it; paths in and out are relative
-// to it, `/`-separated. Every method but `topLevel`,
+// to it, `/`-separated. Every method but `topLevel`, `currentBranch`,
 // `hasUpstream`, `fetch` and `lastFetch` rejects
 // `git <name> exited <code>: <stderr>` on a failed run; every method but
 // `fetch` and `lastFetch` rejects when git cannot start.
@@ -8,6 +8,9 @@ export interface Git {
   // The clone's top folder holding `folder`, a full path; null when `folder`
   // is in no clone.
   topLevel(folder: string): Promise<string | null>;
+  // The branch checked out in the clone holding `folder`; the short commit on
+  // a detached HEAD; null in no clone.
+  currentBranch(folder: string): Promise<string | null>;
   // True when the clone at `root` is a linked worktree (`git worktree add`),
   // whose git folder sits inside another clone's.
   isLinkedWorktree(root: string): Promise<boolean>;

@@ -241,7 +241,7 @@ other plugin; `npm run lint` (layer and style checks) passes, with a `LAYERS` en
 - [x] [Subagent facts in agent events](03-agent-event-facts.md)
 
 ### Wave 2
-- [ ] [The roster keeps finished items, tools, model, effort and spend](04-roster.md) — after 03
+- [x] [The roster keeps finished items, tools, model, effort and spend](04-roster.md) — after 03
 - [ ] [Chat status line, branch and status parts](05-status-line.md) — after 03 (shares `chat-sessions.test.ts`)
 
 ### Wave 3
@@ -268,6 +268,7 @@ Review base: b9ab45db2031275b78977d6ab85e250d4cf49d1f
 - 02 · 7dab784a · diff read: HScroller interface and createHScroller present in h-scroller.ts; worker's h-scroller-steps test 20 rows pass; no typecheck error in 02's files (03 in flight) · concerns: gallery self-test lines unproven live until the test gate
 - 01 · a9fc20b5 · diff read: plugins.disabled in Settings and defaults, startPlugins disabled param, disabledDependencyProblem, mainStartList, applySelfTestConfig serves []; no typecheck error outside 03's in-flight files; worker's 13 test files pass · concerns: the six listed fixture files needed no plugins member (partial casts, compiler flags none); check-layers lets manifests.test.ts import src/config; settings selftest comments renamed to the timeout-reset group
 - 03 · 602263b9 · diff read: agentSpawned name/model/effort, agentReplied, toolStarted summary, taskStarted command in agent.ts; whole-tree tsc clean; worker's 23 test files (626 tests) pass · concerns: Done-when grep for installed_plugins.json also hits five pre-existing docs-plugin readers — a second reader of that file now exists beside the new loader, layer rules stop reuse; probe ran a live claude -p haiku turn
+- 04 · b7219da4 · diff read: RosterOutcome, RosterTool, RosterAgent, RosterTask, Roster in agents/contract.ts as planned; no typecheck error outside 05's in-flight chat files; worker's 5 test files (71 tests) pass · concerns: Done-when grep for RunningAgent matches three plan-chosen test names; RosterAgent.spendUsd comment says 'estimate of its latest reply' where the value is cumulative
 ### Contract changes
 ### Rulings
 - refresh sets data-overflow before a pending reveal and before reading back/forward, departing from the task's order, so the At end sample measures the narrowed track — chevron state would be wrong otherwise — cost if wrong: one extra layout read per refresh · group 02 · group 02
@@ -275,5 +276,6 @@ Review base: b9ab45db2031275b78977d6ab85e250d4cf49d1f
 - disabled parts are dropped before the duplicate-id check, so two disabled parts sharing an id go unreported — cost if wrong: a duplicate id surfaces only when re-enabled · group 01 · group 01
 - page config pushes are filtered by wrapping applyPush once with startedPluginsConfig(next, pageLoadList) — cost if wrong: none beyond the wrapper · group 01 · group 01
 - on a foreground completion receipt agentReplied comes before agentFinished — cost if wrong: 04's fold must accept a reply for an agent about to finish · group 03 · group 03
+- the start.test row 'a message drops a cleared host's finished items' built from its GIVEN/WHEN/THEN (old host has an agent that fails on its sessionEnded, the new host's userMessage drops it), since the step list tested nothing — cost if wrong: none · group 04 · group 04
 ### Review rounds
 ### Test gate

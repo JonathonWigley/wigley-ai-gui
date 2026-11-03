@@ -83,6 +83,8 @@ function session(
     commands: [],
     running,
     queued: [],
+    repo: 'app',
+    branch: 'main',
   };
   const entries = {
     scrollBy(step: ScrollStep, direction: 1 | -1) {

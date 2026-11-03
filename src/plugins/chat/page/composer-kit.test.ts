@@ -12,19 +12,24 @@ import {
   FakeElement,
   installFakeDom,
 } from '../../../shared/page/test-dom';
-import type { ChatComposerPart } from '../contract';
-import { chatCommand } from '../ids';
+import type { ChatComposerPart, ChatStatusPart } from '../contract';
+import { type ChatCommandName, chatCommand } from '../ids';
 import defaultLayout from '../layouts/default/layout.js';
-import type { ChatLayout, ComposerInput } from '../layouts/layout';
+import type {
+  ChatLayout,
+  ComposerInput,
+  ModelEffortInput,
+} from '../layouts/layout';
 import { createChatLayouts } from './chat-layouts';
 import { createComposerSurface } from './composer-kit';
 import { createSignInPart } from './dialog-kits';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 
 // The deps every surface takes, drawing with `user` as the user's layout,
-// or with `default` alone when `user` is null, and no composer part until
-// one is added to `deps.composerParts`; each anchor is kept in `anchors` and
-// each log line in `logs`.
+// or with `default` alone when `user` is null, and no composer or status part
+// until one is added to `deps.composerParts` or `deps.statusParts`; each
+// anchor is kept in `anchors`, each command run in `ran` and each log line in
+// `logs`.
 function surfaceDeps(user: ChatLayout | null) {
   const logs: string[] = [];
   const log = (_source: string, line: string) => logs.push(line);
@@ -33,6 +38,7 @@ function surfaceDeps(user: ChatLayout | null) {
     layouts.set(withUser<ChatLayout>(defaultLayout, user));
   }
   const { anchors, keys } = recordingAnchors();
+  const ran: CommandId[] = [];
   const deps = {
     layouts,
     markdown: {
@@ -44,20 +50,28 @@ function surfaceDeps(user: ChatLayout | null) {
     keys,
     commands: { exists: () => true, run: () => undefined },
     platform: 'macos' as const,
-    run: () => undefined,
+    run: (command: CommandId) => {
+      ran.push(command);
+    },
     composerParts: createPartStore<ChatComposerPart>(),
+    statusParts: createPartStore<ChatStatusPart>(),
     log,
   };
-  return { deps, anchors, logs };
+  return { deps, anchors, ran, logs };
 }
 
-function composerInput(working: boolean): ComposerInput {
+function composerInput(
+  working: boolean,
+  modelEffort: ModelEffortInput | null = null,
+): ComposerInput {
   return {
-    session: 'repo',
-    modeLabel: 'PAGE',
+    session: 'tab',
+    repo: 'repo',
+    branch: 'main',
     isBoxFocused: false,
     running: true,
     working,
+    modelEffort,
     controls: [{ id: 'mode', label: 'Mode', value: 'Auto', enabled: true }],
   };
 }
@@ -259,13 +273,13 @@ describe('composer surface parts', () => {
     ]);
   });
 
-  it('composerBar_Redraw_LeavesOneAnchorPerHint', () => {
+  it('statusLine_Redraw_LeavesOneAnchorPerHint', () => {
     const { deps, anchors } = surfaceDeps({
-      composerBar(parent, _input, kit) {
-        const bar = rootIn(parent);
-        kit.keyHint(bar, 'newSession');
-        kit.sendButton(bar);
-        return { element: bar };
+      statusLine(parent, _input, kit) {
+        const line = rootIn(parent);
+        kit.keyHint(line, 'newSession');
+        kit.sendButton(line);
+        return { element: line };
       },
     });
     const surface = createComposerSurface(deps, {
@@ -275,7 +289,7 @@ describe('composer surface parts', () => {
     });
 
     for (const working of [false, true, false]) {
-      surface.drawBar(composerInput(working));
+      surface.drawStatusLine(composerInput(working));
     }
 
     const madeFor = (command: CommandId) =>
@@ -285,6 +299,136 @@ describe('composer surface parts', () => {
     ).toHaveLength(1);
     expect(madeFor(chatCommand('send'))).toHaveLength(1);
   });
+
+  it('statusLine_StatusParts_BuiltAtComposerDrawOnly', () => {
+    const { deps } = surfaceDeps(null);
+    const record: string[] = [];
+    deps.statusParts.add(recordingPart('usage', record));
+    const surface = createComposerSurface(deps, {
+      sessionId: 'row-1',
+      box: asHtml(boxWithEditor()),
+      removeImage: () => undefined,
+    });
+    const panel = asFake(
+      surface.drawComposer(
+        asHtml(new FakeElement('div')),
+        composerInput(false),
+      ),
+    );
+    const holderInLine = () =>
+      panel
+        .querySelector('.chat-status-line')
+        ?.querySelector('.chat-status-parts');
+
+    const holders = [holderInLine()];
+    for (const working of [true, false]) {
+      surface.drawStatusLine(composerInput(working));
+      holders.push(holderInLine());
+    }
+
+    expect(record).toEqual(['build:usage:row-1']);
+    expect(holders.map((holder) => holder?.children[0]?.dataset.part)).toEqual([
+      'usage',
+      'usage',
+      'usage',
+    ]);
+  });
+
+  it('statusLine_StatusPartsPlacedTwice_DrawsWithDefault', () => {
+    const { deps, logs } = surfaceDeps({
+      statusLine(parent, _input, kit) {
+        const line = rootIn(parent);
+        kit.statusParts(line);
+        kit.statusParts(line);
+        return { element: line };
+      },
+    });
+    const surface = createComposerSurface(deps, {
+      sessionId: 'row-1',
+      box: asHtml(boxWithEditor()),
+      removeImage: () => undefined,
+    });
+
+    const panel = asFake(
+      surface.drawComposer(
+        asHtml(new FakeElement('div')),
+        composerInput(false),
+      ),
+    );
+
+    const line = panel.querySelector('.chat-status-line');
+    expect(line?.dataset.layout).toBe('default');
+    expect(line?.querySelectorAll('.chat-status-parts-slot')).toHaveLength(1);
+    expect(logs.filter((log) => log.includes('failed'))).toEqual([
+      `layout ${USER_LAYOUT} statusLine failed: status line placed status parts twice`,
+    ]);
+  });
+
+  it.each([
+    {
+      case: 'model and effort',
+      effort: { id: 'effort', label: 'Effort', value: 'Medium', enabled: true },
+      enabled: true,
+      value: 'Small · Medium',
+      keys: ['pickModel', 'pickEffort'] as ChatCommandName[],
+    },
+    {
+      case: 'no effort',
+      effort: null,
+      enabled: true,
+      value: 'Small',
+      keys: ['pickModel'] as ChatCommandName[],
+    },
+    {
+      case: 'model not enabled',
+      effort: {
+        id: 'effort',
+        label: 'Effort',
+        value: 'Medium',
+        enabled: false,
+      },
+      enabled: false,
+      value: 'Small · Medium',
+      keys: ['pickModel', 'pickEffort'] as ChatCommandName[],
+    },
+  ])(
+    'statusLine_ModelEffortChip_RunsPickModelAndHoldsBothKeys ($case)',
+    ({ effort, enabled, value, keys }) => {
+      let drawn: HTMLButtonElement | null = null;
+      const { deps, anchors, ran } = surfaceDeps({
+        statusLine(parent, input, kit) {
+          const line = rootIn(parent);
+          if (input.modelEffort !== null) {
+            drawn = kit.modelEffortChip(line, input.modelEffort);
+          }
+          return { element: line };
+        },
+      });
+      const surface = createComposerSurface(deps, {
+        sessionId: 'row-1',
+        box: asHtml(boxWithEditor()),
+        removeImage: () => undefined,
+      });
+      const model = { id: 'model', label: 'Model', value: 'Small', enabled };
+      surface.drawStatusLine(composerInput(false, { model, effort }));
+      const modelEffortChip = drawn as HTMLButtonElement | null;
+      if (modelEffortChip === null) {
+        throw new Error('the status line drew no model · effort chip');
+      }
+      const chipElement = asFake(modelEffortChip);
+      chipElement.click();
+
+      const keySpans = keys.map(
+        (command) =>
+          anchors.find((anchor) => anchor.command === chatCommand(command))
+            ?.element,
+      );
+      expect(ran).toEqual([chatCommand('pickModel')]);
+      expect(chipElement.textContent).toBe(`Model${value}`);
+      expect(chipElement.children.slice(2)).toEqual(keySpans);
+      expect(modelEffortChip.disabled).toBe(!enabled);
+    },
+  );
 
   it('composer_UpdateThrows_DrawsWithDefaultUntilTheLayoutsChange', () => {
     const throwsOnUpdate: ChatLayout = {
@@ -310,10 +454,10 @@ describe('composer surface parts', () => {
       asFake(surface.drawComposer(tab, composerInput(false))).dataset.layout;
 
     const firstLayout = drawnWith();
-    const barOnThrow = surface.drawBar(composerInput(true));
+    const lineOnThrow = surface.drawStatusLine(composerInput(true));
     const afterThrow = drawnWith();
-    const barsAfterThrow = [true, false].map((working) =>
-      surface.drawBar(composerInput(working)),
+    const linesAfterThrow = [true, false].map((working) =>
+      surface.drawStatusLine(composerInput(working)),
     );
     deps.layouts.set(withUser<ChatLayout>(defaultLayout, throwsOnUpdate));
     const afterChange = drawnWith();
@@ -323,7 +467,7 @@ describe('composer surface parts', () => {
       'default',
       USER_LAYOUT,
     ]);
-    expect([barOnThrow, ...barsAfterThrow]).toEqual([false, true, true]);
+    expect([lineOnThrow, ...linesAfterThrow]).toEqual([false, true, true]);
     expect(logs.filter((line) => line.includes('update failed'))).toEqual([
       `layout ${USER_LAYOUT} composer update failed: broken update`,
     ]);

@@ -10,7 +10,7 @@ interface ProcessGitDeps {
 }
 
 // `Git` over the `git` on the PATH, one run per call (two for `fileAtHead` and
-// `commitPaths`), each as `git -C <root> …`.
+// `commitPaths`, up to two for `currentBranch`), each as `git -C <root> …`.
 export function createProcessGit(deps: ProcessGitDeps): Git {
   const { processes } = deps;
   return {
@@ -24,6 +24,28 @@ export function createProcessGit(deps: ProcessGitDeps): Git {
       return result.code === 0
         ? deps.paths.normalize(result.stdout.trim())
         : null;
+    },
+    currentBranch: async (folder) => {
+      // An unborn branch's name prints here too; a detached HEAD exits 1.
+      const branch = await processes.run('git', [
+        '-C',
+        folder,
+        'symbolic-ref',
+        '--short',
+        '-q',
+        'HEAD',
+      ]);
+      if (branch.code === 0) {
+        return branch.stdout.trim();
+      }
+      const commit = await processes.run('git', [
+        '-C',
+        folder,
+        'rev-parse',
+        '--short',
+        'HEAD',
+      ]);
+      return commit.code === 0 ? commit.stdout.trim() : null;
     },
     isLinkedWorktree: async (root) => {
       const output = await gitOutput(processes, 'rev-parse', [

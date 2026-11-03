@@ -123,8 +123,18 @@ async function flush() {
   }
 }
 
+// A folder in no clone, unless a test passes its own `git`.
+const NO_CLONE: ChatSessionsDeps['git'] = {
+  topLevel: () => Promise.resolve(null),
+  currentBranch: () => Promise.resolve(null),
+};
+
 function setUp(
-  options: { harnesses?: FakeAgentHarness[]; clockNow?: number } = {},
+  options: {
+    harnesses?: FakeAgentHarness[];
+    clockNow?: number;
+    git?: ChatSessionsDeps['git'];
+  } = {},
 ) {
   const clock = { now: () => options.clockNow ?? 1000 };
   const harness = createFakeAgentHarness(
@@ -223,6 +233,7 @@ function setUp(
       },
       isFocused: () => isFocused,
     },
+    git: options.git ?? NO_CLONE,
     log,
     clock,
   });
@@ -391,6 +402,8 @@ describe('createChatSessions', () => {
         commands: [],
         running: false,
         queued: [],
+        repo: 'app',
+        branch: null,
       },
     ]);
     expect(test.sent('sessionRunning')).toEqual([{ sessionId: ROW_ID }]);
@@ -2225,6 +2238,88 @@ describe('createChatSessions saved sessions', () => {
     test.chat.selected(null);
 
     expect(test.saved.last()?.selectedHostSessionId).toBe('host-b');
+  });
+});
+
+describe('createChatSessions branch', () => {
+  const TURN_ENDED: AgentEvent = { type: 'turnEnded', at: 1000 };
+
+  // A clone at `/repos/clone` whose branch the test changes.
+  function cloneGit(branch: { current: string }): ChatSessionsDeps['git'] {
+    return {
+      topLevel: () => Promise.resolve('/repos/clone'),
+      currentBranch: () => Promise.resolve(branch.current),
+    };
+  }
+
+  it.each([
+    {
+      case: 'clone on main',
+      git: cloneGit({ current: 'main' }),
+      sent: [{ sessionId: ROW_ID, repo: 'clone', branch: 'main' }],
+      logged: null,
+    },
+    { case: 'no clone', git: NO_CLONE, sent: [], logged: null },
+    {
+      case: 'topLevel rejects',
+      git: {
+        ...NO_CLONE,
+        topLevel: () => Promise.reject(new Error('git did not start')),
+      },
+      sent: [],
+      logged: '[chat] branch not read in app: git did not start',
+    },
+  ])('branchRead_$case', async ({ git, sent, logged }) => {
+    const test = await started({ git });
+
+    expect(test.sent('branch')).toEqual(sent);
+    expect(test.chat.sessions()[0]).toMatchObject({
+      repo: sent[0]?.repo ?? 'app',
+      branch: sent[0]?.branch ?? null,
+    });
+    if (logged !== null) {
+      expect(test.logged).toContain(logged);
+    }
+  });
+
+  it('agentEvent_TurnEnded_ReadsTheBranchAgain', async () => {
+    const branch = { current: 'main' };
+    const test = await started({ git: cloneGit(branch) });
+    branch.current = 'feature';
+
+    test.process.events.agentEvent(TURN_ENDED);
+    await flush();
+    test.process.events.agentEvent(TURN_ENDED);
+    await flush();
+
+    expect(test.sent('branch')).toEqual([
+      { sessionId: ROW_ID, repo: 'clone', branch: 'main' },
+      { sessionId: ROW_ID, repo: 'clone', branch: 'feature' },
+    ]);
+  });
+
+  it('branchRead_OlderReadSettlesLast_KeepsTheNewer', async () => {
+    const reads: ((branch: string) => void)[] = [];
+    const git: ChatSessionsDeps['git'] = {
+      topLevel: () => Promise.resolve('/repos/clone'),
+      currentBranch: () =>
+        new Promise((resolve) => {
+          reads.push(resolve);
+        }),
+    };
+    const test = await started({ git });
+    test.process.events.agentEvent(TURN_ENDED);
+    await flush();
+
+    reads[1]('feature');
+    await flush();
+    reads[0]('main');
+    await flush();
+
+    expect(test.sent('branch')).toEqual([
+      { sessionId: ROW_ID, repo: 'clone', branch: 'feature' },
+    ]);
+    expect(test.chat.sessions()[0].branch).toBe('feature');
   });
 });
 
