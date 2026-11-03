@@ -10,7 +10,7 @@ import type {
   ToolResult,
   ToolSession,
 } from '../contract';
-import { createSessionList } from './session-list';
+import { createSessionList, RESELECT_WINDOW_MS } from './session-list';
 
 const RESULT: ToolResult = { content: [{ type: 'text', text: 'done' }] };
 
@@ -48,11 +48,13 @@ function setUp() {
   // `activated <id>`, `stateChanged` and `emit <event>`, in the order the list
   // called them.
   const calls: string[] = [];
+  const clock = { time: 0, now: () => clock.time };
   const list = createSessionList({
     randomHex: () => {
       hexCount++;
       return hexCount.toString(16).padStart(8, '0');
     },
+    clock,
     log: (source, message) => logged.push(`[${source}] ${message}`),
     emit: (event, data) => {
       emitted.push([event, data]);
@@ -67,7 +69,7 @@ function setUp() {
       calls.push(`activated ${sessionId}`);
     },
   });
-  return { list, emitted, states, logged, activated, calls };
+  return { list, clock, emitted, states, logged, activated, calls };
 }
 
 // A contribution's start: records each session it starts for, and each tool
@@ -100,6 +102,7 @@ function labels(state: SessionsState): string[] {
 }
 
 type SessionList = ReturnType<typeof setUp>['list'];
+type FakeClock = ReturnType<typeof setUp>['clock'];
 
 // Connects a session and marks it, so it holds a row.
 function connectWithRow(
@@ -1141,11 +1144,11 @@ describe('createSessionList', () => {
     expect(logged.slice(loggedBefore)).toEqual(logs);
   });
 
-  // Each row runs its actions on a fresh list; ids count up from 00000001 in
-  // connect and open order.
+  // Each row runs its actions on a fresh list whose clock starts at 0; ids
+  // count up from 00000001 in connect and open order.
   it.each<{
     name: string;
-    act: (list: SessionList) => void;
+    act: (list: SessionList, clock: FakeClock) => void;
     expected: (string | null)[];
   }>([
     {
@@ -1219,16 +1222,44 @@ describe('createSessionList', () => {
       expected: ['00000001'],
     },
     {
-      name: 'mark of a session whose selected row release closed',
-      act: (list) => {
+      name: 'mark of a session whose selected row release closed, at the window',
+      act: (list, clock) => {
         list.connect(info('/work/x'));
         list.connect(info('/work/x'));
         list.mark('00000001');
         list.mark('00000002');
+        clock.time = 5_000;
         list.release('00000001');
+        clock.time = 5_000 + RESELECT_WINDOW_MS;
         list.mark('00000001');
       },
       expected: ['00000001', '00000002', '00000001'],
+    },
+    {
+      name: 'mark of a session whose selected row release closed, past the window',
+      act: (list, clock) => {
+        list.connect(info('/work/x'));
+        list.connect(info('/work/x'));
+        list.mark('00000001');
+        list.mark('00000002');
+        clock.time = 5_000;
+        list.release('00000001');
+        clock.time = 5_000 + RESELECT_WINDOW_MS + 1;
+        list.mark('00000001');
+      },
+      expected: ['00000001', '00000002'],
+    },
+    {
+      name: 'mark after release of the selected row and a mark selecting another from none',
+      act: (list) => {
+        list.connect(info('/work/x'));
+        list.connect(info('/work/x'));
+        list.mark('00000001');
+        list.release('00000001');
+        list.mark('00000002');
+        list.mark('00000001');
+      },
+      expected: ['00000001', null, '00000002'],
     },
     {
       name: 'mark after release of the selected row and an activate of another',
@@ -1285,9 +1316,9 @@ describe('createSessionList', () => {
   ])(
     'selected_SelectionChanges_EmitsOncePerChange: $name',
     ({ act, expected }) => {
-      const { list, emitted } = setUp();
+      const { list, clock, emitted } = setUp();
 
-      act(list);
+      act(list, clock);
 
       expect(
         emitted

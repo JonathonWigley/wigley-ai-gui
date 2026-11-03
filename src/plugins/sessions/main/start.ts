@@ -49,6 +49,7 @@ type SessionsApi = MainApi<
 function createList(api: SessionsApi): SessionList {
   const list = createSessionList({
     randomHex: api.services.randomHex,
+    clock: api.services.clock,
     log: api.services.log,
     emit: (event, data) => api.events.emit(event, data),
     stateChanged: (state) => api.channel.send('stateChanged', state),

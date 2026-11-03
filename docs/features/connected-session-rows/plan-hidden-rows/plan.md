@@ -135,7 +135,9 @@ Review base: d757831
 - primer self-test: submit step expects the Layout preview activation via alsoExpect, the separate <D-w> close step removed — submit now releases the row — none, the run confirms it · group 05
 - lead ran oxfmt on src/plugins/docs/main/start.ts (editor-tooling-only) — lint flagged the import the rename shortened — none · lead
 - triage 7477add0: the user took every recommendation — #1 fix now (next round re-selects a session released while selected unless the user picked another row), #2 fix now (stale notification click selects only an existing row, adds none), #3 leave it — user note 'take all your suggestions' · lead
+- repeat on reselection settled by the lead under the user's 'take all your suggestions': reselect only within 30 s of the release, and clear when mark selects another session from none — a slow next round comes back marked, as before the fix · lead
 ### Review rounds
 - implementation review · 7477add0 · NEEDS FIXES (1 important, 6 minor, 1 pre-existing; lead-applied f492b3a1)
+- re-review (correctness) · 15ce6bfb bad38b0f 87997a36 · NEEDS FIXES (1 important repeat: unbounded reselection steals selection; 3 minor comment fixes)
 ### Test gate
 - full npm test at c6352d51 (340 files / 5299 tests; covers the planned picks session-list.test.ts and channel-presenter.test.ts, and the type check of 03) · pass; npm run selftest at eb6f544b · all passed (818 PASS) after the forms/primer step changes; npm run lint · clean after the oxfmt fix c6352d51

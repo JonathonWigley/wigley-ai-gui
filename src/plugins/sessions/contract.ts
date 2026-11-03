@@ -136,7 +136,10 @@ export interface SessionsMainExports {
   // Attention for the session: selects its row when none is selected, else
   // marks it; a connected session with no row, or a row the user closed, gets
   // its row at the end first. A row `release` closed while selected comes back
-  // selected, unless an `activate` or a selecting `open` came in between.
+  // selected when this mark comes within 30 seconds of the release, unless in
+  // between came an `activate` or `activateExistingRow`, a selecting `open`,
+  // or a mark that selected another session from none; the session's end
+  // drops it too.
   mark(sessionId: string): void;
   // The user's pick: selects the session's row and clears its mark; a
   // connected session with no row, or a row the user closed, gets its row at

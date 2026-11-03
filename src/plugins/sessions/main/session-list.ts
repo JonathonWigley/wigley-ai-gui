@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { RandomHex } from '../../../contracts/ambient';
+import type { Clock, RandomHex } from '../../../contracts/ambient';
 import type { Log } from '../../../contracts/log';
 import type { PluginEvents } from '../../../contracts/plugin';
 import type {
@@ -19,6 +19,7 @@ import type {
 
 export interface SessionListDeps {
   randomHex: RandomHex;
+  clock: Clock;
   log: Log;
   emit: PluginEvents<SessionsMainEvents>['emit'];
   stateChanged(state: SessionsState): void;
@@ -60,6 +61,10 @@ interface SessionEntry {
   // is refused.
   retiredHostIds: Set<string>;
 }
+
+// A mark this soon after `release` closed the session's selected row is a
+// back-to-back round, not one arriving after the user moved on.
+export const RESELECT_WINDOW_MS = 30_000;
 
 const NO_FOLDER_LABEL = 'session';
 const CODEX_NO_FOLDER_LABEL = 'Codex session';
@@ -150,14 +155,17 @@ function routeCall(
 // older one, moves to a new host id by its `setHostSessionId()`, which retires
 // the old id and its relay, and ends only by its `end()`. Each session keeps
 // its label while it lasts; a closed row comes back at the end with the
-// session's next mark or activate, and a row `release` closed while selected
-// comes back selected unless the user activated a row or opened one selected
-// in between. `activateExistingRow` selects only a row the session holds and
-// logs and ignores one with none. `mark`, `activate`, `activateExistingRow`,
+// session's next mark or activate. A row `release` closed while selected
+// comes back selected when the session's next mark comes within
+// RESELECT_WINDOW_MS of the release, unless in between the user activated a
+// row, a row was opened selected, or a mark selected another session from
+// none. `activateExistingRow` selects only a row the session holds and logs
+// and ignores one with none. `mark`, `activate`, `activateExistingRow`,
 // `release` and `closeSession` send the whole state only when it changed;
 // `mark`, `activate`, `activateExistingRow` and `closeSession` log and ignore
-// an unknown session, `release` silently ignores a session it cannot act on. `release` and `closeSession` log and
-// keep a row a close guard refuses, and emit `closed` for a row they close;
+// an unknown session, `release` silently ignores a session it cannot act on.
+// `release` and `closeSession` log and keep a row a close guard refuses, and
+// emit `closed` for a row they close;
 // `closeSession` returns true for a row it closes and for a known session
 // whose row is already closed, false otherwise. Every state sent with a
 // selection other than the last sent emits `selected` after it.
@@ -168,9 +176,11 @@ export function createSessionList(deps: SessionListDeps): SessionList {
   const entries = new Map<string, SessionEntry>();
   const rows: SessionRow[] = [];
   let selectedSessionId: string | null = null;
-  // The session whose selected row `release` closed, selected again when its
-  // next mark adds the row back; null once the user activates another row.
-  let reselectOnReturnId: string | null = null;
+  // The session whose selected row `release` closed, and when: its next mark
+  // selects the row again within RESELECT_WINDOW_MS. Null after that mark, an
+  // activate or activateExistingRow, a selecting open, the session's end, or a
+  // mark that selects another session from none.
+  let reselectOnReturn: { sessionId: string; releasedAt: number } | null = null;
 
   const state = (): SessionsState => ({
     rows: rows.map((row) => ({ ...row })),
@@ -209,8 +219,8 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     if (!entries.delete(entry.session.id)) {
       return;
     }
-    if (reselectOnReturnId === entry.session.id) {
-      reselectOnReturnId = null;
+    if (reselectOnReturn?.sessionId === entry.session.id) {
+      reselectOnReturn = null;
     }
     for (const toolSession of entry.toolSessions) {
       toolSession.end();
@@ -236,7 +246,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
   // it and clears its mark.
   const activateRow = (sessionId: string, index: number) => {
     deps.activated(sessionId);
-    reselectOnReturnId = null;
+    reselectOnReturn = null;
     const row = rows[index];
     if (sessionId === selectedSessionId && !row.marked) {
       return;
@@ -416,7 +426,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       rows.push(rowOf(entry));
       if (options?.select !== false) {
         select(rows.at(-1));
-        reselectOnReturnId = null;
+        reselectOnReturn = null;
       }
       sendState();
       deps.emit('connected', entry.session);
@@ -435,14 +445,19 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       // A connected session with no row, or a row the user closed, gets its
       // row at the end, then is selected or marked like any other.
       const row = rows[rowIndexAdding(entry)];
-      const isReturningToSelection = sessionId === reselectOnReturnId;
-      if (isReturningToSelection) {
-        reselectOnReturnId = null;
+      const releasedSelected =
+        reselectOnReturn?.sessionId === sessionId ? reselectOnReturn : null;
+      const isReturningToSelection =
+        releasedSelected !== null &&
+        deps.clock.now() - releasedSelected.releasedAt <= RESELECT_WINDOW_MS;
+      if (releasedSelected !== null) {
+        reselectOnReturn = null;
       }
       if (sessionId === selectedSessionId) {
         return;
       }
       if (selectedSessionId === null || isReturningToSelection) {
+        reselectOnReturn = null;
         select(row);
         sendState();
         return;
@@ -499,7 +514,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
         return;
       }
       if (sessionId === selectedSessionId) {
-        reselectOnReturnId = sessionId;
+        reselectOnReturn = { sessionId, releasedAt: deps.clock.now() };
       }
       closeRow(index, sessionId);
     },
