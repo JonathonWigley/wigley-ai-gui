@@ -1,6 +1,6 @@
 # 04 — Chat reads a restored row's saved usage
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -30,3 +30,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 804e0855 · proof: diff read matches Decisions; Produces present; npm run typecheck clean · concerns: none

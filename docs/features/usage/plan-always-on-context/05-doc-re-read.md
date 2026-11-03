@@ -1,6 +1,6 @@
 # 05 — Doc re-read
 
-Status: not started
+Status: done
 Type: Task
 Wave: 3 · Depends on: 01, 02, 03, 04
 Plan: [plan.md](plan.md)
@@ -14,3 +14,4 @@ Commit:    one commit, when there are fixes
 
 ## Proof
 
+Commit none · proof: no changes: design.md matches the landed code; two loose lines handed to the review · concerns: lastUsage doc names only the missing-transcript rejection, not the bad-id one; store doc says an older event changes nothing though it records the profile

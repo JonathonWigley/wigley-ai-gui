@@ -1,6 +1,6 @@
 # 06 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 4 · Depends on: 05
 Plan: [plan.md](plan.md)
@@ -23,3 +23,4 @@ Commit:    none
 
 ## Proof
 
+Commit none · proof: drive run 20261103-004411-8700 (real Claude, ~$0.31+): check 1 PASS (0k then 0k/300k in row and status); check 2 PASS (restored row 49k, status 49k cache 3m before any send; row line is context-only by design, the check's 'cache in both' wording was wrong); check 3 on an open row only activates it (chat-sessions.ts:1517) — rerun 3b on a closed row: limit arrives, but both lines flash 0k before the transcript seed lands (to the review) · concerns: resume of a closed session draws the page zero line until the adapter seed lands — plan expected no 0k between; restored entry header reads '1 step · 498246h 44m' (epoch-start duration, code this run did not touch)
