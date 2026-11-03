@@ -431,7 +431,12 @@ describe('start prompt', () => {
     pickItem(run.last(), rowLabel(beta));
     await flush();
     expect(run.resumed).toEqual([
-      { projectDir: '/Users/u/dev/app', profile: 'work', hostSessionId: 'b' },
+      {
+        projectDir: '/Users/u/dev/app',
+        profile: 'work',
+        hostSessionId: 'b',
+        title: 'Beta',
+      },
     ]);
     expect(run.revealed).toEqual(['row-2']);
     expect(run.logs).toEqual([expect.stringContaining('Beta')]);

@@ -1,5 +1,6 @@
 import { type Files, readIfPresent } from '../../../contracts/files';
 import { isJsonObject } from '../../../shared/json';
+import { type SessionTitles, TITLE_SOURCES } from '../../sessions/contract';
 
 export const OPEN_SESSIONS_FILE = 'open-sessions.json';
 
@@ -11,7 +12,20 @@ export interface SavedSession {
   sent: boolean;
   // Whether a turn was running when the snapshot was taken.
   busy: boolean;
+  // The row's titles when the snapshot was taken.
+  titles: SessionTitles;
 }
+
+// The titles of a session that has none.
+export const NO_TITLES: SessionTitles = {
+  user: null,
+  agent: null,
+  firstMessage: null,
+};
+
+// A saved session as the file holds it: a file written before titles were
+// saved has none.
+type StoredSession = Omit<SavedSession, 'titles'> & { titles?: SessionTitles };
 
 export interface SavedSessions {
   // In row order.
@@ -28,14 +42,24 @@ export interface OpenSessions {
   save(snapshot: SavedSessions): Promise<void>;
 }
 
-function isSavedSession(value: unknown): value is SavedSession {
+function isSessionTitles(value: unknown): value is SessionTitles {
+  return (
+    isJsonObject(value) &&
+    TITLE_SOURCES.every(
+      (source) => value[source] === null || typeof value[source] === 'string',
+    )
+  );
+}
+
+function isStoredSession(value: unknown): value is StoredSession {
   return (
     isJsonObject(value) &&
     typeof value.hostSessionId === 'string' &&
     typeof value.projectDir === 'string' &&
     typeof value.profile === 'string' &&
     typeof value.sent === 'boolean' &&
-    typeof value.busy === 'boolean'
+    typeof value.busy === 'boolean' &&
+    (value.titles === undefined || isSessionTitles(value.titles))
   );
 }
 
@@ -52,15 +76,21 @@ function parseSavedSessions(text: string): SavedSessions {
   if (!isJsonObject(parsed)) {
     throw unreadable;
   }
+  const { sessions, selectedHostSessionId } = parsed;
   const hasSessions =
-    Array.isArray(parsed.sessions) && parsed.sessions.every(isSavedSession);
+    Array.isArray(sessions) && sessions.every(isStoredSession);
   const hasSelected =
-    parsed.selectedHostSessionId === null ||
-    typeof parsed.selectedHostSessionId === 'string';
+    selectedHostSessionId === null || typeof selectedHostSessionId === 'string';
   if (!hasSessions || !hasSelected) {
     throw unreadable;
   }
-  return parsed as unknown as SavedSessions;
+  return {
+    sessions: (sessions as StoredSession[]).map((stored) => ({
+      ...stored,
+      titles: stored.titles ?? NO_TITLES,
+    })),
+    selectedHostSessionId,
+  };
 }
 
 // The sessions chat has open, in `open-sessions.json` in chat's data folder.

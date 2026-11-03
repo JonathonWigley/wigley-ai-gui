@@ -47,10 +47,13 @@ export interface PastSessionRow {
   archived: boolean;
 }
 
+// `title` is the saved session's title, which the new row takes as its
+// first-message title.
 export interface ResumeRequest {
   projectDir: string;
   profile: string;
   hostSessionId: string;
+  title: string;
 }
 
 // A message sent while its session's turn ran, held by chat main until the

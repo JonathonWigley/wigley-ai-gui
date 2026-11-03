@@ -45,6 +45,10 @@ type ChatApi = MainApi<
 // home.
 const DRIVE_PROJECT_FOLDER = path.join('dev', 'drive-project');
 
+// Every session chat starts carries it, so the agent names the session's row.
+const SESSION_TITLE_INSTRUCTION =
+  "This session shows as a row in the Auri app's side bar. At the end of your first turn, call the set_session_title tool with a short, specific title naming this session's work, and call it again only when the work's focus clearly changes.";
+
 const DEFAULT_PERMISSION_TOOL = 'Bash';
 const DEFAULT_PERMISSION_INPUT = { command: 'ls' };
 
@@ -162,7 +166,8 @@ export function addDriveActions(
 }
 
 // Starts, resumes and runs the Claude Code sessions the page asks for, keeps
-// the open ones saved and restores them resting on start, lists and archives
+// the open ones saved with their titles and restores them resting on start,
+// asks every session it starts to name its row, lists and archives
 // the saved ones, answers their permission prompts through the
 // `permission_prompt` tool, keeps the recent project folders and serves them
 // merged with the harness's, signs profiles in and out (cancelling a running
@@ -313,6 +318,11 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     api.events.on('sessions.selected', ({ sessionId }) =>
       chat.selected(sessionId),
     );
+    api.events.on('sessions.titleChanged', ({ sessionId }) =>
+      chat.titleChanged(sessionId),
+    );
+    // The registration lives and dies with the part.
+    chat.addInstructions(SESSION_TITLE_INSTRUCTION);
     sessions.contributeTools(PERMISSION_TOOLS, (session) =>
       chat.permissionToolSession(session),
     );

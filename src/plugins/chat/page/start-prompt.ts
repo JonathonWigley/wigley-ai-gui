@@ -372,6 +372,7 @@ function resumeSession(step: SessionStep, row: PastSessionRow) {
       projectDir,
       profile: profile.name,
       hostSessionId: row.hostSessionId,
+      title: row.title,
     })
     .then(
       (sessionId) => deps.reveal(sessionId),

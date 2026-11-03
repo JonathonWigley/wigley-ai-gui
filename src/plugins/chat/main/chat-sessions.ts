@@ -15,13 +15,15 @@ import type { Log } from '../../../contracts/log';
 import type { MainChannel, PluginEvents } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { refusalOf } from '../image-rules';
-import type {
-  AgentSession,
-  OpenOptions,
-  OwnedSession,
-  SessionsMainExports,
-  ToolResult,
-  ToolSession,
+import {
+  type AgentSession,
+  type OpenOptions,
+  type OwnedSession,
+  type SessionsMainExports,
+  type SessionTitles,
+  TITLE_SOURCES,
+  type ToolResult,
+  type ToolSession,
 } from '../../sessions/contract';
 import {
   CHAT_HARNESS_ID,
@@ -38,10 +40,11 @@ import {
 } from '../contract';
 import type { ArchivedSessions } from './archived-sessions';
 import { requireChatHarness, requireProfile } from './lookups';
-import type {
-  OpenSessions,
-  SavedSession,
-  SavedSessions,
+import {
+  NO_TITLES,
+  type OpenSessions,
+  type SavedSession,
+  type SavedSessions,
 } from './open-sessions';
 import {
   CANCELLED_REASON,
@@ -59,7 +62,7 @@ export interface ChatSessionsDeps {
   harnesses: readonly AgentHarness[];
   sessions: Pick<
     SessionsMainExports,
-    'open' | 'mark' | 'activate' | 'selectedSessionId'
+    'open' | 'mark' | 'activate' | 'selectedSessionId' | 'setTitle' | 'titles'
   >;
   // Read at each session start.
   profiles(): readonly ChatProfile[];
@@ -83,14 +86,17 @@ export interface ChatSessions {
   // message; returns the row's sessionId. Throws before opening anything on
   // an image chat would refuse to attach.
   launch(request: LaunchRequest): string;
-  // Opens a resting row for each saved session in order, unselected, skipping
-  // one already open in the app, then activates the saved selection. Saving
-  // starts here: nothing is saved before it runs.
+  // Opens a resting row for each saved session in order, unselected, with its
+  // saved titles, skipping one already open in the app, then activates the
+  // saved selection. Saving starts here: nothing is saved before it runs.
   restore(saved: SavedSessions): void;
   // Reads a restored session's earlier conversation once and puts it before
   // the entries held so far; does nothing for a session with none pending,
   // and reads nothing while its profile is missing, leaving it pending.
   loadHistory(sessionId: string): Promise<void>;
+  // The sessions plugin's `titleChanged` event: a row chat holds is saved with
+  // its new titles; any other row is left alone.
+  titleChanged(sessionId: string): void;
   // The sessions plugin's `selected` event: a row chat holds becomes the
   // saved selection; any other row, or none, leaves it as it was.
   selected(sessionId: string | null): void;
@@ -101,7 +107,8 @@ export interface ChatSessions {
   pastSessions(projectDir: string, profile: string): Promise<PastSessionRow[]>;
   setArchived(hostSessionId: string, archived: boolean): Promise<void>;
   // Opens a row for a saved session, its earlier conversation as the first
-  // entries, and resumes its process; resolves to the row's sessionId. A
+  // entries and the request's title as its first-message title, and resumes
+  // its process; resolves to the row's sessionId. A
   // session chat holds a row for has that row activated instead; one open in
   // the app on any other row rejects, as does any after `killAll`.
   resume(request: ResumeRequest): Promise<string>;
@@ -112,7 +119,8 @@ export interface ChatSessions {
   // starts no process and the message is dropped. While the harness reports
   // its turn running the message is queued instead, and each `idle` the
   // harness reports writes the oldest queued message until none is left; a
-  // permission call left waiting after the turn ended queues nothing.
+  // permission call left waiting after the turn ended queues nothing. The
+  // first message written in a row with no first-message title sets it.
   send(sessionId: string, message: UserMessage): Promise<void>;
   // Adds an app notice to the session's entries and sends it as harness
   // entries travel, so `sessions()` keeps it.
@@ -312,14 +320,26 @@ function shownActivity(held: HeldSession): ProcessActivity {
   return held.pending.size > 0 ? 'waiting' : held.harnessActivity;
 }
 
-function savedSessionOf(session: HeldSession): SavedSession {
+function savedSessionOf(
+  session: HeldSession,
+  titles: SessionTitles,
+): SavedSession {
   return {
     hostSessionId: session.hostId,
     projectDir: session.state.projectDir,
     profile: session.state.profile,
     sent: session.sent,
     busy: session.state.activity !== 'idle',
+    titles,
   };
+}
+
+// The first-message title held for a message: a pasted wall of text stays out
+// of every state, and the row cuts it further.
+const FIRST_MESSAGE_TITLE_CAP = 200;
+
+function firstMessageTitleOf(text: string): string {
+  return [...text].slice(0, FIRST_MESSAGE_TITLE_CAP).join('');
 }
 
 // Chat's owned sessions: each one's agent process while it runs, its chat
@@ -346,7 +366,12 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   const instructionRegistrations = new Set<{ text: string }>();
 
   function snapshot(): SavedSessions {
-    const records = [...held.values()].map(savedSessionOf);
+    const records = [...held.values()].map((session) =>
+      savedSessionOf(
+        session,
+        sessions.titles(session.state.sessionId) ?? NO_TITLES,
+      ),
+    );
     const selectionHeld = records.some(
       (record) => record.hostSessionId === selectedHostId,
     );
@@ -672,9 +697,10 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     return profile.configDir;
   }
 
-  // Opens the row for `opening.hostId` as `options` says and holds its state,
-  // resting, with `entries`. `profileDir` is null when the profile is not in
-  // chat's profiles setting; such a row emits no `sessionOpened`.
+  // Opens the row for `opening.hostId` as `options` says, gives it each title
+  // `opening.titles` holds, and holds its state, resting, with `entries`.
+  // `profileDir` is null when the profile is not in chat's profiles setting;
+  // such a row emits no `sessionOpened`.
   function openRow(
     projectDir: string,
     profileName: string,
@@ -684,6 +710,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       entries: ChatEntry[];
       sent: boolean;
       historyPending: boolean;
+      titles: SessionTitles;
     },
     options: OpenOptions,
   ): HeldSession {
@@ -698,6 +725,12 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       options,
     );
     const sessionId = owned.session.id;
+    for (const source of TITLE_SOURCES) {
+      const title = opening.titles[source];
+      if (title !== null) {
+        sessions.setTitle(sessionId, source, title);
+      }
+    }
     const session: HeldSession = {
       state: {
         sessionId,
@@ -790,7 +823,12 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     harness: AgentHarness,
     profile: ChatProfile,
     projectDir: string,
-    opening: { hostId: string; resume: boolean; entries: ChatEntry[] },
+    opening: {
+      hostId: string;
+      resume: boolean;
+      entries: ChatEntry[];
+      titles: SessionTitles;
+    },
     options: OpenOptions,
   ): HeldSession {
     if (isKilled) {
@@ -807,6 +845,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         entries: opening.entries,
         sent: opening.resume,
         historyPending: false,
+        titles: opening.titles,
       },
       options,
     );
@@ -829,7 +868,12 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       harness,
       profile,
       request.projectDir,
-      { hostId: deps.randomUuid(), resume: false, entries: [] },
+      {
+        hostId: deps.randomUuid(),
+        resume: false,
+        entries: [],
+        titles: NO_TITLES,
+      },
       options,
     );
   }
@@ -885,8 +929,25 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     session.process?.send(message);
     if (!session.sent) {
       session.sent = true;
+      setFirstMessageTitle(session, message.text);
       save();
     }
+  }
+
+  // A row whose first-message title is already set, such as a cleared one,
+  // keeps it; an images-only message, or a row sessions no longer holds, sets
+  // none.
+  function setFirstMessageTitle(session: HeldSession, text: string) {
+    const { sessionId } = session.state;
+    const titles = sessions.titles(sessionId);
+    const isRowGone = titles === null;
+    const hasFirstMessageTitle =
+      titles !== null && titles.firstMessage !== null;
+    const isImagesOnly = text === '';
+    if (isRowGone || hasFirstMessageTitle || isImagesOnly) {
+      return;
+    }
+    sessions.setTitle(sessionId, 'firstMessage', firstMessageTitleOf(text));
   }
 
   function launch(request: LaunchRequest): string {
@@ -940,6 +1001,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           entries: [],
           sent: record.sent,
           historyPending: record.sent,
+          titles: record.titles,
         },
         { select: false },
       );
@@ -1110,7 +1172,15 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       harness,
       profile,
       projectDir,
-      { hostId: hostSessionId, resume: true, entries },
+      {
+        hostId: hostSessionId,
+        resume: true,
+        entries,
+        titles: {
+          ...NO_TITLES,
+          firstMessage: firstMessageTitleOf(request.title),
+        },
+      },
       { select: true },
     ).state.sessionId;
   }
@@ -1227,6 +1297,11 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     launch,
     restore,
     loadHistory,
+    titleChanged(sessionId) {
+      if (held.has(sessionId)) {
+        save();
+      }
+    },
     selected(sessionId) {
       const session = sessionId === null ? undefined : held.get(sessionId);
       if (session === undefined) {
