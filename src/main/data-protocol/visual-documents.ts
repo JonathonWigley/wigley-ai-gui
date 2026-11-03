@@ -9,9 +9,12 @@ const VISUAL_CSP =
 
 // Runs in the frame before the visual's own scripts: keeps the root hidden
 // until the page's first theme message and applies each one, reports the
-// root's height on each change, and reports Esc without stopping it. The root
-// hides vertical overflow: a scrollbar narrows a width-scaled visual, and the
-// frame then holds it at that narrowed height with the scrollbar showing.
+// height the frame needs on each change of the root's size or the frame's,
+// and reports Esc without stopping it. The root hides vertical overflow: a
+// scrollbar narrows a width-scaled visual, and the frame then holds it at
+// that narrowed height with the scrollbar showing. A visual wider than the
+// frame scrolls sideways, so the height adds the horizontal scrollbar's
+// thickness, `innerHeight` less the root's `clientHeight`, 0 without one.
 const BOOTSTRAP_SCRIPT = `(() => {
   const messages = ${JSON.stringify(VISUAL_MESSAGES)};
   const root = document.documentElement;
@@ -30,13 +33,16 @@ const BOOTSTRAP_SCRIPT = `(() => {
     root.style.visibility = '';
   });
   let reported = -1;
-  new ResizeObserver(() => {
-    const height = Math.ceil(root.getBoundingClientRect().height);
+  const reportHeight = () => {
+    const scrollbar = window.innerHeight - root.clientHeight;
+    const height = Math.ceil(root.getBoundingClientRect().height) + scrollbar;
     if (height !== reported) {
       reported = height;
       window.parent.postMessage({ type: messages.height, height }, '*');
     }
-  }).observe(root);
+  };
+  new ResizeObserver(reportHeight).observe(root);
+  window.addEventListener('resize', reportHeight);
   window.addEventListener(
     'keydown',
     (event) => {

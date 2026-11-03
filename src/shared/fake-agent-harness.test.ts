@@ -451,6 +451,11 @@ describe('createFakeAgentHarness', () => {
       call: (agent: AgentProcess) => agent.kill(),
       lastEntry: streamingVisualEntry,
     },
+    {
+      case: 'send',
+      call: (agent: AgentProcess) => agent.send({ text: 'hi', images: [] }),
+      lastEntry: { kind: 'result', id: 'result-2' },
+    },
   ])(
     'visualHold_CutShort_ClearsTheTimer ($case)',
     async ({ call, lastEntry }) => {

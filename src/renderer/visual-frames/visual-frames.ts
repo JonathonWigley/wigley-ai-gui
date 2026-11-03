@@ -10,12 +10,12 @@ import { visualHashOf } from '../../shared/visual-url';
 import './visual-frames.css';
 
 // `serveVisual` is the Bridge's; `messages` is the page's window, where each
-// frame's messages arrive; `focusPage` moves keyboard focus to the page's own
-// document; `log` is the page log.
+// frame's messages arrive; `focusPage` moves keyboard focus out of a frame
+// whose visual reported Esc, to the page's own document; `log` is the page log.
 export interface VisualFramesDeps {
   serveVisual(source: string): Promise<string>;
   messages: Pick<Window, 'addEventListener' | 'removeEventListener'>;
-  focusPage(): void;
+  focusPage(from: HTMLIFrameElement): void;
   log: Log;
 }
 
@@ -124,10 +124,30 @@ function takeMessage(
       iframe.style.setProperty('--visual-frame-height', String(height));
     }
   } else if (data.type === VISUAL_MESSAGES.escape) {
-    // `blur` alone may leave focus in the frame: browsers may ignore it.
-    iframe.blur();
-    deps.focusPage();
+    deps.focusPage(iframe);
   }
+}
+
+// Moves keyboard focus out of `frame` to the page: to the nearest ancestor
+// holding a `tabindex` that takes it, else to the body. A frame whose document
+// holds focus stays the page's active element through its own `blur`.
+export function focusOutOfFrame(frame: HTMLIFrameElement) {
+  for (
+    let node = frame.parentElement;
+    node !== null;
+    node = node.parentElement
+  ) {
+    if (node.hasAttribute('tabindex')) {
+      node.focus({ preventScroll: true });
+      if (document.activeElement === node) {
+        return;
+      }
+    }
+  }
+  const { body } = document;
+  body.tabIndex = -1;
+  body.focus({ preventScroll: true });
+  body.removeAttribute('tabindex');
 }
 
 // The source main did not serve, as the code block it was.

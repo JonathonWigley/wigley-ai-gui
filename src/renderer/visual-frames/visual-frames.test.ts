@@ -3,11 +3,10 @@ import type { VisualFrame } from '../../contracts/visual-frames';
 import {
   asFake,
   type FakeElement,
-  type FocusFakeDocument,
-  installFocusFakeDom,
+  installFakeDom,
 } from '../../shared/page/test-dom';
 import type { VisualTheme } from '../../shared/visual-messages';
-import { createVisualFrames } from './visual-frames';
+import { createVisualFrames, focusOutOfFrame } from './visual-frames';
 
 function deferred<T>() {
   let resolve: (value: T) => void = () => undefined;
@@ -82,10 +81,8 @@ const B: VisualTheme = {
 };
 
 describe('createVisualFrames', () => {
-  let doc: FocusFakeDocument;
-
   beforeEach(() => {
-    doc = installFocusFakeDom(vi.stubGlobal);
+    installFakeDom(vi.stubGlobal);
   });
 
   afterEach(() => {
@@ -194,78 +191,77 @@ describe('createVisualFrames', () => {
         from: 'own',
         data: height,
         height: '240',
-        blurred: false,
+        leaves: false,
       },
       {
         case: 'height from another frame',
         from: 'other',
         data: height,
         height: undefined,
-        blurred: false,
+        leaves: false,
       },
       {
         case: 'height from a null source to a detached frame',
         from: 'null',
         data: height,
         height: undefined,
-        blurred: false,
+        leaves: false,
       },
       {
         case: 'negative height',
         from: 'own',
         data: { type: 'wigley-visual:height', height: -1 },
         height: undefined,
-        blurred: false,
+        leaves: false,
       },
       {
         case: 'height as text',
         from: 'own',
         data: { type: 'wigley-visual:height', height: '240' },
         height: undefined,
-        blurred: false,
+        leaves: false,
       },
       {
         case: 'infinite height',
         from: 'own',
         data: { type: 'wigley-visual:height', height: Infinity },
         height: undefined,
-        blurred: false,
+        leaves: false,
       },
       {
         case: 'Esc from its frame',
         from: 'own',
         data: escape,
         height: undefined,
-        blurred: true,
+        leaves: true,
       },
       {
         case: 'Esc from another frame',
         from: 'other',
         data: escape,
         height: undefined,
-        blurred: false,
+        leaves: false,
       },
       {
         case: 'Esc from a null source to a detached frame',
         from: 'null',
         data: escape,
         height: undefined,
-        blurred: false,
+        leaves: false,
       },
       {
         case: 'not an object',
         from: 'own',
         data: 'wigley-visual:escape',
         height: undefined,
-        blurred: false,
+        leaves: false,
       },
-    ] as const)('$case', ({ from, data, height, blurred }) => {
+    ] as const)('$case', ({ from, data, height, leaves }) => {
       const { frames, focusPage, send } = setup();
       const frame = frames.open('<p>a</p>');
       const iframe = iframeOf(frame);
       const own = frameWindow();
       setContentWindow(iframe, own);
-      (iframe as unknown as { focus(): void }).focus();
 
       if (from === 'null') {
         setContentWindow(iframe, null);
@@ -274,8 +270,7 @@ describe('createVisualFrames', () => {
       send(source, data);
 
       expect(iframe.style['--visual-frame-height']).toBe(height);
-      expect(doc.activeElement !== iframe).toBe(blurred);
-      expect(focusPage).toHaveBeenCalledTimes(blurred ? 1 : 0);
+      expect(focusPage.mock.calls).toEqual(leaves ? [[iframe]] : []);
     });
   });
 
@@ -300,5 +295,101 @@ describe('createVisualFrames', () => {
 
     expect(() => frame.dispose()).not.toThrow();
     expect(listeners).toEqual([]);
+  });
+});
+
+// An element as focus sees it: it takes focus only while it holds a
+// `tabindex`, as a browser's `div` and `body` do, unless `refuses` is set, as
+// for a hidden one.
+interface FocusNode {
+  name: string;
+  parentElement: FocusNode | null;
+  attributes: Set<string>;
+  tabIndex: number;
+  hasAttribute(name: string): boolean;
+  removeAttribute(name: string): void;
+  focus(): void;
+}
+
+function focusNode(
+  focus: { activeElement: FocusNode | null },
+  name: string,
+  parent: FocusNode | null,
+  { tabindex = false, refuses = false } = {},
+): FocusNode {
+  const node: FocusNode = {
+    name,
+    parentElement: parent,
+    attributes: new Set(tabindex ? ['tabindex'] : []),
+    set tabIndex(_value: number) {
+      node.attributes.add('tabindex');
+    },
+    get tabIndex() {
+      return -1;
+    },
+    hasAttribute: (attribute) => node.attributes.has(attribute),
+    removeAttribute: (attribute) => {
+      node.attributes.delete(attribute);
+    },
+    focus() {
+      if (!refuses && node.attributes.has('tabindex')) {
+        focus.activeElement = node;
+      }
+    },
+  };
+  return node;
+}
+
+describe('focusOutOfFrame', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  // Each row is the frame's ancestors from the body inward, with the ancestor
+  // focus lands on.
+  it.each([
+    {
+      case: 'nearest ancestor holding a tabindex',
+      ancestors: [
+        { name: 'pane', tabindex: true },
+        { name: 'list', tabindex: true },
+        { name: 'entry' },
+      ],
+      focused: 'list',
+    },
+    {
+      case: 'next one up when the nearest refuses focus',
+      ancestors: [
+        { name: 'pane', tabindex: true },
+        { name: 'list', tabindex: true, refuses: true },
+        { name: 'entry' },
+      ],
+      focused: 'pane',
+    },
+    {
+      case: 'body when no ancestor holds a tabindex',
+      ancestors: [{ name: 'pane' }, { name: 'entry' }],
+      focused: 'body',
+    },
+  ])('moves focus off the frame to the $case', ({ ancestors, focused }) => {
+    const focus: { activeElement: FocusNode | null } = { activeElement: null };
+    const body = focusNode(focus, 'body', null);
+    let parent = body;
+    for (const { name, ...options } of ancestors) {
+      parent = focusNode(focus, name, parent, options);
+    }
+    const iframe = focusNode(focus, 'iframe', parent, { tabindex: true });
+    iframe.focus();
+    vi.stubGlobal('document', {
+      body,
+      get activeElement() {
+        return focus.activeElement;
+      },
+    });
+
+    focusOutOfFrame(iframe as unknown as HTMLIFrameElement);
+
+    expect(focus.activeElement?.name).toBe(focused);
+    expect(body.hasAttribute('tabindex')).toBe(false);
   });
 });

@@ -214,6 +214,18 @@ const VISUAL_STEPS: SelfTestStep[] = [
     screenshot: 'visuals',
     why: "The mockup's block closes while the reply streams, and the flowchart's closes with the final entry after the fake's hold; both frames load before the screenshot.",
   },
+  { keys: ['Escape'], expect: '[chat] left the box' },
+  {
+    keys: ['k'],
+    expect: '[chat] focused assistant entry',
+    why: 'The reply holding both visuals sits above the result.',
+  },
+  { keys: ['v'], expect: '[visual] visual overlay showing 1 of 2' },
+  { keys: ['l'], expect: '[visual] visual overlay showing 2 of 2' },
+  { keys: ['l'], expect: '[visual] no next visual' },
+  { keys: ['h'], expect: '[visual] visual overlay showing 1 of 2' },
+  { keys: ['h'], expect: '[visual] no previous visual' },
+  { keys: ['Escape'], expect: '[visual] visual overlay closed' },
   { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
 ];
 
@@ -557,7 +569,7 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'visuals',
-    why: "fake: visual draws the settings mockup and the flowchart in chat-second's transcript as live visuals, the second block first showing as the drawing card while the fake holds it open.",
+    why: "fake: visual draws the settings mockup and the flowchart in chat-second's transcript as live visuals, the second block first showing as the drawing card while the fake holds it open; v on the reply opens the overlay on its first visual, l and h step through both and stop at either end, and Esc closes it.",
     steps: VISUAL_STEPS,
   },
   {

@@ -48,7 +48,8 @@ export const FAKE_HOLD_TEXT = 'fake: hold';
 export const FAKE_TOOL_TEXT = 'fake: tool';
 // A send of this text streams a reply holding two visuals, holds it with the
 // second block still open for `FAKE_VISUAL_HOLD_MS`, then sends the whole
-// reply; an interrupt during the hold ends the turn as a held turn's does.
+// reply; an interrupt during the hold ends the turn as a held turn's does,
+// and a send, end or kill during it drops the rest of the reply.
 export const FAKE_VISUAL_TEXT = 'fake: visual';
 export const FAKE_VISUAL_HOLD_MS = 1500;
 // A send of this text runs six finished tools, one failed, and a thought, then
@@ -1086,6 +1087,7 @@ export function createFakeAgentHarness(
         const { text, images } = message;
         calls.push({ method: 'send', text, imageCount: images.length });
         requireRunning();
+        clearVisualHold();
         turn += 1;
         const sentTurn = turn;
         // The user entry and its events; `startsTurn` is false for a send
