@@ -739,7 +739,8 @@ function reportUserChanges(changed: (text: string) => void) {
 // `options.completions` is given, after vim so CodeMirror's keymap stays
 // behind vim; lines wrap, and paths draw as file chips. `leaving` runs on
 // blur before the editor reports it, so a box the user leaves drops its
-// unfinished keys before any other box reports. Its popups draw on the page body, past any scroll box it sits in.
+// unfinished keys before any other box reports. Its popups draw on the page
+// body, past any scroll box it sits in.
 function boxExtensions(
   events: EditorEvents,
   options: EditorOptions | undefined,

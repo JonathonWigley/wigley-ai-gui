@@ -160,10 +160,11 @@ export interface SourceRead extends IndexLoad {
 }
 
 // The docs main part's exports, each running the same code as the channel
-// method of its name, except `addSource`, which has none, and `watchDoc`,
-// which takes a callback. `addSource` throws on an id already registered; while
-// the source is registered, the entries it last loaded allow changes to their
-// docs. None of them emits `indexLoaded`.
+// method of its name, except `addSource`, which has none, `machineIndex` and
+// `rebuildMachineIndex`, which run `loadIndex` and `rebuildIndex` on the
+// machine source, and `watchDoc`, which takes a callback. `addSource` throws
+// on an id already registered; while the source is registered, the entries it
+// last loaded allow changes to their docs. None of them emits `indexLoaded`.
 export interface DocsMainExports {
   addSource(source: IndexSource): Disposable;
   // The machine index source's load, as Docs mode reads it.

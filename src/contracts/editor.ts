@@ -37,7 +37,8 @@ export interface TextEditor {
   // `changed`.
   insert(text: string): void;
   // The character just before the point `insert` puts text at (in normal
-  // mode, the character under the cursor); '' at the start of the text.
+  // mode, the character under the cursor, or the last character of the chip
+  // under it); '' at the start of the text.
   charBeforeCursor(): string;
   focus(options?: FocusOptions): void;
   blur(): void;
