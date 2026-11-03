@@ -1,4 +1,4 @@
-import type { Files } from '../../contracts/files';
+import type { Files, FileWatch } from '../../contracts/files';
 import type { LayoutEntry, LayoutSet } from '../../contracts/layouts';
 import type { Log } from '../../contracts/log';
 import { errorText } from '../error-text';
@@ -10,7 +10,8 @@ import { errorText } from '../error-text';
 // deleting a layout's whole folder. `default` is live while the owner's
 // default folder holds `layout.js`, and built in otherwise; a save of its
 // `layout.js` or `layout.css` sends the set naming `default`. A watch failure
-// is logged, and saves then go unseen until the next start.
+// is logged, and saves then go unseen until the next start; a default watch
+// that fails to start leaves the user layouts listed and watched.
 export interface LayoutRegistry {
   current(): LayoutSet;
   names(): string[];
@@ -115,7 +116,7 @@ export async function startLayoutRegistry(
       defaultSkipLogged = true;
       log(
         logSource,
-        `layouts/${logSource}/default is ignored; the built-in default layout wins`,
+        `layouts/${logSource}/default is ignored; the app's default layout wins`,
       );
     }
     return userNames
@@ -237,34 +238,33 @@ export async function startLayoutRegistry(
       log(logSource, `layouts watch failed: ${errorText(error)}`),
   });
 
+  const logDefaultWatchFailed = (error: unknown) =>
+    log(logSource, `default layout watch failed: ${errorText(error)}`);
+
   // Not recursive: a change in a subfolder reports the subfolder's name, which
   // is neither file a default loads.
+  const watchDefault = (watched: Files): FileWatch | null => {
+    try {
+      return watched.watch(
+        ROOT,
+        (changed) => {
+          if (changed !== DEFAULT_CODE && changed !== DEFAULT_STYLE) {
+            return;
+          }
+          serially(() => relistDefault(watched)).catch((error: unknown) =>
+            log(logSource, `layout default not reloaded: ${errorText(error)}`),
+          );
+        },
+        { recursive: false, onError: logDefaultWatchFailed },
+      );
+    } catch (error) {
+      logDefaultWatchFailed(error);
+      return null;
+    }
+  };
+
   const defaultWatch =
-    watchedDefault === null
-      ? null
-      : watchedDefault.watch(
-          ROOT,
-          (changed) => {
-            if (changed !== DEFAULT_CODE && changed !== DEFAULT_STYLE) {
-              return;
-            }
-            serially(() => relistDefault(watchedDefault)).catch(
-              (error: unknown) =>
-                log(
-                  logSource,
-                  `layout default not reloaded: ${errorText(error)}`,
-                ),
-            );
-          },
-          {
-            recursive: false,
-            onError: (error) =>
-              log(
-                logSource,
-                `default layout watch failed: ${errorText(error)}`,
-              ),
-          },
-        );
+    watchedDefault === null ? null : watchDefault(watchedDefault);
 
   return {
     current: () => setOf(null),

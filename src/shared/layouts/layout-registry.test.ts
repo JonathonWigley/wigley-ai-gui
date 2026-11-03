@@ -63,8 +63,12 @@ function defaultIn(set: LayoutSet): LayoutEntry | undefined {
   return entryIn(set, 'default');
 }
 
-// `files` whose watch hands its options' `onError` to `fail`.
-function withFailingWatch(inner: Files): {
+// `files` whose watch hands its options' `onError` to `fail`, or throws
+// `startError` from `watch` when one is given.
+function withFailingWatch(
+  inner: Files,
+  startError?: Error,
+): {
   folder: Files;
   fail(error: unknown): void;
 } {
@@ -73,6 +77,9 @@ function withFailingWatch(inner: Files): {
     folder: {
       ...inner,
       watch: (folder, onChange, options) => {
+        if (startError !== undefined) {
+          throw startError;
+        }
         onWatchError = options?.onError;
         return inner.watch(folder, onChange);
       },
@@ -340,21 +347,36 @@ describe('watch', () => {
   );
 
   it.each([
-    { watch: 'layouts', line: /^\[demo\] layouts watch.*EMFILE/ },
-    { watch: 'default', line: /^\[demo\] default layout watch.*EMFILE/ },
-  ])('watch_Fails_LogsIt ($watch)', async ({ watch, line }) => {
+    {
+      watch: 'layouts',
+      when: 'running',
+      line: /^\[demo\] layouts watch.*EMFILE/,
+    },
+    {
+      watch: 'default',
+      when: 'running',
+      line: /^\[demo\] default layout watch.*EMFILE/,
+    },
+    {
+      watch: 'default',
+      when: 'starting',
+      line: /^\[demo\] default layout watch.*ENOENT/,
+    },
+  ])('watch_Fails_LogsIt ($watch, $when)', async ({ watch, when, line }) => {
     await writeDefaultFiles('layout.js');
+    await writeLayouts('alpha');
     const failing = withFailingWatch(
       watch === 'layouts' ? files : defaultFolder,
+      when === 'starting' ? new Error('ENOENT') : undefined,
     );
-    if (watch === 'layouts') {
-      await start(failing.folder, LAYOUT_TYPES, defaultFolder);
-    } else {
-      await start(files, LAYOUT_TYPES, failing.folder);
-    }
+    const registry =
+      watch === 'layouts'
+        ? await start(failing.folder, LAYOUT_TYPES, defaultFolder)
+        : await start(files, LAYOUT_TYPES, failing.folder);
 
     failing.fail(new Error('EMFILE'));
 
+    expect(registry.names()).toEqual(['default', 'alpha']);
     expect(logLines).toContainEqual(expect.stringMatching(line));
   });
 
@@ -409,6 +431,22 @@ describe('watch', () => {
       expect(sent[0].changed).toBe('alpha');
     },
   );
+
+  it('watch_DefaultLayoutJsWrittenLater_SendsTheLiveDefault', async () => {
+    await writeDefaultFiles('layout.test.ts');
+    await startWithDefault();
+
+    await writeDefaultFiles('layout.js');
+
+    await vi.waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0].changed).toBe('default');
+    expect(defaultIn(sent[0])).toEqual({
+      name: 'default',
+      revision: 2,
+      hasCss: false,
+      builtIn: false,
+    });
+  });
 
   it('watch_DefaultLayoutJsRemovedThenWritten_BuiltInThenHigherRevision', async () => {
     await writeDefaultFiles('layout.js');
