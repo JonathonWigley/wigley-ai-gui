@@ -11,6 +11,7 @@ export const BRIDGE_CHANNELS = {
   pluginInvoke: 'plugin:invoke',
   pluginMessage: 'plugin:message',
   savePasted: 'bridge:save-pasted',
+  serveVisual: 'bridge:serve-visual',
   uiStateRead: 'bridge:ui-state-read',
   uiStateWrite: 'bridge:ui-state-write',
 } as const;
@@ -28,6 +29,9 @@ export interface Bridge {
   // Calls `listener` with each owner's set main sends: its first once its
   // registry has listed, then one after each change in a layout's folder.
   onLayouts(listener: (owner: LayoutOwner, set: LayoutSet) => void): void;
+  // Keeps a visual's source in main and resolves the `wigley-visual:` URL that
+  // serves it; the same source always gets the same URL.
+  serveVisual(source: string): Promise<string>;
   // Every saved ui-state key, qualified by its plugin id (`forms.rail`), and
   // its value.
   uiState(): Promise<Record<string, unknown>>;

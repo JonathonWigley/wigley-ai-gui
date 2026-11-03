@@ -5,6 +5,8 @@ import { pathToFileURL } from 'node:url';
 import type { Paths } from '../../contracts/paths';
 import { DATA_SCHEME, dataFilePath } from '../../shared/data-url';
 import { LAYOUT_SCHEME, layoutFilePath } from '../../shared/layout-url';
+import { VISUAL_SCHEME } from '../../shared/visual-url';
+import { createVisualDocuments } from './visual-documents';
 
 const CONTENT_TYPES: Record<string, string> = {
   '.js': 'text/javascript',
@@ -33,15 +35,28 @@ const FILE_SCHEME_PRIVILEGES = {
   corsEnabled: true,
 };
 
-// Registers `wigley-data:` and `wigley-layout:`. Electron takes scheme
-// privileges once, before the app is ready, so both go in this one call.
-export function registerFileSchemes(): void {
-  protocol.registerSchemesAsPrivileged(
-    [DATA_SCHEME, LAYOUT_SCHEME].map((scheme) => ({
+// The privileges `wigley-visual:` takes. `standard`: the URL parses with a
+// host and a path, and a relative URL (`#anchor`) inside a visual resolves.
+// `secure`: the frame is a secure context, so Chromium's mixed-content check
+// does not block it inside the page. No `supportFetchAPI` or `corsEnabled`:
+// nothing fetches a visual, the page only frames it. No `bypassCSP`: the
+// frame's own CSP header must hold.
+const VISUAL_SCHEME_PRIVILEGES = {
+  standard: true,
+  secure: true,
+};
+
+// Registers `wigley-data:`, `wigley-layout:` and `wigley-visual:`. Electron
+// takes scheme privileges once, before the app is ready, so all three go in
+// this one call.
+export function registerAppSchemes(): void {
+  protocol.registerSchemesAsPrivileged([
+    ...[DATA_SCHEME, LAYOUT_SCHEME].map((scheme) => ({
       scheme,
       privileges: FILE_SCHEME_PRIVILEGES,
     })),
-  );
+    { scheme: VISUAL_SCHEME, privileges: VISUAL_SCHEME_PRIVILEGES },
+  ]);
 }
 
 // Serves each plugin's data folder under `dataRoot`, joined by `paths`, on
@@ -57,6 +72,15 @@ export function serveDataScheme(dataRoot: string, paths: Paths): void {
 // file, answers 404.
 export function serveLayoutScheme(layoutsRoot: string, paths: Paths): void {
   serveFiles(LAYOUT_SCHEME, (url) => layoutFilePath(url, layoutsRoot, paths));
+}
+
+// Serves each visual's document on the default session, kept in memory by
+// source hash for the app's life, and returns the call that hands one over
+// and resolves its URL. A URL it does not hold answers 404.
+export function serveVisualScheme(): (source: string) => string {
+  const documents = createVisualDocuments();
+  protocol.handle(VISUAL_SCHEME, (request) => documents.response(request.url));
+  return (source) => documents.serve(source);
 }
 
 // Serves `scheme` on the default session, open to any origin: the file

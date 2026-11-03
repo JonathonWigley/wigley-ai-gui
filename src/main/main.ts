@@ -76,9 +76,10 @@ import {
 } from './config/config-store';
 import { createUserConfig } from './config/user-config';
 import {
-  registerFileSchemes,
+  registerAppSchemes,
   serveDataScheme,
   serveLayoutScheme,
+  serveVisualScheme,
 } from './data-protocol/data-protocol';
 import { type DriveRun, startDriveRun } from './drive/drive-run';
 import { electronDrivenWindow } from './electron-driven-window';
@@ -150,7 +151,7 @@ const appInstance = appInstanceOf(app.isPackaged);
 const driveRunDir =
   runEnvironment.mode === 'drive' ? runEnvironment.runDir : null;
 
-registerFileSchemes();
+registerAppSchemes();
 
 // Read while the app gets ready, and applied before any plugin starts. A
 // terminal start, the self-test and a drive run keep the PATH of the shell
@@ -934,6 +935,10 @@ function startApp() {
       onSelfTestExit('the config store', () => store.dispose());
       serveDataScheme(inputs.dataRoot, paths);
       serveLayoutScheme(layoutsFolder(inputs.homeDir), paths);
+      const serveVisual = serveVisualScheme();
+      ipcMain.handle(BRIDGE_CHANNELS.serveVisual, (_event, source: string) =>
+        serveVisual(source),
+      );
       createWindow(inputs, store, userConfig);
       // After createWindow's quit tasks, so the parts dispose before it.
       onQuit(() => store.dispose());

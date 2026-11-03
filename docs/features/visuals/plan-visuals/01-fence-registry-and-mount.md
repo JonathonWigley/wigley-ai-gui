@@ -1,6 +1,6 @@
 # 01 — Fence registry and markdown mount
 
-Status: not started
+Status: in progress
 Type: Batch
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)

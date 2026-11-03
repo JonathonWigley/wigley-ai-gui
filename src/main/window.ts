@@ -8,6 +8,7 @@ import path from 'node:path';
 import type { Log } from '../contracts/log';
 import type { MainServices } from '../contracts/plugin';
 import type { Settings } from '../contracts/settings';
+import { refusesFrameNavigation } from '../shared/visual-url';
 import type { MainCommands } from './keybindings';
 
 // `title` is the window's title, the name the app shows, held over any title
@@ -16,6 +17,8 @@ import type { MainCommands } from './keybindings';
 // native title bar the platform's way, keeping the OS window buttons. The
 // window stays on the app's page: a navigation the page starts to another URL,
 // such as Chromium opening a file dropped on the window, is refused and logged.
+// A frame inside the page stays on the `wigley-visual:` scheme: a frame
+// navigation off it is refused and logged.
 export function createMainWindow(
   settings: Settings['window'],
   title: string,
@@ -49,6 +52,12 @@ export function createMainWindow(
     if (!isSamePage(event.url, window.webContents.getURL())) {
       event.preventDefault();
       log('main', `navigation refused: ${event.url}`);
+    }
+  });
+  window.webContents.on('will-frame-navigate', (details) => {
+    if (refusesFrameNavigation(details)) {
+      details.preventDefault();
+      log('main', `frame navigation refused: ${details.url}`);
     }
   });
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {

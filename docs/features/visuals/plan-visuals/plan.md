@@ -258,7 +258,7 @@ export function visualHashOf(url: string): string | null;
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: d7578311fe99437ccefe407289916bbcfa049eb8
 
 ### Groups
 ### Contract changes
