@@ -42,8 +42,8 @@ harness and read by the workflow plugin (`docs/features/workflow/design.md`).
   calls it a subagent and never a task).
 - **Roster** — a session's agents and tasks as the agents plugin tracks them from its events: each subagent with its
   type, name, description, start time, model, effort, spend, every tool call (name, summary, outcome) and outcome, and
-  each task with its owning agent, description, command, start time and outcome. A finished item stays, outcome set,
-  until the session's next `userMessage` drops it.
+  each task with its owning agent, description, command, start time and outcome. An item that ends done leaves at
+  once; a failed item stays, outcome set, until the session's next `userMessage` drops it.
 - **Plan step** — one step of the session's task plan, one floor of the tower. Chat's **step** (a tool, thinking or
   raw entry, `agent-chat/design.md` § Vocabulary) is a different thing; the tower always says plan step.
 
@@ -102,8 +102,8 @@ would emit the same events into `chat.agentEvent`'s payload shape.
   `sessionEnded`. Foreground Bash calls of a subagent get a task too (`is_backgrounded: false`) and show the same way.
 - **`agentReplied`** is sent on a subagent's reply and on its launch receipt's `resolvedModel`; on a foreground
   completion receipt it comes before `agentFinished`. The roster takes the reply's model and spend.
-- **Page** draws nothing. It keeps every session's roster, finished items included, and exports `roster(sessionId)`
-  and `onRosterChanged(listener)` to the views that draw it. A message drops a cleared host's finished items.
+- **Page** draws nothing. It keeps every session's roster, failed items included, and exports `roster(sessionId)`
+  and `onRosterChanged(listener)` to the views that draw it. A message drops a cleared host's failed items.
 - **`agent-lines`** (a separate plugin, in `plugins.disabled` by default; its `layout` setting is `agent-lines.layout`)
   adds a row part through sessions' `addRowPart` and draws, under each session row, one `workingLine` while the
   session runs any subagent or task: a running dot and the elapsed time since the earliest running item started. The

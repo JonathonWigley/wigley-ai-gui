@@ -66,8 +66,8 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
   `model · effort · $cost`, the description, and the latest 3 tool calls as mono lines.
 - **A task box:** a terminal icon, the description, the owning agent's name (or `main`) and, while it runs, the
   elapsed time.
-- **Lifetime:** a running box shows a running dot. A finished box stays, dimmed, with a done or failed dot, until the
-  user sends the next message (`userMessage`); the roster then drops every finished item.
+- **Lifetime:** a running box shows a running dot. A box that ends done leaves the strip at once. A failed box stays,
+  dimmed, with a failed dot, until the user sends the next message (`userMessage`); the roster then drops it.
 - **Scrolling:** the strip scrolls sideways; `‹` and `›` buttons at its ends scroll it by one box and hide when there
   is nothing further that way. The trackpad scrolls it too.
 - **Keys:** the strip is a stop in the chat's entry cursor. `j` on the entry cursor's last stop (the newest pending
@@ -147,7 +147,8 @@ Only the Claude adapter knows Claude's shapes, so it alone fills these into agen
   this on 2026-11-02.
 - **The strip joins the entry cursor through a general stop.** Any composer part may offer one, so chat names no
   plugin.
-- **Finished boxes stay until the next message.** A burst of parallel agents finishing does not vanish mid-glance.
+- **Done boxes leave at once; failed boxes stay until the next message.** Done boxes are clutter, and a failure is
+  the one end worth a glance; the user chose this on 2026-11-03.
 - **Subagent cost is estimated in dollars from tokens.** Claude reports cost only per process.
 - **The status line replaces the composer bar.** One line; model and effort share one chip.
 - **The tab-bar usage line and the sidebar's working line start switched off**, one setting away.

@@ -14,7 +14,7 @@ export interface RosterTool {
   outcome: RosterOutcome;
 }
 
-// A subagent of a session, running or finished since the user's last message. `startedAt` is its spawn's `at`, epoch
+// A subagent of a session, running, or failed since the user's last message. `startedAt` is its spawn's `at`, epoch
 // milliseconds. `model` is the model of its latest `agentReplied` (a reply or its launch receipt), else the spawn's;
 // `spendUsd` is its estimated spend so far from its latest `agentReplied` (cumulative), null before its first reply or
 // once any reply's model has no list price.
@@ -33,7 +33,7 @@ export interface RosterAgent {
   outcome: RosterOutcome;
 }
 
-// A task of a session, running or finished since the user's last message: a background shell or another long-running
+// A task of a session, running, or failed since the user's last message: a background shell or another long-running
 // job an agent started. `agentId` is the agent that started it, `main` or a subagent's id; `command` is null when the
 // harness named none; `startedAt` is its start's `at`, epoch milliseconds.
 export interface RosterTask {

@@ -8,8 +8,8 @@ import type {
 } from './contract';
 
 // Folds one agent event into one process's roster, each list kept in start order; an item never moves. Returns
-// `roster` itself when the event changes nothing. A finished item stays, its outcome set, until a `userMessage` drops
-// it. A task outlives the subagent that started it. `sessionEnded` fails every running item, since a process that
+// `roster` itself when the event changes nothing. An agent or task that ends done leaves at once; one that fails stays,
+// its outcome set, until a `userMessage` drops it. A task outlives the subagent that started it. `sessionEnded` fails every running item, since a process that
 // exits mid-run sends no end for them.
 export function foldAgentEvent(roster: Roster, event: AgentEvent): Roster {
   switch (event.type) {
@@ -65,7 +65,18 @@ export function foldAgentEvent(roster: Roster, event: AgentEvent): Roster {
       return updateAgent(roster, event.agentId, (agent) =>
         finishTool(agent, event.toolUseId, event.ok ? 'done' : 'failed'),
       );
-    case 'agentFinished':
+    case 'agentFinished': {
+      const index = indexOfAgent(roster.agents, event.agentId);
+      const endsDone =
+        event.outcome === 'done' &&
+        index !== -1 &&
+        isRunning(roster.agents[index]);
+      if (endsDone) {
+        return {
+          ...roster,
+          agents: roster.agents.filter((_, i) => i !== index),
+        };
+      }
       return updateAgent(roster, event.agentId, (agent) =>
         agent.outcome === 'running'
           ? {
@@ -75,6 +86,7 @@ export function foldAgentEvent(roster: Roster, event: AgentEvent): Roster {
             }
           : agent,
       );
+    }
     case 'taskStarted':
       return indexOfTask(roster.tasks, event.taskId) === -1
         ? {
@@ -99,9 +111,12 @@ export function foldAgentEvent(roster: Roster, event: AgentEvent): Roster {
       }
       return {
         ...roster,
-        tasks: roster.tasks.map((task, i) =>
-          i === index ? { ...task, outcome: event.outcome } : task,
-        ),
+        tasks:
+          event.outcome === 'done'
+            ? roster.tasks.filter((_, i) => i !== index)
+            : roster.tasks.map((task, i) =>
+                i === index ? { ...task, outcome: event.outcome } : task,
+              ),
       };
     }
     case 'sessionEnded':

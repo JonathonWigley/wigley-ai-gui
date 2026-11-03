@@ -281,16 +281,22 @@ describe('foldAgentEvent', () => {
     {
       case: 'FinishedFailsItsRunningTools',
       before: roster([{ ...b, tools: [...b.tools, runningTool] }]),
-      event: finished(b.agentId),
+      event: finished(b.agentId, 'failed'),
       after: roster([
-        { ...b, tools: [...b.tools, toolWith('failed')], outcome: 'done' },
+        { ...b, tools: [...b.tools, toolWith('failed')], outcome: 'failed' },
       ]),
     },
     {
-      case: 'FinishedKeepsItsTask',
+      case: 'FinishedDoneDropsAgent',
+      before: roster([a, b]),
+      event: finished(a.agentId),
+      after: roster([b]),
+    },
+    {
+      case: 'FinishedDoneKeepsItsTask',
       before: roster([a, b], [mainTask, aTask]),
       event: finished(a.agentId),
-      after: roster([{ ...a, outcome: 'done' }, b], [mainTask, aTask]),
+      after: roster([b], [mainTask, aTask]),
     },
     {
       case: 'FinishedOfFinishedAgent',
@@ -321,6 +327,12 @@ describe('foldAgentEvent', () => {
       before: roster([a], [mainTask, aTask]),
       event: taskFinished(mainTask.taskId, 'failed'),
       after: roster([a], [{ ...mainTask, outcome: 'failed' }, aTask]),
+    },
+    {
+      case: 'TaskFinishedDoneDropsTask',
+      before: roster([a], [mainTask, aTask]),
+      event: taskFinished(mainTask.taskId),
+      after: roster([a], [aTask]),
     },
     {
       case: 'TaskFinishedOfFinishedTask',

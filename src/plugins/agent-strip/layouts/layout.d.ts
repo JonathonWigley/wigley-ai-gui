@@ -1,5 +1,5 @@
 // The agent-strip layout contract: what a layout in `layouts/agent-strip/<name>/layout.js` draws the strip above a Chat
-// tab's composer box with. The app draws one `agentBox` per subagent of the session and one `taskBox` per task, finished
+// tab's composer box with. The app draws one `agentBox` per subagent of the session and one `taskBox` per task, failed
 // ones included until the user's next message, in start order, into the strip's scrolling track. Into the open agent
 // box's own root, after `agentBox` returns it, it draws a `toolList` of every tool call that subagent made; a task box
 // draws its own `command` while `isOpen`. The app sets `data-layout-owner="agent-strip"` and `data-layout="<name>"` on

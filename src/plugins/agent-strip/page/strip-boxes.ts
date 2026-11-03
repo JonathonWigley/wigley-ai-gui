@@ -60,7 +60,7 @@ export function reselect(
 }
 
 // A running box shows a running dot; a finished one dims, its dot saying how it
-// ended.
+// ended. The roster drops a done agent or task at once, so only a tool shows done.
 export function boxLook(outcome: RosterOutcome): {
   dot: 'running' | 'success' | 'error';
   isDimmed: boolean;

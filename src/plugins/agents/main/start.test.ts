@@ -25,6 +25,7 @@ const finished: AgentEvent = {
   agentId: 'toolu_a',
   outcome: 'done',
 };
+const failed: AgentEvent = { ...finished, outcome: 'failed' };
 const userMessage: AgentEvent = { type: 'userMessage', at: 3_000 };
 const sessionEnded: AgentEvent = { type: 'sessionEnded', at: 4_000 };
 const spawnedB: AgentEvent = {
@@ -63,7 +64,6 @@ const runningB: RosterAgent = {
   tools: [],
   outcome: 'running',
 };
-const doneA: RosterAgent = { ...runningA, outcome: 'done' };
 const failedA: RosterAgent = { ...runningA, outcome: 'failed' };
 
 const taskStartedA: AgentEvent = {
@@ -185,11 +185,20 @@ describe('agentsMainPart', () => {
       rosters: { s1: roster([runningA]) },
     },
     {
-      name: 'a finished agent stays listed until the next message',
-      steps: [spawned, finished, userMessage],
+      name: 'a done agent leaves the roster at once',
+      steps: [spawned, finished],
       sent: [
         { sessionId: 's1', roster: roster([runningA]) },
-        { sessionId: 's1', roster: roster([doneA]) },
+        { sessionId: 's1', roster: roster([]) },
+      ],
+      rosters: {},
+    },
+    {
+      name: 'a failed agent stays listed until the next message',
+      steps: [spawned, failed, userMessage],
+      sent: [
+        { sessionId: 's1', roster: roster([runningA]) },
+        { sessionId: 's1', roster: roster([failedA]) },
         { sessionId: 's1', roster: roster([]) },
       ],
       rosters: {},
@@ -265,9 +274,9 @@ describe('agentsMainPart', () => {
       sent: [
         { sessionId: 's1', roster: roster([runningA]) },
         { sessionId: 's1', roster: roster([runningA], [runningTaskA]) },
-        { sessionId: 's1', roster: roster([doneA], [runningTaskA]) },
+        { sessionId: 's1', roster: roster([], [runningTaskA]) },
       ],
-      rosters: { s1: roster([doneA], [runningTaskA]) },
+      rosters: { s1: roster([], [runningTaskA]) },
     },
   ])('$name', ({ steps, sent, rosters }) => {
     const agents = startAgentsPart();

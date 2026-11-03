@@ -39,8 +39,8 @@ function rowRoster(hosts: ReadonlyMap<string, Roster>): Roster {
 // process's host session id, a `userMessage` into every host id's roster of
 // its row, sending the page each row's roster that changed:
 // every host id's subagents and tasks in the row, each list in fold order. A
-// host id's roster is dropped once a message drops its last finished item,
-// and a row's rosters when it closes or ends. Holds agents' sample session,
+// host id's roster is dropped once its last item ends done or a message drops
+// its last failed one, and a row's rosters when it closes or ends. Holds agents' sample session,
 // whose roster `rosters` lists beside the live ones. Registers no layout and
 // hands the self-test no script: agent-lines and agent-strip draw the rosters.
 export const agentsMainPart: MainPart<typeof agentsManifest> = {

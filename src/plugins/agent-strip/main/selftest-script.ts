@@ -30,7 +30,7 @@ const selectedLine = (index: number) =>
 const GROUPS: SelfTestGroup[] = [
   {
     name: 'strip keys',
-    why: 'j from the last entry enters the strip on its first running box, l and h move between boxes, Enter opens and closes a box, k hands the cursor back, an interrupt leaves the finished boxes dimmed and the next message drops them.',
+    why: 'j from the last entry enters the strip on its first running box, l and h move between boxes, Enter opens and closes a box, k hands the cursor back, an interrupt leaves the failed boxes dimmed and the next message drops them.',
     steps: [
       {
         keys: sendKeys(FAKE_AGENTS_TEXT),
