@@ -34,7 +34,7 @@ Re-run each before the first dispatch:
 - The background-tasks plan has landed on `main`: `grep -c "taskStarted" src/contracts/agent.ts` prints 1 or more,
   and `docs/features/agent-tower/plan-background-tasks/` is gone. At plan time it ran in
   `.claude/worktrees/background-tasks` and had not landed. This plan's roster shape starts from its
-  `Roster { agents, tasks }` and `RunningTask` (that plan's `plan.md` § File Structure).
+  `Roster { agents, tasks }` and `RunningTask` (`src/plugins/agents/contract.ts`).
 - Other plans touching this plan's files are landed or not running: `ls -d docs/features/*/plan-*` at plan time listed
   `agent-chat/plan-slash-completion`, `agent-chat/plan-turn-tracking`, `agent-chat/plan-working-block`,
   `connected-session-rows/plan-hidden-rows`, `docs-browser/plan-ownership`, `session-titles/plan-titles-and-status`.
