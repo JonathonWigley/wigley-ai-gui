@@ -63,10 +63,38 @@ export function button(
   return node;
 }
 
-// Blurs whatever holds focus, a text box included, so page keys fire.
+// Takes focus off whatever holds it, a text box or a frame included, so page
+// keys fire: a frame through `focusOutOfFrame`, anything else by its `blur`.
 export function blurFocusedElement() {
   const focused = document.activeElement;
-  if (focused instanceof HTMLElement) {
+  if (!(focused instanceof HTMLElement)) {
+    return;
+  }
+  if (focused.tagName === 'IFRAME') {
+    focusOutOfFrame(focused as HTMLIFrameElement);
+  } else {
     focused.blur();
   }
+}
+
+// Moves keyboard focus out of `frame` to the page: to the nearest ancestor
+// holding a `tabindex` that takes it, else to the body. A frame whose document
+// holds focus stays the page's active element through its own `blur`.
+export function focusOutOfFrame(frame: HTMLIFrameElement) {
+  for (
+    let node = frame.parentElement;
+    node !== null;
+    node = node.parentElement
+  ) {
+    if (node.hasAttribute('tabindex')) {
+      node.focus({ preventScroll: true });
+      if (document.activeElement === node) {
+        return;
+      }
+    }
+  }
+  const { body } = document;
+  body.tabIndex = -1;
+  body.focus({ preventScroll: true });
+  body.removeAttribute('tabindex');
 }

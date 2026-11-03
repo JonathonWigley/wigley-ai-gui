@@ -128,28 +128,6 @@ function takeMessage(
   }
 }
 
-// Moves keyboard focus out of `frame` to the page: to the nearest ancestor
-// holding a `tabindex` that takes it, else to the body. A frame whose document
-// holds focus stays the page's active element through its own `blur`.
-export function focusOutOfFrame(frame: HTMLIFrameElement) {
-  for (
-    let node = frame.parentElement;
-    node !== null;
-    node = node.parentElement
-  ) {
-    if (node.hasAttribute('tabindex')) {
-      node.focus({ preventScroll: true });
-      if (document.activeElement === node) {
-        return;
-      }
-    }
-  }
-  const { body } = document;
-  body.tabIndex = -1;
-  body.focus({ preventScroll: true });
-  body.removeAttribute('tabindex');
-}
-
 // The source main did not serve, as the code block it was.
 function sourceAsCode(source: string): HTMLElement {
   const pre = document.createElement('pre');

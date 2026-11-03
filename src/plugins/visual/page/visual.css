@@ -29,6 +29,13 @@
   padding: var(--wg-space-1);
 }
 
+/* Any layout's `v` hint: hidden outside a chat entry and on every visual
+   after the entry's first. */
+.visual-open-hint:not(.chat-entry-slot .visual-open-hint),
+.chat-entry-slot :is(.visual-host, :has(.visual-host)) ~ * .visual-open-hint {
+  display: none;
+}
+
 /* The overlay's backdrop: a centred column of the part's body and place, the
    part's draw laying out nothing itself. */
 .ui-scrim.visual-overlay {

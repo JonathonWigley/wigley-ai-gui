@@ -3,7 +3,11 @@ import type { FenceContribution } from '../../../contracts/markdown';
 import type { VisualFrames } from '../../../contracts/visual-frames';
 import { callEach } from '../../../shared/call-each';
 import { element } from '../../../shared/page/dom';
-import type { Drawn, VisualParts } from './layout/visual-parts';
+import {
+  type Drawn,
+  openFrameSlot,
+  type VisualParts,
+} from './layout/visual-parts';
 import type { VisualRegistry } from './visual-registry';
 
 // `expand` is what a visual's expand control runs with its source.
@@ -20,7 +24,9 @@ export interface HtmlFenceDeps {
 // `visual` part around a frame opened on its source, its host held in the
 // registry under that source until the view's dispose, logged as
 // `visual mounted: <title>`. `redraw` draws every live view's part again with
-// the layouts last set, keeping each view's frame loaded.
+// the layouts last set, moving each view's frame into the new part: it stays
+// loaded only when its host is in the document and the part places it in an
+// element already there.
 export interface HtmlFence {
   contribution: FenceContribution;
   redraw(): void;
@@ -71,9 +77,7 @@ export function createHtmlFence(deps: HtmlFenceDeps): HtmlFence {
             () => undefined,
           );
         }
-        const frame = deps.frames.open(source);
-        const slot = element('div', 'visual-frame-slot');
-        slot.append(frame.element);
+        const { frame, slot } = openFrameSlot(deps.frames, source);
         const registered = deps.registry.add(host, source);
         const view = mountView(
           host,

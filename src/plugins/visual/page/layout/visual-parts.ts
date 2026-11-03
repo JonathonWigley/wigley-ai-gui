@@ -1,6 +1,10 @@
 import type { Log } from '../../../../contracts/log';
 import type { ShownLayouts } from '../../../../contracts/plugin';
-import { appended, element } from '../../../../shared/page/dom';
+import type {
+  VisualFrame,
+  VisualFrames,
+} from '../../../../contracts/visual-frames';
+import { appended, element, moveConnected } from '../../../../shared/page/dom';
 import { appSlot } from '../../../../shared/page/layout-host/app-slot';
 import type { OwnerKitServices } from '../../../../shared/page/layout-host/base-kit';
 import type { RollbackDeps } from '../../../../shared/page/layout-host/draw-part';
@@ -37,7 +41,9 @@ export interface VisualPartsDeps {
 // Each part picks its own layout and falls back to `default` on a throw.
 // `visual` and `overlay` place `frame`, the app's frame slot, where the part
 // calls `kit.frame`, else at the end of its root; drawn again with the same
-// `frame`, each moves the slot, so the visual stays loaded. `visual` also
+// `frame`, each moves the slot, and the visual stays loaded only when the
+// slot and the element it moves into are both in the document: a part that
+// places it in a detached element, or whose draw throws, reloads it. `visual` also
 // places an expand button whose click runs `expand`, where the part calls
 // `kit.expand`, else at its root's end after the frame. `card` and `overlay`
 // anchor keys in no scope and the overlay's scope, `visual` in chat's.
@@ -52,7 +58,8 @@ export interface VisualParts {
 type PartName = keyof CompleteLayout;
 
 // `kit.frame`'s slot for one drawing attempt: `appSlot`'s shape, but it moves
-// the slot so the frame inside it stays loaded.
+// the slot through `moveConnected`, so the frame inside it stays loaded when
+// both are in the document.
 interface FrameSlot {
   // Moves the slot to the end of `at` and returns it; throws
   // `frame placed twice` on a second call.
@@ -60,12 +67,6 @@ interface FrameSlot {
   // Moves the slot to the end of `root` when no `place` call placed it.
   placeIfLeftOut(root: HTMLElement): void;
 }
-
-// `moveBefore` keeps an iframe loaded as it moves; lib.dom declares it only
-// on Document.
-type MovingParent = HTMLElement & {
-  moveBefore?(node: Node, child: Node | null): void;
-};
 
 export function createVisualParts(deps: VisualPartsDeps): VisualParts {
   const layoutParts = createLayoutParts<Layout, CompleteLayout>({
@@ -148,9 +149,21 @@ export function createVisualParts(deps: VisualPartsDeps): VisualParts {
   };
 }
 
+// A frame opened on `source`, in the `div.visual-frame-slot` a part's
+// `kit.frame` places.
+export function openFrameSlot(
+  frames: VisualFrames,
+  source: string,
+): { frame: VisualFrame; slot: HTMLElement } {
+  const frame = frames.open(source);
+  const slot = element('div', 'visual-frame-slot');
+  slot.append(frame.element);
+  return { frame, slot };
+}
+
 // Placing `slot` records, through `rollback`, a destroy that detaches it while
 // it still sits where this attempt put it, so a later draw that moved it keeps
-// it when this one is disposed.
+// it when this one is disposed, and a throwing attempt leaves it detached.
 function createFrameSlot(
   slot: HTMLElement,
   rollback: Pick<RollbackDeps, 'recordBox'>,
@@ -161,7 +174,7 @@ function createFrameSlot(
       throw new Error('frame placed twice');
     }
     isPlaced = true;
-    moveToEnd(at, slot);
+    moveConnected(at, slot);
     rollback.recordBox(() => {
       if (slot.parentNode === at) {
         slot.remove();
@@ -177,17 +190,4 @@ function createFrameSlot(
       }
     },
   };
-}
-
-// Moves `slot` to the end of `at`, through `moveBefore` when both are
-// connected, so the frame in it stays loaded.
-function moveToEnd(at: MovingParent, slot: HTMLElement): void {
-  const { moveBefore } = at;
-  const canMoveConnected =
-    moveBefore !== undefined && at.isConnected && slot.isConnected;
-  if (canMoveConnected) {
-    moveBefore.call(at, slot, null);
-  } else {
-    at.append(slot);
-  }
 }

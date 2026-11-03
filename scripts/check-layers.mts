@@ -948,6 +948,7 @@ const LAYERS: Record<string, LayerRule> = {
       'src/renderer/visual-frames',
       'src/plugins/page.ts',
       'src/plugins/manifests.ts',
+      'src/shared/page',
       'src/shared/page/ui',
       'src/shared/page/layout-host',
       'src/renderer/shell/layouts',

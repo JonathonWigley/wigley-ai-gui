@@ -22,6 +22,7 @@ import { errorText } from '../shared/error-text';
 import { createEventBus } from '../shared/event-bus';
 import { editorBindMode } from '../shared/key-hints';
 import { requireUnambiguousEditorBinds } from '../shared/keymap-checks';
+import { focusOutOfFrame } from '../shared/page/dom';
 import type { BaseKitDeps } from '../shared/page/layout-host/base-kit';
 import { createPageLayouts } from '../shared/page/layout-host/show-layouts';
 import { icon } from '../shared/page/ui/icon';
@@ -55,10 +56,7 @@ import { createThemeApplier } from './theme';
 import { createToasts } from './toasts';
 import { overrideTransparency } from './transparency-override';
 import { createPageUiState } from './ui-state';
-import {
-  createVisualFrames,
-  focusOutOfFrame,
-} from './visual-frames/visual-frames';
+import { createVisualFrames } from './visual-frames/visual-frames';
 
 // The scope page keys fire in until a plugin sets one: only `any` binds match.
 const INITIAL_SCOPE = 'any';

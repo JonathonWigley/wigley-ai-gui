@@ -6,7 +6,11 @@ import type {
 } from '../../../contracts/visual-frames';
 import { blurFocusedElement, element } from '../../../shared/page/dom';
 import '../../../shared/page/ui/dialog.css';
-import type { Drawn, VisualParts } from './layout/visual-parts';
+import {
+  type Drawn,
+  openFrameSlot,
+  type VisualParts,
+} from './layout/visual-parts';
 
 // The full-size overlay over a list of visuals' sources: `open` shows the
 // visual at `index` and pushes the overlay's scope; `next` and `previous`
@@ -62,9 +66,7 @@ export function createVisualOverlay(deps: VisualOverlayDeps): VisualOverlay {
   const show = (opened: OpenVisuals, index: number) => {
     hide(opened.shown);
     opened.index = index;
-    const frame = deps.frames.open(opened.sources[index]);
-    const slot = element('div', 'visual-frame-slot');
-    slot.append(frame.element);
+    const { frame, slot } = openFrameSlot(deps.frames, opened.sources[index]);
     const input = { index, count: opened.sources.length };
     opened.shown = {
       frame,

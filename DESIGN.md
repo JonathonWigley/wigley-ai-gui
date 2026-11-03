@@ -389,6 +389,12 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   `radius-xl`, inset `space-3`) with the transcript scrolling beneath it, and holds the strip of attached images'
   thumbnails above the box, the box, the session controls as chips, and send. A user turn shows its sent images as
   thumbnails under its text.
+- **Visuals:** an agent's html block in any markdown. While it streams it is a Card holding a running StatusDot and
+  `drawing visual…` in `text-12` `fg-secondary`. Once closed it is the inline box: the frame as wide as its column in a
+  `radius-md` box that clips it, over a bar holding the small expand icon button at its end, the button's `v` hint on
+  a chat entry's first visual only. The full-size overlay sits over the `scrim` with `space-8` padding: the overlay
+  body fills it, a `radius-lg` sheet on `transcript-background` that scrolls a visual taller than the window, with the
+  count (`2 of 3`, `text-12` `fg` in tabular numerals) under it, hidden for a single visual.
 - **Docs:** in Docs mode the tree is the side bar; in a session's Docs tab it is the left pane of a
   split in the sheet. Rendered docs use the prose style; code blocks are solid `block-background`
   with `radius-md` and no border.

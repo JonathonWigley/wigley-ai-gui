@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { moveConnected } from './dom';
+import { blurFocusedElement, focusOutOfFrame, moveConnected } from './dom';
 import { installMarkdownDom } from './markdown-mount.test-support';
 import { asFake } from './test-dom';
 
@@ -67,4 +67,143 @@ describe('moveConnected', () => {
       );
     },
   );
+});
+
+interface FocusState {
+  activeElement: FocusNode | null;
+}
+
+// An element as focus sees it: it takes focus only while it holds a
+// `tabindex`, as a browser's `div` and `body` do, unless `refuses` is set, as
+// for a hidden one. Its tag is its `name`.
+class FocusNode {
+  readonly attributes: Set<string>;
+  private readonly refuses: boolean;
+
+  constructor(
+    private readonly focusState: FocusState,
+    readonly name: string,
+    readonly parentElement: FocusNode | null,
+    { tabindex = false, refuses = false } = {},
+  ) {
+    this.attributes = new Set(tabindex ? ['tabindex'] : []);
+    this.refuses = refuses;
+  }
+
+  get tagName(): string {
+    return this.name.toUpperCase();
+  }
+
+  set tabIndex(_value: number) {
+    this.attributes.add('tabindex');
+  }
+
+  get tabIndex(): number {
+    return -1;
+  }
+
+  hasAttribute(attribute: string): boolean {
+    return this.attributes.has(attribute);
+  }
+
+  removeAttribute(attribute: string) {
+    this.attributes.delete(attribute);
+  }
+
+  focus() {
+    if (!this.refuses && this.attributes.has('tabindex')) {
+      this.focusState.activeElement = this;
+    }
+  }
+
+  blur() {
+    if (this.focusState.activeElement === this) {
+      this.focusState.activeElement = null;
+    }
+  }
+}
+
+// Builds `ancestors`, from the body inward, around a focused `focused` node,
+// and stubs the document and `HTMLElement` over them.
+function focusTree(
+  ancestors: { name: string; tabindex?: boolean; refuses?: boolean }[],
+  focused: string,
+) {
+  const state: FocusState = { activeElement: null };
+  const body = new FocusNode(state, 'body', null);
+  let parent = body;
+  for (const { name, ...options } of ancestors) {
+    parent = new FocusNode(state, name, parent, options);
+  }
+  const node = new FocusNode(state, focused, parent, { tabindex: true });
+  node.focus();
+  vi.stubGlobal('HTMLElement', FocusNode);
+  vi.stubGlobal('document', {
+    body,
+    get activeElement() {
+      return state.activeElement;
+    },
+  });
+  return { state, body, node };
+}
+
+describe('focusOutOfFrame', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  // Each row is the frame's ancestors from the body inward, with the ancestor
+  // focus lands on.
+  it.each([
+    {
+      case: 'nearest ancestor holding a tabindex',
+      ancestors: [
+        { name: 'pane', tabindex: true },
+        { name: 'list', tabindex: true },
+        { name: 'entry' },
+      ],
+      focused: 'list',
+    },
+    {
+      case: 'next one up when the nearest refuses focus',
+      ancestors: [
+        { name: 'pane', tabindex: true },
+        { name: 'list', tabindex: true, refuses: true },
+        { name: 'entry' },
+      ],
+      focused: 'pane',
+    },
+    {
+      case: 'body when no ancestor holds a tabindex',
+      ancestors: [{ name: 'pane' }, { name: 'entry' }],
+      focused: 'body',
+    },
+  ])('moves focus off the frame to the $case', ({ ancestors, focused }) => {
+    const { state, body, node } = focusTree(ancestors, 'iframe');
+
+    focusOutOfFrame(node as unknown as HTMLIFrameElement);
+
+    expect(state.activeElement?.name).toBe(focused);
+    expect(body.hasAttribute('tabindex')).toBe(false);
+  });
+});
+
+describe('blurFocusedElement', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it.each([
+    { case: 'a frame, to its ancestor', focused: 'iframe', after: 'pane' },
+    { case: 'a text box, to nothing', focused: 'input', after: undefined },
+  ])('takes focus off $case', ({ focused, after }) => {
+    const { state } = focusTree(
+      [{ name: 'pane', tabindex: true }, { name: 'entry' }],
+      focused,
+    );
+
+    blurFocusedElement();
+
+    expect(state.activeElement?.name).toBe(after);
+  });
 });

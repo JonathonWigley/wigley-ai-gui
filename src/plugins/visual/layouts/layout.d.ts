@@ -6,11 +6,15 @@ import type { BaseKit } from '../../../shared/page/layout-host/kit';
 // The kit the `visual` part gets.
 export interface VisualKit extends BaseKit {
   // Appends the app's frame element to `parent` and returns it. A part that never calls it gets the frame at its
-  // root's end; a second call throws `frame placed twice`.
+  // root's end; a second call throws `frame placed twice`. `parent` must already be in the document under its final
+  // parent: a frame placed in a detached element, or moved after, reloads on each layouts change, its scripts
+  // starting again.
   frame(parent: HTMLElement): HTMLElement;
   // Appends the expand control to `parent` and returns it: a small icon button that never takes focus, whose click
   // opens the overlay on this visual. A part that never calls it gets the button at its root's end, after the frame;
-  // a second call throws `expand placed twice`. Its key hint is the layout's own `keyHint(button, 'openVisuals')`.
+  // a second call throws `expand placed twice`. Its key hint is the layout's own `keyHint(button, 'openVisuals')`;
+  // `openVisuals` opens a chat entry's visuals from its first, so a hint given the class `visual-open-hint` shows
+  // on a chat entry's first visual only.
   expand(parent: HTMLElement): HTMLButtonElement;
 }
 
@@ -22,7 +26,8 @@ export interface OverlayInput {
 
 // The kit the `overlay` part gets.
 export interface OverlayKit extends BaseKit {
-  // Appends the overlay's own frame element to `parent` and returns it, as `VisualKit.frame` does.
+  // Appends the overlay's own frame element to `parent` and returns it, as `VisualKit.frame` does: `parent` must
+  // already be in the document under its final parent, or the frame reloads on each layouts change.
   frame(parent: HTMLElement): HTMLElement;
 }
 

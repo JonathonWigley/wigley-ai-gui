@@ -2,7 +2,8 @@
 
 // The built-in visual look: a running dot and a line of text while the block
 // streams, then the frame in a clipped, rounded box as wide as its column
-// over a bar holding the expand control; the overlay shows the frame in a
+// over a bar holding the expand control, its `v` hint on a chat entry's first
+// visual only; the overlay shows the frame in a
 // sheet filling the window, with its place under it when there is more than
 // one.
 
@@ -19,7 +20,7 @@ const layout = {
     kit.frame(root);
     const bar = kit.el(root, 'div', 'visual-bar');
     const button = kit.expand(bar);
-    kit.keyHint(button, 'openVisuals');
+    kit.keyHint(button, 'openVisuals', { className: 'visual-open-hint' });
     return root;
   },
   overlay(parent, input, kit) {

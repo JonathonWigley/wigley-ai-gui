@@ -6,7 +6,7 @@ import {
   installFakeDom,
 } from '../../shared/page/test-dom';
 import type { VisualTheme } from '../../shared/visual-messages';
-import { createVisualFrames, focusOutOfFrame } from './visual-frames';
+import { createVisualFrames } from './visual-frames';
 
 function deferred<T>() {
   let resolve: (value: T) => void = () => undefined;
@@ -295,101 +295,5 @@ describe('createVisualFrames', () => {
 
     expect(() => frame.dispose()).not.toThrow();
     expect(listeners).toEqual([]);
-  });
-});
-
-// An element as focus sees it: it takes focus only while it holds a
-// `tabindex`, as a browser's `div` and `body` do, unless `refuses` is set, as
-// for a hidden one.
-interface FocusNode {
-  name: string;
-  parentElement: FocusNode | null;
-  attributes: Set<string>;
-  tabIndex: number;
-  hasAttribute(name: string): boolean;
-  removeAttribute(name: string): void;
-  focus(): void;
-}
-
-function focusNode(
-  focus: { activeElement: FocusNode | null },
-  name: string,
-  parent: FocusNode | null,
-  { tabindex = false, refuses = false } = {},
-): FocusNode {
-  const node: FocusNode = {
-    name,
-    parentElement: parent,
-    attributes: new Set(tabindex ? ['tabindex'] : []),
-    set tabIndex(_value: number) {
-      node.attributes.add('tabindex');
-    },
-    get tabIndex() {
-      return -1;
-    },
-    hasAttribute: (attribute) => node.attributes.has(attribute),
-    removeAttribute: (attribute) => {
-      node.attributes.delete(attribute);
-    },
-    focus() {
-      if (!refuses && node.attributes.has('tabindex')) {
-        focus.activeElement = node;
-      }
-    },
-  };
-  return node;
-}
-
-describe('focusOutOfFrame', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  // Each row is the frame's ancestors from the body inward, with the ancestor
-  // focus lands on.
-  it.each([
-    {
-      case: 'nearest ancestor holding a tabindex',
-      ancestors: [
-        { name: 'pane', tabindex: true },
-        { name: 'list', tabindex: true },
-        { name: 'entry' },
-      ],
-      focused: 'list',
-    },
-    {
-      case: 'next one up when the nearest refuses focus',
-      ancestors: [
-        { name: 'pane', tabindex: true },
-        { name: 'list', tabindex: true, refuses: true },
-        { name: 'entry' },
-      ],
-      focused: 'pane',
-    },
-    {
-      case: 'body when no ancestor holds a tabindex',
-      ancestors: [{ name: 'pane' }, { name: 'entry' }],
-      focused: 'body',
-    },
-  ])('moves focus off the frame to the $case', ({ ancestors, focused }) => {
-    const focus: { activeElement: FocusNode | null } = { activeElement: null };
-    const body = focusNode(focus, 'body', null);
-    let parent = body;
-    for (const { name, ...options } of ancestors) {
-      parent = focusNode(focus, name, parent, options);
-    }
-    const iframe = focusNode(focus, 'iframe', parent, { tabindex: true });
-    iframe.focus();
-    vi.stubGlobal('document', {
-      body,
-      get activeElement() {
-        return focus.activeElement;
-      },
-    });
-
-    focusOutOfFrame(iframe as unknown as HTMLIFrameElement);
-
-    expect(focus.activeElement?.name).toBe(focused);
-    expect(body.hasAttribute('tabindex')).toBe(false);
   });
 });
