@@ -47,7 +47,7 @@ interview on 2026-10-23; this file is the record of both.
 - **Profile** — a named Claude config folder (`work` → `~/.claude`, `personal` → `~/.claude-personal`); it sets the
   login, plugins, settings and where transcripts live. Picked with the folder when starting a session.
 - **Owned session** — a session the app started; its row exists from start and stays, across a quit and relaunch
-  and after its process ends on its own, resting until the next message starts the process again, until the user
+  (its process still running in the session host) and after its process ends on its own, resting until the next message starts the process again, until the user
   closes the row (§ Saved sessions). A
   **connected session** is one a relay connection brought (a terminal session), as today.
 - **Take over** — a session tab selecting itself and later giving the session back to the tab shown before.
@@ -130,11 +130,10 @@ interview on 2026-10-23; this file is the record of both.
 - Slash commands typed in the chat run as in the terminal (`/model`, `/compact`, `/wigley:feature …`), except the
   app slash commands, which the app runs itself (§ Chat plugin).
 - **Commands**: `AgentProcessEvents.commands` reports the session's commands and skills as `AgentCommand` records
-  (`name`, `description`, `argumentHint`, `aliases`), names without a leading `/`. The Claude adapter sends an
-  `initialize` control request at process start and reports its `commands` within half a second
-  (`claude-stream.md` § Initialize), since `init` waits for the first message. Each later `init` replaces the list: a
-  name it lists that matches an earlier record's name or alias keeps that record, and a new name gets a record with
-  empty text. A failed `initialize` is logged, and the list then waits for `init`.
+  (`name`, `description`, `argumentHint`, `aliases`), names without a leading `/`. The Claude adapter reports them
+  from each `init` event's `slash_commands` and `skills`, so the list waits for the first message. Each later `init`
+  replaces the list: a name it lists that matches an earlier record's name or alias keeps that record, and a new name
+  gets a record with empty text.
 - **Messages carry images**: `AgentProcess.send` takes `{ text, images }`, each image `{ mediaType, data }` (base64,
   no `data:` prefix), and the `user` chat entry carries the same `images`. Claude sends them as `image` content blocks
   before the text block (`claude-stream.md` § Images); a resumed transcript's image blocks come back as the user
@@ -253,8 +252,9 @@ interview on 2026-10-23; this file is the record of both.
   (claude-stream.md § Queued messages), so chat holds it until the turn ends, unless the user sends it now (Send now
   below). A permission call left waiting after the turn ended
   queues nothing; a running turn waiting on a permission still queues. Chat main holds the message in the session's
-  queue (`ChatSessionState.queued`, oldest first, each with an id of its own; kept across a page reload, dropped on
-  quit), and the Chat tab shows it as a pending row after the last entry, drawn by the layout's `queuedMessage` part:
+  queue (`ChatSessionState.queued`, oldest first, each with an id of its own; kept across a page reload, and saved
+  with the session's record so a relaunch that re-attaches the session shows and sends them,
+  `docs/features/session-host/design.md` § Re-attach), and the Chat tab shows it as a pending row after the last entry, drawn by the layout's `queuedMessage` part:
   dim, with a `pending` label on its own line above the text (`pending · 2 images` when it carries images; `sending` in place of `pending` once sent now). The code names these **queued**
   messages, after claude-stream.md § Queued messages, since `pending` already names chat main's permission calls and a
   restored session's unread history.
@@ -316,9 +316,13 @@ interview on 2026-10-23; this file is the record of both.
   row (null when it names no row chat still holds), whether a message was ever sent, and whether a turn was running. A
   new, resumed or launched session is saved only after its process starts, so a start that fails leaves no record. Only
   the user closing its row removes a record; quit, `install-app`, a process exit and a chat plugin reload keep it.
-  Plugin data is per app instance, so the stable and dev apps, drive runs and the self-test each keep their own list. On
-  start, chat opens a row for each record, in order and unselected, then selects the saved row: each row **rests**,
-  holding no process. A record whose host id is already open, or whose open throws, is skipped and logged. A restored
+  Plugin data is per app instance, so the stable and dev apps, drive runs and the self-test each keep their own list.
+  Quit and `install-app` end no process: the session host keeps each one running, and quitting only disconnects the
+  app from it (`docs/features/session-host/design.md`). `chat.stopAll` (`<Leader>:`) ends every owned session's
+  process and leaves each row resting. On start, chat opens a row for each record, in order and unselected, then
+  selects the saved row. A row whose process the host still holds is **re-attached**: the harness replays its pipe
+  log, the row shows the transcript up to that process's start and then the process's own entries, and it carries on
+  live (`session-host/design.md` § Re-attach). Every other row **rests**, holding no process. A record whose host id is already open, or whose open throws, is skipped and logged. A restored
   row that was ever sent to has its earlier conversation read from its transcript once, on the first show of its Chat
   tab or the first send, whichever comes first, while its profile is in the settings, so start reads no transcripts; a
   send reads it before starting the process, so the read never holds the new turn. The first message sent in a resting
@@ -339,7 +343,8 @@ interview on 2026-10-23; this file is the record of both.
   compaction (`--system-prompt-snapshot`, on by default), so a resumed conversation keeps the instructions of its
   first launch.
   A session whose process exits while the app runs rests the same way, a notice in its chat giving the exit and its
-  reason. A restored session whose turn was running at quit gets a notice that the app quit during that turn; one whose
+  reason. A restored session whose turn was running when its process was lost (a reboot or a host crash, since quit
+  ends none) gets a notice that the app quit during that turn; one whose
   profile is no longer in the settings gets a notice naming it, and a send there toasts that the message was not sent
   because the profile is missing, instead of starting. A message main refuses goes back into the box, above anything
   typed since, with its images ahead of any attached since. A resting row looks like an idle one in the sidebar. A file

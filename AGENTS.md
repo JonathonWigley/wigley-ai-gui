@@ -146,6 +146,11 @@ src/main/        core main process; main.ts is its composition root
                  rename, trash, folder lists and watching, behind Files
   processes/     runs a program, killed past an optional timeout, and returns its exit code and output, behind
                  ProcessRunner
+  local-channel/ the local channel transport: a Unix socket on macOS, a named pipe on Windows, its path and its
+                 newline-JSON framing; the relay and the session host share it → no electron import
+  session-host/  the app's client of the session host behind SessionHost: connects, starts the host when none
+                 answers, drains an older protocol's host, and hands out hosted processes;
+                 `docs/features/session-host/design.md`
   git/           git adapter behind Git, over ProcessRunner: a clone's top folder, changed and unpushed paths,
                  upstream and its blobs, fetch and last fetch, a file's text at HEAD, and a commit of named paths
                  only → the only place the app runs `git`, except the Backlog self-test's fixture repo (its `init`,
@@ -158,6 +163,9 @@ src/main/        core main process; main.ts is its composition root
                  CSP header); `window.ts` refuses any frame navigation off that scheme; `docs/features/visuals/design.md`
   drive/         the drive run: the page driver the self-test shares, the commands, their HTTP server, plugins'
                  drive actions and the video recorder, over a `DrivenWindow` → no electron import
+src/session-host/ the session host process, its own composition root and build entry: owns every agent process,
+                 logs their pipes, ends idle ones while no app is connected → imports only src/contracts,
+                 src/shared and src/main/local-channel; no electron import
 src/preload/     the Bridge, exposed as window.wigley
 src/renderer/    core page; renderer.ts is its composition root
   shell/         the shell registry, its areas and the default `ShellLayout`, and the modes; `shell-chrome.ts` draws the
@@ -275,8 +283,8 @@ selects only a row its session still holds (`activateExistingRow`), so a stale c
 app starts (`open`) is an owned session: its row exists from start, the relay connection whose hello carries its
 host session id joins that row instead of adding one (a newer relay takes the join from an older one still
 connected, as when the harness restarts its MCP connection), and the row ends when its owner ends it: chat keeps
-its rows across a relaunch and after a process exits, resting until the next message, and ends one only when the user
-closes it (`docs/features/agent-chat/design.md` § Saved sessions). A plugin's close
+its rows across a relaunch, re-attaching each one whose process the session host still runs, and after a process
+exits, resting until the next message, and ends one only when the user closes it (`docs/features/agent-chat/design.md` § Saved sessions). A plugin's close
 guard (`addCloseGuard`) refuses the user's close while the plugin still has something open there (forms: an open
 round; primer: an open primer), since main, not the page, decides.
 
@@ -726,11 +734,13 @@ stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
   another). It packages in a build-only worktree beside the repo, `../.wigley-ai-gui-build`, so neither
   uncommitted edits nor the dev app's `.vite/build` are touched, and runs `npm ci` there when its `node_modules` is
   missing or the lockfile changed since the last one. It copies the packaged app beside the install while the
-  stable app still runs, then quits that app (Windows refuses to rename a running exe's folder), never
-  force-killing it: one still running after 15 s fails the install and leaves the installed app untouched, the
-  staged copy waiting for the next run, which deletes it. Then it swaps the copy in for
-  `%LOCALAPPDATA%\Programs\wigley-ai-gui` (with a Start menu shortcut named Auri) or
-  `/Applications/wigley-ai-gui.app`, and starts the app again when it was running. Each OS builds its own app; a
+  stable app still runs, then quits that app, never force-killing it: one still running after 15 s fails the install
+  and leaves the installed app untouched, the staged copy waiting for the next run, which deletes it. Quitting ends
+  no session: the session host keeps running from the old build (`docs/features/session-host/design.md`). On macOS
+  it then swaps the copy in for `/Applications/wigley-ai-gui.app`. On Windows a running host locks its exe's folder,
+  so each build installs into its own `app-<short sha>` folder under `%LOCALAPPDATA%\Programs\wigley-ai-gui\`, the
+  Start menu shortcut named Auri moves to it, and each older `app-*` folder is deleted when no process holds it. It
+  starts the app again when it was running. Each OS builds its own app; a
   locally built app needs no signing identity. On macOS, packaging rewrites the bundle's shown names
   (`CFBundleName`, which the menu bar shows, and `CFBundleDisplayName`) to Auri in `Info.plist`, renames the
   `wigley-ai-gui Helper*.app` bundles to `Auri Helper*.app` (Electron finds its helpers by `CFBundleName`), and
