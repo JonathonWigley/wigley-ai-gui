@@ -550,7 +550,11 @@ round; primer: an open primer), since main, not the page, decides.
   its manifest's `settings`. Each one declares a label and a one-line description by its dotted path, in
   `settingInfo` beside its default (`src/config/settings.ts` or the manifest), which Settings mode draws as its row;
   the compiler fails on a setting with no declaration. The user overrides any of them in `settings.json` (plugin
-  settings under the plugin id), by hand or from Settings mode.
+  settings under the plugin id), by hand or from Settings mode. The ConfigStore rejects a `settings.json` naming a
+  setting that no longer exists, and the app keeps no table of renamed settings, so a change that renames, moves or
+  removes a setting also edits `~/.config/wigley-ai-gui/settings.json` to match, and the report names that edit. When
+  it moves a layout setting to another owner or changes a layout contract, the report also names each user layout
+  under `layouts/` that the change orphans or leaves on the old contract.
 - **The user config folder** is `~/.config/wigley-ai-gui/` on both OSes: `settings.json`, `keymap.json`,
   `themes/` and `layouts/`, each holding only what the user changes, shared by the stable and dev apps. Main's ConfigStore watches it and serves every new config to
   the page over the Bridge, so everything hot reloads: plugins read `settings()` and `keys.keymap()` with
