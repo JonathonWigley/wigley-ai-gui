@@ -253,7 +253,8 @@ interview on 2026-10-23; this file is the record of both.
     nothing and logs `queued message <id> no longer queued`. A write that throws leaves the row unsent and logs
     `queued message <id> not sent: <error>`. When the harness reports the agent dropped a sent message without taking
     it in (`AgentProcessEvents.messageDropped`: Claude's `cancelled`, `discarded` or `refused` with no `started`
-    before it), main returns it to the box and logs `sent message <id> returned: never taken in`.
+    before it), main returns it to the box and logs `sent message <id> returned: never taken in`; main holds every
+    message it writes, idle sends included, until its entry arrives, so a dropped idle send returns the same way.
   - **Pulling back**: a pending row is a cursor stop after the last entry, so `G` and a following focus land on the
     newest pending row when any exist. Three routes pull a message back: Enter on the focused row, a click on it, and
     `<Leader>cp` in the box, which pulls back the newest. Each logs `pulling back a pending message in <session>`
