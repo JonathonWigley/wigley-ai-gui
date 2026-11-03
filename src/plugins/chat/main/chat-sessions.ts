@@ -78,6 +78,9 @@ export interface ChatSessionsDeps {
 
 export interface ChatSessions {
   sessions(): ChatSessionState[];
+  // The held session's current host id, which a `clear` replaces; null for a
+  // row chat does not hold.
+  hostSessionIdOf(sessionId: string): string | null;
   start(request: StartRequest): string;
   // Starts a session with its row unselected and sends `message` as its first
   // message; returns the row's sessionId. Throws before opening anything on
@@ -1223,6 +1226,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   return {
     sessions: () =>
       [...held.values()].map((session) => copyState(session.state)),
+    hostSessionIdOf: (sessionId) => held.get(sessionId)?.hostId ?? null,
     start: (request) => startNew(request, { select: true }).state.sessionId,
     launch,
     restore,

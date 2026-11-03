@@ -16,6 +16,7 @@ function fakeChat(running = true) {
     calls,
     closed: vi.fn<(sessionId: string) => void>(),
     start: () => 'started',
+    hostSessionIdOf: () => 'host-started',
     sessions: () => [
       { sessionId: 'held', projectDir: '/p', running } as ChatSessionState,
     ],

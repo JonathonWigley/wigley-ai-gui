@@ -370,6 +370,16 @@ describe('createChatSessions', () => {
     ]);
   });
 
+  it.each([
+    { row: 'the started row', sessionId: ROW_ID, expected: 'uuid-1' },
+    { row: 'a row chat does not hold', sessionId: 'row-9', expected: null },
+  ])('hostSessionIdOf_$row_ReturnsItsHostId', ({ sessionId, expected }) => {
+    const test = setUp();
+    test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+
+    expect(test.chat.hostSessionIdOf(sessionId)).toBe(expected);
+  });
+
   it('addInstructions_EachStartCarriesTheRegisteredOnes', async () => {
     const test = setUp();
     const first = test.chat.addInstructions('first note');
