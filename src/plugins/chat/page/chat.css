@@ -280,15 +280,14 @@
   display: none;
 }
 
-/* The activity dock keeps its height in a short pane, as the attachments
-   do. */
-.chat-working-slot {
+/* The activity dock and the attachments keep their height in a short pane. */
+.chat-working-slot,
+.chat-attachments-slot {
   flex-shrink: 0;
 }
 
 .chat-attachments {
   display: flex;
-  flex-shrink: 0;
   flex-wrap: wrap;
   gap: var(--wg-space-2);
 }
