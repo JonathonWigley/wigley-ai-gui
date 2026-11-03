@@ -134,11 +134,11 @@ to `DotStatus`.
 - [x] [Chat saves titles, first-message fallback, the instruction](04-chat-titles.md) — after 01
 
 ### Wave 3
-- [ ] [Chat activities](05-chat-activities.md) — after 03
+- [x] [Chat activities](05-chat-activities.md) — after 03
 - [x] [Forms and primer set needs you](06-form-activities.md) — after 03
 
 ### Wave 4
-- [ ] [Doc re-read](07-doc-re-read.md) — after 02, 03, 04, 05, 06
+- [x] [Doc re-read](07-doc-re-read.md) — after 02, 03, 04, 05, 06
 
 ### Wave 5
 - [ ] [Final verification](08-final-verification.md) — after 07
@@ -153,6 +153,8 @@ Review base: e38f1bb7
 - 04 · e9cb027c · diff read (SavedSession.titles, ResumeRequest.title, ChatSessions.titleChanged, deps widened all present), no type errors in chat, layers clean · concerns: agent-chat design.md saved-sessions field list omits titles (for 07); that doc says a resume keeps the first request's system prompt, so a pre-change conversation may not get the instruction on resume, against the plan's 'a resumed agent may rename once more'
 - 03 · f98fa386 · diff read (ActivityTone, RowActivity, NEEDS_YOU_ACTIVITY, setActivity, createRowActivities, SessionRowInput.title/activity, commands, scope, binds present), typecheck clean, lint and sessions self-test passed per worker · concerns: status-dot.css header 'Static: only the streaming indicator moves.' now stale (for 07); .session-rename-box is a third copy of the input reset in .docs-box and .settings-box-input; problem line stays while editing until next Enter; Esc during an in-flight invoke closes but the title still sets and logs
 - 06 · b24de12c · diff read (formShown dep present, forms and primer wired with own source ids), no type errors outside chat's in-progress files · concerns: forms-view.test.ts and primer-view.test.ts stubs gained setActivity, outside the Files list; start.ts files untouched since they pass the whole exports
+- 05 · 4de1cf63 · diff read (Unseen, rowActivity, unseenAfterTurnEnd, unseenAfterRest, markSent, ChatViewDeps listeners and Pick widened present), typecheck clean, lint and chat self-test passed per worker · concerns: needs you has no self-test step of its own: the fixture permission is asked during open, before any step; the permission card y step's 'none' line stands in; chat-state imports the value NEEDS_YOU_ACTIVITY from sessions' contract (layers pass); the done step depends on FAKE_VISUAL_HOLD_MS outlasting two key presses
+- 07 · f66c42a6 · diff read; keymap.md, AGENTS.md and layouts design.md read with no change needed · concerns: the CLI resume keeping the first request's system prompt is the agent-chat doc's claim with no code showing it; design.md Status still names the plan folder, which Close deletes
 ### Contract changes
 - createRowActivities(): inline return type → named RowActivities interface, same members · why: readability · consumers: 03 · group 03
 - startTitleTool deps: inline type → named TitleToolDeps, same shape · why: readability · consumers: 02 · group 02
@@ -171,5 +173,9 @@ Review base: e38f1bb7
 - trailing grid column is minmax(max-content, 1fr), not bare max-content, so it sits at the line end without a spacer track — none · group 03 · group 03
 - row-drawing tests live in preview.test.ts under describe('session rows'), since Files named no sessions-view test — none · group 03 · group 03
 - the exact-call-list cases are a new test rather than rows in the existing sync test — reviewers may want them merged · group 06 · group 06
+- the row activity log line fires only on a change, compared by identity against shared constants — duplicate lines if the constants stopped being shared · group 05 · group 05
+- markSent, activeChanged and sessionHostChanged share one clearUnseen — none · group 05 · group 05
+- needs you's self-test is covered by the permission card step's 'none' line rather than a step of its own — changing the runner or fixture to re-ask a permission is out of the plan's scope; the unit table covers rowActivity's waiting row — a regression only in the view's wiring of waiting would slip past the self-test · lead
+- the plan's 'a resumed agent may rename once more' is dropped: per agent-chat design a resume keeps the first request's system prompt, so a pre-feature conversation never gets the instruction — if the CLI does re-read appended prompts on resume, the doc understates it · group 07 · group 07
 ### Review rounds
 ### Test gate

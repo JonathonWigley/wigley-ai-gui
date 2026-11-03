@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentStart } from '../../../contracts/agent';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
-import type { ToolResult } from '../../sessions/contract';
+import type {
+  SessionTitles,
+  TitleSource,
+  ToolResult,
+} from '../../sessions/contract';
 import type { ChatMainExports, ChatSessionState } from '../contract';
 import { addDriveActions, chatMainPart } from './start';
 
@@ -121,7 +125,8 @@ describe('chat drive actions', () => {
 // Chat's main part started on a harness whose sign-ins record their cancel
 // and whose processes record each message sent, with one profile, `work`, and
 // a data folder that cannot be read; sessions open rows `row-1`, `row-2`, …,
-// and an owned session's end emits `sessions.ended`, recorded in `ended`.
+// and an owned session's end emits `sessions.ended`, recorded in `ended`;
+// each row holds its titles as sessions would, starting with none.
 // `invoke` calls the page channel's handler for `name`; `sent` holds each
 // channel message, `logged` each log line, and `starts` counts the harness's
 // process starts and `startInstructions` each start's instructions, in start
@@ -165,11 +170,13 @@ function startChatPart() {
   const listeners = new Map<string, (data: unknown) => void>();
   const ended: string[] = [];
   let rows = 0;
+  const titles = new Map<string, SessionTitles>();
   const sessions = {
     contributeTools: () => undefined,
     open: () => {
       rows += 1;
       const id = `row-${rows}`;
+      titles.set(id, { user: null, agent: null, firstMessage: null });
       return {
         session: { id },
         end: () => {
@@ -180,6 +187,20 @@ function startChatPart() {
       };
     },
     activate: () => undefined,
+    setTitle: (
+      sessionId: string,
+      source: TitleSource,
+      title: string | null,
+    ) => {
+      const held = titles.get(sessionId);
+      if (held !== undefined) {
+        held[source] = title;
+      }
+    },
+    titles: (sessionId: string) => {
+      const held = titles.get(sessionId);
+      return held === undefined ? null : { ...held };
+    },
   };
   const api = {
     channel: {
@@ -347,13 +368,15 @@ describe('chat main part', () => {
     expect(chat.processSends).toHaveBeenCalledExactlyOnceWith(message);
   });
 
-  it('exports_AddInstructions_ReachTheNextStart', () => {
+  it('exports_AddInstructions_ReachTheNextStart_AfterTheTitleInstruction', () => {
     const chat = startChatPart();
     chat.exports.addInstructions('visual note');
 
     chat.invoke('start', { projectDir: '/p', profile: 'work' });
 
-    expect(chat.startInstructions).toEqual([['visual note']]);
+    expect(chat.startInstructions).toEqual([
+      [expect.stringContaining('set_session_title'), 'visual note'],
+    ]);
   });
 
   it('exports_Clear_ResolvesAfterTheFreshStart', async () => {
