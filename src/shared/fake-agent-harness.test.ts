@@ -693,6 +693,14 @@ describe('createFakeAgentHarness', () => {
       'thinking',
     ]);
     const stepTools = ['Read', 'Read', 'Read', 'Bash', 'Edit', 'Bash'];
+    const stepSummaries = [
+      'src/app.ts',
+      'src/view.ts',
+      'src/state.ts',
+      'false',
+      'src/app.ts',
+      'npm test',
+    ];
     expect(agentEvents).toEqual([
       { type: 'userMessage', at: 1000 },
       { type: 'turnStarted', at: 1000 },
@@ -700,7 +708,14 @@ describe('createFakeAgentHarness', () => {
         const toolUseId = `fake-step-1-${index + 1}`;
         const agentId = MAIN_AGENT_ID;
         return [
-          { type: 'toolStarted', at: 1000, agentId, toolUseId, tool },
+          {
+            type: 'toolStarted',
+            at: 1000,
+            agentId,
+            toolUseId,
+            tool,
+            summary: stepSummaries[index],
+          },
           {
             type: 'toolFinished',
             at: 1000,
@@ -748,13 +763,25 @@ describe('createFakeAgentHarness', () => {
     agent.send({ text: FAKE_AGENTS_TEXT, images: [] });
     await flush();
 
-    const subagentTool = (n: number, tool: string) => [
+    const subagentTool = (
+      n: number,
+      tool: string,
+      summary: string,
+      reply: { model: string; spendUsd: number },
+    ) => [
+      {
+        type: 'agentReplied',
+        at: 1000,
+        agentId: `fake-agent-1-${n}`,
+        ...reply,
+      },
       {
         type: 'toolStarted',
         at: 1000,
         agentId: `fake-agent-1-${n}`,
         toolUseId: `fake-agent-1-${n}-tool`,
         tool,
+        summary,
       },
       {
         type: 'toolFinished',
@@ -774,6 +801,9 @@ describe('createFakeAgentHarness', () => {
         parentAgentId: MAIN_AGENT_ID,
         agentType: 'wigley:sonnet-medium',
         description: 'Map the stream decoder',
+        name: 'map-decoder',
+        model: 'sonnet',
+        effort: 'medium',
       },
       {
         type: 'agentSpawned',
@@ -782,15 +812,25 @@ describe('createFakeAgentHarness', () => {
         parentAgentId: MAIN_AGENT_ID,
         agentType: 'Explore',
         description: 'Find every Files adapter',
+        name: 'Explore',
+        model: null,
+        effort: null,
       },
-      ...subagentTool(1, 'Read'),
-      ...subagentTool(2, 'Grep'),
+      ...subagentTool(1, 'Read', 'src/main/claude-code/stream-decoder.ts', {
+        model: 'claude-sonnet-5-5',
+        spendUsd: 0.0421,
+      }),
+      ...subagentTool(2, 'Grep', 'append', {
+        model: 'claude-haiku-5-5',
+        spendUsd: 0.0019,
+      }),
       {
         type: 'taskStarted',
         at: 1000,
         taskId: 'fake-task-1-1',
         agentId: MAIN_AGENT_ID,
         description: 'Run the self-test',
+        command: 'npm run selftest',
       },
       {
         type: 'taskStarted',
@@ -798,6 +838,7 @@ describe('createFakeAgentHarness', () => {
         taskId: 'fake-task-1-2',
         agentId: 'fake-agent-1-1',
         description: 'Watch the build',
+        command: 'npm run build -- --watch',
       },
     ]);
     // Each entry as `[kind, id, tool result text]`.
@@ -887,10 +928,12 @@ describe('createFakeAgentHarness', () => {
         'agentSpawned fake-agent-2-1',
         'tool agent-2-2',
         'agentSpawned fake-agent-2-2',
+        'agentReplied fake-agent-2-1',
         'tool agent-2-1-tool',
         'toolStarted fake-agent-2-1',
         'tool agent-2-1-tool fake',
         'toolFinished fake-agent-2-1',
+        'agentReplied fake-agent-2-2',
         'tool agent-2-2-tool',
         'toolStarted fake-agent-2-2',
         'tool agent-2-2-tool fake',
@@ -1034,6 +1077,7 @@ describe('createFakeAgentHarness', () => {
           agentId: MAIN_AGENT_ID,
           toolUseId: 'fake-tool-1',
           tool: 'Bash',
+          summary: 'echo fake',
         },
         {
           type: 'toolFinished',

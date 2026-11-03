@@ -11,6 +11,9 @@ const e2: AgentEvent = {
   parentAgentId: MAIN_AGENT_ID,
   agentType: 'Explore',
   description: 'Find adapters',
+  name: 'Explore',
+  model: null,
+  effort: null,
 };
 
 // A `files` double whose appends each wait for the test to settle them.

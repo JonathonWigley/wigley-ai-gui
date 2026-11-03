@@ -884,7 +884,22 @@ description "read notes" …)`; Explore spawned on the first attempt):
 - `run_in_background` is in `input` only when the model sets it: `true` in probe 4, `false` in the foreground probes,
   absent otherwise. Probe 4: `{"description":"read notes","prompt":"…","run_in_background":true}`. The CLI did not
   refuse the option.
-- No other `input` key appeared.
+- No other `input` key appeared in these probes. The tool's schema also takes `name`, `model` and `effort`, which the
+  model sets only when asked (below).
+- **`name`, `model` and `effort` inputs** (Claude 2.1.317, probed 2026-11-02 with `claude -p … --output-format
+  stream-json --verbose --model haiku --effort low`, one turn whose prompt asked for one Agent call with these inputs).
+  They arrive verbatim in `input` (and in `wire_tool_inputs`): `model` is the alias the call gave, not a model id.
+
+  ```
+  {"type":"assistant","message":{"model":"claude-haiku-5-5",…,"content":[{"type":"tool_use","id":"toolu_01VkSUB6QndznDsC1sePT7Rd","name":"Agent","input":{"description":"say ok","subagent_type":"general-purpose","name":"probe-agent","model":"haiku","effort":"low","run_in_background":true,"prompt":"Reply with the single word OK and use no tools."},"caller":{"type":"direct"}}],…},"parent_tool_use_id":null,…}
+  ```
+
+  `task_started` carries none of the three (`description`, `subagent_type`, `is_backgrounded`, `spawn_depth`,
+  `task_type`, `prompt`, as above). The launch receipt names the model id the subagent runs on in
+  `tool_use_result.resolvedModel`, and does not echo `name` or `effort`:
+  `"tool_use_result":{"isAsync":true,"status":"async_launched","agentId":"ad7f1eca80ac1ed99","description":"say ok","resolvedModel":"claude-haiku-5-5","prompt":"…","outputFile":"<tasks>/ad7f1eca80ac1ed99.output","canReadOutputFile":true,…}`.
+  Session transcripts of 2.1.314 (2026-10-31) show the same `name` input on Agent calls a main agent made unprompted
+  (`{"subagent_type":"wigley:opus-medium","description":"Draft plan tasks 06-10","name":"drafter-b",…}`).
 - A reader pins an Agent call by `tool_use.id`, which is also the `tool_use_id` of every `task_*` line below.
 
 **The system lines for a subagent.** All four carry the Agent call's id in `tool_use_id` (not in

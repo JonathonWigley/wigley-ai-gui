@@ -191,6 +191,7 @@ export type AgentEvent =
   | UsageAgentEvent
   | { type: 'sessionStarted'; at: number }
   | { type: 'sessionEnded'; at: number }
+  // `name` is the label the agent was given, its type when none; `model` and `effort` are null when unknown.
   | {
       type: 'agentSpawned';
       at: number;
@@ -198,6 +199,9 @@ export type AgentEvent =
       parentAgentId: string;
       agentType: string;
       description: string;
+      name: string;
+      model: string | null;
+      effort: string | null;
     }
   | {
       type: 'agentFinished';
@@ -205,15 +209,27 @@ export type AgentEvent =
       agentId: string;
       outcome: 'done' | 'failed';
     }
+  // A subagent's model and spend so far, on each of its replies and on its launch receipt. `model` is the model id
+  // Claude used (the reply's, or the receipt's resolved model); `spendUsd` is the agent's estimated spend so far
+  // (cumulative, not the reply's share), null before its first reply or when any reply's model has no list price.
+  | {
+      type: 'agentReplied';
+      at: number;
+      agentId: string;
+      model: string;
+      spendUsd: number | null;
+    }
   // A process an agent started that runs apart from its turn (a background command). `agentId` is the agent that
   // started it, MAIN_AGENT_ID or a subagent's id. A task outlives its turn and its agent: it ends only on its own
-  // `taskFinished` or `sessionEnded`.
+  // `taskFinished` or `sessionEnded`. `command` is the shell command the task runs, the whole text; null when the
+  // harness links the task to none.
   | {
       type: 'taskStarted';
       at: number;
       taskId: string;
       agentId: string;
       description: string;
+      command: string | null;
     }
   // A task's end; nothing else ends a task but `sessionEnded`.
   | {
@@ -222,12 +238,14 @@ export type AgentEvent =
       taskId: string;
       outcome: 'done' | 'failed';
     }
+  // `summary` is the tool call's one-line description, the tool ChatEntry's `summary`.
   | {
       type: 'toolStarted';
       at: number;
       agentId: string;
       toolUseId: string;
       tool: string;
+      summary: string;
     }
   | {
       type: 'toolFinished';

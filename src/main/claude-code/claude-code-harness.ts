@@ -22,6 +22,10 @@ import type { Paths } from '../../contracts/paths';
 import { errorText } from '../../shared/error-text';
 import { isSameJson } from '../../shared/json';
 import { typedSkill } from '../../shared/typed-skill';
+import {
+  type AgentDefinitions,
+  loadAgentDefinitions,
+} from './agent-definitions';
 import { readAccountStatus, signInLink } from './claude-auth';
 import { claudeConfigFolder, claudeEnv, claudeLaunch } from './claude-launch';
 import {
@@ -70,7 +74,8 @@ export type ClaudeSpawn = (
 // `claude -p /usage` run, and `paths` joins and compares paths by the rules of
 // the OS `claude` runs on; `clock` stamps each live entry's and agent event's
 // `at`; `randomUuid` gives each stdin user message its `uuid`. `files` also
-// reads the profile's `settings.json` at each session start.
+// reads the profile's `settings.json` and the agent definitions at each session
+// start.
 export interface ClaudeCodeHarnessDeps {
   command(): string;
   permissionTool: string;
@@ -171,9 +176,12 @@ function startClaudeProcess(
   let requestCount = 0;
   let noticeCount = 0;
   const pendingRequests = new Map<string, PendingRequest>();
+  // The session's agent definitions, empty until their load resolves.
+  let definitions: AgentDefinitions = new Map();
   // The adapter's own `get_context_usage` replies stay out of the chat.
   const decoder = createStreamDecoder(
     (requestId) => pendingRequests.get(requestId)?.kind === 'contextUsage',
+    (agentType) => definitions.get(agentType) ?? null,
   );
   const tracker = createTurnTracker();
   let lastStderr: string | null = null;
@@ -501,10 +509,13 @@ function startClaudeProcess(
   requestContextUsage();
   // The profile's autocompact override, read once: a change applies to the
   // next session.
-  const settingsPath = deps.paths.join(
-    claudeConfigFolder(request.profileDir, deps.env, deps.homeDir, deps.paths),
-    'settings.json',
+  const configFolder = claudeConfigFolder(
+    request.profileDir,
+    deps.env,
+    deps.homeDir,
+    deps.paths,
   );
+  const settingsPath = deps.paths.join(configFolder, 'settings.json');
   void readIfPresent(deps.files, settingsPath).then(
     (text) => {
       usage = withConfiguredPercent(usage, configuredPercent(text));
@@ -513,6 +524,14 @@ function startClaudeProcess(
     (error: unknown) =>
       deps.log('claude', `settings.json not read: ${errorText(error)}`),
   );
+  // Read once per session: an agent definition added later applies to the next session.
+  void loadAgentDefinitions(
+    { files: deps.files, paths: deps.paths, log: deps.log },
+    request.projectDir,
+    configFolder,
+  ).then((loaded) => {
+    definitions = loaded;
+  });
 
   return {
     send(userInput) {

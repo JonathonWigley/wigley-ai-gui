@@ -1,6 +1,6 @@
 # 01 — The plugins.disabled setting
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -211,3 +211,4 @@ One commit for the group.
 
 ## Proof
 
+Commit a9fc20b5 · proof: diff read: plugins.disabled in Settings and defaults, startPlugins disabled param, disabledDependencyProblem, mainStartList, applySelfTestConfig serves []; no typecheck error outside 03's in-flight files; worker's 13 test files pass · concerns: the six listed fixture files needed no plugins member (partial casts, compiler flags none); check-layers lets manifests.test.ts import src/config; settings selftest comments renamed to the timeout-reset group

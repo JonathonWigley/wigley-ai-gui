@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { AgentDefinition } from './agent-definitions';
 import { createStreamDecoder } from './stream-decoder';
 
 // Lines shaped after the excerpts in docs/features/agent-chat/claude-stream.md.
@@ -162,11 +163,16 @@ const taskStarted = (
     task_type: taskType,
   });
 
-const taskBegan = (taskId: string, agentId = 'main') => ({
+const taskBegan = (
+  taskId: string,
+  agentId = 'main',
+  command: string | null = null,
+) => ({
   type: 'taskStarted',
   taskId,
   agentId,
   description: 'Sleep 6 seconds in background',
+  command,
 });
 
 const taskEnded = (taskId: string, outcome: 'done' | 'failed') => ({
@@ -194,13 +200,58 @@ const spawned = (
   agentId: string,
   agentType = 'Explore',
   parentAgentId = 'main',
+  facts: { name?: string; model?: string; effort?: string } = {},
 ) => ({
   type: 'agentSpawned',
   agentId,
   parentAgentId,
   agentType,
   description: 'read notes',
+  name: facts.name ?? agentType,
+  model: facts.model ?? null,
+  effort: facts.effort ?? null,
 });
+
+const started = (
+  agentId: string,
+  toolUseId: string,
+  tool: string,
+  summary: string,
+) => ({ type: 'toolStarted', agentId, toolUseId, tool, summary });
+
+const replied = (agentId: string, model: string, spendUsd: number | null) => ({
+  type: 'agentReplied',
+  agentId,
+  model,
+  spendUsd: spendUsd === null ? null : expect.closeTo(spendUsd, 12),
+});
+
+// A subagent reply of one text block with `usage`.
+const subagentReply = (
+  agentId: string,
+  messageId: string,
+  model: string,
+  usage: object,
+) =>
+  line({
+    type: 'assistant',
+    message: {
+      model,
+      id: messageId,
+      type: 'message',
+      role: 'assistant',
+      content: [{ type: 'text', text: 'ok' }],
+      stop_reason: null,
+      usage,
+    },
+    parent_tool_use_id: agentId,
+  });
+
+// The measured subagent Read, claude-stream.md § Subagents (4.76).
+const MEASURED_AGENT_CALL = 'toolu_01FqZQTLkePVaZcsvgWG3jqK';
+const MEASURED_SUBAGENT_READ =
+  '{"type":"assistant","message":{"model":"claude-haiku-5-5","id":"msg_011CgdGgYLDfFWRV43cgsu25","type":"message","role":"assistant","content":[{"type":"tool_use","id":"toolu_01Th9zCiM7nvQkeAH1gsms6w","name":"Read","input":{"file_path":"<project>/notes.txt"},"caller":{"type":"direct"}}],"stop_reason":null,"usage":{"input_tokens":2,"cache_creation_input_tokens":15637,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":15637,"ephemeral_1h_input_tokens":0},"output_tokens":17}},"parent_tool_use_id":"toolu_01FqZQTLkePVaZcsvgWG3jqK","agent_id":"a4e45e22d2e0fef8f","request_id":"req_011CgdGgY1sEU695qQGKYAK9","subagent_type":"Explore","task_description":"read notes"}';
+const SUBAGENT_BASH = 'python3 -c "import time; time.sleep(45)"\necho slept';
 
 const finished = (agentId: string, outcome: 'done' | 'failed') => ({
   type: 'agentFinished',
@@ -1023,9 +1074,7 @@ describe('createStreamDecoder', () => {
     {
       case: 'main tool',
       lines: [toolUseLine('t1', 'Read', { file_path: 'notes.txt' })],
-      expected: [
-        { type: 'toolStarted', agentId: 'main', toolUseId: 't1', tool: 'Read' },
-      ],
+      expected: [started('main', 't1', 'Read', 'notes.txt')],
     },
     {
       case: 'spawn',
@@ -1046,7 +1095,7 @@ describe('createStreamDecoder', () => {
       ],
       expected: [
         spawned('a1'),
-        { type: 'toolStarted', agentId: 'a1', toolUseId: 't1', tool: 'Read' },
+        started('a1', 't1', 'Read', 'notes.txt'),
         { type: 'toolFinished', agentId: 'a1', toolUseId: 't1', ok: true },
       ],
     },
@@ -1057,7 +1106,7 @@ describe('createStreamDecoder', () => {
         toolResultLine('t1', { isError: true }),
       ],
       expected: [
-        { type: 'toolStarted', agentId: 'main', toolUseId: 't1', tool: 'Read' },
+        started('main', 't1', 'Read', 'missing.txt'),
         { type: 'toolFinished', agentId: 'main', toolUseId: 't1', ok: false },
       ],
     },
@@ -1118,7 +1167,7 @@ describe('createStreamDecoder', () => {
       ],
       expected: [
         spawned('b1'),
-        { type: 'toolStarted', agentId: 'b1', toolUseId: 't1', tool: 'Read' },
+        started('b1', 't1', 'Read', 'notes.txt'),
         { type: 'toolFinished', agentId: 'b1', toolUseId: 't1', ok: true },
         finished('b1', 'done'),
       ],
@@ -1270,8 +1319,8 @@ describe('createStreamDecoder', () => {
       ],
       expected: [
         spawned('a1'),
-        { type: 'toolStarted', agentId: 'a1', toolUseId: 't1', tool: 'Read' },
-        { type: 'toolStarted', agentId: 'a1', toolUseId: 't2', tool: 'Grep' },
+        started('a1', 't1', 'Read', 'notes.txt'),
+        started('a1', 't2', 'Grep', 'x'),
         { type: 'toolFinished', agentId: 'a1', toolUseId: 't2', ok: true },
         { type: 'toolFinished', agentId: 'a1', toolUseId: 't1', ok: false },
         finished('a1', 'failed'),
@@ -1289,11 +1338,11 @@ describe('createStreamDecoder', () => {
         toolResultLine('t2', { parent: 'n1' }),
       ],
       expected: [
-        { type: 'toolStarted', agentId: 'main', toolUseId: 't0', tool: 'Bash' },
+        started('main', 't0', 'Bash', 'ls'),
         spawned('a1'),
         spawned('n1', 'Explore', 'a1'),
-        { type: 'toolStarted', agentId: 'a1', toolUseId: 't1', tool: 'Read' },
-        { type: 'toolStarted', agentId: 'n1', toolUseId: 't2', tool: 'Read' },
+        started('a1', 't1', 'Read', 'notes.txt'),
+        started('n1', 't2', 'Read', 'todo.txt'),
         { type: 'toolFinished', agentId: 'a1', toolUseId: 't1', ok: false },
         finished('a1', 'failed'),
         { type: 'toolFinished', agentId: 'n1', toolUseId: 't2', ok: false },
@@ -1310,12 +1359,7 @@ describe('createStreamDecoder', () => {
         }),
       ],
       expected: [
-        {
-          type: 'toolStarted',
-          agentId: 'main',
-          toolUseId: 's1',
-          tool: 'Skill',
-        },
+        started('main', 's1', 'Skill', 'wigley:feature'),
         skillStarted('main', 'wigley:feature', 'plan x'),
       ],
     },
@@ -1323,26 +1367,14 @@ describe('createStreamDecoder', () => {
       case: 'skill without args',
       lines: [toolUseLine('s1', 'Skill', { skill: 'wigley:make' })],
       expected: [
-        {
-          type: 'toolStarted',
-          agentId: 'main',
-          toolUseId: 's1',
-          tool: 'Skill',
-        },
+        started('main', 's1', 'Skill', 'wigley:make'),
         skillStarted('main', 'wigley:make', ''),
       ],
     },
     {
       case: 'skill without a name',
       lines: [toolUseLine('s1', 'Skill', { args: 'x' })],
-      expected: [
-        {
-          type: 'toolStarted',
-          agentId: 'main',
-          toolUseId: 's1',
-          tool: 'Skill',
-        },
-      ],
+      expected: [started('main', 's1', 'Skill', 'x')],
     },
     {
       case: 'subagent skill',
@@ -1357,7 +1389,7 @@ describe('createStreamDecoder', () => {
       ],
       expected: [
         spawned('a1'),
-        { type: 'toolStarted', agentId: 'a1', toolUseId: 's1', tool: 'Skill' },
+        started('a1', 's1', 'Skill', 'wigley:feature'),
         skillStarted('a1', 'wigley:feature', 'plan x'),
       ],
     },
@@ -1372,12 +1404,7 @@ describe('createStreamDecoder', () => {
         RESULT_LINE,
       ],
       expected: [
-        {
-          type: 'toolStarted',
-          agentId: 'main',
-          toolUseId: 'w1',
-          tool: 'Write',
-        },
+        started('main', 'w1', 'Write', '/p/docs/features/x/plan-y/plan.md'),
         { type: 'toolFinished', agentId: 'main', toolUseId: 'w1', ok: true },
         written('main', '/p/docs/features/x/plan-y/plan.md'),
         TURN_ENDED,
@@ -1397,19 +1424,9 @@ describe('createStreamDecoder', () => {
         toolResultLine('e3'),
       ],
       expected: [
-        { type: 'toolStarted', agentId: 'main', toolUseId: 'e1', tool: 'Edit' },
-        {
-          type: 'toolStarted',
-          agentId: 'main',
-          toolUseId: 'e2',
-          tool: 'MultiEdit',
-        },
-        {
-          type: 'toolStarted',
-          agentId: 'main',
-          toolUseId: 'e3',
-          tool: 'NotebookEdit',
-        },
+        started('main', 'e1', 'Edit', '/p/a.ts'),
+        started('main', 'e2', 'MultiEdit', '/p/b.ts'),
+        started('main', 'e3', 'NotebookEdit', '/p/c.ipynb'),
         { type: 'toolFinished', agentId: 'main', toolUseId: 'e1', ok: true },
         written('main', '/p/a.ts'),
         { type: 'toolFinished', agentId: 'main', toolUseId: 'e2', ok: true },
@@ -1425,12 +1442,7 @@ describe('createStreamDecoder', () => {
         toolResultLine('w1', { isError: true }),
       ],
       expected: [
-        {
-          type: 'toolStarted',
-          agentId: 'main',
-          toolUseId: 'w1',
-          tool: 'Write',
-        },
+        started('main', 'w1', 'Write', '/p/a.md'),
         { type: 'toolFinished', agentId: 'main', toolUseId: 'w1', ok: false },
       ],
     },
@@ -1449,7 +1461,7 @@ describe('createStreamDecoder', () => {
       ],
       expected: [
         spawned('a1'),
-        { type: 'toolStarted', agentId: 'a1', toolUseId: 'w1', tool: 'Write' },
+        started('a1', 'w1', 'Write', '/p/a.md'),
         { type: 'toolFinished', agentId: 'a1', toolUseId: 'w1', ok: false },
         finished('a1', 'done'),
       ],
@@ -1461,7 +1473,7 @@ describe('createStreamDecoder', () => {
         toolResultLine('t1'),
       ],
       expected: [
-        { type: 'toolStarted', agentId: 'main', toolUseId: 't1', tool: 'Read' },
+        started('main', 't1', 'Read', '/p/a.md'),
         { type: 'toolFinished', agentId: 'main', toolUseId: 't1', ok: true },
       ],
     },
@@ -1602,8 +1614,206 @@ describe('createStreamDecoder', () => {
       ],
       expected: [taskBegan('bvrvtgapv'), taskEnded('bvrvtgapv', 'done')],
     },
-  ])('decode_AgentEvents_$case', ({ lines, expected }) => {
-    const decoder = createStreamDecoder();
+    {
+      case: 'spawn with name',
+      lines: [agentCall('a1', { name: 'notes-reader' })],
+      expected: [spawned('a1', 'Explore', 'main', { name: 'notes-reader' })],
+    },
+    {
+      case: 'spawn of a defined type',
+      definitions: { mapper: { model: 'sonnet', effort: 'high' } },
+      lines: [agentCall('a1', { subagent_type: 'mapper' })],
+      expected: [
+        spawned('a1', 'mapper', 'main', { model: 'sonnet', effort: 'high' }),
+      ],
+    },
+    {
+      case: 'spawn whose input names model and effort',
+      definitions: { Explore: { model: 'sonnet', effort: 'low' } },
+      lines: [agentCall('a1', { model: 'opus', effort: 'max' })],
+      expected: [
+        spawned('a1', 'Explore', 'main', { model: 'opus', effort: 'max' }),
+      ],
+    },
+    {
+      case: 'subagent reply',
+      lines: [agentCall(MEASURED_AGENT_CALL), MEASURED_SUBAGENT_READ],
+      expected: [
+        spawned(MEASURED_AGENT_CALL),
+        replied(MEASURED_AGENT_CALL, 'claude-haiku-5-5', 0.001963325),
+        started(
+          MEASURED_AGENT_CALL,
+          'toolu_01Th9zCiM7nvQkeAH1gsms6w',
+          'Read',
+          '<project>/notes.txt',
+        ),
+      ],
+    },
+    {
+      case: 'subagent reply re-sent for a second block',
+      lines: [
+        agentCall('a1'),
+        subagentReply('a1', 'm1', 'claude-haiku-5-5', { output_tokens: 1000 }),
+        subagentReply('a1', 'm1', 'claude-haiku-5-5', { output_tokens: 1000 }),
+      ],
+      expected: [
+        spawned('a1'),
+        replied('a1', 'claude-haiku-5-5', 0.0005),
+        replied('a1', 'claude-haiku-5-5', 0.0005),
+      ],
+    },
+    {
+      case: 'subagent replies of two messages',
+      lines: [
+        agentCall('a1'),
+        subagentReply('a1', 'm1', 'claude-haiku-5-5', { output_tokens: 1000 }),
+        subagentReply('a1', 'm2', 'claude-sonnet-5-5', {
+          input_tokens: 3000,
+          output_tokens: 2000,
+        }),
+      ],
+      expected: [
+        spawned('a1'),
+        replied('a1', 'claude-haiku-5-5', 0.0005),
+        replied('a1', 'claude-sonnet-5-5', 0.0265),
+      ],
+    },
+    {
+      case: 'subagent reply of an unpriced model',
+      lines: [
+        agentCall('a1'),
+        subagentReply('a1', 'm1', 'claude-mythos-5-1', { output_tokens: 1000 }),
+      ],
+      expected: [spawned('a1'), replied('a1', 'claude-mythos-5-1', null)],
+    },
+    {
+      case: 'subagent replies priced then unpriced',
+      lines: [
+        agentCall('a1'),
+        subagentReply('a1', 'm1', 'claude-haiku-5-5', { output_tokens: 1000 }),
+        subagentReply('a1', 'm2', 'claude-mythos-5-1', { output_tokens: 1000 }),
+      ],
+      expected: [
+        spawned('a1'),
+        replied('a1', 'claude-haiku-5-5', 0.0005),
+        replied('a1', 'claude-mythos-5-1', null),
+      ],
+    },
+    {
+      case: 'subagent replies unpriced then priced',
+      lines: [
+        agentCall('a1'),
+        subagentReply('a1', 'm1', 'claude-mythos-5-1', { output_tokens: 1000 }),
+        subagentReply('a1', 'm2', 'claude-haiku-5-5', { output_tokens: 1000 }),
+      ],
+      expected: [
+        spawned('a1'),
+        replied('a1', 'claude-mythos-5-1', null),
+        replied('a1', 'claude-haiku-5-5', null),
+      ],
+    },
+    {
+      case: 'launch receipt sets the resolved model',
+      lines: [
+        agentCall('b1', { model: 'haiku', run_in_background: true }),
+        toolResultLine('b1', {
+          toolUseResult: {
+            isAsync: true,
+            status: 'async_launched',
+            agentId: 'a4e45e22d2e0fef8f',
+            description: 'read notes',
+            resolvedModel: 'claude-haiku-5-5',
+          },
+        }),
+        taskNotification('b1', 'completed'),
+      ],
+      expected: [
+        spawned('b1', 'Explore', 'main', { model: 'haiku' }),
+        replied('b1', 'claude-haiku-5-5', null),
+        finished('b1', 'done'),
+      ],
+    },
+    {
+      case: 'receipt of a non-Agent tool',
+      lines: [
+        toolUseLine('t1', 'Bash', { command: 'ls' }),
+        toolResultLine('t1', {
+          toolUseResult: { stdout: '', resolvedModel: 'claude-haiku-5-5' },
+        }),
+      ],
+      expected: [
+        started('main', 't1', 'Bash', 'ls'),
+        { type: 'toolFinished', agentId: 'main', toolUseId: 't1', ok: true },
+      ],
+    },
+    {
+      case: 'main reply',
+      lines: [REPLY_LINE],
+      expected: [],
+    },
+    {
+      case: 'synthetic subagent reply',
+      lines: [
+        agentCall('a1'),
+        replyWith((event) => {
+          event.parent_tool_use_id = 'a1';
+          event.message.model = '<synthetic>';
+        }),
+      ],
+      expected: [spawned('a1')],
+    },
+    {
+      case: 'main background Bash task',
+      lines: [
+        toolUseLine('toolu_016R', 'Bash', {
+          command: 'sleep 6',
+          run_in_background: true,
+        }),
+        taskStarted('bvrvtgapv', 'toolu_016R', 'local_bash'),
+      ],
+      expected: [
+        started('main', 'toolu_016R', 'Bash', 'sleep 6'),
+        taskBegan('bvrvtgapv', 'main', 'sleep 6'),
+      ],
+    },
+    {
+      case: 'subagent-owned Bash task',
+      lines: [
+        agentCall('a1'),
+        launchReceipt('a1'),
+        taskStarted('a8e9e7aad968da282', 'a1', 'local_agent'),
+        toolUseLine('toolu_013y', 'Bash', { command: SUBAGENT_BASH }, 'a1'),
+        taskStarted(
+          'bpdumb7hy',
+          'toolu_013y',
+          'local_bash',
+          'a8e9e7aad968da282',
+        ),
+      ],
+      expected: [
+        spawned('a1'),
+        started(
+          'a1',
+          'toolu_013y',
+          'Bash',
+          'python3 -c "import time; time.sleep(45)"',
+        ),
+        taskBegan('bpdumb7hy', 'a1', SUBAGENT_BASH),
+      ],
+    },
+    {
+      case: 'task with no linked call',
+      lines: [taskStarted('bvrvtgapv', 'toolu_none', 'local_bash')],
+      expected: [taskBegan('bvrvtgapv')],
+    },
+  ])('decode_AgentEvents_$case', ({ lines, expected, definitions }) => {
+    const known = new Map<string, AgentDefinition>(
+      Object.entries(definitions ?? {}),
+    );
+    const decoder = createStreamDecoder(
+      undefined,
+      (agentType) => known.get(agentType) ?? null,
+    );
 
     const drafts = lines.flatMap((text) => decoder.decode(text).agentEvents);
 

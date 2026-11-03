@@ -4,6 +4,7 @@ import {
   type PlanRowPatch,
   type UsageAgentEvent,
 } from '../../contracts/agent';
+import type { AgentDefinition } from './agent-definitions';
 import type { ClaudeControlId } from './claude-controls';
 import type { EntryDraft, WithoutAt } from '../../shared/entry-stamp';
 import { isJsonObject } from '../../shared/json';
@@ -15,6 +16,7 @@ import {
   numberOrNull,
   parsed,
 } from './json-fields';
+import { replySpendUsd } from './model-prices';
 import { rateLimitRows } from './plan-usage';
 import {
   type ReplyUsage,
@@ -212,8 +214,11 @@ function reportSkillCall(
 // `content_block_start`; every other stream event is left out, since the
 // entry's start event or the final `assistant` event holds its content. A
 // `control_response` whose request id `isKeptOut` names joins no entry.
+// `definitionOf` gives the agent definition of an Agent call's type, null when
+// none is known.
 export function createStreamDecoder(
   isKeptOut: (requestId: string) => boolean = () => false,
+  definitionOf: (agentType: string) => AgentDefinition | null = () => null,
 ): StreamDecoder {
   const textEntries = new Map<string, TextEntry>();
   const toolEntries = new Map<string, ToolEntry>();
@@ -243,6 +248,9 @@ export function createStreamDecoder(
   const subagentTasks = new Map<string, string>();
   // Tasks started and not yet ended, by `task_id`.
   const startedTasks = new Set<string>();
+  // Each subagent's reply spends by message id, by its Agent call id: null for
+  // a reply whose model has no list price.
+  const replySpends = new Map<string, Map<string, number | null>>();
   let rawCount = 0;
   let turnCount = 0;
   // The events entry gathered events join: the first gathered event opens the
@@ -310,9 +318,16 @@ export function createStreamDecoder(
   }
 
   // A `tool_use` block starts a subagent when it calls the Agent tool, and a
-  // tool call of the line's agent otherwise; a Skill call also starts its
-  // skill, and a write call keeps its path for its result.
-  function startAgentOrTool(block: Json, event: Json, out: DecodedLine) {
+  // tool call of the line's agent otherwise, described by `summary`; a Skill
+  // call also starts its skill, and a write call keeps its path for its result.
+  // A spawn's model and effort are the call's own inputs, else its type's
+  // definition's.
+  function startAgentOrTool(
+    block: Json,
+    event: Json,
+    summary: string,
+    out: DecodedLine,
+  ) {
     const id = asString(block.id);
     const name = asString(block.name);
     const agentId = agentOf(event);
@@ -324,18 +339,69 @@ export function createStreamDecoder(
         agentId,
         toolUseId: id,
         tool: name,
+        summary,
       });
       reportSkillCall(name, input, agentId, out);
       keepWritePath(id, name, input);
       return;
     }
     pendingAgents.set(id, agentId);
+    const agentType = asString(input.subagent_type) || DEFAULT_AGENT_TYPE;
+    const definition = definitionOf(agentType);
     out.agentEvents.push({
       type: 'agentSpawned',
       agentId: id,
       parentAgentId: agentId,
-      agentType: asString(input.subagent_type) || DEFAULT_AGENT_TYPE,
+      agentType,
       description: asString(input.description),
+      name: asString(input.name) || agentType,
+      model: asString(input.model) || (definition?.model ?? null),
+      effort: asString(input.effort) || (definition?.effort ?? null),
+    });
+  }
+
+  // The subagent's estimated spend over its recorded replies; null before its
+  // first reply or when any reply has no price.
+  function spendOf(agentId: string): number | null {
+    const spends = replySpends.get(agentId);
+    if (spends === undefined) {
+      return null;
+    }
+    let total = 0;
+    for (const spend of spends.values()) {
+      if (spend === null) {
+        return null;
+      }
+      total += spend;
+    }
+    return total;
+  }
+
+  // A subagent's model reply records its spend under its message id (Claude
+  // sends one line per content block, each with the message's usage) and
+  // reports the agent's model and spend so far.
+  function reportSubagentReply(event: Json, message: Json, out: DecodedLine) {
+    const agentId = event.parent_tool_use_id;
+    const model = message.model;
+    const isSubagentReply =
+      typeof agentId === 'string' &&
+      typeof model === 'string' &&
+      model !== SYNTHETIC_MODEL &&
+      isJsonObject(message.usage);
+    if (!isSubagentReply) {
+      return;
+    }
+    const spends = replySpends.get(agentId) ?? new Map<string, number | null>();
+    replySpends.set(agentId, spends);
+    spends.set(
+      asString(message.id),
+      replySpendUsd(model, asJson(message.usage)),
+    );
+    out.agentEvents.push({
+      type: 'agentReplied',
+      agentId,
+      model,
+      spendUsd: spendOf(agentId),
     });
   }
 
@@ -401,6 +467,7 @@ export function createStreamDecoder(
     const id = asString(block.tool_use_id);
     const isOk = block.is_error !== true;
     if (pendingAgents.has(id)) {
+      reportResolvedModel(id, event, out);
       const isLaunchReceipt =
         isOk && asJson(event.tool_use_result).isAsync === true;
       if (isLaunchReceipt) {
@@ -429,6 +496,20 @@ export function createStreamDecoder(
     }
   }
 
+  // An Agent call's receipt names the model its subagent runs on.
+  function reportResolvedModel(agentId: string, event: Json, out: DecodedLine) {
+    const model = asString(asJson(event.tool_use_result).resolvedModel);
+    if (model === '') {
+      return;
+    }
+    out.agentEvents.push({
+      type: 'agentReplied',
+      agentId,
+      model,
+      spendUsd: spendOf(agentId),
+    });
+  }
+
   // A subagent's end event; it also comes for other background tasks, whose
   // `tool_use_id` is no Agent call's.
   function finishByNotification(event: Json, out: DecodedLine) {
@@ -440,7 +521,8 @@ export function createStreamDecoder(
 
   // A `local_agent` start pairs a subagent's `task_id` with its Agent call;
   // any other typed start begins a task of the subagent its `parent_task_id`
-  // names, or of the main agent.
+  // names, or of the main agent, running the `command` input of the tool call
+  // its `tool_use_id` names.
   function startTask(event: Json, out: DecodedLine) {
     const taskId = asString(event.task_id);
     const taskType = asString(event.task_type);
@@ -458,6 +540,10 @@ export function createStreamDecoder(
       agentId:
         subagentTasks.get(asString(event.parent_task_id)) ?? MAIN_AGENT_ID,
       description: asString(event.description),
+      command:
+        asString(
+          asJson(toolEntries.get(asString(event.tool_use_id))?.input).command,
+        ) || null,
     });
   }
 
@@ -676,6 +762,7 @@ export function createStreamDecoder(
   function decodeAssistant(event: Json, out: DecodedLine) {
     const message = asJson(event.message);
     readReplyUsage(event, message, out);
+    reportSubagentReply(event, message, out);
     if (message.model === SYNTHETIC_MODEL) {
       const text = messageText(message.content).trim();
       out.entries.push(
@@ -692,8 +779,9 @@ export function createStreamDecoder(
           snapshot(decodeTextBlock(kind, messageId, block, event)),
         );
       } else if (block.type === 'tool_use') {
-        out.entries.push(snapshot(toolEntry(block, event)));
-        startAgentOrTool(block, event, out);
+        const entry = toolEntry(block, event);
+        out.entries.push(snapshot(entry));
+        startAgentOrTool(block, event, entry.summary, out);
       }
     }
   }

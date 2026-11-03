@@ -236,7 +236,7 @@ other plugin; `npm run lint` (layer and style checks) passes, with a `LAYERS` en
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [The plugins.disabled setting](01-plugins-disabled.md)
+- [x] [The plugins.disabled setting](01-plugins-disabled.md)
 - [x] [The HScroller primitive](02-hscroller.md)
 - [ ] [Subagent facts in agent events](03-agent-event-facts.md)
 
@@ -266,9 +266,12 @@ Review base: b9ab45db2031275b78977d6ab85e250d4cf49d1f
 
 ### Groups
 - 02 · 7dab784a · diff read: HScroller interface and createHScroller present in h-scroller.ts; worker's h-scroller-steps test 20 rows pass; no typecheck error in 02's files (03 in flight) · concerns: gallery self-test lines unproven live until the test gate
+- 01 · a9fc20b5 · diff read: plugins.disabled in Settings and defaults, startPlugins disabled param, disabledDependencyProblem, mainStartList, applySelfTestConfig serves []; no typecheck error outside 03's in-flight files; worker's 13 test files pass · concerns: the six listed fixture files needed no plugins member (partial casts, compiler flags none); check-layers lets manifests.test.ts import src/config; settings selftest comments renamed to the timeout-reset group
 ### Contract changes
 ### Rulings
 - refresh sets data-overflow before a pending reveal and before reading back/forward, departing from the task's order, so the At end sample measures the narrowed track — chevron state would be wrong otherwise — cost if wrong: one extra layout read per refresh · group 02 · group 02
 - track items get flex: none so a long row scrolls rather than squeezes — cost if wrong: a strip box could not shrink · group 02 · group 02
+- disabled parts are dropped before the duplicate-id check, so two disabled parts sharing an id go unreported — cost if wrong: a duplicate id surfaces only when re-enabled · group 01 · group 01
+- page config pushes are filtered by wrapping applyPush once with startedPluginsConfig(next, pageLoadList) — cost if wrong: none beyond the wrapper · group 01 · group 01
 ### Review rounds
 ### Test gate

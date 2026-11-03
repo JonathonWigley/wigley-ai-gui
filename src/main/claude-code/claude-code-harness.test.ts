@@ -958,8 +958,54 @@ describe('createClaudeCodeHarness', () => {
         agentId: 'main',
         toolUseId: 't1',
         tool: 'Read',
+        summary: 'notes.txt',
       },
       { type: 'sessionEnded', at: 2000 },
+    ]);
+  });
+
+  it('start_AgentDefinition_ReachesTheSpawn', async () => {
+    const files = createMemoryFiles();
+    await files.write(
+      '/proj/.claude/agents/mapper.md',
+      '---\nname: mapper\nmodel: sonnet\neffort: high\n---\nYou map.\n',
+    );
+    const run = started(fakeChild(), files);
+    await settle();
+
+    writeLine(run.stdout, {
+      type: 'assistant',
+      message: {
+        model: 'claude-opus-5-5',
+        id: 'msg_1',
+        role: 'assistant',
+        content: [
+          {
+            type: 'tool_use',
+            id: 'a1',
+            name: 'Agent',
+            input: { description: 'map', subagent_type: 'mapper', prompt: 'x' },
+          },
+        ],
+      },
+      parent_tool_use_id: null,
+    });
+    await settle();
+
+    expect(
+      run.agentEvents.filter((event) => event.type === 'agentSpawned'),
+    ).toEqual([
+      {
+        type: 'agentSpawned',
+        at: 1000,
+        agentId: 'a1',
+        parentAgentId: 'main',
+        agentType: 'mapper',
+        description: 'map',
+        name: 'mapper',
+        model: 'sonnet',
+        effort: 'high',
+      },
     ]);
   });
 

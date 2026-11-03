@@ -45,6 +45,9 @@ function spawned(agent: RunningAgent): AgentEvent {
     parentAgentId: MAIN_AGENT_ID,
     agentType: agent.agentType,
     description: agent.description,
+    name: agent.agentType,
+    model: null,
+    effort: null,
   };
 }
 
@@ -55,6 +58,7 @@ function toolStarted(agentId: string): AgentEvent {
     agentId,
     toolUseId: 'toolu_tool',
     tool: 'Read',
+    summary: '',
   };
 }
 
@@ -69,6 +73,7 @@ function taskStarted(task: RunningTask): AgentEvent {
     taskId: task.taskId,
     agentId: task.agentId,
     description: task.description,
+    command: null,
   };
 }
 

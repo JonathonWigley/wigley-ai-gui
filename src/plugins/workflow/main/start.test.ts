@@ -272,6 +272,9 @@ describe('workflowMainPart', () => {
           parentAgentId: 'main',
           agentType: 'worker',
           description: 'd',
+          name: 'worker',
+          model: null,
+          effort: null,
         }),
     },
     {
@@ -340,6 +343,9 @@ describe('workflowMainPart', () => {
       parentAgentId: 'main',
       agentType: 'worker',
       description: 'd',
+      name: 'worker',
+      model: null,
+      effort: null,
     });
 
     await workflow.agentEvent({ type: 'sessionEnded', at: 1 });

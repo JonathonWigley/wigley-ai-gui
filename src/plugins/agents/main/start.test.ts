@@ -14,6 +14,9 @@ const spawned: AgentEvent = {
   parentAgentId: MAIN_AGENT_ID,
   agentType: 'Explore',
   description: 'Find adapters',
+  name: 'Explore',
+  model: null,
+  effort: null,
 };
 const finished: AgentEvent = {
   type: 'agentFinished',
@@ -30,6 +33,9 @@ const spawnedB: AgentEvent = {
   parentAgentId: MAIN_AGENT_ID,
   agentType: 'general-purpose',
   description: 'Write the reducer',
+  name: 'general-purpose',
+  model: null,
+  effort: null,
 };
 
 const runningA: RunningAgent = {
@@ -53,6 +59,7 @@ const taskStartedA: AgentEvent = {
   taskId: 'task_a',
   agentId: 'toolu_a',
   description: 'npm test --watch',
+  command: null,
 };
 const taskStartedMain: AgentEvent = {
   type: 'taskStarted',
@@ -60,6 +67,7 @@ const taskStartedMain: AgentEvent = {
   taskId: 'task_main',
   agentId: MAIN_AGENT_ID,
   description: 'npm run build',
+  command: null,
 };
 const runningTaskA: RunningTask = {
   taskId: 'task_a',

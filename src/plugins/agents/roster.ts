@@ -60,6 +60,7 @@ export function foldAgentEvent(roster: Roster, event: AgentEvent): Roster {
         ? roster
         : { agents: [], tasks: [] };
     case 'sessionStarted':
+    case 'agentReplied':
     case 'toolFinished':
     case 'usage':
     case 'compacted':

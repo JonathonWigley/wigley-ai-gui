@@ -37,7 +37,8 @@ import { typedSkill } from './typed-skill';
 // would for what it simulates, each at the clock's time: `sessionStarted` first,
 // `userMessage` after each user entry, then `skillStarted` for a typed
 // `/<skill>` message and `turnStarted` for every send that runs a turn, tool
-// and subagent events beside their entries, `taskStarted` and `taskFinished`
+// and subagent events (`agentReplied` included) beside their entries,
+// `taskStarted` and `taskFinished`
 // for background tasks, `turnEnded` when a turn closes or is interrupted, and
 // `sessionEnded` just before each `ended`. The workflow
 // sends (`FAKE_WORKFLOW_FEATURE_TEXT`, `/wigley:make <plan folder>`,
@@ -402,6 +403,7 @@ const toolStartedEvent = (
   agentId,
   toolUseId: call.toolUseId,
   tool: call.name,
+  summary: call.summary,
 });
 
 const toolFinishedEvent = (
@@ -554,11 +556,16 @@ function emitStepsTurn(
 }
 
 // The subagents `FAKE_AGENTS_TEXT`'s turn spawns, in order, each with the one
-// tool it runs.
+// tool it runs and the model and spend its reply reports. `name` is the Agent
+// call's `name` input, null when the call names none.
 const FAKE_SUBAGENTS = [
   {
     agentType: 'wigley:sonnet-medium',
     description: 'Map the stream decoder',
+    name: 'map-decoder',
+    model: 'sonnet',
+    effort: 'medium',
+    reply: { model: 'claude-sonnet-5-5', spendUsd: 0.0421 },
     tool: {
       name: 'Read',
       input: { file_path: 'src/main/claude-code/stream-decoder.ts' },
@@ -568,6 +575,10 @@ const FAKE_SUBAGENTS = [
   {
     agentType: 'Explore',
     description: 'Find every Files adapter',
+    name: null,
+    model: null,
+    effort: null,
+    reply: { model: 'claude-haiku-5-5', spendUsd: 0.0019 },
     tool: {
       name: 'Grep',
       input: { pattern: 'append' },
@@ -580,7 +591,8 @@ const FAKE_SUBAGENTS = [
 type SubagentEntry = ToolCall;
 
 // Spawns turn `turn`'s subagents, ids `fake-agent-<turn>-<n>`, and runs each
-// one's tool; returns their Agent entries in spawn order. The turn stays open.
+// one's tool after its `agentReplied`; returns their Agent entries in spawn
+// order. The turn stays open.
 function emitAgentsTurn(
   events: AgentProcessEvents,
   emitEntry: EmitEntry,
@@ -597,6 +609,7 @@ function emitAgentsTurn(
       input: {
         subagent_type: subagent.agentType,
         description: subagent.description,
+        ...(subagent.name === null ? {} : { name: subagent.name }),
       },
       summary: subagent.description,
     };
@@ -608,11 +621,21 @@ function emitAgentsTurn(
       parentAgentId: MAIN_AGENT_ID,
       agentType: subagent.agentType,
       description: subagent.description,
+      name: subagent.name ?? subagent.agentType,
+      model: subagent.model,
+      effort: subagent.effort,
     });
     return entry;
   });
-  FAKE_SUBAGENTS.forEach(({ tool }, index) => {
+  FAKE_SUBAGENTS.forEach(({ tool, reply }, index) => {
     const agentId = spawned[index].toolUseId;
+    events.agentEvent({
+      type: 'agentReplied',
+      at: clock.now(),
+      agentId,
+      model: reply.model,
+      spendUsd: reply.spendUsd,
+    });
     const toolCall: ToolCall = {
       kind: 'tool',
       id: `${spawned[index].id}-tool`,
@@ -633,8 +656,16 @@ function emitAgentsTurn(
 // The tasks `FAKE_AGENTS_TEXT`'s turn starts, in order: `subagent` is the
 // index of the turn's subagent that starts it, null for the main agent.
 const FAKE_TASKS = [
-  { subagent: null, description: 'Run the self-test' },
-  { subagent: 0, description: 'Watch the build' },
+  {
+    subagent: null,
+    description: 'Run the self-test',
+    command: 'npm run selftest',
+  },
+  {
+    subagent: 0,
+    description: 'Watch the build',
+    command: 'npm run build -- --watch',
+  },
 ];
 
 // Starts turn `turn`'s tasks, ids `fake-task-<turn>-<n>`, each owned by its
@@ -656,6 +687,7 @@ function startFakeTasks(
           ? MAIN_AGENT_ID
           : subagents[task.subagent].toolUseId,
       description: task.description,
+      command: task.command,
     });
     return taskId;
   });

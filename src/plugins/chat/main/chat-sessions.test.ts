@@ -2239,6 +2239,7 @@ describe('createChatSessions usage forwarding', () => {
         agentId: MAIN_AGENT_ID,
         toolUseId: 'tool-1',
         tool: 'Read',
+        summary: '',
       } satisfies AgentEvent,
     },
     {
