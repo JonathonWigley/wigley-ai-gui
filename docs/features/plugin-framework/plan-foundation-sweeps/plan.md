@@ -423,7 +423,7 @@ Tasks 08, 09 and 10 apply this to each of their plugins, part by part:
 
 ### Wave 7
 - [x] [Remove the compatibility forms](11-remove-compat.md) — after 08, 09, 10
-- [ ] [Derived layer rules](12-derived-layer-rules.md) — after 08, 09, 10
+- [x] [Derived layer rules](12-derived-layer-rules.md) — after 08, 09, 10
 
 ### Wave 8
 - [ ] [Doc re-read](13-doc-re-read.md) — after 11, 12
@@ -447,6 +447,7 @@ Review base: 7f956435
 - 09 · e04f6b15 · Diff read of every main and page start, index-sources and contract; whole-tree typecheck clean; lane lint clean, whole-tree lint re-proved at task 10's landing; workers ran 748 tests in docs and backlog, 454 in notes and workflow; grep finds no two-argument log or string dependency in the four folders · concerns: Docs and backlog page tests start a small real stand-in part because the harness shows the first mode during modes.add, read not run. No test pins the tab-before-view order in docs' dispose, and a throwing view skips the rest. A late reply drawing into a disposed docs or backlog view was not traced. Docs main tests skip the fixture path. An open() in flight at notes' stop continues, shows a dialog with no overlay, and its close would call the throwing pop; blurBoxes has no test and real blur on overlay removal was not checked live. addDriveActions and planWatch and countdown dispose keep no production caller. Workflow main's ready.then(sendFlows) can still send after a stop: the late-track rule covers registrations, not sends.
 - 10 · 1600d93c 81607cda 4198f2c9 7aa5b684 c7e992dc e2a11ba1 · Diff read of every main and page start, session-list, sessions-view, preview and check-layers; whole-tree typecheck clean; whole-tree lint clean (1029 layer, 694 style files); workers ran 540 tests in keys, sessions, settings, gallery, and 847 in forms, primer and the real-provider tests; grep finds no two-argument log or string dependency in src/plugins · concerns: No test pins settings' closeBox disposing its scope, and closeFilter still pops. Late continuations in settings and sessions after stop run against detached elements. SessionsView.dispose covers the pane tree only, and frames' bars and parts stay undisposed, unexercised. Nothing pins the relay log lines. endAll iterates entries directly, so an entry an ended listener adds is also ended. No test goes red on removing boxes.dispose, autosave.dispose or the form service dispose calls in forms and primer. Probe parts and fakes are copied across test files. Seven plugin tests import another plugin's part through exact-file layer rules.
 - 11 · 2ae6ad84 · Diff read of contracts, both APIs and plugin-log; whole-tree typecheck clean after commit; the task's four greps and its type Log grep print nothing; worker ran the named tests and harness test, 88 pass, and both test-d files under typecheck; no plugin file needed a change · concerns: AGENTS.md:320 still shows the removed form, for task 13. The worker ran npx --version against the brief's denied list: it printed a version, fetched nothing and changed no file.
+- 12 · 9a21e0e9 · Read layer-rules.mts whole and check-layers' shape; whole-tree typecheck and lint clean (1030 layer files); worker ran 36 named tests and two lint runs over throwaway folders that showed the runner's failure flow, folders removed · concerns: A clean lint does not show the derived rules reject anything beyond the unit rows; no break tried on the real tree. A quoted dependsOn key fails as not literal. AGENTS.md:694 says LAYERS, for task 13. The worker ran node and npx --version against the brief's denied list; neither fetched anything.
 ### Contract changes
 - PagePartHarness: send, fireWindow, showLayouts, pushKeymap → the same plus readonly fences · why: the task's test asserts recorded fences are empty and no member read them · consumers: 08, 09, 10 · group 07
 - Harness exports: as listed → also FakeMainApi<M> and FakePageApi<M> · why: the type test must show a string id failing on the fake API while MainPart.start takes MainApi, whose deprecated overload accepts one until task 11 · consumers: test-d only · group 07
@@ -487,5 +488,8 @@ Review base: 7f956435
 - Seven plugin tests that start a real provider get exact-file LAYERS entries, after agent-form-drive's precedent, since the plan's rule that a plugin test imports only its own folder contradicts the task's real-provider tests; task 12 keeps them hand-written in CORE_LAYERS · group 10
 - scope.dispose replaces pop in the rename dialog and settings closeBox, since a late answer after stop would throw · group 10
 - Settings, docs and backlog page tests carry a small local part that adds the first mode, since the harness shows the first mode during modes.add · group 10
+- Settings' node: extra dropped, since nothing under settings main imports node: · group 12
+- pluginLayers also throws on an extra for a part its folder lacks, so it cannot vanish silently · group 12
+- A spread among dependsOn's properties fails as not literal · group 12
 ### Review rounds
 ### Test gate

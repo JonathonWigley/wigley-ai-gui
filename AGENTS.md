@@ -316,9 +316,10 @@ round; primer: an open primer), since main, not the page, decides.
   plugin over a data plugin that stays on (`docs/features/chat-bar/design.md` § Optional plugins).
 - **A plugin talks** to its other process over its own channel (`api.channel`), typed by its `contract.ts`, and to
   another plugin through the exported API of a plugin its manifest depends on, or through events. The manifest's
-  `dependsOn` lists the plugins whose exports it reads or whose events it hears, in either process. A plugin reads
-  a dependency with `api.dependency<Exports>(pluginId)` (`api.dependency<ChatMainExports>('chat')`), typed by the
-  caller from the provider's `contract.ts`. A plugin imports
+  `dependsOn` has a `main` and a `page` list, each naming the plugins whose exports that process reads or whose
+  events it hears there. A plugin reads a dependency with `api.dependency(key)`, where the key is the typed
+  `DependencyKey` the provider's `contract.ts` exports for that process (`sessionsMainKey`, `keysPageKey`). The
+  compiler rejects a key for the other process or for a plugin missing from that process's list. A plugin imports
   only `src/contracts`, `src/shared`, its own folder, and the `contract.ts` of a plugin its manifest depends on,
   which types that plugin's exports, keys and events.
 - **An event** is published with `api.events.emit` under the publishing plugin's id (`activeChanged` in plugin
@@ -687,13 +688,17 @@ round; primer: an open primer), since main, not the page, decides.
     page emits `roundShown`, `answerChanged`, `roundFinished` and `viewChanged` (`FormsPageEvents`, from
     `page/forms-events.ts`), each logged as `[forms] event <name> …`.
 - `npm run lint` runs `scripts/check-layers.mts`, which fails on an import crossing a boundary its rules do not
-  allow. A plugin's rules are derived from the folder convention and its manifest's per-process `dependsOn`: its
-  `main/` may import the `contract.ts` of each plugin in `dependsOn.main`, and its `page/` those in
-  `dependsOn.page`. A plugin needing more, such as a `node:` package or an extra sublayer, gets an entry in the
-  script's `PLUGIN_EXTRAS` table. The script also fails when `src/plugins/main.ts`, `page.ts` or `manifests.ts`
-  misses a plugin folder's part or manifest, or lists one twice. A new core layer or adapter gets a `LAYERS` entry,
-  and the composition root's entry lists it.
-  Every plugin's `page/` layer and `src/shared/page` may import `src/shared/page/ui`.
+  allow. A plugin's rules are derived in `scripts/layer-rules.mts` from the folder convention and its manifest's
+  per-process `dependsOn`: its `main/` may import the `contract.ts` of each plugin in `dependsOn.main`, and its
+  `page/` those in `dependsOn.page`. Each plugin's `contract.ts` is a layer of its own, with `src/contracts` and the
+  contracts of the plugin's dependencies. `src/shared/paths` and `src/shared/followups` are allowed in every
+  plugin root, `main/` and `page/`, and the four page kits (`src/shared/page` and its `ui`, `layout-host` and `file-drop`
+  folders) in every `page/`. A plugin needing more, such as a `node:` package or an extra sublayer, gets an entry in the
+  `PLUGIN_EXTRAS` table in `check-layers.mts`. The script also fails when `src/plugins/main.ts`, `page.ts` or
+  `manifests.ts` misses a plugin folder's part or manifest, or lists one twice. A new core layer or adapter gets a
+  `CORE_LAYERS` entry in `check-layers.mts`, and the composition root's entry lists it. A plugin's test may import
+  only `src/contracts`, `src/shared` and its own folder; a test that starts a real provider part has an
+  exact-file `CORE_LAYERS` entry.
 - It also runs `scripts/check-styles.mts`, which fails on a raw colour, length, duration or font stack in CSS or an
   inline style under `src/`, and on `backdrop-filter` outside `src/shared/page/ui/materials.css`. It judges every file under
   `src/` and takes no argument.

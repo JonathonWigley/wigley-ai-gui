@@ -63,11 +63,11 @@ Start any time; all ∥.
 
 Run in order: each step touches every plugin.
 
-1. [ ] Disposable registrations, disposed per plugin [ready]
-2. [ ] Typed dependency keys [ready] (includes per-process `dependsOn`)
-   - ∥ [ ] Disposable tool contributions reach live sessions [ready] (sessions and forms main only)
-   - ∥ [ ] Plugin-scoped logs [ready]
-3. [ ] Derived layer rules [ready]: it reads the per-process `dependsOn` from step 2.
+1. [x] Disposable registrations, disposed per plugin [ready]
+2. [x] Typed dependency keys [ready] (includes per-process `dependsOn`)
+   - ∥ [x] Disposable tool contributions reach live sessions [ready] (sessions and forms main only)
+   - ∥ [x] Plugin-scoped logs [ready]
+3. [x] Derived layer rules [ready]: it reads the per-process `dependsOn` from step 2.
 
 Gate: every registration returns a handle, and every dependency is typed.
 

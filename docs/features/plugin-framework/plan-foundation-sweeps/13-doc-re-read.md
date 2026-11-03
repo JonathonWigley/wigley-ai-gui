@@ -1,6 +1,6 @@
 # 13 — Doc re-read, and the master plan and follow-ups closed
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 8 · Depends on: 11, 12
 Plan: [plan.md](plan.md)

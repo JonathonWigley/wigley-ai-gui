@@ -1,6 +1,6 @@
 # 12 — Derived layer rules
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 7 · Depends on: 08, 09, 10
 Plan: [plan.md](plan.md)
@@ -231,3 +231,4 @@ Commit: one commit for the group
 
 ## Proof
 
+Commit 9a21e0e9 · proof: Read layer-rules.mts whole and check-layers' shape; whole-tree typecheck and lint clean (1030 layer files); worker ran 36 named tests and two lint runs over throwaway folders that showed the runner's failure flow, folders removed · concerns: A clean lint does not show the derived rules reject anything beyond the unit rows; no break tried on the real tree. A quoted dependsOn key fails as not literal. AGENTS.md:694 says LAYERS, for task 13. The worker ran node and npx --version against the brief's denied list; neither fetched anything.

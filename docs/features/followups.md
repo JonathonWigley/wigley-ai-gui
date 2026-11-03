@@ -15,27 +15,6 @@ headings): the Backlog plugin reads it as one follow-up per top-level list item.
 
 Core seams that most items below assume.
 
-- **Disposable registrations, disposed per plugin** — *agent-ready*: every registration returns a `Disposable`, and
-  each plugin disposes its own. Already returning a handle: `PageChannel.on`, `Modes.add` (`ModeHandle`),
-  `Area.contribute` and `Files.watch` — the model. Still returning `void` (`src/contracts/plugin.ts`): `EventBus.on` /
-  `PluginEvents.on`, `MainChannel.handle`, `Bridge.onMessage` (preload adds a fresh `ipcRenderer` listener per call),
-  `CommandRegistry.register`, `Modes.onChanged`, `keys.onScopeChanged` / `onPending`, `PushedScope.onBaseChanged`,
-  `EditorHost.onPendingKeys`. `createMainApi` / `createPageApi` record each handle per plugin, so the host can unload
-  a plugin without its help. Then each plugin collects and disposes its handles: forms page (`start.ts`,
-  `forms-view.ts` drops `contribute` handles, the shared `editor-boxes` and reducer store
-  (`src/shared/page/editor-boxes.ts`, `reducer-store.ts`), autosave timers), forms main
-  (`createAgentFormChannelPresenter`, close guard, tool contribution; `dispose` also ends every live `FormsSession`,
-  its deadline timers and the preview), chat page (`channel.on` calls, `events.on`, tabs, overlay), chat main
-  (`dispose` in `src/plugins/chat/main/start.ts` leaves an open layout-preview row in the sessions list:
-  `ChatPreview`, `src/plugins/chat/main/preview/chat-preview.ts`, needs a close), keys (dropped area handles,
-  `focusin`/`focusout` listeners, which-key timers), sessions page (`narrow` listener, mode), shell
-  (`ResizeObserver`), `installPageKeys` (four document/window listeners), `showLayouts`.
-- **Disposable tool contributions reach live sessions** — *agent-ready*: sessions' `contributeTools` and
-  `addCloseGuard` (`src/plugins/sessions/contract.ts`) return a `Disposable`, and a contribution reaches sessions
-  already connected (today only later sessions get it): start or end its `ToolSession` per live entry, rewrite
-  `tools.json`, have `serveMcp` read a live tool list and send `notifications/tools/list_changed`, and keep one
-  unknown-tool check (today both `serveMcp` and `routeCall`). Forms item kinds as registrations (Plugin extension
-  points) needs this.
 - **Plugin state registry** — *needs a feature plan*: a core registry of typed state slots, so a plugin added late
   or reloaded reads the current value of any state another plugin owns, and a rebuild is needed only for new data.
   Each owner declares its slot keys in its `contract.ts` (`slot<ChatSession[]>('chat.sessions')`, keeping the
@@ -53,24 +32,23 @@ Core seams that most items below assume.
   another plugin's event (agents on chat), since reading a slot needs the contract import but not start order. A
   layout kit gets `kit.state.read(key)` too, so a user layout can show data its owner did not pass in (today
   `BaseKit` reads no settings, sessions or other plugins' data). Questions for the plan: deltas or whole values for
-  streamed data (chat entries), and how a reloaded owner re-attaches to its slot. Builds on the disposable
-  registrations above.
-- **Typed dependency keys** — *agent-ready*: `api.dependency<E>(id)` is an unchecked cast (`dependencyFor`,
-  `src/shared/plugin-host.ts`): nothing ties `'chat'` to `ChatMainExports` or to the process, and a dependency with
-  no part in the process reads `undefined` typed as `E`. Each `contract.ts` exports a key per process carrying its
-  export type (`dependency(chatMain)` returns `ChatMainExports`, `| undefined` where the provider may have no part).
-  With it, `dependsOn` applies per process: workflow's manifest lists `docs` only for its page `addView`, so its main
-  part takes a start-order and disable edge it never uses (`src/plugins/workflow/manifest.ts`).
-- **PluginHost stop and reload, with a live enable switch** — *needs a feature plan*: a `PluginHost` with `stop(id)`
-  and `reload(id, part)` (`src/shared/plugin-host.ts` exports only `startPlugins` today), disposing dependents in
-  reverse dependency order first; `PageStart` gets `dispose`, and quit disposes main parts in reverse order rather
-  than all at once (`src/main/main.ts`). Dependents hold a dependency's `exports` directly, so a reload leaves them
-  stale: hand them a stable proxy or restart them too. A reloaded main part keeps its live state through the plugin
+  streamed data (chat entries), and how a reloaded owner re-attaches to its slot. Builds on
+  disposable registrations landed (plan-foundation-sweeps).
+- **PluginHost stop and reload, with a live enable switch** — *needs a feature plan*: `PluginHost` has `stop(id)`
+  and `stopAll()` (stop landed, plan-foundation-sweeps); add `reload(id, part)` (`src/shared/plugin-host.ts`),
+  stopping dependents first and starting them again after. Dependents hold the view `exports(consumer)` gave them, so
+  a reload leaves them stale: hand them a stable export proxy or restart them too. A reloaded main part keeps its live state through the plugin
   state registry above, not its `start` closure. On top of it, the `plugins.disabled` setting
   (`src/config/settings.ts`, read once by `startPlugins`) takes effect live from a per-plugin switch in Settings
   mode, so view and interaction behaviours (the completion row's description, key hints and the like) ship as
-  plugins the user switches on and off rather than settings inside the plugin they change. Builds on the disposable
-  registrations above.
+  plugins the user switches on and off rather than settings inside the plugin they change. Builds on
+  disposable registrations landed (plan-foundation-sweeps).
+- **Quit does not hold for a plugin's suspending dispose** — *agent-ready*: quit runs `stopAll` on the main parts
+  (`src/main/main.ts`), but a live quit does not wait for it, so a `dispose` that really suspends (chat's, forms' on an
+  unfinished write) is cut off and the parts after it never stop. Hold the quit until `stopAll` settles, and prove it
+  in a live quit, which a drive run cannot show because it holds the quit itself. Two gaps ride on the same path:
+  `stop` and `stopAll` have no guard against running together, and on Windows zeroing the alert counts at quit may
+  call `setOverlayIcon` on a destroyed window, so `stopAll` would reject.
 - **Runtime command API** — *agent-ready*: commands at runtime and around other plugins:
   `commands.register(id, decl, handler)`, `keys.bind(bind)`, `commands.intercept(id, (next, ctx) => …)`,
   `commands.onDidRun`, all disposable, and `MainApi.commands.run`. Commands take a count or argument, so
@@ -123,8 +101,6 @@ Core seams that most items below assume.
   `pageKeys` (`src/renderer/renderer.ts`), and the editor-bind miss policy moves into `editor-binds.ts`. `anchor`
   moves with `keysFor`: the renderer reads the keys plugin's exports by `KEYS_PLUGIN_ID` to hand the shell chrome its
   anchors, a reach a plugin from a user folder would not have, and the chrome's hints vanish with `keys` disabled.
-- **Plugin-scoped logs** — *agent-ready*: each plugin gets a log already scoped to its id from `createPageApi`,
-  retiring the hand-typed `logSource` strings (primer, settings and others).
 - **Forms takes the timers service** — *agent-ready*: `MainServices.timers` exists, but `FormsService`
   (`src/shared/agent-forms/form-service.ts`) still calls the global `setTimeout`; move it onto `timers`, and move its
   32-bit overflow clamp into the timers adapter.
@@ -354,9 +330,6 @@ Closed lists that become registrations, so a plugin adds what is hardcoded today
   `manifest.json`, `main.js`, `page.js`); main `import()`s from disk and the page through `dataUrl`, and a
   `validateManifest` gives every plugin the checks `definePlugin` makes at compile time. `requireListed` and the
   static lists in `src/plugins/{main,page,manifests}.ts` are what block it. Builds on PluginHost stop and reload.
-- **Derived layer rules** — *agent-ready*: `scripts/check-layers.mts` derives each plugin's rules from the folder
-  convention and its manifest's `dependsOn`, and checks `src/plugins/{main,page,manifests}.ts` against the folders,
-  rather than about five hand entries per plugin.
 - **Forms item kinds as registrations** — *agent-ready*: forms item kinds register as one unit (`registerKind`, main
   and page, disposable), each declaring its wire keys (`argsKey`, `bodyKey`, `resultKey`,
   `fingerprintJoinsWhenEmpty`) so saved rounds, retro and the Python fingerprint stay byte-compatible. `Round` /
@@ -365,7 +338,7 @@ Closed lists that become registrations, so a plugin adds what is hardcoded today
   order), replacing `RAIL_ORDER`, `ROUND_ITEMS`, `ANSWER_ARRAYS`, `PICK_ANSWERS`, `RECOMMENDED_PICKS`, `TextTarget`,
   `boxes.ts`, `card-kit.ts` tables, `read-layout.ts`'s `CARD_KINDS`, and the kind branches in `view-model.ts` and
   `round-view.ts`. The AGENTS.md "item kind" checklist shrinks to the module. The tool schema then needs disposable
-  tool contributions (Foundations), and retro reads unknown result keys.
+  tool contributions (landed, plan-foundation-sweeps), and retro reads unknown result keys.
 - **Finding origin specs and open layout unions** — *agent-ready*: finding origins become one `FindingOriginSpec`
   each (card, meaning, choice noun, choice bounds, severity required, action words, chip, theme token), the single
   source for the parser, tool text and card input. One `Finding` type with `severity: Severity | null` replaces the
@@ -584,6 +557,19 @@ because the earlier items rewrite many of these tests anyway.
   `EditorHost.typeInto`, `src/renderer/page-keys.ts`) has three limits only a custom keymap reaches: focus moving
   mid-replay sends the rest to the old box, a replayed `:` does not open the vim command prompt, and Shift is lost on
   named keys.
+- **Sends and draws after a plugin stops** — *agent-ready*: the host disposes a registration made after the stop, but
+  a late send or draw is not a registration. Known sites: workflow main's `ready.then(sendFlows)` can send after a
+  stop; a late reply can draw into a disposed docs or backlog view; notes' `open()` in flight at a stop shows a dialog
+  with no overlay and its close then calls the throwing `pop`; late continuations in settings and sessions run against
+  detached elements. Decide one rule (a stopped flag each continuation checks, or a signal the part awaits against),
+  apply it at these sites, and look for others.
+- **Disposed services still start work** — *agent-ready*: after `dispose`, the agent form service's `startSession` and
+  the layout preview's `show` can still start a session or open a preview, because neither checks that it was disposed. Make a disposed service refuse, as `track` does for a registration made after the stop.
+- **A throwing teardown step skips the rest** — *agent-ready*: a tool-session end in the live tool list
+  (`src/plugins/sessions/main/mcp`) skips the remaining ends and the `list_changed` notice; chat's throwing `kill` skips
+  `cancelRunning` and leaves the end-wait resolved; a throwing `tearDownTab` step skips the rest; and
+  `EditorBoxes.dispose` stops at an editor whose `destroy` throws. Run the remaining steps and rethrow the first
+  error, the way `Registrations.dispose` does.
 - **A viewport-sized wide visual ends one scrollbar tall after it grows** — a visual whose root follows the viewport
   (`min-height: 100vh`) and is wider than the column settles one horizontal scrollbar (15 px) taller than it needs
   once its content grows after load (the known limit in `docs/features/visuals/design.md` and
