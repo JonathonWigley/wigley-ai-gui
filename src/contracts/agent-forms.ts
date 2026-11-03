@@ -141,6 +141,9 @@ export interface AgentFormSessions {
   mark(sessionId: string): void;
   activate(sessionId: string): void;
   addCloseGuard(mayClose: (sessionId: string) => boolean): void;
+  // Closes a connected session's row once every close guard allows; any other
+  // session is left alone.
+  release(sessionId: string): void;
 }
 
 // The sessions contract's ToolResult and ToolSession, restated: the contracts layer imports no plugin.

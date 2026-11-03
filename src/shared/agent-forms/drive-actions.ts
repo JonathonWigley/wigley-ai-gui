@@ -19,7 +19,8 @@ export interface AgentFormDriveSession extends AgentFormToolSession {
 }
 
 export interface AgentFormDriveSessions<Harness extends string> {
-  // Adds a row for the host session id, or joins the owned session holding it.
+  // Connects a session for the host session id, with no row until a form
+  // shows, or joins the owned session holding it.
   connect(info: {
     sessionId: string;
     projectDir: string | null;

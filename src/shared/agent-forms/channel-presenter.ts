@@ -26,8 +26,8 @@ export interface AgentFormChannelPresenter<
 }
 
 // Shows forms on the page over the type's channel, each marked on its
-// session's row, and keeps that row from closing while the form is open;
-// registers its channel handlers and close guard once, so it lives as long as
+// session's row; keeps that row from closing while the form is open and
+// releases it when the form closes. Registers its channel handlers and close guard once, so it lives as long as
 // the app. `source` is the open count's source and the log's; `announceTitle`
 // titles each form's notification.
 export function createAgentFormChannelPresenter<Form, Body>(deps: {
@@ -116,6 +116,7 @@ export function createAgentFormChannelPresenter<Form, Body>(deps: {
     if (!entry.quiet) {
       updateOpenCount();
     }
+    sessions.release(entry.form.sessionId);
   };
 
   return {
