@@ -1,6 +1,6 @@
 # 06 — Wire the dock into the composer and the Chat tab
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 4 · Depends on: 03, 04, 05 (05 makes the flag comment's hiding sentence true)
 Plan: [plan.md](plan.md)

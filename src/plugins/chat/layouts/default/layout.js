@@ -1,12 +1,12 @@
 // @ts-check
 
 // The built-in chat look: the entries, the activity lines (each one summary
-// line, live or finished), the working block, the pending messages' rows, the
+// line, live or finished), the activity dock, the pending messages' rows, the
 // composer, the list rows, the dialogs' bodies and the image viewer. Every
 // collapsible row's body is built on its first open and kept, so an update
 // refills it in place whether it is open or closed.
 
-// The tool calls the working block's box lists; a user layout sets its own
+// The tool calls the activity dock's box lists; a user layout sets its own
 // box's length.
 const WORKING_ACTION_LINES = 3;
 
@@ -523,8 +523,8 @@ const layout = {
       },
     };
   },
-  // Every update draws the block afresh, as `activity` does; a `done` input
-  // draws the finished turn's one line.
+  // The activity dock: every update draws it afresh, as `activity` does; a
+  // `done` input draws the finished turn's one line.
   working(parent, input, kit) {
     const block = root(parent, 'chat-working');
     fillWorking(block, input, kit);

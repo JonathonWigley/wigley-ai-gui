@@ -134,7 +134,7 @@ export type ChatTabScope = 'chat';
 // `slashCommandNames` reads the app slash commands registered now, which the
 // `/` completion offers ahead of the agent's. `viewer` opens a sent message's
 // images full size. `timers` and `clock` tick a live activity line's time and
-// the working block's. `composerParts` holds the parts other plugins draw
+// the activity dock's. `composerParts` holds the parts other plugins draw
 // above every composer, `statusParts` those they draw in every status line.
 // `drops` registers each Chat tab as the target of the
 // files dropped or pasted on it, and saves a pasted file that is not an
@@ -195,8 +195,8 @@ interface HeldTab {
 }
 
 // One Chat tab per chat session main holds, each with its entries, its
-// pending rows and its composer (attached images, message box, and the status
-// line: repo, branch, type hint, control chips, status parts, running
+// pending rows and its composer (the activity dock, attached images, message
+// box, and the status line: repo, branch, type hint, control chips, status parts, running
 // indicator, send), kept up to date from chat main's messages. Each tab is
 // selected in its session when added. A layout change draws every tab's
 // entries, pending rows and composer again, and a composer or status part
@@ -304,6 +304,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
         tab.state.activity === 'idle' && activity !== 'idle';
       tab.state = { ...tab.state, activity };
       tab.entries.setWorking(isWorking(tab.state));
+      drawTurn(tab);
       if (isTurnEnded) {
         tab.entries.latest();
         const focused = deps.sessions.selectedSessionId() === sessionId;
@@ -354,6 +355,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     if (tab !== undefined) {
       tab.state = { ...tab.state, entries };
       tab.entries.rebuild(entries);
+      drawTurn(tab);
       log('chat', `${entries.length} entries read in ${tab.name}`);
     }
   });
@@ -370,6 +372,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     if (tab !== undefined) {
       tab.state = { ...tab.state, running: true };
       tab.entries.setWorking(isWorking(tab.state));
+      drawTurn(tab);
       drawStatusLine(tab);
       log('chat', `${tab.name} running`);
     }
@@ -383,6 +386,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     tab.unseen = unseenAfterRest(tab.unseen, error, wasActive);
     tab.state = { ...tab.state, running: false };
     tab.entries.setWorking(isWorking(tab.state));
+    drawTurn(tab);
     drawStatusLine(tab);
     drawActivity(tab, deps);
     if (tab.handle?.isVisible() === true) {
@@ -486,6 +490,12 @@ function drawComposer(tab: HeldTab) {
   }
 }
 
+// Hands the composer's activity dock the tab's entries and whether its session
+// works on its turn.
+function drawTurn(tab: HeldTab) {
+  tab.composer.setTurn(tab.state.entries, isWorking(tab.state));
+}
+
 // Draws the status line, or the whole composer again when its update threw.
 function drawStatusLine(tab: HeldTab) {
   if (!tab.composer.drawStatusLine(composerInputOf(tab))) {
@@ -535,8 +545,8 @@ function sessionOf(
 }
 
 // The tab element (`div.chat-tab`: entries, then the floating composer
-// holding other plugins' parts, the attached images' strip, the box and its
-// status line) added to its session, with the box's editor mounted once the
+// holding other plugins' parts, the activity dock, the attached images'
+// strip, the box and its status line) added to its session, with the box's editor mounted once the
 // element is attached; it is marked `is-at-stop` while a composer part's stop
 // holds the entry cursor, and the box taking focus leaves that part. The
 // tab then selects itself, so a chat session opens on its Chat tab whichever
@@ -588,6 +598,8 @@ function createTab(
       composerParts: deps.composerParts,
       statusParts: deps.statusParts,
       log: deps.log,
+      clock: deps.clock,
+      timers: deps.timers,
     },
     {
       sessionId: state.sessionId,
@@ -633,6 +645,7 @@ function createTab(
   entries.setQueued(state.queued);
   entries.setWorking(isWorking(state));
   drawComposer(tab);
+  drawTurn(tab);
   tab.handle = deps.sessions.addTab(state.sessionId, {
     id: 'chat',
     title: 'Chat',
@@ -728,6 +741,7 @@ function putEntry(tab: HeldTab, entry: ChatEntry, log: Log) {
   const applied = applyEntry(tab.state.entries, entry);
   tab.state = { ...tab.state, entries: applied.entries };
   tab.entries.put(entry, applied.entries);
+  drawTurn(tab);
   if (applied.added) {
     log('chat', `${entry.kind} entry added in ${tab.name}`);
   }

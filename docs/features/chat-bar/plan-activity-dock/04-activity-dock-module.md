@@ -1,6 +1,6 @@
 # 04 — The activity dock module
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -112,3 +112,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit c3a7867b · proof: diff read: workingInput, isTurnEmpty, doneInput, ActivityDockDeps, ActivityDock, createActivityDock present as planned; typecheck green · concerns: isStepsChanged now duplicated in activity-dock.ts and entry-list.ts; LiveWorkingInput.startedAt comment still says held block (task 06)

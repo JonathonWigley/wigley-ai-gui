@@ -392,12 +392,12 @@ setTurn(entries: readonly ChatEntry[], working: boolean): void;
 
 ### Wave 3
 - [x] [The composer's working slot](03-composer-working-slot.md) — after 02
-- [ ] [The activity dock module](04-activity-dock-module.md) — after 02
+- [x] [The activity dock module](04-activity-dock-module.md) — after 02
 - [x] [Entry list hides activity rows and drops the working block](05-entry-list-hiding.md) — after 01, 02
 
 ### Wave 4
 - [ ] [Wire the dock into the composer and the Chat tab](06-dock-wiring.md) — after 03, 04, 05
-- [ ] [Self-test scripts follow the dock](07-selftest-scripts.md) — after 05
+- [x] [Self-test scripts follow the dock](07-selftest-scripts.md) — after 05
 
 ### Wave 5
 - [ ] [Doc re-read](08-doc-re-read.md) — after 06, 07
@@ -412,6 +412,8 @@ Review base: 46f417b5
 - 02 · 7d7f06b0 · diff read: every Produces present; typecheck green; check-layers, oxlint, oxfmt clean on touched files · concerns: npm run lint fails in check-styles on agent-strip.css:17 (pre-existing, 65d29099), so the lint script stops before oxlint
 - 03 · 8eebaabd · diff read: ComposerKit.working and the hidden slot present; tree typecheck green at worker's end · concerns: left-out placement uses parentNode?.insertBefore since the test DOM has no before()
 - 05 · 5a2b0c6a · diff read: createEntryList signature and every EntryList member kept, working block gone, isActivityInTranscript read at create and rebuild; typecheck green at worker's end · concerns: chat-view.ts:137 and other 'working block' comments outside the task are stale until tasks 06 and 07
+- 04 · c3a7867b · diff read: workingInput, isTurnEmpty, doneInput, ActivityDockDeps, ActivityDock, createActivityDock present as planned; typecheck green · concerns: isStepsChanged now duplicated in activity-dock.ts and entry-list.ts; LiveWorkingInput.startedAt comment still says held block (task 06)
+- 07 · 32bc4b7d · diff read: VISUAL_STEPS, TRANSCRIPT_FOCUS_STEPS, ACTIVITY_DOCK_STEPS and the transcript focus / activity dock groups present; typecheck green at worker's end; self-test runs in 09 · concerns: dock-done and dock-after-interrupt captures depend on task 06 calling drawTurn before the idle log line
 ### Contract changes
 ### Rulings
 - Preflight: precondition 1's peer AGENTS.md hunk is committed (1b7363b5) and the tree is clean; origin is unreachable from this session (SSH publickey denied), so the run builds on local main at 46f417b5 — lead
@@ -424,5 +426,8 @@ Review base: 46f417b5
 - the working-placed-twice row asserts the default fallback and log, not before-box placement — group 03 · group 03
 - the list holds only slotted entries (transcriptEntries) so rows and stops never see a step or result under flag false — group 05 · group 05
 - every fancy buildEntry row builds over activityShown — group 05 · group 05
+- a no-change set keeps the shown input (old now) rather than swapping in the equal new one — group 04 · group 04
+- the tick returns without sending when it fires while not live (guard) — group 04 · group 04
+- agent-strip strip keys step why rewritten (G lands on the last entry), beyond the comment-only scope — group 07 · group 07
 ### Review rounds
 ### Test gate
