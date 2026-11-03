@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { SessionInfo } from '../../sessions/contract';
-import type { RunningAgent } from '../contract';
+import { MAIN_AGENT_ID } from '../../../contracts/agent';
+import type { Roster } from '../contract';
 import { createAgentsPreview } from './preview';
 
 const NOW = 900_000;
@@ -11,7 +12,7 @@ const NOW = 900_000;
 function setUp() {
   const opened: [SessionInfo, unknown][] = [];
   const ends: string[] = [];
-  const rosters: { sessionId: string; running: RunningAgent[] }[] = [];
+  const rosters: { sessionId: string; roster: Roster }[] = [];
   const activate = vi.fn<(sessionId: string) => void>();
   const preview = createAgentsPreview({
     sessions: {
@@ -53,16 +54,24 @@ describe('agents preview', () => {
     ]);
     expect(activate).toHaveBeenCalledWith('row-1');
     expect(rosters[0].sessionId).toBe('row-1');
-    expect(rosters[0].running.map((agent) => agent.startedAt)).toEqual([
+    const sample = rosters[0].roster;
+    expect(sample.agents.map((agent) => agent.startedAt)).toEqual([
       NOW - 42_000,
       NOW - 185_000,
     ]);
+    expect(sample.tasks.map((task) => task.agentId)).toEqual([
+      MAIN_AGENT_ID,
+      sample.agents[1].agentId,
+    ]);
     expect(afterOpen).toEqual({
       ends: [],
-      rosters: { 'row-1': rosters[0].running },
+      rosters: { 'row-1': sample },
     });
     expect(ends).toEqual(['row-1']);
-    expect(rosters[1]).toEqual({ sessionId: 'row-1', running: [] });
+    expect(rosters[1]).toEqual({
+      sessionId: 'row-1',
+      roster: { agents: [], tasks: [] },
+    });
     expect(preview.rosters()).toEqual({});
   });
 

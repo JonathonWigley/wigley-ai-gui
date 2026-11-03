@@ -7,21 +7,27 @@ import {
   type OwnerKitServices,
   ownerBaseKitDeps,
 } from '../../../shared/page/layout-host/base-kit';
-import type { DrawnPart } from '../../../shared/page/layout-host/draw-part';
+import type {
+  DrawnPart,
+  RollbackDeps,
+} from '../../../shared/page/layout-host/draw-part';
 import { createLayoutParts } from '../../../shared/page/layout-host/layout-parts';
 import type { SessionPart } from '../../sessions/contract';
-import type { RunningAgent } from '../contract';
+import type { Roster } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type {
+  AgentLineInput,
+  AgentsKit,
   AgentsPart,
   CompleteLayout,
   Layout,
-  SubagentLineInput,
+  TaskLineInput,
 } from '../layouts/layout';
 import { agentsManifest } from '../manifest';
+import { orderRosterLines, type RosterLine } from './roster-line-order';
 
 // `nameOf` is the session's name in the page log line.
-export interface SubagentLinesDeps {
+export interface RosterLinesDeps {
   kit: OwnerKitServices;
   log: Log;
   clock: Clock;
@@ -29,13 +35,14 @@ export interface SubagentLinesDeps {
   nameOf(sessionId: string): string;
 }
 
-// `part` draws a session's running subagents, one line each, into the
-// wrapper sessions hands it under the session's row. `setRunning` replaces a
-// session's list, `[]` once none runs, and redraws its lines; `setLayouts`
-// redraws every session's; `forget` drops a session that left.
-export interface SubagentLines {
+// `part` draws a session's running subagents and tasks, one line each, in
+// `orderRosterLines`' order, into the wrapper sessions hands it under the
+// session's row. `setRoster` replaces a session's roster, both lists empty
+// once nothing runs, and redraws its lines; `setLayouts` redraws every
+// session's; `forget` drops a session that left.
+export interface RosterLines {
   part: SessionPart;
-  setRunning(sessionId: string, running: RunningAgent[]): void;
+  setRoster(sessionId: string, roster: Roster): void;
   setLayouts(shown: ShownLayouts<Layout>): void;
   forget(sessionId: string): void;
 }
@@ -48,20 +55,20 @@ interface HeldWrapper {
 
 const TICK_MS = 1000;
 
-// Each session's running list outlives its wrapper, which a row redraw builds
-// and disposes many times. While any line shows, one tick a second redraws
+// Each session's roster outlives its wrapper, which a row redraw builds and
+// disposes many times. While any line shows, one tick a second redraws
 // every line, since a line has no hook to update its elapsed time alone.
-// After each draw it logs `lines in <name>: <count>` when the count differs
-// from the last one logged for that session, so a row redraw or a tick logs
-// nothing new.
-export function createSubagentLines(deps: SubagentLinesDeps): SubagentLines {
+// After each draw it logs `lines in <name>: <count>`, counting subagent and
+// task lines together, when the count differs from the last one logged for
+// that session, so a row redraw or a tick logs nothing new.
+export function createRosterLines(deps: RosterLinesDeps): RosterLines {
   const { clock, timers } = deps;
   const layoutParts = createLayoutParts<Layout, CompleteLayout>({
     owner: agentsManifest.id,
     defaultLayout,
     log: deps.log,
   });
-  const running = new Map<string, RunningAgent[]>();
+  const orderedLines = new Map<string, RosterLine[]>();
   const held = new Map<string, HeldWrapper>();
   const loggedCounts = new Map<string, number>();
   let pendingTick: number | null = null;
@@ -72,16 +79,32 @@ export function createSubagentLines(deps: SubagentLinesDeps): SubagentLines {
     callEach(lines, (line) => line.dispose());
   };
 
-  const drawLine = (holder: HeldWrapper, input: SubagentLineInput) =>
-    layoutParts.draw('line', holder.wrapper, (line, slot, rollback) =>
-      line(
-        slot,
-        input,
-        createBaseKit(
-          ownerBaseKitDeps(agentsManifest, deps.kit, null, rollback),
-        ),
-      ),
+  const kitFor = (rollback: RollbackDeps): AgentsKit =>
+    createBaseKit(ownerBaseKitDeps(agentsManifest, deps.kit, null, rollback));
+
+  const drawAgentLine = (holder: HeldWrapper, input: AgentLineInput) =>
+    layoutParts.draw('agentLine', holder.wrapper, (agentLine, slot, rollback) =>
+      agentLine(slot, input, kitFor(rollback)),
     );
+
+  const drawTaskLine = (holder: HeldWrapper, input: TaskLineInput) =>
+    layoutParts.draw('taskLine', holder.wrapper, (taskLine, slot, rollback) =>
+      taskLine(slot, input, kitFor(rollback)),
+    );
+
+  const drawLine = (holder: HeldWrapper, line: RosterLine, now: number) =>
+    line.kind === 'agent'
+      ? drawAgentLine(holder, {
+          agentType: line.agent.agentType,
+          description: line.agent.description,
+          elapsedMs: now - line.agent.startedAt,
+          toolCalls: line.agent.toolCalls,
+        })
+      : drawTaskLine(holder, {
+          description: line.task.description,
+          elapsedMs: now - line.task.startedAt,
+          isNested: line.isNested,
+        });
 
   const logCount = (sessionId: string, count: number) => {
     if (count === (loggedCounts.get(sessionId) ?? 0)) {
@@ -113,15 +136,8 @@ export function createSubagentLines(deps: SubagentLinesDeps): SubagentLines {
       holder.wrapper.replaceChildren();
     }
     const now = clock.now();
-    for (const agent of running.get(sessionId) ?? []) {
-      holder.lines.push(
-        drawLine(holder, {
-          agentType: agent.agentType,
-          description: agent.description,
-          elapsedMs: now - agent.startedAt,
-          toolCalls: agent.toolCalls,
-        }),
-      );
+    for (const line of orderedLines.get(sessionId) ?? []) {
+      holder.lines.push(drawLine(holder, line, now));
     }
     logCount(sessionId, holder.lines.length);
   };
@@ -141,7 +157,7 @@ export function createSubagentLines(deps: SubagentLinesDeps): SubagentLines {
 
   return {
     part: {
-      id: 'agents.subagentLines',
+      id: 'agents.rosterLines',
       build(wrapper, sessionId) {
         const holder: HeldWrapper = { wrapper, lines: [] };
         held.set(sessionId, holder);
@@ -164,11 +180,12 @@ export function createSubagentLines(deps: SubagentLinesDeps): SubagentLines {
         };
       },
     },
-    setRunning(sessionId, next) {
-      if (next.length === 0) {
-        running.delete(sessionId);
+    setRoster(sessionId, roster) {
+      const lines = orderRosterLines(roster);
+      if (lines.length === 0) {
+        orderedLines.delete(sessionId);
       } else {
-        running.set(sessionId, next);
+        orderedLines.set(sessionId, lines);
       }
       const holder = held.get(sessionId);
       if (holder === undefined) {
@@ -185,7 +202,7 @@ export function createSubagentLines(deps: SubagentLinesDeps): SubagentLines {
       drawAll();
     },
     forget(sessionId) {
-      running.delete(sessionId);
+      orderedLines.delete(sessionId);
       loggedCounts.delete(sessionId);
     },
   };
