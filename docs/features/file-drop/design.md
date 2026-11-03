@@ -27,7 +27,9 @@ file goes in as its path, which the agent opens itself; Chat keeps sending image
   path, and a draft or `setText` keeps the chip. A path with a space is written in double quotes
   (`"/Users/me/My File.md"`). Any absolute path of two or more segments in a box's text draws as a chip, typed or dropped, so
   a slash command (`/compact`) stays text.
-  In vim a chip is one character: the cursor steps over it and `x` deletes it whole.
+  In vim a chip is one character: the cursor steps over it and `x` deletes it whole. A move that
+  lands inside a chip rests on its start, and the next one from there (`n`, `;`, `l`) steps past
+  it, to the line's end when the chip ends the line; `p` on a chip pastes after the whole chip.
   A chip is drawn from the text, so typing that joins it to other characters dissolves it or
   redraws it as a different path; a quoted chip's ends are its quotes.
   A path holding a `"` goes in as plain text, with no chip.
