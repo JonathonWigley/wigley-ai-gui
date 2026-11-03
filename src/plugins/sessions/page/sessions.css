@@ -247,10 +247,10 @@
   flex: none;
 }
 
-/* The bar parts give up their width well before the strip does, and each
-   part shrinks and clips in its own box, so a part may drop whole items that
-   no longer fit; each part styles its own content. After the rule above, so
-   it wins. */
+/* The bar parts give up their width well before the strip does, down to any
+   least width a part's own CSS sets, and each part shrinks and clips in its
+   own box, so a part may drop whole items that no longer fit; each part
+   styles its own content. After the rule above, so it wins. */
 .session-bar-parts {
   display: flex;
   flex: 0 1000 auto;

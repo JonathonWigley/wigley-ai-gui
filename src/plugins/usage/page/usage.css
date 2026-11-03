@@ -39,6 +39,23 @@
   white-space: nowrap;
 }
 
+/* In a tab bar the line keeps its context bar however narrow the bar: its bar
+   part stops shrinking at the meter's width (`src/shared/page/ui/meter.css`),
+   and sessions' bar parts holder at that width plus the part's `space-1`
+   margin, so the strip scrolls instead. */
+.session-bar-part:has(
+  > [data-layout-owner='usage'][data-layout='default'].usage-session-line
+) {
+  min-width: calc(var(--wg-space-8) * 1.5);
+}
+
+.session-bar-parts:has(
+  > .session-bar-part
+    > [data-layout-owner='usage'][data-layout='default'].usage-session-line
+) {
+  min-width: calc(var(--wg-space-8) * 1.5 + var(--wg-space-1));
+}
+
 /* A session's context under its side-bar row, after the row's other parts. */
 .session-row-part[data-part='usage.rowLine'] {
   order: 2;

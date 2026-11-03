@@ -22,11 +22,13 @@
 /* The title bar drags the window; its controls take clicks. Its padding
    leaves room for the OS window buttons. Its three tracks, `start`, `center`
    and `end`, sit in grid columns, the outer two always equal, so the centre
-   sits centred on the window; the centre track is at most 60% of the bar.
-   The layout gives it its material. */
+   sits centred on the window; the centre track is at most 60% of the bar,
+   `space-2` from each outer track, so an end item such as the config problem
+   badge never runs into the context. The layout gives it its material. */
 .shell-title-bar {
   align-items: center;
   border-bottom: 1px solid var(--wg-material-chrome-edge);
+  column-gap: var(--wg-space-2);
   display: grid;
   grid-area: title;
   grid-template-columns: minmax(0, 1fr) fit-content(60%) minmax(0, 1fr);
