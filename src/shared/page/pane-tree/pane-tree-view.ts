@@ -46,13 +46,14 @@ export interface PaneTreeView {
   // Throws when `id` is not a leaf.
   slot(id: string): HTMLElement;
   // Draws `tree` in place of the current one; slots of leaves it drops leave
-  // the document.
+  // the document, after `leaving`.
   restore(tree: PaneTree): void;
   // Splits the focused pane, the new pane `newId` right of it (`row`) or below
   // it (`column`) and focused. False, with nothing changed, when either half
   // would fall under the least pane size. Throws when `newId` is a leaf.
   split(axis: SplitAxis, newId: string): boolean;
-  // Closes pane `id`, its slot leaving the document; false for the last pane.
+  // Closes pane `id`, its slot leaving the document after `leaving`; false for
+  // the last pane.
   close(id: string): boolean;
   // Focuses pane `id`; throws when `id` is not a leaf.
   focus(id: string): void;
@@ -73,6 +74,9 @@ export interface PaneTreeViewOptions {
   timers: Timers;
   changed(tree: PaneTree): void;
   focused(id: string): void;
+  // Runs with the ids of the leaves a close or `restore` drops while their
+  // slots are still in the document, before they leave it.
+  leaving(ids: readonly string[]): void;
 }
 
 // A split drawn: its box (`first`, handle, `second`), the node it draws now,
@@ -299,11 +303,14 @@ export function createPaneTreeView(options: PaneTreeViewOptions): PaneTreeView {
 
   const dropSlotsMissingFrom = (tree: PaneTree) => {
     const ids = new Set(leafIds(tree));
-    for (const [id, slot] of slots) {
-      if (!ids.has(id)) {
-        slot.remove();
-        slots.delete(id);
-      }
+    const dropped = [...slots].filter(([id]) => !ids.has(id));
+    if (dropped.length === 0) {
+      return;
+    }
+    options.leaving(dropped.map(([id]) => id));
+    for (const [id, slot] of dropped) {
+      slot.remove();
+      slots.delete(id);
     }
   };
 

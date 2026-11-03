@@ -63,6 +63,20 @@ describe('session tabs view', () => {
       act: ({ view }) => view.setLayouts(withUser<Layout>(defaultLayout, {})),
       moved: ['a', 'c'],
     },
+    {
+      case: 'a pane close',
+      act: ({ view }) => view.panes.close('pane-2'),
+      moved: ['a', 'c'],
+    },
+    {
+      case: 'a restore dropping a pane',
+      act: ({ view }) =>
+        view.panes.restore(
+          { root: { kind: 'leaf', id: 'pane-1' }, focusedId: 'pane-1' },
+          new Map([['pane-1', 'a']]),
+        ),
+      moved: ['a', 'c'],
+    },
   ])('sessionsView_FramesMoved_MoveConnected ($case)', ({ act, moved }) => {
     const setup = sessionsViewSetup();
     setup.area.isPageRoot = true;

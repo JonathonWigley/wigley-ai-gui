@@ -137,6 +137,7 @@ function viewOf(tree: PaneTree) {
     timers,
     changed: (next) => changed.push(next),
     focused: (id) => focused.push(id),
+    leaving: () => undefined,
   });
   view.restore(tree);
   asFake(view.element).isPageRoot = true;

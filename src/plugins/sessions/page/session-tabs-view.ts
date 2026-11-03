@@ -100,6 +100,9 @@ export interface SessionTabsView {
     focusedPaneId: string,
     edges: readonly PaneDirection[],
   ): void;
+  // Moves the frames panes `paneIds` show into the holder, while their slots
+  // are still in the document, ahead of those slots leaving it.
+  vacate(paneIds: readonly string[]): void;
   // Draws every pane and tab bar again with the parts' current layouts, then
   // the tabs and the texts; the tab bodies and their elements stay as they are.
   redrawPane(): void;
@@ -127,12 +130,14 @@ export interface SessionTabsView {
 // prompts, the bar parts other plugins added, the close prompt and the pane
 // controls at the bar's end) on the top edge of a sheet holding the session's
 // tabs, only its selected tab showing, or the `emptyText` saying why no tab
-// shows. An empty pane's body holds a sheet with the empty text alone. The tab prompts hide while the session has
-// no other tab, and every tab bar's prompts and pane control keys hide outside
-// the focused pane, whose keys they are. A tab's element fills its frame's
-// sheet, and a frame moves between panes, the holder and a redrawn pane part
-// as the same element, by a connected move that keeps a visual in it loaded. A frame no pane
-// shows, a session's with no row yet included, waits in the hidden holder.
+// shows. An empty pane's body holds a sheet with the empty text alone. The tab
+// prompts hide while the session has no other tab, and every tab bar's prompts
+// and pane control keys hide outside the focused pane, whose keys they are. A
+// tab's element fills its frame's sheet, and a frame moves between panes, the
+// holder and a redrawn pane part as the same element, by a connected move that
+// keeps a visual in it loaded; a closing pane's frame moves to the holder
+// (`vacate`) before its slot leaves the document. A frame no pane shows, a
+// session's with no row yet included, waits in the hidden holder.
 // Until `render` hands it main's first state, it shows no text either. The
 // view keeps each tab's click, its tooltip and the active tab's mark.
 export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
@@ -363,6 +368,22 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     draw();
   };
 
+  const vacate = (paneIds: readonly string[]) => {
+    for (const paneId of paneIds) {
+      const pane = panes.get(paneId);
+      if (pane === undefined || pane.sessionId === null) {
+        continue;
+      }
+      const frame = frames.get(pane.sessionId);
+      const isShownInPane =
+        frame !== undefined &&
+        frame.element.parentNode === pane.part?.built.body;
+      if (isShownInPane) {
+        moveConnected(holder, frame.element);
+      }
+    }
+  };
+
   const changed = () => {
     draw();
     deps.changed();
@@ -404,6 +425,7 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
       draw();
     },
     place,
+    vacate,
     redrawPane() {
       for (const frame of frames.values()) {
         redrawBar(frame);
