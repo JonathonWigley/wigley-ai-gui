@@ -62,7 +62,7 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'narrow',
-    why: "In a narrow window the status line wraps between its groups, the Chat status line's usage part drops whole items from its end, and the right bar lies over the content at its least width.",
+    why: "In a narrow window the status line keeps every profile stacked, the Chat status line's usage part drops whole items from its end, and the right bar lies over the content at its least width.",
     steps: [
       {
         width: 520,

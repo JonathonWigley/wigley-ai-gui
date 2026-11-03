@@ -60,8 +60,8 @@ Only `src/main/claude-code/` knows any of these shapes.
 
 Measured 2026-10-30 on 2.1.314: `get_context_usage` reported `autoCompactThreshold: 967000`,
 `autocompactSource: "model-default"` on Opus, Sonnet and Haiku with the override at 30 in both the environment and
-`settings.json`. Claude applies the override only under conditions its code does not expose, so the details bar
-shows both limits and marks a session whose two differ.
+`settings.json`. Claude applies the override only under conditions its code does not expose, so the details input
+carries both limits and flags a session whose two differ.
 
 The launch strips `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` from the child's environment (`claude-launch.ts`,
 `NESTED_SESSION_ENV`) because a parent Claude session sets it for its own children; Claude still reads it from the
@@ -140,9 +140,11 @@ In `src/contracts/agent.ts`, beside `AgentHarness`:
   usage: the line says `plan loading` (or `plan unavailable` after a failure) and the details say `no good read yet`.
   A poll still running when the next one is due is not doubled.
 - **Page** draws, through the `usage` layout:
-  - a status-bar line, always on, aligned to the end: the shown session's profile's plan rows (the default profile
-    while no session shows). Each meter is tinted by its severity. A stale profile's rows draw muted. The layout
-    also gets every profile's plan rows, so a user layout can stack them all.
+  - a status-bar line, always on, aligned to the end: every profile stacked, one line each, its name before its plan
+    rows, each limit in a column shared across the profiles. The 5h and Week rows always show; any other row shows
+    only while used. Each meter is tinted by its severity. A stale profile's rows draw muted. The input also carries
+    the shown session's profile's plan rows (the default profile while no session shows), for a layout that shows
+    one profile.
   - each Chat session's line, a status part (chat's `addStatusPart`) in its Chat status line; the optional
     `usage-tab-line` plugin (in `plugins.disabled` by default) draws the same line as a bar part (sessions'
     `addBarPart`) in each session's tab bar. The line: its context bar
@@ -157,10 +159,11 @@ In `src/contracts/agent.ts`, beside `AgentHarness`:
     side-bar row: the session's context meter alone, drawn by the `rowLine` layout part and redrawn like the session
     line.
   - the details bar in the right bar, toggled by `usage.toggleDetails` (`Space v u`), its open state kept in
-    `uiState`: every profile's rows with reset times, extra usage as `spent / limit` in its currency (or `off`), the
-    poll's staleness and error, and the shown session's context, both autocompact limits and the marker when they
-    differ, cache expiry and spend. A fresh profile reads `updated <ago>`, measured from the poll's `at`; with no
-    profiles the bar says `No profiles`.
+    `uiState`: a card per profile, its rows with reset times (5h and Week always, any other row only while used),
+    extra usage as `spent / limit` in its currency (only while on and spent), the poll's staleness beside the name
+    and its error. A fresh profile reads `updated <ago>`, measured from the poll's `at`; with no profiles the bar says
+    `No profiles`. The input also carries the shown session's context, both autocompact limits and the marker when
+    they differ, cache expiry and spend, for a layout that draws them.
 - Countdowns redraw once a minute through the page `timers` and `clock`.
 
 ## The right bar
@@ -191,9 +194,9 @@ contributes to it through `api.areas.rightBar`.
   covers nothing.
 - **The agent-tower agent event seam is built now,** with `usage` as its first member grown to carry the autocompact
   limits, cache expiry and spend, so there is one forwarding path from adapter to plugins.
-- **Profiles:** the default status bar shows the shown session's profile, its input carrying every profile for a
-  layout that shows them all; the details bar lists every profile.
-- **Autocompact limit:** the configured override wins, the reported limit shows beside it, and a difference is marked.
+- **Profiles:** the default status bar stacks every profile, its input also carrying the shown session's profile
+  for a layout that shows one; the details bar lists every profile.
+- **Autocompact limit:** the configured override wins, the reported limit rides beside it, and a difference is flagged.
 - **Cache time** is the prompt-cache expiry, not an autocompact timer: autocompact fires on tokens alone.
 - **Main gains injected `timers`,** matching the page's, since the poller is main's first periodic work.
 - **Every chat shows its line.** A session with no usage draws a zero line rather than nothing. A restored or resumed

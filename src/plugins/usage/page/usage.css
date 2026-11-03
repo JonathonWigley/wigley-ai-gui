@@ -1,23 +1,44 @@
 /* The default usage layout's look, under each part's root. */
 
-/* The status-bar line: groups wrap between one another, never inside one, so
-   a narrow window stacks them at the bar's end without clipping. */
+/* One grid row per profile: the name, then a label, meter and text column
+   trio per limit (the layout sets `--usage-columns`), so each limit's meter
+   lines up across profiles. */
 [data-layout-owner='usage'][data-layout='default'].usage-status-line {
   align-items: center;
-  display: flex;
-  flex-wrap: wrap;
+  column-gap: var(--wg-space-1_5);
+  display: grid;
   font-size: var(--wg-text-12);
   font-variant-numeric: tabular-nums;
-  gap: var(--wg-space-3);
-  justify-content: flex-end;
+  grid-template-columns: repeat(var(--usage-columns, 2), auto);
+  justify-content: end;
   padding: 0 var(--wg-space-2);
+  white-space: nowrap;
 }
 
-[data-layout-owner='usage'][data-layout='default'] .usage-group {
-  align-items: center;
-  display: inline-flex;
-  gap: var(--wg-space-1_5);
-  white-space: nowrap;
+[data-layout-owner='usage'][data-layout='default'].usage-status-line
+  > .usage-group {
+  display: contents;
+}
+
+[data-layout-owner='usage'][data-layout='default'].usage-status-line
+  .usage-label {
+  margin-inline-start: var(--wg-space-1_5);
+}
+
+[data-layout-owner='usage'][data-layout='default'].usage-status-line
+  .usage-text {
+  text-align: end;
+}
+
+[data-layout-owner='usage'][data-layout='default'].usage-status-line
+  .usage-note {
+  grid-column: 2 / -1;
+  text-align: end;
+}
+
+[data-layout-owner='usage'][data-layout='default'] .usage-profile-name {
+  color: var(--wg-fg-secondary);
+  font-weight: var(--wg-weight-semibold);
 }
 
 /* A session's line in its Chat status line or tab bar: one row held to one
@@ -87,7 +108,7 @@
   color: var(--wg-fg-tertiary);
 }
 
-/* The details: a section per profile, then the shown session. */
+/* The details: a card per profile. */
 [data-layout-owner='usage'][data-layout='default'].usage-details {
   display: flex;
   flex-direction: column;
@@ -125,17 +146,52 @@
   white-space: normal;
 }
 
+/* A meter's percent is never narrower than `100%` in its own font, so meters
+   line up from row to row however wide their number. */
+[data-layout-owner='usage'][data-layout='default'] .ui-meter + .usage-text {
+  display: inline-block;
+  text-align: end;
+}
+
+[data-layout-owner='usage'][data-layout='default']
+  .ui-meter
+  + .usage-text::after {
+  content: '100%';
+  display: block;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+}
+
+/* A card's header sits flush with its rows. */
+[data-layout-owner='usage'][data-layout='default'] .usage-profile {
+  padding: var(--wg-space-1) var(--wg-space-2);
+}
+
+/* Name, then freshness beside it, then the default tag at the end. */
+[data-layout-owner='usage'][data-layout='default'] .ui-section-header {
+  gap: var(--wg-space-1_5);
+  justify-content: flex-start;
+}
+
+[data-layout-owner='usage'][data-layout='default']
+  .ui-section-header
+  > .ui-tag {
+  margin-inline-start: auto;
+}
+
 [data-layout-owner='usage'][data-layout='default'] .usage-freshness,
 [data-layout-owner='usage'][data-layout='default'] .usage-error {
   font-size: var(--wg-text-12);
   margin: 0;
-  padding: 0 var(--wg-space-2);
 }
 
 [data-layout-owner='usage'][data-layout='default'] .usage-freshness {
   color: var(--wg-fg-tertiary);
+  font-weight: var(--wg-weight-regular);
 }
 
 [data-layout-owner='usage'][data-layout='default'] .usage-error {
   color: var(--wg-status-error);
+  padding: 0 var(--wg-space-2);
 }

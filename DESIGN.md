@@ -342,6 +342,11 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   cursor adds the focus ring. In a split whose panes each keep a selection (Settings mode, the docs
   tree, the Primer tab's tasks and items columns), the pane without focus marks itself `is-pane-inactive` and its selected
   row takes `list-inactive-selection-background` instead, so the pane the keys act on reads at a glance.
+  Sessions mode's rows are cards, `card-background` under a `card-border` hairline with `radius-md`, `space-1_5`
+  apart: the title and activity on top, over a footer holding the status then other plugins' row parts, on
+  `block-background` under a `border-subtle` hairline, bleeding to the card's edges and gone while empty. Hover
+  strengthens the border to `border-strong`, and the selected card takes `list-active-background` with an
+  `accent-tint-strong` border.
 - **Right bar:** L1 dense glass beside the content sheet in every mode, opening at `rightbar-width` and then the
   user's width (by drag; it carries no resize keys); hidden while no plugin contributes to it. In a window too narrow
   for both bars, the side bar narrows to its least width first, then the right bar to its own; with too little room left
@@ -352,8 +357,9 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
 - **Status bar:** L1, `statusbar-height`, `text-12`, shown only while a plugin contributes to it;
   the usage plugin does (below). Status colours only on status items. A status belongs on the surface it
   describes: a form's saved state on its rail header, a config problem on the title bar.
-- **Usage:** the status-bar line is always on and aligned to the end, in `text-12`: the plan rows of the shown
-  session's profile, each a meter with its percent in the server's order. A Chat session's context bar, cache
+- **Usage:** the status-bar line is always on and aligned to the end, in `text-12`: every profile stacked, one
+  line each, its name in semibold `fg-secondary` before its plan rows, each a label, a meter and its percent in the
+  server's order, each limit in a column shared across the profiles so its meters line up. A Chat session's context bar, cache
   countdown and spend draw in its Chat status line, in the same items and order as the tab-bar line below. With the
   optional `usage-tab-line` plugin on, each session's line also sits in its own tab bar,
   after the tabs and before the pane controls, in `text-12`: its context bar (`used/limit` against the autocompact
@@ -363,11 +369,12 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   `warning`, `critical`); the context bar by its share of the limit
   (`warning` from 70 %, `critical` from 90 %). The context bar carries no label; a stale profile's rows and a note
   (`plan loading`, `plan unavailable`) draw in `fg-tertiary`. The details bar
-  (right bar, `Space v u`) is a section per profile, each a header (the default profile tagged) over its rows with
-  reset times, extra usage as `spent / limit` in its currency or `off`, a muted freshness line (`updated <ago>` from
-  the poll's time, or `stale, last good <ago>`) and the poll's error in `status-error`; with no profile it holds a
-  muted `No profiles` line. A last section holds the shown session's context, remaining tokens, window, both
-  autocompact limits (marked when they differ), cache expiry and spend.
+  (right bar, `Space v u`) is a card per profile, each a header (the name, its muted `text-12` freshness beside it —
+  `updated <ago>` from the poll's time, or `stale, last good <ago>` — and the default profile's tag at the end) over
+  its rows with reset times, extra usage as `spent / limit` in its currency, and the poll's error in `status-error`;
+  with no profile it holds a muted `No profiles` line. A meter's percent is never narrower than `100%`, so the meters
+  line up from row to row. In the status line and the details, the 5h and Week rows always show; any other row (a
+  model-scoped limit) shows only while used, and extra usage only while on and spent.
 - **Forms:** the rail is the start pane of a split in the Form tab's sheet, on the sheet colour with no fill of its own. Its header holds the
   open count, the saved state and the `⌥P ◂ ▸ ⌥N` edge prompt. Cards are `card-background` with
   `radius-md`. The recommended choice carries the accent, since Enter accepts it.

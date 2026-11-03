@@ -1,23 +1,56 @@
 // @ts-check
 
-// The built-in usage look: the status-bar line as wrapping groups (each plan
-// meter, or the note), each session's line as one row (its context, cache and
-// spend) in its Chat status line or tab bar that drops whole items from its
-// end when narrow, each session's row line as its context meter and text, and
-// the details as a section per profile and one for the shown session.
+// The built-in usage look: the status-bar line as every profile stacked, one
+// line each, its name before its meters, each meter in a column shared across
+// profiles; each session's line as one row (its context, cache and spend) in
+// its Chat status line or tab bar that drops whole items from its end when
+// narrow; each session's row line as its context meter and text; and the
+// details as one card per profile, its freshness beside its name. In the status
+// line and the details, the 5h and Week rows always show; any other row (a
+// model-scoped limit) shows only while used, and extra usage only while on and
+// spent.
+
+// Labels the adapter gives the session and weekly limits.
+const ALWAYS_SHOWN_ROWS = new Set(['5h', 'Week']);
 
 /** @type {import('../layout').CompleteLayout} */
 const layout = {
   statusLine(parent, input, kit) {
     const line = kit.el(parent, 'div', 'usage-status-line');
-    const planGroups =
-      input.note === null
-        ? input.plans.map((meter) => planMeter(line, meter, kit))
-        : [kit.el(line, 'span', 'usage-group usage-note', input.note)];
-    for (const group of planGroups) {
-      group.classList.toggle('is-stale', input.stale);
-      if (input.profileName !== null) {
-        group.title = input.profileName;
+    if (input.profiles.length === 0) {
+      kit.el(line, 'span', 'usage-group usage-note', 'no profiles');
+    }
+    // Each label shown in any profile owns one column trio (label, meter,
+    // text), in first-seen order, so the same meter lines up across profiles;
+    // a profile without that label leaves its trio empty.
+    const labels = [
+      ...new Set(
+        input.profiles.flatMap((profile) =>
+          profile.plans.filter(isRowShown).map((meter) => meter.label),
+        ),
+      ),
+    ];
+    line.style.setProperty('--usage-columns', String(1 + labels.length * 3));
+    for (const profile of input.profiles) {
+      const group = kit.el(line, 'span', 'usage-group usage-profile-line');
+      group.classList.toggle('is-stale', profile.stale);
+      kit.el(group, 'span', 'usage-profile-name', profile.name);
+      if (profile.note !== null) {
+        kit.el(group, 'span', 'usage-note', profile.note);
+        continue;
+      }
+      const shown = profile.plans.filter(isRowShown);
+      for (const label of labels) {
+        const meter = shown.find((candidate) => candidate.label === label);
+        if (meter === undefined) {
+          kit.el(group, 'span', 'usage-label');
+          kit.el(group, 'span');
+          kit.el(group, 'span');
+          continue;
+        }
+        kit.el(group, 'span', 'usage-label', meter.label);
+        kit.meter(group, meter.percent, meter.tone);
+        kit.el(group, 'span', 'usage-text', meter.text);
       }
     }
     return line;
@@ -46,73 +79,51 @@ const layout = {
       kit.el(root, 'p', 'usage-freshness', 'No profiles');
     }
     for (const profile of input.profiles) {
-      const section = kit.el(root, 'section', 'usage-profile');
-      const header = kit.sectionHeader(section, profile.name);
+      const card = kit.card(root, 'usage-profile');
+      const header = kit.sectionHeader(card, profile.name);
+      kit.el(header, 'span', 'usage-freshness', profile.freshness);
       if (profile.isDefault) {
         kit.tag(header, 'default');
       }
-      for (const row of profile.rows) {
-        kit.row(section, {
+      for (const row of profile.rows.filter(isRowShown)) {
+        kit.row(card, {
           density: 'list',
           label: row.label,
           detail: row.resets,
           trailing: meterTrailing(row, kit),
         });
       }
-      if (profile.extraUsage !== null) {
-        kit.row(section, {
+      if (isExtraUsageShown(profile.extraUsage)) {
+        kit.row(card, {
           density: 'list',
           label: 'Extra usage',
           trailing: textTrailing(profile.extraUsage, kit),
         });
       }
-      kit.el(section, 'p', 'usage-freshness', profile.freshness);
       if (profile.error !== null) {
-        kit.el(section, 'p', 'usage-error', profile.error);
+        kit.el(card, 'p', 'usage-error', profile.error);
       }
-    }
-    if (input.session !== null) {
-      const session = input.session;
-      const section = kit.el(root, 'section', 'usage-session-details');
-      kit.sectionHeader(section, 'Session');
-      kit.row(section, {
-        density: 'list',
-        label: 'Context',
-        trailing: meterTrailing(session.context, kit),
-      });
-      textRow(section, 'Left', session.remaining, kit);
-      textRow(section, 'Window', session.window, kit);
-      const limits = textTrailing(
-        `${session.configuredLimit} configured · ${session.reportedLimit} reported`,
-        kit,
-      );
-      if (session.limitsDiffer) {
-        kit.tag(limits, 'differ', 'warning');
-      }
-      kit.row(section, {
-        density: 'list',
-        label: 'Autocompact',
-        trailing: limits,
-      });
-      textRow(section, 'Cache', session.cache, kit);
-      textRow(section, 'Spend', session.spend, kit);
     }
     return root;
   },
 };
 
-// One plan meter on the line: `<label> <meter> <text>`.
+/** @param {import('../layout').MeterInput} row */
+function isRowShown(row) {
+  return ALWAYS_SHOWN_ROWS.has(row.label) || row.percent > 0;
+}
+
+// Extra usage reads `off`, or `<used> / <limit>` with `used` as money text.
 /**
- * @param {HTMLElement} line
- * @param {import('../layout').MeterInput} meter
- * @param {import('../layout').UsageKit} kit
+ * @param {string | null} extraUsage
+ * @returns {extraUsage is string}
  */
-function planMeter(line, meter, kit) {
-  const group = kit.el(line, 'span', 'usage-group usage-plan');
-  kit.el(group, 'span', 'usage-label', meter.label);
-  kit.meter(group, meter.percent, meter.tone);
-  kit.el(group, 'span', 'usage-text', meter.text);
-  return group;
+function isExtraUsageShown(extraUsage) {
+  if (extraUsage === null || extraUsage === 'off') {
+    return false;
+  }
+  const used = extraUsage.split(' / ')[0];
+  return /[1-9]/.test(used);
 }
 
 // A meter and its text, not yet placed, for a row's trailing end.
@@ -138,20 +149,6 @@ function textTrailing(text, kit) {
   trailing.className = 'usage-trailing';
   kit.el(trailing, 'span', 'usage-text', text);
   return trailing;
-}
-
-/**
- * @param {HTMLElement} parent
- * @param {string} label
- * @param {string} text
- * @param {import('../layout').UsageKit} kit
- */
-function textRow(parent, label, text, kit) {
-  kit.row(parent, {
-    density: 'list',
-    label,
-    trailing: textTrailing(text, kit),
-  });
 }
 
 export default layout;

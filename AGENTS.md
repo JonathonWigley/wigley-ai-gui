@@ -16,6 +16,13 @@ UI work — a view, its CSS, a theme, a primitive, a layout or a key — reads `
 every view follows, and it says where a new value or primitive goes. A new or moved key also reads `docs/keymap.md`,
 the rule for which key an action takes.
 
+A user's request to change how the app looks or behaves goes into the repo's built-in `default` layout (and the
+contract or kit part when the look needs one), because the user is the app's only user and wants every change in the
+shipped app. A user layout in `~/.config/wigley-ai-gui/layouts/<owner>/<name>/` is written only when the user asks for
+one. `settings.json` can still pick a user layout for an owner (`"<plugin>": { "layout": "<name>" }`, or the core
+`shell.layout`), which hides a `default` change from the user's screen: check it before the change, apply the change
+to that layout too, and name it in the report.
+
 An Electron app (Forge 8, Vite, TypeScript) growing into a vim-first GUI over the wigley harness: CodeMirror 6 with
 vim, app-owned Cmd keys and a global summon shortcut. Its live jobs: it is the only client of the `wigley-forms`
 tools, receiving agents' review rounds and feature primers and showing each in its agent session's Form or Primer tab
