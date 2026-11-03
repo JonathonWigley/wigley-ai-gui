@@ -1,6 +1,6 @@
 # 14 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 9 · Depends on: 13
 Plan: [plan.md](plan.md)
@@ -55,3 +55,4 @@ Commit:    none, unless a fix lands (in its own task's commit)
 
 ## Proof
 
+Commit 8740cc31 · proof: Check 1: typecheck and lint clean; npm test 6591 of 6591 on the second full run, first run failed one timeout in node-files watch_NotRecursive, which passed twice alone. Check 2: selftest of sessions, forms, primer, chat all passed, exit 0. Check 3: not run, no user yes. Check 4: drive start, restart, quit: chat row restored, open-sessions unchanged, quit CLI exit 0, only hit a vite ResizeObserver line; app.log holds no main-process plugin lines and the app's own exit code is not read. Check 5: covered by task 05's serveMcp tests and check 6, no drive action contributes a tool. Check 6: app-away list_changed and the kept six-tool tools/list pass; the second notice arrives on the next tools/call, as the relay connects only then · concerns: After [selftest] all passed: 5 Plugin docs has no main handler for watchDoc and 1 chat loadHistory, as the page still invokes after main's handlers are disposed at quit. A tools/list written just before the channel closes goes unanswered, since _drop answers only tools/call ids, 1 of 2 runs. Each restart sends 4 list_changed in a burst. node-files watch test timed out once under full load; task 04 changed node-files.

@@ -1,6 +1,6 @@
 # 13 — Doc re-read, and the master plan and follow-ups closed
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 8 · Depends on: 11, 12
 Plan: [plan.md](plan.md)
@@ -47,3 +47,4 @@ Commit:    one commit for the group, naming each stale line fixed
 
 ## Proof
 
+Commit 8740cc31 · proof: Doc diff read; every step 1 name greps to the landed code; five boxes ticked, five items gone; whole-tree lint clean (1030 layer, 695 style files) · concerns: Sites in the throwing-teardown follow-up come from the Run log and were not checked one by one: its tool-session path is approximate, and 'leaves the end-wait resolved' reads wrongly. Run-log doubts left out of the follow-ups are listed in the worker's report.
