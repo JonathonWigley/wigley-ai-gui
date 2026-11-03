@@ -25,7 +25,7 @@ export const PREVIEW_ROUND_ARGS: Record<string, unknown> = {
         'The router looks the session up by `sessionId` after the row is gone, and drops the round without a reply.',
       proof:
         '- `session-list.ts`: the closed row is removed before `mark` runs\n' +
-        '- the self-test log shows `mark for session … with no row ignored`',
+        "- the round's tool call never returns, so the agent waits until its deadline",
       choices: [
         {
           text: 'Bring the row back at the end of the list when a round arrives for it.',

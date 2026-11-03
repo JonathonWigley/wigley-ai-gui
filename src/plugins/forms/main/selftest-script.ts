@@ -1075,7 +1075,9 @@ function payloadProblems(payload: AnswersPayload): string[] {
 // `selftest`, and a Claude session there for the layouts round. Asks the
 // fixture round in the first, a second round in the second, which the steps
 // never answer, and the layouts round in the third; each shows at once, so
-// their rows come in that order and the first is selected. Then it opens a
+// their rows come in that order and the first is selected. That order relies
+// on each `askFixtureRound` showing its form synchronously, before the
+// background `open`: an async open path would move the Codex row first. Then it opens a
 // Codex session with no project in the background, whose row follows theirs
 // though it never shows a round, and asks the unknown-layout round there
 // through a relay joining it, which refuses it. The script checks the answers

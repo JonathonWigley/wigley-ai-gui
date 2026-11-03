@@ -678,7 +678,8 @@ round; primer: an open primer), since main, not the page, decides.
   the cap without `until` fails. It reports one line, `<keys> ×<presses> -> <until>`, and its `screenshot` saves one
   PNG per press, `<plugin>-<name>-<n>.png`, file n after press n. A step's `alsoExpect` holds patterns that must each
   match a line logged after the step began, before or after `expect`, for a line carrying a value the script cannot
-  know (chat's clear step matches the notes line naming the row's random new host id). The self-test's user config
+  know (chat's clear step matches the notes line naming the row's random new host id) or a second line the step's keys
+  cause, in either order. The self-test's user config
   folder sits in its temp home. The script's `settings` override plugin settings in the config main serves the page
   (forms' sets a short `keys.whichKeyTimeoutMs`, so a step can wait out the panel); main parts start on the
   ConfigStore's config, which under the self-test is the empty config folder in its temp home, so the defaults, with

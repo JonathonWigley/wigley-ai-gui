@@ -537,7 +537,8 @@ export interface PagePart<M extends PluginManifest = PluginManifest> {
 // logs once the write and the keys have run, and `alsoExpect`, when set, holds
 // patterns that each match a line logged after the step began, before or
 // after `expect`, for a line carrying a value the script cannot know, such as
-// a random id; a repeating step takes none. `checksFit` also checks the page
+// a random id, or a second line the step's keys cause, in either order; a
+// repeating step takes none. `checksFit` also checks the page
 // fits the window's minimum width, or, as `'held'`, the width the step holds,
 // for what shows only while the window is wide (a side bar beside the view).
 // `screenshot`, when set, saves a PNG of the window once the step's line has

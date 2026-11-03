@@ -166,8 +166,8 @@ export function addDriveActions(
   deps: DocsDriveDeps,
 ): Disposable {
   const { files, homeDir, sessions, started, paths, channel } = deps;
-  const connected: OwnedSession[] = [];
-  let connects = 0;
+  const opened: OwnedSession[] = [];
+  let opens = 0;
   const actions = [
     drive.add('seed', {
       description:
@@ -191,10 +191,10 @@ export function addDriveActions(
       args: '{ sessionId?: string, loadStates?: boolean, indexDelayMs?: number }',
       async run(rawArgs) {
         await started;
-        connects += 1;
+        opens += 1;
         const args = argsObject(rawArgs);
         const sessionId =
-          optionalString(args, 'sessionId') ?? `drive-docs-${String(connects)}`;
+          optionalString(args, 'sessionId') ?? `drive-docs-${String(opens)}`;
         const loadStates = optionalBoolean(args, 'loadStates') ?? false;
         const indexDelayMs = indexDelayMsArg(args);
         const session = await openDocsFixtureSession(
@@ -205,7 +205,7 @@ export function addDriveActions(
           paths,
           { loadStates, indexDelayMs },
         );
-        connected.push(session);
+        opened.push(session);
         return { sessionId, rowId: session.session.id };
       },
     }),
@@ -228,7 +228,7 @@ export function addDriveActions(
       for (const action of actions) {
         action.dispose();
       }
-      for (const session of connected.splice(0)) {
+      for (const session of opened.splice(0)) {
         session.end();
       }
     },
