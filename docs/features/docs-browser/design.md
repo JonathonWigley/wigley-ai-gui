@@ -55,9 +55,9 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
   reacting to a key, so the user's `keymap.json` rebinds any of them.
 - **Sessions sidebar**, left, Claude Code style, replacing the tab strip. It lists every session holding a row: a
   relay-connected session (one the app did not start) gets its row when a form first shows or a plugin activates
-  it, and its row closes again when its last form closes. A row: the project folder on the first line (numbered on a clash, as tabs are today), the harness (Claude /
-  Codex) dimmed beside it; while a round is open a second line with its heading and `answered/total`; an accent dot
-  for a round not yet opened.
+  it, and its row closes again when its last form closes. A row: the project folder on the first line (numbered on a
+  clash, as tabs are today), the harness (Claude / Codex) dimmed beside it; while a round is open a second line with
+  its heading and `answered/total`; an accent dot for a round not yet opened.
 - The sidebar is 16rem wide. The window's minimum width stays 420 px: below 680 px the sidebar hides itself, and
   `Space k s` draws it over the content until pressed again or the window widens.
 - **Session tabs**: each session holds tabs other plugins add. A Docs tab appears when the session connects (plan B

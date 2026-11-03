@@ -120,9 +120,9 @@ type StartedSession = Pick<OwnedSession, 'session' | 'end'>;
 
 // Starts a drive run's sessions, each with no form, and ends or selects them:
 // `connect` connects one as a relay would, with no row until a form shows or
-// `activate` adds it; `open` opens an owned
-// one, selected, which forms' and the primer's open actions join when they
-// name its id, so a round and a primer share its row. A session's id is
+// `activate` adds it; `open` opens an owned one, selected, which forms' and
+// the primer's open actions join when they name its id, so a round and a
+// primer share its row. A session's id is
 // `drive-session-<n>` unless the caller names one; `rowId` is the app's own
 // id, which `activate` takes. A session that ends leaves the map, so its id
 // starts again. `onSessionEnded` hears each session that ends, by its row id.
