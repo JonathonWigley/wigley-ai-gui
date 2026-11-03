@@ -550,12 +550,13 @@ const layout = {
       },
     };
   },
-  // The glass panel: other plugins' parts, the attached images, the box, then
-  // the status line.
+  // The glass panel: other plugins' parts, the working slot, the attached
+  // images, the box, then the status line.
   composer(parent, _input, kit) {
     const panel = kit.floatingPanel(parent);
     panel.classList.add('chat-composer');
     kit.contributedParts(panel);
+    kit.working(panel);
     kit.attachments(panel);
     kit.box(panel);
     kit.statusLine(panel);

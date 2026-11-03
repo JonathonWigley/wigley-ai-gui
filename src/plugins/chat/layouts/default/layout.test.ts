@@ -862,6 +862,7 @@ function fakeSurfaceKit() {
     floatingPanel: (parent: HTMLElement) =>
       part(parent, 'div', 'floatingPanel'),
     box: (parent: HTMLElement) => part(parent, 'div', 'box'),
+    working: (parent: HTMLElement) => part(parent, 'div', 'working'),
     attachments: (parent: HTMLElement) => part(parent, 'div', 'attachments'),
     contributedParts: (parent: HTMLElement) =>
       part(parent, 'div', 'contributedParts'),
@@ -973,6 +974,7 @@ describe('default chat layout surfaces', () => {
     expect(panel.dataset.part).toBe('floatingPanel');
     expect(describeChildren(panel)).toEqual([
       'contributedParts',
+      'working',
       'attachments',
       'box',
       'statusLine',

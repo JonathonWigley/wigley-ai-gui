@@ -252,12 +252,16 @@ export interface ComposerInput {
   controls: ComposerControlInput[];
 }
 // The composer's pieces. Each slot and the box mounts once per draw: a second call throws `<part> placed twice`, and
-// the composer draws with `default`. A composer that leaves the box out gets it at the end of its element.
+// the composer draws with `default`. A composer that leaves the box out gets it at the end of its element, and the
+// working slot just above the box.
 export interface ComposerKit extends BaseKit {
   // `div.ui-floating`: the glass panel; the composer's root in the default layout.
   floatingPanel(parent: HTMLElement): HTMLElement;
   // The message box frame, its editor inside.
   box(parent: HTMLElement): HTMLElement;
+  // The slot the `working` part draws into: the activity dock. The app hides it while there is nothing to show. A
+  // composer that leaves it out gets it just above the box.
+  working(parent: HTMLElement): HTMLElement;
   // The slot the `attachments` part draws into; the app hides it while no image is attached.
   attachments(parent: HTMLElement): HTMLElement;
   // The slot the `statusLine` part draws into.

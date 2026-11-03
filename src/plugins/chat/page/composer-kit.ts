@@ -62,7 +62,7 @@ export interface ComposerPieces {
 }
 
 // One Chat tab's composer, drawn through the chat layout. The box, the
-// attachments and status line slots, the status parts' slot and the status
+// working, attachments and status line slots, the status parts' slot and the status
 // line's key-holding parts are built once and placed again by each draw;
 // other plugins' composer parts and status parts are built again by each
 // composer draw, not by a status line draw.
@@ -111,6 +111,8 @@ export function createComposerSurface(
   deps: ComposerSurfaceDeps,
   pieces: ComposerPieces,
 ): ComposerSurface {
+  const workingSlot = element('div', 'chat-working-slot');
+  workingSlot.hidden = true;
   const attachmentsSlot = element('div', 'chat-attachments-slot');
   attachmentsSlot.hidden = true;
   const statusLineSlot = element('div', 'chat-status-line-slot');
@@ -130,6 +132,7 @@ export function createComposerSurface(
       composer?.built.element.remove();
       composer = composerDraws.draw(parent, (builder, at, rollback) => {
         const box = appSlot(pieces.box, 'box', rollback);
+        const workingAt = appSlot(workingSlot, 'working', rollback);
         const attachmentsAt = appSlot(attachmentsSlot, 'attachments', rollback);
         const statusLineAt = appSlot(statusLineSlot, 'statusLine', rollback);
         statusPartsSlot.replaceChildren();
@@ -142,11 +145,17 @@ export function createComposerSurface(
           rollback,
         );
         let arePartsPlaced = false;
+        let isWorkingPlaced = false;
         const kit: ComposerKit = {
           ...surfaceBaseKit(deps, 'chat', rollback),
           floatingPanel: (panelParent) =>
             appended(panelParent, floatingPanel()),
           box: (boxParent) => box.place(boxParent),
+          working(slotParent) {
+            const placed = workingAt.place(slotParent);
+            isWorkingPlaced = true;
+            return placed;
+          },
           attachments: (slotParent) => attachmentsAt.place(slotParent),
           statusLine: (slotParent) => statusLineAt.place(slotParent),
           contributedParts(partsParent) {
@@ -170,6 +179,10 @@ export function createComposerSurface(
           root.prepend(kit.contributedParts(root));
         }
         box.placeIfLeftOut(root);
+        if (!isWorkingPlaced) {
+          pieces.box.parentNode?.insertBefore(workingSlot, pieces.box);
+          rollback.recordBox(() => workingSlot.remove());
+        }
         return { element: root, view };
       });
       drawStatusLinePart(input);

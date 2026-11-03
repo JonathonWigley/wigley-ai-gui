@@ -154,6 +154,7 @@ describe('composer surface parts', () => {
       layout: 'mine',
       endsWithPieces: true,
       startsWithParts: false,
+      expectsWorkingBeforeBox: false,
       log: null,
     },
     {
@@ -163,6 +164,7 @@ describe('composer surface parts', () => {
       layout: 'mine',
       endsWithPieces: true,
       startsWithParts: false,
+      expectsWorkingBeforeBox: false,
       log: null,
     },
     {
@@ -179,6 +181,7 @@ describe('composer surface parts', () => {
       layout: 'default',
       endsWithPieces: false,
       startsWithParts: false,
+      expectsWorkingBeforeBox: false,
       log: 'layout mine composer failed: box placed twice',
     },
     {
@@ -197,6 +200,7 @@ describe('composer surface parts', () => {
       layout: 'mine',
       endsWithPieces: false,
       startsWithParts: true,
+      expectsWorkingBeforeBox: false,
       log: null,
     },
     {
@@ -214,11 +218,54 @@ describe('composer surface parts', () => {
       layout: 'default',
       endsWithPieces: false,
       startsWithParts: false,
+      expectsWorkingBeforeBox: false,
       log: 'layout mine composer failed: composer placed contributed parts twice',
+    },
+    {
+      name: 'a composer that never calls kit.working',
+      draw: () =>
+        drawComposer({
+          composer(parent, _input, kit) {
+            const panel = kit.floatingPanel(parent);
+            kit.box(panel);
+            kit.statusLine(panel);
+            return { element: panel };
+          },
+        }),
+      layout: 'mine',
+      endsWithPieces: false,
+      startsWithParts: false,
+      expectsWorkingBeforeBox: true,
+      log: null,
+    },
+    {
+      name: 'a composer that calls kit.working twice',
+      draw: () =>
+        drawComposer({
+          composer(parent, _input, kit) {
+            const panel = kit.floatingPanel(parent);
+            kit.working(panel);
+            kit.working(panel);
+            kit.box(panel);
+            return { element: panel };
+          },
+        }),
+      layout: 'default',
+      endsWithPieces: false,
+      startsWithParts: false,
+      expectsWorkingBeforeBox: false,
+      log: 'layout mine composer failed: working placed twice',
     },
   ])(
     'composerParts_PieceLeftOutOrPlacedTwice_KeysStillReachTheBox ($name)',
-    ({ draw, layout, endsWithPieces, startsWithParts, log }) => {
+    ({
+      draw,
+      layout,
+      endsWithPieces,
+      startsWithParts,
+      expectsWorkingBeforeBox,
+      log,
+    }) => {
       const { root, pieces, logs } = draw();
 
       expect(root.dataset.layout).toBe(layout);
@@ -232,6 +279,12 @@ describe('composer surface parts', () => {
       }
       if (startsWithParts) {
         expect(root.children[0]?.className).toBe('chat-composer-parts');
+      }
+      if (expectsWorkingBeforeBox) {
+        const [box] = pieces;
+        expect(root.children[root.children.indexOf(box) - 1]?.className).toBe(
+          'chat-working-slot',
+        );
       }
       expect(logs.filter((line) => line.includes('failed'))).toEqual(
         log === null ? [] : [log],
@@ -263,7 +316,12 @@ describe('composer surface parts', () => {
       'first',
       'second',
     ]);
-    expect(panel.children.indexOf(box)).toBeGreaterThan(0);
+    const workingSlot = panel.querySelector('.chat-working-slot');
+    const slotAt =
+      workingSlot === null ? -1 : panel.children.indexOf(workingSlot);
+    expect(slotAt).toBeGreaterThan(0);
+    expect(panel.children.indexOf(box)).toBeGreaterThan(slotAt);
+    expect(workingSlot?.hidden).toBe(true);
     expect(firstDraw).toEqual(['build:first:row-1', 'build:second:row-1']);
     expect(record.slice(firstDraw.length)).toEqual([
       'dispose:first:row-1',

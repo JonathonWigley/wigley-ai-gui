@@ -132,8 +132,9 @@
   color: var(--wg-fg-tertiary);
 }
 
-/* The working block: the turn's time and state, a card of its latest tool
-   calls (the newest in fg), then its tool counts, dim. */
+/* The activity dock: while the turn runs, its time and state, a card of its
+   latest tool calls (the newest in fg), then its tool counts, dim; once it
+   ends, one dim line. */
 .chat-working {
   display: flex;
   flex-direction: column;
@@ -178,6 +179,18 @@
 
 .chat-working-counts {
   color: var(--wg-fg-tertiary);
+}
+
+.chat-working.is-done {
+  color: var(--wg-fg-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.chat-working-done {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Pending messages: a dim label over the text as typed, its line breaks
@@ -236,8 +249,8 @@
   width: calc(var(--wg-space-8) * 3);
 }
 
-/* The composer: other plugins' parts, the attached images' strip, then the
-   message box over its bar (mode, type hint, control chips, running
+/* The composer: other plugins' parts, the activity dock, the attached images'
+   strip, then the message box over its bar (mode, type hint, control chips, running
    indicator, send). */
 .ui-floating.chat-composer {
   border-radius: var(--wg-radius-xl);
@@ -264,6 +277,12 @@
 
 .chat-composer-parts:empty {
   display: none;
+}
+
+/* The activity dock keeps its height in a short pane, as the attachments
+   do. */
+.chat-working-slot {
+  flex-shrink: 0;
 }
 
 .chat-attachments {
