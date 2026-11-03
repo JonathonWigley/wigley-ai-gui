@@ -38,6 +38,7 @@ export interface ThinkingInput {
 export interface ToolInput {
   kind: 'tool';
   id: string;
+  agentId: string;
   toolUseId: string;
   name: string;
   input: unknown;

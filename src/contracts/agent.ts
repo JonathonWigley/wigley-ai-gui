@@ -68,6 +68,9 @@ export type ChatEntry =
       kind: 'tool';
       id: string;
       at: number;
+      // The agent that made the call: MAIN_AGENT_ID for the session's own agent, else the subagent's id the agent
+      // events use (Claude: the Agent call's id, the line's `parent_tool_use_id`).
+      agentId: string;
       toolUseId: string;
       name: string;
       input: unknown;

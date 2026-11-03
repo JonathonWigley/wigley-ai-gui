@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Timers } from '../../../contracts/ambient';
-import type { ChatEntry } from '../../../contracts/agent';
+import { type ChatEntry, MAIN_AGENT_ID } from '../../../contracts/agent';
 import type { ShownLayouts } from '../../../contracts/plugin';
 import type { CommandId } from '../../../contracts/commands';
 import { withUser } from '../../../shared/page/layout-host/test-layouts';
@@ -78,6 +78,7 @@ const tool = (id: string): Extract<ChatEntry, { kind: 'tool' }> => ({
   kind: 'tool',
   id,
   at: 1000,
+  agentId: MAIN_AGENT_ID,
   toolUseId: `use-${id}`,
   name: 'Bash',
   input: {},

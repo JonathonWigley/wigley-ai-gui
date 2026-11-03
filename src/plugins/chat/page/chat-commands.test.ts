@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type {
-  ChatEntry,
-  ChatImage,
-  SessionControl,
+import {
+  type ChatEntry,
+  type ChatImage,
+  MAIN_AGENT_ID,
+  type SessionControl,
 } from '../../../contracts/agent';
 import type { ScrollStep, TextEditor } from '../../../contracts/editor';
 import type { ChatSessionState, SlashCommandContext } from '../contract';
@@ -50,6 +51,7 @@ const activityStop: ListStop = {
       id: 'tool-1',
       at: 1000,
       kind: 'tool',
+      agentId: MAIN_AGENT_ID,
       toolUseId: 'use-1',
       name: 'Read',
       input: {},

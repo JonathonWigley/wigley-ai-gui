@@ -741,7 +741,7 @@ export function createStreamDecoder(
   }
 
   function toolEntry(block: Json, event: Json): ToolEntry {
-    const entry = toolUseEntry(`tool-${asString(block.id)}`, block, event);
+    const entry = toolUseEntry(`tool-${asString(block.id)}`, block, event, agentOf(event));
     toolEntries.set(entry.toolUseId, entry);
     return entry;
   }

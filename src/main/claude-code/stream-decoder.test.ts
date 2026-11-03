@@ -597,20 +597,41 @@ describe('createStreamDecoder', () => {
     ]);
   });
 
-  it('decode_ToolUse_AddsToolEntryWithSummary', () => {
-    const decoder = createStreamDecoder();
+  it.each([
+    {
+      case: 'main',
+      input: line(toolUseEvent),
+      expected: {
+        kind: 'tool',
+        id: 'tool-t1',
+        toolUseId: 't1',
+        name: 'Bash',
+        summary: 'ls -la',
+        result: null,
+        agentId: 'main',
+      },
+    },
+    {
+      case: 'subagent',
+      input: MEASURED_SUBAGENT_READ,
+      expected: {
+        kind: 'tool',
+        id: 'tool-toolu_01Th9zCiM7nvQkeAH1gsms6w',
+        toolUseId: 'toolu_01Th9zCiM7nvQkeAH1gsms6w',
+        name: 'Read',
+        agentId: 'toolu_01FqZQTLkePVaZcsvgWG3jqK',
+      },
+    },
+  ])(
+    'decode_ToolUse_AddsToolEntryWithSummaryAndAgent ($case)',
+    ({ input, expected }) => {
+      const decoder = createStreamDecoder();
 
-    const [entry] = decoder.decode(line(toolUseEvent)).entries;
+      const [entry] = decoder.decode(input).entries;
 
-    expect(entry).toMatchObject({
-      kind: 'tool',
-      id: 'tool-t1',
-      toolUseId: 't1',
-      name: 'Bash',
-      summary: 'ls -la',
-      result: null,
-    });
-  });
+      expect(entry).toMatchObject(expected);
+    },
+  );
 
   it('decode_ToolResult_PairsByToolUseId', () => {
     const decoder = createStreamDecoder();

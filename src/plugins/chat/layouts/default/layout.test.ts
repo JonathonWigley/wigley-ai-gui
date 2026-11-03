@@ -18,6 +18,7 @@ import type {
   WorkingInput,
   WorkingState,
 } from '../layout';
+import { MAIN_AGENT_ID } from '../../../../contracts/agent';
 import type { KitRowOptions } from '../../../../shared/page/layout-host/kit';
 import layout from './layout.js';
 
@@ -279,6 +280,7 @@ describe('default chat layout', () => {
   const toolEntry = {
     kind: 'tool' as const,
     id: 'tool1',
+    agentId: MAIN_AGENT_ID,
     toolUseId: 'toolu_1',
     name: 'Bash',
     input: { command: 'ls -la' } as unknown,
@@ -403,6 +405,7 @@ function toolStep(
   return {
     kind: 'tool',
     id: `${name}-${summary}`,
+    agentId: MAIN_AGENT_ID,
     toolUseId: `toolu-${name}-${summary}`,
     name,
     input: {},
@@ -624,6 +627,7 @@ function workingLines(view: PartView<WorkingInput>): string[] {
 const chatKitRead: StepInput = {
   kind: 'tool',
   id: 'read-chat-kit',
+  agentId: MAIN_AGENT_ID,
   toolUseId: 'toolu-read-chat-kit',
   name: 'Read',
   input: { file_path: '/a/b/chat-kit.ts' },

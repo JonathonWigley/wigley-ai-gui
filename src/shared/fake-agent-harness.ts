@@ -393,14 +393,10 @@ type ToolCall = Omit<ToolEntryDraft, 'result' | 'raw'>;
 
 type ToolResult = { text: string; isError: boolean };
 
-const toolStartedEvent = (
-  clock: Clock,
-  agentId: string,
-  call: ToolCall,
-): AgentEvent => ({
+const toolStartedEvent = (clock: Clock, call: ToolCall): AgentEvent => ({
   type: 'toolStarted',
   at: clock.now(),
-  agentId,
+  agentId: call.agentId,
   toolUseId: call.toolUseId,
   tool: call.name,
   summary: call.summary,
@@ -408,29 +404,27 @@ const toolStartedEvent = (
 
 const toolFinishedEvent = (
   clock: Clock,
-  agentId: string,
   call: ToolCall,
   result: ToolResult,
 ): AgentEvent => ({
   type: 'toolFinished',
   at: clock.now(),
-  agentId,
+  agentId: call.agentId,
   toolUseId: call.toolUseId,
   ok: !result.isError,
 });
 
-// Emits agent `agentId`'s `call` without its result, raw `[{ fake: tag }]`,
+// Emits `call` without its result, raw `[{ fake: tag }]`,
 // then its `toolStarted`.
 function startFakeTool(
   events: AgentProcessEvents,
   emitEntry: EmitEntry,
   clock: Clock,
-  agentId: string,
   call: ToolCall,
   tag: string,
 ) {
   emitEntry({ ...call, result: null, raw: [{ fake: tag }] });
-  events.agentEvent(toolStartedEvent(clock, agentId, call));
+  events.agentEvent(toolStartedEvent(clock, call));
 }
 
 // Re-sends `call` with `result`, raw `[{ fake: tag }, { fake: tag-result }]`,
@@ -439,7 +433,6 @@ function finishFakeTool(
   events: AgentProcessEvents,
   emitEntry: EmitEntry,
   clock: Clock,
-  agentId: string,
   call: ToolCall,
   tag: string,
   result: ToolResult,
@@ -449,7 +442,7 @@ function finishFakeTool(
     result,
     raw: [{ fake: tag }, { fake: `${tag}-result` }],
   });
-  events.agentEvent(toolFinishedEvent(clock, agentId, call, result));
+  events.agentEvent(toolFinishedEvent(clock, call, result));
 }
 
 // The entries, usage and activity that close turn `turn`.
@@ -482,13 +475,14 @@ function emitToolTurn(
   const tool: ToolCall = {
     kind: 'tool',
     id: `tool-${turn}`,
+    agentId: MAIN_AGENT_ID,
     toolUseId: `fake-tool-${turn}`,
     name: 'Bash',
     input: { command: 'echo fake' },
     summary: 'echo fake',
   };
-  startFakeTool(events, emitEntry, clock, MAIN_AGENT_ID, tool, 'tool');
-  finishFakeTool(events, emitEntry, clock, MAIN_AGENT_ID, tool, 'tool', {
+  startFakeTool(events, emitEntry, clock, tool, 'tool');
+  finishFakeTool(events, emitEntry, clock, tool, 'tool', {
     text: 'fake',
     isError: false,
   });
@@ -535,6 +529,7 @@ function emitStepsTurn(
     const call: ToolCall = {
       kind: 'tool',
       id: `step-${turn}-${n}`,
+      agentId: MAIN_AGENT_ID,
       toolUseId: `fake-step-${turn}-${n}`,
       name: tool.name,
       input: tool.input,
@@ -542,8 +537,8 @@ function emitStepsTurn(
     };
     const result = tool.result ?? { text: 'ok', isError: false };
     emitEntry({ ...call, result, raw: [{ fake: 'step' }] });
-    events.agentEvent(toolStartedEvent(clock, MAIN_AGENT_ID, call));
-    events.agentEvent(toolFinishedEvent(clock, MAIN_AGENT_ID, call, result));
+    events.agentEvent(toolStartedEvent(clock, call));
+    events.agentEvent(toolFinishedEvent(clock, call, result));
   });
   const thought = 'Checking the test output.';
   emitEntry({
@@ -604,6 +599,7 @@ function emitAgentsTurn(
     const entry: SubagentEntry = {
       kind: 'tool',
       id: `agent-${turn}-${index + 1}`,
+      agentId: MAIN_AGENT_ID,
       toolUseId: agentId,
       name: 'Agent',
       input: {
@@ -639,13 +635,14 @@ function emitAgentsTurn(
     const toolCall: ToolCall = {
       kind: 'tool',
       id: `${spawned[index].id}-tool`,
+      agentId,
       toolUseId: `${agentId}-tool`,
       name: tool.name,
       input: tool.input,
       summary: tool.summary,
     };
-    startFakeTool(events, emitEntry, clock, agentId, toolCall, 'tool');
-    finishFakeTool(events, emitEntry, clock, agentId, toolCall, 'tool', {
+    startFakeTool(events, emitEntry, clock, toolCall, 'tool');
+    finishFakeTool(events, emitEntry, clock, toolCall, 'tool', {
       text: 'fake',
       isError: false,
     });
@@ -781,6 +778,7 @@ function workflowToolCall(
   return {
     kind: 'tool',
     id: `workflow-${turn}-${n}`,
+    agentId: MAIN_AGENT_ID,
     toolUseId: `fake-workflow-${turn}-${n}`,
     ...tool,
   };
@@ -801,7 +799,7 @@ function emitWorkflowSkill(
     input: { skill },
     summary: skill,
   });
-  startFakeTool(events, emitEntry, clock, MAIN_AGENT_ID, call, 'workflow');
+  startFakeTool(events, emitEntry, clock, call, 'workflow');
   events.agentEvent({
     type: 'skillStarted',
     at: clock.now(),
@@ -813,7 +811,6 @@ function emitWorkflowSkill(
     events,
     emitEntry,
     clock,
-    MAIN_AGENT_ID,
     call,
     'workflow',
     WORKFLOW_TOOL_OK,
@@ -825,6 +822,7 @@ function permissionToolCall(turn: number): ToolCall {
   return {
     kind: 'tool',
     id: `tool-${turn}`,
+    agentId: MAIN_AGENT_ID,
     toolUseId: `fake-permission-${turn}`,
     name: 'Bash',
     input: { command: 'rm fake.txt' },
@@ -1031,7 +1029,7 @@ export function createFakeAgentHarness(
     // process's end came while the ask waited.
     const runPermissionTurn = async (askedTurn: number) => {
       const call = permissionToolCall(askedTurn);
-      startFakeTool(events, emitEntry, clock, MAIN_AGENT_ID, call, 'tool');
+      startFakeTool(events, emitEntry, clock, call, 'tool');
       let result: ToolResult;
       try {
         if (permissionAsk === null) {
@@ -1057,7 +1055,6 @@ export function createFakeAgentHarness(
         events,
         emitEntry,
         clock,
-        MAIN_AGENT_ID,
         call,
         'tool',
         result,
@@ -1090,12 +1087,11 @@ export function createFakeAgentHarness(
           events,
           emitEntry,
           clock,
-          MAIN_AGENT_ID,
           call,
           'workflow',
           result,
         );
-      startFakeTool(events, emitEntry, clock, MAIN_AGENT_ID, call, 'workflow');
+      startFakeTool(events, emitEntry, clock, call, 'workflow');
       try {
         await change();
       } catch (error) {

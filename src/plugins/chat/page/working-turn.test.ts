@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { ChatEntry, ChatEntryKind } from '../../../contracts/agent';
+import {
+  type ChatEntry,
+  type ChatEntryKind,
+  MAIN_AGENT_ID,
+} from '../../../contracts/agent';
 import { workingInput } from './working-turn';
 
 function entry(kind: ChatEntryKind, id: string, at: number): ChatEntry {
@@ -14,6 +18,7 @@ function entry(kind: ChatEntryKind, id: string, at: number): ChatEntry {
         kind,
         id,
         at,
+        agentId: MAIN_AGENT_ID,
         toolUseId: `use-${id}`,
         name: 'Read',
         input: {},
