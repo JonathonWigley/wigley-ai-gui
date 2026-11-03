@@ -99,6 +99,18 @@ function labels(state: SessionsState): string[] {
   return state.rows.map((row) => row.label);
 }
 
+type SessionList = ReturnType<typeof setUp>['list'];
+
+// Connects a session and marks it, so it holds a row.
+function connectWithRow(
+  list: SessionList,
+  sessionInfo: SessionInfo,
+): ConnectedSession {
+  const connected = list.connect(sessionInfo);
+  list.mark(connected.session.id);
+  return connected;
+}
+
 describe('createSessionList', () => {
   it('gives each connected session a fresh id and emits connected', () => {
     const { list, emitted } = setUp();
@@ -190,55 +202,33 @@ describe('createSessionList', () => {
     expect(list.tools().map((each) => each.name)).toEqual(['a', 'b', 'c']);
   });
 
-  it('adds an unselected, unmarked row for each connected session', () => {
-    const { list, states } = setUp();
+  it('connect_ConnectedSession_AddsNoRowSendsNoStateAndEmitsConnected', () => {
+    const { list, states, emitted } = setUp();
 
-    list.connect(info('/work/x'));
-    list.connect(info('/work/x'));
+    const connected = list.connect(info('/work/x'));
 
-    const expected: SessionsState = {
-      rows: [
-        {
-          sessionId: '00000001',
-          label: 'x',
-          harness: null,
-          marked: false,
-          projectDir: '/work/x',
-          hostSessionId: null,
-        },
-        {
-          sessionId: '00000002',
-          label: 'x 2',
-          harness: null,
-          marked: false,
-          projectDir: '/work/x',
-          hostSessionId: null,
-        },
-      ],
-      selectedSessionId: null,
-    };
-    expect(list.state()).toEqual(expected);
-    expect(states).toHaveLength(2);
-    expect(states[1]).toEqual(expected);
+    expect(list.state()).toEqual({ rows: [], selectedSessionId: null });
+    expect(states).toEqual([]);
+    expect(emitted).toEqual([['connected', connected.session]]);
   });
 
   it('numbers sessions of one folder by the lowest free number', () => {
     const { list } = setUp();
-    list.connect(info('/work/x'));
-    const b = list.connect(info('/work/x'));
-    list.connect(info('/work/x'));
+    connectWithRow(list, info('/work/x'));
+    const b = connectWithRow(list, info('/work/x'));
+    connectWithRow(list, info('/work/x'));
     expect(labels(list.state())).toEqual(['x', 'x 2', 'x 3']);
 
     b.end();
-    list.connect(info('/work/x'));
+    connectWithRow(list, info('/work/x'));
 
     expect(labels(list.state())).toEqual(['x', 'x 3', 'x 2']);
   });
 
   it('label_IsTheRowsLabel_KeptWhileTheRowIsClosed_NullOnceTheSessionEnds', () => {
     const { list } = setUp();
-    list.connect(info('/work/x'));
-    const second = list.connect(info('/work/x'));
+    connectWithRow(list, info('/work/x'));
+    const second = connectWithRow(list, info('/work/x'));
     const id = second.session.id;
 
     expect(list.label(id)).toBe('x 2');
@@ -252,8 +242,8 @@ describe('createSessionList', () => {
   it('numbers two folders with one name as one group', () => {
     const { list } = setUp();
 
-    list.connect(info('/a/x'));
-    list.connect(info('/b/x'));
+    connectWithRow(list, info('/a/x'));
+    connectWithRow(list, info('/b/x'));
 
     expect(labels(list.state())).toEqual(['x', 'x 2']);
   });
@@ -261,8 +251,8 @@ describe('createSessionList', () => {
   it('labels a session with no project folder session', () => {
     const { list } = setUp();
 
-    list.connect(info(null));
-    list.connect(info(null));
+    connectWithRow(list, info(null));
+    connectWithRow(list, info(null));
 
     expect(labels(list.state())).toEqual(['session', 'session 2']);
   });
@@ -270,9 +260,9 @@ describe('createSessionList', () => {
   it('labels a codex session with no project folder Codex session', () => {
     const { list } = setUp();
 
-    list.connect(info(null, 'codex'));
-    list.connect(info(null, 'codex'));
-    list.connect(info(null, 'claude'));
+    connectWithRow(list, info(null, 'codex'));
+    connectWithRow(list, info(null, 'codex'));
+    connectWithRow(list, info(null, 'claude'));
 
     expect(labels(list.state())).toEqual([
       'Codex session',
@@ -286,29 +276,33 @@ describe('createSessionList', () => {
     ]);
   });
 
-  it("selects the round's row when none is selected and marks a later one", () => {
-    const { list } = setUp();
+  it("adds a connected session's row at mark, selected when none is selected, else marked", () => {
+    const { list, states } = setUp();
     const a = list.connect(info('/work/x'));
     const b = list.connect(info('/work/x'));
+    const c = list.connect(info('/work/x'));
 
+    list.mark(b.session.id);
     list.mark(a.session.id);
-    list.mark(b.session.id);
 
-    const { rows, selectedSessionId } = list.state();
-    expect(selectedSessionId).toBe(a.session.id);
-    expect(rows.map((row) => row.marked)).toEqual([false, true]);
-  });
-
-  it("selects the second session's row when its round arrives first", () => {
-    const { list } = setUp();
-    list.connect(info('/work/x'));
-    const b = list.connect(info('/work/x'));
-
-    list.mark(b.session.id);
-
-    const { rows, selectedSessionId } = list.state();
-    expect(selectedSessionId).toBe(b.session.id);
-    expect(rows.map((row) => row.marked)).toEqual([false, false]);
+    expect(
+      states.map((state) => [
+        state.rows.map((row) => [row.sessionId, row.marked]),
+        state.selectedSessionId,
+      ]),
+    ).toEqual([
+      [[[b.session.id, false]], b.session.id],
+      [
+        [
+          [b.session.id, false],
+          [a.session.id, true],
+        ],
+        b.session.id,
+      ],
+    ]);
+    expect(list.state().rows.map((row) => row.sessionId)).not.toContain(
+      c.session.id,
+    );
   });
 
   it('sends nothing for the selected row or a row already marked', () => {
@@ -348,6 +342,7 @@ describe('createSessionList', () => {
     const a = list.connect(info('/work/x'));
     const b = list.connect(info('/work/x'));
     list.mark(a.session.id);
+    list.mark(b.session.id);
     list.closeSession(b.session.id);
 
     list.mark(b.session.id);
@@ -369,25 +364,50 @@ describe('createSessionList', () => {
     expect(contribution.calls.map((call) => call.name)).toEqual(['a']);
   });
 
-  it('activates a row, clears its mark and reports activated first', () => {
-    const { list, activated, calls } = setUp();
-    const a = list.connect(info('/work/x'));
-    const b = list.connect(info('/work/x'));
-    list.mark(a.session.id);
-    list.mark(b.session.id);
-    const callsBefore = calls.length;
+  // Sessions 00000001 and 00000002 hold rows, 00000001 selected and 00000002
+  // marked; 00000003 is connected with no row.
+  it.each<{ name: string; sessionId: string; rows: [string, boolean][] }>([
+    {
+      name: 'a marked row',
+      sessionId: '00000002',
+      rows: [
+        ['00000001', false],
+        ['00000002', false],
+      ],
+    },
+    {
+      name: 'a connected session with no row',
+      sessionId: '00000003',
+      rows: [
+        ['00000001', false],
+        ['00000002', true],
+        ['00000003', false],
+      ],
+    },
+  ])(
+    'activates a row, clears its mark and reports activated first: $name',
+    ({ sessionId, rows: expectedRows }) => {
+      const { list, activated, calls } = setUp();
+      connectWithRow(list, info('/work/x'));
+      connectWithRow(list, info('/work/x'));
+      list.connect(info('/work/x'));
+      const callsBefore = calls.length;
 
-    list.activate(b.session.id);
+      list.activate(sessionId);
 
-    expect(activated).toEqual(['00000002']);
-    expect(calls.slice(callsBefore)).toEqual([
-      'activated 00000002',
-      'stateChanged',
-      'emit selected',
-    ]);
-    expect(list.state().selectedSessionId).toBe('00000002');
-    expect(list.state().rows[1].marked).toBe(false);
-  });
+      expect(activated).toEqual([sessionId]);
+      expect(calls.slice(callsBefore)).toEqual([
+        `activated ${sessionId}`,
+        'stateChanged',
+        'emit selected',
+      ]);
+      const { rows, selectedSessionId } = list.state();
+      expect(selectedSessionId).toBe(sessionId);
+      expect(rows.map((row) => [row.sessionId, row.marked])).toEqual(
+        expectedRows,
+      );
+    },
+  );
 
   it('reports activated for the selected row and sends nothing', () => {
     const { list, states, activated } = setUp();
@@ -478,7 +498,7 @@ describe('createSessionList', () => {
 
   it('keeps a row a close guard refuses, with a log line and false, until every guard allows it', () => {
     const { list, states, logged } = setUp();
-    const connected = list.connect(info('/work/x'));
+    const connected = connectWithRow(list, info('/work/x'));
     const id = connected.session.id;
     let roundOpen = true;
     list.addCloseGuard(() => true);
@@ -497,7 +517,7 @@ describe('createSessionList', () => {
 
   it('drops the row of a session that ends whatever the close guards say', () => {
     const { list } = setUp();
-    const connected = list.connect(info('/work/x'));
+    const connected = connectWithRow(list, info('/work/x'));
     list.addCloseGuard(() => false);
 
     connected.end();
@@ -508,16 +528,15 @@ describe('createSessionList', () => {
   it('ignores unknown sessions and rows it does not hold, with a log line', () => {
     const { list, states, logged, activated } = setUp();
     const connected = list.connect(info('/work/x'));
-    list.closeSession(connected.session.id);
     const sentBefore = states.length;
 
     list.mark('ffffffff');
-    list.activate(connected.session.id);
+    list.activate('fffffffe');
     expect(list.closeSession(connected.session.id)).toBe(false);
 
     expect(logged).toEqual([
       expect.stringMatching(/mark .*ffffffff/),
-      expect.stringMatching(/activate .*00000001/),
+      expect.stringMatching(/activate .*fffffffe/),
       expect.stringMatching(/closeSession .*00000001/),
     ]);
     expect(activated).toEqual([]);
@@ -528,14 +547,16 @@ describe('createSessionList', () => {
     const { list, states } = setUp();
     const taken: SessionsState[] = [];
     const connected: ConnectedSession[] = [];
+    connected.push(list.connect(info('/work/x')));
+    connected.push(list.connect(info('/work/x')));
     const id = (index: number) => connected[index].session.id;
     const changes = [
-      () => connected.push(list.connect(info('/work/x'))),
-      () => connected.push(list.connect(info('/work/x'))),
       () => list.mark(id(0)),
       () => list.mark(id(1)),
       () => list.activate(id(1)),
       () => list.closeSession(id(1)),
+      () => list.mark(id(1)),
+      () => list.release(id(1)),
       () => connected[0].end(),
     ];
 
@@ -635,7 +656,7 @@ describe('createSessionList', () => {
     expect(() => list.open(owned('host-1'))).toThrow(/host-1/);
     list.connect(owned('host-2'));
     expect(() => list.open(owned('host-2'))).toThrow(/host-2/);
-    expect(list.state().rows).toHaveLength(2);
+    expect(list.state().rows).toHaveLength(1);
   });
 
   it('joins an owned session when its relay connects, adding no row', () => {
@@ -871,7 +892,7 @@ describe('createSessionList', () => {
     const contribution = fakeContribution();
     list.contributeTools([tool('a')], contribution.start);
     list.open(owned('host-1'));
-    list.connect(info('/work/y'));
+    connectWithRow(list, info('/work/y'));
 
     expect(list.closeSession('00000001')).toBe(true);
 
@@ -892,7 +913,7 @@ describe('createSessionList', () => {
 
   it('emits no closed for a row a guard keeps or a row already gone', () => {
     const { list, emitted } = setUp();
-    const connected = list.connect(info('/work/x'));
+    const connected = connectWithRow(list, info('/work/x'));
     const id = connected.session.id;
     let allow = false;
     list.addCloseGuard(() => allow);
@@ -907,11 +928,118 @@ describe('createSessionList', () => {
     expect(closedEvents()).toHaveLength(1);
   });
 
+  // Each row arranges a fresh list and returns the id `release` gets; ids
+  // count up from 00000001 in connect and open order. `sent` is each state
+  // sent as its row ids and selected id; `events` and `logs` are what follows
+  // the release.
+  it.each<{
+    name: string;
+    arrange: (list: SessionList) => string;
+    sent: [string[], string | null][];
+    events: [string, unknown][];
+    logs: string[];
+  }>([
+    {
+      name: 'closes when every guard allows',
+      arrange: (list) => {
+        list.open(owned('h1'));
+        list.addCloseGuard(() => true);
+        return connectWithRow(list, info('/work/x')).session.id;
+      },
+      sent: [[['00000001'], '00000001']],
+      events: [['closed', { sessionId: '00000002' }]],
+      logs: [],
+    },
+    {
+      name: 'a guard keeps the row',
+      arrange: (list) => {
+        list.addCloseGuard(() => false);
+        return connectWithRow(list, info('/work/x')).session.id;
+      },
+      sent: [],
+      events: [],
+      logs: ['[sessions] release for session 00000001 kept by a close guard'],
+    },
+    {
+      name: 'an owned session keeps its row',
+      arrange: (list) => list.open(owned('h1')).session.id,
+      sent: [],
+      events: [],
+      logs: [],
+    },
+    {
+      name: 'a connected session with no row is silent',
+      arrange: (list) => list.connect(info('/work/x')).session.id,
+      sent: [],
+      events: [],
+      logs: [],
+    },
+    {
+      name: 'an unknown session is silent',
+      arrange: (list) => {
+        connectWithRow(list, info('/work/x'));
+        return 'ffffffff';
+      },
+      sent: [],
+      events: [],
+      logs: [],
+    },
+    {
+      name: 'the selected row hands the selection to its right neighbour',
+      arrange: (list) => {
+        const [a] = [1, 2, 3].map(() => connectWithRow(list, info('/work/x')));
+        return a.session.id;
+      },
+      sent: [[['00000002', '00000003'], '00000002']],
+      events: [
+        ['selected', { sessionId: '00000002' }],
+        ['closed', { sessionId: '00000001' }],
+      ],
+      logs: [],
+    },
+    {
+      name: 'the selected last row hands the selection to its left neighbour',
+      arrange: (list) => {
+        connectWithRow(list, info('/work/x'));
+        const b = connectWithRow(list, info('/work/x'));
+        list.activate(b.session.id);
+        return b.session.id;
+      },
+      sent: [[['00000001'], '00000001']],
+      events: [
+        ['selected', { sessionId: '00000001' }],
+        ['closed', { sessionId: '00000002' }],
+      ],
+      logs: [],
+    },
+  ])('release: $name', ({ arrange, sent, events, logs }) => {
+    const { list, states, emitted, logged } = setUp();
+    const sessionId = arrange(list);
+    const [sentBefore, emittedBefore, loggedBefore] = [
+      states.length,
+      emitted.length,
+      logged.length,
+    ];
+
+    list.release(sessionId);
+
+    expect(
+      states
+        .slice(sentBefore)
+        .map((state) => [
+          state.rows.map((row) => row.sessionId),
+          state.selectedSessionId,
+        ]),
+    ).toEqual(sent);
+    expect(emitted.slice(emittedBefore)).toEqual(events);
+    expect(logged.slice(loggedBefore)).toEqual(logs);
+  });
+
   // Each row runs its actions on a fresh list; ids count up from 00000001 in
   // connect and open order.
   it.each<{
     name: string;
-    act: (list: ReturnType<typeof setUp>['list']) => void;
+    act: (list: SessionList) => void;
     expected: (string | null)[];
   }>([
     {
@@ -959,6 +1087,7 @@ describe('createSessionList', () => {
         list.connect(info('/work/x'));
         list.connect(info('/work/x'));
         list.mark('00000001');
+        list.mark('00000002');
         list.closeSession('00000001');
       },
       expected: ['00000001', '00000002'],
@@ -978,6 +1107,7 @@ describe('createSessionList', () => {
         list.connect(info('/work/x'));
         list.connect(info('/work/x'));
         list.mark('00000001');
+        list.mark('00000002');
         list.closeSession('00000002');
       },
       expected: ['00000001'],

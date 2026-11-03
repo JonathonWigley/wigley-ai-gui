@@ -121,8 +121,9 @@ export interface SessionsMainExports {
     tools: ToolDefinition[],
     start: (session: AgentSession) => ToolSession,
   ): void;
-  // Adds the session's row, unmarked and unselected, or joins the owned session
-  // whose host id the info carries, adding no row. A newer relay for that host
+  // Connects the session with no row, sending no state, or joins the owned
+  // session whose host id the info carries; `mark` or `activate` adds a
+  // connected session's row, and `release` closes it. A newer relay for that host
   // id takes the join from an older one still connected; the older handle's
   // `end` then leaves the join alone. Throws for a host id an owned session
   // moved away from, unless another owned session holds it.
@@ -133,21 +134,28 @@ export interface SessionsMainExports {
   // host id.
   open(info: SessionInfo, options?: OpenOptions): OwnedSession;
   // Attention for the session: selects its row when none is selected, else
-  // marks it; a row the user closed comes back at the end first.
+  // marks it; a connected session with no row, or a row the user closed, gets
+  // its row at the end first.
   mark(sessionId: string): void;
+  // Selects the session's row and clears its mark; a connected session with
+  // no row, or a row the user closed, gets its row at the end first.
   activate(sessionId: string): void;
+  // Closes a connected session's row once every close guard allows, emitting
+  // `closed`; a guard refusing keeps the row and logs. An unknown or owned
+  // session, or one with no row, is left alone without a log line.
+  release(sessionId: string): void;
   selectedSessionId(): string | null;
   // The session's side-bar label (`gamma 2`), kept while its row is closed;
   // null for a session not connected.
   label(sessionId: string): string | null;
-  // The user closing a session's row asks every guard first, and the row stays
-  // while any answers false; once every guard allows, the row goes and
+  // The user closing a session's row, or `release`, asks every guard first,
+  // and the row stays while any answers false; once every guard allows, the row goes and
   // `closed` is emitted. A session that ends loses its row regardless.
   addCloseGuard(mayClose: (sessionId: string) => boolean): void;
 }
 
-// `closed` is the user closing a row every guard allowed; the session itself
-// stays until it ends. `selected` is the selected row changing, to another row
+// `closed` is a row the user closed, or one `release` closed, every guard
+// allowing; the session itself stays until it ends. `selected` is the selected row changing, to another row
 // or to none, emitted after the state that carries it: an open that selects,
 // an activate or mark that selects, or the selected row closing or ending.
 // `hostSessionChanged` is an owned session moved to a new host id, emitted
@@ -160,9 +168,11 @@ export interface SessionsMainEvents extends EventShape {
   hostSessionChanged: AgentSession;
 }
 
-// One connected session's sidebar row. `marked` is a form not yet opened;
-// `projectDir`, `hostSessionId` and `harness` are the session's info, fixed at
-// connect, `hostSessionId` also changed by the owner through `setHostSessionId`.
+// One session's sidebar row; a connected session's row exists only while
+// marked, activated or holding a form. `marked` is a form not yet opened;
+// `projectDir`, `hostSessionId` and `harness` are the session's info, fixed
+// when the session connects, `hostSessionId` also changed by the owner through
+// `setHostSessionId`.
 export interface SessionRow {
   sessionId: string;
   label: string;

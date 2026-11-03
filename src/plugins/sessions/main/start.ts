@@ -119,7 +119,8 @@ function driveSessionInfo(args: JsonObject, sessionId: string): SessionInfo {
 type StartedSession = Pick<OwnedSession, 'session' | 'end'>;
 
 // Starts a drive run's sessions, each with no form, and ends or selects them:
-// `connect` connects one as a relay would, unselected; `open` opens an owned
+// `connect` connects one as a relay would, with no row until a form shows or
+// `activate` adds it; `open` opens an owned
 // one, selected, which forms' and the primer's open actions join when they
 // name its id, so a round and a primer share its row. A session's id is
 // `drive-session-<n>` unless the caller names one; `rowId` is the app's own
@@ -161,7 +162,7 @@ export function addDriveActions(
   const actions = [
     host.add('connect', {
       description:
-        'Connects an agent session with no form, as a relay would, and adds its row.',
+        'Connects an agent session with no form, as a relay would; it gets no row until a form shows.',
       args: sessionArgs,
       run: async (rawArgs) =>
         startSession(rawArgs, (info) => sessions.connect(info)),
@@ -240,6 +241,7 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
       open: (info, options) => list.open(info, options),
       mark: (sessionId) => list.mark(sessionId),
       activate: (sessionId) => list.activate(sessionId),
+      release: (sessionId) => list.release(sessionId),
       selectedSessionId: () => list.selectedSessionId(),
       label: (sessionId) => list.label(sessionId),
       addCloseGuard: (mayClose) => list.addCloseGuard(mayClose),

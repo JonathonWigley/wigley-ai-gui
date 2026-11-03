@@ -142,19 +142,20 @@ function routeCall(
 }
 
 // Connected and owned sessions and the sidebar rows main holds for them. A
-// connected session gets its row at connect, unselected; an owned session gets
-// its row at open, selected unless opened with `select` false, is joined by
-// each relay carrying its host id without a row of its own, a newer relay
-// taking the join from an older one, moves to a new host id by its
-// `setHostSessionId()`, which retires the old id and its relay, and ends only
-// by its `end()`. Each
-// session keeps its label while it lasts; a closed row comes back at the end
-// with the session's next mark. `mark`, `activate` and `closeSession` send the
-// whole state only when it changed, and log and ignore a session they cannot
-// act on; `closeSession` logs and keeps a row a close guard refuses, returning
-// false for every row it leaves open, and emits `closed` for a row it closes.
-// Every state sent with a selection other than the last sent emits `selected`
-// after it.
+// connected session has no row until `mark` or `activate` adds it at the end,
+// and `release` closes that row again; an owned session gets its row at open,
+// selected unless opened with `select` false, is joined by each relay carrying
+// its host id without a row of its own, a newer relay taking the join from an
+// older one, moves to a new host id by its `setHostSessionId()`, which retires
+// the old id and its relay, and ends only by its `end()`. Each session keeps
+// its label while it lasts; a closed row comes back at the end with the
+// session's next mark or activate. `mark`, `activate`, `release` and
+// `closeSession` send the whole state only when it changed; `mark`, `activate`
+// and `closeSession` log and ignore a session they cannot act on, `release`
+// ignores one silently. `release` and `closeSession` log and keep a row a close
+// guard refuses, and emit `closed` for a row they close; `closeSession` returns
+// false for every row it leaves open. Every state sent with a selection other
+// than the last sent emits `selected` after it.
 export function createSessionList(deps: SessionListDeps): SessionList {
   const contributions: Contribution[] = [];
   const closeGuards: ((sessionId: string) => boolean)[] = [];
@@ -231,9 +232,29 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     deps.emit('ended', { sessionId: entry.session.id });
   };
 
-  // Builds the session's entry and adds its row at the end; a throwing
-  // contribution start leaves neither.
-  const addEntry = (info: SessionInfo, owned: boolean): SessionEntry => {
+  // The index of the session's row, adding it at the end when it has none.
+  const rowIndexAdding = (entry: SessionEntry): number => {
+    const index = rowIndex(entry.session.id);
+    return index === -1 ? rows.push(rowOf(entry)) - 1 : index;
+  };
+
+  const everyGuardAllows = (sessionId: string) =>
+    closeGuards.every((mayClose) => mayClose(sessionId));
+
+  // Removes the row, sends the state, then emits `closed`.
+  const closeRow = (index: number, sessionId: string) => {
+    removeRow(index);
+    sendState();
+    deps.emit('closed', { sessionId });
+  };
+
+  // Builds the session's entry, adding its row at the end when `addsRow`; a
+  // throwing contribution start leaves neither.
+  const addEntry = (
+    info: SessionInfo,
+    owned: boolean,
+    addsRow: boolean,
+  ): SessionEntry => {
     const session: AgentSession = { id: deps.randomHex(), info };
     const group = groupOf(info);
     const entry: SessionEntry = {
@@ -246,7 +267,9 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       retiredHostIds: new Set(),
     };
     entries.set(session.id, entry);
-    rows.push(rowOf(entry));
+    if (addsRow) {
+      rows.push(rowOf(entry));
+    }
     return entry;
   };
 
@@ -376,8 +399,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
           `Host session ${hostId} was retired by session ${appId}`,
         );
       }
-      const entry = addEntry(info, false);
-      sendState();
+      const entry = addEntry(info, false, false);
       deps.emit('connected', entry.session);
       return {
         session: entry.session,
@@ -393,7 +415,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       if (entriesHolding(hostId).length > 0) {
         throw new Error(`Host session ${hostId} is already open`);
       }
-      const entry = addEntry(info, true);
+      const entry = addEntry(info, true, true);
       if (options?.select !== false) {
         select(rows.at(-1));
       }
@@ -411,13 +433,9 @@ export function createSessionList(deps: SessionListDeps): SessionList {
         deps.log('sessions', `mark for unknown session ${sessionId} ignored`);
         return;
       }
-      // A row the user closed comes back at the end, then is selected or
-      // marked like any other.
-      let index = rowIndex(sessionId);
-      if (index === -1) {
-        index = rows.push(rowOf(entry)) - 1;
-      }
-      const row = rows[index];
+      // A connected session with no row, or a row the user closed, gets its
+      // row at the end, then is selected or marked like any other.
+      const row = rows[rowIndexAdding(entry)];
       if (sessionId === selectedSessionId) {
         return;
       }
@@ -433,17 +451,39 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       sendState();
     },
     activate(sessionId) {
-      const index = knownRow('activate', sessionId);
-      if (index === null) {
+      const entry = entries.get(sessionId);
+      if (entry === undefined) {
+        deps.log(
+          'sessions',
+          `activate for unknown session ${sessionId} ignored`,
+        );
         return;
       }
       deps.activated(sessionId);
-      const row = rows[index];
+      // A connected session with no row, or a row the user closed, gets its
+      // row at the end, then is selected like any other.
+      const row = rows[rowIndexAdding(entry)];
       if (sessionId === selectedSessionId && !row.marked) {
         return;
       }
       select(row);
       sendState();
+    },
+    release(sessionId) {
+      const entry = entries.get(sessionId);
+      const index = rowIndex(sessionId);
+      const isReleasable = entry !== undefined && !entry.owned && index !== -1;
+      if (!isReleasable) {
+        return;
+      }
+      if (!everyGuardAllows(sessionId)) {
+        deps.log(
+          'sessions',
+          `release for session ${sessionId} kept by a close guard`,
+        );
+        return;
+      }
+      closeRow(index, sessionId);
     },
     addCloseGuard(mayClose) {
       closeGuards.push(mayClose);
@@ -453,16 +493,14 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       if (index === null) {
         return false;
       }
-      if (!closeGuards.every((mayClose) => mayClose(sessionId))) {
+      if (!everyGuardAllows(sessionId)) {
         deps.log(
           'sessions',
           `closeSession for session ${sessionId} kept by a close guard`,
         );
         return false;
       }
-      removeRow(index);
-      sendState();
-      deps.emit('closed', { sessionId });
+      closeRow(index, sessionId);
       return true;
     },
     selectedSessionId: () => selectedSessionId,
