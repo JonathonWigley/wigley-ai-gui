@@ -267,7 +267,8 @@
 
 /* Other plugins' composer parts; a Chat tab with none shows no space. They
    give up height first and scroll, so the box and the status line keep theirs
-   in a short pane. */
+   in a short pane. A part's own CSS may hold them to a floor and raise the
+   composer's cap to fit it. */
 .chat-composer-parts {
   display: flex;
   flex-direction: column;
