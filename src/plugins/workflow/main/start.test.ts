@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentEvent } from '../../../contracts/agent';
-import type { Files } from '../../../contracts/files';
+import { type Files, readIfPresent } from '../../../contracts/files';
 import type { QualifiedEvents } from '../../../contracts/plugin';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
@@ -39,7 +39,29 @@ interface WorkflowTestSettings {
   autoStartSeconds: number;
 }
 
+const FLOWS_PATH = `/data/workflow/${FLOWS_FILE}`;
+
 const settled = () => new Promise((settle) => setImmediate(settle));
+
+// Project files whose reads, from `holdReads` on, wait for `release`.
+function holdableReads() {
+  const memory = createMemoryFiles();
+  let held: PromiseWithResolvers<void> | null = null;
+  const files: Files = {
+    ...memory,
+    read: async (path) => {
+      await held?.promise;
+      return memory.read(path);
+    },
+  };
+  return {
+    files,
+    holdReads: () => {
+      held = Promise.withResolvers<void>();
+    },
+    release: () => held?.resolve(),
+  };
+}
 
 // Timers and a clock the test moves by hand: `advance` moves the clock and
 // runs each timer that came due, in due order.
@@ -225,10 +247,11 @@ async function runFeatureTurn(
   await workflow.agentEvent({ type: 'turnEnded', at: 1 });
 }
 
-// Runs a wigley:feature turn that writes the plan, over the part harness, so
-// the flow holds a plan watch and a running countdown.
+// Runs a wigley:feature turn that writes the plan into `project`, over the part
+// harness, so the flow holds a plan watch and a running countdown.
 async function reachPlanReady(
   harness: MainPartHarness<typeof workflowManifest>,
+  project: Files = harness.files,
 ): Promise<void> {
   const agentEvent = async (event: AgentEvent) => {
     harness.emit('chat.agentEvent', {
@@ -244,7 +267,7 @@ async function reachPlanReady(
   await settled();
   await agentEvent(skill('wigley:feature', ''));
   await agentEvent({ type: 'turnStarted', at: 1 });
-  await harness.files.write(PLAN_FILE, PLAN);
+  await project.write(PLAN_FILE, PLAN);
   await agentEvent({
     type: 'fileWritten',
     at: 1,
@@ -416,33 +439,58 @@ describe('workflowMainPart', () => {
   it.each([
     {
       state: 'fresh start',
+      replacesFiles: false,
       act: () => Promise.resolve(),
       liveTimers: 0,
     },
     {
       state: 'a plan watched and its countdown running',
-      act: reachPlanReady,
+      replacesFiles: false,
+      act: (harness: MainPartHarness<typeof workflowManifest>) =>
+        reachPlanReady(harness),
       liveTimers: 1,
     },
-  ])('stop_LeavesNoLiveRegistration ($state)', async ({ act, liveTimers }) => {
-    const harness = startMainPart(workflowMainPart, {
-      settings: { ...SETTINGS, autoClearAndMake: true },
-    });
-    await act(harness);
-    expect(harness.counts().timers).toBe(liveTimers);
-    expect(harness.counts().registrations).toBeGreaterThan(0);
+    {
+      state: 'a plan read held open',
+      replacesFiles: true,
+      act: async (
+        harness: MainPartHarness<typeof workflowManifest>,
+        project: ReturnType<typeof holdableReads>,
+      ) => {
+        await reachPlanReady(harness, project.files);
+        project.holdReads();
+        await project.files.write(PLAN_FILE, PLAN_TICKED);
+        await settled();
+      },
+      liveTimers: 1,
+    },
+  ])(
+    'stop_LeavesNoLiveRegistration_AndWritesNothing ($state)',
+    async ({ replacesFiles, act, liveTimers }) => {
+      const project = holdableReads();
+      const harness = startMainPart(workflowMainPart, {
+        settings: { ...SETTINGS, autoClearAndMake: true },
+        services: replacesFiles ? { files: project.files } : {},
+      });
+      await act(harness, project);
+      expect(harness.counts().timers).toBe(liveTimers);
+      expect(harness.counts().registrations).toBeGreaterThan(0);
+      const savedAtStop = await readIfPresent(harness.files, FLOWS_PATH);
 
-    await harness.stop();
-    await settled();
+      await harness.stop();
+      project.release();
+      await settled();
 
-    expect(harness.counts()).toEqual({
-      registrations: 0,
-      timers: 0,
-      listeners: 0,
-      observers: 0,
-      frames: 0,
-    });
-  });
+      expect(harness.counts()).toEqual({
+        registrations: 0,
+        timers: 0,
+        listeners: 0,
+        observers: 0,
+        frames: 0,
+      });
+      expect(await readIfPresent(harness.files, FLOWS_PATH)).toBe(savedAtStop);
+    },
+  );
 
   it('stopThenStart_StartsAgain', async () => {
     const harness = startMainPart(workflowMainPart);

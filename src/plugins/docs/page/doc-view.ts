@@ -400,6 +400,9 @@ export function createDocView(deps: DocViewDeps): DocView {
   // Draws the open doc's header, with its chips as they read now; nothing
   // while no doc is open.
   const drawHeader = () => {
+    if (isDisposed) {
+      return;
+    }
     drawnHeader?.dispose();
     drawnHeader = null;
     if (shown === null) {
@@ -955,7 +958,7 @@ export function createDocView(deps: DocViewDeps): DocView {
     openPath: () => shown?.target.path ?? null,
     retarget(target) {
       const doc = shown;
-      if (doc === null) {
+      if (doc === null || isDisposed) {
         return;
       }
       doc.target = target;
@@ -969,7 +972,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       drawHeader();
     },
     clear() {
-      if (shown === null) {
+      if (shown === null || isDisposed) {
         return;
       }
       openCount++;

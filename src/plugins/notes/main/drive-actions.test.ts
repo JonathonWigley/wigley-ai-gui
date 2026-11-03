@@ -11,8 +11,8 @@ function setUp() {
   const data = createMemoryFiles();
   const store = createDraftStore(data, () => undefined);
   const drive = fakeDriveHost();
-  const actions = addDriveActions(drive.host, { store, data });
-  return { data, store, drive, actions };
+  addDriveActions(drive.host, { store, data });
+  return { data, store, drive };
 }
 
 describe('notes drive actions', () => {
@@ -41,13 +41,5 @@ describe('notes drive actions', () => {
 
     expect(await drive.run('discard')).toEqual({ draft: emptyDraft(2) });
     expect(await data.list('images')).toEqual([]);
-  });
-
-  it('dispose_RemovesBothActions', () => {
-    const { drive, actions } = setUp();
-
-    actions.dispose();
-
-    expect([...drive.actions.keys()]).toEqual([]);
   });
 });

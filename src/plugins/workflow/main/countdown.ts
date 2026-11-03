@@ -8,7 +8,6 @@ import type { SessionFlow } from '../contract';
 export interface Countdown {
   sync(flow: SessionFlow): void;
   stop(sessionId: string): void;
-  dispose(): void;
 }
 
 export function createCountdown(deps: {
@@ -46,10 +45,5 @@ export function createCountdown(deps: {
       handles.set(sessionId, handle);
     },
     stop,
-    dispose() {
-      for (const sessionId of handles.keys()) {
-        stop(sessionId);
-      }
-    },
   };
 }

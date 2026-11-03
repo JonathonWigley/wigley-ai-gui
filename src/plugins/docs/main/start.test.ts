@@ -6,9 +6,17 @@ import { fakeDriveHost } from '../../../shared/fake-drive-host';
 import { FakeProcesses } from '../../../shared/fake-processes';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
-import { startMainPart } from '../../../shared/plugin-part-harness.test-support';
+import {
+  fakeDependency,
+  startMainPart,
+} from '../../../shared/plugin-part-harness.test-support';
 import { createRegistrations } from '../../../shared/registrations';
-import type { OwnedSession, SessionInfo } from '../../sessions/contract';
+import {
+  type OwnedSession,
+  type SessionInfo,
+  sessionsMainKey,
+  type SessionsMainExports,
+} from '../../sessions/contract';
 import type { DocsMainExports, IndexDocument } from '../contract';
 import { MACHINE_INDEX_FILE } from './index-sources';
 import { addDriveActions, docsMainPart, startDocs } from './start';
@@ -89,37 +97,6 @@ async function driveOpeningNothing(
 }
 
 describe('docs drive actions', () => {
-  it('dispose removes the actions and ends each session connectSession opened', async () => {
-    const files = await setUpFiles();
-    const ended: string[] = [];
-    const drive = fakeDriveHost();
-    const actions = addDriveActions(drive.host, {
-      files,
-      homeDir: HOME,
-      started: Promise.resolve(),
-      paths: posixPaths,
-      channel: { send: () => undefined },
-      sessions: {
-        activate: () => undefined,
-        open(info: SessionInfo): OwnedSession {
-          const id = `row-${String(info.sessionId)}`;
-          return {
-            session: { id, info },
-            end: () => ended.push(id),
-            setHostSessionId: () => undefined,
-          };
-        },
-      },
-    });
-    await drive.run('connectSession');
-    await drive.run('connectSession', { sessionId: 'named' });
-
-    actions.dispose();
-
-    expect(ended).toEqual(['row-drive-docs-1', 'row-named']);
-    expect([...drive.actions.keys()]).toEqual([]);
-  });
-
   it('connectSession rejects a sessionId that is not a string', async () => {
     const drive = await driveOpeningNothing();
 
@@ -484,6 +461,40 @@ describe('docs main part lifecycle', () => {
     await harness.stop();
 
     expect(harness.counts()).toEqual(NOTHING_LIVE);
+  });
+
+  it('stop_EndsEachSessionConnectSessionOpened', async () => {
+    const ended: string[] = [];
+    // Sessions faked as its consumer view files each session it opens.
+    const sessions = fakeDependency(
+      sessionsMainKey,
+      (consumer) =>
+        ({
+          activate: () => undefined,
+          open(info: SessionInfo): OwnedSession {
+            const id = `row-${String(info.sessionId)}`;
+            consumer.track({ dispose: () => ended.push(id) });
+            return {
+              session: { id, info },
+              end: () => ended.push(id),
+              setHostSessionId: () => undefined,
+            };
+          },
+        }) as unknown as SessionsMainExports,
+    );
+    const harness = startMainPart(docsMainPart, {
+      drive: true,
+      dependencies: [sessions],
+      settings: { ...docsMainPart.manifest.settings, scriptPath: '/script.py' },
+      services: { homeDir: '/', runMode: 'live' },
+    });
+    await harness.drive?.run('connectSession');
+    await harness.drive?.run('connectSession', { sessionId: 'named' });
+    expect(ended).toEqual([]);
+
+    await harness.stop();
+
+    expect(ended.sort()).toEqual(['row-drive-docs-1', 'row-named']);
   });
 
   it('stopThenStart_StartsAgain', async () => {

@@ -20,7 +20,6 @@ import { errorText } from '../../../shared/error-text';
 import type { JsonObject } from '../../../shared/json';
 import {
   type AgentSession,
-  type OwnedSession,
   type SessionsMainEvents,
   type SessionsMainExports,
   sessionsMainKey,
@@ -160,80 +159,62 @@ function lineArg(args: JsonObject): number | null {
 // opens a session in its repo, whose row shows its Docs tab. Each takes
 // `loadStates` to add a doc per non-launch index load state and
 // `indexDelayMs` to make the stand-in index script wait before answering.
-// `docs.openDoc` asks the page to open a doc in Docs mode. Disposing removes
-// the actions and ends every session `docs.connectSession` opened.
-export function addDriveActions(
-  drive: DriveHost,
-  deps: DocsDriveDeps,
-): Disposable {
+// `docs.openDoc` asks the page to open a doc in Docs mode.
+export function addDriveActions(drive: DriveHost, deps: DocsDriveDeps): void {
   const { files, homeDir, sessions, started, paths, channel } = deps;
-  const opened: OwnedSession[] = [];
   let opens = 0;
-  const actions = [
-    drive.add('seed', {
-      description:
-        'Rewrites the docs fixture under the temp home, removing what earlier steps added; loadStates adds one doc per index load state other than launch (on-demand, listed, shadowed, not-loaded) under .claude/load-states; indexDelayMs makes the stand-in docs_index.py wait that many milliseconds before answering, so a docs index run outlasts the Docs tree\'s "Claude pending" chip (default 0). Returns the home\'s real path.',
-      args: '{ loadStates?: boolean, indexDelayMs?: number }',
-      async run(rawArgs) {
-        await started;
-        const args = argsObject(rawArgs);
-        const loadStates = optionalBoolean(args, 'loadStates') ?? false;
-        const indexDelayMs = indexDelayMsArg(args);
-        await writeDocsFixture(files, homeDir, paths, {
-          loadStates,
-          indexDelayMs,
-        });
-        return { home: await files.realPath(homeDir) };
-      },
-    }),
-    drive.add('connectSession', {
-      description:
-        'Rewrites the docs fixture and opens a session in its repo in the background, activating its row on its Docs tab; sessionId defaults to drive-docs-<n>, and one another session already holds is refused; loadStates and indexDelayMs as docs.seed takes them.',
-      args: '{ sessionId?: string, loadStates?: boolean, indexDelayMs?: number }',
-      async run(rawArgs) {
-        await started;
-        opens += 1;
-        const args = argsObject(rawArgs);
-        const sessionId =
-          optionalString(args, 'sessionId') ?? `drive-docs-${String(opens)}`;
-        const loadStates = optionalBoolean(args, 'loadStates') ?? false;
-        const indexDelayMs = indexDelayMsArg(args);
-        const session = await openDocsFixtureSession(
-          files,
-          homeDir,
-          sessions,
-          sessionId,
-          paths,
-          { loadStates, indexDelayMs },
-        );
-        opened.push(session);
-        return { sessionId, rowId: session.session.id };
-      },
-    }),
-    drive.add('openDoc', {
-      description:
-        'Shows Docs mode and opens the doc at path (line 1-based, a positive whole number), or toasts that the machine index does not list it, waiting first for a rebuild coming or running when its first read does not.',
-      args: '{ path: string, line?: number }',
-      async run(rawArgs) {
-        await started;
-        const args = argsObject(rawArgs);
-        const path = requiredString(args, 'path');
-        const line = lineArg(args);
-        channel.send('openDoc', { path, line });
-        return {};
-      },
-    }),
-  ];
-  return {
-    dispose() {
-      for (const action of actions) {
-        action.dispose();
-      }
-      for (const session of opened.splice(0)) {
-        session.end();
-      }
+  drive.add('seed', {
+    description:
+      'Rewrites the docs fixture under the temp home, removing what earlier steps added; loadStates adds one doc per index load state other than launch (on-demand, listed, shadowed, not-loaded) under .claude/load-states; indexDelayMs makes the stand-in docs_index.py wait that many milliseconds before answering, so a docs index run outlasts the Docs tree\'s "Claude pending" chip (default 0). Returns the home\'s real path.',
+    args: '{ loadStates?: boolean, indexDelayMs?: number }',
+    async run(rawArgs) {
+      await started;
+      const args = argsObject(rawArgs);
+      const loadStates = optionalBoolean(args, 'loadStates') ?? false;
+      const indexDelayMs = indexDelayMsArg(args);
+      await writeDocsFixture(files, homeDir, paths, {
+        loadStates,
+        indexDelayMs,
+      });
+      return { home: await files.realPath(homeDir) };
     },
-  };
+  });
+  drive.add('connectSession', {
+    description:
+      'Rewrites the docs fixture and opens a session in its repo in the background, activating its row on its Docs tab; sessionId defaults to drive-docs-<n>, and one another session already holds is refused; loadStates and indexDelayMs as docs.seed takes them.',
+    args: '{ sessionId?: string, loadStates?: boolean, indexDelayMs?: number }',
+    async run(rawArgs) {
+      await started;
+      opens += 1;
+      const args = argsObject(rawArgs);
+      const sessionId =
+        optionalString(args, 'sessionId') ?? `drive-docs-${String(opens)}`;
+      const loadStates = optionalBoolean(args, 'loadStates') ?? false;
+      const indexDelayMs = indexDelayMsArg(args);
+      const session = await openDocsFixtureSession(
+        files,
+        homeDir,
+        sessions,
+        sessionId,
+        paths,
+        { loadStates, indexDelayMs },
+      );
+      return { sessionId, rowId: session.session.id };
+    },
+  });
+  drive.add('openDoc', {
+    description:
+      'Shows Docs mode and opens the doc at path (line 1-based, a positive whole number), or toasts that the machine index does not list it, waiting first for a rebuild coming or running when its first read does not.',
+    args: '{ path: string, line?: number }',
+    async run(rawArgs) {
+      await started;
+      const args = argsObject(rawArgs);
+      const path = requiredString(args, 'path');
+      const line = lineArg(args);
+      channel.send('openDoc', { path, line });
+      return {};
+    },
+  });
 }
 
 // Serves the page every registered index source (the machine index and one
@@ -372,17 +353,16 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
         paths: services.paths,
       }),
     );
-    const driveActions =
-      api.drive !== null
-        ? addDriveActions(api.drive, {
-            files: services.files,
-            homeDir: services.homeDir,
-            sessions,
-            started: docs,
-            paths: services.paths,
-            channel,
-          })
-        : null;
+    if (api.drive !== null) {
+      addDriveActions(api.drive, {
+        files: services.files,
+        homeDir: services.homeDir,
+        sessions,
+        started: docs,
+        paths: services.paths,
+        channel,
+      });
+    }
     return {
       commands: {},
       exports: (consumer): DocsMainExports => ({
@@ -396,8 +376,6 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
         watchDoc: async (path, changed) =>
           consumer.track(await (await docs).docFiles.watch(path, changed)),
       }),
-      // Ends the sessions `docs.connectSession` opened.
-      dispose: () => driveActions?.dispose(),
     };
   },
 };

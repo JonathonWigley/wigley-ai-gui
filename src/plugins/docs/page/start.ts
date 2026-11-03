@@ -444,8 +444,11 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     });
     // The tab goes first, so it never holds a disposed view.
     const disposeSessionDocs = (held: SessionDocs) => {
-      held.tab?.dispose();
-      held.view.dispose();
+      try {
+        held.tab?.dispose();
+      } finally {
+        held.view.dispose();
+      }
     };
     api.events.on('sessions.sessionRemoved', ({ sessionId }) => {
       const held = sessionDocs.get(sessionId);
@@ -614,11 +617,15 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         if (pendingResizeFrame !== null) {
           cancelAnimationFrame(pendingResizeFrame);
         }
-        for (const held of sessionDocs.values()) {
-          disposeSessionDocs(held);
-        }
+        const held = [...sessionDocs.values()];
         sessionDocs.clear();
-        machineView.dispose();
+        callEach<() => void>(
+          [
+            ...held.map((each) => () => disposeSessionDocs(each)),
+            () => machineView.dispose(),
+          ],
+          (dispose) => dispose(),
+        );
       },
     };
   },

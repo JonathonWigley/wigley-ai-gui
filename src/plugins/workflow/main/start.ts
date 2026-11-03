@@ -292,6 +292,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       exports: (consumer): WorkflowMainExports => ({
         addStage: (stage) => consumer.track(stages.add(stage)),
       }),
+      dispose: () => planWatch.dispose(),
     };
   },
 };

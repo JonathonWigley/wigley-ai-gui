@@ -712,6 +712,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
   // ── Opening and closing ───────────────────────────────────────────────────
   const open = async () => {
     phase = 'loading';
+    const isStillLoading = () => phase === 'loading';
     try {
       const [draft, found] = await Promise.all([
         channel.invoke('loadDraft'),
@@ -719,8 +720,14 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
       ]);
       homes = found.homes;
       await cacheImages(draft);
+      if (!isStillLoading()) {
+        return;
+      }
       showDraft(draft);
     } catch (error) {
+      if (!isStillLoading()) {
+        return;
+      }
       phase = 'closed';
       toast(`Note not opened: ${errorText(error)}`, 'error');
       log(`note not opened: ${errorText(error)}`);

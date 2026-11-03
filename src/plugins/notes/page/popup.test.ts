@@ -106,7 +106,8 @@ interface Harness {
   inserts: string[];
   // The fields of each `saveDraft` call, in order.
   saved: NoteFields[];
-  // How many pushed scopes `pop` was called on.
+  // How many scopes were pushed, and how many `pop` was called on.
+  pushes(): number;
   pops(): number;
   // The arguments of each `saveMarkup` call, in order.
   savedMarkups: [number, string][];
@@ -124,6 +125,7 @@ interface Harness {
 }
 
 interface Fakes {
+  loadDraft(): Promise<NoteDraft>;
   savePasted(file: DroppedFile): Promise<string>;
   encode: ImageEncoder['encode'];
   addImage(bytes: Uint8Array): Promise<NoteDraft>;
@@ -244,7 +246,7 @@ function fakeChannel(
     invoke(name: string, ...args: unknown[]) {
       switch (name) {
         case 'loadDraft':
-          return Promise.resolve(draft);
+          return fakes.loadDraft();
         case 'homes':
           return Promise.resolve({ homes: [], message: null });
         case 'image':
@@ -288,6 +290,7 @@ async function openPopup(draft: NoteDraft = DRAFT): Promise<Harness> {
   const time = handTimers();
   let images = draft.images;
   const fakes: Fakes = {
+    loadDraft: () => Promise.resolve(draft),
     savePasted: () => Promise.resolve(PASTED_PATH),
     encode: () => Promise.reject(new Error('no encode in the fake')),
     addImage() {
@@ -299,14 +302,18 @@ async function openPopup(draft: NoteDraft = DRAFT): Promise<Harness> {
   };
   const targets: DropTarget[] = [];
   let body: TextEditor | null = null;
+  let pushes = 0;
   let pops = 0;
-  const pushed = (): PushedScope => ({
-    pop() {
-      pops += 1;
-    },
-    dispose: () => undefined,
-    onBaseChanged: () => ({ dispose: () => undefined }),
-  });
+  const pushed = (): PushedScope => {
+    pushes += 1;
+    return {
+      pop() {
+        pops += 1;
+      },
+      dispose: () => undefined,
+      onBaseChanged: () => ({ dispose: () => undefined }),
+    };
+  };
   const services = {
     editor: {
       create(parent: HTMLElement, _doc: string, events: EditorEvents) {
@@ -375,6 +382,7 @@ async function openPopup(draft: NoteDraft = DRAFT): Promise<Harness> {
     added,
     inserts,
     saved,
+    pushes: () => pushes,
     pops: () => pops,
     savedMarkups,
     changeMarkup() {
@@ -389,25 +397,28 @@ async function openPopup(draft: NoteDraft = DRAFT): Promise<Harness> {
   };
 }
 
+// The open popup's text boxes: how a test focuses each, and its element.
+const FOCUSED_BOXES = [
+  {
+    box: 'title',
+    focus(harness: Harness) {
+      harness.body.blur();
+      harness.title.focus();
+      harness.title.fire('focus');
+    },
+    boxOf: (harness: Harness) => harness.title,
+  },
+  {
+    box: 'body',
+    focus: () => undefined,
+    boxOf: (harness: Harness) => harness.bodyFrame,
+  },
+];
+
 describe('note popup', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it.each([
-    {
-      box: 'title',
-      focus(harness: Harness) {
-        harness.body.blur();
-        harness.title.focus();
-        harness.title.fire('focus');
-      },
-      boxOf: (harness: Harness) => harness.title,
-    },
-    {
-      box: 'body',
-      focus: () => undefined,
-      boxOf: (harness: Harness) => harness.bodyFrame,
-    },
-  ])(
+  it.each(FOCUSED_BOXES)(
     'popupSetLayouts_BoxFocused_FocusesItAgainInTheNewRow ($box)',
     async ({ focus, boxOf }) => {
       const harness = await openPopup();
@@ -681,6 +692,53 @@ describe('note popup', () => {
     expect(harness.added.slice(addedBefore)).toEqual([]);
     expect(harness.inserts).toEqual([]);
   });
+
+  it.each(FOCUSED_BOXES)(
+    'dispose_BoxFocused_BlursIt ($box)',
+    async ({ focus, boxOf }) => {
+      const harness = await openPopup();
+      focus(harness);
+      expect(harness.doc.activeElement).toBe(boxOf(harness));
+
+      harness.popup.dispose();
+
+      expect(harness.doc.activeElement).toBeNull();
+    },
+  );
+
+  it.each([
+    {
+      answer: 'loads',
+      settleLoad: (load: PromiseWithResolvers<NoteDraft>) =>
+        load.resolve(DRAFT),
+    },
+    {
+      answer: 'fails',
+      settleLoad: (load: PromiseWithResolvers<NoteDraft>) =>
+        load.reject(new Error('main gone')),
+    },
+  ])(
+    'dispose_OpenInFlight_StaysClosedAndPushesNoScope ($answer)',
+    async ({ settleLoad }) => {
+      const harness = await openPopup();
+      harness.popup.commands.close();
+      await settle();
+      const load = Promise.withResolvers<NoteDraft>();
+      harness.fakes.loadDraft = () => load.promise;
+      harness.popup.commands.open();
+      const pushesAtDispose = harness.pushes();
+
+      harness.popup.dispose();
+      settleLoad(load);
+      await settle();
+      harness.take([png('late.png')]);
+      await settle();
+
+      expect(harness.pushes()).toBe(pushesAtDispose);
+      expect(harness.added).toEqual([]);
+      expect(harness.toasts).toEqual([]);
+    },
+  );
 
   it('dispose_MarkupOpen_SavesAndHidesIt', async () => {
     const harness = await openPopup();
