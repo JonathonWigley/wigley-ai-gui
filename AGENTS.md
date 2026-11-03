@@ -658,8 +658,9 @@ round; primer: an open primer), since main, not the page, decides.
   runs the touched plugins' groups, and runs the whole self-test only when the user asks for it, since a whole run
   takes half an hour or more: `npm run selftest -- --plugin <id>` runs only that plugin's script (repeat the flag or
   give a comma list), and `--group <name>` (repeatable) runs that group, named `<plugin>: <name>` as the report prints
-  it or bare for that name in every script, together with the groups before it in its script, since a group starts
-  from the page they left. A filtered run serves the page every script's binds and settings, checks a script's result
+  it or bare for that name in every script (a name several scripts share usually needs its `<plugin>: ` prefix, since a
+  bare name that cuts an earlier script short is refused), together with the groups before it in its script, since a
+  group starts from the page they left. A filtered run serves the page every script's binds and settings, checks a script's result
   only when the run reaches the script's last group, and skips the end-of-run placement check. It fails before any
   step on a plugin or group no script holds, naming the known ones, and on a filter that cuts a script short of its
   last group and keeps a script after it, since the cut script leaves its fixture open: run that script's groups on

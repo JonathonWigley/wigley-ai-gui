@@ -153,7 +153,7 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'shrunk image',
-    why: "A session send re-encodes an image over the API's cap smaller through main's native image encoder, so the new session gets it under the cap; the fixture adds the over-cap PNG once the last group's send went out.",
+    why: "A session send re-encodes an image over the API's cap smaller through main's native image encoder, so the new session gets it under the cap; the fixture adds the over-cap PNG once the new session group's send went out.",
     steps: [
       {
         keys: OPEN,
@@ -317,17 +317,27 @@ function shrunkSendProblems({
 // row so the popup attaches it. Once the steps' first send to a new session
 // went out it adds an over-cap noise PNG to the cleared draft, for the shrunk
 // image group, and the result waits for the second send, then reads the
-// fixture home's follow-ups and each launched session's first message.
+// fixture home's follow-ups and each launched session's first message. A run
+// a later open replaced writes nothing more, and its result never settles.
 export function notesSelfTestScript(deps: NotesSelfTestDeps): SelfTestScript {
   const { homeDir, files, paths, sessions, harnesses, store } = deps;
   let previous: ConnectedSession | null = null;
+  let latestOpen = 0;
 
   async function run(sent: Promise<void>): Promise<NotesSelfTestResult> {
+    const thisOpen = latestOpen;
+    const isReplaced = () => thisOpen !== latestOpen;
     const overCapPng = noisePng(NOISE_WIDTH, NOISE_HEIGHT);
     await store.clear();
     const home = await files.realPath(homeDir);
+    if (isReplaced()) {
+      return new Promise<never>(() => {});
+    }
     const folder = path.join(home, 'dev', REPO);
     await files.makeFolder(folder);
+    if (isReplaced()) {
+      return new Promise<never>(() => {});
+    }
     const connected = sessions.connect({
       sessionId: SESSION_ID,
       projectDir: folder,
@@ -338,6 +348,9 @@ export function notesSelfTestScript(deps: NotesSelfTestDeps): SelfTestScript {
     sessions.activate(connected.session.id);
     const marks = markRun(harnesses);
     await sent;
+    if (isReplaced()) {
+      return new Promise<never>(() => {});
+    }
     // Registered before the image is added, so it waits for the send after
     // `sent`.
     const shrunkSent = deps.nextSessionSend();
@@ -359,6 +372,7 @@ export function notesSelfTestScript(deps: NotesSelfTestDeps): SelfTestScript {
     settings: {},
     scrollsItself: ['.notes-target', '.notes-session'],
     open() {
+      latestOpen++;
       previous?.end();
       previous = null;
       const result = run(deps.nextSessionSend());

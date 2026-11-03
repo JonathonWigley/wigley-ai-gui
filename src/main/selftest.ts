@@ -198,8 +198,10 @@ function emptyFolder(folder: string): void {
 // the scripts the filter leaves out included, so the page is served as on a
 // whole run. With no script handed over, scripts whose settings clash, groups
 // or steps `checkGroups` rejects, steps whose screenshot names are malformed or
-// save one file, or a filter naming a plugin or group no script holds,
-// `closeHandover` fails the self-test and exits.
+// save one file, or a filter `selectScripts` refuses (a malformed
+// `PROOF_SELFTEST_FILTER`, a plugin or group no script holds, or a script cut
+// short of its last group with a kept script after it), `closeHandover` fails
+// the self-test and exits.
 export interface SelfTestDriver {
   hostFor(pluginId: string): SelfTestHost;
   closeHandover(): SelfTestConfig;

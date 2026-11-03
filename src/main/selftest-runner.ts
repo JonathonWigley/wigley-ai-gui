@@ -504,8 +504,8 @@ export async function runScript(
   if (!isCurrent()) {
     return null;
   }
-  // Reached only by a result checkResult skipped: a checked one that rejects
-  // rejects there.
+  // A skipped result, or a checked one that timed out in `settleWithin`, that
+  // has rejected by now: a checked one that rejected in time rejected there.
   if (settled.hasRejected) {
     throw settled.error;
   }
