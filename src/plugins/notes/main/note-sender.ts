@@ -17,7 +17,8 @@ import type { DraftStore } from './draft-store';
 import { firstSentence, followupText, launchText } from './note-text';
 
 // `homeDir` is the real home path, its links resolved. `images` shrinks each
-// image over the API's cap before it is sent.
+// image over the API's cap before a session send; a follow-up files them as
+// they are.
 export interface NoteSenderDeps {
   store: DraftStore;
   images: ImageEncoder;
@@ -32,8 +33,9 @@ export interface NoteSenderDeps {
 // Sends the kept draft and clears it once the send succeeded; a refused or
 // failed send keeps it. `flattened` holds one entry per draft image, in strip
 // order: the PNG with its markup drawn in, or null to send the stored image.
-// Each image over the API's cap is shrunk first; one that will not shrink
-// under it refuses the send with SHRINK_REFUSED.
+// A follow-up files the images at full size, on disk where no API cap
+// applies. A session send shrinks each image over the API's cap first; one
+// that will not shrink under it refuses the send with SHRINK_REFUSED.
 // Each throws when `flattened` and the draft hold different image counts.
 export interface NoteSender {
   toFollowup(
@@ -50,24 +52,30 @@ function refused(reason: string): NoteSendResult {
   return { type: 'refused', reason };
 }
 
-// The PNG bytes to send for each draft image, in strip order, each shrunk
-// under the API's cap; null when one will not shrink under it.
-async function imagesToSend(
+// The PNG bytes of each draft image, in strip order: the flattened PNG, else
+// the stored one. Throws when `flattened` and the draft differ in count.
+async function draftPngs(
   store: DraftStore,
-  encoder: ImageEncoder,
   draft: NoteDraft,
   flattened: readonly (Uint8Array | null)[],
-): Promise<Uint8Array[] | null> {
+): Promise<Uint8Array[]> {
   if (flattened.length !== draft.images.length) {
     throw new Error(
       `flattened holds ${String(flattened.length)} images; the draft holds ${String(draft.images.length)}`,
     );
   }
-  const pngs = await Promise.all(
+  return Promise.all(
     draft.images.map(
       (image, index) => flattened[index] ?? store.image(image.id),
     ),
   );
+}
+
+// Each PNG shrunk under the API's cap; null when one will not shrink under it.
+async function fitToCap(
+  pngs: readonly Uint8Array[],
+  encoder: ImageEncoder,
+): Promise<Uint8Array[] | null> {
   const fitted = await Promise.all(
     pngs.map((bytes) =>
       shrinkToFit({ bytes, mediaType: 'image/png' }, encoder),
@@ -151,10 +159,7 @@ export function createNoteSender(deps: NoteSenderDeps): NoteSender {
       if (home === null) {
         throw new Error('sendRefusal passed a draft with no target');
       }
-      const images = await imagesToSend(store, deps.images, draft, flattened);
-      if (images === null) {
-        return refused(SHRINK_REFUSED);
-      }
+      const images = await draftPngs(store, draft, flattened);
       const line = await lineOf(draft);
       const target = followupTarget(draft, request);
       let result: BacklogWriteResult;
@@ -182,7 +187,8 @@ export function createNoteSender(deps: NoteSenderDeps): NoteSender {
       if (refusal !== null) {
         return refused(refusal);
       }
-      const images = await imagesToSend(store, deps.images, draft, flattened);
+      const pngs = await draftPngs(store, draft, flattened);
+      const images = await fitToCap(pngs, deps.images);
       if (images === null) {
         return refused(SHRINK_REFUSED);
       }

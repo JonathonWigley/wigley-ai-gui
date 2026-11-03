@@ -83,8 +83,8 @@ The API caps one image at 5 MB of base64 text. An image over it is scaled down a
 stepping down until it fits, each step scaling to 0.75 of the one before: JPEG and WebP re-encode as themselves at quality 0.9, PNG and GIF as
 PNG (a GIF keeps its first frame). An image still over the cap after six steps is refused with the toast `Image could not be shrunk under 5 MB`. Chat shrinks an
 image when it is attached; the Notes popup shrinks a pasted or dropped one when it joins the Images
-field. Notes main shrinks every image again as it sends it, so a GUI capture and an image flattened with its markup
-fit the cap too; main re-encodes through Electron's `nativeImage`, behind the `images` main service. Notes stores
+field. Notes main shrinks every image again as it sends it to a session, so a GUI capture and an image flattened with its markup
+fit the cap too; a follow-up files its images at full size, on disk where no cap applies; main re-encodes through Electron's `nativeImage`, behind the `images` main service. Notes stores
 every image as PNG, so it converts first and shrinks the PNG form it stores: a large JPEG loses more resolution there
 than in Chat.
 

@@ -243,6 +243,25 @@ describe('toFollowup', () => {
     ]);
   });
 
+  it.each([
+    { kind: 'capture', stored: OVER_CAP_PNG, flattened: [null] },
+    { kind: 'markup image', stored: PNG_A, flattened: [OVER_CAP_PNG] },
+  ])(
+    'toFollowup_ImageOverCap_FilesItUnshrunk: $kind',
+    async ({ stored, flattened }) => {
+      const encoder = fakeEncoder(SHRUNK_PNG);
+      const note = await setUp({ images: [stored], encoder });
+
+      const result = await note.sender.toFollowup(CREATE, flattened);
+
+      expect(encoder.scales).toEqual([]);
+      expect(result.type).toBe('sent');
+      expect(note.filed).toHaveLength(1);
+      const [filed] = note.filed[0].images;
+      expect(filed.byteLength).toBe(OVER_CAP_PNG.byteLength);
+    },
+  );
+
   it('toFollowup_SendRefusal_CallsNeitherExport', async () => {
     const note = await setUp({ fields: { target: null } });
 

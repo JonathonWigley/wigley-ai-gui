@@ -73,8 +73,8 @@ session.
   that session, else chat's first profile. Its first message is the brief from the `notes.launchBrief` setting
   (default `A nitpick to fix, noted while working. Make the change, then report.`), then the note's title, body and
   session line, with the images attached under chat's per-image cap (5 MB of base64 text), which every image meets when it is sent: the popup
-  shrinks a pasted or dropped one over it when it joins the strip, and main shrinks every image again as it sends it, a
-  GUI capture and a flattened markup image included. An image that will not shrink under the cap refuses the send with
+  shrinks a pasted or dropped one over it when it joins the strip, and main shrinks every image again as it sends it to
+  the session, a GUI capture and a flattened markup image included. A follow-up files its images at full size. An image that will not shrink under the cap refuses the send with
   `Image could not be shrunk under 5 MB`, and the draft is kept. The user stays where they were; the session runs
   in the background and a toast reads `Session started in <folder>`.
 
