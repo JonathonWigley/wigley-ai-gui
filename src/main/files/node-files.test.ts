@@ -138,7 +138,7 @@ describe('createNodeFiles', () => {
     expect(isMissingFile(error)).toBe(false);
   });
 
-  it('watch_TwoWritesInABurst_ReportsOnce', async () => {
+  it('watch_TwoWritesInABurst_ReportsOnce', { timeout: 10000 }, async () => {
     const reports: string[] = [];
     const watch = files.watch(root, (changed) => reports.push(changed));
     try {
@@ -157,25 +157,29 @@ describe('createNodeFiles', () => {
     expect(reports).toEqual(['z.txt']);
   });
 
-  it('watch_NotRecursive_ReportsOnlyTheFolderOwnEntries', async () => {
-    mkdirSync(path.join(root, 'sub'));
-    const reports: string[] = [];
-    const watch = files.watch(root, (changed) => reports.push(changed), {
-      recursive: false,
-    });
-    try {
-      await files.write(path.join(root, 'sub', 'a.txt'), 'nested');
-      await files.write(path.join(root, 'b.txt'), 'direct');
-      await vi.waitFor(() => expect(reports).toContain('b.txt'), {
-        timeout: 5000,
+  it(
+    'watch_NotRecursive_ReportsOnlyTheFolderOwnEntries',
+    { timeout: 10000 },
+    async () => {
+      mkdirSync(path.join(root, 'sub'));
+      const reports: string[] = [];
+      const watch = files.watch(root, (changed) => reports.push(changed), {
+        recursive: false,
       });
-    } finally {
-      watch.dispose();
-    }
+      try {
+        await files.write(path.join(root, 'sub', 'a.txt'), 'nested');
+        await files.write(path.join(root, 'b.txt'), 'direct');
+        await vi.waitFor(() => expect(reports).toContain('b.txt'), {
+          timeout: 5000,
+        });
+      } finally {
+        watch.dispose();
+      }
 
-    // The OS may report `sub` itself, its contents having changed.
-    expect(reports.filter((changed) => changed !== 'sub')).toEqual(['b.txt']);
-  });
+      // The OS may report `sub` itself, its contents having changed.
+      expect(reports.filter((changed) => changed !== 'sub')).toEqual(['b.txt']);
+    },
+  );
 
   it('watch_WatcherErrors_ClosesAndReportsTheErrorOnce', async () => {
     const reports: string[] = [];

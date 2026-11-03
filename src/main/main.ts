@@ -327,9 +327,22 @@ function onQuit(task: () => unknown) {
 }
 
 // Starts every quit task, on the first call only, and settles once every task
-// has.
+// has. Outside the user's app, a task's rejection goes to stderr, which the
+// drive CLI keeps in the run's `app.log`.
 function startQuitWork() {
-  quitWork ??= Promise.allSettled(quitTasks.map(async (task) => task()));
+  quitWork ??= Promise.allSettled(
+    quitTasks.map(async (task) => {
+      try {
+        await task();
+      } catch (error) {
+        if (runMode !== 'live') {
+          process.stderr.write(
+            `wigley-ai-gui quit task failed: ${errorText(error)}\n`,
+          );
+        }
+      }
+    }),
+  );
   return quitWork;
 }
 
@@ -652,7 +665,9 @@ function serveLayouts(
 // own host from `driveRun` (null outside a drive run), its data folder under
 // `dataRoot`, and its layouts in `layouts`. Each part's commands join `commands`
 // as it starts, tracked in its registrations, so stopping the part unregisters
-// them.
+// them. Outside the user's app, the host's lines also go to stderr, which the
+// drive CLI keeps in the run's `app.log`, as the page has gone by the time a
+// quit stops the parts.
 function startMainParts(
   window: BrowserWindow,
   store: ConfigStore,
@@ -697,7 +712,12 @@ function startMainParts(
     },
     manifests,
     disabled,
-    services.log,
+    (source, message) => {
+      if (runMode !== 'live') {
+        process.stderr.write(`wigley-ai-gui ${source}: ${message}\n`);
+      }
+      services.log(source, message);
+    },
   );
 }
 

@@ -299,6 +299,7 @@ async function start() {
     },
     manifests,
     pageLoadList,
+    log,
   );
   // The core's own store for the chrome's view of keys, kept for the page load.
   const shellRegistrations = createRegistrations();

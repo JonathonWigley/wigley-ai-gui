@@ -32,11 +32,16 @@ function overlayDot(): NativeImage {
   });
 }
 
+// Electron throws on a call to a destroyed window, as at quit.
+function hasLiveTaskbarButton(window: BrowserWindow) {
+  return process.platform === 'win32' && !window.isDestroyed();
+}
+
 // For when no notification can show: unsigned macOS builds emit `failed`.
 function drawAttention(window: BrowserWindow) {
   if (process.platform === 'darwin') {
     app.dock?.bounce('informational');
-  } else if (process.platform === 'win32') {
+  } else if (hasLiveTaskbarButton(window)) {
     window.flashFrame(true);
   }
 }
@@ -78,7 +83,7 @@ export function createElectronAlerts(window: BrowserWindow, log: Log): Alerts {
       const total = openCounts.set(source, count);
       if (process.platform === 'darwin') {
         app.setBadgeCount(total);
-      } else if (process.platform === 'win32') {
+      } else if (hasLiveTaskbarButton(window)) {
         const description =
           total === 0
             ? ''

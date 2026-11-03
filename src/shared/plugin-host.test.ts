@@ -268,6 +268,55 @@ describe('startPlugins', () => {
     },
   );
 
+  it.each([
+    {
+      name: 'stop then stop',
+      first: (host: PluginHost<unknown>) => host.stop('a'),
+      second: (host: PluginHost<unknown>) => host.stop('a'),
+    },
+    {
+      name: 'stop then stopAll',
+      first: (host: PluginHost<unknown>) => host.stop('a'),
+      second: (host: PluginHost<unknown>) => host.stopAll(),
+    },
+    {
+      name: 'stopAll then stop',
+      first: (host: PluginHost<unknown>) => host.stopAll(),
+      second: (host: PluginHost<unknown>) => host.stop('a'),
+    },
+  ])(
+    '$name: the second waits on the stop in flight and shares its error, and the part stops once',
+    async ({ first, second }) => {
+      const regsDispose = vi.fn();
+      let failDispose = (_error: Error) => {};
+      const dispose = vi.fn(
+        () =>
+          new Promise<void>((_resolve, reject) => {
+            failDispose = reject;
+          }),
+      );
+      const host = startPlugins([part('a')], 'main', (_started, context) => {
+        context.registrations.track({ dispose: regsDispose });
+        return { dispose };
+      });
+
+      const firstStop = first(host);
+      const secondStop = second(host);
+      const settled: string[] = [];
+      void secondStop.catch(() => settled.push('second'));
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(settled).toEqual([]);
+
+      failDispose(new Error('a dispose failed'));
+
+      await expect(firstStop).rejects.toThrow('a dispose failed');
+      await expect(secondStop).rejects.toThrow('a dispose failed');
+      expect(dispose).toHaveBeenCalledTimes(1);
+      expect(regsDispose).toHaveBeenCalledTimes(1);
+      expect(host.started.size).toBe(0);
+    },
+  );
+
   it('stopAll stops every part in reverse start order, logging each', async () => {
     const log: string[] = [];
     const logged: string[] = [];

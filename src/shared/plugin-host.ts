@@ -16,9 +16,10 @@ export interface PluginHost<Started> {
   readonly started: ReadonlyMap<string, Started>;
   // Stops the started dependents of `pluginId` in this process, in reverse start order, then awaits the part's
   // `dispose`, then disposes its registrations, then forgets it. Does nothing for a part not started. Every step
-  // runs even when one throws; the returned promise rejects with the first error.
+  // runs even when one throws; the returned promise rejects with the first error. A part already stopping is not
+  // stopped twice: this call waits on the stop in flight and shares its errors.
   stop(pluginId: string): Promise<void>;
-  // Stops every started part in reverse start order, with the same error rule.
+  // Stops every started part in reverse start order, with the same error and overlap rules.
   stopAll(): Promise<void>;
 }
 
@@ -150,13 +151,16 @@ function stopOrder(
 }
 
 // Awaits the part's `dispose`, disposes its registrations, then forgets the
-// part and its views. A step's throw goes in `errors`, and the next step runs.
-async function stopPart<Started extends { dispose?(): void | Promise<void> }>(
+// part and its views. Returns each step's throw; a throw does not stop the next
+// step.
+async function runStopSteps<
+  Started extends { dispose?(): void | Promise<void> },
+>(
   pluginId: string,
   started: Map<string, Started>,
   records: Map<string, PartRecord>,
-  errors: unknown[],
-) {
+): Promise<unknown[]> {
+  const errors: unknown[] = [];
   try {
     await started.get(pluginId)?.dispose?.();
   } catch (error) {
@@ -170,6 +174,26 @@ async function stopPart<Started extends { dispose?(): void | Promise<void> }>(
   records.get(pluginId)?.views.clear();
   records.delete(pluginId);
   started.delete(pluginId);
+  return errors;
+}
+
+// The one stop of `pluginId`, resolving to its steps' throws: a part already
+// stopping answers with the stop in `inFlight`, so its `dispose` runs once.
+function stopPart<Started extends { dispose?(): void | Promise<void> }>(
+  pluginId: string,
+  started: Map<string, Started>,
+  records: Map<string, PartRecord>,
+  inFlight: Map<string, Promise<unknown[]>>,
+): Promise<unknown[]> {
+  const running = inFlight.get(pluginId);
+  if (running !== undefined) {
+    return running;
+  }
+  const stopping = runStopSteps(pluginId, started, records).finally(() =>
+    inFlight.delete(pluginId),
+  );
+  inFlight.set(pluginId, stopping);
+  return stopping;
 }
 
 function throwFirst(errors: readonly unknown[]) {
@@ -186,9 +210,10 @@ function throwFirst(errors: readonly unknown[]) {
 // Plugins that add parts to one surface (chat's composer parts) add them in
 // this order. `known` is every plugin's manifest, those with no part in this
 // process included; a dependency in `known` with no part here, such as a
-// page-only plugin in main, starts nowhere in this process. `log` is the core
-// log, through which `stopAll` logs `stopping <id>` before each part, so a hang
-// names the plugin. Returns the host, whose `started` holds what each start
+// page-only plugin in main, starts nowhere in this process. `log` takes the
+// host's own lines: `stopAll` logs `stopping <id>` before each part, so a hang
+// names the plugin, and a failed start logs a failed cleanup; the caller picks
+// who reads them. Returns the host, whose `started` holds what each start
 // returned, by plugin id, in start order, until the part stops. Throws on a
 // duplicate id, a dependency in this process not in `known`, a kept part
 // depending on a disabled plugin, or a dependency cycle in this process. A
@@ -218,6 +243,7 @@ export function startPlugins<
   }
   const started = new Map<string, Started>();
   const records = new Map<string, PartRecord>();
+  const inFlight = new Map<string, Promise<unknown[]>>();
   let pending = [...kept];
   while (pending.length > 0) {
     const ready = nextToStart(pending, process);
@@ -242,7 +268,7 @@ export function startPlugins<
     async stop(pluginId) {
       const errors: unknown[] = [];
       for (const id of stopOrder(pluginId, process, records)) {
-        await stopPart(id, started, records, errors);
+        errors.push(...(await stopPart(id, started, records, inFlight)));
       }
       throwFirst(errors);
     },
@@ -250,7 +276,7 @@ export function startPlugins<
       const errors: unknown[] = [];
       for (const id of [...started.keys()].reverse()) {
         log?.('plugin-host', `stopping ${id}`);
-        await stopPart(id, started, records, errors);
+        errors.push(...(await stopPart(id, started, records, inFlight)));
       }
       throwFirst(errors);
     },
