@@ -210,7 +210,6 @@ export const defaultKeymap = {
     { keys: '<Leader>wr', scope: 'any', command: 'workflow.resumeMake' },
     { keys: '<Leader>wo', scope: 'any', command: 'workflow.openPlan' },
     { keys: '<Leader>wt', scope: 'any', command: 'workflow.retro' },
-    { keys: '<Leader>wf', scope: 'any', command: 'workflow.startFeature' },
     { keys: '<Leader>wd', scope: 'any', command: 'workflow.dismiss' },
     { keys: '<C-j>', scope: 'workflow.flow', command: 'workflow.lineDown' },
     { keys: '<C-k>', scope: 'workflow.flow', command: 'workflow.lineUp' },

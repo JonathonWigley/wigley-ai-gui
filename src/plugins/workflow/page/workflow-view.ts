@@ -41,7 +41,7 @@ export interface PageStages {
 // else the pushed flow or a new idle one); `nameOf` names the session in the
 // log; `isPreview` is whether the session shows the preview, which runs
 // nothing. `stripBuilt` hears each strip build, before it draws. The rest run
-// the actions: `fillComposer` and `openDoc` the page ones, `runAction` main's.
+// the actions: `openDoc` the page one, `runAction` main's.
 export interface WorkflowViewDeps {
   kit: OwnerKitServices;
   log: Log;
@@ -54,7 +54,6 @@ export interface WorkflowViewDeps {
   nameOf(sessionId: string): string;
   isPreview(sessionId: string): boolean;
   stripBuilt(sessionId: string): void;
-  fillComposer(sessionId: string, text: string): void;
   openDoc(path: string): void;
   runAction(request: WorkflowActionRequest): Promise<void>;
 }
@@ -98,7 +97,6 @@ interface HeldPart {
 
 const TICK_MS = 1000;
 const MAIN_ACTION = 'mainAction';
-const START_FEATURE_TEXT = '/wigley:feature ';
 const PLAN_FILE = 'plan.md';
 const TASKS_GROUP_TITLE = 'Tasks';
 
@@ -219,6 +217,9 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
       }
       case 'strip': {
         const input = stripInput(flow);
+        if (input.stage === IDLE_STAGE) {
+          return false;
+        }
         part.drawn = parts.strip(part.wrapper, input, run);
         return input.countdown !== null;
       }
@@ -353,9 +354,6 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
       return;
     }
     switch (spec.command) {
-      case 'startFeature':
-        deps.fillComposer(sessionId, START_FEATURE_TEXT);
-        return;
       case 'openPlan':
         if (flow.planDir === null) {
           throw new Error('the session has no plan');

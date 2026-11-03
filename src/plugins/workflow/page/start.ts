@@ -52,7 +52,6 @@ type SessionCommand =
   | 'resumeMake'
   | 'openPlan'
   | 'retro'
-  | 'startFeature'
   | 'dismiss';
 
 // A session the page heard of: its name in the log (its side bar label), its
@@ -111,7 +110,6 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
       nameOf,
       isPreview,
       stripBuilt: (sessionId) => flowTabs.chatTabBuilt(sessionId),
-      fillComposer: (sessionId, text) => chat.fillComposer(sessionId, text),
       openDoc: (path) => docs.openDoc(path),
       runAction: (request) => api.channel.invoke('runAction', request),
     });
@@ -273,7 +271,6 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
         resumeMake: runOnSelected('resumeMake'),
         openPlan: runOnSelected('openPlan'),
         retro: runOnSelected('retro'),
-        startFeature: runOnSelected('startFeature'),
         dismiss: runOnSelected('dismiss'),
         lineDown: () => scrollFlowTab('line', 1),
         lineUp: () => scrollFlowTab('line', -1),

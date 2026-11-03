@@ -3,10 +3,9 @@
 // - `chip`, under the session's row in the side bar, in the row part's wrapper: the stage, its detail, the countdown
 //   and the main action's button. An idle session draws no chip.
 // - `strip`, above the Chat tab's composer, in the composer part's wrapper: the stepper with the current stage lit,
-//   the detail, the countdown and the stage's buttons; in idle (`stage` is `idle`) only a dim Start feature.
+//   the detail, the countdown and the stage's buttons. An idle session draws no strip.
 // - `flowTab`, in the session's Flow tab: the stage's label, the stepper, the stage's detail (the plan's title in it),
-//   the plan's checklist by wave (or, with no plan, an empty state naming the Start feature key) and every action of
-//   the stage.
+//   the plan's checklist by wave (or, with no plan, a `No plan yet` empty state) and every action of the stage.
 // The app sets `data-layout-owner="workflow"` and `data-layout="<name>"` on the element each part returns, `<name>`
 // being the layout that drew it, so `[data-layout-owner="workflow"][data-layout="<name>"] …` in a layout's CSS
 // selects only its own parts.

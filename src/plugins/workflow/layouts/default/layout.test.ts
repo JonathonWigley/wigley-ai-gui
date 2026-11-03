@@ -21,7 +21,7 @@ function asHtml(element: FakeElement): HTMLElement {
 
 // Each kit part appends a fake element tagged with the part and its text
 // (`section:Make`), so a test reads what the layout drew in order.
-function fakeKit(startFeatureKeys: string | null): WorkflowKit {
+function fakeKit(): WorkflowKit {
   const part = (parent: HTMLElement, name: string) => {
     const node = new FakeElement(name);
     (parent as unknown as FakeElement).append(node);
@@ -33,9 +33,6 @@ function fakeKit(startFeatureKeys: string | null): WorkflowKit {
     stepper: (parent) => part(parent, 'stepper'),
     countdown: (parent, text) => part(parent, `countdown:${text}`),
     emptyState: (parent, text) => part(parent, `empty:${text}`),
-    keys: (command) => (command === 'startFeature' ? startFeatureKeys : null),
-    keyPrompt: (parent, keys, label) =>
-      part(parent, `keyPrompt:${keys}:${label ?? ''}`),
     icon: (parent, name) => part(parent, `icon:${name}`),
     row: (parent, options) => part(parent, `row:${options.label}`),
     actionButton: (parent, action) =>
@@ -45,7 +42,7 @@ function fakeKit(startFeatureKeys: string | null): WorkflowKit {
 }
 
 // What the Flow tab drew besides its frame: its section headers and its
-// empty state, each with what it holds.
+// empty state.
 function drawnParts(element: FakeElement): string[] {
   const shown: string[] = [];
   for (const child of element.children) {
@@ -53,7 +50,7 @@ function drawnParts(element: FakeElement): string[] {
       shown.push(child.part);
     }
     if (child.part.startsWith('empty:')) {
-      shown.push(child.part, ...child.children.map((each) => each.part));
+      shown.push(child.part);
     }
   }
   return shown;
@@ -90,57 +87,41 @@ describe('default layout flowTab', () => {
       name: 'no plan read',
       planTitle: null,
       boxes: 0,
-      keys: 'Space w f',
-      drawn: [
-        'section:Make',
-        'empty:No plan yet —',
-        'keyPrompt:Space w f:starts a feature',
-      ],
-    },
-    {
-      name: 'no plan read, Start feature unbound',
-      planTitle: null,
-      boxes: 0,
-      keys: null,
       drawn: ['section:Make', 'empty:No plan yet'],
     },
     {
       name: 'a read plan with no boxes',
       planTitle: 'Fake flow',
       boxes: 0,
-      keys: 'Space w f',
       drawn: ['section:Make'],
     },
     {
       name: 'a read plan with no title',
       planTitle: '',
       boxes: 2,
-      keys: 'Space w f',
       drawn: ['section:Make', 'section:Wave 1'],
     },
     {
       name: 'a read plan with no title and no boxes',
       planTitle: '',
       boxes: 0,
-      keys: 'Space w f',
       drawn: ['section:Make'],
     },
     {
       name: 'a read plan with boxes',
       planTitle: 'Fake flow',
       boxes: 3,
-      keys: 'Space w f',
       drawn: ['section:Make', 'section:Wave 1'],
     },
   ])(
     'flowTab_$name_HeadsWithTheStageAndShowsTheEmptyStateOnlyWithNoPlan',
-    ({ planTitle, boxes, keys, drawn }) => {
+    ({ planTitle, boxes, drawn }) => {
       const parent = new FakeElement('parent');
 
       const { element } = layout.flowTab(
         asHtml(parent),
         flowTabInput(planTitle, boxes),
-        fakeKit(keys),
+        fakeKit(),
       );
 
       expect(drawnParts(element as unknown as FakeElement)).toEqual(drawn);

@@ -85,7 +85,6 @@ function setUp() {
   const clears: number[] = [];
   const logged: string[] = [];
   const invoked: WorkflowActionRequest[] = [];
-  const filled: [string, string][] = [];
   const flows = new Map<string, SessionFlow>();
   const stages = createStageList<PageStage>();
   for (const stage of BUILT_IN_PAGE_STAGES) {
@@ -120,7 +119,6 @@ function setUp() {
     nameOf: () => 'proj',
     isPreview: () => false,
     stripBuilt: () => undefined,
-    fillComposer: (sessionId, text) => filled.push([sessionId, text]),
     openDoc: () => undefined,
     runAction: async (request) => {
       invoked.push(request);
@@ -142,7 +140,6 @@ function setUp() {
     clears,
     logged,
     invoked,
-    filled,
   };
 }
 
@@ -216,11 +213,11 @@ describe('workflow view', () => {
       actions: ['resumeMake:false', 'openPlan:true'],
     },
     {
-      stage: 'idle',
+      stage: 'primer',
       busy: 'none',
       countdownMs: null,
       fields: {},
-      actions: ['startFeature:true'],
+      actions: [],
     },
   ])(
     'actions_TableOfFlows_ListsAvailableActionsMainFirst $stage $busy $countdownMs',
@@ -254,7 +251,6 @@ describe('workflow view', () => {
       flow: flowIn('planReady'),
       command: 'mainAction',
       invoked: [{ sessionId: 'a', command: 'clearAndMake' }],
-      filled: [],
       line: '[workflow] ran clearAndMake in proj',
     },
     {
@@ -262,7 +258,6 @@ describe('workflow view', () => {
       flow: flowIn('planReady', { turnRunning: true }),
       command: 'mainAction',
       invoked: [],
-      filled: [],
       line: '[workflow] nothing to run for mainAction in proj',
     },
     {
@@ -270,7 +265,6 @@ describe('workflow view', () => {
       flow: flowIn('planReady', { turnRunning: true }),
       command: 'makeInNewSession',
       invoked: [{ sessionId: 'a', command: 'makeInNewSession' }],
-      filled: [],
       line: '[workflow] ran makeInNewSession in proj',
     },
     {
@@ -278,25 +272,22 @@ describe('workflow view', () => {
       flow: flowIn('make', { progress: progressOf(3, [3]) }),
       command: 'resumeMake',
       invoked: [],
-      filled: [],
       line: '[workflow] nothing to run for resumeMake in proj',
     },
     {
-      case: 'IdleMainAction_FillsComposer',
+      case: 'IdleMainAction_RunsNothing',
       flow: flowIn('idle'),
       command: 'mainAction',
       invoked: [],
-      filled: [['a', '/wigley:feature ']],
-      line: '[workflow] ran startFeature in proj',
+      line: '[workflow] nothing to run for mainAction in proj',
     },
-  ])('runFor_$case', async ({ flow, command, invoked, filled, line }) => {
+  ])('runFor_$case', async ({ flow, command, invoked, line }) => {
     const run = setUp();
     run.put(flow);
 
     await run.view.runFor('a', command);
 
     expect(run.invoked).toEqual(invoked);
-    expect(run.filled).toEqual(filled);
     expect(run.logged.at(-1)).toBe(line);
   });
 
@@ -320,10 +311,7 @@ describe('workflow view', () => {
     expect(isStopped).toBe(true);
   });
 
-  it.each([
-    { part: 'chip', buttons: [] },
-    { part: 'strip', buttons: ['Start feature'] },
-  ] as const)('$part_IdleFlow_DrawsOnlyItsIdleLook', ({ part, buttons }) => {
+  it.each(['chip', 'strip'] as const)('%s_IdleFlow_DrawsNothing', (part) => {
     const { view, put } = setUp();
     const wrapper = new FakeElement('div');
     put(flowIn('idle'));
@@ -331,10 +319,7 @@ describe('workflow view', () => {
     const built = part === 'chip' ? view.chipPart : view.stripPart;
     built.build(asHtml(wrapper), 'a');
 
-    expect(
-      findAll(wrapper, 'ui-button').map((button) => button.textContent),
-    ).toEqual(buttons);
-    expect(wrapper.children).toHaveLength(part === 'chip' ? 0 : 1);
+    expect(wrapper.children).toHaveLength(0);
   });
 
   it('log_SameStageRedrawn_LogsOnce', () => {

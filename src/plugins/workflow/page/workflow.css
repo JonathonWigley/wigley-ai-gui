@@ -43,10 +43,6 @@
   font-size: var(--wg-text-12);
 }
 
-.workflow-strip--idle {
-  color: var(--wg-fg-tertiary);
-}
-
 .workflow-strip-detail {
   color: var(--wg-fg-secondary);
 }

@@ -3,8 +3,8 @@
 // The built-in workflow look: a one-line chip under the session row (the
 // stage as an accent tag, its detail, the countdown and the main action), a
 // strip above the composer (the stepper, the detail, the countdown and every
-// action, or only a dim Start feature in idle), and the Flow tab (the stage's
-// label, the stepper, the detail, the checklist by wave and every action).
+// action), and the Flow tab (the stage's label, the stepper, the detail, the
+// checklist by wave and every action).
 
 /** @type {import('../layout').CompleteLayout} */
 const layout = {
@@ -26,14 +26,6 @@ const layout = {
 
   strip(parent, input, kit) {
     const strip = kit.el(parent, 'div', 'workflow-strip');
-    if (input.stage === 'idle') {
-      strip.classList.add('workflow-strip--idle');
-      const startFeature = input.actions[0];
-      if (startFeature !== undefined) {
-        kit.actionButton(strip, startFeature, { variant: 'ghost' });
-      }
-      return { element: strip };
-    }
     kit.stepper(strip, input.steps);
     kit.el(strip, 'span', 'workflow-strip-detail', input.detail);
     if (input.countdown !== null) {
@@ -55,13 +47,7 @@ const layout = {
     }
     const hasPlan = input.planTitle !== null || input.waves.length > 0;
     if (!hasPlan) {
-      const keys = kit.keys('startFeature');
-      if (keys === null) {
-        kit.emptyState(flow, 'No plan yet');
-      } else {
-        const empty = kit.emptyState(flow, 'No plan yet —');
-        kit.keyPrompt(empty, keys, 'starts a feature');
-      }
+      kit.emptyState(flow, 'No plan yet');
     }
     for (const wave of input.waves) {
       const header = kit.sectionHeader(flow, wave.title);

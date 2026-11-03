@@ -38,15 +38,14 @@ Built, in `src/plugins/workflow/`, on the clear, the agent events and the row pa
 
 | Stage | A session enters it when | Shows | Actions (main action first) |
 |---|---|---|---|
-| idle | it starts; Dismiss on closed; Make in new session hands its plan away | nothing on the row; a dim Start feature on the strip | Start feature |
-| primer | `wigley:feature-primer` starts | the stage | Start feature |
+| idle | it starts; Dismiss on closed; Make in new session hands its plan away | nothing on the row or the strip | none: a feature starts from its skill call |
+| primer | `wigley:feature-primer` starts | the stage | none |
 | feature | `wigley:feature` starts | the stage, and the plan's name once one is written | Open plan, once a plan is written |
 | plan ready | in feature, a turn ends or the plan changes while the session's `plan-*/plan.md` holds a box under Tasks and no turn or subagent runs | the plan's name and task count | Clear & make (Cancel during the countdown), Make in new session, Open plan |
 | make | `wigley:make` starts | ticked over total, the current wave | Resume make, Open plan |
 | review | `wigley:review` starts in make, or the plan's Run log gains a review round logged after make started (Resume make from review stays in make until the next round) | the review round, ticked over total | Resume make, Open plan |
 | closed | in make or review, a plan folder that was read goes missing (`wigley:make` naming a folder not written yet waits in make for its `plan.md`) | the plan's name, done | Retro, Dismiss |
 
-- **Start feature** puts `/wigley:feature ` in the composer and focuses it, without sending.
 - **Clear & make** clears the session (the row and its tabs stay, a new conversation starts) and sends
   `/wigley:make <plan folder>`. It is disabled while the session is busy: a turn or a main-agent subagent runs.
 - **Make in new session** starts a background session in the same folder with `/wigley:make <plan folder>` through
@@ -113,7 +112,7 @@ Everything draws through the `workflow` layout, its built-in `default`, and the 
 - **Row chip** — a row part (sessions' `addRowPart`): the stage, the progress and the main action's button. Idle draws
   nothing.
 - **Composer strip** — a part above the Chat composer (chat's `addComposerPart`): the stepper, with the current stage
-  lit, and the stage's buttons. Idle draws only a dim Start feature.
+  lit, and the stage's buttons. Idle draws nothing.
 - **Flow tab** — a session tab (`addTab`) added when the session first leaves idle, kept from then on: the stepper,
   the plan's checklist by wave, and every action of the stage. Its status line is the stage, so a row shows it in text
   too.
@@ -135,7 +134,6 @@ The `<Leader>w` group (which-key: workflow), each anchored on the strip and the 
 | `<Leader>wr` | Resume make |
 | `<Leader>wo` | Open plan |
 | `<Leader>wt` | Retro |
-| `<Leader>wf` | Start feature |
 | `<Leader>wd` | Dismiss |
 
 In the Flow tab (scope `workflow.flow`), `<C-j>` and `<C-k>` scroll a line, and `<C-S-j>` and `<C-S-k>` scroll half a

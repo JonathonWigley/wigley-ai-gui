@@ -5,14 +5,6 @@ export const idlePageStage: PageStage = {
   label: 'Idle',
   inStepper: false,
   order: 0,
-  actions: [
-    {
-      command: 'startFeature',
-      label: 'Start feature',
-      side: 'page',
-      available: () => true,
-      enabled: () => true,
-    },
-  ],
+  actions: [],
   detail: () => '',
 };

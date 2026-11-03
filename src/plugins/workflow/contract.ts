@@ -98,7 +98,7 @@ export interface StageActionSpec {
   command: string;
   // The button's text: 'Clear & make'.
   label: string;
-  // 'page': the page runs it (startFeature, openPlan); 'main': through
+  // 'page': the page runs it (openPlan); 'main': through
   // runAction.
   side: 'page' | 'main';
   // Whether the action shows for this flow, beyond the stage match: Resume

@@ -419,12 +419,12 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
 - **Workflow:** three parts, each drawn by the workflow plugin's `default` layout (`docs/features/workflow/design.md`).
   The chip is one line under a session row: the stage as an accent Tag, its detail in `fg-tertiary`, the countdown and
   the main action as a ghost button; an idle session draws no chip. The strip sits above the Chat composer: the stepper
-  with the current stage lit, the detail, the countdown and every action as buttons; an idle session shows only a dim
-  ghost Start feature. The Flow tab holds the stage's label as its header, the stepper, the stage's detail (which
+  with the current stage lit, the detail, the countdown and every action as buttons; an idle session draws no strip.
+  The Flow tab holds the stage's label as its header, the stepper, the stage's detail (which
   carries the plan's title from feature on, once a plan is read, after the progress in make and review so the chip's
   ellipsis cuts the title first) with the countdown, the plan's tasks under a header per wave (the current wave
   marked, a task's mark filled once it is done) and the stage's actions; with no plan read it shows the
-  empty state `No plan yet — Space w f starts a feature`, and a read plan with no boxes shows none. A disabled action
+  empty state `No plan yet`, and a read plan with no boxes shows none. A disabled action
   draws disabled.
 - **Floating:** pickers, which-key, help and dialogs use the floating material with `row-list` rows
   and key hints right-aligned in `fg-tertiary`; dialogs, chat's full-size image viewer and the full-size visual

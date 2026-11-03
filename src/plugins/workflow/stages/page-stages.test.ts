@@ -145,7 +145,7 @@ describe('BUILT_IN_PAGE_STAGES', () => {
       name: stage,
       stage,
       flow: flowWith({}),
-      actions: [['startFeature', true]] as [string, boolean][],
+      actions: [] as [string, boolean][],
     })),
     {
       name: 'plan ready with no plan folder',

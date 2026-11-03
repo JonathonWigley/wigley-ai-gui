@@ -55,15 +55,12 @@ interface WorkflowSelfTestResult {
 // sends.
 const sendKeys = (text: string) => ['i', ...text, 'Escape', 'Enter'];
 
-// `<Leader>wf` leaves the box in insert mode after `/wigley:feature `.
-const FEATURE_KEYS = [...FAKE_WORKFLOW_FEATURE_TEXT, 'Escape', 'Enter'];
+const FEATURE_KEYS = sendKeys(FEATURE_SEND);
 
 const line = (text: string) => `[workflow] ${SELFTEST_PROJECT_NAME} ${text}`;
 // `text` holds no regex metacharacter.
 const anchored = (text: string) =>
   new RegExp(`^\\[workflow\\] ${SELFTEST_PROJECT_NAME} ${text}$`);
-const ran = (command: string) =>
-  `[workflow] ran ${command} in ${SELFTEST_PROJECT_NAME}`;
 const DOCS_TAB_SHOWN = `[sessions] showed Docs tab in ${SELFTEST_PROJECT_NAME}`;
 
 // The tabs are Chat and Docs in either order, then Flow, so one press of a
@@ -89,17 +86,6 @@ const TAB_STEPS: SelfTestStep[] = [
 ];
 
 const GROUPS: SelfTestGroup[] = [
-  {
-    name: 'idle and start feature',
-    why: 'An idle session offers Start feature, which fills the composer without sending.',
-    steps: [
-      {
-        keys: [' ', 'w', 'f'],
-        expect: ran('startFeature'),
-        screenshot: 'strip-idle',
-      },
-    ],
-  },
   {
     name: 'feature to plan ready',
     why: 'A wigley:feature turn that writes a plan and ends moves the session to plan ready on the chip and the strip.',
@@ -161,7 +147,6 @@ const GROUPS: SelfTestGroup[] = [
         keys: [],
         expect: '[workflow] settings: autoClearAndMake on, autoStartSeconds 30',
       },
-      { keys: [' ', 'w', 'f'], expect: ran('startFeature') },
       {
         keys: FEATURE_KEYS,
         expect: `[workflow] countdown shown in ${SELFTEST_PROJECT_NAME}`,

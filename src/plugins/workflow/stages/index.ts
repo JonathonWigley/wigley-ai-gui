@@ -66,7 +66,6 @@ export const WORKFLOW_COMMANDS = {
   },
   openPlan: { label: 'open the plan', group: 'workflow', runsIn: 'page' },
   retro: { label: 'run a retro', group: 'workflow', runsIn: 'page' },
-  startFeature: { label: 'start a feature', group: 'workflow', runsIn: 'page' },
   dismiss: {
     label: 'dismiss the closed run',
     group: 'workflow',

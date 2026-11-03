@@ -5,14 +5,6 @@ export const primerPageStage: PageStage = {
   label: 'Primer',
   inStepper: true,
   order: 10,
-  actions: [
-    {
-      command: 'startFeature',
-      label: 'Start feature',
-      side: 'page',
-      available: () => true,
-      enabled: () => true,
-    },
-  ],
+  actions: [],
   detail: () => '',
 };
