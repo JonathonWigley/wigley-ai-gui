@@ -200,7 +200,10 @@ interview on 2026-10-23; this file is the record of both.
   - The key log lines are `focused activity line`, `expanded activity line` and `collapsed activity line`; a step row
     logs as its entry kind does (`focused tool entry`).
 - **Pending messages**: a message sent while the harness reports the session's turn running (the process runs and
-  its own activity is not `idle`) is not written to the agent. A permission call left waiting after the turn ended
+  its own activity is not `idle`) is not written to the agent. A turn Claude runs on its own after a background task
+  ends counts as running too: the session shows working through it, its messages wait, and the turn-finished alert
+  fires when it ends. Written into a running tool turn, Claude would fold a message into it (claude-stream.md
+  § Queued messages). A permission call left waiting after the turn ended
   queues nothing; a running turn waiting on a permission still queues. Chat main holds the message in the session's
   queue (`ChatSessionState.queued`, oldest first, each with an id of its own; kept across a page reload, dropped on
   quit), and the Chat tab shows it as a pending row after the last entry, drawn by the layout's `queuedMessage` part:
