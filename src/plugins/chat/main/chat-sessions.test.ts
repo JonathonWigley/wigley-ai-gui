@@ -2308,9 +2308,9 @@ describe('createChatSessions saved sessions', () => {
       await flush();
 
       expect(test.harness.lastUsageCalls).toEqual(['host-a']);
-      expect(test.emitted.filter((each) => each.event === 'agentEvent')).toEqual(
-        [],
-      );
+      expect(
+        test.emitted.filter((each) => each.event === 'agentEvent'),
+      ).toEqual([]);
     },
   );
 
