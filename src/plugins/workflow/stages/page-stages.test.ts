@@ -229,19 +229,13 @@ describe('BUILT_IN_PAGE_STAGES', () => {
         name: `${stage} with a turn running`,
         stage,
         flow: turnRunning,
-        actions: [
-          ['resumeMake', false],
-          ['openPlan', true],
-        ] as [string, boolean][],
+        actions: [['openPlan', true]] as [string, boolean][],
       },
       {
         name: `${stage} with a subagent running`,
         stage,
         flow: subagentRunning,
-        actions: [
-          ['resumeMake', false],
-          ['openPlan', true],
-        ] as [string, boolean][],
+        actions: [['openPlan', true]] as [string, boolean][],
       },
     ]),
     {

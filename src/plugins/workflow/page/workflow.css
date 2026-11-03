@@ -11,28 +11,6 @@
   font-size: var(--wg-text-12);
 }
 
-/* A zero basis gives the detail only the room the other parts leave, so it is
-   cut before the main action's label. */
-.workflow-chip-detail {
-  flex: 1 1 0;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: var(--wg-fg-tertiary);
-}
-
-/* Once the detail is gone, the main action's label is cut with an ellipsis
-   so the chip stays inside its row. */
-.workflow-chip > .ui-button {
-  min-width: 0;
-}
-
-.workflow-chip > .ui-button .ui-button-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .workflow-strip {
   display: flex;
   flex-wrap: wrap;

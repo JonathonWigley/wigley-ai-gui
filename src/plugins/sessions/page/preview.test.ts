@@ -114,7 +114,7 @@ describe('sessions preview', () => {
     expect(rowsWhileShown).toHaveLength(PREVIEW_STATE.rows.length);
     const realRows = drawnRows(sideBar);
     expect(realRows).toHaveLength(1);
-    expect(realRows[0].textContent).toContain('label real-3');
+    expect(realRows[0].title).toContain('label real-3');
   });
 
   it.each([
@@ -220,7 +220,7 @@ describe('session rows', () => {
       marked: false,
       activity: null,
       label: 'Fix the build',
-      detail: 'label s1',
+      detail: null,
       word: null,
       dots: 0,
     },

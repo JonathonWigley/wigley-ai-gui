@@ -1,22 +1,60 @@
 import { callEach } from '../../../shared/call-each';
 import type { UsageLinePart, UsageSnapshot } from '../contract';
+import type { RowLineInput, SessionLineInput } from '../layouts/layout';
 import type { Drawn, UsageParts } from './layout/usage-parts';
-import { sessionLineInput, sessionLineText } from './usage-view-model';
+import {
+  rowLineInput,
+  rowLineText,
+  sessionLineInput,
+  sessionLineText,
+} from './usage-view-model';
 
-// `id` is the part's id on its host's surface. `nameOf` is a session's name in
-// the log, its side-bar label, or its id while none is known. `latest` is the
-// page's last snapshot and the time to draw it at, null until the first
-// snapshot lands.
-export interface SessionLinesDeps {
+// Which usage line a host's part draws: `input` reads a session's input from a
+// snapshot, null while it has no usage; `text` is the input as the page log
+// writes it; `draw` draws it through usage's layout.
+export interface SessionLineKind<I> {
+  input(snapshot: UsageSnapshot, sessionId: string, now: number): I | null;
+  text(input: I): string;
+  draw(parent: HTMLElement, input: I): Drawn;
+}
+
+// The full session line: context, cache and spend.
+export function sessionLineKind(
+  parts: Pick<UsageParts, 'sessionLine'>,
+): SessionLineKind<SessionLineInput> {
+  return {
+    input: sessionLineInput,
+    text: sessionLineText,
+    draw: (parent, input) => parts.sessionLine(parent, input),
+  };
+}
+
+// The side-bar row's line: context alone.
+export function rowLineKind(
+  parts: Pick<UsageParts, 'rowLine'>,
+): SessionLineKind<RowLineInput> {
+  return {
+    input: rowLineInput,
+    text: rowLineText,
+    draw: (parent, input) => parts.rowLine(parent, input),
+  };
+}
+
+// `id` is the part's id on its host's surface; `line` the line it draws.
+// `nameOf` is a session's name in the log, its side-bar label, or its id while
+// none is known. `latest` is the page's last snapshot and the time to draw it
+// at, null until the first snapshot lands.
+export interface SessionLinesDeps<I> {
   id: string;
-  parts: Pick<UsageParts, 'sessionLine'>;
+  line: SessionLineKind<I>;
   log: (line: string) => void;
   nameOf(sessionId: string): string;
   latest(): { snapshot: UsageSnapshot; now: number } | null;
 }
 
 // `part` draws a session's usage line into the wrapper its host hands it (a
-// Chat status line or a tab bar), nothing while the session has no usage.
+// Chat status line, a tab bar or a side-bar row), nothing while the session
+// has no usage.
 // `redraw` draws every held session's line again from `latest`, nothing before
 // the first snapshot; `forget` drops a session that left.
 export interface SessionLines {
@@ -38,7 +76,7 @@ const NO_LINE = 'none';
 // `session line in <name>: <text>` when the text differs from the last one
 // logged for that session, so a host redraw or a name change alone logs
 // nothing new.
-export function createSessionLines(deps: SessionLinesDeps): SessionLines {
+export function createSessionLines<I>(deps: SessionLinesDeps<I>): SessionLines {
   const held = new Map<string, HeldWrapper>();
   const loggedTexts = new Map<string, string>();
 
@@ -57,7 +95,7 @@ export function createSessionLines(deps: SessionLinesDeps): SessionLines {
     snapshot: UsageSnapshot,
     now: number,
   ) => {
-    const input = sessionLineInput(snapshot, sessionId, now);
+    const input = deps.line.input(snapshot, sessionId, now);
     const last = holder.line;
     holder.line = null;
     callEach<() => void>(
@@ -65,13 +103,13 @@ export function createSessionLines(deps: SessionLinesDeps): SessionLines {
         () => last?.dispose(),
         () => {
           if (input !== null) {
-            holder.line = deps.parts.sessionLine(holder.wrapper, input);
+            holder.line = deps.line.draw(holder.wrapper, input);
           }
         },
       ],
       (step) => step(),
     );
-    logText(sessionId, input === null ? NO_LINE : sessionLineText(input));
+    logText(sessionId, input === null ? NO_LINE : deps.line.text(input));
   };
 
   return {

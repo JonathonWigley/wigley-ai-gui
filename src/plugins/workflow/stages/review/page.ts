@@ -11,8 +11,10 @@ export const reviewPageStage: PageStage = {
       label: 'Resume make',
       side: 'main',
       available: (flow) =>
-        flow.progress !== null && flow.progress.checked < flow.progress.total,
-      enabled: (flow) => !isBusy(flow),
+        !isBusy(flow) &&
+        flow.progress !== null &&
+        flow.progress.checked < flow.progress.total,
+      enabled: () => true,
     },
     {
       command: 'openPlan',

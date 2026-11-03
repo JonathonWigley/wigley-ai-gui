@@ -6,6 +6,7 @@ import type {
   DetailsRowInput,
   DetailsSessionInput,
   MeterInput,
+  RowLineInput,
   SessionLineInput,
   StatusLineInput,
   UsageTone,
@@ -49,6 +50,21 @@ export function sessionLineInput(
 ): SessionLineInput | null {
   const usage = findSession(snapshot, sessionId)?.usage ?? null;
   return usage === null ? null : sessionLine(usage, now);
+}
+
+// `sessionId`'s side-bar row line: its context; null while the snapshot holds
+// no such session or it has no usage yet.
+export function rowLineInput(
+  snapshot: UsageSnapshot,
+  sessionId: string,
+): RowLineInput | null {
+  const usage = findSession(snapshot, sessionId)?.usage ?? null;
+  return usage === null ? null : { context: contextMeter(usage) };
+}
+
+// A row line as the page log writes it: `context 180k/300k`.
+export function rowLineText(input: RowLineInput): string {
+  return `context ${input.context.text}`;
 }
 
 // The details bar: every profile's plan, and the shown session's usage.

@@ -4,8 +4,7 @@ import type { Layout } from '../../layouts/layout';
 // Every part an agent-lines layout may define, so a part added to the contract and
 // missed here fails to compile.
 const LAYOUT_PARTS: Record<keyof Layout, true> = {
-  agentLine: true,
-  taskLine: true,
+  workingLine: true,
 };
 
 // The agent-lines layout a user's `layout.js` module exports as its default. A

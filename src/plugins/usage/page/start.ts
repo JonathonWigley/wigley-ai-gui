@@ -25,7 +25,11 @@ import { usageManifest } from '../manifest';
 import { readUsageLayout } from './layout/read-usage-layout';
 import { createUsageParts, type Drawn } from './layout/usage-parts';
 import { createSessionLineParts } from './session-line-parts';
-import { createSessionLines } from './session-lines';
+import {
+  createSessionLines,
+  rowLineKind,
+  sessionLineKind,
+} from './session-lines';
 import {
   detailsInput,
   detailsStatesText,
@@ -45,7 +49,8 @@ const DETAILS_OPEN_KEY = 'details-open';
 const REDRAW_MS = 60_000;
 
 // Draws the usage status-bar line at the status bar's end for the page's
-// life, each session's line in its Chat status line (a chat status part), and
+// life, each session's line in its Chat status line (a chat status part), its
+// context under its side-bar row (a sessions row part), and
 // the usage details in the right bar while they are open (`toggleDetails`,
 // kept in `uiState`), all through the `usage.layout` layout. Exports
 // `sessionLinePart`, the same line as a part for another surface; every part
@@ -102,7 +107,7 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
     ) => {
       const lines = createSessionLines({
         id,
-        parts,
+        line: sessionLineKind(parts),
         log: partLog,
         nameOf: (sessionId) => names.get(sessionId) ?? sessionId,
         latest: () =>
@@ -112,6 +117,16 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
       return lines.part;
     };
     chat.addStatusPart(sessionLinePart('usage.sessionLine', log));
+    const rowLines = createSessionLines({
+      id: 'usage.rowLine',
+      line: rowLineKind(parts),
+      log: (line) => log(`row ${line}`),
+      nameOf: (sessionId) => names.get(sessionId) ?? sessionId,
+      latest: () =>
+        snapshot === null ? null : { snapshot, now: services.clock.now() },
+    });
+    lineParts.add(rowLines);
+    sessions.addRowPart(rowLines.part);
 
     // Draws the line again, the last draw disposed first.
     const drawStatusLine = (current: UsageSnapshot) => {
