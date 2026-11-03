@@ -79,23 +79,6 @@ describe('drawPart', () => {
     vi.unstubAllGlobals();
   });
 
-  it('drawPart_PickedPartDraws_MarkedWithItsNameAndTheOwner', () => {
-    const rail = drawRail({
-      name: 'fancy',
-      layout: { rail: drawsArticle('fancy') },
-    });
-
-    const drawn = rail.call();
-
-    expect(drawn.layoutName).toBe('fancy');
-    expect(asFake(drawn.built.element).textContent).toBe('fancy');
-    expect(asFake(drawn.built.element).dataset).toEqual({
-      layout: 'fancy',
-      layoutOwner: 'forms',
-    });
-    expect(rail.logLines).toEqual([]);
-  });
-
   it.each([
     {
       row: 'user layout draws',
@@ -103,6 +86,7 @@ describe('drawPart', () => {
       drewPick: true,
       layoutName: 'fancy',
       text: 'fancy',
+      dataset: { layout: 'fancy', layoutOwner: 'forms' },
       logLines: [],
     },
     {
@@ -111,6 +95,7 @@ describe('drawPart', () => {
       drewPick: false,
       layoutName: 'default',
       text: 'default',
+      dataset: { layout: 'default', layoutOwner: 'forms' },
       logLines: [],
     },
     {
@@ -119,6 +104,7 @@ describe('drawPart', () => {
       drewPick: false,
       layoutName: 'default',
       text: 'default',
+      dataset: { layout: 'default', layoutOwner: 'forms' },
       logLines: ['[forms] layout fancy rail failed: boom'],
     },
     {
@@ -127,6 +113,7 @@ describe('drawPart', () => {
       drewPick: true,
       layoutName: 'default',
       text: 'default',
+      dataset: { layout: 'default', layoutOwner: 'forms' },
       logLines: [],
     },
     {
@@ -135,6 +122,7 @@ describe('drawPart', () => {
       drewPick: true,
       layoutName: 'default',
       text: 'live',
+      dataset: { layout: 'default', layoutOwner: 'forms' },
       logLines: [],
     },
     {
@@ -143,6 +131,7 @@ describe('drawPart', () => {
       drewPick: false,
       layoutName: 'default',
       text: 'default',
+      dataset: { layout: 'default', layoutOwner: 'forms' },
       logLines: ['[forms] layout default rail failed: boom'],
     },
     {
@@ -151,11 +140,12 @@ describe('drawPart', () => {
       drewPick: false,
       layoutName: 'default',
       text: 'default',
+      dataset: { layout: 'default', layoutOwner: 'forms' },
       logLines: [],
     },
   ])(
     'drawPart_DrewPick_TrueOnlyWhenThePickedLayoutDrew: $row',
-    ({ pick, drewPick, layoutName, text, logLines }) => {
+    ({ pick, drewPick, layoutName, text, dataset, logLines }) => {
       const rail = drawRail(pick);
 
       const drawn = rail.call();
@@ -164,23 +154,11 @@ describe('drawPart', () => {
         drewPick: drawn.drewPick,
         layoutName: drawn.layoutName,
         text: asFake(drawn.built.element).textContent,
-      }).toEqual({ drewPick, layoutName, text });
+        dataset: asFake(drawn.built.element).dataset,
+      }).toEqual({ drewPick, layoutName, text, dataset });
       expect(rail.logLines).toEqual(logLines);
     },
   );
-
-  it('drawPart_PickLacksThePart_DefaultDrawsWithNoLog', () => {
-    const rail = drawRail({ name: 'bare', layout: {} });
-
-    const drawn = rail.call();
-
-    expect(drawn.layoutName).toBe('default');
-    expect(asFake(drawn.built.element).dataset).toEqual({
-      layout: 'default',
-      layoutOwner: 'forms',
-    });
-    expect(rail.logLines).toEqual([]);
-  });
 
   it('drawPart_PickedThrowsAfterMountingAnchoringAndAppending_RolledBackAndDefaultDraws', () => {
     const record = recorded();
