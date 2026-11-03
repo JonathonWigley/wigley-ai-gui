@@ -82,7 +82,10 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
   file-url.ts    what `layout-url.ts` and `data-url.ts` share: per-segment encoding, scheme and revision checks,
                  and per-segment decoding that refuses an encoded `/`
   agent-forms/   the agent form lifecycle every agent form type shares (forms' rounds, the primer): the service with
-                 its per-session open form, deadline, re-attach and hand-back, the saved-form folder and memory stores,
+                 its per-session open form, deadline, re-attach and hand-back, the wake (a form the user finishes
+                 while no call waits on it sends its session a message naming the collect tool, through the
+                 `AgentFormWake` the service is handed: chat's `send` for a session chat owns, nothing for any
+                 other), the saved-form folder and memory stores,
                  the channel and scripted presenters, the MCP tool session, the drive actions that open a
                  form type's forms in a drive run's sessions, and the layout preview helper
                  (`agent-form-preview.ts`: a form type's sample in a session of its own, its form asked again and a
@@ -206,7 +209,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  the start prompt with its folder, profile, sign-in and session steps), layouts/ (the chat Layout contract
                  and the built-in `default` chat layout); `image-rules.ts` at the root holds the attach rules both
                  parts share; main exports `launch` (a background session with a first message), `profileNames` and
-                 `profileOf` to notes, and `addInstructions` (text every session chat starts carries to its harness)
+                 `profileOf` to notes, `send` and `profileOf` to forms and the primer (the form wake), and `addInstructions` (text every session chat starts carries to its harness)
                  to visual; page exports `focusedEntry` (the focused entry's element) to visual
   keys/          manifest.ts, contract.ts, main/ (registers the layouts only), page/ (which-key, the help overlay,
                  the title bar's Keys button, and the hint anchors and keys-for-command lookup it exports), layouts/
