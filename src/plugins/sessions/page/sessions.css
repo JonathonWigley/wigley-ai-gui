@@ -169,22 +169,23 @@
   white-space: nowrap;
 }
 
-/* A running activity's dot pulses: it reports the agent at work. Under
-   reduced motion it is static: the instant duration would loop the pulse
-   every millisecond, a flicker. */
+/* A running activity's dot pulses: it reports the agent at work. The cycle is
+   a fixed 2s breath, not a theme duration token: those are sized for UI
+   transitions (220ms), and a pulse at that rate reads as flashing. Under
+   reduced motion it is static. */
 @keyframes session-dot-pulse {
-  from {
+  0%,
+  100% {
     opacity: 1;
   }
 
-  to {
-    opacity: 0.4;
+  50% {
+    opacity: 0.35;
   }
 }
 
 .session-row .ui-dot[data-status='running'] {
-  animation: session-dot-pulse var(--wg-duration-slow) var(--wg-ease-out)
-    infinite alternate;
+  animation: session-dot-pulse 2s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
