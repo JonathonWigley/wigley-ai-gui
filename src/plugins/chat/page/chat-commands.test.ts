@@ -543,15 +543,17 @@ describe('chat commands', () => {
       expect(run.logs).toContainEqual(expect.stringContaining('profile gone'));
       expect(message.held.text).toBe(text);
       expect(shown.attachments.images()).toEqual(images);
+      expect(run.marked).toEqual([]);
     },
   );
 
-  it('send_ImagesOnly_Sends', () => {
+  it('send_ImagesOnly_Sends', async () => {
     const shown = Object.assign(session(true), { box: box('') });
     shown.attachments.add(png);
     const run = setUp(shown);
 
     run.handlers.send({});
+    await flush();
 
     expect(run.invoked).toEqual([
       ['send', 'row-1', { text: '', images: [png] }],
@@ -610,14 +612,16 @@ describe('chat commands', () => {
   );
 
   it.each([{ running: true }, { running: false }])(
-    'send with images, running $running, sends to main and clears attachments',
-    ({ running }) => {
+    'send with images, running $running, sends to main, clears attachments and marks the row once main accepts',
+    async ({ running }) => {
       const shown = Object.assign(session(running), { box: box('hi') });
       shown.attachments.add(png);
       shown.attachments.add(jpeg);
       const run = setUp(shown);
 
       run.handlers.send({});
+      expect(run.marked).toEqual([]);
+      await flush();
 
       expect(run.invoked).toEqual([
         ['send', 'row-1', { text: 'hi', images: [png, jpeg] }],

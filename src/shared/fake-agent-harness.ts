@@ -63,6 +63,10 @@ export const FAKE_STEPS_TEXT = 'fake: steps';
 export const FAKE_AGENTS_TEXT = 'fake: agents';
 // A send of this text ends the process on its own, as a CLI that exits.
 export const FAKE_END_TEXT = 'fake: end';
+// A send of this text starts one Bash tool, asks its permission through the
+// harness's `askPermissionsWith` ask, then finishes the tool, allowed or
+// refused, and replies. The turn stays open while the ask waits.
+export const FAKE_PERMISSION_TEXT = 'fake: permission';
 // A send of this text, or `/wigley:feature ` before it, runs a wigley:feature
 // turn that writes `fakeWorkflowPlan(0, 0)` at `FAKE_WORKFLOW_PLAN_PATH` under
 // the process's project folder.
@@ -82,6 +86,21 @@ const FAKE_ACCOUNT = 'fake@example.invalid';
 const SIGNED_OUT: AccountStatus = { signedIn: false, account: null };
 // The `at` of a fake past session's first history entry.
 const FAKE_HISTORY_AT = 1767236645000;
+
+// The tool call a `FAKE_PERMISSION_TEXT` turn asks permission for.
+export interface FakePermissionCall {
+  toolName: string;
+  input: unknown;
+  toolUseId: string;
+}
+
+// Asks the user whether the process `request` started may run `call`, as
+// Claude Code asks through chat's permission tool; resolves to whether it was
+// allowed.
+export type FakePermissionAsk = (
+  request: AgentStart,
+  call: FakePermissionCall,
+) => Promise<boolean>;
 
 export type FakeAgentCall =
   | { method: 'send'; text: string; imageCount: number }
@@ -138,7 +157,9 @@ export interface FakePastSessionCall {
 // in. `listProjects` lists the folders `start` ran under the profile, the last
 // started first. `planUsage` resolves `fakePlanUsage` at the clock's time in a
 // later microtask; `failNextPlanUsage` makes the next one reject `message`.
-// `timers` runs the `fake: visual` hold.
+// `timers` runs the `fake: visual` hold. `askPermissionsWith` sets the ask a
+// `fake: permission` turn calls, replacing any earlier one; with none set, the
+// turn's tool fails.
 export interface FakeAgentHarness extends AgentHarness {
   readonly processes: readonly FakeAgentProcessRecord[];
   readonly pastSessionCalls: readonly FakePastSessionCall[];
@@ -147,6 +168,7 @@ export interface FakeAgentHarness extends AgentHarness {
   failNextPlanUsage(message: string): void;
   holdEnd(): void;
   releaseEnd(): void;
+  askPermissionsWith(ask: FakePermissionAsk): void;
 }
 
 // Timers for tests that never look at a fake's hold: each `set` runs its `run`
@@ -729,6 +751,18 @@ function emitWorkflowSkill(
   );
 }
 
+// The Bash call a `FAKE_PERMISSION_TEXT` turn asks permission for.
+function permissionToolCall(turn: number): ToolCall {
+  return {
+    kind: 'tool',
+    id: `tool-${turn}`,
+    toolUseId: `fake-permission-${turn}`,
+    name: 'Bash',
+    input: { command: 'rm fake.txt' },
+    summary: 'rm fake.txt',
+  };
+}
+
 function emitEchoTurn(
   events: AgentProcessEvents,
   emitEntry: EmitEntry,
@@ -812,6 +846,7 @@ export function createFakeAgentHarness(
   // Each fake plan's progress by plan folder, kept across processes so a make
   // run outlives a clear.
   const workflowPlans = new Map<string, WorkflowPlan>();
+  let permissionAsk: FakePermissionAsk | null = null;
 
   const statusOf = (profileDir: string | null): AccountStatus =>
     signedOutProfiles.has(profileDir)
@@ -918,6 +953,55 @@ export function createFakeAgentHarness(
         });
         emitTurnEnd(events, emitEntry, clock, turn);
       }, FAKE_VISUAL_HOLD_MS);
+    };
+
+    // Starts the turn's tool, asks its permission, then finishes the tool with
+    // the answer and closes the turn, unless an interrupt, a later send or the
+    // process's end came while the ask waited.
+    const runPermissionTurn = async (askedTurn: number) => {
+      const call = permissionToolCall(askedTurn);
+      startFakeTool(events, emitEntry, clock, MAIN_AGENT_ID, call, 'tool');
+      let result: ToolResult;
+      try {
+        if (permissionAsk === null) {
+          throw new Error('fake harness has no permission ask');
+        }
+        const allowed = await permissionAsk(record.request, {
+          toolName: call.name,
+          input: call.input,
+          toolUseId: call.toolUseId,
+        });
+        result = allowed
+          ? { text: 'fake', isError: false }
+          : { text: 'Permission denied', isError: true };
+      } catch (error) {
+        result = { text: errorText(error), isError: true };
+      }
+      const isStillTheTurn = !record.ended && isTurnOpen && turn === askedTurn;
+      if (!isStillTheTurn) {
+        return;
+      }
+      isTurnOpen = false;
+      finishFakeTool(
+        events,
+        emitEntry,
+        clock,
+        MAIN_AGENT_ID,
+        call,
+        'tool',
+        result,
+      );
+      const reply = result.isError
+        ? 'fake agent was refused'
+        : 'fake agent ran an allowed tool';
+      emitEntry({
+        kind: 'assistant',
+        id: `assistant-${askedTurn}`,
+        text: reply,
+        streaming: false,
+        raw: [{ fake: 'assistant', text: reply }],
+      });
+      emitTurnEnd(events, emitEntry, clock, askedTurn);
     };
 
     // Runs `change` between workflow tool `n`'s call and its result; a
@@ -1133,7 +1217,8 @@ export function createFakeAgentHarness(
         const isSteps = text === FAKE_STEPS_TEXT;
         const isAgents = text === FAKE_AGENTS_TEXT;
         const isVisual = text === FAKE_VISUAL_TEXT;
-        isTurnOpen = isHold || isSteps || isAgents || isVisual;
+        const isPermission = text === FAKE_PERMISSION_TEXT;
+        isTurnOpen = isHold || isSteps || isAgents || isVisual || isPermission;
         queueMicrotask(() => {
           finishSubagents(events, emitEntry, clock, runningSubagents, {
             text: 'fake subagent done',
@@ -1167,6 +1252,8 @@ export function createFakeAgentHarness(
             emitToolTurn(events, emitEntry, clock, sentTurn);
           } else if (isVisual) {
             emitVisualTurn(sentTurn);
+          } else if (isPermission) {
+            void runPermissionTurn(sentTurn);
           } else {
             emitEchoTurn(events, emitEntry, clock, sentTurn, text);
           }
@@ -1338,6 +1425,9 @@ export function createFakeAgentHarness(
     },
     holdEnd() {
       isEndHeld = true;
+    },
+    askPermissionsWith(ask) {
+      permissionAsk = ask;
     },
     releaseEnd() {
       isEndHeld = false;

@@ -12,12 +12,14 @@ import {
   FAKE_END_TEXT,
   FAKE_HOLD_TEXT,
   FAKE_PAST_SESSIONS,
+  FAKE_PERMISSION_TEXT,
   FAKE_SIGN_IN_CODE,
   FAKE_STEPS_TEXT,
   FAKE_TOOL_TEXT,
   FAKE_VISUAL_TEXT,
   type FakeAgentCall,
   type FakeAgentProcessRecord,
+  type FakePermissionAsk,
   markRun,
   type RunMark,
 } from '../../../shared/fake-agent-harness';
@@ -168,6 +170,18 @@ const ROW_ACTIVITY_STEPS: SelfTestStep[] = [
     expect: rowActivityLine('chat-second', 'none'),
     alsoExpect: [rowActivityPattern('chat-second', 'working')],
     why: 'A turn that ends in the focused session skips done.',
+  },
+  {
+    keys: sendKeys(FAKE_PERMISSION_TEXT),
+    expect: rowActivityLine('chat-second', 'needs you'),
+    alsoExpect: [rowActivityPattern('chat-second', 'working')],
+    why: 'The fake asks a permission mid-turn.',
+  },
+  {
+    keys: ['Escape', 'y'],
+    expect: rowActivityLine('chat-second', 'none'),
+    alsoExpect: [/^\[chat\] allowed Bash in chat-second$/],
+    why: 'Allowing it lets the turn end in the focused session.',
   },
   { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
 ];
@@ -602,7 +616,7 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'row activity',
-    why: 'the row shows working during a turn, done after it in an unfocused session, and nothing once viewed',
+    why: 'the row shows working during a turn, done after it in an unfocused session, nothing once viewed, and needs you while the fake asks a permission mid-turn',
     steps: ROW_ACTIVITY_STEPS,
   },
   {
@@ -861,6 +875,36 @@ function pastSessionProblems(
   return [`past session calls ${JSON.stringify(calls)}`];
 }
 
+// Asks a fake process's permission through chat's tool in the running chat
+// session in the process's project folder, as Claude Code would; allowed when
+// the reply's behavior is allow.
+function fakePermissionAsk(
+  chat: Pick<ChatSessions, 'permissionToolSession' | 'sessions'>,
+): FakePermissionAsk {
+  return async (request, call) => {
+    const session = chat
+      .sessions()
+      .find(
+        (state) => state.running && state.projectDir === request.projectDir,
+      );
+    if (session === undefined) {
+      throw new Error(`no running chat session in ${request.projectDir}`);
+    }
+    const reply = await askFixturePermission(
+      chat,
+      session.sessionId,
+      request.projectDir,
+      call,
+    );
+    const text = reply.content[0]?.text ?? '';
+    if (reply.isError === true) {
+      throw new Error(text);
+    }
+    const { behavior } = JSON.parse(text) as { behavior: string };
+    return behavior === 'allow';
+  };
+}
+
 // The self-test's two project folders.
 interface SelfTestProjects {
   selftest: string;
@@ -877,7 +921,8 @@ interface SelfTestProjects {
 // steps submit. The result is both calls' replies and the self-test project's
 // folder; problems reads the fake processes, whose records the steps keep
 // changing in place, when it runs, reading only the records this run added.
-// The run waits on the session's Chat tab being shown.
+// Each fake harness asks a `fake: permission` turn's permission through
+// chat's tool too. The run waits on the session's Chat tab being shown.
 export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
   const { chat, sessions, harnesses, files } = deps;
   // Cleared when making them fails, so a later run tries again.
@@ -958,6 +1003,9 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
     scrollsItself: SCROLLS_ITSELF,
     open(run) {
       marks = markRun(harnesses);
+      for (const mark of marks) {
+        mark.harness.askPermissionsWith(fakePermissionAsk(chat));
+      }
       previousRelay?.end();
       const failures: string[] = [];
       archiveResetFailures = failures;

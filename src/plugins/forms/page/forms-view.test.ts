@@ -16,6 +16,7 @@ import { apply, type FormsAction, initialState } from './form-state';
 import { mountFormsView } from './forms-view';
 import { presentedRound } from './test-rounds';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
+import { NEEDS_YOU_ACTIVITY, type RowActivity } from '../../sessions/contract';
 
 // One `insert` call on an editor the host made.
 interface Inserted {
@@ -67,9 +68,11 @@ type ScopeCall = ['setScope', string] | ['setResizeTarget', 'target' | null];
 // each of `others` open in its own session's tab; `tab` is r1's tab element,
 // `tabs` every tab element by session, and `calls` logs every `setScope` and
 // `setResizeTarget` call, in call order. `targets` holds every drop target the
-// view registered, and `inserted` every insert into a box's editor.
+// view registered, `inserted` every insert into a box's editor, and
+// `activities` every row activity the view set.
 function formTabSetup(others: string[] = []) {
   const calls: ScopeCall[] = [];
+  const activities: [string, string, RowActivity | null][] = [];
   const targets: RegisteredTarget[] = [];
   const inserted: Inserted[] = [];
   const presented = presentedRound('r1');
@@ -102,7 +105,8 @@ function formTabSetup(others: string[] = []) {
           remove: () => undefined,
         };
       },
-      setActivity: () => undefined,
+      setActivity: (sessionId, sourceId, activity) =>
+        activities.push([sessionId, sourceId, activity]),
     },
     beforeClose: () => true,
     setScope: (view) => calls.push(['setScope', view]),
@@ -159,6 +163,7 @@ function formTabSetup(others: string[] = []) {
     calls,
     targets,
     inserted,
+    activities,
   };
 }
 
@@ -233,6 +238,24 @@ describe('form tabs of several sessions', () => {
     const unfocused = tabs.get('r2-session') as FakeElement;
     expect(roundShown(unfocused)).toBe(true);
     expect(itemsPane(unfocused).hidden).toBe(false);
+  });
+});
+
+describe('form tab row activity', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("sets the session's row to needs you while its round shows, and clears it when the round closes", () => {
+    const { store, sessionId, activities } = formTabSetup();
+
+    store.dispatch({ type: 'formClosed', formId: 'r1' });
+
+    expect(activities).toEqual([
+      [sessionId, 'forms', NEEDS_YOU_ACTIVITY],
+      [sessionId, 'forms', null],
+    ]);
   });
 });
 
