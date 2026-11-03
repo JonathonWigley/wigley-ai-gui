@@ -182,5 +182,6 @@ Review base: e38f1bb7
 - triage by the user's standing word (go with every recommendation): fix now 1-8, 12-14, 16-18; leave 15 (a done on the visible session would linger after the user returns; the OS alert already names the finish) and 20 (invisible, and dropping late sets conflicts with set-before-row); follow-up 19 (shared input reset across five plugins) and 21 (pre-existing split picker) — none · lead
 ### Review rounds
 - review 1 · 675f65f7 · NEEDS FIXES — 5 important, 15 minor, 1 pre-existing (/tmp/claude-session-titles/review-675f65f7.md); lead applied 9, 10, 11 in e3981051
+- re-review 1 · eb88d107 (fix commits 187973e1..eb88d107) · NEEDS FIXES — every prior finding closed; 2 minor: rename dialog redraw untested, fake permission ask routed by folder not host session id
 ### Test gate
 - Vitest: src/plugins/{sessions,chat,forms,primer}, src/shared/page/session-form-tabs.test.ts, keymap.test.ts, shared/keymap-checks.test.ts, agent-form-drive.test.ts — every touched plugin and the keymap/session-form-tabs seams the range edits; first run failed 3 in chat/main/start.test.ts (stale fake and instructions assertion from group 04), fixed in a dispatched test-only commit, re-run 1652/1652 pass · self-test --plugin sessions,chat,forms,primer: all passed (/tmp/claude-session-titles/selftest-gate.log) · lint clean

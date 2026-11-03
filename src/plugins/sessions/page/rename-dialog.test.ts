@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { withUser } from '../../../shared/page/layout-host/test-layouts';
 import {
   asFake,
   findAll,
@@ -7,6 +8,8 @@ import {
   installFocusFakeDom,
 } from '../../../shared/page/test-dom';
 import type { SessionRow, SessionTitles } from '../contract';
+import defaultLayout from '../layouts/default/layout.js';
+import type { Layout } from '../layouts/layout';
 import { createRenameDialog } from './rename-dialog';
 import { sessionsViewSetup } from './sessions-view-fakes';
 
@@ -43,7 +46,7 @@ function deferred() {
 // parts, whose `setUserTitle` records each call and answers as `answer` says,
 // and whose pushed scope records its pushes and pops and runs its base-change
 // listener on `baseChanged`. `opener` is a connected element holding focus
-// before the dialog opens.
+// before the dialog opens; `view` is the sessions view whose parts draw it.
 function dialogSetup(answer: () => Promise<void> = async () => undefined) {
   const invoked: [string, string | null][] = [];
   const logged: string[] = [];
@@ -77,10 +80,13 @@ function dialogSetup(answer: () => Promise<void> = async () => undefined) {
   opener.focus();
   return {
     dialog,
+    view,
     invoked,
     logged,
     // The title box, drawn once the dialog opens.
     box: () => findAll(root, 'session-rename-box')[0] as FocusFakeElement,
+    // Every body element of the given class.
+    bodies: (className: string) => findAll(root, className),
     opener,
     // The problem line's text; null while none shows.
     problem: () =>
@@ -277,6 +283,49 @@ describe('createRenameDialog', () => {
     expect(box().value).toBe('First');
     expect(pushes()).toBe(1);
   });
+
+  it.each<{ case: string; layout: Layout; boxAt: number }>([
+    {
+      case: 'layout leaves the box out',
+      layout: {
+        renameDialog: (parent, input, kit) => {
+          const element = kit.el(parent, 'div', 'mine-rename');
+          kit.el(element, 'p', 'mine-hint', input.hint);
+          return { element };
+        },
+      },
+      boxAt: 0,
+    },
+    {
+      case: 'layout places the box after the hint',
+      layout: {
+        renameDialog: (parent, input, kit) => {
+          const element = kit.el(parent, 'div', 'mine-rename');
+          kit.el(element, 'p', 'mine-hint', input.hint);
+          kit.textBox(element);
+          return { element };
+        },
+      },
+      boxAt: 1,
+    },
+  ])(
+    'redraw_LayoutsChanged_DrawsTheBodyAgainKeepingTheBox ($case)',
+    ({ layout, boxAt }) => {
+      const { dialog, view, box, bodies } = dialogSetup();
+      dialog.open(row());
+      box().value = 'Half typed';
+
+      view.setLayouts(withUser<Layout>(defaultLayout, layout));
+      dialog.redraw();
+
+      expect(bodies('session-rename')).toEqual([]);
+      const [body] = bodies('mine-rename');
+      expect(body?.dataset.layout).toBe('mine');
+      expect(box().parentNode).toBe(body?.children[boxAt]);
+      expect(box().value).toBe('Half typed');
+      expect(doc.activeElement).toBe(box());
+    },
+  );
 
   it('open_FirstMessageOnly_PrefillsTheUncutText', () => {
     const { dialog, box } = dialogSetup();

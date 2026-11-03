@@ -34,7 +34,8 @@ import type { BaseKit, DotStatus } from '../../../shared/page/layout-host/kit';
 // key unprompted.
 //
 // Dialogs. The Dialog primitive (scrim, panel and title) stays the app's; a part draws the dialog's body.
-// `renameDialog` draws the rename dialog's body each time the dialog opens and again whenever its input changes.
+// `renameDialog` draws the rename dialog's body each time the dialog opens and again whenever its input or the layouts
+// change.
 
 // One session row. `title` is the session's title as the row shows it (the user's, else the agent's, else the first
 // message cut to the title length), null for none; `label` is the session's folder label (`gamma 2`); `harness` is
