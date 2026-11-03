@@ -59,7 +59,6 @@ import {
   pluginThemeTokens,
   qualify,
   requireListed,
-  withoutPluginBinds,
 } from '../shared/plugin-manifests';
 import { posixPaths } from '../shared/paths/posix-paths';
 import { windowsPaths } from '../shared/paths/windows-paths';
@@ -112,6 +111,7 @@ import {
   applySelfTestConfig,
   mainStartList,
   selfTestFilterOf,
+  withMainStartList,
 } from './selftest-config';
 import { tempFolders } from './temp-folders';
 import {
@@ -667,28 +667,6 @@ function startMainParts(
     manifests,
     disabled,
   );
-}
-
-// `config` with the plugins main did not start, `startList`, added to its
-// `plugins.disabled`, so the page starts no page part whose main part did not
-// start, and without those plugins' main binds.
-function withMainStartList(
-  config: AppConfig,
-  startList: readonly string[],
-): AppConfig {
-  const disabled = [
-    ...new Set([...config.settings.plugins.disabled, ...startList]),
-  ];
-  return {
-    ...config,
-    settings: { ...config.settings, plugins: { disabled } },
-    keymap: withoutPluginBinds(
-      config.keymap,
-      config.commands,
-      startList,
-      'main',
-    ),
-  };
 }
 
 function registerPartCommands(
