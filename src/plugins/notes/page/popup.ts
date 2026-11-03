@@ -1128,12 +1128,9 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
   };
 
   // Puts the paths of `files` into the Body at its cursor, unless the popup
-  // changed while they were saved: `isOwnAttach` tells whether an 'attach' in
-  // flight is the same take's.
-  const insertPaths = async (
-    files: readonly DroppedFile[],
-    isOwnAttach: () => boolean,
-  ) => {
+  // changed while they were saved: then the paths are toasted instead. Only
+  // an 'attach' may hold the draft meanwhile, since it leaves the Body alone.
+  const insertPaths = async (files: readonly DroppedFile[]) => {
     const filePaths: string[] = [];
     for (const file of files) {
       const path = await pathOf(file, deps.drops.savePasted, saveFailed);
@@ -1144,10 +1141,11 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     if (filePaths.length === 0) {
       return;
     }
-    const isDraftFree =
-      inFlight === null || (inFlight === 'attach' && isOwnAttach());
-    if (!fieldsShown() || !isDraftFree) {
-      log('notes', `paths not inserted, popup changed: ${filePaths.join(' ')}`);
+    const isBodyFree = inFlight === null || inFlight === 'attach';
+    if (!fieldsShown() || !isBodyFree) {
+      const message = `Paths not inserted, popup changed: ${filePaths.join(' ')}`;
+      toast(message, 'error');
+      log('notes', message);
       return;
     }
     body.insert(insertionText(filePaths, body.charBeforeCursor()));
@@ -1167,19 +1165,11 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     const otherFiles = files.filter(
       (file) => !IMAGE_TYPES.includes(file.mediaType),
     );
-    let isAttaching = false;
     if (imageFiles.length > 0) {
-      isAttaching = true;
-      void runDraftOperation('attach', async () => {
-        try {
-          await attachEach(imageFiles);
-        } finally {
-          isAttaching = false;
-        }
-      });
+      void runDraftOperation('attach', () => attachEach(imageFiles));
     }
     if (otherFiles.length > 0) {
-      void insertPaths(otherFiles, () => isAttaching);
+      void insertPaths(otherFiles);
     }
   };
   // The popup lives as long as the page, so it keeps no target to dispose.

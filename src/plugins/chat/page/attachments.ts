@@ -67,28 +67,38 @@ export interface ChatDropDeps {
   savePasted(file: DroppedFile): Promise<string>;
   encoder: ImageEncoder;
   report: AttachReport;
+  isHeld(): boolean;
 }
 
 // Takes the files dropped or pasted on a Chat tab in the order given: each
 // image attaches, shrunk to fit the cap, and every other file's path (a
 // pasted one's once saved) goes into the box in one insert after the walk.
-// One file's failure leaves the rest.
+// One file's failure leaves the rest. Once `isHeld` answers false the take
+// stops, writing, saving and reporting nothing more.
 export async function takeChatFiles(
   files: readonly DroppedFile[],
   deps: ChatDropDeps,
 ): Promise<void> {
   const paths: string[] = [];
   for (const file of files) {
+    if (!deps.isHeld()) {
+      return;
+    }
     if (IMAGE_TYPES.includes(file.mediaType)) {
       await attachImage(file, deps);
       continue;
     }
-    const path = await pathOf(file, deps.savePasted, (failed, error) =>
-      deps.report.failed(failed.name, 'saved', error),
-    );
+    const path = await pathOf(file, deps.savePasted, (failed, error) => {
+      if (deps.isHeld()) {
+        deps.report.failed(failed.name, 'saved', error);
+      }
+    });
     if (path !== null) {
       paths.push(path);
     }
+  }
+  if (!deps.isHeld()) {
+    return;
   }
   if (paths.length > 0) {
     deps.box.insert(insertionText(paths, deps.box.charBeforeCursor()));
@@ -98,7 +108,7 @@ export async function takeChatFiles(
 
 async function attachImage(
   file: DroppedFile,
-  deps: Pick<ChatDropDeps, 'attachments' | 'encoder' | 'report'>,
+  deps: Pick<ChatDropDeps, 'attachments' | 'encoder' | 'report' | 'isHeld'>,
 ): Promise<void> {
   let shrunk: EncodableImage | null;
   try {
@@ -108,7 +118,12 @@ async function attachImage(
       deps.encoder,
     );
   } catch (error) {
-    deps.report.failed(file.name, 'read', errorText(error));
+    if (deps.isHeld()) {
+      deps.report.failed(file.name, 'read', errorText(error));
+    }
+    return;
+  }
+  if (!deps.isHeld()) {
     return;
   }
   if (shrunk === null) {

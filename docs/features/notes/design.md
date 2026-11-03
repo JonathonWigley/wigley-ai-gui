@@ -42,7 +42,8 @@ session.
 ## Images
 
 - In: paste from the clipboard, drop a file, or capture the GUI. A file that is not an image goes into the Body as a
-  file chip, its path (`docs/features/file-drop/design.md`). Capture hides the popup, grabs the window in main,
+  file chip, its path (`docs/features/file-drop/design.md`); when the popup closed, or a send, discard, capture or image
+  removal began, while a pasted file saved, its path is toasted instead. Capture hides the popup, grabs the window in main,
   and reopens the popup with the image attached, so the capture shows the app as the user saw it. Capture waits two
   frames after the hide, so the popup is gone from the shot.
 - Each image opens a markup editor inside the popup: select and move, pen, text, arrow, box, four colours, undo and

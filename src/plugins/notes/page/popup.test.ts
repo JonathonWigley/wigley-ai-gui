@@ -488,15 +488,8 @@ describe('note popup', () => {
       change: 'send started',
       act: (harness: Harness) => harness.popup.commands.sendFollowup(),
     },
-    {
-      change: "another take's attach in flight",
-      act(harness: Harness) {
-        harness.fakes.addImage = () => new Promise(() => undefined);
-        harness.take([png('other.png')]);
-      },
-    },
   ])(
-    'take_StateChangedDuringSave_InsertsNothing ($change)',
+    'take_StateChangedDuringSave_ToastsPathsInsertsNothing ($change)',
     async ({ act }) => {
       const harness = await openPopup({
         ...DRAFT,
@@ -512,9 +505,39 @@ describe('note popup', () => {
       await settle();
 
       expect(harness.inserts).toEqual([]);
-      expect(harness.logged.some((line) => line.includes(PASTED_PATH))).toBe(
-        true,
-      );
+      expect(
+        harness.toasts.filter(([text]) => text.includes(PASTED_PATH)),
+      ).toHaveLength(1);
+    },
+  );
+
+  // Each row's attach hangs in main while the pasted file saves.
+  it.each([
+    {
+      attaching: 'this take',
+      files: [png('own.png')],
+      duringSave: () => undefined,
+    },
+    {
+      attaching: 'another take',
+      files: [],
+      duringSave: (harness: Harness) => harness.take([png('other.png')]),
+    },
+  ])(
+    'take_AttachInFlightDuringSave_InsertsPaths ($attaching)',
+    async ({ files, duringSave }) => {
+      const harness = await openPopup();
+      harness.fakes.addImage = () => new Promise(() => undefined);
+      harness.fakes.savePasted = () => {
+        duringSave(harness);
+        return Promise.resolve(PASTED_PATH);
+      };
+
+      harness.take([...files, droppedFile('n.txt', 'text/plain', '')]);
+      await settle();
+
+      expect(harness.inserts).toEqual([insertionText([PASTED_PATH], '')]);
+      expect(harness.toasts).toEqual([]);
     },
   );
 

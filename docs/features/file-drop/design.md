@@ -38,8 +38,9 @@ file goes in as its path, which the agent opens itself; Chat keeps sending image
 
 - **Drop**: the innermost registered target under the pointer takes the files; a one-line
   `<input>` or `<textarea>` under the pointer is innermost of all and takes plain paths at its
-  caret. A drop on no target and no input shows the toast `Nothing here takes files`, and no drop
-  ever opens the file in the window (the core cancels every
+  caret. A drop on no target and no input shows the toast `Nothing here takes files`; a file drag
+  that carries no file (a folder the OS hands none for) shows `This drag carried no files` wherever
+  it lands; and no drop ever opens the file in the window (the core cancels every
   file `dragover` and `drop` on the page).
 - **Paste**: a focused one-line input takes it as plain paths; else the innermost target holding
   the focused element takes it; with no focused
