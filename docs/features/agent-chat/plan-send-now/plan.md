@@ -125,7 +125,7 @@ No new files. Boundary rule: nothing outside `src/main/claude-code/` names lifec
 - [x] [Harness seam: entry on take-in, send returns its id](01-harness-seam.md)
 
 ### Wave 2
-- [ ] [Chat main: sendNow and sent rows](02-chat-main.md) — after 01
+- [x] [Chat main: sendNow and sent rows](02-chat-main.md) — after 01
 
 ### Wave 3
 - [ ] [Chat page: key routes and the sending label](03-chat-page.md) — after 02
@@ -142,12 +142,18 @@ Review base: 495866206a2877ebce1a939c301f551fbe01d49b
 
 ### Groups
 - 01 · 2db2f106 · diff read: send(): string and messageDropped on AgentProcess/AgentProcessEvents in agent.ts, TurnTracker.mode() and TurnMode exported; whole-tree tsc clean; worker's three test files pass (159 tests) · concerns: chat-sessions stub comment names the plan (task 02 replaces it); whole-tree lint stops on peer files outside this task, oxfmt clean on the 8 touched files
+- 02 · f9ab864e · diff read: sentEntryId on QueuedMessage, sendNow and sendAllNow on ChatChannel invoke and ChatSessions, both start.ts handlers via ignoredInPreview present; whole-tree tsc clean; worker's chat-sessions and start tests pass (195) · concerns: worker ran npx prettier (downloaded to ~/.npm/_npx/b388654678d519d9, hard-gate breach, reported to user) then restored formatting with the repo's oxfmt; sentEntryId: null added to fakes in page/entry-list.test.ts and page/chat-commands.test.ts (03's files); start.ts SESSION_TITLE_INSTRUCTION line not oxfmt-clean at HEAD either
 ### Contract changes
 - TurnTracker exports: mode() and TurnMode → plus TERMINAL_STATES exported · why: the adapter reads the same terminal set rather than copying it · consumers: none · group 01
+- sendAllNow on ChatChannel invoke and ChatSessions: void → Promise<void> · why: the idle path is send's async path, which may start a process and reject; matches send's shape · consumers: 03 · group 02
 ### Rulings
 - Round 3 key routes folded into 02–05 (user decision relayed by session ai-dev-2e): <Leader>cs and chat.sendQueuedNow dropped; Cmd+Enter in the box runs chat.sendNow → sendAllNow (every unsent row then the box message while busy, as Enter while idle); 02 gains sendAllNow because the box route needs main support; Enter/Shift+Enter in insert mode left to ai-dev-2e's own change — cost if wrong: 02/03 rework before they start · lead
 - hold released right after tracker.read, before the line's entries, so messageDropped and the held entry precede syncActivity — cost if wrong: order differs only on a line carrying both lifecycle and entries, which command_lifecycle lines never do · group 01 · group 01
 - held drafts cleared in markClosed (close and never-spawned error), so a lifecycle line after close releases nothing — cost if wrong: none · group 01 · group 01
 - harness test recordingEvents gained a timeline to check entry/userMessage/skillStarted/messageDropped/activity order; drop rows send a successResult first so the terminal line causes the idle activity — cost if wrong: none · group 01 · group 01
+- held-message map named writtenMessages since held names the sessions map — cost if wrong: a rename · group 02 · group 02
+- launch's first message is recorded as a written message, so a dropped launch message returns to the box — cost if wrong: a returned message in a box the user never typed in · group 02 · group 02
+- deliver throws 'session <id> has no running process' instead of skipping through ?. — cost if wrong: a not-sent log or rejected send where a message used to vanish silently · group 02 · group 02
+- returnAllHeld sends queued before returned (pull-back's order); entry callback sends the entry before dropping the matching row — cost if wrong: message order on the page only · group 02 · group 02
 ### Review rounds
 ### Test gate

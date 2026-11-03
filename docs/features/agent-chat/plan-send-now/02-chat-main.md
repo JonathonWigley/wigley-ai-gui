@@ -1,6 +1,6 @@
 # 02 — Chat main: sendNow, sendAllNow and sent rows
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -59,3 +59,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit f9ab864e · proof: diff read: sentEntryId on QueuedMessage, sendNow and sendAllNow on ChatChannel invoke and ChatSessions, both start.ts handlers via ignoredInPreview present; whole-tree tsc clean; worker's chat-sessions and start tests pass (195) · concerns: worker ran npx prettier (downloaded to ~/.npm/_npx/b388654678d519d9, hard-gate breach, reported to user) then restored formatting with the repo's oxfmt; sentEntryId: null added to fakes in page/entry-list.test.ts and page/chat-commands.test.ts (03's files); start.ts SESSION_TITLE_INSTRUCTION line not oxfmt-clean at HEAD either
