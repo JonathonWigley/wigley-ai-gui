@@ -372,9 +372,9 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
     logSelected(selection, boxes.length);
   };
 
-  // After the session's roster changed: the selection follows its box, or
-  // hands the cursor back once no box is left, and the open box closes once
-  // its box is gone.
+  // After the session's roster changed: the selection follows its box and is
+  // scrolled into view, or hands the cursor back once no box is left, and the
+  // open box closes once its box is gone.
   const rosterChanged = (sessionId: string) => {
     const boxes = boxesOf(sessionId);
     const openKey = openKeys.get(sessionId);
@@ -382,6 +382,7 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
       openKeys.delete(sessionId);
     }
     let handBack: ComposerStopExits | null = null;
+    let keptSelection = false;
     if (selection?.sessionId === sessionId) {
       const index = reselect(selection.key, selection.index, boxes);
       if (index === null) {
@@ -389,9 +390,13 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
         selection = null;
       } else {
         selection = { ...selection, index, key: boxes[index].key };
+        keptSelection = true;
       }
     }
     redraw(sessionId);
+    if (keptSelection) {
+      revealSelected();
+    }
     handBack?.toEntries();
   };
 

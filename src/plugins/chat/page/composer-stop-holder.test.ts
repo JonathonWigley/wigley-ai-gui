@@ -86,18 +86,42 @@ describe('composer stop holder', () => {
       case: 'the first throws',
       enters: ['throws', 'takes'] as Enter[],
       holding: 'p2',
-      calls: ['enter p1', 'enter p2', 'changed true'],
+      calls: [
+        'enter p1',
+        'leave p1',
+        'setChatScope',
+        'enter p2',
+        'changed true',
+      ],
       logs: [
         '[chat] composer part p1 stop failed: no roster',
         '[chat] composer part p2 took the cursor in app',
       ],
     },
-  ])('offer_$case', ({ enters, holding, calls, logs }) => {
+    {
+      case: 'the first throws and its leave throws',
+      enters: ['throws', 'declines'] as Enter[],
+      firstLeaveThrows: true,
+      holding: null,
+      calls: ['enter p1', 'leave p1', 'setChatScope', 'enter p2'],
+      logs: [
+        '[chat] composer part p1 stop failed: no roster',
+        '[chat] composer part p1 leave failed: gone',
+      ],
+    },
+  ])('offer_$case', ({ enters, firstLeaveThrows, holding, calls, logs }) => {
     const run = setUp();
     const bare: ChatComposerPart = { id: 'bare', build: () => ({}) };
     const parts = [
       bare,
-      ...enters.map((enter, index) => part(`p${index + 1}`, enter, run.calls)),
+      ...enters.map((enter, index) =>
+        part(
+          `p${index + 1}`,
+          enter,
+          run.calls,
+          index === 0 && firstLeaveThrows === true,
+        ),
+      ),
     ];
 
     const took = run.holder.offer(parts);

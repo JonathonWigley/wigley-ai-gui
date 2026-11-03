@@ -257,19 +257,43 @@ describe('agent strip', () => {
     expect(logged.at(-1)).toBe('[agent-strip] left strip in proj');
   });
 
-  it('rosterEmptiesWhileSelected_ReturnsToEntries', () => {
-    const { build, enter, setRoster, exitCalls, wrapper, strip, logged } =
+  // `enter` selects box 2 of MIXED, a2; `revealed` is the box index each
+  // reveal after the roster change scrolled to.
+  it.each<{
+    case: string;
+    roster: Roster;
+    selected: number[];
+    revealed: number[];
+    exitCalls: string[];
+  }>([
+    {
+      case: 'empties: returns to entries',
+      roster: EMPTY,
+      selected: [],
+      revealed: [],
+      exitCalls: ['toEntries'],
+    },
+    {
+      case: 'drops an earlier box: follows and reveals its box',
+      roster: { ...MIXED, agents: MIXED.agents.slice(1) },
+      selected: [0],
+      revealed: [0],
+      exitCalls: [],
+    },
+  ])('rosterChangedWhileSelected_$case', (row) => {
+    const { build, enter, setRoster, exitCalls, scrollers, boxes, selected } =
       setUp(MIXED);
     build();
     enter();
+    const revealsBefore = scrollers.reveals.length;
 
-    setRoster(EMPTY);
-    const loggedAfter = logged.length;
-    strip.nextBox();
+    setRoster(row.roster);
 
-    expect(wrapper.children).toEqual([]);
-    expect(exitCalls).toEqual(['toEntries']);
-    expect(logged).toHaveLength(loggedAfter);
+    expect(selected()).toEqual(row.selected);
+    expect(scrollers.reveals.slice(revealsBefore)).toEqual(
+      row.revealed.map((index) => boxes()[index]),
+    );
+    expect(exitCalls).toEqual(row.exitCalls);
   });
 
   it('toggleBox_DrawsToolListInOpenAgentBox', () => {

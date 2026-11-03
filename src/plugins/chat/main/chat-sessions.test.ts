@@ -2298,29 +2298,55 @@ describe('createChatSessions branch', () => {
     ]);
   });
 
-  it('branchRead_OlderReadSettlesLast_KeepsTheNewer', async () => {
-    const reads: ((branch: string) => void)[] = [];
-    const git: ChatSessionsDeps['git'] = {
-      topLevel: () => Promise.resolve('/repos/clone'),
-      currentBranch: () =>
-        new Promise((resolve) => {
-          reads.push(resolve);
-        }),
-    };
-    const test = await started({ git });
-    test.process.events.agentEvent(TURN_ENDED);
-    await flush();
+  // `reads` holds each branch read still open, oldest first.
+  it.each([
+    {
+      case: 'older read settles after a newer',
+      settle: async (
+        test: Awaited<ReturnType<typeof started>>,
+        reads: ((branch: string) => void)[],
+      ) => {
+        test.process.events.agentEvent(TURN_ENDED);
+        await flush();
+        reads[1]('feature');
+        await flush();
+        reads[0]('main');
+      },
+      sent: [{ sessionId: ROW_ID, repo: 'clone', branch: 'feature' }],
+      shown: 'feature',
+    },
+    {
+      case: 'read settles after its row closed',
+      settle: async (
+        test: Awaited<ReturnType<typeof started>>,
+        reads: ((branch: string) => void)[],
+      ) => {
+        test.chat.closed(ROW_ID);
+        reads[0]('main');
+      },
+      sent: [],
+      shown: null,
+    },
+  ])(
+    'branchRead_StaleRead_ChangesNothing ($case)',
+    async ({ settle, sent, shown }) => {
+      const reads: ((branch: string) => void)[] = [];
+      const git: ChatSessionsDeps['git'] = {
+        topLevel: () => Promise.resolve('/repos/clone'),
+        currentBranch: () =>
+          new Promise((resolve) => {
+            reads.push(resolve);
+          }),
+      };
+      const test = await started({ git });
 
-    reads[1]('feature');
-    await flush();
-    reads[0]('main');
-    await flush();
+      await settle(test, reads);
+      await flush();
 
-    expect(test.sent('branch')).toEqual([
-      { sessionId: ROW_ID, repo: 'clone', branch: 'feature' },
-    ]);
-    expect(test.chat.sessions()[0].branch).toBe('feature');
-  });
+      expect(test.sent('branch')).toEqual(sent);
+      expect(test.chat.sessions()[0]?.branch ?? null).toBe(shown);
+    },
+  );
 });
 
 describe('createChatSessions usage forwarding', () => {
