@@ -177,5 +177,7 @@ Review base: e38f1bb7
 - markSent, activeChanged and sessionHostChanged share one clearUnseen — none · group 05 · group 05
 - needs you's self-test is covered by the permission card step's 'none' line rather than a step of its own — changing the runner or fixture to re-ask a permission is out of the plan's scope; the unit table covers rowActivity's waiting row — a regression only in the view's wiring of waiting would slip past the self-test · lead
 - the plan's 'a resumed agent may rename once more' is dropped: per agent-chat design a resume keeps the first request's system prompt, so a pre-feature conversation never gets the instruction — if the CLI does re-read appended prompts on resume, the doc understates it · group 07 · group 07
+- the test gate, self-test and drive run all run in the worktree: this is an Electron app with no editor boundary, and the worktree has its own .vite and node_modules symlinked to the main tree — none · lead
 ### Review rounds
 ### Test gate
+- Vitest: src/plugins/{sessions,chat,forms,primer}, src/shared/page/session-form-tabs.test.ts, keymap.test.ts, shared/keymap-checks.test.ts, agent-form-drive.test.ts — every touched plugin and the keymap/session-form-tabs seams the range edits; first run failed 3 in chat/main/start.test.ts (stale fake and instructions assertion from group 04), fixed in a dispatched test-only commit, re-run 1652/1652 pass · self-test --plugin sessions,chat,forms,primer: all passed (/tmp/claude-session-titles/selftest-gate.log) · lint clean
