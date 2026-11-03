@@ -128,14 +128,52 @@ const launchReceipt = (toolUseId: string, parent: string | null = null) =>
     },
   });
 
-const taskNotification = (toolUseId: string, status: string) =>
+const taskNotification = (
+  toolUseId: string,
+  status: string,
+  taskId = 'a4e45e22d2e0fef8f',
+) =>
   line({
     type: 'system',
     subtype: 'task_notification',
-    task_id: 'a4e45e22d2e0fef8f',
+    task_id: taskId,
     tool_use_id: toolUseId,
     status,
   });
+
+// A `task_type` of undefined leaves the key out.
+const taskStarted = (
+  taskId: string,
+  toolUseId: string,
+  taskType: string | undefined,
+  parentTaskId?: string,
+) =>
+  line({
+    type: 'system',
+    subtype: 'task_started',
+    task_id: taskId,
+    tool_use_id: toolUseId,
+    description: 'Sleep 6 seconds in background',
+    // The measured subagent-owned line carries `false`.
+    is_backgrounded: parentTaskId === undefined,
+    ...(parentTaskId === undefined
+      ? {}
+      : { parent_task_id: parentTaskId, owned_by_subagent: true }),
+    task_type: taskType,
+  });
+
+const taskBegan = (taskId: string, agentId = 'main') => ({
+  type: 'taskStarted',
+  taskId,
+  agentId,
+  description: 'Sleep 6 seconds in background',
+});
+
+const taskEnded = (taskId: string, outcome: 'done' | 'failed') => ({
+  type: 'taskFinished',
+  taskId,
+  outcome,
+});
 
 const INTERRUPTED_RESULT_LINE = line({
   type: 'result',
@@ -1385,6 +1423,118 @@ describe('createStreamDecoder', () => {
         }),
       ],
       expected: [TURN_STARTED, TURN_ENDED],
+    },
+    {
+      case: 'main background task start and end',
+      lines: [
+        taskStarted('bvrvtgapv', 'tb1', 'local_bash'),
+        taskNotification('tb1', 'completed', 'bvrvtgapv'),
+      ],
+      expected: [taskBegan('bvrvtgapv'), taskEnded('bvrvtgapv', 'done')],
+    },
+    {
+      case: 'subagent task names its subagent',
+      lines: [
+        agentCall('a1'),
+        launchReceipt('a1'),
+        taskStarted('a8e9e7aad968da282', 'a1', 'local_agent'),
+        taskStarted('bpdumb7hy', 'tb2', 'local_bash', 'a8e9e7aad968da282'),
+      ],
+      expected: [spawned('a1'), taskBegan('bpdumb7hy', 'a1')],
+    },
+    {
+      case: 'failed task',
+      lines: [
+        taskStarted('bvrvtgapv', 'tb1', 'local_bash'),
+        taskNotification('tb1', 'failed', 'bvrvtgapv'),
+      ],
+      expected: [taskBegan('bvrvtgapv'), taskEnded('bvrvtgapv', 'failed')],
+    },
+    {
+      case: 'stopped task',
+      lines: [
+        taskStarted('bvrvtgapv', 'tb1', 'local_bash'),
+        taskNotification('tb1', 'stopped', 'bvrvtgapv'),
+      ],
+      expected: [taskBegan('bvrvtgapv'), taskEnded('bvrvtgapv', 'failed')],
+    },
+    {
+      case: 'killed task',
+      lines: [
+        taskStarted('bvrvtgapv', 'tb1', 'local_bash'),
+        taskNotification('tb1', 'killed', 'bvrvtgapv'),
+      ],
+      expected: [taskBegan('bvrvtgapv'), taskEnded('bvrvtgapv', 'failed')],
+    },
+    {
+      case: 'subagent task_started starts no task',
+      lines: [
+        agentCall('a1'),
+        launchReceipt('a1'),
+        taskStarted('a8e9e7aad968da282', 'a1', 'local_agent'),
+        taskNotification('a1', 'completed', 'a8e9e7aad968da282'),
+      ],
+      expected: [spawned('a1'), finished('a1', 'done')],
+    },
+    {
+      case: 'task with no type starts nothing',
+      lines: [
+        taskStarted('bvrvtgapv', 'tb1', undefined),
+        taskNotification('tb1', 'completed', 'bvrvtgapv'),
+      ],
+      expected: [],
+    },
+    {
+      case: 'task with an unknown parent',
+      lines: [
+        taskStarted('bpdumb7hy', 'tb2', 'local_bash', 'a8e9e7aad968da282'),
+      ],
+      expected: [taskBegan('bpdumb7hy')],
+    },
+    {
+      case: "task outlives the turn's result",
+      lines: [
+        taskStarted('bvrvtgapv', 'tb1', 'local_bash'),
+        RESULT_LINE,
+        taskNotification('tb1', 'completed', 'bvrvtgapv'),
+      ],
+      expected: [
+        taskBegan('bvrvtgapv'),
+        TURN_ENDED,
+        taskEnded('bvrvtgapv', 'done'),
+      ],
+    },
+    {
+      case: 'task outlives its subagent',
+      lines: [
+        agentCall('a1'),
+        launchReceipt('a1'),
+        taskStarted('a8e9e7aad968da282', 'a1', 'local_agent'),
+        taskStarted('bpdumb7hy', 'tb2', 'local_bash', 'a8e9e7aad968da282'),
+        taskNotification('a1', 'completed', 'a8e9e7aad968da282'),
+        taskNotification('tb2', 'completed', 'bpdumb7hy'),
+      ],
+      expected: [
+        spawned('a1'),
+        taskBegan('bpdumb7hy', 'a1'),
+        finished('a1', 'done'),
+        taskEnded('bpdumb7hy', 'done'),
+      ],
+    },
+    {
+      case: 'notification for an unknown task',
+      lines: [taskNotification('tb1', 'completed', 'bvrvtgapv')],
+      expected: [],
+    },
+    {
+      case: 'repeated start and notification',
+      lines: [
+        taskStarted('bvrvtgapv', 'tb1', 'local_bash'),
+        taskStarted('bvrvtgapv', 'tb1', 'local_bash'),
+        taskNotification('tb1', 'completed', 'bvrvtgapv'),
+        taskNotification('tb1', 'completed', 'bvrvtgapv'),
+      ],
+      expected: [taskBegan('bvrvtgapv'), taskEnded('bvrvtgapv', 'done')],
     },
   ])('decode_AgentEvents_$case', ({ lines, expected }) => {
     const decoder = createStreamDecoder();

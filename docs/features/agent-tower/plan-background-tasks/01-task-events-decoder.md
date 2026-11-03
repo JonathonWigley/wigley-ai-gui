@@ -1,6 +1,6 @@
 # 01 — Task events in the contract and the Claude decoder
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -55,3 +55,5 @@ Done when: `npm run typecheck` passes; the test gate runs `stream-decoder.test.t
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 533539e · proof: diff read (both AgentEvent members, roster cases present); typecheck pass; worker ran lint and stream-decoder.test.ts (81 pass) · concerns: AGENTS.md agent-event bullet left as an example list; at stamped by the harness via AgentEventDraft, no decoder change

@@ -1,6 +1,6 @@
 # 03 — The fake harness runs tasks
 
-Status: not started
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -41,3 +41,5 @@ Done when: `npm run typecheck` passes; the test gate runs
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 93e57f0 · proof: diff read (two taskStarted tail, interrupt ends tasks before subagent finishes, ids match spec); typecheck clean on 03's files (errors only in 02's in-flight agents files); worker ran fake-agent-harness.test.ts 52/52 · concerns: selftest line counts after the agents send are 02's to update

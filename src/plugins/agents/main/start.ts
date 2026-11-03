@@ -8,7 +8,7 @@ import type {
   SessionsMainEvents,
   SessionsMainExports,
 } from '../../sessions/contract';
-import type { AgentsChannel, RunningAgent } from '../contract';
+import type { AgentsChannel, Roster } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { agentsManifest } from '../manifest';
 import { foldAgentEvent } from '../roster';
@@ -24,20 +24,23 @@ type AgentsApi = MainApi<
     QualifiedEvents<'sessions', SessionsMainEvents>
 >;
 
-const NONE: readonly RunningAgent[] = [];
+const NONE: Roster = { agents: [], tasks: [] };
 
-// A row's roster as the page sees it: each host session id's subagents, in
-// the order each host id's roster began.
-function rowRoster(
-  hosts: ReadonlyMap<string, readonly RunningAgent[]>,
-): RunningAgent[] {
-  return [...hosts.values()].flat();
+// A row's roster as the page sees it: each host session id's subagents, and
+// each one's tasks, in the order each host id's roster began.
+function rowRoster(hosts: ReadonlyMap<string, Roster>): Roster {
+  const rosters = [...hosts.values()];
+  return {
+    agents: rosters.flatMap((roster) => roster.agents),
+    tasks: rosters.flatMap((roster) => roster.tasks),
+  };
 }
 
 // Hears chat's agent events: logs each in plugin data and folds it into the
 // roster of its process's host session id, sending the page each row's roster
-// that changed: every host id's subagents in the row, in fold order. A row's
-// rosters are dropped when it closes or ends. Registers the agents layouts,
+// that changed: every host id's subagents and tasks in the row, each list in
+// fold order. A host id's roster is dropped once it lists neither, and a row's
+// rosters when it closes or ends. Registers the agents layouts,
 // and holds the layout preview, whose roster `rosters` lists beside the live
 // ones, and hands the self-test its script.
 export const agentsMainPart: MainPart<typeof agentsManifest> = {
@@ -57,8 +60,8 @@ export const agentsMainPart: MainPart<typeof agentsManifest> = {
     });
     // Row id → host session id → that process's roster. A clear leaves the
     // old process ending under the same row, so its `sessionEnded` must drop
-    // only its own subagents.
-    const rosters = new Map<string, Map<string, readonly RunningAgent[]>>();
+    // only its own subagents and tasks.
+    const rosters = new Map<string, Map<string, Roster>>();
 
     api.events.on('chat.agentEvent', ({ sessionId, hostSessionId, event }) => {
       void agentLog.append(hostSessionId, event);
@@ -68,7 +71,7 @@ export const agentsMainPart: MainPart<typeof agentsManifest> = {
       if (after === before) {
         return;
       }
-      if (after.length === 0) {
+      if (after.agents.length === 0 && after.tasks.length === 0) {
         hosts.delete(hostSessionId);
       } else {
         hosts.set(hostSessionId, after);
@@ -80,13 +83,16 @@ export const agentsMainPart: MainPart<typeof agentsManifest> = {
       }
       api.channel.send('rosterChanged', {
         sessionId,
-        running: rowRoster(hosts),
+        roster: rowRoster(hosts),
       });
     });
 
     const dropRoster = ({ sessionId }: { sessionId: string }) => {
       if (rosters.delete(sessionId)) {
-        api.channel.send('rosterChanged', { sessionId, running: [] });
+        api.channel.send('rosterChanged', {
+          sessionId,
+          roster: { agents: [], tasks: [] },
+        });
       }
     };
     api.events.on('sessions.closed', (closed) => {

@@ -1,6 +1,6 @@
 # 02 — The roster holds tasks, and the page draws task lines
 
-Status: not started
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -95,3 +95,5 @@ Done when: `npm run typecheck` and `npm run lint` pass; the test gate runs the f
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 9275f5b · proof: diff read (every Produces present: RunningTask, Roster, AgentsChannel shape, foldAgentEvent, RosterLine/orderRosterLines, agentLine/taskLine/TaskLineInput, createRosterLines part agents.rosterLines); typecheck and lint pass; worker ran the five test files (49 pass); selftest not yet run · concerns: manifest.ts reworded outside the Files list; lint:fix run repo-wide (only this task's files changed); AGENTS.md:170, :304 and layouts/design.md:89 left stale for 04

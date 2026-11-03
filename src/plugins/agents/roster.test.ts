@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MAIN_AGENT_ID, type AgentEvent } from '../../contracts/agent';
-import type { RunningAgent } from './contract';
+import type { Roster, RunningAgent, RunningTask } from './contract';
 import { foldAgentEvent } from './roster';
 
 const a: RunningAgent = {
@@ -17,6 +17,25 @@ const b: RunningAgent = {
   startedAt: 2500,
   toolCalls: 3,
 };
+
+// A task the main agent started and one subagent `a` started.
+const mainTask: RunningTask = {
+  taskId: 'task_main',
+  agentId: MAIN_AGENT_ID,
+  description: 'npm run build',
+  startedAt: 1500,
+};
+const aTask: RunningTask = {
+  taskId: 'task_a',
+  agentId: a.agentId,
+  description: 'Watch the tests',
+  startedAt: 3000,
+};
+
+// A roster holding these agents and tasks.
+function roster(agents: RunningAgent[], tasks: RunningTask[] = []): Roster {
+  return { agents, tasks };
+}
 
 function spawned(agent: RunningAgent): AgentEvent {
   return {
@@ -43,74 +62,129 @@ function finished(agentId: string): AgentEvent {
   return { type: 'agentFinished', at: 5000, agentId, outcome: 'done' };
 }
 
+function taskStarted(task: RunningTask): AgentEvent {
+  return {
+    type: 'taskStarted',
+    at: task.startedAt,
+    taskId: task.taskId,
+    agentId: task.agentId,
+    description: task.description,
+  };
+}
+
+function taskFinished(taskId: string): AgentEvent {
+  return { type: 'taskFinished', at: 5500, taskId, outcome: 'done' };
+}
+
 interface Row {
   case: string;
-  before: readonly RunningAgent[];
+  before: Roster;
   event: AgentEvent;
-  after?: readonly RunningAgent[];
+  after?: Roster;
   same?: true;
 }
 
 describe('foldAgentEvent', () => {
   it.each<Row>([
-    { case: 'SpawnIntoEmpty', before: [], event: spawned(a), after: [a] },
+    {
+      case: 'SpawnIntoEmpty',
+      before: roster([]),
+      event: spawned(a),
+      after: roster([a]),
+    },
     {
       case: 'SpawnAppendsInOrder',
-      before: [a],
+      before: roster([a]),
       event: spawned({ ...b, toolCalls: 0 }),
-      after: [a, { ...b, toolCalls: 0 }],
+      after: roster([a, { ...b, toolCalls: 0 }]),
     },
     {
       case: 'SpawnOfListedId',
-      before: [a],
+      before: roster([a]),
       event: spawned({ ...a, startedAt: 9000 }),
       same: true,
     },
     {
       case: 'ToolStartedCountsOnlyItsAgent',
-      before: [a, b],
+      before: roster([a, b]),
       event: toolStarted(b.agentId),
-      after: [a, { ...b, toolCalls: 4 }],
+      after: roster([a, { ...b, toolCalls: 4 }]),
     },
     {
       case: 'ToolStartedOnMain',
-      before: [a],
+      before: roster([a]),
       event: toolStarted(MAIN_AGENT_ID),
       same: true,
     },
     {
       case: 'ToolStartedOnUnlistedId',
-      before: [a],
+      before: roster([a]),
       event: toolStarted('toolu_gone'),
       same: true,
     },
     {
       case: 'FinishedRemovesItsAgent',
-      before: [a, b],
+      before: roster([a, b]),
       event: finished(a.agentId),
-      after: [b],
+      after: roster([b]),
+    },
+    {
+      case: 'FinishedKeepsItsTask',
+      before: roster([a, b], [mainTask, aTask]),
+      event: finished(a.agentId),
+      after: roster([b], [mainTask, aTask]),
+    },
+    {
+      case: 'TaskStartedAppendsInOrder',
+      before: roster([a], [mainTask]),
+      event: taskStarted(aTask),
+      after: roster([a], [mainTask, aTask]),
+    },
+    {
+      case: 'TaskStartedOfListedId',
+      before: roster([a], [mainTask]),
+      event: taskStarted({ ...mainTask, startedAt: 9000 }),
+      same: true,
+    },
+    {
+      case: 'TaskFinishedRemovesItsTask',
+      before: roster([a], [mainTask, aTask]),
+      event: taskFinished(mainTask.taskId),
+      after: roster([a], [aTask]),
+    },
+    {
+      case: 'TaskFinishedOnUnlistedId',
+      before: roster([a], [mainTask]),
+      event: taskFinished('task_gone'),
+      same: true,
     },
     {
       case: 'FinishedOnUnlistedId',
-      before: [a, b],
+      before: roster([a, b]),
       event: finished('toolu_gone'),
       same: true,
     },
     {
-      case: 'SessionEndedFinishesEveryAgent',
-      before: [a, b],
+      case: 'SessionEndedFinishesEveryAgentAndTask',
+      before: roster([a, b], [mainTask, aTask]),
       event: { type: 'sessionEnded', at: 6000 },
-      after: [],
+      after: roster([]),
+    },
+    {
+      case: 'SessionEndedFinishesTasksWithNoAgent',
+      before: roster([], [mainTask]),
+      event: { type: 'sessionEnded', at: 6000 },
+      after: roster([]),
     },
     {
       case: 'SessionEndedWhileEmpty',
-      before: [],
+      before: roster([]),
       event: { type: 'sessionEnded', at: 6000 },
       same: true,
     },
     {
       case: 'Usage',
-      before: [a],
+      before: roster([a]),
       event: {
         type: 'usage',
         agentId: a.agentId,
@@ -125,7 +199,7 @@ describe('foldAgentEvent', () => {
     },
     {
       case: 'Compacted',
-      before: [a],
+      before: roster([a]),
       event: {
         type: 'compacted',
         at: 7000,
@@ -136,19 +210,19 @@ describe('foldAgentEvent', () => {
     },
     {
       case: 'UserMessage',
-      before: [a],
+      before: roster([a]),
       event: { type: 'userMessage', at: 7000 },
       same: true,
     },
     {
       case: 'SessionStarted',
-      before: [a],
+      before: roster([a]),
       event: { type: 'sessionStarted', at: 7000 },
       same: true,
     },
     {
       case: 'ToolFinished',
-      before: [a],
+      before: roster([a]),
       event: {
         type: 'toolFinished',
         at: 7000,
@@ -160,7 +234,7 @@ describe('foldAgentEvent', () => {
     },
     {
       case: 'SkillStarted',
-      before: [a],
+      before: roster([a]),
       event: {
         type: 'skillStarted',
         at: 7000,
@@ -172,7 +246,7 @@ describe('foldAgentEvent', () => {
     },
     {
       case: 'FileWritten',
-      before: [a],
+      before: roster([a]),
       event: {
         type: 'fileWritten',
         at: 7000,
@@ -183,13 +257,13 @@ describe('foldAgentEvent', () => {
     },
     {
       case: 'TurnStarted',
-      before: [a],
+      before: roster([a]),
       event: { type: 'turnStarted', at: 7000 },
       same: true,
     },
     {
       case: 'TurnEnded',
-      before: [a],
+      before: roster([a]),
       event: { type: 'turnEnded', at: 7000 },
       same: true,
     },

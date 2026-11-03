@@ -15,7 +15,7 @@ import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
 import { agentsManifest } from '../manifest';
 import { readAgentsLayout } from './layout/read-agents-layout';
-import { createSubagentLines } from './subagent-lines';
+import { createRosterLines } from './roster-lines';
 
 type AgentsApi = PageApi<
   typeof agentsManifest,
@@ -24,7 +24,7 @@ type AgentsApi = PageApi<
   QualifiedEvents<'sessions', SessionsPageEvents>
 >;
 
-// Draws each session's running subagents under its row, one line each,
+// Draws each session's running subagents and tasks under its row, one line each,
 // through sessions' row parts and the `agents.layout` layout. Hears main's
 // `rosterChanged`, filled in by one `rosters` read, and names each session by
 // its side-bar label for the page log. `openPreview` asks main for the layout
@@ -38,7 +38,7 @@ export const agentsPagePart: PagePart<typeof agentsManifest> = {
     const keys = api.dependency<KeysPageExports>('keys');
     // Each session's name in the log, its side-bar label (`gamma 2`).
     const names = new Map<string, string>();
-    const lines = createSubagentLines({
+    const lines = createRosterLines({
       kit: {
         markdown: services.markdown,
         keys: { anchor: keys.anchor, keysFor: keys.keysFor },
@@ -66,17 +66,17 @@ export const agentsPagePart: PagePart<typeof agentsManifest> = {
     // A rosters read is stale for each session a rosterChanged touched since
     // the read began; null once the read settles.
     let changedSinceRead: Set<string> | null = new Set<string>();
-    api.channel.on('rosterChanged', ({ sessionId, running }) => {
+    api.channel.on('rosterChanged', ({ sessionId, roster }) => {
       changedSinceRead?.add(sessionId);
-      lines.setRunning(sessionId, running);
+      lines.setRoster(sessionId, roster);
     });
     api.channel
       .invoke('rosters')
       .then(
         (rosters) => {
-          for (const [sessionId, running] of Object.entries(rosters)) {
+          for (const [sessionId, roster] of Object.entries(rosters)) {
             if (!changedSinceRead?.has(sessionId)) {
-              lines.setRunning(sessionId, running);
+              lines.setRoster(sessionId, roster);
             }
           }
         },

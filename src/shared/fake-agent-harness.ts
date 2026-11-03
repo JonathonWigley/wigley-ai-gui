@@ -37,8 +37,9 @@ import { typedSkill } from './typed-skill';
 // would for what it simulates, each at the clock's time: `sessionStarted` first,
 // `userMessage` after each user entry, then `skillStarted` for a typed
 // `/<skill>` message and `turnStarted` for every send that runs a turn, tool
-// and subagent events beside their entries, `turnEnded` when a turn closes or
-// is interrupted, and `sessionEnded` just before each `ended`. The workflow
+// and subagent events beside their entries, `taskStarted` and `taskFinished`
+// for background tasks, `turnEnded` when a turn closes or is interrupted, and
+// `sessionEnded` just before each `ended`. The workflow
 // sends (`FAKE_WORKFLOW_FEATURE_TEXT`, `/wigley:make <plan folder>`,
 // `FAKE_WORKFLOW_STEP_TEXT`) change a fake plan through the injected `files`.
 
@@ -59,7 +60,12 @@ export const FAKE_STEPS_TEXT = 'fake: steps';
 // open as `FAKE_HOLD_TEXT`'s turn does. The subagents run until an interrupt
 // (failed), the next send other than `FAKE_END_TEXT` (done) or the process's
 // end (no `agentFinished`). An interrupt or send queued before the end still
-// finishes them.
+// finishes them. The turn also starts two tasks, one owned by `main` and one by
+// the first subagent; the next send leaves them running, and an interrupt of an
+// open turn, this one or a later one, ends them (failed); the process's end
+// sends no `taskFinished`, since `sessionEnded` clears a roster. Real Claude
+// may keep a background Bash past an interrupt; the fake ends it to keep the
+// self-test row's count exact.
 export const FAKE_AGENTS_TEXT = 'fake: agents';
 // A send of this text ends the process on its own, as a CLI that exits.
 export const FAKE_END_TEXT = 'fake: end';
@@ -602,6 +608,37 @@ function emitAgentsTurn(
   return spawned;
 }
 
+// The tasks `FAKE_AGENTS_TEXT`'s turn starts, in order: `subagent` is the
+// index of the turn's subagent that starts it, null for the main agent.
+const FAKE_TASKS = [
+  { subagent: null, description: 'Run the self-test' },
+  { subagent: 0, description: 'Watch the build' },
+];
+
+// Starts turn `turn`'s tasks, ids `fake-task-<turn>-<n>`, each owned by its
+// agent among `subagents`; returns their ids in start order.
+function startFakeTasks(
+  events: AgentProcessEvents,
+  clock: Clock,
+  turn: number,
+  subagents: readonly SubagentEntry[],
+): string[] {
+  return FAKE_TASKS.map((task, index) => {
+    const taskId = `fake-task-${turn}-${index + 1}`;
+    events.agentEvent({
+      type: 'taskStarted',
+      at: clock.now(),
+      taskId,
+      agentId:
+        task.subagent === null
+          ? MAIN_AGENT_ID
+          : subagents[task.subagent].toolUseId,
+      description: task.description,
+    });
+    return taskId;
+  });
+}
+
 // Re-sends each running subagent's Agent entry with `result`, then its
 // `agentFinished`, in spawn order.
 function finishSubagents(
@@ -866,6 +903,8 @@ export function createFakeAgentHarness(
     let isTurnOpen = false;
     // The Agent entries of the subagents still running, in spawn order.
     let runningSubagents: SubagentEntry[] = [];
+    // The ids of the tasks still running, in start order.
+    let runningTasks: string[] = [];
     // The plan folder this process's make run works on.
     let makeFolder: string | null = null;
     let endPromise: Promise<void> | null = null;
@@ -1161,6 +1200,9 @@ export function createFakeAgentHarness(
               clock,
               sentTurn,
             );
+            runningTasks.push(
+              ...startFakeTasks(events, clock, sentTurn, runningSubagents),
+            );
           } else if (isSteps) {
             emitStepsTurn(events, emitEntry, clock, sentTurn);
           } else if (text === FAKE_TOOL_TEXT) {
@@ -1182,6 +1224,15 @@ export function createFakeAgentHarness(
         isTurnOpen = false;
         const interruptedTurn = turn;
         queueMicrotask(() => {
+          for (const taskId of runningTasks) {
+            events.agentEvent({
+              type: 'taskFinished',
+              at: clock.now(),
+              taskId,
+              outcome: 'failed',
+            });
+          }
+          runningTasks = [];
           finishSubagents(events, emitEntry, clock, runningSubagents, {
             text: 'Interrupted',
             isError: true,

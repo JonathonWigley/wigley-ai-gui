@@ -329,8 +329,9 @@ round; primer: an open primer), since main, not the page, decides.
 - **A session part** (`SessionPart`) is what a plugin draws for every session on a sessions surface: sessions hands
   it a wrapper and the session id, and the part draws through its own plugin's layout. It has the same shape as forms'
   `addCardPart`. A **row part** draws under every session row in the side bar, through the `sessions` page export
-  `addRowPart`; the agent-lines plugin's subagent lines are one. A **bar part** draws in every session's tab bar, which
-  moves with its session between panes, through `addBarPart`; the usage-tab-line plugin's per-session line is one.
+  `addRowPart`; the agent-lines plugin's subagent and task lines are one. A **bar part** draws in every session's tab
+  bar, which moves with its session between panes, through `addBarPart`; the usage-tab-line plugin's per-session line
+  is one.
   Information about one session goes in a session part, not on a shared bar.
 - **A row activity** is the short state a session's row shows beside its title — a status dot and a word (working,
   needs you, done, error). A page plugin sets one per session under its own source id through the `sessions` page

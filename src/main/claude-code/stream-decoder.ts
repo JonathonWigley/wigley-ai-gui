@@ -219,6 +219,11 @@ export function createStreamDecoder(
   const toolAgents = new Map<string, string>();
   // The file each pending write call writes, by tool call id.
   const writePaths = new Map<string, string>();
+  // Each subagent's Agent call id, by the subagent's `task_id`; kept after the
+  // subagent ends, so a task it started still names it.
+  const subagentTasks = new Map<string, string>();
+  // Tasks started and not yet ended, by `task_id`.
+  const startedTasks = new Set<string>();
   let rawCount = 0;
   let turnCount = 0;
   // The events entry gathered events join: the first gathered event opens the
@@ -414,6 +419,41 @@ export function createStreamDecoder(
     }
   }
 
+  // A `local_agent` start pairs a subagent's `task_id` with its Agent call;
+  // any other typed start begins a task of the subagent its `parent_task_id`
+  // names, or of the main agent.
+  function startTask(event: Json, out: DecodedLine) {
+    const taskId = asString(event.task_id);
+    const taskType = asString(event.task_type);
+    if (taskType === 'local_agent') {
+      subagentTasks.set(taskId, asString(event.tool_use_id));
+      return;
+    }
+    if (taskType === '' || startedTasks.has(taskId)) {
+      return;
+    }
+    startedTasks.add(taskId);
+    out.agentEvents.push({
+      type: 'taskStarted',
+      taskId,
+      agentId:
+        subagentTasks.get(asString(event.parent_task_id)) ?? MAIN_AGENT_ID,
+      description: asString(event.description),
+    });
+  }
+
+  function finishTask(event: Json, out: DecodedLine) {
+    const taskId = asString(event.task_id);
+    if (!startedTasks.delete(taskId)) {
+      return;
+    }
+    out.agentEvents.push({
+      type: 'taskFinished',
+      taskId,
+      outcome: event.status === 'completed' ? 'done' : 'failed',
+    });
+  }
+
   // A turn's result fails every Agent call the main agent made that is still
   // pending, a guard for a call whose end never came, and with it the calls
   // pending under that call. A launched background call waits for its end
@@ -428,8 +468,12 @@ export function createStreamDecoder(
   }
 
   function decodeSystem(event: Json, out: DecodedLine) {
+    if (event.subtype === 'task_started') {
+      startTask(event, out);
+    }
     if (event.subtype === 'task_notification') {
       finishByNotification(event, out);
+      finishTask(event, out);
     }
     if (event.subtype === 'compact_boundary') {
       // `post_tokens` counts the conversation messages only, not the system prompt and tools `pre_tokens` holds, so
