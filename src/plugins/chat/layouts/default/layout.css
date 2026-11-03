@@ -75,21 +75,13 @@
 
 /* The activity dock: while the turn runs, its time and state, a card of its
    latest tool calls (the newest in fg), then its tool counts, dim; once it
-   ends, one dim line. In a short slot, a part that does not fit wraps to a
-   column on the left, which the slot clips and nothing scrolls to: the counts
-   go first, then the card. */
+   ends, one dim line. */
 .chat-working {
   display: flex;
   flex-direction: column;
-  flex-wrap: wrap-reverse;
   font-family: var(--wg-font-ui);
   font-size: var(--wg-text-ui);
   gap: var(--wg-space-1);
-  min-height: 0;
-}
-
-.chat-working > * {
-  width: 100%;
 }
 
 .chat-working-head {
@@ -184,7 +176,6 @@
 
 .chat-attachments {
   display: flex;
-  flex-shrink: 0;
   flex-wrap: wrap;
   gap: var(--wg-space-2);
 }

@@ -113,13 +113,12 @@
 }
 
 /* Other plugins' composer parts; a Chat tab with none shows no space. They
-   give up height first and scroll, ahead of the activity dock, so the box and
-   the status line keep theirs in a short pane. A part's own CSS may raise the
-   composer's cap to give them room, and holds them to no floor. */
+   give up height first and scroll, so the box and the status line keep theirs
+   in a short pane. A part's own CSS may raise the composer's cap to give them
+   room, and holds them to no floor. */
 .chat-composer-parts {
   display: flex;
   flex-direction: column;
-  flex-shrink: 1000;
   min-height: 0;
   overflow-y: auto;
 }
@@ -128,13 +127,10 @@
   display: none;
 }
 
-/* The activity dock gives up height after the composer parts, down to one
-   line, and clips what its draw cannot fit. */
-.chat-working-slot {
-  display: flex;
-  flex-direction: column;
-  min-height: calc(var(--wg-text-ui) * var(--wg-leading-ui));
-  overflow: hidden;
+/* The activity dock and the attachments keep their height in a short pane. */
+.chat-working-slot,
+.chat-attachments-slot {
+  flex-shrink: 0;
 }
 
 .chat-attachment-remove {

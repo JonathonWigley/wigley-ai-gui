@@ -210,6 +210,14 @@ Defects seen in a drive run, a transcript or the user's own use.
 - **Missed rebuild on a rules folder write** — *agent-ready*: in a drive run, a doc written into the temp home's
   `.claude/rules/` from outside the app started no rebuild until Rescan. Check whether the docs watches cover that
   folder or the change was debounced away (`src/plugins/docs/main/view-watches.ts`, which watches one file per view).
+- **Composer status line cut off in a very short Chat tab** — *needs a feature plan*: in a tab under about 318px (a
+  900x360 window, or a pane after `splitDown` at 900x700) the live activity dock (`.chat-working-slot`, `flex-shrink:
+  0`, about 97px), the box and a wrapped status line outgrow the composer's cap, and the status line runs past the
+  tab's bottom. CSS-only shrinking was tried and reverted (d22bc1b5, 9bba64c2): flex shrink is weighted, not ordered,
+  so a shrinkable dock also gave up its lines to a long draft in a tall tab, and its all-or-nothing wrap dropped parts
+  on sub-pixel shares. A dock that measures its room in script (composer-kit hands the default `working` draw a line
+  budget once the composer parts reach 0) would give a strict order; the `ComposerKit.working` contract
+  (`src/plugins/chat/layouts/layout.d.ts`) would then say a user draw gets that budget.
 
 ## Harness seams
 

@@ -104,8 +104,15 @@ export function usageSelfTestScript(deps: UsageSelfTestDeps): SelfTestScript {
   return {
     pageBinds: [],
     settings: {},
-    // The tab bar's parts and the session line clip in their own box.
-    scrollsItself: ['.session-bar-parts', '.usage-session-line'],
+    // The tab bar's parts and the session line clip in their own box, and the
+    // activity dock's tool calls and done line end in an ellipsis inside
+    // theirs.
+    scrollsItself: [
+      '.session-bar-parts',
+      '.usage-session-line',
+      '.chat-working-action',
+      '.chat-working-done',
+    ],
     open() {
       made ??= makeProject().catch((error: unknown) => {
         made = null;
