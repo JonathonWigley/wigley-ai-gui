@@ -101,6 +101,9 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  (`agent-form-preview.ts`: a form type's sample in a session of its own, its form asked again and a
                  draft waited on; forms and the primer build their previews on it) → main-side only
   paths/         the POSIX and Windows adapters behind `Paths`, picked by each composition root
+  local-channel/ the local channel transport: a Unix socket on macOS, a named pipe on Windows, its path and its
+                 newline-JSON framing; the sessions plugin's relay and the session host share it → main-side only,
+                 no electron import
   followups/     the follow-up file module: parses a features home's follow-ups file into items (title, one line,
                  tags, body, line span, done) and turns a create, edit, tag change or delete into the file's new
                  text, in the file's own shape (triage.md § The project's follow-ups in wigley-ai-marketplace) →
@@ -146,8 +149,6 @@ src/main/        core main process; main.ts is its composition root
                  rename, trash, folder lists and watching, behind Files
   processes/     runs a program, killed past an optional timeout, and returns its exit code and output, behind
                  ProcessRunner
-  local-channel/ the local channel transport: a Unix socket on macOS, a named pipe on Windows, its path and its
-                 newline-JSON framing; the relay and the session host share it → no electron import
   session-host/  the app's client of the session host behind SessionHost: connects, starts the host when none
                  answers, drains an older protocol's host, and hands out hosted processes;
                  `docs/features/session-host/design.md`
@@ -165,7 +166,7 @@ src/main/        core main process; main.ts is its composition root
                  drive actions and the video recorder, over a `DrivenWindow` → no electron import
 src/session-host/ the session host process, its own composition root and build entry: owns every agent process,
                  logs their pipes, ends idle ones while no app is connected → imports only src/contracts,
-                 src/shared and src/main/local-channel; no electron import
+                 and src/shared; no electron import
 src/preload/     the Bridge, exposed as window.wigley
 src/renderer/    core page; renderer.ts is its composition root
   shell/         the shell registry, its areas and the default `ShellLayout`, and the modes; `shell-chrome.ts` draws the

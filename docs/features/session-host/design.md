@@ -81,8 +81,8 @@ lines past the last `seq` it read.
 
 - The harness keeps a session's state as a pure fold over its pipe lines, both directions. Live, each line the
   harness writes and each line it reads goes through the fold, and the fold's effects (writes, timers, events) run.
-  On attach the fold replays the log with its effects off, then goes live. Replay and live cannot drift because they
-  are one fold.
+  On attach the fold replays the log with its effects off, then goes live. Replay and live share one fold, so they
+  agree except for what no pipe line records (a notice the app made from a call, such as "Interrupted again").
 - A re-attached row shows the transcript up to its process's start time, then the replayed entries, so no entry
   shows twice: transcript entries and live entries have different ids.
 - Events a replay emits are flagged `replayed`, so the agents log appends nothing twice and no alert fires for a

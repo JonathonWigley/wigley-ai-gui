@@ -1,0 +1,194 @@
+# 06 — Session host process
+
+Status: not started
+Type: Task
+Wave: 2 · Depends on: 01, 02
+Plan: [plan.md](plan.md)
+
+Files:
+- create `src/session-host/session-host.ts` (the composition root and build entry)
+- create `src/session-host/process-table.ts` · test `src/session-host/process-table.test.ts`
+- create `src/session-host/pipe-log.ts` · test `src/session-host/pipe-log.test.ts`
+- create `src/session-host/host-server.ts` · test `src/session-host/host-server.test.ts`
+- create `vite.session-host.config.mts`
+- modify `forge.config.mts`
+- modify `scripts/check-layers.mts`
+
+The implementer may split or name the inner modules otherwise. The root's file name, the built script's name, the
+arguments, the folder layout and the protocol behaviour below are fixed.
+
+Consumes:
+- `src/contracts/session-host.ts` (all types), `SESSION_HOST_PROTOCOL`, `ClientMessage`, `HostMessage`,
+  `ListedProcess`, `PipeLogRecord`, `SessionHostRecord` and every message type in
+  `src/contracts/session-host-protocol.ts` ← 01
+- `listenOnChannel(channel: string, handlers: ChannelHandlers): ChannelServer`,
+  `connectToChannel(channel: string): Promise<Socket>`, `readLines(stream: Readable, received: (line: string) => void): void`,
+  `jsonLine(value: unknown): string` ← 02
+- `Clock`, `Timers` in `src/contracts/ambient.ts` (in the tree)
+
+## Produces
+
+- The built host script `.vite/build/session-host.js`, in dev (`npm start`) and in the packaged app
+  (`<resources>/app.asar/.vite/build/session-host.js`). Task 04 finds the host by this name on its command line.
+  Task 07 spawns it.
+- The host's command line: `<execPath> <hostScript> <folder> <channel>`, with `ELECTRON_RUN_AS_NODE=1`.
+  `process.argv[2]` is the host folder; `process.argv[3]` is the channel path.
+- The host folder layout (`<folder>` is `<app instance user data>/session-host`):
+  - `host-v<SESSION_HOST_PROTOCOL>.json` — a `SessionHostRecord`, written after the server listens, deleted at exit.
+  - `host-v<SESSION_HOST_PROTOCOL>.log` — the host's own diagnostic lines, emptied at host start.
+  - `logs/<id>.jsonl` — one pipe log per hosted process, one `PipeLogRecord` JSON object per line.
+- The protocol behaviour in § Decisions, which task 07's client relies on.
+
+## Decisions
+
+### Build and packaging
+
+- The root is `src/session-host/session-host.ts`, not `main.ts`: forge's Vite plugin names a build's output after its
+  entry file, and a second `main` entry would write over `.vite/build/main.cjs`.
+- `vite.session-host.config.mts` sets the output file name to `session-host.js` (Vite `build.lib.fileName` returning
+  `'session-host.js'`, the format CommonJS). `package.json` has no `"type": "module"`, so Node loads `.js` as
+  CommonJS. If forge's own setting wins over the config, the implementer finds the setting that does produce
+  `session-host.js` and records it in the Proof. The name is fixed by plan.md § Boundary rules.
+- `forge.config.mts`: add the build entry
+  `{ entry: 'src/session-host/session-host.ts', config: 'vite.session-host.config.mts', target: 'main' }` after the
+  preload entry. Set `[FuseV1Options.RunAsNode]: true`. Leave every other fuse unchanged.
+- `scripts/check-layers.mts` gains `'src/session-host': { layers: ['src/contracts', 'src/shared', 'src/shared/local-channel'], packages: ['node:'] }`
+  with a comment: "The session host process: no electron import (`docs/features/session-host/design.md`)."
+
+### Start and exit
+
+- At start the root reads `argv[2]` and `argv[3]`. It makes `<folder>` and `<folder>/logs` (`recursive`). It empties
+  `host-v<N>.log`.
+- It calls `connectToChannel(channel)` and sends `hello`. When a host answers with `protocol` equal to
+  `SESSION_HOST_PROTOCOL` within 2000 ms, this host exits with code 0 without listening. Another host already owns
+  the channel.
+- Otherwise it listens with `listenOnChannel`. When `listening` is false, it exits with code 1. When true, it writes
+  `host-v<N>.json` = `{ protocol: SESSION_HOST_PROTOCOL, channel, pid: process.pid }` through a temp file and a rename.
+- **Log sweep at start:** after listening, the host reads every other `host-v*.json` in `<folder>`. It connects to each
+  record's channel and sends `hello`. When no other host answers within 2000 ms each, every file in `logs/` belongs
+  to a dead host: the host deletes each one. When any other host answers, it deletes nothing.
+- **Exit rule:** the host exits when it holds no process and no client is connected. It checks the rule when a
+  process closes and when a client disconnects. After start it waits 30 000 ms for the first client; it checks the
+  rule when that wait ends. (Task 07's client waits at most 10 000 ms for the channel.)
+- On exit the host closes the server, deletes `host-v<N>.json`, and exits with code 0. An uncaught error is written to
+  `host-v<N>.log`; then the host exits with code 1. A host that dies takes its processes with it: their pipes close.
+
+### Processes
+
+- `spawn` runs `request.command` with `request.args`, `cwd`, and `env` exactly as sent: the host adds nothing, so its
+  own `ELECTRON_RUN_AS_NODE` never reaches a hosted process. stdio is three pipes; `windowsHide: true`; not detached.
+  The host's spawn is an injected dep in the process table, of the type `ClaudeSpawn` has
+  (`(command, args, { cwd, env }) => ChildProcessWithoutNullStreams`).
+- The host refuses a `spawn` whose `id` it already holds, and every `spawn` while draining. It answers a refusal with
+  `closed` `{ code: null, signal: null, error }` to that connection: `a process with id <id> already exists` or
+  `the session host is draining`.
+- A child `error` event before it ran (such as `ENOENT`) closes the process with `{ code: null, signal: null,
+  error: error.message }`. A child `close` event closes it with `{ code, signal, error: null }`.
+- **Pipe log:** each `out` or `err` line (split on `\n`, without it, a partial last line flushed at `close` when not
+  empty) and each `in` line (the text of a `write`) gets the next `seq` (1 first, per process) and `at =
+  clock.now()`. The host appends it to `logs/<id>.jsonl` with a synchronous append **before** it pushes the `line`
+  to subscribers. So a line pushed live is always in the file, and the client's read-then-live order has no gap.
+  `in` lines are logged and never pushed.
+- `write(id, text)` writes `text + '\n'` to stdin and logs it as `in`. `endInput` ends stdin. `kill` sends the
+  signal. Each of these does nothing for an unknown or closed id.
+- **When a process closes**, the host pushes `closed` to each subscribed connection, then deletes `logs/<id>.jsonl`
+  and drops the process from its table. A closed process never shows in `list`. (Decided: the log lives as long as
+  its process; a client that is still reading it gets a read error and task 07 treats it as no process.)
+
+### Idle and the keep window
+
+- Idle rule, per process: the state starts **idle**. An `in` line makes it busy. An `out` line whose text parses as a
+  JSON object whose top-level `idleRule.key` equals `idleRule.value` (strict equality, string) makes it idle. Any
+  other `out` line makes it busy (non-JSON included). An `err` line leaves the state unchanged.
+- `keepIdleMinutes` starts at 60. `setKeepIdle` sets it for the whole host (last value wins) and re-arms each timer.
+- **The keep window runs only while no client is connected.** For an idle process, the deadline is
+  `keepIdleMinutes * 60 000` ms after the later of: the moment it turned idle, the moment the last client
+  disconnected. A client connecting, or the process turning busy, cancels the timer. At the deadline the host ends the
+  process.
+- **End** = `endInput`; then `SIGTERM` after 3000 ms; then `SIGKILL` after another 3000 ms. These are
+  `END_GRACE_MS` in `claude-code-harness.ts` (3000), the grace the harness's own `end` uses. A close cancels the
+  pending signals.
+- All times come from the injected `Clock` and `Timers`. The root builds them as `main.ts` does
+  (`setTimeout(...)[Symbol.toPrimitive]()`).
+
+### Protocol (newline JSON over the channel, `readLines` and `jsonLine`)
+
+- `hello` → `{ type: 'hello', requestId, protocol: SESSION_HOST_PROTOCOL }`.
+- `list` → `{ type: 'list', requestId, processes }`, one `ListedProcess` per process in the table:
+  `running: true`, `code: null`, `signal: null`, `log` the absolute path of its `.jsonl`.
+- `drain` → no reply. The host sets draining. It ends each idle process now and each other process when it turns
+  idle (the **End** steps), whether or not a client is connected. Once the table is empty it exits, closing every
+  connection.
+- **One subscriber per process.** A process has at most one subscribed connection. A `spawn` subscribes the
+  connection that sent it. A `subscribe` makes its connection the subscriber and replaces any earlier one, which gets
+  no more `line` or `closed` for that id.
+- `spawn` → no reply.
+- `unsubscribe` → no reply. When the sending connection is the process's subscriber, the process has none from now
+  on. From any other connection it does nothing. The process keeps running, and the keep window treats it as
+  unattached only when no client is connected at all (the window rule above is unchanged).
+- `write`, `endInput`, `kill`, `setKeepIdle` → no reply.
+- `subscribe` → when the id is in the table, the host subscribes the connection, **then** replies
+  `{ type: 'subscribe', requestId, id, running: true, log: <path> }`. For an unknown id it replies
+  `running: false, log: null` and subscribes nothing.
+- `stopAll` → the host sends `SIGTERM` to each process, `SIGKILL` 3000 ms later to each still open, and replies
+  `{ type: 'stopAll', requestId }` once the table is empty.
+- `line` and `closed` are pushed to each subscribed connection.
+- A line that is not JSON, or has an unknown `type`, is written to `host-v<N>.log` and ignored. A disconnect drops
+  that connection's subscriptions.
+
+## Behaviour
+
+GIVEN a process with rule `{ key: 'type', value: 'result' }`, keep 60, and no client WHEN it writes
+`{"type":"result"}` at t = 0 THEN at t = 3 600 000 its stdin ends, at 3 603 000 it gets `SIGTERM`, at 3 606 000
+`SIGKILL`.
+GIVEN the same process WHEN a client is connected at the deadline THEN nothing ends; WHEN the client disconnects at
+t = 5 000 000 THEN stdin ends at t = 8 600 000.
+GIVEN a client subscribed to `a` WHEN `a` closes THEN the client gets `closed`, and `logs/a.jsonl` is gone.
+GIVEN draining and a busy process WHEN it writes the result line THEN the host ends it, and exits once it closes.
+GIVEN another live host on the channel WHEN a second host starts THEN the second exits with code 0 and writes no
+record.
+
+## Tests
+
+Process table and pipe log (fake spawn with `PassThrough` stdio, as `fakeChild` in
+`src/main/claude-code/claude-code-harness.test.ts`; a manual `Timers` fake and a settable clock; real `mkdtemp`
+folders):
+- `spawn_LinesBothWays_AppendsRecordsInSeqOrder` — after `write('hi')` and stdout `ok\n`, the file holds
+  `{"seq":1,"dir":"in","at":1000,"text":"hi"}` then `{"seq":2,"dir":"out","at":1000,"text":"ok"}`; the listener got
+  only seq 2.
+- `idleRule_LineCases_SetsTheState` — table: start → idle; `in` → busy; `out` `{"type":"result"}` → idle; `out`
+  `{"type":"assistant"}` → busy; `out` `not json` → busy; `err` after idle → idle.
+- `keepWindow_IdleNoClient_EndsAfterTheWindowThenGraces` — the three times in § Behaviour.
+- `keepWindow_ClientConnected_EndsNothingUntilItLeaves` — the second § Behaviour line.
+- `setKeepIdle_Zero_EndsAnIdleUnattachedProcessAtOnce`.
+- `close_EndsPendingSignals_AndDeletesTheLog` — a close at 3 601 000 sends no `SIGTERM`; the file is gone.
+- `spawn_Refusals_CloseWithTheReason` — table: duplicate id → `a process with id a already exists`; draining →
+  `the session host is draining`.
+- `spawn_ChildError_ClosesWithTheMessage` — error `spawn x ENOENT` → `{ code: null, signal: null, error: 'spawn x ENOENT' }`.
+
+Server (real channel in a `mkdtemp` folder, fake spawn):
+- `hello_RepliesTheProtocol` — `{ type: 'hello', requestId: 1, protocol: 1 }`.
+- `subscribe_Cases_RepliesThenPushesLines` — known id → `running: true`, `log` the file path, then a later line
+  arrives as `line`; unknown id → `running: false, log: null`.
+- `list_TwoProcesses_ListsEachWithItsLogPath`.
+- `subscribe_SecondConnection_ReplacesTheFirst` — after connection B subscribes to `a`, a new line reaches B only.
+- `unsubscribe_Cases_StopsOnlyTheSubscriber` — table: from the subscriber → no further `line` reaches it and `a`
+  keeps running; from another connection → the subscriber still gets lines.
+- `stopAll_RepliesOnceEveryProcessClosed` — reply after both fake children emit `close`; `SIGKILL` to a child still
+  open after 3000 ms.
+- `drain_IdleAndBusy_EndsEachAtTurnEndThenExits` — exit is a dep the test records.
+- `exitRule_NoProcessNoClient_Exits` — after the last client disconnects with an empty table; and at 30 000 ms when
+  no client came.
+- `start_RecordAndSweep` — writes `host-v1.json` with the channel and pid; with no other live host, deletes a leftover
+  `logs/old.jsonl`; with a live host behind `host-v0.json`, keeps it.
+
+## Done when
+
+`npm run typecheck`, `npm run lint` and `npm test` pass. `grep -n "RunAsNode\]: true" forge.config.mts` finds the
+fuse. `npm run package` leaves `.vite/build/session-host.js` and no change to `.vite/build/main.cjs`'s name. Running
+the built host for real and the packaged binary as Node are checks for task 12.
+
+Commit: one commit for the group.
+
+## Proof
+
