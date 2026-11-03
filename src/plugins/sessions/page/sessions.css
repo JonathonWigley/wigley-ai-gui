@@ -345,8 +345,9 @@
   padding: 0 var(--wg-space-1);
 }
 
-/* The strip is the scrolling Tabs variant, so in a narrow bar it shrinks
-   and scrolls its tabs rather than clip their icons. */
+/* The strip may shrink in a narrow bar; one built as the scrolling Tabs
+   variant (`ui-tabs--scroll`) then scrolls its tabs rather than clip their
+   icons. */
 .ui-tabs.session-tabs {
   flex: 0 1 auto;
   min-width: 0;

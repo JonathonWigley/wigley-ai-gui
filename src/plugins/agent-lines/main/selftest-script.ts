@@ -103,8 +103,8 @@ export function agentLinesSelfTestScript(
     pageBinds: [],
     settings: {},
     // A session row's status, and each of the activity dock's tool calls (the
-    // Agent calls carry the subagents' prompts), end in an ellipsis inside
-    // their own boxes, as their CSS says. The tab bar's parts clip in their own box.
+    // Agent calls carry the subagents' prompts) and its done line, end in an
+    // ellipsis inside their own boxes, as their CSS says. The tab bar's parts clip in their own box.
     // The side bar handle's resize prompt shows past its box for a second
     // after each resize step, and the split handle of the preview pane's Docs
     // tab holds its prompt, hidden until hovered, over both panes.
@@ -112,6 +112,7 @@ export function agentLinesSelfTestScript(
       '.session-row-status',
       '.session-bar-parts',
       '.chat-working-action',
+      '.chat-working-done',
       '.shell-side-bar-handle',
       '.ui-split-handle',
     ],

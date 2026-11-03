@@ -122,9 +122,9 @@ export function agentStripSelfTestScript(
     // A box's name, model line, description and tool lines end in an
     // ellipsis inside their own boxes and an open box's tool list scrolls
     // inside its box, as their CSS says. The activity dock's tool calls (the
-    // Agent calls carry the subagents' prompts) and the session row's status
-    // end in an ellipsis inside their own boxes; the tab bar's parts clip in
-    // their own box.
+    // Agent calls carry the subagents' prompts) and done line, and the session
+    // row's status, end in an ellipsis inside their own boxes; the tab bar's
+    // parts clip in their own box.
     scrollsItself: [
       '.agent-strip-name',
       '.agent-strip-description',
@@ -132,6 +132,7 @@ export function agentStripSelfTestScript(
       '.agent-strip-tool',
       '.agent-strip-toolList',
       '.chat-working-action',
+      '.chat-working-done',
       '.session-row-status',
       '.session-bar-parts',
     ],

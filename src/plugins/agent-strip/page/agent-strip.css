@@ -1,24 +1,10 @@
-/* The agent strip above the Chat composer's box: the composer's floor and cap
-   for it, the app's scroller, then the default layout's boxes under each box's
-   root. */
+/* The agent strip above the Chat composer's box: the composer's cap for it,
+   the app's scroller, then the default layout's boxes under each box's root. */
 
-/* Every closed box takes the height of the fullest one — a subagent's head,
-   meta, task, three recent tool lines and the cursor prompt: seven lines
-   (`text-12` at the inherited `leading-ui`) and their six gaps, inside the
-   padding and the Card's hairline border. While the strip shows boxes the
-   composer parts keep one closed box's height in a short pane rather than
-   giving it all up. */
-.chat-composer-parts:has(.agent-strip-scroller) {
-  --agent-strip-box-height: calc(
-    7 * var(--wg-text-12) * var(--wg-leading-ui) + 6 * var(--wg-space-1) + 2 *
-      var(--wg-space-2) + 2 * 1px
-  );
-  min-height: calc-size(max-content, min(size, var(--agent-strip-box-height)));
-}
-
-/* The composer's cap rises from half the tab so that floor fits beside the
-   activity dock, the box and a wrapped status line: at 900x700 they take
-   442px of the tab's 585px (76%). */
+/* The composer's cap rises from half the tab while the strip shows boxes, so
+   the composer parts have room for one closed box beside the activity dock,
+   the message box and a wrapped status line in a 900x700 tab. The parts hold
+   no floor: in a shorter tab they still give up height first and scroll. */
 .ui-floating.chat-composer:has(.agent-strip-scroller) {
   max-height: 80%;
 }
@@ -33,7 +19,14 @@
   flex-direction: column;
   gap: var(--wg-space-1);
   width: calc(var(--wg-space-6) * 10);
-  min-height: var(--agent-strip-box-height);
+  /* Every closed box takes the height of the fullest one — a subagent's head,
+     meta, task, three recent tool lines and the cursor prompt: seven lines
+     (`text-12` at the inherited `leading-ui`) and their six gaps, inside the
+     padding and the Card's hairline border. */
+  min-height: calc(
+    7 * var(--wg-text-12) * var(--wg-leading-ui) + 6 * var(--wg-space-1) + 2 *
+      var(--wg-space-2) + 2 * 1px
+  );
   padding: var(--wg-space-2);
   font-size: var(--wg-text-12);
   color: var(--wg-fg-secondary);
