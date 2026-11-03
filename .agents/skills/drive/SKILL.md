@@ -35,7 +35,7 @@ or touches their data, so start one whenever a check needs it.
    to Claude reaches it under `--harness claude`; `{"profile":"<name>"}` picks another.
    `forms.openRound` and `primer.openPrimer` open their form in the live session their own
    plugin opened under that `sessionId`, else in the owned session holding it, else in a new
-   row; a `sessions.connect` row is never reused. To put a round and a primer on one row, run
+   row; a `sessions.connect` session is never reused. To put a round and a primer on one row, run
    `sessions.open '{"sessionId":"s"}'` first, then both open actions with `"sessionId":"s"`. The
    second of the two opens logs `[sessions] newer relay took over session <id>`; that line is
    expected there.

@@ -11,7 +11,7 @@
 A gamified view of a session's agents: each plan step is a floor of a tower, and chibi characters fight their way up
 as the harness works, one enemy per floor, cleared when the plan step completes. The first piece built is the seam
 it stands on: a harness-neutral stream of agent events, logged per session, and a plain display of each session's
-running subagents in the Sessions side bar.
+running subagents and tasks in the Sessions side bar.
 
 ## Status
 
@@ -79,7 +79,7 @@ would emit the same events into `chat.agentEvent`'s payload shape.
 `src/plugins/agents/` depends on `sessions`, `chat` and `keys` (its layout kit's key prompts).
 
 - **Main** hears `chat.agentEvent`, folds each event into the roster of its process's host session id under its row (a
-  cleared row's old process ending drops only its own subagents) with a pure reducer, appends the event as one JSON line
+  cleared row's old process ending drops only its own subagents and tasks) with a pure reducer, appends the event as one JSON line
   to `logs/<host session id>.jsonl` in its plugin data, and sends each changed roster to the page over its channel. A
   session's `sessionEnded` finishes every subagent still listed: a process that exits or crashes mid-subagent sends no
   `agentFinished`. The Claude adapter finishes a subagent itself on its `task_notification` or its non-launch

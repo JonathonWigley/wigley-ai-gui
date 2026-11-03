@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { MAIN_AGENT_ID, type AgentEvent } from '../../../contracts/agent';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import type { SessionsMainExports } from '../../sessions/contract';
-import type { RunningAgent } from '../contract';
+import type { Roster, RunningAgent, RunningTask } from '../contract';
 import { agentsMainPart } from './start';
 
 const PREVIEW_ROW = 'preview-row';
@@ -47,6 +47,38 @@ const runningB: RunningAgent = {
   toolCalls: 0,
 };
 
+const taskStartedA: AgentEvent = {
+  type: 'taskStarted',
+  at: 1_500,
+  taskId: 'task_a',
+  agentId: 'toolu_a',
+  description: 'npm test --watch',
+};
+const taskStartedMain: AgentEvent = {
+  type: 'taskStarted',
+  at: 6_000,
+  taskId: 'task_main',
+  agentId: MAIN_AGENT_ID,
+  description: 'npm run build',
+};
+const runningTaskA: RunningTask = {
+  taskId: 'task_a',
+  agentId: 'toolu_a',
+  description: 'npm test --watch',
+  startedAt: 1_500,
+};
+const runningTaskMain: RunningTask = {
+  taskId: 'task_main',
+  agentId: MAIN_AGENT_ID,
+  description: 'npm run build',
+  startedAt: 6_000,
+};
+
+// A roster holding these agents and tasks.
+function roster(agents: RunningAgent[], tasks: RunningTask[] = []): Roster {
+  return { agents, tasks };
+}
+
 // Row s1's process after a clear, beside its first process `h1`.
 const CLEARED_HOST = 'h2';
 
@@ -58,7 +90,7 @@ const CLEARED_HOST = 'h2';
 function startAgentsPart() {
   const handlers = new Map<string, () => unknown>();
   const listeners = new Map<string, ((data: unknown) => void)[]>();
-  const sent: { sessionId: string; running: RunningAgent[] }[] = [];
+  const sent: { sessionId: string; roster: Roster }[] = [];
   const data = createMemoryFiles();
   const sessions: Pick<SessionsMainExports, 'open' | 'activate'> = {
     open: (info) => ({
@@ -72,10 +104,7 @@ function startAgentsPart() {
     channel: {
       handle: (name: string, handler: () => unknown) =>
         handlers.set(name, handler),
-      send: (
-        name: string,
-        message: { sessionId: string; running: RunningAgent[] },
-      ) => {
+      send: (name: string, message: { sessionId: string; roster: Roster }) => {
         if (name === 'rosterChanged') {
           sent.push(message);
         }
@@ -123,30 +152,30 @@ describe('agentsMainPart', () => {
   it.each<{
     name: string;
     steps: Step[];
-    sent: { sessionId: string; running: RunningAgent[] }[];
-    rosters: Record<string, RunningAgent[]>;
+    sent: { sessionId: string; roster: Roster }[];
+    rosters: Record<string, Roster>;
   }>([
     {
       name: 'an event that leaves the roster as it was sends nothing',
       steps: [spawned, userMessage],
-      sent: [{ sessionId: 's1', running: [runningA] }],
-      rosters: { s1: [runningA] },
+      sent: [{ sessionId: 's1', roster: roster([runningA]) }],
+      rosters: { s1: roster([runningA]) },
     },
     {
-      name: 'an emptied roster sends [] and is no longer listed',
+      name: 'an emptied roster sends an empty roster and is no longer listed',
       steps: [spawned, finished],
       sent: [
-        { sessionId: 's1', running: [runningA] },
-        { sessionId: 's1', running: [] },
+        { sessionId: 's1', roster: roster([runningA]) },
+        { sessionId: 's1', roster: roster([]) },
       ],
       rosters: {},
     },
     {
-      name: 'a closed then ended session sends [] once',
+      name: 'a closed then ended session sends an empty roster once',
       steps: [spawned, 'sessions.closed', 'sessions.ended'],
       sent: [
-        { sessionId: 's1', running: [runningA] },
-        { sessionId: 's1', running: [] },
+        { sessionId: 's1', roster: roster([runningA]) },
+        { sessionId: 's1', roster: roster([]) },
       ],
       rosters: {},
     },
@@ -159,18 +188,46 @@ describe('agentsMainPart', () => {
     {
       name: "a cleared row's old process ending keeps the new process's subagent",
       steps: [{ host: CLEARED_HOST, event: spawned }, sessionEnded],
-      sent: [{ sessionId: 's1', running: [runningA] }],
-      rosters: { s1: [runningA] },
+      sent: [{ sessionId: 's1', roster: roster([runningA]) }],
+      rosters: { s1: roster([runningA]) },
     },
     {
       name: "a row's old process ending drops only its own subagents",
       steps: [spawned, { host: CLEARED_HOST, event: spawnedB }, sessionEnded],
       sent: [
-        { sessionId: 's1', running: [runningA] },
-        { sessionId: 's1', running: [runningA, runningB] },
-        { sessionId: 's1', running: [runningB] },
+        { sessionId: 's1', roster: roster([runningA]) },
+        { sessionId: 's1', roster: roster([runningA, runningB]) },
+        { sessionId: 's1', roster: roster([runningB]) },
       ],
-      rosters: { s1: [runningB] },
+      rosters: { s1: roster([runningB]) },
+    },
+    {
+      name: 'a started task sends a roster listing it',
+      steps: [taskStartedMain],
+      sent: [{ sessionId: 's1', roster: roster([], [runningTaskMain]) }],
+      rosters: { s1: roster([], [runningTaskMain]) },
+    },
+    {
+      name: "two hosts' tasks under one row are both sent",
+      steps: [taskStartedA, { host: CLEARED_HOST, event: taskStartedMain }],
+      sent: [
+        { sessionId: 's1', roster: roster([], [runningTaskA]) },
+        {
+          sessionId: 's1',
+          roster: roster([], [runningTaskA, runningTaskMain]),
+        },
+      ],
+      rosters: { s1: roster([], [runningTaskA, runningTaskMain]) },
+    },
+    {
+      name: "a host's only agent finishing keeps the host's running task",
+      steps: [spawned, taskStartedA, finished],
+      sent: [
+        { sessionId: 's1', roster: roster([runningA]) },
+        { sessionId: 's1', roster: roster([runningA], [runningTaskA]) },
+        { sessionId: 's1', roster: roster([], [runningTaskA]) },
+      ],
+      rosters: { s1: roster([], [runningTaskA]) },
     },
   ])('$name', ({ steps, sent, rosters }) => {
     const agents = startAgentsPart();
@@ -204,15 +261,23 @@ describe('agentsMainPart', () => {
   it('rosters copies each live list and merges the preview roster', () => {
     const agents = startAgentsPart();
     agents.agentEvent(spawned);
+    agents.agentEvent(taskStartedA);
     agents.invoke('openPreview');
 
-    const first = agents.invoke('rosters') as Record<string, RunningAgent[]>;
-    first.s1.pop();
-    first[PREVIEW_ROW].pop();
-    const second = agents.invoke('rosters') as Record<string, RunningAgent[]>;
+    const first = agents.invoke('rosters') as Record<string, Roster>;
+    first.s1.agents.pop();
+    first.s1.tasks.pop();
+    first[PREVIEW_ROW].agents.pop();
+    first[PREVIEW_ROW].tasks.pop();
+    const second = agents.invoke('rosters') as Record<string, Roster>;
 
     expect(Object.keys(second)).toEqual(['s1', PREVIEW_ROW]);
-    expect(second.s1).toEqual([runningA]);
-    expect(second[PREVIEW_ROW]).toHaveLength(first[PREVIEW_ROW].length + 1);
+    expect(second.s1).toEqual(roster([runningA], [runningTaskA]));
+    expect(second[PREVIEW_ROW].agents).toHaveLength(
+      first[PREVIEW_ROW].agents.length + 1,
+    );
+    expect(second[PREVIEW_ROW].tasks).toHaveLength(
+      first[PREVIEW_ROW].tasks.length + 1,
+    );
   });
 });

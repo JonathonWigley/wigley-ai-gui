@@ -5,10 +5,11 @@ import type {
   OwnedSession,
   SessionsMainExports,
 } from '../../sessions/contract';
-import type { AgentsChannel, RunningAgent } from '../contract';
+import { MAIN_AGENT_ID } from '../../../contracts/agent';
+import type { AgentsChannel, Roster } from '../contract';
 
 // Holds no alerts or window, so the preview cannot raise a notification, a
-// Dock bounce or a badge. `clock` dates the sample's spawns at open.
+// Dock bounce or a badge. `clock` dates the sample's starts at open.
 export interface AgentsPreviewDeps {
   sessions: Pick<SessionsMainExports, 'open' | 'activate'>;
   clock: Clock;
@@ -21,7 +22,7 @@ export interface AgentsPreviewDeps {
 // preview when `sessionId` is its row.
 export interface AgentsPreview {
   toggle(): void;
-  rosters(): Record<string, RunningAgent[]>;
+  rosters(): Record<string, Roster>;
   closed(sessionId: string): void;
 }
 
@@ -30,15 +31,18 @@ const PREVIEW_PROJECT_DIR = 'Agents preview';
 
 interface OpenPreview {
   owned: OwnedSession;
-  running: RunningAgent[];
+  roster: Roster;
 }
 
 // The sample session's two running subagents, spawned 42 s and 185 s before
-// `now`; the second's description is long enough to end in an ellipsis. The
-// second is the widest line the agents self-test fits at the side bar's least
-// width, so its elapsed time stays past a minute and its tool count past 9.
-function sampleRoster(now: number): RunningAgent[] {
-  return [
+// `now`, and two running tasks, started 95 s and 60 s before `now`: one the
+// main agent's, one the 185 s subagent's, drawn nested under it. The second
+// subagent's and the second task's descriptions are long enough to end in an
+// ellipsis. The second subagent is the widest line the agents self-test fits
+// at the side bar's least width, so its elapsed time stays past a minute and
+// its tool count past 9.
+function sampleRoster(now: number): Roster {
+  const agents = [
     {
       agentId: 'preview-agent-1',
       agentType: 'wigley:sonnet-medium',
@@ -55,10 +59,31 @@ function sampleRoster(now: number): RunningAgent[] {
       toolCalls: 12,
     },
   ];
+  const tasks = [
+    {
+      taskId: 'preview-task-1',
+      agentId: MAIN_AGENT_ID,
+      description: 'npm run selftest',
+      startedAt: now - 95_000,
+    },
+    {
+      taskId: 'preview-task-2',
+      agentId: 'preview-agent-2',
+      description:
+        'Watch the stream decoder tests and report each failure as it lands',
+      startedAt: now - 60_000,
+    },
+  ];
+  return { agents, tasks };
+}
+
+// A copy of `roster` whose lists the caller may change.
+function copyRoster(roster: Roster): Roster {
+  return { agents: [...roster.agents], tasks: [...roster.tasks] };
 }
 
 // A sample session in a row of its own, held here with no process, running
-// two subagents: the first toggle starts the row selected and sends its
+// two subagents and two tasks: the first toggle starts the row selected and sends its
 // roster; the next ends the row and sends it empty. Closing the row ends it
 // too, and the next toggle starts over.
 export function createAgentsPreview(deps: AgentsPreviewDeps): AgentsPreview {
@@ -69,7 +94,10 @@ export function createAgentsPreview(deps: AgentsPreviewDeps): AgentsPreview {
   const end = (open: OpenPreview) => {
     preview = null;
     open.owned.end();
-    send('rosterChanged', { sessionId: open.owned.session.id, running: [] });
+    send('rosterChanged', {
+      sessionId: open.owned.session.id,
+      roster: { agents: [], tasks: [] },
+    });
   };
 
   return {
@@ -88,19 +116,19 @@ export function createAgentsPreview(deps: AgentsPreviewDeps): AgentsPreview {
         },
         { select: true },
       );
-      preview = { owned, running: sampleRoster(deps.clock.now()) };
+      preview = { owned, roster: sampleRoster(deps.clock.now()) };
       // `select` picks the row; only `activate` shows the sessions mode.
       sessions.activate(owned.session.id);
       send('rosterChanged', {
         sessionId: owned.session.id,
-        running: [...preview.running],
+        roster: copyRoster(preview.roster),
       });
       log('agents', 'agents preview opened');
     },
     rosters: () =>
       preview === null
         ? {}
-        : { [preview.owned.session.id]: [...preview.running] },
+        : { [preview.owned.session.id]: copyRoster(preview.roster) },
     closed(sessionId) {
       if (preview !== null && preview.owned.session.id === sessionId) {
         end(preview);

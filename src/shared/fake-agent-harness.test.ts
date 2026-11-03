@@ -81,8 +81,8 @@ function recordingEvents() {
 }
 
 // One timeline event as a line: an entry as its kind, id and tool result text,
-// an agent event as its type, agent id and outcome, any other as its name and,
-// for activity, its value.
+// an agent event as its type, task id, agent id and outcome, any other as its
+// name and, for activity, its value.
 function timelineLine([name, payload]: [string, unknown]): string {
   if (name === 'entry') {
     const entry = payload as ChatEntry;
@@ -91,9 +91,10 @@ function timelineLine([name, payload]: [string, unknown]): string {
   }
   if (name === 'agentEvent') {
     const event = payload as AgentEvent;
+    const taskId = 'taskId' in event ? event.taskId : undefined;
     const agentId = 'agentId' in event ? event.agentId : undefined;
     const outcome = 'outcome' in event ? event.outcome : undefined;
-    return [event.type, agentId, outcome].filter(Boolean).join(' ');
+    return [event.type, taskId, agentId, outcome].filter(Boolean).join(' ');
   }
   return name === 'activity' ? `activity ${String(payload)}` : name;
 }
@@ -659,6 +660,20 @@ describe('createFakeAgentHarness', () => {
       },
       ...subagentTool(1, 'Read'),
       ...subagentTool(2, 'Grep'),
+      {
+        type: 'taskStarted',
+        at: 1000,
+        taskId: 'fake-task-1-1',
+        agentId: MAIN_AGENT_ID,
+        description: 'Run the self-test',
+      },
+      {
+        type: 'taskStarted',
+        at: 1000,
+        taskId: 'fake-task-1-2',
+        agentId: 'fake-agent-1-1',
+        description: 'Watch the build',
+      },
     ]);
     // Each entry as `[kind, id, tool result text]`.
     expect(
@@ -696,6 +711,8 @@ describe('createFakeAgentHarness', () => {
       case: 'interrupt_FinishesSubagentsAsFailed',
       end: (agent: AgentProcess) => agent.interrupt(),
       lines: [
+        'taskFinished fake-task-1-1 failed',
+        'taskFinished fake-task-1-2 failed',
         'tool agent-1-1 Interrupted',
         'agentFinished fake-agent-1-1 failed',
         'tool agent-1-2 Interrupted',
@@ -727,6 +744,48 @@ describe('createFakeAgentHarness', () => {
       ],
     },
     {
+      case: 'sendAgentsThenInterrupt_FailsTasksOfEveryTurn',
+      end: (agent: AgentProcess) => {
+        agent.send({ text: FAKE_AGENTS_TEXT, images: [] });
+        agent.interrupt();
+      },
+      lines: [
+        'tool agent-1-1 fake subagent done',
+        'agentFinished fake-agent-1-1 done',
+        'tool agent-1-2 fake subagent done',
+        'agentFinished fake-agent-1-2 done',
+        'user user-2',
+        'userMessage',
+        'turnStarted',
+        'activity working',
+        'tool agent-2-1',
+        'agentSpawned fake-agent-2-1',
+        'tool agent-2-2',
+        'agentSpawned fake-agent-2-2',
+        'tool agent-2-1-tool',
+        'toolStarted fake-agent-2-1',
+        'tool agent-2-1-tool fake',
+        'toolFinished fake-agent-2-1',
+        'tool agent-2-2-tool',
+        'toolStarted fake-agent-2-2',
+        'tool agent-2-2-tool fake',
+        'toolFinished fake-agent-2-2',
+        'taskStarted fake-task-2-1 main',
+        'taskStarted fake-task-2-2 fake-agent-2-1',
+        'taskFinished fake-task-1-1 failed',
+        'taskFinished fake-task-1-2 failed',
+        'taskFinished fake-task-2-1 failed',
+        'taskFinished fake-task-2-2 failed',
+        'tool agent-2-1 Interrupted',
+        'agentFinished fake-agent-2-1 failed',
+        'tool agent-2-2 Interrupted',
+        'agentFinished fake-agent-2-2 failed',
+        'notice notice-2',
+        'turnEnded',
+        'activity idle',
+      ],
+    },
+    {
       case: 'end_LeavesSubagentsToSessionEnded',
       end: (agent: AgentProcess) => void agent.end(),
       lines: ['sessionEnded', 'ended'],
@@ -738,6 +797,8 @@ describe('createFakeAgentHarness', () => {
         void agent.end();
       },
       lines: [
+        'taskFinished fake-task-1-1 failed',
+        'taskFinished fake-task-1-2 failed',
         'tool agent-1-1 Interrupted',
         'agentFinished fake-agent-1-1 failed',
         'tool agent-1-2 Interrupted',
@@ -756,6 +817,8 @@ describe('createFakeAgentHarness', () => {
         agent.kill();
       },
       lines: [
+        'taskFinished fake-task-1-1 failed',
+        'taskFinished fake-task-1-2 failed',
         'tool agent-1-1 Interrupted',
         'agentFinished fake-agent-1-1 failed',
         'tool agent-1-2 Interrupted',

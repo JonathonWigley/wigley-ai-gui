@@ -12,11 +12,26 @@ export interface RunningAgent {
   toolCalls: number;
 }
 
-// Rosters are keyed by the app's sessionId (the session row's id), each listing its running subagents in spawn order.
-// `rosters` returns every session's roster that lists one; `rosterChanged` carries a session's whole roster after
-// each change, `running` empty once its last subagent finishes. `openPreview` opens the layout preview's sample
-// session, or ends it while it is open.
+// A task still running in a session: a background shell or another long-running job an agent started. `agentId` is
+// the agent that started it, `main` or a subagent's id; `startedAt` is its start's `at`, epoch milliseconds.
+export interface RunningTask {
+  taskId: string;
+  agentId: string;
+  description: string;
+  startedAt: number;
+}
+
+// A session's running subagents and running tasks, each list in start order.
+export interface Roster {
+  agents: RunningAgent[];
+  tasks: RunningTask[];
+}
+
+// Rosters are keyed by the app's sessionId (the session row's id). `rosters` returns every session's roster that
+// lists a subagent or a task; `rosterChanged` carries a session's whole roster after each change, both lists empty
+// once its last subagent and task finish. `openPreview` opens the layout preview's sample session, or ends it while
+// it is open.
 export interface AgentsChannel extends ChannelShape {
-  invoke: { rosters(): Record<string, RunningAgent[]>; openPreview(): void };
-  messages: { rosterChanged: { sessionId: string; running: RunningAgent[] } };
+  invoke: { rosters(): Record<string, Roster>; openPreview(): void };
+  messages: { rosterChanged: { sessionId: string; roster: Roster } };
 }

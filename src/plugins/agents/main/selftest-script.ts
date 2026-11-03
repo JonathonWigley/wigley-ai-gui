@@ -42,12 +42,12 @@ const resizeSideBar = (direction: 'Left' | 'Right') => {
 
 const GROUPS: SelfTestGroup[] = [
   {
-    name: 'subagent lines',
-    why: "A session whose agent spawns two subagents draws a line for each under its row (dot, type, description, elapsed, tool count); at the side bar's least width every line fits its row with its description showing, the preview's minutes-long, double-digit-tool line wrapping its elapsed time and tool count under the description; an interrupt finishes the subagents and their lines go.",
+    name: 'roster lines',
+    why: "A session whose agent spawns two subagents and starts two tasks draws a line for each under its row (a subagent's dot, type, description, elapsed, tool count; a task's terminal icon, description, elapsed); at the side bar's least width every line fits its row with its description showing, the preview's minutes-long, double-digit-tool subagent line wrapping its elapsed time and tool count under the description while each task line stays on one row; an interrupt ends the session's subagents and tasks and their lines go.",
     steps: [
       {
         keys: sendKeys(FAKE_AGENTS_TEXT),
-        expect: `[agents] lines in ${SELFTEST_PROJECT_NAME}: 2`,
+        expect: `[agents] lines in ${SELFTEST_PROJECT_NAME}: 4`,
         checksFit: true,
         screenshot: 'subagent-lines',
       },
@@ -56,10 +56,10 @@ const GROUPS: SelfTestGroup[] = [
       ),
       {
         keys: ['Escape', ...PREVIEW_KEYS],
-        expect: `[agents] lines in ${PREVIEW_NAME}: 2`,
+        expect: `[agents] lines in ${PREVIEW_NAME}: 4`,
         checksFit: 'held',
         screenshot: 'subagent-lines-narrow',
-        why: "The preview's sample roster holds the widest lines (one with a long type, one with an elapsed time past a minute and 12 tools), checked beside this run's lines at the side bar's least width: the fit check at the minimum width hides the side bar.",
+        why: "The preview's sample roster holds the widest lines (a subagent with a long type, one with an elapsed time past a minute and 12 tools, and a long task nested under it), checked beside this run's lines at the side bar's least width: the fit check at the minimum width hides the side bar.",
       },
       {
         keys: PREVIEW_KEYS,
@@ -72,7 +72,7 @@ const GROUPS: SelfTestGroup[] = [
       {
         keys: ['<C-c>'],
         expect: `[agents] lines in ${SELFTEST_PROJECT_NAME}: 0`,
-        why: 'Interrupt sends agentFinished for each running subagent, so the roster empties.',
+        why: 'Interrupt sends agentFinished for each running subagent and taskFinished for each running task, so the roster empties.',
       },
     ],
   },
@@ -80,7 +80,8 @@ const GROUPS: SelfTestGroup[] = [
 
 // Each run launches a new chat session in the project folder with a plain
 // first message, and the steps send the agents text by keys: a launch that
-// spawned the subagents would log the two lines before any step began waiting.
+// spawned the subagents and tasks would log the lines before any step began
+// waiting.
 // An earlier run's row stays open, its lines gone after its interrupt; only
 // the new row's count changes, so the waits stay exact.
 export function agentsSelfTestScript(deps: AgentsSelfTestDeps): SelfTestScript {
@@ -99,13 +100,13 @@ export function agentsSelfTestScript(deps: AgentsSelfTestDeps): SelfTestScript {
   return {
     pageBinds: [],
     settings: {},
-    // A line's type and description, its session row's status, and each of
-    // the working block's tool calls (the Agent calls carry the subagents'
-    // prompts), end in an ellipsis inside their own boxes, as their CSS
-    // says. The tab bar's parts clip in their own box. The side bar
-    // handle's resize prompt shows past its box for a second after each resize
-    // step, and the split handle of the preview pane's Docs tab holds its
-    // prompt, hidden until hovered, over both panes.
+    // A line's type and description (a task line's too), its session row's
+    // status, and each of the working block's tool calls (the Agent calls
+    // carry the subagents' prompts), end in an ellipsis inside their own
+    // boxes, as their CSS says. The tab bar's parts clip in their own box.
+    // The side bar handle's resize prompt shows past its box for a second
+    // after each resize step, and the split handle of the preview pane's Docs
+    // tab holds its prompt, hidden until hovered, over both panes.
     scrollsItself: [
       '.agents-line-type',
       '.agents-line-description',

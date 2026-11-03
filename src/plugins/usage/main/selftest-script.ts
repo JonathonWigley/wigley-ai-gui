@@ -1,14 +1,14 @@
 import type { Clock } from '../../../contracts/ambient';
 import type { SelfTestGroup, SelfTestScript } from '../../../contracts/plugin';
 import type {
-  ConnectedSession,
+  OwnedSession,
   SessionsMainExports,
 } from '../../sessions/contract';
 import type { UsageSnapshot } from '../contract';
 import { usageFixture } from './usage-fixture';
 
 export interface UsageSelfTestDeps {
-  sessions: Pick<SessionsMainExports, 'connect' | 'activate'>;
+  sessions: Pick<SessionsMainExports, 'open' | 'activate'>;
   clock: Clock;
   snapshot(): UsageSnapshot;
   seed(snapshot: UsageSnapshot): void;
@@ -16,7 +16,7 @@ export interface UsageSelfTestDeps {
 
 // What `open` saw and seeded: `unreadPlans` names the plans with no usage
 // before the seed, null when the snapshot held no plan; `snapshot` is the
-// store's snapshot read back after the seed; `sessionId` is the id `connect`
+// store's snapshot read back after the seed; `sessionId` is the id `open`
 // gave the run's session.
 interface UsageSelfTestResult {
   unreadPlans: string[] | null;
@@ -66,29 +66,32 @@ const GROUPS: SelfTestGroup[] = [
   },
 ];
 
-// Each run ends the session the run before connected, connects
-// `usage-selftest-<run>`, activates its row so that a pane shows the session
-// and its tab bar draws the session line whatever an earlier script left
-// selected, and seeds the fresh fixture on it:
+// Each run ends the session the run before opened, opens
+// `usage-selftest-<run>` in the background, activates its row so that a pane
+// shows the session and its tab bar draws the session line whatever an
+// earlier script left selected, and seeds the fresh fixture on it:
 // the steps wait for exact lines, and the start poll's line is logged before
 // the run begins. The plans the start poll left unread fail the run, so the
 // poll over the harness is still proved. The steps end with the details
 // closed, so `uiState` opens none for the next run.
 export function usageSelfTestScript(deps: UsageSelfTestDeps): SelfTestScript {
-  let connected: ConnectedSession | null = null;
+  let opened: OwnedSession | null = null;
   return {
     pageBinds: [],
     settings: {},
     scrollsItself: ['.session-bar-parts'],
     open(run) {
-      connected?.end();
-      const session = deps.sessions.connect({
-        sessionId: `usage-selftest-${run}`,
-        projectDir: 'usage-selftest',
-        harness: 'claude',
-        deadlineSeconds: null,
-      });
-      connected = session;
+      opened?.end();
+      const session = deps.sessions.open(
+        {
+          sessionId: `usage-selftest-${run}`,
+          projectDir: 'usage-selftest',
+          harness: 'claude',
+          deadlineSeconds: null,
+        },
+        { select: false },
+      );
+      opened = session;
       const sessionId = session.session.id;
       deps.sessions.activate(sessionId);
       const { plans } = deps.snapshot();
