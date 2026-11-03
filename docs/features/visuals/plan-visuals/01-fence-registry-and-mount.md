@@ -1,6 +1,6 @@
 # 01 — Fence registry and markdown mount
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -419,3 +419,4 @@ colours in an agent reply, in a user's own chat message and in the docs browser.
 
 ## Proof
 
+Commit 2a9c0ef · proof: diff read: every Produces present, markdownElement gone; typecheck + lint clean; filtered tests 2779 pass · concerns: AGENTS.md says the mount reuses by language and source, but the key also holds the closed flag (for 08); a target redrawn without a view it lent out costs one extra mount

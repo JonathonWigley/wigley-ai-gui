@@ -1,6 +1,6 @@
 # 05 — Visual plugin: fence, card and session note
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 3 · Depends on: 01, 03, 04
 Plan: [plan.md](plan.md)

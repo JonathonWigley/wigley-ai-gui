@@ -234,7 +234,7 @@ export function visualHashOf(url: string): string | null;
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Fence registry and markdown mount](01-fence-registry-and-mount.md)
+- [x] [Fence registry and markdown mount](01-fence-registry-and-mount.md)
 - [x] [Visual scheme, guard and Bridge call](02-visual-scheme.md)
 - [x] [Session instructions through the harness](03-session-instructions.md)
 
@@ -264,11 +264,18 @@ Review base: d7578311fe99437ccefe407289916bbcfa049eb8
 - 02 · a224d7a · diff read: every Produces present; typecheck + lint clean; 21 tests pass filtered · concerns: the guard refuses a subframe on about:blank or srcdoc, so 04 sets the iframe src only once serveVisual resolves (live check in 09)
 - 03 · da9a67f · diff read: every Produces present, no --append-system-prompt outside src/main/claude-code; typecheck clean for its files; 262 tests pass filtered · concerns: none
 - 04 · cf5e079 · diff read: every Produces present, src set only after serveVisual resolves; lint clean; 25 tests pass filtered; typecheck errors only in task 01's in-flight fakes · concerns: fake-visual-frames.ts sits in src/shared/page beside task 01's files (no file of 01 edited)
+- 01 · 2a9c0ef · diff read: every Produces present, markdownElement gone; typecheck + lint clean; filtered tests 2779 pass · concerns: AGENTS.md says the mount reuses by language and source, but the key also holds the closed flag (for 08); a target redrawn without a view it lent out costs one extra mount
 ### Contract changes
+- MarkdownRenderer fakes: 22 files → 23 (composer-kit.test.ts too) · why: plan-time count missed it · consumers: none · group 01
+- shell kit log: from createShellChrome → from mountShellChrome · why: createShellChrome does not exist · consumers: none · group 01
+- docViewOver and roundViewSetup test helpers gain optional markdown/layout params; docs-page-fakes SourceLineFakeElement.querySelectorAll passes class selectors through · why: new tests need them · consumers: none · group 01
 ### Rulings
 - the served body is doctype, script, source with no trailing newline in the bootstrap — matches the pinned order — whitespace only if wrong · group 02 · group 02
 - registrations held in a Set of {text} objects rather than an array — insertion order kept, identity delete makes a second dispose a no-op, matches drop-targets addTarget — none if wrong · group 03 · group 03
 - src/renderer/visual-frames layer also allows src/shared/page, since its test imports test-dom.ts and check-layers rules cover tests — the adapter itself imports none of it — a reviewer may want a test-only carve-out · group 04 · group 04
 - the load log falls back to an empty hash when visualHashOf returns null — main only serves visual URLs — a blank hash in the log if wrong · group 04 · group 04
+- a superseded view in another target of the same parent is taken outright, not borrowed — it would be disposed anyway — an early dispose of a still-shown view if wrong · group 01 · group 01
+- a view lent to a sibling cannot be taken by another draw in the same task — avoids two placeholders sharing one view — an extra mount if wrong · group 01 · group 01
+- new views mount after the staged children are appended — a contribution sees a connected placeholder — none · group 01 · group 01
 ### Review rounds
 ### Test gate
