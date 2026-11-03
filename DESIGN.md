@@ -309,9 +309,12 @@ The primitives, each a builder in `src/shared/page/ui/`:
 - **Dialog** (`createDialog`): a modal over the `scrim`.
 - **EmptyState** (`emptyState`): one line saying what to do, then the key that does it.
 - **SectionHeader** (`sectionHeader`): a section's heading with a trailing slot.
-- **DragReorder** (`createDragReorder`): drag to reorder over one or more drop zones, each a list of keyed items;
-  the item under the pointer marks where the drop lands, and a drop reports the item's key, the zone and the
-  index it lands at, so the view, not the primitive, changes the order. A view that drops it calls its `dispose`.
+- **DragReorder** (`createDragReorder`): drag to reorder over one or more drop zones, each a list of keyed items
+  (`ui-drag-reorder-item`, dragged by a source element inside it); the item where the drop would land carries
+  `is-drop-before` or `is-drop-after`, an unordered zone (`ui-drag-reorder-zone`) carries `is-drop-target`, and the
+  dragged item `is-dragging`. A drop reports the item's key, the zone and the index it lands at among the zone's
+  other items, so the view, not the primitive, changes the order. It acts only on drags it started, so file drops
+  pass by. A view that drops it calls its `dispose`.
 
 Icon stays the Codicon builder `icon`.
 
@@ -324,7 +327,8 @@ Conventions every primitive follows:
   selector (`.ui-floating.ui-dialog`, `.ui-card.ui-collapsible`), which outranks either class
   alone, so they win whatever order the stylesheets load in.
 - States are classes `is-selected`, `is-active`, `is-cursor`, `is-disabled` (a button's
-  `disabled` attribute) and `is-no-target` (an edge prompt or anchor with nothing to act on); an
+  `disabled` attribute), `is-no-target` (an edge prompt or anchor with nothing to act on) and DragReorder's
+  `is-dragging`, `is-drop-before`, `is-drop-after` and `is-drop-target`; an
   enumerated value is `data-<name>`; `is-hover` and `is-pressed` exist only so the gallery can show
   those states.
 - Buttons never take focus.

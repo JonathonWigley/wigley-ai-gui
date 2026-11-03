@@ -54,14 +54,18 @@ project names), so they last across restarts.
 - `<Leader>pf` toggles the focused pane's session's project; `<Leader>pk` / `<Leader>pj` move it up or down among
   the favorites, and log and do nothing on a project that is not one.
 - Dragging a group header reorders the favorites; dropping a Recent group into Favorites favorites it at the drop
-  point, and dropping a favorite into Recent unfavorites it. Recent has no hand order.
+  point, and dropping a favorite into Recent unfavorites it. Recent has no hand order, so a drop there marks the
+  whole section. While a drag runs, an empty section shows as a drop box, so the first favorite can come from a
+  drag, and the side bar holds its redraws until the drag ends. The layout preview (`Space z l s`) draws with its
+  own sample favorites and never changes the user's.
 
 ## Drawing
 
 The sessions layout gains two parts: `section` (a Favorites or Recent label over the box the app fills with
-groups) and `group` (a project header over the box the app fills with rows), with a `GroupKit` that draws the
-star (`favoriteToggle`) and the drag grip (`dragHandle`). The app keeps the star's click and the drag on each
-group, through the DragReorder primitive (`DESIGN.md` § Primitives).
+groups, both always drawn, an empty one hidden outside a drag) and `group` (a project header over the box the app
+fills with rows), with a `GroupKit` that draws the star (`favoriteToggle`) and the grip (`dragHandle`, a visual
+cue: the whole header drags). The app keeps the star's click and the drag on each header, through the
+DragReorder primitive (`DESIGN.md` § Primitives).
 
 ## Decisions
 
