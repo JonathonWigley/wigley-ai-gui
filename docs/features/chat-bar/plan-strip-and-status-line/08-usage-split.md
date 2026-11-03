@@ -1,6 +1,6 @@
 # 08 — Usage in the status line, and the usage-tab-line plugin
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 4 · Depends on: 01, 05, 07
 Plan: [plan.md](plan.md)

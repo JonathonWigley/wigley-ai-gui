@@ -23,6 +23,15 @@ export function moveFocus(
   return { entryId: ids[next], following: next === last };
 }
 
+// Whether `j` has no stop left to move to: no stops at all, or the focus on the
+// last of `ids`. From no entry it has not, since `j` focuses the last stop.
+export function isAtLastStop(
+  focus: EntryFocus,
+  ids: readonly string[],
+): boolean {
+  return ids.length === 0 || focus.entryId === ids[ids.length - 1];
+}
+
 // The first entry, following only when it is also the last.
 export function focusFirst(ids: readonly string[]): EntryFocus {
   const first = ids.at(0);

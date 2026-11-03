@@ -1,6 +1,6 @@
 # 07 — The agent-lines plugin, and agents' page exports
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 01, 04
 Plan: [plan.md](plan.md)
@@ -164,3 +164,4 @@ ran them); with the default list, no line draws and the agents preview (`Space z
 
 ## Proof
 
+Commit 26bf19f6 · proof: diff read: AgentsPageExports roster/onRosterChanged in agents/contract.ts; agent-lines plugin listed in main/page/manifests and LAYERS; tsc clean apart from 06 in flight; worker's 10 test files (109 tests) pass · concerns: the pure renames landed in peer commit d035a2db; npm run lint stops on a peer's sessions.css:188 raw 2s (d95c8c4b)

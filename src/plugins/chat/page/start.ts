@@ -162,6 +162,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
         api.events.on('sessions.sessionHostChanged', ({ sessionId }) =>
           listener(sessionId),
         ),
+      onScopeChanged: (listener) => api.keys.onScopeChanged(() => listener()),
       editor: services.editor,
       markdown: services.markdown,
       keys,

@@ -48,6 +48,10 @@ import {
 } from './chat-state';
 import { composerInputOf } from './composer-input';
 import { type ComposerSurface, createComposerSurface } from './composer-kit';
+import {
+  type ComposerStopHolder,
+  createComposerStopHolder,
+} from './composer-stop-holder';
 import { createEntryList, type EntryList } from './entry-list';
 import type { ImageViewer } from './image-viewer';
 import { completionWords } from './slash-commands';
@@ -61,7 +65,8 @@ export interface ChatView {
   // The session whose Chat tab is the visible tab.
   visibleSessionId(): string | null;
   // The visible Chat tab's focused stop's slot element; null with no visible
-  // Chat tab or no focused stop.
+  // Chat tab, no focused stop, or while a composer part's stop holds the
+  // cursor.
   focusedEntry(): HTMLElement | null;
 }
 
@@ -73,7 +78,9 @@ export interface SessionRef {
 
 // One held chat session as the commands act on it: its state as chat main
 // last sent it, whether its process runs, its message box, the images
-// attached to its next message and its entries.
+// attached to its next message and its entries. `enterStop` offers the entry
+// cursor to the composer parts' stops, in part order: the id of the part that
+// took it, null when none did.
 export interface ChatSession extends SessionRef {
   readonly state: ChatSessionState;
   readonly running: boolean;
@@ -81,8 +88,15 @@ export interface ChatSession extends SessionRef {
   attachments: Attachments;
   entries: Pick<
     EntryList,
-    'move' | 'latest' | 'first' | 'focused' | 'toggleFocused' | 'scrollBy'
+    | 'move'
+    | 'isAtLastStop'
+    | 'latest'
+    | 'first'
+    | 'focused'
+    | 'toggleFocused'
+    | 'scrollBy'
   >;
+  enterStop(): string | null;
 }
 
 // The Chat view with what the commands read: the session a box belongs to,
@@ -109,7 +123,8 @@ export type ChatTabScope = 'chat';
 // `visibleSessionRested` runs when the visible Chat tab's process exits;
 // `onSessionRemoved` hears the sessions plugin drop a row's tabs,
 // `onActiveChanged` the focused pane's session change and
-// `onSessionHostChanged` a row's host id change; `sessions` also takes each
+// `onSessionHostChanged` a row's host id change, `onScopeChanged` each change of
+// the scope keys fire in; `sessions` also takes each
 // row's activity and names the focused pane's session. `run` runs
 // a command, as the composer's chips and send button do; `keys` also anchors
 // the composer's key hints; `layouts` holds the chat layouts the entries and
@@ -132,6 +147,7 @@ export interface ChatViewDeps extends SurfaceKitDeps {
   onSessionRemoved(listener: (sessionId: string) => void): void;
   onActiveChanged(listener: (sessionId: string | null) => void): void;
   onSessionHostChanged(listener: (sessionId: string) => void): void;
+  onScopeChanged(listener: () => void): void;
   editor: EditorHost;
   run(command: CommandId): void;
   layouts: ChatLayouts;
@@ -155,7 +171,8 @@ export interface ChatViewDeps extends SurfaceKitDeps {
 // `box` and `dropTarget` until the editor mounts into the attached tab.
 // `composerSize` follows the drawn composer's height for as long as the tab is
 // held. `unseen` is the finished turn the row still shows, and `activity` the
-// activity last set on the row.
+// activity last set on the row. `stop` holds the composer part holding the
+// tab's entry cursor.
 interface HeldTab {
   sessionId: string;
   name: string;
@@ -172,6 +189,7 @@ interface HeldTab {
   composer: ComposerSurface;
   composerSize: ResizeObserver;
   dropTarget: Disposable | null;
+  stop: ComposerStopHolder;
 }
 
 // One Chat tab per chat session main holds, each with its entries, its
@@ -193,12 +211,12 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     toastedKinds.clear();
     for (const tab of tabs.values()) {
       tab.entries.rebuild(tab.state.entries);
-      drawComposer(tab);
+      drawComposer(tab, deps);
     }
   });
   const drawEveryComposer = () => {
     for (const tab of tabs.values()) {
-      drawComposer(tab);
+      drawComposer(tab, deps);
     }
   };
   deps.composerParts.onChanged(drawEveryComposer);
@@ -229,6 +247,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       // sets the same scope, so no pushed dialog hears a base change:
       // `otherSessionShown` closes the session's dialogs.
       shown: (shownTab) => {
+        shownTab.stop.leave();
         deps.setScope('chat');
         askHistory(shownTab, deps);
         if (
@@ -239,7 +258,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
         }
         lastShownSessionId = shownTab.sessionId;
         log('chat', `Chat tab shown in ${shownTab.name}`);
-        drawStatusLine(shownTab);
+        drawStatusLine(shownTab, deps);
         shownTab.entries.scrollToFocus();
         focusIfRevealed(shownTab);
       },
@@ -272,7 +291,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
   channel.on('controls', ({ sessionId, controls }) => {
     const tab = heldFor('controls', sessionId);
     if (tab !== undefined) {
-      setControls(tab, controls, log);
+      setControls(tab, controls, deps);
     }
   });
   channel.on('activity', ({ sessionId, activity }) => {
@@ -293,7 +312,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       }
       log('chat', `${tab.name} is ${activity}`);
       drawActivity(tab, deps);
-      drawStatusLine(tab);
+      drawStatusLine(tab, deps);
     }
   });
   channel.on('branch', ({ sessionId, repo, branch }) => {
@@ -302,7 +321,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       return;
     }
     tab.state = { ...tab.state, repo, branch };
-    drawStatusLine(tab);
+    drawStatusLine(tab, deps);
     log(
       'chat',
       branch === null
@@ -337,7 +356,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     if (tab !== undefined) {
       tab.state = { ...tab.state, running: true };
       tab.entries.setWorking(isWorking(tab.state));
-      drawStatusLine(tab);
+      drawStatusLine(tab, deps);
       log('chat', `${tab.name} running`);
     }
   });
@@ -350,7 +369,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     tab.unseen = unseenAfterRest(tab.unseen, error, wasActive);
     tab.state = { ...tab.state, running: false };
     tab.entries.setWorking(isWorking(tab.state));
-    drawStatusLine(tab);
+    drawStatusLine(tab, deps);
     drawActivity(tab, deps);
     if (tab.handle?.isVisible() === true) {
       deps.visibleSessionRested();
@@ -368,6 +387,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       return;
     }
     tabs.delete(sessionId);
+    tab.stop.leave();
     tab.dropTarget?.dispose();
     tab.box?.destroy();
     tab.composerSize.disconnect();
@@ -389,6 +409,13 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
   };
   deps.onActiveChanged(clearUnseen);
   deps.onSessionHostChanged(clearUnseen);
+  // Another tab, pane or mode took the keys; a scope pushed over the visible
+  // tab keeps its stop.
+  deps.onScopeChanged(() => {
+    for (const tab of tabs.values()) {
+      tab.stop.scopeChanged(tab.handle?.isVisible() === true);
+    }
+  });
   void channel
     .invoke('sessions')
     .then((states) => {
@@ -403,7 +430,9 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
   const visibleTab = () =>
     [...tabs.values()].find((tab) => tab.handle?.isVisible() === true);
   const asSession = (tab: HeldTab | undefined): ChatSession | undefined =>
-    tab === undefined || tab.box === null ? undefined : sessionOf(tab, tab.box);
+    tab === undefined || tab.box === null
+      ? undefined
+      : sessionOf(tab, tab.box, deps.composerParts);
 
   return {
     reveal(sessionId) {
@@ -414,7 +443,12 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       }
     },
     visibleSessionId: () => visibleTab()?.sessionId ?? null,
-    focusedEntry: () => visibleTab()?.entries.focusedElement() ?? null,
+    focusedEntry: () => {
+      const tab = visibleTab();
+      return tab === undefined || tab.stop.holding() !== null
+        ? null
+        : tab.entries.focusedElement();
+    },
     session: (sessionId) => asSession(tabs.get(sessionId)),
     sessionOfEditor: (editor) =>
       asSession([...tabs.values()].find((tab) => tab.box === editor)),
@@ -424,8 +458,16 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
 
 // Draws the tab's composer through the chat layout in place of its last draw,
 // moving the box into it and focusing the box again when it held focus; the
-// height observer follows the new composer.
-function drawComposer(tab: HeldTab) {
+// height observer follows the new composer. The parts are built again, so a
+// part holding the entry cursor leaves first, and a visible tab's cursor goes
+// back on the entries.
+function drawComposer(tab: HeldTab, deps: Pick<ChatViewDeps, 'setScope'>) {
+  if (tab.stop.holding() !== null) {
+    tab.stop.leave();
+    if (tab.handle?.isVisible() === true) {
+      cursorToEntries(tab, deps);
+    }
+  }
   const hadFocus = tab.isBoxFocused;
   const composer = tab.composer.drawComposer(tab.root, composerInputOf(tab));
   tab.composerSize.disconnect();
@@ -436,10 +478,16 @@ function drawComposer(tab: HeldTab) {
 }
 
 // Draws the status line, or the whole composer again when its update threw.
-function drawStatusLine(tab: HeldTab) {
+function drawStatusLine(tab: HeldTab, deps: Pick<ChatViewDeps, 'setScope'>) {
   if (!tab.composer.drawStatusLine(composerInputOf(tab))) {
-    drawComposer(tab);
+    drawComposer(tab, deps);
   }
+}
+
+// Chat's scope in force again and the cursor on the stop `G` focuses.
+function cursorToEntries(tab: HeldTab, deps: Pick<ChatViewDeps, 'setScope'>) {
+  deps.setScope('chat');
+  tab.entries.latest();
 }
 
 // Asks main for the session's earlier conversation each time its tab shows;
@@ -453,9 +501,15 @@ function askHistory(tab: HeldTab, deps: ChatViewDeps) {
     });
 }
 
-// The commands' view of a held tab, reading its state live.
-function sessionOf(tab: HeldTab, box: TextEditor): ChatSession {
+// The commands' view of a held tab, reading its state live; `enterStop`
+// offers the cursor to the composer parts held now.
+function sessionOf(
+  tab: HeldTab,
+  box: TextEditor,
+  composerParts: Pick<PartStore<ChatComposerPart>, 'parts'>,
+): ChatSession {
   return {
+    enterStop: () => tab.stop.offer(composerParts.parts()),
     sessionId: tab.sessionId,
     name: tab.name,
     get state() {
@@ -472,8 +526,9 @@ function sessionOf(tab: HeldTab, box: TextEditor): ChatSession {
 
 // The tab element (`div.chat-tab`: entries, then the floating composer
 // holding other plugins' parts, the attached images' strip, the box and its
-// bar) added to its
-// session, with the box's editor mounted once the element is attached. The
+// status line) added to its session, with the box's editor mounted once the
+// element is attached; it is marked `is-at-stop` while a composer part's stop
+// holds the entry cursor, and the box taking focus leaves that part. The
 // tab then selects itself, so a chat session opens on its Chat tab whichever
 // plugin's tab the session got first. `view.shown` may run inside `addTab`,
 // before the handle and box are set. Once the box is mounted the tab element is
@@ -549,11 +604,25 @@ function createTab(
     composer,
     composerSize: followComposerHeight(root, entries),
     dropTarget: null,
+    stop: createComposerStopHolder({
+      sessionId: state.sessionId,
+      name,
+      toEntries: () => cursorToEntries(tab, deps),
+      toBox: (how) => {
+        deps.setScope('chat');
+        tab.box?.focus(
+          how === 'insert' ? { insert: true } : { insertAtEnd: true },
+        );
+      },
+      setChatScope: () => deps.setScope('chat'),
+      changed: (holding) => root.classList.toggle('is-at-stop', holding),
+      log: deps.log,
+    }),
   };
   entries.rebuild(state.entries);
   entries.setQueued(state.queued);
   entries.setWorking(isWorking(state));
-  drawComposer(tab);
+  drawComposer(tab, deps);
   tab.handle = deps.sessions.addTab(state.sessionId, {
     id: 'chat',
     title: 'Chat',
@@ -568,14 +637,15 @@ function createTab(
     {
       changed: () => undefined,
       focused: () => {
+        tab.stop.boxFocused();
         tab.isBoxFocused = true;
         tab.root.classList.add('is-box-focused');
-        drawStatusLine(tab);
+        drawStatusLine(tab, deps);
       },
       blurred: () => {
         tab.isBoxFocused = false;
         tab.root.classList.remove('is-box-focused');
-        drawStatusLine(tab);
+        drawStatusLine(tab, deps);
       },
       // The cursor's shape shows the vim mode; the status line names none.
       modeChanged: () => undefined,
@@ -653,12 +723,19 @@ function putEntry(tab: HeldTab, entry: ChatEntry, log: Log) {
   }
 }
 
-function setControls(tab: HeldTab, controls: SessionControl[], log: Log) {
+function setControls(
+  tab: HeldTab,
+  controls: SessionControl[],
+  deps: Pick<ChatViewDeps, 'setScope' | 'log'>,
+) {
   const changed = changedControls(tab.state.controls, controls);
   tab.state = { ...tab.state, controls };
-  drawStatusLine(tab);
+  drawStatusLine(tab, deps);
   for (const control of changed) {
-    log('chat', `${control.label} is ${valueLabel(control)} in ${tab.name}`);
+    deps.log(
+      'chat',
+      `${control.label} is ${valueLabel(control)} in ${tab.name}`,
+    );
   }
 }
 

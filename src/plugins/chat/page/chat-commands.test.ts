@@ -103,6 +103,7 @@ function session(
     box: {} as TextEditor,
     attachments: createAttachments(),
     entries,
+    enterStop: () => null,
   };
   return Object.assign(shown, { counts });
 }
@@ -387,15 +388,53 @@ describe('chat commands', () => {
     },
   );
 
-  it('nextEntry_activityLine_logsFocusedActivityLine', () => {
+  it.each([
+    {
+      case: 'at the last stop, a stop takes it',
+      atLastStop: true,
+      takenBy: 'agent-strip.strip',
+      offered: 1,
+      moves: 0,
+      logs: [],
+    },
+    {
+      case: 'at the last stop, none takes it',
+      atLastStop: true,
+      takenBy: null,
+      offered: 1,
+      moves: 1,
+      logs: ['[chat] focused activity line'],
+    },
+    {
+      case: 'not at the last stop',
+      atLastStop: false,
+      takenBy: 'agent-strip.strip',
+      offered: 0,
+      moves: 1,
+      logs: ['[chat] focused activity line'],
+    },
+  ])('nextEntry_$case', ({ atLastStop, takenBy, offered, moves, logs }) => {
+    const counts = { offered: 0, moves: 0 };
+    const entries = {
+      isAtLastStop: () => atLastStop,
+      move() {
+        counts.moves++;
+        return activityStop;
+      },
+    } as Partial<ChatSession['entries']> as ChatSession['entries'];
     const shown = Object.assign(session(true), {
-      entries: focusedOnStop(activityStop),
+      entries,
+      enterStop() {
+        counts.offered++;
+        return takenBy;
+      },
     });
     const run = setUp(shown);
 
     run.handlers.nextEntry({});
 
-    expect(run.logs).toEqual(['[chat] focused activity line']);
+    expect(counts).toEqual({ offered, moves });
+    expect(run.logs).toEqual(logs);
   });
 
   it.each([

@@ -277,11 +277,36 @@ export interface AppSlashCommand {
   run(context: SlashCommandContext): Promise<void> | void;
 }
 
+// A composer part's stop on a Chat tab's entry cursor: `j` on the last stop of
+// the entries offers it the cursor.
+export interface ComposerStop {
+  // Takes the entry cursor in `sessionId`; false when the part has nothing to
+  // select, and `j` stays put. Before it returns true the part sets its own
+  // base scope through its own `api.keys.setScope`; returning false it changes
+  // nothing.
+  enter(sessionId: string, exits: ComposerStopExits): boolean;
+  // The cursor left by a chat action (the box took focus, the tab hid); the
+  // part drops its selection and scope. It sets no scope: chat, or the view
+  // that took the keys, has set one already.
+  leave(sessionId: string): void;
+}
+
+// How a holding part hands the cursor back. A part calls each at most once
+// per `enter`; a call after chat took the cursor back does nothing.
+export interface ComposerStopExits {
+  // Back to the last entry, chat's scope in force again.
+  toEntries(): void;
+  // Focuses the chat box as `i` / `a` do.
+  toBox(how: 'insert' | 'append'): void;
+}
+
 // What a plugin draws above every Chat tab's composer: chat hands it a
-// wrapper and the tab's session id.
+// wrapper and the tab's session id. A part with a `stop` is offered the entry
+// cursor, in part order, the first to take it holding it.
 export interface ChatComposerPart {
   id: string;
   build(parent: HTMLElement, sessionId: string): { dispose?(): void };
+  stop?: ComposerStop;
 }
 
 // What a plugin draws in every Chat tab's status line, after the control
@@ -307,8 +332,8 @@ export interface ChatStatusPart {
 // redraws into its wrapper itself when its content changes; it draws in every
 // Chat tab, the preview's included.
 // `focusedEntry` is the visible Chat tab's focused stop's slot element (an
-// entry, an activity line or a pending row); null with no visible Chat tab or
-// no focused stop.
+// entry, an activity line or a pending row); null with no visible Chat tab, no
+// focused stop, or while a composer part's stop holds the cursor.
 export interface ChatPageExports {
   addSlashCommand(command: AppSlashCommand): Disposable;
   fillComposer(sessionId: string, text: string): void;

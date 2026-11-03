@@ -48,6 +48,7 @@ import {
   focusAfterScroll,
   focusFirst,
   focusLatest,
+  isAtLastStop,
   moveFocus,
   START_FOCUS,
 } from './entry-focus';
@@ -118,6 +119,10 @@ export interface EntryList {
   setWorking(working: boolean): void;
   // The focused stop after the move; null with no stops.
   move(step: 1 | -1): EntryListStop | null;
+  // Whether `move(1)` has no stop left to move to: no stops, or the focus on
+  // the last stop in cursor order (the newest pending row, else the last row's
+  // last stop: an open last run's last step).
+  isAtLastStop(): boolean;
   // Follows the last row, the newest pending row, else an entry or a run's
   // line whether the run is open or not, and scrolls to the bottom.
   latest(): void;
@@ -522,6 +527,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       drawFocus('slot');
       return focusedStop();
     },
+    isAtLastStop: () => isAtLastStop(focus, order),
     latest() {
       focus = focusLatest(lastStopId());
       drawFocus('bottom');

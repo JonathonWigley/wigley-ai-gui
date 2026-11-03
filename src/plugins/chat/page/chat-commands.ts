@@ -162,7 +162,14 @@ export function chatCommandHandlers(
         );
       log('chat', `interrupted ${session.name}`);
     }),
-    nextEntry: inSession((session) => moveEntry(session, 1, log)),
+    // On the last stop, a composer part's stop may take the cursor; the
+    // holder logs the part that took it.
+    nextEntry: inSession((session) => {
+      if (session.entries.isAtLastStop() && session.enterStop() !== null) {
+        return;
+      }
+      moveEntry(session, 1, log);
+    }),
     prevEntry: inSession((session) => moveEntry(session, -1, log)),
     latestEntry: inSession((session) => {
       session.entries.latest();

@@ -5,6 +5,7 @@ import {
   focusAfterClose,
   focusAfterScroll,
   focusFirst,
+  isAtLastStop,
   moveFocus,
   START_FOCUS,
 } from './entry-focus';
@@ -99,6 +100,26 @@ describe('entry focus', () => {
       expect(focusAfterChange(focus, next, lastRow)).toEqual(expected);
     },
   );
+
+  it.each([
+    { case: 'no ids', focus: START_FOCUS, stops: [], expected: true },
+    { case: 'focus on the last id', focus: onC, stops: ids, expected: true },
+    { case: 'focus on an earlier id', focus: onB, stops: ids, expected: false },
+    {
+      case: 'no focused entry with ids',
+      focus: START_FOCUS,
+      stops: ids,
+      expected: false,
+    },
+    {
+      case: 'focus on an open last run line before its steps',
+      focus: onLine,
+      stops: ['a', 'activity:s1', 's1', 's2'],
+      expected: false,
+    },
+  ])('isAtLastStop_$case', ({ focus, stops, expected }) => {
+    expect(isAtLastStop(focus, stops)).toBe(expected);
+  });
 
   it.each([
     { entries: ['a', 'b', 'c'], expected: { entryId: 'a', following: false } },
