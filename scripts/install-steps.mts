@@ -1,7 +1,8 @@
 // The decisions `npm run install-app` makes from its inputs alone: the ref its
 // arguments name, where it builds, what it installs from the build and where on
-// each OS, whether the build worktree needs `npm ci`, which processes are the
-// stable app, and what cleaning the Windows install root deletes.
+// each OS, whether the build worktree needs `npm ci`, what each OS's process
+// list says, which processes are the stable app and which of them the run quits,
+// and what cleaning the Windows install root deletes.
 // `scripts/install-app.mts` runs the steps.
 import path from 'node:path';
 
@@ -19,6 +20,15 @@ export interface InstallPaths {
   stagingDir: string;
   binary: string;
   shortcut: string | null;
+}
+
+export interface StableProcess {
+  pid: number;
+  executable: string;
+}
+
+export interface ListedProcess extends StableProcess {
+  commandLine: string;
 }
 
 const DEFAULT_REF = 'main';
@@ -172,4 +182,57 @@ export function isStableAppProcess(
     path.win32.dirname(folder) === installRoot &&
     path.win32.basename(folder).startsWith(APP_FOLDER_PREFIX);
   return fileName === WINDOWS_EXE_NAME && (isFlatInstall || isVersionFolder);
+}
+
+// The stable app's `running` processes this install ends. On Windows an app
+// already running from installDir is the build this run installs, so it keeps
+// running; macOS replaces the bundle, so every match goes.
+export function processesToQuit(
+  platform: NodeJS.Platform,
+  paths: InstallPaths,
+  running: readonly StableProcess[],
+): StableProcess[] {
+  if (platform !== 'win32') {
+    return [...running];
+  }
+  const installDir = paths.installDir.toLowerCase();
+  return running.filter(
+    ({ executable }) =>
+      path.win32.dirname(executable).toLowerCase() !== installDir,
+  );
+}
+
+// The processes in the listing PowerShell prints: one line each of pid,
+// ExecutablePath and CommandLine joined by tabs. A process whose path Windows
+// hides has no ExecutablePath, and is left out.
+export function parseWindowsProcessList(output: string): ListedProcess[] {
+  return output.split(/\r?\n/).flatMap((line) => {
+    const [pid, executable, ...commandLine] = line.split('\t');
+    return executable
+      ? [
+          {
+            pid: Number(pid),
+            executable,
+            commandLine: commandLine.join('\t'),
+          },
+        ]
+      : [];
+  });
+}
+
+// The processes in `ps -o pid=,args=` output. The executable is the first token
+// of the command line, as the installed binary's path holds no space.
+export function parseMacProcessList(output: string): ListedProcess[] {
+  return output.split('\n').flatMap((line) => {
+    const match = /^\s*(\d+)\s+(.*)$/.exec(line);
+    return match === null
+      ? []
+      : [
+          {
+            pid: Number(match[1]),
+            executable: match[2].split(' ')[0],
+            commandLine: match[2],
+          },
+        ];
+  });
 }

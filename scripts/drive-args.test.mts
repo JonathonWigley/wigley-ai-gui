@@ -110,11 +110,24 @@ describe('parseDriveArgs', () => {
     });
   });
 
-  it("GIVEN argv ['quit', '--run', 'x'] WHEN parsed THEN it is the CLI's own quit of run x", () => {
-    expect(parseDriveArgs(['quit', '--run', 'x'])).toEqual({
-      kind: 'quit',
-      run: 'x',
-    });
+  it.each([
+    { argv: ['quit', '--run', 'x'], keepSessions: false },
+    { argv: ['quit', '--keep-sessions', '--run', 'x'], keepSessions: true },
+  ])(
+    "GIVEN argv $argv WHEN parsed THEN it is the CLI's own quit of run x, keepSessions $keepSessions",
+    ({ argv, keepSessions }) => {
+      expect(parseDriveArgs(argv)).toEqual({
+        kind: 'quit',
+        keepSessions,
+        run: 'x',
+      });
+    },
+  );
+
+  it("GIVEN argv ['restart', '--keep-sessions'] WHEN parsed THEN it throws naming the flag", () => {
+    expect(() => parseDriveArgs(['restart', '--keep-sessions'])).toThrow(
+      '--keep-sessions',
+    );
   });
 
   it.each(['../x', '..', 'a/b', 'a\\b', '.', ''])(
@@ -127,6 +140,7 @@ describe('parseDriveArgs', () => {
   it("GIVEN --run '20261022-101500-ab12' WHEN parsed THEN the run is that id", () => {
     expect(parseDriveArgs(['quit', '--run', '20261022-101500-ab12'])).toEqual({
       kind: 'quit',
+      keepSessions: false,
       run: '20261022-101500-ab12',
     });
   });

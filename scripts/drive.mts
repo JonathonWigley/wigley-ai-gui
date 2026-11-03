@@ -76,8 +76,10 @@ async function main(invocation: DriveInvocation): Promise<void> {
     await restart(currentRun(invocation.run));
   } else if (invocation.kind === 'quit') {
     const runId = currentRun(invocation.run);
-    await stop(runId, {});
-    removeQuitEntries(runId);
+    await stop(runId, { keepSessions: invocation.keepSessions });
+    if (!invocation.keepSessions) {
+      removeQuitEntries(runId);
+    }
   } else if (invocation.kind === 'help') {
     await printHelp(invocation.run);
   } else {

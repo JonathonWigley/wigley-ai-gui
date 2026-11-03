@@ -364,5 +364,6 @@ Review base: 7f956435
 - extra tests beyond the doc: unheldGuard_ClearedRow_LogsAndStartsFresh, restore_SkippedRecord_LeftOutOnceAHeldRowHoldsItsHostId, hold_AfterAWaitEnded_StartsANewWaitWithItsOwnBound · group 09
 - Check 4's fix went to a worker on the lead's ruling that the host stays harness-free and an unknown line reads busy · lead
 ### Review rounds
+- Round 1 at 426be8f2: NEEDS FIXES, 51 findings, 7 lanes; prose and comment fixes applied by the lead; report /tmp/claude-session-host/review-426be8f2.md
 ### Test gate
 - Whole gui suite: 394 files, 6583 tests passed at 73bdb0c8, tsc and lint clean; self-test 864 PASS at 14a6a1b5 (before the idle fix, which touched no self-test path); marketplace forms suite 63 passed, 2 Windows-only skipped. Picked whole suite since the change reaches main, chat, sessions and the harness

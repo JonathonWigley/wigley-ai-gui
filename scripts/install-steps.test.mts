@@ -5,6 +5,9 @@ import {
   isInstallDue,
   isStableAppProcess,
   parseInstallArgs,
+  parseMacProcessList,
+  parseWindowsProcessList,
+  processesToQuit,
 } from './install-steps.mts';
 
 const USAGE = 'usage: npm run install-app -- [--ref <ref>]';
@@ -205,6 +208,27 @@ describe('isStableAppProcess', () => {
       expected: false,
     },
     {
+      name: 'another file name in a version folder',
+      platform: 'win32',
+      executable: `${WINDOWS_ROOT}\\app-fedcba987654\\other.exe`,
+      commandLine: `"${WINDOWS_ROOT}\\app-fedcba987654\\other.exe"`,
+      expected: false,
+    },
+    {
+      name: 'the file name deeper under a version folder',
+      platform: 'win32',
+      executable: `${WINDOWS_ROOT}\\app-fedcba987654\\resources\\wigley-ai-gui.exe`,
+      commandLine: `"${WINDOWS_ROOT}\\app-fedcba987654\\resources\\wigley-ai-gui.exe"`,
+      expected: false,
+    },
+    {
+      name: 'a version folder and file name in upper case',
+      platform: 'win32',
+      executable: `${WINDOWS_ROOT}\\APP-FEDCBA987654\\WIGLEY-AI-GUI.EXE`,
+      commandLine: `"${WINDOWS_ROOT}\\APP-FEDCBA987654\\WIGLEY-AI-GUI.EXE"`,
+      expected: true,
+    },
+    {
       name: 'the macOS app',
       platform: 'darwin',
       executable: MAC_BINARY,
@@ -236,6 +260,85 @@ describe('isStableAppProcess', () => {
       );
     },
   );
+});
+
+describe('processesToQuit', () => {
+  it.each([
+    {
+      name: 'Windows keeps the build this run installs and quits the others',
+      platform: 'win32',
+      executables: [
+        `${WINDOWS_ROOT}\\app-0123456789ab\\wigley-ai-gui.exe`,
+        `${WINDOWS_ROOT}\\APP-0123456789AB\\WIGLEY-AI-GUI.EXE`,
+        `${WINDOWS_ROOT}\\app-fedcba987654\\wigley-ai-gui.exe`,
+        `${WINDOWS_ROOT}\\wigley-ai-gui.exe`,
+      ],
+      expected: [3, 4],
+    },
+    {
+      name: 'macOS quits every match, even one directly in installDir',
+      platform: 'darwin',
+      executables: [MAC_BINARY, '/Applications/wigley-ai-gui.app/helper'],
+      expected: [1, 2],
+    },
+  ] as const)(
+    'GIVEN $name WHEN processesToQuit runs THEN pids $expected',
+    ({ platform, executables, expected }) => {
+      const paths = platform === 'win32' ? windowsPaths() : macPaths();
+      const running = executables.map((executable, index) => ({
+        pid: index + 1,
+        executable,
+      }));
+      expect(
+        processesToQuit(platform, paths, running).map(({ pid }) => pid),
+      ).toEqual(expected);
+    },
+  );
+});
+
+describe('parseWindowsProcessList', () => {
+  it.each([
+    {
+      name: 'a command line holding a tab, CRLF line ends and a trailing blank line',
+      output:
+        '41\tC:\\a b\\x.exe\t"C:\\a b\\x.exe"\targ\r\n52\tD:\\y.exe\t\r\n',
+      expected: [
+        {
+          pid: 41,
+          executable: 'C:\\a b\\x.exe',
+          commandLine: '"C:\\a b\\x.exe"\targ',
+        },
+        { pid: 52, executable: 'D:\\y.exe', commandLine: '' },
+      ],
+    },
+    {
+      name: 'a process with no ExecutablePath',
+      output: '41\t\t\n52\tD:\\y.exe\tD:\\y.exe',
+      expected: [
+        { pid: 52, executable: 'D:\\y.exe', commandLine: 'D:\\y.exe' },
+      ],
+    },
+    { name: 'no processes', output: '', expected: [] },
+  ])(
+    'GIVEN $name WHEN parsed THEN the processes are listed',
+    ({ output, expected }) => {
+      expect(parseWindowsProcessList(output)).toEqual(expected);
+    },
+  );
+});
+
+describe('parseMacProcessList', () => {
+  it('GIVEN padded pids, arguments and a blank line WHEN parsed THEN each executable is the first token', () => {
+    const output = `  417 ${MAC_BINARY} --flag value\n90210 /bin/zsh\n\n`;
+    expect(parseMacProcessList(output)).toEqual([
+      {
+        pid: 417,
+        executable: MAC_BINARY,
+        commandLine: `${MAC_BINARY} --flag value`,
+      },
+      { pid: 90210, executable: '/bin/zsh', commandLine: '/bin/zsh' },
+    ]);
+  });
 });
 
 describe('isInstallDue', () => {

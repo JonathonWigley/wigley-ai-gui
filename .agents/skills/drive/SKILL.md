@@ -58,8 +58,10 @@ or touches their data, so start one whenever a check needs it.
 5. `npm run drive -- quit` when done; it waits for the ui-state write, part disposal and any
    recording to finish and ends the run's Claude sessions before the app exits, then deletes the
    run's `home/` and `user-data/`, so its test repos leave the machine's docs index: `screenshots/`,
-   `videos/` and `app.log` stay for reading back. Every `start` deletes each other run folder untouched for over a day whose app is
-   not running. `.drive/` is git-ignored.
+   `videos/` and `app.log` stay for reading back. `quit --keep-sessions` instead keeps the run's
+   Claude sessions running on the session host, and its `home/` and `user-data/`, so `start --run
+   <id>` with the run's own flags brings it back and re-attaches them. Every `start` deletes each other run folder untouched for over a day whose app is
+   not running, a kept run's included. `.drive/` is git-ignored.
 
 A page edit hot reloads into a running run. A main-process edit needs `restart`, which keeps the
 temp home and the start flags and does not copy the user config again, so a check that something

@@ -7,7 +7,7 @@
 // `app-<short sha>` folder, since a running session host locks its exe's folder.
 // The build bakes in this clone's path, never the build worktree's, so the
 // stable app reads each live default layout from this clone.
-// `scripts/install-steps.mts` holds the paths and the argument parsing.
+// `scripts/install-steps.mts` holds the decisions made from inputs alone.
 import { type SpawnSyncOptions, spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
@@ -29,28 +29,24 @@ import {
   installRootCleanup,
   isInstallDue,
   isStableAppProcess,
+  type ListedProcess,
   parseInstallArgs,
+  parseMacProcessList,
+  parseWindowsProcessList,
+  processesToQuit,
+  type StableProcess,
 } from './install-steps.mts';
 
 const REPO_DIR = path.resolve(import.meta.dirname, '..');
 const LOCK_HASH_FILE = '.install-app-lock-hash';
 const QUIT_TIMEOUT_MS = 15_000;
 const POLL_MS = 500;
-// Windows refuses a rename with these codes for a moment after the app's
-// processes exit, while their handles release.
+// Windows refuses a rename or a delete with these codes for a moment after the
+// app's processes exit, while their handles release.
 const RENAME_RETRY_CODES = new Set(['EBUSY', 'EPERM', 'EACCES']);
 const RENAME_ATTEMPTS = 10;
 const RENAME_RETRY_MS = 250;
 const IS_WINDOWS = process.platform === 'win32';
-
-interface StableProcess {
-  pid: number;
-  executable: string;
-}
-
-interface ListedProcess extends StableProcess {
-  commandLine: string;
-}
 
 async function main(ref: string): Promise<void> {
   const commit = resolveCommit(ref);
@@ -256,23 +252,16 @@ function runningStableProcesses(paths: InstallPaths): StableProcess[] {
   );
 }
 
-// The app's processes this run has to end. On Windows an app already running
-// from installDir is the build this run installs, so it keeps running; macOS
-// replaces the bundle, so every match goes.
 function stableProcessesToQuit(paths: InstallPaths): StableProcess[] {
-  const running = runningStableProcesses(paths);
-  if (!IS_WINDOWS) {
-    return running;
-  }
-  const installDir = paths.installDir.toLowerCase();
-  return running.filter(
-    ({ executable }) => path.dirname(executable).toLowerCase() !== installDir,
+  return processesToQuit(
+    process.platform,
+    paths,
+    runningStableProcesses(paths),
   );
 }
 
 // Every running wigley-ai-gui.exe. PowerShell writes UTF-8 with no byte order
-// mark because Node reads the paths it prints; a process whose path Windows hides
-// has no ExecutablePath.
+// mark because Node reads the paths it prints.
 function listWindowsProcesses(): ListedProcess[] {
   const output = runStep('Finding the stable app', 'powershell.exe', [
     '-NoProfile',
@@ -280,41 +269,17 @@ function listWindowsProcesses(): ListedProcess[] {
     '-Command',
     `$ErrorActionPreference = 'Stop'; [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false; Get-CimInstance Win32_Process -Filter ${powerShellString("Name = 'wigley-ai-gui.exe'")} | ForEach-Object { ($_.ProcessId, $_.ExecutablePath, $_.CommandLine) -join [char]9 }`,
   ]);
-  return output.split(/\r?\n/).flatMap((line) => {
-    const [pid, executable, ...commandLine] = line.split('\t');
-    return executable
-      ? [
-          {
-            pid: Number(pid),
-            executable,
-            commandLine: commandLine.join('\t'),
-          },
-        ]
-      : [];
-  });
+  return parseWindowsProcessList(output);
 }
 
-// Every running process; `ww` keeps `ps` from cutting the command line. The
-// executable is the first token of it, as the installed binary's path holds no
-// space.
+// Every running process; `ww` keeps `ps` from cutting the command line.
 function listMacProcesses(): ListedProcess[] {
   const output = runStep('Finding the stable app', 'ps', [
     '-axww',
     '-o',
     'pid=,args=',
   ]);
-  return output.split('\n').flatMap((line) => {
-    const match = /^\s*(\d+)\s+(.*)$/.exec(line);
-    return match === null
-      ? []
-      : [
-          {
-            pid: Number(match[1]),
-            executable: match[2].split(' ')[0],
-            commandLine: match[2],
-          },
-        ];
-  });
+  return parseMacProcessList(output);
 }
 
 // Asks the stable app's `processes` to quit and waits for them to exit. Never
@@ -437,7 +402,12 @@ async function deleteOlderAppFolder(
 // Whether `target` is gone; a failure names the path and the next run retries it.
 function removeOrWarn(target: string): boolean {
   try {
-    rmSync(target, { recursive: true, force: true });
+    rmSync(target, {
+      recursive: true,
+      force: true,
+      maxRetries: RENAME_ATTEMPTS - 1,
+      retryDelay: RENAME_RETRY_MS,
+    });
     return true;
   } catch (error) {
     console.warn(

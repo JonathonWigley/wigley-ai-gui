@@ -375,7 +375,7 @@ export function createDriveCommands(deps: DriveCommandsDeps): DriveCommands {
     quit: {
       args: '{ keepSessions?: boolean }',
       description:
-        "quits the app once the reply is sent, ending the run's Claude sessions unless `keepSessions`",
+        "quits the app once the reply is sent, ending the run's Claude sessions unless `keepSessions` (`--keep-sessions` on the CLI)",
       unqueued: true,
       run: async (args) => {
         const keepSessions = optionalBoolean(args, 'keepSessions') ?? false;
