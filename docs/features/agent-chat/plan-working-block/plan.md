@@ -157,6 +157,7 @@ Review base: 578c0d08
 - 04 · 3f41d091 · diff read: four stale lines fixed, DESIGN.md and layout comments already true; typecheck and lint clean · concerns: two design.md lines now run past the file's wrap width
 - 05 · 3f41d091 · typecheck, lint, npm test 5629 pass; selftest chat and agents all passed; chat-activity-live.png shows the block under the last entry (0:00 Thinking…, box of 5 tool lines with Bash npm test current and Bash false failed, counts Read 3 Bash 2 Edit 1) under a one-line live summary; chat-activity-finished.png shows no block and the summary line · concerns: none
 ### Contract changes
+- working-turn.ts exports: workingInput → workingInput, isTurnEmpty(entries) · why: entry-list tells an empty turn by the same turn-start rule · consumers: entry-list.ts · group R1 fix
 ### Rulings
 - Every bounds row asserts now, not one row — stronger than asked — a slightly longer table · group 01 · group 01
 - AGENTS.md's chat-layout surface-part list joins task 04's doc re-read, since 01's worker found it omits working — the doc stays true — one more file in 04 · lead · group 01
@@ -165,6 +166,11 @@ Review base: 578c0d08
 - working part declared (parent, input), dropping the unused kit — the part draws nothing through it — a one-word change if wrong · group 02 · group 02
 - Box card: card-background, radius-md, space-2 space-3 padding; is-failed after is-current so a failed current line shows error — a visual retune if wrong · group 02 · group 02
 - src/plugins/chat/main/selftest-script.ts (the activity-line why) joins task 04's doc re-read, as 02's worker found it stale — keeps the self-test's prose true — one more file in 04 · lead · group 02
+- R1#1 empty-turn reset: keep the held block's input unchanged while the turn holds no entries (no redraw on list changes; the tick still moves now) — the user approved the agent's recommendation for every finding — if wrong, the block shows the previous turn's box for the instant between the result and idle · lead
 ### Review rounds
+- R1 · d5dfe1ac · NEEDS FIXES — 1 open Minor (empty-turn clock reset; user approved the agent's recommendations), 1 applied (rewrap, prose-only)
+- R2 (re-review, a7403224) · a7403224 · NEEDS FIXES — R1#1 closed; 1 determined Minor (no test row for leaving the held state) dispatched; 1 applied (startedAt comment)
+- R3 (re-review, 8c5c53fd) · 8c5c53fd · PASS — R2#1 closed
 ### Test gate
 - full npm test (vitest, 17 s — the whole suite is cheap, and the change reaches the shared entry list and default layout) 5629/5629 pass; npm run selftest --plugin chat --plugin agents (task 05 checks 2–3) all passed; typecheck and lint clean · pass
+- after the fix cycles: full npm test re-run (fixes touch entry-list and working-turn) · see result line in the run report
