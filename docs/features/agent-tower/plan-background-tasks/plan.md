@@ -146,7 +146,7 @@ the roster only through the agents channel; `npm run lint` (layer and style chec
 - [x] [Task events in the contract and the Claude decoder](01-task-events-decoder.md)
 
 ### Wave 2
-- [ ] [The roster holds tasks, and the page draws task lines](02-roster-tasks.md) — after 01
+- [x] [The roster holds tasks, and the page draws task lines](02-roster-tasks.md) — after 01
 - [x] [The fake harness runs tasks](03-fake-harness-tasks.md) — after 01
 
 ### Wave 3
@@ -162,10 +162,15 @@ Review base: d757831
 ### Groups
 - 01 · 533539e · diff read (both AgentEvent members, roster cases present); typecheck pass; worker ran lint and stream-decoder.test.ts (81 pass) · concerns: AGENTS.md agent-event bullet left as an example list; at stamped by the harness via AgentEventDraft, no decoder change
 - 03 · 93e57f0 · diff read (two taskStarted tail, interrupt ends tasks before subagent finishes, ids match spec); typecheck clean on 03's files (errors only in 02's in-flight agents files); worker ran fake-agent-harness.test.ts 52/52 · concerns: selftest line counts after the agents send are 02's to update
+- 02 · 9275f5b · diff read (every Produces present: RunningTask, Roster, AgentsChannel shape, foldAgentEvent, RosterLine/orderRosterLines, agentLine/taskLine/TaskLineInput, createRosterLines part agents.rosterLines); typecheck and lint pass; worker ran the five test files (49 pass); selftest not yet run · concerns: manifest.ts reworded outside the Files list; lint:fix run repo-wide (only this task's files changed); AGENTS.md:170, :304 and layouts/design.md:89 left stale for 04
 ### Contract changes
 ### Rulings
 - A task_started for a task already notified and forgotten starts it again — the plan only rules out repeats while open — a late duplicate start would show a line until sessionEnded · group 01 · group 01
 - A local_agent start with empty tool_use_id maps to '' so its tasks get agentId '' rather than main — no measured line lacks tool_use_id — such a task would draw top-level under no agent · group 01 · group 01
 - runningTasks accumulates across sends, so an interrupt ends every running task including ones left from an earlier agents turn — Produces says each task still running — a self-test sending agents twice before an interrupt would count more lines · group 03 · group 03
+- Nested indent padding-left var(--wg-space-4); terminal icon text-12 fg-tertiary — plan named no token — one-line CSS change if wrong · group 02 · group 02
+- Under-180px wrap rules scoped with .agents-line:not(.agents-task-line) so task lines keep the shared agents-line styling — keeps scrollsItself classes — a task line would lose shared styling if wrong · group 02 · group 02
+- Moved roster-lines tests now assert the 185 s agent as line 0, since the page sorts by start time — the behaviour the plan asked for — not a weakened test · group 02 · group 02
 ### Review rounds
 ### Test gate
+- stream-decoder.test.ts (01's decoder rows), fake-agent-harness.test.ts (03), src/plugins/agents/** (02's five files plus agent-log), and consumers of the decoder and fake harness timelines whose exact-sequence assertions could see the new events: claude-code-harness.test.ts, chat-sessions/accounts/folder-choices tests, usage main tests, workflow start.test.ts · 18 files, 445 tests pass (run in the worktree after the last code group; 04 is doc-only)

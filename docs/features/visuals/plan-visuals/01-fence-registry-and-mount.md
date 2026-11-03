@@ -18,7 +18,7 @@ Files:     modify `src/contracts/markdown.ts` · modify `src/renderer/markdown-i
            test `src/shared/page/markdown-mount.test.ts` (new) · test `src/renderer/markdown-it/markdown-it-renderer.test.ts` ·
            test `src/shared/page/layout-host/base-kit.test.ts` ·
            modify (fakes only, see Approach § Fakes) the 22 files that build a `MarkdownRenderer`
-           literal: `src/plugins/agents/page/subagent-lines.test.ts`, `src/plugins/backlog/page/backlog-view.test.ts`,
+           literal: `src/plugins/agents/page/roster-lines.test.ts`, `src/plugins/backlog/page/backlog-view.test.ts`,
            `src/plugins/chat/page/chat-kit.test.ts`, `src/plugins/chat/page/entry-list.test.ts`,
            `src/plugins/docs/page/doc-view.test.ts`, `src/plugins/docs/page/docs-page-fakes.ts`,
            `src/plugins/forms/page/forms-view.test.ts`, `src/plugins/forms/page/layout/card-kit.test.ts`,

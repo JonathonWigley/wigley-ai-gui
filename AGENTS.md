@@ -167,7 +167,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  layouts/ (the sessions Layout contract and the built-in `default` layout)
   agents/        manifest.ts, contract.ts, roster.ts (the pure reducer folding agent events into a session's roster),
                  main/ (hears `chat.agentEvent`, keeps each session's roster, appends each event to
-                 `logs/<host session id>.jsonl` in its plugin data, the layout preview), page/ (the running subagent
+                 `logs/<host session id>.jsonl` in its plugin data, the layout preview), page/ (the running subagent and task
                  lines under each session row, through sessions' `addRowPart`), layouts/ (the agents Layout contract
                  and the built-in `default` layout); `docs/features/agent-tower/design.md`
   forms/         manifest.ts, contract.ts, main/ (the round form type, its MCP tools, the preview
@@ -301,7 +301,7 @@ round; primer: an open primer), since main, not the page, decides.
 - **A session part** (`SessionPart`) is what a plugin draws for every session on a sessions surface: sessions hands
   it a wrapper and the session id, and the part draws through its own plugin's layout. It has the same shape as forms'
   `addCardPart`. A **row part** draws under every session row in the side bar, through the `sessions` page export
-  `addRowPart`; the agents plugin's subagent lines are one. A **bar part** draws in every session's tab bar, which moves
+  `addRowPart`; the agents plugin's subagent and task lines are one. A **bar part** draws in every session's tab bar, which moves
   with its session between panes, through `addBarPart`; the usage plugin's per-session context line is one.
   Information about one session goes in a session part, not on a shared bar.
 - **A composer part** is what a plugin draws above the Chat composer, through the `chat` page export
@@ -469,7 +469,7 @@ round; primer: an open primer), since main, not the page, decides.
   `src/main/claude-code/transcripts.ts`. That format is undocumented and was measured on the installed CLI, so a
   resume that lists nothing or draws raw entries starts with `transcripts.ts` and a fresh look at a transcript's line
   shapes.
-- **An agent event** — a subagent spawned or finished, a tool call, context usage, a compaction, a user message — is
+- **An agent event** — a subagent spawned or finished, a task started or finished, a tool call, context usage, a compaction, a user message — is
   the harness-neutral record (`AgentEvent` in `src/contracts/agent.ts`) the adapter sends through
   `AgentProcessEvents.agentEvent` beside the chat entries, naming its agent (`main` or a subagent's id). Chat main
   forwards each owned session's as `chat.agentEvent`; the agents plugin and the Agent Tower read only these, never a

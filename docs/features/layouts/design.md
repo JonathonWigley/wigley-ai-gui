@@ -86,7 +86,7 @@ stays in themes.
 | `settings` | `settings.layout` | the section list, the setting, key, leader and advanced rows, the problem line, the picker rows |
 | `notes` | `notes.layout` | the note popup: fields, tags, images, target, session, actions, markup toolbar, the confirm and picker rows |
 | `sessions` | `sessions.layout` | the session rows in the side bar, each session's tab strip, and where other plugins' row and bar parts sit |
-| `agents` | `agents.layout` | the running subagent lines under each session row |
+| `agents` | `agents.layout` | the running subagent and task lines under each session row |
 | `gallery` | `gallery.layout` | each primitive's sample block |
 | `usage` | `usage.layout` | the status-bar line (plan rows), each session's line in its tab bar (context bar, cache countdown, spend) and the right-bar details |
 | `keys` | `keys.layout` | the help overlay, the which-key panel, the title bar's Keys button |
@@ -105,7 +105,7 @@ can be iterated in place. The sample sends nothing and raises no notification or
 | `Space z l p` | primer: a sample primer holding every field and need |
 | `Space z l c` | chat: a session of every entry kind, its steps grouped into finished activity lines |
 | `Space z l s` | sessions: rows in every state |
-| `Space z l a` | agents: a sample session with two running subagents |
+| `Space z l a` | agents: a sample session with two running subagents and two running tasks |
 | `Space z l w` | workflow: a sample session in every stage, the plan-ready countdown included |
 
 ## The primer's columns
