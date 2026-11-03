@@ -174,3 +174,4 @@ Review base: 578c0d08
 ### Test gate
 - full npm test (vitest, 17 s — the whole suite is cheap, and the change reaches the shared entry list and default layout) 5629/5629 pass; npm run selftest --plugin chat --plugin agents (task 05 checks 2–3) all passed; typecheck and lint clean · pass
 - after the fix cycles: full npm test re-run (fixes touch entry-list and working-turn) · see result line in the run report
+- post-fix re-run result: npm test 5634/5634 pass, typecheck and lint clean · pass
