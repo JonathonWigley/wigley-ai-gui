@@ -184,6 +184,8 @@ export interface ChatChannel extends ChannelShape {
       entryId: string,
       answer: PermissionAnswer,
     ): void;
+    // Kills every session process chat holds; the rows stay, resting.
+    stopAll(): void;
     // Opens the layout preview's sample session and selects its row, or
     // selects the row of the one already open.
     openPreview(): void;

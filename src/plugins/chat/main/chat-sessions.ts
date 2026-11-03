@@ -16,6 +16,10 @@ import type { Disposable } from '../../../contracts/disposable';
 import type { Git } from '../../../contracts/git';
 import type { Log } from '../../../contracts/log';
 import type { MainChannel, PluginEvents } from '../../../contracts/plugin';
+import type {
+  HostedProcessInfo,
+  SessionHost,
+} from '../../../contracts/session-host';
 import { errorText } from '../../../shared/error-text';
 import { refusalOf } from '../image-rules';
 import {
@@ -82,6 +86,8 @@ export interface ChatSessionsDeps {
   log: Log;
   // Stamps the `at` of the notices and permission entries chat makes itself.
   clock: Clock;
+  // Lists the host's processes before a send or history read on an unheld row.
+  sessionHost: Pick<SessionHost, 'list'>;
 }
 
 export interface ChatSessions {
@@ -94,13 +100,23 @@ export interface ChatSessions {
   // message; returns the row's sessionId. Throws before opening anything on
   // an image chat would refuse to attach.
   launch(request: LaunchRequest): string;
-  // Opens a resting row for each saved session in order, unselected, with its
-  // saved titles, skipping one already open in the app, then activates the
-  // saved selection. Saving starts here: nothing is saved before it runs.
-  restore(saved: SavedSessions): void;
+  // Opens a row for each saved session in order, unselected, with its saved
+  // titles and queued messages, then activates the saved selection. A row whose
+  // process `hosted` lists running in the current host re-attaches to it; any
+  // other row rests, unheld when the host may still run its process (`hosted`
+  // null: the host list is unknown). A record already open in the app is
+  // skipped, and stays saved while it holds queued messages. Saving starts
+  // here: nothing is saved before it runs.
+  restore(
+    saved: SavedSessions,
+    hosted: readonly HostedProcessInfo[] | null,
+  ): void;
   // Reads a restored session's earlier conversation once and puts it before
-  // the entries held so far; does nothing for a session with none pending,
-  // and reads nothing while its profile is missing, leaving it pending.
+  // the entries held so far, up to its process's start on a re-attached row;
+  // does nothing for a session with none pending. It waits out a running
+  // attach. It reads nothing, leaving the history pending, while its profile is
+  // missing, and while its unheld process runs in another app version or the
+  // host cannot be listed.
   loadHistory(sessionId: string): Promise<void>;
   // The sessions plugin's `titleChanged` event: a row chat holds is saved with
   // its new titles; any other row is left alone.
@@ -118,25 +134,31 @@ export interface ChatSessions {
   // entries and the request's title as its first-message title, and resumes
   // its process; resolves to the row's sessionId. A
   // session chat holds a row for has that row activated instead; one open in
-  // the app on any other row rejects, as does any after `killAll`.
+  // the app on any other row rejects, as does any after `detachAll`.
   resume(request: ResumeRequest): Promise<string>;
   // Starts a resting session's process first, rejecting when its profile is
   // missing or the start fails; the row then stays resting. A restored row
   // whose earlier conversation is still pending has it read before the start,
-  // so the read holds none of this turn. After `killAll` a resting session
-  // starts no process and the message is dropped. While the harness reports
+  // so the read holds none of this turn. After `detachAll` a resting session
+  // starts no process and the message is dropped. A send waits out a running
+  // attach, then goes on from its start. On an unheld row it lists the host
+  // first: it rejects while that process runs in another app version or the
+  // host cannot be listed, and re-attaches when the process runs in the current
+  // host, so a session never runs two processes. While the harness reports
   // its turn running the message is queued instead, and each `idle` the
   // harness reports writes the oldest queued message not sent now until none
   // is left; a permission call left waiting after the turn ended queues
-  // nothing. A written message is held until its entry arrives, and returned
-  // when the harness reports it dropped. The first message written in a row
-  // with no first-message title sets it.
+  // nothing. A send at idle in a row holding unsent queued messages queues
+  // behind them and writes the oldest. A written message is held until its
+  // entry arrives, and returned when the harness reports it dropped. The first
+  // message written in a row with no first-message title sets it.
   send(sessionId: string, message: UserMessage): Promise<void>;
   // Adds an app notice to the session's entries and sends it as harness
   // entries travel, so `sessions()` keeps it.
   notice(sessionId: string, text: string, tone: 'info' | 'error'): void;
   // Returns every queued message not sent now, then interrupts the process;
-  // messages sent now stay queued.
+  // messages sent now stay queued. During an attach it waits for the attach
+  // to settle, then does this when the row holds a process.
   interrupt(sessionId: string): void;
   // Ends the session's process, interrupting a running turn first, and starts a
   // fresh one at once under a new host session id with the row's held mode and
@@ -146,9 +168,11 @@ export interface ChatSessions {
   // process raises no exit notice and no turn-finished alert. The entries
   // become one `Conversation cleared` notice. A resting session just starts its
   // fresh process. Throws before changing anything when the profile or harness
-  // is missing; a fresh start that throws leaves the row resting under the new
-  // id, then rethrows. Logs and does nothing for a session chat does not hold,
-  // or after `killAll`.
+  // is missing, or while the row attaches; a fresh start that throws leaves the
+  // row resting under the new id, then rethrows. An unheld process is left
+  // running on the host, since the fresh process shares no transcript with it.
+  // Logs and does nothing for a session chat does not hold, or after
+  // `detachAll`.
   clear(sessionId: string): void;
   // Takes the queued message out of the queue and returns it; logs and sends
   // nothing for one no longer queued or already sent now.
@@ -163,8 +187,9 @@ export interface ChatSessions {
   // `sendNow` does, stopping at a write that throws. Otherwise sends
   // `message` as `send` does, and a null `message` does nothing.
   sendAllNow(sessionId: string, message: UserMessage | null): Promise<void>;
-  // Throws for a session chat no longer holds or that has no running process,
-  // as the process's own `setControl` throws for a value it refuses, so the
+  // Throws for a session chat no longer holds, that has no running process or
+  // that is still attaching, as the process's own `setControl` throws for a
+  // value it refuses, so the
   // caller learns the change was not made. A model or effort set this way is
   // the user's once a controls report from the same process holds the picked
   // value; every later start in the row then passes its held value. A pick no
@@ -178,12 +203,19 @@ export interface ChatSessions {
   ): void;
   // The sessions plugin's `closed` event for `sessionId`: drops its saved
   // record, ends the process, then the owned session, which drops its row; a
-  // resting session has its owned session ended at once.
+  // resting session has its owned session ended at once. During an attach it
+  // waits for the attach to settle first. An unheld process is left running on
+  // the host: chat holds nothing to end it with.
   closed(sessionId: string): void;
-  // Kills every process not yet exited, a closed session's still ending
-  // included, for an app quit or a chat plugin reload, which does not wait
-  // for `end`; nothing is saved or started after it.
-  killAll(): void;
+  // Kills every process chat holds, a closed session's still ending included,
+  // and rests its row with a notice. A row still attaching or an unheld row's
+  // process is not stopped.
+  stopAll(): void;
+  // Detaches every held process, which keeps running on the session host, and
+  // kills every other process not yet exited, a closed or cleared session's
+  // still ending, for an app quit or a chat plugin reload; nothing is saved or
+  // started after it, and every later process event is ignored.
+  detachAll(): void;
   // The sessions plugin's `connected` event: records the session's host id
   // as open in the app.
   sessionConnected(session: AgentSession): void;
@@ -215,7 +247,7 @@ interface WrittenMessage {
 }
 
 // `process` is null whenever the session rests, and while the harness's
-// `start` runs.
+// `start` or `attach` runs.
 interface HeldSession {
   state: ChatSessionState;
   owned: OwnedSession;
@@ -258,10 +290,45 @@ interface HeldSession {
   exit: { code: number | null; error: string | null } | null;
   // Branch reads started in this row, numbering them; only the latest applies.
   branchReads: number;
+  // The id of the row's last process start or attach; never cleared, so after
+  // an exit it still names the ended process.
+  processId: string | null;
+  // What the row's last process start passed as `controls` and `resume`, which
+  // an attach passes again: no pipe line reports them.
+  launchControls: Record<string, string>;
+  launchResume: boolean;
+  // The `before` of the pending history read: the attached process's start;
+  // null when the row replayed nothing.
+  historyBefore: number | null;
+  // The running attach; resolves after its result is applied, to the
+  // rejection's error text, or null when it did not reject. Never rejects.
+  attaching: Promise<string | null> | null;
+  // `stopAll` killed the running process, so its `ended` says so.
+  isStopRequested: boolean;
+  // A process the host may still run for this row while chat holds no process
+  // object for it.
+  unheldProcessId: string | null;
+  // The running guard step for `unheldProcessId`.
+  unheldSettling: Promise<void> | null;
+}
+
+// What one guard step on an unheld process leaves its caller to do: whether a
+// pending history read goes on, and the error a send rejects with.
+interface UnheldSettled {
+  readsHistory: boolean;
+  refusal: string | null;
 }
 
 const QUIT_DURING_TURN_TEXT =
   'The app quit during this turn. Your next message resumes this session.';
+
+const OLDER_HOST_NOTICE_TEXT =
+  'This session is finishing its turn in another app version. Send a message once it ends.';
+
+const OLDER_HOST_REFUSAL_TEXT =
+  'This session is still finishing in another app version. Send again once it ends.';
+
+const STOPPED_TEXT = 'Session stopped. Your next message resumes this session.';
 
 function missingProfileText(name: string): string {
   return `Profile ${name} is not in chat's profiles setting; add it back to resume this session.`;
@@ -384,6 +451,10 @@ function savedSessionOf(
     sent: session.sent,
     busy: session.state.activity !== 'idle',
     titles,
+    processId: session.processId,
+    queued: session.state.queued.filter(isUnsent).map(userMessageOf),
+    launchControls: session.launchControls,
+    launchResume: session.launchResume,
   };
 }
 
@@ -401,8 +472,8 @@ function firstMessageTitleOf(text: string): string {
 // calls waiting on the user, the messages queued behind its running turn, and
 // the messages written to the agent it has not taken in yet;
 // the folder's saved sessions it can resume; and
-// the open sessions it saves and restores across a relaunch. Every state
-// change reaches the page over `send`.
+// the open sessions it saves across a relaunch, re-attaching to each process
+// the session host still runs. Every state change reaches the page over `send`.
 export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   const { sessions, send, log } = deps;
   // Insertion order is open order, the sidebar's order for chat's rows.
@@ -414,13 +485,20 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   // Host id of the last row chat holds that was selected.
   let selectedHostId: string | null = null;
   // Saving waits for the restore, so no save overwrites the saved records
-  // before they are read; it stops for good at `killAll`.
+  // before they are read; it stops for good at `detachAll`.
   let isRestored = false;
-  let isKilled = false;
+  let isDetached = false;
+  // Records the restore skipped that hold queued messages, saved unchanged so
+  // the next app start tries them again.
+  let skippedRecords: SavedSession[] = [];
   // One object per `addInstructions` call, in registration order.
   const instructionRegistrations = new Set<{ text: string }>();
 
   function snapshot(): SavedSessions {
+    // A held row's own record replaces a skipped one for good.
+    skippedRecords = skippedRecords.filter(
+      (record) => holding(record.hostSessionId) === undefined,
+    );
     const records = [...held.values()].map((session) =>
       savedSessionOf(
         session,
@@ -431,13 +509,13 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       (record) => record.hostSessionId === selectedHostId,
     );
     return {
-      sessions: records,
+      sessions: [...records, ...skippedRecords],
       selectedHostSessionId: selectionHeld ? selectedHostId : null,
     };
   }
 
   function save() {
-    if (!isRestored || isKilled) {
+    if (!isRestored || isDetached) {
       return;
     }
     deps.saved
@@ -447,9 +525,10 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       );
   }
 
-  // Held, and `processStart` is its running process.
+  // Held, and `processStart` is its running process, until `detachAll`.
   function isLive(session: HeldSession, processStart: number): boolean {
     return (
+      !isDetached &&
       held.get(session.state.sessionId) === session &&
       session.state.running &&
       session.processStarts === processStart
@@ -552,7 +631,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     send('background', { sessionId: session.state.sessionId, background });
   }
 
-  function updateActivity(session: HeldSession) {
+  // A replayed turn's end announces nothing: it ended while the app was closed.
+  function updateActivity(session: HeldSession, isReplayed = false) {
     const previous = session.state.activity;
     const activity = shownActivity(session);
     if (activity === previous) {
@@ -566,7 +646,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     const userIsElsewhere =
       !deps.window.isFocused() || sessions.selectedSessionId() !== sessionId;
     const workIsOver = session.backgroundIds.size === 0;
-    if (turnFinished && userIsElsewhere && workIsOver) {
+    if (turnFinished && userIsElsewhere && workIsOver && !isReplayed) {
       announceTurnFinished(session);
     }
     if (turnFinished || turnStarted) {
@@ -614,6 +694,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       sessionId: session.state.sessionId,
       queued: [...session.state.queued],
     });
+    save();
   }
 
   // Empties the queue and the written messages, and sends every message they
@@ -772,14 +853,16 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     updateActivity(session);
   }
 
-  // The events of the row's `processStart`th process, started under
+  // The events of the row's `processStart`th process, started or attached under
   // `profileDir`; `started.process` is that process once the harness's `start`
-  // returns.
+  // returns or its `attach` settles. While `replay.isReplaying` holds, events
+  // show the session's state and act on nothing that already happened.
   function processEvents(
     session: HeldSession,
     processStart: number,
     started: { process: AgentProcess | null },
     profileDir: string,
+    replay: { isReplaying: boolean },
   ): AgentProcessEvents {
     const { sessionId } = session.state;
     // A clear moves the row to a new host id while this process still ends.
@@ -804,11 +887,12 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         }
         // A queued message starts the next turn, so the session shows no idle
         // in between and the turn-finished alert waits for the last one.
-        if (activity === 'idle' && writeNextQueued(session)) {
+        const writesNext = !replay.isReplaying && activity === 'idle';
+        if (writesNext && writeNextQueued(session)) {
           return;
         }
         session.harnessActivity = activity;
-        updateActivity(session);
+        updateActivity(session, replay.isReplaying);
       },
       commands(names) {
         if (
@@ -821,14 +905,14 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         send('commands', { sessionId, names: [...names] });
       },
       planUsage(update) {
-        if (isLive(session, processStart)) {
+        if (isLive(session, processStart) && !replay.isReplaying) {
           deps.emit('planUsage', { profileDir, update });
         }
       },
       agentEvent(event) {
         // A closed row's process still ends, and its log and roster close on
         // its `sessionEnded`.
-        const endsTheSession = event.type === 'sessionEnded';
+        const endsTheSession = event.type === 'sessionEnded' && !isDetached;
         const isLiveEvent = isLive(session, processStart);
         if (isLiveEvent || endsTheSession) {
           deps.emit('agentEvent', {
@@ -836,19 +920,20 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
             profileDir,
             hostSessionId,
             event,
-            replayed: false,
+            replayed: replay.isReplaying,
           });
         }
         if (isLiveEvent) {
           trackBackground(session, event);
         }
-        if (isLiveEvent && event.type === 'turnEnded') {
+        const endsALiveTurn = isLiveEvent && event.type === 'turnEnded';
+        if (endsALiveTurn && !replay.isReplaying) {
           readBranch(session);
         }
       },
       // Returns a written message the agent let go without taking it in.
       messageDropped(entryId) {
-        if (isLive(session, processStart)) {
+        if (isLive(session, processStart) && !replay.isReplaying) {
           returnDropped(session, entryId);
         }
       },
@@ -875,11 +960,15 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         cancelPending(session);
         returnAllHeld(session);
         const isCleanExit = code === 0 && error === null;
-        addNotice(
-          session,
-          exitNoticeText(code, error),
-          isCleanExit ? 'info' : 'error',
-        );
+        if (session.isStopRequested) {
+          addNotice(session, STOPPED_TEXT, 'info');
+        } else {
+          addNotice(
+            session,
+            exitNoticeText(code, error),
+            isCleanExit ? 'info' : 'error',
+          );
+        }
         send('sessionRested', { sessionId, error });
         clearBackground(session);
         showRestingIdle(session);
@@ -909,6 +998,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       sent: boolean;
       historyPending: boolean;
       titles: SessionTitles;
+      processId: string | null;
+      launchControls: Record<string, string>;
+      launchResume: boolean;
     },
     options: OpenOptions,
   ): HeldSession {
@@ -964,6 +1056,14 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       pendingPicks: new Map(),
       exit: null,
       branchReads: 0,
+      processId: opening.processId,
+      launchControls: opening.launchControls,
+      launchResume: opening.launchResume,
+      historyBefore: null,
+      attaching: null,
+      isStopRequested: false,
+      unheldProcessId: null,
+      unheldSettling: null,
     };
     held.set(sessionId, session);
     if (profileDir !== null) {
@@ -1036,24 +1136,28 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     session.processStarts += 1;
     session.pendingPicks.clear();
     clearBackground(session);
+    session.isStopRequested = false;
     const started: { process: AgentProcess | null } = { process: null };
     const profileDir = profileDirOf(profile);
+    session.processId = `${session.hostId}-${session.processStarts}-${deps.clock.now()}`;
+    session.launchControls = controlValuesOf(
+      session.state.controls,
+      session.userSetControls,
+    );
+    session.launchResume = resume;
     const process = harness.start(
       {
-        processId: `${session.hostId}:${session.processStarts}`,
+        processId: session.processId,
         sessionId: session.hostId,
         resume,
         projectDir,
         profileDir,
-        controls: controlValuesOf(
-          session.state.controls,
-          session.userSetControls,
-        ),
-        instructions: [...instructionRegistrations].map(
-          (registration) => registration.text,
-        ),
+        controls: session.launchControls,
+        instructions: currentInstructions(),
       },
-      processEvents(session, session.processStarts, started, profileDir),
+      processEvents(session, session.processStarts, started, profileDir, {
+        isReplaying: false,
+      }),
     );
     started.process = process;
     session.process = process;
@@ -1069,8 +1173,220 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       );
   }
 
+  function currentInstructions(): string[] {
+    return [...instructionRegistrations].map(
+      (registration) => registration.text,
+    );
+  }
+
+  // Attaches the row to the process the host lists as `hosted`, replaying what
+  // it has done so far. The returned promise, also held as `attaching` until it
+  // settles, never rejects: it resolves once the result is applied, to a
+  // rejection's error text, or null when the attach did not reject. `busy` adds
+  // the quit-during-turn notice when no process stays.
+  function attachProcess(
+    session: HeldSession,
+    harness: AgentHarness,
+    profile: ChatProfile,
+    hosted: HostedProcessInfo,
+    busy: boolean,
+  ): Promise<string | null> {
+    const { sessionId, projectDir } = session.state;
+    session.processStarts += 1;
+    session.pendingPicks.clear();
+    clearBackground(session);
+    session.isStopRequested = false;
+    session.exit = null;
+    session.processId = hosted.id;
+    session.historyBefore = hosted.startedAt;
+    session.state.running = true;
+    send('sessionRunning', { sessionId });
+    const started: { process: AgentProcess | null } = { process: null };
+    const replay = { isReplaying: true };
+    const profileDir = profileDirOf(profile);
+    const attaching = harness
+      .attach(
+        {
+          processId: hosted.id,
+          sessionId: session.hostId,
+          resume: session.launchResume,
+          projectDir,
+          profileDir,
+          controls: session.launchControls,
+          instructions: currentInstructions(),
+        },
+        processEvents(
+          session,
+          session.processStarts,
+          started,
+          profileDir,
+          replay,
+        ),
+      )
+      .then(
+        (process) => {
+          replay.isReplaying = false;
+          session.attaching = null;
+          if (process === null) {
+            restAfterFailedAttach(
+              session,
+              profile,
+              `process ${hosted.id} is not running`,
+              busy,
+            );
+          } else {
+            holdAttached(session, process, started);
+          }
+          return null;
+        },
+        (error: unknown) => {
+          replay.isReplaying = false;
+          session.attaching = null;
+          const reason = errorText(error);
+          // The host may still run the process, whatever the row does next.
+          if (!isDetached && session.exit === null) {
+            session.unheldProcessId = hosted.id;
+          }
+          restAfterFailedAttach(session, profile, reason, busy);
+          return reason;
+        },
+      );
+    session.attaching = attaching;
+    return attaching;
+  }
+
+  // An `ended` during the replay already rested the row, and the hosted process
+  // has closed. A closed row keeps the process only for `closed` to end.
+  function holdAttached(
+    session: HeldSession,
+    process: AgentProcess,
+    started: { process: AgentProcess | null },
+  ) {
+    const { sessionId } = session.state;
+    if (isDetached) {
+      process.detach();
+      return;
+    }
+    if (session.exit !== null) {
+      return;
+    }
+    started.process = process;
+    session.process = process;
+    running.add(process);
+    if (held.get(sessionId) !== session) {
+      return;
+    }
+    log(
+      'chat',
+      `session ${sessionId} re-attached to process ${session.processId}`,
+    );
+    if (session.harnessActivity === 'idle') {
+      writeNextQueued(session);
+    }
+  }
+
+  // Rests a row whose attach found no process to hold, with no exit notice. A
+  // row that ended during the replay or closed is only logged.
+  function restAfterFailedAttach(
+    session: HeldSession,
+    profile: ChatProfile,
+    reason: string,
+    busy: boolean,
+  ) {
+    if (isDetached) {
+      return;
+    }
+    const { sessionId } = session.state;
+    log('chat', `session ${sessionId} not re-attached: ${reason}`);
+    if (held.get(sessionId) !== session || session.exit !== null) {
+      return;
+    }
+    session.state.running = false;
+    session.process = null;
+    session.historyBefore = null;
+    clearBackground(session);
+    showRestingIdle(session);
+    send('sessionRested', { sessionId, error: null });
+    if (busy) {
+      addNotice(session, QUIT_DURING_TURN_TEXT, 'info');
+    }
+    if (session.sent) {
+      restoreSavedUsageOrLog(session, profile);
+    }
+    save();
+  }
+
+  // One step of the guard on `unheldId`: lists the host, then takes the row off
+  // the guard unless the process runs in another app version, re-attaching when
+  // the process runs in the current host.
+  async function runUnheldStep(
+    session: HeldSession,
+    harness: AgentHarness,
+    profile: ChatProfile,
+    unheldId: string,
+  ): Promise<UnheldSettled> {
+    let listed: readonly HostedProcessInfo[];
+    try {
+      listed = await deps.sessionHost.list();
+    } catch (error) {
+      const reason = errorText(error);
+      log('chat', `session host not listed: ${reason}`);
+      return { readsHistory: false, refusal: reason };
+    }
+    const isRowElsewhere =
+      held.get(session.state.sessionId) !== session ||
+      isDetached ||
+      session.unheldProcessId !== unheldId;
+    if (isRowElsewhere) {
+      return { readsHistory: false, refusal: null };
+    }
+    const entry = listed.find((hosted) => hosted.id === unheldId);
+    const isRunning = entry !== undefined && entry.running;
+    if (isRunning && !entry.current) {
+      return { readsHistory: false, refusal: OLDER_HOST_REFUSAL_TEXT };
+    }
+    session.unheldProcessId = null;
+    if (!isRunning) {
+      return { readsHistory: true, refusal: null };
+    }
+    const attachError = await attachProcess(
+      session,
+      harness,
+      profile,
+      entry,
+      false,
+    );
+    return { readsHistory: true, refusal: attachError };
+  }
+
+  // Runs the guard on the row's unheld process; a call while a step runs awaits
+  // that step, then checks again.
+  async function settleUnheld(
+    session: HeldSession,
+    harness: AgentHarness,
+    profile: ChatProfile,
+  ): Promise<UnheldSettled> {
+    while (session.unheldSettling !== null) {
+      await session.unheldSettling;
+    }
+    const unheldId = session.unheldProcessId;
+    if (unheldId === null) {
+      return { readsHistory: true, refusal: null };
+    }
+    const step = runUnheldStep(session, harness, profile, unheldId);
+    const clearSettling = () => {
+      session.unheldSettling = null;
+    };
+    session.unheldSettling = step.then(clearSettling, clearSettling);
+    return step;
+  }
+
+  function isUnheld(session: HeldSession): boolean {
+    return session.unheldProcessId !== null || session.unheldSettling !== null;
+  }
+
   // Opens the row for `hostId` and starts its process; a start that throws
-  // drops the session, then ends the owned session. After `killAll` it throws
+  // drops the session, then ends the owned session. After `detachAll` it throws
   // and opens nothing.
   function openAndStart(
     harness: AgentHarness,
@@ -1084,7 +1400,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     },
     options: OpenOptions,
   ): HeldSession {
-    if (isKilled) {
+    if (isDetached) {
       throw new Error(
         `session ${opening.hostId} not started: chat is stopping`,
       );
@@ -1099,6 +1415,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         sent: opening.resume,
         historyPending: false,
         titles: opening.titles,
+        processId: null,
+        launchControls: {},
+        launchResume: false,
       },
       options,
     );
@@ -1133,6 +1452,11 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
 
   async function sendMessage(sessionId: string, message: UserMessage) {
     const session = held.get(sessionId);
+    if (session?.attaching) {
+      await session.attaching;
+      await sendMessage(sessionId, message);
+      return;
+    }
     if (session === undefined) {
       log('chat', `send for unknown session ${sessionId} ignored`);
       return;
@@ -1141,16 +1465,44 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       queue(session, message);
       return;
     }
-    await writeAtIdle(session, message);
+    await writeAtIdle(session, message, () => sendMessage(sessionId, message));
   }
 
   // Writes `message` to a session whose harness runs no turn, starting a
-  // resting session's process first.
-  async function writeAtIdle(session: HeldSession, message: UserMessage) {
+  // resting session's process first; saved queued messages go first. An unheld
+  // row runs the guard first, then `sendAgain`, since the guard may have attached
+  // a process.
+  async function writeAtIdle(
+    session: HeldSession,
+    message: UserMessage,
+    sendAgain: () => Promise<void>,
+  ) {
     const { sessionId } = session.state;
     if (!session.state.running) {
       const profile = profileNamed(session.state.profile);
       const harness = requireHarness();
+      if (isUnheld(session)) {
+        const settled = await settleUnheld(session, harness, profile);
+        if (held.get(sessionId) !== session) {
+          log(
+            'chat',
+            `send for session ${sessionId} closed while listing the host ignored`,
+          );
+          return;
+        }
+        if (isDetached) {
+          log(
+            'chat',
+            `send for session ${sessionId} ignored: chat is stopping`,
+          );
+          return;
+        }
+        if (settled.refusal !== null) {
+          throw new Error(settled.refusal);
+        }
+        await sendAgain();
+        return;
+      }
       const reading = historyReadOf(session, profile, harness);
       if (reading !== null) {
         await reading;
@@ -1162,26 +1514,39 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           return;
         }
       }
-      if (isKilled) {
+      if (isDetached) {
         log('chat', `send for session ${sessionId} ignored: chat is stopping`);
         return;
       }
       if (!session.state.running) {
         startProcess(session, harness, profile, session.sent);
+        save();
       }
+    }
+    if (session.state.queued.some(isUnsent)) {
+      queue(session, message);
+      writeNextQueued(session);
+      return;
     }
     deliverWritten(session, message);
   }
 
   async function sendAllNow(sessionId: string, message: UserMessage | null) {
     const session = held.get(sessionId);
+    if (session?.attaching) {
+      await session.attaching;
+      await sendAllNow(sessionId, message);
+      return;
+    }
     if (session === undefined) {
       log('chat', `sendAllNow for unknown session ${sessionId} ignored`);
       return;
     }
     if (!isTurnRunning(session)) {
       if (message !== null) {
-        await writeAtIdle(session, message);
+        await writeAtIdle(session, message, () =>
+          sendAllNow(sessionId, message),
+        );
       }
       return;
     }
@@ -1300,13 +1665,29 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     );
   }
 
-  function restoreRecord(record: SavedSession) {
+  // A skipped record holding queued messages stays saved, so they are not lost.
+  function keepSkipped(record: SavedSession) {
+    if (record.queued.length === 0) {
+      return;
+    }
+    skippedRecords.push(record);
+    log(
+      'chat',
+      `session ${record.hostSessionId} not restored; its ${record.queued.length} queued message(s) stay saved`,
+    );
+  }
+
+  function restoreRecord(
+    record: SavedSession,
+    hosted: readonly HostedProcessInfo[] | null,
+  ) {
     const { hostSessionId } = record;
     if (
       holding(hostSessionId) !== undefined ||
       isOpenOnOtherRow(hostSessionId)
     ) {
       log('chat', `session ${hostSessionId} already open; not restored`);
+      keepSkipped(record);
       return;
     }
     const profile = deps
@@ -1324,27 +1705,64 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           sent: record.sent,
           historyPending: record.sent,
           titles: record.titles,
+          processId: record.processId,
+          launchControls: record.launchControls,
+          launchResume: record.launchResume,
         },
         { select: false },
       );
     } catch (error) {
       log('chat', `session ${hostSessionId} not restored: ${errorText(error)}`);
+      keepSkipped(record);
       return;
     }
-    if (record.busy) {
+    for (const message of record.queued) {
+      appendQueued(session, message);
+    }
+    if (record.queued.length > 0) {
+      sendQueued(session);
+    }
+    const entry = hosted?.find((listed) => listed.id === record.processId);
+    const runsHere = entry !== undefined && entry.running && entry.current;
+    const runsElsewhere =
+      entry !== undefined && entry.running && !entry.current;
+    const isListUnknown = hosted === null && record.processId !== null;
+    if (runsHere && profile !== undefined) {
+      void attachProcess(
+        session,
+        requireHarness(),
+        profile,
+        entry,
+        record.busy,
+      );
+      return;
+    }
+    if (runsHere || runsElsewhere || isListUnknown) {
+      session.unheldProcessId = record.processId;
+    }
+    if (runsElsewhere) {
+      addNotice(session, OLDER_HOST_NOTICE_TEXT, 'info');
+      log(
+        'chat',
+        `session ${session.state.sessionId} waits on process ${record.processId} in another app version`,
+      );
+    }
+    if (record.busy && !runsHere && !runsElsewhere) {
       addNotice(session, QUIT_DURING_TURN_TEXT, 'info');
     }
     if (profile === undefined) {
       addNotice(session, missingProfileText(record.profile), 'error');
     }
     if (record.sent && profile !== undefined) {
-      restoreSavedUsage(session, profile).catch((error: unknown) =>
-        log(
-          'chat',
-          `saved usage of ${hostSessionId} not read: ${errorText(error)}`,
-        ),
-      );
+      restoreSavedUsageOrLog(session, profile);
     }
+  }
+
+  function restoreSavedUsageOrLog(session: HeldSession, profile: ChatProfile) {
+    const { hostId } = session;
+    restoreSavedUsage(session, profile).catch((error: unknown) =>
+      log('chat', `saved usage of ${hostId} not read: ${errorText(error)}`),
+    );
   }
 
   // Emits the session's saved usage as its row's `agentEvent`, unless the row
@@ -1359,7 +1777,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       session.state.projectDir,
       profileDir,
     );
-    if (event === null || isKilled) {
+    if (event === null || isDetached) {
       return;
     }
     if (isClosedOrCleared(session, sessionId, hostId)) {
@@ -1401,13 +1819,16 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     });
   }
 
-  function restore(saved: SavedSessions) {
-    if (isKilled) {
+  function restore(
+    saved: SavedSessions,
+    hosted: readonly HostedProcessInfo[] | null,
+  ) {
+    if (isDetached) {
       log('chat', 'open sessions not restored: chat is stopping');
       return;
     }
     for (const record of saved.sessions) {
-      restoreRecord(record);
+      restoreRecord(record, hosted);
     }
     const selection =
       saved.selectedHostSessionId === null
@@ -1428,9 +1849,15 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     hostSessionId: string,
     projectDir: string,
     profileDir: string,
+    before: number | null,
   ): Promise<ChatEntry[]> {
     try {
-      return await harness.history(hostSessionId, projectDir, profileDir, null);
+      return await harness.history(
+        hostSessionId,
+        projectDir,
+        profileDir,
+        before,
+      );
     } catch (error) {
       const reason = errorText(error);
       log('chat', `history of ${hostSessionId} not read: ${reason}`);
@@ -1487,6 +1914,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       hostId,
       session.state.projectDir,
       profileDirOf(profile),
+      session.historyBefore,
     );
     if (isClosedOrCleared(session, sessionId, hostId)) {
       return;
@@ -1496,6 +1924,12 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   }
 
   async function loadHistory(sessionId: string): Promise<void> {
+    // An attach that finds no process drops the history's cut, so the read
+    // waits for its result.
+    const attaching = held.get(sessionId)?.attaching;
+    if (attaching) {
+      await attaching;
+    }
     const session = held.get(sessionId);
     if (session === undefined || !session.historyPending) {
       return;
@@ -1508,7 +1942,14 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     if (profile === undefined) {
       return;
     }
-    await historyReadOf(session, profile, requireHarness());
+    const harness = requireHarness();
+    if (isUnheld(session)) {
+      const settled = await settleUnheld(session, harness, profile);
+      if (!settled.readsHistory || held.get(sessionId) !== session) {
+        return;
+      }
+    }
+    await historyReadOf(session, profile, harness);
   }
 
   // A file that cannot be read marks no row archived, so every saved session
@@ -1556,7 +1997,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     }
     const profileDir = profileDirOf(profile);
     const [entries, usage] = await Promise.all([
-      readHistory(harness, hostSessionId, projectDir, profileDir),
+      readHistory(harness, hostSessionId, projectDir, profileDir, null),
       readSavedUsage(harness, hostSessionId, projectDir, profileDir),
     ]);
     const session = openAndStart(
@@ -1649,12 +2090,22 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       log('chat', `clear for unknown session ${sessionId} ignored`);
       return;
     }
-    if (isKilled) {
+    if (isDetached) {
       log('chat', `clear for session ${sessionId} ignored: chat is stopping`);
       return;
     }
+    if (session.attaching !== null) {
+      throw new Error(`session ${sessionId} is still attaching`);
+    }
     const profile = profileNamed(session.state.profile);
     const harness = requireHarness();
+    if (session.unheldProcessId !== null) {
+      log(
+        'chat',
+        `session ${sessionId} cleared; process ${session.unheldProcessId} left running on the session host`,
+      );
+      session.unheldProcessId = null;
+    }
     endForClear(session);
     cancelPending(session);
     returnAllHeld(session);
@@ -1664,6 +2115,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     session.hostId = newHostId;
     session.sent = false;
     session.historyPending = false;
+    session.historyBefore = null;
     if (selectedHostId === oldHostId) {
       selectedHostId = newHostId;
     }
@@ -1683,6 +2135,40 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       'chat',
       `conversation cleared in ${path.basename(session.state.projectDir)}`,
     );
+  }
+
+  // Today's end of a closed row: its process's, then the owned session's.
+  function endClosed(session: HeldSession) {
+    const { sessionId } = session.state;
+    if (session.unheldProcessId !== null) {
+      log(
+        'chat',
+        `session ${sessionId} closed; process ${session.unheldProcessId} left running on the session host`,
+      );
+    }
+    if (!session.state.running) {
+      logCloseExit(session);
+      session.owned.end();
+      return;
+    }
+    const ended = session.process?.end() ?? Promise.resolve();
+    ended.then(
+      () => {
+        logCloseExit(session);
+        session.owned.end();
+      },
+      (error: unknown) => {
+        log('chat', `session ${sessionId} end failed: ${errorText(error)}`);
+        session.owned.end();
+      },
+    );
+  }
+
+  // A resting session's queue holds only saved messages, which `liveFor`
+  // skipping it leaves as pending rows.
+  function interruptNow(session: HeldSession) {
+    returnUnsent(session);
+    session.process?.interrupt();
   }
 
   return {
@@ -1719,15 +2205,21 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       }
       addNotice(session, text, tone);
     },
-    // A resting session's queue is always empty, so `liveFor` skipping it
-    // returns nothing.
     interrupt(sessionId) {
       const session = liveFor('interrupt', sessionId);
       if (session === null) {
         return;
       }
-      returnUnsent(session);
-      session.process?.interrupt();
+      if (session.attaching === null) {
+        interruptNow(session);
+        return;
+      }
+      log('chat', `session ${sessionId} interrupt waits for the attach`);
+      void session.attaching.then(() => {
+        if (held.get(sessionId) === session && session.process !== null) {
+          interruptNow(session);
+        }
+      });
     },
     clear,
     pullBack(sessionId, queuedId) {
@@ -1778,6 +2270,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       if (session === undefined || !session.state.running) {
         throw new Error(`session ${sessionId} has no running process`);
       }
+      if (session.attaching !== null) {
+        throw new Error(`session ${sessionId} is still attaching`);
+      }
       session.process?.setControl(controlId, value);
       session.pendingPicks.set(controlId, value);
     },
@@ -1800,27 +2295,43 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       }
       drop(session);
       save();
-      if (!session.state.running) {
-        logCloseExit(session);
-        session.owned.end();
+      if (session.attaching === null) {
+        endClosed(session);
         return;
       }
-      const ended = session.process?.end() ?? Promise.resolve();
-      ended.then(
-        () => {
-          logCloseExit(session);
-          session.owned.end();
-        },
-        (error: unknown) => {
-          log('chat', `session ${sessionId} end failed: ${errorText(error)}`);
-          session.owned.end();
-        },
-      );
+      void session.attaching.then(() => endClosed(session));
     },
-    killAll() {
-      isKilled = true;
+    stopAll() {
+      for (const session of held.values()) {
+        if (session.process !== null) {
+          session.isStopRequested = true;
+        }
+        if (session.attaching !== null) {
+          log(
+            'chat',
+            `session ${session.state.sessionId} still attaching; not stopped`,
+          );
+        }
+      }
+      const stopped = running.size;
       for (const process of running) {
         process.kill();
+      }
+      log('chat', `stopped ${stopped} session process(es)`);
+    },
+    detachAll() {
+      isDetached = true;
+      const heldProcesses = new Set<AgentProcess>();
+      for (const session of held.values()) {
+        if (session.process !== null) {
+          heldProcesses.add(session.process);
+          session.process.detach();
+        }
+      }
+      for (const process of running) {
+        if (!heldProcesses.has(process)) {
+          process.kill();
+        }
       }
     },
     sessionConnected(session) {
@@ -1845,6 +2356,10 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     permissionToolSession(agentSession) {
       return {
         async call(name, args, { signal }) {
+          const attaching = held.get(agentSession.id)?.attaching;
+          if (attaching) {
+            await attaching;
+          }
           const session = held.get(agentSession.id);
           if (!session) {
             return errorResult(NOT_OWNED_TEXT);

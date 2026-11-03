@@ -294,7 +294,7 @@ Task 01 sets `replayed: false` at every `ChatAgentEvent` emitter in the tree (ch
 - [x] [Agents log and workflow skip replayed events](10-agents-replayed.md) — after 01
 
 ### Wave 3
-- [ ] [Claude adapter on the host](08-claude-on-host.md) — after 05, 07
+- [x] [Claude adapter on the host](08-claude-on-host.md) — after 05, 07
 
 ### Wave 4
 - [ ] [Chat re-attaches and survives quit](09-chat-reattach.md) — after 08
@@ -318,6 +318,7 @@ Review base: 7f956435
 - 05 · 5b2ec6e5 · diff read; all Produces present; typecheck clean in claude-code; claude-code tests 404 passed · concerns: a send from idle gives one activity effect where the task says none (required by the activity sync); an error event with a pid now emits idle before ended, not on the task's list, named in the commit; HostedSpawn.id is sessionId until 08 switches to processId; a live init with no slash_commands replays a commands effect holding []; hasEmittedEnded guard cannot trigger today, 08 can drop it
 - 07 · 4a9d6ee0 · diff read; Produces present; typecheck clean in its files; session-host client tests 27 passed; not yet run against task 06's real host · concerns: duplicate-id spawn differs from 01's fake (client replaces events, fake keeps the old ones live); current host's list, subscribe and stopAll have no reply timeout, so task 09's list timeout is the only bound; a detached entry stays in the client's map until host death or close; a corrupt middle log line takes the read-failure path
 - 06 · b4b193de · diff read; typecheck clean in its files; session-host tests 58 passed; worker's packaged asar probe passed; not run on Windows · concerns: a pipe log create or append failure (disk full) ends the host and every session; a known message type missing fields throws and ends the host; close waits on stdio, so a grandchild holding the pipes keeps a process, its host and a stopAll reply past SIGKILL; exit-after-push not run live and a Windows pipe might lose the last closed; a dead older record costs up to 2000 ms each start; session-host-test-doubles.ts is an extra file beside production code
+- 08 · cdd307d2 · diff read; tsc clean; 779 tests pass across claude-code, session-host, drive, fake harness, chat-sessions · concerns: client connects at construction, so every self-test and fake-harness drive run starts a host (task 12 confirms teardown and startup speed); stopAll has no reply timeout (drive quit held until the CLI's 60 s SIGTERM; self-test capped 5000 ms); closed during attach emits before the caller's await continuation, so isReplaying is true (sessionEnded/activity flagged replayed, ended live); a log with no usage event gets one usage event from settings read after a grace-expired attach; main.ts wiring and drive teardown untested until task 12; docs/features/agent-chat/design.md Agent harness seam stale for task 11
 ### Contract changes
 ### Rulings
 - Marketplace review base is cbd8a9e; git fetch fails in this session (SSH key unavailable), so origin was not checked; neither main showed behind at the last fetch and nothing is pushed — a stale origin would surface at push · lead
@@ -344,5 +345,9 @@ Review base: 7f956435
 - A synchronous spawn throw closes that id and removes its log, since a throw would end the host and every session · group 06 · group 06
 - Keep window delay is capped at 2^31-1 ms, since setTimeout fires at once past it — a window above 24.8 days ends at 24.8 days · group 06 · group 06
 - The uncaught handler and listen failure write the diagnostic log even in a host that does not own the channel — a stray line in a live host's log if wrong · group 06 · group 06
+- createClaudeSession(deps, request, events, state, connect) shape, since host.spawn needs pipe events first · group 08
+- attach still reads deps.command()/claudeLaunch, used only for spawnError hint text · group 08
+- hasEmittedEnded dropped · group 08
+- fake detach follows the task literally: a held end stays pending until releaseEnd, so a task 09 test detaching during holdEnd and awaiting would hang · group 08
 ### Review rounds
 ### Test gate

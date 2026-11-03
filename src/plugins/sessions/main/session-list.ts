@@ -30,7 +30,7 @@ export interface SessionListDeps {
 }
 
 // The session list and its rows. `tools` lists every contributed tool in contribution order.
-export interface SessionList extends SessionsMainExports {
+export interface SessionList extends Omit<SessionsMainExports, 'holdConnects'> {
   tools(): ToolDefinition[];
   state(): SessionsState;
   // The user's close, which every close guard must allow; returns whether the

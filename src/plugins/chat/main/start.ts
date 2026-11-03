@@ -8,6 +8,7 @@ import type {
   MainPart,
   QualifiedEvents,
 } from '../../../contracts/plugin';
+import type { HostedProcessInfo } from '../../../contracts/session-host';
 import {
   argsObject,
   optionalString,
@@ -48,6 +49,37 @@ const DRIVE_PROJECT_FOLDER = path.join('dev', 'drive-project');
 // Every session chat starts carries it, so the agent names the session's row.
 const SESSION_TITLE_INSTRUCTION =
   'This session shows as a row in the Auri app\'s side bar. At the end of your first turn, call the set_session_title tool with a title of 2 to 4 words, at most 30 characters, that names the topic of this session\'s work like a heading ("Agent Status Line", "Forms Crash on Resume"), not a sentence describing the request. Call it again only when the work\'s focus clearly changes.';
+
+// Under the relay's hold on connects, so a relay hello never opens an unowned
+// row while chat waits on the host.
+const SESSION_HOST_LIST_WAIT_MS = 3_000;
+
+// The host's processes, or null after logging when the list rejects or outlasts
+// its wait.
+function listHostedProcesses(
+  services: Pick<MainServices, 'sessionHost' | 'timers' | 'log'>,
+): Promise<HostedProcessInfo[] | null> {
+  return new Promise((resolve) => {
+    const timer = services.timers.set(() => {
+      services.log(
+        'chat',
+        `session host not listed: timed out after ${SESSION_HOST_LIST_WAIT_MS} ms`,
+      );
+      resolve(null);
+    }, SESSION_HOST_LIST_WAIT_MS);
+    services.sessionHost.list().then(
+      (hosted) => {
+        services.timers.clear(timer);
+        resolve(hosted);
+      },
+      (error: unknown) => {
+        services.timers.clear(timer);
+        services.log('chat', `session host not listed: ${errorText(error)}`);
+        resolve(null);
+      },
+    );
+  });
+}
 
 const DEFAULT_PERMISSION_TOOL = 'Bash';
 const DEFAULT_PERMISSION_INPUT = { command: 'ls' };
@@ -176,8 +208,11 @@ export function addDriveActions(
 }
 
 // Starts, resumes and runs the Claude Code sessions the page asks for, keeps
-// the open ones saved with their titles and restores them resting on start,
-// asks every session it starts to name its row, lists and archives
+// the open ones saved with their titles and queued messages, and on start
+// restores them, re-attaching each to its process the session host still runs,
+// holding relay connects until the rows are open; stops every process on
+// request, leaves them running on quit, tells the host how long to keep idle
+// ones, asks every session it starts to name its row, lists and archives
 // the saved ones, answers their permission prompts through the
 // `permission_prompt` tool, keeps the recent project folders and serves them
 // merged with the harness's, signs profiles in and out (cancelling a running
@@ -232,6 +267,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       git: services.git,
       log: services.log,
       clock: services.clock,
+      sessionHost: services.sessionHost,
     });
     const preview = createChatPreview({
       sessions,
@@ -319,6 +355,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
         chat.answerPermission(sessionId, entryId, answer);
       }
     });
+    api.channel.handle('stopAll', () => chat.stopAll());
     api.channel.handle('openPreview', () => preview.open());
     api.channel.handle('recentFolders', () => folderChoices.list());
     api.channel.handle('chooseFolder', () => services.window.chooseFolder());
@@ -348,13 +385,20 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     sessions.contributeTools(PERMISSION_TOOLS, (session) =>
       chat.permissionToolSession(session),
     );
-    saved.load().then(
-      (snapshot) => chat.restore(snapshot),
-      (error: unknown) => {
+    const restored = Promise.all([
+      saved.load().catch((error: unknown) => {
         services.log('chat', `open sessions not read: ${errorText(error)}`);
         // Lets saving start; the store refuses every write to the unread file.
-        chat.restore({ sessions: [], selectedHostSessionId: null });
-      },
+        return { sessions: [], selectedHostSessionId: null };
+      }),
+      listHostedProcesses(services),
+    ]).then(([snapshot, hosted]) => chat.restore(snapshot, hosted));
+    sessions.holdConnects(restored);
+    const passKeepIdle = (keepIdleMinutes: number) =>
+      services.sessionHost.setKeepIdleMinutes(Math.max(0, keepIdleMinutes));
+    passKeepIdle(api.settings().keepIdleMinutes);
+    const keepIdleListener = api.onSettingsChanged((settings) =>
+      passKeepIdle(settings.keepIdleMinutes),
     );
     services.selfTest?.run(
       chatSelfTestScript({
@@ -419,7 +463,8 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       commands: {},
       exports,
       dispose: () => {
-        chat.killAll();
+        chat.detachAll();
+        keepIdleListener.dispose();
         accounts.cancelRunning();
         for (const action of driveActions) {
           action.dispose();

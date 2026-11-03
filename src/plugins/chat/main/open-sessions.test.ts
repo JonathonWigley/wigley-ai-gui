@@ -17,6 +17,10 @@ const TWO_SESSIONS: SavedSessions = {
       sent: true,
       busy: false,
       titles: { user: null, agent: 'Plan review', firstMessage: 'hi there' },
+      processId: 's-alpha-1-1000',
+      queued: [],
+      launchControls: { effort: 'high' },
+      launchResume: true,
     },
     {
       hostSessionId: 's-beta',
@@ -25,6 +29,10 @@ const TWO_SESSIONS: SavedSessions = {
       sent: false,
       busy: true,
       titles: { user: 'Mine', agent: null, firstMessage: null },
+      processId: null,
+      queued: [{ text: 'next', images: [] }],
+      launchControls: {},
+      launchResume: false,
     },
   ],
   selectedHostSessionId: 's-beta',
@@ -39,6 +47,10 @@ const ONE_SESSION: SavedSessions = {
       sent: true,
       busy: true,
       titles: { user: null, agent: null, firstMessage: 'gamma work' },
+      processId: null,
+      queued: [],
+      launchControls: {},
+      launchResume: false,
     },
   ],
   selectedHostSessionId: null,
@@ -90,6 +102,38 @@ describe('createOpenSessions', () => {
             sent: true,
             busy: false,
             titles: { user: null, agent: null, firstMessage: null },
+            processId: null,
+            launchControls: {},
+            launchResume: false,
+            queued: [],
+          },
+        ],
+        selectedHostSessionId: null,
+      },
+    },
+    {
+      file: 'a queued message holding an image',
+      text: withSessions([
+        {
+          ...TWO_SESSIONS.sessions[0],
+          queued: [
+            {
+              text: 'look',
+              images: [{ mediaType: 'image/png', data: 'AAAA' }],
+            },
+          ],
+        },
+      ]),
+      expected: {
+        sessions: [
+          {
+            ...TWO_SESSIONS.sessions[0],
+            queued: [
+              {
+                text: 'look',
+                images: [{ mediaType: 'image/png', data: 'AAAA' }],
+              },
+            ],
           },
         ],
         selectedHostSessionId: null,
@@ -130,6 +174,24 @@ describe('createOpenSessions', () => {
     {
       file: 'busy a string',
       text: withSessions([{ ...TWO_SESSIONS.sessions[0], busy: 'yes' }]),
+    },
+    {
+      file: 'queued holding a message whose text is a number',
+      text: withSessions([
+        { ...TWO_SESSIONS.sessions[0], queued: [{ text: 1 }] },
+      ]),
+    },
+    {
+      file: 'launchControls holding a number',
+      text: withSessions([
+        { ...TWO_SESSIONS.sessions[0], launchControls: { effort: 1 } },
+      ]),
+    },
+    {
+      file: 'launchResume a string',
+      text: withSessions([
+        { ...TWO_SESSIONS.sessions[0], launchResume: 'yes' },
+      ]),
     },
     {
       file: 'selectedHostSessionId a number',

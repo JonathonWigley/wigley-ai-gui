@@ -13,6 +13,11 @@ export const chatManifest = definePlugin({
   dependsOn: ['sessions', 'keys'],
   commands: {
     newSession: { label: 'new session', group: 'sessions', runsIn: 'page' },
+    stopAll: {
+      label: "stop every session's process",
+      group: 'sessions',
+      runsIn: 'page',
+    },
     focusBox: { label: 'type a message', group: 'box', runsIn: 'page' },
     appendBox: {
       label: 'type after the message',
@@ -150,7 +155,11 @@ export const chatManifest = definePlugin({
     signIn: 'In the sign-in dialog',
     image: 'In the image viewer',
   },
-  settings: { profiles: DEFAULT_PROFILES, layout: 'default' },
+  settings: {
+    profiles: DEFAULT_PROFILES,
+    layout: 'default',
+    keepIdleMinutes: 60,
+  },
   settingInfo: {
     profiles: {
       label: 'Profiles',
@@ -161,6 +170,11 @@ export const chatManifest = definePlugin({
       label: 'Layout',
       description:
         "The chat layout every Chat tab draws in: a folder name in chat's layouts folder, or default.",
+    },
+    keepIdleMinutes: {
+      label: 'Keep idle sessions (minutes)',
+      description:
+        "How long a session whose turn has ended keeps its Claude process while the app is closed. Past it the process ends, and the next message resumes the session. The default, 60, is the prompt cache's life.",
     },
   },
   themeTokens: {},

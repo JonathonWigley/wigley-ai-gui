@@ -24,9 +24,11 @@ export type ServeSession = (
   session: ConnectedSession,
 ) => { close(): Promise<void> };
 
-// `connect` opens the app's session for each relay that said hello.
+// `connect` opens the app's session for each relay that said a good hello, once
+// `ready` resolves; `ready` never rejects.
 export interface RelayServerDeps {
   channel: string;
+  ready(): Promise<void>;
   connect(info: SessionInfo): ConnectedSession;
   serve: ServeSession;
   log: Log;
@@ -97,15 +99,14 @@ function refuse(socket: Socket, error: string, deps: RelayServerDeps) {
 
 // The session opens before the reply, so a hello the app cannot serve is
 // refused rather than answered ok over a session that never started.
-function startSession(socket: Socket, line: string, deps: RelayServerDeps) {
-  const parsed = parseHello(line);
-  if ('error' in parsed) {
-    refuse(socket, parsed.error, deps);
-    return;
-  }
+function startSession(
+  socket: Socket,
+  hello: RelayHello,
+  deps: RelayServerDeps,
+) {
   let session: ConnectedSession;
   try {
-    session = deps.connect(sessionInfo(parsed.hello));
+    session = deps.connect(sessionInfo(hello));
   } catch (error) {
     refuse(
       socket,
@@ -122,13 +123,54 @@ function startSession(socket: Socket, line: string, deps: RelayServerDeps) {
   });
 }
 
-// Reads the hello line, then hands the socket on paused, with the bytes that
-// followed the newline put back in front.
+// Waits for `deps.ready`, then starts the session unless the relay left. The
+// socket keeps flowing into a buffer during the wait, since a paused socket
+// raises no `end` or `close` when the relay exits.
+async function startSessionOnceReady(
+  socket: Socket,
+  hello: RelayHello,
+  deps: RelayServerDeps,
+) {
+  let hasLeft = false;
+  const markLeft = () => {
+    hasLeft = true;
+  };
+  const received: Buffer[] = [];
+  const keepChunk = (chunk: Buffer) => received.push(chunk);
+  socket.once('end', markLeft);
+  socket.once('close', markLeft);
+  socket.on('data', keepChunk);
+  socket.resume();
+  await deps.ready();
+  socket.off('end', markLeft);
+  socket.off('close', markLeft);
+  socket.off('data', keepChunk);
+  if (hasLeft || socket.destroyed) {
+    deps.log('relay', 'a relay left while its connect was held');
+    return;
+  }
+  socket.pause();
+  if (received.length > 0) {
+    socket.unshift(Buffer.concat(received));
+  }
+  startSession(socket, hello, deps);
+}
+
+// Reads the hello line and refuses a bad one at once; a good one waits for
+// `deps.ready`, then the socket is handed on paused, with the bytes that followed
+// the newline put back in front.
 function acceptConnection(socket: Socket, deps: RelayServerDeps) {
   socket.on('error', (error) =>
     deps.log('relay', `a relay connection failed: ${error.message}`),
   );
-  readFirstLine(socket, (line) => startSession(socket, line, deps));
+  readFirstLine(socket, (line) => {
+    const parsed = parseHello(line);
+    if ('error' in parsed) {
+      refuse(socket, parsed.error, deps);
+      return;
+    }
+    void startSessionOnceReady(socket, parsed.hello, deps);
+  });
 }
 
 // Listens for relay.py connections on the channel, one connected session each.

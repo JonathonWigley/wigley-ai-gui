@@ -1,6 +1,6 @@
 # 08 — Claude adapter on the host
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 05, 07
 Plan: [plan.md](plan.md)
@@ -346,4 +346,4 @@ attach replays a pipe log; history cuts at the process start`.
 
 ## Proof
 
-<written by wigley:make: commit sha, proof result, concerns; empty until the group lands>
+Commit cdd307d2 · proof: diff read; tsc clean; 779 tests pass across claude-code, session-host, drive, fake harness, chat-sessions · concerns: client connects at construction, so every self-test and fake-harness drive run starts a host (task 12 confirms teardown and startup speed); stopAll has no reply timeout (drive quit held until the CLI's 60 s SIGTERM; self-test capped 5000 ms); closed during attach emits before the caller's await continuation, so isReplaying is true (sessionEnded/activity flagged replayed, ended live); a log with no usage event gets one usage event from settings read after a grace-expired attach; main.ts wiring and drive teardown untested until task 12; docs/features/agent-chat/design.md Agent harness seam stale for task 11

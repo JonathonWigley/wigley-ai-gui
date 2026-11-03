@@ -1,6 +1,6 @@
 # 09 — Chat re-attaches and survives quit
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 4 · Depends on: 08
 Plan: [plan.md](plan.md)

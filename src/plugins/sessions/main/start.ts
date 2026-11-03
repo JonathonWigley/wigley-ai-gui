@@ -36,6 +36,7 @@ import {
   launchCommand,
   writeEndpointFiles,
 } from './relay/endpoint';
+import { type ConnectHold, createConnectHold } from './relay/connect-hold';
 import { startRelayServer } from './relay/relay-server';
 import { sessionsSelfTestScript } from './selftest-script';
 import { createSessionList, type SessionList } from './session-list';
@@ -75,7 +76,7 @@ function createList(api: SessionsApi): SessionList {
 // Opens the channel relay.py connects to, each relay connecting one session
 // served the tools contributed so far. A relay that finds the app gone starts
 // it again, except a drive run's, which stays ended and names the run's home.
-function openRelay(api: SessionsApi, list: SessionList) {
+function openRelay(api: SessionsApi, list: SessionList, hold: ConnectHold) {
   const channel = channelPath(
     process.platform,
     api.services.homeDir,
@@ -85,6 +86,7 @@ function openRelay(api: SessionsApi, list: SessionList) {
   );
   const relay = startRelayServer({
     channel,
+    ready: () => hold.ready(),
     connect: (info) => list.connect(info),
     serve: (streams, session) => serveMcp(streams, session, list.tools()),
     log: api.services.log,
@@ -235,8 +237,9 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
   manifest: sessionsManifest,
   start(api: SessionsApi) {
     const list = createList(api);
+    const hold = createConnectHold(api.services.timers, api.services.log);
     const opened =
-      api.services.runMode === 'selfTest' ? null : openRelay(api, list);
+      api.services.runMode === 'selfTest' ? null : openRelay(api, list, hold);
     const endpointDir = appEndpointDir(
       api.services.paths,
       api.services.homeDir,
@@ -261,6 +264,7 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
       setTitle: (sessionId, source, title) =>
         list.setTitle(sessionId, source, title),
       titles: (sessionId) => list.titles(sessionId),
+      holdConnects: (until) => hold.hold(until),
     };
     exports.contributeTools(
       [SET_SESSION_TITLE_TOOL],

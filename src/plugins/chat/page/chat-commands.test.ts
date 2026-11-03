@@ -258,6 +258,27 @@ describe('chat commands', () => {
     expect(run.toastTones).toEqual(['error']);
   });
 
+  it('stopAll_InvokesMain', async () => {
+    const run = setUp(session(true));
+
+    run.handlers.stopAll({});
+    await flush();
+
+    expect(run.invoked).toEqual([['stopAll']]);
+    expect(run.logs).toEqual(['[chat] stopping every session']);
+  });
+
+  it('stopAll_Rejects_ToastsError', async () => {
+    const run = setUp(session(true), new Error('host gone'));
+
+    run.handlers.stopAll({});
+    await flush();
+
+    expect(run.invoked).toEqual([['stopAll']]);
+    expect(run.toasts).toEqual(['Sessions not stopped: host gone']);
+    expect(run.toastTones).toEqual(['error']);
+  });
+
   it('interrupt_runningWorkingSession_interruptsIt', () => {
     const run = setUp(session(true));
 

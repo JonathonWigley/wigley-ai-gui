@@ -1,12 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentStart } from '../../../contracts/agent';
+import type { Timers } from '../../../contracts/ambient';
+import type { Files } from '../../../contracts/files';
+import type { HostedProcessInfo } from '../../../contracts/session-host';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
+import { createFakeSessionHost } from '../../../shared/fake-session-host';
+import { createMemoryFiles } from '../../../shared/memory-files';
 import type {
   SessionTitles,
   TitleSource,
   ToolResult,
 } from '../../sessions/contract';
 import type { ChatMainExports, ChatSessionState } from '../contract';
+import { OPEN_SESSIONS_FILE } from './open-sessions';
 import { addDriveActions, chatMainPart } from './start';
 
 // A chat holding one session, `held`, whose permission calls wait until the
@@ -143,11 +149,22 @@ describe('chat drive actions', () => {
 // order. `processEvents` holds each process's events, by start, and
 // `holdProcessEnds` keeps every process's `end` pending until the function it
 // returns is called. Paths compare equal ignoring a trailing `/`.
-// `exports` is the part's main exports.
-function startChatPart() {
+// `exports` is the part's main exports. `sessionHost` is a fake host whose `list`
+// is `options.list` when given, and `timers` a manual `Timers`. `options.data`
+// replaces the data folder. `holdConnects` holds each promise held, `harnessAttaches`
+// each attach request, `settingsChange` calls the settings listener, and
+// `processDetach` and `processKill` record their process calls.
+function startChatPart(
+  options: {
+    list?: () => Promise<HostedProcessInfo[]>;
+    data?: Files;
+  } = {},
+) {
   const handlers = new Map<string, (...args: unknown[]) => unknown>();
   const cancelLogIn = vi.fn<() => void>();
   const processSends = vi.fn<(message: unknown) => void>();
+  const processDetach = vi.fn<() => void>();
+  const processKill = vi.fn<() => void>();
   const sent: { message: string; data: unknown }[] = [];
   const logged: string[] = [];
   const starts = { count: 0 };
@@ -163,9 +180,14 @@ function startChatPart() {
     });
     return release;
   };
+  const harnessAttaches: AgentStart[] = [];
   const harness = {
     id: 'claude',
     logIn: () => ({ sendCode: () => undefined, cancel: cancelLogIn }),
+    attach: (request: AgentStart) => {
+      harnessAttaches.push(request);
+      return Promise.resolve(null);
+    },
     start: (request: AgentStart, events: (typeof processEvents)[number]) => {
       starts.count += 1;
       startInstructions.push(request.instructions);
@@ -174,9 +196,28 @@ function startChatPart() {
         send: processSends,
         end: () => processEnd,
         interrupt: () => undefined,
+        detach: processDetach,
+        kill: processKill,
       };
     },
   };
+  const clock = { now: () => 5000 };
+  const sessionHost = createFakeSessionHost(clock);
+  if (options.list !== undefined) {
+    sessionHost.list = options.list;
+  }
+  const timerRuns = new Map<number, () => void>();
+  let lastTimer = 0;
+  const timers: Timers = {
+    set: (run) => {
+      lastTimer += 1;
+      timerRuns.set(lastTimer, run);
+      return lastTimer;
+    },
+    clear: (handle) => timerRuns.delete(handle),
+  };
+  const heldConnects: Promise<unknown>[] = [];
+  let settingsListener: (settings: unknown) => void = () => undefined;
   const listeners = new Map<string, (data: unknown) => void>();
   const ended: string[] = [];
   let rows = 0;
@@ -197,6 +238,7 @@ function startChatPart() {
       };
     },
     activate: () => undefined,
+    holdConnects: (until: Promise<unknown>) => heldConnects.push(until),
     setTitle: (
       sessionId: string,
       source: TitleSource,
@@ -225,12 +267,21 @@ function startChatPart() {
       },
       emit: () => undefined,
     },
-    settings: () => ({ profiles: [{ name: 'work', configDir: '/work' }] }),
+    settings: () => ({
+      profiles: [{ name: 'work', configDir: '/work' }],
+      keepIdleMinutes: 60,
+    }),
+    onSettingsChanged: (listener: (settings: unknown) => void) => {
+      settingsListener = listener;
+      return { dispose: () => undefined };
+    },
     services: {
       log: (_plugin: string, line: string) => logged.push(line),
       agentHarnesses: [harness],
       randomUuid: () => 'host-1',
-      clock: { now: () => 5000 },
+      clock,
+      timers,
+      sessionHost,
       paths: {
         samePath: (a: string, b: string) =>
           a.replace(/\/$/, '') === b.replace(/\/$/, ''),
@@ -238,7 +289,7 @@ function startChatPart() {
       selfTest: null,
     },
     dependency: () => sessions,
-    data: {
+    data: options.data ?? {
       list: () => Promise.reject(new Error('no data folder')),
       read: () => Promise.reject(new Error('no data folder')),
       write: () => Promise.reject(new Error('no data folder')),
@@ -269,7 +320,39 @@ function startChatPart() {
     holdProcessEnds,
     ended,
     listeners,
+    processDetach,
+    processKill,
+    sessionHost,
+    timerRuns,
+    heldConnects,
+    harnessAttaches,
+    settingsChange: (settings: unknown) => settingsListener(settings),
   };
+}
+
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+// A data folder holding one saved session whose process id is `p1`.
+async function dataWithSavedRow(): Promise<Files> {
+  const data = createMemoryFiles();
+  await data.write(
+    OPEN_SESSIONS_FILE,
+    JSON.stringify({
+      sessions: [
+        {
+          hostSessionId: 'host-a',
+          projectDir: '/p',
+          profile: 'work',
+          sent: false,
+          busy: false,
+          titles: { user: null, agent: null, firstMessage: null },
+          processId: 'p1',
+        },
+      ],
+      selectedHostSessionId: null,
+    }),
+  );
+  return data;
 }
 
 describe('chat main part', () => {
@@ -426,7 +509,6 @@ describe('chat main part', () => {
   });
 
   it('sessionsTitleChanged_HeldRow_Saves', async () => {
-    const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
     const chat = startChatPart();
     await settle();
     chat.invoke('start', { projectDir: '/p', profile: 'work' });
@@ -446,9 +528,81 @@ describe('chat main part', () => {
   it('dispose_SignInRunning_CancelsIt', async () => {
     const chat = startChatPart();
     chat.invoke('logIn', 1, 'work');
+    chat.invoke('start', { projectDir: '/p', profile: 'work' });
 
     await chat.part.dispose?.();
 
     expect(chat.cancelLogIn).toHaveBeenCalledOnce();
+    expect(chat.processDetach).toHaveBeenCalledOnce();
+    expect(chat.processKill).not.toHaveBeenCalled();
+  });
+
+  it('stopAll_Channel_StopsEveryProcess', () => {
+    const chat = startChatPart();
+    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+
+    chat.invoke('stopAll');
+
+    expect(chat.processKill).toHaveBeenCalledOnce();
+  });
+
+  it('keepIdleMinutes_StartAndChange_PassedToTheHost', () => {
+    const chat = startChatPart();
+
+    expect(chat.sessionHost.keepIdleMinutes).toEqual([60]);
+    chat.settingsChange({ keepIdleMinutes: 5 });
+
+    expect(chat.sessionHost.keepIdleMinutes).toEqual([60, 5]);
+  });
+
+  it('restore_HoldsRelayConnectsUntilTheRowsOpen', async () => {
+    const chat = startChatPart({ data: await dataWithSavedRow() });
+
+    expect(chat.heldConnects).toHaveLength(1);
+    expect(chat.invoke('sessions')).toEqual([]);
+
+    await chat.heldConnects[0];
+
+    const listed = chat.invoke('sessions') as ChatSessionState[];
+    expect(listed.map((state) => state.sessionId)).toEqual(['row-1']);
+  });
+
+  it.each([
+    {
+      given: 'a list that rejects',
+      list: () => Promise.reject(new Error('no host')),
+      runsTheTimer: false,
+      logged: 'session host not listed: no host',
+    },
+    {
+      given: 'a list that never settles',
+      list: () => new Promise<HostedProcessInfo[]>(() => {}),
+      runsTheTimer: true,
+      logged: 'session host not listed: timed out after 3000 ms',
+    },
+  ])(
+    'restore_SessionHostListFails_LogsAndRestsEveryRow given $given',
+    async ({ list, runsTheTimer, logged }) => {
+      const chat = startChatPart({ list, data: await dataWithSavedRow() });
+      await settle();
+
+      if (runsTheTimer) {
+        [...chat.timerRuns.values()].forEach((run) => run());
+      }
+      await settle();
+
+      expect(chat.logged).toContain(logged);
+      const listed = chat.invoke('sessions') as ChatSessionState[];
+      expect(listed.map((state) => state.running)).toEqual([false]);
+      expect(chat.harnessAttaches).toEqual([]);
+    },
+  );
+
+  it('restore_SessionHostListFails_LogsAndRestsEveryRow given a list that resolves first', async () => {
+    const chat = startChatPart({ list: () => Promise.resolve([]) });
+
+    await settle();
+
+    expect(chat.timerRuns.size).toBe(0);
   });
 });

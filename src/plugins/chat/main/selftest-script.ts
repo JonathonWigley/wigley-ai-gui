@@ -733,6 +733,13 @@ const GROUPS: SelfTestGroup[] = [
     why: 'Space z l c opens the sample session with no agent, and a send there sends nothing.',
     steps: LAYOUT_PREVIEW_STEPS,
   },
+  {
+    name: 'stop all',
+    why: 'Space : stops every session process; the rows stay, resting.',
+    steps: [
+      { keys: ['Escape', ' ', ':'], expect: '[chat] stopping every session' },
+    ],
+  },
 ];
 
 // Raw JSON and tool output scroll in their own box, as code and tables do, a

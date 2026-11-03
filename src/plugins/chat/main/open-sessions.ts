@@ -1,3 +1,4 @@
+import type { UserMessage } from '../../../contracts/agent';
 import { type Files, readIfPresent } from '../../../contracts/files';
 import { isJsonObject } from '../../../shared/json';
 import { type SessionTitles, TITLE_SOURCES } from '../../sessions/contract';
@@ -14,6 +15,14 @@ export interface SavedSession {
   busy: boolean;
   // The row's titles when the snapshot was taken.
   titles: SessionTitles;
+  // The id of the row's last process start, which the session host knows it by; null when the row never started one.
+  processId: string | null;
+  // The row's queued messages not yet sent, oldest first, images included.
+  queued: UserMessage[];
+  // The `AgentStart.controls` the row's last process start passed; {} when the row never started one.
+  launchControls: Record<string, string>;
+  // The `AgentStart.resume` the row's last process start passed; false when the row never started one.
+  launchResume: boolean;
 }
 
 // The titles of a session that has none.
@@ -23,9 +32,18 @@ export const NO_TITLES: SessionTitles = {
   firstMessage: null,
 };
 
-// A saved session as the file holds it: a file written before titles were
+// A saved session as the file holds it: a file written before a field was
 // saved has none.
-type StoredSession = Omit<SavedSession, 'titles'> & { titles?: SessionTitles };
+type StoredSession = Omit<
+  SavedSession,
+  'titles' | 'processId' | 'queued' | 'launchControls' | 'launchResume'
+> &
+  Partial<
+    Pick<
+      SavedSession,
+      'titles' | 'processId' | 'queued' | 'launchControls' | 'launchResume'
+    >
+  >;
 
 export interface SavedSessions {
   // In row order.
@@ -51,6 +69,41 @@ function isSessionTitles(value: unknown): value is SessionTitles {
   );
 }
 
+function isSavedImage(value: unknown): boolean {
+  return (
+    isJsonObject(value) &&
+    typeof value.mediaType === 'string' &&
+    typeof value.data === 'string'
+  );
+}
+
+function isSavedMessage(value: unknown): boolean {
+  return (
+    isJsonObject(value) &&
+    typeof value.text === 'string' &&
+    Array.isArray(value.images) &&
+    value.images.every(isSavedImage)
+  );
+}
+
+function isOptionalProcessId(value: unknown): boolean {
+  return value === undefined || value === null || typeof value === 'string';
+}
+
+function isOptionalQueue(value: unknown): boolean {
+  return (
+    value === undefined || (Array.isArray(value) && value.every(isSavedMessage))
+  );
+}
+
+function isOptionalControls(value: unknown): boolean {
+  return (
+    value === undefined ||
+    (isJsonObject(value) &&
+      Object.values(value).every((held) => typeof held === 'string'))
+  );
+}
+
 function isStoredSession(value: unknown): value is StoredSession {
   return (
     isJsonObject(value) &&
@@ -59,7 +112,12 @@ function isStoredSession(value: unknown): value is StoredSession {
     typeof value.profile === 'string' &&
     typeof value.sent === 'boolean' &&
     typeof value.busy === 'boolean' &&
-    (value.titles === undefined || isSessionTitles(value.titles))
+    (value.titles === undefined || isSessionTitles(value.titles)) &&
+    isOptionalProcessId(value.processId) &&
+    isOptionalQueue(value.queued) &&
+    isOptionalControls(value.launchControls) &&
+    (value.launchResume === undefined ||
+      typeof value.launchResume === 'boolean')
   );
 }
 
@@ -88,6 +146,10 @@ function parseSavedSessions(text: string): SavedSessions {
     sessions: (sessions as StoredSession[]).map((stored) => ({
       ...stored,
       titles: stored.titles ?? NO_TITLES,
+      processId: stored.processId ?? null,
+      queued: stored.queued ?? [],
+      launchControls: stored.launchControls ?? {},
+      launchResume: stored.launchResume ?? false,
     })),
     selectedHostSessionId,
   };

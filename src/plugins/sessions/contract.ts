@@ -179,6 +179,10 @@ export interface SessionsMainExports {
   // A copy of the session's titles, kept while its row is closed; null for a
   // session not connected.
   titles(sessionId: string): SessionTitles | null;
+  // Holds each relay's connect until `until` settles, up to a bound, so a
+  // relaunched relay joins the row a plugin is about to open rather than
+  // opening its own. Only a relay's hello waits: `connect` does not.
+  holdConnects(until: Promise<unknown>): void;
 }
 
 // `closed` is a row the user closed, or one `release` closed, every guard

@@ -210,6 +210,7 @@ export const defaultKeymap = {
     { keys: '<A-i>', scope: 'any', command: 'sessions.prevTab' },
     { keys: '<D-w>', scope: 'any', command: 'sessions.closeSession' },
     { keys: '<Leader>;', scope: 'any', command: 'sessions.closeSession' },
+    { keys: '<Leader>:', scope: 'any', command: 'chat.stopAll' },
     { keys: '<Leader>rr', scope: 'any', command: 'sessions.renameSession' },
 
     // ── Workflow ───────────────────────────────────────────────────────────

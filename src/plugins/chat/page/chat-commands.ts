@@ -293,6 +293,13 @@ export function chatCommandHandlers(
     pickerClose: () => picker.close(),
     pickerFilter: () => picker.focusFilter(),
     pickerList: () => picker.leaveFilter(),
+    stopAll: () => {
+      log('chat', 'stopping every session');
+      void channel.invoke('stopAll').catch((error: unknown) => {
+        log('chat', `sessions not stopped: ${errorText(error)}`);
+        deps.toast(`Sessions not stopped: ${errorText(error)}`, 'error');
+      });
+    },
     openPreview: () =>
       void channel.invoke('openPreview').catch((error: unknown) => {
         log('chat', `chat preview not opened: ${errorText(error)}`);
