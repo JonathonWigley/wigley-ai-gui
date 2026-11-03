@@ -13,7 +13,7 @@ export interface Chord {
 }
 
 export const CHORD_NOTATION_RULE =
-  "write modifiers C-, A-, S-, D- in that order, at least one of C-, A-, D-, then one lowercase letter, one digit, ;, ', or Enter";
+  "write modifiers C-, A-, S-, D- in that order, at least one of C-, A-, D- (S- alone only on Enter), then one lowercase letter, one digit, ;, ', or Enter";
 
 const CHORD_NOTATION = /^<(C-)?(A-)?(S-)?(D-)?([a-z0-9;']|Enter)>$/;
 
@@ -24,7 +24,8 @@ export function isChordToken(key: string): boolean {
 }
 
 // The chord `token` writes, or null when it does not fit the notation. Shift
-// alone makes no chord: it types the key's capital or symbol.
+// alone makes no chord, since it types the key's capital or symbol, except on
+// Enter, which has neither.
 export function parseChord(token: string): Chord | null {
   const parts = CHORD_NOTATION.exec(token);
   if (!parts) {
@@ -38,5 +39,6 @@ export function parseChord(token: string): Chord | null {
     key: parts[5],
   };
   const hasNonShiftModifier = chord.ctrl || chord.alt || chord.meta;
-  return hasNonShiftModifier ? chord : null;
+  const isShiftEnter = chord.shift && chord.key === 'Enter';
+  return hasNonShiftModifier || isShiftEnter ? chord : null;
 }

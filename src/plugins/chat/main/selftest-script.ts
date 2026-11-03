@@ -84,11 +84,11 @@ const LONG_PARAGRAPHS = Array.from(
   (_, index) => `${index + 1}`,
 );
 const LONG_TEXT = LONG_PARAGRAPHS.join('\n\n');
-// Enter in insert mode breaks the line.
+// Shift+Enter in insert mode breaks the line.
 const LONG_KEYS = [
   'i',
   ...LONG_PARAGRAPHS.flatMap((paragraph, index) => [
-    ...(index === 0 ? [] : ['Enter', 'Enter']),
+    ...(index === 0 ? [] : ['<S-Enter>', '<S-Enter>']),
     ...paragraph,
   ]),
   'Escape',
@@ -290,13 +290,14 @@ const SENDING_STEPS: SelfTestStep[] = [
     expect: '[chat] assistant entry added in chat-selftest',
   },
   {
-    keys: ['i', ...'one', 'Enter', ...'two', 'Escape', 'Enter'],
+    keys: ['i', ...'one', '<S-Enter>', ...'two', 'Enter'],
     expect: '[chat] assistant entry added in chat-selftest',
-    why: 'Enter in insert mode breaks the line, so one and two go as one message.',
+    why: 'Shift+Enter in insert mode breaks the line and Enter sends, so one and two go as one message.',
   },
   {
-    keys: ['i', ...'hello', '<D-Enter>'],
+    keys: [...'hello', '<D-Enter>'],
     expect: '[chat] assistant entry added in chat-selftest',
+    why: 'Enter in insert mode left the box in insert mode.',
   },
   { keys: ['Escape', 'Escape'], expect: '[chat] left the box' },
 ];

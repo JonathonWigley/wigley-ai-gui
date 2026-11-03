@@ -36,6 +36,13 @@ describe('parseChord', () => {
       meta: true,
       key: 'Enter',
     });
+    expect(parseChord('<S-Enter>')).toEqual({
+      ctrl: false,
+      alt: false,
+      shift: true,
+      meta: false,
+      key: 'Enter',
+    });
   });
 
   it.each(['<D-enter>', '<D-Tab>'])(

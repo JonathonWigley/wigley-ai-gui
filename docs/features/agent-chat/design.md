@@ -169,7 +169,7 @@ interview on 2026-10-23; this file is the record of both.
 - `src/plugins/chat/`, depending on `sessions` and `keys`. Main keeps every owned session's entries, so a page
   reload redraws the chat whole (the dev server reloads twice at start).
 - **Chat tab**: the entries under a floating composer: a vim message box, the box's vim mode, each control's value
-  as a chip, and send (changed by ui-design plan C). Enter in normal mode sends, Enter in insert mode adds a line, Cmd+Enter sends from any mode. `i` /
+  as a chip, and send (changed by ui-design plan C). Enter sends in insert and normal mode, Shift+Enter in insert mode adds a line, Cmd+Enter sends from any mode. `i` /
   `a` focus the box, `j` / `k` move between entries, `Enter` opens or closes the focused entry or activity line and pulls
   back a focused pending message, `G` jumps to the latest, Ctrl+C interrupts and pulls back every pending message
   (§ Pending messages). The agent's steps show as activity lines (§ Activity line). While the box
