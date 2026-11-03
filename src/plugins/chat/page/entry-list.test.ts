@@ -19,10 +19,9 @@ import type {
   EntryInput,
   EntryKind,
   EntryView,
-  WorkingInput,
 } from '../layouts/layout';
 import { createChatLayouts } from './chat-layouts';
-import { createEntryList } from './entry-list';
+import { createEntryList, type EntryListStop } from './entry-list';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 
 type AnyBuilder = (
@@ -225,6 +224,32 @@ const user = (id: string): ChatEntry => ({
   images: [],
   raw: [],
 });
+const thinking = (id: string): ChatEntry => ({
+  kind: 'thinking',
+  id,
+  at: 1000,
+  text: 'hmm',
+  streaming: false,
+  raw: [],
+});
+const permission = (id: string): ChatEntry => ({
+  kind: 'permission',
+  id,
+  at: 1000,
+  toolName: 'Bash',
+  input: {},
+  answer: null,
+  raw: [],
+});
+const result = (id: string): ChatEntry => ({
+  kind: 'result',
+  id,
+  at: 2000,
+  stopReason: 'end_turn',
+  costUsd: null,
+  durationMs: null,
+  raw: [],
+});
 
 const queued = (id: string): QueuedMessage => ({
   id,
@@ -239,6 +264,18 @@ function defaultShown(): ShownLayouts<ChatLayout> {
     layouts: new Map<string, ChatLayout>([['default', defaultLayout]]),
     user: 'default',
   };
+}
+
+// The user layout `user`, named `name`, with activity in the transcript.
+function activityShown(
+  user: ChatLayout = {},
+  name = 'activity',
+): ShownLayouts<ChatLayout> {
+  return withUser<ChatLayout>(
+    defaultLayout,
+    { ...user, activityInTranscript: true },
+    name,
+  );
 }
 
 // Timers that run only when the test fires them.
@@ -354,8 +391,7 @@ interface ActivityCall {
 function recordingActivity(calls: ActivityCall[]): ShownLayouts<ChatLayout> {
   const record = (how: ActivityCall['how'], input: ActivityInput) =>
     calls.push({ how, run: input.steps[0].id, input });
-  return withUser<ChatLayout>(
-    defaultLayout,
+  return activityShown(
     {
       activity(parent, input, kit) {
         record('draw', input);
@@ -387,11 +423,7 @@ describe('entry list', () => {
     const shown =
       row.shown === 'default'
         ? defaultShown()
-        : withUser<ChatLayout>(
-            defaultLayout,
-            fancyLayout(row.fancy ?? {}),
-            'fancy',
-          );
+        : activityShown(fancyLayout(row.fancy ?? {}), 'fancy');
     const { list, logs, toasts, disposed, put } = setUpList(shown);
 
     for (const entry of row.puts) {
@@ -431,7 +463,7 @@ describe('activity lines', () => {
   });
 
   it('runs_UserToolToolAssistant_OneActivitySlotBeforeHiddenSteps', () => {
-    const { list, put } = setUpList(defaultShown());
+    const { list, put } = setUpList(activityShown());
     userToolToolAssistant.forEach(put);
 
     expect(slotClasses(list.element)).toEqual([
@@ -445,7 +477,7 @@ describe('activity lines', () => {
   });
 
   it('runs_ToggleTwice_OpensIntoStepsThenCloses', () => {
-    const { list, put } = setUpList(defaultShown());
+    const { list, put } = setUpList(activityShown());
     userToolToolAssistant.forEach(put);
     list.move(-1);
 
@@ -463,7 +495,7 @@ describe('activity lines', () => {
   });
 
   it('runs_LastRunFollowedToggleTwiceWithAStepBetween_StaysOnTheLine', () => {
-    const { list, put } = setUpList(defaultShown());
+    const { list, put } = setUpList(activityShown());
     [user('u1'), tool('t1'), tool('t2')].forEach(put);
 
     expect(list.toggleFocused()?.result).toBe('expanded');
@@ -478,7 +510,7 @@ describe('activity lines', () => {
   });
 
   it('runs_ClickClosesWithFocusOnStep_FocusMovesToTheRun', () => {
-    const { list, put } = setUpList(defaultShown());
+    const { list, put } = setUpList(activityShown());
     userToolToolAssistant.forEach(put);
     list.move(-1);
     list.toggleFocused();
@@ -550,9 +582,7 @@ describe('activity lines', () => {
   });
 
   it('runs_UserToolBuilder_StepSlotsDrawWithIt', () => {
-    const { list, put } = setUpList(
-      withUser<ChatLayout>(defaultLayout, fancyLayout({}), 'fancy'),
-    );
+    const { list, put } = setUpList(activityShown(fancyLayout({}), 'fancy'));
     userToolToolAssistant.forEach(put);
     list.move(-1);
     list.toggleFocused();
@@ -564,8 +594,7 @@ describe('activity lines', () => {
 
   it('runs_UserActivityUpdateThrows_RedrawsWithDefault', () => {
     const { list, logs, put } = setUpList(
-      withUser<ChatLayout>(
-        defaultLayout,
+      activityShown(
         {
           activity: (parent, _input, kit) => ({
             element: kit.el(parent, 'div', 'fancy-activity'),
@@ -594,7 +623,7 @@ describe('activity lines', () => {
     vi.spyOn(defaultLayout, 'activity').mockImplementation(() => {
       throw new Error('broken default');
     });
-    const { list, logs, put } = setUpList(defaultShown());
+    const { list, logs, put } = setUpList(activityShown());
 
     put(tool('t1'));
 
@@ -609,7 +638,7 @@ describe('activity lines', () => {
   });
 
   it('runs_RebuildSameEntries_RunStaysOpen', () => {
-    const { list, put, entries } = setUpList(defaultShown());
+    const { list, put, entries } = setUpList(activityShown());
     userToolToolAssistant.forEach(put);
     list.move(-1);
     list.toggleFocused();
@@ -660,6 +689,21 @@ describe('pending rows', () => {
     put(user('u1'));
     list.setQueued([queued('q1'), queued('q2')]);
 
+    put(assistant('a1'));
+
+    expect(slotClasses(list.element)).toEqual([
+      'chat-entry-slot',
+      'chat-entry-slot',
+      'chat-entry-slot chat-queued-slot',
+      'chat-entry-slot chat-queued-slot is-cursor',
+    ]);
+  });
+
+  it('pending_RunPutAfterRows_SlotsSitBeforeRows', () => {
+    const { list, put } = setUpList(activityShown());
+    put(user('u1'));
+    list.setQueued([queued('q1'), queued('q2')]);
+
     put(tool('t1'));
 
     expect(slotClasses(list.element)).toEqual([
@@ -701,7 +745,7 @@ describe('pending rows', () => {
   });
 
   it('pending_RowAfterFollowedOpenLastRun_FollowingFocusLandsOnTheRow', () => {
-    const { list, put } = setUpList(defaultShown());
+    const { list, put } = setUpList(activityShown());
     [user('u1'), tool('t1'), tool('t2')].forEach(put);
     list.toggleFocused();
 
@@ -713,7 +757,7 @@ describe('pending rows', () => {
   });
 
   it('pending_OnlyRowLeavesDuringFollowedOpenLastRun_FocusReturnsToTheLineAndFollows', () => {
-    const { list, put } = setUpList(defaultShown());
+    const { list, put } = setUpList(activityShown());
     [user('u1'), tool('t1'), tool('t2')].forEach(put);
     list.toggleFocused();
     const line = expect.objectContaining({
@@ -758,319 +802,117 @@ describe('pending rows', () => {
   });
 });
 
-// One draw or update of a recording working part, with its input.
-interface WorkingCall {
-  how: 'draw' | 'update';
-  input: WorkingInput;
-}
-
-// A user layout `fancy` whose working part draws `div.fancy-working` and
-// records each draw and update in `calls`, and whose activity part and user
-// entry record each of theirs in `others` as `<part> <how>`.
-function recordingWorking(
-  calls: WorkingCall[],
-  others: string[],
-): ShownLayouts<ChatLayout> {
-  return withUser<ChatLayout>(
-    defaultLayout,
-    {
-      working(parent, input, kit) {
-        calls.push({ how: 'draw', input });
-        return {
-          element: kit.el(parent, 'div', 'fancy-working'),
-          update: (next) => calls.push({ how: 'update', input: next }),
-        };
-      },
-      activity(parent, _input, kit) {
-        others.push('activity draw');
-        return {
-          element: kit.el(parent, 'div', 'fancy-activity'),
-          update: () => others.push('activity update'),
-        };
-      },
-      entries: {
-        user(parent, _input, kit) {
-          others.push('user draw');
-          return {
-            element: kit.el(parent, 'div', 'fancy'),
-            update: () => others.push('user update'),
-          };
-        },
-      },
-    },
-    'fancy',
-  );
-}
-
-// Each working call as `<how> <state> [<step ids>]`.
-function workingCallLines(calls: WorkingCall[]): string[] {
-  return calls.map(
-    ({ how, input }) =>
-      `${how} ${input.state} [${input.steps.map((step) => step.id).join(' ')}]`,
-  );
-}
-
-describe('working block', () => {
+describe('activity hidden', () => {
   beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
-  const toolDone = (id: string): ChatEntry => ({
-    ...tool(id),
-    result: { text: 'ok', isError: false },
-  });
-  const result = (id: string): ChatEntry => ({
-    kind: 'result',
-    id,
-    at: 2000,
-    stopReason: 'end_turn',
-    costUsd: null,
-    durationMs: null,
-    raw: [],
-  });
-
-  it('working_SetWorkingThenIdle_SlotAfterEntriesThenGone', () => {
-    const { list, put } = setUpList(defaultShown());
-    put(user('u1'));
-    list.setQueued([queued('q1')]);
-
-    list.setWorking(true);
-    expect(slotClasses(list.element)).toEqual([
-      'chat-entry-slot',
-      'chat-entry-slot chat-working-slot',
-      'chat-entry-slot chat-queued-slot is-cursor',
-    ]);
-
-    list.setWorking(false);
-    expect(slotClasses(list.element)).toEqual([
-      'chat-entry-slot',
-      'chat-entry-slot chat-queued-slot is-cursor',
-    ]);
-  });
-
   type ListSetUp = ReturnType<typeof setUpList>;
-  const runLine = [
-    'chat-entry-slot',
-    'chat-entry-slot chat-activity-slot is-cursor',
-    'chat-entry-slot chat-step-slot hidden',
-    'chat-entry-slot chat-working-slot',
+  const everyKind = [
+    user('u1'),
+    tool('t1'),
+    thinking('k1'),
+    assistant('done'),
+    permission('p1'),
+    result('r1'),
+    notice('n1'),
   ];
+  const putAllThenRebuild = ({ list, put, entries }: ListSetUp) => {
+    everyKind.forEach(put);
+    list.rebuild(entries());
+  };
+
+  // The focused stop's id: an entry's, a run's, or a pending row's message's.
+  const stopId = (stop: EntryListStop) => {
+    if (stop.kind === 'entry') {
+      return stop.entry.id;
+    }
+    return stop.kind === 'activity' ? stop.runId : stop.message.id;
+  };
+
   it.each<{
-    name: string;
-    before: (setUp: ListSetUp) => void;
+    case: string;
+    shown: () => ShownLayouts<ChatLayout>;
     act: (setUp: ListSetUp) => void;
-    calls: string[];
     slots: string[];
+    kinds: string[];
+    stops: string[];
   }>([
     {
-      name: 'a running tool put',
-      before: () => undefined,
-      act: ({ put }) => put(tool('t1')),
-      calls: ['update working [t1]'],
-      slots: runLine,
-    },
-    {
-      name: 'the tool given its result',
-      before: ({ put }) => put(tool('t1')),
-      act: ({ put }) => put(toolDone('t1')),
-      calls: ['update thinking [t1]'],
-      slots: runLine,
-    },
-    {
-      name: 'streaming text put, no step',
-      before: () => undefined,
-      act: ({ put }) =>
-        put({
-          kind: 'assistant',
-          id: 'a1',
-          at: 1000,
-          text: 'so',
-          streaming: true,
-          raw: [],
-        }),
-      calls: ['update writing []'],
+      case: 'default layout, rebuilt',
+      shown: defaultShown,
+      act: putAllThenRebuild,
       slots: [
+        'chat-entry-slot',
+        'chat-entry-slot',
         'chat-entry-slot',
         'chat-entry-slot is-cursor',
-        'chat-entry-slot chat-working-slot',
       ],
+      kinds: ['chat-user', 'chat-assistant', 'chat-permission', 'chat-notice'],
+      stops: ['u1', 'a1', 'p1', 'n1'],
     },
     {
-      name: 'a message queued',
-      before: () => undefined,
-      act: ({ list }) => list.setQueued([queued('q1')]),
-      calls: [],
-      slots: [
-        'chat-entry-slot',
-        'chat-entry-slot chat-working-slot',
-        'chat-entry-slot chat-queued-slot is-cursor',
-      ],
-    },
-    {
-      name: 'a message queued after the turn finished, before idle',
-      before: ({ put, clock }) => {
-        put(toolDone('t1'));
-        clock.time = 3000;
-        put(result('r1'));
-        clock.time = 5000;
-      },
-      act: ({ list }) => list.setQueued([queued('q1')]),
-      calls: [],
+      case: 'activity in the transcript, rebuilt',
+      shown: () => activityShown(),
+      act: putAllThenRebuild,
       slots: [
         'chat-entry-slot',
         'chat-entry-slot chat-activity-slot',
         'chat-entry-slot chat-step-slot hidden',
-        'chat-entry-slot',
-        'chat-entry-slot chat-working-slot',
-        'chat-entry-slot chat-queued-slot is-cursor',
-      ],
-    },
-    {
-      name: 'a message queued in a turn begun with no entries',
-      before: ({ list, put, clock }) => {
-        list.setWorking(false);
-        put(result('r1'));
-        list.setWorking(true);
-        clock.time = 5000;
-      },
-      act: ({ list }) => list.setQueued([queued('q1')]),
-      calls: [],
-      slots: [
-        'chat-entry-slot',
-        'chat-entry-slot',
-        'chat-entry-slot chat-working-slot',
-        'chat-entry-slot chat-queued-slot is-cursor',
-      ],
-    },
-    {
-      name: 'an entry put after the turn finished, before idle',
-      before: ({ put, clock }) => {
-        put(toolDone('t1'));
-        clock.time = 3000;
-        put(result('r1'));
-        clock.time = 5000;
-      },
-      act: ({ put }) => put(tool('t2')),
-      calls: ['update working [t2]'],
-      slots: [
-        'chat-entry-slot',
-        'chat-entry-slot chat-activity-slot',
         'chat-entry-slot chat-step-slot hidden',
         'chat-entry-slot',
-        ...runLine.slice(1),
+        'chat-entry-slot',
+        'chat-entry-slot',
+        'chat-entry-slot is-cursor',
       ],
+      kinds: [
+        'chat-user',
+        'chat-activity',
+        'chat-tool',
+        'chat-thinking',
+        'chat-assistant',
+        'chat-permission',
+        'chat-result',
+        'chat-notice',
+      ],
+      stops: ['u1', 'activity:t1', 'a1', 'p1', 'r1', 'n1'],
     },
     {
-      name: 'an entry put in a turn begun with no entries',
-      before: ({ list, put, clock }) => {
-        list.setWorking(false);
-        put(result('r1'));
-        list.setWorking(true);
-        clock.time = 5000;
-        // A change while the turn is still empty holds the block.
-        list.setQueued([]);
+      case: 'default layout, a tool put then given its result',
+      shown: defaultShown,
+      act: ({ put }) => {
+        put(tool('t1'));
+        put({ ...tool('t1'), result: { text: 'ok', isError: false } });
       },
-      act: ({ put }) => put(tool('t2')),
-      calls: ['update working [t2]'],
-      slots: ['chat-entry-slot', 'chat-entry-slot', ...runLine.slice(1)],
+      slots: [],
+      kinds: [],
+      stops: [],
     },
-    {
-      name: 'a rebuild with the same entries',
-      before: ({ put }) => put(tool('t1')),
-      act: ({ list, entries }) => list.rebuild(entries()),
-      calls: ['draw working [t1]'],
-      slots: runLine,
-    },
-  ])('working_Changes_UpdateOnlyOnStepsOrState $name', (row) => {
-    const calls: WorkingCall[] = [];
-    const setUp = setUpList(recordingWorking(calls, []));
-    setUp.put(user('u1'));
-    setUp.list.setWorking(true);
-    row.before(setUp);
-    calls.length = 0;
+  ])('hidden_ActivityNotInTranscript ($case)', (row) => {
+    const setUp = setUpList(row.shown());
+    const { list } = setUp;
 
     row.act(setUp);
 
-    expect(workingCallLines(calls)).toEqual(row.calls);
-    expect(slotClasses(setUp.list.element)).toEqual(row.slots);
-  });
-
-  it('working_PutWhileWorking_EntrySlotGoesBeforeTheBlock', () => {
-    const { list, put } = setUpList(defaultShown());
-    put(user('u1'));
-    list.setQueued([queued('q1')]);
-    list.setWorking(true);
-
-    put(tool('t1'));
-
-    expect(slotClasses(list.element)).toEqual([
-      'chat-entry-slot',
-      'chat-entry-slot chat-activity-slot',
-      'chat-entry-slot chat-step-slot hidden',
-      'chat-entry-slot chat-working-slot',
-      'chat-entry-slot chat-queued-slot is-cursor',
-    ]);
-  });
-
-  it.each<{
-    name: string;
-    arrange: (setUp: ListSetUp) => void;
-    startedAt: number;
-  }>([
-    {
-      name: 'a turn with entries',
-      arrange: ({ list, put }) => {
-        put(user('u1'));
-        list.setWorking(true);
-      },
-      startedAt: 1000,
-    },
-    {
-      name: 'a turn with no entries, the list changed since its draw',
-      arrange: ({ list, put, clock }) => {
-        put(user('u1'));
-        put(result('r1'));
-        clock.time = 1500;
-        list.setWorking(true);
-        clock.time = 3000;
-        list.setQueued([queued('q1')]);
-      },
-      startedAt: 1500,
-    },
-  ])('working_Tick_UpdatesTheBlockWithNow $name', (row) => {
-    const calls: WorkingCall[] = [];
-    const others: string[] = [];
-    const setUp = setUpList(recordingWorking(calls, others));
-    row.arrange(setUp);
-    calls.length = 0;
-    others.length = 0;
-    setUp.clock.time = 7000;
-
-    setUp.fireAll();
-
-    expect(calls).toEqual([
-      {
-        how: 'update',
-        input: expect.objectContaining({
-          startedAt: row.startedAt,
-          now: 7000,
-        }),
-      },
-    ]);
-    expect(others).toEqual([]);
-  });
-
-  it('working_CursorSkipsTheBlock', () => {
-    const { list, put } = setUpList(defaultShown());
-    put(user('u1'));
-    list.setQueued([queued('q1')]);
-    list.setWorking(true);
-    list.move(-1);
-
-    expect(list.move(1)).toEqual(pendingStop('q1'));
-    expect(list.move(-1)).toEqual({ kind: 'entry', entry: user('u1') });
+    expect(slotClasses(list.element)).toEqual(row.slots);
+    expect(
+      asFake(list.element).children.map((slot) =>
+        slot.children[0].className
+          .split(' ')
+          .find((name) => name !== 'chat-entry'),
+      ),
+    ).toEqual(row.kinds);
+    list.first();
+    const stops: string[] = [];
+    for (let stop = list.focused(); stop !== null; stop = list.move(1)) {
+      stops.push(stopId(stop));
+      if (list.isAtLastStop()) {
+        break;
+      }
+    }
+    expect(stops).toEqual(row.stops);
   });
 });
 
