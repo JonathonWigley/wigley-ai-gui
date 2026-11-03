@@ -26,10 +26,10 @@ clone of one repo (`new-games-prototypes`, `-2`, `-3`, `-4`) reads as one projec
 
 ## Preconditions
 
-- `git -C /Users/jonathonwigley/Documents/ai-dev/wigley-ai-gui status -sb` → `## main...origin/main [ahead 67]`,
-  clean tree (measured at plan time, re-verify). `git fetch` failed at plan time (the 1Password SSH agent refused
-  the key in the agent's shell), so whether `origin/main` moved is unverified: `wigley:make` re-runs the fetch at
-  preflight.
+- `git -C /Users/jonathonwigley/Documents/ai-dev/wigley-ai-gui status -sb` → on `main`, ahead of `origin/main`, nothing
+  modified under the paths this plan touches. Other sessions commit to `main` too, so the ahead count moves.
+  `git fetch` failed at plan time (the 1Password SSH agent refused the key in the agent's shell), so whether
+  `origin/main` moved is unverified: `wigley:make` re-runs the fetch at preflight.
 - The four new-games clones share one origin:
   `for d in /Users/jonathonwigley/Documents/dev/peoplefun/new-games-prototypes*/; do git -C "$d" remote get-url origin; done`
   → `https://github.com/peoplefun/new-games-prototypes` four times (no `.git` suffix).
