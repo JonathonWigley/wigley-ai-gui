@@ -237,8 +237,9 @@ the `retro` skill reads, and the relay's side of the channel). A change to eithe
 lands in both repos together. Each relay connection is one agent session, owned by the `sessions` plugin. A
 connected session (one the app did not start, such as a terminal `claude` or Codex session) has no row in the sessions
 sidebar until a plugin needs the user there: `mark` or `activate` adds its row, as a form opening does, and `release` closes it
-again once every close guard allows, as the form presenter does when the session's last form closes, by submit,
-cancel or any other close. The user may also close the row; it leaves when the session disconnects. A session the
+again once every close guard allows, as the form presenter does after every form close, by submit, cancel or
+any other close (the close guard of a session's other open form keeps the row). The user may also close the row,
+which `mark` or `activate` brings back; it leaves for good when the session disconnects. A session the
 app starts (`open`) is an owned session: its row exists from start, the relay connection whose hello carries its
 host session id joins that row instead of adding one (a newer relay takes the join from an older one still
 connected, as when the harness restarts its MCP connection), and the row ends when its owner ends it: chat keeps

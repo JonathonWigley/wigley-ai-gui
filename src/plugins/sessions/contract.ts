@@ -123,10 +123,10 @@ export interface SessionsMainExports {
   ): void;
   // Connects the session with no row, sending no state, or joins the owned
   // session whose host id the info carries; `mark` or `activate` adds a
-  // connected session's row, and `release` closes it. A newer relay for that host
-  // id takes the join from an older one still connected; the older handle's
-  // `end` then leaves the join alone. Throws for a host id an owned session
-  // moved away from, unless another owned session holds it.
+  // connected session's row, and `release` closes it. A newer relay for that
+  // host id takes the join from an older one still connected; the older
+  // handle's `end` then leaves the join alone. Throws for a host id an owned
+  // session moved away from, unless another owned session holds it.
   connect(info: SessionInfo): ConnectedSession;
   // Starts an owned session with its row selected, or, with `options.select`
   // false, added unmarked and the selected row (or none) left as it was.
@@ -149,15 +149,17 @@ export interface SessionsMainExports {
   // null for a session not connected.
   label(sessionId: string): string | null;
   // The user closing a session's row, or `release`, asks every guard first,
-  // and the row stays while any answers false; once every guard allows, the row goes and
-  // `closed` is emitted. A session that ends loses its row regardless.
+  // and the row stays while any answers false; once every guard allows, the
+  // row goes and `closed` is emitted. A session that ends loses its row
+  // regardless.
   addCloseGuard(mayClose: (sessionId: string) => boolean): void;
 }
 
 // `closed` is a row the user closed, or one `release` closed, every guard
-// allowing; the session itself stays until it ends. `selected` is the selected row changing, to another row
-// or to none, emitted after the state that carries it: an open that selects,
-// an activate or mark that selects, or the selected row closing or ending.
+// allowing; the session itself stays until it ends. `selected` is the selected
+// row changing, to another row or to none, emitted after the state that
+// carries it: an open that selects, an activate or mark that selects, or the
+// selected row closing or ending.
 // `hostSessionChanged` is an owned session moved to a new host id, emitted
 // after the state that carries it, with the session's info already updated.
 export interface SessionsMainEvents extends EventShape {
