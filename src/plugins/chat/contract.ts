@@ -235,10 +235,12 @@ export interface ChatAgentEvent {
 }
 
 // `agentEvent`: one agent event of a session chat owns, still sent after the
-// row closes for its process's `sessionEnded`. `planUsage`: the plan rows one
-// of those sessions saw. Both carry the `profileDir` the session's process was
-// started with: the profile's `configDir` as the `profiles` setting writes it,
-// unexpanded; null is the harness default, which chat never sends.
+// row closes for its process's `sessionEnded`; also a restored or resumed
+// row's saved usage, read from its transcript rather than sent by a process.
+// `planUsage`: the plan rows one of those sessions saw. Both carry the
+// `profileDir` of the profile the row opened under: its `configDir` as the
+// `profiles` setting writes it, unexpanded; null is the harness default, which
+// chat never sends.
 // `sessionOpened`: a session chat now owns, with the profile it opened under.
 export interface ChatMainEvents extends EventShape {
   agentEvent: ChatAgentEvent;
