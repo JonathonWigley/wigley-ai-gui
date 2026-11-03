@@ -1,0 +1,172 @@
+# Live default layouts — plan
+
+Feature: layouts · Implements: none · Ticket: none
+Target: main · Written: 2026-11-03
+
+REQUIRED SUB-SKILL: Use wigley:make to implement this plan
+
+## Goal
+
+The user edits any owner's built-in `default` layout (`layout.js` and `layout.css`) in the repo clone, and the
+running app (stable and dev) redraws at once, with no rebuild. Today only user layouts in
+`~/.config/wigley-ai-gui/layouts/` reload; each `default` is bundled by Vite and changes only on a rebuild.
+
+## Architecture
+
+Systems touched:
+
+- **Main, layouts:** `src/main/layouts/layout-service.ts`, `src/shared/layouts/layout-registry.ts`. Each owner's
+  registry also watches that owner's default folder in the repo clone and announces `default` with a revision that
+  rises on each save.
+- **Main, scheme:** `src/main/data-protocol/data-protocol.ts`, `src/shared/layout-url.ts`. The `wigley-layout:`
+  scheme serves `<owner>/default/<path>` from the owner's default folder in the clone.
+- **Main, composition root:** `src/main/main.ts`, the Vite main and renderer configs, `scripts/install-app.mts`. The
+  stable build carries the clone's path; the dev app uses its own repo, and its Vite dev server does not watch
+  `layouts/default/`, so both apps redraw a default through the same live path.
+- **Page, layout host:** `src/shared/page/layout-host/` (`layout-loader.ts`, `show-layouts.ts`, `draw-part.ts`),
+  `src/contracts/plugin.ts`. The loader imports a live `default` like a user layout, links the default's
+  stylesheet (bundled URL or live URL), and draws the bundled default for any failure.
+- **Every owner (16):** each moves its default-look CSS into `layouts/default/layout.css` and hands the bundled URL
+  of that file to the layout host.
+
+## Preconditions
+
+Each was run at plan time against `1f2710da`; `wigley:make` re-runs each before the first dispatch.
+
+- 16 owners have a built-in default: `find src -path '*/layouts/default/layout.js' | wc -l` → `16`
+  (measured at plan time, re-verify). The owners: agent-lines, agent-strip, backlog, chat, docs, forms, gallery,
+  keys, notes, primer, sessions, settings, usage, visual, workflow, and the shell (`src/renderer/shell`).
+- No default has a `layout.css` yet: `find src -path '*/layouts/default/layout.css' | wc -l` → `0`.
+- The registry ignores a folder named `default`: `grep -n "DEFAULT_NAME" src/shared/layouts/layout-registry.ts`
+  shows the constant and the filter.
+- The loader never imports a built-in entry: `grep -n "builtIn" src/shared/page/layout-host/layout-loader.ts` shows
+  the skip.
+- `src/plugins/agents/layouts/default/` is an empty folder and not a layout owner: `ls -A src/plugins/agents/layouts/default`
+  prints nothing.
+- **Baseline captures (a preflight step, not a check).** Before the first dispatch, with no task landed, start a dev
+  drive run (`npm run drive -- start`), take the "before" screenshots task 07 check 5 lists (same width, theme and
+  steps), write the exact drive commands run (seed actions, keys, width, theme, `screenshot <name>` per owner) and the run folder in the Run log, and quit the run. Task 07 compares its "after" captures with these.
+
+## Docs written ahead
+
+Commit `1f2710da`:
+
+- `docs/features/layouts/design.md` — § Live defaults, the Shape diagram, the owner's contract bullet, two Decisions.
+- `AGENTS.md` — the look-change paragraph and the layout bullet under Architecture.
+
+## Mandatory Reads
+
+- `AGENTS.md` (repo root) — every section an edited file falls under; `DESIGN.md` for any CSS task.
+- `docs/features/layouts/design.md` — § Shape, § Folder and settings, § Live defaults, § Decisions.
+- Any `AGENTS*.md` in a folder a task edits (`find src scripts -name 'AGENTS*.md'`).
+
+## Design Overview
+
+```
+ install-app ── bakes the clone path ──▶ stable build          dev app: its own repo
+                                              │
+ main: LayoutService.register(owner, layoutTypes, defaultFolder)
+        ├─ user registry:    ~/.config/wigley-ai-gui/layouts/<owner>/<name>/
+        └─ default watch:    <clone>/<defaultFolder>/layout.js|layout.css
+              │ announces { name: 'default', revision: n, hasCss, builtIn: false } while the folder holds layout.js
+              │ announces { name: 'default', revision: 1, hasCss: false, builtIn: true } with no clone or no layout.js
+ scheme: wigley-layout://<owner>/default/~<rev>/<path> → <clone>/<defaultFolder>/<path>
+              │
+ page: layout loader
+        ├─ default not built in: import it, read it with the owner's reader, keep the last good version
+        ├─ default stylesheet link: live layout.css URL while a live default is loaded, else the bundled URL
+        └─ any failure (import, read, a part that throws or is missing) → the bundled default, same toast
+```
+
+Out of scope:
+
+- CSS for parts the app draws itself (slots, panes, editors, text boxes) stays in each plugin's page CSS.
+- A user layout folder named `default` stays ignored.
+- No setting or override for the clone path.
+
+Decisions (rounds 1–2 and the design review):
+
+- The live default is read from the repo clone's working tree, uncommitted edits included (round 1).
+- Each default's look CSS moves to `layouts/default/layout.css`; only the rules for what the layout draws move
+  (rounds 1, 2).
+- The stable build learns the clone path at build time from `install-app`; the dev app uses its own repo (Decided).
+- A plugin's default folder is `src/plugins/<id>/layouts/default`, derived from its id; the shell passes
+  `src/renderer/shell/layouts/default` (Decided).
+- The bundled `layout.css` is linked by the loader as a file, never bundled into the page CSS, so a rule deleted
+  live disappears (Decided).
+- A part that throws in a live default logs and draws the bundled part, as a throwing user-layout part does today;
+  a load or read failure raises the existing toast (Decided, task 03).
+- A live default must define every function part the bundled default defines; a missing part fails the load with
+  `layout default has no <part>` (Decided, task 03).
+- The default stylesheet link is one element, present whichever layout is picked, because a user layout draws its
+  missing parts from the default and several moved rules are not scoped to `default` (Decided, tasks 03, 05).
+- Classes both the default layout and the app create (`.chat-entry`, `.settings-bind` and others task 05 names) keep
+  their CSS in the page bundle, so restyling them still needs a rebuild (Decided, task 05).
+- Design review: the registry stays the one module that announces an owner's layouts, and the page sees a live
+  default as an ordinary entry (`builtIn: false`), so the loader's existing import, revision and last-good paths
+  carry it; the scheme stays one handler with the owner's default folder looked up by owner; the bundled default
+  stays the final fallback in `draw-part.ts`.
+
+## File Structure
+
+Names and signatures more than one task uses:
+
+- `LayoutService.register(owner: LayoutOwner, layoutTypes: string, defaultFolder: string): Disposable` in
+  `src/main/layouts/layout-service.ts` — `defaultFolder` is relative to the clone root. The plugin host passes
+  `src/plugins/<id>/layouts/default`; `main.ts` passes `src/renderer/shell/layouts/default` for the shell.
+- The registry entry keeps its shape `{ name, revision, hasCss, builtIn }`. `default` is `builtIn: false` while a
+  live default folder holds `layout.js`, with its own revision and `hasCss`; else `builtIn: true`, revision 1,
+  `hasCss: false`, as today.
+- `ShowLayoutOptions<L>.defaultStylesheet: string | null` in `src/contracts/plugin.ts` — the bundled URL of the
+  owner's `layouts/default/layout.css`, from `import defaultStylesheet from '../layouts/default/layout.css?url'`;
+  null for an owner with no default CSS. The shell's page host takes the same field.
+- `layouts/default/layout.css` in each owner — the rules for what that owner's default layout draws, each selector
+  kept exactly as it is today.
+- `LayoutRegistryDeps.defaultFolder: Files | null` in `src/shared/layouts/layout-registry.ts` — the owner's default
+  folder in the clone, scoped to it; null with no clone (task 01 adds it, task 04 fills it).
+- `layoutFilePath(url: string, layoutsRoot: string, paths: Paths, defaultFolderOf: (owner: LayoutOwner) => string | null): string | null`
+  in `src/shared/layout-url.ts`, and
+  `serveLayoutScheme(layoutsRoot: string, paths: Paths, defaultFolderOf: (owner: LayoutOwner) => string | null): void`
+  in `src/main/data-protocol/data-protocol.ts` — the name `default` maps to `defaultFolderOf(owner)`, null → 404
+  (task 02 adds them, task 04 passes the service's lookup).
+- `LayoutService.defaultFolderPath(owner: LayoutOwner): string | null` in `src/main/layouts/layout-service.ts` — the
+  absolute default folder of a registered owner; null when unregistered or with no clone. The scheme's lookup.
+- `declare const WIGLEY_CLONE_DIR: string` in `src/main/clone-dir.d.ts`, set by `vite.main.config.mts`'s `define`
+  from the build's `WIGLEY_CLONE_DIR` environment variable, else the repo the build runs in. `install-app` sets the
+  variable to the main clone. Kept out of `src/declarations.d.ts`, which task 05 may edit for `?url`.
+
+Existing files modified: see each task's Files line. New files: one `layouts/default/layout.css` per owner that has
+default-look CSS (moved, not written new).
+
+Boundary rules: main code imports no page code; the page learns of a live default only through the registry's
+entry and the scheme; no task adds a `process.platform` check.
+
+## Tasks
+
+> `wigley:make` ticks a box once its group is committed and proved, and sets `Status: done` in the
+> task document in the same change. The run is done when every box is ticked.
+
+### Wave 1
+- [ ] [Registry announces a live default](01-registry-live-default.md)
+- [ ] [Scheme serves `<owner>/default/`](02-scheme-serves-default.md)
+- [ ] [Page loads a live default](03-page-loads-live-default.md)
+
+### Wave 2
+- [ ] [Main wires the clone and each owner's default folder](04-main-wires-clone-defaults.md) — after 01, 02
+- [ ] [Default CSS to `layout.css`](05-default-css-to-layout-css.md) — after 03
+
+### Wave 3
+- [ ] [Doc re-read](06-doc-re-read.md) — after 01, 02, 03, 04, 05
+
+### Wave 4
+- [ ] [Final verification](07-final-verification.md) — after 01, 02, 03, 04, 05, 06
+
+## Run log
+
+Review base: <sha, written by wigley:make at preflight>
+
+### Groups
+### Contract changes
+### Rulings
+### Review rounds
+### Test gate

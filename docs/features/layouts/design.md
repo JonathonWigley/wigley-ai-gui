@@ -82,7 +82,8 @@ edit shows at once, and the committed edit ships as the next build's bundled cop
   default is loaded, and the loader swaps it for the live one, so a rule deleted live is gone. CSS for parts the app
   draws itself (slots, panes, editors, text boxes) stays in the plugin's page CSS and still needs a rebuild.
 - **Fallback.** A missing clone, a default that fails to load or read, and a part that throws or is missing all draw
-  the bundled default, with the same toast a failed user layout raises.
+  the bundled default. A load, read or missing-part failure raises the toast a failed user layout raises; a part
+  that throws while drawing logs, as a user layout's part does.
 
 ## What a layout draws
 
