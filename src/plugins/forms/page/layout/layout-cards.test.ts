@@ -184,7 +184,6 @@ describe('buildLayoutCard', () => {
       anchors.slice(0, anchorsAtThrow).every((anchor) => anchor.isDisposed),
     ).toBe(true);
     expect(deps.log).toHaveBeenCalledWith(
-      'forms',
       'layout fancy finding card failed: fancy failed',
     );
     expect(parent.children).toEqual([asFake(card.element)]);

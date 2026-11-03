@@ -1,4 +1,4 @@
-import type { Log } from '../../../../contracts/log';
+import type { PluginLog } from '../../../../contracts/log';
 import {
   PANE_FOCUS_COMMANDS,
   type PaneDirection,
@@ -55,7 +55,7 @@ type SessionsCommand = keyof typeof sessionsManifest.commands & string;
 // `rowParts` holds the parts each row draws, `barParts` the parts each tab bar
 // draws.
 export interface SessionsPartsDeps extends OwnerKitServices {
-  log: Log;
+  log: PluginLog;
   rowParts: Pick<PartStore<SessionPart>, 'parts'>;
   barParts: Pick<PartStore<SessionPart>, 'parts'>;
 }
@@ -331,14 +331,12 @@ export function createSessionsParts(deps: SessionsPartsDeps): SessionsParts {
 }
 
 const ROW_PARTS: ContributedPartsPlace = {
-  owner: 'sessions',
   noun: 'row part',
   holderClass: 'session-row-parts',
   wrapperClass: 'session-row-part',
 };
 
 const BAR_PARTS: ContributedPartsPlace = {
-  owner: 'sessions',
   noun: 'bar part',
   holderClass: 'session-bar-parts',
   wrapperClass: 'session-bar-part',

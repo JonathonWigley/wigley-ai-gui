@@ -1,7 +1,7 @@
 import type { CommandId } from '../../../contracts/commands';
 import type { Disposable } from '../../../contracts/disposable';
 import type { ViewScope } from '../../../contracts/keymap';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { Platform } from '../../../contracts/platform';
 import type { PluginManifest } from '../../../contracts/plugin';
@@ -48,7 +48,7 @@ export interface BaseKitDeps {
   platform: Platform;
   recordAnchor?(anchor: Disposable): void;
   recordMount?(mount: MarkdownMount): void;
-  log?: Log;
+  log?: PluginLog;
 }
 
 // The page services an owner's base kit reads beside its manifest, its scope
@@ -58,7 +58,7 @@ export interface OwnerKitServices {
   keys: BaseKitDeps['keys'];
   commands: KitCommands;
   platform: Platform;
-  log?: Log;
+  log?: PluginLog;
 }
 
 // The qualified id of the short command name `short` of the plugin of
@@ -258,7 +258,7 @@ export function createBaseKit(deps: BaseKitDeps): BaseKit {
   return kit;
 }
 
-const NO_LOG: Log = () => undefined;
+const NO_LOG: PluginLog = () => undefined;
 
 function durationText(ms: number): string {
   const seconds = Math.max(0, Math.floor(ms / 1000));

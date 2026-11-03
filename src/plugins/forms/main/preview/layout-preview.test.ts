@@ -93,7 +93,7 @@ function preview() {
     forms: fakeForms,
     savedArgs: () => saved,
     layoutNames: () => layoutNames,
-    log: (source, message) => logLines.push(`[${source}] ${message}`),
+    log: (...parts: string[]) => logLines.push(parts.at(-1) ?? ''),
   });
 }
 
@@ -175,7 +175,7 @@ describe('open', () => {
 
     expect(calls.at(-1)?.args).toBe(SECOND_SAVED);
     expect(logLines).toHaveLength(1);
-    expect(logLines[0]).toMatch(/^\[forms\] /);
+    expect(logLines[0]).toMatch(/preview skipped a saved round/);
   });
 
   it('open_SavedArgsNameMissingLayout_SkipsAndLogs', () => {
@@ -188,7 +188,7 @@ describe('open', () => {
 
     expect(calls.at(-1)?.args).toBe(SECOND_SAVED);
     expect(logLines).toHaveLength(1);
-    expect(logLines[0]).toMatch(/^\[forms\] /);
+    expect(logLines[0]).toMatch(/preview skipped a saved round/);
   });
 
   it('open_NoSavedArgsParse_AsksSampleAgain', () => {

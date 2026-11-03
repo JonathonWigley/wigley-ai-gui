@@ -60,7 +60,7 @@ export function sessionsViewSetup(
     },
     platform: 'macos',
     commands: { exists: () => true, run: () => undefined },
-    log: (source, message) => logged.push(`[${source}] ${message}`),
+    log: (...parts: string[]) => logged.push(parts.at(-1) ?? ''),
   });
   const sideBar = asFake(view.sideBar);
   const area = asFake(view.element);

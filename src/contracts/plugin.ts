@@ -380,8 +380,8 @@ export interface ShellLayout {
 
 export type ToastTone = 'success' | 'info' | 'error';
 
-// What an owner hands `show`. The host supplies log, logSource (the owner) and
-// toast, so they are not options.
+// What an owner hands `show`. The host supplies the log, with the owner as each
+// line's source, and toast, so they are not options.
 export interface ShowLayoutOptions<L> {
   defaultLayout: L;
   // The bundled URL of the owner's `layouts/default/layout.css`, or null for an

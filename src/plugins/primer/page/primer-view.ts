@@ -4,7 +4,7 @@ import type { Disposable } from '../../../contracts/disposable';
 import type { PageDrops } from '../../../contracts/drops';
 import type { ContentScroll, ScrollStep } from '../../../contracts/editor';
 import type { ViewScope } from '../../../contracts/keymap';
-import type { Log } from '../../../contracts/log';
+import type { Log, PluginLog } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import {
   type FocusTarget,
@@ -158,7 +158,7 @@ export interface PrimerViewDeps {
   timers: Timers;
   drops: Pick<PageDrops, 'addTarget' | 'savePasted'>;
   toast(text: string, tone: ToastTone): void;
-  log: Log;
+  log: PluginLog;
 }
 
 // `forgetSession` drops a session's Primer tab entry and destroys its primer
@@ -191,7 +191,7 @@ interface PrimerFormView {
 
 // What the view's parts draw through: the kits' deps and the log a part's
 // failure goes to.
-type PartDeps = PrimerPartKitDeps & { log: Log };
+type PartDeps = PrimerPartKitDeps & { log: PluginLog };
 
 // A part the view drew: what its build returned, the pick it was drawn from,
 // and the dispose of the anchors and boxes it recorded.
@@ -325,7 +325,6 @@ export function mountPrimerTab(deps: PrimerViewDeps): PrimerTab {
     isSending: () => (activeForm(store.get())?.sending ?? null) !== null,
     dismiss: () => dispatch({ type: 'dismissConfirm' }),
     log: deps.log,
-    logSource: 'primer',
   });
   areas.overlay.contribute(confirm.element);
   let shownLayouts: ShownLayouts<PrimerLayout> = {
@@ -514,7 +513,6 @@ function addPrimerDropTarget(
       savePasted: (file) => deps.drops.savePasted(file),
       toast: (text, tone) => deps.toast(text, tone),
       log: deps.log,
-      logSource: 'primer',
     }),
   });
 }
@@ -1000,7 +998,6 @@ function drawTasksPart(
       return { element: paneElement(buildParent, pane, 'tasks'), rows };
     },
     log: deps.log,
-    logSource: 'primer',
     partName: 'tasks',
   });
 }
@@ -1023,7 +1020,6 @@ function drawItemsPart(
       return { element: paneElement(buildParent, pane, 'items'), rows };
     },
     log: deps.log,
-    logSource: 'primer',
     partName: 'items',
   });
 }
@@ -1047,7 +1043,6 @@ function drawReview(
       return { element: paneElement(buildParent, pane, 'review') };
     },
     log: deps.log,
-    logSource: 'primer',
     partName: 'review',
   });
   return { built: drawn.built, pick, dispose: drawn.dispose };
@@ -1165,7 +1160,6 @@ function drawCardPart<Kit, Input>(
       return { element, card: card as PrimerLayoutCard<Input>, kit };
     },
     log: deps.log,
-    logSource: 'primer',
     partName,
   });
   const layout = drawn.drewPick ? pick.layout : defaultLayout;

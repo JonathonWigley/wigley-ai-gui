@@ -71,16 +71,23 @@ const wake: AgentFormWake = {
   },
 };
 
-function startSession(
-  info: Partial<AgentFormOwnerInfo> = {},
-): AgentFormSession<TestPayload> {
+function newService() {
   return createAgentFormService({
     type: TEST_FORM_TYPE,
     presenter,
     store,
     wake,
     defaultDeadlineSeconds: () => DEFAULT_DEADLINE_SECONDS,
-  }).startSession({ id: 'app-1', info: { ...SESSION, ...info } });
+  });
+}
+
+function startSession(
+  info: Partial<AgentFormOwnerInfo> = {},
+): AgentFormSession<TestPayload> {
+  return newService().startSession({
+    id: 'app-1',
+    info: { ...SESSION, ...info },
+  });
 }
 
 function live(): AbortSignal {
@@ -148,13 +155,44 @@ beforeEach(() => {
     randomHex: () => (++hexCount).toString(16).padStart(8, '0'),
     paths: posixPaths,
     log: () => {},
-    logSource: 'test',
   });
 });
 
 afterEach(() => {
   vi.useRealTimers();
   rmSync(formsDir, { recursive: true, force: true });
+});
+
+describe('a disposed service', () => {
+  it('ends every live session once disposed, answering each waiting call with its draft', async () => {
+    const service = newService();
+    const [one, two, three] = ['app-1', 'app-2', 'app-3'].map((id) =>
+      service.startSession({ id, info: { ...SESSION, sessionId: id } }),
+    );
+    const waiting = [
+      one.open(NAMING_ARGS, null, live()),
+      two.open(PLACEMENT_ARGS, null, live()),
+    ];
+    const [firstId, secondId] = presenter.shown.map((form) => form.formId);
+    const ended = three.open(
+      { heading: 'Ended', items: ['first'] },
+      null,
+      live(),
+    );
+    const thirdId = presenter.latest().formId;
+    three.end();
+
+    service.dispose();
+
+    expect(presenter.closed).toEqual([thirdId, firstId, secondId]);
+    const answers = await Promise.all(waiting);
+    expect(answers.map((answer) => answer.outcome)).toEqual(['draft', 'draft']);
+    await ended;
+    expect(vi.getTimerCount()).toBe(0);
+    await expect(one.open(NAMING_ARGS, null, live())).rejects.toThrow(
+      'The session ended before this',
+    );
+  });
 });
 
 describe('open', () => {

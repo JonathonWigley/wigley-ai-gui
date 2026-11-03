@@ -1,6 +1,6 @@
 import type { ChatEntryKind } from '../../../contracts/agent';
 import type { Disposable } from '../../../contracts/disposable';
-import type { Log } from '../../../contracts/log';
+import type { Log, PluginLog } from '../../../contracts/log';
 import type { ShownLayouts } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import {
@@ -50,7 +50,7 @@ export interface ChatLayouts {
 
 type ChatParts = LayoutParts<ChatLayout, CompleteChatLayout>;
 
-export function createChatLayouts(log: Log): ChatLayouts {
+export function createChatLayouts(log: PluginLog): ChatLayouts {
   const deps = { owner: 'chat', defaultLayout, log } as const;
   const parts = createLayoutParts<ChatLayout, CompleteChatLayout>(deps);
   const defaultParts = createLayoutParts<ChatLayout, CompleteChatLayout>(deps);

@@ -1,5 +1,5 @@
 import type { Clock, Timers } from '../../../contracts/ambient';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type { ShownLayouts } from '../../../contracts/plugin';
 import { callEach } from '../../../shared/call-each';
 import {
@@ -21,7 +21,7 @@ import { type RunningWork, runningWork } from './running-work';
 // it.
 export interface WorkingLinesDeps {
   kit: OwnerKitServices;
-  log: Log;
+  log: PluginLog;
   clock: Clock;
   timers: Timers;
   nameOf(sessionId: string): string;

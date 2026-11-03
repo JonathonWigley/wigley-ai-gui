@@ -10,6 +10,7 @@ import type {
   AgentFormType,
   AgentFormWake,
 } from '../../contracts/agent-forms';
+import type { Disposable } from '../../contracts/disposable';
 import type { AgentFormStore, SavedAgentForm } from './form-store';
 
 export interface AgentFormServiceDeps<Form, Body, Payload> {
@@ -746,9 +747,19 @@ async function collectLastForm<Form, Body, Payload>(
     : finishedPayload(session.type, handed);
 }
 
+function endSession<Form, Body, Payload>(
+  session: SessionContext<Form, Body, Payload>,
+  live: Set<SessionContext<Form, Body, Payload>>,
+): void {
+  live.delete(session);
+  session.ended = true;
+  closeOpenForm(session);
+}
+
 function startSession<Form, Body, Payload>(
   owner: AgentFormOwner,
   deps: AgentFormServiceDeps<Form, Body, Payload>,
+  live: Set<SessionContext<Form, Body, Payload>>,
 ): AgentFormSession<Payload> {
   const { info } = owner;
   const session: SessionContext<Form, Body, Payload> = {
@@ -766,22 +777,29 @@ function startSession<Form, Body, Payload>(
     ended: false,
     reportedUnreadable: new Set(),
   };
+  live.add(session);
   return {
     open: (args, toolUseId, signal) =>
       openFormInTurn(session, args, toolUseId, signal),
     collect: (wait, signal) => collectLastForm(session, wait, signal),
-    end: () => {
-      session.ended = true;
-      closeOpenForm(session);
-    },
+    end: () => endSession(session, live),
   };
 }
 
 // Form logic every form source reaches, for one form type: validation,
 // re-send, replay, hand-back, pre-fill, the soft deadline, the saved forms and
-// the wake for a form no call will return.
+// the wake for a form no call will return. `dispose` ends every live session
+// as its own `end` does.
 export function createAgentFormService<Form, Body, Payload>(
   deps: AgentFormServiceDeps<Form, Body, Payload>,
-): AgentFormService<Payload> {
-  return { startSession: (owner) => startSession(owner, deps) };
+): AgentFormService<Payload> & Disposable {
+  const live = new Set<SessionContext<Form, Body, Payload>>();
+  return {
+    startSession: (owner) => startSession(owner, deps, live),
+    dispose() {
+      for (const session of live) {
+        endSession(session, live);
+      }
+    },
+  };
 }

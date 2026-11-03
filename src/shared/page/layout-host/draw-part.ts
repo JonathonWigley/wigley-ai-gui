@@ -1,6 +1,6 @@
 import type { Disposable } from '../../../contracts/disposable';
 import type { LayoutOwner } from '../../../contracts/layouts';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import { callEach } from '../../call-each';
 import { errorText } from '../../error-text';
 
@@ -33,8 +33,7 @@ export interface DrawPartOptions<
   defaultLayout: L;
   part(layout: L): B | undefined;
   build(builder: B, parent: HTMLElement, rollback: RollbackDeps): R;
-  log: Log;
-  logSource: string;
+  log: PluginLog;
   partName: string;
 }
 
@@ -61,7 +60,7 @@ const loggedFailures = new WeakMap<object, Set<string>>();
 // must return an element appended to `parent`. When the picked attempt throws,
 // it is rolled back (each recorded box destroyed, each recorded anchor
 // disposed, each node it appended to `parent` removed),
-// `layout <name> <partName> failed: <error>` is logged under `logSource` once
+// `layout <name> <partName> failed: <error>` goes to `log` once
 // per layout object and part name, and `defaultLayout` draws in its place. An
 // attempt that leaves `parent` holding a new node beside its element fails the
 // same way. A throw from the `defaultLayout` attempt rolls back the same way
@@ -206,7 +205,7 @@ function removeAppended(parent: HTMLElement, existing: Set<ChildNode>): void {
 function logFailureOnce<L extends object>(
   options: Pick<
     DrawPartOptions<L, unknown, { element: HTMLElement }>,
-    'pick' | 'partName' | 'log' | 'logSource'
+    'pick' | 'partName' | 'log'
   >,
   error: unknown,
 ): void {
@@ -217,8 +216,5 @@ function logFailureOnce<L extends object>(
     return;
   }
   logged.add(partName);
-  options.log(
-    options.logSource,
-    `layout ${pick.name} ${partName} failed: ${errorText(error)}`,
-  );
+  options.log(`layout ${pick.name} ${partName} failed: ${errorText(error)}`);
 }

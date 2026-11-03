@@ -32,7 +32,7 @@ describe('createChatFormWake', () => {
   ])('sends the wake text to a session $session', ({ profile, expected }) => {
     const chat = fakeChat(profile);
 
-    createChatFormWake(chat, () => {}, 'forms').formFinishedUnheard('s1', TEXT);
+    createChatFormWake(chat, () => {}).formFinishedUnheard('s1', TEXT);
 
     expect(chat.sent).toEqual(expected);
   });
@@ -41,11 +41,9 @@ describe('createChatFormWake', () => {
     const chat = fakeChat('claude', () =>
       Promise.reject(new Error('process gone')),
     );
-    const logged: [string, string][] = [];
-    const wake = createChatFormWake(
-      chat,
-      (source, message) => logged.push([source, message]),
-      'forms',
+    const logged: string[] = [];
+    const wake = createChatFormWake(chat, (message: string) =>
+      logged.push(message),
     );
 
     expect(() => wake.formFinishedUnheard('s1', TEXT)).not.toThrow();
@@ -53,8 +51,7 @@ describe('createChatFormWake', () => {
     await Promise.resolve();
 
     expect(logged).toHaveLength(1);
-    expect(logged[0][0]).toBe('forms');
-    expect(logged[0][1]).toContain('s1');
-    expect(logged[0][1]).toContain('process gone');
+    expect(logged[0]).toContain('s1');
+    expect(logged[0]).toContain('process gone');
   });
 });

@@ -36,8 +36,7 @@ function storeIn(dir: string, paths: Paths = posixPaths): AgentFormStore {
     clock: { now: () => nowMs },
     randomHex: () => (++hexCount).toString(16).padStart(8, '0'),
     paths,
-    log: (source, message) => logLines.push(`[${source}] ${message}`),
-    logSource: 'forms',
+    log: (message: string) => logLines.push(message),
   });
 }
 

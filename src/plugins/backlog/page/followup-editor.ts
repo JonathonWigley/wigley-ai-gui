@@ -1,6 +1,6 @@
 import type { PageDrops } from '../../../contracts/drops';
 import type { EditorHost, FocusOptions } from '../../../contracts/editor';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type { ToastTone } from '../../../contracts/plugin';
 import {
   boxDropTake,
@@ -22,7 +22,7 @@ export const FOLLOWUP_FORM_ID = 'followup';
 
 export interface FollowupEditorDeps {
   editor: EditorHost;
-  log: Log;
+  log: PluginLog;
   changed(field: EditorField, text: string): void;
   // The `div.backlog-editor` slot the editor pane is drawn into; `leave`
   // focuses it. It is a drop target through `drops`, typing files into the
@@ -83,7 +83,6 @@ export function createFollowupEditor(deps: FollowupEditorDeps): FollowupEditor {
       formIdOf: () => FOLLOWUP_FORM_ID,
       keyOf: (field) => field,
       describe: (field) => `${EDITOR_FIELD_LABELS[field]} box`,
-      logSource: 'backlog',
     },
   );
   // The slot lives as long as the page, so its target is never disposed.
@@ -93,7 +92,6 @@ export function createFollowupEditor(deps: FollowupEditorDeps): FollowupEditor {
       savePasted: (file) => deps.drops.savePasted(file),
       toast: (text, tone) => deps.toast(text, tone),
       log: deps.log,
-      logSource: 'backlog',
     }),
   });
 

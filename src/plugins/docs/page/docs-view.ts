@@ -1,7 +1,7 @@
 import type { Disposable } from '../../../contracts/disposable';
 import type { PageDrops } from '../../../contracts/drops';
 import type { EditorHost } from '../../../contracts/editor';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { FocusTarget } from '../../../contracts/panes';
 import type { Paths } from '../../../contracts/paths';
@@ -176,7 +176,7 @@ export interface DocsViewDeps {
   markdown: MarkdownRenderer;
   paths: Paths;
   toast(text: string, tone: ToastTone): void;
-  log: Log;
+  log: PluginLog;
   // Where the doc pane's editor registers its drop target.
   drops: Pick<PageDrops, 'addTarget'>;
   // The star set every docs view shares; each view redraws on its toggles.

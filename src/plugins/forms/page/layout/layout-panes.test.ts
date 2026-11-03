@@ -301,7 +301,6 @@ describe('panes', () => {
       });
 
       expect(log).toHaveBeenCalledWith(
-        'forms',
         expect.stringContaining(String(position)),
       );
       expect(pane.element.dataset.layout).toBe('default');
@@ -317,10 +316,7 @@ describe('panes', () => {
       },
     });
 
-    expect(log).toHaveBeenCalledWith(
-      'forms',
-      expect.stringContaining(String(row)),
-    );
+    expect(log).toHaveBeenCalledWith(expect.stringContaining(String(row)));
     expect(pane.element.dataset.layout).toBe('default');
   });
 });

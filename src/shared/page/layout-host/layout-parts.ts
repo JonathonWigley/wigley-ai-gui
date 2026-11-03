@@ -1,5 +1,5 @@
 import type { LayoutOwner } from '../../../contracts/layouts';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type { ShownLayouts } from '../../../contracts/plugin';
 import {
   type DrawnPart,
@@ -9,11 +9,12 @@ import {
 } from './draw-part';
 import { pickLayout } from './pick';
 
-// `defaultLayout` is the owner's built-in layout, defining every part.
+// `defaultLayout` is the owner's built-in layout, defining every part. `owner`
+// marks each part root's `data-layout-owner`.
 export interface LayoutPartsDeps<C> {
   owner: LayoutOwner;
   defaultLayout: C;
-  log: Log;
+  log: PluginLog;
 }
 
 // Draws a part's builder into `parent` and returns the owner's own object,
@@ -27,7 +28,7 @@ export type BuildPart<B, R extends { element: HTMLElement }> = (
 // An owner's parts over its shown layouts, `L` the layout a user writes and
 // `C` the complete one `default` is. It shows `default` alone until the first
 // `setLayouts`. A part draws with the user's layout when that layout defines
-// the part, else with `default`, through `drawPart` under the owner's name.
+// the part, else with `default`, through `drawPart`.
 export interface LayoutParts<L, C> {
   shown(): ShownLayouts<L>;
   setLayouts(shown: ShownLayouts<L>): void;
@@ -84,7 +85,6 @@ export function createLayoutParts<L extends object, C extends L>(
       part: (layout) => partOf(layout, key) as C[K] | undefined,
       build,
       log: deps.log,
-      logSource: deps.owner,
       partName: key,
     });
   return {

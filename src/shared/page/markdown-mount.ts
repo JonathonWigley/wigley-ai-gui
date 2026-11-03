@@ -1,5 +1,5 @@
 import type { Disposable } from '../../contracts/disposable';
-import type { Log } from '../../contracts/log';
+import type { PluginLog } from '../../contracts/log';
 import type {
   FenceContribution,
   FenceView,
@@ -70,7 +70,7 @@ const PLACEHOLDER = '.md-fence';
 
 export function createMarkdownMount(
   fences: Pick<MarkdownRenderer, 'fence'>,
-  log: Log,
+  log: PluginLog,
 ): MarkdownMount {
   let records: ViewRecord[] = [];
   let isDisposed = false;
@@ -97,10 +97,7 @@ export function createMarkdownMount(
     try {
       view = contribution.mount(fence.source, fence.closed);
     } catch (error) {
-      log(
-        'markdown',
-        `fence ${fence.language} not mounted: ${errorText(error)}`,
-      );
+      log(`fence ${fence.language} not mounted: ${errorText(error)}`);
       return;
     }
     fence.placeholder.replaceChildren(view.element);
@@ -120,10 +117,7 @@ export function createMarkdownMount(
     try {
       record.view.dispose();
     } catch (error) {
-      log(
-        'markdown',
-        `fence ${record.language} view dispose failed: ${errorText(error)}`,
-      );
+      log(`fence ${record.language} view dispose failed: ${errorText(error)}`);
     }
   };
 

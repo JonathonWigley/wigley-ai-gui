@@ -1,4 +1,4 @@
-import type { Log } from '../../../../contracts/log';
+import type { PluginLog } from '../../../../contracts/log';
 import type { ShownLayouts } from '../../../../contracts/plugin';
 import {
   type AppSlot,
@@ -30,7 +30,7 @@ import { galleryManifest } from '../../manifest';
 
 // What the gallery's kits and part draws read.
 export interface GalleryPartsDeps extends OwnerKitServices {
-  log: Log;
+  log: PluginLog;
 }
 
 // One state of a section's primitive: the app's sample, its caption, and

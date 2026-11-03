@@ -85,8 +85,7 @@ function preview(): AgentFormPreview {
       activate: (sessionId) => activated.push(sessionId),
     },
     forms: fakeForms,
-    log: (source, message) => logLines.push(`[${source}] ${message}`),
-    logSource: 'sample',
+    log: (message: string) => logLines.push(message),
     noun: 'form',
   });
 }
@@ -131,6 +130,35 @@ describe('show', () => {
 
     expect(subject.show()).toBe(true);
     expect(connects).toHaveLength(2);
+  });
+});
+
+describe('dispose', () => {
+  it.each([
+    {
+      case: 'WhileShown_AbortsTheAskAndEndsTheSession',
+      run: () => asked().dispose(),
+      ends: [1, 1],
+    },
+    {
+      case: 'NeverShown_EndsNothing',
+      run: () => preview().dispose(),
+      ends: [0, 0],
+    },
+    {
+      case: 'Twice_EndsOnce',
+      run: () => {
+        const subject = asked();
+        subject.dispose();
+        subject.dispose();
+      },
+      ends: [1, 1],
+    },
+  ])('dispose_$case', ({ run, ends }) => {
+    run();
+
+    expect([formEnds, connectedEnds]).toEqual(ends);
+    expect(calls.every((call) => call.signal.aborted)).toBe(true);
   });
 });
 
@@ -199,9 +227,7 @@ describe('settle', () => {
     calls[0].fail(new Error('store write failed'));
     await flush();
 
-    expect(logLines).toEqual([
-      expect.stringMatching(/^\[sample\] .*store write failed/),
-    ]);
+    expect(logLines).toEqual([expect.stringMatching(/store write failed/)]);
     expect([formEnds, connectedEnds]).toEqual([1, 1]);
   });
 });

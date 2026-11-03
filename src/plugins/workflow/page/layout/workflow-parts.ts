@@ -1,4 +1,4 @@
-import type { Log } from '../../../../contracts/log';
+import type { PluginLog } from '../../../../contracts/log';
 import type { ShownLayouts } from '../../../../contracts/plugin';
 import type { OwnerKitServices } from '../../../../shared/page/layout-host/base-kit';
 import { createLayoutParts } from '../../../../shared/page/layout-host/layout-parts';
@@ -40,7 +40,7 @@ export interface WorkflowParts {
 
 export function createWorkflowParts(deps: {
   kit: OwnerKitServices;
-  log: Log;
+  log: PluginLog;
 }): WorkflowParts {
   const layoutParts = createLayoutParts<Layout, CompleteLayout>({
     owner: workflowManifest.id,

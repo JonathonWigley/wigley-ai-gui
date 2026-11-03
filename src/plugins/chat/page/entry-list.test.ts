@@ -153,7 +153,7 @@ const rows: Row[] = [
       ['chat-entry chat-tool@default'],
       ['chat-entry chat-tool@default'],
     ],
-    logs: ['[chat] layout fancy tool entry failed: boom'],
+    logs: ['layout fancy tool entry failed: boom'],
     toasts: ['Chat layout fancy: tool entries drawn with default'],
     disposedAnchors: [
       chatCommand('allowPermission'),
@@ -167,8 +167,8 @@ const rows: Row[] = [
     puts: [notice('n1'), notice('n2')],
     slots: [['chat-entry chat-raw@'], ['chat-entry chat-raw@']],
     logs: [
-      '[chat] default layout notice entry failed: broken default',
-      '[chat] default layout notice entry failed: broken default',
+      'default layout notice entry failed: broken default',
+      'default layout notice entry failed: broken default',
     ],
     toasts: ['Chat layout default: notice entries drawn as bare lines'],
     disposedAnchors: [],
@@ -181,8 +181,8 @@ const rows: Row[] = [
     puts: [notice('n1')],
     slots: [['chat-entry chat-raw@']],
     logs: [
-      '[chat] layout fancy notice entry failed: boom',
-      '[chat] default layout notice entry failed: broken default',
+      'layout fancy notice entry failed: boom',
+      'default layout notice entry failed: broken default',
     ],
     toasts: ['Chat layout fancy: notice entries drawn as bare lines'],
     disposedAnchors: [chatCommand('allowPermission')],
@@ -193,7 +193,7 @@ const rows: Row[] = [
     fancy: { assistant: updateThrows },
     puts: [assistant('one'), assistant('two'), assistant('three')],
     slots: [['chat-entry chat-assistant@default']],
-    logs: ['[chat] layout fancy assistant entry update failed: broken update'],
+    logs: ['layout fancy assistant entry update failed: broken update'],
     toasts: ['Chat layout fancy: assistant entries drawn with default'],
     disposedAnchors: [],
   },
@@ -205,9 +205,9 @@ const rows: Row[] = [
     puts: [assistant('one'), assistant('two'), assistant('three')],
     slots: [['chat-entry chat-raw@']],
     logs: [
-      '[chat] layout fancy assistant entry update failed: broken update',
-      '[chat] default layout assistant entry failed: broken default',
-      '[chat] default layout assistant entry failed: broken default',
+      'layout fancy assistant entry update failed: broken update',
+      'default layout assistant entry failed: broken default',
+      'default layout assistant entry failed: broken default',
     ],
     toasts: ['Chat layout fancy: assistant entries drawn as bare lines'],
     disposedAnchors: [],
@@ -218,9 +218,7 @@ const rows: Row[] = [
     fancy: { assistant: updateThrows },
     puts: [assistant('one'), assistant('two'), assistant('three')],
     slots: [['chat-entry chat-assistant@default']],
-    logs: [
-      '[chat] layout default assistant entry update failed: broken update',
-    ],
+    logs: ['layout default assistant entry update failed: broken update'],
     toasts: [],
     disposedAnchors: [],
   },
@@ -325,8 +323,7 @@ function setUpList(shown: ShownLayouts<ChatLayout>) {
   const pulled: string[] = [];
   const toasts: string[] = [];
   const disposed: CommandId[] = [];
-  const log = (source: string, message: string) =>
-    logs.push(`[${source}] ${message}`);
+  const log = (...parts: string[]) => logs.push(parts.at(-1) ?? '');
   const layouts = createChatLayouts(log);
   layouts.set(shown);
   const { timers, armed, fireAll } = fakeTimers();
@@ -637,7 +634,7 @@ describe('activity lines', () => {
       run.children.map((child) => `${child.className}@${child.dataset.layout}`),
     ).toEqual(['chat-activity@default']);
     expect(logs).toContain(
-      '[chat] layout fancy activity update failed: broken update',
+      'layout fancy activity update failed: broken update',
     );
   });
 
@@ -654,9 +651,7 @@ describe('activity lines', () => {
       'chat-entry chat-raw',
     ]);
     expect(run.textContent).toBe('activity');
-    expect(logs).toEqual([
-      '[chat] default layout activity failed: broken default',
-    ]);
+    expect(logs).toEqual(['default layout activity failed: broken default']);
   });
 
   it('runs_RebuildSameEntries_RunStaysOpen', () => {

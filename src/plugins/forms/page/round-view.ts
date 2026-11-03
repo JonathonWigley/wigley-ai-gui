@@ -2,7 +2,7 @@ import type { Timers } from '../../../contracts/ambient';
 import type { CommandId } from '../../../contracts/commands';
 import type { Disposable } from '../../../contracts/disposable';
 import type { ContentScroll, ScrollStep } from '../../../contracts/editor';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { ResizeTarget } from '../../../contracts/panes';
 import type { Platform } from '../../../contracts/platform';
@@ -95,7 +95,7 @@ export interface RoundViewDeps {
   platform: Platform;
   uiState: UiState;
   timers: Timers;
-  log: Log;
+  log: PluginLog;
 }
 
 // `update` draws the round for the view whose pane shows: under the cancel

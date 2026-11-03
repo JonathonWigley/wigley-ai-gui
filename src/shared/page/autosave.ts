@@ -1,5 +1,6 @@
 import type { Timers } from '../../contracts/ambient';
-import type { Log } from '../../contracts/log';
+import type { Disposable } from '../../contracts/disposable';
+import type { PluginLog } from '../../contracts/log';
 import { errorText } from '../error-text';
 
 export type SaveState = 'saved' | 'saving' | 'unsaved';
@@ -66,7 +67,7 @@ export function saveLabel(state: SaveState, error: string | null): string {
 }
 
 export interface AutosaveDeps<Draft extends DraftRevisions, Body> {
-  subscribe(listener: () => void): void;
+  subscribe(listener: () => void): Disposable;
   // The open drafts now, read after each change `subscribe` reports.
   drafts(): readonly Draft[];
   idOf(draft: Draft): string;
@@ -79,9 +80,7 @@ export interface AutosaveDeps<Draft extends DraftRevisions, Body> {
   // Read each time a save is scheduled.
   delayMs(): number;
   timers: Timers;
-  log: Log;
-  // The log line's source, the plugin id.
-  logSource: string;
+  log: PluginLog;
 }
 
 interface PendingSave {
@@ -92,12 +91,14 @@ interface PendingSave {
 
 // Saves a draft once its edits pause for `delayMs`. A save is in flight until
 // `save` settles; a failed one leaves the draft unsaved with its message, and
-// the next edit schedules a save again.
+// the next edit schedules a save again. Its `Disposable` clears every scheduled
+// save and the subscription, and a save still in flight then settles unheard.
 export function startAutosave<Draft extends DraftRevisions, Body>(
   deps: AutosaveDeps<Draft, Body>,
-): void {
+): Disposable {
   const pending = new Map<string, PendingSave>();
-  deps.subscribe(() => {
+  let isDisposed = false;
+  const subscription = deps.subscribe(() => {
     const drafts = deps.drafts();
     for (const [id, entry] of pending) {
       if (!drafts.some((draft) => deps.idOf(draft) === id)) {
@@ -117,18 +118,32 @@ export function startAutosave<Draft extends DraftRevisions, Body>(
         cancel(deps.timers, entry);
       }
       const handle = deps.timers.set(
-        () => void saveDraft(deps, pending, id),
+        () => void saveDraft(deps, pending, id, () => isDisposed),
         deps.delayMs(),
       );
       pending.set(id, { revision: draft.revision, handle });
     }
   });
+  return {
+    dispose() {
+      if (isDisposed) {
+        return;
+      }
+      isDisposed = true;
+      for (const entry of pending.values()) {
+        cancel(deps.timers, entry);
+      }
+      pending.clear();
+      subscription.dispose();
+    },
+  };
 }
 
 async function saveDraft<Draft extends DraftRevisions, Body>(
   deps: AutosaveDeps<Draft, Body>,
   pending: Map<string, PendingSave>,
   id: string,
+  isDisposed: () => boolean,
 ) {
   pending.delete(id);
   const draft = deps.drafts().find((candidate) => deps.idOf(candidate) === id);
@@ -140,16 +155,21 @@ async function saveDraft<Draft extends DraftRevisions, Body>(
   try {
     await deps.save(id, deps.bodyOf(draft));
   } catch (error) {
+    if (isDisposed()) {
+      return;
+    }
     const message = errorText(error);
     // An edit made during the save has its own save scheduled already.
     if (!pending.has(id)) {
       pending.set(id, { revision, handle: null });
     }
-    deps.log(deps.logSource, `draft not saved for ${id}: ${message}`);
+    deps.log(`draft not saved for ${id}: ${message}`);
     deps.saveFinished(id, revision, message);
     return;
   }
-  deps.saveFinished(id, revision, null);
+  if (!isDisposed()) {
+    deps.saveFinished(id, revision, null);
+  }
 }
 
 function cancel(timers: Timers, entry: PendingSave) {

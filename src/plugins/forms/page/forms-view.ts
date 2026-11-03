@@ -3,7 +3,7 @@ import type { CommandId } from '../../../contracts/commands';
 import type { Disposable } from '../../../contracts/disposable';
 import type { PageDrops } from '../../../contracts/drops';
 import type { ContentScroll, ScrollStep } from '../../../contracts/editor';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { ResizeTarget } from '../../../contracts/panes';
 import type { Platform } from '../../../contracts/platform';
@@ -77,7 +77,7 @@ export interface FormsViewDeps {
   timers: Timers;
   drops: Pick<PageDrops, 'addTarget' | 'savePasted'>;
   toast(text: string, tone: ToastTone): void;
-  log: Log;
+  log: PluginLog;
 }
 
 // The layouts every round view picks its cards and panes from.
@@ -145,7 +145,6 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
     isSending: () => (activeForm(store.get())?.sending ?? null) !== null,
     dismiss: () => dispatch({ type: 'dismissConfirm' }),
     log: deps.log,
-    logSource: 'forms',
   });
   areas.overlay.contribute(confirm.element);
   const roundViews = new Map<string, RoundView>();
@@ -270,7 +269,6 @@ function addRoundDropTarget(
       savePasted: (file) => deps.drops.savePasted(file),
       toast: (text, tone) => deps.toast(text, tone),
       log: deps.log,
-      logSource: 'forms',
     }),
   });
 }

@@ -105,7 +105,7 @@ describe('notes parts', () => {
         expect(root.dataset.layout).toBe('default');
       }
       expect(logged).toEqual([
-        expect.stringMatching(`^\\[notes\\] layout ${USER} ${part} failed`),
+        expect.stringMatching(`^layout ${USER} ${part} failed`),
       ]);
     },
   );

@@ -32,7 +32,7 @@ function partsSetup(undone: string[] = []) {
   const parts = createLayoutParts<TestLayout, Required<TestLayout>>({
     owner: 'docs',
     defaultLayout,
-    log: (source, line) => logLines.push(`[${source}] ${line}`),
+    log: (line: string) => logLines.push(line),
   });
   return { parts, defaultLayout, logLines };
 }
@@ -85,7 +85,7 @@ describe('createLayoutParts', () => {
     const drawn = parts.draw('rail', asHtml(new FakeElement('div')), build);
 
     expect(drawn.layoutName).toBe('default');
-    expect(logLines).toEqual(['[docs] layout mine rail failed: boom']);
+    expect(logLines).toEqual(['layout mine rail failed: boom']);
   });
 
   it('redraw_SameSlot_DisposesAndRemovesTheLastDrawOnly', () => {

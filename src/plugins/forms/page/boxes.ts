@@ -53,7 +53,6 @@ export const FORMS_BOX_IDENTITY: BoxIdentity<BoxRef> = {
   formIdOf: (box) => box.roundId,
   keyOf: boxKey,
   describe: boxDescription,
-  logSource: 'forms',
 };
 
 // The boxes the user can reach now, in Ctrl+n order: the active round's boxes

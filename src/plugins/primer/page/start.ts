@@ -196,7 +196,6 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
       delayMs: () => api.settings().autosaveDelayMs,
       timers: services.timers,
       log: services.log,
-      logSource: 'primer',
     });
     const logEvent = createPrimerEventLog(services.log);
     startPrimerEvents(store, (event) => {

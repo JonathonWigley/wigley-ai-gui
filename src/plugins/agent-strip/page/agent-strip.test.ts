@@ -148,7 +148,7 @@ function setUp(initial: Roster = EMPTY, onSetScope: () => void = () => {}) {
       commands: { exists: () => true, run: () => undefined },
       platform: 'macos',
     },
-    log: (source, message) => logged.push(`[${source}] ${message}`),
+    log: (...parts: string[]) => logged.push(parts.at(-1) ?? ''),
     clock: { now: () => now },
     timers: {
       set(run) {
@@ -241,7 +241,7 @@ describe('agent strip', () => {
     expect(scopeSets()).toBe(1);
     expect(selected()).toEqual([1]);
     expect(scrollers.reveals).toEqual([boxes()[1]]);
-    expect(logged.at(-1)).toBe('[agent-strip] selected box 2 of 3 in proj');
+    expect(logged.at(-1)).toBe('selected box 2 of 3 in proj');
   });
 
   // `calls` holds the other session's exits and every scope set, in order.
@@ -292,7 +292,7 @@ describe('agent strip', () => {
 
     expect(exitCalls).toEqual([exit]);
     expect(selected()).toEqual([]);
-    expect(logged.at(-1)).toBe('[agent-strip] left strip in proj');
+    expect(logged.at(-1)).toBe('left strip in proj');
   });
 
   // `enter` selects box 2 of MIXED, a2; `revealed` is the box index each
@@ -320,7 +320,7 @@ describe('agent strip', () => {
       selected: [0],
       revealed: [0],
       exitCalls: [],
-      nextBox: ['[agent-strip] selected box 2 of 2 in proj'],
+      nextBox: ['selected box 2 of 2 in proj'],
     },
     {
       case: 'adds a later box: keeps its place unrevealed',
@@ -328,7 +328,7 @@ describe('agent strip', () => {
       selected: [1],
       revealed: [],
       exitCalls: [],
-      nextBox: ['[agent-strip] selected box 3 of 4 in proj'],
+      nextBox: ['selected box 3 of 4 in proj'],
     },
   ])('rosterChangedWhileSelected_$case', (row) => {
     const {
@@ -413,7 +413,7 @@ describe('agent strip', () => {
       update: 'throws',
       taskBoxKept: false,
       updateFailures: [
-        `[agent-strip] layout ${USER_LAYOUT} taskBox update failed: broken update`,
+        `layout ${USER_LAYOUT} taskBox update failed: broken update`,
       ],
     },
   ])('tick_RunningTaskShown_$case', (row) => {
@@ -542,9 +542,9 @@ describe('agent strip', () => {
     expect(opened()).toEqual([2]);
     expect(selected()).toEqual([1]);
     expect(logged.filter((line) => /opened|closed/.test(line))).toEqual([
-      '[agent-strip] opened box 1 in proj',
-      '[agent-strip] opened box 2 in proj',
-      '[agent-strip] opened box 3 in proj',
+      'opened box 1 in proj',
+      'opened box 2 in proj',
+      'opened box 3 in proj',
     ]);
   });
 
@@ -571,7 +571,7 @@ describe('agent strip', () => {
     strip.nextBox();
 
     expect(selected()).toEqual([]);
-    expect(logged.at(-1)).toBe('[agent-strip] left strip in proj');
+    expect(logged.at(-1)).toBe('left strip in proj');
     expect(scopeSets()).toBe(1);
     expect(exitCalls).toEqual([]);
   });
@@ -614,15 +614,12 @@ describe('agent strip', () => {
         { agents: THREE_AGENTS.agents, tasks: [task('t1', 5_000)] },
         EMPTY,
       ],
-      lines: [
-        '[agent-strip] boxes in proj: 4 (4 running)',
-        '[agent-strip] boxes in proj: 0 (0 running)',
-      ],
+      lines: ['boxes in proj: 4 (4 running)', 'boxes in proj: 0 (0 running)'],
     },
     {
       case: 'unchanged text across a tick logs once',
       rosters: [MIXED, MIXED],
-      lines: ['[agent-strip] boxes in proj: 3 (2 running)'],
+      lines: ['boxes in proj: 3 (2 running)'],
     },
   ])('log_$case', ({ rosters, lines }) => {
     const { build, setRoster, sets, logged } = setUp();
@@ -646,8 +643,8 @@ describe('agent strip', () => {
     strip.leave();
 
     expect(logged.filter((line) => line.includes('left strip'))).toEqual([
-      '[agent-strip] left strip in proj',
-      '[agent-strip] left strip in proj',
+      'left strip in proj',
+      'left strip in proj',
     ]);
   });
 });

@@ -61,7 +61,6 @@ export const PRIMER_BOX_IDENTITY: BoxIdentity<PrimerBox> = {
   formIdOf: (box) => box.primerId,
   keyOf: boxKey,
   describe: boxDescription,
-  logSource: 'primer',
 };
 
 // The boxes the user can reach now, in Ctrl+n order: the active primer's

@@ -437,7 +437,6 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     delayMs: deps.autosaveDelayMs,
     timers: services.timers,
     log,
-    logSource: 'notes',
   });
 
   // Saves the fields now unless main already holds them; rejects with the
@@ -586,7 +585,6 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
   const picker = createListPicker({
     pushScope: () => deps.pushScope('picker'),
     log,
-    logSource: 'notes',
     filterEditor: editorHost,
   });
   dialog.element.append(picker.element);

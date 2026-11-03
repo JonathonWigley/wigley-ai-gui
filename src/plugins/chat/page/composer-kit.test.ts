@@ -51,7 +51,7 @@ function fakeTimers() {
 // `logs` and each armed timer in `armed`, over a clock fixed at 5000.
 function surfaceDeps(user: ChatLayout | null) {
   const logs: string[] = [];
-  const log = (_source: string, line: string) => logs.push(line);
+  const log = (...parts: string[]) => logs.push(parts.at(-1) ?? '');
   const layouts = createChatLayouts(log);
   if (user !== null) {
     layouts.set(withUser<ChatLayout>(defaultLayout, user));

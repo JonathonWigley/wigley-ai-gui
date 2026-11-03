@@ -43,14 +43,14 @@ function setup(
   );
   const clock = fakeTimers();
   const logs: string[] = [];
-  startRoundAutosave({
+  const autosave = startRoundAutosave({
     store,
     save,
     delayMs,
     timers: clock.timers,
-    log: (_source, message) => logs.push(message),
+    log: (message: string) => logs.push(message),
   });
-  return { store, logs, ...clock };
+  return { store, logs, autosave, ...clock };
 }
 
 // A save whose promise the test settles by hand.
@@ -130,6 +130,32 @@ describe('startRoundAutosave', () => {
     store.dispatch({ type: 'nextItem' });
 
     expect(scheduled.size).toBe(0);
+  });
+
+  it('cancels every pending save and schedules none once disposed', () => {
+    const { store, autosave, scheduled } = setup(async () => {});
+
+    typeNotes(store, 'a');
+    expect(scheduled.size).toBe(1);
+    autosave.dispose();
+    expect(scheduled.size).toBe(0);
+    typeNotes(store, 'ab');
+
+    expect(scheduled.size).toBe(0);
+  });
+
+  it('drops the result of a save still in flight when disposed', async () => {
+    const { calls, save } = heldSaves();
+    const { store, logs, autosave, runDue } = setup(save);
+    typeNotes(store, 'a');
+    runDue();
+
+    autosave.dispose();
+    calls[0].reject(new Error('disk full'));
+    await settle();
+
+    expect(logs).toEqual([]);
+    expect(saveErrorOf(store)).toBeNull();
   });
 
   it('keeps a failed save unsaved with its message, until the next edit', async () => {

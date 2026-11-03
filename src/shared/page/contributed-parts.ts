@@ -1,5 +1,5 @@
 import type { Disposable } from '../../contracts/disposable';
-import type { Log } from '../../contracts/log';
+import type { PluginLog } from '../../contracts/log';
 import { errorText } from '../error-text';
 import { element } from './dom';
 
@@ -61,10 +61,9 @@ export interface PartRollback {
   recordBox(destroy: () => void): void;
 }
 
-// Where one surface's contributed parts go: the plugin its log lines name,
-// the noun they name a part by, and the holder's and each wrapper's class.
+// Where one surface's contributed parts go: the noun its log lines name a part
+// by, and the holder's and each wrapper's class.
 export interface ContributedPartsPlace {
-  owner: string;
   noun: string;
   holderClass: string;
   wrapperClass: string;
@@ -81,7 +80,7 @@ export function placeContributedParts(
   sessionId: string,
   parts: readonly ContributedPart[],
   place: ContributedPartsPlace,
-  log: Log,
+  log: PluginLog,
   rollback: PartRollback,
 ): HTMLElement {
   const holder = element('div', place.holderClass);
@@ -96,15 +95,12 @@ export function placeContributedParts(
         try {
           built.dispose?.();
         } catch (error) {
-          log(
-            place.owner,
-            `${place.noun} ${part.id} dispose failed: ${errorText(error)}`,
-          );
+          log(`${place.noun} ${part.id} dispose failed: ${errorText(error)}`);
         }
       });
     } catch (error) {
       wrapper.remove();
-      log(place.owner, `${place.noun} ${part.id} failed: ${errorText(error)}`);
+      log(`${place.noun} ${part.id} failed: ${errorText(error)}`);
     }
   }
   return holder;

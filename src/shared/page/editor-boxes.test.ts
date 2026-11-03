@@ -77,7 +77,6 @@ const identity: BoxIdentity<TestBox> = {
   formIdOf: (box) => box.formId,
   keyOf: (box) => box.key,
   describe: (box) => box.key,
-  logSource: 'test',
 };
 
 const parent = {} as HTMLElement;
@@ -97,7 +96,7 @@ function emptySetup() {
       changed: (box, text) => changes.push({ box, text }),
       activated: (box) => activated.push(box),
     },
-    (_source, message) => logs.push(message),
+    (message: string) => logs.push(message),
     identity,
   );
   return { boxes, created, changes, activated, logs };
@@ -121,6 +120,23 @@ describe('createEditorBoxes', () => {
     expect(boxes.active()).toEqual(notes);
     expect(activated).toEqual([notes]);
     expect(logs).toEqual(['focused f1/notes']);
+  });
+
+  it('destroys every mounted editor on dispose and tells no listener', () => {
+    const { boxes, created } = setup();
+    boxes.focus(notes);
+    let changes = 0;
+    boxes.onChange(() => changes++);
+
+    boxes.dispose();
+
+    expect(created.every((made) => made.editor.isDestroyed)).toBe(true);
+    expect(boxes.active()).toBeNull();
+    expect(boxes.isMounted(notes)).toBe(false);
+    expect(changes).toBe(0);
+    boxes.mount(parent, notes, '');
+    boxes.focus(notes);
+    expect(changes).toBe(0);
   });
 
   it('hands the focus options to the editor', () => {
@@ -491,8 +507,7 @@ describe('boxDropTake', () => {
           return SAVED;
         },
         toast: (text, tone) => shownToasts.push([text, tone]),
-        log: (_source, message) => logged.push(message),
-        logSource: 'test',
+        log: (message: string) => logged.push(message),
       });
 
       take(files);

@@ -1,5 +1,6 @@
 import type { UserMessage } from '../../contracts/agent';
 import type { AgentFormWake } from '../../contracts/agent-forms';
+import type { PluginLog } from '../../contracts/log';
 import { errorText } from '../error-text';
 
 // The parts of chat's main exports the wake uses, restated: shared code
@@ -14,8 +15,7 @@ export interface ChatFormWakeTarget {
 // gets nothing. A send that rejects is logged.
 export function createChatFormWake(
   chat: ChatFormWakeTarget,
-  log: (source: string, message: string) => void,
-  source: string,
+  log: PluginLog,
 ): AgentFormWake {
   return {
     formFinishedUnheard: (sessionId, text) => {
@@ -23,7 +23,7 @@ export function createChatFormWake(
         return;
       }
       chat.send(sessionId, { text, images: [] }).catch((error: unknown) => {
-        log(source, `form wake not sent to ${sessionId}: ${errorText(error)}`);
+        log(`form wake not sent to ${sessionId}: ${errorText(error)}`);
       });
     },
   };

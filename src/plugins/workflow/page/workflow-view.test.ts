@@ -103,7 +103,7 @@ function setUp() {
       commands: { exists: () => true, run: () => undefined },
       platform: 'macos',
     },
-    log: (source, message) => logged.push(`[${source}] ${message}`),
+    log: (...parts: string[]) => logged.push(parts.at(-1) ?? ''),
     clock: { now: () => now },
     timers: {
       set(run) {
@@ -261,35 +261,35 @@ describe('workflow view', () => {
       flow: flowIn('planReady'),
       command: 'mainAction',
       invoked: [{ sessionId: 'a', command: 'clearAndMake' }],
-      line: '[workflow] ran clearAndMake in proj',
+      line: 'ran clearAndMake in proj',
     },
     {
       case: 'PlanReadyBusyMainAction_RunsNothing',
       flow: flowIn('planReady', { turnRunning: true }),
       command: 'mainAction',
       invoked: [],
-      line: '[workflow] nothing to run for mainAction in proj',
+      line: 'nothing to run for mainAction in proj',
     },
     {
       case: 'PlanReadyBusyMakeInNewSession_RunsIt',
       flow: flowIn('planReady', { turnRunning: true }),
       command: 'makeInNewSession',
       invoked: [{ sessionId: 'a', command: 'makeInNewSession' }],
-      line: '[workflow] ran makeInNewSession in proj',
+      line: 'ran makeInNewSession in proj',
     },
     {
       case: 'MakeAllTickedResumeMake_RunsNothing',
       flow: flowIn('make', { progress: progressOf(3, [3]) }),
       command: 'resumeMake',
       invoked: [],
-      line: '[workflow] nothing to run for resumeMake in proj',
+      line: 'nothing to run for resumeMake in proj',
     },
     {
       case: 'IdleMainAction_RunsNothing',
       flow: flowIn('idle'),
       command: 'mainAction',
       invoked: [],
-      line: '[workflow] nothing to run for mainAction in proj',
+      line: 'nothing to run for mainAction in proj',
     },
   ])('runFor_$case', async ({ flow, command, invoked, line }) => {
     const run = setUp();
@@ -354,9 +354,9 @@ describe('workflow view', () => {
     put(flowIn('planReady', { progress: progressOf(1, [3, 3, 1]) }));
 
     expect(logged).toEqual([
-      '[workflow] proj shows planReady',
-      '[workflow] proj progress 0/7 wave 1',
-      '[workflow] proj progress 1/7 wave 1',
+      'proj shows planReady',
+      'proj progress 0/7 wave 1',
+      'proj progress 1/7 wave 1',
     ]);
   });
 

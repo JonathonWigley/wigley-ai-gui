@@ -1,4 +1,4 @@
-import type { Log } from '../../../../contracts/log';
+import type { PluginLog } from '../../../../contracts/log';
 import type { MarkdownRenderer } from '../../../../contracts/markdown';
 import type { Platform } from '../../../../contracts/platform';
 import type { KeysPageExports } from '../../../keys/contract';
@@ -30,7 +30,7 @@ export interface CardDeps {
   toggleDontAsk(): void;
   keys: Pick<KeysPageExports, 'keysFor' | 'anchor'>;
   platform: Platform;
-  log: Log;
+  log: PluginLog;
   commands: KitCommands;
   contributions: Pick<FormsContributions, 'cardParts'>;
   recordMount(mount: MarkdownMount): void;

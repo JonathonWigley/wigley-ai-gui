@@ -18,7 +18,7 @@ export function notesPartsDeps() {
     keys,
     commands: { exists: () => true, run: (id) => ran.push(id) },
     platform: 'macos',
-    log: (source, line) => logged.push(`[${source}] ${line}`),
+    log: (...parts: string[]) => logged.push(parts.at(-1) ?? ''),
   };
   return { deps, anchors, logged, ran };
 }

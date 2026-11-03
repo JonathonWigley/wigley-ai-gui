@@ -93,7 +93,6 @@ export function buildLayoutCard(
         recordingDeps(deps, rollback),
       ),
     log: deps.log,
-    logSource: 'forms',
     partName: `${item.kind} card`,
   });
   return hostCard(built, layoutName, item, deps);

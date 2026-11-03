@@ -5,7 +5,7 @@ import type { Disposable } from '../../../contracts/disposable';
 import type { PageDrops } from '../../../contracts/drops';
 import type { EditorHost, TextEditor } from '../../../contracts/editor';
 import type { ChatEntryKind } from '../../../contracts/agent';
-import type { Log } from '../../../contracts/log';
+import type { Log, PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import type { PageChannel, ToastTone } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
@@ -163,7 +163,7 @@ export interface ChatViewDeps extends SurfaceKitDeps {
   setScope(scope: ChatTabScope): void;
   otherSessionShown(): void;
   visibleSessionRested(): void;
-  log: Log;
+  log: PluginLog;
   toast(text: string, tone: ToastTone): void;
   timers: Timers;
   clock: Clock;

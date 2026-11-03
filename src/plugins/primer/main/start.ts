@@ -85,7 +85,6 @@ export const primerMainPart: MainPart<typeof primerManifest> = {
       randomHex: services.randomHex,
       paths: services.paths,
       log: services.log,
-      logSource: 'primer',
     });
     store.prune();
     const presenter = createAgentFormChannelPresenter({
@@ -102,7 +101,7 @@ export const primerMainPart: MainPart<typeof primerManifest> = {
       type: primerType,
       presenter,
       store,
-      wake: createChatFormWake(chat, services.log, 'primer'),
+      wake: createChatFormWake(chat, services.log),
       defaultDeadlineSeconds,
     });
     const preview = createPrimerPreview({

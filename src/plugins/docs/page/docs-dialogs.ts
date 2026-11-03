@@ -1,4 +1,4 @@
-import type { Log } from '../../../contracts/log';
+import type { Log, PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import type {
   PageChannel,
@@ -413,7 +413,7 @@ export interface DocsDialogsDeps {
   homeDir: string;
   paths: Paths;
   toast(text: string, tone: ToastTone): void;
-  log: Log;
+  log: PluginLog;
   // Draws the dialogs' bodies and the list picker's rows through the docs
   // layout.
   parts: DocsParts;
@@ -464,7 +464,6 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
   const picker = createListPicker({
     pushScope: () => deps.pushScope('picker'),
     log,
-    logSource: 'docs',
   });
   const { parts } = deps;
   const box = createTextBox({

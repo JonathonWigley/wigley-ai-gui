@@ -1,5 +1,5 @@
 import type { CommandId } from '../../../contracts/commands';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import { appended, element } from '../../../shared/page/dom';
 import { appSlot } from '../../../shared/page/layout-host/app-slot';
 import {
@@ -73,7 +73,7 @@ export function dialogActions(
 
 export interface DialogPartDeps extends SurfaceKitDeps {
   layouts: ChatLayouts;
-  log: Log;
+  log: PluginLog;
 }
 
 // One dialog's part, drawn into `parent` (the dialog's body, or the image

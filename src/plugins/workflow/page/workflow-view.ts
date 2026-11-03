@@ -1,6 +1,6 @@
 import type { Clock, Timers } from '../../../contracts/ambient';
 import type { Disposable } from '../../../contracts/disposable';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import type { ShownLayouts, ToastTone } from '../../../contracts/plugin';
 import { callEach } from '../../../shared/call-each';
@@ -44,7 +44,7 @@ export interface PageStages {
 // the actions: `openDoc` the page one, `runAction` main's.
 export interface WorkflowViewDeps {
   kit: OwnerKitServices;
-  log: Log;
+  log: PluginLog;
   clock: Clock;
   timers: Timers;
   toast(text: string, tone: ToastTone): void;

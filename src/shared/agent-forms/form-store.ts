@@ -13,7 +13,7 @@ import type {
   AgentFormOwnerInfo,
 } from '../../contracts/agent-forms';
 import type { Clock, RandomHex } from '../../contracts/ambient';
-import type { Log } from '../../contracts/log';
+import type { PluginLog } from '../../contracts/log';
 import type { Paths } from '../../contracts/paths';
 import { errorText } from '../error-text';
 import { isJsonObject } from '../json';
@@ -295,13 +295,12 @@ function writeRecordOrLog(
   dir: string,
   record: SavedAgentForm,
   clock: Clock,
-  log: Log,
-  logSource: string,
+  log: PluginLog,
 ): void {
   try {
     writeRecord(dir, record, clock);
   } catch (error) {
-    log(logSource, errorText(error));
+    log(errorText(error));
   }
 }
 
@@ -317,12 +316,7 @@ function pruneFileNames(dir: string): string[] {
   }
 }
 
-function pruneOlderThan(
-  dir: string,
-  cutoffMs: number,
-  log: Log,
-  logSource: string,
-): void {
+function pruneOlderThan(dir: string, cutoffMs: number, log: PluginLog): void {
   for (const name of pruneFileNames(dir)) {
     try {
       const filePath = path.join(dir, name);
@@ -330,12 +324,12 @@ function pruneOlderThan(
         unlinkSync(filePath);
       }
     } catch (error) {
-      log(logSource, `could not prune ${name}: ${errorText(error)}`);
+      log(`could not prune ${name}: ${errorText(error)}`);
     }
   }
 }
 
-// The saved-form folder `dir`; `logSource` names the type in its log lines.
+// The saved-form folder `dir`; `log` takes its lines.
 // A disk failure is logged and never thrown, losing the copy must not cost
 // the live form — except a draft's, which saveBody throws so the page can
 // show it unsaved. A file that does not parse is skipped by every read.
@@ -344,12 +338,11 @@ export function createFolderFormStore(deps: {
   clock: Clock;
   randomHex: RandomHex;
   paths: Paths;
-  log: Log;
-  logSource: string;
+  log: PluginLog;
 }): AgentFormStore {
-  const { dir, clock, randomHex, paths, log, logSource } = deps;
+  const { dir, clock, randomHex, paths, log } = deps;
   const write = (record: SavedAgentForm) =>
-    writeRecordOrLog(dir, record, clock, log, logSource);
+    writeRecordOrLog(dir, record, clock, log);
   return {
     create: (owner, fingerprint, args, body, toolUseId) => {
       const record = openRecord(
@@ -382,11 +375,6 @@ export function createFolderFormStore(deps: {
     },
     ...formQueries(() => readAllForms(dir), paths),
     prune: () =>
-      pruneOlderThan(
-        dir,
-        clock.now() - RETENTION_SECONDS * 1000,
-        log,
-        logSource,
-      ),
+      pruneOlderThan(dir, clock.now() - RETENTION_SECONDS * 1000, log),
   };
 }

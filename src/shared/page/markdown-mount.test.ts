@@ -86,7 +86,7 @@ function viewsIn(target: HTMLElement, views: FakeView[]): (number | null)[] {
 }
 
 describe('createMarkdownMount', () => {
-  let logs: [string, string][];
+  let logs: string[];
   let dom: ReturnType<typeof installMarkdownDom>;
   let fake: ReturnType<typeof fakeFences>;
   let mount: MarkdownMount;
@@ -97,8 +97,8 @@ describe('createMarkdownMount', () => {
     dom = installMarkdownDom((name, value) => vi.stubGlobal(name, value));
     logs = [];
     fake = fakeFences();
-    mount = createMarkdownMount(fake.fences, (source, message) =>
-      logs.push([source, message]),
+    mount = createMarkdownMount(fake.fences, (message: string) =>
+      logs.push(message),
     );
     parent = newElement();
     target = newElement();
@@ -434,7 +434,7 @@ describe('createMarkdownMount', () => {
   ])('logs and goes on when $part throws', async ({ run, line }) => {
     await run();
 
-    expect(logs).toEqual([['markdown', line]]);
+    expect(logs).toEqual([line]);
   });
 
   it('leaves a view in another parent alone', async () => {

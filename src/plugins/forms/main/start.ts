@@ -67,7 +67,6 @@ function createForms(
     randomHex: services.randomHex,
     paths: services.paths,
     log: services.log,
-    logSource: 'forms',
   });
   store.prune();
   const presenter = createAgentFormChannelPresenter({
@@ -85,7 +84,7 @@ function createForms(
       type: roundType,
       presenter,
       store,
-      wake: createChatFormWake(chat, services.log, 'forms'),
+      wake: createChatFormWake(chat, services.log),
       defaultDeadlineSeconds,
     }),
     layoutNames,

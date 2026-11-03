@@ -1,4 +1,4 @@
-import type { Log } from '../../../../contracts/log';
+import type { PluginLog } from '../../../../contracts/log';
 import type { ShownLayouts } from '../../../../contracts/plugin';
 import type {
   VisualFrame,
@@ -33,7 +33,7 @@ export interface Drawn {
 export interface VisualPartsDeps {
   defaultLayout: CompleteLayout;
   kit: OwnerKitServices;
-  log: Log;
+  log: PluginLog;
 }
 
 // Draws each visual part into a fresh `div.visual-draw` appended to `parent`,

@@ -1,6 +1,6 @@
 import type { Clock, Timers } from '../../../contracts/ambient';
 import type { ChatEntry, ChatEntryKind } from '../../../contracts/agent';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type { ContentScroll, ScrollStep } from '../../../contracts/editor';
 import type { ToastTone } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
@@ -65,7 +65,7 @@ export interface EntryListDeps {
   layouts: ChatLayouts;
   toastedKinds: Set<ChatEntryKind>;
   kit: KitDeps;
-  log: Log;
+  log: PluginLog;
   toast(text: string, tone: ToastTone): void;
   timers: Timers;
   clock: Clock;
@@ -833,7 +833,6 @@ function buildEntry(
         return { element: view.element, view, kit };
       },
       log: deps.log,
-      logSource: 'chat',
       partName: `${entry.kind} entry`,
     });
     return {

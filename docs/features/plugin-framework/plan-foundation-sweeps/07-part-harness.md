@@ -1,6 +1,6 @@
 # 07 — Plugin part test harness
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 01, 02, 04
 Plan: [plan.md](plan.md)
@@ -260,3 +260,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 53947ab6 · proof: diff read; harness tests 20 pass with no type errors in its files, run while task 06 was editing other files, so whole-tree typecheck and lint were clean at the worker's check and are re-proved at 06's landing; .css?url loads as an empty string under vitest; real keys page part starts and restarts on it · concerns: page-global counts include real provider parts; installFocusFakeDom goes stale against the document copy; document listeners cannot be fired; the trial stopped at the first string-id dependency in 16 of 17 page parts, so parts may need services faked; replaced editor and userConfig are not tracked; channel.handle overwrites where the real one throws; keys page part leaks its PLACEMENT_CHECK_EVENT document listener, for task 10

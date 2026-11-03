@@ -1,7 +1,7 @@
 import type { Disposable } from '../../../contracts/disposable';
 import type { EditorHost } from '../../../contracts/editor';
 import type { UserKeymap } from '../../../contracts/keymap';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { FocusTarget } from '../../../contracts/panes';
 import type { Platform } from '../../../contracts/platform';
@@ -176,7 +176,7 @@ export interface SettingsViewDeps {
   markdown: MarkdownRenderer;
   keys: Pick<KeysPageExports, 'anchor' | 'keysFor'>;
   commands: KitCommands;
-  log: Log;
+  log: PluginLog;
   toast(text: string, tone: ToastTone): void;
   setScope(scope: 'sections' | 'rows'): void;
   // Hands over the target the focus keys move between the sections and the
@@ -355,7 +355,6 @@ export function createSettingsView(deps: SettingsViewDeps): SettingsView {
   const picker: ListPicker = createListPicker({
     pushScope: () => deps.pushScope('picker'),
     log: deps.log,
-    logSource: 'settings',
   });
   deps.addOverlay(picker.element);
 

@@ -3,7 +3,8 @@ import type {
   AgentFormService,
   AgentFormSession,
 } from '../../contracts/agent-forms';
-import type { Log } from '../../contracts/log';
+import type { Disposable } from '../../contracts/disposable';
+import type { PluginLog } from '../../contracts/log';
 import { errorText } from '../error-text';
 
 // The preview's session as the sessions plugin connects it; `end` removes its
@@ -15,8 +16,8 @@ export interface PreviewConnection {
 
 // `session` is what the preview's session connects with (the sessions
 // plugin's `SessionInfo`). `forms` is a service of the preview's own, whose
-// forms raise no alert and write no file. `logSource` and `noun` name the
-// form type in the log: `preview <noun> failed`.
+// forms raise no alert and write no file. `noun` names the form type in the
+// log: `preview <noun> failed`.
 export interface AgentFormPreviewDeps<Info, Payload> {
   session: Info;
   sessions: {
@@ -24,15 +25,15 @@ export interface AgentFormPreviewDeps<Info, Payload> {
     activate(sessionId: string): void;
   };
   forms: AgentFormService<Payload>;
-  log: Log;
-  logSource: string;
+  log: PluginLog;
   noun: string;
 }
 
 // A sample form type's layout preview, in a session of its own. A send or
 // cancel ends the session, and the next `show` connects it again; a draft
-// (the deadline passed) waits on.
-export interface AgentFormPreview {
+// (the deadline passed) waits on. `dispose` ends an open preview as a send
+// does, ignoring its last ask's answer.
+export interface AgentFormPreview extends Disposable {
   // Selects the preview's row, connecting its session first when none is
   // open; true when this call connected it.
   show(): boolean;
@@ -82,10 +83,7 @@ export function createAgentFormPreview<
         if (signal.aborted) {
           return;
         }
-        deps.log(
-          deps.logSource,
-          `preview ${deps.noun} failed: ${errorText(error)}`,
-        );
+        deps.log(`preview ${deps.noun} failed: ${errorText(error)}`);
         end(shown);
       },
     );
@@ -118,6 +116,13 @@ export function createAgentFormPreview<
         asking.signal,
         preview.form.open(args, null, asking.signal),
       );
+    },
+    dispose() {
+      if (preview === null) {
+        return;
+      }
+      preview.asking.abort();
+      end(preview);
     },
   };
 }

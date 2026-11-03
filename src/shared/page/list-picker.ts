@@ -1,5 +1,5 @@
 import type { EditorHost } from '../../contracts/editor';
-import type { Log } from '../../contracts/log';
+import type { PluginLog } from '../../contracts/log';
 import type { PushedScope } from '../../contracts/plugin';
 import { element } from './dom';
 import { floatingPanel, openFloatingPanel } from './ui/floating-panel';
@@ -95,9 +95,8 @@ export interface ListPicker {
 export interface ListPickerDeps {
   // Pushes the owning plugin's picker scope.
   pushScope(): PushedScope;
-  log: Log;
-  // The `[source]` of the `picker shown: <title>` line.
-  logSource: string;
+  // Takes the `picker shown: <title>` line.
+  log: PluginLog;
   // Adds the filter box above the list when given.
   filterEditor?: EditorHost;
 }
@@ -289,7 +288,7 @@ export function createListPicker(deps: ListPickerDeps): ListPicker {
       panel.setAttribute('aria-label', next.title);
       openFloatingPanel(panel, layer);
       draw();
-      deps.log(deps.logSource, `picker shown: ${next.title}`);
+      deps.log(`picker shown: ${next.title}`);
     },
     isOpen: () => request !== null,
     cursorIndex: () =>

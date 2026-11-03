@@ -1,5 +1,5 @@
 import type { Clock, Timers } from '../../../contracts/ambient';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type { ShownLayouts } from '../../../contracts/plugin';
 import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
@@ -50,7 +50,7 @@ import {
 // page log; `createScroller` makes the HScroller a strip draws its boxes into.
 export interface AgentStripDeps {
   kit: OwnerKitServices;
-  log: Log;
+  log: PluginLog;
   clock: Clock;
   timers: Timers;
   agents: AgentsPageExports;

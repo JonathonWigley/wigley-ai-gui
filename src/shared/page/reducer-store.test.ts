@@ -41,4 +41,85 @@ describe('createReducerStore', () => {
     expect(store.get()).toBe(0);
     expect(seen.at(-1)).toBe(0);
   });
+
+  it.each([
+    {
+      when: 'before the dispatch',
+      disposedBy: 'test',
+      disposedCalls: 0,
+    },
+    {
+      when: 'by an earlier listener in the same dispatch',
+      disposedBy: 'other',
+      disposedCalls: 0,
+    },
+    {
+      when: 'by itself in the same dispatch',
+      disposedBy: 'itself',
+      disposedCalls: 1,
+    },
+  ])(
+    'stops telling a listener whose subscription was disposed $when',
+    ({ disposedBy, disposedCalls }) => {
+      const store = createReducerStore(0, apply);
+      let disposed = 0;
+      let other = 0;
+      const subscriptions: { dispose(): void }[] = [];
+      if (disposedBy === 'other') {
+        store.subscribe(() => {
+          other++;
+          subscriptions[0].dispose();
+        });
+        subscriptions.push(store.subscribe(() => disposed++));
+      } else {
+        subscriptions.push(
+          store.subscribe(() => {
+            disposed++;
+            subscriptions[0].dispose();
+          }),
+        );
+        store.subscribe(() => other++);
+      }
+      if (disposedBy === 'test') {
+        subscriptions[0].dispose();
+      }
+
+      store.dispatch(1);
+
+      expect(disposed).toBe(disposedCalls);
+      expect(other).toBe(1);
+      expect(() => subscriptions[0].dispose()).not.toThrow();
+    },
+  );
+
+  it('disposes only its own subscription when one function is subscribed twice', () => {
+    const store = createReducerStore(0, apply);
+    let calls = 0;
+    const listener = () => {
+      calls++;
+    };
+    const first = store.subscribe(listener);
+    store.subscribe(listener);
+
+    first.dispose();
+    first.dispose();
+    store.dispatch(1);
+
+    expect(calls).toBe(1);
+  });
+
+  it('runs a listener subscribed after a nested dispatch in the outer dispatch', () => {
+    const store = createReducerStore(0, apply);
+    let late = 0;
+    store.subscribe(() => {
+      if (store.get() === 1) {
+        store.dispatch(10);
+        store.subscribe(() => late++);
+      }
+    });
+
+    store.dispatch(1);
+
+    expect(late).toBe(1);
+  });
 });

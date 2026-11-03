@@ -638,7 +638,6 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
     const picker = createListPicker({
       pushScope: () => api.keys.pushScope('picker'),
       log,
-      logSource: sessionsManifest.id,
     });
     api.areas.overlay.contribute(picker.element);
 

@@ -70,7 +70,7 @@ export function fakeDocsParts(layouts: () => ShownLayouts<Layout>) {
           rollback,
         ),
       ),
-    log: (_source, message) => logs.push(message),
+    log: (...parts: string[]) => logs.push(parts.at(-1) ?? ''),
   });
   return { parts, anchors, logs };
 }

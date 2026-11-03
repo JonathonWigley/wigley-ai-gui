@@ -3,7 +3,7 @@ import type {
   AgentFormEnd,
   AgentFormEndKind,
 } from '../../contracts/agent-forms';
-import type { Log } from '../../contracts/log';
+import type { PluginLog } from '../../contracts/log';
 import type { ToastTone } from '../../contracts/plugin';
 import { errorText } from '../error-text';
 import { type DraftRevisions, finishSave, startSave } from './autosave';
@@ -401,18 +401,17 @@ export interface SessionFormsStore<Form extends SessionForm> {
 }
 
 // How the log and toasts name a form: `noun` as in `round`, `sent` as the
-// toast after a submit, as in `Answers sent`. `logSource` is the plugin id.
+// toast after a submit, as in `Answers sent`.
 export interface SessionFormWords {
   noun: string;
   sent: string;
-  logSource: string;
 }
 
 export interface SessionFormCommandDeps<Form extends SessionForm> {
   store: SessionFormsStore<Form>;
   words: SessionFormWords;
   toast(text: string, tone: ToastTone): void;
-  log: Log;
+  log: PluginLog;
 }
 
 // `showForm` selects the session's form tab; `activate` selects the session.
@@ -440,15 +439,12 @@ export function guardSessionClose<Form extends SessionForm>(
     return true;
   }
   if (form.sending !== null) {
-    deps.log(words.logSource, `session close kept: ${form.label} is sending`);
+    deps.log(`session close kept: ${form.label} is sending`);
     deps.toast(`Sending ${form.label}'s ${words.noun}…`, 'info');
     return false;
   }
   if (form.formId !== store.get().activeFormId) {
-    deps.log(
-      words.logSource,
-      `session close kept: ${form.label} is open in the background`,
-    );
+    deps.log(`session close kept: ${form.label} is open in the background`);
     deps.toast(`Finish or cancel ${form.label}'s ${words.noun} first`, 'info');
     deps.activate(sessionId);
     return false;
@@ -457,10 +453,7 @@ export function guardSessionClose<Form extends SessionForm>(
   const wasConfirm = store.get().view === 'confirm';
   store.dispatch({ type: 'askClose', sessionId });
   if (!wasConfirm && store.get().view === 'confirm') {
-    deps.log(
-      words.logSource,
-      `closing the session asks to cancel ${form.label}`,
-    );
+    deps.log(`closing the session asks to cancel ${form.label}`);
   }
   return false;
 }
@@ -495,10 +488,7 @@ export function finishActiveForm<Form extends SessionForm, Body>(
   deps.store.dispatch({ type: 'sendStarted', formId, kind });
   void deps.finish(formId, { kind, body }).catch((error) => {
     deps.store.dispatch({ type: 'sendFailed', formId });
-    deps.log(
-      words.logSource,
-      `${words.noun} ${formId} not finished: ${errorText(error)}`,
-    );
+    deps.log(`${words.noun} ${formId} not finished: ${errorText(error)}`);
     deps.toast(
       `${capitalized(words.noun)} not sent: ${errorText(error)}`,
       'error',
@@ -534,7 +524,7 @@ export function closeFormFromMain<Form extends SessionForm>(
   }
   if (closed.byFinish) {
     const isSubmit = sending.kind === 'submitted';
-    deps.log(words.logSource, sending.kind);
+    deps.log(sending.kind);
     deps.toast(
       isSubmit
         ? `${words.sent}: ${form.label}`

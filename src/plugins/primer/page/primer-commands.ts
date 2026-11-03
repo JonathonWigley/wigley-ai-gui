@@ -8,7 +8,7 @@ import type {
   FocusOptions,
   ScrollStep,
 } from '../../../contracts/editor';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type { FocusTarget, PaneDirection } from '../../../contracts/panes';
 import type {
   PageCommandContext,
@@ -63,7 +63,7 @@ export interface PrimerCommandDeps {
   // Asks main to open the layout preview; rejects with the reason it failed.
   openPreview(): Promise<unknown>;
   toast(text: string, tone: ToastTone): void;
-  log: Log;
+  log: PluginLog;
 }
 
 // A handler's body, run once the box it fired in has its row shown; `box` is
@@ -76,7 +76,6 @@ const SOURCE = 'primer';
 const PRIMER_WORDS: SessionFormWords = {
   noun: 'primer',
   sent: 'Primer sent',
-  logSource: SOURCE,
 };
 
 const APPEND: FocusOptions = { insertAtEnd: true };

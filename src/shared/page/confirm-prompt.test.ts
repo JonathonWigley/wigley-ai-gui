@@ -70,7 +70,6 @@ function promptSetup(
       ? { onBaseChanged: () => calls.push('base changed') }
       : {}),
     log,
-    logSource: 'test',
     ...(drawBody === undefined ? {} : { drawBody }),
   });
   const scrim = asFake(prompt.element);
@@ -161,7 +160,7 @@ describe('confirm prompt', () => {
 
     expect(calls.at(-1)).toBe('base changed');
     expect(dismiss).toHaveBeenCalledOnce();
-    expect(log).toHaveBeenCalledWith('test', DISMISSED);
+    expect(log).toHaveBeenCalledWith(DISMISSED);
   });
 
   it('dismisses on a base change with no onBaseChanged given', () => {
@@ -200,7 +199,7 @@ describe('confirm prompt', () => {
     expect(prompt.settleOwedDismiss()).toBe(false);
     expect(dismiss).toHaveBeenCalledTimes(2);
     expect(caller.asked).toBe(false);
-    expect(log).toHaveBeenCalledWith('test', DISMISSED);
+    expect(log).toHaveBeenCalledWith(DISMISSED);
     expect(prompt.settleOwedDismiss()).toBe(true);
   });
 

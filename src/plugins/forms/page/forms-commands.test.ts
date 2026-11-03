@@ -73,7 +73,7 @@ function setup(
   let scrollResult: ContentScroll | null = { moved: true, atEnd: false };
   // Each closed session, with the rounds the store held at the call.
   const closedSessions: { sessionId: string; roundCount: number }[] = [];
-  const log = (_source: string, message: string) => logs.push(message);
+  const log = (...parts: string[]) => logs.push(parts.at(-1) ?? '');
   const closeSession = (sessionId: string) =>
     closedSessions.push({ sessionId, roundCount: store.get().forms.length });
   const toast = (text: string, tone: ToastTone) => {

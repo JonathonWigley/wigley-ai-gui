@@ -1,5 +1,5 @@
 import type { EditorHost } from '../../../contracts/editor';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type { PluginAreas, PushedScope } from '../../../contracts/plugin';
 import { blurFocusedElement, element } from '../../../shared/page/dom';
 import {
@@ -86,7 +86,7 @@ export interface PickerDeps extends SurfaceKitDeps {
   // Pushes the named chat scope.
   pushScope(scope: ChatScopeName): PushedScope;
   layouts: ChatLayouts;
-  log: Log;
+  log: PluginLog;
 }
 
 type PickerScope = NonNullable<PickerRequest<unknown>['scope']>;
@@ -97,7 +97,6 @@ export function createPicker(deps: PickerDeps): Picker {
   const list = createListPicker({
     pushScope: () => deps.pushScope(scope),
     log: deps.log,
-    logSource: 'chat',
     filterEditor: deps.editor,
   });
   deps.overlay.contribute(list.element);

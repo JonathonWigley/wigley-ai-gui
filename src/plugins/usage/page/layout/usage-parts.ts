@@ -1,4 +1,4 @@
-import type { Log } from '../../../../contracts/log';
+import type { PluginLog } from '../../../../contracts/log';
 import type { ShownLayouts } from '../../../../contracts/plugin';
 import type { OwnerKitServices } from '../../../../shared/page/layout-host/base-kit';
 import type { RollbackDeps } from '../../../../shared/page/layout-host/draw-part';
@@ -24,7 +24,7 @@ export interface Drawn {
 export interface UsagePartsDeps {
   defaultLayout: CompleteLayout;
   kit: OwnerKitServices;
-  log: Log;
+  log: PluginLog;
 }
 
 // Draws each usage surface's part into `parent` with the layouts last set,

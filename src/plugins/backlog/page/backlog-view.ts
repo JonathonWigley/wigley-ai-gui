@@ -3,7 +3,7 @@ import type { CommandId } from '../../../contracts/commands';
 import type { Disposable } from '../../../contracts/disposable';
 import type { PageDrops } from '../../../contracts/drops';
 import type { EditorHost, ScrollStep } from '../../../contracts/editor';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type {
   FocusTarget,
@@ -138,7 +138,7 @@ export interface BacklogViewDeps {
   uiState: UiState;
   // Runs the list split's resize prompt linger.
   timers: Timers;
-  log: Log;
+  log: PluginLog;
   toast(text: string, tone: ToastTone): void;
   // Makes the follow-up editor's slot a drop target.
   drops: Pick<PageDrops, 'addTarget' | 'savePasted'>;
@@ -312,7 +312,6 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   const picker: ListPicker = createListPicker({
     pushScope: () => deps.pushScope('picker'),
     log: deps.log,
-    logSource: PLUGIN_ID,
   });
   deps.addOverlay(picker.element);
 
@@ -349,7 +348,6 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     isSending: () => false,
     dismiss: () => dispatch({ type: 'dismissConfirm' }),
     log: deps.log,
-    logSource: PLUGIN_ID,
   };
   const deletePrompt = createConfirmPrompt({
     ...promptDeps,

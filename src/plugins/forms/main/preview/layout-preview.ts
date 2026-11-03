@@ -1,4 +1,4 @@
-import type { Log } from '../../../../contracts/log';
+import type { Log, PluginLog } from '../../../../contracts/log';
 import { errorText } from '../../../../shared/error-text';
 import { createAgentFormPreview } from '../../../../shared/agent-forms/agent-form-preview';
 import type {
@@ -50,14 +50,13 @@ export function createLayoutPreview(deps: {
   savedArgs(): unknown[];
   // The layouts folder's layout names now.
   layoutNames(): readonly string[];
-  log: Log;
+  log: PluginLog;
 }): { open(): void } {
   const preview = createAgentFormPreview({
     session: PREVIEW_SESSION,
     sessions: deps.sessions,
     forms: deps.forms,
     log: deps.log,
-    logSource: 'forms',
     noun: 'round',
   });
   let cursor = SAMPLE;

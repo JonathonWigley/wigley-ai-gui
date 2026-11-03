@@ -230,7 +230,7 @@ describe('sessions parts', () => {
       }
       expect(
         setup.logged.filter((line) =>
-          line.startsWith(`[sessions] layout mine ${partName} failed`),
+          line.startsWith(`layout mine ${partName} failed`),
         ),
       ).toHaveLength(1);
     },
@@ -421,14 +421,14 @@ describe('sessions parts', () => {
         surface,
         case: 'build throws',
         bad: { id: 'bad', build: fail } as SessionPart,
-        logLine: `[sessions] ${surface.noun} bad failed: broken part`,
+        logLine: `${surface.noun} bad failed: broken part`,
         drawnParts: ['good'],
       },
       {
         surface,
         case: 'dispose throws',
         bad: { id: 'bad', build: () => ({ dispose: fail }) } as SessionPart,
-        logLine: `[sessions] ${surface.noun} bad dispose failed: broken part`,
+        logLine: `${surface.noun} bad dispose failed: broken part`,
         drawnParts: ['bad', 'good'],
       },
     ]),

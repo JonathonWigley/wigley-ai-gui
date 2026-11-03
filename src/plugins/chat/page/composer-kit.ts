@@ -2,7 +2,7 @@ import type { ChatEntry, ChatImage } from '../../../contracts/agent';
 import type { Clock, Timers } from '../../../contracts/ambient';
 import type { CommandId } from '../../../contracts/commands';
 import type { Disposable } from '../../../contracts/disposable';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import { errorText } from '../../../shared/error-text';
 import {
   type ContributedPartsPlace,
@@ -54,7 +54,7 @@ export interface ComposerSurfaceDeps extends SurfaceKitDeps {
   run(command: CommandId): void;
   composerParts: Pick<PartStore<ChatComposerPart>, 'parts'>;
   statusParts: Pick<PartStore<ChatStatusPart>, 'parts'>;
-  log: Log;
+  log: PluginLog;
   clock: Clock;
   timers: Timers;
 }
@@ -333,14 +333,12 @@ export function createComposerSurface(
 }
 
 const COMPOSER_PARTS: ContributedPartsPlace = {
-  owner: 'chat',
   noun: 'composer part',
   holderClass: 'chat-composer-parts',
   wrapperClass: 'chat-composer-part',
 };
 
 const STATUS_PARTS: ContributedPartsPlace = {
-  owner: 'chat',
   noun: 'status part',
   holderClass: 'chat-status-parts',
   wrapperClass: 'chat-status-part',

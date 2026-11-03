@@ -1,5 +1,6 @@
 import type { Timers } from '../../../contracts/ambient';
-import type { Log } from '../../../contracts/log';
+import type { Disposable } from '../../../contracts/disposable';
+import type { PluginLog } from '../../../contracts/log';
 import { startAutosave } from '../../../shared/page/autosave';
 import type { FormBody } from '../contract';
 import { buildBody, type FormsStore } from './form-state';
@@ -11,14 +12,14 @@ export interface RoundAutosaveDeps {
   // Read each time a save is scheduled.
   delayMs(): number;
   timers: Timers;
-  log: Log;
+  log: PluginLog;
 }
 
 // Saves a round's answers once its edits pause for `delayMs`, each round a
 // draft of the shared autosave.
-export function startRoundAutosave(deps: RoundAutosaveDeps): void {
+export function startRoundAutosave(deps: RoundAutosaveDeps): Disposable {
   const { store } = deps;
-  startAutosave({
+  return startAutosave({
     subscribe: (listener) => store.subscribe(listener),
     drafts: () => store.get().forms,
     idOf: (round) => round.formId,
@@ -36,6 +37,5 @@ export function startRoundAutosave(deps: RoundAutosaveDeps): void {
     delayMs: () => deps.delayMs(),
     timers: deps.timers,
     log: deps.log,
-    logSource: 'forms',
   });
 }

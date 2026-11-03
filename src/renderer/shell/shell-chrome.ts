@@ -1,6 +1,6 @@
 import type { AppInstance } from '../../contracts/app-instance';
 import type { Disposable } from '../../contracts/disposable';
-import type { Log } from '../../contracts/log';
+import type { Log, PluginLog } from '../../contracts/log';
 import type {
   Alignment,
   Area,
@@ -100,10 +100,11 @@ const NO_DRAWN = () => undefined;
 // the list is empty; neither draws a part then.
 export function mountShellChrome(deps: ShellChromeDeps): ShellChrome {
   const { areas, defaultLayout, services, log } = deps;
+  const shellLog: PluginLog = (message) => log('shell', message);
   const parts = createLayoutParts<Layout, CompleteLayout>({
     owner: 'shell',
     defaultLayout,
-    log,
+    log: shellLog,
   });
   let keys = NO_KEYS;
   let context: ModeContext | null = null;
@@ -130,7 +131,7 @@ export function mountShellChrome(deps: ShellChromeDeps): ShellChrome {
         element: build(
           builder,
           parent,
-          createShellKit({ ...services, log }, keys, rollback),
+          createShellKit({ ...services, log: shellLog }, keys, rollback),
         ),
       }),
     );

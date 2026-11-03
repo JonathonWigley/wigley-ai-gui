@@ -411,7 +411,7 @@ Tasks 08, 09 and 10 apply this to each of their plugins, part by part:
 
 ### Wave 4
 - [x] [Tool contributions reach live sessions](05-live-tool-contributions.md) — after 04
-- [ ] [Plugin part test harness](07-part-harness.md) — after 04
+- [x] [Plugin part test harness](07-part-harness.md) — after 04
 
 ### Wave 5
 - [ ] [Shared modules take a plugin log and dispose](06-shared-modules.md) — after 05
@@ -441,7 +441,11 @@ Review base: 7f956435
 - 02 · 8eda568a · diff read; typecheck and lint clean; every handle in the plan's table returns Disposable; worker ran 22 named and fake-owning test files, 342 pass · concerns: preload onMessage dispose across contextBridge has no test or live check; track mutates a handle's dispose, unread for shell.setLayout and createDropTargets; a listener added during a tell now waits at five more sites; a stopped plugin's late pop throws; markedId keeps a disposed id until the next markMode; spreading editor and markdown would lose prototype methods on a class host
 - 04 · 5a86c47e · diff read; typecheck and lint clean; every handle in the plan's table returns Disposable, service views and pluginLog present; worker ran 13 named test files, 286 pass; second disposeRegistration is a no-op, pinned by a watch-count test · concerns: on Windows, zeroing alert counts at quit may call setOverlayIcon on a destroyed window, so stopAll would reject; a stale channel handle disposed after re-registering the same function drops the new one; spreading files and userConfig would lose prototype methods on a class; FakeProcesses settles a few microtasks later with a signal; no live quit run
 - 05 · 06a5e4ff · diff read; typecheck and lint clean; contributeTools, addCloseGuard and SessionTabHandle produce Disposables, consumer views on both sides; worker ran 10 named test files, 212 pass, and a wider 643 across sessions and neighbours; SDK's sendToolListChanged confirmed in version 2.3.1 · concerns: a throwing tool-session end skips the remaining ends and the notice; at quit chat's sessions end during its registrations' disposal with its listeners live, read as safe, and hosts get list_changed with a shrinking list; a notice can precede initialize; a consumer's tracked session end stays filed after the session ends itself; contributeTools fakes returning void were not read one by one; write-failure test opens a real socket
+- 07 · 53947ab6 · diff read; harness tests 20 pass with no type errors in its files, run while task 06 was editing other files, so whole-tree typecheck and lint were clean at the worker's check and are re-proved at 06's landing; .css?url loads as an empty string under vitest; real keys page part starts and restarts on it · concerns: page-global counts include real provider parts; installFocusFakeDom goes stale against the document copy; document listeners cannot be fired; the trial stopped at the first string-id dependency in 16 of 17 page parts, so parts may need services faked; replaced editor and userConfig are not tracked; channel.handle overwrites where the real one throws; keys page part leaks its PLACEMENT_CHECK_EVENT document listener, for task 10
 ### Contract changes
+- PagePartHarness: send, fireWindow, showLayouts, pushKeymap → the same plus readonly fences · why: the task's test asserts recorded fences are empty and no member read them · consumers: 08, 09, 10 · group 07
+- Harness exports: as listed → also FakeMainApi<M> and FakePageApi<M> · why: the type test must show a string id failing on the fake API while MainPart.start takes MainApi, whose deprecated overload accepts one until task 11 · consumers: test-d only · group 07
+- Fake API keys.command: undefined → the CommandInfo for a command the asking part's own manifest declares, undefined for any other · why: keys' page part builds a kit at start that throws without its own command · consumers: 10 and any part whose kit checks its own commands · group 07
 ### Rulings
 - Worktree run on branch foundation-sweeps in both repos, on the user's word; marketplace review base is cbd8a9e; git fetch fails on SSH access in both repos, so origin was not checked and the run builds on local main; a stale origin would surface at push · lead
 - Task 03 commits on branch foundation-sweeps rather than main, since this is a worktree run; 1.14.1 will need reconciling with the peer's 1.15.0 at merge — one bump per pushed series · group 03 · group 03
@@ -457,5 +461,8 @@ Review base: 7f956435
 - channel-presenter.test.ts changed beyond the Files list, since its fake handle must return a Disposable to compile · group 04 · group 04
 - A live contribution starts every tool session before committing names and routes, through a shared startAllOrNone, so a start reading list.tools() does not see its own tools · group 05 · group 05
 - channel-presenter.ts needed no edit, since it already ignores addCloseGuard's return · group 05 · group 05
+- dataUrl uses the real helper's form, not the task table's stale one · group 07 · group 07
+- A replaced files, processes or alerts service still runs through its per-plugin view, so its run options carry a signal and alerts sees the zeroing call at stop · group 07 · group 07
+- Channel state is per part, so a test driving a real provider's channel cannot; panes members do nothing · group 07 · group 07
 ### Review rounds
 ### Test gate

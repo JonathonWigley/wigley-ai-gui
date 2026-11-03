@@ -65,8 +65,7 @@ function drawRail(
       defaultLayout: DEFAULT_LAYOUT,
       part: (layout) => layout.rail,
       build,
-      log: (source, message) => logLines.push(`[${source}] ${message}`),
-      logSource: 'forms',
+      log: (message: string) => logLines.push(message),
       partName: 'rail',
       ...overrides,
     });
@@ -105,7 +104,7 @@ describe('drawPart', () => {
       layoutName: 'default',
       text: 'default',
       dataset: { layout: 'default', layoutOwner: 'forms' },
-      logLines: ['[forms] layout fancy rail failed: boom'],
+      logLines: ['layout fancy rail failed: boom'],
     },
     {
       row: 'the bundled default picked as default',
@@ -132,7 +131,7 @@ describe('drawPart', () => {
       layoutName: 'default',
       text: 'default',
       dataset: { layout: 'default', layoutOwner: 'forms' },
-      logLines: ['[forms] layout default rail failed: boom'],
+      logLines: ['layout default rail failed: boom'],
     },
     {
       row: 'a live default lacks the part',
@@ -178,7 +177,7 @@ describe('drawPart', () => {
 
     expect(record.undone).toEqual(['box notes', 'anchor next']);
     expect(rail.parent.children).toEqual([asFake(drawn.built.element)]);
-    expect(rail.logLines).toEqual(['[forms] layout fancy rail failed: boom']);
+    expect(rail.logLines).toEqual(['layout fancy rail failed: boom']);
     expect(asFake(drawn.built.element).dataset).toEqual({
       layout: 'default',
       layoutOwner: 'forms',
@@ -199,7 +198,7 @@ describe('drawPart', () => {
     const drawn = rail.call();
 
     expect(rail.logLines).toEqual([
-      '[forms] layout spill rail failed: rail added nodes beside its element',
+      'layout spill rail failed: rail added nodes beside its element',
     ]);
     expect(rail.parent.children).toEqual([asFake(drawn.built.element)]);
     expect(drawn.layoutName).toBe('default');
@@ -226,7 +225,7 @@ describe('drawPart', () => {
     expect(record.undone).toEqual(['anchor next']);
     expect(rail.parent.children).toEqual([asFake(drawn.built.element)]);
     expect(rail.logLines).toEqual([
-      '[forms] layout fancy rail failed: boom; rollback failed: stuck',
+      'layout fancy rail failed: boom; rollback failed: stuck',
     ]);
   });
 
@@ -239,7 +238,7 @@ describe('drawPart', () => {
     const drawn = rail.call();
 
     expect(rail.logLines).toEqual([
-      "[forms] layout stray rail failed: rail's element is not appended to parent",
+      "layout stray rail failed: rail's element is not appended to parent",
     ]);
     expect(drawn.layoutName).toBe('default');
   });
@@ -368,10 +367,10 @@ describe('drawPart', () => {
     const drawnSecond = second.call();
     fixedThenBroken.call();
 
-    expect(first.logLines).toEqual(['[forms] layout fancy rail failed: boom']);
+    expect(first.logLines).toEqual(['layout fancy rail failed: boom']);
     expect(second.logLines).toEqual([]);
     expect(fixedThenBroken.logLines).toEqual([
-      '[forms] layout fancy rail failed: boom',
+      'layout fancy rail failed: boom',
     ]);
     expect([drawnFirst.layoutName, drawnSecond.layoutName]).toEqual([
       'default',

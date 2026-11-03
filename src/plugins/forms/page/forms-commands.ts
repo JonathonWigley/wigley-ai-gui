@@ -3,7 +3,7 @@ import type {
   FocusOptions,
   ScrollStep,
 } from '../../../contracts/editor';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type {
   PageCommandContext,
   PageStart,
@@ -60,14 +60,13 @@ export interface FormsCommandDeps {
   // -1; null when no round is shown to scroll.
   scrollForm(step: ScrollStep, direction: 1 | -1): ContentScroll | null;
   toast(text: string, tone: ToastTone): void;
-  log: Log;
+  log: PluginLog;
 }
 
 // How the forms page's log and toasts name a round.
 const ROUND_WORDS: SessionFormWords = {
   noun: 'round',
   sent: 'Answers sent',
-  logSource: 'forms',
 };
 
 // Main's layout method the preview key invokes; what it resolves to is unused.

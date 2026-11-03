@@ -1,4 +1,4 @@
-import type { Log } from '../../../../contracts/log';
+import type { PluginLog } from '../../../../contracts/log';
 import type { ShownLayouts } from '../../../../contracts/plugin';
 import {
   type AppSlot,
@@ -48,7 +48,7 @@ export interface DocsPartsDeps {
   defaultLayout: CompleteLayout;
   // The base kit for one draw in `scope`, its anchors recorded by `rollback`.
   baseKit(scope: DocsScope, rollback: RollbackDeps): BaseKit;
-  log: Log;
+  log: PluginLog;
 }
 
 // The slot of an app element a kit member named `member` places, for one

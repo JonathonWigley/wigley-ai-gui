@@ -9,7 +9,7 @@ import type {
   TextEditor,
   VimMode,
 } from '../../contracts/editor';
-import type { Log } from '../../contracts/log';
+import type { PluginLog } from '../../contracts/log';
 import type { ToastTone } from '../../contracts/plugin';
 import { insertionText } from './file-drop/file-chips';
 import { pathOf } from './file-drop/file-path';
@@ -22,8 +22,6 @@ export interface BoxIdentity<Box> {
   keyOf(box: Box): string;
   // How the log names the box, e.g. `notes on question 1`.
   describe(box: Box): string;
-  // The log line's source, the plugin id.
-  logSource: string;
 }
 
 export interface EditorBoxEvents<Box> {
@@ -57,6 +55,9 @@ export interface EditorBoxes<Box> {
   formIdOf(box: Box): string;
   // Runs after the focused box, or its vim mode, changes.
   onChange(listener: () => void): void;
+  // Destroys every mounted editor and forgets every record and `onChange`
+  // listener, none of which hears it.
+  dispose(): void;
 }
 
 // `order` is the box's first-mount order.
@@ -77,7 +78,7 @@ const STARTING_MODE: VimMode = { mode: 'normal', subMode: '' };
 export function createEditorBoxes<Box>(
   host: EditorHost,
   events: EditorBoxEvents<Box>,
-  log: Log,
+  log: PluginLog,
   identity: BoxIdentity<Box>,
 ): EditorBoxes<Box> {
   const mounted = new Map<string, MountedBox<Box>>();
@@ -101,7 +102,7 @@ export function createEditorBoxes<Box>(
     }
     activeKey = key;
     lastActivated.set(identity.formIdOf(box), key);
-    log(identity.logSource, `focused ${identity.describe(box)}`);
+    log(`focused ${identity.describe(box)}`);
     events.activated(box);
     notify();
   };
@@ -223,6 +224,17 @@ export function createEditorBoxes<Box>(
     onChange(listener) {
       listeners.push(listener);
     },
+    dispose() {
+      listeners.length = 0;
+      for (const entry of mounted.values()) {
+        entry.editor.destroy();
+      }
+      mounted.clear();
+      modes.clear();
+      activeKey = null;
+      lastActivated.clear();
+      firstMounts.clear();
+    },
   };
 }
 
@@ -268,8 +280,7 @@ export function stepBox<Box>(
 export interface BoxDropDeps {
   savePasted(file: DroppedFile): Promise<string>;
   toast(text: string, tone: ToastTone): void;
-  log: Log;
-  logSource: string;
+  log: PluginLog;
 }
 
 // A drop target's `take` that types every file's path, as file chips, into
@@ -291,7 +302,7 @@ async function takeFiles(
   editorFor: () => TextEditor | null,
   deps: BoxDropDeps,
 ): Promise<void> {
-  const log = (message: string) => deps.log(deps.logSource, message);
+  const { log } = deps;
   if (editorFor() === null) {
     deps.toast(NOTHING_TAKES_FILES, 'info');
     log(`${String(files.length)} files dropped where no box takes them`);

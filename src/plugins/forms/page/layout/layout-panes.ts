@@ -1,5 +1,5 @@
 import type { CommandId } from '../../../../contracts/commands';
-import type { Log } from '../../../../contracts/log';
+import type { PluginLog } from '../../../../contracts/log';
 import type { MarkdownRenderer } from '../../../../contracts/markdown';
 import type { Platform } from '../../../../contracts/platform';
 import { errorText } from '../../../../shared/error-text';
@@ -80,7 +80,7 @@ import type { LayoutPick } from './layout-resolver';
 export interface PaneDeps {
   markdown: MarkdownRenderer;
   platform: Platform;
-  log: Log;
+  log: PluginLog;
   keys: Pick<KeysPageExports, 'keysFor' | 'anchor'>;
   dispatch(action: FormsAction): void;
   getState(): FormsState;
@@ -131,7 +131,6 @@ export function buildRailPane(
     build: (rail, paneParent, rollback) =>
       drawRail(rail, paneParent, round, recordingDeps(deps, rollback)),
     log: deps.log,
-    logSource: 'forms',
     partName: 'rail',
   }).built;
 }
@@ -153,7 +152,6 @@ export function buildReviewPane(
     build: (review, paneParent, rollback) =>
       drawReview(review, paneParent, round, recordingDeps(deps, rollback)),
     log: deps.log,
-    logSource: 'forms',
     partName: 'review',
   }).built;
 }

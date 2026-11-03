@@ -1,7 +1,7 @@
 import type { CommandId } from '../../contracts/commands';
 import type { Disposable } from '../../contracts/disposable';
 import type { ViewScope } from '../../contracts/keymap';
-import type { Log } from '../../contracts/log';
+import type { PluginLog } from '../../contracts/log';
 import type { PushedScope } from '../../contracts/plugin';
 import { appended, element } from './dom';
 import { type ButtonVariant, textButton } from './ui/button';
@@ -42,8 +42,7 @@ export interface ConfirmPromptDeps {
   dismiss(): void;
   // Runs on each base scope change under the pushed scope, when given.
   onBaseChanged?(): void;
-  log: Log;
-  logSource: string;
+  log: PluginLog;
   // Draws the body into `parent` (the dialog's body), placing the buttons
   // through `parts`; the prompt draws its own body when left out.
   drawBody?(parent: HTMLElement, parts: ConfirmBodyParts): void;
@@ -142,7 +141,7 @@ export function createConfirmPrompt(deps: ConfirmPromptDeps): ConfirmPrompt {
       }
       deps.dismiss();
       if (!deps.isAsked()) {
-        deps.log(deps.logSource, DISMISSED_LINE);
+        deps.log(DISMISSED_LINE);
       } else if (deps.isSending()) {
         isDismissOwed = true;
       }
@@ -158,7 +157,7 @@ export function createConfirmPrompt(deps: ConfirmPromptDeps): ConfirmPrompt {
       } else if (isDismissOwed && !deps.isSending()) {
         isDismissOwed = false;
         deps.dismiss();
-        deps.log(deps.logSource, DISMISSED_LINE);
+        deps.log(DISMISSED_LINE);
         return false;
       }
       return true;

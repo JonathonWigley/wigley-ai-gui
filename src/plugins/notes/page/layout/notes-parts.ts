@@ -1,4 +1,4 @@
-import type { Log } from '../../../../contracts/log';
+import type { PluginLog } from '../../../../contracts/log';
 import type { ShownLayouts } from '../../../../contracts/plugin';
 import { appended, element } from '../../../../shared/page/dom';
 import type { DrawnPickerRow } from '../../../../shared/page/list-picker';
@@ -124,7 +124,7 @@ const MARKUP_COMMANDS: readonly { command: MarkupCommand; label: string }[] = [
 
 // What every notes part draw reads: the page services and the keys export.
 export interface NotesPartsDeps extends OwnerKitServices {
-  log: Log;
+  log: PluginLog;
 }
 
 // The image entries the `images` part draws, by position from 1, and the

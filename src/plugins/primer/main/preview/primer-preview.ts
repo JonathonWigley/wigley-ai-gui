@@ -1,5 +1,5 @@
 import type { AgentFormService } from '../../../../contracts/agent-forms';
-import type { Log } from '../../../../contracts/log';
+import type { PluginLog } from '../../../../contracts/log';
 import { createAgentFormPreview } from '../../../../shared/agent-forms/agent-form-preview';
 import type {
   SessionInfo,
@@ -21,7 +21,7 @@ const PREVIEW_SESSION: SessionInfo = {
 export interface PrimerPreviewDeps {
   sessions: Pick<SessionsMainExports, 'connect' | 'activate'>;
   primer: AgentFormService<PrimerPayload>;
-  log: Log;
+  log: PluginLog;
 }
 
 // The sample primer in a session of its own. The first open connects the
@@ -36,7 +36,6 @@ export function createPrimerPreview(deps: PrimerPreviewDeps): {
     sessions: deps.sessions,
     forms: deps.primer,
     log: deps.log,
-    logSource: 'primer',
     noun: 'primer',
   });
   return {

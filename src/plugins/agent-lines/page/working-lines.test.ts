@@ -74,7 +74,7 @@ function setUp(current: Roster = { agents: [], tasks: [] }) {
       commands: { exists: () => true, run: () => undefined },
       platform: 'macos',
     },
-    log: (source, message) => logged.push(`[${source}] ${message}`),
+    log: (...parts: string[]) => logged.push(parts.at(-1) ?? ''),
     clock: { now: () => now },
     timers: {
       set(run) {
@@ -116,7 +116,7 @@ describe('working lines', () => {
     expect(drawn[0].dataset.layoutOwner).toBe('agent-lines');
     expect(drawn[0].textContent).toContain('3m 05s');
     expect(drawn[0].textContent).not.toContain('Map the callers');
-    expect(logged).toEqual(['[agent-lines] running in proj: 3']);
+    expect(logged).toEqual(['running in proj: 3']);
   });
 
   // A row built before any `setRoster` named its session draws the roster
@@ -135,7 +135,7 @@ describe('working lines', () => {
     expect(
       findAll(wrapper, 'agent-lines-line').map((line) => line.textContent),
     ).toEqual([expect.stringContaining('42s')]);
-    expect(logged).toEqual(['[agent-lines] running in proj: 1']);
+    expect(logged).toEqual(['running in proj: 1']);
   });
 
   it('tick_LineShown_RedrawsElapsedAndStopsWhenEmpty', () => {
@@ -155,10 +155,7 @@ describe('working lines', () => {
     expect(clears).toEqual([sets[1].handle]);
     expect(sets).toHaveLength(2);
     expect(findAll(wrapper, 'agent-lines-line')).toEqual([]);
-    expect(logged).toEqual([
-      '[agent-lines] running in proj: 3',
-      '[agent-lines] running in proj: 0',
-    ]);
+    expect(logged).toEqual(['running in proj: 3', 'running in proj: 0']);
   });
 
   it('build_UserPartThrows_DrawsWithDefault', () => {

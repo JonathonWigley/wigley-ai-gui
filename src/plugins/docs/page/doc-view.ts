@@ -7,7 +7,7 @@ import type {
   EditorScroll,
   ScrollStep,
 } from '../../../contracts/editor';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import type { Paths } from '../../../contracts/paths';
 import type {
@@ -82,7 +82,7 @@ export interface DocViewDeps {
   markdown: MarkdownRenderer;
   paths: Paths;
   toast(text: string, tone: ToastTone): void;
-  log: Log;
+  log: PluginLog;
   // Registers the scroller as a drop target while the editor is open.
   drops: Pick<PageDrops, 'addTarget'>;
   // Epoch milliseconds, for naming pasted files.

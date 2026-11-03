@@ -191,7 +191,6 @@ beforeEach(() => {
     randomHex: () => (++hexCount).toString(16).padStart(8, '0'),
     paths: posixPaths,
     log: () => {},
-    logSource: 'forms',
   });
 });
 

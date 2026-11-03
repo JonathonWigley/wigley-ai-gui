@@ -43,7 +43,10 @@ function fakeStore(initial: FormsState): FormsStore {
         listeners.forEach((listener) => listener());
       }
     },
-    subscribe: (listener) => listeners.push(listener),
+    subscribe: (listener) => {
+      listeners.push(listener);
+      return { dispose: () => undefined };
+    },
   };
 }
 

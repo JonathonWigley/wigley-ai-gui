@@ -19,7 +19,6 @@ function pickerSetup() {
       onBaseChanged: () => ({ dispose: () => undefined }),
     }),
     log: vi.fn(),
-    logSource: 'test',
   });
   return { picker, layer: asFake(picker.element) };
 }
@@ -47,7 +46,6 @@ function filteredPickerSetup() {
       onBaseChanged: () => ({ dispose: () => undefined }),
     }),
     log: vi.fn(),
-    logSource: 'test',
     filterEditor,
   });
   return {
