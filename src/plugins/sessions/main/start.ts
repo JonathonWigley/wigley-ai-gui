@@ -39,6 +39,7 @@ import {
 import { startRelayServer } from './relay/relay-server';
 import { sessionsSelfTestScript } from './selftest-script';
 import { createSessionList, type SessionList } from './session-list';
+import { SET_SESSION_TITLE_TOOL, startTitleTool } from './title-tool';
 
 type SessionsApi = MainApi<
   typeof sessionsManifest,
@@ -221,7 +222,8 @@ export function addDriveActions(
 }
 
 // Owns agent sessions: the relay they connect through, the tools other
-// plugins contribute for them, their sidebar rows, and the sessions layouts.
+// plugins contribute for them and its own `set_session_title`, their sidebar
+// rows, and the sessions layouts.
 // Each contribution rewrites the endpoint files, so a relay that starts the
 // app finds every tool listed. In the self-test it opens no relay and writes
 // no file, and hands its pane keys' script; a drive run opens it in the run's
@@ -255,6 +257,14 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
         list.setTitle(sessionId, source, title),
       titles: (sessionId) => list.titles(sessionId),
     };
+    exports.contributeTools(
+      [SET_SESSION_TITLE_TOOL],
+      startTitleTool({
+        setTitle: exports.setTitle,
+        titles: exports.titles,
+        maxLength: () => titleLimit(api.settings().titleMaxLength),
+      }),
+    );
     const driveActions =
       api.drive !== null
         ? addDriveActions(api.drive, exports, (listener) =>
