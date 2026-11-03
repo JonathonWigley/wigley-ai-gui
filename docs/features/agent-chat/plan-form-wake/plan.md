@@ -150,7 +150,7 @@ Forms and primer reach chat only through `api.dependency<ChatMainExports>('chat'
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Wake seam in the form service, and the chat adapter](01-wake-seam.md)
+- [x] [Wake seam in the form service, and the chat adapter](01-wake-seam.md)
 - [x] [Drive: chat.start returns the session's host id](02-drive-host-id.md)
 
 ### Wave 2
@@ -168,9 +168,12 @@ Review base: 9b795658
 
 ### Groups
 - 02 · 54f72bb2 · diff read: hostSessionIdOf and the { sessionId, hostSessionId } result present as planned; chat-sessions.test.ts and start.test.ts 152 passed; whole-tree typecheck waits on 01 · concerns: no test row pins chat.start's hostSessionId result or its null throw (plan asked none); worker's nvm prefix was refused, ran on default node (v24.22.1 matches .nvmrc)
+- 01 · d3ba371b · diff read: AgentFormWake, AgentFormServiceDeps.wake, ChatFormWakeTarget, createChatFormWake, NO_FORM_WAKE present as planned; npm run typecheck passes; worker ran the 4 test files, 107 passed · concerns: re-send row has both callers>0 and askTurn set, so it isolates neither clause (each clause pinned by its own row); rejection test's two microtask flushes depend on promise-chain depth
 ### Contract changes
 ### Rulings
 - drive SKILL.md stated no chat.start result, so one sentence was added after the chat.start profile line — the Files field expects the skill to state it — one sentence to drop if wrong · group 02 · group 02
 - start.test.ts (outside Files) gains hostSessionIdOf on its fakeChat, no new row — the widened Pick needs it to typecheck — none · group 02 · group 02
+- forms and primer start.ts pass NO_FORM_WAKE to all four services as a placeholder so the tree compiles — group 03 replaces the two live ones with createChatFormWake — if 03 misses it the live app never wakes · group 01 · group 01
+- host-move GIVEN is its own it in the 'a session moved to a new host id' block, not a column of its it.each — that table's second row has a waiting call, so a wake column would pass trivially — one extra test · group 01 · group 01
 ### Review rounds
 ### Test gate

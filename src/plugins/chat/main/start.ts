@@ -62,7 +62,11 @@ interface ChatDriveDeps {
   profileNames: () => string[];
   chat: Pick<
     ChatSessions,
-    'start' | 'hostSessionIdOf' | 'closed' | 'sessions' | 'permissionToolSession'
+    | 'start'
+    | 'hostSessionIdOf'
+    | 'closed'
+    | 'sessions'
+    | 'permissionToolSession'
   >;
   sessions: Pick<SessionsMainExports, 'activate'>;
 }
@@ -99,7 +103,9 @@ export function addDriveActions(
       }
       const hostSessionId = chat.hostSessionIdOf(sessionId);
       if (hostSessionId === null) {
-        throw new Error(`chat started ${sessionId} but holds no host id for it`);
+        throw new Error(
+          `chat started ${sessionId} but holds no host id for it`,
+        );
       }
       return { sessionId, hostSessionId };
     },
