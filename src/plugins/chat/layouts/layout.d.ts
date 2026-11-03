@@ -119,7 +119,8 @@ export interface WorkingInput {
   state: WorkingState;
   // Every step of the turn in entry order, each the step's entry input; the layout picks the ones it shows.
   steps: StepInput[];
-  // When the turn began: its first entry, else, while the turn holds no entries yet, when the block was first drawn.
+  // When the turn began: its first entry. While the turn holds no entries, the held block's start: the finished
+  // turn's first entry until the session goes idle, else when the block was drawn.
   startedAt: number;
   // The time of this draw or update; the turn's time is `now - startedAt`.
   now: number;
