@@ -122,7 +122,7 @@ No new files. Boundary rule: nothing outside `src/main/claude-code/` names lifec
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Harness seam: entry on take-in, send returns its id](01-harness-seam.md)
+- [x] [Harness seam: entry on take-in, send returns its id](01-harness-seam.md)
 
 ### Wave 2
 - [ ] [Chat main: sendNow and sent rows](02-chat-main.md) — after 01
@@ -141,8 +141,13 @@ No new files. Boundary rule: nothing outside `src/main/claude-code/` names lifec
 Review base: 495866206a2877ebce1a939c301f551fbe01d49b
 
 ### Groups
+- 01 · 2db2f106 · diff read: send(): string and messageDropped on AgentProcess/AgentProcessEvents in agent.ts, TurnTracker.mode() and TurnMode exported; whole-tree tsc clean; worker's three test files pass (159 tests) · concerns: chat-sessions stub comment names the plan (task 02 replaces it); whole-tree lint stops on peer files outside this task, oxfmt clean on the 8 touched files
 ### Contract changes
+- TurnTracker exports: mode() and TurnMode → plus TERMINAL_STATES exported · why: the adapter reads the same terminal set rather than copying it · consumers: none · group 01
 ### Rulings
 - Round 3 key routes folded into 02–05 (user decision relayed by session ai-dev-2e): <Leader>cs and chat.sendQueuedNow dropped; Cmd+Enter in the box runs chat.sendNow → sendAllNow (every unsent row then the box message while busy, as Enter while idle); 02 gains sendAllNow because the box route needs main support; Enter/Shift+Enter in insert mode left to ai-dev-2e's own change — cost if wrong: 02/03 rework before they start · lead
+- hold released right after tracker.read, before the line's entries, so messageDropped and the held entry precede syncActivity — cost if wrong: order differs only on a line carrying both lifecycle and entries, which command_lifecycle lines never do · group 01 · group 01
+- held drafts cleared in markClosed (close and never-spawned error), so a lifecycle line after close releases nothing — cost if wrong: none · group 01 · group 01
+- harness test recordingEvents gained a timeline to check entry/userMessage/skillStarted/messageDropped/activity order; drop rows send a successResult first so the terminal line causes the idle activity — cost if wrong: none · group 01 · group 01
 ### Review rounds
 ### Test gate

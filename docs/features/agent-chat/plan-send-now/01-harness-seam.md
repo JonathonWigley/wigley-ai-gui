@@ -1,6 +1,6 @@
 # 01 — Harness seam: entry on take-in, send returns its id
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -42,3 +42,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 2db2f106 · proof: diff read: send(): string and messageDropped on AgentProcess/AgentProcessEvents in agent.ts, TurnTracker.mode() and TurnMode exported; whole-tree tsc clean; worker's three test files pass (159 tests) · concerns: chat-sessions stub comment names the plan (task 02 replaces it); whole-tree lint stops on peer files outside this task, oxfmt clean on the 8 touched files
