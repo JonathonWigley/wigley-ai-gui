@@ -1,4 +1,4 @@
-import type { UserMessage } from '../../../contracts/agent';
+import type { SessionControl, UserMessage } from '../../../contracts/agent';
 import { type Files, readIfPresent } from '../../../contracts/files';
 import { isJsonObject } from '../../../shared/json';
 import { type SessionTitles, TITLE_SOURCES } from '../../sessions/contract';
@@ -23,6 +23,12 @@ export interface SavedSession {
   launchControls: Record<string, string>;
   // The `AgentStart.resume` the row's last process start passed; false when the row never started one.
   launchResume: boolean;
+  // The controls the row held, as its process last reported them; [] when no process reported any.
+  controls: SessionControl[];
+  // The ids of the controls whose pick in this row a report confirmed.
+  userSetControls: string[];
+  // The entry ids of the messages the last process dropped that chat has already returned to the page.
+  returnedDrops: string[];
 }
 
 // The titles of a session that has none.
@@ -34,16 +40,18 @@ export const NO_TITLES: SessionTitles = {
 
 // A saved session as the file holds it: a file written before a field was
 // saved has none.
-type StoredSession = Omit<
-  SavedSession,
-  'titles' | 'processId' | 'queued' | 'launchControls' | 'launchResume'
-> &
-  Partial<
-    Pick<
-      SavedSession,
-      'titles' | 'processId' | 'queued' | 'launchControls' | 'launchResume'
-    >
-  >;
+type LaterSavedField =
+  | 'titles'
+  | 'processId'
+  | 'queued'
+  | 'launchControls'
+  | 'launchResume'
+  | 'controls'
+  | 'userSetControls'
+  | 'returnedDrops';
+
+type StoredSession = Omit<SavedSession, LaterSavedField> &
+  Partial<Pick<SavedSession, LaterSavedField>>;
 
 export interface SavedSessions {
   // In row order.
@@ -96,11 +104,43 @@ function isOptionalQueue(value: unknown): boolean {
   );
 }
 
-function isOptionalControls(value: unknown): boolean {
+function isOptionalLaunchControls(value: unknown): boolean {
   return (
     value === undefined ||
     (isJsonObject(value) &&
       Object.values(value).every((held) => typeof held === 'string'))
+  );
+}
+
+function isSavedChoice(value: unknown): boolean {
+  return (
+    isJsonObject(value) &&
+    typeof value.value === 'string' &&
+    typeof value.label === 'string'
+  );
+}
+
+function isSavedControl(value: unknown): boolean {
+  return (
+    isJsonObject(value) &&
+    typeof value.id === 'string' &&
+    typeof value.label === 'string' &&
+    Array.isArray(value.choices) &&
+    value.choices.every(isSavedChoice) &&
+    (value.value === null || typeof value.value === 'string')
+  );
+}
+
+function isOptionalControlList(value: unknown): boolean {
+  return (
+    value === undefined || (Array.isArray(value) && value.every(isSavedControl))
+  );
+}
+
+function isOptionalStrings(value: unknown): boolean {
+  return (
+    value === undefined ||
+    (Array.isArray(value) && value.every((held) => typeof held === 'string'))
   );
 }
 
@@ -115,9 +155,12 @@ function isStoredSession(value: unknown): value is StoredSession {
     (value.titles === undefined || isSessionTitles(value.titles)) &&
     isOptionalProcessId(value.processId) &&
     isOptionalQueue(value.queued) &&
-    isOptionalControls(value.launchControls) &&
+    isOptionalLaunchControls(value.launchControls) &&
     (value.launchResume === undefined ||
-      typeof value.launchResume === 'boolean')
+      typeof value.launchResume === 'boolean') &&
+    isOptionalControlList(value.controls) &&
+    isOptionalStrings(value.userSetControls) &&
+    isOptionalStrings(value.returnedDrops)
   );
 }
 
@@ -150,6 +193,9 @@ function parseSavedSessions(text: string): SavedSessions {
       queued: stored.queued ?? [],
       launchControls: stored.launchControls ?? {},
       launchResume: stored.launchResume ?? false,
+      controls: stored.controls ?? [],
+      userSetControls: stored.userSetControls ?? [],
+      returnedDrops: stored.returnedDrops ?? [],
     })),
     selectedHostSessionId,
   };

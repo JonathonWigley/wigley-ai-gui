@@ -21,6 +21,16 @@ const TWO_SESSIONS: SavedSessions = {
       queued: [],
       launchControls: { effort: 'high' },
       launchResume: true,
+      controls: [
+        {
+          id: 'effort',
+          label: 'Effort',
+          choices: [{ value: 'high', label: 'High' }],
+          value: 'high',
+        },
+      ],
+      userSetControls: ['effort'],
+      returnedDrops: [],
     },
     {
       hostSessionId: 's-beta',
@@ -33,6 +43,9 @@ const TWO_SESSIONS: SavedSessions = {
       queued: [{ text: 'next', images: [] }],
       launchControls: {},
       launchResume: false,
+      controls: [],
+      userSetControls: [],
+      returnedDrops: [],
     },
   ],
   selectedHostSessionId: 's-beta',
@@ -51,6 +64,9 @@ const ONE_SESSION: SavedSessions = {
       queued: [],
       launchControls: {},
       launchResume: false,
+      controls: [],
+      userSetControls: [],
+      returnedDrops: [],
     },
   ],
   selectedHostSessionId: null,
@@ -106,6 +122,9 @@ describe('createOpenSessions', () => {
             launchControls: {},
             launchResume: false,
             queued: [],
+            controls: [],
+            userSetControls: [],
+            returnedDrops: [],
           },
         ],
         selectedHostSessionId: null,
@@ -185,6 +204,27 @@ describe('createOpenSessions', () => {
       file: 'launchControls holding a number',
       text: withSessions([
         { ...TWO_SESSIONS.sessions[0], launchControls: { effort: 1 } },
+      ]),
+    },
+    {
+      file: 'controls holding one with no id',
+      text: withSessions([
+        {
+          ...TWO_SESSIONS.sessions[0],
+          controls: [{ label: 'Mode', choices: [], value: null }],
+        },
+      ]),
+    },
+    {
+      file: 'userSetControls holding a number',
+      text: withSessions([
+        { ...TWO_SESSIONS.sessions[0], userSetControls: [1] },
+      ]),
+    },
+    {
+      file: 'returnedDrops a string',
+      text: withSessions([
+        { ...TWO_SESSIONS.sessions[0], returnedDrops: 'user-1' },
       ]),
     },
     {

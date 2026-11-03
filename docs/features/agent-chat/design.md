@@ -285,9 +285,12 @@ interview on 2026-10-23; this file is the record of both.
     sent`. A write that throws leaves the row unsent, logs
     `queued message <id> not sent: <error>` and stops the box call there. When the harness reports the agent dropped a sent message without taking
     it in (`AgentProcessEvents.messageDropped`: Claude's `cancelled`, `discarded` or `refused` with no `started`
-    before it), main returns it to the box and logs `sent message <id> returned: never taken in` (`dropped message
-    <id> not held` for one main does not hold); main holds every message it writes, idle sends included, until its
-    entry arrives, so a dropped idle send returns the same way.
+    before it), main returns it to the box and logs `sent message <id> returned: never taken in`; main holds every
+    message it writes, idle sends included, until its entry arrives, so a dropped idle send returns the same way. The
+    event carries the message, so one written before a relaunch returns too: a drop the re-attach's replay finds, one
+    that comes live after it, and one the replay left held when the process closes. The saved record keeps the ids
+    returned for its process, so a replay of a drop already returned logs `dropped message <id> already returned` and
+    returns nothing.
   - **Pulling back**: a pending row is a cursor stop after the last entry, so `G` and a following focus land on the
     newest pending row when any exist. Three routes pull a message back: Enter on the focused row, a click on it, and
     `<Leader>cp` in the box, which pulls back the newest unsent. Each logs `pulling back a pending message in
@@ -312,8 +315,9 @@ interview on 2026-10-23; this file is the record of both.
   `open-sessions.json` in chat's plugin data: its host session id, folder and profile, its `titles` (the user, agent
   and first-message titles; a file without them reads as untitled), its active time in ms (`activeMs`, the session
   clock's total at the save, `docs/features/session-clock/design.md`; a file without it reads as 0), its last process's
-  id, the controls and resume flag that process launched with, and its unsent queued messages with their images (a file
-  without them reads as none), in row order, with the selected
+  id, the controls and resume flag that process launched with, the controls the row holds and the ids of those the user
+  picked, the entry ids of the messages that process dropped which already went back to the box, and its unsent queued
+  messages with their images (a file without any of these reads as none), in row order, with the selected
   row (null when it names no row chat still holds), whether a message was ever sent, and whether a turn was running. A
   new, resumed or launched session is saved only after its process starts, so a start that fails leaves no record. Only
   the user closing its row removes a record; quit, `install-app`, a process exit and a chat plugin reload keep it.
@@ -328,7 +332,8 @@ interview on 2026-10-23; this file is the record of both.
   tab or the first send, whichever comes first, while its profile is in the settings, so start reads no transcripts; a
   send reads it before starting the process, so the read never holds the new turn. The first message sent in a resting
   row starts its process (`--resume` when a message was ever sent, else `--session-id`); app slash commands run without
-  one, and the controls and the agent's slash commands fill in once it runs. Every process start in a row passes
+  one, its controls show what the record held, and the agent's slash commands and the controls' current values fill in
+  once it runs. Every process start in a row passes
   (`AgentStart.controls`, each carrying the value the row holds for it now) the row's `mode` as `--permission-mode`
   (`auto` when the row holds none), whoever set it, since a mode narrows nothing: a `plan` Claude entered after the user
   approved its `EnterPlanMode` card carries over. It passes `model` as `--model` and `effort` as `--effort` only once
@@ -336,8 +341,10 @@ interview on 2026-10-23; this file is the record of both.
   value: a pick Claude refused, one a clear or exit cut short before it resolved, or one a newer pick replaced is never
   passed. A model or effort Claude only reported is not passed, so a profile's own model (`opus[1m]`, `opusplan`, a
   pinned id), which the chip shows as its alias, is never narrowed to the alias. So a row resumed after its process
-  exits, or cleared, keeps its mode and the model and effort the user picked, and its chips show them from the start; a
-  restored row holds none until its process reports them, and passes no model or effort until the user picks one again.
+  exits, or cleared, keeps its mode and the model and effort the user picked, and its chips show them from the start.
+  A restored row, re-attached or resting, keeps them the same way: its record gives it the held controls and which of
+  them the user picked, a replay's report then replaces the values as a live report does, and its next start passes
+  them. A record with no controls opens with none and passes none, so its first start runs in `auto`.
   Every start also passes `AgentStart.instructions`, the text plugins registered through `addInstructions` in
   registration order, as one `--append-system-prompt` value joined with a blank line; no flag when none are
   registered. On a resume the Claude CLI sends the system prompt it recorded on the conversation's first request until

@@ -66,8 +66,8 @@ import {
 //   turn's `result`. An interrupt's final activity and `graceDeadline` agree
 //   either way; fallback mode's turn end can read working in a replay where live
 //   read idle, until the next `init`;
-// - what a replay leaves out: `messageDropped` and the refusal of a host request;
-//   `owedHostRequests` holds the requests no refusal answered.
+// - what a replay leaves out: the refusal of a host request; `owedHostRequests`
+//   holds the requests no refusal answered.
 
 // How long an interrupt waits for the turn to end before the session shows
 // idle.
@@ -86,8 +86,12 @@ export function appCommandUuid(uuid: string): string {
 // A sent message's user entry and the skill it starts (null for none), held
 // until the CLI takes the message in.
 export interface HeldMessage {
-  draft: EntryDraft;
+  draft: Extract<EntryDraft, { kind: 'user' }>;
   skill: TypedSkill | null;
+}
+
+export function heldUserMessage({ draft }: HeldMessage): UserMessage {
+  return { text: draft.text, images: draft.images };
 }
 
 export type PendingRequest =
@@ -132,7 +136,7 @@ export type FoldEffect =
   | { kind: 'activity'; activity: ProcessActivity }
   | { kind: 'commands'; commands: string[] }
   | { kind: 'planUsage'; update: PlanRowUpdate }
-  | { kind: 'messageDropped'; entryId: string }
+  | { kind: 'messageDropped'; entryId: string; message: UserMessage }
   | { kind: 'requestContextUsage' }
   | { kind: 'refuseHostRequest'; requestId: string; subtype: string }
   | { kind: 'log'; text: string };
@@ -419,7 +423,11 @@ function releaseHeldMessage(
     pushUserMessage(state, held, at, effects);
   } else if (TERMINAL_STATES.has(lifecycle.state)) {
     state.heldMessages.delete(lifecycle.uuid);
-    effects.push({ kind: 'messageDropped', entryId: held.draft.id });
+    effects.push({
+      kind: 'messageDropped',
+      entryId: held.draft.id,
+      message: heldUserMessage(held),
+    });
   }
 }
 
@@ -704,7 +712,7 @@ export function replayPipeLog(
   ];
   const emittedIds = new Set<string>();
   for (const effect of folded) {
-    if (effect.kind === 'agentEvent') {
+    if (effect.kind === 'agentEvent' || effect.kind === 'messageDropped') {
       replayed.push(effect);
     } else if (effect.kind === 'entry' && !emittedIds.has(effect.entry.id)) {
       emittedIds.add(effect.entry.id);

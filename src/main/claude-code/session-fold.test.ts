@@ -509,7 +509,6 @@ describe('session-fold', () => {
       'requestContextUsage',
       'refuseHostRequest',
       'log',
-      'messageDropped',
     ]) {
       expect(kinds).not.toContain(dropped);
     }
@@ -569,6 +568,32 @@ describe('session-fold', () => {
       expect(state.graceDeadline).toBe(graceDeadline);
     },
   );
+
+  it('replayPipeLog_DroppedMessage_ReportsItsTextAndImages', () => {
+    const image = { mediaType: 'image/png', data: 'aGk=' };
+    const log = [
+      inLine(userMessage({ text: 'hi', images: [image] }, 'u1'), 500),
+      outLine(lifecycleInit, 600),
+      outLine(lifecycle('u1', 'cancelled'), 700),
+    ];
+
+    const effects = replayPipeLog(
+      createSessionFoldState(request),
+      log,
+      800,
+      null,
+    );
+
+    expect(
+      effects.filter((effect) => effect.kind === 'messageDropped'),
+    ).toEqual([
+      {
+        kind: 'messageDropped',
+        entryId: 'user-1',
+        message: { text: 'hi', images: [image] },
+      },
+    ]);
+  });
 
   it('replayPipeLog_EmptyLog_StartsAtNow', () => {
     const effects = replayPipeLog(

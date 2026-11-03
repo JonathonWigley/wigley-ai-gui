@@ -289,7 +289,7 @@ interface HeldSession {
   // Processes started in this row, the one running included.
   processStarts: number;
   // Ids of the controls whose pick in this row a report confirmed; a start
-  // passes their held values and no other model or effort.
+  // passes their held values and no other model or effort. Saved with the row.
   userSetControls: Set<string>;
   // Control id → the value the user picked that the running process has not
   // reported yet.
@@ -305,6 +305,9 @@ interface HeldSession {
   // an attach passes again: no pipe line reports them.
   launchControls: Record<string, string>;
   launchResume: boolean;
+  // Entry ids of the messages the row's last process start dropped that went
+  // back to the page: a re-attach replays those drops.
+  returnedDrops: Set<string>;
   // The `before` of the pending history read: the attached process's start;
   // null when the row replayed nothing.
   historyBefore: number | null;
@@ -463,6 +466,9 @@ function savedSessionOf(
     queued: session.state.queued.filter(isUnsent).map(userMessageOf),
     launchControls: session.launchControls,
     launchResume: session.launchResume,
+    controls: session.state.controls,
+    userSetControls: [...session.userSetControls],
+    returnedDrops: [...session.returnedDrops],
   };
 }
 
@@ -798,28 +804,33 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     }
   }
 
-  // The agent dropped the message written under `entryId` without taking it
-  // in: its sent row leaves the queue, and the message goes back to the page.
-  function returnDropped(session: HeldSession, entryId: string) {
-    const { sessionId } = session.state;
-    const row = session.state.queued.find(
-      (queued) => queued.sentEntryId === entryId,
-    );
-    const written = session.writtenMessages.get(entryId);
-    if (row !== undefined) {
-      session.state.queued = session.state.queued.filter(
-        (queued) => queued !== row,
-      );
-      sendQueued(session);
-      send('returned', { sessionId, messages: [userMessageOf(row)] });
-    } else if (written !== undefined) {
-      session.writtenMessages.delete(entryId);
-      send('returned', { sessionId, messages: [written.message] });
-    } else {
-      log('chat', `dropped message ${entryId} not held`);
+  // The agent dropped `message`, written under `entryId`, without taking it in:
+  // its sent row leaves the queue, and it goes back to the page once per process.
+  // A message written before a relaunch has no row and no written record here.
+  function returnDropped(
+    session: HeldSession,
+    entryId: string,
+    message: UserMessage,
+  ) {
+    if (session.returnedDrops.has(entryId)) {
+      log('chat', `dropped message ${entryId} already returned`);
       return;
     }
+    session.returnedDrops.add(entryId);
+    session.writtenMessages.delete(entryId);
+    const { queued } = session.state;
+    if (queued.some((row) => row.sentEntryId === entryId)) {
+      session.state.queued = queued.filter(
+        (row) => row.sentEntryId !== entryId,
+      );
+      sendQueued(session);
+    }
+    send('returned', {
+      sessionId: session.state.sessionId,
+      messages: [message],
+    });
     log('chat', `sent message ${entryId} returned: never taken in`);
+    save();
   }
 
   // The state is dropped first, so every later event for the session is
@@ -885,6 +896,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           session.state.controls = controls;
           confirmPicks(controls, session.pendingPicks, session.userSetControls);
           send('controls', { sessionId, controls });
+          save();
         }
       },
       activity(activity) {
@@ -943,9 +955,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         }
       },
       // Returns a written message the agent let go without taking it in.
-      messageDropped(entryId) {
-        if (isLive(session, processStart) && !replay.isReplaying) {
-          returnDropped(session, entryId);
+      messageDropped(entryId, message) {
+        if (isLive(session, processStart)) {
+          returnDropped(session, entryId, message);
         }
       },
       ended({ code, error }) {
@@ -1015,6 +1027,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       processId: string | null;
       launchControls: Record<string, string>;
       launchResume: boolean;
+      controls: SessionControl[];
+      userSetControls: readonly string[];
+      returnedDrops: readonly string[];
     },
     options: OpenOptions,
   ): HeldSession {
@@ -1041,7 +1056,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         projectDir,
         profile: profileName,
         entries: opening.entries,
-        controls: [],
+        controls: opening.controls,
         activity: 'idle',
         background: 0,
         commands: [],
@@ -1066,13 +1081,14 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       rowOrders: new WeakMap(),
       writtenMessages: new Map(),
       processStarts: 0,
-      userSetControls: new Set(),
+      userSetControls: new Set(opening.userSetControls),
       pendingPicks: new Map(),
       exit: null,
       branchReads: 0,
       processId: opening.processId,
       launchControls: opening.launchControls,
       launchResume: opening.launchResume,
+      returnedDrops: new Set(opening.returnedDrops),
       historyBefore: null,
       attaching: null,
       isStopRequested: false,
@@ -1193,6 +1209,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       session.userSetControls,
     );
     session.launchResume = resume;
+    session.returnedDrops.clear();
     const process = harness.start(
       {
         processId: session.processId,
@@ -1492,6 +1509,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         processId: null,
         launchControls: {},
         launchResume: false,
+        controls: [],
+        userSetControls: [],
+        returnedDrops: [],
       },
       options,
     );
@@ -1540,6 +1560,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         processId: opening.hosted.id,
         launchControls: {},
         launchResume: true,
+        controls: [],
+        userSetControls: [],
+        returnedDrops: [],
       },
       { select: true },
     );
@@ -1844,6 +1867,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           processId: record.processId,
           launchControls: record.launchControls,
           launchResume: record.launchResume,
+          controls: record.controls,
+          userSetControls: record.userSetControls,
+          returnedDrops: record.returnedDrops,
         },
         { select: false },
       );

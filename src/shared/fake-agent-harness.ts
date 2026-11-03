@@ -435,8 +435,8 @@ function untilDetached(record: FakeAgentProcessRecord): AgentProcessEvents {
     commands: (names) => whileAttached(() => events.commands(names)),
     planUsage: (update) => whileAttached(() => events.planUsage(update)),
     agentEvent: (event) => whileAttached(() => events.agentEvent(event)),
-    messageDropped: (entryId) =>
-      whileAttached(() => events.messageDropped(entryId)),
+    messageDropped: (entryId, message) =>
+      whileAttached(() => events.messageDropped(entryId, message)),
     ended: (end) => whileAttached(() => events.ended(end)),
   };
 }

@@ -176,7 +176,8 @@ function recordingEvents() {
       agentEvents.push(event);
       timeline.push(['agentEvent', event]);
     },
-    messageDropped: (entryId) => hear('messageDropped', entryId),
+    messageDropped: (entryId, message) =>
+      hear('messageDropped', { entryId, message }),
     ended: (end) => hear('ended', end),
   };
   return { heard, agentEvents, timeline, events };
@@ -493,7 +494,10 @@ describe('createClaudeCodeHarness', () => {
       ],
       atWrite: [],
       expected: [
-        ['messageDropped', 'user-1'],
+        [
+          'messageDropped',
+          { entryId: 'user-1', message: { text: 'hi', images: [] } },
+        ],
         ['activity', 'idle'],
       ],
     })),
@@ -2798,6 +2802,84 @@ describe('createClaudeCodeHarness on the session host', () => {
       ),
     ).toHaveLength(1);
   });
+
+  it.each([
+    {
+      case: 'taken in while away',
+      logged: [lifecycle('uuid-1', 'started')],
+      live: [],
+      closes: true,
+      drops: 0,
+    },
+    {
+      case: 'dropped while away',
+      logged: [lifecycle('uuid-1', 'cancelled')],
+      live: [],
+      closes: true,
+      drops: 1,
+    },
+    {
+      case: 'dropped once live',
+      logged: [],
+      live: [lifecycle('uuid-1', 'cancelled')],
+      closes: true,
+      drops: 1,
+    },
+    {
+      case: 'still held when the process closes',
+      logged: [],
+      live: [],
+      closes: true,
+      drops: 1,
+    },
+    {
+      case: 'still held, process running',
+      logged: [],
+      live: [],
+      closes: false,
+      drops: 0,
+    },
+  ])(
+    'attach_MessageWrittenBeforeIt_ReportedOnceIfDropped ($case)',
+    async ({ logged, live, closes, drops }) => {
+      const host = createFakeSessionHost(clock);
+      host.addRunning(
+        running(
+          logOf([
+            {
+              dir: 'in',
+              line: userMessage({ text: 'hi', images: [] }, 'uuid-1'),
+            },
+            { dir: 'out', line: lifecycleInit },
+            ...logged.map((line) => ({ dir: 'out' as const, line })),
+          ]),
+        ),
+      );
+      const { timeline, events } = recordingEvents();
+
+      await hostHarness(host, clock).attach(request, events);
+      for (const line of live) {
+        host.output('p-1', 'out', asText(line));
+      }
+      if (closes) {
+        host.close('p-1', { code: 0, signal: null, error: null });
+      }
+      await settle();
+
+      const names = timeline.map(([name]) => name);
+      expect(timeline.filter(([name]) => name === 'messageDropped')).toEqual(
+        Array.from({ length: drops }, () => [
+          'messageDropped',
+          { entryId: 'user-1', message: { text: 'hi', images: [] } },
+        ]),
+      );
+      if (drops === 1) {
+        expect(names.indexOf('messageDropped')).toBeLessThan(
+          closes ? names.indexOf('ended') : names.length,
+        );
+      }
+    },
+  );
 
   it('attach_ClosedDuringAttach_EndsAfterTheReplay', async () => {
     const host = createFakeSessionHost(clock);

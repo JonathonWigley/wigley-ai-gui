@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   type AgentEvent,
+  type AgentProcessEvents,
   type ChatEntry,
   MAIN_AGENT_ID,
   type ProcessActivity,
@@ -121,6 +122,9 @@ function record(
     launchControls: {},
     launchResume: false,
     queued: [],
+    controls: [],
+    userSetControls: [],
+    returnedDrops: [],
     ...fields,
   };
 }
@@ -1760,6 +1764,7 @@ describe('createChatSessions', () => {
         test.chat.sendNow(ROW_ID, 'queued-2');
         return {
           entryId: sentEntryIdOf(test, 1),
+          message: second,
           sends: [
             {
               message: 'queued',
@@ -1784,6 +1789,7 @@ describe('createChatSessions', () => {
         test.chat.send(ROW_ID, message);
         return {
           entryId: 'user-1',
+          message,
           sends: [
             {
               message: 'returned',
@@ -1795,19 +1801,28 @@ describe('createChatSessions', () => {
       },
     },
     {
-      case: 'an id chat holds nothing for',
-      arrange: () => ({
-        entryId: 'user-9',
-        sends: [],
-        log: '[chat] dropped message user-9 not held',
-      }),
+      case: 'one written before a relaunch, which chat holds nothing for',
+      arrange: () => {
+        const message: UserMessage = { text: 'before the quit', images: [] };
+        return {
+          entryId: 'user-9',
+          message,
+          sends: [
+            {
+              message: 'returned',
+              data: { sessionId: ROW_ID, messages: [message] },
+            },
+          ],
+          log: '[chat] sent message user-9 returned: never taken in',
+        };
+      },
     },
-  ])('messageDropped_ReturnsWhatChatHolds: $case', async (row) => {
+  ])('messageDropped_ReturnsTheMessage: $case', async (row) => {
     const test = await started();
-    const { entryId, sends, log } = row.arrange(test);
+    const { entryId, message, sends, log } = row.arrange(test);
     const sentBefore = test.messages.length;
 
-    test.process.events.messageDropped(entryId);
+    test.process.events.messageDropped(entryId, message);
 
     expect(test.messages.slice(sentBefore)).toEqual(sends);
     expect(test.logged).toContain(log);
@@ -2637,6 +2652,9 @@ describe('createChatSessions saved sessions', () => {
         queued: [],
         launchControls: {},
         launchResume: false,
+        controls: test.chat.sessions()[0].controls,
+        userSetControls: [],
+        returnedDrops: [],
       },
     ]);
   });
@@ -3405,6 +3423,9 @@ describe('createChatSessions clear', () => {
           queued: [],
           launchControls: { mode: 'auto', model: 'fake-large' },
           launchResume: false,
+          controls: test.chat.sessions()[0].controls,
+          userSetControls: ['model'],
+          returnedDrops: [],
         },
       ],
       selectedHostSessionId: 'uuid-2',
@@ -3510,7 +3531,7 @@ describe('createChatSessions clear', () => {
       if (event === 'entry') {
         old.events.entry(userEntry('user-1', 'stale'));
       } else {
-        old.events.messageDropped('user-1');
+        old.events.messageDropped('user-1', { text: 'stale', images: [] });
       }
       fresh.events.ended({ code: 0, error: null });
 
@@ -3940,6 +3961,106 @@ describe('createChatSessions restoring hosted processes', () => {
     },
   );
 
+  const heldControl = (id: string, value: string | null): SessionControl => ({
+    id,
+    label: id,
+    choices: [],
+    value,
+  });
+  const HELD_CONTROLS = [
+    heldControl('mode', 'plan'),
+    heldControl('model', 'opus'),
+    heldControl('effort', 'high'),
+  ];
+  const HELD_RECORD = {
+    processId: 'p1',
+    controls: HELD_CONTROLS,
+    userSetControls: ['model', 'effort'],
+  };
+
+  it.each([
+    {
+      given: 'a re-attached row whose process ends',
+      fields: HELD_RECORD,
+      hosted: [hostedP1()],
+      replayed: [
+        heldControl('mode', 'default'),
+        heldControl('model', 'opus'),
+        heldControl('effort', 'high'),
+      ],
+      shown: HELD_CONTROLS,
+      passed: { mode: 'default', model: 'opus', effort: 'high' },
+    },
+    {
+      given: 'a resting row',
+      fields: HELD_RECORD,
+      hosted: [],
+      replayed: null,
+      shown: HELD_CONTROLS,
+      passed: { mode: 'plan', model: 'opus', effort: 'high' },
+    },
+    {
+      given: 'a row whose picks are only reports',
+      fields: { ...HELD_RECORD, userSetControls: [] },
+      hosted: [],
+      replayed: null,
+      shown: HELD_CONTROLS,
+      passed: { mode: 'plan' },
+    },
+    {
+      given: 'a saved file without controls',
+      fields: { processId: 'p1' },
+      hosted: [],
+      replayed: null,
+      shown: [],
+      passed: {},
+    },
+  ])(
+    'restore_HeldControls_ShownAndPassedAtTheNextStart given $given',
+    async ({ fields, hosted, replayed, shown, passed }) => {
+      const test = setUp();
+      test.harness.scriptAttach('p1', {
+        outcome: 'process',
+        turns: 0,
+        replay: (events) => {
+          expect(test.chat.sessions()[0].controls).toEqual(shown);
+          events.controls(replayed ?? []);
+        },
+      });
+
+      restoreOne(test, hostedRecord(fields), hosted);
+      expect(test.chat.sessions()[0].controls).toEqual(shown);
+      expect(test.saved.last()?.sessions[0].userSetControls).toEqual(
+        hostedRecord(fields).userSetControls,
+      );
+      await flush();
+      attachedOf(test)[0]?.events.ended({ code: 0, error: null });
+      await test.chat.send(ROW_ID, { text: 'next', images: [] });
+      await flush();
+
+      expect(startsOf(test).at(-1)?.request.controls).toEqual(passed);
+    },
+  );
+
+  it('controls_ConfirmedPick_SavedWithTheRow', async () => {
+    const test = setUp();
+    test.chat.restore(NOTHING_SAVED, []);
+    test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+    await flush();
+    const controls = [
+      heldControl('mode', 'auto'),
+      heldControl('model', 'fake-large'),
+    ];
+
+    test.chat.setControl(ROW_ID, 'model', 'fake-large');
+    test.harness.processes[0].events.controls(controls);
+
+    expect(test.saved.last()?.sessions[0]).toMatchObject({
+      controls,
+      userSetControls: ['model'],
+    });
+  });
+
   it.each([
     { queued: [{ text: 'a', images: [] }], kept: true },
     { queued: [], kept: false },
@@ -4163,6 +4284,80 @@ describe('createChatSessions attaching', () => {
       expect(test.uuidCalls()).toBe(0);
     },
   );
+
+  const WRITTEN_BEFORE_QUIT: UserMessage = { text: 'dropped', images: [] };
+
+  it.each([
+    {
+      given: 'a drop in the replay',
+      returnedDrops: [],
+      inReplay: 1,
+      live: 0,
+      returned: 1,
+    },
+    {
+      given: 'a drop once live',
+      returnedDrops: [],
+      inReplay: 0,
+      live: 1,
+      returned: 1,
+    },
+    {
+      given: 'a repeat of the drop',
+      returnedDrops: [],
+      inReplay: 1,
+      live: 1,
+      returned: 1,
+    },
+    {
+      given: 'a drop an earlier run returned',
+      returnedDrops: ['user-1'],
+      inReplay: 1,
+      live: 0,
+      returned: 0,
+    },
+  ])(
+    'attach_DroppedMessage_ComesBackOnce given $given',
+    async ({ returnedDrops, inReplay, live, returned }) => {
+      const test = setUp();
+      const dropTimes = (events: AgentProcessEvents, times: number) => {
+        for (let drop = 0; drop < times; drop += 1) {
+          events.messageDropped('user-1', WRITTEN_BEFORE_QUIT);
+        }
+      };
+      test.harness.scriptAttach('p1', {
+        outcome: 'process',
+        turns: 0,
+        replay: (events) => dropTimes(events, inReplay),
+      });
+
+      restoreOne(test, hostedRecord({ returnedDrops }), [hostedP1()]);
+      await flush();
+      dropTimes(attachedOf(test)[0].events, live);
+
+      expect(test.sent('returned')).toEqual(
+        Array.from({ length: returned }, () => ({
+          sessionId: ROW_ID,
+          messages: [WRITTEN_BEFORE_QUIT],
+        })),
+      );
+      expect(test.saved.last()?.sessions[0].returnedDrops).toEqual(['user-1']);
+    },
+  );
+
+  it('startProcess_NewProcess_ForgetsTheOldProcessesDrops', async () => {
+    const test = setUp();
+    const message: UserMessage = { text: 'second process', images: [] };
+
+    restoreOne(test, record('host-a', { returnedDrops: ['user-1'] }), []);
+    await test.chat.send(ROW_ID, { text: 'starts it', images: [] });
+    await flush();
+    test.harness.processes[0].events.messageDropped('user-1', message);
+
+    expect(test.sent('returned')).toEqual([
+      { sessionId: ROW_ID, messages: [message] },
+    ]);
+  });
 
   it('attach_ReplayedEvents_FlaggedNoAlertNoPlanUsage', async () => {
     const test = setUp();

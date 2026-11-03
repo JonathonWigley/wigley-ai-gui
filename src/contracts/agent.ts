@@ -298,9 +298,11 @@ export interface AgentProcessEvents {
   // Plan rows the session saw between polls.
   planUsage(update: PlanRowUpdate): void;
   agentEvent(event: AgentEvent): void;
-  // The agent let the message `send` returned `entryId` for go without taking
-  // it in; no entry with that id follows.
-  messageDropped(entryId: string): void;
+  // The agent let `message`, which `send` returned `entryId` for, go without
+  // taking it in; no entry with that id follows. An attach's replay fires it for
+  // every such message in the process's log, including one the caller heard
+  // before the attach.
+  messageDropped(entryId: string, message: UserMessage): void;
   ended(end: { code: number | null; error: string | null }): void;
 }
 
@@ -317,7 +319,8 @@ export interface AgentProcess {
   // agent decides when its turn takes it in. `messageDropped` names an id
   // whose entry will never come, and also arrives only after `send` returns.
   // A message whose entry has not come when `ended` fires gets neither: the
-  // process's end lets it go.
+  // process's end lets it go. One written before an `attach`, which the caller
+  // never passed to this process's `send`, gets `messageDropped` before `ended`.
   send(message: UserMessage): string;
   interrupt(): void;
   setControl(id: string, value: string): void;

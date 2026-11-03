@@ -53,6 +53,7 @@ import {
   type FoldStep,
   foldPipeLine,
   foldUsageInput,
+  heldUserMessage,
   replayPipeLog,
   type SessionFoldState,
 } from './session-fold';
@@ -190,7 +191,7 @@ function reportEffect(events: AgentProcessEvents, effect: FoldEffect) {
       events.planUsage(effect.update);
       break;
     case 'messageDropped':
-      events.messageDropped(effect.entryId);
+      events.messageDropped(effect.entryId, effect.message);
       break;
     case 'requestContextUsage':
     case 'refuseHostRequest':
@@ -226,8 +227,10 @@ interface ClaudeSession {
 // sent message's user entry waits for its `started` line, or for the init that
 // fixes fallback mode; a message ended before it started is reported through
 // `messageDropped`, and one still held when the process closes is dropped
-// silently. Once the process has closed or detached, nothing more is emitted or
-// written; a detached process keeps running on the host. The caller delivers
+// silently, unless a replay left it held: the caller never wrote that one, so it
+// gets `messageDropped` before `ended`. Once the process has closed or detached,
+// nothing more is emitted or written; a detached process keeps running on the
+// host. The caller delivers
 // `pipe`'s events to `pipeEvents`.
 function createClaudeSession(
   deps: ClaudeCodeHarnessDeps,
@@ -236,6 +239,7 @@ function createClaudeSession(
   state: SessionFoldState,
   pipe: HostedProcess,
 ): ClaudeSession {
+  const heldByReplay = new Set(state.heldMessages.keys());
   let isEndCalled = false;
   let hasClosed = false;
   let isDetached = false;
@@ -417,6 +421,13 @@ function createClaudeSession(
       if (state.activity === 'working') {
         state.activity = 'idle';
         emitActivity('idle');
+      }
+      for (const [uuid, held] of state.heldMessages) {
+        if (heldByReplay.has(uuid)) {
+          emit(() =>
+            events.messageDropped(held.draft.id, heldUserMessage(held)),
+          );
+        }
       }
       const isCleanExit = exit.code === 0 || isEndCalled;
       const exitFailure = isCleanExit
