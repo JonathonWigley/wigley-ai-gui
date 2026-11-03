@@ -345,18 +345,12 @@
   padding: 0 var(--wg-space-1);
 }
 
+/* The strip is the scrolling Tabs variant, so in a narrow bar it shrinks
+   and scrolls its tabs rather than clip their icons. */
 .ui-tabs.session-tabs {
   flex: 0 1 auto;
   min-width: 0;
   margin: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-/* A tab keeps its full width, so a narrow strip scrolls instead of clipping
-   its icons. */
-.session-tabs .ui-tab {
-  flex: none;
 }
 
 /* A tab draws its icon alone: `fg-secondary` at rest, `fg` on hover or

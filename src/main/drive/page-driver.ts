@@ -246,6 +246,7 @@ const CORE_SCROLLS_ITSELF = ['.title-bar-context'];
 export const PRIMITIVE_CLIPPING_SELECTORS: readonly string[] = [
   '.ui-row-label',
   '.ui-row-detail',
+  '.ui-tabs--scroll',
   '.ui-tab-label',
   '.ui-collapsible-summary',
   '.ui-h-scroller-track',
