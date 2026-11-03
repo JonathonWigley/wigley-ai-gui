@@ -236,7 +236,7 @@ export function visualHashOf(url: string): string | null;
 ### Wave 1
 - [ ] [Fence registry and markdown mount](01-fence-registry-and-mount.md)
 - [x] [Visual scheme, guard and Bridge call](02-visual-scheme.md)
-- [ ] [Session instructions through the harness](03-session-instructions.md)
+- [x] [Session instructions through the harness](03-session-instructions.md)
 
 ### Wave 2
 - [ ] [Visual frames service](04-visual-frames.md) — after 02
@@ -262,8 +262,10 @@ Review base: d7578311fe99437ccefe407289916bbcfa049eb8
 
 ### Groups
 - 02 · a224d7a · diff read: every Produces present; typecheck + lint clean; 21 tests pass filtered · concerns: the guard refuses a subframe on about:blank or srcdoc, so 04 sets the iframe src only once serveVisual resolves (live check in 09)
+- 03 · da9a67f · diff read: every Produces present, no --append-system-prompt outside src/main/claude-code; typecheck clean for its files; 262 tests pass filtered · concerns: none
 ### Contract changes
 ### Rulings
 - the served body is doctype, script, source with no trailing newline in the bootstrap — matches the pinned order — whitespace only if wrong · group 02 · group 02
+- registrations held in a Set of {text} objects rather than an array — insertion order kept, identity delete makes a second dispose a no-op, matches drop-targets addTarget — none if wrong · group 03 · group 03
 ### Review rounds
 ### Test gate

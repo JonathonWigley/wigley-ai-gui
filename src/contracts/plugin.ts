@@ -27,6 +27,7 @@ import type { ProcessRunner } from './processes';
 import type { TokenDecl } from './theme';
 import type { UiState } from './ui-state';
 import type { UserConfig } from './user-config';
+import type { VisualFrames } from './visual-frames';
 
 export type ProcessName = 'page' | 'main';
 
@@ -395,6 +396,8 @@ export interface PageServices {
   editor: EditorHost;
   markdown: MarkdownRenderer;
   markup: MarkupEditor;
+  // Opens a visual's html in a sandboxed frame (`src/contracts/visual-frames.ts`).
+  visualFrames: VisualFrames;
   toast(text: string, tone: ToastTone): void;
   log: Log;
   timers: Timers;

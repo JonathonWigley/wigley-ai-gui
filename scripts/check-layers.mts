@@ -882,6 +882,10 @@ const LAYERS: Record<string, LayerRule> = {
     layers: ['src/contracts', 'src/shared'],
     packages: ['fabric'],
   },
+  'src/renderer/visual-frames': {
+    layers: ['src/contracts', 'src/shared', 'src/shared/page'],
+    packages: [],
+  },
   'src/renderer/renderer.ts': {
     layers: [
       'src/contracts',
@@ -891,6 +895,7 @@ const LAYERS: Record<string, LayerRule> = {
       'src/renderer/codemirror-vim',
       'src/renderer/markdown-it',
       'src/renderer/fabric',
+      'src/renderer/visual-frames',
       'src/plugins/page.ts',
       'src/plugins/manifests.ts',
       'src/shared/page/ui',

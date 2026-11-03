@@ -1,6 +1,6 @@
 # 03 — Session instructions through the harness
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -104,4 +104,4 @@ Commit:    one commit for the group
 
 ## Proof
 
-<empty — wigley:make writes it>
+Commit da9a67f · proof: diff read: every Produces present, no --append-system-prompt outside src/main/claude-code; typecheck clean for its files; 262 tests pass filtered · concerns: none

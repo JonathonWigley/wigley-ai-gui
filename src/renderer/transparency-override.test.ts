@@ -104,7 +104,7 @@ describe('overrideTransparency', () => {
       matches: boolean;
     };
     const { applier, transparency } = overrideTransparency(
-      createThemeApplier(root, query),
+      createThemeApplier(root, query, () => {}),
     );
     applier.apply(theme, { transparency: 'system', fonts });
     transparency.override('full');

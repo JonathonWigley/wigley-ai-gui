@@ -55,6 +55,7 @@ import { createThemeApplier } from './theme';
 import { createToasts } from './toasts';
 import { overrideTransparency } from './transparency-override';
 import { createPageUiState } from './ui-state';
+import { createVisualFrames } from './visual-frames/visual-frames';
 
 // The scope page keys fire in until a plugin sets one: only `any` binds match.
 const INITIAL_SCOPE = 'any';
@@ -101,10 +102,17 @@ async function start() {
   );
   const live = createLiveConfig(config, log);
   const { settings, keymap } = config;
+  const visualFrames = createVisualFrames({
+    serveVisual: (source) => bridge.serveVisual(source),
+    messages: window,
+    focusPage: () => window.focus(),
+    log,
+  });
   const { applier: themeApplier, transparency } = overrideTransparency(
     createThemeApplier(
       document.documentElement,
       window.matchMedia('(prefers-reduced-transparency: reduce)'),
+      (applied) => visualFrames.themeApplied(applied),
     ),
   );
   themeApplier.apply(config.theme, settings);
@@ -207,6 +215,7 @@ async function start() {
     editor,
     markdown,
     markup: createFabricMarkupEditor(),
+    visualFrames,
     toast: (text, tone) => toasts.show(text, tone),
     log,
     timers,
