@@ -72,13 +72,16 @@ export function shownBoxes(state: PrimerState): PrimerBox[] {
 }
 
 // The boxes primer `primerId`'s view draws, focused or not: its boxes in the
-// view its session's pane draws it in.
+// view its session's pane draws it in; none for the active primer under the
+// cancel prompt.
 export function primerViewBoxes(
   state: PrimerState,
   primerId: string,
 ): PrimerBox[] {
   const primer = formById(state, primerId);
-  return primer === undefined
+  const isUnderPrompt =
+    state.view === 'confirm' && state.activeFormId === primerId;
+  return primer === undefined || isUnderPrompt
     ? []
     : boxesInView(primer, sessionPaneView(state, primer.sessionId, 'primer'));
 }

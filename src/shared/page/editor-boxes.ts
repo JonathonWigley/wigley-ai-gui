@@ -11,8 +11,8 @@ import type {
 } from '../../contracts/editor';
 import type { Log } from '../../contracts/log';
 import type { ToastTone } from '../../contracts/plugin';
-import { errorText } from '../error-text';
 import { insertionText } from './file-drop/file-chips';
+import { pathOf } from './file-drop/file-path';
 
 // How the boxes of one kind of form are told apart.
 export interface BoxIdentity<Box> {
@@ -297,9 +297,14 @@ async function takeFiles(
     log(`${String(files.length)} files dropped where no box takes them`);
     return;
   }
+  const saveFailed = (file: DroppedFile, error: string) => {
+    const message = `${file.name} not saved: ${error}`;
+    deps.toast(message, 'error');
+    log(message);
+  };
   const paths: string[] = [];
   for (const file of files) {
-    const path = await pathOf(file, deps, log);
+    const path = await pathOf(file, deps.savePasted, saveFailed);
     if (path !== null) {
       paths.push(path);
     }
@@ -313,23 +318,4 @@ async function takeFiles(
     return;
   }
   editor.insert(insertionText(paths, editor.charBeforeCursor()));
-}
-
-// The file's path, saving a file with none first; null when the save fails.
-async function pathOf(
-  file: DroppedFile,
-  deps: BoxDropDeps,
-  log: (message: string) => void,
-): Promise<string | null> {
-  if (file.path !== '') {
-    return file.path;
-  }
-  try {
-    return await deps.savePasted(file);
-  } catch (error) {
-    const message = `${file.name} not saved: ${errorText(error)}`;
-    deps.toast(message, 'error');
-    log(message);
-    return null;
-  }
 }

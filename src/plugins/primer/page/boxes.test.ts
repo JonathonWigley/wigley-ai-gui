@@ -84,6 +84,11 @@ describe('primer boxes', () => {
       action: { type: 'openReview' },
       keys: [],
     },
+    {
+      name: 'the focused primer under the cancel prompt',
+      action: { type: 'askClose', sessionId: 'p1-session' },
+      keys: [],
+    },
   ])('draws the boxes of $name', ({ action, keys }) => {
     const onItem = apply(apply(setup(), { type: 'nextRow' }), {
       type: 'selectItem',

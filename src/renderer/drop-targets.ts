@@ -6,8 +6,8 @@ import {
   type PageDrops,
 } from '../contracts/drops';
 import type { ToastTone } from '../contracts/plugin';
-import { errorText } from '../shared/error-text';
 import { insertionText } from '../shared/page/file-drop/file-chips';
+import { pathOf } from '../shared/page/file-drop/file-path';
 import { filesOf, holdsPastedText } from '../shared/page/file-drop/pasted-text';
 
 // `isShown` tells whether a target's element is on screen, for a paste that
@@ -63,13 +63,14 @@ export function createDropTargets(deps: DropTargetsDeps): PageDrops {
     files: readonly DroppedFile[],
   ): Promise<void> => {
     const paths: string[] = [];
-    try {
-      for (const file of files) {
-        paths.push(file.path === '' ? await savePasted(file) : file.path);
+    const saveFailed = (_file: DroppedFile, error: string) =>
+      deps.toast(`Pasted file not saved: ${error}`, 'error');
+    for (const file of files) {
+      const path = await pathOf(file, savePasted, saveFailed);
+      if (path === null) {
+        return;
       }
-    } catch (error) {
-      deps.toast(`Pasted file not saved: ${errorText(error)}`, 'error');
-      return;
+      paths.push(path);
     }
     if (!input.isConnected) {
       return;

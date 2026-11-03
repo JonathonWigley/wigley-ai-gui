@@ -412,23 +412,34 @@ describe('boxDropTake', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
 
+  // `editors` answers `editorFor` in turn, its last answer from then on:
+  // true for the box's editor, false for none.
   it.each<{
     name: string;
-    hasEditor: boolean;
+    editors: boolean[];
     files: DroppedFile[];
     inserts: string[];
     toasts: [string, string][];
+    logs?: string[];
   }>([
     {
       name: 'no editor',
-      hasEditor: false,
-      files: [droppedFile('a.md', '/d/a.md')],
+      editors: [false],
+      files: [droppedFile('image.png', '')],
       inserts: [],
       toasts: [[NOTHING_TAKES_FILES, 'info']],
     },
     {
+      name: 'an editor gone once the saves land',
+      editors: [true, false],
+      files: [droppedFile('image.png', ''), droppedFile('a.md', '/d/a.md')],
+      inserts: [],
+      toasts: [],
+      logs: [`no box left for the dropped files: ${SAVED} /d/a.md`],
+    },
+    {
       name: 'two files on disk',
-      hasEditor: true,
+      editors: [true],
       files: [
         droppedFile('a.md', '/d/a.md'),
         droppedFile('My File.mp4', '/d/My File.mp4'),
@@ -438,33 +449,40 @@ describe('boxDropTake', () => {
     },
     {
       name: 'a pasted file',
-      hasEditor: true,
+      editors: [true],
       files: [droppedFile('image.png', '')],
       inserts: [insertionText([SAVED], 'x')],
       toasts: [],
     },
     {
       name: 'a failed save beside a file on disk',
-      hasEditor: true,
+      editors: [true],
       files: [droppedFile('bad.png', ''), droppedFile('a.md', '/d/a.md')],
       inserts: [insertionText(['/d/a.md'], 'x')],
       toasts: [['bad.png not saved: disk full', 'error']],
     },
     {
       name: 'a failed save alone',
-      hasEditor: true,
+      editors: [true],
       files: [droppedFile('bad.png', '')],
       inserts: [],
       toasts: [['bad.png not saved: disk full', 'error']],
     },
   ])(
     'boxDropTake_TakesFilesIntoTheBox: $name',
-    async ({ hasEditor, files, inserts, toasts }) => {
+    async ({ editors, files, inserts, toasts, logs }) => {
       const { created } = setup();
       const editor = created[0].editor;
       const saved: string[] = [];
       const shownToasts: [string, string][] = [];
-      const take = boxDropTake(() => (hasEditor ? editor : null), {
+      const logged: string[] = [];
+      let calls = 0;
+      const editorFor = () => {
+        const hasEditor = editors[Math.min(calls, editors.length - 1)];
+        calls++;
+        return hasEditor ? editor : null;
+      };
+      const take = boxDropTake(editorFor, {
         savePasted: async (file) => {
           saved.push(file.name);
           if (file.name === 'bad.png') {
@@ -473,7 +491,7 @@ describe('boxDropTake', () => {
           return SAVED;
         },
         toast: (text, tone) => shownToasts.push([text, tone]),
-        log: () => undefined,
+        log: (_source, message) => logged.push(message),
         logSource: 'test',
       });
 
@@ -482,8 +500,11 @@ describe('boxDropTake', () => {
 
       expect(editor.inserts).toEqual(inserts);
       expect(shownToasts).toEqual(toasts);
-      if (!hasEditor) {
+      if (!editors[0]) {
         expect(saved).toEqual([]);
+      }
+      if (logs !== undefined) {
+        expect(logged).toEqual(logs);
       }
     },
   );

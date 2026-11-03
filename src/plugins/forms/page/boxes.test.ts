@@ -135,6 +135,12 @@ describe('roundViewBoxes', () => {
       roundId: 'r2',
       boxes: [notesOn('r2', 2)],
     },
+    {
+      name: 'no box for the focused round under the cancel prompt',
+      actions: [onBeta, { type: 'askClose', sessionId: 'r1-session' }],
+      roundId: 'r1',
+      boxes: [],
+    },
   ])('draws $name', ({ actions, roundId, boxes }) => {
     expect(roundViewBoxes(twoRoundsAfter(...actions), roundId)).toEqual(boxes);
   });

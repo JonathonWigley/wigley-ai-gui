@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import type { ChatImage } from '../../../contracts/agent';
 import type { DroppedFile } from '../../../contracts/drops';
 import { insertionText } from '../../../shared/page/file-drop/file-chips';
-import type { ImageEncoder } from '../../../shared/page/file-drop/shrink-image';
+import {
+  type ImageEncoder,
+  SHRINK_REFUSED,
+} from '../../../shared/page/file-drop/shrink-image';
 import { MAX_IMAGE_BASE64, refusalOf } from '../image-rules';
 import {
   type ChatDropDeps,
@@ -199,7 +202,7 @@ describe('takeChatFiles', () => {
       mediaType: 'image/png',
       encoded: LARGEST_ACCEPTED_BYTES + 1,
       attached: [],
-      refused: ['Image could not be shrunk under 5 MB'],
+      refused: [SHRINK_REFUSED],
     },
   ])(
     'takeChatFiles_OverCap_ShrinksOrRefuses: $label',

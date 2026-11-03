@@ -15,8 +15,10 @@ import { saveState, startAutosave } from '../../../shared/page/autosave';
 import { element } from '../../../shared/page/dom';
 import type { KitCommands } from '../../../shared/page/layout-host/base-kit';
 import { insertionText } from '../../../shared/page/file-drop/file-chips';
+import { pathOf } from '../../../shared/page/file-drop/file-path';
 import {
   type ImageEncoder,
+  SHRINK_REFUSED,
   shrinkToFit,
 } from '../../../shared/page/file-drop/shrink-image';
 import { createListPicker } from '../../../shared/page/list-picker';
@@ -67,8 +69,6 @@ import {
 export type NotesPageCommand = CommandsRunIn<typeof notesManifest, 'page'>;
 
 type NotesScope = keyof typeof notesManifest.scopes & string;
-
-export const SHRINK_REFUSED = 'Image could not be shrunk under 5 MB';
 
 const FIELD_LABELS: Record<NoteField, string> = {
   target: 'Target',
@@ -1120,19 +1120,11 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
   };
 
   // ── Dropped and pasted files ──────────────────────────────────────────────
-  // Each file's path, a pasted one saved first; null when its save failed.
-  const pathOf = async (file: DroppedFile): Promise<string | null> => {
-    if (file.path !== '') {
-      return file.path;
-    }
-    try {
-      return await deps.drops.savePasted(file);
-    } catch (error) {
-      const message = `${file.name} not saved: ${errorText(error)}`;
-      toast(message, 'error');
-      log('notes', message);
-      return null;
-    }
+  // A file whose save failed is toasted and logged.
+  const saveFailed = (file: DroppedFile, error: string) => {
+    const message = `${file.name} not saved: ${error}`;
+    toast(message, 'error');
+    log('notes', message);
   };
 
   // Puts the paths of `files` into the Body at its cursor, unless the popup
@@ -1144,7 +1136,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
   ) => {
     const filePaths: string[] = [];
     for (const file of files) {
-      const path = await pathOf(file);
+      const path = await pathOf(file, deps.drops.savePasted, saveFailed);
       if (path !== null) {
         filePaths.push(path);
       }

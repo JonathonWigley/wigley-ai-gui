@@ -9,7 +9,11 @@ import type {
   ToastTone,
 } from '../../../contracts/plugin';
 import { insertionText } from '../../../shared/page/file-drop/file-chips';
-import type { ImageEncoder } from '../../../shared/page/file-drop/shrink-image';
+import {
+  type ImageEncoder,
+  SHRINK_REFUSED,
+} from '../../../shared/page/file-drop/shrink-image';
+import { MAX_IMAGE_BASE64 } from '../../../shared/image-types';
 import {
   recordingAnchors,
   USER_LAYOUT,
@@ -33,7 +37,7 @@ import type {
 import { emptyDraft } from '../draft';
 import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
-import { createNotePopup, type NotePopup, SHRINK_REFUSED } from './popup';
+import { createNotePopup, type NotePopup } from './popup';
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
@@ -63,8 +67,8 @@ const DRAFT: NoteDraft = {
 
 const PASTED_PATH = '/app/pasted/20261102-090000-1.txt';
 
-// The most bytes whose base64 text fits the 5 MB cap.
-const CAP_BYTES = ((5 * 1024 * 1024) / 4) * 3;
+// The most bytes whose base64 text fits the cap.
+const CAP_BYTES = (MAX_IMAGE_BASE64 / 4) * 3;
 
 // A row in its own look, so a test sees which rows drew with it.
 const MINE_ROW: Layout = {
@@ -483,6 +487,13 @@ describe('note popup', () => {
     {
       change: 'send started',
       act: (harness: Harness) => harness.popup.commands.sendFollowup(),
+    },
+    {
+      change: "another take's attach in flight",
+      act(harness: Harness) {
+        harness.fakes.addImage = () => new Promise(() => undefined);
+        harness.take([png('other.png')]);
+      },
     },
   ])(
     'take_StateChangedDuringSave_InsertsNothing ($change)',

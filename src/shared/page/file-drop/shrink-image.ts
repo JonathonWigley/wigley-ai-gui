@@ -20,6 +20,9 @@ export interface ImageEncoder {
   ): Promise<Uint8Array>;
 }
 
+// The toast for an image still over the API's cap after every shrink step.
+export const SHRINK_REFUSED = 'Image could not be shrunk under 5 MB';
+
 const STEPS = 6;
 const STEP_SCALE = 0.75;
 

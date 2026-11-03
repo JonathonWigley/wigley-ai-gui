@@ -2,18 +2,15 @@ import type { ChatImage } from '../../../contracts/agent';
 import type { DroppedFile } from '../../../contracts/drops';
 import type { TextEditor } from '../../../contracts/editor';
 import { errorText } from '../../../shared/error-text';
-import {
-  IMAGE_TYPES,
-  base64LengthOf,
-  base64Of,
-} from '../../../shared/image-types';
+import { IMAGE_TYPES, base64Of } from '../../../shared/image-types';
 import { insertionText } from '../../../shared/page/file-drop/file-chips';
+import { pathOf } from '../../../shared/page/file-drop/file-path';
 import {
   type EncodableImage,
   type ImageEncoder,
+  SHRINK_REFUSED,
   shrinkToFit,
 } from '../../../shared/page/file-drop/shrink-image';
-import { refusalOf } from '../image-rules';
 
 // The images attached to one Chat tab's next message, in the order attached.
 // Each change tells every `onChange` listener the images held after it.
@@ -54,9 +51,6 @@ export function createAttachments(): Attachments {
   };
 }
 
-// The toast for an image still over the API's cap after every shrink step.
-export const SHRINK_REFUSED = 'Image could not be shrunk under 5 MB';
-
 // What became of each file a Chat tab took: an image `attached` or `refused`,
 // a file whose bytes were not `read` or that was not `saved`, and the paths
 // `inserted` into the box.
@@ -89,7 +83,9 @@ export async function takeChatFiles(
       await attachImage(file, deps);
       continue;
     }
-    const path = await pathOf(file, deps);
+    const path = await pathOf(file, deps.savePasted, (failed, error) =>
+      deps.report.failed(failed.name, 'saved', error),
+    );
     if (path !== null) {
       paths.push(path);
     }
@@ -119,37 +115,12 @@ async function attachImage(
     deps.report.refused(SHRINK_REFUSED);
     return;
   }
-  const refusal = refusalOf(
-    shrunk.mediaType,
-    base64LengthOf(shrunk.bytes.length),
-  );
-  if (refusal !== null) {
-    deps.report.refused(refusal);
-    return;
-  }
   const image: ChatImage = {
     mediaType: shrunk.mediaType,
     data: base64Of(shrunk.bytes),
   };
   deps.attachments.add(image);
   deps.report.attached(image);
-}
-
-// The file's path on disk, or the path it was saved under when it had none;
-// null when the save failed, which is reported.
-async function pathOf(
-  file: DroppedFile,
-  deps: Pick<ChatDropDeps, 'savePasted' | 'report'>,
-): Promise<string | null> {
-  if (file.path !== '') {
-    return file.path;
-  }
-  try {
-    return await deps.savePasted(file);
-  } catch (error) {
-    deps.report.failed(file.name, 'saved', errorText(error));
-    return null;
-  }
 }
 
 // The image as a `data:` URL an `<img>` shows.

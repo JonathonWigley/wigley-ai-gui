@@ -64,10 +64,13 @@ export function shownBoxes(state: FormsState): BoxRef[] {
 }
 
 // The boxes round `roundId`'s view draws, focused or not: its boxes in the
-// view its session's pane draws it in.
+// view its session's pane draws it in; none for the active round under the
+// cancel prompt.
 export function roundViewBoxes(state: FormsState, roundId: string): BoxRef[] {
   const round = formById(state, roundId);
-  return round === undefined
+  const isUnderPrompt =
+    state.view === 'confirm' && state.activeFormId === roundId;
+  return round === undefined || isUnderPrompt
     ? []
     : boxesInView(round, sessionPaneView(state, round.sessionId, 'forms'));
 }
