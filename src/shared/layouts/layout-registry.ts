@@ -4,11 +4,13 @@ import type { Log } from '../../contracts/log';
 import { errorText } from '../error-text';
 
 // The layouts in an owner's layouts folder, each at the revision the page
-// loads it at. A save of a code, style, data, image or font file in any layout's
-// folder lists the layouts again and sends the new set, naming that layout as
-// changed; so does renaming, moving or deleting a layout's whole folder. A
-// watch failure is logged, and saves then go unseen until the next
-// start.
+// loads it at, after the owner's `default`. A save of a code, style, data,
+// image or font file in any layout's folder lists the layouts again and sends
+// the new set, naming that layout as changed; so does renaming, moving or
+// deleting a layout's whole folder. `default` is live while the owner's
+// default folder holds `layout.js`, and built in otherwise; a save of its
+// `layout.js` or `layout.css` sends the set naming `default`. A watch failure
+// is logged, and saves then go unseen until the next start.
 export interface LayoutRegistry {
   current(): LayoutSet;
   names(): string[];
@@ -18,10 +20,13 @@ export interface LayoutRegistry {
 export interface LayoutRegistryDeps {
   // Scoped to the owner's layouts folder, `layouts/<owner>/`.
   folder: Files;
+  // Scoped to the owner's default folder in the repo clone; null with no
+  // clone. Watched only when the folder exists at start, and never made.
+  defaultFolder: Files | null;
   send(set: LayoutSet): void;
   log: Log;
-  // The source name every log line carries: the owner's id, which the line
-  // about a `default` folder names too.
+  // The source name every log line carries: the owner's id, which the lines
+  // about a user `default` folder and the default-folder watch name too.
   logSource: string;
   // The text of the owner's `layout.d.ts`, written to the folder's root at
   // start with its repo kit specifier rewritten to `'../kit'`.
@@ -31,6 +36,16 @@ export interface LayoutRegistryDeps {
 // The folder's root, as its scoped `Files` names it.
 const ROOT = '';
 const DEFAULT_NAME = 'default';
+// The files directly in the default folder that make and style a live
+// default; any other file there changes nothing.
+const DEFAULT_CODE = 'layout.js';
+const DEFAULT_STYLE = 'layout.css';
+const BUILT_IN_DEFAULT: LayoutEntry = {
+  name: DEFAULT_NAME,
+  revision: 1,
+  hasCss: false,
+  builtIn: true,
+};
 // How an owner's repo `layout.d.ts` names the shared kit types, and how its
 // copy in the user's folder names them, beside `layouts/kit.d.ts`.
 const REPO_KIT_SPECIFIER = "'../../../shared/page/layout-host/kit'";
@@ -51,14 +66,38 @@ interface ListedLayout {
   hasCss: boolean;
 }
 
+// What the default folder holds: whether it makes a live default, and whether
+// that default has a stylesheet.
+interface DefaultFiles {
+  hasCode: boolean;
+  hasCss: boolean;
+}
+
+async function listDefaultFiles(defaultFolder: Files): Promise<DefaultFiles> {
+  const names = new Set(
+    (await defaultFolder.list(ROOT))
+      .filter((entry) => entry.kind === 'file')
+      .map((entry) => entry.path),
+  );
+  return { hasCode: names.has(DEFAULT_CODE), hasCss: names.has(DEFAULT_STYLE) };
+}
+
+async function isFolder(files: Files): Promise<boolean> {
+  return (await files.stat(ROOT))?.isFolder === true;
+}
+
 export async function startLayoutRegistry(
   deps: LayoutRegistryDeps,
 ): Promise<LayoutRegistry> {
-  const { folder, send, log, logSource } = deps;
+  const { folder, defaultFolder, send, log, logSource } = deps;
   let defaultSkipLogged = false;
   // Each user layout's revision, kept for the life of the process so a layout
   // that goes and comes back never reuses a revision.
   const revisions = new Map<string, number>();
+  // The live default's revision: it rises on every default change the
+  // registry announces and never resets, so a default that goes built in and
+  // comes back live takes a revision above every earlier one.
+  let defaultRevision = 1;
   let queue: Promise<unknown> = Promise.resolve();
 
   const listLayouts = async (): Promise<ListedLayout[]> => {
@@ -79,38 +118,54 @@ export async function startLayoutRegistry(
         `layouts/${logSource}/default is ignored; the built-in default layout wins`,
       );
     }
-    const users = userNames
+    return userNames
       .filter((name) => name !== DEFAULT_NAME)
       .sort((a, b) => a.localeCompare(b))
       .map((name) => ({ name, hasCss: files.has(`${name}/layout.css`) }));
-    return [{ name: DEFAULT_NAME, hasCss: false }, ...users];
   };
 
   // Gives every listed user layout the registry has not seen revision 1.
   const holdListing = (layouts: ListedLayout[]): ListedLayout[] => {
     for (const layout of layouts) {
-      if (layout.name !== DEFAULT_NAME && !revisions.has(layout.name)) {
+      if (!revisions.has(layout.name)) {
         revisions.set(layout.name, 1);
       }
     }
     return layouts;
   };
 
+  const defaultEntryOf = (files: DefaultFiles): LayoutEntry =>
+    files.hasCode
+      ? {
+          name: DEFAULT_NAME,
+          revision: defaultRevision,
+          hasCss: files.hasCss,
+          builtIn: false,
+        }
+      : BUILT_IN_DEFAULT;
+
   await folder.write('layout.d.ts', userLayoutTypes(deps.layoutTypes));
   let listed = holdListing(await listLayouts());
+  // `Files.watch` makes a missing folder, so a default folder missing at start
+  // stays unwatched until the next start.
+  const watchedDefault =
+    defaultFolder !== null && (await isFolder(defaultFolder))
+      ? defaultFolder
+      : null;
+  let defaultEntry =
+    watchedDefault === null
+      ? BUILT_IN_DEFAULT
+      : defaultEntryOf(await listDefaultFiles(watchedDefault));
 
-  const entry = (layout: ListedLayout): LayoutEntry => {
-    const builtIn = layout.name === DEFAULT_NAME;
-    return {
-      name: layout.name,
-      revision: builtIn ? 1 : (revisions.get(layout.name) ?? 1),
-      hasCss: layout.hasCss,
-      builtIn,
-    };
-  };
+  const entry = (layout: ListedLayout): LayoutEntry => ({
+    name: layout.name,
+    revision: revisions.get(layout.name) ?? 1,
+    hasCss: layout.hasCss,
+    builtIn: false,
+  });
 
   const setOf = (changed: string | null): LayoutSet => ({
-    layouts: listed.map(entry),
+    layouts: [defaultEntry, ...listed.map(entry)],
     changed,
   });
 
@@ -136,6 +191,18 @@ export async function startLayoutRegistry(
     revisions.set(name, seen === undefined ? 1 : seen + 1);
     listed = holdListing(layouts);
     send(setOf(name));
+  };
+
+  // Lists the default folder again and announces `default` when it is live
+  // now or was before; a change while it stays built in sends nothing.
+  const relistDefault = async (watched: Files): Promise<void> => {
+    const files = await listDefaultFiles(watched);
+    if (defaultEntry.builtIn && !files.hasCode) {
+      return;
+    }
+    defaultRevision += 1;
+    defaultEntry = defaultEntryOf(files);
+    send(setOf(DEFAULT_NAME));
   };
 
   const relistInTurn = (name: string) => {
@@ -170,9 +237,41 @@ export async function startLayoutRegistry(
       log(logSource, `layouts watch failed: ${errorText(error)}`),
   });
 
+  // Not recursive: a change in a subfolder reports the subfolder's name, which
+  // is neither file a default loads.
+  const defaultWatch =
+    watchedDefault === null
+      ? null
+      : watchedDefault.watch(
+          ROOT,
+          (changed) => {
+            if (changed !== DEFAULT_CODE && changed !== DEFAULT_STYLE) {
+              return;
+            }
+            serially(() => relistDefault(watchedDefault)).catch(
+              (error: unknown) =>
+                log(
+                  logSource,
+                  `layout default not reloaded: ${errorText(error)}`,
+                ),
+            );
+          },
+          {
+            recursive: false,
+            onError: (error) =>
+              log(
+                logSource,
+                `default layout watch failed: ${errorText(error)}`,
+              ),
+          },
+        );
+
   return {
     current: () => setOf(null),
-    names: () => listed.map((layout) => layout.name),
-    dispose: () => watch.close(),
+    names: () => [DEFAULT_NAME, ...listed.map((layout) => layout.name)],
+    dispose: () => {
+      watch.close();
+      defaultWatch?.close();
+    },
   };
 }

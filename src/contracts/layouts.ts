@@ -3,8 +3,9 @@ export type LayoutOwner = string;
 
 // One layout in an owner's layouts folder. `revision` grows on every change in
 // the layout's folder and never resets, so a URL holding it loads fresh
-// modules; `builtIn` marks the `default` layout, which has no files in the
-// layouts folder.
+// modules. `builtIn` marks the bundled `default`, which the page draws from
+// its own bundle; a `default` with `builtIn: false` is the live default from
+// the owner's default folder in the repo clone.
 export interface LayoutEntry {
   name: string;
   revision: number;

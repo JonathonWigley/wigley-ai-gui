@@ -2,16 +2,24 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Files } from '../../contracts/files';
 import type { LayoutEntry, LayoutSet } from '../../contracts/layouts';
 import { createMemoryFiles, type MemoryFiles } from '../memory-files';
+import { posixPaths } from '../paths/posix-paths';
+import { scopedFiles } from '../scoped-files';
 import { type LayoutRegistry, startLayoutRegistry } from './layout-registry';
 
 const LAYOUT_TYPES = 'declare const types: 1;';
+const DEFAULT_PATH = 'clone/src/plugins/demo/layouts/default';
 
 let files: MemoryFiles;
+// The repo clone, which holds the owner's default folder at `DEFAULT_PATH`.
+let clone: MemoryFiles;
+let defaultFolder: Files;
 let sent: LayoutSet[];
 let logLines: string[];
 
 beforeEach(() => {
   files = createMemoryFiles();
+  clone = createMemoryFiles();
+  defaultFolder = scopedFiles(clone, DEFAULT_PATH, posixPaths);
   sent = [];
   logLines = [];
 });
@@ -19,9 +27,11 @@ beforeEach(() => {
 function start(
   folder: Files = files,
   layoutTypes = LAYOUT_TYPES,
+  defaultFolder: Files | null = null,
 ): Promise<LayoutRegistry> {
   return startLayoutRegistry({
     folder,
+    defaultFolder,
     send: (set) => sent.push(set),
     log: (source, message) => logLines.push(`[${source}] ${message}`),
     logSource: 'demo',
@@ -35,8 +45,22 @@ async function writeLayouts(...names: string[]): Promise<void> {
   }
 }
 
+async function writeDefaultFiles(...names: string[]): Promise<void> {
+  for (const name of names) {
+    await defaultFolder.write(name, `/* ${name} */`);
+  }
+}
+
+function startWithDefault(): Promise<LayoutRegistry> {
+  return start(files, LAYOUT_TYPES, defaultFolder);
+}
+
 function entryIn(set: LayoutSet, name: string): LayoutEntry | undefined {
   return set.layouts.find((layout) => layout.name === name);
+}
+
+function defaultIn(set: LayoutSet): LayoutEntry | undefined {
+  return entryIn(set, 'default');
 }
 
 // `files` whose watch hands its options' `onError` to `fail`.
@@ -110,6 +134,74 @@ describe('start', () => {
     expect(logLines).toContainEqual(
       expect.stringMatching(/^\[demo\] layouts\/demo\/default is ignored/),
     );
+  });
+
+  it.each<{
+    row: string;
+    folder: 'none' | 'clone';
+    written: string[];
+    expected: LayoutEntry;
+  }>([
+    {
+      row: 'no clone',
+      folder: 'none',
+      written: [],
+      expected: { name: 'default', revision: 1, hasCss: false, builtIn: true },
+    },
+    {
+      row: 'folder missing',
+      folder: 'clone',
+      written: [],
+      expected: { name: 'default', revision: 1, hasCss: false, builtIn: true },
+    },
+    {
+      row: 'only layout.test.ts',
+      folder: 'clone',
+      written: ['layout.test.ts'],
+      expected: { name: 'default', revision: 1, hasCss: false, builtIn: true },
+    },
+    {
+      row: 'layout.js only',
+      folder: 'clone',
+      written: ['layout.js'],
+      expected: { name: 'default', revision: 1, hasCss: false, builtIn: false },
+    },
+    {
+      row: 'layout.js and layout.css',
+      folder: 'clone',
+      written: ['layout.js', 'layout.css'],
+      expected: { name: 'default', revision: 1, hasCss: true, builtIn: false },
+    },
+  ])(
+    'start_DefaultEntry_FollowsTheDefaultFolder ($row)',
+    async ({ folder, written, expected }) => {
+      await writeDefaultFiles(...written);
+      await writeLayouts('alpha');
+
+      const registry = await start(
+        files,
+        LAYOUT_TYPES,
+        folder === 'clone' ? defaultFolder : null,
+      );
+
+      expect(registry.current().layouts[0]).toEqual(expected);
+    },
+  );
+
+  it('start_DefaultFolderMissing_IsNotWatchedOrMade', async () => {
+    const watched: string[] = [];
+    const recording: Files = {
+      ...defaultFolder,
+      watch: (folder, onChange, options) => {
+        watched.push(folder);
+        return defaultFolder.watch(folder, onChange, options);
+      },
+    };
+
+    await start(files, LAYOUT_TYPES, recording);
+
+    expect(watched).toEqual([]);
+    expect(await defaultFolder.stat('')).toBeNull();
   });
 
   it('start_FolderWithoutLayoutJs_IsNotListed', async () => {
@@ -247,15 +339,108 @@ describe('watch', () => {
     },
   );
 
-  it('watch_Fails_LogsIt', async () => {
-    const failing = withFailingWatch(files);
-    await start(failing.folder);
+  it.each([
+    { watch: 'layouts', line: /^\[demo\] layouts watch.*EMFILE/ },
+    { watch: 'default', line: /^\[demo\] default layout watch.*EMFILE/ },
+  ])('watch_Fails_LogsIt ($watch)', async ({ watch, line }) => {
+    await writeDefaultFiles('layout.js');
+    const failing = withFailingWatch(
+      watch === 'layouts' ? files : defaultFolder,
+    );
+    if (watch === 'layouts') {
+      await start(failing.folder, LAYOUT_TYPES, defaultFolder);
+    } else {
+      await start(files, LAYOUT_TYPES, failing.folder);
+    }
 
     failing.fail(new Error('EMFILE'));
 
-    expect(logLines).toContainEqual(
-      expect.stringMatching(/^\[demo\] .*watch.*EMFILE/),
-    );
+    expect(logLines).toContainEqual(expect.stringMatching(line));
+  });
+
+  it.each([
+    { saved: 'layout.js', started: ['layout.js', 'layout.css'], hasCss: true },
+    { saved: 'layout.css', started: ['layout.js', 'layout.css'], hasCss: true },
+    { saved: 'layout.css', started: ['layout.js'], hasCss: true },
+  ])(
+    'watch_SaveInDefaultFolder_RaisesTheDefaultRevision ($saved, from $started)',
+    async ({ saved, started, hasCss }) => {
+      await writeDefaultFiles(...started);
+      const registry = await startWithDefault();
+      const startRevision = defaultIn(registry.current())?.revision ?? 0;
+
+      await writeDefaultFiles(saved);
+
+      await vi.waitFor(() => expect(sent).toHaveLength(1));
+      expect(sent[0].changed).toBe('default');
+      expect(defaultIn(sent[0])).toMatchObject({ builtIn: false, hasCss });
+      expect(defaultIn(sent[0])?.revision).toBeGreaterThan(startRevision);
+    },
+  );
+
+  it('watch_DefaultLayoutCssRemoved_SendsDefaultWithoutCss', async () => {
+    await writeDefaultFiles('layout.js', 'layout.css');
+    const registry = await startWithDefault();
+    const startRevision = defaultIn(registry.current())?.revision ?? 0;
+
+    clone.remove(`${DEFAULT_PATH}/layout.css`);
+
+    await vi.waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0].changed).toBe('default');
+    expect(defaultIn(sent[0])).toMatchObject({ builtIn: false, hasCss: false });
+    expect(defaultIn(sent[0])?.revision).toBeGreaterThan(startRevision);
+  });
+
+  it.each([
+    { saved: 'layout.test.ts', started: ['layout.js'] },
+    { saved: 'parts/card.js', started: ['layout.js'] },
+    { saved: 'layout.css', started: ['layout.test.ts'] },
+  ])(
+    'watch_OtherFileInDefaultFolder_SendsNothing ($saved, from $started)',
+    async ({ saved, started }) => {
+      await writeDefaultFiles(...started);
+      await writeLayouts('alpha');
+      await startWithDefault();
+
+      await writeDefaultFiles(saved);
+      await files.write('alpha/layout.js', '// saved');
+
+      await vi.waitFor(() => expect(sent).toHaveLength(1));
+      expect(sent[0].changed).toBe('alpha');
+    },
+  );
+
+  it('watch_DefaultLayoutJsRemovedThenWritten_BuiltInThenHigherRevision', async () => {
+    await writeDefaultFiles('layout.js');
+    const registry = await startWithDefault();
+    const liveRevision = defaultIn(registry.current())?.revision ?? 0;
+
+    clone.remove(`${DEFAULT_PATH}/layout.js`);
+    await vi.waitFor(() => expect(sent).toHaveLength(1));
+    await writeDefaultFiles('layout.js');
+
+    await vi.waitFor(() => expect(sent).toHaveLength(2));
+    expect(sent.map((set) => set.changed)).toEqual(['default', 'default']);
+    expect(defaultIn(sent[0])).toEqual({
+      name: 'default',
+      revision: 1,
+      hasCss: false,
+      builtIn: true,
+    });
+    expect(defaultIn(sent[1])?.builtIn).toBe(false);
+    expect(defaultIn(sent[1])?.revision).toBeGreaterThan(liveRevision);
+  });
+
+  it('dispose_ClosesTheDefaultWatch', async () => {
+    await writeDefaultFiles('layout.js');
+    const registry = await startWithDefault();
+
+    registry.dispose();
+    await writeDefaultFiles('layout.js');
+    // Lets a relist the write may have queued run to its send.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(sent).toEqual([]);
   });
 
   it('hasCss_TrueWhenLayoutCssPresent', async () => {

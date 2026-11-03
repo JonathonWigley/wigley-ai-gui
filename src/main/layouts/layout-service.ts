@@ -83,6 +83,7 @@ export function createLayoutService(deps: LayoutServiceDeps): LayoutService {
       registrations.set(owner, held);
       startLayoutRegistry({
         folder: scopedFiles(files, paths.join(deps.folder, owner), paths),
+        defaultFolder: null,
         send: (set) => {
           if (!held.isDisposed) {
             deps.send(owner, set);
