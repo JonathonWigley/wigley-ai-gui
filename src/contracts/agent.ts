@@ -311,6 +311,8 @@ export interface AgentProcess {
   // during a running turn hands the message to the agent at once, and the
   // agent decides when its turn takes it in. `messageDropped` names an id
   // whose entry will never come, and also arrives only after `send` returns.
+  // A message whose entry has not come when `ended` fires gets neither: the
+  // process's end lets it go.
   send(message: UserMessage): string;
   interrupt(): void;
   setControl(id: string, value: string): void;

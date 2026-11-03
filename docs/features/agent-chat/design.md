@@ -77,9 +77,10 @@ interview on 2026-10-23; this file is the record of both.
                  ▼
  sessions relay ─► connect(info) finds the owned session by host id ─► joins its row (no second row)
 
- user types ─► message box (vim), images pasted or dropped ─► Enter (normal) / Cmd+Enter
+ user types ─► message box (vim), images pasted or dropped ─► Enter / Cmd+Enter
           ├─► `/name` an app slash command registered ─► its handler runs in the page; nothing goes to the agent
-          └─► otherwise ─► chat main ─► AgentProcess.send({ text, images })
+          └─► otherwise ─► chat main ─► AgentProcess.send({ text, images }) (Cmd+Enter during a turn: every unsent
+              pending message first, § Pending messages, Send now)
  /login ─► chat main ─► AgentHarness.logIn(profile) ─► claude auth login opens the browser ─► sign-in dialog
           (link, paste-code box) ─► process ends ─► accountStatus confirms ─► dialog closes + toast
  claude stdout ─► adapter ─► ChatEntry added / updated ─► chat channel ─► Chat tab, drawn by the chat layout
@@ -171,7 +172,7 @@ interview on 2026-10-23; this file is the record of both.
 - **Chat tab**: the entries under a floating composer: a vim message box, the box's vim mode, each control's value
   as a chip, and send (changed by ui-design plan C). Enter sends in insert and normal mode, Shift+Enter in insert mode adds a line, Cmd+Enter sends from any mode, and while a turn runs sends the pending messages with it (§ Pending messages, Send now). `i` /
   `a` focus the box, `j` / `k` move between entries, `Enter` opens or closes the focused entry or activity line and pulls
-  back a focused pending message, `G` jumps to the latest, Ctrl+C interrupts and pulls back every pending message
+  back a focused pending message, `G` jumps to the latest, Ctrl+C interrupts and pulls back every unsent pending message
   (§ Pending messages). The agent's steps show as activity lines (§ Activity line). While the box
   has focus no entry is marked and the box draws no focused frame; once it loses focus (Esc) the focused entry shows a
   thin left bar (DESIGN.md § Keys and focus). These keys act only on the Chat tab on screen and its session: on any other tab or mode they do
@@ -236,10 +237,10 @@ interview on 2026-10-23; this file is the record of both.
   messages, after claude-stream.md § Queued messages, since `pending` already names chat main's permission calls and a
   restored session's unread history.
   - **Sending**: when the harness reports the turn ended (activity `idle`) and a message is queued, chat main writes
-    the oldest queued message to the agent and swallows that `idle`: the activity the session shows does not change,
+    the oldest unsent queued message to the agent and swallows that `idle`: the activity the session shows does not change,
     so it shows no idle between turns. Each queued message runs as its own turn, in the order sent, so the
-    turn-finished alert fires once, after the last one. A write that throws leaves the message at the head of the
-    queue and logs `queued message <id> not sent: <error>`. Every message, sent at idle or sent now, joins the
+    turn-finished alert fires once, after the last one. A write that throws puts the message back at its place in
+    the queue and logs `queued message <id> not sent: <error>`. Every message, sent at idle or sent now, joins the
     transcript as its user entry when the agent takes it in, at the place it really ran: the Claude adapter adds the
     entry on the message's `started` lifecycle line (claude-stream.md § Message lifecycle), or at the write when the
     CLI reports no lifecycle. `AgentProcess.send` returns the id that entry will carry.
@@ -347,7 +348,7 @@ interview on 2026-10-23; this file is the record of both.
   channel call) end the row's process and start a fresh one at once in the same row, under a new host session id and
   with the row's mode and the model and effort the user picked (§ Saved sessions), so the harness loads its plugins,
   skills, MCP servers and settings again. A running turn is interrupted first; waiting permission calls are cancelled
-  and queued messages are pulled back into the box, as on an exit; no exit notice shows for the old process and no
+  and written messages not yet taken in, then queued messages, are pulled back into the box, as on an exit; no exit notice shows for the old process and no
   turn-finished alert fires. The old process's later events are no longer live: none reaches the chat, but its
   `agentEvent`s that do emit keep the old host id, and its `sessionEnded` still emits; the agents roster folds each host
   id apart, so that `sessionEnded` drops only the old process's subagents. The row's entries become one info notice,
