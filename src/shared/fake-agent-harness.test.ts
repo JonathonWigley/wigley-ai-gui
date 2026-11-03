@@ -39,6 +39,7 @@ const request: AgentStart = {
   projectDir: '/p',
   profileDir: null,
   controls: {},
+  instructions: [],
 };
 
 // Every event the process emits, as `[event name, payload]`, in emit order,

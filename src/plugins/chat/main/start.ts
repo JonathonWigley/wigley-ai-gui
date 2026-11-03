@@ -170,7 +170,8 @@ export function addDriveActions(
 // chat layouts, opens the layout preview's sample session (held apart from
 // chat's sessions, with no process), offers a drive run its fixtures, and
 // exports to other plugins a background launch, a send and clear on the
-// sessions it holds, and a close of every session in a folder.
+// sessions it holds, a close of every session in a folder, and a registration
+// of instructions every later session start carries.
 export const chatMainPart: MainPart<typeof chatManifest> = {
   manifest: chatManifest,
   start(api: ChatApi) {
@@ -380,6 +381,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
         }
         await Promise.all(ended);
       },
+      addInstructions: (text) => chat.addInstructions(text),
     };
     return {
       commands: {},

@@ -1,6 +1,6 @@
 # 02 — Visual scheme, guard and Bridge call
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -314,3 +314,4 @@ visual fails under its CSP; a frame that sets `location` to an `https:` URL stay
 
 ## Proof
 
+Commit a224d7a · proof: diff read: every Produces present; typecheck + lint clean; 21 tests pass filtered · concerns: the guard refuses a subframe on about:blank or srcdoc, so 04 sets the iframe src only once serveVisual resolves (live check in 09)

@@ -235,7 +235,7 @@ export function visualHashOf(url: string): string | null;
 
 ### Wave 1
 - [ ] [Fence registry and markdown mount](01-fence-registry-and-mount.md)
-- [ ] [Visual scheme, guard and Bridge call](02-visual-scheme.md)
+- [x] [Visual scheme, guard and Bridge call](02-visual-scheme.md)
 - [ ] [Session instructions through the harness](03-session-instructions.md)
 
 ### Wave 2
@@ -261,7 +261,9 @@ export function visualHashOf(url: string): string | null;
 Review base: d7578311fe99437ccefe407289916bbcfa049eb8
 
 ### Groups
+- 02 · a224d7a · diff read: every Produces present; typecheck + lint clean; 21 tests pass filtered · concerns: the guard refuses a subframe on about:blank or srcdoc, so 04 sets the iframe src only once serveVisual resolves (live check in 09)
 ### Contract changes
 ### Rulings
+- the served body is doctype, script, source with no trailing newline in the bootstrap — matches the pinned order — whitespace only if wrong · group 02 · group 02
 ### Review rounds
 ### Test gate

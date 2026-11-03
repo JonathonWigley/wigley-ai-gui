@@ -14,6 +14,7 @@ describe('claudeLaunch', () => {
         projectDir: '/proj',
         profileDir: '/p',
         controls: {},
+        instructions: [],
       },
       TOOL,
       { HOME: '/h', CLAUDE_CONFIG_DIR: '/x' },
@@ -50,6 +51,7 @@ describe('claudeLaunch', () => {
         projectDir: '/proj',
         profileDir: null,
         controls: {},
+        instructions: [],
       },
       TOOL,
       env,
@@ -110,6 +112,7 @@ describe('claudeLaunch', () => {
           projectDir: '/proj',
           profileDir: null,
           controls,
+          instructions: [],
         },
         TOOL,
         {},
@@ -126,6 +129,46 @@ describe('claudeLaunch', () => {
     },
   );
 
+  it.each<{ name: string; instructions: string[]; expected: string }>([
+    {
+      name: 'one instruction',
+      instructions: ['Use the wigley:visuals skill.'],
+      expected: 'Use the wigley:visuals skill.',
+    },
+    {
+      name: 'two instructions',
+      instructions: ['First note.', 'Second note.\nIts second line.'],
+      expected: 'First note.\n\nSecond note.\nIts second line.',
+    },
+  ])(
+    'claudeLaunch_Instructions_JoinIntoOneAppendedPrompt ($name)',
+    ({ instructions, expected }) => {
+      const launch = claudeLaunch(
+        {
+          sessionId: 's-1',
+          resume: false,
+          projectDir: '/proj',
+          profileDir: null,
+          controls: {},
+          instructions,
+        },
+        TOOL,
+        {},
+        '/h',
+        posixPaths,
+      );
+
+      const flagIndex = launch.args.indexOf('--append-system-prompt');
+      expect(
+        launch.args.filter((arg) => arg === '--append-system-prompt'),
+      ).toHaveLength(1);
+      expect(launch.args.slice(flagIndex, flagIndex + 2)).toEqual([
+        '--append-system-prompt',
+        expected,
+      ]);
+    },
+  );
+
   it('claudeLaunch_NestedSessionEnv_StripsListedNamesOnly', () => {
     const launch = claudeLaunch(
       {
@@ -134,6 +177,7 @@ describe('claudeLaunch', () => {
         projectDir: '/proj',
         profileDir: '/p',
         controls: {},
+        instructions: [],
       },
       TOOL,
       {
@@ -161,6 +205,7 @@ describe('claudeLaunch', () => {
         projectDir: '/proj',
         profileDir: '~/.claude-personal',
         controls: {},
+        instructions: [],
       },
       TOOL,
       { HOME: '/elsewhere' },
@@ -179,6 +224,7 @@ describe('claudeLaunch', () => {
         projectDir: 'C:\\proj',
         profileDir: '~/.claude-work',
         controls: {},
+        instructions: [],
       },
       TOOL,
       {},

@@ -25,6 +25,7 @@ const request: AgentStart = {
   projectDir: '/proj',
   profileDir: null,
   controls: {},
+  instructions: [],
 };
 
 // A child with `PassThrough` stdio that records its signals and stdin lines.

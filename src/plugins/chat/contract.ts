@@ -242,6 +242,10 @@ export interface ChatMainExports {
   // asking the close guards: for a self-test that starts its project over.
   // Resolves once each one's owned session has ended and its row is gone.
   closeSessionsIn(projectDir: string): Promise<void>;
+  // Text every session chat starts from now on carries to its harness, after
+  // the texts registered before it; a running session keeps what it started
+  // with. Disposing it leaves later starts without it.
+  addInstructions(text: string): Disposable;
 }
 
 // The session an app slash command was sent in: `args` is the trimmed text

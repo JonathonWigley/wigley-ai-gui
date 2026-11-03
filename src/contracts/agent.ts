@@ -111,12 +111,15 @@ export type ChatEntryKind = ChatEntry['kind'];
 // `controls` maps a control id to the value the row holds, for the row's mode and for each model or effort the user
 // picked in the row once the process confirmed the pick, leaving out a null `value`; the adapter starts with each value
 // it knows and ignores an id it does not declare.
+// `instructions` is text the session's agent is told before its first message, in the order its registrations were
+// made; [] when none. Each adapter hands it to its harness in that harness's own way.
 export interface AgentStart {
   sessionId: string;
   resume: boolean;
   projectDir: string;
   profileDir: string | null;
   controls: Readonly<Record<string, string>>;
+  instructions: readonly string[];
 }
 
 export type PlanSeverity = 'normal' | 'warning' | 'critical';
