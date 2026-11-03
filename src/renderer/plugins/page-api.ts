@@ -3,6 +3,7 @@ import type { CommandId } from '../../contracts/commands';
 import type { Disposable, Registrations } from '../../contracts/disposable';
 import type { PageDrops } from '../../contracts/drops';
 import type { EditorHost } from '../../contracts/editor';
+import type { Log } from '../../contracts/log';
 import type { MarkdownRenderer } from '../../contracts/markdown';
 import type {
   FocusTarget,
@@ -31,6 +32,7 @@ import type { UiState } from '../../contracts/ui-state';
 import { dataUrl } from '../../shared/data-url';
 import { type EventBus, pluginEvents } from '../../shared/event-bus';
 import type { PageLayouts } from '../../shared/page/layout-host/show-layouts';
+import { pluginLog } from '../../shared/plugin-log';
 import { qualify } from '../../shared/plugin-manifests';
 import { createRegistrations } from '../../shared/registrations';
 import { trackedTimers } from '../../shared/tracked-timers';
@@ -38,6 +40,12 @@ import type { ScopeStack } from '../key-scope';
 import type { LiveConfig } from '../live-config';
 import type { PaneTargets } from '../pane-targets';
 import type { PendingKeysHub } from '../pending-keys';
+
+// The services the page core hands the plugin APIs: each plugin's `uiState` and
+// scoped `log` are made from these, `log` being the core's own.
+export type PageApiServices = Omit<PageServices, 'uiState' | 'log'> & {
+  log: Log;
+};
 
 // What the page core shares with every plugin's API. `scopeStack` holds
 // qualified scopes; `pendingKeys` is the page's one pending-key report;
@@ -62,7 +70,7 @@ export interface PageApiDeps {
   scopeStack: ScopeStack;
   pendingKeys: Pick<PendingKeysHub, 'onPending' | 'hold' | 'cancel'>;
   config: LiveConfig;
-  services: Omit<PageServices, 'uiState'>;
+  services: PageApiServices;
   uiState: { scoped(prefix: string): UiState };
   run(id: CommandId, context?: PageCommandContext): void;
   dependency(pluginId: string): unknown;
@@ -82,10 +90,10 @@ export interface PageApiDeps {
 // they leave out `main`, which only the mode registry fills, and the activity
 // bar and side bar, which the core draws from the modes. Its
 // settings are its own entry in the config's plugin settings, and its ui state
-// is scoped to its id. Its layout shows run under its id. Every registration it
-// makes through the API is filed in `deps.registrations`. Editors, timers, pane
-// targets and the transparency override are held per plugin and filed as one
-// entry each, so a destroyed editor or a run timer leaves nothing in the store;
+// and `services.log` are scoped to its id. Its layout shows run under its id.
+// Every registration it makes through the API is filed in
+// `deps.registrations`. Editors, timers, pane targets and the transparency
+// override are held per plugin and filed as one entry each, so a destroyed editor or a run timer leaves nothing in the store;
 // `services.visualFrames`, `services.markup` and `uiState` are not recorded,
 // and the plugin closes what it opens through them.
 export function createPageApi(
@@ -158,6 +166,7 @@ export function createPageApi(
     commands: { run: deps.run },
     services: {
       ...deps.services,
+      log: pluginLog(deps.services.log, manifest.id),
       editor: trackedEditor(deps.services.editor, registrations),
       markdown: trackedMarkdown(deps.services.markdown, registrations),
       timers: trackedTimers(deps.services.timers, registrations),

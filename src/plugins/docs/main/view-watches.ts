@@ -19,7 +19,7 @@ export function createViewWatches(
   let requestCount = 0;
 
   const stop = (viewId: string) => {
-    watches.get(viewId)?.close();
+    watches.get(viewId)?.dispose();
     watches.delete(viewId);
   };
 
@@ -33,7 +33,7 @@ export function createViewWatches(
       }
       const watch = await watchFile(path, () => send({ viewId, path }));
       if (latestRequest.get(viewId) !== request) {
-        watch.close();
+        watch.dispose();
         return;
       }
       watches.set(viewId, watch);
@@ -41,7 +41,7 @@ export function createViewWatches(
     closeAll() {
       latestRequest.clear();
       for (const watch of watches.values()) {
-        watch.close();
+        watch.dispose();
       }
       watches.clear();
     },

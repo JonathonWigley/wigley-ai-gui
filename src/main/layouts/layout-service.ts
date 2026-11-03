@@ -34,7 +34,7 @@ export interface LayoutServiceDeps {
 // `<owner> is no layout owner` for an owner that is not lowercase letters,
 // digits and `-`, and `layouts of <owner> already registered` while the owner
 // holds a registration. Disposing a registration closes its watches and drops
-// the owner. `names` reads `['default']` and `read` resolves null for an
+// the owner; disposing it again, or after `dispose`, does nothing. `names` reads `['default']` and `read` resolves null for an
 // owner not registered or not yet listed. `defaultFolderPath` is the absolute
 // default folder of a registered owner, listed or not; null for an owner not
 // registered or with no `repoDir`. `dispose` drops every owner.
@@ -78,6 +78,9 @@ export function createLayoutService(deps: LayoutServiceDeps): LayoutService {
     );
 
   const disposeRegistration = (owner: LayoutOwner, held: Registration) => {
+    if (held.isDisposed) {
+      return;
+    }
     held.isDisposed = true;
     held.registry?.dispose();
     if (registrations.get(owner) === held) {

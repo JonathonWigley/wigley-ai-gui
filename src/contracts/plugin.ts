@@ -18,7 +18,7 @@ import type {
   PendingKeys,
   ViewScope,
 } from './keymap';
-import type { Log } from './log';
+import type { PluginLog } from './log';
 import type { MarkdownRenderer } from './markdown';
 import type { MarkupEditor } from './markup';
 import type { FocusTarget, OuterPanes, ResizeTarget } from './panes';
@@ -195,11 +195,14 @@ export interface PageChannel<Ch extends ChannelShape> {
   ): Disposable;
 }
 
+// `handle` throws for a method already handled. Its `dispose` drops the
+// handler, so an invoke rejects and the method can be handled again; a second
+// `dispose` does nothing.
 export interface MainChannel<Ch extends ChannelShape> {
   handle<K extends keyof Ch['invoke'] & string>(
     method: K,
     handler: Ch['invoke'][K],
-  ): void;
+  ): Disposable;
   send<K extends keyof Ch['messages'] & string>(
     message: K,
     data: Ch['messages'][K],
@@ -425,7 +428,8 @@ export interface PageServices {
   // Opens a visual's html in a sandboxed frame (`src/contracts/visual-frames.ts`).
   visualFrames: VisualFrames;
   toast(text: string, tone: ToastTone): void;
-  log: Log;
+  // Logs under the plugin's id, called as `log(message)`.
+  log: PluginLog;
   timers: Timers;
   // Epoch milliseconds, for times drawn relative to now.
   clock: Clock;
@@ -675,12 +679,17 @@ export interface DriveHost {
 }
 
 // `runMode` is how the app was started. `selfTest` is the plugin's own
-// self-test host, null outside the self-test.
+// self-test host, null outside the self-test. `log` logs under the plugin's
+// id, called as `log(message)`.
 // `timers` runs one-shot timers, the `Timers` seam the page shares.
 // `files` takes absolute paths; outside a live run, `files.trash` deletes for
 // good. `paths` handles full paths by the rules of the OS main runs on.
 // `processes` runs the machine's programs; `git` is the one way a plugin runs
-// `git`. `agentHarnesses` lists every
+// `git`, and stopping the plugin leaves a `git` run to finish. `alerts` gets
+// the user's attention, and stopping the plugin zeroes the open counts it set.
+// Stopping the plugin also clears its pending `timers`, disposes its live
+// `files` watches and stops its running `processes`, each of which then rejects
+// with `Stopped <command>`. `agentHarnesses` lists every
 // harness adapter the app runs, found by `id`. `window.chooseFolder` opens the
 // native folder dialog over the window and resolves to null when the user
 // cancels; `window.isFocused` is true while the app's window has focus;
@@ -698,7 +707,7 @@ export interface MainServices {
   files: Files;
   processes: ProcessRunner;
   git: Git;
-  log: Log;
+  log: PluginLog;
   clock: Clock;
   timers: Timers;
   randomHex: RandomHex;
@@ -731,6 +740,7 @@ export interface MainServices {
 // reads the plugin's settings as the user config now sets them;
 // `onSettingsChanged` hears them each time they change, until its `dispose`.
 // `drive` is the plugin's own drive host, null outside a drive run.
+// `services.log` logs under the plugin's id, called as `log(message)`.
 // `layouts.register` writes the plugin's layout contract `layoutTypes` to its
 // layouts folder and watches that folder, and the plugin's default folder
 // `src/plugins/<id>/layouts/default` in the repo clone, until the returned

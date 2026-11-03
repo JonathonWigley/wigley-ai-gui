@@ -34,6 +34,7 @@ function fakeChannel(calls: string[]) {
   const channel: MainChannel<TestChannel> = {
     handle: (method, handler) => {
       handlers[method] = handler;
+      return { dispose: () => {} };
     },
     send: (message, data) => {
       sent.push([message, data]);

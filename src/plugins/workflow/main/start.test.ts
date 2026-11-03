@@ -97,7 +97,7 @@ function startWorkflowPart(
   const project = createMemoryFiles();
   const projectFiles: Files =
     options.silentWatch === true
-      ? { ...project, watch: () => ({ close: () => undefined }) }
+      ? { ...project, watch: () => ({ dispose: () => undefined }) }
       : project;
   const time = handTime();
   const chat: Pick<ChatMainExports, 'send' | 'clear' | 'launch' | 'profileOf'> =

@@ -240,4 +240,34 @@ describe('createLayoutService', () => {
 
     expect(sent.map(([, set]) => namesIn(set))).toEqual([['default', 'x']]);
   });
+
+  it('dispose_RegistrationAfterServiceDispose_DoesNothing', async () => {
+    const memory = files;
+    let watchesDisposed = 0;
+    files = {
+      ...memory,
+      watch: (folder, onChange, options) => {
+        const watch = memory.watch(folder, onChange, options);
+        return {
+          dispose: () => {
+            watchesDisposed++;
+            watch.dispose();
+          },
+        };
+      },
+    };
+    const service = createService();
+    const registration = await registered(service, 'forms');
+    service.dispose();
+    const disposedByTheService = watchesDisposed;
+    sent = [];
+
+    expect(() => registration.dispose()).not.toThrow();
+    expect(watchesDisposed).toBe(disposedByTheService);
+    await files.write(`${FOLDER}/forms/x/layout.js`, '// x');
+    expect(sent).toEqual([]);
+    expect(() =>
+      service.register('forms', '', defaultFolderOf('forms')),
+    ).not.toThrow();
+  });
 });

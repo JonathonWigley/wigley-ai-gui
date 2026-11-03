@@ -9,7 +9,7 @@ const processes = createNodeProcesses();
 // Runs `script` in the Node that runs the tests.
 function runScript(
   script: string,
-  options?: { cwd?: string; timeoutMs?: number },
+  options?: { cwd?: string; timeoutMs?: number; signal?: AbortSignal },
 ) {
   return processes.run(process.execPath, ['-e', script], options);
 }
@@ -45,6 +45,29 @@ describe('createNodeProcesses', () => {
         stderr: '',
         timedOut: true,
       });
+      expect(Date.now() - started).toBeLessThan(5000);
+    },
+  );
+
+  it.each([
+    { case: 'before the run', abortsFirst: true },
+    { case: 'while it runs', abortsFirst: false },
+  ])(
+    'run_Aborted_RejectsStopped ($case)',
+    { timeout: 10000 },
+    async ({ abortsFirst }) => {
+      const controller = new AbortController();
+      const started = Date.now();
+      if (abortsFirst) {
+        controller.abort();
+      }
+
+      const run = runScript('setTimeout(() => {}, 60000)', {
+        signal: controller.signal,
+      });
+      controller.abort();
+
+      await expect(run).rejects.toThrow(`Stopped ${process.execPath}`);
       expect(Date.now() - started).toBeLessThan(5000);
     },
   );

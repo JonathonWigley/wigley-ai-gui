@@ -55,14 +55,14 @@ export function createPlanWatch(deps: {
 
   // Closes the session's watch and drops every read still in flight for it.
   const close = (sessionId: string) => {
-    watched.get(sessionId)?.watch?.close();
+    watched.get(sessionId)?.watch?.dispose();
     watched.delete(sessionId);
     latestReads.delete(sessionId);
     nextGeneration(sessionId);
   };
 
   const signalGone = (sessionId: string, entry: Watched) => {
-    entry.watch?.close();
+    entry.watch?.dispose();
     entry.watch = null;
     entry.status = 'gone';
     nextGeneration(sessionId);

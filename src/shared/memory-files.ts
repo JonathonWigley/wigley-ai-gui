@@ -185,7 +185,7 @@ export function createMemoryFiles(clock?: Clock): MemoryFiles {
         recursive: options?.recursive ?? true,
       };
       watches.add(watch);
-      return { close: () => watches.delete(watch) };
+      return { dispose: () => watches.delete(watch) };
     },
     stat: async (path) => statKey(keyOf(path)),
     realPath: async (path) => {

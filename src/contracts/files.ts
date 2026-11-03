@@ -1,3 +1,5 @@
+import type { Disposable } from './disposable';
+
 // One entry `Files.list` returns: `path` is relative to the folder listed,
 // its segments joined with `/`.
 export interface FileEntry {
@@ -13,10 +15,9 @@ export interface FileStat {
   isLink: boolean;
 }
 
-export interface FileWatch {
-  // Stops the watch and drops any change not yet reported.
-  close(): void;
-}
+// `dispose` stops the watch and drops any change not yet reported; a second
+// `dispose` does nothing.
+export interface FileWatch extends Disposable {}
 
 export interface WatchOptions {
   // Whether the watch covers every folder under the watched one; true when
@@ -83,11 +84,11 @@ export interface Files {
   // burst of events for one path once, 100 ms after its last event; the
   // memory adapter reports each change at once. A temp file `write` makes
   // never reports, so a write reports only its target. Creates `folder` when
-  // it is missing. When watching fails the watch closes, dropping any change
-  // not yet reported, and calls the options' `onError` once; with no
-  // `onError` it closes silently. A failure to start watching, creating
-  // `folder` or starting the watcher, throws from `watch` and never reaches
-  // `onError`.
+  // it is missing. When watching fails the watch disposes itself, dropping any
+  // change not yet reported, and calls the options' `onError` once; with no
+  // `onError` it disposes itself silently. A failure to start watching,
+  // creating `folder` or starting the watcher, throws from `watch` and never
+  // reaches `onError`.
   watch(
     folder: string,
     onChange: (path: string) => void,

@@ -270,8 +270,8 @@ export async function startLayoutRegistry(
     current: () => setOf(null),
     names: () => [DEFAULT_NAME, ...listed.map((layout) => layout.name)],
     dispose: () => {
-      watch.close();
-      defaultWatch?.close();
+      watch.dispose();
+      defaultWatch?.dispose();
     },
   };
 }

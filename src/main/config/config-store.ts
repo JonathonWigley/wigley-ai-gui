@@ -277,7 +277,7 @@ export async function loadConfigStore(
     },
     dispose() {
       isDisposed = true;
-      watch?.close();
+      watch?.dispose();
       watch = null;
       listeners.clear();
     },

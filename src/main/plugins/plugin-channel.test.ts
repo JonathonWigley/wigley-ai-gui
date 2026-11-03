@@ -79,4 +79,20 @@ describe('createPluginChannels', () => {
       /"p".*"save"/,
     );
   });
+
+  it('drops a disposed handler, so an invoke rejects and the method registers again', () => {
+    const ipc = fakeIpc();
+    const channel = createPluginChannels(ipc, () => null).forPlugin('p');
+    const handle = channel.handle('save', () => 'first');
+
+    handle.dispose();
+    handle.dispose();
+
+    expect(() => ipc.invoke('p', 'save', [])).toThrow(
+      'Plugin "p" has no main handler for "save"',
+    );
+    channel.handle('save', () => 'second');
+    handle.dispose();
+    expect(ipc.invoke('p', 'save', [])).toBe('second');
+  });
 });

@@ -13,10 +13,12 @@ export interface ProcessRunner {
   // Runs `command` with `args`, no shell, in `cwd` when given. Resolves once
   // the program ends, a non-zero exit included, or once `timeoutMs` passes and
   // the program is killed; rejects with `Could not run <command>: <reason>`
-  // when it cannot start.
+  // when it cannot start. When `signal` aborts the program is killed and the
+  // run rejects with `Stopped <command>`; a signal already aborted rejects so
+  // without starting the program.
   run(
     command: string,
     args: string[],
-    options?: { cwd?: string; timeoutMs?: number },
+    options?: { cwd?: string; timeoutMs?: number; signal?: AbortSignal },
   ): Promise<ProcessResult>;
 }

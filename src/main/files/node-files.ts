@@ -253,7 +253,7 @@ function watchDebounced(
       }, WATCH_QUIET_MS),
     );
   });
-  const close = () => {
+  const dispose = () => {
     watcher.close();
     for (const timer of pending.values()) {
       clearTimeout(timer);
@@ -268,10 +268,10 @@ function watchDebounced(
       return;
     }
     failed = true;
-    close();
+    dispose();
     options?.onError?.(error);
   });
-  return { close };
+  return { dispose };
 }
 
 // FSEvents reports a change to the watched folder itself (its contents

@@ -100,7 +100,7 @@ import {
   type LayoutService,
 } from './layouts/layout-service';
 import { resolveCloneDir } from './resolve-clone-dir';
-import { createMainApi } from './plugins/main-api';
+import { createMainApi, type MainApiServices } from './plugins/main-api';
 import { createPageLog } from './page-log';
 import { createPastedFiles } from './pasted-files';
 import { createPluginChannels } from './plugins/plugin-channel';
@@ -658,7 +658,7 @@ function startMainParts(
   store: ConfigStore,
   dataRoot: string,
   layouts: LayoutService,
-  services: Omit<MainServices, 'selfTest'>,
+  services: MainApiServices,
   selfTest: SelfTestDriver | null,
   driveRun: DriveRun | null,
   disabled: readonly string[],

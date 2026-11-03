@@ -53,8 +53,16 @@ export function createPluginChannels(
             `Plugin "${pluginId}" registered a main handler for "${method}" twice`,
           );
         }
-        methods.set(method, handler as Handler);
+        const registered = handler as Handler;
+        methods.set(method, registered);
         handlers.set(pluginId, methods);
+        return {
+          dispose() {
+            if (methods.get(method) === registered) {
+              methods.delete(method);
+            }
+          },
+        };
       },
       // With no page to receive it the message is dropped.
       send: (message, data) => {

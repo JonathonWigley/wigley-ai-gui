@@ -26,7 +26,6 @@ import type {
   ModeHandle,
   Modes,
   PageChannel,
-  PageServices,
   PageTransparency,
   PluginManifest,
   ShellLayout,
@@ -38,7 +37,11 @@ import { createRegistrations } from '../../shared/registrations';
 import { createScopeStack, type ScopeStack } from '../key-scope';
 import { createLiveConfig } from '../live-config';
 import { createPageUiState } from '../ui-state';
-import { createPageApi, type PageApiDeps } from './page-api';
+import {
+  createPageApi,
+  type PageApiDeps,
+  type PageApiServices,
+} from './page-api';
 
 const manifest: PluginManifest = {
   id: 'p',
@@ -128,7 +131,7 @@ function deps(overrides: Partial<PageApiDeps>): PageApiDeps {
       cancel: () => {},
     },
     config: liveConfig(),
-    services: {} as Omit<PageServices, 'uiState'>,
+    services: {} as PageApiServices,
     uiState: createPageUiState({}, () => {}),
     run: () => {},
     dependency: () => undefined,
@@ -287,6 +290,23 @@ describe('createPageApi', () => {
     expect(listeners.map(([pluginId, message]) => [pluginId, message])).toEqual(
       [['p', 'shown']],
     );
+  });
+
+  it("services.log logs a one-argument line under the plugin's id", () => {
+    const logged: string[][] = [];
+    const api = createPageApi(
+      manifest,
+      deps({
+        services: {
+          log: (source: string, message: string) =>
+            logged.push([source, message]),
+        } as unknown as PageApiServices,
+      }),
+    );
+
+    api.services.log('hello');
+
+    expect(logged).toEqual([['p', 'hello']]);
   });
 
   it('gives the plugin events under its id', () => {

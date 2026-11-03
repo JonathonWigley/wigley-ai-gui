@@ -1,6 +1,6 @@
 # 02 — Page-side handles and recording
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -177,3 +177,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 8eda568a · proof: diff read; typecheck and lint clean; every handle in the plan's table returns Disposable; worker ran 22 named and fake-owning test files, 342 pass · concerns: preload onMessage dispose across contextBridge has no test or live check; track mutates a handle's dispose, unread for shell.setLayout and createDropTargets; a listener added during a tell now waits at five more sites; a stopped plugin's late pop throws; markedId keeps a disposed id until the next markMode; spreading editor and markdown would lose prototype methods on a class host

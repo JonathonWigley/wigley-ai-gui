@@ -967,7 +967,7 @@ describe('watch', () => {
     let changes = 0;
     const watch = await test.docFiles.watch(path, () => changes++);
 
-    watch.close();
+    watch.dispose();
     await test.files.write(path, 'b');
 
     expect(changes).toBe(0);
@@ -1132,7 +1132,7 @@ describe('on Windows', () => {
       watch: (folder, onChange) => {
         watched.push(folder);
         report = onChange;
-        return { close: () => {} };
+        return { dispose: () => {} };
       },
     });
     let changes = 0;

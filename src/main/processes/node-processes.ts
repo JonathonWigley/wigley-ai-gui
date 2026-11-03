@@ -6,7 +6,8 @@ import type { ProcessResult, ProcessRunner } from '../../contracts/processes';
 // Output is collected whole, with no size cap. A run that cannot start
 // rejects naming the program, or the folder when `cwd` does not exist. Past
 // `timeoutMs` the program is killed and the run resolves at once with the
-// output so far; a grandchild it started is not killed.
+// output so far; a grandchild it started is not killed. An abort of `signal`
+// kills it the same way and the run rejects at once with `Stopped <command>`.
 export function createNodeProcesses(): ProcessRunner {
   return { run: runToEnd };
 }
@@ -14,39 +15,58 @@ export function createNodeProcesses(): ProcessRunner {
 function runToEnd(
   command: string,
   args: string[],
-  options?: { cwd?: string; timeoutMs?: number },
+  options?: { cwd?: string; timeoutMs?: number; signal?: AbortSignal },
 ): Promise<ProcessResult> {
   return new Promise((resolve, reject) => {
+    const signal = options?.signal;
+    if (signal?.aborted) {
+      reject(new Error(`Stopped ${command}`));
+      return;
+    }
     const child = spawn(command, args, {
       cwd: options?.cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     const stdout: Buffer[] = [];
     const stderr: Buffer[] = [];
-    let timedOut = false;
+    let isKilled = false;
+    const kill = () => {
+      isKilled = true;
+      child.kill('SIGKILL');
+      // Releases the pipe handles and stops a surviving grandchild's output
+      // from growing the buffers.
+      child.stdout.destroy();
+      child.stderr.destroy();
+    };
+    const stop = () => {
+      stopWaiting();
+      kill();
+      reject(new Error(`Stopped ${command}`));
+    };
     const timer =
       options?.timeoutMs === undefined
         ? undefined
         : setTimeout(() => {
-            timedOut = true;
-            child.kill('SIGKILL');
-            // Releases the pipe handles and stops a surviving grandchild's
-            // output from growing the buffers.
-            child.stdout.destroy();
-            child.stderr.destroy();
+            stopWaiting();
+            kill();
             resolve(collected(-1, stdout, stderr, true));
           }, options.timeoutMs);
+    const stopWaiting = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', stop);
+    };
+    signal?.addEventListener('abort', stop);
     child.stdout.on('data', (chunk: Buffer) => stdout.push(chunk));
     child.stderr.on('data', (chunk: Buffer) => stderr.push(chunk));
     child.on('error', (error) => {
-      clearTimeout(timer);
-      if (!timedOut) {
+      stopWaiting();
+      if (!isKilled) {
         reject(new Error(startFailureMessage(command, options?.cwd, error)));
       }
     });
     child.on('close', (code) => {
-      clearTimeout(timer);
-      if (!timedOut) {
+      stopWaiting();
+      if (!isKilled) {
         resolve(collected(code ?? -1, stdout, stderr, false));
       }
     });

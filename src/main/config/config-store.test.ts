@@ -671,7 +671,7 @@ describe('loadConfigStore', () => {
       ...createMemoryFiles(),
       watch: (_folder, _onChange, options) => {
         fail = options?.onError ?? fail;
-        return { close: () => undefined };
+        return { dispose: () => undefined };
       },
     };
     const store = await load(files);
@@ -695,9 +695,9 @@ describe('loadConfigStore', () => {
       watch: (folder, onChange, options) => {
         const watch = memory.watch(folder, onChange, options);
         return {
-          close: () => {
+          dispose: () => {
             closes++;
-            watch.close();
+            watch.dispose();
           },
         };
       },

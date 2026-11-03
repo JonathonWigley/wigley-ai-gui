@@ -151,7 +151,7 @@ describe('createNodeFiles', () => {
       });
       await waitMs(3 * QUIET_MS);
     } finally {
-      watch.close();
+      watch.dispose();
     }
 
     expect(reports).toEqual(['z.txt']);
@@ -170,7 +170,7 @@ describe('createNodeFiles', () => {
         timeout: 5000,
       });
     } finally {
-      watch.close();
+      watch.dispose();
     }
 
     // The OS may report `sub` itself, its contents having changed.
@@ -190,7 +190,7 @@ describe('createNodeFiles', () => {
       await files.write(path.join(root, 'z.txt'), 'text');
       await waitMs(3 * QUIET_MS);
     } finally {
-      watch.close();
+      watch.dispose();
     }
 
     expect(errors).toEqual([failure]);
@@ -205,7 +205,7 @@ describe('createNodeFiles', () => {
       await files.write(path.join(root, 'z.txt'), 'text');
       await waitMs(3 * QUIET_MS);
     } finally {
-      watch.close();
+      watch.dispose();
     }
 
     expect(reports).toEqual([]);

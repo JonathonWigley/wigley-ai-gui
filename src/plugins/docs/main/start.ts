@@ -390,10 +390,8 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
       writeDoc,
       writeBytes,
       trashDoc,
-      watchDoc: async (path, changed) => {
-        const watch = await (await docs).docFiles.watch(path, changed);
-        return { dispose: () => watch.close() };
-      },
+      watchDoc: async (path, changed) =>
+        (await docs).docFiles.watch(path, changed),
     };
     return {
       commands: {},

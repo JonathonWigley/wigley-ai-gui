@@ -13,7 +13,7 @@ import {
   PANE_FOCUS_COMMANDS,
   PANE_RESIZE_COMMANDS,
 } from '../contracts/panes';
-import type { PageCommandContext, PageServices } from '../contracts/plugin';
+import type { PageCommandContext } from '../contracts/plugin';
 import type { AppConfig } from '../contracts/settings';
 import { manifests } from '../plugins/manifests';
 import { pageParts } from '../plugins/page';
@@ -45,7 +45,7 @@ import { createScopeStack } from './key-scope';
 import { installPageKeys } from './page-keys';
 import { createPaneTargets } from './pane-targets';
 import { createPendingKeys } from './pending-keys';
-import { createPageApi } from './plugins/page-api';
+import { createPageApi, type PageApiServices } from './plugins/page-api';
 import defaultChromeLayout from './shell/layouts/default/layout.js';
 import defaultChromeStylesheet from './shell/layouts/default/layout.css?url';
 import type { Layout as ChromeLayout } from './shell/layouts/layout';
@@ -221,7 +221,7 @@ async function start() {
   );
   // Highlighted markdown has no editor to mount the code colours.
   mountCodeColours(document);
-  const services: Omit<PageServices, 'uiState'> = {
+  const services: PageApiServices = {
     editor,
     markdown,
     markup: createFabricMarkupEditor(),

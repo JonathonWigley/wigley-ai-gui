@@ -23,7 +23,7 @@ function setUp() {
         closed: false,
         start: () =>
           resolve({
-            close: () => {
+            dispose: () => {
               record.closed = true;
             },
           }),
