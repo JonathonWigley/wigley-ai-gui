@@ -770,7 +770,8 @@ export function createDocView(deps: DocViewDeps): DocView {
   };
 
   // Links every file at the editor's cursor, once each pasted one is saved,
-  // while the doc and editor the take began on are still open.
+  // while the doc and editor the take began on are still open; else toasts
+  // the paths of the pasted files it saved.
   const takeFiles = async (files: readonly DroppedFile[]) => {
     const doc = shown;
     const taking = editor;
@@ -780,17 +781,28 @@ export function createDocView(deps: DocViewDeps): DocView {
     const now = deps.now();
     const pasteIndexes = claimPasteIndexes(files, now);
     const links: string[] = [];
+    const savedPaths: string[] = [];
     for (const file of files) {
-      const path =
-        file.path === ''
-          ? await writePasted(doc, file, now, pasteIndexes.shift()!)
-          : file.path;
-      if (path !== null) {
-        links.push(docLinkOf(path, doc.filePath, file.mediaType, deps.paths));
+      const isPasted = file.path === '';
+      const path = isPasted
+        ? await writePasted(doc, file, now, pasteIndexes.shift()!)
+        : file.path;
+      if (path === null) {
+        continue;
       }
+      if (isPasted) {
+        savedPaths.push(path);
+      }
+      links.push(docLinkOf(path, doc.filePath, file.mediaType, deps.paths));
     }
     if (shown !== doc || editor !== taking) {
       deps.log('docs', `not linked: the editor on ${doc.name} closed`);
+      if (savedPaths.length > 0) {
+        deps.toast(
+          `Saved ${savedPaths.join(', ')}, not linked: the editor closed`,
+          'info',
+        );
+      }
       return;
     }
     if (links.length === 0) {

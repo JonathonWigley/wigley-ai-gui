@@ -71,7 +71,25 @@ describe('docLinkOf', () => {
       filePath: '/n/docs/a\\b.md',
       docPath: DOC,
       mediaType: 'text/markdown',
-      link: '[a\\\\b.md](a\\b.md)',
+      link: '[a\\\\b.md](a%5Cb.md)',
+    },
+    {
+      filePath: '/n/docs/a\\#b.md',
+      docPath: DOC,
+      mediaType: 'text/markdown',
+      link: '[a\\\\#b.md](a%5C%23b.md)',
+    },
+    {
+      filePath: '/n/docs/Q3:Q4.md',
+      docPath: DOC,
+      mediaType: 'text/markdown',
+      link: '[Q3:Q4.md](Q3%3AQ4.md)',
+    },
+    {
+      filePath: '/n/docs/notes:12',
+      docPath: DOC,
+      mediaType: '',
+      link: '[notes:12](notes%3A12)',
     },
     {
       filePath: 'C:\\n\\docs\\img\\a.png',

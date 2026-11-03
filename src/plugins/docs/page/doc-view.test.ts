@@ -420,7 +420,9 @@ describe('createDocView', () => {
       writeBytes: 'afterQuit',
       writes: [['/n/docs/images/guide-20261102-090507.png', [1]]],
       inserts: [],
-      toasts: [],
+      toasts: [
+        'Saved /n/docs/images/guide-20261102-090507.png, not linked: the editor closed',
+      ],
     },
   ])('take_FilesBecomeDocLinks $name', async (row) => {
     const shown = docViewOver(() =>
