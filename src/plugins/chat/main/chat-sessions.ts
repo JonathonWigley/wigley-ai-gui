@@ -1593,8 +1593,12 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         return;
       }
       const row = session.state.queued.find((queued) => queued.id === queuedId);
-      if (row === undefined || !isUnsent(row)) {
+      if (row === undefined) {
         log('chat', `queued message ${queuedId} no longer queued`);
+        return;
+      }
+      if (!isUnsent(row)) {
+        log('chat', `queued message ${queuedId} already sent`);
         return;
       }
       if (writeRowNow(session, row)) {

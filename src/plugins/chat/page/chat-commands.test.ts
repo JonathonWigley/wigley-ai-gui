@@ -362,10 +362,31 @@ describe('chat commands', () => {
 
   it.each([
     {
-      given: 'two queued',
-      queued: ['q-1', 'q-2'],
+      given: 'two unsent queued',
+      queued: [
+        { id: 'q-1', sentEntryId: null },
+        { id: 'q-2', sentEntryId: null },
+      ],
       invoked: [['pullBack', 'row-1', 'q-2']],
       logs: ['[chat] pulling back a pending message in app'],
+    },
+    {
+      given: 'the newest sent, the older unsent',
+      queued: [
+        { id: 'q-1', sentEntryId: null },
+        { id: 'q-2', sentEntryId: 'entry-7' },
+      ],
+      invoked: [['pullBack', 'row-1', 'q-1']],
+      logs: ['[chat] pulling back a pending message in app'],
+    },
+    {
+      given: 'every queued sent',
+      queued: [
+        { id: 'q-1', sentEntryId: 'entry-6' },
+        { id: 'q-2', sentEntryId: 'entry-7' },
+      ],
+      invoked: [],
+      logs: ['[chat] no pending message in app'],
     },
     {
       given: 'none queued',
@@ -374,17 +395,12 @@ describe('chat commands', () => {
       logs: ['[chat] no pending message in app'],
     },
   ])(
-    'pullBackQueued given $given pulls back the newest',
+    'pullBackQueued given $given pulls back the newest unsent',
     ({ queued, invoked, logs }) => {
       const shown = session(true);
       const state = {
         ...shown.state,
-        queued: queued.map((id) => ({
-          id,
-          text: id,
-          images: [],
-          sentEntryId: null,
-        })),
+        queued: queued.map((row) => ({ ...row, text: row.id, images: [] })),
       };
       const run = setUp(Object.assign(shown, { state }));
 
@@ -395,47 +411,77 @@ describe('chat commands', () => {
     },
   );
 
+  const pendingStop: EntryListStop = {
+    kind: 'queued',
+    message: { id: 'q-2', text: 'later', images: [], sentEntryId: null },
+  };
+
   it.each([
     {
       given: 'a pending row focused, the box unfocused',
+      focused: pendingStop,
       boxFocused: false,
       typed: 'draft',
       invoked: [['sendNow', 'row-1', 'q-2']],
       left: 'draft',
+      marked: [],
     },
     {
       given: 'a pending row focused, text in the focused box',
+      focused: pendingStop,
       boxFocused: true,
       typed: 'now',
       invoked: [['sendAllNow', 'row-1', { text: 'now', images: [] }]],
       left: '',
+      marked: ['row-1'],
     },
     {
       given: 'a pending row focused, the focused box empty',
+      focused: pendingStop,
       boxFocused: true,
       typed: '',
       invoked: [['sendAllNow', 'row-1', null]],
       left: '',
+      marked: [],
+    },
+    {
+      given: 'an entry focused, text in the unfocused box',
+      focused: { kind: 'entry', entry: userEntry } as EntryListStop,
+      boxFocused: false,
+      typed: 'now',
+      invoked: [['sendAllNow', 'row-1', { text: 'now', images: [] }]],
+      left: '',
+      marked: ['row-1'],
+    },
+    {
+      given: 'an app slash command in the focused box',
+      focused: pendingStop,
+      boxFocused: true,
+      typed: '/status',
+      invoked: [],
+      left: '',
+      marked: ['row-1'],
     },
   ])(
     'sendNow given $given sends the row or the box',
-    ({ boxFocused, typed, invoked, left }) => {
+    async ({ focused, boxFocused, typed, invoked, left, marked }) => {
+      const commands = createSlashCommands();
+      commands.add({ name: 'status', description: 'Show', run: () => {} });
       const message = box(typed);
-      const entries = focusedOnStop({
-        kind: 'queued',
-        message: { id: 'q-2', text: 'later', images: [], sentEntryId: null },
-      });
+      const entries = focusedOnStop(focused);
       const shown = Object.assign(session(true), {
         box: message,
         entries: Object.assign(entries, { latest: () => undefined }),
         isBoxFocused: () => boxFocused,
       });
-      const run = setUp(shown);
+      const run = setUp(shown, undefined, true, commands);
 
       run.handlers.sendNow({});
+      await flush();
 
       expect(run.invoked).toEqual(invoked);
       expect(message.held.text).toBe(left);
+      expect(run.marked).toEqual(marked);
     },
   );
 
@@ -603,6 +649,8 @@ describe('chat commands', () => {
   it.each([
     {
       given: 'nothing new in the box',
+      handler: 'send' as const,
+      method: 'send',
       closedSince: false,
       typedSince: '',
       attachedSince: [],
@@ -611,6 +659,8 @@ describe('chat commands', () => {
     },
     {
       given: 'text and an image added since',
+      handler: 'send' as const,
+      method: 'send',
       closedSince: false,
       typedSince: 'more',
       attachedSince: [jpeg],
@@ -619,21 +669,46 @@ describe('chat commands', () => {
     },
     {
       given: 'the session closed since',
+      handler: 'send' as const,
+      method: 'send',
       closedSince: true,
       typedSince: 'more',
       attachedSince: [jpeg],
       text: 'more',
       images: [jpeg],
     },
+    {
+      given: 'sent now from the focused box, nothing new in it',
+      handler: 'sendNow' as const,
+      method: 'sendAllNow',
+      closedSince: false,
+      typedSince: '',
+      attachedSince: [],
+      text: 'hi',
+      images: [png],
+    },
   ])(
     'send_MainRejects_ToastsAndPutsTheMessageBack given $given',
-    async ({ closedSince, typedSince, attachedSince, text, images }) => {
+    async ({
+      handler,
+      method,
+      closedSince,
+      typedSince,
+      attachedSince,
+      text,
+      images,
+    }) => {
       const message = box('hi');
-      const shown = Object.assign(session(false), { box: message });
+      const entries = focusedOnStop({ kind: 'entry', entry: userEntry });
+      const shown = Object.assign(session(false), {
+        box: message,
+        entries: Object.assign(entries, { latest: () => undefined }),
+        isBoxFocused: () => true,
+      });
       shown.attachments.add(png);
       const run = setUp(shown, new Error('profile gone'));
 
-      run.handlers.send({});
+      run.handlers[handler]({});
       message.held.text = typedSince;
       for (const image of attachedSince) {
         shown.attachments.add(image);
@@ -644,7 +719,7 @@ describe('chat commands', () => {
       await flush();
 
       expect(run.toasts).toEqual(['Message not sent: profile gone']);
-      expect(run.logs).toContainEqual(expect.stringContaining('profile gone'));
+      expect(run.logs).toContainEqual(`[chat] ${method} failed: profile gone`);
       expect(message.held.text).toBe(text);
       expect(shown.attachments.images()).toEqual(images);
       expect(run.marked).toEqual([]);

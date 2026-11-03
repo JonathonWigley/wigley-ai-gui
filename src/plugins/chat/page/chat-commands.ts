@@ -263,7 +263,9 @@ export function chatCommandHandlers(
       });
     }),
     pullBackQueued: inSession((session) => {
-      const newest = session.state.queued.at(-1);
+      const newest = session.state.queued.findLast(
+        (queued) => queued.sentEntryId === null,
+      );
       if (newest === undefined) {
         log('chat', `no pending message in ${session.name}`);
         return;

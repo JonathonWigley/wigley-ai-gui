@@ -1404,18 +1404,25 @@ describe('createChatSessions', () => {
   });
 
   it.each([
-    { case: 'an unknown id', queuedId: 'queued-9', arrange: () => {} },
+    {
+      case: 'an unknown id',
+      queuedId: 'queued-9',
+      arrange: () => {},
+      reason: 'no longer queued',
+    },
     {
       case: 'a row already sent now',
       queuedId: 'queued-1',
       arrange: (test: Awaited<ReturnType<typeof started>>) =>
         test.chat.sendNow(ROW_ID, 'queued-1'),
+      reason: 'already sent',
     },
     {
       case: 'a row already written at an idle',
       queuedId: 'queued-1',
       arrange: (test: Awaited<ReturnType<typeof started>>) =>
         test.activity('idle'),
+      reason: 'no longer queued',
     },
   ])('sendNow_NotQueued_LogsAndWritesNothing: $case', async (row) => {
     const test = await started();
@@ -1429,7 +1436,7 @@ describe('createChatSessions', () => {
     expect(test.process.calls).toHaveLength(callsBefore);
     expect(test.messages).toHaveLength(sentBefore);
     expect(test.logged).toContain(
-      `[chat] queued message ${row.queuedId} no longer queued`,
+      `[chat] queued message ${row.queuedId} ${row.reason}`,
     );
   });
 

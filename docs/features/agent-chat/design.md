@@ -256,8 +256,9 @@ interview on 2026-10-23; this file is the record of both.
     <error>`, and a refused box message goes back into the box. Main logs `nothing to send now in <session>` when
     the box call finds nothing unsent and no message. Main writes each message and keeps its row in the queue,
     marked sent (`QueuedMessage.sentEntryId`, the id `send` returned), and the row's label reads `sending` until the
-    entry with that id arrives, which drops the row. A send-now for a message no longer queued, or already sent, does
-    nothing and logs `queued message <id> no longer queued`. A write that throws leaves the row unsent, logs
+    entry with that id arrives, which drops the row. A send-now for a message no longer queued does nothing and logs
+    `queued message <id> no longer queued`; one for a sent row does nothing and logs `queued message <id> already
+    sent`. A write that throws leaves the row unsent, logs
     `queued message <id> not sent: <error>` and stops the box call there. When the harness reports the agent dropped a sent message without taking
     it in (`AgentProcessEvents.messageDropped`: Claude's `cancelled`, `discarded` or `refused` with no `started`
     before it), main returns it to the box and logs `sent message <id> returned: never taken in` (`dropped message
@@ -265,8 +266,8 @@ interview on 2026-10-23; this file is the record of both.
     entry arrives, so a dropped idle send returns the same way.
   - **Pulling back**: a pending row is a cursor stop after the last entry, so `G` and a following focus land on the
     newest pending row when any exist. Three routes pull a message back: Enter on the focused row, a click on it, and
-    `<Leader>cp` in the box, which pulls back the newest. Each logs `pulling back a pending message in <session>`
-    (`no pending message in <session>` for `<Leader>cp` with none). Main takes the message out of the queue and returns
+    `<Leader>cp` in the box, which pulls back the newest unsent. Each logs `pulling back a pending message in
+    <session>` (`no pending message in <session>` for `<Leader>cp` with no unsent row). Main takes the message out of the queue and returns
     it, and the page puts it into the box the way a refused message goes back: its text on its own line above
     anything typed, its images ahead of any attached. `putBack` returns whether the box took the messages, and each
     caller logs its own line: `pulled back <n> message(s) in <session>`, or `put the refused message back in

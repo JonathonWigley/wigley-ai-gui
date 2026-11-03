@@ -33,7 +33,7 @@ export const chatManifest = definePlugin({
       runsIn: 'page',
     },
     pullBackQueued: {
-      label: 'pull back the newest pending message',
+      label: 'pull back the newest unsent pending message',
       group: 'box',
       runsIn: 'page',
     },
