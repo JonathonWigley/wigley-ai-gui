@@ -72,7 +72,7 @@ const GROUPS: SelfTestGroup[] = [
       {
         keys: ['<C-c>'],
         expect: `[agents] lines in ${SELFTEST_PROJECT_NAME}: 0`,
-        why: 'Interrupt sends agentFinished for each running subagent and taskFinished for each running task, so the roster empties.',
+        why: 'Interrupt ends each running subagent and task, so the roster marks them finished and the page draws no line for them.',
       },
     ],
   },

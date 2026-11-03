@@ -1,6 +1,6 @@
 # 03 — Subagent facts in agent events
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none (the background-tasks plan landed, plan.md § Preconditions)
 Plan: [plan.md](plan.md)
@@ -300,3 +300,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 602263b9 · proof: diff read: agentSpawned name/model/effort, agentReplied, toolStarted summary, taskStarted command in agent.ts; whole-tree tsc clean; worker's 23 test files (626 tests) pass · concerns: Done-when grep for installed_plugins.json also hits five pre-existing docs-plugin readers — a second reader of that file now exists beside the new loader, layer rules stop reuse; probe ran a live claude -p haiku turn

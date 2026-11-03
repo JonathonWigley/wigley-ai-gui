@@ -37,10 +37,11 @@ function rowRoster(hosts: ReadonlyMap<string, Roster>): Roster {
 }
 
 // Hears chat's agent events: logs each in plugin data and folds it into the
-// roster of its process's host session id, sending the page each row's roster
-// that changed: every host id's subagents and tasks in the row, each list in
-// fold order. A host id's roster is dropped once it lists neither, and a row's
-// rosters when it closes or ends. Registers the agents layouts,
+// roster of its process's host session id, a `userMessage` into every host
+// id's roster of its row, sending the page each row's roster that changed:
+// every host id's subagents and tasks in the row, each list in fold order. A
+// host id's roster is dropped once a message drops its last finished item,
+// and a row's rosters when it closes or ends. Registers the agents layouts,
 // and holds the layout preview, whose roster `rosters` lists beside the live
 // ones, and hands the self-test its script.
 export const agentsMainPart: MainPart<typeof agentsManifest> = {
@@ -59,22 +60,33 @@ export const agentsMainPart: MainPart<typeof agentsManifest> = {
       log: api.services.log,
     });
     // Row id → host session id → that process's roster. A clear leaves the
-    // old process ending under the same row, so its `sessionEnded` must drop
+    // old process ending under the same row, so its `sessionEnded` must end
     // only its own subagents and tasks.
     const rosters = new Map<string, Map<string, Roster>>();
 
     api.events.on('chat.agentEvent', ({ sessionId, hostSessionId, event }) => {
       void agentLog.append(hostSessionId, event);
-      const hosts = rosters.get(sessionId) ?? new Map();
-      const before = hosts.get(hostSessionId) ?? NONE;
-      const after = foldAgentEvent(before, event);
-      if (after === before) {
-        return;
+      const hosts = rosters.get(sessionId) ?? new Map<string, Roster>();
+      // A message drops every host's finished items: after a clear only the
+      // new process sends one, and the old one's must go too.
+      const foldedHosts =
+        event.type === 'userMessage' ? [...hosts.keys()] : [hostSessionId];
+      let changed = false;
+      for (const host of foldedHosts) {
+        const before = hosts.get(host) ?? NONE;
+        const after = foldAgentEvent(before, event);
+        if (after === before) {
+          continue;
+        }
+        changed = true;
+        if (after.agents.length === 0 && after.tasks.length === 0) {
+          hosts.delete(host);
+        } else {
+          hosts.set(host, after);
+        }
       }
-      if (after.agents.length === 0 && after.tasks.length === 0) {
-        hosts.delete(hostSessionId);
-      } else {
-        hosts.set(hostSessionId, after);
+      if (!changed) {
+        return;
       }
       if (hosts.size === 0) {
         rosters.delete(sessionId);

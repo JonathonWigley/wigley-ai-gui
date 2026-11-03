@@ -1,30 +1,33 @@
-import type { Roster, RunningAgent, RunningTask } from '../contract';
+import type { Roster, RosterAgent, RosterTask } from '../contract';
 
 // One line under a session row: a running subagent, or a running task, nested
 // when it sits under the subagent that started it.
 export type RosterLine =
-  | { kind: 'agent'; agent: RunningAgent }
-  | { kind: 'task'; task: RunningTask; isNested: boolean };
+  | { kind: 'agent'; agent: RosterAgent }
+  | { kind: 'task'; task: RosterTask; isNested: boolean };
 
-// The lines a roster draws, in start order: every subagent and every task no
-// listed subagent started, each listed subagent's own tasks right after its
-// line, in their start order, nested. Equal start times keep roster order,
-// subagents before tasks. Subagents stay flat whatever started them.
+// The lines a roster draws, running items only, in start order: every running
+// subagent and every running task no running subagent started, each running
+// subagent's own running tasks right after its line, in their start order,
+// nested. Equal start times keep roster order, subagents before tasks.
+// Subagents stay flat whatever started them.
 export function orderRosterLines(roster: Roster): RosterLine[] {
-  const agentIds = new Set(roster.agents.map((agent) => agent.agentId));
+  const agents = roster.agents.filter((agent) => agent.outcome === 'running');
+  const tasks = roster.tasks.filter((task) => task.outcome === 'running');
+  const agentIds = new Set(agents.map((agent) => agent.agentId));
   const topLevel: { startedAt: number; line: RosterLine }[] = [
-    ...roster.agents.map((agent) => ({
+    ...agents.map((agent) => ({
       startedAt: agent.startedAt,
       line: { kind: 'agent', agent } as const,
     })),
-    ...roster.tasks
+    ...tasks
       .filter((task) => !agentIds.has(task.agentId))
       .map((task) => ({
         startedAt: task.startedAt,
         line: { kind: 'task', task, isNested: false } as const,
       })),
   ];
-  const nested = roster.tasks
+  const nested = tasks
     .filter((task) => agentIds.has(task.agentId))
     .sort(byStartedAt);
   return topLevel

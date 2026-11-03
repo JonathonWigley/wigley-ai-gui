@@ -1,6 +1,6 @@
 # 04 — The roster keeps finished items, tools, model, effort and spend
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 2 · Depends on: 03
 Plan: [plan.md](plan.md)

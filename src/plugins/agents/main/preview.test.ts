@@ -59,9 +59,58 @@ describe('agents preview', () => {
       NOW - 42_000,
       NOW - 185_000,
     ]);
-    expect(sample.tasks.map((task) => task.agentId)).toEqual([
-      MAIN_AGENT_ID,
-      sample.agents[1].agentId,
+    expect(
+      sample.agents.map(
+        ({ name, model, effort, spendUsd, tools, outcome }) => ({
+          name,
+          model,
+          effort,
+          spendUsd,
+          tools: tools.map((tool) => `${tool.tool} ${tool.outcome}`),
+          outcome,
+        }),
+      ),
+    ).toEqual([
+      {
+        name: 'map-sessions',
+        model: 'claude-sonnet-5-5',
+        effort: 'medium',
+        spendUsd: 0.0421,
+        tools: ['Read running'],
+        outcome: 'running',
+      },
+      {
+        name: 'Explore',
+        model: 'claude-haiku-5-5',
+        effort: null,
+        spendUsd: 0.0187,
+        tools: [
+          ...Array.from({ length: 11 }, (_, i) =>
+            i % 2 === 0 ? 'Grep done' : 'Read done',
+          ),
+          'Read running',
+        ],
+        outcome: 'running',
+      },
+    ]);
+    expect(
+      sample.tasks.map(({ agentId, command, outcome }) => ({
+        agentId,
+        command,
+        outcome,
+      })),
+    ).toEqual([
+      {
+        agentId: MAIN_AGENT_ID,
+        command: 'npm run selftest',
+        outcome: 'running',
+      },
+      {
+        agentId: sample.agents[1].agentId,
+        command:
+          'npm run test -- --watch src/main/claude-code/stream-decoder.test.ts',
+        outcome: 'running',
+      },
     ]);
     expect(afterOpen).toEqual({
       ends: [],

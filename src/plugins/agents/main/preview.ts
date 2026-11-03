@@ -6,7 +6,12 @@ import type {
   SessionsMainExports,
 } from '../../sessions/contract';
 import { MAIN_AGENT_ID } from '../../../contracts/agent';
-import type { AgentsChannel, Roster } from '../contract';
+import type {
+  AgentsChannel,
+  Roster,
+  RosterAgent,
+  RosterTask,
+} from '../contract';
 
 // Holds no alerts or window, so the preview cannot raise a notification, a
 // Dock bounce or a badge. `clock` dates the sample's starts at open.
@@ -40,38 +45,69 @@ interface OpenPreview {
 // subagent's and the second task's descriptions are long enough to end in an
 // ellipsis. The second subagent is the widest line the agents self-test fits
 // at the side bar's least width, so its elapsed time stays past a minute and
-// its tool count past 9.
+// its count of `tools` past 9: eleven done and the twelfth running.
 function sampleRoster(now: number): Roster {
-  const agents = [
+  const agents: RosterAgent[] = [
     {
       agentId: 'preview-agent-1',
       agentType: 'wigley:sonnet-medium',
+      name: 'map-sessions',
       description: 'Map every caller of the session list',
       startedAt: now - 42_000,
-      toolCalls: 1,
+      model: 'claude-sonnet-5-5',
+      effort: 'medium',
+      spendUsd: 0.0421,
+      tools: [
+        {
+          toolUseId: 'preview-agent-1-tool-1',
+          tool: 'Read',
+          summary: 'src/plugins/sessions/contract.ts',
+          outcome: 'running',
+        },
+      ],
+      outcome: 'running',
     },
     {
       agentId: 'preview-agent-2',
       agentType: 'Explore',
+      name: 'Explore',
       description:
         'Find every adapter behind the Files contract and list what each one writes, so this line ends in an ellipsis',
       startedAt: now - 185_000,
-      toolCalls: 12,
+      model: 'claude-haiku-5-5',
+      effort: null,
+      spendUsd: 0.0187,
+      tools: Array.from({ length: 12 }, (_, i) => {
+        const n = i + 1;
+        return {
+          toolUseId: `preview-agent-2-tool-${n}`,
+          ...(n % 2 === 1
+            ? { tool: 'Grep', summary: 'append' }
+            : { tool: 'Read', summary: 'src/main/files/node-files.ts' }),
+          outcome: n === 12 ? 'running' : 'done',
+        };
+      }),
+      outcome: 'running',
     },
   ];
-  const tasks = [
+  const tasks: RosterTask[] = [
     {
       taskId: 'preview-task-1',
       agentId: MAIN_AGENT_ID,
       description: 'npm run selftest',
+      command: 'npm run selftest',
       startedAt: now - 95_000,
+      outcome: 'running',
     },
     {
       taskId: 'preview-task-2',
       agentId: 'preview-agent-2',
       description:
         'Watch the stream decoder tests and report each failure as it lands',
+      command:
+        'npm run test -- --watch src/main/claude-code/stream-decoder.test.ts',
       startedAt: now - 60_000,
+      outcome: 'running',
     },
   ];
   return { agents, tasks };

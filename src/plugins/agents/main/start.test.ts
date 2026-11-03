@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { MAIN_AGENT_ID, type AgentEvent } from '../../../contracts/agent';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import type { SessionsMainExports } from '../../sessions/contract';
-import type { Roster, RunningAgent, RunningTask } from '../contract';
+import type { Roster, RosterAgent, RosterTask } from '../contract';
 import { agentsMainPart } from './start';
 
 const PREVIEW_ROW = 'preview-row';
@@ -38,20 +38,32 @@ const spawnedB: AgentEvent = {
   effort: null,
 };
 
-const runningA: RunningAgent = {
+const runningA: RosterAgent = {
   agentId: 'toolu_a',
   agentType: 'Explore',
+  name: 'Explore',
   description: 'Find adapters',
   startedAt: 1_000,
-  toolCalls: 0,
+  model: null,
+  effort: null,
+  spendUsd: null,
+  tools: [],
+  outcome: 'running',
 };
-const runningB: RunningAgent = {
+const runningB: RosterAgent = {
   agentId: 'toolu_b',
   agentType: 'general-purpose',
+  name: 'general-purpose',
   description: 'Write the reducer',
   startedAt: 5_000,
-  toolCalls: 0,
+  model: null,
+  effort: null,
+  spendUsd: null,
+  tools: [],
+  outcome: 'running',
 };
+const doneA: RosterAgent = { ...runningA, outcome: 'done' };
+const failedA: RosterAgent = { ...runningA, outcome: 'failed' };
 
 const taskStartedA: AgentEvent = {
   type: 'taskStarted',
@@ -69,21 +81,25 @@ const taskStartedMain: AgentEvent = {
   description: 'npm run build',
   command: null,
 };
-const runningTaskA: RunningTask = {
+const runningTaskA: RosterTask = {
   taskId: 'task_a',
   agentId: 'toolu_a',
   description: 'npm test --watch',
+  command: null,
   startedAt: 1_500,
+  outcome: 'running',
 };
-const runningTaskMain: RunningTask = {
+const runningTaskMain: RosterTask = {
   taskId: 'task_main',
   agentId: MAIN_AGENT_ID,
   description: 'npm run build',
+  command: null,
   startedAt: 6_000,
+  outcome: 'running',
 };
 
 // A roster holding these agents and tasks.
-function roster(agents: RunningAgent[], tasks: RunningTask[] = []): Roster {
+function roster(agents: RosterAgent[], tasks: RosterTask[] = []): Roster {
   return { agents, tasks };
 }
 
@@ -170,10 +186,11 @@ describe('agentsMainPart', () => {
       rosters: { s1: roster([runningA]) },
     },
     {
-      name: 'an emptied roster sends an empty roster and is no longer listed',
-      steps: [spawned, finished],
+      name: 'a finished agent stays listed until the next message',
+      steps: [spawned, finished, userMessage],
       sent: [
         { sessionId: 's1', roster: roster([runningA]) },
+        { sessionId: 's1', roster: roster([doneA]) },
         { sessionId: 's1', roster: roster([]) },
       ],
       rosters: {},
@@ -200,14 +217,30 @@ describe('agentsMainPart', () => {
       rosters: { s1: roster([runningA]) },
     },
     {
-      name: "a row's old process ending drops only its own subagents",
+      name: "a message drops a cleared host's finished items",
+      steps: [
+        spawned,
+        { host: CLEARED_HOST, event: spawnedB },
+        sessionEnded,
+        { host: CLEARED_HOST, event: userMessage },
+      ],
+      sent: [
+        { sessionId: 's1', roster: roster([runningA]) },
+        { sessionId: 's1', roster: roster([runningA, runningB]) },
+        { sessionId: 's1', roster: roster([failedA, runningB]) },
+        { sessionId: 's1', roster: roster([runningB]) },
+      ],
+      rosters: { s1: roster([runningB]) },
+    },
+    {
+      name: "a row's old process ending fails only its own subagents",
       steps: [spawned, { host: CLEARED_HOST, event: spawnedB }, sessionEnded],
       sent: [
         { sessionId: 's1', roster: roster([runningA]) },
         { sessionId: 's1', roster: roster([runningA, runningB]) },
-        { sessionId: 's1', roster: roster([runningB]) },
+        { sessionId: 's1', roster: roster([failedA, runningB]) },
       ],
-      rosters: { s1: roster([runningB]) },
+      rosters: { s1: roster([failedA, runningB]) },
     },
     {
       name: 'a started task sends a roster listing it',
@@ -233,9 +266,9 @@ describe('agentsMainPart', () => {
       sent: [
         { sessionId: 's1', roster: roster([runningA]) },
         { sessionId: 's1', roster: roster([runningA], [runningTaskA]) },
-        { sessionId: 's1', roster: roster([], [runningTaskA]) },
+        { sessionId: 's1', roster: roster([doneA], [runningTaskA]) },
       ],
-      rosters: { s1: roster([], [runningTaskA]) },
+      rosters: { s1: roster([doneA], [runningTaskA]) },
     },
   ])('$name', ({ steps, sent, rosters }) => {
     const agents = startAgentsPart();

@@ -2,35 +2,57 @@
 
 import type { ChannelShape } from '../../contracts/plugin';
 
-// A subagent still working in a session. `startedAt` is its spawn's `at`, epoch milliseconds; `toolCalls` counts
-// the tool calls it started.
-export interface RunningAgent {
-  agentId: string;
-  agentType: string;
-  description: string;
-  startedAt: number;
-  toolCalls: number;
+// Whether a roster item is still running, or how it ended.
+export type RosterOutcome = 'running' | 'done' | 'failed';
+
+// One tool call a subagent started, `summary` naming what it acted on.
+export interface RosterTool {
+  toolUseId: string;
+  tool: string;
+  summary: string;
+  outcome: RosterOutcome;
 }
 
-// A task still running in a session: a background shell or another long-running job an agent started. `agentId` is
-// the agent that started it, `main` or a subagent's id; `startedAt` is its start's `at`, epoch milliseconds.
-export interface RunningTask {
+// A subagent of a session, running or finished since the user's last message. `startedAt` is its spawn's `at`, epoch
+// milliseconds. `model` is the model of its latest `agentReplied` (a reply or its launch receipt), else the spawn's;
+// `spendUsd` is the estimate of its latest reply, null before one or for an unpriced model.
+export interface RosterAgent {
+  agentId: string;
+  agentType: string;
+  name: string;
+  description: string;
+  startedAt: number;
+  model: string | null;
+  effort: string | null;
+  spendUsd: number | null;
+  // Its tool calls in start order, every one kept: each tool start and end sends the whole roster, so a subagent with
+  // hundreds of calls sends hundreds of small objects per change, a cost accepted so the box can list every call.
+  tools: RosterTool[];
+  outcome: RosterOutcome;
+}
+
+// A task of a session, running or finished since the user's last message: a background shell or another long-running
+// job an agent started. `agentId` is the agent that started it, `main` or a subagent's id; `command` is null when the
+// harness named none; `startedAt` is its start's `at`, epoch milliseconds.
+export interface RosterTask {
   taskId: string;
   agentId: string;
   description: string;
+  command: string | null;
   startedAt: number;
+  outcome: RosterOutcome;
 }
 
-// A session's running subagents and running tasks, each list in start order.
+// A session's subagents and tasks, each list in start order.
 export interface Roster {
-  agents: RunningAgent[];
-  tasks: RunningTask[];
+  agents: RosterAgent[];
+  tasks: RosterTask[];
 }
 
 // Rosters are keyed by the app's sessionId (the session row's id). `rosters` returns every session's roster that
-// lists a subagent or a task; `rosterChanged` carries a session's whole roster after each change, both lists empty
-// once its last subagent and task finish. `openPreview` opens the layout preview's sample session, or ends it while
-// it is open.
+// lists any item, finished ones included; `rosterChanged` carries a session's whole roster after each change, both
+// lists empty once a message drops its last finished item or the row ends. `openPreview` opens the layout preview's
+// sample session, or ends it while it is open.
 export interface AgentsChannel extends ChannelShape {
   invoke: { rosters(): Record<string, Roster>; openPreview(): void };
   messages: { rosterChanged: { sessionId: string; roster: Roster } };

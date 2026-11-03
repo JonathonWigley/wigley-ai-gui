@@ -1,6 +1,6 @@
 # 05 — Chat status line, branch and status parts
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 2 · Depends on: 03
 Plan: [plan.md](plan.md)

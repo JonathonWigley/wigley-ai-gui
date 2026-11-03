@@ -98,7 +98,7 @@ export function createRosterLines(deps: RosterLinesDeps): RosterLines {
           agentType: line.agent.agentType,
           description: line.agent.description,
           elapsedMs: now - line.agent.startedAt,
-          toolCalls: line.agent.toolCalls,
+          toolCalls: line.agent.tools.length,
         })
       : drawTaskLine(holder, {
           description: line.task.description,

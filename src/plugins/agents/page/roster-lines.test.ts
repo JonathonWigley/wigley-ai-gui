@@ -10,7 +10,7 @@ import {
   installFakeDom,
 } from '../../../shared/page/test-dom';
 import { MAIN_AGENT_ID } from '../../../contracts/agent';
-import type { Roster } from '../contract';
+import type { Roster, RosterAgent, RosterTask } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type { Layout, TaskLineInput } from '../layouts/layout';
 import { createRosterLines } from './roster-lines';
@@ -19,24 +19,63 @@ import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 const NOW = 1_000_000;
 const SESSION = 'row-1';
 
+// A running agent of `agentType`, `ageMs` old at NOW, with `toolCount` tool
+// calls, all done.
+function runningAgent(
+  agentId: string,
+  agentType: string,
+  description: string,
+  ageMs: number,
+  toolCount: number,
+): RosterAgent {
+  return {
+    agentId,
+    agentType,
+    name: agentType,
+    description,
+    startedAt: NOW - ageMs,
+    model: null,
+    effort: null,
+    spendUsd: null,
+    tools: Array.from({ length: toolCount }, (_, i) => ({
+      toolUseId: `${agentId}-tool-${i + 1}`,
+      tool: 'Read',
+      summary: 'src/main/files/node-files.ts',
+      outcome: 'done',
+    })),
+    outcome: 'running',
+  };
+}
+
+// A running task of `agentId`'s, `ageMs` old at NOW.
+function runningTask(
+  taskId: string,
+  agentId: string,
+  description: string,
+  ageMs: number,
+): RosterTask {
+  return {
+    taskId,
+    agentId,
+    description,
+    command: null,
+    startedAt: NOW - ageMs,
+    outcome: 'running',
+  };
+}
+
 // Two running agents, 42 s and 185 s old at NOW, with one and twelve tool
 // calls, and no task.
 const TWO_RUNNING: Roster = {
   agents: [
-    {
-      agentId: 'agent-1',
-      agentType: 'Explore',
-      description: 'Map the callers',
-      startedAt: NOW - 42_000,
-      toolCalls: 1,
-    },
-    {
-      agentId: 'agent-2',
-      agentType: 'wigley:sonnet-medium',
-      description: 'Read the contract',
-      startedAt: NOW - 185_000,
-      toolCalls: 12,
-    },
+    runningAgent('agent-1', 'Explore', 'Map the callers', 42_000, 1),
+    runningAgent(
+      'agent-2',
+      'wigley:sonnet-medium',
+      'Read the contract',
+      185_000,
+      12,
+    ),
   ],
   tasks: [],
 };
@@ -46,18 +85,8 @@ const TWO_RUNNING: Roster = {
 const WITH_TASKS: Roster = {
   ...TWO_RUNNING,
   tasks: [
-    {
-      taskId: 'task-1',
-      agentId: 'agent-2',
-      description: 'npm test --watch',
-      startedAt: NOW - 30_000,
-    },
-    {
-      taskId: 'task-2',
-      agentId: MAIN_AGENT_ID,
-      description: 'npm run build',
-      startedAt: NOW - 90_000,
-    },
+    runningTask('task-1', 'agent-2', 'npm test --watch', 30_000),
+    runningTask('task-2', MAIN_AGENT_ID, 'npm run build', 90_000),
   ],
 };
 
@@ -132,6 +161,7 @@ describe('roster lines', () => {
       drawn.map((line) => findAll(line, 'codicon-terminal').length),
     ).toEqual([0, 1, 1, 0]);
     expect(drawn[0].textContent).toContain('3m 05s');
+    expect(drawn[0].textContent).toContain('12 tools');
     expect(drawn[1].textContent).toContain('npm test --watch');
     expect(drawn[1].textContent).toContain('30s');
     expect(drawn[2].textContent).toContain('npm run build');

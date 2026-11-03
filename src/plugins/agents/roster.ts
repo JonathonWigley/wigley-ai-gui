@@ -1,9 +1,16 @@
 import { MAIN_AGENT_ID, type AgentEvent } from '../../contracts/agent';
-import type { Roster, RunningAgent, RunningTask } from './contract';
+import type {
+  Roster,
+  RosterAgent,
+  RosterOutcome,
+  RosterTask,
+  RosterTool,
+} from './contract';
 
-// Folds one agent event into one process's roster, each list kept in start order. Returns `roster` itself when the
-// event changes nothing. A task outlives the subagent that started it: `agentFinished` drops only the agent.
-// `sessionEnded` finishes every listed subagent and task, since a process that exits mid-run sends neither's end.
+// Folds one agent event into one process's roster, each list kept in start order; an item never moves. Returns
+// `roster` itself when the event changes nothing. A finished item stays, its outcome set, until a `userMessage` drops
+// it. A task outlives the subagent that started it. `sessionEnded` fails every running item, since a process that
+// exits mid-run sends no end for them.
 export function foldAgentEvent(roster: Roster, event: AgentEvent): Roster {
   switch (event.type) {
     case 'agentSpawned':
@@ -15,24 +22,59 @@ export function foldAgentEvent(roster: Roster, event: AgentEvent): Roster {
               {
                 agentId: event.agentId,
                 agentType: event.agentType,
+                name: event.name,
                 description: event.description,
                 startedAt: event.at,
-                toolCalls: 0,
+                model: event.model,
+                effort: event.effort,
+                spendUsd: null,
+                tools: [],
+                outcome: 'running',
               },
             ],
           }
         : roster;
+    case 'agentReplied':
+      return updateAgent(roster, event.agentId, (agent) =>
+        agent.model === event.model && agent.spendUsd === event.spendUsd
+          ? agent
+          : { ...agent, model: event.model, spendUsd: event.spendUsd },
+      );
     case 'toolStarted':
-      return countToolCall(roster, event.agentId);
+      if (event.agentId === MAIN_AGENT_ID) {
+        return roster;
+      }
+      return updateAgent(roster, event.agentId, (agent) =>
+        agent.outcome !== 'running' ||
+        indexOfTool(agent.tools, event.toolUseId) !== -1
+          ? agent
+          : {
+              ...agent,
+              tools: [
+                ...agent.tools,
+                {
+                  toolUseId: event.toolUseId,
+                  tool: event.tool,
+                  summary: event.summary,
+                  outcome: 'running',
+                },
+              ],
+            },
+      );
+    case 'toolFinished':
+      return updateAgent(roster, event.agentId, (agent) =>
+        finishTool(agent, event.toolUseId, event.ok ? 'done' : 'failed'),
+      );
     case 'agentFinished':
-      return indexOfAgent(roster.agents, event.agentId) === -1
-        ? roster
-        : {
-            ...roster,
-            agents: roster.agents.filter(
-              (agent) => agent.agentId !== event.agentId,
-            ),
-          };
+      return updateAgent(roster, event.agentId, (agent) =>
+        agent.outcome === 'running'
+          ? {
+              ...agent,
+              outcome: event.outcome,
+              tools: agent.tools.map(failIfRunning),
+            }
+          : agent,
+      );
     case 'taskStarted':
       return indexOfTask(roster.tasks, event.taskId) === -1
         ? {
@@ -43,28 +85,32 @@ export function foldAgentEvent(roster: Roster, event: AgentEvent): Roster {
                 taskId: event.taskId,
                 agentId: event.agentId,
                 description: event.description,
+                command: event.command,
                 startedAt: event.at,
+                outcome: 'running',
               },
             ],
           }
         : roster;
-    case 'taskFinished':
-      return indexOfTask(roster.tasks, event.taskId) === -1
-        ? roster
-        : {
-            ...roster,
-            tasks: roster.tasks.filter((task) => task.taskId !== event.taskId),
-          };
+    case 'taskFinished': {
+      const index = indexOfTask(roster.tasks, event.taskId);
+      if (index === -1 || roster.tasks[index].outcome !== 'running') {
+        return roster;
+      }
+      return {
+        ...roster,
+        tasks: roster.tasks.map((task, i) =>
+          i === index ? { ...task, outcome: event.outcome } : task,
+        ),
+      };
+    }
     case 'sessionEnded':
-      return roster.agents.length === 0 && roster.tasks.length === 0
-        ? roster
-        : { agents: [], tasks: [] };
+      return failEveryRunningItem(roster);
+    case 'userMessage':
+      return dropFinishedItems(roster);
     case 'sessionStarted':
-    case 'agentReplied':
-    case 'toolFinished':
     case 'usage':
     case 'compacted':
-    case 'userMessage':
     case 'skillStarted':
     case 'fileWritten':
     case 'turnStarted':
@@ -74,27 +120,96 @@ export function foldAgentEvent(roster: Roster, event: AgentEvent): Roster {
   return event satisfies never;
 }
 
-function indexOfAgent(
-  agents: readonly RunningAgent[],
-  agentId: string,
-): number {
+function indexOfAgent(agents: readonly RosterAgent[], agentId: string): number {
   return agents.findIndex((agent) => agent.agentId === agentId);
 }
 
-function indexOfTask(tasks: readonly RunningTask[], taskId: string): number {
+function indexOfTask(tasks: readonly RosterTask[], taskId: string): number {
   return tasks.findIndex((task) => task.taskId === taskId);
 }
 
-function countToolCall(roster: Roster, agentId: string): Roster {
-  const index =
-    agentId === MAIN_AGENT_ID ? -1 : indexOfAgent(roster.agents, agentId);
+function indexOfTool(tools: readonly RosterTool[], toolUseId: string): number {
+  return tools.findIndex((tool) => tool.toolUseId === toolUseId);
+}
+
+// `roster` with its agent `agentId` replaced by `update`'s result; `roster` itself when no agent has that id or
+// `update` returns the agent it was given.
+function updateAgent(
+  roster: Roster,
+  agentId: string,
+  update: (agent: RosterAgent) => RosterAgent,
+): Roster {
+  const index = indexOfAgent(roster.agents, agentId);
   if (index === -1) {
+    return roster;
+  }
+  const updated = update(roster.agents[index]);
+  if (updated === roster.agents[index]) {
     return roster;
   }
   return {
     ...roster,
-    agents: roster.agents.map((agent, i) =>
-      i === index ? { ...agent, toolCalls: agent.toolCalls + 1 } : agent,
+    agents: roster.agents.map((agent, i) => (i === index ? updated : agent)),
+  };
+}
+
+// `agent` with its tool `toolUseId` given `outcome`; `agent` itself unless that tool is listed and running.
+function finishTool(
+  agent: RosterAgent,
+  toolUseId: string,
+  outcome: RosterOutcome,
+): RosterAgent {
+  const index = indexOfTool(agent.tools, toolUseId);
+  if (index === -1 || agent.tools[index].outcome !== 'running') {
+    return agent;
+  }
+  return {
+    ...agent,
+    tools: agent.tools.map((tool, i) =>
+      i === index ? { ...tool, outcome } : tool,
     ),
+  };
+}
+
+function isRunning(item: { outcome: RosterOutcome }): boolean {
+  return item.outcome === 'running';
+}
+
+function failIfRunning<Item extends { outcome: RosterOutcome }>(
+  item: Item,
+): Item {
+  return isRunning(item) ? { ...item, outcome: 'failed' } : item;
+}
+
+// Every running agent, tool and task failed; `roster` itself when nothing runs.
+function failEveryRunningItem(roster: Roster): Roster {
+  const anyRunning =
+    roster.tasks.some(isRunning) ||
+    roster.agents.some(
+      (agent) => isRunning(agent) || agent.tools.some(isRunning),
+    );
+  if (!anyRunning) {
+    return roster;
+  }
+  return {
+    agents: roster.agents.map((agent) => ({
+      ...failIfRunning(agent),
+      tools: agent.tools.map(failIfRunning),
+    })),
+    tasks: roster.tasks.map(failIfRunning),
+  };
+}
+
+// Only the running agents, each with all its tools, and the running tasks, whatever agent owns them; `roster` itself
+// when nothing has finished.
+function dropFinishedItems(roster: Roster): Roster {
+  const anyFinished =
+    !roster.agents.every(isRunning) || !roster.tasks.every(isRunning);
+  if (!anyFinished) {
+    return roster;
+  }
+  return {
+    agents: roster.agents.filter(isRunning),
+    tasks: roster.tasks.filter(isRunning),
   };
 }

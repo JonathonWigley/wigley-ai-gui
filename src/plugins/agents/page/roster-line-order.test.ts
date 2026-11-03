@@ -1,20 +1,46 @@
 import { describe, expect, it } from 'vitest';
 import { MAIN_AGENT_ID } from '../../../contracts/agent';
-import type { Roster, RunningAgent, RunningTask } from '../contract';
+import type {
+  Roster,
+  RosterAgent,
+  RosterOutcome,
+  RosterTask,
+} from '../contract';
 import { orderRosterLines } from './roster-line-order';
 
-function agent(agentId: string, startedAt: number): RunningAgent {
+function agent(
+  agentId: string,
+  startedAt: number,
+  outcome: RosterOutcome = 'running',
+): RosterAgent {
   return {
     agentId,
     agentType: 'Explore',
+    name: agentId,
     description: `${agentId}'s work`,
     startedAt,
-    toolCalls: 2,
+    model: null,
+    effort: null,
+    spendUsd: null,
+    tools: [],
+    outcome,
   };
 }
 
-function task(taskId: string, agentId: string, startedAt: number): RunningTask {
-  return { taskId, agentId, description: `${taskId}'s command`, startedAt };
+function task(
+  taskId: string,
+  agentId: string,
+  startedAt: number,
+  outcome: RosterOutcome = 'running',
+): RosterTask {
+  return {
+    taskId,
+    agentId,
+    description: `${taskId}'s command`,
+    command: null,
+    startedAt,
+    outcome,
+  };
 }
 
 // Each line as `agent <id>`, `task <id>` or `nested <id>`, so a row reads as
@@ -84,6 +110,34 @@ describe('orderRosterLines', () => {
         tasks: [task('t1', MAIN_AGENT_ID, 3_000)],
       },
       lines: ['agent a1', 'agent a2', 'task t1'],
+    },
+    {
+      case: 'FinishedAgentDrawsNoLine',
+      roster: {
+        agents: [agent('a1', 1_200, 'done'), agent('a2', 2_100)],
+        tasks: [],
+      },
+      lines: ['agent a2'],
+    },
+    {
+      case: 'FinishedTaskDrawsNoLine',
+      roster: {
+        agents: [agent('a1', 1_200)],
+        tasks: [
+          task('t1', 'a1', 2_600, 'failed'),
+          task('t2', MAIN_AGENT_ID, 3_300, 'done'),
+          task('t3', 'a1', 4_000),
+        ],
+      },
+      lines: ['agent a1', 'nested t3'],
+    },
+    {
+      case: 'RunningTaskOfFinishedAgentIsTopLevel',
+      roster: {
+        agents: [agent('a1', 1_200, 'done'), agent('a2', 2_100)],
+        tasks: [task('t1', 'a1', 3_500)],
+      },
+      lines: ['agent a2', 'task t1'],
     },
   ])('orderRosterLines_Roster_StartOrder ($case)', ({ roster, lines }) => {
     expect(lineNames(roster)).toEqual(lines);
