@@ -16,7 +16,8 @@ const WHITESPACE = /\s/;
 const LINE_BREAK = /[\r\n]/;
 
 // Every absolute path of two or more segments in `text`, left to right: a
-// double-quoted span on one line, or a run of text up to whitespace or a quote.
+// double-quoted span on one line, or a run of text up to whitespace that holds
+// no quote.
 export function fileChipsIn(text: string, paths: Paths): FileChipRange[] {
   const chips: FileChipRange[] = [];
   let index = 0;
@@ -40,8 +41,9 @@ export function fileChipsIn(text: string, paths: Paths): FileChipRange[] {
       }
     } else {
       const end = tokenEnd(text, index);
-      const path = text.slice(index, end).replace(TRAILING_PUNCTUATION, '');
-      if (isChipPath(path, paths)) {
+      const token = text.slice(index, end);
+      const path = token.replace(TRAILING_PUNCTUATION, '');
+      if (!token.includes('"') && isChipPath(path, paths)) {
         chips.push({
           from: index,
           to: index + path.length,
@@ -57,14 +59,17 @@ export function fileChipsIn(text: string, paths: Paths): FileChipRange[] {
 
 // `filePaths` as text to insert after `charBefore`: joined by spaces, each
 // quoted when an unquoted chip would not read it whole, and spaced off a
-// character before it that is not whitespace.
+// character before it that is not whitespace. A path holding a quote goes in
+// unquoted and reads back as no chip. The caller spaces the text off the
+// character after it.
 export function insertionText(
   filePaths: readonly string[],
   charBefore: string,
 ): string {
   const written = filePaths.map((path) => {
     const needsQuotes =
-      WHITESPACE.test(path) || TRAILING_PUNCTUATION.test(path);
+      !path.includes('"') &&
+      (WHITESPACE.test(path) || TRAILING_PUNCTUATION.test(path));
     return needsQuotes ? `"${path}"` : path;
   });
   const needsLeadingSpace = charBefore !== '' && !WHITESPACE.test(charBefore);
@@ -87,11 +92,7 @@ function closingQuoteAfter(text: string, open: number): number {
 
 function tokenEnd(text: string, start: number): number {
   let end = start;
-  while (
-    end < text.length &&
-    text[end] !== '"' &&
-    !WHITESPACE.test(text[end])
-  ) {
+  while (end < text.length && !WHITESPACE.test(text[end])) {
     end += 1;
   }
   return end;

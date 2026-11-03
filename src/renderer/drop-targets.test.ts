@@ -6,7 +6,7 @@ import {
   NOTHING_TAKES_FILES,
 } from '../contracts/drops';
 import type { ToastTone } from '../contracts/plugin';
-import { createDropTargets } from './drop-targets';
+import { createDropTargets, NO_FILES_CARRIED } from './drop-targets';
 
 const PASTED_PATH = '/home/me/pasted/20261102-090507-1.png';
 
@@ -211,7 +211,7 @@ describe('createDropTargets', () => {
       row: 'a file drag with no files',
       on: 'inner, no files',
       taken: [],
-      toasts: [[NOTHING_TAKES_FILES, 'info']],
+      toasts: [[NO_FILES_CARRIED, 'info']],
     },
   ])(
     'a drop goes to the innermost target under the pointer: $row',
@@ -254,6 +254,7 @@ describe('createDropTargets', () => {
   it.each<{
     row: string;
     focus: 'inner' | 'outer last';
+    focusNow?: 'body' | 'email input' | 'contenteditable';
     shown?: boolean;
     disposeOuter?: boolean;
     taken: string[];
@@ -276,9 +277,27 @@ describe('createDropTargets', () => {
       disposeOuter: true,
       taken: [],
     },
+    {
+      row: 'outer focused last, focus now on the body',
+      focus: 'outer last',
+      focusNow: 'body',
+      taken: ['outer'],
+    },
+    {
+      row: 'outer focused last, focus now in an email input',
+      focus: 'outer last',
+      focusNow: 'email input',
+      taken: [],
+    },
+    {
+      row: 'outer focused last, focus now in other contenteditable',
+      focus: 'outer last',
+      focusNow: 'contenteditable',
+      taken: [],
+    },
   ])(
-    'a paste goes to the focused target, else the last focused one still shown: $row',
-    ({ focus, shown, disposeOuter = false, taken }) => {
+    'a paste goes to the focused target, else the last focused one still shown while no other field holds focus: $row',
+    ({ focus, focusNow, shown, disposeOuter = false, taken }) => {
       const fakes = setUp({ shown });
       if (focus === 'inner') {
         fakes.document.activeElement = fakeElement(fakes.innerElement);
@@ -286,7 +305,18 @@ describe('createDropTargets', () => {
         const inOuter = fakeElement(fakes.outerElement);
         fakes.document.dispatch('focusin', { target: inOuter });
         fakes.document.dispatch('focusin', { target: fakeElement() });
-        fakes.document.activeElement = null;
+        fakes.document.activeElement =
+          focusNow === undefined
+            ? null
+            : {
+                body: { ...fakeElement(), tagName: 'BODY' },
+                'email input': {
+                  ...fakeElement(),
+                  tagName: 'INPUT',
+                  type: 'email',
+                },
+                contenteditable: { ...fakeElement(), isContentEditable: true },
+              }[focusNow];
       }
       if (disposeOuter) {
         fakes.outer.dispose();
@@ -420,7 +450,14 @@ describe('createDropTargets', () => {
       selectionStart: 2,
       selectionEnd: 4,
       paths: ['/a/b'],
-      expected: 'ab /a/bcd',
+      expected: 'ab /a/b cd',
+    },
+    {
+      value: 'ab cd',
+      selectionStart: 3,
+      selectionEnd: 3,
+      paths: ['/a/b'],
+      expected: 'ab /a/b cd',
     },
     {
       value: '',

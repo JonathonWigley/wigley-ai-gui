@@ -34,16 +34,17 @@ describe('fileChipsIn', () => {
     { text: '/', paths: posixPaths, chips: [] },
     { text: 'and/or a/b', paths: posixPaths, chips: [] },
     { text: 'https://x.com/a/b', paths: posixPaths, chips: [] },
-    // The first quote closes on no quote before the line break; `/c` stops
-    // before its quote and has one segment.
+    // The first quote closes on no quote before the line break; `/c"` holds a
+    // quote.
     { text: '"/a/b\n/c"', paths: posixPaths, chips: [[1, 5, '/a/b', 'b']] },
-    // `it` stops before its quote; `"s "` is no chip, so the next quote opens
-    // the path.
+    // `it"s` holds a quote and is no chip, so the next quote opens the path.
     {
       text: 'it"s "/a/b/c.md"',
       paths: posixPaths,
       chips: [[5, 16, '/a/b/c.md', 'c.md']],
     },
+    { text: '/a/b"c/d.md', paths: posixPaths, chips: [] },
+    { text: 'x /a/"b"/c/d', paths: posixPaths, chips: [] },
     {
       text: 'C:\\Users\\me\\a.png',
       paths: windowsPaths,
@@ -86,6 +87,7 @@ describe('insertionText', () => {
     },
     { filePaths: ['/a/b/foo(1)'], charBefore: '', text: '"/a/b/foo(1)"' },
     { filePaths: ['/a/b/file.'], charBefore: '', text: '"/a/b/file."' },
+    { filePaths: ['/a/b"c.'], charBefore: '', text: '/a/b"c.' },
   ])(
     'spaces and quotes the paths: $filePaths after $charBefore → $text',
     ({ filePaths, charBefore, text }) => {

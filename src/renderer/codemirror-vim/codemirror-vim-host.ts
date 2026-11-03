@@ -271,7 +271,6 @@ function insertText(
   }
   const { vim } = cm.state;
   const isInsertMode = vim.insertMode === true;
-  const isVisualMode = vim.visualMode === true;
   const { from, to } = insertionRange(view, cm);
   const next = state.doc.sliceString(to, to + 1);
   const needsSpaceAfter = next !== '' && !WHITESPACE.test(next);
@@ -287,7 +286,8 @@ function insertText(
     scrollIntoView: true,
     annotations: skipsChipRules.of(true),
   });
-  if (isVisualMode) {
+  // Vim may already have left visual mode on the dispatch's selection change.
+  if (cm.state.vim.visualMode) {
     Vim.exitVisualMode(cm);
     // Leaving visual mode puts the cursor at vim's own visual head.
     view.dispatch({
