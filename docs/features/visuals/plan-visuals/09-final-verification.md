@@ -1,6 +1,6 @@
 # 09 — Final verification
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 7 · Depends on: 08
 Plan: [plan.md](plan.md)
@@ -86,3 +86,5 @@ user checks (a real-agent run, and check 1's fallback when taken) are listed in 
 Commit:    none (Proof and the Run log ride in the lead's next commit)
 
 ## Proof
+
+Commit 8d2b7965 (check 2 fix) · proof: 1 PASS (window captures; element capture of an iframe fails UnknownVizError) · 2 FAIL then fixed in 8d2b7965: a scrollbar/height feedback loop on the width-scaled flowchart, re-run shows no strip (.drive/visuals-fix/screenshots/after-fix.png) · 3 PASS (2 mounted + 2 loaded lines, src unchanged, preview card) · 4 FALLBACK: no new loaded line; colours not visible offscreen → user check · 5 PASS (overlay 1 of 2, 2 of 2, closed) · 6 PASS low-confidence (slot 4→5; activeElement still the iframe) · 7 PASS (height 432, sandbox allow-scripts) · 8 PASS · 9 PASS (npm run selftest whole, every key placed, chat-visuals.png) · concerns: a visual wider than the column gets a horizontal scrollbar over its bottom ~15 px (reported height leaves it out); opening the preview or switching sessions reloads every frame; the preview's session-body stays un-hidden at width 0

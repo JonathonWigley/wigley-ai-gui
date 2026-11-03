@@ -254,7 +254,7 @@ export function visualHashOf(url: string): string | null;
 - [x] [Doc re-read](08-doc-re-read.md) — after 07
 
 ### Wave 7
-- [ ] [Final verification](09-final-verification.md) — after 08
+- [x] [Final verification](09-final-verification.md) — after 08
 
 ## Run log
 
@@ -269,6 +269,7 @@ Review base: d7578311fe99437ccefe407289916bbcfa049eb8
 - 06 · 93a87a8f · diff read: every Produces present, the v bind in keymap.ts, updates draw new markdown before removing the old; typecheck + lint clean; 1577 filtered tests pass · concerns: registry.sourcesIn(host) never matches the root itself, so the tests read it around the host (matches real use under chat's slot); the self-test logs 'unplaced v visual.openVisuals in chat.chat' until 07 draws a visual; one edit made by a python3 heredoc; overlay look untested until 09
 - 07 · 69395151 · diff read: every Produces present, all 21 createFakeAgentHarness calls pass timers; typecheck + lint clean; 239 filtered tests pass; self-test steps run at 09 · concerns: the self-test's frame-loaded waits hash each sample source plus a trailing newline, matching what the mount's textContent hands main — the waits time out at 5 s if wrong; a send reaching the process during the 1.5 s hold does not clear it
 - 08 · 6cc0e3a1 + marketplace f78537d · diff read: each fix states the code; items 3, 6, 7 no stale lines; marketplace Done commands pass · concerns: none
+- 09 · 8d2b7965 (check 2 fix) · 1 PASS (window captures; element capture of an iframe fails UnknownVizError) · 2 FAIL then fixed in 8d2b7965: a scrollbar/height feedback loop on the width-scaled flowchart, re-run shows no strip (.drive/visuals-fix/screenshots/after-fix.png) · 3 PASS (2 mounted + 2 loaded lines, src unchanged, preview card) · 4 FALLBACK: no new loaded line; colours not visible offscreen → user check · 5 PASS (overlay 1 of 2, 2 of 2, closed) · 6 PASS low-confidence (slot 4→5; activeElement still the iframe) · 7 PASS (height 432, sandbox allow-scripts) · 8 PASS · 9 PASS (npm run selftest whole, every key placed, chat-visuals.png) · concerns: a visual wider than the column gets a horizontal scrollbar over its bottom ~15 px (reported height leaves it out); opening the preview or switching sessions reloads every frame; the preview's session-body stays un-hidden at width 0
 ### Contract changes
 - MarkdownRenderer fakes: 22 files → 23 (composer-kit.test.ts too) · why: plan-time count missed it · consumers: none · group 01
 - shell kit log: from createShellChrome → from mountShellChrome · why: createShellChrome does not exist · consumers: none · group 01
