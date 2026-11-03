@@ -20,7 +20,6 @@ import type {
   HostedExit,
   HostedProcess,
   HostedProcessEvents,
-  HostedSpawn,
   IdleRule,
   PipeLine,
   SessionHost,
@@ -59,6 +58,7 @@ import {
 } from './session-fold';
 import {
   configuredPercent,
+  type SavedReply,
   withConfiguredPercent,
   withSavedReplies,
 } from './session-usage';
@@ -72,7 +72,7 @@ export type ClaudeSpawn = (
 
 // `host` runs each session's `claude` process, so it outlives the app; `spawn`
 // runs the one-shot commands, which must not. `command` reads the `claude`
-// binary's path, once per session process;
+// binary's path, once per session process `start` spawns;
 // `permissionTool` the MCP tool Claude asks what the session's permission mode
 // would still prompt; `env` the environment the process inherits; `files` reads
 // saved transcripts, `homeDir` holds the default config folder `.claude`, is
@@ -142,6 +142,23 @@ function spawnError(error: string, command: string, cwd: string): string {
     : error;
 }
 
+// `events` with a failed spawn's error carrying `spawnError`'s hint.
+function withSpawnHint(
+  events: HostedProcessEvents,
+  command: string,
+  cwd: string,
+): HostedProcessEvents {
+  return {
+    line: (line) => events.line(line),
+    closed: (exit) =>
+      events.closed(
+        exit.error === null
+          ? exit
+          : { ...exit, error: spawnError(exit.error, command, cwd) },
+      ),
+  };
+}
+
 // `launch.env` without its undefined values.
 function definedEnv(env: NodeJS.ProcessEnv): Record<string, string> {
   return Object.fromEntries(
@@ -192,9 +209,12 @@ interface ClaudeSession {
   open(): void;
   // Arms the live grace timer for `state.graceDeadline`.
   syncGraceTimer(): void;
-  requestContextUsage(): void;
-  // Starts the two reads no pipe line records.
-  readUsageInputs(): void;
+  // Writes what a replay shows the process is owed, unless it has closed: a
+  // refusal for each unanswered host request, then the context request.
+  answerOwed(): void;
+  // Starts the `settings.json` read no pipe line records.
+  readConfiguredPercent(): void;
+  foldSavedReplies(replies: readonly SavedReply[]): void;
 }
 
 // One `claude` process in stream-json mode, its state a fold over its pipe lines
@@ -207,34 +227,15 @@ interface ClaudeSession {
 // fixes fallback mode; a message ended before it started is reported through
 // `messageDropped`, and one still held when the process closes is dropped
 // silently. Once the process has closed or detached, nothing more is emitted or
-// written; a detached process keeps running on the host. `connect` gives the
-// hosted process these pipe events go with.
+// written; a detached process keeps running on the host. The caller delivers
+// `pipe`'s events to `pipeEvents`.
 function createClaudeSession(
   deps: ClaudeCodeHarnessDeps,
   request: AgentStart,
   events: AgentProcessEvents,
   state: SessionFoldState,
-  connect: (
-    spawnRequest: HostedSpawn,
-    pipeEvents: HostedProcessEvents,
-  ) => HostedProcess,
+  pipe: HostedProcess,
 ): ClaudeSession {
-  const launch = claudeLaunch(
-    request,
-    deps.permissionTool,
-    deps.env,
-    deps.homeDir,
-    deps.paths,
-  );
-  const command = deps.command();
-  const spawnRequest: HostedSpawn = {
-    id: request.processId,
-    command,
-    args: launch.args,
-    cwd: launch.cwd,
-    env: definedEnv(launch.env),
-    idleRule: CLAUDE_IDLE_RULE,
-  };
   let isEndCalled = false;
   let hasClosed = false;
   let isDetached = false;
@@ -305,14 +306,7 @@ function createClaudeSession(
         }
         break;
       case 'refuseHostRequest':
-        writeMessage({
-          type: 'control_response',
-          response: {
-            subtype: 'error',
-            request_id: effect.requestId,
-            error: `wigley-ai-gui answers no ${effect.subtype} requests`,
-          },
-        });
+        refuseHostRequest(effect.requestId, effect.subtype);
         break;
       case 'log':
         deps.log('claude', effect.text);
@@ -344,6 +338,17 @@ function createClaudeSession(
     runStep(step);
   };
 
+  const refuseHostRequest = (requestId: string, subtype: string) => {
+    writeMessage({
+      type: 'control_response',
+      response: {
+        subtype: 'error',
+        request_id: requestId,
+        error: `wigley-ai-gui answers no ${subtype} requests`,
+      },
+    });
+  };
+
   const nextRequestId = () => `wigley-${state.requestCount + 1}`;
 
   // Asked at start and after every turn, a control command's included:
@@ -354,6 +359,18 @@ function createClaudeSession(
       request_id: nextRequestId(),
       request: { subtype: 'get_context_usage' },
     });
+  };
+
+  const answerOwed = () => {
+    if (hasClosed) {
+      return;
+    }
+    for (const [requestId, subtype] of state.owedHostRequests) {
+      refuseHostRequest(requestId, subtype);
+    }
+    if (state.isContextRequestOwed) {
+      requestContextUsage();
+    }
   };
 
   const requireRunning = () => {
@@ -405,22 +422,14 @@ function createClaudeSession(
       const exitFailure = isCleanExit
         ? null
         : exitError(exit.code, exit.signal, state.lastStderr);
-      const end = {
-        code: exit.code,
-        error:
-          exit.error === null
-            ? exitFailure
-            : spawnError(exit.error, command, launch.cwd),
-      };
+      const end = { code: exit.code, error: exit.error ?? exitFailure };
       emitAgentEvent({ type: 'sessionEnded', at: deps.clock.now() });
       emit(() => events.ended(end));
       markClosed();
     },
   };
 
-  const pipe = connect(spawnRequest, pipeEvents);
-
-  const readUsageInputs = () => {
+  const readConfiguredPercent = () => {
     // The profile's autocompact override, read once: a change applies to the
     // next session.
     const settingsPath = deps.paths.join(
@@ -445,28 +454,16 @@ function createClaudeSession(
       (error: unknown) =>
         deps.log('claude', `settings.json not read: ${errorText(error)}`),
     );
-    // A resumed session seeds its context from the saved main replies, unless a
-    // live reply came first.
-    if (request.resume) {
-      void readSavedReplies(
-        deps.files,
-        deps.paths,
-        projectsFolder(deps, request.projectDir, request.profileDir),
-        request.sessionId,
-      ).then(
-        (replies) => {
-          runStep(
-            foldUsageInput(
-              state,
-              (usage) => withSavedReplies(usage, replies),
-              deps.clock.now(),
-            ),
-          );
-        },
-        (error: unknown) =>
-          deps.log('claude', `saved usage not read: ${errorText(error)}`),
-      );
-    }
+  };
+
+  const foldSavedReplies = (replies: readonly SavedReply[]) => {
+    runStep(
+      foldUsageInput(
+        state,
+        (usage) => withSavedReplies(usage, replies),
+        deps.clock.now(),
+      ),
+    );
   };
 
   const open = () => {
@@ -574,8 +571,9 @@ function createClaudeSession(
     pipeEvents,
     open,
     syncGraceTimer,
-    requestContextUsage,
-    readUsageInputs,
+    answerOwed,
+    readConfiguredPercent,
+    foldSavedReplies,
   };
 }
 
@@ -592,44 +590,36 @@ function loadSessionDefinitions(
   );
 }
 
-function startClaudeProcess(
+// A resumed session's saved main replies. Null for a new session and for a read
+// that failed, which it logs.
+async function readSessionReplies(
   deps: ClaudeCodeHarnessDeps,
   request: AgentStart,
-  events: AgentProcessEvents,
-): AgentProcess {
-  const state = createSessionFoldState(request);
-  const session = createClaudeSession(
-    deps,
-    request,
-    events,
-    state,
-    (spawnRequest, pipeEvents) => deps.host.spawn(spawnRequest, pipeEvents),
-  );
-  session.open();
-  session.readUsageInputs();
-  void loadSessionDefinitions(deps, request).then((loaded) => {
-    state.definitions = loaded;
-  });
-  return session.process;
+): Promise<SavedReply[] | null> {
+  if (!request.resume) {
+    return null;
+  }
+  try {
+    return await readSavedReplies(
+      deps.files,
+      deps.paths,
+      projectsFolder(deps, request.projectDir, request.profileDir),
+      request.sessionId,
+    );
+  } catch (error) {
+    deps.log('claude', `saved usage not read: ${errorText(error)}`);
+    return null;
+  }
 }
 
-// Attaches to the running process `request.processId`: replays its pipe log on
-// a new fold state, firing the replay's events before the promise resolves, then
-// goes live. `request` carries the `resume` and `controls` the process was
-// launched with, the seeds the fold's usage and controls start from. Writes at
-// most one line: the context request of a turn that ended while no app was
-// attached. Rejects, having detached from the host, when a step after the host's
-// attach fails; it never fires `ended` for that.
-async function attachClaudeProcess(
-  deps: ClaudeCodeHarnessDeps,
-  request: AgentStart,
-  events: AgentProcessEvents,
-): Promise<AgentProcess | null> {
-  // The host may deliver while the definitions load, ahead of the replay.
+// The hosted events of a process no session holds yet. `takeQueuedLines` hands a
+// replay the lines delivered so far; `goLive` gives `live` whatever is still
+// queued, then forwards to it.
+function createPipeForwarder() {
   const queuedLines: PipeLine[] = [];
   let queuedExit: HostedExit | null = null;
   let live: HostedProcessEvents | null = null;
-  const attached = await deps.host.attach(request.processId, {
+  const events: HostedProcessEvents = {
     line(line) {
       if (live === null) {
         queuedLines.push(line);
@@ -644,40 +634,117 @@ async function attachClaudeProcess(
         live.closed(exit);
       }
     },
+  };
+  return {
+    events,
+    takeQueuedLines: () => queuedLines.splice(0),
+    goLive(target: HostedProcessEvents) {
+      live = target;
+      for (const line of queuedLines.splice(0)) {
+        target.line(line);
+      }
+      if (queuedExit !== null) {
+        target.closed(queuedExit);
+      }
+    },
+  };
+}
+
+function startClaudeProcess(
+  deps: ClaudeCodeHarnessDeps,
+  request: AgentStart,
+  events: AgentProcessEvents,
+): AgentProcess {
+  const launch = claudeLaunch(
+    request,
+    deps.permissionTool,
+    deps.env,
+    deps.homeDir,
+    deps.paths,
+  );
+  const command = deps.command();
+  const forwarder = createPipeForwarder();
+  const pipe = deps.host.spawn(
+    {
+      id: request.processId,
+      command,
+      args: launch.args,
+      cwd: launch.cwd,
+      env: definedEnv(launch.env),
+      idleRule: CLAUDE_IDLE_RULE,
+    },
+    withSpawnHint(forwarder.events, command, launch.cwd),
+  );
+  const state = createSessionFoldState(request);
+  const session = createClaudeSession(deps, request, events, state, pipe);
+  session.open();
+  forwarder.goLive(session.pipeEvents);
+  session.readConfiguredPercent();
+  // A resumed session seeds its context from the saved main replies, unless a
+  // live reply came first.
+  void readSessionReplies(deps, request).then((replies) => {
+    if (replies !== null) {
+      session.foldSavedReplies(replies);
+    }
   });
+  void loadSessionDefinitions(deps, request).then((loaded) => {
+    state.definitions = loaded;
+  });
+  return session.process;
+}
+
+// Attaches to the running process `request.processId`: replays a resumed
+// session's saved replies and its pipe log on a new fold state, firing the
+// replay's events before the promise resolves, then goes live. `request` carries
+// the `resume` and `controls` the process was launched with, the seeds the fold's
+// usage and controls start from. Writes only what fell due while no app was
+// attached: a refusal for each unanswered host request and the context request of
+// a turn that ended. Rejects, having detached from the host, when a step after the
+// host's attach fails; it never fires `ended` for that.
+async function attachClaudeProcess(
+  deps: ClaudeCodeHarnessDeps,
+  request: AgentStart,
+  events: AgentProcessEvents,
+): Promise<AgentProcess | null> {
+  // The host may deliver during the reads, ahead of the replay.
+  const forwarder = createPipeForwarder();
+  const attached = await deps.host.attach(request.processId, forwarder.events);
   if (attached === null) {
     return null;
   }
   try {
     const state = createSessionFoldState(request);
-    state.definitions = await loadSessionDefinitions(deps, request);
+    const [definitions, savedReplies] = await Promise.all([
+      loadSessionDefinitions(deps, request),
+      readSessionReplies(deps, request),
+    ]);
+    state.definitions = definitions;
     const lastLoggedSeq = attached.log.at(-1)?.seq ?? 0;
     const effects = replayPipeLog(
       state,
       [
         ...attached.log,
-        ...queuedLines.filter((line) => line.seq > lastLoggedSeq),
+        ...forwarder
+          .takeQueuedLines()
+          .filter((line) => line.seq > lastLoggedSeq),
       ],
       deps.clock.now(),
+      savedReplies,
     );
     const session = createClaudeSession(
       deps,
       request,
       events,
       state,
-      () => attached.process,
+      attached.process,
     );
     for (const effect of effects) {
       reportEffect(events, effect);
     }
-    live = session.pipeEvents;
+    forwarder.goLive(session.pipeEvents);
     session.syncGraceTimer();
-    if (queuedExit !== null) {
-      session.pipeEvents.closed(queuedExit);
-    } else if (state.isContextRequestOwed) {
-      session.requestContextUsage();
-    }
-    session.readUsageInputs();
+    session.answerOwed();
+    session.readConfiguredPercent();
     return session.process;
   } catch (error) {
     attached.process.detach();

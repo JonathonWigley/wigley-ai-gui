@@ -327,7 +327,8 @@ export interface AgentProcess {
   // wait for `end`; `ended` follows once it exits.
   kill(): void;
   // Stops this process object's events and timers and leaves the hosted process
-  // running. Chat calls it on quit and on a chat plugin stop, in place of `kill`.
+  // running; a pending `end` settles, with no `ended`. Chat calls it on quit and on
+  // a chat plugin stop, in place of `kill`.
   detach(): void;
 }
 
@@ -375,7 +376,8 @@ export interface ProjectFolder {
 export interface AgentHarness {
   id: string;
   start(request: AgentStart, events: AgentProcessEvents): AgentProcess;
-  // Attaches to the hosted process `request.processId`. Every event it fires before its promise resolves is replayed.
+  // Attaches to the hosted process `request.processId`. Every event it fires before its promise resolves is replayed,
+  // except what a process that exited during the attach fires for that exit, its `sessionEnded` and `ended` included.
   // Null when the host holds no running process with that id.
   attach(
     request: AgentStart,

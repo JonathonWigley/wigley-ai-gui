@@ -28,6 +28,9 @@ const RATE_LIMIT_LINE =
   '{"type":"rate_limit_event","rate_limit_info":{"status":"allowed_warning","resetsAt":1793426400,"rateLimitType":"seven_day","utilization":0.95,"overageStatus":"rejected","overageDisabledReason":"org_level_disabled","isUsingOverage":false,"surpassedThreshold":0.75,"unifiedWindows":{"five_hour":{"utilization":0.12,"resetsAt":1793434200,"status":"allowed"},"seven_day":{"utilization":0.95,"resetsAt":1793426400,"status":"allowed_warning","surpassedThreshold":0.75}},"overageEnabled":false}}';
 const REPLY_LINE =
   '{"type":"assistant","message":{"model":"claude-opus-5-5","id":"msg_1","type":"message","role":"assistant","content":[{"type":"text","text":"ok"}],"stop_reason":null,"usage":{"input_tokens":3,"cache_creation_input_tokens":2000,"cache_read_input_tokens":40000,"output_tokens":120,"cache_creation":{"ephemeral_1h_input_tokens":2000,"ephemeral_5m_input_tokens":0}}},"parent_tool_use_id":null}';
+// A main reply that only read the cache, 40123 tokens.
+const CACHE_READ_LINE =
+  '{"type":"assistant","message":{"model":"claude-opus-5-5","id":"msg_2","type":"message","role":"assistant","content":[{"type":"text","text":"ok"}],"stop_reason":null,"usage":{"input_tokens":3,"cache_read_input_tokens":40000,"output_tokens":120}},"parent_tool_use_id":null}';
 
 const lifecycleInit = {
   type: 'system',
@@ -293,6 +296,30 @@ describe('session-fold', () => {
     expect(state.isContextRequestOwed).toBe(false);
   });
 
+  it('foldPipeLine_HostRequest_OwedUntilAnswered', () => {
+    const state = createSessionFoldState(request);
+
+    const { effects } = foldPipeLine(
+      state,
+      outLine(controlRequest('r-1', 'can_use_tool')),
+    );
+
+    expect(effects).toContainEqual({
+      kind: 'refuseHostRequest',
+      requestId: 'r-1',
+      subtype: 'can_use_tool',
+    });
+    expect([...state.owedHostRequests]).toEqual([['r-1', 'can_use_tool']]);
+    foldPipeLine(
+      state,
+      inLine({
+        type: 'control_response',
+        response: { subtype: 'error', request_id: 'r-1', error: 'no' },
+      }),
+    );
+    expect(state.owedHostRequests.size).toBe(0);
+  });
+
   it('foldPipeLine_FallbackSend_EmitsTheUserMessage', () => {
     const state = foldedState([outLine(plainInit)]);
 
@@ -457,7 +484,12 @@ describe('session-fold', () => {
       pipeLine('err', 'warn', 1000 * (messages.length + 1)),
     ];
 
-    const effects = replayPipeLog(createSessionFoldState(request), log, 60000);
+    const effects = replayPipeLog(
+      createSessionFoldState(request),
+      log,
+      60000,
+      null,
+    );
 
     expect(effects[0]).toEqual({
       kind: 'agentEvent',
@@ -523,7 +555,7 @@ describe('session-fold', () => {
         inLine(interruptRequest('wigley-2'), 1000),
       ];
 
-      const effects = replayPipeLog(state, log, now);
+      const effects = replayPipeLog(state, log, now, null);
 
       const notices = effects.flatMap((effect) =>
         effect.kind === 'entry' &&
@@ -539,7 +571,12 @@ describe('session-fold', () => {
   );
 
   it('replayPipeLog_EmptyLog_StartsAtNow', () => {
-    const effects = replayPipeLog(createSessionFoldState(request), [], 4000);
+    const effects = replayPipeLog(
+      createSessionFoldState(request),
+      [],
+      4000,
+      null,
+    );
 
     expect(effects.map((effect) => effect.kind)).toEqual([
       'agentEvent',
@@ -552,4 +589,51 @@ describe('session-fold', () => {
     });
     expect(effects[2]).toEqual({ kind: 'activity', activity: 'idle' });
   });
+
+  const HOUR_MS = 3_600_000;
+  const SAVED_WRITE_AT_100 = [
+    {
+      reply: { contextTokens: 500, cacheTtlMs: HOUR_MS, readsCache: false },
+      at: 100,
+    },
+  ];
+  it.each([
+    {
+      case: 'a logged reply only reads the cache',
+      saved: SAVED_WRITE_AT_100,
+      log: [outLine(lifecycleInit, 2000), outLine(CACHE_READ_LINE, 5000)],
+      usage: [
+        { at: 2000, contextTokens: 500, cacheExpiresAt: 100 + HOUR_MS },
+        { at: 5000, contextTokens: 40123, cacheExpiresAt: 5000 + HOUR_MS },
+      ],
+    },
+    {
+      case: 'an empty log',
+      saved: SAVED_WRITE_AT_100,
+      log: [],
+      usage: [{ at: 4000, contextTokens: 500, cacheExpiresAt: 100 + HOUR_MS }],
+    },
+    {
+      case: 'no saved replies',
+      saved: null,
+      log: [outLine(lifecycleInit, 2000), outLine(CACHE_READ_LINE, 5000)],
+      usage: [{ at: 5000, contextTokens: 40123, cacheExpiresAt: null }],
+    },
+  ])(
+    'replayPipeLog_SavedReplies_FoldFirst ($case)',
+    ({ saved, log, usage }) => {
+      const state = createSessionFoldState({ ...request, resume: true });
+
+      const effects = replayPipeLog(state, log, 4000, saved);
+
+      const replayed = effects.flatMap((effect) =>
+        effect.kind === 'agentEvent' && effect.event.type === 'usage'
+          ? [effect.event]
+          : [],
+      );
+      expect(replayed).toEqual(
+        usage.map((row) => expect.objectContaining(row)),
+      );
+    },
+  );
 });

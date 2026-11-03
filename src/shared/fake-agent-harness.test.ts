@@ -1580,6 +1580,27 @@ describe('createFakeAgentHarness attach and detach', () => {
       { method: 'detach' },
     ]);
   });
+
+  it('detach_HeldEnd_SettlesItsOwnWithNoEnded', async () => {
+    const { harness, agent, heard } = await startedProcess();
+    const other = harness.start(request, recordingEvents().events);
+    harness.holdEnd();
+    let hasOtherSettled = false;
+    void other.end().then(() => {
+      hasOtherSettled = true;
+    });
+
+    const ending = agent.end();
+    agent.detach();
+    await ending;
+    await flush();
+
+    expect(hasOtherSettled).toBe(false);
+    harness.releaseEnd();
+    await flush();
+    expect(hasOtherSettled).toBe(true);
+    expect(heard).toEqual([]);
+  });
 });
 
 describe('createFakeAgentHarness accounts and projects', () => {

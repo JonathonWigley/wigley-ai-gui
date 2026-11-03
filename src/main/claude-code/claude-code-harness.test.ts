@@ -349,6 +349,31 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+const SAVED_ID = 'aaaaaaaa-0000-4000-8000-000000000001';
+const TRANSCRIPT = `/Users/u/.claude/projects/-proj/${SAVED_ID}.jsonl`;
+const resumeRequest: AgentStart = {
+  ...request,
+  sessionId: SAVED_ID,
+  resume: true,
+};
+// A saved main reply of 12123 tokens that wrote the 1 h cache.
+const SAVED_REPLY_LINE = JSON.stringify({
+  type: 'assistant',
+  timestamp: '2026-10-27T16:07:09.193Z',
+  message: {
+    model: 'claude-opus-5-5',
+    role: 'assistant',
+    content: [{ type: 'text', text: 'ok' }],
+    usage: {
+      input_tokens: 3,
+      cache_creation_input_tokens: 2000,
+      cache_read_input_tokens: 10000,
+      output_tokens: 120,
+      cache_creation: { ephemeral_1h_input_tokens: 2000 },
+    },
+  },
+});
+
 describe('createClaudeCodeHarness', () => {
   it('start_EmitsNullControlsThenIdle', async () => {
     const run = started();
@@ -713,34 +738,10 @@ describe('createClaudeCodeHarness', () => {
   });
 
   describe('usage reads', () => {
-    const SAVED_ID = 'aaaaaaaa-0000-4000-8000-000000000001';
-    const TRANSCRIPT = `/Users/u/.claude/projects/-proj/${SAVED_ID}.jsonl`;
-    const resumeRequest: AgentStart = {
-      ...request,
-      sessionId: SAVED_ID,
-      resume: true,
-    };
     const SAVED_USER_LINE = JSON.stringify({
       type: 'user',
       timestamp: '2026-10-27T16:07:00.000Z',
       message: { role: 'user', content: 'hi' },
-    });
-    // A saved main reply of 12123 tokens that wrote the 1 h cache.
-    const SAVED_REPLY_LINE = JSON.stringify({
-      type: 'assistant',
-      timestamp: '2026-10-27T16:07:09.193Z',
-      message: {
-        model: 'claude-opus-5-5',
-        role: 'assistant',
-        content: [{ type: 'text', text: 'ok' }],
-        usage: {
-          input_tokens: 3,
-          cache_creation_input_tokens: 2000,
-          cache_read_input_tokens: 10000,
-          output_tokens: 120,
-          cache_creation: { ephemeral_1h_input_tokens: 2000 },
-        },
-      },
     });
     const seeded = (contextTokens: number, cacheExpiresAt: number | null) => ({
       type: 'usage',
@@ -1441,7 +1442,7 @@ describe('createClaudeCodeHarness', () => {
     await settle();
 
     const state = createSessionFoldState(request);
-    const replay = replayPipeLog(state, recorded, at);
+    const replay = replayPipeLog(state, recorded, at, null);
 
     const lastVersions = (entries: readonly ChatEntry[]) => {
       const byId = new Map<string, ChatEntry>();
@@ -2460,33 +2461,75 @@ describe('createClaudeCodeHarness on the session host', () => {
     );
   });
 
+  const HOST_REQUEST_OUT = {
+    dir: 'out',
+    line: {
+      type: 'control_request',
+      request_id: 'r-1',
+      request: { subtype: 'can_use_tool' },
+    },
+  } as const;
+  const REFUSAL = {
+    type: 'control_response',
+    response: {
+      subtype: 'error',
+      request_id: 'r-1',
+      error: 'wigley-ai-gui answers no can_use_tool requests',
+    },
+  };
+  const CONTEXT_REQUEST_IN = {
+    dir: 'in',
+    line: contextUsageRequest('wigley-1'),
+  } as const;
   it.each([
     {
       case: 'turn ended while away',
       goesOn: [],
       closes: false,
-      requested: true,
+      written: [contextUsageRequest('wigley-1')],
     },
     {
       case: 'request already written',
-      goesOn: [{ dir: 'in', line: contextUsageRequest('wigley-1') }],
+      goesOn: [CONTEXT_REQUEST_IN],
       closes: false,
-      requested: false,
+      written: [],
     },
     {
       case: 'closed during attach',
-      goesOn: [],
+      goesOn: [HOST_REQUEST_OUT],
       closes: true,
-      requested: false,
+      written: [],
+    },
+    {
+      case: 'host request unanswered while away',
+      goesOn: [CONTEXT_REQUEST_IN, HOST_REQUEST_OUT],
+      closes: false,
+      written: [REFUSAL],
+    },
+    {
+      case: 'host request and context request both owed',
+      goesOn: [HOST_REQUEST_OUT],
+      closes: false,
+      written: [REFUSAL, contextUsageRequest('wigley-1')],
+    },
+    {
+      case: 'host request already refused',
+      goesOn: [
+        HOST_REQUEST_OUT,
+        { dir: 'in', line: REFUSAL },
+        CONTEXT_REQUEST_IN,
+      ],
+      closes: false,
+      written: [],
     },
   ] as {
     case: string;
     goesOn: { dir: PipeDirection; line: object }[];
     closes: boolean;
-    requested: boolean;
+    written: object[];
   }[])(
-    'attach_TurnEndedWhileDetached_RequestsContextOnce ($case)',
-    async ({ goesOn, closes, requested }) => {
+    'attach_OwedWhileDetached_WritesEachOnce ($case)',
+    async ({ goesOn, closes, written }) => {
       const host = createFakeSessionHost(clock);
       const record = host.addRunning(
         running(logOf([...ENDED_TURN_LOG, ...goesOn])),
@@ -2503,8 +2546,62 @@ describe('createClaudeCodeHarness on the session host', () => {
       await settle();
 
       expect(record.writes).toEqual(
-        requested ? [JSON.stringify(contextUsageRequest('wigley-1'))] : [],
+        written.map((line) => JSON.stringify(line)),
       );
+    },
+  );
+
+  it.each([
+    {
+      case: 'saved replies read',
+      transcript: SAVED_REPLY_LINE,
+      cacheExpiresAt: 9000 + 3_600_000,
+    },
+    { case: 'transcript missing', transcript: null, cacheExpiresAt: null },
+  ])(
+    'attach_ResumedProcess_SavedRepliesFoldBeforeTheLog ($case)',
+    async ({ transcript, cacheExpiresAt }) => {
+      const cacheReadReply = {
+        type: 'assistant',
+        message: {
+          model: 'claude-opus-5-5',
+          id: 'msg_1',
+          type: 'message',
+          role: 'assistant',
+          content: [{ type: 'text', text: 'ok' }],
+          usage: {
+            input_tokens: 3,
+            cache_read_input_tokens: 40000,
+            output_tokens: 120,
+          },
+        },
+        parent_tool_use_id: null,
+      };
+      const host = createFakeSessionHost(clock);
+      host.addRunning(
+        running(logOf([{ dir: 'out', line: cacheReadReply, at: 9000 }])),
+      );
+      const files = createMemoryFiles();
+      if (transcript !== null) {
+        await files.write(TRANSCRIPT, transcript);
+      }
+      const { heard, events } = recordingEvents();
+
+      const attached = await hostHarness(host, clock, { files }).attach(
+        resumeRequest,
+        events,
+      );
+
+      expect(attached).not.toBeNull();
+      expect(heard.filter(([name]) => name === 'agentEvent').at(-1)).toEqual([
+        'agentEvent',
+        expect.objectContaining({
+          type: 'usage',
+          at: 9000,
+          contextTokens: 40123,
+          cacheExpiresAt,
+        }),
+      ]);
     },
   );
 

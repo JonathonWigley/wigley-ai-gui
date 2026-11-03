@@ -28,6 +28,7 @@ import {
   foldContextUsage,
   foldReply,
   foldTurn,
+  type SavedReply,
   type SessionUsageState,
   usageEvent,
   withSavedReplies,
@@ -55,15 +56,18 @@ import {
 //   ends right after;
 // - the agent definitions: a live line read before they load decodes without
 //   them, and a replay loads them first;
-// - the side inputs: the `settings.json` percent and a resumed session's saved
-//   replies are not pipe lines, so their live usage events are not replayed;
+// - the side inputs: the `settings.json` percent is not a pipe line, so its live
+//   usage event is not replayed. A resumed session's saved replies fold ahead of
+//   the log in a replay, and live when read, so a live reply that beats the read
+//   keeps them out live alone;
 // - order: live folds in the order the harness wrote and read, a log in the
 //   order the host saw, so an `in` and an `out` line can swap. Two cases read
 //   that order: fallback mode's turn end, and an interrupt that crosses its
 //   turn's `result`. An interrupt's final activity and `graceDeadline` agree
 //   either way; fallback mode's turn end can read working in a replay where live
 //   read idle, until the next `init`;
-// - what a replay leaves out: the refusal of a host request and `messageDropped`.
+// - what a replay leaves out: `messageDropped` and the refusal of a host request;
+//   `owedHostRequests` holds the requests no refusal answered.
 
 // How long an interrupt waits for the turn to end before the session shows
 // idle.
@@ -116,6 +120,9 @@ export interface SessionFoldState {
   graceDeadline: number | null;
   // True from a turn's end until the next `get_context_usage` `in` line.
   isContextRequestOwed: boolean;
+  // Subtype by request id, from a host request's `out` line until the `in` line
+  // answering it.
+  owedHostRequests: Map<string, string>;
 }
 
 export type FoldEffect =
@@ -166,6 +173,7 @@ export function createSessionFoldState(request: AgentStart): SessionFoldState {
     lastStderr: null,
     graceDeadline: null,
     isContextRequestOwed: false,
+    owedHostRequests: new Map(),
   };
   return state;
 }
@@ -387,6 +395,10 @@ function foldInLine(
     foldUserLine(state, message, message.uuid, line.at, effects);
   } else if (message.type === 'control_request') {
     foldRequestLine(state, message, line.at, effects);
+  } else if (message.type === 'control_response') {
+    state.owedHostRequests.delete(
+      asString(asJson(message.response).request_id),
+    );
   }
 }
 
@@ -577,7 +589,9 @@ function foldOutLine(
     answerControlResponse(state, decoded.controlResponse, at, effects);
   }
   if (decoded.hostRequest !== null) {
-    effects.push({ kind: 'refuseHostRequest', ...decoded.hostRequest });
+    const { requestId, subtype } = decoded.hostRequest;
+    state.owedHostRequests.set(requestId, subtype);
+    effects.push({ kind: 'refuseHostRequest', requestId, subtype });
   }
   if (decoded.turnEnded) {
     state.graceDeadline = null;
@@ -649,15 +663,26 @@ export function foldUsageInput(
   return { state, effects };
 }
 
-// Folds `log` in order, ends a grace `now` passed, and returns what a replay
-// emits. It writes nothing, gives no plan update, and gives each entry id once,
-// at its first place, carrying its last version.
+// Folds `savedReplies` (null when the process is not resumed or they could not be
+// read) at the replay's start, then `log` in order, ends a grace `now` passed, and
+// returns what a replay emits. It writes nothing, gives no plan update, and gives
+// each entry id once, at its first place, carrying its last version.
 export function replayPipeLog(
   state: SessionFoldState,
   log: readonly PipeLine[],
   now: number,
+  savedReplies: readonly SavedReply[] | null,
 ): FoldEffect[] {
+  const startedAt = log.at(0)?.at ?? now;
   const folded: FoldEffect[] = [];
+  if (savedReplies !== null) {
+    const seeded = foldUsageInput(
+      state,
+      (usage) => withSavedReplies(usage, savedReplies),
+      startedAt,
+    );
+    folded.push(...seeded.effects);
+  }
   for (const line of log) {
     folded.push(...foldPipeLine(state, line).effects);
   }
@@ -674,7 +699,7 @@ export function replayPipeLog(
   const replayed: FoldEffect[] = [
     {
       kind: 'agentEvent',
-      event: { type: 'sessionStarted', at: log.at(0)?.at ?? now },
+      event: { type: 'sessionStarted', at: startedAt },
     },
   ];
   const emittedIds = new Set<string>();

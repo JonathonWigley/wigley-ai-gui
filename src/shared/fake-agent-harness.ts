@@ -179,7 +179,8 @@ export interface FakePastSessionCall {
 // `FAKE_END_TEXT` send ended it, the promise of that exit. Between `holdEnd`
 // and `releaseEnd`, a first `end` marks its process ended and leaves that
 // promise pending; `releaseEnd` emits `ended` for each held process in call
-// order and resolves them. A `FAKE_END_TEXT` exit is never held.
+// order and resolves them, and a `detach` resolves its own process's with no
+// `ended`. A `FAKE_END_TEXT` exit is never held.
 // `pastSessionCalls` lists every `listSessions` and `history` call in call
 // order, failed ones included; `history` returns the entries timed before its
 // `before`, all for null; `failNextHistory` makes the next `history` reject
@@ -959,7 +960,8 @@ export function createFakeAgentHarness(
   let nextLastUsageFailure: string | null = null;
   let nextLastUsageHold: Promise<void> | null = null;
   let isEndHeld = false;
-  const heldEnds: (() => void)[] = [];
+  // In call order.
+  const heldEnds = new Map<FakeAgentProcessRecord, () => void>();
   // Profiles `logOut` signed out and no sign-in has signed in since.
   const signedOutProfiles = new Set<string | null>();
   // Each profile's started folders, by the count of `start` calls when each
@@ -1453,7 +1455,7 @@ export function createFakeAgentHarness(
             resolve();
           };
           if (isHeld) {
-            heldEnds.push(exit);
+            heldEnds.set(record, exit);
           } else {
             queueMicrotask(exit);
           }
@@ -1480,6 +1482,9 @@ export function createFakeAgentHarness(
         calls.push({ method: 'detach' });
         record.detached = true;
         clearVisualHold();
+        const heldEnd = heldEnds.get(record);
+        heldEnds.delete(record);
+        heldEnd?.();
       },
     };
   }
@@ -1633,7 +1638,8 @@ export function createFakeAgentHarness(
     },
     releaseEnd() {
       isEndHeld = false;
-      const released = heldEnds.splice(0);
+      const released = [...heldEnds.values()];
+      heldEnds.clear();
       queueMicrotask(() => {
         for (const release of released) {
           release();
