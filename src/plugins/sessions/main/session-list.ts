@@ -158,14 +158,14 @@ function routeCall(
 // session's next mark or activate. A row `release` closed while selected
 // comes back selected when the session's next mark comes within
 // RESELECT_WINDOW_MS of the release, unless in between the user activated a
-// row, a row was opened selected, or a mark selected another session from
-// none. `activateExistingRow` selects only a row the session holds and logs
-// and ignores one with none. `mark`, `activate`, `activateExistingRow`,
-// `release` and `closeSession` send the whole state only when it changed;
-// `mark`, `activate`, `activateExistingRow` and `closeSession` log and ignore
-// an unknown session, `release` silently ignores a session it cannot act on.
-// `release` and `closeSession` log and keep a row a close guard refuses, and
-// emit `closed` for a row they close;
+// row, a row was opened selected, a mark selected another session from none,
+// or `release` closed another selected row. `activateExistingRow` selects
+// only a row the session holds and logs and ignores one with none. `mark`,
+// `activate`, `activateExistingRow`, `release` and `closeSession` send the
+// whole state only when it changed; `mark`, `activate`, `activateExistingRow`
+// and `closeSession` log and ignore an unknown session, `release` silently
+// ignores a session it cannot act on. `release` and `closeSession` log and
+// keep a row a close guard refuses, and emit `closed` for a row they close;
 // `closeSession` returns true for a row it closes and for a known session
 // whose row is already closed, false otherwise. Every state sent with a
 // selection other than the last sent emits `selected` after it.
@@ -179,7 +179,8 @@ export function createSessionList(deps: SessionListDeps): SessionList {
   // The session whose selected row `release` closed, and when: its next mark
   // selects the row again within RESELECT_WINDOW_MS. Null after that mark, an
   // activate or activateExistingRow, a selecting open, the session's end, or a
-  // mark that selects another session from none.
+  // mark that selects another session from none; a release of another
+  // selected row replaces it.
   let reselectOnReturn: { sessionId: string; releasedAt: number } | null = null;
 
   const state = (): SessionsState => ({

@@ -1070,21 +1070,21 @@ function payloadProblems(payload: AnswersPayload): string[] {
 }
 
 // Each run ends the previous run's sessions and empties both user files, since
-// a run a reload cut off can leave `forms.layout` set or the leader moved;
-// then it connects three sessions: a Claude and a Codex session in project
+// a run a reload cut off can leave `forms.layout` set or the leader moved; then
+// it connects three sessions: a Claude and a Codex session in project
 // `selftest`, and a Claude session there for the layouts round. Asks the
 // fixture round in the first, a second round in the second, which the steps
 // never answer, and the layouts round in the third; each shows at once, so
-// their rows come in that order and the first is selected. That order relies
-// on each `askFixtureRound` reaching `sessions.mark` synchronously: an
-// asynchronous form show would put the Codex row first. Then it opens a
-// Codex session with no project in the background, whose row follows theirs
-// though it never shows a round, and asks the unknown-layout round there
-// through a relay joining it, which refuses it. The script checks the answers
-// the first call returns and the unknown-layout call's refusal. The result
-// rejects when this open's emptying fails. An open superseded by a later one
-// before its files are emptied connects nothing, and its result settles only
-// by rejecting, when its own emptying fails.
+// their rows come in that order and the first is selected. That order relies on
+// each `askFixtureRound` reaching `sessions.mark` synchronously: an
+// asynchronous form show would put the background Codex session's row first.
+// Then it opens a Codex session with no project in the background, whose row
+// follows theirs though it never shows a round, and asks the unknown-layout
+// round there through a relay joining it, which refuses it. The script checks
+// the answers the first call returns and the unknown-layout call's refusal. The
+// result rejects when this open's emptying fails. An open superseded by a later
+// one before its files are emptied connects nothing, and its result settles
+// only by rejecting, when its own emptying fails.
 export function formsSelfTestScript(
   sessions: Pick<SessionsMainExports, 'connect' | 'open'>,
   userConfig: Pick<UserConfig, 'read' | 'writeSettings' | 'writeKeymap'>,
