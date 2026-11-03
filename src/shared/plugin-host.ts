@@ -42,11 +42,37 @@ function dependencyFor(
   };
 }
 
-// Starts every part whose id `disabled` does not name, each after the parts
-// its manifest depends on and otherwise in list order, handing it the exports
-// of those dependencies. `known` is every plugin's manifest, those with no
-// part in this process included; a dependency in `known` with no part here,
-// such as a page-only plugin in main, starts nowhere in this process. Returns
+// The pending part to start next: the first in `pending` once none of its
+// dependencies is pending, else the first such part down the chain of each
+// one's first pending dependency in list order. Throws on a chain that comes
+// back to a part it passed, naming the parts of that cycle.
+function nextToStart<Part extends { manifest: PluginManifest }>(
+  pending: readonly Part[],
+): Part {
+  const firstPendingDependency = (part: Part) =>
+    pending.find((each) => part.manifest.dependsOn.includes(each.manifest.id));
+  const chain = [pending[0]];
+  let dependency = firstPendingDependency(chain[0]);
+  while (dependency !== undefined) {
+    if (chain.includes(dependency)) {
+      const cycle = chain.slice(chain.indexOf(dependency));
+      const ids = cycle.map((part) => part.manifest.id).join(', ');
+      throw new Error(`Plugins depend on each other in a cycle: ${ids}`);
+    }
+    chain.push(dependency);
+    dependency = firstPendingDependency(dependency);
+  }
+  return chain[chain.length - 1];
+}
+
+// Starts every part whose id `disabled` does not name, in list order, each
+// part's dependencies started just before it when the list holds them later,
+// so a part listed earlier than another starts before it unless it depends on
+// it; hands each part the exports of its dependencies. Plugins that add parts
+// to one surface (chat's composer parts) add them in this order. `known` is
+// every plugin's manifest, those with no part in this process included; a
+// dependency in `known` with no part here, such as a page-only plugin in
+// main, starts nowhere in this process. Returns
 // what each start returned, by plugin id, in start order. Throws on a
 // duplicate id, a dependency not in `known`, a kept part depending on a
 // disabled plugin, or a dependency cycle.
@@ -67,19 +93,10 @@ export function startPlugins<
   if (problem !== null) {
     throw new Error(problem);
   }
-  const partIds = new Set(manifests.map((manifest) => manifest.id));
   const started = new Map<string, Started>();
   let pending = [...kept];
   while (pending.length > 0) {
-    const ready = pending.find((part) =>
-      part.manifest.dependsOn.every(
-        (id) => started.has(id) || !partIds.has(id),
-      ),
-    );
-    if (!ready) {
-      const waiting = pending.map((part) => part.manifest.id).join(', ');
-      throw new Error(`Plugins depend on each other in a cycle: ${waiting}`);
-    }
+    const ready = nextToStart(pending);
     started.set(
       ready.manifest.id,
       start(ready, dependencyFor(ready.manifest, started)),

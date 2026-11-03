@@ -252,10 +252,14 @@
   right: var(--wg-space-3);
 }
 
-/* Other plugins' composer parts; a Chat tab with none shows no space. */
+/* Other plugins' composer parts; a Chat tab with none shows no space. They
+   give up height first and scroll, so the box and the status line keep theirs
+   in a short pane. */
 .chat-composer-parts {
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .chat-composer-parts:empty {
@@ -287,8 +291,10 @@
   top: var(--wg-space-0_5);
 }
 
+/* The box shrinks and scrolls only once its draft is taller than three
+   `space-8` steps. */
 .chat-box {
-  min-height: 0;
+  min-height: calc-size(max-content, min(size, calc(var(--wg-space-8) * 3)));
   overflow-y: auto;
 }
 

@@ -406,6 +406,8 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
     const scroller = holder?.scroller ?? null;
     if (scroller !== null && element !== undefined) {
       scroller.reveal(element);
+      // Chat's composer parts scroll in a pane too short for them all.
+      element.scrollIntoView({ block: 'nearest' });
     }
   };
 

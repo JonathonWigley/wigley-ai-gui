@@ -42,10 +42,20 @@ function startRecording(parts: TestPart[], disabled: string[] = []): string[] {
 }
 
 describe('startPlugins', () => {
-  it('starts dependencies first', () => {
-    const order = startRecording([part('b', ['a']), part('a'), part('c')]);
-
-    expect(order).toEqual(['a', 'b', 'c']);
+  // The second row is the page list's workflow, agent-strip and docs: a part
+  // waiting on a later-listed dependency still starts before the parts
+  // listed after it, so chat draws workflow's composer part first.
+  it.each([
+    {
+      parts: [part('b', ['a']), part('a'), part('c')],
+      order: ['a', 'b', 'c'],
+    },
+    {
+      parts: [part('w', ['d']), part('s'), part('d', ['k']), part('k')],
+      order: ['k', 'd', 'w', 's'],
+    },
+  ])('starts each part in list order after its dependencies', (row) => {
+    expect(startRecording(row.parts)).toEqual(row.order);
   });
 
   it("hands a dependent its dependency's exports", () => {
