@@ -87,6 +87,16 @@ export function isBusy(flow: SessionFlow): boolean {
   return flow.turnRunning || flow.runningSubagents.length > 0;
 }
 
+// True when `signal` starts `skill` (`plugin:name`), named in full or by the
+// bare `name` Claude Code also accepts for a typed command.
+export function startsSkill(signal: WorkflowSignal, skill: string): boolean {
+  if (signal.type !== 'skillStarted') {
+    return false;
+  }
+  const bareName = skill.slice(skill.indexOf(':') + 1);
+  return signal.skill === skill || signal.skill === bareName;
+}
+
 // A stage's detail from its parts, joined by ` · `, each empty part left out.
 export function detailLine(...parts: string[]): string {
   return parts.filter((part) => part !== '').join(' · ');

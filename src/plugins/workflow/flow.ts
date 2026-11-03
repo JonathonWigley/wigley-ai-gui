@@ -6,6 +6,7 @@ import {
   IDLE_STAGE,
   type MainStage,
   type SessionFlow,
+  startsSkill,
   type WorkflowSignal,
 } from './contract';
 
@@ -81,8 +82,9 @@ function applyBookkeeping(next: SessionFlow, signal: WorkflowSignal): void {
       }
       break;
     case 'skillStarted': {
-      const planDir =
-        signal.skill === MAKE_SKILL ? planDirOfArgsPath(signal.argsPath) : null;
+      const planDir = startsSkill(signal, MAKE_SKILL)
+        ? planDirOfArgsPath(signal.argsPath)
+        : null;
       if (planDir !== null) {
         setPlanDir(next, planDir);
       }

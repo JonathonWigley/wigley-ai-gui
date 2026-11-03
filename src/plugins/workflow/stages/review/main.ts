@@ -1,4 +1,4 @@
-import type { MainStage } from '../../contract';
+import { type MainStage, startsSkill } from '../../contract';
 
 // A review round lights review only when it was logged after make started:
 // Resume make from review keeps make until the next round.
@@ -10,8 +10,7 @@ export const reviewMainStage: MainStage = {
     if (flow.stage !== 'make') {
       return null;
     }
-    const startedReview =
-      signal.type === 'skillStarted' && signal.skill === 'wigley:review';
+    const startedReview = startsSkill(signal, 'wigley:review');
     // The bookkeeping fills a null or left-out reviewRoundsAtMake on every
     // planChanged before the stage rules run; the fallback only satisfies the
     // optional type.

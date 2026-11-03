@@ -173,6 +173,12 @@ const FOLD_ROWS: FoldRow[] = [
     expected: flowWith({ planDir: '/r/plan-a', reviewRoundsAtMake: null }),
   },
   {
+    name: 'make typed by its bare name moves planDir too',
+    flow: flowWith({ planDir: '/r/plan-z', progress: PROGRESS }),
+    signal: skill('make', '/r/plan-a/plan.md'),
+    expected: flowWith({ planDir: '/r/plan-a', reviewRoundsAtMake: null }),
+  },
+  {
     name: 'wigley:make of a plan folder with a trailing separator',
     flow: flowWith({ planDir: '/r/plan-z', progress: PROGRESS }),
     signal: skill('wigley:make', '/r/plan-a/'),
