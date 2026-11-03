@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import type { AgentHarness } from '../../../contracts/agent';
 import type { Files } from '../../../contracts/files';
@@ -14,11 +15,16 @@ import {
   FAKE_SIGN_IN_CODE,
   FAKE_STEPS_TEXT,
   FAKE_TOOL_TEXT,
+  FAKE_VISUAL_TEXT,
   type FakeAgentCall,
   type FakeAgentProcessRecord,
   markRun,
   type RunMark,
 } from '../../../shared/fake-agent-harness';
+import {
+  SAMPLE_FLOWCHART_VISUAL,
+  SAMPLE_MOCKUP_VISUAL,
+} from '../../../shared/sample-visuals';
 import type {
   ConnectedSession,
   SessionsMainExports,
@@ -170,6 +176,43 @@ const CLEAR_STEPS: SelfTestStep[] = [
     expect: '[chat] conversation cleared in chat-second',
     alsoExpect: [NOTES_MOVED_TO_NEW_HOST],
     checksFit: true,
+  },
+  { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
+];
+
+const escapeRegExp = (text: string) =>
+  text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// The line the visual frames service logs when the frame of `source`
+// loads: the first eight hex characters of the source's SHA-256. The source
+// a fence hands its contribution is the block's content, which ends with a
+// newline.
+const frameLoadedLine = (source: string) =>
+  `[visual] visual frame loaded: ${createHash('sha256')
+    .update(`${source}\n`)
+    .digest('hex')
+    .slice(0, 8)}`;
+
+// Each sample visual mounted, then its frame loaded.
+const VISUALS_DRAWN: RegExp[] = [
+  /^\[visual\] visual mounted: Settings panel$/,
+  /^\[visual\] visual mounted: Visual flow$/,
+];
+const FRAMES_LOADED = [SAMPLE_MOCKUP_VISUAL, SAMPLE_FLOWCHART_VISUAL].map(
+  (source) => new RegExp(`^${escapeRegExp(frameLoadedLine(source))}$`),
+);
+
+// The fake's visual reply in the second session, whose calls the run does not
+// check. The screenshot waits for both frames to load.
+const VISUAL_STEPS: SelfTestStep[] = [
+  { keys: ['<A-S-i>'], expect: '[chat] Chat tab shown in chat-second' },
+  {
+    keys: sendKeys(FAKE_VISUAL_TEXT),
+    expect: '[chat] result entry added in chat-second',
+    alsoExpect: [...VISUALS_DRAWN, ...FRAMES_LOADED],
+    checksFit: true,
+    screenshot: 'visuals',
+    why: "The mockup's block closes while the reply streams, and the flowchart's closes with the final entry after the fake's hold; both frames load before the screenshot.",
   },
   { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
 ];
@@ -481,7 +524,9 @@ const LAYOUT_PREVIEW_STEPS: SelfTestStep[] = [
   {
     keys: [' ', 'z', 'l', 'c'],
     expect: '[chat] Chat tab shown in Chat preview',
+    alsoExpect: [...VISUALS_DRAWN, ...FRAMES_LOADED],
     screenshot: 'chat-preview',
+    why: "The sample's visuals entry mounts both visuals and loads their frames before the screenshot; the streaming entry shows the drawing card.",
   },
   {
     keys: sendKeys('hi'),
@@ -509,6 +554,11 @@ const GROUPS: SelfTestGroup[] = [
     name: 'clear',
     why: '/clear in the second session empties its Chat tab to one notice and restarts its agent, and the notes page moves the row to its new host session id.',
     steps: CLEAR_STEPS,
+  },
+  {
+    name: 'visuals',
+    why: "fake: visual draws the settings mockup and the flowchart in chat-second's transcript as live visuals, the second block first showing as the drawing card while the fake holds it open.",
+    steps: VISUAL_STEPS,
   },
   {
     name: 'sending',

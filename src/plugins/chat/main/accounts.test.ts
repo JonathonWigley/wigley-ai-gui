@@ -3,6 +3,7 @@ import {
   createFakeAgentHarness,
   FAKE_SIGN_IN_CODE,
   FAKE_SIGN_IN_URL,
+  FAKE_MICROTASK_TIMERS,
 } from '../../../shared/fake-agent-harness';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import type { ChatChannel, ChatProfile } from '../contract';
@@ -31,6 +32,7 @@ function setUp() {
   const harness = createFakeAgentHarness(
     { now: () => 1000 },
     createMemoryFiles(),
+    FAKE_MICROTASK_TIMERS,
   );
   const messages: Message[] = [];
   const logged: string[] = [];

@@ -1,6 +1,6 @@
 # 07 — Test fixtures: mockup and flowchart
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 5 · Depends on: 03, 06
 Plan: [plan.md](plan.md)

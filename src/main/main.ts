@@ -270,7 +270,7 @@ function driveHarness(
   { store, homeDir, log }: ModeServicesContext,
 ): AgentHarness {
   if (name === 'fake') {
-    return createFakeAgentHarness(clock, files);
+    return createFakeAgentHarness(clock, files, timers);
   }
   return claudeHarness(store, os.homedir(), endpointEnv(homeDir), log);
 }
@@ -281,7 +281,7 @@ function modeServicesOf(environment: RunEnvironment): ModeServices {
       return liveServices();
     case 'selfTest':
       return offscreenRunServices('the self-test', () =>
-        createFakeAgentHarness(clock, files),
+        createFakeAgentHarness(clock, files, timers),
       );
     case 'drive':
       return offscreenRunServices('a drive run', (context) =>

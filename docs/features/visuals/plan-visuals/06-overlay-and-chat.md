@@ -1,6 +1,6 @@
 # 06 — Overlay, key and chat wiring
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 4 · Depends on: 05
 Plan: [plan.md](plan.md)
@@ -252,4 +252,4 @@ Commit:    one commit for the group
 
 ## Proof
 
-<empty — wigley:make writes it>
+Commit 93a87a8f · proof: diff read: every Produces present, the v bind in keymap.ts, updates draw new markdown before removing the old; typecheck + lint clean; 1577 filtered tests pass · concerns: registry.sourcesIn(host) never matches the root itself, so the tests read it around the host (matches real use under chat's slot); the self-test logs 'unplaced v visual.openVisuals in chat.chat' until 07 draws a visual; one edit made by a python3 heredoc; overlay look untested until 09

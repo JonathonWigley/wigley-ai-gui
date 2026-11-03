@@ -245,7 +245,7 @@ export function visualHashOf(url: string): string | null;
 - [x] [Visual plugin: fence, card and session note](05-visual-plugin.md) — after 01, 03, 04
 
 ### Wave 4
-- [ ] [Overlay, key and chat wiring](06-overlay-and-chat.md) — after 05
+- [x] [Overlay, key and chat wiring](06-overlay-and-chat.md) — after 05
 
 ### Wave 5
 - [ ] [Test fixtures: mockup and flowchart](07-fixtures.md) — after 03, 06
@@ -266,10 +266,13 @@ Review base: d7578311fe99437ccefe407289916bbcfa049eb8
 - 04 · cf5e079 · diff read: every Produces present, src set only after serveVisual resolves; lint clean; 25 tests pass filtered; typecheck errors only in task 01's in-flight fakes · concerns: fake-visual-frames.ts sits in src/shared/page beside task 01's files (no file of 01 edited)
 - 01 · 2a9c0ef · diff read: every Produces present, markdownElement gone; typecheck + lint clean; filtered tests 2779 pass · concerns: AGENTS.md says the mount reuses by language and source, but the key also holds the closed flag (for 08); a target redrawn without a view it lent out costs one extra mount
 - 05 · 9e07f590 · diff read: every Produces present; typecheck + lint clean; 15 tests pass filtered · concerns: DESIGN.md Surfaces lacks the visual card and box; a user layout that appends its root after kit.frame reloads the visual on a layouts change; visualMainPart start order before keys not run live
+- 06 · 93a87a8f · diff read: every Produces present, the v bind in keymap.ts, updates draw new markdown before removing the old; typecheck + lint clean; 1577 filtered tests pass · concerns: registry.sourcesIn(host) never matches the root itself, so the tests read it around the host (matches real use under chat's slot); the self-test logs 'unplaced v visual.openVisuals in chat.chat' until 07 draws a visual; one edit made by a python3 heredoc; overlay look untested until 09
 ### Contract changes
 - MarkdownRenderer fakes: 22 files → 23 (composer-kit.test.ts too) · why: plan-time count missed it · consumers: none · group 01
 - shell kit log: from createShellChrome → from mountShellChrome · why: createShellChrome does not exist · consumers: none · group 01
 - docViewOver and roundViewSetup test helpers gain optional markdown/layout params; docs-page-fakes SourceLineFakeElement.querySelectorAll passes class selectors through · why: new tests need them · consumers: none · group 01
+- createVisualCommands deps: inline type → exported VisualCommandsDeps, same members · why: repo *Deps convention · consumers: none · group 06
+- VisualParts.visual(parent, frame) → visual(parent, frame, expand), plus overlay(parent, frame, input); createVisualBaseKit gains a scope argument; new createOverlayKit · why: one base-kit builder for three scopes · consumers: none outside the plugin · group 06
 ### Rulings
 - the served body is doctype, script, source with no trailing newline in the bootstrap — matches the pinned order — whitespace only if wrong · group 02 · group 02
 - registrations held in a Set of {text} objects rather than an array — insertion order kept, identity delete makes a second dispose a no-op, matches drop-targets addTarget — none if wrong · group 03 · group 03
@@ -281,5 +284,8 @@ Review base: d7578311fe99437ccefe407289916bbcfa049eb8
 - Drawn.element is the part's root and Drawn.dispose removes its div.visual-draw — fits redraw-then-dispose — none · group 05 · group 05
 - the card part gets a plain BaseKit, only visual gets frame — matches the Layout contract — none · group 05 · group 05
 - redraw runs over every live view with callEach so one failure does not stop the rest — none · group 05 · group 05
+- blurFocusedElement moved unchanged to src/shared/page/dom.ts and chat's three callers repointed, rather than copied — writing-code reuse rule — four chat files carry an import-only change · group 06 · group 06
+- installFakeDom's ResizeObserver stub gains an empty unobserve — existing entry-list tests threw without it — none · group 06 · group 06
+- overlay CSS sets .visual-draw to display: contents under the scrim and pads the scrim with --wg-space-8 — the parts host puts a div between scrim and part root — the overlay look if wrong (09) · group 06 · group 06
 ### Review rounds
 ### Test gate

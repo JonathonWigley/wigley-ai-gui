@@ -9,6 +9,7 @@ import {
 } from '../../../contracts/agent';
 import {
   createFakeAgentHarness,
+  FAKE_MICROTASK_TIMERS,
   FAKE_PAST_SESSIONS,
   type FakeAgentHarness,
   fakePlanRowUpdate,
@@ -117,7 +118,11 @@ function setUp(
   options: { harnesses?: FakeAgentHarness[]; clockNow?: number } = {},
 ) {
   const clock = { now: () => options.clockNow ?? 1000 };
-  const harness = createFakeAgentHarness(clock, createMemoryFiles());
+  const harness = createFakeAgentHarness(
+    clock,
+    createMemoryFiles(),
+    FAKE_MICROTASK_TIMERS,
+  );
   const harnesses = options.harnesses ?? [harness];
   const data = createMemoryFiles();
   const logged: string[] = [];
@@ -1057,6 +1062,7 @@ describe('createChatSessions', () => {
     const fake = createFakeAgentHarness(
       { now: () => 1000 },
       createMemoryFiles(),
+      FAKE_MICROTASK_TIMERS,
     );
     const failingExit: FakeAgentHarness = {
       ...fake,
@@ -1084,6 +1090,7 @@ describe('createChatSessions', () => {
     const fake = createFakeAgentHarness(
       { now: () => 1000 },
       createMemoryFiles(),
+      FAKE_MICROTASK_TIMERS,
     );
     const failingEnd: FakeAgentHarness = {
       ...fake,
