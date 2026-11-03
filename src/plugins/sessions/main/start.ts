@@ -241,6 +241,7 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
       open: (info, options) => list.open(info, options),
       mark: (sessionId) => list.mark(sessionId),
       activate: (sessionId) => list.activate(sessionId),
+      activateExistingRow: (sessionId) => list.activateExistingRow(sessionId),
       release: (sessionId) => list.release(sessionId),
       selectedSessionId: () => list.selectedSessionId(),
       label: (sessionId) => list.label(sessionId),

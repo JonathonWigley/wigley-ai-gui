@@ -73,7 +73,8 @@ function fakeSessions(calls: string[]) {
   const guards: ((sessionId: string) => boolean)[] = [];
   const sessions: AgentFormSessions = {
     mark: (sessionId) => calls.push(`mark ${sessionId}`),
-    activate: (sessionId) => calls.push(`activate ${sessionId}`),
+    activateExistingRow: (sessionId) =>
+      calls.push(`activateExistingRow ${sessionId}`),
     addCloseGuard: (mayClose) => guards.push(mayClose),
     release: (sessionId) => calls.push(`release ${sessionId}`),
   };
@@ -188,7 +189,7 @@ describe('createAgentFormChannelPresenter', () => {
 
     attention.announced[0].onClick();
 
-    expect(calls).toEqual(['activate app-1']);
+    expect(calls).toEqual(['activateExistingRow app-1']);
     expect(window.shown()).toBe(1);
   });
 

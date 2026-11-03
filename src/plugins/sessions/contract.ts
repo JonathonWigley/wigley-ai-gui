@@ -135,11 +135,16 @@ export interface SessionsMainExports {
   open(info: SessionInfo, options?: OpenOptions): OwnedSession;
   // Attention for the session: selects its row when none is selected, else
   // marks it; a connected session with no row, or a row the user closed, gets
-  // its row at the end first.
+  // its row at the end first. A row `release` closed while selected comes back
+  // selected, unless an `activate` or a selecting `open` came in between.
   mark(sessionId: string): void;
-  // Selects the session's row and clears its mark; a connected session with
-  // no row, or a row the user closed, gets its row at the end first.
+  // The user's pick: selects the session's row and clears its mark; a
+  // connected session with no row, or a row the user closed, gets its row at
+  // the end first.
   activate(sessionId: string): void;
+  // `activate` for a session that holds a row; adds none, and logs and
+  // ignores a session with no row.
+  activateExistingRow(sessionId: string): void;
   // Closes a connected session's row once every close guard allows, emitting
   // `closed`; a guard refusing keeps the row and logs. An unknown or owned
   // session, or one with no row, is left alone without a log line.

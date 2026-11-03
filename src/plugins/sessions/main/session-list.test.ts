@@ -392,9 +392,15 @@ describe('createSessionList', () => {
 
   // Sessions 00000001 and 00000002 hold rows, 00000001 selected and 00000002
   // marked; 00000003 is connected with no row.
-  it.each<{ name: string; sessionId: string; rows: [string, boolean][] }>([
+  it.each<{
+    name: string;
+    method: 'activate' | 'activateExistingRow';
+    sessionId: string;
+    rows: [string, boolean][];
+  }>([
     {
       name: 'a marked row',
+      method: 'activate',
       sessionId: '00000002',
       rows: [
         ['00000001', false],
@@ -403,6 +409,7 @@ describe('createSessionList', () => {
     },
     {
       name: 'a connected session with no row',
+      method: 'activate',
       sessionId: '00000003',
       rows: [
         ['00000001', false],
@@ -410,16 +417,25 @@ describe('createSessionList', () => {
         ['00000003', false],
       ],
     },
+    {
+      name: 'a marked row, by activateExistingRow',
+      method: 'activateExistingRow',
+      sessionId: '00000002',
+      rows: [
+        ['00000001', false],
+        ['00000002', false],
+      ],
+    },
   ])(
     'activates a row, clears its mark and reports activated first: $name',
-    ({ sessionId, rows: expectedRows }) => {
+    ({ method, sessionId, rows: expectedRows }) => {
       const { list, activated, calls } = setUp();
       connectWithRow(list, info('/work/x'));
       connectWithRow(list, info('/work/x'));
       list.connect(info('/work/x'));
       const callsBefore = calls.length;
 
-      list.activate(sessionId);
+      list[method](sessionId);
 
       expect(activated).toEqual([sessionId]);
       expect(calls.slice(callsBefore)).toEqual([
@@ -551,19 +567,25 @@ describe('createSessionList', () => {
     expect(list.state().rows).toEqual([]);
   });
 
-  it('ignores unknown sessions, with a log line', () => {
+  it('ignores unknown sessions, and activateExistingRow of a session with no row, with a log line', () => {
     const { list, states, logged, activated } = setUp();
     connectWithRow(list, info('/work/x'));
+    const released = connectWithRow(list, info('/work/x')).session.id;
+    list.release(released);
     const sentBefore = states.length;
 
     list.mark('ffffffff');
     list.activate('fffffffe');
     expect(list.closeSession('fffffffd')).toBe(false);
+    list.activateExistingRow('fffffffc');
+    list.activateExistingRow(released);
 
     expect(logged).toEqual([
       expect.stringMatching(/mark .*ffffffff/),
       expect.stringMatching(/activate .*fffffffe/),
       expect.stringMatching(/closeSession .*fffffffd/),
+      expect.stringMatching(/activateExistingRow .*fffffffc/),
+      expect.stringMatching(/activateExistingRow .*00000002.*no row/),
     ]);
     expect(activated).toEqual([]);
     expect(states).toHaveLength(sentBefore);
@@ -1193,6 +1215,56 @@ describe('createSessionList', () => {
         list.mark('00000001');
         list.mark('00000002');
         list.closeSession('00000002');
+      },
+      expected: ['00000001'],
+    },
+    {
+      name: 'mark of a session whose selected row release closed',
+      act: (list) => {
+        list.connect(info('/work/x'));
+        list.connect(info('/work/x'));
+        list.mark('00000001');
+        list.mark('00000002');
+        list.release('00000001');
+        list.mark('00000001');
+      },
+      expected: ['00000001', '00000002', '00000001'],
+    },
+    {
+      name: 'mark after release of the selected row and an activate of another',
+      act: (list) => {
+        list.connect(info('/work/x'));
+        list.connect(info('/work/x'));
+        list.connect(info('/work/x'));
+        list.mark('00000001');
+        list.mark('00000002');
+        list.mark('00000003');
+        list.release('00000001');
+        list.activate('00000003');
+        list.mark('00000001');
+      },
+      expected: ['00000001', '00000002', '00000003'],
+    },
+    {
+      name: 'mark after release of the selected row and a selecting open',
+      act: (list) => {
+        list.connect(info('/work/x'));
+        list.mark('00000001');
+        list.release('00000001');
+        list.open(owned('h1'));
+        list.mark('00000001');
+      },
+      expected: ['00000001', null, '00000002'],
+    },
+    {
+      name: 'mark after release of an unselected row',
+      act: (list) => {
+        list.connect(info('/work/x'));
+        list.connect(info('/work/x'));
+        list.mark('00000001');
+        list.mark('00000002');
+        list.release('00000002');
+        list.mark('00000002');
       },
       expected: ['00000001'],
     },

@@ -97,9 +97,10 @@ export function createAgentFormChannelPresenter<Form, Body>(deps: {
     }
     updateOpenCount();
     // A notification click is the user's own act, so it selects the form's
-    // session and brings the window forward.
+    // session's row, when the session still holds one, and brings the window
+    // forward.
     alerts.announce(announceTitle, form.label, () => {
-      sessions.activate(form.sessionId);
+      sessions.activateExistingRow(form.sessionId);
       window.show();
     });
   };
