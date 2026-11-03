@@ -43,8 +43,8 @@ export interface VisualPartsDeps {
 // calls `kit.frame`, else at the end of its root; drawn again with the same
 // `frame`, each moves the slot, and the visual stays loaded only when the
 // slot and the element it moves into are both in the document: a part that
-// places it in a detached element, or whose draw throws, reloads it. `visual` also
-// places an expand button whose click runs `expand`, where the part calls
+// places it in a detached element, or whose draw throws, reloads it. `visual`
+// also places an expand button whose click runs `expand`, where the part calls
 // `kit.expand`, else at its root's end after the frame. `card` and `overlay`
 // anchor keys in no scope and the overlay's scope, `visual` in chat's.
 // `setLayouts` only stores the set; the fence and the overlay draw again.

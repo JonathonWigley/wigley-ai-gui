@@ -87,13 +87,14 @@ function viewsIn(target: HTMLElement, views: FakeView[]): (number | null)[] {
 
 describe('createMarkdownMount', () => {
   let logs: [string, string][];
+  let dom: ReturnType<typeof installMarkdownDom>;
   let fake: ReturnType<typeof fakeFences>;
   let mount: MarkdownMount;
   let parent: HTMLElement;
   let target: HTMLElement;
 
   beforeEach(() => {
-    installMarkdownDom((name, value) => vi.stubGlobal(name, value));
+    dom = installMarkdownDom((name, value) => vi.stubGlobal(name, value));
     logs = [];
     fake = fakeFences();
     mount = createMarkdownMount(fake.fences, (source, message) =>
@@ -136,7 +137,19 @@ describe('createMarkdownMount', () => {
     },
   );
 
-  it.each([
+  // `connected` puts `parent` in the page; `moved` lists each `moveBefore`
+  // as the view it moved and the index in `shown` of the element whose
+  // placeholder it moved into, none when left out.
+  it.each<{
+    name: string;
+    first: string;
+    redraw: (draw: MarkdownMount['draw'], old: HTMLElement) => HTMLElement[];
+    mounts: { source: string; closed: boolean }[];
+    disposals: number[];
+    holds: (number | null)[][];
+    connected?: true;
+    moved?: { view: number; into: number }[];
+  }>([
     {
       name: 'a redraw of the same fence into its target keeps its view',
       first: html('a'),
@@ -189,6 +202,21 @@ describe('createMarkdownMount', () => {
       mounts: [{ source: 'a', closed: true }],
       disposals: [0],
       holds: [[0]],
+    },
+    {
+      name: 'a view kept for a new target in the page moves through moveBefore',
+      first: html('a'),
+      redraw: (draw: MarkdownMount['draw'], old: HTMLElement) => {
+        const next = siblingOf(old);
+        draw(next, html('a'));
+        old.remove();
+        return [next];
+      },
+      mounts: [{ source: 'a', closed: true }],
+      disposals: [0],
+      holds: [[0]],
+      connected: true,
+      moved: [{ view: 0, into: 0 }],
     },
     {
       name: 'a new target drawn after the parent was emptied keeps the view',
@@ -349,17 +377,31 @@ describe('createMarkdownMount', () => {
       disposals: [0],
       holds: [[0], [-1]],
     },
-  ])('$name', async ({ first, redraw, mounts, disposals, holds }) => {
-    mount.draw(target, first);
-    const shown = redraw((...args) => mount.draw(...args), target);
-    await Promise.resolve();
+  ])(
+    '$name',
+    async ({ first, redraw, mounts, disposals, holds, connected, moved }) => {
+      asFake(parent).isPageRoot = connected === true;
+      mount.draw(target, first);
+      const shown = redraw((...args) => mount.draw(...args), target);
+      await Promise.resolve();
 
-    expect(
-      fake.mounts.map(({ source, closed }) => ({ source, closed })),
-    ).toEqual(mounts);
-    expect(fake.views.map((view) => view.disposals)).toEqual(disposals);
-    expect(shown.map((each) => viewsIn(each, fake.views))).toEqual(holds);
-  });
+      expect(
+        fake.mounts.map(({ source, closed }) => ({ source, closed })),
+      ).toEqual(mounts);
+      expect(fake.views.map((view) => view.disposals)).toEqual(disposals);
+      expect(shown.map((each) => viewsIn(each, fake.views))).toEqual(holds);
+      expect(
+        dom.moves.map(({ element, to }) => ({
+          view: fake.views.findIndex(
+            (view) => asFake(view.element) === element,
+          ),
+          into: shown.findIndex((each) =>
+            placeholdersIn(each).includes(to as FakeElement),
+          ),
+        })),
+      ).toEqual(moved ?? []);
+    },
+  );
 
   it.each([
     {

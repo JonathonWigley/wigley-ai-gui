@@ -73,7 +73,9 @@ points at the `wigley:visuals` skill in wigley-ai-marketplace, which holds the h
   pinned to the bottom as it grows. The frame document hides its vertical overflow, so no scrollbar narrows a
   visual whose height follows its width. A visual wider than the column scrolls sideways inline, the frame adding
   the horizontal scrollbar's thickness to the reported height so the bar covers none of it, and reads whole in the
-  full-size overlay.
+  full-size overlay. A root whose height follows the viewport (`min-height: 100vh`) grows with each frame resize,
+  so a report whose root grew by exactly what the frame grew is dropped and the frame settles one bar taller than
+  the root first measured, instead of growing without end.
 - **The theme reaches in live.** The frame host posts the whole token set, then reduced transparency, then the font
   settings (the order `src/renderer/theme.ts` applies them) on load and on every theme change. Tokens reference each
   other, so a subset would break.

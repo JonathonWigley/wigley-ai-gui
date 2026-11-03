@@ -14,7 +14,10 @@ const VISUAL_CSP =
 // scrollbar narrows a width-scaled visual, and the frame then holds it at
 // that narrowed height with the scrollbar showing. A visual wider than the
 // frame scrolls sideways, so the height adds the horizontal scrollbar's
-// thickness, `innerHeight` less the root's `clientHeight`, 0 without one.
+// thickness, `innerHeight` less the root's `clientHeight`, 0 without one. A
+// root that grew by exactly what the frame grew since the last report
+// follows the viewport (`min-height: 100vh`), so that size is not reported:
+// adding the bar again would grow the frame without end.
 const BOOTSTRAP_SCRIPT = `(() => {
   const messages = ${JSON.stringify(VISUAL_MESSAGES)};
   const root = document.documentElement;
@@ -33,13 +36,22 @@ const BOOTSTRAP_SCRIPT = `(() => {
     root.style.visibility = '';
   });
   let reported = -1;
+  let reportedRoot = NaN;
+  let reportedViewport = NaN;
   const reportHeight = () => {
-    const scrollbar = window.innerHeight - root.clientHeight;
-    const height = Math.ceil(root.getBoundingClientRect().height) + scrollbar;
-    if (height !== reported) {
-      reported = height;
-      window.parent.postMessage({ type: messages.height, height }, '*');
+    const viewport = window.innerHeight;
+    const rootHeight = Math.ceil(root.getBoundingClientRect().height);
+    const height = rootHeight + viewport - root.clientHeight;
+    const followsViewport =
+      viewport !== reportedViewport &&
+      rootHeight - reportedRoot === viewport - reportedViewport;
+    if (height === reported || followsViewport) {
+      return;
     }
+    reported = height;
+    reportedRoot = rootHeight;
+    reportedViewport = viewport;
+    window.parent.postMessage({ type: messages.height, height }, '*');
   };
   new ResizeObserver(reportHeight).observe(root);
   window.addEventListener('resize', reportHeight);
