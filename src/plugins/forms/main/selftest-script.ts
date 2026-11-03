@@ -60,6 +60,11 @@ const COMMA_LEADER_KEYMAP = JSON.stringify({ leader: ',' });
 // An unbroken run of letters wider than any pane.
 const LONG_WORD = 'unbroken'.repeat(14);
 
+// Two absolute paths a box draws as file chips, on this OS.
+const IS_WINDOWS = process.platform === 'win32';
+const CHIP_ONE = IS_WINDOWS ? 'C:\\chips\\one.md' : '/tmp/chips/one.md';
+const CHIP_TWO = IS_WINDOWS ? 'C:\\chips\\two.md' : '/tmp/chips/two.md';
+
 // A layout whose question card builds through the kit and throws on every
 // update, whose finding card mounts its notes box and then throws, so the
 // default card can mount that box only once the host has destroyed it, and
@@ -307,6 +312,31 @@ const FINDING_PICKS_STEPS: SelfTestStep[] = [
     keys: ['Enter'],
     expect: '[forms] accepted the recommendation on finding 3',
     why: 'Accept replaces the Drop it pick with choice 2 and its action.',
+  },
+];
+
+// In finding 3's notes box: w from a chip reaches the next word, which ~
+// marks; visual l steps over a chip, so d takes it and its space and P puts
+// both back; diw on a chip deletes it whole and P puts the whole path back;
+// x on the last chip deletes it whole and p puts it back.
+const FILE_CHIPS_STEPS: SelfTestStep[] = [
+  { keys: ['a'], expect: '[forms] focused notes on finding 3' },
+  {
+    keys: [
+      ...`a ${CHIP_ONE} b ${CHIP_TWO}`,
+      'Escape',
+      // w from the first chip lands on b.
+      ...'0ww~',
+      // Visual l from the first chip reaches the space after it.
+      ...'0wvldP',
+      // diw on the first chip cuts into it, and the delete takes it whole.
+      ...'0wdiwP',
+      // $ lands on the last chip.
+      ...'$xp',
+      'Escape',
+    ],
+    expect: '[forms] left the box',
+    why: "The text the keys leave is checked in finding 3's notes once the round is sent.",
   },
 ];
 
@@ -1025,6 +1055,12 @@ function payloadProblems(payload: AnswersPayload): string[] {
       `finding 2 took_action_recommendation ${nit?.took_action_recommendation}`,
     ],
     [design?.status === 'answered', `finding 3 status ${design?.status}`],
+    // The B and the two whole paths prove the file chips group's motions,
+    // deletes and pastes each took a chip as one character.
+    [
+      design?.notes === `a ${CHIP_ONE} B ${CHIP_TWO}`,
+      `finding 3 notes ${JSON.stringify(design?.notes)}`,
+    ],
     [design?.choice === 2, `finding 3 choice ${design?.choice}`],
     [
       design?.took_recommendation === true,
@@ -1154,6 +1190,11 @@ export function formsSelfTestScript(
         name: 'finding picks',
         why: 'Findings 1 to 3 number their choices and bare action headers down the card; a number picks a choice or a header and sets the action with it, the same number again clears it, Space a and a number picks from inside the notes box, and Enter takes the recommendation.',
         steps: FINDING_PICKS_STEPS,
+      },
+      {
+        name: 'file chips',
+        why: 'In a notes box a path is one character to vim: w from a chip lands on the next word, visual l steps over the chip, x and diw delete it whole, and the register holds the whole path, so P and p put it back.',
+        steps: FILE_CHIPS_STEPS,
       },
       {
         name: 'question boxes',

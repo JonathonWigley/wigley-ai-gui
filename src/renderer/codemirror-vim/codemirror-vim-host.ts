@@ -39,10 +39,13 @@ import {
 } from './document-ex-commands';
 import { fileChipsIn } from '../../shared/page/file-drop/file-chips';
 import {
+  type EditMode,
+  editModeOf,
   fileChipExtension,
   fileChipsOf,
   skipsChipRules,
 } from './chip-decorations';
+import { defineChipMotions } from './chip-motions';
 import { codeColours } from './code-colours';
 import { editorTheme } from './editor-theme';
 import { exBindName } from './ex-command-name';
@@ -227,18 +230,15 @@ function replaceText(view: EditorView, text: string) {
   });
 }
 
-// The range `insert` replaces in vim's current mode: in insert and visual
-// mode the main selection; in normal mode the empty point after the
-// character or chip under the cursor, as vim's `p`, or the cursor itself on
-// an empty line.
+// The range `insert` replaces in `mode`: in insert and visual mode the main
+// selection; in normal mode the empty point after the character or chip under
+// the cursor, as vim's `p`, or the cursor itself on an empty line.
 function insertionRange(
-  view: EditorView,
-  cm: VimEditor,
+  state: EditorState,
+  mode: EditMode,
 ): { from: number; to: number } {
-  const { state } = view;
   const { main } = state.selection;
-  const { vim } = cm.state;
-  if (vim.insertMode || vim.visualMode) {
+  if (mode !== 'normal') {
     return { from: main.from, to: main.to };
   }
   const chip = fileChipsOf(state).find((range) => range.from === main.head);
@@ -248,45 +248,62 @@ function insertionRange(
 }
 
 function charBeforeInsertion(view: EditorView, cm: VimEditor): string {
-  const { from } = insertionRange(view, cm);
+  const { from } = insertionRange(view.state, editModeOf(cm.state.vim));
   return from === 0 ? '' : view.state.doc.sliceString(from - 1, from);
 }
 
 const WHITESPACE = /\s/;
 
-// Types `text` over `insertionRange` in one transaction, a space after it when
-// the next character is not whitespace, without focusing the editor. The
-// cursor lands after the text and its space in insert mode; otherwise on the
-// last chip the text holds, or its last character, and visual mode drops to
-// normal. A read-only editor takes nothing.
+// What `insert` writes for `text` in `mode`: `text` over `insertionRange`, a
+// space after it when the next character is not whitespace, and the cursor
+// after the text and its space in insert mode; otherwise on the last chip the
+// text holds, or its last character.
+export function insertionOf(
+  state: EditorState,
+  mode: EditMode,
+  text: string,
+  paths: Paths,
+): { from: number; to: number; insert: string; cursor: number } {
+  const { from, to } = insertionRange(state, mode);
+  const next = state.doc.sliceString(to, to + 1);
+  const needsSpaceAfter = next !== '' && !WHITESPACE.test(next);
+  const insert = needsSpaceAfter ? `${text} ` : text;
+  const lastChip = fileChipsIn(text, paths).at(-1);
+  const cursor =
+    mode === 'insert'
+      ? from + insert.length
+      : from + (lastChip?.from ?? Math.max(text.length - 1, 0));
+  return { from, to, insert, cursor };
+}
+
+// Types `text` as `insertionOf` places it, in one transaction, without
+// focusing the editor; visual mode drops to normal. A read-only editor takes
+// nothing.
 function insertText(
   view: EditorView,
   cm: VimEditor,
   text: string,
   paths: Paths,
 ) {
-  const { state } = view;
-  if (state.readOnly) {
+  if (view.state.readOnly) {
     return;
   }
-  const { vim } = cm.state;
-  const isInsertMode = vim.insertMode === true;
-  const { from, to } = insertionRange(view, cm);
-  const next = state.doc.sliceString(to, to + 1);
-  const needsSpaceAfter = next !== '' && !WHITESPACE.test(next);
-  const inserted = needsSpaceAfter ? `${text} ` : text;
-  const lastChip = fileChipsIn(text, paths).at(-1);
-  const cursor = isInsertMode
-    ? from + inserted.length
-    : from + (lastChip?.from ?? Math.max(text.length - 1, 0));
+  const mode = editModeOf(cm.state.vim);
+  const { from, to, insert, cursor } = insertionOf(
+    view.state,
+    mode,
+    text,
+    paths,
+  );
   view.dispatch({
-    changes: { from, to, insert: inserted },
+    changes: { from, to, insert },
     selection: { anchor: cursor },
     userEvent: 'input.paste',
     scrollIntoView: true,
     annotations: skipsChipRules.of(true),
   });
-  // Vim may already have left visual mode on the dispatch's selection change.
+  // Outside a vim command, vim leaves visual mode itself once a dispatch
+  // empties the selection, keeping the cursor where the dispatch put it.
   if (cm.state.vim.visualMode) {
     Vim.exitVisualMode(cm);
     // Leaving visual mode puts the cursor at vim's own visual head.
@@ -867,6 +884,7 @@ export const createCodeMirrorVimHost: CreateEditorHost = (
   };
 
   defineDocumentExCommands(hosted);
+  defineChipMotions();
   const leaving = (left: EditorView) =>
     discardUnfinishedInput(vimEditorOf(left));
 
