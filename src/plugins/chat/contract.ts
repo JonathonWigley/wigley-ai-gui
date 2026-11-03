@@ -277,7 +277,8 @@ export interface ChatMainExports {
   // Drops every session chat holds in `projectDir` (compared as samePath
   // does), a resting one included, as a `sessions.closed` would, without
   // asking the close guards: for a self-test that starts its project over.
-  // Resolves once each one's owned session has ended and its row is gone.
+  // Resolves once each one's owned session has ended and its row is gone, or
+  // chat stops.
   closeSessionsIn(projectDir: string): Promise<void>;
   // Text every session chat starts from now on carries to its harness, after
   // the texts registered before it; a running session keeps what it started

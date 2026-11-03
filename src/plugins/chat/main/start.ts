@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { Disposable, Registrations } from '../../../contracts/disposable';
+import type { Registrations } from '../../../contracts/disposable';
 import type { Files } from '../../../contracts/files';
 import type {
   DriveHost,
@@ -79,13 +79,10 @@ interface ChatDriveDeps {
 // Offers a drive run chat's fixtures: `chat.start` opens a chat session and
 // selects its row, `chat.askPermission` raises a permission card in one whose
 // process runs, and `chat.permissionAnswer` reads that card's reply.
-export function addDriveActions(
-  drive: DriveHost,
-  deps: ChatDriveDeps,
-): Disposable[] {
+export function addDriveActions(drive: DriveHost, deps: ChatDriveDeps): void {
   const { services, profileNames, chat, sessions } = deps;
   const permissions = new Map<string, DrivePermission>();
-  const start = drive.add('start', {
+  drive.add('start', {
     description:
       'Starts a chat session in projectDir (default <home>/dev/drive-project, made if missing) under profile (default the first of chat\'s profiles) and selects its row. Under the fake harness a message of "fake: tool" runs a tool turn, "fake: hold" a turn that waits for an interrupt, "fake: steps" six tools and a thought in a turn that waits for an interrupt, "fake: agents" two subagents that run until an interrupt, the next message or the session\'s end, "fake: end" one that ends the session, "fake: workflow feature" a wigley:feature turn that writes a three-task plan, "fake: workflow step" the next make step of that plan, after /wigley:make <its folder>, "fake: visual" a reply holding a UI mockup and a flowchart whose second html block stays open for 1.5 s, and anything else an echo. Returns { sessionId, hostSessionId }: hostSessionId is the id forms.openRound and primer.openPrimer take to open a form in this session.',
     args: '{ projectDir?: string; profile?: string }',
@@ -115,7 +112,7 @@ export function addDriveActions(
       return { sessionId, hostSessionId };
     },
   });
-  const askPermission = drive.add('askPermission', {
+  drive.add('askPermission', {
     description: `Raises a permission card in the chat session sessionId for a call of toolName (default ${DEFAULT_PERMISSION_TOOL}) with input (default ${JSON.stringify(DEFAULT_PERMISSION_INPUT)}). Returns the call's toolUseId at once, which chat.permissionAnswer reads the reply by; the main output logs the reply once the user answers. Fails when chat holds no session sessionId, or when that session has no running process.`,
     args: '{ sessionId: string; toolName?: string; input?: unknown }',
     async run(rawArgs) {
@@ -153,7 +150,7 @@ export function addDriveActions(
       return { toolUseId };
     },
   });
-  const permissionAnswer = drive.add('permissionAnswer', {
+  drive.add('permissionAnswer', {
     description:
       "The permission_prompt tool's reply to the card chat.askPermission raised under toolUseId once the user answered it, else { pending: true }.",
     args: '{ toolUseId: string }',
@@ -171,7 +168,6 @@ export function addDriveActions(
         : { pending: true };
     },
   });
-  return [start, askPermission, permissionAnswer];
 }
 
 // Starts, resumes and runs the Claude Code sessions the page asks for, keeps
@@ -329,7 +325,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       chat.sessionConnected(session),
     );
     // closeSessionsIn's waits, by session id: each resolves when its session
-    // ends.
+    // ends or chat stops.
     const endWaits = new Map<string, () => void>();
     api.events.on('sessions.ended', ({ sessionId }) => {
       chat.sessionEnded(sessionId);

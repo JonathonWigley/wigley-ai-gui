@@ -40,13 +40,17 @@ const SESSION: ChatSessionState = {
 
 // Chat's page part on the part harness, over sessions and keys fakes that file
 // each tab and anchor with `consumer.track`, as their views do. `invoke`
-// answers the part's `channel.invoke`.
-function startChatPage(invoke: (method: string) => Promise<unknown>) {
+// answers the part's `channel.invoke`; `destroyEditor` is each tab's box's
+// `destroy`.
+function startChatPage(
+  invoke: (method: string) => Promise<unknown>,
+  destroyEditor: () => void = () => undefined,
+) {
   return startPagePart(chatPagePart, {
     invoke,
     services: {
       editor: {
-        create: () => ({ destroy() {}, focus() {} }),
+        create: () => ({ destroy: destroyEditor, focus() {} }),
       } as unknown as EditorHost,
       markdown: {
         block: (text: string) => text,
@@ -126,6 +130,32 @@ describe('chat page part', () => {
     await Promise.resolve();
 
     expect(harness.counts()).toEqual(NO_LIVE);
+  });
+
+  it('stop_OneTabsDestroyThrows_TearsDownEveryTab', async () => {
+    const destroyEditor = vi.fn<() => void>();
+    destroyEditor.mockImplementationOnce(() => {
+      throw new Error('box gone');
+    });
+    const harness = startChatPage(noSessions, destroyEditor);
+    harness.send('sessionStarted', SESSION);
+    harness.send('sessionStarted', { ...SESSION, sessionId: 's2' });
+
+    await expect(harness.stop()).rejects.toThrow('box gone');
+
+    expect(destroyEditor).toHaveBeenCalledTimes(2);
+    expect(harness.counts()).toEqual(NO_LIVE);
+  });
+
+  it('sessionRemoved_HeldTab_DestroysItsBoxOnce', async () => {
+    const destroyEditor = vi.fn<() => void>();
+    const harness = startChatPage(noSessions, destroyEditor);
+    harness.send('sessionStarted', SESSION);
+
+    harness.emit('sessions.sessionRemoved', { sessionId: SESSION.sessionId });
+    await harness.stop();
+
+    expect(destroyEditor).toHaveBeenCalledOnce();
   });
 
   it('stopThenStart_StartsAgain', async () => {

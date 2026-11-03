@@ -8,6 +8,7 @@ import type { ChatEntryKind } from '../../../contracts/agent';
 import type { PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import type { PageChannel, ToastTone } from '../../../contracts/plugin';
+import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import type { PartStore } from '../../../shared/page/contributed-parts';
 import { blurFocusedElement, element } from '../../../shared/page/dom';
@@ -408,11 +409,11 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       return;
     }
     tabs.delete(sessionId);
-    tearDownTab(tab);
     if (pendingReveal === sessionId) {
       pendingReveal = null;
     }
     log(`session closed: ${tab.name}`);
+    tearDownTab(tab);
   });
   // Viewing a session, clearing its conversation or sending to it leaves
   // nothing unseen.
@@ -474,22 +475,26 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     markSent: clearUnseen,
     dispose() {
       isDisposed = true;
-      for (const tab of tabs.values()) {
-        tearDownTab(tab);
-      }
+      const held = [...tabs.values()];
       tabs.clear();
+      callEach(held, tearDownTab);
     },
   };
 }
 
 // Ends what the tab holds that outlives its element.
 function tearDownTab(tab: HeldTab) {
-  tab.stop.leave();
-  tab.dropTarget?.dispose();
-  tab.box?.destroy();
-  tab.composerSize.disconnect();
-  tab.composer.dispose();
-  tab.entries.dispose();
+  callEach<() => void>(
+    [
+      () => tab.stop.leave(),
+      () => tab.dropTarget?.dispose(),
+      () => tab.box?.destroy(),
+      () => tab.composerSize.disconnect(),
+      () => tab.composer.dispose(),
+      () => tab.entries.dispose(),
+    ],
+    (step) => step(),
+  );
 }
 
 // Draws the tab's composer through the chat layout in place of its last draw,

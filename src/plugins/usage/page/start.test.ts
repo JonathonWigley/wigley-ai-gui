@@ -36,9 +36,11 @@ const SNAPSHOT: UsageSnapshot = {
 };
 
 // The part on the harness, over fakes that file each handle with
-// `consumer.track`, as the real views do.
-function startOnHarness() {
+// `consumer.track`, as the real views do. `invoke` answers the part's
+// `channel.invoke`.
+function startOnHarness(invoke?: (method: string) => Promise<unknown>) {
   return startPagePart(usagePagePart, {
+    invoke,
     dependencies: [
       fakeDependency(
         chatPageKey,
@@ -71,6 +73,7 @@ describe('usagePagePart', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   it('stop_LeavesNoLiveRegistration', async () => {
@@ -88,6 +91,45 @@ describe('usagePagePart', () => {
       observers: 0,
       frames: 0,
     });
+  });
+
+  it('stop_LeavesNoLiveRegistration: snapshot reply after the stop', async () => {
+    let replySnapshot = (_snapshot: UsageSnapshot) => {};
+    const reply = new Promise<UsageSnapshot>((resolve) => {
+      replySnapshot = resolve;
+    });
+    const harness = startOnHarness(() => reply);
+
+    await harness.stop();
+    replySnapshot(SNAPSHOT);
+    await reply;
+    await Promise.resolve();
+
+    expect(harness.counts()).toEqual({
+      registrations: 0,
+      timers: 0,
+      listeners: 0,
+      observers: 0,
+      frames: 0,
+    });
+    expect(harness.logs.map((line) => line.message)).not.toContainEqual(
+      expect.stringContaining('status line'),
+    );
+  });
+
+  it('stop_RemovesTheDrawnLineAndDetails', async () => {
+    const harness = startOnHarness();
+    harness.started().commands.toggleDetails({});
+    harness.send('changed', SNAPSHOT);
+    const remove = vi.spyOn(FakeElement.prototype, 'remove');
+
+    await harness.stop();
+
+    const removed = remove.mock.contexts as FakeElement[];
+    expect(removed.map((node) => node.className)).toEqual([
+      'usage-status-line',
+      'usage-details',
+    ]);
   });
 
   it('stopThenStart_StartsAgain', async () => {

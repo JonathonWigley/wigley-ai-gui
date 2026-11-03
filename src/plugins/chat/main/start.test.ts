@@ -182,6 +182,7 @@ function startChatPart() {
         send: processSends,
         end: () => processEnd,
         interrupt: () => undefined,
+        kill: () => undefined,
       };
     },
   };
@@ -431,6 +432,18 @@ describe('chat main part', () => {
     expect(chat.ended).toEqual(['row-3', 'row-1']);
     const listed = chat.invoke('sessions') as ChatSessionState[];
     expect(listed.map((state) => state.sessionId)).toEqual(['row-2']);
+  });
+
+  it('exports_CloseSessionsIn_EndsNeverCome_ResolvesAtStop', async () => {
+    const chat = startChatPart();
+    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    chat.holdProcessEnds();
+    const closing = chat.exports.closeSessionsIn('/p');
+
+    await chat.part.dispose?.();
+    await closing;
+
+    expect(chat.ended).toEqual([]);
   });
 
   it('sessionsTitleChanged_HeldRow_Saves', async () => {

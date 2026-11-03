@@ -49,8 +49,8 @@ type UsageApi = PageApi<
 const DETAILS_OPEN_KEY = 'details-open';
 const REDRAW_MS = 60_000;
 
-// Draws the usage status-bar line at the status bar's end for the page's
-// life, each session's line in its Chat status line (a chat status part), its
+// Draws the usage status-bar line at the status bar's end until the part
+// stops, each session's line in its Chat status line (a chat status part), its
 // context under its side-bar row (a sessions row part), and
 // the usage details in the right bar while they are open (`toggleDetails`,
 // kept in `uiState`), all through the `usage.layout` layout. Exports
@@ -61,9 +61,9 @@ const REDRAW_MS = 60_000;
 // redraws all on each, on each layouts set and once a minute for the
 // countdowns; hears `sessions.sessionAdded` for each session's name in the log
 // and `sessions.sessionRemoved` to forget a session's lines. Draws nothing
-// until the first snapshot lands. Logs the status line's and each session
-// line's text when it changes, and the details' states when they show, hide
-// or change.
+// until the first snapshot lands, or after the part stops. Logs the status
+// line's and each session line's text when it changes, and the details' states
+// when they show, hide or change.
 export const usagePagePart: PagePart<typeof usageManifest> = {
   manifest: usageManifest,
   start(api: UsageApi) {
@@ -99,6 +99,7 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
     let details: Drawn | null = null;
     let lastStatusText: string | null = null;
     let lastDetailsText: string | null = null;
+    let isDisposed = false;
     // Each session's name in the log, its side-bar label (`gamma 2`).
     const names = new Map<string, string>();
     const lineParts = createSessionLineParts();
@@ -165,7 +166,7 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
     // Draws the line, and the details while open, at one `now`; shows the
     // details on their first draw.
     const redraw = () => {
-      if (snapshot === null) {
+      if (isDisposed || snapshot === null) {
         return;
       }
       const now = services.clock.now();
@@ -267,6 +268,10 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
             return lines.part;
           },
         }) satisfies UsagePageExports,
+      dispose() {
+        isDisposed = true;
+        callEach([statusLine, details], (drawn) => drawn?.dispose());
+      },
     };
   },
 };
