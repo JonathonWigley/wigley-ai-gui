@@ -70,7 +70,8 @@ Both the stable and the dev app read each owner's `default` from the repo clone'
 edit shows at once, and the committed edit ships as the next build's bundled copy.
 
 - **The clone.** `npm run install-app` bakes the clone's path into the stable build; the dev app reads its own repo.
-  Whatever branch the clone has checked out is what shows.
+  Whatever branch the clone has checked out is what shows, so the stable app can run a `layout.js` that uses kit
+  members its installed build lacks; a part that calls one throws and draws the bundled part until the next install.
 - **The folder.** A plugin's default is `src/plugins/<id>/layouts/default/` in the clone, derived from its plugin id;
   the shell names `src/renderer/shell/layouts/default/` when it registers. A user folder named `default` stays
   ignored.
