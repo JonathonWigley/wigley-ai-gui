@@ -28,8 +28,10 @@ its saved transcript before its first new turn.
 - `AgentHarness` has exactly two implementers, the Claude adapter and the fake:
   `grep -rln "planUsage" src/main src/shared --include='*.ts' | grep -v test` lists `claude-code-harness.ts` and
   `fake-agent-harness.ts` (measured at plan time, re-verify).
-- A peer session has uncommitted edits to `docs/features/usage/design.md` (status bar and details bar stacking every
-  profile), which may also reach `usage-view-model.ts`. Check `git status` before wave 1 and leave those edits alone.
+- Another session is reworking the usage status line and details bar (`4c8a2b0b`, `32ce1626`), in the same
+  `usage-view-model.ts` and `usage-format.ts` as task 03. Before wave 1, run `git status` and
+  `git log --oneline -5 -- src/plugins/usage`. Leave a peer's uncommitted edits alone, and re-read both files as they
+  stand.
 - `SYNTHETIC_MODEL` is private to `src/main/claude-code/stream-decoder.ts:80`: `grep -rn "SYNTHETIC_MODEL =" src`.
 - The real `get_context_usage` reply carries no token count (`maxTokens`, `autoCompactThreshold` only):
   `grep -n "autocompactSource" src/main/claude-code/claude-code-harness.test.ts`.
