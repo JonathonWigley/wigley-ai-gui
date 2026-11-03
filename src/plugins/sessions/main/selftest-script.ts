@@ -138,7 +138,7 @@ export function sessionsSelfTestScript(
       },
       {
         name: 'rename',
-        why: '<Leader>rr renames the focused session and an empty name hands naming back',
+        why: '<Leader>rr renames the focused session and an empty name hands naming back.',
         steps: RENAME_STEPS,
       },
       {

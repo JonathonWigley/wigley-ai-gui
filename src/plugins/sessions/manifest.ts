@@ -4,8 +4,8 @@ import { definePlugin } from '../../shared/define-plugin';
 // sidebar of session rows beside chat panes, each showing one session's tabs.
 // Its keys act in every scope; `idle` is the base scope while the focused pane
 // shows no tab, `picker` is pushed while the list picker asks which session a
-// new pane shows, and `rename` while the rename dialog shows. `layout` names the layout the side bar, the panes
-// and the tab bars draw with.
+// new pane shows, and `rename` while the rename dialog shows. `layout` names
+// the layout the side bar, the panes and the tab bars draw with.
 export const sessionsManifest = definePlugin({
   id: 'sessions',
   dependsOn: ['keys'],
