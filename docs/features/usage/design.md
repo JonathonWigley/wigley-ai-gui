@@ -153,7 +153,10 @@ In `src/contracts/agent.ts`, beside `AgentHarness`:
     `addBarPart`) in each session's tab bar. The line: its context bar
     (`used/limit`), its cache countdown and its spend. The context bar is tinted by its share of the limit (`warning`
     from 70 %, `critical` from 90 %); with no autocompact limit it shows tokens alone. A narrow bar drops whole items
-    from the line's end (spend, then cache, then the context text) and keeps the context bar. Every session draws a line:
+    from the line's end (spend, then cache, then the context text) and keeps the context bar. While the session
+    compacts, the line opens with a `compacting` chip naming the trigger and its context bar pulses; main folds each
+    `compactionStarted` and `compactionEnded` agent event into the session's `compaction`
+    (`docs/features/auto-compact/design.md`). Every session draws a line:
     one with no usage event yet (a new chat, a restored row before its saved usage is read, a session usage does not
     track) draws a zero line, its context `0k` with no cache or spend. The line redraws on each snapshot, each `sessions.activeChanged`, each layouts set and the
     minute tick. Each surface logs `session line in <name>: <text>` under its own plugin when a session's text

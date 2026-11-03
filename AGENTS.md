@@ -367,6 +367,10 @@ round; primer: an open primer), since main, not the page, decides.
   its own key scope until it hands the cursor back.
 - **A status part** is what a plugin draws in the Chat status line under the box, through the `chat` page export
   `addStatusPart`, the same shape; the usage plugin's context, cache and spend are one.
+- **A send gate** is a rule a plugin runs before chat main writes a message to an idle session, through the `chat`
+  main export `addSendGate`. A gate answers a hold (`{ action: 'compact', reason }`) or nothing; chat does the
+  holding, so a new pre-send rule is a gate in its own plugin. The `auto-compact` plugin's is the first
+  (`docs/features/auto-compact/design.md`).
 - **A chat pane** is one pane of Sessions mode's pane tree (`src/shared/page/pane-tree/`, the sessions plugin its
   owner): it shows one whole session, tab bar included, and a session shows in at most one pane. The side bar drives
   the focused pane, and the visible tab, whose `shown` sets the key scope and whose `isVisible` reads true, is the

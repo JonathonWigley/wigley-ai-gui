@@ -369,7 +369,9 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   after the tabs and before the pane controls, in `text-12`: its context bar (`used/limit` against the autocompact
   limit), its cache countdown and its spend. In a narrow bar the line drops whole items from its end (spend, then cache,
   then the context text), never part of a number, keeping its context bar and a `space-2` gap before `⌘W`. A session
-  with no usage yet draws no line. A meter takes the existing status colours by the server's severity (`normal`,
+  with no usage yet draws a zero line, its context `0k`. While the session compacts, the line opens with a
+  `compacting` chip (`compacting · auto`) in `accent-tint`, and its context bar pulses at `duration-pulse`, static under
+  reduced motion. A meter takes the existing status colours by the server's severity (`normal`,
   `warning`, `critical`); the context bar by its share of the limit
   (`warning` from 70 %, `critical` from 90 %). The context bar carries no label; a stale profile's rows and a note
   (`plan loading`, `plan unavailable`) draw in `fg-tertiary`. The details bar
@@ -397,7 +399,12 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   the older ones in `fg-tertiary`, a failed one in `status-error`), and the main agent's tool counts, dim
   (`Read 3 Bash 2 Edit 1`). When the turn ends, the dock shrinks to one dim `fg-tertiary` line, such as
   `Done · 1m 05s · $0.57 · Bash 6 · Read 2`, its time compact in tabular numerals, and keeps it until the user sends
-  the next message; with no finished turn to show it takes no space. A chat layout that sets `activityInTranscript`
+  the next message; with no finished turn to show it takes no space. While the session compacts, the dock's header
+  reads `0:06 Compacting…` with the trigger after it in `fg-secondary` (`auto · cache cold · 182k`, `/compact`,
+  `autocompact`) over a thin indeterminate bar in `status-running`, and no tool card. A message held for a compaction is
+  a pending row reading `sends after compaction · ⌃C skips`. A finished compaction leaves a divider in the
+  transcript: a centred dim `text-12` line between two `border-default` rules, `Compacted 182k → 24k · auto · 9s`
+  (`Compacted 182k` until the after-size is known). A chat layout that sets `activityInTranscript`
   draws the steps in the transcript again, each run between two other entries as one **activity line**: one dim
   `fg-tertiary` line, live or finished: the step count and the tools used, such as
   `6 steps · Read 3 · Bash 2 · Edit · 42s`, with `· 1 failed` in `status-error` before the time when a step failed.

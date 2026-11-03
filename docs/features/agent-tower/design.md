@@ -66,7 +66,8 @@ unchanged. Each event carries `at`, epoch milliseconds from the adapter's inject
 | `taskFinished` | task id, done or failed | — |
 | `toolStarted` / `toolFinished` | agent id, tool call id, tool name, one-line summary (started only), success or failure (finished only) | attack / player hurt |
 | `usage` | agent id, context tokens used, context window size (null until the harness reports it), autocompact limit (configured and reported, each tokens or null), cache expiry (null when unknown), session spend in USD (null until the first result) | fatigue bar (context fill) |
-| `compacted` | context tokens before and after, each null when the harness does not report it (Claude reports no after-size; the next `usage` carries it) | rest / heal |
+| `compactionStarted` | trigger: `app` (the app called `compact()`), `manual` (the user sent `/compact`) or `harness` (the harness's own autocompact) | rest begins |
+| `compactionEnded` | trigger, outcome (done, failed or interrupted), context tokens before (null when the harness does not report it), duration in ms (null when unknown); one for each `compactionStarted`. The after-size is the next `usage` | rest / heal |
 | `userMessage` | — | "message from HQ" |
 | `skillStarted` | agent id, skill (`wigley:make`), args; a Skill call or a slash command the user typed | — (the workflow plugin's stages) |
 | `fileWritten` | agent id, the full path of a Write or Edit | — (the workflow plugin's plan detection) |
