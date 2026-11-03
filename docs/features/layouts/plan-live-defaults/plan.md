@@ -153,7 +153,7 @@ entry and the scheme; no task adds a `process.platform` check.
 
 ### Wave 2
 - [ ] [Main wires the clone and each owner's default folder](04-main-wires-clone-defaults.md) — after 01, 02
-- [ ] [Default CSS to `layout.css`](05-default-css-to-layout-css.md) — after 03
+- [x] [Default CSS to `layout.css`](05-default-css-to-layout-css.md) — after 03
 
 ### Wave 3
 - [ ] [Doc re-read](06-doc-re-read.md) — after 01, 02, 03, 04, 05
@@ -169,6 +169,7 @@ Review base: 46f417b5
 - 02 · 10b8f622 · diff read: both Produces signatures present; layout-url tests 17/17; typecheck clean on its files (worker, and the only tree error is task 03 WIP in draw-part.ts); oxfmt clean · concerns: npm run lint stops at check-styles on agent-strip.css:17 raw 2px, pre-existing at the review base
 - 01 · 71f55e08 · diff read: defaultFolder: Files | null on LayoutRegistryDeps present, entry rule as planned; registry tests 39/39; oxfmt clean; tree typecheck errors are task 03 WIP only · concerns: a throw from starting the default-folder watch rejects startLayoutRegistry, so the owner user layouts fail to start too (matches the user-folder watch); a default folder missing at start stays unwatched until the next start
 - 03 · e8dfeb96 · diff read: ShowLayoutOptions.defaultStylesheet, LayoutLoaderDeps.defaultStylesheet and DrawnPart.drewPick present; typecheck clean; layout-host, entry-list, primer-view, page-api tests 238/238; oxlint and oxfmt clean on its files (worker) · concerns: renderer.ts (shell) also took defaultStylesheet: null, for task 05 to fill; drawPart tests now overlap the new drewPick table rows, kept for their dataset asserts
+- 05 · f26de97e · diff read over 9 slices; 16 layout.css files; css_conserve.py per owner: base rules == page CSS + layout.css, lost 0 added 0 for all 16; no defaultStylesheet: null in any show call (test fixtures only); ?url declared; typecheck clean outside src/main (task 04 WIP); layers clean; check-styles and oxfmt flag only the pre-existing agent-strip min-height calc, moved verbatim to agent-strip/layouts/default/layout.css:11 · concerns: cascade ties for task 07 check 5: settings .settings-head vs .ui-section-header (justify-content), notes .notes-markup-group .is-active vs .ui-icon-button.is-active; to look at: agent-strip box vs kit rules, shell .activity-item and .config-problem-badge vs shared button rules, settings .settings-row vs .ui-row if a row ever takes ui-row, sessions .ui-row.session-row:not(.is-selected) vs .ui-row hover background; docs layout.css holds two consecutive .docs-doc-frame rules from the split, unmerged
 ### Contract changes
 ### Rulings
 - layout-url.ts keeps its own private DEFAULT_NAME, as registry, draw-part and layout-parts each do — no shared export exists — a later pass may fold the four copies into one · group 02
@@ -183,5 +184,7 @@ Review base: 46f417b5
 - the default stylesheet link is one element made at loader creation, attached only while it has an href, re-attached before the first user layout link — none · group 03
 - the part check reads plain object as isRecord from read-layout-module.ts — a bundled default holding an array or class instance would have its function members checked too · group 03
 - task 05 (Parallel, 16 owners x 3 files) splits into 9 workers by owner, an owner's three files never split: A agent-lines+agent-strip+src/declarations.d.ts, B backlog+gallery, C chat, D docs, E forms+keys, F notes+primer, G sessions+workflow, H settings+usage, I visual+shell; at most 5 workers run at once with task 04 — 6 files per worker is past the 5-file guide, kept to keep each owner whole · lead
+- section and split comments copied to both sides, each naming its own subjects; page-CSS file-head comments rewritten where they described moved rules (notes, sessions, settings, usage, visual, workflow) — cosmetic · group 05
+- the pre-existing agent-strip raw 2px/7lh calc and its oxfmt wrap moved verbatim into agent-strip/layouts/default/layout.css, unfixed — the lint failure now names that file · group 05
 ### Review rounds
 ### Test gate

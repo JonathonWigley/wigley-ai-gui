@@ -1,6 +1,6 @@
 # 05 — Move each default's look CSS into `layouts/default/layout.css`
 
-Status: in progress
+Status: done
 Type: Parallel
 Wave: 2 · Depends on: 03
 Plan: [plan.md](plan.md)
@@ -398,4 +398,4 @@ These close gaps a cold reader found. Each binds as the Decisions above do.
 
 ## Proof
 
-<written by wigley:make: commit sha, proof result, concerns; empty until the group lands>
+Commit f26de97e · proof: diff read over 9 slices; 16 layout.css files; css_conserve.py per owner: base rules == page CSS + layout.css, lost 0 added 0 for all 16; no defaultStylesheet: null in any show call (test fixtures only); ?url declared; typecheck clean outside src/main (task 04 WIP); layers clean; check-styles and oxfmt flag only the pre-existing agent-strip min-height calc, moved verbatim to agent-strip/layouts/default/layout.css:11 · concerns: cascade ties for task 07 check 5: settings .settings-head vs .ui-section-header (justify-content), notes .notes-markup-group .is-active vs .ui-icon-button.is-active; to look at: agent-strip box vs kit rules, shell .activity-item and .config-problem-badge vs shared button rules, settings .settings-row vs .ui-row if a row ever takes ui-row, sessions .ui-row.session-row:not(.is-selected) vs .ui-row hover background; docs layout.css holds two consecutive .docs-doc-frame rules from the split, unmerged
