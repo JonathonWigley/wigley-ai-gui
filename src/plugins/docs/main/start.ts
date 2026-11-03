@@ -49,10 +49,7 @@ import {
 } from './index-sources';
 import { readPluginStatus } from './plugin-status';
 import { writeDocsFixture } from './selftest-fixture';
-import {
-  docsSelfTestScript,
-  openDocsFixtureSession,
-} from './selftest-script';
+import { docsSelfTestScript, openDocsFixtureSession } from './selftest-script';
 import { createViewWatches } from './view-watches';
 
 type DocsApi = MainApi<
