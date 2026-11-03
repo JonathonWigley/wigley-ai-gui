@@ -1,0 +1,156 @@
+import type { Log } from '../../../../contracts/log';
+import type { ShownLayouts } from '../../../../contracts/plugin';
+import { appended, element } from '../../../../shared/page/dom';
+import type { OwnerKitServices } from '../../../../shared/page/layout-host/base-kit';
+import type { RollbackDeps } from '../../../../shared/page/layout-host/draw-part';
+import { createLayoutParts } from '../../../../shared/page/layout-host/layout-parts';
+import type { CompleteLayout, Layout } from '../../layouts/layout';
+import { visualManifest } from '../../manifest';
+import { createVisualBaseKit, createVisualKit } from './visual-kit';
+
+// A drawn part. `element` is the part's root; `dispose` removes the
+// `div.visual-draw` it was drawn into and disposes every anchor the part
+// named.
+export interface Drawn {
+  element: HTMLElement;
+  dispose(): void;
+}
+
+export interface VisualPartsDeps {
+  defaultLayout: CompleteLayout;
+  kit: OwnerKitServices;
+  log: Log;
+}
+
+// Draws each visual part into a fresh `div.visual-draw` appended to `parent`,
+// with the layouts last set, `default` alone until the first `setLayouts`.
+// Each part picks its own layout and falls back to `default` on a throw.
+// `visual` places `frame`, the app's frame slot, where the part calls
+// `kit.frame`, else at the end of its root; drawn again with the same
+// `frame`, it moves the slot, so the visual stays loaded. `setLayouts` only
+// stores the set; the fence draws again.
+export interface VisualParts {
+  card(parent: HTMLElement): Drawn;
+  visual(parent: HTMLElement, frame: HTMLElement): Drawn;
+  setLayouts(shown: ShownLayouts<Layout>): void;
+}
+
+type PartName = keyof CompleteLayout;
+
+// `kit.frame`'s slot for one drawing attempt: `appSlot`'s shape, but it moves
+// the slot so the frame inside it stays loaded.
+interface FrameSlot {
+  // Moves the slot to the end of `at` and returns it; throws
+  // `frame placed twice` on a second call.
+  place(at: HTMLElement): HTMLElement;
+  // Moves the slot to the end of `root` when no `place` call placed it.
+  placeIfLeftOut(root: HTMLElement): void;
+}
+
+// `moveBefore` keeps an iframe loaded as it moves; lib.dom declares it only
+// on Document.
+type MovingParent = HTMLElement & {
+  moveBefore?(node: Node, child: Node | null): void;
+};
+
+export function createVisualParts(deps: VisualPartsDeps): VisualParts {
+  const layoutParts = createLayoutParts<Layout, CompleteLayout>({
+    owner: visualManifest.id,
+    defaultLayout: deps.defaultLayout,
+    log: deps.log,
+  });
+
+  // Draws `part` into a fresh `div.visual-draw` appended to `parent`; `call`
+  // runs the builder with a kit whose anchors `rollback` records. A draw that
+  // throws leaves no `div.visual-draw` behind.
+  const draw = <P extends PartName>(
+    part: P,
+    parent: HTMLElement,
+    call: (
+      builder: CompleteLayout[P],
+      slot: HTMLElement,
+      rollback: RollbackDeps,
+    ) => HTMLElement,
+  ): Drawn => {
+    const into = appended(parent, element('div', 'visual-draw'));
+    try {
+      const drawn = layoutParts.draw(part, into, (builder, slot, rollback) => ({
+        element: call(builder, slot, rollback),
+      }));
+      return {
+        element: drawn.built.element,
+        dispose() {
+          into.remove();
+          drawn.dispose();
+        },
+      };
+    } catch (error) {
+      into.remove();
+      throw error;
+    }
+  };
+
+  return {
+    card(parent) {
+      return draw('card', parent, (card, slot, rollback) =>
+        card(slot, createVisualBaseKit(deps.kit, rollback)),
+      );
+    },
+    visual(parent, frame) {
+      return draw('visual', parent, (visual, slot, rollback) => {
+        const frameSlot = createFrameSlot(frame, rollback);
+        const root = visual(
+          slot,
+          createVisualKit(deps.kit, rollback, (at) => frameSlot.place(at)),
+        );
+        frameSlot.placeIfLeftOut(root);
+        return root;
+      });
+    },
+    setLayouts: layoutParts.setLayouts,
+  };
+}
+
+// Placing `slot` records, through `rollback`, a destroy that detaches it while
+// it still sits where this attempt put it, so a later draw that moved it keeps
+// it when this one is disposed.
+function createFrameSlot(
+  slot: HTMLElement,
+  rollback: Pick<RollbackDeps, 'recordBox'>,
+): FrameSlot {
+  let isPlaced = false;
+  const place = (at: HTMLElement) => {
+    if (isPlaced) {
+      throw new Error('frame placed twice');
+    }
+    isPlaced = true;
+    moveToEnd(at, slot);
+    rollback.recordBox(() => {
+      if (slot.parentNode === at) {
+        slot.remove();
+      }
+    });
+    return slot;
+  };
+  return {
+    place,
+    placeIfLeftOut(root) {
+      if (!isPlaced) {
+        place(root);
+      }
+    },
+  };
+}
+
+// Moves `slot` to the end of `at`, through `moveBefore` when both are
+// connected, so the frame in it stays loaded.
+function moveToEnd(at: MovingParent, slot: HTMLElement): void {
+  const { moveBefore } = at;
+  const canMoveConnected =
+    moveBefore !== undefined && at.isConnected && slot.isConnected;
+  if (canMoveConnected) {
+    moveBefore.call(at, slot, null);
+  } else {
+    at.append(slot);
+  }
+}

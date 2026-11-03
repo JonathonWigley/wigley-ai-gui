@@ -1,0 +1,30 @@
+/* The default visual layout's look, under each part's root, and the frame's
+   slot, which the app places in every layout. */
+
+/* The card an html block shows until its closing fence arrives. */
+[data-layout-owner='visual'][data-layout='default'].visual-card {
+  align-items: center;
+  display: flex;
+  gap: var(--wg-space-2);
+}
+
+[data-layout-owner='visual'][data-layout='default'] .visual-card-text {
+  color: var(--wg-fg-secondary);
+  font-size: var(--wg-text-12);
+}
+
+/* A closed block: the frame in a box as wide as its column. */
+[data-layout-owner='visual'][data-layout='default'].visual {
+  border-radius: var(--wg-radius-md);
+  display: block;
+  overflow: hidden;
+  width: 100%;
+}
+
+/* The frame takes the column's width; the visual frames service sets its
+   height. */
+.visual-frame-slot > * {
+  border: 0;
+  display: block;
+  width: 100%;
+}
