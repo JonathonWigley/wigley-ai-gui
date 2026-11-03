@@ -264,6 +264,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     // Each set redraws every view's parts its pick changed for.
     api.layouts.show<Layout>({
       defaultLayout,
+      defaultStylesheet: null,
       read: readDocsLayout,
       userLayout: () => api.settings().layout,
       setLayouts(shown) {

@@ -359,6 +359,9 @@ export type ToastTone = 'success' | 'info' | 'error';
 // toast, so they are not options.
 export interface ShowLayoutOptions<L> {
   defaultLayout: L;
+  // The bundled URL of the owner's `layouts/default/layout.css`, or null for an
+  // owner with no default CSS.
+  defaultStylesheet: string | null;
   // The owner's reader: the layout a user's `layout.js` module holds, or a
   // throw naming the first part it gets wrong.
   read(module: unknown, name: string): L;

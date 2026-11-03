@@ -65,6 +65,7 @@ export const agentStripPagePart: PagePart<typeof agentStripManifest> = {
 
     api.layouts.show<Layout>({
       defaultLayout,
+      defaultStylesheet: null,
       read: readAgentStripLayout,
       userLayout: () => api.settings().layout,
       setLayouts: (shown) => strip.setLayouts(shown),

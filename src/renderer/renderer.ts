@@ -249,6 +249,7 @@ async function start() {
   });
   layouts.show<ChromeLayout>('shell', {
     defaultLayout: defaultChromeLayout,
+    defaultStylesheet: null,
     read: readShellLayout,
     userLayout: () => live.current().settings.shell.layout,
     setLayouts(shown) {

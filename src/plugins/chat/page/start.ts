@@ -204,6 +204,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
     });
     api.layouts.show<ChatLayout>({
       defaultLayout,
+      defaultStylesheet: null,
       read: readChatLayout,
       userLayout: () => api.settings().layout,
       setLayouts: (shown) => layouts.set(shown),

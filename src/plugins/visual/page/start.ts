@@ -61,6 +61,7 @@ export const visualPagePart: PagePart<typeof visualManifest> = {
 
     api.layouts.show<Layout>({
       defaultLayout,
+      defaultStylesheet: null,
       read: readVisualLayout,
       userLayout: () => api.settings().layout,
       setLayouts(shown) {

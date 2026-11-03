@@ -91,6 +91,7 @@ export const backlogPagePart: PagePart<typeof backlogManifest> = {
 
     api.layouts.show<BacklogLayout>({
       defaultLayout,
+      defaultStylesheet: null,
       read: readBacklogLayout,
       userLayout: () => api.settings().layout,
       setLayouts: (shown) => view.setLayouts(shown),

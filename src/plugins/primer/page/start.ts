@@ -172,6 +172,7 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
     );
     api.layouts.show<PrimerLayout>({
       defaultLayout,
+      defaultStylesheet: null,
       read: readPrimerLayout,
       userLayout: () => api.settings().layout,
       setLayouts: (shown) => view.setLayouts(shown),

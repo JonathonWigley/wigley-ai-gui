@@ -119,6 +119,7 @@ function showing(
   page: ReturnType<typeof pageLayoutsWith>,
   setting: string,
   setLayouts: (shown: ShownLayouts<TestLayout>) => void = () => undefined,
+  defaultStylesheet: string | null = null,
 ) {
   const show = {
     setting,
@@ -131,6 +132,7 @@ function showing(
   };
   const live = page.layouts.show<TestLayout>('demo', {
     defaultLayout: BUILT_IN,
+    defaultStylesheet,
     read: (module) => (module as { default: TestLayout }).default,
     userLayout: () => show.setting,
     namesInUse: () => show.namesInUse,
@@ -222,23 +224,39 @@ describe('createPageLayouts', () => {
     expect(show.shown).toHaveLength(1);
   });
 
-  it('showLayouts_LoadFails_LogsAndToasts', async () => {
+  it.each([
+    { row: 'a user layout', setting: 'mine', set: setOf(entry('mine', 2)) },
+    {
+      row: 'a live default',
+      setting: 'default',
+      set: { layouts: [entry('default', 2)], changed: null },
+    },
+  ])('showLayouts_LoadFails_LogsAndToasts: $row', async ({ setting, set }) => {
     const page = pageLayoutsWith(async () => {
       throw new Error('broken');
     });
-    const show = showing(page, 'mine');
+    const show = showing(page, setting);
 
-    show.change(setOf(entry('mine', 2)));
+    show.change(set);
 
     await vi.waitFor(() =>
       expect(page.logLines).toEqual([
-        expect.stringMatching(/^\[demo\] .*mine.*broken/),
+        `[demo] layout ${setting} failed: broken`,
       ]),
     );
-    expect(page.toasts).toEqual([
-      expect.stringMatching(/^error: .*mine.*broken/),
-    ]);
+    expect(page.toasts).toEqual([`error: Layout ${setting} failed: broken`]);
     expect(show.shown[0].user).toBe('default');
+    expect(show.shown[0].layouts.get('default')).toBe(BUILT_IN);
+  });
+
+  it('show_DefaultStylesheet_HandedToTheLoader', () => {
+    const page = pageLayoutsWith();
+
+    showing(page, 'default', undefined, 'bundled.css');
+
+    expect(
+      page.appended.map((link) => [link.dataset.layout, link.href]),
+    ).toEqual([['default', 'bundled.css']]);
   });
 
   it('showLayouts_RefreshUnchanged_ShowsNothingNew', async () => {

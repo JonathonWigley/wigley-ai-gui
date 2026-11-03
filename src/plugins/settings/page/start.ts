@@ -73,6 +73,7 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
 
     api.layouts.show<SettingsLayout>({
       defaultLayout,
+      defaultStylesheet: null,
       read: readSettingsLayout,
       userLayout: () => api.settings().layout,
       setLayouts: (shown) => view.setLayouts(shown),

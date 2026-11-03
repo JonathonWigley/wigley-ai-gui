@@ -79,6 +79,7 @@ function showLayouts<L>(
     importModule: deps.importModule,
     layoutUrl: (name, revision, path) => layoutUrl(owner, name, revision, path),
     defaultLayout: options.defaultLayout,
+    defaultStylesheet: options.defaultStylesheet,
     head: deps.head,
     read: (module, name) => options.read(module, name),
   });

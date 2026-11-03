@@ -619,6 +619,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
 
     api.layouts.show<Layout>({
       defaultLayout,
+      defaultStylesheet: null,
       read: readSessionsLayout,
       userLayout: () => api.settings().layout,
       setLayouts: (shown) => {

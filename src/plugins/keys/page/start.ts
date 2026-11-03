@@ -122,6 +122,7 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
     let keysButton: Drawn = parts.titleBarButton(keysButtonSlot);
     api.layouts.show<Layout>({
       defaultLayout,
+      defaultStylesheet: null,
       read: readKeysLayout,
       userLayout: () => api.settings().layout,
       setLayouts(shown) {

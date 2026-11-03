@@ -237,6 +237,7 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
 
     api.layouts.show<Layout>({
       defaultLayout,
+      defaultStylesheet: null,
       read: readUsageLayout,
       userLayout: () => api.settings().layout,
       setLayouts(shown) {

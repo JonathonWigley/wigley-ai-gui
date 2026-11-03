@@ -1168,7 +1168,7 @@ function drawCardPart<Kit, Input>(
     logSource: 'primer',
     partName,
   });
-  const layout = drawn.layoutName === pick.name ? pick.layout : defaultLayout;
+  const layout = drawn.drewPick ? pick.layout : defaultLayout;
   const { card, kit } = drawn.built;
   return {
     pick,

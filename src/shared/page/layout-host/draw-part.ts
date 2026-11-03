@@ -38,11 +38,13 @@ export interface DrawPartOptions<
   partName: string;
 }
 
-// A drawn part: the owner's built object, the layout that drew it, and the
-// dispose of every anchor and box its build recorded.
+// A drawn part: the owner's built object, the name of the layout that drew it,
+// whether the picked layout drew it (false when `defaultLayout` drew in its
+// place), and the dispose of every anchor and box its build recorded.
 export interface DrawnPart<R> {
   built: R;
   layoutName: string;
+  drewPick: boolean;
   dispose(): void;
 }
 
@@ -53,20 +55,22 @@ const DEFAULT_NAME = 'default';
 // logs again.
 const loggedFailures = new WeakMap<object, Set<string>>();
 
-// Draws the part with the picked layout when it defines the part, else with
-// `default`. Each attempt builds with a fresh recorder and must return an
-// element appended to `parent`. When the picked attempt throws, it is rolled
-// back (each recorded box destroyed, each recorded anchor disposed, each node
-// it appended to `parent` removed), `layout <name> <partName> failed: <error>`
-// is logged under `logSource` once per layout object and part name, and
-// `default` draws in its place. An attempt that leaves `parent` holding a new
-// node beside its element fails the same way. A throw from the `default`
-// attempt rolls back the same way and is rethrown, with no log. Throws
-// `layout default has no <partName>` when `default` must draw a part it lacks.
-// `built.element` carries `data-layout="<layoutName>"` and
-// `data-layout-owner="<owner>"`. `dispose` disposes every anchor and runs every
-// box destroy the drawing attempt recorded, once; a second call does nothing.
-// It does not remove `built.element`.
+// Draws the part with the picked layout when it defines the part and is not
+// `defaultLayout` (a live default picked as `default` is attempted), else with
+// `defaultLayout` as `default`. Each attempt builds with a fresh recorder and
+// must return an element appended to `parent`. When the picked attempt throws,
+// it is rolled back (each recorded box destroyed, each recorded anchor
+// disposed, each node it appended to `parent` removed),
+// `layout <name> <partName> failed: <error>` is logged under `logSource` once
+// per layout object and part name, and `defaultLayout` draws in its place. An
+// attempt that leaves `parent` holding a new node beside its element fails the
+// same way. A throw from the `defaultLayout` attempt rolls back the same way
+// and is rethrown, with no log. Throws `layout default has no <partName>` when
+// `defaultLayout` must draw a part it lacks. `built.element` carries
+// `data-layout="<layoutName>"` and `data-layout-owner="<owner>"`. `dispose`
+// disposes every anchor and runs every box destroy the drawing attempt
+// recorded, once; a second call does nothing. It does not remove
+// `built.element`.
 export function drawPart<
   L extends object,
   B,
@@ -74,9 +78,10 @@ export function drawPart<
 >(options: DrawPartOptions<L, B, R>): DrawnPart<R> {
   const { pick } = options;
   const picked = options.part(pick.layout);
-  if (picked !== undefined && pick.name !== DEFAULT_NAME) {
+  const isBundledPick = pick.layout === options.defaultLayout;
+  if (picked !== undefined && !isBundledPick) {
     try {
-      return attempt(options, picked, pick.name);
+      return attempt(options, picked, pick.name, true);
     } catch (error) {
       logFailureOnce(options, error);
     }
@@ -85,7 +90,7 @@ export function drawPart<
   if (builder === undefined) {
     throw new Error(`layout ${DEFAULT_NAME} has no ${options.partName}`);
   }
-  return attempt(options, builder, DEFAULT_NAME);
+  return attempt(options, builder, DEFAULT_NAME, isBundledPick);
 }
 
 // A layout's part must return an element it appended to `parent`: the host
@@ -114,6 +119,7 @@ function attempt<L extends object, B, R extends { element: HTMLElement }>(
   options: DrawPartOptions<L, B, R>,
   builder: B,
   layoutName: string,
+  drewPick: boolean,
 ): DrawnPart<R> {
   const { parent, partName } = options;
   const recorder = createRecorder();
@@ -128,7 +134,7 @@ function attempt<L extends object, B, R extends { element: HTMLElement }>(
     requireOnlyRootAdded(parent, existing, element, partName);
     element.dataset.layout = layoutName;
     element.dataset.layoutOwner = options.owner;
-    return { built, layoutName, dispose: recorder.dispose };
+    return { built, layoutName, drewPick, dispose: recorder.dispose };
   } catch (error) {
     let undoError: unknown = null;
     try {

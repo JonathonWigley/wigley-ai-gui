@@ -52,6 +52,7 @@ export const galleryPagePart: PagePart<typeof galleryManifest> = {
     let isShown = false;
     api.layouts.show<Layout>({
       defaultLayout,
+      defaultStylesheet: null,
       read: readGalleryLayout,
       userLayout: () => api.settings().layout,
       setLayouts(shown) {

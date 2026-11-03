@@ -187,6 +187,7 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
     listenForRounds(api, store, sessions);
     const layoutShow = api.layouts.show<Layout>({
       defaultLayout,
+      defaultStylesheet: null,
       read: readLayout,
       userLayout: () => api.settings().layout,
       namesInUse: () =>

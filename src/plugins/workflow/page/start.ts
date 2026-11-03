@@ -233,6 +233,7 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
 
     api.layouts.show<Layout>({
       defaultLayout,
+      defaultStylesheet: null,
       read: readWorkflowLayout,
       userLayout: () => api.settings().layout,
       setLayouts: (shown) => view.setLayouts(shown),

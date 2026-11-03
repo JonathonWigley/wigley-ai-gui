@@ -400,6 +400,7 @@ describe('createPageApi', () => {
 
     const show = api.layouts.show({
       defaultLayout: {},
+      defaultStylesheet: null,
       read: () => ({}),
       userLayout: () => 'default',
       setLayouts: () => undefined,

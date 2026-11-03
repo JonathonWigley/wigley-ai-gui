@@ -159,19 +159,21 @@ export interface EntryList {
 // One entry as drawn into its slot: the view the layout returned (null for
 // the bare line), the kit made for it, and the dispose of what the draw
 // recorded, which disposes the kit. `isDefaultView` holds while the view is
-// the default layout's or the bare line; `isBareLine` while it is the bare
-// line.
+// a `default` layout's (the bundled or a live one) or the bare line;
+// `isBundledView` while it is the bundled default layout's or the bare line;
+// `isBareLine` while it is the bare line.
 interface DrawnEntry {
   view: EntryView | null;
   kit: EntryKit;
   isDefaultView: boolean;
+  isBundledView: boolean;
   isBareLine: boolean;
   dispose(): void;
 }
 
-// One drawn entry and its slot. `drawsWithDefault` holds once a user
-// layout's update has thrown, and the slot is drawn with the default layout
-// from then on.
+// One drawn entry and its slot. `drawsWithDefault` holds once an update of a
+// layout other than the bundled default has thrown, and the slot is drawn
+// with the bundled default layout from then on.
 interface Slot extends DrawnEntry {
   element: HTMLLIElement;
   entry: ChatEntry;
@@ -793,9 +795,9 @@ function buildSlot(entry: ChatEntry, deps: EntryListDeps): Slot {
 
 // A view with an update runs it after the kit's own parts updated; a view
 // with none is drawn again, its new expanders opening as the old ones were.
-// A user layout's update that throws is logged, and the slot is drawn with
-// the default layout from then on; the default layout's is logged and the
-// entry drawn again.
+// An update that throws from a user layout or a live default is logged, and
+// the slot is drawn with the bundled default layout from then on; the bundled
+// default's is logged and the entry drawn again.
 function redrawSlot(slot: Slot, entry: ChatEntry, deps: EntryListDeps) {
   slot.entry = entry;
   slot.kit.update(entry);
@@ -805,7 +807,7 @@ function redrawSlot(slot: Slot, entry: ChatEntry, deps: EntryListDeps) {
       view.update(entry);
       return;
     } catch (error) {
-      if (slot.isDefaultView) {
+      if (slot.isBundledView) {
         deps.log(
           'chat',
           `default layout ${entry.kind} entry update failed: ${errorText(error)}`,
@@ -828,6 +830,7 @@ function redrawSlot(slot: Slot, entry: ChatEntry, deps: EntryListDeps) {
   slot.view = drawn.view;
   slot.kit = drawn.kit;
   slot.isDefaultView = drawn.isDefaultView;
+  slot.isBundledView = drawn.isBundledView;
   slot.isBareLine = drawn.isBareLine;
   slot.dispose = drawn.dispose;
 }
@@ -895,6 +898,7 @@ function buildEntry(
       view: drawn.built.view,
       kit: drawn.built.kit,
       isDefaultView: drawn.layoutName === DEFAULT_ENTRY_PICK.name,
+      isBundledView: !drawn.drewPick || pick.layout === defaultLayout,
       isBareLine: false,
       dispose: drawn.dispose,
     };
@@ -909,6 +913,7 @@ function buildEntry(
       view: null,
       kit,
       isDefaultView: true,
+      isBundledView: true,
       isBareLine: true,
       dispose: () => kit.dispose(),
     };

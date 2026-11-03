@@ -87,6 +87,7 @@ export const notesPagePart: PagePart<typeof notesManifest> = {
     });
     api.layouts.show<Layout>({
       defaultLayout,
+      defaultStylesheet: null,
       read: readNotesLayout,
       userLayout: () => api.settings().layout,
       setLayouts: (shown) => popup.setLayouts(shown),

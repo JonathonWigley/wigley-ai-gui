@@ -104,7 +104,9 @@ const assistant = (text: string): ChatEntry => ({
 
 interface Row {
   name: string;
-  shown: 'fancy' | 'default';
+  // `live default`: the fancy builders over the bundled default, shown as
+  // `default`.
+  shown: 'fancy' | 'default' | 'live default';
   fancy?: Partial<Record<EntryKind, AnyBuilder | undefined>>;
   // The kind whose default builder throws.
   breakDefault?: EntryKind;
@@ -208,6 +210,18 @@ const rows: Row[] = [
       '[chat] default layout assistant entry failed: broken default',
     ],
     toasts: ['Chat layout fancy: assistant entries drawn as bare lines'],
+    disposedAnchors: [],
+  },
+  {
+    name: 'update throws under a live default',
+    shown: 'live default',
+    fancy: { assistant: updateThrows },
+    puts: [assistant('one'), assistant('two'), assistant('three')],
+    slots: [['chat-entry chat-assistant@default']],
+    logs: [
+      '[chat] layout default assistant entry update failed: broken update',
+    ],
+    toasts: [],
     disposedAnchors: [],
   },
 ];
@@ -383,14 +397,20 @@ describe('entry list', () => {
         },
       );
     }
-    const shown =
-      row.shown === 'default'
-        ? defaultShown()
-        : withUser<ChatLayout>(
-            defaultLayout,
-            fancyLayout(row.fancy ?? {}),
-            'fancy',
-          );
+    const shown = {
+      default: defaultShown(),
+      fancy: withUser<ChatLayout>(
+        defaultLayout,
+        fancyLayout(row.fancy ?? {}),
+        'fancy',
+      ),
+      'live default': {
+        layouts: new Map<string, ChatLayout>([
+          ['default', { ...defaultLayout, ...fancyLayout(row.fancy ?? {}) }],
+        ]),
+        user: 'default',
+      },
+    }[row.shown];
     const { list, logs, toasts, disposed, put } = setUpList(shown);
 
     for (const entry of row.puts) {

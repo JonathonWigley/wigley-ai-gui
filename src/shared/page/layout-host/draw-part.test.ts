@@ -43,6 +43,11 @@ function recorded() {
 
 const DEFAULT_LAYOUT: TestLayout = { rail: drawsArticle('default') };
 
+// A rail that throws `boom` before drawing.
+const throwsBoom: Rail = () => {
+  throw new Error('boom');
+};
+
 function drawRail(
   pick: { name: string; layout: TestLayout },
   overrides: Partial<DrawPartOptions<TestLayout, Rail, Built>> = {},
@@ -90,6 +95,79 @@ describe('drawPart', () => {
     });
     expect(rail.logLines).toEqual([]);
   });
+
+  it.each([
+    {
+      row: 'user layout draws',
+      pick: { name: 'fancy', layout: { rail: drawsArticle('fancy') } },
+      drewPick: true,
+      layoutName: 'fancy',
+      text: 'fancy',
+      logLines: [],
+    },
+    {
+      row: 'user layout lacks the part',
+      pick: { name: 'bare', layout: {} },
+      drewPick: false,
+      layoutName: 'default',
+      text: 'default',
+      logLines: [],
+    },
+    {
+      row: 'user layout throws',
+      pick: { name: 'fancy', layout: { rail: throwsBoom } },
+      drewPick: false,
+      layoutName: 'default',
+      text: 'default',
+      logLines: ['[forms] layout fancy rail failed: boom'],
+    },
+    {
+      row: 'the bundled default picked as default',
+      pick: { name: 'default', layout: DEFAULT_LAYOUT },
+      drewPick: true,
+      layoutName: 'default',
+      text: 'default',
+      logLines: [],
+    },
+    {
+      row: 'a live default draws',
+      pick: { name: 'default', layout: { rail: drawsArticle('live') } },
+      drewPick: true,
+      layoutName: 'default',
+      text: 'live',
+      logLines: [],
+    },
+    {
+      row: 'a live default throws',
+      pick: { name: 'default', layout: { rail: throwsBoom } },
+      drewPick: false,
+      layoutName: 'default',
+      text: 'default',
+      logLines: ['[forms] layout default rail failed: boom'],
+    },
+    {
+      row: 'a live default lacks the part',
+      pick: { name: 'default', layout: {} },
+      drewPick: false,
+      layoutName: 'default',
+      text: 'default',
+      logLines: [],
+    },
+  ])(
+    'drawPart_DrewPick_TrueOnlyWhenThePickedLayoutDrew: $row',
+    ({ pick, drewPick, layoutName, text, logLines }) => {
+      const rail = drawRail(pick);
+
+      const drawn = rail.call();
+
+      expect({
+        drewPick: drawn.drewPick,
+        layoutName: drawn.layoutName,
+        text: asFake(drawn.built.element).textContent,
+      }).toEqual({ drewPick, layoutName, text });
+      expect(rail.logLines).toEqual(logLines);
+    },
+  );
 
   it('drawPart_PickLacksThePart_DefaultDrawsWithNoLog', () => {
     const rail = drawRail({ name: 'bare', layout: {} });

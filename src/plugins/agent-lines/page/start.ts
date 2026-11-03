@@ -69,6 +69,7 @@ export const agentLinesPagePart: PagePart<typeof agentLinesManifest> = {
 
     api.layouts.show<Layout>({
       defaultLayout,
+      defaultStylesheet: null,
       read: readAgentLinesLayout,
       userLayout: () => api.settings().layout,
       setLayouts: (shown) => lines.setLayouts(shown),

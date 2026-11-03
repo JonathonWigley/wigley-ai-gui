@@ -5,12 +5,14 @@ import {
   expect,
   it,
   type Mock,
+  onTestFinished,
   vi,
 } from 'vitest';
 import type { CommandId } from '../../../contracts/commands';
 import type { DroppedFile, DropTarget } from '../../../contracts/drops';
 import type { EditorHost, TextEditor } from '../../../contracts/editor';
 import type { FocusTarget, ResizeTarget } from '../../../contracts/panes';
+import type { ShownLayouts } from '../../../contracts/plugin';
 import { createEditorBoxes } from '../../../shared/page/editor-boxes';
 import { insertionText } from '../../../shared/page/file-drop/file-chips';
 import {
@@ -1057,6 +1059,49 @@ describe('primer layout', () => {
     ]) {
       expect(anchor.dispose).toHaveBeenCalledOnce();
     }
+  });
+
+  it("keys a live default's fallback card update failure by the bundled default", () => {
+    const { store, view, run, logs } = primerTabSetup();
+    const bundledItem = defaultLayout.cards.item;
+    const breaksUpdate = vi
+      .spyOn(defaultLayout.cards, 'item')
+      .mockImplementation((parent, input, kit) => ({
+        ...bundledItem(parent, input, kit),
+        update() {
+          throw new Error('update broke');
+        },
+      }));
+    onTestFinished(() => breaksUpdate.mockRestore());
+    // A live default, shown as `default`, whose item card throws at draw.
+    const liveDefault = (): ShownLayouts<PrimerLayout> => ({
+      layouts: new Map<string, PrimerLayout>([
+        [
+          'default',
+          {
+            ...defaultLayout,
+            cards: {
+              ...defaultLayout.cards,
+              item() {
+                throw new Error('card broke');
+              },
+            },
+          },
+        ],
+      ]),
+      user: 'default',
+    });
+    view.setLayouts(liveDefault());
+    store.dispatch({ type: 'selectTask', row: 1 });
+    store.dispatch({ type: 'selectItem', item: 1 });
+
+    run('toggleInclude');
+    view.setLayouts(liveDefault());
+    run('toggleInclude');
+
+    expect(
+      logs.filter((line) => line.includes('item card update failed')),
+    ).toEqual(['layout default item card update failed: update broke']);
   });
 });
 
