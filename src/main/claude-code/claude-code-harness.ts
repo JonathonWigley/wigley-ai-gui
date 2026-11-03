@@ -159,10 +159,11 @@ function spawnError(error: Error, command: string, cwd: string): string {
 // One `claude` process in stream-json mode. Events a call causes are emitted
 // in a microtask, never inside the call, as the fake harness does. Its agent
 // events open with `sessionStarted` and close with `sessionEnded`, just before
-// `ended`; a subagent still running then gets no `agentFinished`. In
-// lifecycle mode a sent message's user entry waits for its `started` line; a
-// message ended before it started is reported through `messageDropped`, and
-// one still held when the process closes is dropped silently.
+// `ended`; a subagent still running then gets no `agentFinished`. Outside
+// fallback mode a sent message's user entry waits for its `started` line, or
+// for the init that fixes fallback mode; a message ended before it started is
+// reported through `messageDropped`, and one still held when the process
+// closes is dropped silently.
 function startClaudeProcess(
   deps: ClaudeCodeHarnessDeps,
   request: AgentStart,
@@ -190,7 +191,7 @@ function startClaudeProcess(
   let requestCount = 0;
   let noticeCount = 0;
   const pendingRequests = new Map<string, PendingRequest>();
-  // Keyed by the message's uuid; filled only in lifecycle mode.
+  // Keyed by the message's uuid, in write order; never filled in fallback mode.
   const heldMessages = new Map<string, HeldMessage>();
   // The session's agent definitions, empty until their load resolves.
   let definitions: AgentDefinitions = new Map();
@@ -287,6 +288,13 @@ function startClaudeProcess(
       const entryId = held.draft.id;
       emit(() => events.messageDropped(entryId));
     }
+  };
+
+  const releaseAllHeldMessages = () => {
+    for (const held of heldMessages.values()) {
+      emitUserMessage(held);
+    }
+    heldMessages.clear();
   };
 
   // Emits the usage event when it differs from the last one in any field but
@@ -463,6 +471,9 @@ function startClaudeProcess(
     if (decoded.lifecycle !== null) {
       releaseHeldMessage(decoded.lifecycle);
     }
+    if (turn.fellBack) {
+      releaseAllHeldMessages();
+    }
     for (const entry of decoded.entries) {
       const isCommandResult = command !== null && entry.kind === 'result';
       if (!isCommandResult) {
@@ -606,10 +617,10 @@ function startClaudeProcess(
         },
         skill,
       };
-      if (tracker.mode() === 'lifecycle') {
-        heldMessages.set(uuid, sent);
-      } else {
+      if (tracker.mode() === 'fallback') {
         emitUserMessage(sent);
+      } else {
+        heldMessages.set(uuid, sent);
       }
       tracker.written(
         uuid,
