@@ -85,7 +85,7 @@ function setup(
   const scrolls: [ScrollStep, 1 | -1][] = [];
   let scrollResult: ContentScroll | null = { moved: true, atEnd: false };
   const closedSessions: string[] = [];
-  const log = (...parts: string[]) => logs.push(parts.at(-1) ?? '');
+  const log = (message: string) => logs.push(message);
   const closeSession = (sessionId: string) => closedSessions.push(sessionId);
   const toast = (text: string, tone: ToastTone) => {
     toasts.push(text);

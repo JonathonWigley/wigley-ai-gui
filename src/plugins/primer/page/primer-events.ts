@@ -1,4 +1,4 @@
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import { startFormEvents } from '../../../shared/page/session-forms';
 import type { PresentedPrimer, PrimerPageEvents } from '../contract';
 import { buildBody, type OpenPrimer, type PrimerState } from './primer-state';
@@ -8,8 +8,6 @@ import type { PrimerStore } from './primer-store';
 export type PrimerPageEvent = {
   [K in keyof PrimerPageEvents]: { name: K; data: PrimerPageEvents[K] };
 }[keyof PrimerPageEvents];
-
-const SOURCE = 'primer';
 
 // The events one change makes, in this order: a `primerShown` per primer
 // `next` adds, in `next.forms` order; a `needChanged` per task of a primer in
@@ -60,21 +58,20 @@ export function startPrimerEvents(
 // `event needChanged <primerId> <entryId> <need>`, `event primerFinished
 // <primerId> <outcome>`.
 export function createPrimerEventLog(
-  log: Log,
+  log: PluginLog,
 ): (event: PrimerPageEvent) => void {
   return (event) => {
     switch (event.name) {
       case 'primerShown':
-        log(SOURCE, `event primerShown ${event.data.formId}`);
+        log(`event primerShown ${event.data.formId}`);
         return;
       case 'needChanged': {
         const { primerId, entryId, need } = event.data;
-        log(SOURCE, `event needChanged ${primerId} ${entryId} ${need}`);
+        log(`event needChanged ${primerId} ${entryId} ${need}`);
         return;
       }
       case 'primerFinished':
         log(
-          SOURCE,
           `event primerFinished ${event.data.primerId} ${event.data.outcome}`,
         );
         return;

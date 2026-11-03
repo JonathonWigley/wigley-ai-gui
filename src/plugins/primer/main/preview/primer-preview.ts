@@ -1,4 +1,5 @@
 import type { AgentFormService } from '../../../../contracts/agent-forms';
+import type { Disposable } from '../../../../contracts/disposable';
 import type { PluginLog } from '../../../../contracts/log';
 import { createAgentFormPreview } from '../../../../shared/agent-forms/agent-form-preview';
 import type {
@@ -27,10 +28,10 @@ export interface PrimerPreviewDeps {
 // The sample primer in a session of its own. The first open connects the
 // session, selects its row and opens the sample there; an open while it shows
 // selects its row only, keeping the user's edits. A send or cancel ends the
-// session, and the next open starts over.
-export function createPrimerPreview(deps: PrimerPreviewDeps): {
-  open(): void;
-} {
+// session, and the next open starts over. `dispose` ends one still open.
+export function createPrimerPreview(
+  deps: PrimerPreviewDeps,
+): { open(): void } & Disposable {
   const preview = createAgentFormPreview({
     session: PREVIEW_SESSION,
     sessions: deps.sessions,
@@ -44,5 +45,6 @@ export function createPrimerPreview(deps: PrimerPreviewDeps): {
         preview.ask(PREVIEW_PRIMER_ARGS);
       }
     },
+    dispose: () => preview.dispose(),
   };
 }

@@ -4,7 +4,7 @@ import type { Disposable } from '../../../contracts/disposable';
 import type { PageDrops } from '../../../contracts/drops';
 import type { ContentScroll, ScrollStep } from '../../../contracts/editor';
 import type { ViewScope } from '../../../contracts/keymap';
-import type { Log, PluginLog } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
 import {
   type FocusTarget,
@@ -167,12 +167,14 @@ export interface PrimerViewDeps {
 // session's Primer tab, a no-op when it has none. `scrollBy` scrolls the
 // active primer's card or review, whichever shows, down for 1 and up for -1;
 // null with no active primer. `setLayouts` draws every part whose picked
-// layout changed again, keeping the focused box.
+// layout changed again, keeping the focused box. `dispose` destroys every open
+// primer view, giving each session back.
 export interface PrimerTab {
   forgetSession(sessionId: string): void;
   showPrimer(sessionId: string): void;
   scrollBy(step: ScrollStep, direction: 1 | -1): ContentScroll | null;
   setLayouts(shown: ShownLayouts<PrimerLayout>): void;
+  dispose(): void;
 }
 
 // One open primer's DOM in its session's Primer tab. `update` draws it for
@@ -397,6 +399,11 @@ export function mountPrimerTab(deps: PrimerViewDeps): PrimerTab {
     setLayouts(shown) {
       shownLayouts = shown;
       render();
+    },
+    dispose() {
+      for (const primerId of primerViews.keys()) {
+        destroyPrimerView(primerId, shownPrimers, tabs, deps);
+      }
     },
     scrollBy(step, direction) {
       const state = store.get();
@@ -1189,7 +1196,7 @@ function drawCardPart<Kit, Input>(
 }
 
 function logUpdateFailureOnce(
-  log: Log,
+  log: PluginLog,
   layout: object,
   layoutName: string,
   partName: string,
@@ -1201,10 +1208,7 @@ function logUpdateFailureOnce(
     return;
   }
   logged.add(partName);
-  log(
-    'primer',
-    `layout ${layoutName} ${partName} update failed: ${errorText(error)}`,
-  );
+  log(`layout ${layoutName} ${partName} update failed: ${errorText(error)}`);
 }
 
 function featureInput(primer: OpenPrimer): FeatureCardInput {

@@ -16,12 +16,13 @@ import { createAgentFormService } from '../../../shared/agent-forms/form-service
 import { createFolderFormStore } from '../../../shared/agent-forms/form-store';
 import { createMemoryFormStore } from '../../../shared/agent-forms/memory-form-store';
 import { createAgentFormToolSession } from '../../../shared/agent-forms/tool-session';
-import type { ChatMainExports } from '../../chat/contract';
+import { chatMainKey } from '../../chat/contract';
 import {
   DRIVE_SESSION_DEFAULTS,
   type Harness,
   type SessionsMainEvents,
   type SessionsMainExports,
+  sessionsMainKey,
 } from '../../sessions/contract';
 import type { PrimerChannel } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
@@ -77,8 +78,8 @@ export const primerMainPart: MainPart<typeof primerManifest> = {
   manifest: primerManifest,
   start(api: PrimerApi) {
     const { services } = api;
-    const sessions = api.dependency<SessionsMainExports>('sessions');
-    const chat = api.dependency<ChatMainExports>('chat');
+    const sessions = api.dependency(sessionsMainKey);
+    const chat = api.dependency(chatMainKey);
     const store = createFolderFormStore({
       dir: path.join(services.homeDir, '.agents', 'wigley-primer', 'primers'),
       clock: services.clock,
@@ -104,23 +105,24 @@ export const primerMainPart: MainPart<typeof primerManifest> = {
       wake: createChatFormWake(chat, services.log),
       defaultDeadlineSeconds,
     });
+    const previewService = createAgentFormService({
+      type: primerType,
+      presenter: presenter.quiet,
+      store: createMemoryFormStore(
+        services.clock,
+        services.randomHex,
+        services.paths,
+      ),
+      wake: NO_FORM_WAKE,
+      defaultDeadlineSeconds,
+    });
     const preview = createPrimerPreview({
       sessions,
-      primer: createAgentFormService({
-        type: primerType,
-        presenter: presenter.quiet,
-        store: createMemoryFormStore(
-          services.clock,
-          services.randomHex,
-          services.paths,
-        ),
-        wake: NO_FORM_WAKE,
-        defaultDeadlineSeconds,
-      }),
+      primer: previewService,
       log: services.log,
     });
     api.channel.handle('openPreview', () => preview.open());
-    const layouts = api.layouts.register({ layoutTypes });
+    api.layouts.register({ layoutTypes });
     sessions.contributeTools(PRIMER_TOOLS, (session) =>
       createAgentFormToolSession(primer.startSession(session), primerType),
     );
@@ -136,8 +138,10 @@ export const primerMainPart: MainPart<typeof primerManifest> = {
     return {
       commands: {},
       dispose: () => {
+        primer.dispose();
+        previewService.dispose();
+        preview.dispose();
         driveActions?.dispose();
-        layouts.dispose();
       },
     };
   },

@@ -1,5 +1,6 @@
 import '../../../shared/page/markdown.css';
 import './primer.css';
+import type { Disposable } from '../../../contracts/disposable';
 import type {
   PageApi,
   PagePart,
@@ -12,10 +13,11 @@ import {
   type EditorBoxes,
 } from '../../../shared/page/editor-boxes';
 import { activeForm } from '../../../shared/page/session-forms';
-import type { KeysPageExports } from '../../keys/contract';
-import type {
-  SessionsPageEvents,
-  SessionsPageExports,
+import { keysPageKey } from '../../keys/contract';
+import {
+  type SessionsPageEvents,
+  type SessionsPageExports,
+  sessionsPageKey,
 } from '../../sessions/contract';
 import type {
   PrimerChannel,
@@ -80,12 +82,13 @@ function createBoxes(
 // Listeners first: a primer shown while openForms is in flight arrives in
 // both, and showing an open primer again changes nothing. The active primer
 // follows the session the sessions plugin focuses, and a primer leaves only
-// when main closes it.
+// when main closes it. The `Disposable` stops an `openForms` read still in
+// flight from showing its primers.
 function listenForPrimers(
   api: PrimerApi,
   store: PrimerStore,
   sessions: SessionsPageExports,
-) {
+): Disposable {
   const { log, toast } = api.services;
   api.channel.on('formShown', (primer) =>
     store.dispatch({ type: 'formShown', form: primer }),
@@ -104,16 +107,23 @@ function listenForPrimers(
   api.events.on('sessions.activeChanged', ({ sessionId }) =>
     store.dispatch({ type: 'sessionActivated', sessionId }),
   );
+  let isStopped = false;
   void api.channel
     .invoke('openForms')
     .then((primers) => {
+      if (isStopped) {
+        return;
+      }
       for (const primer of primers) {
         store.dispatch({ type: 'formShown', form: primer });
       }
     })
-    .catch((error) =>
-      log('primer', `open primers not read: ${errorText(error)}`),
-    );
+    .catch((error) => log(`open primers not read: ${errorText(error)}`));
+  return {
+    dispose() {
+      isStopped = true;
+    },
+  };
 }
 
 // Shows each agent primer in its session's Primer tab and sends the user's
@@ -129,7 +139,7 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
   manifest: primerManifest,
   start(api: PrimerApi) {
     const { services } = api;
-    const sessions = api.dependency<SessionsPageExports>('sessions');
+    const sessions = api.dependency(sessionsPageKey);
     const store = createPrimerStore(
       initialState([], sessions.selectedSessionId()),
     );
@@ -155,7 +165,7 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
       store,
       boxes,
       markdown: services.markdown,
-      keys: api.dependency<KeysPageExports>('keys'),
+      keys: api.dependency(keysPageKey),
       run: (command) => api.commands.run(command),
       commands: {
         exists: (command) => api.keys.command(command) !== undefined,
@@ -178,7 +188,7 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
       userLayout: () => api.settings().layout,
       setLayouts: (shown) => view.setLayouts(shown),
     });
-    startAutosave({
+    const autosave = startAutosave({
       subscribe: (listener) => store.subscribe(listener),
       drafts: () => store.get().forms,
       idOf: (primer) => primer.formId,
@@ -202,7 +212,7 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
       logEvent(event);
       api.events.emit(event.name, event.data);
     });
-    listenForPrimers(api, store, sessions);
+    const primersRead = listenForPrimers(api, store, sessions);
     const exports: PrimerPageExports = {
       activePrimer() {
         const primer = activeForm(store.get());
@@ -211,6 +221,12 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
     };
     return {
       exports: () => exports,
+      dispose() {
+        primersRead.dispose();
+        autosave.dispose();
+        view.dispose();
+        boxes.dispose();
+      },
       commands: primerCommandHandlers({
         store,
         boxes,

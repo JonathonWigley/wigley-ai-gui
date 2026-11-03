@@ -166,23 +166,11 @@ describe('createPrimerEventLog', () => {
       data: { primerId: 'p1', outcome: 'cancelled' },
     });
 
-    const lines = log.mock.calls.map(([source, line]) => ({
-      source,
-      words: String(line).split(' '),
-    }));
+    const lines = log.mock.calls.map(([line]) => String(line).split(' '));
     expect(lines).toEqual([
-      {
-        source: 'primer',
-        words: expect.arrayContaining(['primerShown', 'p1']),
-      },
-      {
-        source: 'primer',
-        words: expect.arrayContaining(['needChanged', 'p1', '3', 'yes']),
-      },
-      {
-        source: 'primer',
-        words: expect.arrayContaining(['primerFinished', 'p1', 'cancelled']),
-      },
+      expect.arrayContaining(['primerShown', 'p1']),
+      expect.arrayContaining(['needChanged', 'p1', '3', 'yes']),
+      expect.arrayContaining(['primerFinished', 'p1', 'cancelled']),
     ]);
   });
 });

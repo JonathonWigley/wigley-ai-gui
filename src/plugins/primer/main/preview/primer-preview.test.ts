@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 import type {
   AgentFormService,
   AgentFormSession,
@@ -22,6 +22,7 @@ interface Call {
 let connects: SessionInfo[];
 let activated: string[];
 let calls: Call[];
+let connectionEnd: Mock<() => void>;
 
 function record(
   method: Call['method'],
@@ -54,7 +55,7 @@ function connect(info: SessionInfo): ConnectedSession {
   return {
     session,
     call: () => Promise.reject(new Error('the preview calls no tool')),
-    end: () => undefined,
+    end: connectionEnd,
   };
 }
 
@@ -78,6 +79,7 @@ beforeEach(() => {
   connects = [];
   activated = [];
   calls = [];
+  connectionEnd = vi.fn();
 });
 
 describe('open', () => {
@@ -126,4 +128,26 @@ describe('settle', () => {
       PREVIEW_PRIMER_ARGS,
     ]);
   });
+});
+
+describe('dispose', () => {
+  it.each([
+    { state: 'opened, disposed', opens: 1, disposes: 1, ends: 1 },
+    { state: 'opened, disposed twice', opens: 1, disposes: 2, ends: 1 },
+    { state: 'never opened, disposed', opens: 0, disposes: 1, ends: 0 },
+  ])(
+    'dispose ends the connection the preview holds, once ($state)',
+    ({ opens, disposes, ends }) => {
+      const subject = preview();
+      for (let open = 0; open < opens; open++) {
+        subject.open();
+      }
+
+      for (let dispose = 0; dispose < disposes; dispose++) {
+        subject.dispose();
+      }
+
+      expect(connectionEnd).toHaveBeenCalledTimes(ends);
+    },
+  );
 });

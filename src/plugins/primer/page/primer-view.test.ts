@@ -123,7 +123,7 @@ function primerTabSetup(
     initialState([presented, ...others], presented.sessionId),
   );
   const logs: string[] = [];
-  const log = (...parts: string[]) => logs.push(parts.at(-1) ?? '');
+  const log = (message: string) => logs.push(message);
   const targets: RegisteredTarget[] = [];
   const inserted: Inserted[] = [];
   const boxes = createEditorBoxes(

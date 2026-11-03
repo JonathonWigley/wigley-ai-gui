@@ -70,8 +70,6 @@ export interface PrimerCommandDeps {
 // that box, undefined from the page.
 type Run = (box: PrimerBox | undefined) => void;
 
-const SOURCE = 'primer';
-
 // How the primer page's log and toasts name a primer.
 const PRIMER_WORDS: SessionFormWords = {
   noun: 'primer',
@@ -111,7 +109,7 @@ export function primerCommandHandlers(
     editFirstField: handler(() => {
       const first = shownBoxes(store.get())[0];
       if (first === undefined) {
-        log(SOURCE, 'no box to focus');
+        log('no box to focus');
         return;
       }
       boxes.focus(first, APPEND);
@@ -121,7 +119,7 @@ export function primerCommandHandlers(
     leaveBox: handler((box) => {
       commitNewItem(deps, box);
       boxes.leave();
-      log(SOURCE, 'left the box');
+      log('left the box');
     }),
     lineDown: handler(() => scrollPrimer(deps, 'line', 1)),
     lineUp: handler(() => scrollPrimer(deps, 'line', -1)),
@@ -147,7 +145,7 @@ export function primerCommandHandlers(
 
 function openPreview(deps: PrimerCommandDeps) {
   deps.openPreview().catch((error: unknown) => {
-    deps.log(SOURCE, `layout preview failed: ${errorText(error)}`);
+    deps.log(`layout preview failed: ${errorText(error)}`);
     deps.toast(`Layout preview failed: ${errorText(error)}`, 'error');
   });
 }
@@ -206,7 +204,7 @@ function moveRow(
   deps.store.dispatch(action);
   const after = selectedName(deps.store.get());
   if (after !== null && after !== before) {
-    deps.log(SOURCE, `selected ${after}`);
+    deps.log(`selected ${after}`);
   }
 }
 
@@ -217,13 +215,13 @@ function setNeed(deps: PrimerCommandDeps, need: PrimerNeed) {
   }
   const entry = selectedEntry(primer);
   if (entry === null) {
-    deps.log(SOURCE, 'no task selected');
+    deps.log('no task selected');
     return;
   }
   const before = deps.store.get();
   deps.store.dispatch({ type: 'setNeed', need });
   if (deps.store.get() !== before) {
-    deps.log(SOURCE, `need ${need} on task ${entry.id}`);
+    deps.log(`need ${need} on task ${entry.id}`);
   }
 }
 
@@ -234,10 +232,7 @@ function addExtraTask(deps: PrimerCommandDeps) {
     return;
   }
   if (primer.entries.length >= MAX_PRIMER_ENTRIES) {
-    deps.log(
-      SOURCE,
-      `no task added: the primer holds ${MAX_PRIMER_ENTRIES} tasks`,
-    );
+    deps.log(`no task added: the primer holds ${MAX_PRIMER_ENTRIES} tasks`);
     return;
   }
   deps.store.dispatch({ type: 'addExtraTask' });
@@ -249,7 +244,7 @@ function addExtraTask(deps: PrimerCommandDeps) {
   if (entry === null) {
     return;
   }
-  deps.log(SOURCE, `added extra task ${entry.id}`);
+  deps.log(`added extra task ${entry.id}`);
   focusTarget(deps, added, { field: 'taskName', entryId: entry.id });
 }
 
@@ -260,13 +255,13 @@ function removeExtraTask(deps: PrimerCommandDeps) {
   }
   const entry = selectedEntry(primer);
   if (entry === null || entry.group !== 'extra') {
-    deps.log(SOURCE, 'only an extra task can be removed');
+    deps.log('only an extra task can be removed');
     return;
   }
   const before = deps.store.get();
   deps.store.dispatch({ type: 'removeExtraTask' });
   if (deps.store.get() !== before) {
-    deps.log(SOURCE, `removed extra task ${entry.id}`);
+    deps.log(`removed extra task ${entry.id}`);
   }
 }
 
@@ -327,7 +322,7 @@ function focusPane(
   const after = activeForm(deps.store.get())?.pane;
   const moved = after !== undefined && after !== before;
   if (moved) {
-    deps.log(SOURCE, `focused the ${pane}`);
+    deps.log(`focused the ${pane}`);
   }
   return moved;
 }
@@ -350,7 +345,7 @@ function toggleInclude(deps: PrimerCommandDeps) {
   }
   const cursor = cursorItem(before);
   if (cursor === null) {
-    deps.log(SOURCE, 'no item selected');
+    deps.log('no item selected');
     return;
   }
   deps.store.dispatch({ type: 'toggleInclude' });
@@ -360,7 +355,6 @@ function toggleInclude(deps: PrimerCommandDeps) {
   }
   const { row, item } = after;
   deps.log(
-    SOURCE,
     `${item.include ? 'included' : 'left out'} item ${row.item} on task ${row.entryId}`,
   );
 }
@@ -372,7 +366,7 @@ function focusItemComment(deps: PrimerCommandDeps) {
   }
   const cursor = cursorItem(state);
   if (cursor === null) {
-    deps.log(SOURCE, 'no item selected');
+    deps.log('no item selected');
     return;
   }
   const { primer, row } = cursor;
@@ -390,7 +384,7 @@ function focusTaskComment(deps: PrimerCommandDeps) {
   }
   const entry = selectedEntry(primer);
   if (entry === null) {
-    deps.log(SOURCE, 'no task selected');
+    deps.log('no task selected');
     return;
   }
   focusTarget(deps, primer, { field: 'taskComment', entryId: entry.id });
@@ -403,11 +397,11 @@ function focusAddItem(deps: PrimerCommandDeps) {
   }
   const entry = selectedEntry(primer);
   if (entry === null) {
-    deps.log(SOURCE, 'no task selected');
+    deps.log('no task selected');
     return;
   }
   if (entry.items.length >= MAX_PRIMER_ITEMS) {
-    deps.log(SOURCE, fullTaskLine(entry.id));
+    deps.log(fullTaskLine(entry.id));
     return;
   }
   focusTarget(deps, primer, { field: 'newItem', entryId: entry.id });
@@ -435,13 +429,13 @@ function commitNewItem(
     return;
   }
   if (entry.items.length >= MAX_PRIMER_ITEMS) {
-    deps.log(SOURCE, fullTaskLine(entryId));
+    deps.log(fullTaskLine(entryId));
     return;
   }
   const before = deps.store.get();
   deps.store.dispatch({ type: 'addItem', formId: primerId, entryId });
   if (deps.store.get() !== before) {
-    deps.log(SOURCE, `added item ${entry.items.length + 1} on task ${entryId}`);
+    deps.log(`added item ${entry.items.length + 1} on task ${entryId}`);
   }
 }
 
@@ -453,7 +447,7 @@ function stepFocus(
   commitNewItem(deps, box);
   const next = boxAfterStep(shownBoxes(deps.store.get()), box, step);
   if (next === null) {
-    deps.log(SOURCE, 'no box to focus');
+    deps.log('no box to focus');
     return;
   }
   deps.boxes.focus(next);
@@ -489,7 +483,6 @@ function scrollPrimer(
 ) {
   const scroll = deps.scrollPrimer(step, direction);
   deps.log(
-    SOURCE,
     scroll === null
       ? 'no primer to scroll'
       : scrollText('the primer', step, direction, scroll),
@@ -506,7 +499,7 @@ function changeView(
   const before = deps.store.get().view;
   deps.store.dispatch(action);
   if (before !== to && deps.store.get().view === to) {
-    deps.log(SOURCE, line);
+    deps.log(line);
   }
 }
 
@@ -518,7 +511,7 @@ function submit(deps: PrimerCommandDeps) {
   }
   const problems = submitProblems(primer);
   if (problems.length > 0) {
-    deps.log(SOURCE, `submit refused: ${problems.join(' ')}`);
+    deps.log(`submit refused: ${problems.join(' ')}`);
     return;
   }
   finishActivePrimer(deps, 'review', 'submitted');
