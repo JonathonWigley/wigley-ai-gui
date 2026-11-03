@@ -1,6 +1,6 @@
 # 04 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 01, 02, 03
 Plan: [plan.md](plan.md)
@@ -39,4 +39,4 @@ Commit:    one commit for the group, when a fix was needed
 
 ## Proof
 
-<written by wigley:make: commit sha, proof result, concerns; empty until the group lands>
+Commit 4987c3e4 · proof: diff read: each listed section stale-and-fixed or already true; the grep finds no stale line outside plan folders · concerns: design.md § Working block line not written: no working-block code on this branch (it belongs to the unlanded plan-working-block); an own turn with uuids stays unmeasured
