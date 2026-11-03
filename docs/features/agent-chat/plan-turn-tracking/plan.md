@@ -224,7 +224,7 @@ uuid keys; the `AgentHarness` contract is unchanged.
 - [x] [Turn tracker](02-turn-tracker.md) — after 01
 
 ### Wave 3
-- [ ] [Harness tracks turns by uuid](03-harness-turn-tracking.md) — after 01, 02
+- [x] [Harness tracks turns by uuid](03-harness-turn-tracking.md) — after 01, 02
 
 ### Wave 4
 - [ ] [Doc re-read](04-doc-re-read.md) — after 01, 02, 03
@@ -239,9 +239,12 @@ Review base: 578c0d08ecda7909910ef4254a06d47fef5e0f55
 ### Groups
 - 01 · 38ee7cc9 · diff read: five DecodedLine fields and command_lifecycle in DECODERS present; typecheck passes · concerns: none
 - 02 · 0fd04bc9 · diff read: ControlCommand, TurnLine, TurnRead, TurnTracker, createTurnTracker present as planned; typecheck passes · concerns: the explicit turnOpener close in lifecycle mode has no test that fails without it (every measured result lists the opener in turnMessages)
+- 03 · 420cf9cf · diff read: randomUuid dep, userMessage(message, uuid), controlMessage(id, value, lineId) present; typecheck passes · concerns: close handler leaves tracker uuids open (masked by hasClosed); interrupt tests on real timers leave a 5 s grace timer running after the test; worker used one python heredoc for a test edit
 ### Contract changes
 ### Rulings
 - stringItems(value) helper shared by init capabilities and result user_message_uuids — one filter rule — inline it back if unwanted · group 01 · group 01
 - a lifecycle turn end with turnOpener null returns null and still closes every turnMessages uuid — the rule and the folded-uuid row need it — a folded message would wait for its completed frame if wrong · group 02 · group 02
+- interrupt turn-open test row: the errorResult carries user_message_uuid/user_message_uuids uuid-1, as a real interrupted turn's result does, since a result naming no opener cannot close uuid-1 in lifecycle mode — only the test changes if wrong · group 03 · group 03
+- the grace callback nulls graceTimer before its working check — the callback cannot run while idle anyway — none · group 03 · group 03
 ### Review rounds
 ### Test gate

@@ -1,6 +1,6 @@
 # 03 — Harness tracks turns by uuid
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 01, 02
 Plan: [plan.md](plan.md)
@@ -140,4 +140,4 @@ Commit:    one commit for the group
 
 ## Proof
 
-<written by wigley:make: commit sha, proof result, concerns; empty until the group lands>
+Commit 420cf9cf · proof: diff read: randomUuid dep, userMessage(message, uuid), controlMessage(id, value, lineId) present; typecheck passes · concerns: close handler leaves tracker uuids open (masked by hasClosed); interrupt tests on real timers leave a 5 s grace timer running after the test; worker used one python heredoc for a test edit
