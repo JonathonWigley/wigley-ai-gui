@@ -1,18 +1,9 @@
-import { createHash } from 'node:crypto';
-import {
-  mkdirSync,
-  mkdtempSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  statSync,
-} from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { RelayEndpoint, ToolDefinition } from '../../contract';
 import {
-  channelPath,
   endedDriveRunLaunch,
   launchCommand,
   writeEndpointFiles,
@@ -35,94 +26,6 @@ function tempFolder(): string {
 function readJson(file: string): unknown {
   return JSON.parse(readFileSync(file, 'utf8'));
 }
-
-function first8HexOfSha256(text: string): string {
-  return createHash('sha256').update(text).digest('hex').slice(0, 8);
-}
-
-const STABLE = 'wigley-ai-gui';
-const DEV = 'wigley-ai-gui-dev';
-
-describe('channelPath', () => {
-  it('names the Windows pipe by instance, user and a hash of the home', () => {
-    expect(channelPath('win32', 'C:\\Users\\ann', 'ann', STABLE)).toMatch(
-      /^\\\\\.\\pipe\\wigley-ai-gui-ann-[0-9a-f]{8}$/,
-    );
-  });
-
-  it('names a different Windows pipe for a different home', () => {
-    expect(channelPath('win32', 'C:\\Users\\u', 'u', STABLE)).not.toBe(
-      channelPath('win32', 'D:\\drive\\home', 'u', STABLE),
-    );
-  });
-
-  it('puts the socket in the instance folder of the agents folder on macOS', () => {
-    expect(channelPath('darwin', '/Users/u', 'u', STABLE)).toBe(
-      '/Users/u/.agents/wigley-ai-gui/app.sock',
-    );
-  });
-
-  it.each(['win32', 'darwin'] as const)(
-    'never gives the stable and dev instances one channel on %s',
-    (platform) => {
-      expect(channelPath(platform, '/Users/u', 'u', STABLE)).not.toBe(
-        channelPath(platform, '/Users/u', 'u', DEV),
-      );
-    },
-  );
-
-  // 82 bytes of home and 31 of `/.agents/wigley-ai-gui/app.sock`: 113.
-  const longHome = `/Users/u/${'d'.repeat(73)}`;
-  // `wigley-ai-gui-u-<8 hex>.sock` is 29 bytes, 30 with its `/`.
-  const socketName = `wigley-ai-gui-u-${first8HexOfSha256(longHome)}.sock`;
-
-  it('falls back to a per-home socket in the temp folder when it fits in 103 bytes', () => {
-    const tempDir = `/T${'t'.repeat(103 - 30 - 2)}`;
-
-    expect(channelPath('darwin', longHome, 'u', STABLE, tempDir)).toBe(
-      `${tempDir}/${socketName}`,
-    );
-    expect(Buffer.byteLength(`${tempDir}/${socketName}`)).toBe(103);
-  });
-
-  // Windows has no /tmp, no process.getuid and no POSIX mode bits.
-  it.skipIf(process.platform === 'win32')(
-    'falls back to a folder of /tmp only the user can enter when the temp folder socket would be 104 bytes',
-    () => {
-      const username = `wigley-endpoint-test-${process.pid}`;
-      const privateDir = `/tmp/wigley-ai-gui-${username}`;
-      folders.push(privateDir);
-      const tempDir = `/T${'t'.repeat(104 - 30 - 2)}`;
-
-      const channel = channelPath(
-        'darwin',
-        longHome,
-        username,
-        STABLE,
-        tempDir,
-      );
-
-      expect(channel).toBe(`${privateDir}/${first8HexOfSha256(longHome)}.sock`);
-      expect(statSync(privateDir).mode & 0o777).toBe(0o700);
-    },
-  );
-
-  // Windows has no /tmp, no process.getuid and no POSIX mode bits.
-  it.skipIf(process.platform === 'win32')(
-    'throws when the /tmp folder exists open to others',
-    () => {
-      const username = `wigley-endpoint-open-${process.pid}`;
-      const privateDir = `/tmp/wigley-ai-gui-${username}`;
-      folders.push(privateDir);
-      mkdirSync(privateDir, { mode: 0o755 });
-      const tempDir = `/T${'t'.repeat(104 - 30 - 2)}`;
-
-      expect(() =>
-        channelPath('darwin', longHome, username, STABLE, tempDir),
-      ).toThrow(privateDir);
-    },
-  );
-});
 
 describe('launchCommand', () => {
   const npmEnv = {

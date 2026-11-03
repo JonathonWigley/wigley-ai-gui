@@ -21,6 +21,11 @@ const LAYERS: Record<string, LayerRule> = {
   'src/shared': { layers: ['src/contracts', 'src/shared/paths'], packages: [] },
   'src/shared/paths': { layers: ['src/contracts'], packages: [] },
   'src/shared/followups': { layers: [], packages: [] },
+  // The local channel transport the relay and the session host share.
+  'src/shared/local-channel': {
+    layers: ['src/contracts'],
+    packages: ['node:'],
+  },
   'src/shared/agent-forms': {
     layers: ['src/contracts', 'src/shared', 'src/shared/paths'],
     packages: ['node:'],
@@ -131,6 +136,11 @@ const LAYERS: Record<string, LayerRule> = {
     layers: ['src/contracts', 'src/shared', 'src/shared/paths'],
     packages: ['node:'],
   },
+  // The app's client of the session host, over the local channel.
+  'src/main/session-host': {
+    layers: ['src/contracts', 'src/shared', 'src/shared/local-channel'],
+    packages: ['node:'],
+  },
   'src/main/main.ts': {
     layers: [
       'src/contracts',
@@ -150,6 +160,8 @@ const LAYERS: Record<string, LayerRule> = {
       'src/main/git',
       'src/main/data-protocol',
       'src/main/drive',
+      // Starts the session host client.
+      'src/main/session-host',
       'src/plugins/main.ts',
       'src/plugins/manifests.ts',
       'src/plugins/keymap.ts',
@@ -842,6 +854,8 @@ const LAYERS: Record<string, LayerRule> = {
       'src/contracts',
       'src/shared',
       'src/shared/followups',
+      // The relay's channel path.
+      'src/shared/local-channel',
       'src/plugins/sessions',
       'src/plugins/sessions/contract.ts',
       'src/plugins/sessions/main/relay',
@@ -851,7 +865,13 @@ const LAYERS: Record<string, LayerRule> = {
     packages: ['node:'],
   },
   'src/plugins/sessions/main/relay': {
-    layers: ['src/contracts', 'src/shared', 'src/plugins/sessions/contract.ts'],
+    layers: [
+      'src/contracts',
+      'src/shared',
+      // The relay's channel transport.
+      'src/shared/local-channel',
+      'src/plugins/sessions/contract.ts',
+    ],
     packages: ['node:'],
   },
   'src/plugins/sessions/main/mcp': {

@@ -1,6 +1,6 @@
 # 01 — Session host contracts
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -242,3 +242,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit ddfd4b33 · proof: diff read; all Produces present; typecheck clean; both stub greps found · concerns: kill's comment leads the code until task 09 (chat still kills on quit); agents start.test.ts emits untyped chat.agentEvent without replayed, for task 10 to add; fake detach compares events by identity

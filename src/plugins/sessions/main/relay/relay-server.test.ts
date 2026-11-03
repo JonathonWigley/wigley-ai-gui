@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createInterface } from 'node:readline';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { channelPath } from '../../../../shared/local-channel/channel-path';
 import {
   type ConnectedSession,
   RELAY_PROTOCOL,
@@ -16,7 +17,6 @@ import {
   type ServeSession,
   startRelayServer,
 } from './relay-server';
-import { channelPath } from './endpoint';
 
 const HELLO: RelayHello = {
   protocol: RELAY_PROTOCOL,
@@ -68,7 +68,14 @@ function echoServe() {
 // The production channel over a test folder: a named pipe on Windows, a
 // socket file elsewhere.
 function testChannel(dir: string): string {
-  return channelPath(process.platform, dir, 'selftest', 'wigley-ai-gui', dir);
+  return channelPath(
+    process.platform,
+    dir,
+    'selftest',
+    'wigley-ai-gui',
+    '',
+    dir,
+  );
 }
 
 const channelIsPipe = testChannel(tmpdir()).startsWith('\\\\.\\pipe\\');

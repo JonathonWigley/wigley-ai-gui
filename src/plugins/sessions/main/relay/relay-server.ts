@@ -1,9 +1,12 @@
-import { mkdirSync, rmSync } from 'node:fs';
-import { createServer, type Socket } from 'node:net';
-import path from 'node:path';
+import type { Socket } from 'node:net';
 import type { Readable, Writable } from 'node:stream';
 import type { Log } from '../../../../contracts/log';
 import { errorText } from '../../../../shared/error-text';
+import {
+  jsonLine,
+  readFirstLine,
+} from '../../../../shared/local-channel/line-framing';
+import { listenOnChannel } from '../../../../shared/local-channel/local-channel';
 import {
   type ConnectedSession,
   HARNESSES,
@@ -28,8 +31,6 @@ export interface RelayServerDeps {
   serve: ServeSession;
   log: Log;
 }
-
-const PIPE_PREFIX = '\\\\.\\pipe\\';
 
 function parseHello(line: string): { hello: RelayHello } | { error: string } {
   let hello: RelayHello | null;
@@ -86,7 +87,7 @@ function sessionInfo(hello: RelayHello): SessionInfo {
 }
 
 function replyLine(reply: RelayHelloReply): string {
-  return `${JSON.stringify(reply)}\n`;
+  return jsonLine(reply);
 }
 
 function refuse(socket: Socket, error: string, deps: RelayServerDeps) {
@@ -127,50 +128,16 @@ function acceptConnection(socket: Socket, deps: RelayServerDeps) {
   socket.on('error', (error) =>
     deps.log('relay', `a relay connection failed: ${error.message}`),
   );
-  let received = Buffer.alloc(0);
-  const onData = (chunk: Buffer) => {
-    received = Buffer.concat([received, chunk]);
-    const newline = received.indexOf('\n');
-    if (newline === -1) {
-      return;
-    }
-    socket.pause();
-    socket.off('data', onData);
-    const rest = received.subarray(newline + 1);
-    if (rest.length > 0) {
-      socket.unshift(rest);
-    }
-    startSession(socket, received.subarray(0, newline).toString('utf8'), deps);
-  };
-  socket.on('data', onData);
+  readFirstLine(socket, (line) => startSession(socket, line, deps));
 }
 
 // Listens for relay.py connections on the channel, one connected session each.
 export function startRelayServer(deps: RelayServerDeps): {
   close(): Promise<void>;
 } {
-  const sockets = new Set<Socket>();
-  const server = createServer((socket) => {
-    sockets.add(socket);
-    socket.on('close', () => sockets.delete(socket));
-    acceptConnection(socket, deps);
+  return listenOnChannel(deps.channel, {
+    connected: (socket) => acceptConnection(socket, deps),
+    failed: (error) =>
+      deps.log('relay', `channel ${deps.channel} failed: ${error.message}`),
   });
-  server.on('error', (error) =>
-    deps.log('relay', `channel ${deps.channel} failed: ${error.message}`),
-  );
-  if (!deps.channel.startsWith(PIPE_PREFIX)) {
-    mkdirSync(path.dirname(deps.channel), { recursive: true });
-    // A crashed run leaves its socket file behind, and listen fails on it.
-    rmSync(deps.channel, { force: true });
-  }
-  server.listen(deps.channel);
-  return {
-    close: () =>
-      new Promise((resolve) => {
-        for (const socket of sockets) {
-          socket.destroy();
-        }
-        server.close(() => resolve());
-      }),
-  };
 }

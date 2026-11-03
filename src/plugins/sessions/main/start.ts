@@ -16,6 +16,7 @@ import {
   requiredString,
 } from '../../../shared/drive-args';
 import type { JsonObject } from '../../../shared/json';
+import { channelPath } from '../../../shared/local-channel/channel-path';
 import {
   DRIVE_SESSION_DEFAULTS,
   type OwnedSession,
@@ -31,7 +32,6 @@ import { sessionsManifest } from '../manifest';
 import { titleLimit } from '../session-title';
 import { serveMcp } from './mcp/mcp-server';
 import {
-  channelPath,
   endedDriveRunLaunch,
   launchCommand,
   writeEndpointFiles,
@@ -81,6 +81,7 @@ function openRelay(api: SessionsApi, list: SessionList) {
     api.services.homeDir,
     os.userInfo().username,
     api.services.appInstance.id,
+    '',
   );
   const relay = startRelayServer({
     channel,

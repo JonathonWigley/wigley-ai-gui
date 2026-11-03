@@ -1,6 +1,6 @@
 # 10 — Agents log and workflow countdown skip replayed events
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)

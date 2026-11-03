@@ -282,10 +282,10 @@ Task 01 sets `replayed: false` at every `ChatAgentEvent` emitter in the tree (ch
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Session host contracts](01-session-host-contracts.md)
+- [x] [Session host contracts](01-session-host-contracts.md)
 - [ ] [Local channel transport](02-local-channel.md)
 - [ ] [Relay holds a call across a restart](03-relay-hold-call.md)
-- [ ] [Windows per-version install](04-windows-install-folders.md)
+- [x] [Windows per-version install](04-windows-install-folders.md)
 
 ### Wave 2
 - [ ] [Claude adapter pipe fold](05-claude-pipe-fold.md) — after 01
@@ -307,10 +307,18 @@ Task 01 sets `replayed: false` at every `ChatAgentEvent` emitter in the tree (ch
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 7f956435
 
 ### Groups
+- 04 · beff2ef0 · diff read; typecheck clean in scripts/; install-steps tests pass; PowerShell and ps listers not run (live checks are the user's) · concerns: Windows PowerShell paths unrun on this Mac; rmSync on leftovers has no retry, so a flat migration may need a second run to clear; isStableAppProcess table has no row for a wrong file name in app-* or a deeper nested path
+- 01 · ddfd4b33 · diff read; all Produces present; typecheck clean; both stub greps found · concerns: kill's comment leads the code until task 09 (chat still kills on quit); agents start.test.ts emits untyped chat.agentEvent without replayed, for task 10 to add; fake detach compares events by identity
 ### Contract changes
 ### Rulings
+- Marketplace review base is cbd8a9e; git fetch fails in this session (SSH key unavailable), so origin was not checked; neither main showed behind at the last fetch and nothing is pushed — a stale origin would surface at push · lead
+- Cleanup deletes leftovers before older app-* folders, so a stale deleting-app-x cannot block a rename and print a false warning — only delete order differs if wrong · group 04 · group 04
+- Windows lister sets PowerShell stdout to UTF-8 and quit tolerates a pid already gone — the match moved into Node; a real quit failure reads as the 15 s timeout · group 04 · group 04
+- failNextSpawn closes the record through the close path, and a duplicate open id is checked before it — a failed process must not keep listing — only fake-based tests shift if wrong · group 01 · group 01
+- HOST_LOGS_FOLDER and pipeLogFile comments also say frozen, since plan.md freezes every name in the host folder — two comments over-promise if wrong · group 01 · group 01
+- A peer commit (3ae83602) landed on main after the review base, so the review range is this run's explicit commit list, not base..HEAD — a peer's commit would otherwise be graded as this run's · lead
 ### Review rounds
 ### Test gate

@@ -1,6 +1,6 @@
 # 04 — Windows per-version install folders
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -178,3 +178,4 @@ move the shortcut, delete older folders no host holds, clear the flat install; n
 
 ## Proof
 
+Commit beff2ef0 · proof: diff read; typecheck clean in scripts/; install-steps tests pass; PowerShell and ps listers not run (live checks are the user's) · concerns: Windows PowerShell paths unrun on this Mac; rmSync on leftovers has no retry, so a flat migration may need a second run to clear; isStableAppProcess table has no row for a wrong file name in app-* or a deeper nested path
