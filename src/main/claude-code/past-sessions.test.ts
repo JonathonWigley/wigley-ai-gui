@@ -360,9 +360,9 @@ describe('listPastSessions', () => {
 
 describe('readHistory', () => {
   it.each([
-    { name: 'readHistory', read: readHistory },
-    { name: 'readLastUsage', read: readLastUsage },
-  ])('$name_BadId_RejectsBeforeReading', async ({ read }) => {
+    { name: 'readHistory_BadId_RejectsBeforeReading', read: readHistory },
+    { name: 'readLastUsage_BadId_RejectsBeforeReading', read: readLastUsage },
+  ])('$name', async ({ read }) => {
     const stored = createMemoryFiles();
     const readPaths: string[] = [];
     const files: Files = {

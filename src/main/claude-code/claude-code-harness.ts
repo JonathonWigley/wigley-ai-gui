@@ -41,7 +41,7 @@ import {
   listProjectFolders,
   readHistory,
   readLastUsage,
-  readTranscript,
+  readSavedReplies,
 } from './past-sessions';
 import { readPlanUsage } from './plan-usage';
 import {
@@ -60,7 +60,7 @@ import {
   createStreamDecoder,
   type DecodedLine,
 } from './stream-decoder';
-import { mainReplies, projectFolderName } from './transcripts';
+import { projectFolderName } from './transcripts';
 import {
   type ControlCommand,
   createTurnTracker,
@@ -305,8 +305,11 @@ function startClaudeProcess(
   };
 
   // Emits the usage event when it differs from the last one in any field but
-  // `at`.
+  // `at`; once `ended` is emitted, emits nothing, so no usage follows it.
   const emitUsage = () => {
+    if (hasEmittedEnded) {
+      return;
+    }
     const event = usageEvent(usage, deps.clock.now());
     const isRepeat =
       event !== null &&
@@ -596,17 +599,14 @@ function startClaudeProcess(
   // A resumed session seeds its context from the saved main replies, unless a
   // live reply came first.
   if (request.resume) {
-    void readTranscript(
+    void readSavedReplies(
       deps.files,
       deps.paths,
       projectsFolder(deps, request.projectDir, request.profileDir),
       request.sessionId,
     ).then(
-      (text) => {
-        if (hasClosed) {
-          return;
-        }
-        usage = withSavedReplies(usage, mainReplies(text));
+      (replies) => {
+        usage = withSavedReplies(usage, replies);
         emitUsage();
       },
       (error: unknown) =>

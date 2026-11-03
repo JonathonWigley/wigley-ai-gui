@@ -627,7 +627,7 @@ describe('createClaudeCodeHarness', () => {
     ]);
   });
 
-  describe('resumed session usage', () => {
+  describe('usage reads', () => {
     const SAVED_ID = 'aaaaaaaa-0000-4000-8000-000000000001';
     const TRANSCRIPT = `/Users/u/.claude/projects/-proj/${SAVED_ID}.jsonl`;
     const resumeRequest: AgentStart = {
@@ -668,11 +668,11 @@ describe('createClaudeCodeHarness', () => {
       spendUsd: null,
     });
 
-    // Memory files holding `transcript` whose transcript read waits for
-    // `release`.
-    async function heldTranscript(transcript: string) {
+    // Memory files holding `text` at `heldPath`, whose read of that path waits
+    // for `release`.
+    async function heldRead(heldPath: string, text: string) {
       const stored = createMemoryFiles();
-      await stored.write(TRANSCRIPT, transcript);
+      await stored.write(heldPath, text);
       let release = () => {};
       const gate = new Promise<void>((resolve) => {
         release = resolve;
@@ -680,7 +680,7 @@ describe('createClaudeCodeHarness', () => {
       const files: Files = {
         ...stored,
         read: async (path) => {
-          if (path === TRANSCRIPT) {
+          if (path === heldPath) {
             await gate;
           }
           return stored.read(path);
@@ -714,7 +714,7 @@ describe('createClaudeCodeHarness', () => {
     });
 
     it('start_ResumedLiveReplyBeforeTheRead_KeepsTheLiveContext', async () => {
-      const held = await heldTranscript(SAVED_REPLY_LINE);
+      const held = await heldRead(TRANSCRIPT, SAVED_REPLY_LINE);
       const run = started(fakeChild(), held.files, clock, resumeRequest);
       await settle();
 
@@ -745,12 +745,49 @@ describe('createClaudeCodeHarness', () => {
       ]);
     });
 
-    it('start_ResumedReadSettlesAfterClose_EmitsNothing', async () => {
-      const held = await heldTranscript(SAVED_REPLY_LINE);
-      const run = started(fakeChild(), held.files, clock, resumeRequest);
+    const SETTINGS = '/Users/u/.claude/settings.json';
+    const spawnError = new Error('spawn /bin/claude ENOENT');
+    it.each([
+      {
+        name: 'start_ResumedReadSettlesAfterClose_EmitsNothing',
+        startRequest: resumeRequest,
+        heldPath: TRANSCRIPT,
+        heldText: SAVED_REPLY_LINE,
+        pid: 1,
+        end: (emitter: EventEmitter) => emitter.emit('close', 0, null),
+      },
+      {
+        name: 'start_ResumedReadSettlesAfterSpawnedChildError_EmitsNothing',
+        startRequest: resumeRequest,
+        heldPath: TRANSCRIPT,
+        heldText: SAVED_REPLY_LINE,
+        pid: 1,
+        end: (emitter: EventEmitter) => emitter.emit('error', spawnError),
+      },
+      {
+        name: 'start_NewSettingsReadSettlesAfterClose_EmitsNothing',
+        startRequest: request,
+        heldPath: SETTINGS,
+        heldText: '{}',
+        pid: 1,
+        end: (emitter: EventEmitter) => emitter.emit('close', 0, null),
+      },
+      {
+        name: 'start_NewSettingsReadSettlesAfterSpawnNotFound_EmitsNothing',
+        startRequest: request,
+        heldPath: SETTINGS,
+        heldText: '{}',
+        pid: undefined,
+        end: (emitter: EventEmitter) => emitter.emit('error', spawnError),
+      },
+    ])('$name', async ({ startRequest, heldPath, heldText, pid, end }) => {
+      const held = await heldRead(heldPath, heldText);
+      const fake = fakeChild();
+      (fake.child as { pid: number | undefined }).pid = pid;
+      const run = started(fake, held.files, clock, startRequest);
       await settle();
 
-      run.emitter.emit('close', 0, null);
+      end(run.emitter);
       held.release();
       await settle();
 

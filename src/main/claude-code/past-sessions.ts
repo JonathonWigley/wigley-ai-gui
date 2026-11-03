@@ -10,6 +10,7 @@ import type { Paths } from '../../contracts/paths';
 import { errorText } from '../../shared/error-text';
 import {
   EMPTY_SESSION_USAGE,
+  type SavedReply,
   usageEvent,
   withSavedReplies,
 } from './session-usage';
@@ -107,8 +108,11 @@ export async function readLastUsage(
   projectsFolder: string,
   sessionId: string,
 ): Promise<UsageAgentEvent | null> {
-  const replies = mainReplies(
-    await readTranscript(files, paths, projectsFolder, sessionId),
+  const replies = await readSavedReplies(
+    files,
+    paths,
+    projectsFolder,
+    sessionId,
   );
   if (replies.length === 0) {
     return null;
@@ -119,9 +123,22 @@ export async function readLastUsage(
   );
 }
 
+// The saved session's main replies, oldest first. Rejects before any read for
+// an id that is not a session id, as `readHistory` does.
+export async function readSavedReplies(
+  files: Files,
+  paths: Paths,
+  projectsFolder: string,
+  sessionId: string,
+): Promise<SavedReply[]> {
+  return mainReplies(
+    await readTranscript(files, paths, projectsFolder, sessionId),
+  );
+}
+
 // The saved session's transcript text. Rejects before any read for an id that
 // is not a session id, since the id becomes part of a path.
-export async function readTranscript(
+async function readTranscript(
   files: Files,
   paths: Paths,
   projectsFolder: string,
