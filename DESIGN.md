@@ -309,6 +309,9 @@ The primitives, each a builder in `src/shared/page/ui/`:
 - **Dialog** (`createDialog`): a modal over the `scrim`.
 - **EmptyState** (`emptyState`): one line saying what to do, then the key that does it.
 - **SectionHeader** (`sectionHeader`): a section's heading with a trailing slot.
+- **DragReorder** (`createDragReorder`): drag to reorder over one or more drop zones, each a list of keyed items;
+  the item under the pointer marks where the drop lands, and a drop reports the item's key, the zone and the
+  index it lands at, so the view, not the primitive, changes the order. A view that drops it calls its `dispose`.
 
 Icon stays the Codicon builder `icon`.
 
