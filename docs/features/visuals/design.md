@@ -70,7 +70,8 @@ points at the `wigley:visuals` skill in wigley-ai-marketplace, which holds the h
   mounted view is reused while its language, closed flag and source are unchanged, and an open block shows a "drawing visual…" card, so the
   frame loads exactly once, when its source is complete.
 - **No height cap.** The frame takes its content's full height, reported from inside, and the transcript stays
-  pinned to the bottom as it grows. The full-size overlay is for visuals wider than the column.
+  pinned to the bottom as it grows. The frame document hides its vertical overflow, so no scrollbar narrows a
+  visual whose height follows its width. The full-size overlay is for visuals wider than the column.
 - **The theme reaches in live.** The frame host posts the whole token set, then reduced transparency, then the font
   settings (the order `src/renderer/theme.ts` applies them) on load and on every theme change. Tokens reference each
   other, so a subset would break.

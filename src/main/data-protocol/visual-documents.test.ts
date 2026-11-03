@@ -28,6 +28,7 @@ describe('createVisualDocuments', () => {
     expect(body).toContain('wigley-visual:theme');
     expect(body).toContain('wigley-visual:height');
     expect(body).toContain('wigley-visual:escape');
+    expect(body).toContain("root.style.overflowY = 'hidden'");
   });
 
   it.each([

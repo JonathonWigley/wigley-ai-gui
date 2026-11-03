@@ -9,11 +9,14 @@ const VISUAL_CSP =
 
 // Runs in the frame before the visual's own scripts: keeps the root hidden
 // until the page's first theme message and applies each one, reports the
-// root's height on each change, and reports Esc without stopping it.
+// root's height on each change, and reports Esc without stopping it. The root
+// hides vertical overflow: a scrollbar narrows a width-scaled visual, and the
+// frame then holds it at that narrowed height with the scrollbar showing.
 const BOOTSTRAP_SCRIPT = `(() => {
   const messages = ${JSON.stringify(VISUAL_MESSAGES)};
   const root = document.documentElement;
   root.style.visibility = 'hidden';
+  root.style.overflowY = 'hidden';
   const isMessage = (data, type) =>
     typeof data === 'object' && data !== null && data.type === type;
   window.addEventListener('message', (event) => {
