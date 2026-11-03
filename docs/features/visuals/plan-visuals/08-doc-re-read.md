@@ -1,6 +1,6 @@
 # 08 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 6 · Depends on: 07
 Plan: [plan.md](plan.md)
@@ -51,3 +51,5 @@ Done when: every line of the docs in items 1–7 matches the landed code; each r
 Commit:    one commit per repo for the fixes (none when nothing was stale; record "no stale lines" in Proof)
 
 ## Proof
+
+Commit 6cc0e3a1 + marketplace f78537d · proof: diff read: each fix states the code; items 3, 6, 7 no stale lines; marketplace Done commands pass · concerns: none

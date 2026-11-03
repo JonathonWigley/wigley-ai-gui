@@ -251,7 +251,7 @@ export function visualHashOf(url: string): string | null;
 - [x] [Test fixtures: mockup and flowchart](07-fixtures.md) — after 03, 06
 
 ### Wave 6
-- [ ] [Doc re-read](08-doc-re-read.md) — after 07
+- [x] [Doc re-read](08-doc-re-read.md) — after 07
 
 ### Wave 7
 - [ ] [Final verification](09-final-verification.md) — after 08
@@ -268,6 +268,7 @@ Review base: d7578311fe99437ccefe407289916bbcfa049eb8
 - 05 · 9e07f590 · diff read: every Produces present; typecheck + lint clean; 15 tests pass filtered · concerns: DESIGN.md Surfaces lacks the visual card and box; a user layout that appends its root after kit.frame reloads the visual on a layouts change; visualMainPart start order before keys not run live
 - 06 · 93a87a8f · diff read: every Produces present, the v bind in keymap.ts, updates draw new markdown before removing the old; typecheck + lint clean; 1577 filtered tests pass · concerns: registry.sourcesIn(host) never matches the root itself, so the tests read it around the host (matches real use under chat's slot); the self-test logs 'unplaced v visual.openVisuals in chat.chat' until 07 draws a visual; one edit made by a python3 heredoc; overlay look untested until 09
 - 07 · 69395151 · diff read: every Produces present, all 21 createFakeAgentHarness calls pass timers; typecheck + lint clean; 239 filtered tests pass; self-test steps run at 09 · concerns: the self-test's frame-loaded waits hash each sample source plus a trailing newline, matching what the mount's textContent hands main — the waits time out at 5 s if wrong; a send reaching the process during the 1.5 s hold does not clear it
+- 08 · 6cc0e3a1 + marketplace f78537d · diff read: each fix states the code; items 3, 6, 7 no stale lines; marketplace Done commands pass · concerns: none
 ### Contract changes
 - MarkdownRenderer fakes: 22 files → 23 (composer-kit.test.ts too) · why: plan-time count missed it · consumers: none · group 01
 - shell kit log: from createShellChrome → from mountShellChrome · why: createShellChrome does not exist · consumers: none · group 01
@@ -291,3 +292,4 @@ Review base: d7578311fe99437ccefe407289916bbcfa049eb8
 - sample hash includes the trailing newline markdown-it leaves in the fence content — both ends keep it — self-test timeouts if wrong · group 07 · group 07
 ### Review rounds
 ### Test gate
+- whole vitest suite picked: the range touches every MarkdownRenderer fake (23 files), every createFakeAgentHarness caller, the base kit every plugin draws through, and the chat entry list — the whole suite runs in ~16 s, so no narrower pick is worth its risk; typecheck and lint with it · 349 files / 5396 tests pass, no type errors
