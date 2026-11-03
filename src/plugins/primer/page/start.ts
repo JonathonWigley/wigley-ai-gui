@@ -225,7 +225,6 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
         primersRead.dispose();
         autosave.dispose();
         view.dispose();
-        boxes.dispose();
       },
       commands: primerCommandHandlers({
         store,

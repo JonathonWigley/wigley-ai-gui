@@ -144,7 +144,21 @@ describe('startRoundAutosave', () => {
     expect(scheduled.size).toBe(0);
   });
 
-  it('drops the result of a save still in flight when disposed', async () => {
+  it('dispatches nothing for a save resolved after dispose', async () => {
+    const { calls, save } = heldSaves();
+    const { store, logs, autosave, runDue } = setup(save);
+    typeNotes(store, 'a');
+    runDue();
+
+    autosave.dispose();
+    calls[0].resolve();
+    await settle();
+
+    expect(logs).toEqual([]);
+    expect(saveStateOf(store)).toBe('saving');
+  });
+
+  it('logs a save rejected after dispose and dispatches nothing', async () => {
     const { calls, save } = heldSaves();
     const { store, logs, autosave, runDue } = setup(save);
     typeNotes(store, 'a');
@@ -154,7 +168,7 @@ describe('startRoundAutosave', () => {
     calls[0].reject(new Error('disk full'));
     await settle();
 
-    expect(logs).toEqual([]);
+    expect(logs).toEqual([expect.stringMatching(/r1.*disk full/)]);
     expect(saveErrorOf(store)).toBeNull();
   });
 

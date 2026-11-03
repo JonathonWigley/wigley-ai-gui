@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
 import {
@@ -20,12 +23,10 @@ import { addDriveActions, primerMainPart } from './start';
 // call's tool name and args are kept in `calls`.
 function fakeSessions() {
   const connectedInfo: SessionInfo[] = [];
-  const ended: string[] = [];
   const answers: ((result: ToolResult) => void)[] = [];
   const calls: [string, unknown][] = [];
   return {
     connectedInfo,
-    ended,
     answers,
     calls,
     connect(info: SessionInfo): ConnectedSession {
@@ -38,7 +39,7 @@ function fakeSessions() {
             calls.push([tool, args]);
             answers.push(resolve);
           }),
-        end: () => ended.push(id),
+        end: () => undefined,
       };
     },
   };
@@ -94,7 +95,7 @@ describe('primer drive actions', () => {
     const drive = fakeDriveHost();
     const sessions = fakeSessions();
     const ended = fakeEndedEvent();
-    const actions = addDriveActions(drive.host, sessions, ended.on);
+    addDriveActions(drive.host, sessions, ended.on);
     await drive.run('openPrimer', { sessionId: 's' });
     await drive.run('openPrimer', { sessionId: 's' });
     expect(sessions.connectedInfo).toHaveLength(1);
@@ -103,8 +104,6 @@ describe('primer drive actions', () => {
     await drive.run('openPrimer', { sessionId: 's' });
 
     expect(sessions.connectedInfo).toHaveLength(2);
-    actions.dispose();
-    expect(sessions.ended).toEqual(['row-s']);
   });
 
   it('openPrimer rejects a field of the wrong type', async () => {
@@ -133,18 +132,6 @@ describe('primer drive actions', () => {
     await expect(drive.run('answers', {})).rejects.toThrow('sessionId');
   });
 
-  it('dispose removes the actions and ends each session primer opened', async () => {
-    const drive = fakeDriveHost();
-    const sessions = fakeSessions();
-    const actions = addDriveActions(drive.host, sessions, fakeEndedEvent().on);
-    await drive.run('openPrimer', { sessionId: 'a' });
-    await drive.run('openPrimer', { sessionId: 'b' });
-
-    actions.dispose();
-
-    expect(sessions.ended).toEqual(['row-a', 'row-b']);
-    expect([...drive.actions.keys()]).toEqual([]);
-  });
 });
 
 const fakeChat = fakeDependency(
@@ -192,6 +179,36 @@ describe('primer main part', () => {
     // The real sessions part throws on a tool name still contributed.
     await harness.restart();
     await harness.stop();
+  });
+
+  it('stop removes the drive actions and settles each open primer with the error', async () => {
+    const homeDir = mkdtempSync(path.join(tmpdir(), 'wigley-primer-stop-'));
+    const harness = startMainPart(primerMainPart, {
+      parts: [sessionsMainPart],
+      dependencies: [fakeChat],
+      drive: true,
+      services: {
+        homeDir,
+        alerts: { announce() {}, setOpenCount() {} },
+      },
+    });
+    const answers = harness.drive?.actions.get('answers');
+    await harness.drive?.run('openPrimer', { sessionId: 'a' });
+    await harness.drive?.run('openPrimer', { sessionId: 'b' });
+
+    await harness.stop();
+
+    expect(
+      harness.sent.filter((sent) => sent.message === 'formClosed'),
+    ).toHaveLength(2);
+    expect([...(harness.drive?.actions.keys() ?? [])]).toEqual([]);
+    await expect(answers?.run({ sessionId: 'a' })).rejects.toThrow(
+      /open_primer/,
+    );
+    await expect(answers?.run({ sessionId: 'b' })).rejects.toThrow(
+      /open_primer/,
+    );
+    rmSync(homeDir, { recursive: true, force: true });
   });
 
   it("stop ends the open preview's session", async () => {

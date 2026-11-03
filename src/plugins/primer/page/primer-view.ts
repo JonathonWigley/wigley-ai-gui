@@ -384,7 +384,7 @@ export function mountPrimerTab(deps: PrimerViewDeps): PrimerTab {
       isRendering = false;
     }
   };
-  store.subscribe(render);
+  const storeSubscription = store.subscribe(render);
   render();
   return {
     forgetSession(sessionId) {
@@ -401,6 +401,7 @@ export function mountPrimerTab(deps: PrimerViewDeps): PrimerTab {
       render();
     },
     dispose() {
+      storeSubscription.dispose();
       for (const primerId of primerViews.keys()) {
         destroyPrimerView(primerId, shownPrimers, tabs, deps);
       }

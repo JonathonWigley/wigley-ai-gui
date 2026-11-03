@@ -10,7 +10,6 @@ import type {
   AgentFormType,
   AgentFormWake,
 } from '../../contracts/agent-forms';
-import type { Disposable } from '../../contracts/disposable';
 import type { AgentFormStore, SavedAgentForm } from './form-store';
 
 export interface AgentFormServiceDeps<Form, Body, Payload> {
@@ -205,12 +204,26 @@ function settle<Form, Body, Payload>(
   return finished;
 }
 
+function sessionEndedUnansweredError<Form, Body, Payload>(
+  type: AgentFormType<Form, Body, Payload>,
+): Error {
+  return new Error(
+    `The session ended before the ${type.noun} was answered, and it has closed. ` +
+      `Send it again with ${type.openTool}: the answers saved so far fill in.`,
+  );
+}
+
+// A session that ended took its unfinished form out of the window, so a call
+// it woke has no draft to report.
 function openFormPayload<Form, Body, Payload>(
   session: SessionContext<Form, Body, Payload>,
   open: OpenForm<Form, Body>,
 ): Payload {
   const end = open.end;
   if (end === null) {
+    if (session.ended) {
+      throw sessionEndedUnansweredError(session.type);
+    }
     return session.type.payload(open.form, 'draft', open.latestBody);
   }
   if (session.open === open) {
@@ -264,8 +277,9 @@ function releaseCaller<Form, Body, Payload>(
 }
 
 // A deadline running out is a draft, never a failure: the form stays open
-// for the collect tool. `signal` wakes the wait early; `host` is the
-// caller's own signal, which a queued call's deadline leaves alone.
+// for the collect tool. The session ending with no answer rejects the call.
+// `signal` wakes the wait early; `host` is the caller's own signal, which a
+// queued call's deadline leaves alone.
 async function presentOpen<Form, Body, Payload>(
   session: SessionContext<Form, Body, Payload>,
   open: OpenForm<Form, Body>,
@@ -280,9 +294,11 @@ async function presentOpen<Form, Body, Payload>(
   }
   open.callers += 1;
   await waitForEndOrDeadline(open, seconds, signal);
-  const payload = openFormPayload(session, open);
-  releaseCaller(session, open, host);
-  return payload;
+  try {
+    return openFormPayload(session, open);
+  } finally {
+    releaseCaller(session, open, host);
+  }
 }
 
 // A finished form whose answers no tool reply has carried: the open form,
@@ -749,9 +765,7 @@ async function collectLastForm<Form, Body, Payload>(
 
 function endSession<Form, Body, Payload>(
   session: SessionContext<Form, Body, Payload>,
-  live: Set<SessionContext<Form, Body, Payload>>,
 ): void {
-  live.delete(session);
   session.ended = true;
   closeOpenForm(session);
 }
@@ -759,7 +773,6 @@ function endSession<Form, Body, Payload>(
 function startSession<Form, Body, Payload>(
   owner: AgentFormOwner,
   deps: AgentFormServiceDeps<Form, Body, Payload>,
-  live: Set<SessionContext<Form, Body, Payload>>,
 ): AgentFormSession<Payload> {
   const { info } = owner;
   const session: SessionContext<Form, Body, Payload> = {
@@ -777,29 +790,19 @@ function startSession<Form, Body, Payload>(
     ended: false,
     reportedUnreadable: new Set(),
   };
-  live.add(session);
   return {
     open: (args, toolUseId, signal) =>
       openFormInTurn(session, args, toolUseId, signal),
     collect: (wait, signal) => collectLastForm(session, wait, signal),
-    end: () => endSession(session, live),
+    end: () => endSession(session),
   };
 }
 
 // Form logic every form source reaches, for one form type: validation,
 // re-send, replay, hand-back, pre-fill, the soft deadline, the saved forms and
-// the wake for a form no call will return. `dispose` ends every live session
-// as its own `end` does.
+// the wake for a form no call will return.
 export function createAgentFormService<Form, Body, Payload>(
   deps: AgentFormServiceDeps<Form, Body, Payload>,
-): AgentFormService<Payload> & Disposable {
-  const live = new Set<SessionContext<Form, Body, Payload>>();
-  return {
-    startSession: (owner) => startSession(owner, deps, live),
-    dispose() {
-      for (const session of live) {
-        endSession(session, live);
-      }
-    },
-  };
+): AgentFormService<Payload> {
+  return { startSession: (owner) => startSession(owner, deps) };
 }

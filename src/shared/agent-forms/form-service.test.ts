@@ -136,9 +136,10 @@ async function expireDeadline(seconds = DEFAULT_DEADLINE_SECONDS) {
 // Tracks whether a call has answered yet.
 function watch(pending: Promise<TestPayload>): { settled: boolean } {
   const state = { settled: false };
-  void pending.then(() => {
+  const markSettled = () => {
     state.settled = true;
-  });
+  };
+  void pending.then(markSettled, markSettled);
   return state;
 }
 
@@ -161,38 +162,6 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   rmSync(formsDir, { recursive: true, force: true });
-});
-
-describe('a disposed service', () => {
-  it('ends every live session once disposed, answering each waiting call with its draft', async () => {
-    const service = newService();
-    const [one, two, three] = ['app-1', 'app-2', 'app-3'].map((id) =>
-      service.startSession({ id, info: { ...SESSION, sessionId: id } }),
-    );
-    const waiting = [
-      one.open(NAMING_ARGS, null, live()),
-      two.open(PLACEMENT_ARGS, null, live()),
-    ];
-    const [firstId, secondId] = presenter.shown.map((form) => form.formId);
-    const ended = three.open(
-      { heading: 'Ended', items: ['first'] },
-      null,
-      live(),
-    );
-    const thirdId = presenter.latest().formId;
-    three.end();
-
-    service.dispose();
-
-    expect(presenter.closed).toEqual([thirdId, firstId, secondId]);
-    const answers = await Promise.all(waiting);
-    expect(answers.map((answer) => answer.outcome)).toEqual(['draft', 'draft']);
-    await ended;
-    expect(vi.getTimerCount()).toBe(0);
-    await expect(one.open(NAMING_ARGS, null, live())).rejects.toThrow(
-      'The session ended before this',
-    );
-  });
 });
 
 describe('open', () => {
@@ -1331,27 +1300,66 @@ describe("the user's answers on disk", () => {
 });
 
 describe('a session that ends', () => {
-  it('closes its open form in the window and keeps its answers', async () => {
+  // The open call of the row, which its `wait` may wait on.
+  let opening: Promise<TestPayload>;
+
+  it.each<{
+    call: string;
+    wait(session: AgentFormSession<TestPayload>): Promise<TestPayload>;
+  }>([
+    { call: 'the open call', wait: () => opening },
+    {
+      call: 'a collect call',
+      wait: (session) => session.collect(true, live()),
+    },
+  ])(
+    'closes its open form, keeps its answers and rejects $call naming the open tool',
+    async ({ wait }) => {
+      const session = startSession();
+      opening = session.open(NAMING_ARGS, null, live());
+      const settledOpening = expect(opening).rejects.toThrow(/open_form/);
+      const shown = presenter.latest();
+      presenter.draft(shown.formId, body('half'));
+      const waiting = wait(session);
+
+      session.end();
+
+      expect(presenter.closed).toEqual([shown.formId]);
+      await expect(waiting).rejects.toThrow(/open_form/);
+      await settledOpening;
+      expect(vi.getTimerCount()).toBe(0);
+      expect(savedFile(shown.formId)).toMatchObject({
+        outcome: 'open',
+        body: { note: 'half' },
+      });
+    },
+  );
+
+  it('still returns the answers of a form the user finished just before it ended', async () => {
     const session = startSession();
     const waiting = session.open(NAMING_ARGS, null, live());
-    const shown = presenter.latest();
-    presenter.draft(shown.formId, body('half'));
+    presenter.submit(presenter.latest().formId, body('done'));
 
     session.end();
 
-    expect(presenter.closed).toEqual([shown.formId]);
-    expect((await waiting).outcome).toBe('draft');
-    expect(savedFile(shown.formId)).toMatchObject({
-      outcome: 'open',
-      body: { note: 'half' },
-    });
+    expect(await waiting).toMatchObject({ outcome: 'submitted', note: 'done' });
   });
 
-  it('lets the next session re-send the form pre-filled', () => {
+  it('rejects every later open call', async () => {
     const session = startSession();
-    void session.open(NAMING_ARGS, null, live());
+    session.end();
+
+    await expect(session.open(NAMING_ARGS, null, live())).rejects.toThrow(
+      /open_form/,
+    );
+  });
+
+  it('lets the next session re-send the form pre-filled', async () => {
+    const session = startSession();
+    const waiting = session.open(NAMING_ARGS, null, live());
     presenter.draft(presenter.latest().formId, body('half'));
     session.end();
+    await expect(waiting).rejects.toThrow(/open_form/);
 
     void startSession().open(NAMING_ARGS, null, live());
 

@@ -122,23 +122,6 @@ describe('createEditorBoxes', () => {
     expect(logs).toEqual(['focused f1/notes']);
   });
 
-  it('destroys every mounted editor on dispose and tells no listener', () => {
-    const { boxes, created } = setup();
-    boxes.focus(notes);
-    let changes = 0;
-    boxes.onChange(() => changes++);
-
-    boxes.dispose();
-
-    expect(created.every((made) => made.editor.isDestroyed)).toBe(true);
-    expect(boxes.active()).toBeNull();
-    expect(boxes.isMounted(notes)).toBe(false);
-    expect(changes).toBe(0);
-    boxes.mount(parent, notes, '');
-    boxes.focus(notes);
-    expect(changes).toBe(0);
-  });
-
   it('hands the focus options to the editor', () => {
     const { boxes, created } = setup();
 

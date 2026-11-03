@@ -55,9 +55,6 @@ export interface EditorBoxes<Box> {
   formIdOf(box: Box): string;
   // Runs after the focused box, or its vim mode, changes.
   onChange(listener: () => void): void;
-  // Destroys every mounted editor and forgets every record and `onChange`
-  // listener, none of which hears it.
-  dispose(): void;
 }
 
 // `order` is the box's first-mount order.
@@ -223,17 +220,6 @@ export function createEditorBoxes<Box>(
     },
     onChange(listener) {
       listeners.push(listener);
-    },
-    dispose() {
-      listeners.length = 0;
-      for (const entry of mounted.values()) {
-        entry.editor.destroy();
-      }
-      mounted.clear();
-      modes.clear();
-      activeKey = null;
-      lastActivated.clear();
-      firstMounts.clear();
     },
   };
 }

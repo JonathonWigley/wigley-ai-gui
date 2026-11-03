@@ -192,7 +192,7 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
       boxes.leave();
     }
   };
-  store.subscribe(render);
+  const storeSubscription = store.subscribe(render);
   render();
   return {
     forgetSession(sessionId) {
@@ -218,6 +218,7 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
       return roundView?.scrollBy(step, direction) ?? null;
     },
     dispose() {
+      storeSubscription.dispose();
       for (const roundId of roundViews.keys()) {
         destroyRoundView(roundId, shownRounds, tabs, deps);
       }

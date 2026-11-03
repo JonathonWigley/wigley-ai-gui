@@ -92,7 +92,7 @@ interface PendingSave {
 // Saves a draft once its edits pause for `delayMs`. A save is in flight until
 // `save` settles; a failed one leaves the draft unsaved with its message, and
 // the next edit schedules a save again. Its `Disposable` clears every scheduled
-// save and the subscription, and a save still in flight then settles unheard.
+// save and the subscription; a save still in flight then only logs a failure.
 export function startAutosave<Draft extends DraftRevisions, Body>(
   deps: AutosaveDeps<Draft, Body>,
 ): Disposable {
@@ -155,15 +155,15 @@ async function saveDraft<Draft extends DraftRevisions, Body>(
   try {
     await deps.save(id, deps.bodyOf(draft));
   } catch (error) {
+    const message = errorText(error);
+    deps.log(`draft not saved for ${id}: ${message}`);
     if (isDisposed()) {
       return;
     }
-    const message = errorText(error);
     // An edit made during the save has its own save scheduled already.
     if (!pending.has(id)) {
       pending.set(id, { revision, handle: null });
     }
-    deps.log(`draft not saved for ${id}: ${message}`);
     deps.saveFinished(id, revision, message);
     return;
   }

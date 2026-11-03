@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EditorHost } from '../../../contracts/editor';
 import type { MarkdownRenderer } from '../../../contracts/markdown';
-import type { PagePart } from '../../../contracts/plugin';
+import type { PageCommandContext, PagePart } from '../../../contracts/plugin';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 import { installFakeDom } from '../../../shared/page/test-dom';
 import { startPagePart } from '../../../shared/plugin-part-harness.test-support';
@@ -16,10 +16,12 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 function deferred<T>() {
   let resolve: (value: T) => void = () => undefined;
-  const promise = new Promise<T>((settled) => {
+  let reject: (error: Error) => void = () => undefined;
+  const promise = new Promise<T>((settled, failed) => {
     resolve = settled;
+    reject = failed;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
 }
 
 const MARKDOWN: MarkdownRenderer = {
@@ -29,12 +31,17 @@ const MARKDOWN: MarkdownRenderer = {
   ...NO_FENCES,
 };
 
-// An editor host that counts the editors it holds live.
+// An editor host that counts the editors it holds live and every one it made;
+// `type` edits the last one made.
 function countingEditors() {
   let live = 0;
+  let made = 0;
+  let type: (text: string) => void = () => undefined;
   const host: EditorHost = {
-    create(_parent, doc) {
+    create(_parent, doc, events) {
       live += 1;
+      made += 1;
+      type = (text) => events.changed(text);
       return {
         text: () => doc,
         setText() {},
@@ -56,7 +63,12 @@ function countingEditors() {
     cancelPendingKeys() {},
     setKeymap() {},
   };
-  return { host, live: () => live };
+  return {
+    host,
+    live: () => live,
+    made: () => made,
+    type: (text: string) => type(text),
+  };
 }
 
 // A part started first, so stopped last, which hears `primer.primerShown`. Its
@@ -136,6 +148,66 @@ describe('primer page part', () => {
     expect(editors.live()).toBe(0);
     probe.release();
     await stopping;
+  });
+
+  it('a draft reply that lands after stop dispatches and draws nothing', async () => {
+    const saved = deferred<void>();
+    const drafts: unknown[] = [];
+    const editors = countingEditors();
+    const harness = startPagePart(primerPagePart, {
+      parts: [sessionsPagePart, keysPagePart],
+      invoke: (method, ...args) => {
+        if (method === 'draft') {
+          drafts.push(args);
+          return saved.promise;
+        }
+        return new Promise(() => undefined);
+      },
+      services: { editor: editors.host, markdown: MARKDOWN },
+    });
+    harness.send('formShown', presentedPrimer('p1'));
+    editors.type('typed');
+    harness.advance(primerPagePart.manifest.settings.autosaveDelayMs);
+    expect(drafts).toHaveLength(1);
+
+    await harness.stop();
+    const made = editors.made();
+    const logged = harness.logs.length;
+    saved.resolve();
+    await settle();
+
+    expect(editors.made()).toBe(made);
+    expect(editors.live()).toBe(0);
+    expect(harness.logs).toHaveLength(logged);
+  });
+
+  it('a finish that rejects after stop draws nothing', async () => {
+    const finishing = deferred<void>();
+    const editors = countingEditors();
+    const harness = startPagePart(primerPagePart, {
+      parts: [sessionsPagePart, keysPagePart],
+      invoke: (method) =>
+        method === 'finish' ? finishing.promise : new Promise(() => undefined),
+      services: { editor: editors.host, markdown: MARKDOWN },
+    });
+    const primer = presentedPrimer('p1');
+    harness.send('formShown', primer);
+    harness.emit('sessions.activeChanged', { sessionId: primer.sessionId });
+    const { commands } = harness.started();
+    commands.openReview({} as PageCommandContext);
+    commands.askCancel({} as PageCommandContext);
+    commands.confirmCancel({} as PageCommandContext);
+
+    await harness.stop();
+    const made = editors.made();
+    finishing.reject(new Error('main is gone'));
+    await settle();
+
+    expect(harness.logs.map((line) => line.message)).toContainEqual(
+      expect.stringContaining('not finished'),
+    );
+    expect(editors.made()).toBe(made);
+    expect(editors.live()).toBe(0);
   });
 
   it('an open-primers read that lands before stop shows its primer', async () => {

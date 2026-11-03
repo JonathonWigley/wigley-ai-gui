@@ -225,7 +225,6 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
         autosave.dispose();
         layoutRefresh.dispose();
         view.dispose();
-        boxes.dispose();
       },
       commands: formsCommandHandlers({
         store,

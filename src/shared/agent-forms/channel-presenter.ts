@@ -6,10 +6,8 @@ import type {
   PresentedAgentForm,
 } from '../../contracts/agent-forms';
 import type { Alerts } from '../../contracts/alerts';
-import type { Disposable } from '../../contracts/disposable';
 import type { PluginLog } from '../../contracts/log';
 import type { MainChannel } from '../../contracts/plugin';
-import { createRegistrations } from '../registrations';
 
 interface OpenForm<Form, Body> {
   form: PresentedAgentForm<Form, Body>;
@@ -21,15 +19,15 @@ interface OpenForm<Form, Body> {
 // The presenter that announces each form and counts it open, and `quiet`,
 // a view onto the same open forms whose own forms do neither.
 export interface AgentFormChannelPresenter<Form, Body>
-  extends AgentFormPresenter<Form, Body>, Disposable {
+  extends AgentFormPresenter<Form, Body> {
   quiet: AgentFormPresenter<Form, Body>;
 }
 
 // Shows forms on the page over the type's channel, each marked on its
 // session's row; keeps that row from closing while the form is open and
 // releases it when the form closes. Registers its channel handlers and close
-// guard once, until `dispose`. `source` names only the alert open count;
-// `announceTitle` titles each form's notification.
+// guard once, which the plugin's stop removes. `source` names only the alert
+// open count; `announceTitle` titles each form's notification.
 export function createAgentFormChannelPresenter<Form, Body>(deps: {
   channel: Pick<MainChannel<AgentFormChannel<Form, Body>>, 'handle' | 'send'>;
   alerts: Alerts;
@@ -53,42 +51,35 @@ export function createAgentFormChannelPresenter<Form, Body>(deps: {
   // The form whose `finish` the page invoked, while that handler runs.
   let finishingFormId: string | null = null;
 
-  const handles = createRegistrations();
-  handles.track(sessions.addCloseGuard((sessionId) => !hasOpenForm(sessionId)));
+  sessions.addCloseGuard((sessionId) => !hasOpenForm(sessionId));
 
-  handles.track(
-    channel.handle('openForms', () =>
-      [...open.values()].map((entry) => entry.form),
-    ),
+  channel.handle('openForms', () =>
+    [...open.values()].map((entry) => entry.form),
   );
   // A failed write throws out of the listener, which rejects the page's invoke.
-  handles.track(
-    channel.handle('draft', (formId, body) => {
-      const entry = open.get(formId);
-      if (!entry) {
-        return;
-      }
-      entry.form = { ...entry.form, draft: body };
-      entry.listener.draft(body);
-    }),
-  );
+  channel.handle('draft', (formId, body) => {
+    const entry = open.get(formId);
+    if (!entry) {
+      return;
+    }
+    entry.form = { ...entry.form, draft: body };
+    entry.listener.draft(body);
+  });
   // A listener that throws leaves the form open and rejects the page's invoke.
   // The close this finish makes reaches the page marked `byFinish`.
-  handles.track(
-    channel.handle('finish', (formId, end) => {
-      const entry = open.get(formId);
-      if (!entry) {
-        return;
-      }
-      finishingFormId = formId;
-      try {
-        entry.listener.finish(end);
-        close(formId);
-      } finally {
-        finishingFormId = null;
-      }
-    }),
-  );
+  channel.handle('finish', (formId, end) => {
+    const entry = open.get(formId);
+    if (!entry) {
+      return;
+    }
+    finishingFormId = formId;
+    try {
+      entry.listener.finish(end);
+      close(formId);
+    } finally {
+      finishingFormId = null;
+    }
+  });
 
   const show = (
     form: PresentedAgentForm<Form, Body>,
@@ -134,6 +125,5 @@ export function createAgentFormChannelPresenter<Form, Body>(deps: {
       show: (form, listener) => show(form, listener, true),
       close,
     },
-    dispose: () => handles.dispose(),
   };
 }

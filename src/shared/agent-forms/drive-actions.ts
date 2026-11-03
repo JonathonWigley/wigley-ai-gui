@@ -2,7 +2,6 @@ import type {
   AgentFormToolResult,
   AgentFormToolSession,
 } from '../../contracts/agent-forms';
-import type { Disposable } from '../../contracts/disposable';
 import type { DriveHost } from '../../contracts/plugin';
 import {
   argsObject,
@@ -90,14 +89,14 @@ function sessionArgsText(harnesses: readonly string[]): string {
 // row) or connects a session with no row, which the form's showing adds.
 // A session's id is `drive-<pluginId>-<n>` unless the
 // caller names one. `onSessionEnded` hears each session that ends, by its row
-// id. Disposing removes the actions and ends every live session it connected.
+// id. The plugin's stop removes the actions and ends every session connected.
 export function addAgentFormDriveActions<Harness extends string>(deps: {
   host: DriveHost;
   sessions: AgentFormDriveSessions<Harness>;
   sessionDefaults: AgentFormDriveSessionDefaults<Harness>;
   onSessionEnded: (listener: (rowId: string) => void) => void;
   words: AgentFormDriveWords;
-}): Disposable {
+}): void {
   const { host, sessions, sessionDefaults, words } = deps;
   const opened = new Map<string, DriveFormSession>();
   let defaultIds = 0;
@@ -128,73 +127,58 @@ export function addAgentFormDriveActions<Harness extends string>(deps: {
     opened.set(spec.sessionId, session);
     return session;
   };
-  const actions = [
-    host.add(words.openAction, {
-      description: words.openDescription,
-      args: `{ ${sessionArgsText(sessionDefaults.harnesses)}, ${words.formArg}?: object }`,
-      async run(rawArgs) {
-        const args = argsObject(rawArgs);
-        const sessionId =
-          optionalString(args, 'sessionId') ??
-          `drive-${words.pluginId}-${++defaultIds}`;
-        const projectDir = nullableStringOr(
-          args,
-          'projectDir',
-          sessionDefaults.projectDir,
-        );
-        const harness =
-          optionalOneOf(args, 'harness', sessionDefaults.harnesses) ??
-          sessionDefaults.harness;
-        const form =
-          args[words.formArg] === undefined
-            ? words.defaultForm
-            : args[words.formArg];
-        const session = sessionFor({ sessionId, projectDir, harness });
-        const pending: DriveFormSession['latest'] = { state: 'pending' };
-        session.latest = pending;
-        // A form opened after this one stays the latest when this one settles.
-        const settle = (latest: DriveFormSession['latest']) => {
-          if (session.latest === pending) {
-            session.latest = latest;
-          }
-        };
-        openFixtureForm(session.connected, words.openTool, form).then(
-          (result) => settle({ state: 'resolved', result }),
-          (error: unknown) => settle({ state: 'failed', error }),
-        );
-        return { sessionId, rowId: session.connected.session.id };
-      },
-    }),
-    host.add('answers', {
-      description: words.answersDescription,
-      args: '{ sessionId: string }',
-      async run(rawArgs) {
-        const sessionId = requiredString(argsObject(rawArgs), 'sessionId');
-        const session = opened.get(sessionId);
-        if (session === undefined) {
-          throw new Error(
-            `no session ${sessionId} from ${words.pluginId}.${words.openAction}`,
-          );
+  host.add(words.openAction, {
+    description: words.openDescription,
+    args: `{ ${sessionArgsText(sessionDefaults.harnesses)}, ${words.formArg}?: object }`,
+    async run(rawArgs) {
+      const args = argsObject(rawArgs);
+      const sessionId =
+        optionalString(args, 'sessionId') ??
+        `drive-${words.pluginId}-${++defaultIds}`;
+      const projectDir = nullableStringOr(
+        args,
+        'projectDir',
+        sessionDefaults.projectDir,
+      );
+      const harness =
+        optionalOneOf(args, 'harness', sessionDefaults.harnesses) ??
+        sessionDefaults.harness;
+      const form =
+        args[words.formArg] === undefined
+          ? words.defaultForm
+          : args[words.formArg];
+      const session = sessionFor({ sessionId, projectDir, harness });
+      const pending: DriveFormSession['latest'] = { state: 'pending' };
+      session.latest = pending;
+      // A form opened after this one stays the latest when this one settles.
+      const settle = (latest: DriveFormSession['latest']) => {
+        if (session.latest === pending) {
+          session.latest = latest;
         }
-        const { latest } = session;
-        if (latest.state === 'failed') {
-          throw latest.error;
-        }
-        return latest.state === 'resolved' ? latest.result : { pending: true };
-      },
-    }),
-  ];
-  return {
-    dispose() {
-      for (const action of actions) {
-        action.dispose();
-      }
-      for (const session of opened.values()) {
-        if (!session.ended) {
-          session.connected.end();
-        }
-      }
-      opened.clear();
+      };
+      openFixtureForm(session.connected, words.openTool, form).then(
+        (result) => settle({ state: 'resolved', result }),
+        (error: unknown) => settle({ state: 'failed', error }),
+      );
+      return { sessionId, rowId: session.connected.session.id };
     },
-  };
+  });
+  host.add('answers', {
+    description: words.answersDescription,
+    args: '{ sessionId: string }',
+    async run(rawArgs) {
+      const sessionId = requiredString(argsObject(rawArgs), 'sessionId');
+      const session = opened.get(sessionId);
+      if (session === undefined) {
+        throw new Error(
+          `no session ${sessionId} from ${words.pluginId}.${words.openAction}`,
+        );
+      }
+      const { latest } = session;
+      if (latest.state === 'failed') {
+        throw latest.error;
+      }
+      return latest.state === 'resolved' ? latest.result : { pending: true };
+    },
+  });
 }

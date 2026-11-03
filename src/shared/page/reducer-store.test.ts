@@ -89,6 +89,11 @@ describe('createReducerStore', () => {
       expect(disposed).toBe(disposedCalls);
       expect(other).toBe(1);
       expect(() => subscriptions[0].dispose()).not.toThrow();
+
+      store.dispatch(1);
+
+      expect(disposed).toBe(disposedCalls);
+      expect(other).toBe(2);
     },
   );
 

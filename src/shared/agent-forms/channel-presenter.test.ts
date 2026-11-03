@@ -31,16 +31,11 @@ type Invoke = TestChannel['invoke'];
 function fakeChannel(calls: string[]) {
   const handlers: Partial<Invoke> = {};
   const sent: [string, unknown][] = [];
-  // Each channel method named once per `dispose` of its handle.
-  const disposed: string[] = [];
   const channel: MainChannel<TestChannel> = {
     handle: (method, handler) => {
       handlers[method] = handler;
       return {
-        dispose: () => {
-          disposed.push(method);
-          delete handlers[method];
-        },
+        dispose: () => undefined,
       };
     },
     send: (message, data) => {
@@ -52,7 +47,7 @@ function fakeChannel(calls: string[]) {
     method: K,
     ...args: Parameters<Invoke[K]>
   ) => (handlers[method] as (...args: unknown[]) => unknown)(...args);
-  return { channel, sent, invoke, handlers, disposed };
+  return { channel, sent, invoke };
 }
 
 function fakeWindow() {
@@ -79,8 +74,6 @@ function fakeAlerts() {
 // Records row calls into `calls` and keeps the close guards added.
 function fakeSessions(calls: string[]) {
   const guards: ((sessionId: string) => boolean)[] = [];
-  // One entry per `dispose` of a close guard's handle.
-  const guardsDisposed: string[] = [];
   const sessions: AgentFormSessions = {
     mark: (sessionId) => calls.push(`mark ${sessionId}`),
     activateExistingRow: (sessionId) =>
@@ -88,17 +81,14 @@ function fakeSessions(calls: string[]) {
     addCloseGuard: (mayClose) => {
       guards.push(mayClose);
       return {
-        dispose: () => {
-          guardsDisposed.push('close guard');
-          guards.splice(guards.indexOf(mayClose), 1);
-        },
+        dispose: () => undefined,
       };
     },
     release: (sessionId) => calls.push(`release ${sessionId}`),
   };
   const mayClose = (sessionId: string) =>
     guards.every((guard) => guard(sessionId));
-  return { sessions, mayClose, guardsDisposed };
+  return { sessions, mayClose };
 }
 
 function fakeListener() {
@@ -140,7 +130,6 @@ function setUp() {
     attention,
     logged,
     mayClose: tabs.mayClose,
-    guardsDisposed: tabs.guardsDisposed,
     presenter,
     openForms,
     finish,
@@ -149,27 +138,6 @@ function setUp() {
 }
 
 describe('createAgentFormChannelPresenter', () => {
-  it('stops serving the page and guarding session rows once disposed', () => {
-    const { page, mayClose, guardsDisposed, presenter } = setUp();
-    presenter.show({ ...FORM, sessionId: 's1' }, fakeListener().listener);
-
-    presenter.dispose();
-
-    expect(Object.keys(page.handlers)).toEqual([]);
-    expect(mayClose('s1')).toBe(true);
-
-    presenter.dispose();
-
-    expect(Object.keys(page.handlers)).toEqual([]);
-    expect(mayClose('s1')).toBe(true);
-    expect([...page.disposed, ...guardsDisposed].sort()).toEqual([
-      'close guard',
-      'draft',
-      'finish',
-      'openForms',
-    ]);
-  });
-
   it('shows a form on the page and announces it without showing the window', () => {
     const { calls, page, window, attention, logged, presenter } = setUp();
 

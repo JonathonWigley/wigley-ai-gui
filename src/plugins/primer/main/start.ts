@@ -1,5 +1,4 @@
 import path from 'node:path';
-import type { Disposable } from '../../../contracts/disposable';
 import type {
   DriveHost,
   MainApi,
@@ -47,8 +46,8 @@ export function addDriveActions(
   host: DriveHost,
   sessions: Pick<SessionsMainExports, 'connect'>,
   onSessionEnded: (listener: (rowId: string) => void) => void,
-): Disposable {
-  return addAgentFormDriveActions<Harness>({
+): void {
+  addAgentFormDriveActions<Harness>({
     host,
     sessions,
     sessionDefaults: DRIVE_SESSION_DEFAULTS,
@@ -127,22 +126,14 @@ export const primerMainPart: MainPart<typeof primerManifest> = {
       createAgentFormToolSession(primer.startSession(session), primerType),
     );
     services.selfTest?.run(primerSelfTestScript(sessions));
-    const driveActions =
-      api.drive !== null
-        ? addDriveActions(api.drive, sessions, (listener) =>
-            api.events.on('sessions.ended', ({ sessionId }) =>
-              listener(sessionId),
-            ),
-          )
-        : null;
+    if (api.drive !== null) {
+      addDriveActions(api.drive, sessions, (listener) =>
+        api.events.on('sessions.ended', ({ sessionId }) => listener(sessionId)),
+      );
+    }
     return {
       commands: {},
-      dispose: () => {
-        primer.dispose();
-        previewService.dispose();
-        preview.dispose();
-        driveActions?.dispose();
-      },
+      dispose: () => preview.dispose(),
     };
   },
 };

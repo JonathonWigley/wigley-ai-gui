@@ -110,8 +110,8 @@ export interface AgentFormSession<Payload> {
     signal: AbortSignal,
   ): Promise<Payload>;
   collect(wait: boolean, signal: AbortSignal): Promise<Payload>;
-  // The session disconnected: its open form closes and calls still waiting to
-  // open one reject; answers stay saved.
+  // The session disconnected: its open form closes, and every call waiting to
+  // open a form or on an unanswered one rejects; answers stay saved.
   end(): void;
 }
 

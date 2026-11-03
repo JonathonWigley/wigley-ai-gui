@@ -54,8 +54,7 @@ const PREVIEW_SAVED_ROUNDS = 20;
 // preview's rounds go through its quiet view. The agents' service wakes the
 // round's chat session when a round finishes with no call waiting; the
 // preview's wakes nothing. Both services and the preview read `layoutNames`
-// for the layouts a round may name. `dispose` ends every session either service
-// holds.
+// for the layouts a round may name.
 function createForms(
   api: FormsApi,
   sessions: SessionsMainExports,
@@ -64,7 +63,6 @@ function createForms(
 ): {
   forms: FormsService;
   preview: { open(): void } & Disposable;
-  dispose(): void;
 } {
   const { services } = api;
   const store = createFolderFormStore({
@@ -113,10 +111,6 @@ function createForms(
   return {
     forms: withKnownLayouts(agentsService, layoutNames),
     preview,
-    dispose() {
-      agentsService.dispose();
-      previewService.dispose();
-    },
   };
 }
 
@@ -164,8 +158,8 @@ export function addDriveActions(
   host: DriveHost,
   sessions: Pick<SessionsMainExports, 'connect'>,
   onSessionEnded: (listener: (rowId: string) => void) => void,
-): Disposable {
-  return addAgentFormDriveActions<Harness>({
+): void {
+  addAgentFormDriveActions<Harness>({
     host,
     sessions,
     sessionDefaults: DRIVE_SESSION_DEFAULTS,
@@ -195,8 +189,7 @@ export const formsMainPart: MainPart<typeof formsManifest> = {
     const sessions = api.dependency(sessionsMainKey);
     const chat = api.dependency(chatMainKey);
     const layoutNames = () => api.layouts.names();
-    const created = createForms(api, sessions, chat, layoutNames);
-    const { forms, preview } = created;
+    const { forms, preview } = createForms(api, sessions, chat, layoutNames);
     api.channel.handle('openPreview', () => preview.open());
     sessions.contributeTools(FORMS_TOOLS, (session) =>
       createAgentFormToolSession(forms.startSession(session), roundType),
@@ -214,20 +207,15 @@ export const formsMainPart: MainPart<typeof formsManifest> = {
       api.services.log,
     );
     selfTest?.run(formsSelfTestScript(sessions, api.services.userConfig));
-    const driveActions =
-      api.drive !== null
-        ? addDriveActions(api.drive, sessions, (listener) =>
-            api.events.on('sessions.ended', ({ sessionId }) =>
-              listener(sessionId),
-            ),
-          )
-        : null;
+    if (api.drive !== null) {
+      addDriveActions(api.drive, sessions, (listener) =>
+        api.events.on('sessions.ended', ({ sessionId }) => listener(sessionId)),
+      );
+    }
     return {
       commands: {},
       dispose: () => {
-        created.dispose();
         preview.dispose();
-        driveActions?.dispose();
         return layouts.dispose();
       },
     };

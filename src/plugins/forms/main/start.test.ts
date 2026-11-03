@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type { MainPart } from '../../../contracts/plugin';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
@@ -21,11 +24,9 @@ import { addDriveActions, formsMainPart, registerLayoutsAfter } from './start';
 // Sessions whose `ask_round` calls wait until the test answers them.
 function fakeSessions() {
   const connectedInfo: SessionInfo[] = [];
-  const ended: string[] = [];
   const answers: ((result: ToolResult) => void)[] = [];
   return {
     connectedInfo,
-    ended,
     answers,
     connect(info: SessionInfo): ConnectedSession {
       connectedInfo.push(info);
@@ -36,7 +37,7 @@ function fakeSessions() {
           new Promise<ToolResult>((resolve) => {
             answers.push(resolve);
           }),
-        end: () => ended.push(id),
+        end: () => undefined,
       };
     },
   };
@@ -91,7 +92,7 @@ describe('forms drive actions', () => {
     const drive = fakeDriveHost();
     const sessions = fakeSessions();
     const ended = fakeEndedEvent();
-    const actions = addDriveActions(drive.host, sessions, ended.on);
+    addDriveActions(drive.host, sessions, ended.on);
     await drive.run('openRound', { sessionId: 's' });
     await drive.run('openRound', { sessionId: 's' });
     expect(sessions.connectedInfo).toHaveLength(1);
@@ -100,8 +101,6 @@ describe('forms drive actions', () => {
     await drive.run('openRound', { sessionId: 's' });
 
     expect(sessions.connectedInfo).toHaveLength(2);
-    actions.dispose();
-    expect(sessions.ended).toEqual(['row-s']);
   });
 
   it('openRound rejects a field of the wrong type', async () => {
@@ -130,18 +129,6 @@ describe('forms drive actions', () => {
     await expect(drive.run('answers', {})).rejects.toThrow('sessionId');
   });
 
-  it('dispose removes the actions and ends each session forms opened', async () => {
-    const drive = fakeDriveHost();
-    const sessions = fakeSessions();
-    const actions = addDriveActions(drive.host, sessions, fakeEndedEvent().on);
-    await drive.run('openRound', { sessionId: 'a' });
-    await drive.run('openRound', { sessionId: 'b' });
-
-    actions.dispose();
-
-    expect(sessions.ended).toEqual(['row-a', 'row-b']);
-    expect([...drive.actions.keys()]).toEqual([]);
-  });
 });
 
 // A write the test lands or fails, a register that records each registration
@@ -232,6 +219,66 @@ describe('forms main part', () => {
     await harness.stop();
 
     expect(sessions.end).toHaveBeenCalledTimes(1);
+  });
+
+  it('stop closes each open round, releases its row and settles its call with the error', async () => {
+    const homeDir = mkdtempSync(path.join(tmpdir(), 'wigley-forms-stop-'));
+    const released: string[] = [];
+    const spied: MainPart<typeof formsManifest> = {
+      manifest: formsMainPart.manifest,
+      start: (api) =>
+        formsMainPart.start({
+          ...api,
+          dependency: ((key: typeof sessionsMainKey) => {
+            const provided = api.dependency(key);
+            return key === sessionsMainKey
+              ? {
+                  ...provided,
+                  release(sessionId: string) {
+                    released.push(sessionId);
+                    provided.release(sessionId);
+                  },
+                }
+              : provided;
+          }) as typeof api.dependency,
+        }),
+    };
+    const harness = startMainPart(spied, {
+      parts: [sessionsMainPart],
+      dependencies: [fakeChat],
+      drive: true,
+      services: {
+        homeDir,
+        alerts: { announce() {}, setOpenCount() {} },
+      },
+    });
+    const answers = harness.drive?.actions.get('answers');
+    await harness.drive?.run('openRound', { sessionId: 'a' });
+    await harness.drive?.run('openRound', { sessionId: 'b' });
+    const shown = harness.sent
+      .filter((sent) => sent.message === 'formShown')
+      .map((sent) => sent.data as { formId: string; sessionId: string });
+    expect(shown).toHaveLength(2);
+
+    await harness.stop();
+
+    expect(
+      harness.sent.filter((sent) => sent.message === 'formClosed'),
+    ).toEqual(
+      expect.arrayContaining(
+        shown.map(({ formId }) => ({
+          message: 'formClosed',
+          data: { formId, byFinish: false },
+        })),
+      ),
+    );
+    expect([...released].sort()).toEqual(
+      shown.map(({ sessionId }) => sessionId).sort(),
+    );
+    expect([...(harness.drive?.actions.keys() ?? [])]).toEqual([]);
+    await expect(answers?.run({ sessionId: 'a' })).rejects.toThrow(/ask_round/);
+    await expect(answers?.run({ sessionId: 'b' })).rejects.toThrow(/ask_round/);
+    rmSync(homeDir, { recursive: true, force: true });
   });
 
   it('stop before the fixture write lands registers no layout', async () => {
