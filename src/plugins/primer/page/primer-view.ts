@@ -437,7 +437,8 @@ function isBoxShown(state: PrimerState, box: PrimerBox): boolean {
   return hasBox(shownBoxes(state), box);
 }
 
-// Whether the box's primer view draws it, focused or not.
+// Whether a drop on the box's primer view may type into it: drawn by the view,
+// and not under the cancel prompt.
 function isBoxInPrimerView(state: PrimerState, box: PrimerBox): boolean {
   return hasBox(primerViewBoxes(state, box.primerId), box);
 }

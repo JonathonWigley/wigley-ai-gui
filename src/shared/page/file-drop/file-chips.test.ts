@@ -45,6 +45,19 @@ describe('fileChipsIn', () => {
     },
     { text: '/a/b"c/d.md', paths: posixPaths, chips: [] },
     { text: 'x /a/"b"/c/d', paths: posixPaths, chips: [] },
+    // A quote stuck to the text before it still opens a quoted chip.
+    {
+      text: '("/a/b c.md")',
+      paths: posixPaths,
+      chips: [[1, 12, '/a/b c.md', 'b c.md']],
+    },
+    {
+      text: 'see:"/a/b/c.md"',
+      paths: posixPaths,
+      chips: [[4, 15, '/a/b/c.md', 'c.md']],
+    },
+    { text: 'x"/a/b"', paths: posixPaths, chips: [[1, 7, '/a/b', 'b']] },
+    { text: 'C:\\a\\b"c\\d', paths: windowsPaths, chips: [] },
     {
       text: 'C:\\Users\\me\\a.png',
       paths: windowsPaths,

@@ -480,11 +480,25 @@ describe('note popup', () => {
   it.each([
     {
       change: 'popup closed',
-      act: (harness: Harness) => harness.popup.commands.close(),
+      act: (harness: Harness) => {
+        harness.popup.commands.close();
+        return Promise.resolve();
+      },
     },
     {
       change: 'send started',
-      act: (harness: Harness) => harness.popup.commands.sendFollowup(),
+      act: (harness: Harness) => {
+        harness.popup.commands.sendFollowup();
+        return Promise.resolve();
+      },
+    },
+    {
+      change: 'popup reopened on its draft',
+      act: async (harness: Harness) => {
+        harness.popup.commands.close();
+        harness.popup.commands.open();
+        await settle();
+      },
     },
   ])(
     'take_StateChangedDuringSave_ToastsPathsInsertsNothing ($change)',
@@ -494,18 +508,19 @@ describe('note popup', () => {
         target: '/home/me/a',
         title: 'A note',
       });
-      harness.fakes.savePasted = () => {
-        act(harness);
-        return Promise.resolve(PASTED_PATH);
+      harness.fakes.savePasted = async () => {
+        await act(harness);
+        return PASTED_PATH;
       };
 
       harness.take([droppedFile('n.txt', 'text/plain', '')]);
+      await settle();
       await settle();
 
       expect(harness.inserts).toEqual([]);
       expect(
         harness.toasts.filter(([text]) => text.includes(PASTED_PATH)),
-      ).toHaveLength(1);
+      ).toEqual([[expect.stringContaining(PASTED_PATH), 'info']]);
     },
   );
 

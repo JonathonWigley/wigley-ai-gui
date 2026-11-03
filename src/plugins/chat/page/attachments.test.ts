@@ -293,29 +293,40 @@ describe('takeChatFiles', () => {
   );
 
   // A take of [v.mp4 on disk, `closing`, a pasted n.txt, a GIF], where
-  // `closing` closes the session while it is read or saved.
+  // `closing` closes the session while it is read or saved; with
+  // `closesLast`, the take ends at `closing`.
   it.each([
     {
       label: 'an image read as the session closes',
       closing: 'a.png',
+      closesLast: false,
       saveError: undefined,
       saved: [],
     },
     {
       label: 'a pasted file saved as the session closes',
       closing: 't.txt',
+      closesLast: false,
       saveError: undefined,
       saved: ['t.txt'],
     },
     {
       label: 'a pasted file whose save fails as the session closes',
       closing: 't.txt',
+      closesLast: false,
       saveError: new Error('disk full'),
+      saved: ['t.txt'],
+    },
+    {
+      label: 'the last file saved as the session closes',
+      closing: 't.txt',
+      closesLast: true,
+      saveError: undefined,
       saved: ['t.txt'],
     },
   ])(
     'takeChatFiles_SessionClosesMidTake_TakesNoMore: $label',
-    async ({ closing, saveError, saved }) => {
+    async ({ closing, closesLast, saveError, saved }) => {
       const taken = recordingDeps({ saveError });
       const savePasted = taken.deps.savePasted;
       taken.deps.savePasted = (file) => {
@@ -334,8 +345,7 @@ describe('takeChatFiles', () => {
       const files = [
         fileOf('v.mp4', 'video/mp4', '/d/v.mp4'),
         closing === 'a.png' ? closingImage : fileOf('t.txt', 'text/plain', ''),
-        fileOf('n.txt', 'text/plain', ''),
-        gifAfter,
+        ...(closesLast ? [] : [fileOf('n.txt', 'text/plain', ''), gifAfter]),
       ];
 
       await takeChatFiles(files, taken.deps);
