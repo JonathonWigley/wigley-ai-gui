@@ -60,7 +60,10 @@ import {
 // - order: live folds in the order the harness wrote and read, a log in the
 //   order the host saw, so an `in` and an `out` line can swap. Two cases read
 //   that order: fallback mode's turn end, and an interrupt that crosses its
-//   turn's `result`. The final activity and `graceDeadline` agree either way.
+//   turn's `result`. An interrupt's final activity and `graceDeadline` agree
+//   either way; fallback mode's turn end can read working in a replay where live
+//   read idle, until the next `init`;
+// - what a replay leaves out: the refusal of a host request and `messageDropped`.
 
 // How long an interrupt waits for the turn to end before the session shows
 // idle.

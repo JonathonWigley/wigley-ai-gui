@@ -130,11 +130,9 @@ interview on 2026-10-23; this file is the record of both.
   calls, so Claude's undocumented transcript format stays in the adapter. A line it cannot read becomes a raw entry.
 - Slash commands typed in the chat run as in the terminal (`/model`, `/compact`, `/wigley:feature …`), except the
   app slash commands, which the app runs itself (§ Chat plugin).
-- **Commands**: `AgentProcessEvents.commands` reports the session's commands and skills as `AgentCommand` records
-  (`name`, `description`, `argumentHint`, `aliases`), names without a leading `/`. The Claude adapter reports them
-  from each `init` event's `slash_commands` and `skills`, so the list waits for the first message. Each later `init`
-  replaces the list: a name it lists that matches an earlier record's name or alias keeps that record, and a new name
-  gets a record with empty text.
+- **Commands**: `AgentProcessEvents.commands` reports the session's commands and skills as names without a leading `/`. The Claude adapter
+  reports them from each `init` event's `slash_commands` and `skills`, so the list waits for the first message. Each
+  later `init` replaces the list.
 - **Messages carry images**: `AgentProcess.send` takes `{ text, images }`, each image `{ mediaType, data }` (base64,
   no `data:` prefix), and the `user` chat entry carries the same `images`. Claude sends them as `image` content blocks
   before the text block (`claude-stream.md` § Images); a resumed transcript's image blocks come back as the user
@@ -313,7 +311,9 @@ interview on 2026-10-23; this file is the record of both.
 - **Saved sessions**: every session chat runs — started, resumed, or launched by another plugin — is saved in
   `open-sessions.json` in chat's plugin data: its host session id, folder and profile, its `titles` (the user, agent
   and first-message titles; a file without them reads as untitled), its active time in ms (`activeMs`, the session
-  clock's total at the save, `docs/features/session-clock/design.md`; a file without it reads as 0), in row order, with the selected
+  clock's total at the save, `docs/features/session-clock/design.md`; a file without it reads as 0), its last process's
+  id, the controls and resume flag that process launched with, and its unsent queued messages with their images (a file
+  without them reads as none), in row order, with the selected
   row (null when it names no row chat still holds), whether a message was ever sent, and whether a turn was running. A
   new, resumed or launched session is saved only after its process starts, so a start that fails leaves no record. Only
   the user closing its row removes a record; quit, `install-app`, a process exit and a chat plugin reload keep it.

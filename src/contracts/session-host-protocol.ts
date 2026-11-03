@@ -1,11 +1,7 @@
-import type {
-  HostedExit,
-  HostedSpawn,
-  PipeDirection,
-  PipeLine,
-} from './session-host';
+import type { HostedExit, HostedSpawn, PipeLine } from './session-host';
 
-// The version of the wire between an app and its session host, newline JSON.
+// The version of the wire between an app and its session host, newline JSON. Any
+// shape change below that an app and a host both read needs a bump, once one has shipped.
 export const SESSION_HOST_PROTOCOL = 1;
 
 // Frozen: never change this shape. Asks a host for its protocol version.
@@ -40,14 +36,14 @@ export interface ListReply {
   requestId: number;
   processes: ListedProcess[];
 }
-// Frozen: never change this shape. Tells a host to drain; it carries nothing and gets no reply.
+// Frozen: never change this shape, or that it gets no reply. Tells a host to drain; it carries nothing.
 export interface DrainMessage {
   type: 'drain';
 }
 // Frozen: never change this shape. One line of a pipe log file, one JSON object per line: a `PipeLine` as stored.
 export interface PipeLogRecord {
   seq: number;
-  dir: PipeDirection;
+  dir: 'in' | 'out' | 'err';
   at: number;
   text: string;
 }

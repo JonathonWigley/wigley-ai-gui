@@ -55,7 +55,8 @@ ends a turn; it falls back to the resting row and `--resume`, as before this fea
   on stdin or stdout, so an unknown line keeps a process alive rather than ending it mid-turn. A bookkeeping line
   leaves the state alone. While no app is connected, an idle process is ended once the keep window has passed since
   the later of its turn end and the app's last disconnect: stdin closed, then SIGTERM after a 3 s grace, then SIGKILL after 3 s more. The app sends
-  the window (`chat.keepIdleMinutes`, default 60, the prompt cache's life) on connect and on each change.
+  the window (`chat.keepIdleMinutes`, default 60, the prompt cache's life) on connect and on each change. The host sees
+  only pipe lines, so a background shell that stays silent past the window ends with its process.
 - The host's folder is `session-host/` in the app instance's user data folder (the self-test's: in its temporary
   home, deleted at its teardown): the pipe logs in `logs/`, the channel's record `host-v<protocol>.json` and the
   host's own log. A pipe log is deleted when its process closes; a host that starts also deletes each log it holds no
@@ -88,7 +89,8 @@ lines past the last `seq` it read.
 - The harness keeps a session's state as a pure fold over its pipe lines, both directions. Live, each line the
   harness writes and each line it reads goes through the fold, and the fold's effects (writes, timers, events) run.
   On attach the fold replays the log with its effects off, then goes live. Replay and live share one fold, so they
-  agree except for what no pipe line records (a notice the app made from a call, such as "Interrupted again").
+  agree except for what no pipe line records (a notice the app made from a call, such as "Interrupted again") and the
+  order of an `in` and an `out` line that crossed.
 - A re-attached row shows the transcript up to its process's start time, then the replayed entries, so no entry
   shows twice: transcript entries and live entries have different ids.
 - A row whose process runs but cannot be attached — it lives in another protocol's host, the host list timed out, the

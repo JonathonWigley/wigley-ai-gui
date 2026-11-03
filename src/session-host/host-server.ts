@@ -52,6 +52,7 @@ const CLIENT_MESSAGE_TYPES: ReadonlySet<unknown> = new Set<
   'stopAll',
 ]);
 // Another host's probe or an older-host check sends only these, and never counts as a client.
+// Frozen with the messages it names, since an app drains or lists any older host.
 const NON_CLIENT_MESSAGE_TYPES: ReadonlySet<ClientMessage['type']> = new Set([
   'hello',
   'list',
