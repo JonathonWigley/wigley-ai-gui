@@ -18,7 +18,8 @@ the rule for which key an action takes.
 
 A user's request to change how the app looks or behaves goes into the repo's built-in `default` layout (and the
 contract or kit part when the look needs one), because the user is the app's only user and wants every change in the
-shipped app. A user layout in `~/.config/wigley-ai-gui/layouts/<owner>/<name>/` is written only when the user asks for
+shipped app. Both apps read each `default`'s `layout.js` and `layout.css` live from the repo clone, so the edit shows
+at once with no rebuild; CSS for parts the app draws itself still ships only with a rebuild. A user layout in `~/.config/wigley-ai-gui/layouts/<owner>/<name>/` is written only when the user asks for
 one. `settings.json` can still pick a user layout for an owner (`"<plugin>": { "layout": "<name>" }`, or the core
 `shell.layout`), which hides a `default` change from the user's screen: check it before the change, apply the change
 to that layout too, and name it in the report.
@@ -583,7 +584,8 @@ round; primer: an open primer), since main, not the page, decides.
   scripts and styles; `revision` sits in the URL's path, so a changed module and every relative import under it load
   fresh. The scheme serves plugin data only: layouts load on their own `wigley-layout:` scheme.
 - **A layout** is an owner's user-editable look; the owner is a plugin or the shell. Layouts live in the user config
-  folder, `layouts/<owner>/<name>/layout.js` with an optional `layout.css`, shared by the stable and dev apps. Main's
+  folder, `layouts/<owner>/<name>/layout.js` with an optional `layout.css`, shared by the stable and dev apps; each
+  owner's built-in `default` is read live from the repo clone (`docs/features/layouts/design.md` § Live defaults). Main's
   core LayoutService watches that folder and announces each owner's set of layouts, each with its own revision, so
   saving one reloads only that one. A plugin's main part registers its contract text with `api.layouts.register` and its
   page part draws with `api.layouts.show`, handing over its built-in `default` layout, its reader and its setting; the

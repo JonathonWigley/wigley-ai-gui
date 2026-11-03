@@ -5,6 +5,7 @@
 - **Intent** — every surface of the app draws through a user-editable layout.
 - **Shape** — the core layout service, the page host, and what each adopter supplies.
 - **Folder and settings** — where layout files live and how one is picked.
+- **Live defaults** — each built-in `default` read from the repo clone and reloaded live, the bundled copy as fallback.
 - **What a layout draws** — the parts a layout owns and the pieces the app keeps.
 - **Adopters** — every surface, its setting and its parts.
 - **Previews** — the `Space z l` samples for views that need agent data.
@@ -32,6 +33,10 @@ app and shown in the stable app with no copy.
          · fall back to default on a throw · data-layout root · stylesheet link · redraw on reload
               │
    owner (a plugin, or the shell) supplies: contract text (layout.d.ts), default layout, reader, kit
+
+ <repo clone>/src/plugins/<id>/layouts/default/   (the shell: src/renderer/shell/layouts/default/)
+              │ watched beside the user folder; served as `<owner>/default/` on the same scheme
+              └─▶ the live default, drawn over the bundled default, which stays the fallback
 ```
 
 - **One core service.** The layouts folder is core-owned, like `settings.json` and `themes/`, so main's
@@ -44,7 +49,8 @@ app and shown in the stable app with no copy.
   and its kit parts. Every owner's kit extends the host's `BaseKit` (`kit.d.ts`), whose
   members every layout can use.
 - **The owner's contract** is its `layouts/layout.d.ts`; its built-in `default` is `layouts/default/layout.js`,
-  plain JS under `// @ts-check`. A user layout defines only the parts it changes.
+  plain JS under `// @ts-check`, with its look in `layouts/default/layout.css`. A user layout defines only the parts
+  it changes.
 
 ## Folder and settings
 
@@ -56,6 +62,27 @@ app and shown in the stable app with no copy.
 - Each owner has its own setting naming its layout: `<plugin>.layout` for a plugin, the core setting `shell.layout`
   for the shell, `default` when unset. Forms keeps its per-round and per-item `layout` fields over its setting.
 - The old plugin data `layouts/` folders are not read. They held only generated `layout.d.ts` files.
+
+## Live defaults
+
+The user changes a built-in `default` the same way as a user layout: edit its files, and the running app redraws.
+Both the stable and the dev app read each owner's `default` from the repo clone's working tree, so an uncommitted
+edit shows at once, and the committed edit ships as the next build's bundled copy.
+
+- **The clone.** `npm run install-app` bakes the clone's path into the stable build; the dev app reads its own repo.
+  Whatever branch the clone has checked out is what shows.
+- **The folder.** A plugin's default is `src/plugins/<id>/layouts/default/` in the clone, derived from its plugin id;
+  the shell names `src/renderer/shell/layouts/default/` when it registers. A user folder named `default` stays
+  ignored.
+- **Reload.** Main watches each owner's default folder beside its user folder, and a saved `layout.js` or
+  `layout.css` raises the default's revision like any layout's; the page loads it on the same `wigley-layout:`
+  scheme, as `<owner>/default/`, and redraws.
+- **CSS.** A default's `layout.css` holds the rules for what that layout draws, and loads through the same
+  stylesheet link as a user layout's. The bundled copy of that file ships as a file the loader links while no live
+  default is loaded, and the loader swaps it for the live one, so a rule deleted live is gone. CSS for parts the app
+  draws itself (slots, panes, editors, text boxes) stays in the plugin's page CSS and still needs a rebuild.
+- **Fallback.** A missing clone, a default that fails to load or read, and a part that throws or is missing all draw
+  the bundled default, with the same toast a failed user layout raises.
 
 ## What a layout draws
 
@@ -141,6 +168,11 @@ can be iterated in place. The sample sends nothing and raises no notification or
   owner.
 - **CSS stays inside the layout's root.** Restyling a primitive app-wide from a layout is out of scope: themes carry
   the app-wide look, and a layout rule selects under its own `data-layout` root.
+- **Defaults load live from the repo clone, not a config override.** The user is the app's only user and wants every
+  look change in the shipped app, so the repo edit is the live edit and the shipped edit, with no second copy to
+  carry over. The bundled copy keeps the app drawing when the clone is missing or broken.
+- **Only a layout's own look reloads live.** App-drawn parts keep their CSS in the page bundle: a part that needs a
+  live look becomes a layout part, rather than gaining a second live path for plugin CSS.
 
 ## Out of scope
 
