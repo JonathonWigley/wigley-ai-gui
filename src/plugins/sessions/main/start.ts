@@ -28,6 +28,7 @@ import {
 } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { sessionsManifest } from '../manifest';
+import { titleLimit } from '../session-title';
 import { serveMcp } from './mcp/mcp-server';
 import {
   channelPath,
@@ -58,6 +59,13 @@ function createList(api: SessionsApi): SessionList {
   api.channel.handle('activate', (sessionId) => list.activate(sessionId));
   api.channel.handle('closeSession', (sessionId) =>
     list.closeSession(sessionId),
+  );
+  api.channel.handle('setUserTitle', (sessionId, title) =>
+    list.setUserTitle(
+      sessionId,
+      title,
+      titleLimit(api.settings().titleMaxLength),
+    ),
   );
   return list;
 }
@@ -243,6 +251,9 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
       selectedSessionId: () => list.selectedSessionId(),
       label: (sessionId) => list.label(sessionId),
       addCloseGuard: (mayClose) => list.addCloseGuard(mayClose),
+      setTitle: (sessionId, source, title) =>
+        list.setTitle(sessionId, source, title),
+      titles: (sessionId) => list.titles(sessionId),
     };
     const driveActions =
       api.drive !== null

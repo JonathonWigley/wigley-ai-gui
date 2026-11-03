@@ -22,6 +22,16 @@ export const DRIVE_SESSION_DEFAULTS = {
   deadlineSeconds: null;
 };
 
+// Every source a session title comes from, in the order the row prefers them:
+// the user's rename, the agent's `set_session_title`, the first message.
+export const TITLE_SOURCES = ['user', 'agent', 'firstMessage'] as const;
+
+export type TitleSource = (typeof TITLE_SOURCES)[number];
+
+// A session's title from each source, each normalized; null where that source
+// set none.
+export type SessionTitles = Record<TitleSource, string | null>;
+
 // What a form source knows about the session it serves.
 export interface SessionInfo {
   sessionId: string | null;
@@ -144,6 +154,14 @@ export interface SessionsMainExports {
   // while any answers false; once every guard allows, the row goes and
   // `closed` is emitted. A session that ends loses its row regardless.
   addCloseGuard(mayClose: (sessionId: string) => boolean): void;
+  // Stores the source's title, normalized, or clears it for null or a string
+  // that normalizes to empty; checks no limit, which callers own. A changed
+  // value sends the state when the session has a row and emits `titleChanged`
+  // either way. A session not connected is logged and ignored.
+  setTitle(sessionId: string, source: TitleSource, title: string | null): void;
+  // A copy of the session's titles, kept while its row is closed; null for a
+  // session not connected.
+  titles(sessionId: string): SessionTitles | null;
 }
 
 // `closed` is the user closing a row every guard allowed; the session itself
@@ -152,17 +170,21 @@ export interface SessionsMainExports {
 // an activate or mark that selects, or the selected row closing or ending.
 // `hostSessionChanged` is an owned session moved to a new host id, emitted
 // after the state that carries it, with the session's info already updated.
+// `titleChanged` is a session's titles changing, after the state that carries
+// them when the session has a row.
 export interface SessionsMainEvents extends EventShape {
   connected: AgentSession;
   ended: { sessionId: string };
   closed: { sessionId: string };
   selected: { sessionId: string | null };
   hostSessionChanged: AgentSession;
+  titleChanged: { sessionId: string; titles: SessionTitles };
 }
 
 // One connected session's sidebar row. `marked` is a form not yet opened;
 // `projectDir`, `hostSessionId` and `harness` are the session's info, fixed at
 // connect, `hostSessionId` also changed by the owner through `setHostSessionId`.
+// `titles` are the session's titles, kept across a host id change.
 export interface SessionRow {
   sessionId: string;
   label: string;
@@ -170,6 +192,7 @@ export interface SessionRow {
   marked: boolean;
   projectDir: string | null;
   hostSessionId: string | null;
+  titles: SessionTitles;
 }
 
 export interface SessionsState {
@@ -180,11 +203,14 @@ export interface SessionsState {
 // `closeSession` returns whether the row closed: false when a close guard kept
 // it or main holds no such row; the session stays connected either way.
 // `activated` arrives before the `stateChanged` the activation causes.
+// `setUserTitle` sets the user title, a string that normalizes to empty or
+// null clearing it; it throws a title past `sessions.titleMaxLength`.
 export interface SessionsChannel extends ChannelShape {
   invoke: {
     state(): SessionsState;
     activate(sessionId: string): void;
     closeSession(sessionId: string): boolean;
+    setUserTitle(sessionId: string, title: string | null): void;
   };
   messages: { stateChanged: SessionsState; activated: { sessionId: string } };
 }

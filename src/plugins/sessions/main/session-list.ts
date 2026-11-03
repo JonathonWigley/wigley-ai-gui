@@ -11,11 +11,13 @@ import type {
   SessionsMainExports,
   SessionRow,
   SessionsState,
+  SessionTitles,
   ToolCallContext,
   ToolDefinition,
   ToolResult,
   ToolSession,
 } from '../contract';
+import { normalizedTitle, titleProblem } from '../session-title';
 
 export interface SessionListDeps {
   randomHex: RandomHex;
@@ -33,6 +35,13 @@ export interface SessionList extends SessionsMainExports {
   // The user's close, which every close guard must allow; returns whether the
   // row closed, emitting `closed` when it did. The session stays connected.
   closeSession(sessionId: string): boolean;
+  // The user's rename at `maxLength`: a title that normalizes to empty, or
+  // null, clears the user title; one with a `titleProblem` throws its text.
+  setUserTitle(
+    sessionId: string,
+    title: string | null,
+    maxLength: number,
+  ): void;
 }
 
 interface Contribution {
@@ -58,6 +67,8 @@ interface SessionEntry {
   // Host ids an owned session moved away from; a relay saying hello with one
   // is refused.
   retiredHostIds: Set<string>;
+  // The source of the row's titles, kept while the row is closed.
+  titles: SessionTitles;
 }
 
 const NO_FOLDER_LABEL = 'session';
@@ -99,6 +110,7 @@ function rowOf(entry: SessionEntry): SessionRow {
     marked: false,
     projectDir: info.projectDir,
     hostSessionId: info.sessionId,
+    titles: { ...entry.titles },
   };
 }
 
@@ -154,7 +166,8 @@ function routeCall(
 // act on; `closeSession` logs and keeps a row a close guard refuses, returning
 // false for every row it leaves open, and emits `closed` for a row it closes.
 // Every state sent with a selection other than the last sent emits `selected`
-// after it.
+// after it. Each session's titles live on its entry, copied onto its row, and
+// last while the session does.
 export function createSessionList(deps: SessionListDeps): SessionList {
   const contributions: Contribution[] = [];
   const closeGuards: ((sessionId: string) => boolean)[] = [];
@@ -164,7 +177,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
   let selectedSessionId: string | null = null;
 
   const state = (): SessionsState => ({
-    rows: rows.map((row) => ({ ...row })),
+    rows: rows.map((row) => ({ ...row, titles: { ...row.titles } })),
     selectedSessionId,
   });
   // The selected id the last `selected` carried; null before any.
@@ -244,6 +257,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       owned,
       joinedBy: null,
       retiredHostIds: new Set(),
+      titles: { user: null, agent: null, firstMessage: null },
     };
     entries.set(session.id, entry);
     rows.push(rowOf(entry));
@@ -284,6 +298,29 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     }
     deps.log('sessions', `owned session ${appId} now host ${newHostId}`);
     deps.emit('hostSessionChanged', entry.session);
+  };
+
+  const setTitle: SessionsMainExports['setTitle'] = (
+    sessionId,
+    source,
+    title,
+  ) => {
+    const entry = entries.get(sessionId);
+    if (entry === undefined) {
+      deps.log('sessions', `setTitle for unknown session ${sessionId} ignored`);
+      return;
+    }
+    const value = title === null ? null : normalizedTitle(title) || null;
+    if (entry.titles[source] === value) {
+      return;
+    }
+    entry.titles[source] = value;
+    const index = rowIndex(sessionId);
+    if (index !== -1) {
+      rows[index].titles = { ...entry.titles };
+      sendState();
+    }
+    deps.emit('titleChanged', { sessionId, titles: { ...entry.titles } });
   };
 
   // The relay's handle on an owned session, taking the join from any older
@@ -469,6 +506,19 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     label(sessionId) {
       const entry = entries.get(sessionId);
       return entry === undefined ? null : labelOf(entry);
+    },
+    setTitle,
+    titles(sessionId) {
+      const entry = entries.get(sessionId);
+      return entry === undefined ? null : { ...entry.titles };
+    },
+    setUserTitle(sessionId, title, maxLength) {
+      const isClearing = title === null || normalizedTitle(title) === '';
+      const problem = isClearing ? null : titleProblem(title, maxLength);
+      if (problem !== null) {
+        throw new Error(problem);
+      }
+      setTitle(sessionId, 'user', title);
     },
     tools: () => contributions.flatMap((contribution) => contribution.tools),
     state,

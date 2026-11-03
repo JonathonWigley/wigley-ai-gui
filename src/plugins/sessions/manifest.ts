@@ -70,12 +70,17 @@ export const sessionsManifest = definePlugin({
     },
   },
   scopes: { idle: 'Sessions', picker: 'In the sessions pane picker' },
-  settings: { layout: 'default' },
+  settings: { layout: 'default', titleMaxLength: 40 },
   settingInfo: {
     layout: {
       label: 'Layout',
       description:
         "The sessions layout Sessions mode's side bar, panes and tab bars draw in: a folder name in sessions' layouts folder, or default.",
+    },
+    titleMaxLength: {
+      label: 'Title length',
+      description:
+        'The most characters a session title may hold; longer titles from the agent or the rename dialog are refused, and a first-message title is cut.',
     },
   },
   themeTokens: {},

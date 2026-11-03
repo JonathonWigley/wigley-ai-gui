@@ -5,6 +5,7 @@ import type {
   Harness,
   SessionInfo,
   SessionsState,
+  SessionTitles,
   ToolCallContext,
   ToolDefinition,
   ToolResult,
@@ -33,6 +34,12 @@ function owned(hostId: string, projectDir = '/work/x'): SessionInfo {
 const CONTEXT: ToolCallContext = {
   toolUseId: null,
   signal: new AbortController().signal,
+};
+
+const NO_TITLES: SessionTitles = {
+  user: null,
+  agent: null,
+  firstMessage: null,
 };
 
 function tool(name: string): ToolDefinition {
@@ -205,6 +212,7 @@ describe('createSessionList', () => {
           marked: false,
           projectDir: '/work/x',
           hostSessionId: null,
+          titles: NO_TITLES,
         },
         {
           sessionId: '00000002',
@@ -213,6 +221,7 @@ describe('createSessionList', () => {
           marked: false,
           projectDir: '/work/x',
           hostSessionId: null,
+          titles: NO_TITLES,
         },
       ],
       selectedSessionId: null,
@@ -445,6 +454,7 @@ describe('createSessionList', () => {
           marked: false,
           projectDir: '/work/x',
           hostSessionId: null,
+          titles: NO_TITLES,
         },
       ],
       selectedSessionId: '00000002',
@@ -562,6 +572,7 @@ describe('createSessionList', () => {
           marked: false,
           projectDir: '/work/x',
           hostSessionId: 'host-1',
+          titles: NO_TITLES,
         },
       ],
       selectedSessionId: '00000001',
@@ -730,6 +741,7 @@ describe('createSessionList', () => {
     const contribution = fakeContribution();
     list.contributeTools([tool('a')], contribution.start);
     const ownedSession = list.open(owned('a'));
+    list.setTitle(ownedSession.session.id, 'agent', 'Fix login');
     const sentBefore = states.length;
     const callsBefore = calls.length;
 
@@ -737,6 +749,11 @@ describe('createSessionList', () => {
 
     expect(states).toHaveLength(sentBefore + 1);
     expect(states.at(-1)?.rows.map((row) => row.hostSessionId)).toEqual(['b']);
+    expect(states.at(-1)?.rows[0].titles).toEqual({
+      ...NO_TITLES,
+      agent: 'Fix login',
+    });
+    expect(list.titles(ownedSession.session.id)?.agent).toBe('Fix login');
     expect(calls.slice(callsBefore)).toEqual([
       'stateChanged',
       'emit hostSessionChanged',
@@ -905,6 +922,152 @@ describe('createSessionList', () => {
     list.closeSession(id);
     expect(list.closeSession(id)).toBe(false);
     expect(closedEvents()).toHaveLength(1);
+  });
+
+  it('setTitle_ChangedTitle_StoresItNormalizedSendsStateThenEmitsOnce', () => {
+    const { list, states, emitted, calls } = setUp();
+    const { session } = list.connect(info('/work/x'));
+    const callsBefore = calls.length;
+
+    list.setTitle(session.id, 'agent', '  Fix  login\nbug ');
+
+    const expected = { ...NO_TITLES, agent: 'Fix login bug' };
+    expect(calls.slice(callsBefore)).toEqual([
+      'stateChanged',
+      'emit titleChanged',
+    ]);
+    expect(states.at(-1)?.rows[0].titles).toEqual(expected);
+    expect(list.titles(session.id)).toEqual(expected);
+    expect(emitted.at(-1)).toEqual([
+      'titleChanged',
+      { sessionId: session.id, titles: expected },
+    ]);
+  });
+
+  it.each<{ name: string; title: string | null }>([
+    { name: 'the same title', title: 'Fix login' },
+    { name: 'the same title before normalizing', title: ' Fix   login ' },
+  ])('setTitle_Unchanged_SendsAndEmitsNothing: $name', ({ title }) => {
+    const { list, calls } = setUp();
+    const { session } = list.connect(info('/work/x'));
+    list.setTitle(session.id, 'agent', 'Fix login');
+    const callsBefore = calls.length;
+
+    list.setTitle(session.id, 'agent', title);
+
+    expect(calls.slice(callsBefore)).toEqual([]);
+  });
+
+  it.each<{ name: string; title: string | null }>([
+    { name: 'null', title: null },
+    { name: 'a title that normalizes to empty', title: ' \n ' },
+  ])('setTitle_Cleared_ClearsOnlyThatSource: $name', ({ title }) => {
+    const { list, emitted } = setUp();
+    const { session } = list.connect(info('/work/x'));
+    list.setTitle(session.id, 'user', 'Mine');
+    list.setTitle(session.id, 'agent', 'Theirs');
+
+    list.setTitle(session.id, 'user', title);
+
+    const expected = { ...NO_TITLES, agent: 'Theirs' };
+    expect(list.state().rows[0].titles).toEqual(expected);
+    expect(emitted.at(-1)).toEqual([
+      'titleChanged',
+      { sessionId: session.id, titles: expected },
+    ]);
+  });
+
+  it('setTitle_UnknownOrEndedSession_LogsAndIgnores', () => {
+    const { list, states, emitted, logged } = setUp();
+    const connected = list.connect(info('/work/x'));
+    connected.end();
+    const lengthsBefore = [states.length, emitted.length];
+
+    list.setTitle('ffffffff', 'agent', 'X');
+    list.setTitle(connected.session.id, 'agent', 'X');
+
+    expect([states.length, emitted.length]).toEqual(lengthsBefore);
+    expect(logged.slice(-2)).toEqual([
+      expect.stringMatching(/setTitle .*ffffffff/),
+      expect.stringMatching(/setTitle .*00000001/),
+    ]);
+    expect(list.titles(connected.session.id)).toBeNull();
+  });
+
+  it('setTitle_RowClosedByUser_EmitsWithNoStateAndMarkBringsTheTitleBack', () => {
+    const { list, states, emitted } = setUp();
+    const { session } = list.connect(info('/work/x'));
+    list.closeSession(session.id);
+    const sentBefore = states.length;
+
+    list.setTitle(session.id, 'agent', 'X');
+
+    expect(states).toHaveLength(sentBefore);
+    expect(emitted.at(-1)).toEqual([
+      'titleChanged',
+      { sessionId: session.id, titles: { ...NO_TITLES, agent: 'X' } },
+    ]);
+
+    list.mark(session.id);
+
+    expect(list.state().rows[0].titles.agent).toBe('X');
+  });
+
+  it('state_RowTitlesMutated_LeavesMainsTitlesAlone', () => {
+    const { list } = setUp();
+    const { session } = list.connect(info('/work/x'));
+    list.setTitle(session.id, 'agent', 'X');
+
+    list.state().rows[0].titles.agent = 'changed';
+    const titles = list.titles(session.id);
+    if (titles !== null) {
+      titles.user = 'changed';
+    }
+
+    expect(list.state().rows[0].titles).toEqual({ ...NO_TITLES, agent: 'X' });
+    expect(list.titles(session.id)).toEqual({ ...NO_TITLES, agent: 'X' });
+  });
+
+  it.each<{
+    name: string;
+    title: string | null;
+    maxLength: number;
+    expected: string | null | Error;
+  }>([
+    {
+      name: 'within the limit sets it',
+      title: ' Mine ',
+      maxLength: 40,
+      expected: 'Mine',
+    },
+    {
+      name: 'past the limit throws',
+      title: 'a'.repeat(41),
+      maxLength: 40,
+      expected: new Error('The title is 41 characters; the limit is 40.'),
+    },
+    {
+      name: 'the limit applies per call',
+      title: 'a'.repeat(41),
+      maxLength: 41,
+      expected: 'a'.repeat(41),
+    },
+    { name: 'blank clears', title: '   ', maxLength: 40, expected: null },
+    { name: 'null clears', title: null, maxLength: 40, expected: null },
+  ])('setUserTitle: $name', ({ title, maxLength, expected }) => {
+    const { list } = setUp();
+    const { session } = list.connect(info('/work/x'));
+    list.setTitle(session.id, 'user', 'Before');
+
+    const rename = () => list.setUserTitle(session.id, title, maxLength);
+
+    if (expected instanceof Error) {
+      expect(rename).toThrow(expected.message);
+      expect(list.titles(session.id)?.user).toBe('Before');
+    } else {
+      rename();
+      expect(list.titles(session.id)?.user).toBe(expected);
+    }
   });
 
   // Each row runs its actions on a fresh list; ids count up from 00000001 in
