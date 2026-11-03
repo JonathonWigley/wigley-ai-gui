@@ -129,8 +129,8 @@ export interface LiveWorkingInput {
   now: number;
 }
 
-// The finished turn: every entry from the user's last message to its last result; the dock shows it while the session
-// is idle, until the user sends the next message. Times are epoch ms.
+// The finished turn: every entry from the user's last message on; the dock shows it while the session is idle,
+// until the user sends the next message. Times are epoch ms.
 export interface DoneWorkingInput {
   state: 'done';
   // The turn's steps in entry order, each the step's entry input, leaving out subagents' tool calls (a tool whose

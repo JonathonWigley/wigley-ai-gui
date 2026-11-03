@@ -21,12 +21,12 @@ import type {
   EntryView,
   PartView,
   QueuedMessageInput,
-  StepInput,
 } from '../layouts/layout';
 import type { BaseKit } from '../../../shared/page/layout-host/kit';
 import {
   cursorStops,
   isStep,
+  isStepsChanged,
   type ListRow,
   type ListStop,
   listRows,
@@ -97,16 +97,17 @@ export interface TranscriptScroll extends ContentScroll {
 // to the latest stop as the list changes, except one on the last row's
 // activity line, which stays on it while the run is open and grows and no
 // pending row follows it. After every change, and whenever the list's own box
-// or any slot's box resizes, a following focus scrolls the list to its bottom; a hidden list does not scroll, so its tab
-// calls `scrollToFocus` each time it shows. Any scroll of a shown list (wheel,
-// trackpad, scrollbar or keys) that comes to rest off the bottom stops
-// following, and one that lands on the bottom follows again.
+// or any slot's box resizes, a following focus scrolls the list to its bottom;
+// a hidden list does not scroll, so its tab calls `scrollToFocus` each time it
+// shows. Any scroll of a shown list (wheel, trackpad, scrollbar or keys) that
+// comes to rest off the bottom stops following, and one that lands on the
+// bottom follows again.
 // While the session works on its turn, the live run's line time ticks once a
 // second.
 export interface EntryList {
   element: HTMLOListElement;
-  // Builds an entry new to the list, or redraws the one holding its id;
-  // `entries` is the session's list after the change.
+  // Builds an entry new to the list that shows, or redraws the one holding
+  // its id; `entries` is the session's list after the change.
   put(entry: ChatEntry, entries: readonly ChatEntry[]): void;
   // Reads whether the shown layouts put activity in the transcript, and builds
   // every entry that shows and every pending row again with the shown layouts,
@@ -620,17 +621,6 @@ function isActivityChanged(last: ActivityInput, next: ActivityInput): boolean {
     last.open !== next.open ||
     last.startedAt !== next.startedAt ||
     last.endedAt !== next.endedAt
-  );
-}
-
-// Whether any step is replaced, added or gone, by identity.
-function isStepsChanged(
-  last: readonly StepInput[],
-  next: readonly StepInput[],
-): boolean {
-  return (
-    last.length !== next.length ||
-    last.some((step, index) => step !== next[index])
   );
 }
 

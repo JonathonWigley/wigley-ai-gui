@@ -807,14 +807,7 @@ function emitWorkflowSkill(
     skill,
     args: '',
   });
-  finishFakeTool(
-    events,
-    emitEntry,
-    clock,
-    call,
-    'workflow',
-    WORKFLOW_TOOL_OK,
-  );
+  finishFakeTool(events, emitEntry, clock, call, 'workflow', WORKFLOW_TOOL_OK);
 }
 
 // The Bash call a `FAKE_PERMISSION_TEXT` turn asks permission for.
@@ -1051,14 +1044,7 @@ export function createFakeAgentHarness(
         return;
       }
       isTurnOpen = false;
-      finishFakeTool(
-        events,
-        emitEntry,
-        clock,
-        call,
-        'tool',
-        result,
-      );
+      finishFakeTool(events, emitEntry, clock, call, 'tool', result);
       const reply = result.isError
         ? 'fake agent was refused'
         : 'fake agent ran an allowed tool';
@@ -1083,14 +1069,7 @@ export function createFakeAgentHarness(
     ): Promise<WorkflowChange> => {
       const call = workflowToolCall(turn, n, tool);
       const finish = (result: ToolResult) =>
-        finishFakeTool(
-          events,
-          emitEntry,
-          clock,
-          call,
-          'workflow',
-          result,
-        );
+        finishFakeTool(events, emitEntry, clock, call, 'workflow', result);
       startFakeTool(events, emitEntry, clock, call, 'workflow');
       try {
         await change();

@@ -69,8 +69,8 @@ export interface ComposerPieces {
 }
 
 // One Chat tab's composer, drawn through the chat layout. The box, the
-// working, attachments and status line slots, the status parts' slot and the status
-// line's key-holding parts are built once and placed again by each draw;
+// working, attachments and status line slots, the status parts' slot and the
+// status line's key-holding parts are built once and placed again by each draw;
 // other plugins' composer parts and status parts are built again by each
 // composer draw, not by a status line draw. The working slot holds the
 // activity dock: the `working` part, drawn with what the tab's activity dock

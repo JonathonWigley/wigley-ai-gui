@@ -196,8 +196,8 @@ interface HeldTab {
 
 // One Chat tab per chat session main holds, each with its entries, its
 // pending rows and its composer (the activity dock, attached images, message
-// box, and the status line: repo, branch, type hint, control chips, status parts, running
-// indicator, send), kept up to date from chat main's messages. Each tab is
+// box, and the status line: repo, branch, type hint, control chips, status
+// parts, running indicator, send), kept up to date from chat main's messages. Each tab is
 // selected in its session when added. A layout change draws every tab's
 // entries, pending rows and composer again, and a composer or status part
 // added or removed draws every tab's composer again, each box keeping its
@@ -546,8 +546,8 @@ function sessionOf(
 
 // The tab element (`div.chat-tab`: entries, then the floating composer
 // holding other plugins' parts, the activity dock, the attached images'
-// strip, the box and its status line) added to its session, with the box's editor mounted once the
-// element is attached; it is marked `is-at-stop` while a composer part's stop
+// strip, the box and its status line) added to its session, with the box's
+// editor mounted once the element is attached; it is marked `is-at-stop` while a composer part's stop
 // holds the entry cursor, and the box taking focus leaves that part. The
 // tab then selects itself, so a chat session opens on its Chat tab whichever
 // plugin's tab the session got first. `view.shown` may run inside `addTab`,

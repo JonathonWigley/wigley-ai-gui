@@ -3,9 +3,9 @@ import type { Clock, Timers } from '../../../contracts/ambient';
 import type {
   DoneWorkingInput,
   LiveWorkingInput,
-  StepInput,
   WorkingInput,
 } from '../layouts/layout';
+import { isStepsChanged } from './activity-runs';
 import { doneInput, isTurnEmpty, workingInput } from './working-turn';
 
 export interface ActivityDockDeps {
@@ -135,16 +135,5 @@ function isDoneChanged(
     last.endedAt !== next.endedAt ||
     last.stopReason !== next.stopReason ||
     last.costUsd !== next.costUsd
-  );
-}
-
-// Whether any step is replaced, added or gone, by identity.
-function isStepsChanged(
-  last: readonly StepInput[],
-  next: readonly StepInput[],
-): boolean {
-  return (
-    last.length !== next.length ||
-    last.some((step, index) => step !== next[index])
   );
 }
