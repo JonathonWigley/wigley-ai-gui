@@ -1,6 +1,6 @@
 # 07 — Session host client
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01, 02
 Plan: [plan.md](plan.md)
@@ -240,3 +240,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit 4a9d6ee0 · proof: diff read; Produces present; typecheck clean in its files; session-host client tests 27 passed; not yet run against task 06's real host · concerns: duplicate-id spawn differs from 01's fake (client replaces events, fake keeps the old ones live); current host's list, subscribe and stopAll have no reply timeout, so task 09's list timeout is the only bound; a detached entry stays in the client's map until host death or close; a corrupt middle log line takes the read-failure path

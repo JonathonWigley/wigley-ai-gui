@@ -141,6 +141,11 @@ const LAYERS: Record<string, LayerRule> = {
     layers: ['src/contracts', 'src/shared', 'src/shared/local-channel'],
     packages: ['node:'],
   },
+  // The session host process: no electron import (`docs/features/session-host/design.md`).
+  'src/session-host': {
+    layers: ['src/contracts', 'src/shared', 'src/shared/local-channel'],
+    packages: ['node:'],
+  },
   'src/main/main.ts': {
     layers: [
       'src/contracts',

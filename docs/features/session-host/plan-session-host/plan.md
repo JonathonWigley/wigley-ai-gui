@@ -290,7 +290,7 @@ Task 01 sets `replayed: false` at every `ChatAgentEvent` emitter in the tree (ch
 ### Wave 2
 - [x] [Claude adapter pipe fold](05-claude-pipe-fold.md) — after 01
 - [ ] [Session host process](06-session-host-process.md) — after 01, 02
-- [ ] [Session host client](07-session-host-client.md) — after 01, 02
+- [x] [Session host client](07-session-host-client.md) — after 01, 02
 - [x] [Agents log and workflow skip replayed events](10-agents-replayed.md) — after 01
 
 ### Wave 3
@@ -316,6 +316,7 @@ Review base: 7f956435
 - 10 · 6b18de64 · diff read; typecheck clean in its files; agents and workflow start tests 25 passed · concerns: the new unlogged-events table drops the old proof that a preview event and a real event log side by side
 - 03 · marketplace:524438dd · diff read; all Produces present; forms suite 63 tests OK (2 Windows-only skipped); manifest check run after commit; Windows lookup not run (user's check) · concerns: cancel-then-new-call lets that call start the app inside the 30 s window, harmless under the single-instance lock; narrow race leaves such a call needs_manual_open; _reconnecting stays True after close; refused-hello test at 2.0 s does not catch dropping the refusal stop
 - 05 · 5b2ec6e5 · diff read; all Produces present; typecheck clean in claude-code; claude-code tests 404 passed · concerns: a send from idle gives one activity effect where the task says none (required by the activity sync); an error event with a pid now emits idle before ended, not on the task's list, named in the commit; HostedSpawn.id is sessionId until 08 switches to processId; a live init with no slash_commands replays a commands effect holding []; hasEmittedEnded guard cannot trigger today, 08 can drop it
+- 07 · 4a9d6ee0 · diff read; Produces present; typecheck clean in its files; session-host client tests 27 passed; not yet run against task 06's real host · concerns: duplicate-id spawn differs from 01's fake (client replaces events, fake keeps the old ones live); current host's list, subscribe and stopAll have no reply timeout, so task 09's list timeout is the only bound; a detached entry stays in the client's map until host death or close; a corrupt middle log line takes the read-failure path
 ### Contract changes
 ### Rulings
 - Marketplace review base is cbd8a9e; git fetch fails in this session (SSH key unavailable), so origin was not checked; neither main showed behind at the last fetch and nothing is pushed — a stale origin would surface at push · lead
@@ -333,5 +334,9 @@ Review base: 7f956435
 - foldUsageInput does not run advanceFold first — the task gives that to foldPipeLine only — a past-deadline grace ends at the next line or timer with the same stamp · group 05 · group 05
 - The interrupt control response no longer syncs activity itself — every fold ends with the sync — an activity effect could come later within one fold if wrong · group 05 · group 05
 - exitText and exitError take signal: string | null — HostedExit.signal is a string · group 05 · group 05
+- setKeepIdleMinutes while connecting stores the value and the new connection's first message carries the latest — the host sees one setKeepIdle, same end state · group 07 · group 07
+- close() flushes with destroySoon and resolves once each socket closes, so a drain or unsubscribe reaches the host — a stopped host with a full buffer could hold close() open, so task 08 bounds it at quit if it awaits it · group 07 · group 07
+- A spawn of an id already held replaces the events like an attach, and the host's refusal closed goes to the new events · group 07 · group 07
+- The older-host sweep on connect skips drained records and never connects to a newer one — a stale record is deleted only by the next list() · group 07 · group 07
 ### Review rounds
 ### Test gate
