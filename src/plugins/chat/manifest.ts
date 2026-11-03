@@ -22,7 +22,8 @@ export const chatManifest = definePlugin({
     leaveBox: { label: 'leave the box', group: 'box', runsIn: 'page' },
     send: { label: 'send the message', group: 'box', runsIn: 'page' },
     sendNow: {
-      label: 'send now: the focused pending row, or the box with every pending message',
+      label:
+        'send now: the focused pending row, or the box with every pending message',
       group: 'box',
       runsIn: 'page',
     },
