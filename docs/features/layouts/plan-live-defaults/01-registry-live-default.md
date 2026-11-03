@@ -1,6 +1,6 @@
 # 01 — The registry announces a live default from the owner's default folder
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -92,3 +92,4 @@ These close gaps a cold reader found. Each binds as the Decisions above do.
 
 ## Proof
 
+Commit 71f55e08 · proof: diff read: defaultFolder: Files | null on LayoutRegistryDeps present, entry rule as planned; registry tests 39/39; oxfmt clean; tree typecheck errors are task 03 WIP only · concerns: a throw from starting the default-folder watch rejects startLayoutRegistry, so the owner user layouts fail to start too (matches the user-folder watch); a default folder missing at start stays unwatched until the next start

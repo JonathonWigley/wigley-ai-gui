@@ -147,7 +147,7 @@ entry and the scheme; no task adds a `process.platform` check.
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Registry announces a live default](01-registry-live-default.md)
+- [x] [Registry announces a live default](01-registry-live-default.md)
 - [x] [Scheme serves `<owner>/default/`](02-scheme-serves-default.md)
 - [ ] [Page loads a live default](03-page-loads-live-default.md)
 
@@ -167,10 +167,13 @@ Review base: 46f417b5
 
 ### Groups
 - 02 · 10b8f622 · diff read: both Produces signatures present; layout-url tests 17/17; typecheck clean on its files (worker, and the only tree error is task 03 WIP in draw-part.ts); oxfmt clean · concerns: npm run lint stops at check-styles on agent-strip.css:17 raw 2px, pre-existing at the review base
+- 01 · 71f55e08 · diff read: defaultFolder: Files | null on LayoutRegistryDeps present, entry rule as planned; registry tests 39/39; oxfmt clean; tree typecheck errors are task 03 WIP only · concerns: a throw from starting the default-folder watch rejects startLayoutRegistry, so the owner user layouts fail to start too (matches the user-folder watch); a default folder missing at start stays unwatched until the next start
 ### Contract changes
 ### Rulings
 - layout-url.ts keeps its own private DEFAULT_NAME, as registry, draw-part and layout-parts each do — no shared export exists — a later pass may fold the four copies into one · group 02
 - main.ts passes () => null to serveLayoutScheme until task 04 wires the lookup — per the task doc — none · group 02
 - npm run lint fails at the review base on src/plugins/agent-strip/page/agent-strip.css:17 (check-styles raw-length, from 65d29099, outside this plan); lint proofs this run read check-styles output for the run's own files and run oxlint and oxfmt directly — not this plan's to fix — a real style failure in a run file could hide behind it · lead
+- the registry sends on a default-folder change only when default is live now or was before, and bumps the revision on every send, so a folder that gains layout.js after start goes live at revision 2 — the page only needs a rising number — none known · group 01
+- the default folder is watched non-recursively, filtered to exactly layout.js and layout.css — none · group 01
 ### Review rounds
 ### Test gate
