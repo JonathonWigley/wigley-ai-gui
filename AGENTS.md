@@ -178,8 +178,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  main/ (hears `chat.agentEvent`, keeps each session's roster, appends each event to
                  `logs/<host session id>.jsonl` in its plugin data, the layout preview); draws nothing: its page
                  part only exports the rosters to the views below; `docs/features/agent-tower/design.md`
-  agent-lines/   main/ (registers its layouts, hands the lines' self-test script), page/ (the subagent and task
-                 lines under each session row, through sessions' `addRowPart`), layouts/ (its Layout contract and
+  agent-lines/   main/ (registers its layouts, hands the lines' self-test script), page/ (the working line
+                 under each session row while it runs a subagent or task, through sessions' `addRowPart`), layouts/ (its Layout contract and
                  `default` layout); in `plugins.disabled` by default
   agent-strip/   main/ (registers its layouts, hands its self-test script), page/ (the strip of subagent and task boxes above the Chat composer's box, through chat's
                  `addComposerPart`, with a stop on chat's entry cursor), layouts/ (its Layout contract and `default`
@@ -228,10 +228,9 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  layout)
   usage/         manifest.ts, contract.ts, main/ (polls each chat profile's plan usage through the Claude harness, folds
                  `chat.planUsage` and `chat.agentEvent`), page/ (the status-bar plan line, each session's line in
-                 its tab bar through sessions' `addBarPart`, and the right-bar details),
+                 the Chat status line through chat's `addStatusPart`, its context meter under each session row, and the right-bar details),
                  layouts/ (the usage Layout contract and the built-in `default` layout),
-                 `docs/features/usage/design.md`; its session numbers draw in the Chat status line through chat's
-                 `addStatusPart`
+                 `docs/features/usage/design.md`
   usage-tab-line/ page/ only (each session's usage line in its tab bar through sessions' `addBarPart`, drawn by
                  usage's own session-line part through a usage page export, so the line has one look); in
                  `plugins.disabled` by default
@@ -329,7 +328,7 @@ round; primer: an open primer), since main, not the page, decides.
 - **A session part** (`SessionPart`) is what a plugin draws for every session on a sessions surface: sessions hands
   it a wrapper and the session id, and the part draws through its own plugin's layout. It has the same shape as forms'
   `addCardPart`. A **row part** draws under every session row in the side bar, through the `sessions` page export
-  `addRowPart`; the agent-lines plugin's subagent and task lines are one. A **bar part** draws in every session's tab
+  `addRowPart`; the agent-lines plugin's working line and usage's context meter are two. A **bar part** draws in every session's tab
   bar, which moves with its session between panes, through `addBarPart`; the usage-tab-line plugin's per-session line
   is one.
   Information about one session goes in a session part, not on a shared bar.
@@ -604,7 +603,7 @@ round; primer: an open primer), since main, not the page, decides.
   image viewer). Every part takes its parent first. Beside the entries, the layout draws the other Chat tab surfaces
   through parts that take `(parent, input, kit)` and return a `PartView`: `activity` (one run of the agent's steps,
   `docs/features/agent-chat/design.md` § Activity line), `working` (the running turn, § Working block),
-  `queuedMessage` (one pending message's row, § Pending messages), `composer`, `composerBar`, `attachments`, `pickerRow`, `signIn`, `reasonBox`, `closeConfirm` and
+  `queuedMessage` (one pending message's row, § Pending messages), `composer`, `statusLine`, `attachments`, `pickerRow`, `signIn`, `reasonBox`, `closeConfirm` and
   `imageViewer`, each with a kit that extends the base kit (`activity`, `working`, `queuedMessage` and `imageViewer`
   take the base kit itself).
   A user chat layout defines only the entry builders and the parts it changes: a kind or part it leaves out draws with
@@ -708,7 +707,7 @@ round; primer: an open primer), since main, not the page, decides.
   `sendInputEvent`, checks the lines each step adds to the page's log and the result the script checks, and exits
   non-zero on a failure. A key behaviour the agent adds or fixes gets a step in its plugin's self-test script
   (`src/plugins/forms/main/selftest-script.ts` for forms, `src/plugins/primer/main/selftest-script.ts` for the
-  primer, `src/plugins/agent-lines/main/selftest-script.ts` for the sidebar lines, `src/plugins/agent-strip/main/selftest-script.ts` for the strip, `src/plugins/workflow/main/selftest-script.ts` for
+  primer, `src/plugins/agent-lines/main/selftest-script.ts` for the sidebar working line, `src/plugins/agent-strip/main/selftest-script.ts` for the strip, `src/plugins/workflow/main/selftest-script.ts` for
   workflow); a step with no keys waits for its line, and a step's `writeFile` writes a file under the self-test's temp
   home before its keys, as an outside change on disk, and a step's `screenshot` (a lowercase name in words joined by
   `-`) saves a PNG of the window, once the step's line has been waited for, to

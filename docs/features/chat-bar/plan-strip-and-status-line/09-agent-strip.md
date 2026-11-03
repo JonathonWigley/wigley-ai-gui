@@ -1,6 +1,6 @@
 # 09 — The agent-strip plugin
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 5 · Depends on: 02, 04, 06, 07, 08
 Plan: [plan.md](plan.md)
@@ -282,3 +282,4 @@ which only the user's hands can check.
 
 ## Proof
 
+Commit 1975b3fe · proof: diff read: agent-strip plugin uses createHScroller, AgentsPageExports and ChatComposerPart.stop; listed in main/page/manifests and LAYERS; HEAD typecheck clean and layers/styles/oxlint clean in a scratch worktree at HEAD; worker's 9 test files (77 tests) pass · concerns: task's scrollsItself named a missing .chat-activity-step selector, script uses .chat-working-action/.session-row-status/.session-bar-parts; keymap comment lost a space ('Visual─'); layouts/design.md Space z l c row stale (task 10); oxfmt flags chat/main/start.ts (swept peer string)

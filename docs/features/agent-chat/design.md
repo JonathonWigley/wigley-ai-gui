@@ -168,8 +168,9 @@ interview on 2026-10-23; this file is the record of both.
 
 - `src/plugins/chat/`, depending on `sessions` and `keys`. Main keeps every owned session's entries, so a page
   reload redraws the chat whole (the dev server reloads twice at start).
-- **Chat tab**: the entries under a floating composer: a vim message box, the box's vim mode, each control's value
-  as a chip, and send (changed by ui-design plan C). Enter sends in insert and normal mode, Shift+Enter in insert mode adds a line, Cmd+Enter sends from any mode. `i` /
+- **Chat tab**: the entries under a floating composer: a vim message box and, under it, a status line: the model and effort chip, each
+  other control's value as a chip, send, and the parts other plugins add (usage's numbers). The box's cursor shape shows
+  the vim mode (changed by ui-design plan C). Enter sends in insert and normal mode, Shift+Enter in insert mode adds a line, Cmd+Enter sends from any mode. `i` /
   `a` focus the box, `j` / `k` move between entries, `Enter` opens or closes the focused entry or activity line and pulls
   back a focused pending message, `G` jumps to the latest, Ctrl+C interrupts and pulls back every pending message
   (§ Pending messages). The agent's steps show as activity lines (§ Activity line). While the box
@@ -425,7 +426,7 @@ interview on 2026-10-23; this file is the record of both.
 - Besides the entries, a layout draws the Chat tab's other surfaces through parts that take `(parent, input, kit)`
   and return a `PartView`: `activity` (a run of steps, § Activity line), `working` (the running turn, § Working
   block: its state, its steps and its times `startedAt` and `now`, sent again each second), `queuedMessage` (one pending message, § Pending
-  messages: its text, how many images it carries, and whether it was sent now), `composer`, `composerBar`, `attachments` (the
+  messages: its text, how many images it carries, and whether it was sent now), `composer`, `statusLine`, `attachments` (the
   strip of attached images), `pickerRow` (a row of the start prompt and the pickers), `signIn`, `reasonBox` (the deny
   reason), `closeConfirm` (the end-session confirm) and `imageViewer`. The `activity` part's input is the run's steps
   (each the step's entry input), the current step (the last), whether the run is live, whether it is open, and its times:

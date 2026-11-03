@@ -20,7 +20,7 @@ The decisions from the 2026-11-02 interview, kept so a later change does not reo
 The user drives several agents from one Chat tab and wants, beside the box they type in, what the session's helpers
 are doing and the session's vital numbers: each running subagent and background task as a small box the cursor can
 reach, and one status line with the repo, the branch, the model and effort, the context used and the money spent.
-The sidebar's subagent lines and the tab bar's usage line stay available as plugins the user switches on.
+The sidebar's working line (shown while a session runs a subagent or task) and the tab bar's usage line stay available as plugins the user switches on.
 
 ## Vocabulary
 
@@ -41,7 +41,7 @@ The sidebar's subagent lines and the tab bar's usage line stay available as plug
 │ attachments strip                               chat
 │ ┌ box ─────────────────────────────────────┐    chat (no mode label; the cursor shape shows the mode)
 │ └──────────────────────────────────────────┘
-│ repo · branch · model·effort · mode · [status parts] · ● Send     chat + usage (status part)
+│ repo · branch · hint · model·effort · controls · [status parts] · ● Send     chat + usage (status part)
 └───────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -106,7 +106,7 @@ Only the Claude adapter knows Claude's shapes, so it alone fills these into agen
   start; turning one on takes effect on the next app start, since a page part never starts without its main part (the
   page reads the union of the setting and main's start list). A plugin that another started plugin depends on cannot
   be disabled: the config check reports it as a config problem and keeps the last good config.
-- `agents` keeps the roster, the event log and its channel, and draws nothing. `agent-lines` draws the sidebar lines;
+- `agents` keeps the roster, the event log and its channel, and draws nothing. `agent-lines` draws the sidebar's working line;
   `agent-strip` draws the strip. Both read the agents roster.
 - `usage` keeps the polls, the status-bar plan line, the right bar and the status part. `usage-tab-line` draws usage's
   own session-line part in each tab bar, so the line has one look.
@@ -125,7 +125,7 @@ Only the Claude adapter knows Claude's shapes, so it alone fills these into agen
 - **Finished boxes stay until the next message.** A burst of parallel agents finishing does not vanish mid-glance.
 - **Subagent cost is estimated in dollars from tokens.** Claude reports cost only per process.
 - **The status line replaces the composer bar.** One line; model and effort share one chip.
-- **The tab-bar usage line and the sidebar lines start switched off**, one setting away.
+- **The tab-bar usage line and the sidebar's working line start switched off**, one setting away.
 - **No vim mode label.** The cursor shape already shows the mode: a block in normal and visual, a bar in insert.
 
 ## Rejected

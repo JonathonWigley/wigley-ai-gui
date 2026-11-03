@@ -183,9 +183,6 @@ means something.
   user's width is kept; `640px` stacks a sheet's split panes. Every split pane has a
   least width (the Primer tab's card column `320px`, every other pane `160px` or more): a narrowing
   split gives up its start pane's width down to its least width first, then stacks at any window width.
-  A subagent line narrower than `180px` (its container query) wraps its elapsed time and tool count
-  to a second row under its description; a task line stays on one row at every width, its description
-  ending in an ellipsis, and a task under its subagent's line is indented `space-4`.
 
 ## Motion
 
