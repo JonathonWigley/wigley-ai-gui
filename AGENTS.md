@@ -726,7 +726,9 @@ round; primer: an open primer), since main, not the page, decides.
   PNG per press, `<plugin>-<name>-<n>.png`, file n after press n. A step's `alsoExpect` holds patterns that must each
   match a line logged after the step began, before or after `expect`, for a line carrying a value the script cannot
   know (chat's clear step matches the notes line naming the row's random new host id) or a second line the step's keys
-  cause, in either order. The self-test's user config
+  cause, in either order. A line the fixture's opening causes goes in `open`'s `alsoShown` patterns, waited for with
+  the shown line from before `open`: logged before the first step began, it would never reach that step's
+  `alsoExpect` (usage's script waits there for usage-tab-line's session line). The self-test's user config
   folder sits in its temp home. The script's `settings` override plugin settings in the config main serves the page
   (forms' sets a short `keys.whichKeyTimeoutMs`, so a step can wait out the panel); main parts start on the
   ConfigStore's config, which under the self-test is the empty config folder in its temp home, so the defaults, with

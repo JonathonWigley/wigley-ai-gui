@@ -23,7 +23,7 @@ import {
   STEP_TIMEOUT_MS,
   waitForAnyNewLogLine,
   waitForNewLogLine,
-  withPrimitiveEllipsis,
+  withPrimitiveClipping,
 } from './drive/page-driver';
 import type { ScriptRun } from './selftest-config';
 
@@ -391,15 +391,16 @@ function reportWhys(group: SelfTestGroup, step: SelfTestStep) {
 
 // Opens the script's fixture, runs its groups' steps in order and checks its
 // result, reporting each under `pluginId` and each group's name before its
-// steps; the shown line and each step's lines are waited for up to
-// `stepTimeoutMs`, a result that has not settled within it once the steps end
+// steps; the shown line, its `alsoShown` lines and each step's lines are
+// waited for up to `stepTimeoutMs`, a result that has not settled within it
+// once the steps end
 // fails as timed out, and a result that rejects, even before the steps end,
 // stops the run and rejects with its error. The window starts and ends the
 // script at `startWidth`, the content width the self-test started on: a run
 // that opens on another (a reload interrupted a held width) resizes back first,
 // and a width a step held is restored once the result is checked. `screenshots`
 // maps each step that saves PNGs to their paths, and the fit check lets the
-// script's `scrollsItself` and the primitives' ellipsis parts clip. `load` is
+// script's `scrollsItself` and the primitives' clipping parts clip. `load` is
 // the page load the run belongs to, which the fixture opens under, and
 // `isCurrent` (`isOnLoad` of it) whether the run still owns the window.
 // Without `checksResult` the result is left unchecked, a skip line saying so,
@@ -434,7 +435,7 @@ export async function runScript(
   if (!isCurrent()) {
     return null;
   }
-  const { shownLine, result } = script.open(load);
+  const { shownLine, alsoShown, result } = script.open(load);
   const settled: { hasRejected: boolean; error?: unknown } = {
     hasRejected: false,
   };
@@ -445,18 +446,22 @@ export async function runScript(
   // Rejects with the result's error and otherwise never settles, so a wait
   // raced against it ends as soon as the result rejects.
   const rejection = result.then(() => new Promise<never>(() => {}));
-  const isShown = await Promise.race([
-    waitForNewLogLine(window, shownLine, mark, stepTimeoutMs),
-    rejection,
-  ]);
+  const shownLines = [shownLine, ...(alsoShown ?? [])];
+  let isShown = true;
+  for (const line of shownLines) {
+    isShown &&= await Promise.race([
+      waitForNewLogLine(window, line, mark, stepTimeoutMs),
+      rejection,
+    ]);
+  }
   if (!isShown) {
     failures++;
   }
   if (isCurrent()) {
-    report(isShown, shownLine);
+    report(isShown, shownLines.join(' and '));
   }
 
-  const scrollsItself = withPrimitiveEllipsis(script.scrollsItself);
+  const scrollsItself = withPrimitiveClipping(script.scrollsItself);
   for (const group of script.groups) {
     if (!isCurrent()) {
       return null;

@@ -11,7 +11,7 @@ import {
   waitFor,
   waitForNewLogLine,
   waitForRedraw,
-  withPrimitiveEllipsis,
+  withPrimitiveClipping,
 } from './page-driver';
 
 describe('waitForNewLogLine', () => {
@@ -416,11 +416,11 @@ describe('drag', () => {
   });
 });
 
-describe('withPrimitiveEllipsis', () => {
-  it('withPrimitiveEllipsis_ListHoldingOne_KeepsTheListFirstAndRepeatsNone', () => {
+describe('withPrimitiveClipping', () => {
+  it('withPrimitiveClipping_ListHoldingOne_KeepsTheListFirstAndRepeatsNone', () => {
     const scrollsItself = ['.scroller', '.ui-tab-label'];
 
-    const selectors = withPrimitiveEllipsis(scrollsItself);
+    const selectors = withPrimitiveClipping(scrollsItself);
 
     expect(selectors.slice(0, 2)).toEqual(scrollsItself);
     expect(selectors.length).toBeGreaterThan(scrollsItself.length);

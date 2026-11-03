@@ -581,16 +581,24 @@ export interface SelfTestGroup {
 
 // `open` starts the fixture for run `run`, returning the line the page logs
 // once it shows and the result the script checks with `problems`, which lists
-// what was wrong, empty when nothing was. `scrollsItself` lists CSS selectors
-// for the elements a fit check lets scroll or clip in their own box rather
-// than wrap, nothing inside them checked either; empty when nothing does.
+// what was wrong, empty when nothing was. `alsoShown`, when set, holds
+// patterns that each match a line logged after `open` began, before or after
+// the shown line, for another line the opening itself causes: one logged
+// before the first step began would never reach that step's `alsoExpect`.
+// `scrollsItself` lists CSS selectors for the elements a fit check lets
+// scroll or clip in their own box rather than wrap, nothing inside them
+// checked either; empty when nothing does.
 // `settings` overrides plugin settings in the config main serves the page, by
 // plugin id, each holding only the settings it changes; main parts have
 // already started on their defaults.
 export interface SelfTestScript {
   pageBinds: PageBind[];
   settings: Record<string, object>;
-  open(run: number): { shownLine: string; result: Promise<unknown> };
+  open(run: number): {
+    shownLine: string;
+    alsoShown?: RegExp[];
+    result: Promise<unknown>;
+  };
   groups: SelfTestGroup[];
   scrollsItself: string[];
   problems(result: unknown): string[];

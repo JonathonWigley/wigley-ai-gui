@@ -105,18 +105,17 @@ export function agentStripSelfTestScript(
     pageBinds: [],
     settings: {},
     // A box's name, model line, description and tool lines end in an
-    // ellipsis inside their own boxes, an open box's tool list scrolls inside
-    // its box, and the strip's track scrolls sideways, as their CSS says. The
-    // working block's tool calls (the Agent calls carry the subagents'
-    // prompts) and the session row's status end in an ellipsis inside their
-    // own boxes; the tab bar's parts clip in their own box.
+    // ellipsis inside their own boxes and an open box's tool list scrolls
+    // inside its box, as their CSS says. The working block's tool calls (the
+    // Agent calls carry the subagents' prompts) and the session row's status
+    // end in an ellipsis inside their own boxes; the tab bar's parts clip in
+    // their own box.
     scrollsItself: [
       '.agent-strip-name',
       '.agent-strip-description',
       '.agent-strip-meta',
       '.agent-strip-tool',
       '.agent-strip-toolList',
-      '.ui-h-scroller-track',
       '.chat-working-action',
       '.session-row-status',
       '.session-bar-parts',

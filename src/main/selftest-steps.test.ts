@@ -329,6 +329,53 @@ describe('runScript', () => {
     },
   );
 
+  it.each([
+    ['[t] id 4f2a', 0],
+    ['[t] id none', 1],
+  ])(
+    'a fixture whose opening logs %s beside its shown line fails %s times on its alsoShown pattern',
+    async (opened, expected) => {
+      const { window, log } = page(echo);
+
+      const failures = await runScript(
+        window,
+        {} as Files,
+        {
+          pluginId: 't',
+          script: {
+            pageBinds: [],
+            settings: {},
+            open: () => {
+              log.unshift('[t] shown', opened);
+              return {
+                shownLine: '[t] shown',
+                alsoShown: [/^\[t\] id [0-9a-f]+$/],
+                result: Promise.resolve(null),
+              };
+            },
+            groups: [
+              {
+                name: 'keys',
+                why: 'keys log',
+                steps: [{ keys: ['a'], expect: '[t] a' }],
+              },
+            ],
+            scrollsItself: [],
+            problems: () => [],
+          },
+          checksResult: true,
+        },
+        new Map(),
+        START_WIDTH,
+        1,
+        () => true,
+        50,
+      );
+
+      expect(failures).toBe(expected);
+    },
+  );
+
   it('passes a repeating step whose first press logs its until line', async () => {
     const { window, log } = page(pager(1));
 

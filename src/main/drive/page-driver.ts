@@ -241,23 +241,24 @@ export function readStartFailure(window: DrivenWindow): Promise<string | null> {
 // The core shell's elements that clip their own text with an ellipsis.
 const CORE_SCROLLS_ITSELF = ['.title-bar-context'];
 
-// The design primitives' parts that clip their text with an ellipsis on
-// purpose, which the fit check lets clip in every script.
-export const PRIMITIVE_ELLIPSIS_SELECTORS: readonly string[] = [
+// The design primitives' parts that clip their text with an ellipsis or scroll
+// their content on purpose, which the fit check lets clip in every script.
+export const PRIMITIVE_CLIPPING_SELECTORS: readonly string[] = [
   '.ui-row-label',
   '.ui-row-detail',
   '.ui-tab-label',
   '.ui-collapsible-summary',
+  '.ui-h-scroller-track',
 ];
 
-// A script's `scrollsItself` followed by each primitive ellipsis selector it
+// A script's `scrollsItself` followed by each primitive clipping selector it
 // does not already hold.
-export function withPrimitiveEllipsis(
+export function withPrimitiveClipping(
   scrollsItself: readonly string[],
 ): string[] {
   return [
     ...scrollsItself,
-    ...PRIMITIVE_ELLIPSIS_SELECTORS.filter(
+    ...PRIMITIVE_CLIPPING_SELECTORS.filter(
       (selector) => !scrollsItself.includes(selector),
     ),
   ];
