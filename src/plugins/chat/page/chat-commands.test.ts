@@ -430,6 +430,7 @@ describe('chat commands', () => {
       left: 'draft',
       marked: [],
       latests: 0,
+      logs: ['[chat] sending a pending message now in app'],
     },
     {
       given: 'a pending row focused, text in the focused box',
@@ -441,6 +442,7 @@ describe('chat commands', () => {
       left: '',
       marked: ['row-1'],
       latests: 1,
+      logs: ['[chat] sending now in app'],
     },
     {
       given: 'a pending row focused and unsent, the focused box empty',
@@ -452,6 +454,7 @@ describe('chat commands', () => {
       left: '',
       marked: [],
       latests: 0,
+      logs: ['[chat] sending now in app'],
     },
     {
       given: 'only a sent row, the focused box empty',
@@ -463,6 +466,7 @@ describe('chat commands', () => {
       left: '',
       marked: [],
       latests: 0,
+      logs: ['[chat] nothing to send'],
     },
     {
       given: 'an entry focused, text in the unfocused box',
@@ -474,6 +478,7 @@ describe('chat commands', () => {
       left: '',
       marked: ['row-1'],
       latests: 1,
+      logs: ['[chat] sending now in app'],
     },
     {
       given: 'an app slash command in the focused box',
@@ -485,6 +490,7 @@ describe('chat commands', () => {
       left: '',
       marked: ['row-1'],
       latests: 0,
+      logs: ['[chat] ran /status in app'],
     },
   ])(
     'sendNow given $given sends the row or the box',
@@ -497,6 +503,7 @@ describe('chat commands', () => {
       left,
       marked,
       latests,
+      logs,
     }) => {
       const commands = createSlashCommands();
       commands.add({ name: 'status', description: 'Show', run: () => {} });
@@ -523,6 +530,7 @@ describe('chat commands', () => {
       expect(message.held.text).toBe(left);
       expect(run.marked).toEqual(marked);
       expect(latestCalls).toBe(latests);
+      expect(run.logs).toEqual(logs);
     },
   );
 

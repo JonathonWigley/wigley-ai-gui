@@ -316,10 +316,10 @@ function assistant(id: string, text: string): ChatEntry {
   return { kind: 'assistant', id, at: 1000, text, streaming: false, raw: [] };
 }
 
-// Two messages sent while the session's harness reports `working`.
 const IDLE_SEND: UserMessage = { text: 'idle send', images: [] };
 const PENDING: UserMessage = { text: 'pending', images: [] };
 
+// Two messages sent while the session's harness reports `working`.
 function queueTwo(
   test: Awaited<ReturnType<typeof started>>,
 ): [UserMessage, UserMessage] {
