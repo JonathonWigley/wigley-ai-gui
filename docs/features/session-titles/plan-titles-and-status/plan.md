@@ -141,7 +141,7 @@ to `DotStatus`.
 - [x] [Doc re-read](07-doc-re-read.md) — after 02, 03, 04, 05, 06
 
 ### Wave 5
-- [ ] [Final verification](08-final-verification.md) — after 07
+- [x] [Final verification](08-final-verification.md) — after 07
 
 ## Run log
 
@@ -155,6 +155,7 @@ Review base: e38f1bb7
 - 06 · b24de12c · diff read (formShown dep present, forms and primer wired with own source ids), no type errors outside chat's in-progress files · concerns: forms-view.test.ts and primer-view.test.ts stubs gained setActivity, outside the Files list; start.ts files untouched since they pass the whole exports
 - 05 · 4de1cf63 · diff read (Unseen, rowActivity, unseenAfterTurnEnd, unseenAfterRest, markSent, ChatViewDeps listeners and Pick widened present), typecheck clean, lint and chat self-test passed per worker · concerns: needs you has no self-test step of its own: the fixture permission is asked during open, before any step; the permission card y step's 'none' line stands in; chat-state imports the value NEEDS_YOU_ACTIVITY from sessions' contract (layers pass); the done step depends on FAKE_VISUAL_HOLD_MS outlasting two key presses
 - 07 · f66c42a6 · diff read; keymap.md, AGENTS.md and layouts design.md read with no change needed · concerns: the CLI resume keeping the first request's system prompt is the agent-chat doc's claim with no code showing it; design.md Status still names the plan folder, which Close deletes
+- 08 · none · drive run st08 with real Claude: checks 1-6 pass (report /tmp/claude-session-titles/reports/08-1.md, captures .drive/st08/screenshots/) · concerns: at the least side-bar width the folder label ellipsizes alongside the title, and one title cut to a bare 'M' with no ellipsis while the label vanished; restored chat's first step header read '498243h 11m'; two stray rows appeared briefly after restart while the plan loaded
 ### Contract changes
 - createRowActivities(): inline return type → named RowActivities interface, same members · why: readability · consumers: 03 · group 03
 - startTitleTool deps: inline type → named TitleToolDeps, same shape · why: readability · consumers: 02 · group 02
