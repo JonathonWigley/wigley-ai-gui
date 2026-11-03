@@ -1,21 +1,100 @@
-// Fails when a source file (`.ts` or `.js`) imports across a layer boundary
-// LAYERS does not allow. A file belongs to the layer with the longest matching
-// path; imports inside a file's own layer are always allowed, and a test file
-// (`.test.ts`, a `.test-d.ts` type test or a `.test-support.ts` module of
-// shared test cases) may also import the test packages. An import is allowed when the
-// imported file's own layer is listed exactly: allowing `src/shared` does not
-// admit `src/shared/page`.
-import { readdirSync, readFileSync } from 'node:fs';
+// Fails when a source file (`.ts` or `.js`) imports across a layer boundary its
+// rules do not allow. The rules are CORE_LAYERS, written here, and each plugin's
+// entries, derived in `layer-rules.mts` from the plugin folders and each
+// manifest's `dependsOn`, with PLUGIN_EXTRAS added. A file belongs to the layer
+// with the longest matching path; imports inside a file's own layer are always
+// allowed, and a test file (`.test.ts`, a `.test-d.ts` type test or a
+// `.test-support.ts` module of shared test cases) may also import the test
+// packages. An import is allowed when the imported file's own layer is listed
+// exactly: allowing `src/shared` does not admit `src/shared/page`. It also fails
+// when `src/plugins/main.ts`, `page.ts` or `manifests.ts` misses a plugin
+// folder's part or manifest, lists one twice, or lists anything else.
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import ts from 'typescript';
+import {
+  compositionFailures,
+  pluginLayers,
+  readDependsOn,
+  type LayerRule,
+  type PluginExtra,
+  type PluginFolder,
+} from './layer-rules.mts';
 
-interface LayerRule {
-  layers: string[];
-  // A package name, or a prefix ending in `:` such as `node:`.
-  packages: string[];
-}
+const NODE_ONLY: Partial<LayerRule> = { packages: ['node:'] };
 
-const LAYERS: Record<string, LayerRule> = {
+const WORKFLOW_SUBLAYERS = [
+  'src/plugins/workflow/plan-reader.ts',
+  'src/plugins/workflow/stages',
+];
+
+const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
+  // Its contract's records hold the follow-up file module's types.
+  backlog: { contract: { layers: ['src/shared/followups'] } },
+  // Its main joins paths with `node:path`.
+  chat: { main: NODE_ONLY },
+  // Its plugin status hashes files with `node:crypto`.
+  docs: { main: NODE_ONLY },
+  forms: {
+    // Its contract imports NUMBER_KEY_COUNT from `./manifest`.
+    contract: { layers: ['src/plugins/forms'] },
+    // A round is an agent form with a `node:crypto` fingerprint.
+    main: { layers: ['src/shared/agent-forms'], packages: ['node:'] },
+  },
+  // Its self-test script builds a PNG with `node:zlib`.
+  notes: { main: NODE_ONLY },
+  // A primer is an agent form with a `node:crypto` fingerprint.
+  primer: { main: { layers: ['src/shared/agent-forms'], packages: ['node:'] } },
+  // Its relay's socket and its MCP adapter's SDK sit in sublayers of main.
+  sessions: {
+    main: {
+      layers: [
+        'src/plugins/sessions/main/relay',
+        'src/plugins/sessions/main/mcp',
+      ],
+      packages: ['node:'],
+    },
+    sublayers: {
+      'src/plugins/sessions/main/relay': {
+        layers: [
+          'src/contracts',
+          'src/shared',
+          'src/plugins/sessions/contract.ts',
+        ],
+        packages: ['node:'],
+      },
+      'src/plugins/sessions/main/mcp': {
+        layers: [
+          'src/contracts',
+          'src/shared',
+          'src/plugins/sessions/contract.ts',
+        ],
+        packages: ['@modelcontextprotocol/server', 'node:'],
+      },
+    },
+  },
+  // Its root and parts share the plan reader and stages; main uses `node:path`.
+  workflow: {
+    root: { layers: WORKFLOW_SUBLAYERS },
+    contract: { layers: ['src/plugins/workflow/plan-reader.ts'] },
+    main: { layers: WORKFLOW_SUBLAYERS, packages: ['node:'] },
+    page: { layers: WORKFLOW_SUBLAYERS },
+    sublayers: {
+      'src/plugins/workflow/plan-reader.ts': { layers: [], packages: [] },
+      'src/plugins/workflow/stages': {
+        layers: [
+          'src/contracts',
+          'src/plugins/workflow',
+          'src/plugins/workflow/contract.ts',
+          'src/plugins/workflow/plan-reader.ts',
+        ],
+        packages: [],
+      },
+    },
+  },
+};
+
+const CORE_LAYERS: Record<string, LayerRule> = {
   'src/contracts': { layers: [], packages: [] },
   'src/config': { layers: ['src/contracts'], packages: [] },
   'src/shared': { layers: ['src/contracts', 'src/shared/paths'], packages: [] },
@@ -263,7 +342,7 @@ const LAYERS: Record<string, LayerRule> = {
       'src/contracts',
       'src/shared',
       'src/shared/page',
-      'src/plugins/forms',
+      'src/plugins/forms/contract.ts',
       'src/plugins/forms/page',
       'src/plugins/sessions/page',
       'src/plugins/keys/page',
@@ -287,7 +366,7 @@ const LAYERS: Record<string, LayerRule> = {
       'src/contracts',
       'src/shared',
       'src/shared/page',
-      'src/plugins/primer',
+      'src/plugins/primer/contract.ts',
       'src/plugins/primer/page',
       'src/plugins/sessions/page',
       'src/plugins/keys/page',
@@ -295,777 +374,6 @@ const LAYERS: Record<string, LayerRule> = {
     packages: [],
   },
   'src/plugins': { layers: ['src/contracts', 'src/shared'], packages: [] },
-  'src/plugins/agent-lines': {
-    layers: ['src/contracts', 'src/shared'],
-    packages: [],
-  },
-  'src/plugins/agent-lines/layouts': {
-    layers: ['src/shared/page/layout-host'],
-    packages: [],
-  },
-  'src/plugins/agent-lines/main': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/plugins/agent-lines',
-      'src/plugins/agent-lines/layouts',
-      'src/plugins/chat/contract.ts',
-      'src/plugins/sessions/contract.ts',
-    ],
-    packages: [],
-  },
-  'src/plugins/agent-lines/page': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/shared/page',
-      'src/shared/page/ui',
-      'src/shared/page/layout-host',
-      'src/plugins/agent-lines',
-      'src/plugins/agent-lines/layouts',
-      'src/plugins/agents/contract.ts',
-      'src/plugins/sessions/contract.ts',
-      'src/plugins/keys/contract.ts',
-    ],
-    packages: [],
-  },
-  'src/plugins/agent-strip': {
-    layers: ['src/contracts', 'src/shared'],
-    packages: [],
-  },
-  'src/plugins/agent-strip/layouts': {
-    layers: ['src/shared/page/layout-host'],
-    packages: [],
-  },
-  'src/plugins/agent-strip/main': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/plugins/agent-strip',
-      'src/plugins/agent-strip/layouts',
-      'src/plugins/chat/contract.ts',
-      'src/plugins/sessions/contract.ts',
-    ],
-    packages: [],
-  },
-  'src/plugins/agent-strip/page': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/shared/page',
-      'src/shared/page/ui',
-      'src/shared/page/layout-host',
-      'src/plugins/agent-strip',
-      'src/plugins/agent-strip/layouts',
-      'src/plugins/agents/contract.ts',
-      'src/plugins/chat/contract.ts',
-      'src/plugins/sessions/contract.ts',
-      'src/plugins/keys/contract.ts',
-    ],
-    packages: [],
-  },
-  'src/plugins/agents': {
-    layers: ['src/contracts', 'src/shared', 'src/plugins/agents/contract.ts'],
-    packages: [],
-  },
-  'src/plugins/agents/contract.ts': { layers: ['src/contracts'], packages: [] },
-  'src/plugins/agents/main': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/plugins/agents',
-      'src/plugins/agents/contract.ts',
-      'src/plugins/chat/contract.ts',
-      'src/plugins/sessions/contract.ts',
-    ],
-    packages: [],
-  },
-  'src/plugins/agents/page': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/plugins/agents',
-      'src/plugins/agents/contract.ts',
-      'src/plugins/sessions/contract.ts',
-    ],
-    packages: [],
-  },
-  'src/plugins/chat': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/plugins/chat/contract.ts',
-      'src/plugins/sessions/contract.ts',
-      'src/plugins/keys/contract.ts',
-    ],
-    packages: [],
-  },
-  'src/plugins/chat/main': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/shared/followups',
-      'src/shared/paths',
-      'src/plugins/chat',
-      'src/plugins/chat/contract.ts',
-      'src/plugins/chat/layouts',
-      'src/plugins/sessions/contract.ts',
-    ],
-    packages: ['node:'],
-  },
-  'src/plugins/chat/contract.ts': { layers: ['src/contracts'], packages: [] },
-  'src/plugins/chat/layouts': {
-    layers: ['src/shared/page/layout-host'],
-    packages: [],
-  },
-  'src/plugins/chat/page': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/shared/followups',
-      'src/shared/paths',
-      'src/shared/page',
-      'src/shared/page/ui',
-      'src/plugins/chat',
-      'src/plugins/chat/contract.ts',
-      'src/plugins/chat/layouts',
-      'src/plugins/keys/contract.ts',
-      'src/plugins/sessions/contract.ts',
-      'src/shared/page/layout-host',
-      'src/shared/page/file-drop',
-    ],
-    packages: [],
-  },
-  'src/plugins/docs': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/shared/followups',
-      'src/shared/paths',
-      'src/plugins/docs/contract.ts',
-      'src/plugins/sessions/contract.ts',
-    ],
-    packages: [],
-  },
-  'src/plugins/docs/contract.ts': {
-    layers: ['src/contracts'],
-    packages: [],
-  },
-  'src/plugins/docs/main': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/shared/followups',
-      'src/shared/paths',
-      'src/plugins/docs',
-      'src/plugins/docs/contract.ts',
-      'src/plugins/sessions/contract.ts',
-      'src/plugins/docs/layouts',
-    ],
-    packages: ['node:'],
-  },
-  'src/plugins/docs/layouts': {
-    layers: ['src/shared/page/layout-host'],
-    packages: [],
-  },
-  'src/plugins/docs/page': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/shared/followups',
-      'src/shared/paths',
-      'src/shared/page',
-      'src/shared/page/ui',
-      'src/plugins/docs',
-      'src/plugins/docs/contract.ts',
-      'src/plugins/keys/contract.ts',
-      'src/plugins/sessions/contract.ts',
-      'src/plugins/docs/layouts',
-      'src/shared/page/layout-host',
-      'src/shared/page/file-drop',
-    ],
-    packages: [],
-  },
-  'src/plugins/backlog': {
-    layers: ['src/contracts', 'src/shared', 'src/plugins/backlog/contract.ts'],
-    packages: [],
-  },
-  'src/plugins/backlog/contract.ts': {
-    layers: ['src/contracts', 'src/shared/followups'],
-    packages: [],
-  },
-  'src/plugins/backlog/main': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/shared/followups',
-      'src/shared/paths',
-      'src/plugins/backlog',
-      'src/plugins/backlog/contract.ts',
-      'src/plugins/docs/contract.ts',
-      'src/plugins/backlog/layouts',
-    ],
-    packages: [],
-  },
-  'src/plugins/backlog/layouts': {
-    layers: ['src/shared/page/layout-host'],
-    packages: [],
-  },
-  'src/plugins/backlog/page': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/shared/followups',
-      'src/shared/paths',
-      'src/shared/page',
-      'src/shared/page/ui',
-      'src/plugins/backlog',
-      'src/plugins/backlog/contract.ts',
-      'src/plugins/docs/contract.ts',
-      'src/plugins/keys/contract.ts',
-      'src/plugins/backlog/layouts',
-      'src/shared/page/layout-host',
-      'src/shared/page/file-drop',
-    ],
-    packages: [],
-  },
-  'src/plugins/notes': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/shared/paths',
-      'src/plugins/notes/contract.ts',
-      'src/plugins/sessions/contract.ts',
-    ],
-    packages: [],
-  },
-  'src/plugins/notes/contract.ts': {
-    layers: ['src/contracts', 'src/plugins/sessions/contract.ts'],
-    packages: [],
-  },
-  'src/plugins/notes/main': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/shared/followups',
-      'src/shared/paths',
-      'src/plugins/notes',
-      'src/plugins/notes/contract.ts',
-      'src/plugins/backlog/contract.ts',
-      'src/plugins/chat/contract.ts',
-      'src/plugins/sessions/contract.ts',
-      'src/plugins/notes/layouts',
-    ],
-    packages: ['node:'],
-  },
-  'src/plugins/notes/layouts': {
-    layers: ['src/shared/page/layout-host'],
-    packages: [],
-  },
-  'src/plugins/notes/page': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/shared/paths',
-      'src/shared/page',
-      'src/shared/page/ui',
-      'src/plugins/notes',
-      'src/plugins/notes/contract.ts',
-      'src/plugins/keys/contract.ts',
-      'src/plugins/sessions/contract.ts',
-      'src/plugins/notes/layouts',
-      'src/shared/page/layout-host',
-      'src/shared/page/file-drop',
-    ],
-    packages: [],
-  },
-  'src/plugins/workflow/plan-reader.ts': { layers: [], packages: [] },
-  'src/plugins/workflow/contract.ts': {
-    layers: ['src/contracts', 'src/plugins/workflow/plan-reader.ts'],
-    packages: [],
-  },
-  'src/plugins/workflow': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/plugins/workflow/contract.ts',
-      'src/plugins/workflow/plan-reader.ts',
-      'src/plugins/workflow/stages',
-    ],
-    packages: [],
-  },
-  'src/plugins/workflow/stages': {
-    layers: [
-      'src/contracts',
-      'src/plugins/workflow',
-      'src/plugins/workflow/contract.ts',
-      'src/plugins/workflow/plan-reader.ts',
-    ],
-    packages: [],
-  },
-  'src/plugins/workflow/main': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/shared/paths',
-      'src/plugins/workflow',
-      'src/plugins/workflow/contract.ts',
-      'src/plugins/workflow/plan-reader.ts',
-      'src/plugins/workflow/stages',
-      'src/plugins/chat/contract.ts',
-      'src/plugins/sessions/contract.ts',
-      'src/plugins/workflow/layouts',
-    ],
-    packages: ['node:'],
-  },
-  'src/plugins/workflow/layouts': {
-    layers: ['src/shared/page/layout-host'],
-    packages: [],
-  },
-  'src/plugins/workflow/page': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/shared/paths',
-      'src/shared/page',
-      'src/shared/page/ui',
-      'src/plugins/workflow',
-      'src/plugins/workflow/contract.ts',
-      'src/plugins/workflow/plan-reader.ts',
-      'src/plugins/workflow/stages',
-      'src/plugins/chat/contract.ts',
-      'src/plugins/docs/contract.ts',
-      'src/plugins/keys/contract.ts',
-      'src/plugins/sessions/contract.ts',
-      'src/plugins/workflow/layouts',
-      'src/shared/page/layout-host',
-    ],
-    packages: [],
-  },
-  'src/plugins/usage': {
-    layers: ['src/contracts', 'src/shared'],
-    packages: [],
-  },
-  'src/plugins/usage/contract.ts': { layers: ['src/contracts'], packages: [] },
-  'src/plugins/usage/main': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/shared/paths',
-      'src/plugins/usage',
-      'src/plugins/usage/contract.ts',
-      'src/plugins/chat/contract.ts',
-      'src/plugins/sessions/contract.ts',
-      'src/plugins/usage/layouts',
-    ],
-    packages: [],
-  },
-  'src/plugins/usage/layouts': {
-    layers: ['src/shared/page/layout-host'],
-    packages: [],
-  },
-  'src/plugins/usage/page': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/shared/page',
-      'src/shared/page/ui',
-      'src/shared/page/layout-host',
-      'src/plugins/usage',
-      'src/plugins/usage/contract.ts',
-      'src/plugins/usage/layouts',
-      'src/plugins/chat/contract.ts',
-      'src/plugins/keys/contract.ts',
-      'src/plugins/sessions/contract.ts',
-    ],
-    packages: [],
-  },
-  'src/plugins/usage-tab-line': {
-    layers: ['src/contracts', 'src/shared'],
-    packages: [],
-  },
-  'src/plugins/usage-tab-line/page': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/plugins/usage-tab-line',
-      'src/plugins/usage/contract.ts',
-      'src/plugins/sessions/contract.ts',
-    ],
-    packages: [],
-  },
-  'src/plugins/visual': {
-    layers: ['src/contracts', 'src/shared'],
-    packages: [],
-  },
-  'src/plugins/visual/contract.ts': { layers: ['src/contracts'], packages: [] },
-  'src/plugins/visual/main': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/plugins/visual',
-      'src/plugins/visual/contract.ts',
-      'src/plugins/chat/contract.ts',
-      'src/plugins/visual/layouts',
-    ],
-    packages: [],
-  },
-  'src/plugins/visual/layouts': {
-    layers: ['src/shared/page/layout-host'],
-    packages: [],
-  },
-  'src/plugins/visual/page': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/shared/page',
-      'src/shared/page/ui',
-      'src/shared/page/layout-host',
-      'src/plugins/visual',
-      'src/plugins/visual/contract.ts',
-      'src/plugins/visual/layouts',
-      'src/plugins/keys/contract.ts',
-      'src/plugins/chat/contract.ts',
-    ],
-    packages: [],
-  },
-  'src/plugins/settings': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/shared/paths',
-      'src/plugins/settings/contract.ts',
-    ],
-    packages: [],
-  },
-  'src/plugins/settings/contract.ts': {
-    layers: ['src/contracts'],
-    packages: [],
-  },
-  'src/plugins/settings/main': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/shared/followups',
-      'src/shared/paths',
-      'src/plugins/settings',
-      'src/plugins/settings/contract.ts',
-      'src/plugins/settings/layouts',
-    ],
-    packages: ['node:'],
-  },
-  'src/plugins/settings/layouts': {
-    layers: ['src/shared/page/layout-host'],
-    packages: [],
-  },
-  'src/plugins/settings/page': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/shared/followups',
-      'src/shared/paths',
-      'src/shared/page',
-      'src/shared/page/ui',
-      'src/plugins/settings',
-      'src/plugins/settings/contract.ts',
-      'src/plugins/keys/contract.ts',
-      'src/plugins/settings/layouts',
-      'src/shared/page/layout-host',
-    ],
-    packages: [],
-  },
-  'src/plugins/forms': {
-    layers: ['src/contracts', 'src/shared', 'src/plugins/sessions/contract.ts'],
-    packages: [],
-  },
-  'src/plugins/forms/main': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/shared/followups',
-      'src/shared/agent-forms',
-      'src/shared/paths',
-      'src/plugins/forms',
-      'src/plugins/forms/layouts',
-      'src/plugins/chat/contract.ts',
-      'src/plugins/sessions/contract.ts',
-    ],
-    packages: ['node:'],
-  },
-  'src/plugins/forms/layouts': {
-    layers: ['src/shared/page/layout-host'],
-    packages: [],
-  },
-  'src/plugins/forms/page': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/shared/followups',
-      'src/shared/page',
-      'src/shared/page/ui',
-      'src/plugins/forms',
-      'src/plugins/forms/layouts',
-      'src/plugins/keys/contract.ts',
-      'src/plugins/sessions/contract.ts',
-      'src/shared/page/layout-host',
-      'src/shared/page/file-drop',
-    ],
-    packages: [],
-  },
-  'src/plugins/primer': {
-    layers: ['src/contracts', 'src/shared'],
-    packages: [],
-  },
-  'src/plugins/primer/main': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/shared/followups',
-      'src/shared/paths',
-      'src/shared/agent-forms',
-      'src/plugins/primer',
-      'src/plugins/chat/contract.ts',
-      'src/plugins/sessions/contract.ts',
-      'src/plugins/primer/layouts',
-    ],
-    packages: ['node:'],
-  },
-  'src/plugins/primer/layouts': {
-    layers: ['src/shared/page/layout-host'],
-    packages: [],
-  },
-  'src/plugins/primer/page': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/shared/followups',
-      'src/shared/page',
-      'src/shared/page/ui',
-      'src/plugins/primer',
-      'src/plugins/keys/contract.ts',
-      'src/plugins/sessions/contract.ts',
-      'src/plugins/primer/layouts',
-      'src/shared/page/layout-host',
-      'src/shared/page/file-drop',
-    ],
-    packages: [],
-  },
-  'src/plugins/gallery': {
-    layers: ['src/contracts', 'src/shared'],
-    packages: [],
-  },
-  'src/plugins/gallery/layouts': {
-    layers: ['src/shared/page/layout-host'],
-    packages: [],
-  },
-  'src/plugins/gallery/main': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/plugins/gallery',
-      'src/plugins/gallery/layouts',
-    ],
-    packages: [],
-  },
-  'src/plugins/gallery/page': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/shared/followups',
-      'src/shared/page',
-      'src/shared/page/ui',
-      'src/plugins/gallery',
-      'src/plugins/keys/contract.ts',
-      'src/plugins/gallery/layouts',
-      'src/shared/page/layout-host',
-    ],
-    packages: [],
-  },
-  'src/plugins/keys': { layers: ['src/contracts', 'src/shared'], packages: [] },
-  'src/plugins/keys/contract.ts': {
-    layers: ['src/contracts'],
-    packages: [],
-  },
-  'src/plugins/keys/layouts': {
-    layers: ['src/shared/page/layout-host'],
-    packages: [],
-  },
-  'src/plugins/keys/main': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/plugins/keys',
-      'src/plugins/keys/layouts',
-    ],
-    packages: [],
-  },
-  'src/plugins/keys/page': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/shared/followups',
-      'src/shared/page',
-      'src/shared/page/ui',
-      'src/plugins/keys',
-      'src/plugins/keys/contract.ts',
-      'src/plugins/keys/layouts',
-      'src/shared/page/layout-host',
-    ],
-    packages: [],
-  },
-  'src/plugins/sessions': {
-    layers: ['src/contracts', 'src/shared', 'src/plugins/sessions/contract.ts'],
-    packages: [],
-  },
-  'src/plugins/sessions/contract.ts': {
-    layers: ['src/contracts'],
-    packages: [],
-  },
-  'src/plugins/sessions/main': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/shared/followups',
-      'src/plugins/sessions',
-      'src/plugins/sessions/contract.ts',
-      'src/plugins/sessions/main/relay',
-      'src/plugins/sessions/main/mcp',
-      'src/plugins/sessions/layouts',
-    ],
-    packages: ['node:'],
-  },
-  'src/plugins/sessions/main/relay': {
-    layers: ['src/contracts', 'src/shared', 'src/plugins/sessions/contract.ts'],
-    packages: ['node:'],
-  },
-  'src/plugins/sessions/main/mcp': {
-    layers: ['src/contracts', 'src/shared', 'src/plugins/sessions/contract.ts'],
-    packages: ['@modelcontextprotocol/server', 'node:'],
-  },
-  'src/plugins/sessions/layouts': {
-    layers: ['src/shared/page/layout-host'],
-    packages: [],
-  },
-  'src/plugins/sessions/page': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/shared/followups',
-      'src/shared/page',
-      'src/shared/page/ui',
-      'src/plugins/sessions',
-      'src/plugins/sessions/contract.ts',
-      'src/plugins/keys/contract.ts',
-      'src/plugins/sessions/layouts',
-      'src/shared/page/layout-host',
-    ],
-    packages: [],
-  },
-  'src/plugins/main.ts': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/plugins/agent-lines',
-      'src/plugins/agent-lines/main',
-      'src/plugins/agent-strip',
-      'src/plugins/agent-strip/main',
-      'src/plugins/agents',
-      'src/plugins/agents/main',
-      'src/plugins/backlog',
-      'src/plugins/backlog/main',
-      'src/plugins/chat',
-      'src/plugins/chat/main',
-      'src/plugins/docs',
-      'src/plugins/docs/main',
-      'src/plugins/forms',
-      'src/plugins/forms/main',
-      'src/plugins/notes',
-      'src/plugins/notes/main',
-      'src/plugins/primer',
-      'src/plugins/primer/main',
-      'src/plugins/sessions',
-      'src/plugins/sessions/main',
-      'src/plugins/settings',
-      'src/plugins/settings/main',
-      'src/plugins/gallery',
-      'src/plugins/gallery/main',
-      'src/plugins/keys',
-      'src/plugins/keys/main',
-      'src/plugins/usage',
-      'src/plugins/usage/main',
-      'src/plugins/visual',
-      'src/plugins/visual/main',
-      'src/plugins/workflow',
-      'src/plugins/workflow/main',
-    ],
-    packages: [],
-  },
-  'src/plugins/manifests.ts': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/plugins/agent-lines',
-      'src/plugins/agent-strip',
-      'src/plugins/agents',
-      'src/plugins/backlog',
-      'src/plugins/chat',
-      'src/plugins/docs',
-      'src/plugins/forms',
-      'src/plugins/gallery',
-      'src/plugins/keys',
-      'src/plugins/notes',
-      'src/plugins/primer',
-      'src/plugins/sessions',
-      'src/plugins/settings',
-      'src/plugins/usage',
-      'src/plugins/usage-tab-line',
-      'src/plugins/visual',
-      'src/plugins/workflow',
-    ],
-    packages: [],
-  },
-  'src/plugins/page.ts': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/shared/page',
-      'src/plugins/agent-lines',
-      'src/plugins/agent-lines/page',
-      'src/plugins/agent-strip',
-      'src/plugins/agent-strip/page',
-      'src/plugins/agents',
-      'src/plugins/agents/page',
-      'src/plugins/backlog',
-      'src/plugins/backlog/page',
-      'src/plugins/chat',
-      'src/plugins/chat/page',
-      'src/plugins/docs',
-      'src/plugins/docs/page',
-      'src/plugins/forms',
-      'src/plugins/forms/page',
-      'src/plugins/gallery',
-      'src/plugins/gallery/page',
-      'src/plugins/keys',
-      'src/plugins/keys/page',
-      'src/plugins/notes',
-      'src/plugins/notes/page',
-      'src/plugins/primer',
-      'src/plugins/primer/page',
-      'src/plugins/sessions',
-      'src/plugins/sessions/page',
-      'src/plugins/settings',
-      'src/plugins/settings/page',
-      'src/plugins/usage',
-      'src/plugins/usage/page',
-      'src/plugins/usage-tab-line',
-      'src/plugins/usage-tab-line/page',
-      'src/plugins/visual',
-      'src/plugins/visual/page',
-      'src/plugins/workflow',
-      'src/plugins/workflow/page',
-    ],
-    packages: [],
-  },
   'src/renderer': {
     layers: [
       'src/contracts',
@@ -1142,16 +450,18 @@ const LAYERS: Record<string, LayerRule> = {
 const TEST_PACKAGES = ['vitest'];
 const TEST_FILE_SUFFIXES = ['.test.ts', '.test-d.ts', '.test-support.ts'];
 
-function layerOf(file: string): string | undefined {
-  return Object.keys(LAYERS)
+type Layers = Record<string, LayerRule>;
+
+function layerOf(file: string, layers: Layers): string | undefined {
+  return Object.keys(layers)
     .filter((layer) => file === layer || file.startsWith(`${layer}/`))
     .sort((a, b) => b.length - a.length)[0];
 }
 
 // An extensionless import of a single-file layer (a composition root) names that file.
-function layerOfImport(target: string): string | undefined {
+function layerOfImport(target: string, layers: Layers): string | undefined {
   const asFile = `${target}.ts`;
-  return layerOf(asFile in LAYERS ? asFile : target);
+  return layerOf(asFile in layers ? asFile : target, layers);
 }
 
 function allowsPackage(rule: LayerRule, specifier: string): boolean {
@@ -1162,12 +472,12 @@ function allowsPackage(rule: LayerRule, specifier: string): boolean {
   );
 }
 
-function importViolations(file: string): string[] {
-  const layer = layerOf(file);
+function importViolations(file: string, layers: Layers): string[] {
+  const layer = layerOf(file, layers);
   if (!layer) {
-    return [`${file}: no layer in LAYERS covers this file`];
+    return [`${file}: no layer covers this file`];
   }
-  const rule = LAYERS[layer];
+  const rule = layers[layer];
   const isTestFile = TEST_FILE_SUFFIXES.some((suffix) => file.endsWith(suffix));
   const violations: string[] = [];
   const imports = ts.preProcessFile(readFileSync(file, 'utf8'), true, true);
@@ -1182,7 +492,7 @@ function importViolations(file: string): string[] {
       continue;
     }
     const target = path.posix.join(path.posix.dirname(file), specifier);
-    const targetLayer = layerOfImport(target);
+    const targetLayer = layerOfImport(target, layers);
     const isAllowed =
       targetLayer === layer ||
       (targetLayer !== undefined && rule.layers.includes(targetLayer));
@@ -1195,15 +505,106 @@ function importViolations(file: string): string[] {
   return violations;
 }
 
-const files = readdirSync('src', { recursive: true, encoding: 'utf8' })
-  .filter((file) => file.endsWith('.ts') || file.endsWith('.js'))
-  .map((file) => `src/${file.replaceAll(path.sep, '/')}`);
-const violations = files.flatMap(importViolations);
-for (const violation of violations) {
-  console.error(violation);
-}
-if (violations.length > 0) {
+function printFailure(line: string): void {
+  console.error(line);
   process.exitCode = 1;
-} else {
-  console.log(`layers: ${files.length} files clean`);
+}
+
+function thrownText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function readPluginFolder(id: string): PluginFolder | undefined {
+  const root = `src/plugins/${id}`;
+  const manifest = `${root}/manifest.ts`;
+  if (!existsSync(manifest)) {
+    printFailure(`${root}: no manifest.ts`);
+    return undefined;
+  }
+  try {
+    return {
+      id,
+      hasContract: existsSync(`${root}/contract.ts`),
+      hasMain: existsSync(`${root}/main/start.ts`),
+      hasPage: existsSync(`${root}/page/start.ts`),
+      hasLayouts: existsSync(`${root}/layouts`),
+      dependsOn: readDependsOn(manifest, readFileSync(manifest, 'utf8')),
+    };
+  } catch (error) {
+    printFailure(thrownText(error));
+    return undefined;
+  }
+}
+
+// Undefined when a failure is already printed, which leaves no rules to check by.
+function derivedPluginLayers(pluginIds: readonly string[]): Layers | undefined {
+  const folders = pluginIds
+    .map(readPluginFolder)
+    .filter((folder) => folder !== undefined);
+  if (folders.length < pluginIds.length) {
+    return undefined;
+  }
+  try {
+    return pluginLayers(folders, PLUGIN_EXTRAS);
+  } catch (error) {
+    printFailure(thrownText(error));
+    return undefined;
+  }
+}
+
+function startModules(pluginIds: readonly string[], part: string): string[] {
+  return pluginIds
+    .filter((id) => existsSync(`src/plugins/${id}/${part}/start.ts`))
+    .map((id) => `./${id}/${part}/start`);
+}
+
+function checkCompositionRoots(pluginIds: readonly string[]): void {
+  const roots = [
+    {
+      file: 'src/plugins/main.ts',
+      arrayName: 'mainParts',
+      expected: startModules(pluginIds, 'main'),
+    },
+    {
+      file: 'src/plugins/page.ts',
+      arrayName: 'pageParts',
+      expected: startModules(pluginIds, 'page'),
+    },
+    {
+      file: 'src/plugins/manifests.ts',
+      arrayName: 'builtInManifests',
+      expected: pluginIds.map((id) => `./${id}/manifest`),
+    },
+  ];
+  for (const { file, arrayName, expected } of roots) {
+    try {
+      compositionFailures(
+        file,
+        readFileSync(file, 'utf8'),
+        arrayName,
+        expected,
+      ).forEach(printFailure);
+    } catch (error) {
+      printFailure(thrownText(error));
+    }
+  }
+}
+
+function checkImports(layers: Layers): void {
+  const files = readdirSync('src', { recursive: true, encoding: 'utf8' })
+    .filter((file) => file.endsWith('.ts') || file.endsWith('.js'))
+    .map((file) => `src/${file.replaceAll(path.sep, '/')}`);
+  files.flatMap((file) => importViolations(file, layers)).forEach(printFailure);
+  if (process.exitCode === undefined) {
+    console.log(`layers: ${files.length} files clean`);
+  }
+}
+
+const pluginIds = readdirSync('src/plugins', { withFileTypes: true })
+  .filter((entry) => entry.isDirectory())
+  .map((entry) => entry.name);
+checkCompositionRoots(pluginIds);
+const pluginEntries = derivedPluginLayers(pluginIds);
+if (pluginEntries) {
+  checkImports({ ...CORE_LAYERS, ...pluginEntries });
 }

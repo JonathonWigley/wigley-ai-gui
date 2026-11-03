@@ -1,6 +1,6 @@
 # 11 — Remove the compatibility forms
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 7 · Depends on: 08, 09, 10
 Plan: [plan.md](plan.md)
@@ -65,3 +65,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 2ae6ad84 · proof: Diff read of contracts, both APIs and plugin-log; whole-tree typecheck clean after commit; the task's four greps and its type Log grep print nothing; worker ran the named tests and harness test, 88 pass, and both test-d files under typecheck; no plugin file needed a change · concerns: AGENTS.md:320 still shows the removed form, for task 13. The worker ran npx --version against the brief's denied list: it printed a version, fetched nothing and changed no file.
