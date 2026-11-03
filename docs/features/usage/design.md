@@ -132,10 +132,10 @@ In `src/contracts/agent.ts`, beside `AgentHarness`:
   main `timers`. It folds each
   `chat.planUsage` update into that profile's plan usage, records each session's profile from `chat.sessionOpened`
   (so the line shows the right profile before the session's first turn ends), keeps each session's latest `usage`
-  agent event from `chat.agentEvent` (an event whose `at` is older than the kept one's changes nothing), and drops a
+  agent event from `chat.agentEvent` (an event whose `at` is older than the kept one's records only the session's profile, keeping the kept usage), and drops a
   session when it ends. Chat sends a restored row's saved usage the same way: on restoring a row that ever sent a
   message, it reads `harness.lastUsage` and emits the result as the row's `agentEvent`. A failed read is logged, and
-  the row keeps the 0 line. It sends one snapshot over its channel on every change.
+  the row keeps the zero line. It sends one snapshot over its channel on every change.
 - A failed poll keeps the profile's last plan usage, marks it stale with the time of the last good poll, and carries
   the reason, which the details bar shows; the next good poll clears both. With no good poll yet the profile has no
   usage: the line says `plan loading` (or `plan unavailable` after a failure) and the details say `no good read yet`.
