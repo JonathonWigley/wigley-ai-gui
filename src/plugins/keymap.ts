@@ -119,16 +119,24 @@ function chatEntryPageBinds() {
   ];
 }
 
-// A box's binds are normal-mode maps: `<CR>` sends only in normal mode, so
-// Enter in insert mode adds a line.
+// `<CR>` sends in insert mode too; Shift+Enter, which no bind takes, adds a
+// line.
 function chatBoxBinds() {
   const scope = 'chat.chat' as const;
   return [
-    { keys: '<CR>', command: 'chat.send' as const },
-    { keys: '<Esc>', command: 'chat.leaveBox' as const },
-    { keys: '<Leader>cx', command: 'chat.removeImage' as const },
-    { keys: '<Leader>cp', command: 'chat.pullBackQueued' as const },
-  ].map((bind) => ({ ...bind, scope, where: 'box' as const }));
+    ...[
+      { keys: '<CR>', command: 'chat.send' as const },
+      { keys: '<Esc>', command: 'chat.leaveBox' as const },
+      { keys: '<Leader>cx', command: 'chat.removeImage' as const },
+      { keys: '<Leader>cp', command: 'chat.pullBackQueued' as const },
+    ].map((bind) => ({ ...bind, scope, where: 'box' as const })),
+    {
+      keys: '<CR>',
+      scope,
+      command: 'chat.send' as const,
+      mode: 'insert' as const,
+    },
+  ];
 }
 
 // The chat's picker and session list each hold the same list keys.
