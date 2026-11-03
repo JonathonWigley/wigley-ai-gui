@@ -46,6 +46,7 @@ import {
   focusAfterChange,
   focusAfterClose,
   focusAfterScroll,
+  focusAfterScrollEvent,
   focusFirst,
   focusLatest,
   isAtLastStop,
@@ -98,7 +99,9 @@ export interface TranscriptScroll extends ContentScroll {
 // the run is open and grows and no pending row follows it. After every change,
 // and whenever the list's own box or any slot's box resizes, a following focus
 // scrolls the list to its bottom; a hidden list does not scroll, so its tab
-// calls `scrollToFocus` each time it shows.
+// calls `scrollToFocus` each time it shows. Any scroll of a shown list (wheel,
+// trackpad, scrollbar or keys) that comes to rest off the bottom stops
+// following, and one that lands on the bottom follows again.
 // While the session works on its turn, the live run's line time and the
 // working block's tick once a second.
 export interface EntryList {
@@ -468,6 +471,13 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       list.scrollTop = list.scrollHeight;
     }
   };
+  const onListScroll = () => {
+    const isHidden = list.clientHeight === 0;
+    if (!isHidden) {
+      focus = focusAfterScrollEvent(focus, isScrolledToEnd(list, 1));
+    }
+  };
+  list.addEventListener('scroll', onListScroll);
   const listSize = followListSize(list, followBottom);
   const slotSizes = new ResizeObserver(followBottom);
   const observeSlot = (slot: HTMLElement) =>
@@ -572,6 +582,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       return { stop, result: opens ? 'expanded' : 'collapsed' };
     },
     dispose() {
+      list.removeEventListener('scroll', onListScroll);
       listSize.disconnect();
       slotSizes.disconnect();
       if (tick !== null) {

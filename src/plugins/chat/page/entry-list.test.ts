@@ -1087,11 +1087,17 @@ describe('slots and focus', () => {
   });
 
   it.each([
-    { name: 'following', scrolledUp: false, scrollTop: 500 },
-    { name: 'scrolled up', scrolledUp: true, scrollTop: 280 },
-  ])(
+    { name: 'following', scrolledBy: 'nothing', scrollTop: 500 },
+    { name: 'scrolled up by keys', scrolledBy: 'keys', scrollTop: 280 },
+    { name: 'scrolled up by the wheel', scrolledBy: 'wheel', scrollTop: 250 },
+    {
+      name: 'wheeled back to the bottom',
+      scrolledBy: 'wheel back',
+      scrollTop: 500,
+    },
+  ] as const)(
     'followsGrowth_SlotResizes_ScrollsOnlyWhileFollowing $name',
-    ({ scrolledUp, scrollTop }) => {
+    ({ scrolledBy, scrollTop }) => {
       const { list, put } = setUpList(defaultShown());
       const scroller = asFake(list.element) as FakeElement & {
         scrollHeight: number;
@@ -1102,8 +1108,16 @@ describe('slots and focus', () => {
       put(assistant('a visual'));
       // A browser clamps the bottom scroll to the height less the box's.
       scroller.scrollTop = 300;
-      if (scrolledUp) {
+      if (scrolledBy === 'keys') {
         list.scrollBy('line', -1);
+      }
+      if (scrolledBy === 'wheel' || scrolledBy === 'wheel back') {
+        scroller.scrollTop = 250;
+        scroller.fire('scroll');
+      }
+      if (scrolledBy === 'wheel back') {
+        scroller.scrollTop = 300;
+        scroller.fire('scroll');
       }
       const slot = asFake(list.element).children[0];
 
