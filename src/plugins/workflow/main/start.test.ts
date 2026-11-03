@@ -167,6 +167,7 @@ function startWorkflowPart(
       profileDir: '~/.claude',
       hostSessionId,
       event,
+      replayed: false,
     });
   const openS1 = async () => {
     await emit('sessions.connected', session('s1', 'h1'));

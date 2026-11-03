@@ -101,6 +101,7 @@ export function createChatPreview(deps: ChatPreviewDeps): ChatPreview {
           profileDir: null,
           hostSessionId: CHAT_PREVIEW_HOST_ID,
           event,
+          replayed: false,
         });
       }
       log('chat', 'chat preview opened');

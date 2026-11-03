@@ -442,6 +442,7 @@ describe('createChatSessions', () => {
     ]);
     expect(test.harness.processes.map((process) => process.request)).toEqual([
       {
+        processId: 'uuid-1:1',
         sessionId: 'uuid-1',
         resume: false,
         projectDir: PROJECT_DIR,
@@ -649,6 +650,7 @@ describe('createChatSessions', () => {
     ]);
     expect(state.commands).toEqual([]);
     expect(test.harness.processes.at(-1)?.request).toEqual({
+      processId: `${hostId}:1`,
       sessionId: hostId,
       resume: true,
       projectDir: '/w/app',
@@ -700,6 +702,7 @@ describe('createChatSessions', () => {
           profileDir: '~/.claude',
           hostSessionId: PAST_ONE.sessionId,
           event: fakeUsageEvent(2, 1500),
+          replayed: false,
         },
       ],
     },
@@ -2311,6 +2314,7 @@ describe('createChatSessions saved sessions', () => {
           profileDir: '~/.claude',
           hostSessionId: 'host-a',
           event: fakeUsageEvent(2, 1500),
+          replayed: false,
         },
       ],
     },
@@ -2420,6 +2424,7 @@ describe('createChatSessions saved sessions', () => {
 
       expect(test.harness.processes.map((process) => process.request)).toEqual([
         {
+          processId: `${hostId}:1`,
           sessionId: hostId,
           resume: sent,
           projectDir: '/w/app',
@@ -3017,6 +3022,7 @@ describe('createChatSessions usage forwarding', () => {
           profileDir: '~/.claude-personal',
           hostSessionId: 'uuid-1',
           event,
+          replayed: false,
         },
       },
     ]);
@@ -3054,6 +3060,7 @@ describe('createChatSessions usage forwarding', () => {
             profileDir: '~/.claude-personal',
             hostSessionId: 'uuid-1',
             event: fakeUsageEvent(1, 1000),
+            replayed: false,
           },
         },
       ],

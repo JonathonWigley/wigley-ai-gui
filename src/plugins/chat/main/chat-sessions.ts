@@ -836,6 +836,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
             profileDir,
             hostSessionId,
             event,
+            replayed: false,
           });
         }
         if (isLiveEvent) {
@@ -1039,6 +1040,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     const profileDir = profileDirOf(profile);
     const process = harness.start(
       {
+        processId: `${session.hostId}:${session.processStarts}`,
         sessionId: session.hostId,
         resume,
         projectDir,
@@ -1395,6 +1397,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       profileDir,
       hostSessionId: session.hostId,
       event,
+      replayed: false,
     });
   }
 
@@ -1427,7 +1430,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     profileDir: string,
   ): Promise<ChatEntry[]> {
     try {
-      return await harness.history(hostSessionId, projectDir, profileDir);
+      return await harness.history(hostSessionId, projectDir, profileDir, null);
     } catch (error) {
       const reason = errorText(error);
       log('chat', `history of ${hostSessionId} not read: ${reason}`);

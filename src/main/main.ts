@@ -39,6 +39,7 @@ import { BRIDGE_CHANNELS } from '../contracts/bridge';
 import type { Log } from '../contracts/log';
 import type { Paths } from '../contracts/paths';
 import type { Platform } from '../contracts/platform';
+import type { SessionHost } from '../contracts/session-host';
 import type { AppConfig } from '../contracts/settings';
 import type { UserConfig } from '../contracts/user-config';
 import type {
@@ -304,6 +305,15 @@ const timers: Timers = {
   clear: (handle) => clearTimeout(handle),
 };
 const modeServices = modeServicesOf(runEnvironment);
+const unwiredSessionHost: SessionHost = {
+  spawn() {
+    throw new Error('no session host is wired yet');
+  },
+  attach: async () => null,
+  list: async () => [],
+  setKeepIdleMinutes() {},
+  stopAll: async () => {},
+};
 
 const files = createNodeFiles({ trashItem: modeServices.trashItem });
 const processes = createNodeProcesses();
@@ -821,6 +831,7 @@ function createWindow(
       images: nativeImageEncoder,
       runMode,
       appInstance,
+      sessionHost: unwiredSessionHost,
       ...modeServices.forWindow({
         window,
         store,

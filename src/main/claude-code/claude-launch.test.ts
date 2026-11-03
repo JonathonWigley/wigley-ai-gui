@@ -9,6 +9,7 @@ describe('claudeLaunch', () => {
   it('claudeLaunch_NewSession_PinnedArgsAndProfileEnv', () => {
     const launch = claudeLaunch(
       {
+        processId: 'p-1',
         sessionId: 's-1',
         resume: false,
         projectDir: '/proj',
@@ -46,6 +47,7 @@ describe('claudeLaunch', () => {
 
     const launch = claudeLaunch(
       {
+        processId: 'p-1',
         sessionId: 's-1',
         resume: true,
         projectDir: '/proj',
@@ -107,6 +109,7 @@ describe('claudeLaunch', () => {
     ({ controls, present, absent }) => {
       const launch = claudeLaunch(
         {
+          processId: 'p-1',
           sessionId: 's-1',
           resume: false,
           projectDir: '/proj',
@@ -145,6 +148,7 @@ describe('claudeLaunch', () => {
     ({ instructions, expected }) => {
       const launch = claudeLaunch(
         {
+          processId: 'p-1',
           sessionId: 's-1',
           resume: false,
           projectDir: '/proj',
@@ -172,6 +176,7 @@ describe('claudeLaunch', () => {
   it('claudeLaunch_NestedSessionEnv_StripsListedNamesOnly', () => {
     const launch = claudeLaunch(
       {
+        processId: 'p-1',
         sessionId: 's-1',
         resume: false,
         projectDir: '/proj',
@@ -200,6 +205,7 @@ describe('claudeLaunch', () => {
   it("expands a profile folder against the adapter's home", () => {
     const launch = claudeLaunch(
       {
+        processId: 'p-1',
         sessionId: 's-1',
         resume: false,
         projectDir: '/proj',
@@ -219,6 +225,7 @@ describe('claudeLaunch', () => {
   it('claudeLaunch_WindowsProfile_ExpandsUnderHome', () => {
     const launch = claudeLaunch(
       {
+        processId: 'p-1',
         sessionId: 's-1',
         resume: false,
         projectDir: 'C:\\proj',

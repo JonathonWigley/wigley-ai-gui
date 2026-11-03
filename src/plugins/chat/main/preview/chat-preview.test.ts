@@ -132,6 +132,7 @@ describe('chat preview', () => {
         profileDir: null,
         hostSessionId: CHAT_PREVIEW_HOST_ID,
         event,
+        replayed: false,
       })),
     );
   });

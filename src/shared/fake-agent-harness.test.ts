@@ -43,6 +43,7 @@ import {
 const clock = { now: () => 1000 };
 
 const request: AgentStart = {
+  processId: 'p-1',
   sessionId: 's-1',
   resume: false,
   projectDir: '/p',
@@ -1308,7 +1309,7 @@ describe('createFakeAgentHarness', () => {
     );
     const known = '00000000-0000-4000-8000-000000000001';
 
-    expect(await harness.history(known, '/a', null)).toEqual([
+    expect(await harness.history(known, '/a', null, null)).toEqual([
       {
         kind: 'user',
         id: `history:${known}-user`,
@@ -1326,12 +1327,14 @@ describe('createFakeAgentHarness', () => {
         raw: [{ fake: 'history-assistant' }],
       },
     ]);
-    await expect(harness.history('nope', '/a', null)).rejects.toThrow(/nope/);
+    await expect(harness.history('nope', '/a', null, null)).rejects.toThrow(
+      /nope/,
+    );
     harness.failNextHistory('cannot read');
-    await expect(harness.history(known, '/a', null)).rejects.toThrow(
+    await expect(harness.history(known, '/a', null, null)).rejects.toThrow(
       'cannot read',
     );
-    expect(await harness.history(known, '/a', null)).toHaveLength(2);
+    expect(await harness.history(known, '/a', null, null)).toHaveLength(2);
     expect(harness.pastSessionCalls).toEqual([
       {
         method: 'history',

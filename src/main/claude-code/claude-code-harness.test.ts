@@ -20,6 +20,7 @@ import {
 import { controlMessage, userMessage } from './claude-controls';
 
 const request: AgentStart = {
+  processId: 'p-1',
   sessionId: 's-1',
   resume: false,
   projectDir: '/proj',

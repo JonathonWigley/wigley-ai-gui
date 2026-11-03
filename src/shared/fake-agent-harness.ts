@@ -1412,6 +1412,9 @@ export function createFakeAgentHarness(
           });
         });
       },
+      detach() {
+        throw new Error('detach is not implemented until task 08');
+      },
     };
   }
 
@@ -1435,6 +1438,8 @@ export function createFakeAgentHarness(
       recordStart(request);
       return startProcess(record);
     },
+    attach: () =>
+      Promise.reject(new Error('attach is not implemented until task 08')),
     failNextStart(message) {
       nextStartFailure = message;
     },

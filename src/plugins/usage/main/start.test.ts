@@ -164,12 +164,14 @@ describe('usageMainPart', () => {
       profileDir: '~/.claude-personal',
       hostSessionId: 'h1',
       event: usageEvent('main'),
+      replayed: false,
     });
     usage.emit('chat.agentEvent', {
       sessionId: 's1',
       profileDir: '~/.claude-personal',
       hostSessionId: 'h1',
       event: usageEvent('agent-7'),
+      replayed: false,
     });
     usage.emit('sessions.ended', { sessionId: 's1' });
 
@@ -218,6 +220,7 @@ describe('usageMainPart', () => {
       profileDir: '~/.claude-personal',
       hostSessionId: 'h1',
       event: usageEvent('main'),
+      replayed: false,
     });
 
     expect(usage.snapshot().sessions).toEqual([
@@ -237,6 +240,7 @@ describe('usageMainPart', () => {
       profileDir: '~/.claude-personal',
       hostSessionId: 'h1',
       event: usageEvent('main'),
+      replayed: false,
     });
 
     expect(usage.logs).toEqual([
@@ -334,6 +338,7 @@ describe('sessionUsage', () => {
             profileDir: '~/.claude-personal',
             hostSessionId: 'h1',
             event: usageEvent('main'),
+            replayed: false,
           });
     before.forEach(hear);
     let isResolved = false;

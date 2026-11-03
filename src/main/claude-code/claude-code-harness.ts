@@ -750,6 +750,9 @@ function startClaudeProcess(
       return endPromise;
     },
     kill,
+    detach() {
+      throw new Error('detach is not implemented until task 08');
+    },
   };
 }
 
@@ -1031,6 +1034,8 @@ export function createClaudeCodeHarness(
   return {
     id: 'claude',
     start: (request, events) => startClaudeProcess(deps, request, events),
+    attach: () =>
+      Promise.reject(new Error('attach is not implemented until task 08')),
     listSessions: (projectDir, profileDir) =>
       listPastSessions(
         { files: deps.files, paths: deps.paths, log: deps.log },

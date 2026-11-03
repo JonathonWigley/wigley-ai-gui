@@ -226,12 +226,14 @@ export interface ChatChannel extends ChannelShape {
 
 // One agent event of a session chat owns. `sessionId` is the sessions plugin's
 // row id, `hostSessionId` the harness's session id, which a resumed session
-// keeps.
+// keeps. `replayed` is true for an event a re-attach replayed from a pipe log;
+// a listener that appends or alerts skips it.
 export interface ChatAgentEvent {
   sessionId: string;
   profileDir: string | null;
   hostSessionId: string;
   event: AgentEvent;
+  replayed: boolean;
 }
 
 // `agentEvent`: one agent event of a session chat owns, still sent after the

@@ -116,7 +116,9 @@ export type ChatEntryKind = ChatEntry['kind'];
 // it knows and ignores an id it does not declare.
 // `instructions` is text the session's agent is told before its first message, in the order its registrations were
 // made; [] when none. Each adapter hands it to its harness in that harness's own way.
+// `processId` is the hosted process id chat chooses for this start.
 export interface AgentStart {
+  processId: string;
   sessionId: string;
   resume: boolean;
   projectDir: string;
@@ -322,8 +324,11 @@ export interface AgentProcess {
   // Resolves once the process has exited, after `ended` has fired.
   end(): Promise<void>;
   // Stops the process at once, mid-turn included, for a caller that cannot
-  // wait for `end`, such as an app quit; `ended` follows once it exits.
+  // wait for `end`; `ended` follows once it exits.
   kill(): void;
+  // Stops this process object's events and timers and leaves the hosted process
+  // running. Chat calls it on quit and on a chat plugin stop, in place of `kill`.
+  detach(): void;
 }
 
 // A session the harness saved for a folder. `title` is its first user message, whitespace collapsed to
@@ -370,6 +375,12 @@ export interface ProjectFolder {
 export interface AgentHarness {
   id: string;
   start(request: AgentStart, events: AgentProcessEvents): AgentProcess;
+  // Attaches to the hosted process `request.processId`. Every event it fires before its promise resolves is replayed.
+  // Null when the host holds no running process with that id.
+  attach(
+    request: AgentStart,
+    events: AgentProcessEvents,
+  ): Promise<AgentProcess | null>;
   // Every session the harness saved for `projectDir` under `profileDir` (as `AgentStart` holds it), newest first;
   // [] when none.
   listSessions(
@@ -377,11 +388,12 @@ export interface AgentHarness {
     profileDir: string | null,
   ): Promise<PastSession[]>;
   // The saved session's conversation as chat entries, oldest first. Rejects naming the path when the
-  // transcript is missing.
+  // transcript is missing. `before`: only entries the transcript recorded before that epoch ms; null reads them all.
   history(
     sessionId: string,
     projectDir: string,
     profileDir: string | null,
+    before: number | null,
   ): Promise<ChatEntry[]>;
   // The main agent's `usage` event as the saved session's main replies left it: `at` is the last main reply's time;
   // the window, both limits and spend are null. Null when the session has no main reply. Rejects naming the path when
