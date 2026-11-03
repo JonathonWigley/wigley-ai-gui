@@ -806,8 +806,8 @@ report what happens to that message. No flag is needed: the field alone turns it
   the queue), `started` (it was taken into a turn), then one terminal state: `completed`, `cancelled`, `discarded` or
   `refused`. A message written with no `uuid` gets no frames.
 - `result`, `assistant`, `system/status` and the first stream event of a turn carry `user_message_uuid` (the message
-  that opened the turn) and `user_message_uuids` (every message the turn took in, the folded ones after the opener). A
-  turn Claude runs on its own carries neither key.
+  that opened the turn) and `user_message_uuids` (every message the turn took in, the folded ones after the opener).
+  A turn Claude runs on its own was not measured with uuids.
 - init's `capabilities` advertises this as `msg_lifecycle_v1` (§ Init).
 - The CLI's own schema marks `command_lifecycle`, `for_user_message_uuids` and the interrupt reply's `turn` as
   `@internal`; the public Agent SDK pages document none of them. `user_message_uuid(s)` and `priority` carry no mark
