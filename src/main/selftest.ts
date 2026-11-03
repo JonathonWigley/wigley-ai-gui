@@ -10,17 +10,22 @@ import { electronDrivenWindow } from './electron-driven-window';
 import {
   checkGroups,
   type HandedScript,
+  isFiltered,
   mergeSelfTestConfigs,
+  type ScriptRun,
   type SelfTestConfig,
+  type SelfTestFilter,
   screenshotFiles,
+  selectScripts,
 } from './selftest-config';
 import { checkPlacement, isOnLoad, report, runScript } from './selftest-runner';
 
 // Runs the plugins' self-test scripts on every page load, one after another,
 // each through `runScript`, which drives its keys into the page through
-// Electron's input pipeline; takes the scripts the plugins hand over, starts a
-// fresh run on each page load, and exits once the run ends. Run with
-// `npm run selftest`; exits non-zero on failure.
+// Electron's input pipeline; takes the scripts the plugins hand over, keeps
+// those the run's filter names, starts a fresh run on each page load, and
+// exits once the run ends. Run with `npm run selftest`; exits non-zero on
+// failure.
 
 let hasExited = false;
 
@@ -63,13 +68,15 @@ export function failSelfTest(
 let startedLoad = 0;
 
 // Waits for the page to be ready for keys and focuses it, acting as the
-// focused window as a drive run's page does, then runs every handed script in
+// focused window as a drive run's page does, then runs every kept script in
 // hand-over order; a failing script does not stop the next. After the last
-// script it fails the run on each bind the page load left unplaced.
+// script it fails the run on each bind the page load left unplaced, unless
+// the run is `filtered`: the scripts it left out place binds too.
 async function runAllScripts(
   window: DrivenWindow,
   homeFiles: Files,
-  handed: readonly HandedScript[],
+  runs: readonly ScriptRun[],
+  filtered: boolean,
   screenshots: ReadonlyMap<SelfTestStep, readonly string[]>,
   startWidth: number,
   load: number,
@@ -104,11 +111,11 @@ async function runAllScripts(
   }
 
   let failures = 0;
-  for (const script of handed) {
+  for (const run of runs) {
     const scriptFailures = await runScript(
       window,
       homeFiles,
-      script,
+      run,
       screenshots,
       startWidth,
       load,
@@ -119,7 +126,13 @@ async function runAllScripts(
     }
     failures += scriptFailures;
   }
-  failures += await checkPlacement(window);
+  if (filtered) {
+    console.log(
+      '[selftest] SKIP every key placed: a filtered run leaves out the binds of the scripts and groups it skips',
+    );
+  } else {
+    failures += await checkPlacement(window);
+  }
   if (!isCurrent()) {
     return;
   }
@@ -129,7 +142,7 @@ async function runAllScripts(
   exit(failures === 0 ? 0 : 1);
 }
 
-// Starts a fresh run of every handed script on the page load the window is on,
+// Starts a fresh run of every kept script on the page load the window is on,
 // printing `[selftest] page load <n> starts its run` (the drive's `ready`
 // reports the same number), unless that load already started one; a step that
 // throws or a script result that rejects fails the self-test, unless a reload
@@ -139,7 +152,8 @@ async function runAllScripts(
 function startRun(
   window: DrivenWindow,
   homeFiles: Files,
-  handed: readonly HandedScript[],
+  runs: readonly ScriptRun[],
+  filtered: boolean,
   screenshots: ReadonlyMap<SelfTestStep, readonly string[]>,
   startWidth: number,
   cleanUp: () => Promise<void>,
@@ -154,7 +168,8 @@ function startRun(
   runAllScripts(
     window,
     homeFiles,
-    handed,
+    runs,
+    filtered,
     screenshots,
     startWidth,
     load,
@@ -179,10 +194,14 @@ function emptyFolder(folder: string): void {
 
 // What the composition root holds: `hostFor` gives each plugin the host its
 // part hands its script to, and `closeHandover`, called once every part has
-// started, returns the merged page binds and settings of every handed script.
-// With no script handed over, scripts whose settings clash, groups or steps
-// `checkGroups` rejects, or steps whose screenshot names are malformed or
-// save one file, `closeHandover` fails the self-test and exits.
+// started, returns the merged page binds and settings of every handed script,
+// the scripts the filter leaves out included, so the page is served as on a
+// whole run. With no script handed over, scripts whose settings clash, groups
+// or steps `checkGroups` rejects, steps whose screenshot names are malformed or
+// save one file, or a filter `selectScripts` refuses (a malformed
+// `PROOF_SELFTEST_FILTER`, a plugin or group no script holds, or a script cut
+// short of its last group with a kept script after it), `closeHandover` fails
+// the self-test and exits.
 export interface SelfTestDriver {
   hostFor(pluginId: string): SelfTestHost;
   closeHandover(): SelfTestConfig;
@@ -194,15 +213,16 @@ export interface SelfTestDriver {
 // it before it exits. `screenshotFolder` is emptied here, so it ends the run
 // holding only that run's PNGs. Each plugin hands at most one script while the
 // parts start; a host throws on its plugin's second script or one handed over
-// late. Every page load runs the handed scripts in hand-over order, a run
-// begun on the previous page standing down as the new one commits. The
-// window's content width as the self-test starts is the width every script
-// starts and ends on.
+// late. Every page load runs the scripts `filter` keeps (`selectScripts`) in
+// hand-over order, a run begun on the previous page standing down as the new
+// one commits. The window's content width as the self-test starts is the
+// width every script starts and ends on.
 export function startSelfTest(
   window: BrowserWindow,
   homeFiles: Files,
   cleanUp: () => Promise<void>,
   screenshotFolder: string,
+  filter: SelfTestFilter,
 ): SelfTestDriver {
   emptyFolder(screenshotFolder);
   const drivenWindow = electronDrivenWindow(window);
@@ -257,11 +277,23 @@ export function startSelfTest(
         failSelfTest('the self-test screenshots name', error, cleanUp);
         return { pageBinds: [], settings: {} };
       }
+      let runs: ScriptRun[];
+      try {
+        runs = selectScripts(handed, filter);
+      } catch (error) {
+        failSelfTest('the self-test filter', error, cleanUp);
+        return { pageBinds: [], settings: {} };
+      }
+      const filtered = isFiltered(filter);
+      if (filtered) {
+        console.log(`[selftest] filtered run: ${runsLine(runs, handed)}`);
+      }
       window.webContents.on('did-finish-load', () =>
         startRun(
           drivenWindow,
           homeFiles,
-          handed,
+          runs,
+          filtered,
           screenshots,
           startWidth,
           cleanUp,
@@ -270,4 +302,21 @@ export function startSelfTest(
       return config;
     },
   };
+}
+
+// Each kept script as `<plugin> (<kept> of <all> groups)`, in hand-over order.
+function runsLine(
+  runs: readonly ScriptRun[],
+  handed: readonly HandedScript[],
+): string {
+  return handed
+    .flatMap(({ pluginId, script }) => {
+      const run = runs.find((entry) => entry.pluginId === pluginId);
+      return run === undefined
+        ? []
+        : [
+            `${pluginId} (${run.script.groups.length} of ${script.groups.length} groups)`,
+          ];
+    })
+    .join(', ');
 }

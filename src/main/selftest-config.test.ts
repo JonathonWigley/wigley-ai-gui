@@ -11,7 +11,10 @@ import {
   checkGroups,
   type HandedScript,
   mergeSelfTestConfigs,
+  SELFTEST_FILTER_ENV,
   screenshotFiles,
+  selectScripts,
+  selfTestFilterOf,
 } from './selftest-config';
 
 function handed(
@@ -367,4 +370,146 @@ describe('checkGroups', () => {
 
     expect(check).toThrow(new RegExp(`forms.*narrow.*\\(x\\).*width ${width}`));
   });
+});
+
+describe('selectScripts', () => {
+  const groupsOf = (...names: string[]): SelfTestGroup[] =>
+    names.map((name) => ({ name, why: 'w', steps: [] }));
+  const scripts = [
+    withGroups('forms', groupsOf('gallery', 'side bar', 'review')),
+    withGroups('settings', groupsOf('side bar', 'keymap')),
+    withGroups('docs', groupsOf('editor', 'pickers', 'side bar', 'stars')),
+  ];
+  const kept = (plugins: string[], groups: string[]) =>
+    selectScripts(scripts, { plugins, groups }).map((run) => [
+      run.pluginId,
+      run.script.groups.map((group) => group.name),
+      run.checksResult,
+    ]);
+
+  it.each([
+    {
+      filter: 'nothing',
+      plugins: [],
+      groups: [],
+      runs: [
+        ['forms', ['gallery', 'side bar', 'review'], true],
+        ['settings', ['side bar', 'keymap'], true],
+        ['docs', ['editor', 'pickers', 'side bar', 'stars'], true],
+      ],
+    },
+    {
+      filter: 'two plugins, in hand-over order',
+      plugins: ['docs', 'forms'],
+      groups: [],
+      runs: [
+        ['forms', ['gallery', 'side bar', 'review'], true],
+        ['docs', ['editor', 'pickers', 'side bar', 'stars'], true],
+      ],
+    },
+    {
+      filter: 'a qualified group, with the groups before it',
+      plugins: [],
+      groups: ['docs: pickers'],
+      runs: [['docs', ['editor', 'pickers'], false]],
+    },
+    {
+      filter: 'a bare group, in every script holding it',
+      plugins: [],
+      groups: ['side bar', 'review', 'keymap'],
+      runs: [
+        ['forms', ['gallery', 'side bar', 'review'], true],
+        ['settings', ['side bar', 'keymap'], true],
+        ['docs', ['editor', 'pickers', 'side bar'], false],
+      ],
+    },
+    {
+      filter: 'a plugin and a group of another',
+      plugins: ['settings'],
+      groups: ['docs: editor'],
+      runs: [
+        ['settings', ['side bar', 'keymap'], true],
+        ['docs', ['editor'], false],
+      ],
+    },
+  ])('keeps $filter', ({ plugins, groups, runs }) => {
+    expect(kept(plugins, groups)).toEqual(runs);
+  });
+
+  it.each([
+    {
+      name: 'an unknown plugin',
+      plugins: ['chat'],
+      groups: [],
+      message: /chat.*forms, settings, docs/,
+    },
+    {
+      name: 'an unknown group',
+      plugins: [],
+      groups: ['settings: review'],
+      message:
+        /"settings: review".*forms: gallery.*settings: keymap.*docs: stars/,
+    },
+    {
+      name: 'a cut script before a kept one',
+      plugins: [],
+      groups: ['forms: gallery', 'keymap'],
+      message:
+        /cuts the forms script.*"gallery".*keeps settings.*forms groups on their own/,
+    },
+    {
+      name: 'a bare group that cuts an earlier script',
+      plugins: [],
+      groups: ['side bar'],
+      message: /cuts the forms script.*"side bar".*keeps settings/,
+    },
+    {
+      name: 'a cut script before a whole plugin',
+      plugins: ['docs'],
+      groups: ['settings: side bar'],
+      message: /cuts the settings script.*keeps docs/,
+    },
+  ])(
+    'throws on $name, naming the known ones',
+    ({ plugins, groups, message }) => {
+      expect(() => selectScripts(scripts, { plugins, groups })).toThrow(
+        message,
+      );
+    },
+  );
+});
+
+describe('selfTestFilterOf', () => {
+  it.each([
+    { env: {}, filter: { plugins: [], groups: [] } },
+    { env: { [SELFTEST_FILTER_ENV]: '' }, filter: { plugins: [], groups: [] } },
+    {
+      env: {
+        [SELFTEST_FILTER_ENV]:
+          '{"plugins":["settings"],"groups":["docs: stars"]}',
+      },
+      filter: { plugins: ['settings'], groups: ['docs: stars'] },
+    },
+  ])('reads $env', ({ env, filter }) => {
+    expect(selfTestFilterOf(env)).toEqual(filter);
+  });
+
+  it.each([
+    { value: '{"plugins":', why: /is not JSON/ },
+    { value: '["forms"]', why: /is not a JSON object/ },
+    { value: 'null', why: /is not a JSON object/ },
+    { value: '{"plugins":"forms"}', why: /not lists of strings/ },
+    { value: '{"groups":[1]}', why: /not lists of strings/ },
+  ])(
+    'makes selectScripts throw on the malformed value $value, naming it',
+    ({ value, why }) => {
+      const filter = selfTestFilterOf({ [SELFTEST_FILTER_ENV]: value });
+
+      const select = () => selectScripts([withGroups('forms', [])], filter);
+
+      expect(select).toThrow(SELFTEST_FILTER_ENV);
+      expect(select).toThrow(JSON.stringify(value));
+      expect(select).toThrow(why);
+    },
+  );
 });

@@ -504,6 +504,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     editorDraw?.dispose();
     editorDraw = null;
     followupEditor.destroy();
+    followupEditor.forget();
     editorSlot.replaceChildren();
     editorSlot.hidden = true;
   };

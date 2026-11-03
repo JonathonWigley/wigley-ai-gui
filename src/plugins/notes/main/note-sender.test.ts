@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import type { ImageEncoder } from '../../../contracts/images';
+import { MAX_IMAGE_BASE64 } from '../../../shared/image-types';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
+import { SHRINK_REFUSED } from '../../../shared/shrink-image';
 import type { BacklogWriteResult, NoteTarget } from '../../backlog/contract';
 import type { LaunchRequest } from '../../chat/contract';
 import type { FollowupRequest, NoteFields, NoteSession } from '../contract';
@@ -14,6 +17,21 @@ const BRIEF = 'Fix this.';
 const PNG_A = new Uint8Array([1, 1, 1]);
 const PNG_B = new Uint8Array([2, 2, 2]);
 const CREATE: FollowupRequest = { type: 'create' };
+// One byte more than the most whose base64 text fits the cap.
+const OVER_CAP_PNG = new Uint8Array((MAX_IMAGE_BASE64 / 4) * 3 + 1);
+const SHRUNK_PNG = new Uint8Array([7, 7, 7]);
+
+// Re-encodes every image as `encoded`, recording the scale of each call.
+function fakeEncoder(encoded: Uint8Array): ImageEncoder & { scales: number[] } {
+  const scales: number[] = [];
+  return {
+    scales,
+    encode(_image, scale) {
+      scales.push(scale);
+      return Promise.resolve(encoded);
+    },
+  };
+}
 
 const SESSION: NoteSession = {
   sessionId: 's1',
@@ -35,6 +53,7 @@ interface FiledNote {
 async function setUp(options: {
   fields?: Partial<NoteFields>;
   images?: Uint8Array[];
+  encoder?: ImageEncoder;
   fileNote?: () => Promise<BacklogWriteResult>;
   launch?: () => Promise<string>;
   profiles?: string[];
@@ -57,6 +76,7 @@ async function setUp(options: {
   const launched: LaunchRequest[] = [];
   const sender = createNoteSender({
     store,
+    images: options.encoder ?? fakeEncoder(new Uint8Array()),
     backlog: {
       fileNote(homeRoot, target, text, images) {
         filed.push({ homeRoot, target, text, images });
@@ -148,6 +168,48 @@ describe('toSession', () => {
     });
   });
 
+  it.each([
+    { kind: 'capture', stored: OVER_CAP_PNG, flattened: [null] },
+    { kind: 'markup image', stored: PNG_A, flattened: [OVER_CAP_PNG] },
+  ])(
+    'toSession_ImageOverCap_SendsItShrunk: $kind',
+    async ({ stored, flattened }) => {
+      const encoder = fakeEncoder(SHRUNK_PNG);
+      const note = await setUp({ images: [stored], encoder });
+
+      await note.sender.toSession('/home/me/repo', flattened);
+
+      expect(encoder.scales).toEqual([0.75]);
+      expect(note.launched.map((request) => request.message.images)).toEqual([
+        [{ mediaType: 'image/png', data: 'BwcH' }],
+      ]);
+    },
+  );
+
+  it.each([
+    {
+      kind: 'will not shrink under the cap',
+      encoder: fakeEncoder(OVER_CAP_PNG),
+    },
+    {
+      kind: 'the encoder rejects',
+      encoder: {
+        encode: () => Promise.reject(new Error('Could not decode the image')),
+      },
+    },
+  ])(
+    'toSession_ImageOverCap_RefusesAndKeepsDraft: $kind',
+    async ({ encoder }) => {
+      const note = await setUp({ images: [PNG_A, OVER_CAP_PNG], encoder });
+
+      const result = await note.sender.toSession('/home/me/repo', [null, null]);
+
+      expect(result).toEqual({ type: 'refused', reason: SHRINK_REFUSED });
+      expect(note.launched).toEqual([]);
+      expect((await note.saved())?.images).toHaveLength(2);
+    },
+  );
+
   it('toSession_LaunchRejects_KeepsDraftAndPassesText', async () => {
     const note = await setUp({
       images: [PNG_A],
@@ -191,6 +253,25 @@ describe('toFollowup', () => {
       [flattenedA, PNG_B],
     ]);
   });
+
+  it.each([
+    { kind: 'capture', stored: OVER_CAP_PNG, flattened: [null] },
+    { kind: 'markup image', stored: PNG_A, flattened: [OVER_CAP_PNG] },
+  ])(
+    'toFollowup_ImageOverCap_FilesItUnshrunk: $kind',
+    async ({ stored, flattened }) => {
+      const encoder = fakeEncoder(SHRUNK_PNG);
+      const note = await setUp({ images: [stored], encoder });
+
+      const result = await note.sender.toFollowup(CREATE, flattened);
+
+      expect(encoder.scales).toEqual([]);
+      expect(result.type).toBe('sent');
+      expect(note.filed).toHaveLength(1);
+      const [filed] = note.filed[0].images;
+      expect(filed.byteLength).toBe(OVER_CAP_PNG.byteLength);
+    },
+  );
 
   it('toFollowup_SendRefusal_CallsNeitherExport', async () => {
     const note = await setUp({ fields: { target: null } });

@@ -71,6 +71,7 @@ function runGroups(
         scrollsItself: [],
         problems: () => [],
       },
+      checksResult: true,
     },
     screenshots,
     START_WIDTH,

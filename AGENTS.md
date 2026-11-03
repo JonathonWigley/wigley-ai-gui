@@ -93,7 +93,8 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  text, in the file's own shape (triage.md § The project's follow-ups in wigley-ai-marketplace) →
                  pure, no I/O; Backlog and Docs' create dialog both write follow-ups through it
   image-types.ts the image media types the app attaches and pastes (chat and notes share it), the 5 MB base64 cap `MAX_IMAGE_BASE64`, and the helpers `extensionOf`, `base64LengthOf` and `base64Of`
-  page/          page-only DOM builders plugins share: the paste and drop helpers (`file-drop/`: the text-paste rule, the file chip pattern, the image shrink and its canvas encoder), the layout host
+  shrink-image.ts `shrinkToFit`: steps an image over the 5 MB cap down until it fits, through an `ImageEncoder` (the page's canvas adapter, or main's `services.images`)
+  page/          page-only DOM builders plugins share: the paste and drop helpers (`file-drop/`: the text-paste rule, the file chip pattern, the canvas adapter behind `ImageEncoder`), the layout host
                  (`layout-host/`: showing layouts, the pick chain, drawing a part, rollback, `BaseKit` (the kit every
                  owner's kit extends, with the shared `icon`, `chevron`, `edge`, `rowTrailing` and `duration`) and
                  `ownerBaseKitDeps` (the deps an owner's base kit is built from), the markdown mount
@@ -124,6 +125,7 @@ src/main/        core main process; main.ts is its composition root
   ui-state/      the uiState file: app-written view state (`ui-state.json`) in the app instance's user data folder
   alerts/        native notification, Dock bounce or taskbar flash, and the badge, behind Alerts; the badge sums the
                  open counts each source sets
+  images/        Electron's nativeImage behind ImageEncoder: re-encodes an image smaller, as PNG or JPEG only
   claude-code/   Claude Code CLI adapter behind AgentHarness, which also lists and reads Claude's saved sessions and
                  project folders, runs `claude auth` sign-in, sign-out and status and `claude -p /usage` (the plan usage
                  poll), and asks each session for `get_context_usage` → the only place the app spawns `claude`
@@ -161,12 +163,14 @@ src/renderer/    core page; renderer.ts is its composition root
                  flattened to a PNG                         → the only fabric import
 src/plugins/     every plugin, one folder each; manifests.ts lists every built-in manifest, keymap.ts holds
                  every built-in default key, main.ts and page.ts the parts each root starts
-  sessions/      manifest.ts, contract.ts, main/ (the session list — rows, the selected session, tool routing — relay,
-                 endpoint files, MCP adapter → the only @modelcontextprotocol import), page/ (Sessions mode: the
-                 sidebar, the pane tree of whole sessions with its split, swap and close commands and the shared
-                 list picker's `picker` scope, each session's tabs, the row and bar parts other plugins add, and the
-                 layout preview rows),
-                 layouts/ (the sessions Layout contract and the built-in `default` layout)
+  sessions/      manifest.ts, contract.ts, session-title.ts (the title rules main and page share), main/ (the
+                 session list — rows, their titles, the selected session, tool routing — the `set_session_title`
+                 tool, relay, endpoint files, MCP adapter → the only @modelcontextprotocol import), page/ (Sessions
+                 mode: the sidebar, the pane tree of whole sessions with its split, swap and close commands and the
+                 shared list picker's `picker` scope, each session's tabs, the row and bar parts other plugins add,
+                 each row's activities, the rename dialog, and the layout preview rows),
+                 layouts/ (the sessions Layout contract and the built-in `default` layout);
+                 `docs/features/session-titles/design.md`
   agents/        manifest.ts, contract.ts, roster.ts (the pure reducer folding agent events into a session's roster),
                  main/ (hears `chat.agentEvent`, keeps each session's roster, appends each event to
                  `logs/<host session id>.jsonl` in its plugin data, the layout preview), page/ (the running subagent
@@ -308,6 +312,11 @@ round; primer: an open primer), since main, not the page, decides.
   `addRowPart`; the agents plugin's subagent lines are one. A **bar part** draws in every session's tab bar, which moves
   with its session between panes, through `addBarPart`; the usage plugin's per-session context line is one.
   Information about one session goes in a session part, not on a shared bar.
+- **A row activity** is the short state a session's row shows beside its title — a status dot and a word (working,
+  needs you, done, error). A page plugin sets one per session under its own source id through the `sessions` page
+  export `setActivity`, and the row shows the highest rank, so a new state is a registration in the plugin that knows
+  it, never an edit to sessions. A **session title** has three sources (user, agent, first message) kept on the row;
+  the agent sets its own through the `set_session_title` tool (`docs/features/session-titles/design.md`).
 - **A composer part** is what a plugin draws above the Chat composer, through the `chat` page export
   `addComposerPart`, the same shape as a session part: chat hands each part a wrapper and the session id. The workflow
   plugin's strip is one.
@@ -397,9 +406,9 @@ round; primer: an open primer), since main, not the page, decides.
     only; a view may still anchor one, as Accept does with Enter. An anchor prints the command's first bind that is
     not one of vim's own keys, or its first bind when every bind is; the user's binds come before the defaults. Leader
     sequences show in which-key.
-  - **Every other bind has an anchor.** At the end of a self-test run (the `keys-check-placement` page event, named
-    with the line's prefix in `src/shared/placement-check.ts`, which the runner and the plugin share) the
-    plugin logs `[keys] unplaced <keys> <command> in <scope>`, once per scope and bind, for each bind firing in a
+  - **Every other bind has an anchor.** At the end of a whole self-test run (a filtered run skips it; the
+    `keys-check-placement` page event, named with the line's prefix in `src/shared/placement-check.ts`, which the
+    runner and the plugin share) the plugin logs `[keys] unplaced <keys> <command> in <scope>`, once per scope and bind, for each bind firing in a
     scope that was in force during the page load whose command no anchor named during the page load, in that scope or
     with no scope, on an element seen on the page (connected when the anchor drew, hid or showed, was disposed, or at
     the check). Leader sequences and vim's own keys are left out. The self-test fails on that line, so a new
@@ -499,7 +508,7 @@ round; primer: an open primer), since main, not the page, decides.
 - **An MCP tool** is contributed to the `sessions` plugin by the plugin that runs it, with a handler per session;
   sessions writes every contributed tool into `tools.json` and routes each call by tool name, so its MCP adapter
   names no tool.
-- **An ambient service** — the clock, timers, ids, the home folder, files (with watching), processes, git (main only), opening a link in the default browser, how the app was started (`runMode`: live, self-test or drive) — reaches a plugin
+- **An ambient service** — the clock, timers, ids, the home folder, files (with watching), processes, git (main only), image re-encoding (`images`, main only), opening a link in the default browser, how the app was started (`runMode`: live, self-test or drive) — reaches a plugin
   through `api.services`, filled in by the composition root, so a test hands the plugin a fake. The page's home folder
   is the real path of main's, served in the config, so every view shows a folder under it as `~` through
   `services.homeDir`.
@@ -656,7 +665,17 @@ round; primer: an open primer), since main, not the page, decides.
   (`typecheck` in `vitest.config.mts`), and runs them once more at run time. Two adapters of one contract run one
   suite of shared cases, kept in a `*.test-support.ts` module (the Files contract in
   `src/shared/files-contract.test-support.ts`).
-- `npm run selftest` is the agent's loop, and the user allows the agent to run it any time. It renders the window
+- `npm run selftest` is the agent's loop, and the user allows the agent to run it any time. An agent proving a change
+  runs the touched plugins' groups, and runs the whole self-test only when the user asks for it, since a whole run
+  takes half an hour or more: `npm run selftest -- --plugin <id>` runs only that plugin's script (repeat the flag or
+  give a comma list), and `--group <name>` (repeatable) runs that group, named `<plugin>: <name>` as the report prints
+  it or bare for that name in every script (a name several scripts share usually needs its `<plugin>: ` prefix, since a
+  bare name that cuts an earlier script short is refused), together with the groups before it in its script, since a
+  group starts from the page they left. A filtered run serves the page every script's binds and settings, checks a script's result
+  only when the run reaches the script's last group, and skips the end-of-run placement check. It fails before any
+  step on a plugin or group no script holds, naming the known ones, and on a filter that cuts a script short of its
+  last group and keeps a script after it, since the cut script leaves its fixture open: run that script's groups on
+  their own. A cut script's result that rejects by the end of the run still fails it. It renders the window
   offscreen as an accessory app, so it never takes the user's foreground; the core's driver (`src/main/selftest.ts`,
   its step runner in `src/main/selftest-runner.ts`) runs the script a plugin hands it — the forms plugin's opens
   fixture sessions through `sessions` and their rounds through `FormsService` — drives keys with

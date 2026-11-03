@@ -26,17 +26,40 @@ interface Registration {
   readonly target: DropTarget;
 }
 
+const WHITESPACE = /\s/;
+
 const ONE_LINE_INPUT_TYPES = new Set(['text', 'search', 'url']);
+
+// Input types that take no typed text, so focus in one leaves no field the
+// user is typing in.
+const NON_TEXT_INPUT_TYPES = new Set([
+  'button',
+  'checkbox',
+  'color',
+  'file',
+  'hidden',
+  'image',
+  'radio',
+  'range',
+  'reset',
+  'submit',
+]);
+
+// The toast for a file drag that holds no File, such as a folder the OS gives
+// none for.
+export const NO_FILES_CARRIED = 'This drag carried no files';
 
 // The page core's drop registry. It listens on `deps.document` in the capture
 // phase, ahead of the editor's own drop and paste handlers, and cancels every
 // file `dragover` and `drop` so no drop navigates the window. A drop goes to a
 // one-line input under the pointer, else the innermost target under it, else
-// toasts `NOTHING_TAKES_FILES`. A paste of files whose text is no real text
-// goes to a focused one-line input, else the innermost target holding focus,
-// else the target that last held focus while it is shown; with none it stays a
-// paste. A one-line input takes plain paths at its caret, saving each pathless
-// file first, and hears one `input` event.
+// toasts `NOTHING_TAKES_FILES`; a file drag holding no File toasts
+// `NO_FILES_CARRIED` wherever it lands. A paste of files whose text is no real
+// text goes to a focused one-line input, else the innermost target holding
+// focus, else, while no other editable field holds focus, the target that last
+// held focus while it is shown; with none it stays a paste. A one-line input
+// takes plain paths at its caret, spaced off the text on either side, saving
+// each pathless file first, and hears one `input` event.
 export function createDropTargets(deps: DropTargetsDeps): PageDrops {
   const registrations = new Set<Registration>();
   let lastFocused: Registration | null = null;
@@ -78,12 +101,10 @@ export function createDropTargets(deps: DropTargetsDeps): PageDrops {
     const { value } = input;
     const start = input.selectionStart ?? value.length;
     const end = input.selectionEnd ?? start;
-    input.setRangeText(
-      insertionText(paths, value[start - 1] ?? ''),
-      start,
-      end,
-      'end',
-    );
+    const next = value[end] ?? '';
+    const needsSpaceAfter = next !== '' && !WHITESPACE.test(next);
+    const text = insertionText(paths, value[start - 1] ?? '');
+    input.setRangeText(needsSpaceAfter ? `${text} ` : text, start, end, 'end');
     input.dispatchEvent(new Event('input', { bubbles: true }));
   };
 
@@ -118,7 +139,7 @@ export function createDropTargets(deps: DropTargetsDeps): PageDrops {
       const input = asOneLineInput(event.target);
       const registration = innermostHolding(event.target);
       if (files.length === 0) {
-        deps.toast(NOTHING_TAKES_FILES, 'info');
+        deps.toast(NO_FILES_CARRIED, 'info');
       } else if (input !== null) {
         void insertIntoInput(input, droppedFiles(files));
       } else if (registration !== null) {
@@ -140,7 +161,9 @@ export function createDropTargets(deps: DropTargetsDeps): PageDrops {
       }
       const focused = deps.document.activeElement;
       const input = asOneLineInput(focused);
-      const registration = innermostHolding(focused) ?? lastFocusedShown();
+      const registration =
+        innermostHolding(focused) ??
+        (holdsTextEntry(focused) ? null : lastFocusedShown());
       if (input === null && registration === null) {
         return;
       }
@@ -194,6 +217,20 @@ function asOneLineInput(element: EventTarget | null): OneLineInput | null {
     ONE_LINE_INPUT_TYPES.has((input as HTMLInputElement).type);
   const isEditable = !input?.readOnly && !input?.disabled;
   return (isTextArea || isTextInput) && isEditable ? input : null;
+}
+
+// Whether `element` is a field the user types in: a text-taking input, a
+// textarea, or contenteditable content such as an editor.
+function holdsTextEntry(element: Element | null): boolean {
+  const field = element as HTMLElement | null;
+  const isTextInput =
+    field?.tagName === 'INPUT' &&
+    !NON_TEXT_INPUT_TYPES.has((field as HTMLInputElement).type);
+  return (
+    isTextInput ||
+    field?.tagName === 'TEXTAREA' ||
+    field?.isContentEditable === true
+  );
 }
 
 function droppedFile(

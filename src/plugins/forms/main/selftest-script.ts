@@ -60,6 +60,13 @@ const COMMA_LEADER_KEYMAP = JSON.stringify({ leader: ',' });
 // An unbroken run of letters wider than any pane.
 const LONG_WORD = 'unbroken'.repeat(14);
 
+// Two absolute paths a box draws as file chips, on this OS.
+const IS_WINDOWS = process.platform === 'win32';
+const CHIP_ONE = IS_WINDOWS ? 'C:\\chips\\one.md' : '/tmp/chips/one.md';
+const CHIP_TWO = IS_WINDOWS ? 'C:\\chips\\two.md' : '/tmp/chips/two.md';
+// The first path with each letter's case toggled, as vim's `~` leaves it.
+const CHIP_ONE_TOGGLED = IS_WINDOWS ? 'c:\\CHIPS\\ONE.MD' : '/TMP/CHIPS/ONE.MD';
+
 // A layout whose question card builds through the kit and throws on every
 // update, whose finding card mounts its notes box and then throws, so the
 // default card can mount that box only once the host has destroyed it, and
@@ -307,6 +314,43 @@ const FINDING_PICKS_STEPS: SelfTestStep[] = [
     keys: ['Enter'],
     expect: '[forms] accepted the recommendation on finding 3',
     why: 'Accept replaces the Drop it pick with choice 2 and its action.',
+  },
+];
+
+// In finding 3's notes box: w from a chip reaches the next word, which ~
+// marks; visual l steps over a chip, so d takes it and its space and P puts
+// both back; diw on a chip deletes it whole and P puts the whole path back;
+// x on the last chip deletes it whole and p puts it back. A search for text
+// inside the chips lands on the first chip's start, n steps past it and n
+// again reaches the second, where i types z; visual f into the first chip
+// selects it whole, so ~ toggles the case of the a before it and of the whole
+// path.
+const FILE_CHIPS_STEPS: SelfTestStep[] = [
+  { keys: ['a'], expect: '[forms] focused notes on finding 3' },
+  {
+    keys: [
+      ...`a ${CHIP_ONE} b ${CHIP_TWO}`,
+      'Escape',
+      // w from the first chip lands on b.
+      ...'0ww~',
+      // Visual l from the first chip reaches the space after it.
+      ...'0wvldP',
+      // diw on the first chip cuts into it, and the delete takes it whole.
+      ...'0wdiwP',
+      // $ lands on the last chip.
+      ...'$xp',
+      // The search lands on the first chip, n steps past it, and n again
+      // moves on to the second.
+      ...'0/chips',
+      'Enter',
+      ...'nniz ',
+      'Escape',
+      // f lands inside the first chip, and the selection takes it whole.
+      ...'0vfc~',
+      'Escape',
+    ],
+    expect: '[forms] left the box',
+    why: "The text the keys leave is checked in finding 3's notes once the round is sent.",
   },
 ];
 
@@ -1025,6 +1069,13 @@ function payloadProblems(payload: AnswersPayload): string[] {
       `finding 2 took_action_recommendation ${nit?.took_action_recommendation}`,
     ],
     [design?.status === 'answered', `finding 3 status ${design?.status}`],
+    // The B, the z, the toggled first path and the whole second path prove
+    // the file chips group's motions, searches, deletes, pastes and case
+    // toggles each took a chip as one character.
+    [
+      design?.notes === `A ${CHIP_ONE_TOGGLED} B z ${CHIP_TWO}`,
+      `finding 3 notes ${JSON.stringify(design?.notes)}`,
+    ],
     [design?.choice === 2, `finding 3 choice ${design?.choice}`],
     [
       design?.took_recommendation === true,
@@ -1154,6 +1205,11 @@ export function formsSelfTestScript(
         name: 'finding picks',
         why: 'Findings 1 to 3 number their choices and bare action headers down the card; a number picks a choice or a header and sets the action with it, the same number again clears it, Space a and a number picks from inside the notes box, and Enter takes the recommendation.',
         steps: FINDING_PICKS_STEPS,
+      },
+      {
+        name: 'file chips',
+        why: 'In a notes box a path is one character to vim: w from a chip lands on the next word, visual l steps over the chip, x and diw delete it whole, and the register holds the whole path, so P and p put it back; a search for text inside a chip lands on its start and n steps past it to the next chip, and a visual f into a chip selects it whole, so ~ toggles the case of the whole path.',
+        steps: FILE_CHIPS_STEPS,
       },
       {
         name: 'question boxes',

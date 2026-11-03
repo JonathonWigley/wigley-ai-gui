@@ -2,12 +2,20 @@ import type { Paths } from '../../../contracts/paths';
 import { fileStamp } from '../../../shared/file-stamp';
 import { extensionOf } from '../../../shared/image-types';
 
-// The characters `resolveLink` reads before it URI-decodes a link's path:
-// `%` first, so the others' escapes stay as written.
+// The characters a link's path loses before `resolveLink` URI-decodes it:
+// `#` and `?` start a fragment or query. `%` goes first, so the others'
+// escapes stay as written.
 const PERCENT_ENCODED: readonly [string, string][] = [
   ['%', '%25'],
   ['#', '%23'],
   ['?', '%3F'],
+];
+// In a relative destination, also `:`, which reads as a scheme or a line,
+// and `\`, which CommonMark reads as an escape before ASCII punctuation.
+const RELATIVE_PERCENT_ENCODED: readonly [string, string][] = [
+  ...PERCENT_ENCODED,
+  [':', '%3A'],
+  ['\\', '%5C'],
 ];
 // A CommonMark link destination holding one of these is written in `<…>`.
 const NEEDS_BRACKETS = /[ ()<>]/;
@@ -23,7 +31,11 @@ export function docLinkOf(
   paths: Paths,
 ): string {
   const name = paths.base(filePath).replace(/[\\[\]]/g, '\\$&');
-  const dest = linkDestination(relativeDest(filePath, docPath, paths));
+  const relative = relativeDest(filePath, docPath, paths);
+  const dest =
+    relative === null
+      ? linkDestination(filePath, PERCENT_ENCODED)
+      : linkDestination(relative, RELATIVE_PERCENT_ENCODED);
   const bang = mediaType.startsWith('image/') ? '!' : '';
   return `${bang}[${name}](${dest})`;
 }
@@ -56,19 +68,27 @@ export function pastedImagePath(
   return paths.join(paths.parent(docPath), 'images', fileName);
 }
 
-function relativeDest(filePath: string, docPath: string, paths: Paths): string {
+// Null when the two share no root.
+function relativeDest(
+  filePath: string,
+  docPath: string,
+  paths: Paths,
+): string | null {
   const common = paths.commonFolder([docPath, filePath]);
   if (common === null) {
-    return filePath;
+    return null;
   }
   const up = paths.segmentsBelow(paths.parent(docPath), common)!.length;
   const down = paths.segmentsBelow(filePath, common)!;
   return '../'.repeat(up) + down.join('/');
 }
 
-function linkDestination(dest: string): string {
+function linkDestination(
+  dest: string,
+  percentEncoded: readonly [string, string][],
+): string {
   let encoded = dest;
-  for (const [character, escape] of PERCENT_ENCODED) {
+  for (const [character, escape] of percentEncoded) {
     encoded = encoded.replaceAll(character, escape);
   }
   if (!NEEDS_BRACKETS.test(encoded)) {

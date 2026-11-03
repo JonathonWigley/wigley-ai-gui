@@ -425,7 +425,7 @@ function sessionOf(tab: HeldTab, box: TextEditor): ChatSession {
 // plugin's tab the session got first. `view.shown` may run inside `addTab`,
 // before the handle and box are set. Once the box is mounted the tab element is
 // the target of the files dropped or pasted on it; `view.isHeld` answers
-// whether the tab is still held, so a take that outlives it does nothing.
+// whether the tab is still held, so a take that outlives it stops.
 function createTab(
   state: ChatSessionState,
   toastedKinds: Set<ChatEntryKind>,
@@ -554,8 +554,8 @@ function createTab(
   return tab;
 }
 
-// What a take on the tab writes into: its box and attachments, each doing
-// nothing once `isHeld` answers false.
+// What a take on the tab writes into: its box and attachments, until
+// `isHeld` answers false.
 function chatDropDepsOf(
   tab: HeldTab,
   box: TextEditor,
@@ -563,24 +563,12 @@ function chatDropDepsOf(
   deps: Pick<ChatViewDeps, 'drops' | 'log' | 'toast'>,
 ): ChatDropDeps {
   return {
-    attachments: {
-      add: (image) => {
-        if (isHeld()) {
-          tab.attachments.add(image);
-        }
-      },
-    },
-    box: {
-      insert: (text) => {
-        if (isHeld()) {
-          box.insert(text);
-        }
-      },
-      charBeforeCursor: () => (isHeld() ? box.charBeforeCursor() : ''),
-    },
+    attachments: tab.attachments,
+    box,
     savePasted: (file) => deps.drops.savePasted(file),
     encoder: canvasEncoder,
     report: attachReportOf(tab.name, deps),
+    isHeld,
   };
 }
 

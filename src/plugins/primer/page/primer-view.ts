@@ -437,7 +437,8 @@ function isBoxShown(state: PrimerState, box: PrimerBox): boolean {
   return hasBox(shownBoxes(state), box);
 }
 
-// Whether the box's primer view draws it, focused or not.
+// Whether a drop on the box's primer view may type into it: drawn by the view,
+// and not under the cancel prompt.
 function isBoxInPrimerView(state: PrimerState, box: PrimerBox): boolean {
   return hasBox(primerViewBoxes(state, box.primerId), box);
 }
@@ -491,7 +492,7 @@ function syncPrimerViews(
 }
 
 // Files dropped or pasted on the primer view go into the primer's box used
-// last, else its first box the view draws, whether or not its pane has focus.
+// last, else its first box mounted, whether or not its pane has focus.
 function addPrimerDropTarget(
   primerId: string,
   primerView: PrimerFormView,

@@ -112,7 +112,8 @@ export function isBoxShown(state: FormsState, box: BoxRef): boolean {
   return hasBox(shownBoxes(state), box);
 }
 
-// Whether the box's round view draws it, focused or not.
+// Whether a drop on the box's round view may type into it: drawn by the view,
+// and not under the cancel prompt.
 export function isBoxInRoundView(state: FormsState, box: BoxRef): boolean {
   return hasBox(roundViewBoxes(state, box.roundId), box);
 }

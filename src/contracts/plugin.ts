@@ -8,6 +8,7 @@ import type { PageDrops } from './drops';
 import type { EditorHost, TextEditor } from './editor';
 import type { Files } from './files';
 import type { Git } from './git';
+import type { ImageEncoder } from './images';
 import type {
   InterceptBind,
   KeyBind,
@@ -596,9 +597,9 @@ export interface SelfTestScript {
 
 // Each plugin's part calls `run` at most once, during its `start`, and the
 // script's page binds and settings join the config. The driver runs the handed
-// scripts in hand-over order on each run. `run` throws on a plugin's second
-// script or after the parts have started, and a self-test that got no script
-// fails.
+// scripts in hand-over order, each cut after its last kept group on a filtered
+// run. `run` throws on a plugin's second script or after the parts have
+// started, and a self-test that got no script fails.
 export interface SelfTestHost {
   run(script: SelfTestScript): void;
 }
@@ -643,7 +644,8 @@ export interface DriveHost {
 // paths, none in the self-test; a folder inside one is scratch space.
 // `userConfig` reads and writes the user's `settings.json` and `keymap.json`
 // layers through the ConfigStore's checks. `appInstance` names which app runs,
-// the stable or the dev one.
+// the stable or the dev one. `images` re-encodes an image smaller, as PNG or
+// JPEG only, for `shrinkToFit`.
 export interface MainServices {
   files: Files;
   processes: ProcessRunner;
@@ -658,6 +660,7 @@ export interface MainServices {
   userConfig: UserConfig;
   paths: Paths;
   alerts: Alerts;
+  images: ImageEncoder;
   agentHarnesses: readonly AgentHarness[];
   window: {
     show(): void;

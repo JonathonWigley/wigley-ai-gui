@@ -7,7 +7,7 @@
 - **Images** — paste, drop, GUI capture, markup.
 - **Session reference** — the chip and the line it writes.
 - **Destinations** — new follow-up, append to a follow-up, new session.
-- **Seams** — window capture, the markup adapter, Backlog's and chat's exports, the docs binary write.
+- **Seams** — window capture, the image encoder, the markup adapter, Backlog's and chat's exports, the docs binary write.
 
 The decisions the user settled in the 2026-10-26 interview (two rounds and the agent's Decided notices), kept so the
 plan is written from them. A decision here stands unless the user changes it.
@@ -42,7 +42,8 @@ session.
 ## Images
 
 - In: paste from the clipboard, drop a file, or capture the GUI. A file that is not an image goes into the Body as a
-  file chip, its path (`docs/features/file-drop/design.md`). Capture hides the popup, grabs the window in main,
+  file chip, its path (`docs/features/file-drop/design.md`); when the popup closed, or a send, discard, capture or image
+  removal began, while a pasted file saved, its path is toasted instead. Capture hides the popup, grabs the window in main,
   and reopens the popup with the image attached, so the capture shows the app as the user saw it. Capture waits two
   frames after the hide, so the popup is gone from the shot.
 - Each image opens a markup editor inside the popup: select and move, pen, text, arrow, box, four colours, undo and
@@ -71,14 +72,18 @@ session.
 - **New session** — chat starts a session in the folder the target resolves to (see The popup), under the attached session's profile when chat owns
   that session, else chat's first profile. Its first message is the brief from the `notes.launchBrief` setting
   (default `A nitpick to fix, noted while working. Make the change, then report.`), then the note's title, body and
-  session line, with the images attached under chat's per-image cap (5 MB of base64 text), which a pasted or dropped image meets: the popup
-  shrinks one over it when it joins the strip (a GUI capture is not shrunk). The user stays where they were; the session runs
+  session line, with the images attached under chat's per-image cap (5 MB of base64 text), which every image meets when it is sent: the popup
+  shrinks a pasted or dropped one over it when it joins the strip, and main shrinks every image again as it sends it to
+  the session, a GUI capture and a flattened markup image included. A follow-up files its images at full size. An image that will not shrink under the cap refuses the send with
+  `Image could not be shrunk under 5 MB`, and the draft is kept. The user stays where they were; the session runs
   in the background and a toast reads `Session started in <folder>`.
 
 ## Seams
 
 - **Window capture** — a `capture` call on the existing `window` main service, returning the window's PNG at device pixels; the
   composition root fills it from Electron's `capturePage`, and tests hand the plugin a fake.
+- **Image encoder** — the `images` main service (`ImageEncoder`, `src/contracts/images.ts`) the sender shrinks through;
+  the composition root fills it from Electron's `nativeImage` (`src/main/images/`), and tests hand the sender a fake.
 - **Markup** — a page service behind a contract (`MarkupEditor`, `src/contracts/markup.ts`); the Fabric adapter sits
   in `src/renderer/fabric/`.
 - **Backlog** — owns every follow-up write and the `followups-images/` folder. Its main part exports `load` (the

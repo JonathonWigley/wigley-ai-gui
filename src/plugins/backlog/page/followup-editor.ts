@@ -43,8 +43,11 @@ export interface FollowupEditor {
   // field hint when the box activates.
   mount(field: EditorField, frame: HTMLElement, text: string): void;
   isMounted(field: EditorField): boolean;
-  // Destroys every mounted box and forgets them.
+  // Destroys every mounted box. A redraw of the same draft keeps the box used
+  // last and the mount order; `forget` drops them.
   destroy(): void;
+  // Forgets the box used last and the mount order, when the editor pane closes.
+  forget(): void;
   focus(field: EditorField, options?: FocusOptions): void;
   step(by: 1 | -1): void;
   // Blurs the focused box and focuses the `div.backlog-editor` slot.
@@ -102,8 +105,10 @@ export function createFollowupEditor(deps: FollowupEditorDeps): FollowupEditor {
     isMounted: (field) => boxes.isMounted(field),
     destroy() {
       boxes.destroyForm(FOLLOWUP_FORM_ID);
-      boxes.forgetForm(FOLLOWUP_FORM_ID);
       frames.clear();
+    },
+    forget() {
+      boxes.forgetForm(FOLLOWUP_FORM_ID);
     },
     focus(field, options) {
       boxes.focus(field, options);

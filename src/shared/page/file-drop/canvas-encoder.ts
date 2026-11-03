@@ -1,6 +1,6 @@
 // The canvas adapter behind ImageEncoder: decodes the image (a GIF to its
 // first frame), draws it scaled, and encodes the drawing.
-import type { EncodableImage, ImageEncoder } from './shrink-image';
+import type { EncodableImage, ImageEncoder } from '../../../contracts/images';
 
 const QUALITY = 0.9;
 
