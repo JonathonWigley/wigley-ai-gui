@@ -109,10 +109,8 @@ export function createMainApi(
       },
       selfTest: deps.selfTestFor(manifest.id),
     },
-    dependency: ((keyOrId: DependencyKey<unknown> | string) =>
-      deps.dependency(
-        typeof keyOrId === 'string' ? keyOrId : keyOrId.id,
-      )) as MainApi<PluginManifest, ChannelShape>['dependency'],
+    dependency: <E>(key: DependencyKey<E, 'main'>) =>
+      deps.dependency(key.id) as E,
     data: scopedFiles(
       files,
       deps.services.paths.join(deps.dataRoot, manifest.id),

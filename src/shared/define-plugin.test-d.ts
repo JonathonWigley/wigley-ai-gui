@@ -133,7 +133,10 @@ describe('definePlugin', () => {
       pageApi.dependency(bPageKey);
       // @ts-expect-error -- dependsOn.main is empty
       mainApi.dependency(aMainKey);
-      assertType<{ n: number }>(pageApi.dependency<{ n: number }>('a'));
+      // @ts-expect-error -- a plugin id string is no key
+      pageApi.dependency('a');
+      // @ts-expect-error -- a plugin id string is no key
+      mainApi.dependency('a');
     };
     assertType<() => void>(typeChecksOnly);
   });

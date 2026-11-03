@@ -172,10 +172,8 @@ export function createPageApi(
       timers: trackedTimers(deps.services.timers, registrations),
       uiState: deps.uiState.scoped(manifest.id),
     },
-    dependency: ((keyOrId: DependencyKey<unknown> | string) =>
-      deps.dependency(
-        typeof keyOrId === 'string' ? keyOrId : keyOrId.id,
-      )) as PageApi<PluginManifest, ChannelShape>['dependency'],
+    dependency: <E>(key: DependencyKey<E, 'page'>) =>
+      deps.dependency(key.id) as E,
     dataUrl: (path, revision) => dataUrl(manifest.id, revision, path),
     layouts: {
       show: (options) =>

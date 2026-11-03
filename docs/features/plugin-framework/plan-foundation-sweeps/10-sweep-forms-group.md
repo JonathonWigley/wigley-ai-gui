@@ -1,6 +1,6 @@
 # 10 — Sweep: forms, primer, sessions, settings, keys, gallery
 
-Status: in progress
+Status: done
 Type: Parallel
 Wave: 6 · Depends on: 06, 07
 Plan: [plan.md](plan.md)
@@ -388,3 +388,4 @@ Tests:
 
 ## Proof
 
+Commit 1600d93c 81607cda 4198f2c9 7aa5b684 c7e992dc e2a11ba1 · proof: Diff read of every main and page start, session-list, sessions-view, preview and check-layers; whole-tree typecheck clean; whole-tree lint clean (1029 layer, 694 style files); workers ran 540 tests in keys, sessions, settings, gallery, and 847 in forms, primer and the real-provider tests; grep finds no two-argument log or string dependency in src/plugins · concerns: No test pins settings' closeBox disposing its scope, and closeFilter still pops. Late continuations in settings and sessions after stop run against detached elements. SessionsView.dispose covers the pane tree only, and frames' bars and parts stay undisposed, unexercised. Nothing pins the relay log lines. endAll iterates entries directly, so an entry an ended listener adds is also ended. No test goes red on removing boxes.dispose, autosave.dispose or the form service dispose calls in forms and primer. Probe parts and fakes are copied across test files. Seven plugin tests import another plugin's part through exact-file layer rules.

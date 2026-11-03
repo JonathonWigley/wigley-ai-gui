@@ -453,26 +453,26 @@ describe('createPageApi', () => {
     expect(calls).toEqual(['show p', 'dispose']);
   });
 
-  it.each([
-    { name: 'a key', arg: { id: 'a', process: 'page' } },
-    { name: 'an id', arg: 'a' },
-  ])('dependency asks the host for the plugin $name names', ({ arg }) => {
-    const asked: string[] = [];
-    const api = createPageApi(
-      manifest,
-      deps({
-        dependency: (pluginId) => {
-          asked.push(pluginId);
-          return { n: 1 };
-        },
-      }),
-    );
+  it.each([{ name: 'a key', arg: { id: 'a', process: 'page' } as const }])(
+    'dependency asks the host for the plugin $name names',
+    ({ arg }) => {
+      const asked: string[] = [];
+      const api = createPageApi(
+        manifest,
+        deps({
+          dependency: (pluginId) => {
+            asked.push(pluginId);
+            return { n: 1 };
+          },
+        }),
+      );
 
-    const received = (api.dependency as (keyOrId: unknown) => unknown)(arg);
+      const received = api.dependency(arg);
 
-    expect(received).toEqual({ n: 1 });
-    expect(asked).toEqual(['a']);
-  });
+      expect(received).toEqual({ n: 1 });
+      expect(asked).toEqual(['a']);
+    },
+  );
 });
 
 // One member of the page API that returns a handle: `register` makes the

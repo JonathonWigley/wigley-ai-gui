@@ -552,8 +552,6 @@ export interface PageApi<
   dependency<E, Id extends M['dependsOn']['page'][number]>(
     key: DependencyKey<E, 'page', Id>,
   ): E;
-  /** @deprecated removed by plan task 11 */
-  dependency<E>(pluginId: string): E;
   dataUrl(path: string, revision: number): string;
   layouts: { show<L>(options: ShowLayoutOptions<L>): LayoutShow };
 }
@@ -761,8 +759,6 @@ export interface MainApi<
   dependency<E, Id extends M['dependsOn']['main'][number]>(
     key: DependencyKey<E, 'main', Id>,
   ): E;
-  /** @deprecated removed by plan task 11 */
-  dependency<E>(pluginId: string): E;
   data: Files;
   drive: DriveHost | null;
   layouts: {

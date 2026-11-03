@@ -1,13 +1,6 @@
 import type { Log, PluginLog } from '../contracts/log';
 
-// One plugin's view of the core `log`: one argument logs under `pluginId`, and
-// two log under the given source.
+// One plugin's view of the core `log`: every line logs under `pluginId`.
 export function pluginLog(log: Log, pluginId: string): PluginLog {
-  return (first: string, second?: string) => {
-    if (second === undefined) {
-      log(pluginId, first);
-    } else {
-      log(first, second);
-    }
-  };
+  return (message) => log(pluginId, message);
 }

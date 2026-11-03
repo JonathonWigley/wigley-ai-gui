@@ -1,6 +1,6 @@
 # 12 — Derived layer rules
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 7 · Depends on: 08, 09, 10
 Plan: [plan.md](plan.md)
