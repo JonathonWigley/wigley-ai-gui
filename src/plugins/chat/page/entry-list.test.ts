@@ -916,6 +916,38 @@ describe('working block', () => {
       ],
     },
     {
+      name: 'an entry put after the turn finished, before idle',
+      before: ({ put, clock }) => {
+        put(toolDone('t1'));
+        clock.time = 3000;
+        put(result('r1'));
+        clock.time = 5000;
+      },
+      act: ({ put }) => put(tool('t2')),
+      calls: ['update working [t2]'],
+      slots: [
+        'chat-entry-slot',
+        'chat-entry-slot chat-activity-slot',
+        'chat-entry-slot chat-step-slot hidden',
+        'chat-entry-slot',
+        ...runLine.slice(1),
+      ],
+    },
+    {
+      name: 'an entry put in a turn begun with no entries',
+      before: ({ list, put, clock }) => {
+        list.setWorking(false);
+        put(result('r1'));
+        list.setWorking(true);
+        clock.time = 5000;
+        // A change while the turn is still empty holds the block.
+        list.setQueued([]);
+      },
+      act: ({ put }) => put(tool('t2')),
+      calls: ['update working [t2]'],
+      slots: ['chat-entry-slot', 'chat-entry-slot', ...runLine.slice(1)],
+    },
+    {
       name: 'a rebuild with the same entries',
       before: ({ put }) => put(tool('t1')),
       act: ({ list, entries }) => list.rebuild(entries()),
