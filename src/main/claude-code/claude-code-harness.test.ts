@@ -631,6 +631,13 @@ describe('createClaudeCodeHarness', () => {
     expect(lastActivity(run.heard)).toBe('idle');
   });
 
+  // The interrupted turn's result, naming the first message as its opener.
+  const interruptedResult = {
+    ...errorResult,
+    user_message_uuid: 'uuid-1',
+    user_message_uuids: ['uuid-1'],
+  };
+
   const interruptReply = (error: string | null) =>
     error === null
       ? {
@@ -682,11 +689,7 @@ describe('createClaudeCodeHarness', () => {
         return;
       }
       expect(lastActivity(run.heard)).toBe('working');
-      writeLine(run.stdout, {
-        ...errorResult,
-        user_message_uuid: 'uuid-1',
-        user_message_uuids: ['uuid-1'],
-      });
+      writeLine(run.stdout, interruptedResult);
       await settle();
       expect(lastActivity(run.heard)).toBe('idle');
     },
@@ -712,44 +715,98 @@ describe('createClaudeCodeHarness', () => {
     },
   );
 
-  it('interrupt_AnsweredWithinTheGrace_PostsNoGraceNotice', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    const run = await startedQuiet();
-    run.agent.send({ text: 'one', images: [] });
-    run.agent.interrupt();
-    writeLine(run.stdout, errorResult);
-    await settle();
-
-    vi.advanceTimersByTime(5000);
-    await settle();
-
-    expect(noticeTexts(run.heard)).not.toContain(GRACE_NOTICE);
-    expect(activities(run.heard)).toEqual(['working', 'idle']);
-  });
-
-  it.each([
-    { name: 'unanswered', answerFirst: false, signals: ['SIGTERM'] },
-    { name: 'first answered', answerFirst: true, signals: [] },
+  it.each<{
+    name: string;
+    texts: string[];
+    lines: object[];
+    activities: string[];
+  }>([
+    {
+      name: 'the only message',
+      texts: ['one'],
+      lines: [errorResult],
+      activities: ['working', 'idle'],
+    },
+    {
+      name: 'a message queued behind',
+      texts: ['one', 'two'],
+      lines: [lifecycleInit, interruptedResult],
+      activities: ['working'],
+    },
   ])(
-    'interrupt_SecondWhileWorking_KillsTheProcess ($name)',
-    async ({ answerFirst, signals }) => {
+    'interrupt_AnsweredWithinTheGrace_PostsNoGraceNotice ($name)',
+    async ({ texts, lines, activities: expected }) => {
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
       const run = await startedQuiet();
-      run.agent.send({ text: 'one', images: [] });
+      for (const text of texts) {
+        run.agent.send({ text, images: [] });
+      }
       run.agent.interrupt();
-      if (answerFirst) {
-        writeLine(run.stdout, errorResult);
-        await settle();
-        run.agent.send({ text: 'two', images: [] });
+      for (const turnLine of lines) {
+        writeLine(run.stdout, turnLine);
+      }
+      await settle();
+
+      vi.advanceTimersByTime(5000);
+      await settle();
+
+      expect(noticeTexts(run.heard)).not.toContain(GRACE_NOTICE);
+      expect(activities(run.heard)).toEqual(expected);
+    },
+  );
+
+  it.each<{
+    name: string;
+    texts: string[];
+    lines: object[];
+    textsAfter: string[];
+    isKilled: boolean;
+  }>([
+    {
+      name: 'unanswered',
+      texts: ['one'],
+      lines: [],
+      textsAfter: [],
+      isKilled: true,
+    },
+    {
+      name: 'first answered',
+      texts: ['one'],
+      lines: [errorResult],
+      textsAfter: ['two'],
+      isKilled: false,
+    },
+    {
+      name: 'first turn ended, a message queued behind',
+      texts: ['one', 'two'],
+      lines: [lifecycleInit, interruptedResult],
+      textsAfter: [],
+      isKilled: false,
+    },
+  ])(
+    'interrupt_SecondWhileWorking_KillsTheProcess ($name)',
+    async ({ texts, lines, textsAfter, isKilled }) => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const run = await startedQuiet();
+      for (const text of texts) {
+        run.agent.send({ text, images: [] });
+      }
+      run.agent.interrupt();
+      for (const turnLine of lines) {
+        writeLine(run.stdout, turnLine);
+      }
+      await settle();
+      for (const text of textsAfter) {
+        run.agent.send({ text, images: [] });
       }
 
       run.agent.interrupt();
       await settle();
 
-      expect(run.signals).toEqual(signals);
+      expect(run.signals).toEqual(isKilled ? ['SIGTERM'] : []);
       const killNotice = 'Interrupted again; ending the Claude process.';
-      expect(noticeTexts(run.heard).includes(killNotice)).toBe(!answerFirst);
-      expect(interruptRequests(run.written)).toHaveLength(answerFirst ? 2 : 1);
+      expect(noticeTexts(run.heard).includes(killNotice)).toBe(isKilled);
+      expect(interruptRequests(run.written)).toHaveLength(isKilled ? 1 : 2);
     },
   );
 

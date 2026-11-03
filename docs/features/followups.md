@@ -346,3 +346,8 @@ now, any harness later). Each item names its sites.
 - **A visual may flash light in a dark theme before its first theme post**: the frame's root stays hidden until the
   page's first theme message, but the iframe's own background before that is unproved; check in a real window with a
   dark theme.
+- **Interrupt in the gap before a message's init** — *agent-ready*: `interruptAnswered` with no turn open
+  (`src/main/claude-code/turn-tracker.ts`) also closes a message after its `queued`/`started` frame and before its
+  `init` — e.g. Ctrl+C in `/compact`'s gap between `started` and `init` (`agent-chat/claude-stream.md` § Message
+  lifecycle) — so the session shows idle and the turn-finished alert fires, then the init shows working again. Option:
+  in lifecycle mode keep a uuid whose last state was `started` open through `interruptAnswered`.

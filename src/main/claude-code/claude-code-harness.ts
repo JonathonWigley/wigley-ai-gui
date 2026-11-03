@@ -183,7 +183,7 @@ function startClaudeProcess(
   let endPromise: Promise<void> | null = null;
   const closeWaiters: (() => void)[] = [];
   const timers: ReturnType<typeof setTimeout>[] = [];
-  // Pending while an interrupt waits for the turn to end.
+  // Pending from an interrupt until a turn's result or idle.
   let graceTimer: ReturnType<typeof setTimeout> | null = null;
   let usage = EMPTY_SESSION_USAGE;
   let lastUsageEvent: UsageAgentEvent | null = null;
@@ -202,6 +202,13 @@ function startClaudeProcess(
     emit(() => events.activity(next));
   };
 
+  const clearGraceTimer = () => {
+    if (graceTimer !== null) {
+      clearTimeout(graceTimer);
+      graceTimer = null;
+    }
+  };
+
   // Emits the tracker's activity when it changed; a line read after `close`
   // emits nothing, so no activity follows `ended`.
   const syncActivity = () => {
@@ -212,9 +219,8 @@ function startClaudeProcess(
     if (next !== activity) {
       emitActivity(next);
     }
-    if (next === 'idle' && graceTimer !== null) {
-      clearTimeout(graceTimer);
-      graceTimer = null;
+    if (next === 'idle') {
+      clearGraceTimer();
     }
   };
 
@@ -443,6 +449,9 @@ function startClaudeProcess(
     if (decoded.hostRequest !== null) {
       refuseHostRequest(decoded.hostRequest);
     }
+    if (decoded.turnEnded) {
+      clearGraceTimer();
+    }
     const isRunning = !isEndCalled && !hasClosed;
     if (decoded.turnEnded && isRunning) {
       requestContextUsage();
@@ -571,14 +580,15 @@ function startClaudeProcess(
           return;
         }
         tracker.abandon();
+        const grace = `${INTERRUPT_GRACE_MS / 1000} s`;
         harnessNotice(
-          'Claude did not stop within 5 s; showing the session idle.',
+          `Claude did not stop within ${grace}; showing the session idle.`,
           'info',
           null,
         );
         deps.log(
           'claude',
-          'interrupt unanswered after 5 s; dropping turn state',
+          `interrupt unanswered after ${grace}; dropping turn state`,
         );
         syncActivity();
       }, INTERRUPT_GRACE_MS);

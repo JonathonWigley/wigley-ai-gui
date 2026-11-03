@@ -230,7 +230,7 @@ uuid keys; the `AgentHarness` contract is unchanged.
 - [x] [Doc re-read](04-doc-re-read.md) — after 01, 02, 03
 
 ### Wave 5
-- [ ] [Final verification](05-final-verification.md) — after 04
+- [x] [Final verification](05-final-verification.md) — after 04
 
 ## Run log
 
@@ -241,6 +241,7 @@ Review base: 578c0d08ecda7909910ef4254a06d47fef5e0f55
 - 02 · 0fd04bc9 · diff read: ControlCommand, TurnLine, TurnRead, TurnTracker, createTurnTracker present as planned; typecheck passes · concerns: the explicit turnOpener close in lifecycle mode has no test that fails without it (every measured result lists the opener in turnMessages)
 - 03 · 420cf9cf · diff read: randomUuid dep, userMessage(message, uuid), controlMessage(id, value, lineId) present; typecheck passes · concerns: close handler leaves tracker uuids open (masked by hasClosed); interrupt tests on real timers leave a 5 s grace timer running after the test; worker used one python heredoc for a test edit
 - 04 · 4987c3e4 · diff read: each listed section stale-and-fixed or already true; the grep finds no stale line outside plan folders · concerns: design.md § Working block line not written: no working-block code on this branch (it belongs to the unlanded plan-working-block); an own turn with uuids stays unmeasured
+- 05 · none · gate: typecheck, lint, 291 tests, chat selftest pass; drive .drive/20261102-210036-e214 on Haiku/Low over the real CLI: 1 own turn shows working PASS, 2 message during own turn waits then runs PASS (2nd attempt), 3 Ctrl+C recovers PASS, 4 second Ctrl+C VOID (Claude answered the first interrupt in under 1 s; covered by interrupt_SecondWhileWorking_KillsTheProcess) · concerns: the second-Ctrl+C kill path is unchecked live
 ### Contract changes
 ### Rulings
 - stringItems(value) helper shared by init capabilities and result user_message_uuids — one filter rule — inline it back if unwanted · group 01 · group 01
@@ -249,6 +250,8 @@ Review base: 578c0d08ecda7909910ef4254a06d47fef5e0f55
 - the grace callback nulls graceTimer before its working check — the callback cannot run while idle anyway — none · group 03 · group 03
 - dropped the followups.md item 'Probe messages that get no result' — its probes are recorded in claude-stream.md and the tracker is the guard — restore from git if wrong · group 04 · group 04
 - skipped the Working block header line the task asked for — no code counts from turnStarted yet — plan-working-block adds it · group 04 · group 04
+- review 1 triage on the user's standing word to take every recommendation: #1 fix now (clear the grace on the interrupted turn's result), #4 and #5 fix now, #2 leave it (fallback clear-all is the plan's decision and chat never has two messages in flight), #3 follow-up (interruptAnswered could keep a started uuid open) — lead
 ### Review rounds
+- 1 · 089c6ae0 · NEEDS FIXES (1 Important: grace timer survives the interrupted turn's result; 4 Minor)
 ### Test gate
 - stream-decoder, turn-tracker, claude-code-harness, claude-controls tests (the files 01–03 changed) and chat-sessions.test.ts (chat main reads the emitted activity); npm run typecheck, npm run lint; npm run selftest -- --plugin chat · 291/291 tests pass, typecheck and lint clean, selftest all passed

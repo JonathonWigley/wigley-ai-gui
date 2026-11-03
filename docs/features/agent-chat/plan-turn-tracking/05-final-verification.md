@@ -1,6 +1,6 @@
 # 05 — Final verification
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 5 · Depends on: 04
 Plan: [plan.md](plan.md)
@@ -62,4 +62,4 @@ Commit:    none
 
 ## Proof
 
-<written by wigley:make: commit sha, proof result, concerns; empty until the group lands>
+Commit none · proof: gate: typecheck, lint, 291 tests, chat selftest pass; drive .drive/20261102-210036-e214 on Haiku/Low over the real CLI: 1 own turn shows working PASS, 2 message during own turn waits then runs PASS (2nd attempt), 3 Ctrl+C recovers PASS, 4 second Ctrl+C VOID (Claude answered the first interrupt in under 1 s; covered by interrupt_SecondWhileWorking_KillsTheProcess) · concerns: the second-Ctrl+C kill path is unchecked live

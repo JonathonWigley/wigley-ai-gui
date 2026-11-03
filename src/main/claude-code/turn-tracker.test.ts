@@ -115,6 +115,14 @@ describe('createTurnTracker', () => {
       ],
     },
     {
+      name: 'the opener closes though its result lists no messages',
+      steps: [
+        [{ written: 'a' }, W],
+        [{ read: lifecycleInit }, W],
+        [{ read: result('a', []) }, I],
+      ],
+    },
+    {
       name: 'cancelled closes a queued uuid with no result',
       steps: [
         [{ read: lifecycleInit }, W],
