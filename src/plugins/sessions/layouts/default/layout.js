@@ -1,10 +1,10 @@
 // @ts-check
 
 // The built-in Sessions look: the side bar's "Sessions" header over its rows,
-// each row's title (the folder label for a row with no title; no harness
-// name), its activity's dot and word or, with no
-// activity, its attention dot, its status line and on-screen mark,
-// then other plugins' row parts (`contributedParts`) under them,
+// each row a card: its title (the folder label for a row with no title; no
+// harness name), its activity's dot and word or, with no activity, its
+// attention dot, and its on-screen mark, over a footer holding its status then
+// other plugins' row parts (`contributedParts`),
 // each chat pane's frame and focus edges, the tab bar's prompts around its
 // strip, other plugins' bar parts (`contributedParts`) after them, then its
 // close prompt and pane controls, each tab's icon with no label, and the
@@ -36,10 +36,11 @@ const layout = {
     } else if (input.marked) {
       kit.statusDot(kit.rowTrailing(element), 'attention');
     }
+    const foot = kit.el(element, 'div', 'session-row-foot');
     if (input.status !== null) {
-      kit.el(element, 'span', 'session-row-status', input.status);
+      kit.el(foot, 'span', 'session-row-status', input.status);
     }
-    kit.contributedParts(element);
+    kit.contributedParts(foot);
     return { element };
   },
 
