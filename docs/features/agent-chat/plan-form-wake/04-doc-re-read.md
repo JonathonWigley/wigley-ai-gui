@@ -1,6 +1,6 @@
 # 04 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 01, 02, 03
 Plan: [plan.md](plan.md)
@@ -29,3 +29,4 @@ Commit:    one per repo with a fix
 
 ## Proof
 
+Commit no change · proof: no change: AGENTS.md agent-forms and chat entries, the start-order line (733, generic), drive SKILL.md's chat.start result, and the forms README's wake paragraph (round text character for character, primer noun and tool, replayed collect, cleared conversation, non-chat sessions) all match the landed code · concerns: none
