@@ -1,6 +1,6 @@
 # 08 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 5 · Depends on: 07
 Plan: [plan.md](plan.md)
@@ -21,3 +21,5 @@ Done when: every check above passes, with its captures read
 Commit:    none (no code); the Run log records the result
 
 ## Proof
+
+Commit none · proof: drive run st08 with real Claude: checks 1-6 pass (report /tmp/claude-session-titles/reports/08-1.md, captures .drive/st08/screenshots/) · concerns: at the least side-bar width the folder label ellipsizes alongside the title, and one title cut to a bare 'M' with no ellipsis while the label vanished; restored chat's first step header read '498243h 11m'; two stray rows appeared briefly after restart while the plan loaded

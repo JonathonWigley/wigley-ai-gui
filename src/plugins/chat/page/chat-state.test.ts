@@ -9,6 +9,9 @@ import {
   folderName,
   isWorking,
   oldestPendingPermission,
+  rowActivity,
+  unseenAfterRest,
+  unseenAfterTurnEnd,
 } from './chat-state';
 
 function user(id: string, text: string): ChatEntry {
@@ -112,6 +115,46 @@ describe('chat state', () => {
     'isWorking_RunningAndActivity_TrueOnlyWhenRunningAndWorking: running $running, $activity → $expected',
     ({ running, activity, expected }) => {
       expect(isWorking({ running, activity })).toBe(expected);
+    },
+  );
+
+  it.each([
+    { activity: 'waiting', unseen: null, expected: 'needs you' },
+    { activity: 'waiting', unseen: 'error', expected: 'needs you' },
+    { activity: 'working', unseen: null, expected: 'working' },
+    { activity: 'working', unseen: 'done', expected: 'working' },
+    { activity: 'idle', unseen: 'done', expected: 'done' },
+    { activity: 'idle', unseen: 'error', expected: 'error' },
+    { activity: 'idle', unseen: null, expected: null },
+  ] as const)(
+    'rowActivity_ActivityAndUnseen_TheRowsWord: $activity, unseen $unseen → $expected',
+    ({ activity, unseen, expected }) => {
+      expect(rowActivity({ activity, unseen })?.word ?? null).toBe(expected);
+    },
+  );
+
+  it.each([
+    { unseen: null, focused: false, expected: 'done' },
+    { unseen: null, focused: true, expected: null },
+    { unseen: 'error', focused: false, expected: 'error' },
+    { unseen: 'error', focused: true, expected: 'error' },
+    { unseen: 'done', focused: true, expected: null },
+  ] as const)(
+    'unseenAfterTurnEnd_ErrorStaysElseDoneUnlessFocused: $unseen, focused $focused → $expected',
+    ({ unseen, focused, expected }) => {
+      expect(unseenAfterTurnEnd(unseen, focused)).toBe(expected);
+    },
+  );
+
+  it.each([
+    { unseen: null, error: 'boom', wasActive: false, expected: 'error' },
+    { unseen: null, error: null, wasActive: true, expected: 'error' },
+    { unseen: 'done', error: null, wasActive: false, expected: 'done' },
+    { unseen: null, error: null, wasActive: false, expected: null },
+  ] as const)(
+    'unseenAfterRest_ErrorOrMidTurn_Error: $unseen, error $error, active $wasActive → $expected',
+    ({ unseen, error, wasActive, expected }) => {
+      expect(unseenAfterRest(unseen, error, wasActive)).toBe(expected);
     },
   );
 

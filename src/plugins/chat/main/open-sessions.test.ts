@@ -16,6 +16,7 @@ const TWO_SESSIONS: SavedSessions = {
       profile: 'personal',
       sent: true,
       busy: false,
+      titles: { user: null, agent: 'Plan review', firstMessage: 'hi there' },
     },
     {
       hostSessionId: 's-beta',
@@ -23,6 +24,7 @@ const TWO_SESSIONS: SavedSessions = {
       profile: 'work',
       sent: false,
       busy: true,
+      titles: { user: 'Mine', agent: null, firstMessage: null },
     },
   ],
   selectedHostSessionId: 's-beta',
@@ -36,6 +38,7 @@ const ONE_SESSION: SavedSessions = {
       profile: 'work',
       sent: true,
       busy: true,
+      titles: { user: null, agent: null, firstMessage: 'gamma work' },
     },
   ],
   selectedHostSessionId: null,
@@ -67,6 +70,31 @@ describe('createOpenSessions', () => {
       text: JSON.stringify(TWO_SESSIONS, null, 2),
       expected: TWO_SESSIONS,
     },
+    {
+      file: 'written before titles were saved',
+      text: withSessions([
+        {
+          hostSessionId: 's-alpha',
+          projectDir: '/work/alpha',
+          profile: 'personal',
+          sent: true,
+          busy: false,
+        },
+      ]),
+      expected: {
+        sessions: [
+          {
+            hostSessionId: 's-alpha',
+            projectDir: '/work/alpha',
+            profile: 'personal',
+            sent: true,
+            busy: false,
+            titles: { user: null, agent: null, firstMessage: null },
+          },
+        ],
+        selectedHostSessionId: null,
+      },
+    },
   ])('load_FileShape_ReadsOrRejects: $file → snapshot', async (row) => {
     const test = setUp();
     if (row.text !== null) {
@@ -87,6 +115,15 @@ describe('createOpenSessions', () => {
           projectDir: '/work/alpha',
           sent: true,
           busy: false,
+        },
+      ]),
+    },
+    {
+      file: 'a title a number',
+      text: withSessions([
+        {
+          ...TWO_SESSIONS.sessions[0],
+          titles: { user: null, agent: 7, firstMessage: null },
         },
       ]),
     },

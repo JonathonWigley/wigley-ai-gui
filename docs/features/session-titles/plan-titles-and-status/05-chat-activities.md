@@ -1,6 +1,6 @@
 # 05 — Chat activities
 
-Status: not started
+Status: done
 Type: Task
 Wave: 3 · Depends on: 03
 Plan: [plan.md](plan.md)
@@ -32,3 +32,5 @@ Done when: compiles; the test gate runs the tests above and `npm run selftest --
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 4de1cf63 · proof: diff read (Unseen, rowActivity, unseenAfterTurnEnd, unseenAfterRest, markSent, ChatViewDeps listeners and Pick widened present), typecheck clean, lint and chat self-test passed per worker · concerns: needs you has no self-test step of its own: the fixture permission is asked during open, before any step; the permission card y step's 'none' line stands in; chat-state imports the value NEEDS_YOU_ACTIVITY from sessions' contract (layers pass); the done step depends on FAKE_VISUAL_HOLD_MS outlasting two key presses

@@ -21,6 +21,8 @@ import type {
   AgentSession,
   OpenOptions,
   SessionInfo,
+  SessionTitles,
+  TitleSource,
   ToolResult,
 } from '../../sessions/contract';
 import type { ChatChannel, ChatMainEvents, ChatProfile } from '../contract';
@@ -71,13 +73,19 @@ const BASH_ARGS = {
   tool_use_id: 'tu-1',
 };
 
+const NO_TITLES: SessionTitles = {
+  user: null,
+  agent: null,
+  firstMessage: null,
+};
+
 const NOTHING_SAVED: SavedSessions = {
   sessions: [],
   selectedHostSessionId: null,
 };
 
-// A saved record of a session in `/w/app` under `work`, no message sent and
-// no turn running, unless `fields` say otherwise.
+// A saved record of a session in `/w/app` under `work`, no message sent, no
+// turn running and no titles, unless `fields` say otherwise.
 function record(
   hostSessionId: string,
   fields: Partial<SavedSession> = {},
@@ -88,6 +96,7 @@ function record(
     profile: 'work',
     sent: false,
     busy: false,
+    titles: NO_TITLES,
     ...fields,
   };
 }
@@ -147,6 +156,9 @@ function setUp(
   let profiles: readonly ChatProfile[] = DEFAULT_PROFILES;
   const archived = createArchivedSessions(data);
   const saved = fakeOpenSessions();
+  // Every `setTitle` call, and the titles of each row opened.
+  const titleCalls: [string, TitleSource, string | null][] = [];
+  const titles = new Map<string, SessionTitles>();
   // Rows are numbered in open order: the first is ROW_ID.
   const sessions: ChatSessionsDeps['sessions'] = {
     open: (info, options) => {
@@ -155,8 +167,10 @@ function setUp(
       }
       opened.push(info);
       openOptions.push(options);
+      const id = `row-${opened.length}`;
+      titles.set(id, { ...NO_TITLES });
       return {
-        session: { id: `row-${opened.length}`, info },
+        session: { id, info },
         end: () => {
           ownedEnds++;
           onOwnedEnd();
@@ -169,6 +183,17 @@ function setUp(
     mark: (sessionId) => marked.push(sessionId),
     activate: (sessionId) => activated.push(sessionId),
     selectedSessionId: () => selectedSessionId,
+    setTitle: (sessionId, source, title) => {
+      titleCalls.push([sessionId, source, title]);
+      const held = titles.get(sessionId);
+      if (held !== undefined) {
+        held[source] = title;
+      }
+    },
+    titles: (sessionId) => {
+      const held = titles.get(sessionId);
+      return held === undefined ? null : { ...held };
+    },
   };
   const chat = createChatSessions({
     harnesses,
@@ -225,6 +250,11 @@ function setUp(
     agentSession,
     archived,
     saved,
+    titleCalls,
+    titlesOf: (sessionId: string) => titles.get(sessionId),
+    // Changes a row's titles as sessions would, recording no call.
+    setRowTitles: (sessionId: string, next: SessionTitles) =>
+      titles.set(sessionId, next),
     uuidCalls: () => uuidCalls,
     hostIdChanges,
     ownedEnds: () => ownedEnds,
@@ -474,6 +504,7 @@ describe('createChatSessions', () => {
           projectDir: '/w/app',
           profile: 'home',
           hostSessionId: PAST_ONE.sessionId,
+          title: PAST_ONE.title,
         }),
     },
     {
@@ -510,6 +541,7 @@ describe('createChatSessions', () => {
       projectDir: '/w/app',
       profile: 'work',
       hostSessionId: hostId,
+      title: PAST_ONE.title,
     });
     await flush();
 
@@ -556,6 +588,7 @@ describe('createChatSessions', () => {
       projectDir: '/w/app',
       profile: 'work',
       hostSessionId: hostId,
+      title: PAST_ONE.title,
     });
 
     expect(test.sent('sessionStarted')[0].entries).toEqual([
@@ -584,6 +617,7 @@ describe('createChatSessions', () => {
         projectDir: '/w/app',
         profile: 'work',
         hostSessionId: hostId,
+        title: PAST_ONE.title,
       }),
     ).rejects.toThrow(hostId);
     expect(test.harness.pastSessionCalls).toEqual([]);
@@ -617,6 +651,7 @@ describe('createChatSessions', () => {
       projectDir: '/w/app',
       profile: 'work',
       hostSessionId: hostId,
+      title: PAST_ONE.title,
     });
 
     expect(sessionId).toBe(ROW_ID);
@@ -624,6 +659,7 @@ describe('createChatSessions', () => {
     expect(test.opened).toHaveLength(1);
     expect(test.harness.processes).toEqual([]);
     expect(test.harness.pastSessionCalls).toEqual([]);
+    expect(test.titleCalls).toEqual([]);
   });
 
   it('commands_StoredAndSentOnChange', async () => {
@@ -1786,6 +1822,7 @@ describe('createChatSessions saved sessions', () => {
         profile: 'personal',
         sent,
         busy: false,
+        titles: { ...NO_TITLES, firstMessage: sent ? 'hi' : null },
       },
     ]);
   });
@@ -2112,6 +2149,7 @@ describe('createChatSessions saved sessions', () => {
       projectDir: '/w/app',
       profile: 'work',
       hostSessionId: hostId,
+      title: PAST_ONE.title,
     });
     test.chat.killAll();
 
@@ -2371,6 +2409,7 @@ describe('createChatSessions clear', () => {
           profile: 'personal',
           sent: false,
           busy: false,
+          titles: { ...NO_TITLES, firstMessage: 'first' },
         },
       ],
       selectedHostSessionId: 'uuid-2',
@@ -2540,5 +2579,135 @@ describe('createChatSessions clear', () => {
 
     expect(test.announced).toEqual([]);
     expect(test.marked).toEqual([]);
+  });
+});
+
+describe('createChatSessions titles', () => {
+  it.each([
+    {
+      given: 'a first message then a second',
+      act: async (chat: ChatSessions) => {
+        await chat.send(ROW_ID, { text: '  fix the\nlogin bug', images: [] });
+        await chat.send(ROW_ID, { text: 'and the logout', images: [] });
+      },
+      expected: [[ROW_ID, 'firstMessage', 'fix the\nlogin bug']],
+    },
+    {
+      given: 'a first message over 200 code points',
+      act: (chat: ChatSessions) =>
+        chat.send(ROW_ID, { text: '🙂a'.repeat(150), images: [] }),
+      expected: [[ROW_ID, 'firstMessage', '🙂a'.repeat(100)]],
+    },
+    {
+      given: 'a first message opening with 250 spaces',
+      act: (chat: ChatSessions) =>
+        chat.send(ROW_ID, { text: `${' '.repeat(250)}fix it`, images: [] }),
+      expected: [[ROW_ID, 'firstMessage', 'fix it']],
+    },
+    {
+      given: 'a whitespace-only first message',
+      act: (chat: ChatSessions) =>
+        chat.send(ROW_ID, { text: ' \n\t ', images: [] }),
+      expected: [],
+    },
+    {
+      given: 'an images-only first message',
+      act: (chat: ChatSessions) =>
+        chat.send(ROW_ID, {
+          text: '',
+          images: [{ mediaType: 'image/png', data: 'iVBORw0K' }],
+        }),
+      expected: [],
+    },
+  ])('deliver_FirstMessage_SetsItsTitle given $given', async (row) => {
+    const test = await started();
+
+    await row.act(test.chat);
+
+    expect(test.titleCalls).toEqual(row.expected);
+  });
+
+  it('deliver_FirstMessageAfterClear_KeepsTheTitle', async () => {
+    const test = await started();
+    await test.chat.send(ROW_ID, { text: 'first', images: [] });
+    test.chat.clear(ROW_ID);
+    await flush();
+    test.titleCalls.length = 0;
+
+    await test.chat.send(ROW_ID, { text: 'second', images: [] });
+
+    expect(test.titleCalls).toEqual([]);
+    expect(test.titlesOf(ROW_ID)?.firstMessage).toBe('first');
+  });
+
+  it.each([
+    { given: 'a short title', title: 'Past work', expected: 'Past work' },
+    {
+      given: 'a title over 200 code points',
+      title: '🙂a'.repeat(150),
+      expected: '🙂a'.repeat(100),
+    },
+  ])(
+    'resume_SetsTheRequestTitleAndSavesIt given $given',
+    async ({ title, expected }) => {
+      const test = setUp();
+      test.chat.restore(NOTHING_SAVED);
+
+      await test.chat.resume({
+        projectDir: '/w/app',
+        profile: 'work',
+        hostSessionId: PAST_ONE.sessionId,
+        title,
+      });
+
+      expect(test.titleCalls).toEqual([[ROW_ID, 'firstMessage', expected]]);
+      expect(test.saved.last()?.sessions[0].titles).toEqual({
+        ...NO_TITLES,
+        firstMessage: expected,
+      });
+    },
+  );
+
+  it('restore_SavedTitles_SetsEachSavedSource', () => {
+    const test = setUp();
+    const titles = { user: null, agent: 'Plan review', firstMessage: 'hi' };
+
+    test.chat.restore({
+      sessions: [record('host-a', { titles })],
+      selectedHostSessionId: null,
+    });
+
+    expect(test.titleCalls).toEqual([
+      [ROW_ID, 'agent', 'Plan review'],
+      [ROW_ID, 'firstMessage', 'hi'],
+    ]);
+    expect(test.titlesOf(ROW_ID)).toEqual(titles);
+  });
+
+  it('titleChanged_HeldRow_SavesItsCurrentTitles', async () => {
+    const test = setUp();
+    test.chat.restore(NOTHING_SAVED);
+    test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+    await flush();
+    const renamed = { ...NO_TITLES, agent: 'Named by agent' };
+    test.setRowTitles(ROW_ID, renamed);
+    const savesBefore = test.saved.saves();
+
+    test.chat.titleChanged(ROW_ID);
+
+    expect(test.saved.saves()).toBe(savesBefore + 1);
+    expect(test.saved.last()?.sessions[0].titles).toEqual(renamed);
+  });
+
+  it('titleChanged_RowChatDoesNotHold_SavesNothing', async () => {
+    const test = setUp();
+    test.chat.restore(NOTHING_SAVED);
+    test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+    await flush();
+    const savesBefore = test.saved.saves();
+
+    test.chat.titleChanged('row-9');
+
+    expect(test.saved.saves()).toBe(savesBefore);
   });
 });

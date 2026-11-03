@@ -23,6 +23,7 @@ function tabsSetup() {
   const added: AddedTab[] = [];
   const beforeClose = vi.fn((sessionId: string) => sessionId === 'closable');
   const shown = vi.fn();
+  const formShown: [string, boolean][] = [];
   const tabs = createSessionFormTabs({
     addTab: (sessionId, view) => {
       const handle: AddedTab['handle'] = {
@@ -49,8 +50,9 @@ function tabsSetup() {
     idleText: 'No form open.',
     beforeClose,
     shown,
+    formShown: (sessionId, isShown) => formShown.push([sessionId, isShown]),
   });
-  return { tabs, added, beforeClose, shown };
+  return { tabs, added, beforeClose, shown, formShown };
 }
 
 function root(): HTMLElement {
@@ -137,6 +139,23 @@ describe('session form tabs', () => {
     tabs.sync(() => null);
 
     expect(added[0].handle.statuses).toEqual(['Feature 0/2', '']);
+  });
+
+  it('tells the host when a form starts or stops showing, status text aside', () => {
+    const { tabs, formShown } = tabsSetup();
+    tabs.mount('s1', root());
+    const calls = () => formShown.splice(0);
+
+    tabs.sync(() => null);
+    expect(calls()).toEqual([]);
+    tabs.sync(() => 'Feature 0/2');
+    expect(calls()).toEqual([['s1', true]]);
+    tabs.sync(() => 'Feature 1/2');
+    expect(calls()).toEqual([]);
+    tabs.sync(() => null);
+    expect(calls()).toEqual([['s1', false]]);
+    tabs.sync(() => '');
+    expect(calls()).toEqual([['s1', true]]);
   });
 
   it('adds a new tab for a session it forgot', () => {

@@ -361,3 +361,21 @@ now, any harness later). Each item names its sites.
   `init` — e.g. Ctrl+C in `/compact`'s gap between `started` and `init` (`agent-chat/claude-stream.md` § Message
   lifecycle) — so the session shows idle and the turn-finished alert fires, then the init shows working again. Option:
   in lifecycle mode keep a uuid whose last state was `started` open through `interruptAnswered`.
+- **One native-input reset in the input frame** — *agent-ready*: five plugins copy the same eight-declaration reset
+  for the plain `<input>` that `textBoxInput` puts in an `inputFrame` (transparent background, no border, `font:
+  inherit`, no outline, no padding, full width, `min-width: 0`): `.docs-box` (`src/plugins/docs/page/docs.css`),
+  `.settings-box-input` (`settings/page/settings.css`), `.backlog-filter-input` (`backlog/page/backlog.css`),
+  `.notes-title` (`notes/page/notes.css`) and the sessions rename dialog's box. Move it into the primitive (a rule on
+  `.ui-input > input` in `src/shared/page/ui/input-frame.css`, or a class `textBoxInput` adds) and delete the five
+  copies, checking each box's look in a drive capture. Found in the session titles review.
+- **Sessions split picker rows through the sessions layout** — *agent-ready*: the split's "Show session" picker
+  (`openSplitPicker`, `src/plugins/sessions/page/start.ts`) passes no `drawRow` to `createListPicker`, so its rows do
+  not draw through `sessions.layout`, against `docs/features/layouts/design.md`'s "a dialog follows its opener". Add a
+  picker-row part to the sessions layout contract and `default` layout, as docs, chat, settings, notes and backlog
+  do. Found in the session titles review (pre-existing).
+- **A restored chat's first step header reads hundreds of thousands of hours** — *agent-ready*: in a drive run, after
+  `restart` restored a chat row, the restored conversation's first step header read "1 step · 498243h 11m", a
+  duration measured from a zero or epoch start time. Find where the step line's duration takes its start for entries
+  read back from history (the `at` stamps of `loadHistory` entries, `src/plugins/chat/main/chat-sessions.ts`, and the
+  page's activity line) and give history entries a real or absent start. Seen in the session titles drive run
+  (`.drive/st08`).

@@ -35,6 +35,7 @@ function stateOf(
       marked: false,
       projectDir: null,
       hostSessionId: null,
+      titles: { user: null, agent: null, firstMessage: null },
     })),
     selectedSessionId,
   };

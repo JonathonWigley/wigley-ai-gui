@@ -3,9 +3,9 @@ import { definePlugin } from '../../shared/define-plugin';
 // Agent sessions: the relay each one connects through, and Sessions mode, its
 // sidebar of session rows beside chat panes, each showing one session's tabs.
 // Its keys act in every scope; `idle` is the base scope while the focused pane
-// shows no tab, and `picker` is pushed while the list picker asks which
-// session a new pane shows. `layout` names the layout the side bar, the panes
-// and the tab bars draw with.
+// shows no tab, `picker` is pushed while the list picker asks which session a
+// new pane shows, and `rename` while the rename dialog shows. `layout` names
+// the layout the side bar, the panes and the tab bars draw with.
 export const sessionsManifest = definePlugin({
   id: 'sessions',
   dependsOn: ['keys'],
@@ -25,6 +25,11 @@ export const sessionsManifest = definePlugin({
     prevTab: { label: 'previous tab', group: 'tabs', runsIn: 'page' },
     closeSession: {
       label: 'close the session',
+      group: 'sessions',
+      runsIn: 'page',
+    },
+    renameSession: {
+      label: 'rename the session',
       group: 'sessions',
       runsIn: 'page',
     },
@@ -63,19 +68,30 @@ export const sessionsManifest = definePlugin({
     pickerUp: { label: 'previous choice', group: 'picker', runsIn: 'page' },
     pickerChoose: { label: 'choose', group: 'picker', runsIn: 'page' },
     pickerCancel: { label: 'cancel', group: 'picker', runsIn: 'page' },
+    renameAccept: { label: 'rename', group: 'rename', runsIn: 'page' },
+    renameCancel: { label: 'cancel', group: 'rename', runsIn: 'page' },
     openPreview: {
       label: 'show the layout preview rows',
       group: 'debug',
       runsIn: 'page',
     },
   },
-  scopes: { idle: 'Sessions', picker: 'In the sessions pane picker' },
-  settings: { layout: 'default' },
+  scopes: {
+    idle: 'Sessions',
+    picker: 'In the sessions pane picker',
+    rename: 'In the rename dialog',
+  },
+  settings: { layout: 'default', titleMaxLength: 40 },
   settingInfo: {
     layout: {
       label: 'Layout',
       description:
         "The sessions layout Sessions mode's side bar, panes and tab bars draw in: a folder name in sessions' layouts folder, or default.",
+    },
+    titleMaxLength: {
+      label: 'Title length',
+      description:
+        'The most characters a session title may hold; longer titles from the agent or the rename dialog are refused, and a first-message title is cut.',
     },
   },
   themeTokens: {},

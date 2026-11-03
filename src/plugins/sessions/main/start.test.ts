@@ -1,7 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
-import type { ConnectedSession, OwnedSession, SessionInfo } from '../contract';
-import { addDriveActions } from './start';
+import type {
+  ConnectedSession,
+  OwnedSession,
+  SessionInfo,
+  SessionsMainExports,
+} from '../contract';
+import { addDriveActions, sessionsMainPart } from './start';
+import { SET_SESSION_TITLE_TOOL, startTitleTool } from './title-tool';
 
 function fakeSessions() {
   const connectedInfo: SessionInfo[] = [];
@@ -151,5 +157,66 @@ describe('sessions drive actions', () => {
     });
     actions.dispose();
     expect(sessions.ended).toEqual(['row-a']);
+  });
+});
+
+// Sessions' main part started over a fake `MainApi` with no relay, no drive
+// and no self-test script, its titles limited to `titleMaxLength`.
+function startSessionsPart(titleMaxLength: number): SessionsMainExports {
+  let hex = 0;
+  const api = {
+    channel: { handle: () => undefined, send: () => undefined },
+    events: { emit: () => undefined, on: () => undefined },
+    settings: () => ({ layout: 'default', titleMaxLength }),
+    services: {
+      randomHex: () => (++hex).toString(16),
+      log: () => undefined,
+      runMode: 'selfTest',
+      paths: { join: (...parts: string[]) => parts.join('/') },
+      homeDir: '/home',
+      appInstance: { id: 'app', isDev: false },
+      selfTest: null,
+    },
+    drive: null,
+    layouts: { register: () => ({ dispose: () => undefined }) },
+  } as unknown as Parameters<typeof sessionsMainPart.start>[0];
+  return sessionsMainPart.start(api).exports as SessionsMainExports;
+}
+
+describe('sessions main part', () => {
+  it('contributes set_session_title once, titling the calling session at the setting limit', async () => {
+    const exports = startSessionsPart(10);
+    const connected = exports.connect({
+      sessionId: 'host-1',
+      projectDir: null,
+      deadlineSeconds: null,
+      harness: 'claude',
+    });
+    const context = { toolUseId: null, signal: new AbortController().signal };
+
+    const overLimit = await connected.call(
+      SET_SESSION_TITLE_TOOL.name,
+      { title: 'Session titles' },
+      context,
+    );
+    const stored = await connected.call(
+      SET_SESSION_TITLE_TOOL.name,
+      { title: 'Titles' },
+      context,
+    );
+
+    expect(overLimit.content[0]?.text).toContain('the limit is 10');
+    expect(stored.isError ?? false).toBe(false);
+    expect(exports.titles(connected.session.id)?.agent).toBe('Titles');
+    expect(() =>
+      exports.contributeTools(
+        [SET_SESSION_TITLE_TOOL],
+        startTitleTool({
+          setTitle: exports.setTitle,
+          titles: exports.titles,
+          maxLength: () => 10,
+        }),
+      ),
+    ).toThrow('Two tool contributions both name the tool "set_session_title"');
   });
 });

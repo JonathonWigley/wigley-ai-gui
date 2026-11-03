@@ -12,12 +12,14 @@ import {
   FAKE_END_TEXT,
   FAKE_HOLD_TEXT,
   FAKE_PAST_SESSIONS,
+  FAKE_PERMISSION_TEXT,
   FAKE_SIGN_IN_CODE,
   FAKE_STEPS_TEXT,
   FAKE_TOOL_TEXT,
   FAKE_VISUAL_TEXT,
   type FakeAgentCall,
   type FakeAgentProcessRecord,
+  type FakePermissionAsk,
   markRun,
   type RunMark,
 } from '../../../shared/fake-agent-harness';
@@ -134,11 +136,66 @@ const TWO_SESSIONS_STEPS: SelfTestStep[] = [
   },
 ];
 
+const escapeRegExp = (text: string) =>
+  text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// The line the Chat page logs when chat's activity on the named session's row
+// changes; `none` for no activity.
+const rowActivityLine = (name: string, word: string) =>
+  `[chat] row activity ${name} ${word}`;
+const rowActivityPattern = (name: string, word: string) =>
+  new RegExp(`^${escapeRegExp(rowActivityLine(name, word))}$`);
+
+// The fake's visual turn holds for a second and a half, so the second
+// session's turn ends after the first session's Chat tab shows.
+const ROW_ACTIVITY_STEPS: SelfTestStep[] = [
+  { keys: ['<A-S-i>'], expect: '[chat] Chat tab shown in chat-second' },
+  {
+    keys: [...sendKeys(FAKE_VISUAL_TEXT), '<A-S-o>'],
+    expect: rowActivityLine('chat-second', 'done'),
+    alsoExpect: [
+      rowActivityPattern('chat-second', 'working'),
+      /^\[chat\] Chat tab shown in chat-selftest$/,
+    ],
+    why: 'The turn ends while the first session is focused.',
+  },
+  {
+    keys: ['<A-S-i>'],
+    expect: rowActivityLine('chat-second', 'none'),
+    alsoExpect: [/^\[chat\] Chat tab shown in chat-second$/],
+    why: 'Focusing the session views its finished turn.',
+  },
+  {
+    keys: sendKeys('seen'),
+    expect: rowActivityLine('chat-second', 'none'),
+    alsoExpect: [rowActivityPattern('chat-second', 'working')],
+    why: 'A turn that ends in the focused session skips done.',
+  },
+  {
+    keys: sendKeys(FAKE_PERMISSION_TEXT),
+    expect: rowActivityLine('chat-second', 'needs you'),
+    alsoExpect: [rowActivityPattern('chat-second', 'working')],
+    why: 'The fake asks a permission mid-turn.',
+  },
+  {
+    keys: ['Escape', 'y'],
+    expect: rowActivityLine('chat-second', 'none'),
+    alsoExpect: [/^\[chat\] allowed Bash in chat-second$/],
+    why: 'Allowing it lets the turn end in the focused session.',
+  },
+  { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
+];
+
 // The second session's process ends here, leaving its row resting until the
 // next message there starts it again; its processes' calls are not checked.
 const RESTING_SESSION_STEPS: SelfTestStep[] = [
   { keys: ['<A-S-i>'], expect: '[chat] Chat tab shown in chat-second' },
-  { keys: sendKeys(FAKE_END_TEXT), expect: '[chat] chat-second rested' },
+  {
+    keys: sendKeys(FAKE_END_TEXT),
+    expect: '[chat] chat-second rested',
+    alsoExpect: [rowActivityPattern('chat-second', 'error')],
+    why: 'The process stops while its turn runs, so the row shows error though the session is focused.',
+  },
   {
     keys: [' ', 'c', 'e'],
     expect: '[chat] chat-second has no running process',
@@ -153,7 +210,8 @@ const RESTING_SESSION_STEPS: SelfTestStep[] = [
   {
     keys: sendKeys('again'),
     expect: '[chat] assistant entry added in chat-second',
-    why: 'The send starts the process again in the same row.',
+    alsoExpect: [rowActivityPattern('chat-second', 'none')],
+    why: 'The send starts the process again in the same row and clears its error.',
   },
   { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
 ];
@@ -179,9 +237,6 @@ const CLEAR_STEPS: SelfTestStep[] = [
   },
   { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
 ];
-
-const escapeRegExp = (text: string) =>
-  text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // The line the visual frames service logs when the frame of `source`
 // loads: the first eight hex characters of the source's SHA-256. The source
@@ -250,6 +305,8 @@ const PERMISSION_CARD_STEPS: SelfTestStep[] = [
   {
     keys: ['y'],
     expect: `[forms] form shown: chat-selftest · ${ROUND_HEADING}`,
+    alsoExpect: [rowActivityPattern('chat-selftest', 'none')],
+    why: 'The row showed needs you from the start; the answered permission leaves the focused session idle.',
   },
   { keys: [' ', ' '], expect: '[forms] review opened' },
   {
@@ -558,6 +615,11 @@ const GROUPS: SelfTestGroup[] = [
     steps: TWO_SESSIONS_STEPS,
   },
   {
+    name: 'row activity',
+    why: 'the row shows working during a turn, done after it in an unfocused session, nothing once viewed, and needs you while the fake asks a permission mid-turn',
+    steps: ROW_ACTIVITY_STEPS,
+  },
+  {
     name: 'resting session',
     why: "fake: end leaves the second session resting in its row, where the box's control keys log that no process runs, Esc still leaves the box, j still moves through the entries, and the next message starts the process again in place.",
     steps: RESTING_SESSION_STEPS,
@@ -813,6 +875,36 @@ function pastSessionProblems(
   return [`past session calls ${JSON.stringify(calls)}`];
 }
 
+// Asks a fake process's permission through chat's tool in the running chat
+// session in the process's project folder, as Claude Code would; allowed when
+// the reply's behavior is allow.
+function fakePermissionAsk(
+  chat: Pick<ChatSessions, 'permissionToolSession' | 'sessions'>,
+): FakePermissionAsk {
+  return async (request, call) => {
+    const session = chat
+      .sessions()
+      .find(
+        (state) => state.running && state.projectDir === request.projectDir,
+      );
+    if (session === undefined) {
+      throw new Error(`no running chat session in ${request.projectDir}`);
+    }
+    const reply = await askFixturePermission(
+      chat,
+      session.sessionId,
+      request.projectDir,
+      call,
+    );
+    const text = reply.content[0]?.text ?? '';
+    if (reply.isError === true) {
+      throw new Error(text);
+    }
+    const { behavior } = JSON.parse(text) as { behavior: string };
+    return behavior === 'allow';
+  };
+}
+
 // The self-test's two project folders.
 interface SelfTestProjects {
   selftest: string;
@@ -829,7 +921,8 @@ interface SelfTestProjects {
 // steps submit. The result is both calls' replies and the self-test project's
 // folder; problems reads the fake processes, whose records the steps keep
 // changing in place, when it runs, reading only the records this run added.
-// The run waits on the session's Chat tab being shown.
+// Each fake harness asks a `fake: permission` turn's permission through
+// chat's tool too. The run waits on the session's Chat tab being shown.
 export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
   const { chat, sessions, harnesses, files } = deps;
   // Cleared when making them fails, so a later run tries again.
@@ -910,6 +1003,9 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
     scrollsItself: SCROLLS_ITSELF,
     open(run) {
       marks = markRun(harnesses);
+      for (const mark of marks) {
+        mark.harness.askPermissionsWith(fakePermissionAsk(chat));
+      }
       previousRelay?.end();
       const failures: string[] = [];
       archiveResetFailures = failures;

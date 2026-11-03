@@ -30,7 +30,10 @@ import {
   sessionPaneView,
 } from '../../../shared/page/session-forms';
 import type { KeysPageExports } from '../../keys/contract';
-import type { SessionsPageExports } from '../../sessions/contract';
+import {
+  NEEDS_YOU_ACTIVITY,
+  type SessionsPageExports,
+} from '../../sessions/contract';
 import { formsCommand, formsScope } from '../ids';
 import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
@@ -57,7 +60,7 @@ import { sessionTitle } from './view-model';
 // a drop target through `drops`, typing files into the round's box used last.
 export interface FormsViewDeps {
   areas: Pick<PluginAreas, 'overlay'>;
-  sessions: Pick<SessionsPageExports, 'addTab'>;
+  sessions: Pick<SessionsPageExports, 'addTab' | 'setActivity'>;
   beforeClose(sessionId: string): boolean;
   setScope(view: FormsState['view']): void;
   setResizeTarget(target: ResizeTarget | null): void;
@@ -121,6 +124,12 @@ export function mountFormsView(deps: FormsViewDeps): FormsView {
     idleText: "No round open. The agent's next round opens here.",
     beforeClose: (sessionId) => deps.beforeClose(sessionId),
     shown: () => setBaseScope(deps.store.get()),
+    formShown: (sessionId, shown) =>
+      deps.sessions.setActivity(
+        sessionId,
+        'forms',
+        shown ? NEEDS_YOU_ACTIVITY : null,
+      ),
   });
   const dispatch = (action: FormsAction) => store.dispatch(action);
   const confirm = createConfirmPrompt({

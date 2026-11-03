@@ -37,11 +37,8 @@ import {
   UNSAVED_TEXT,
 } from './docs-state';
 import type { AppSlot } from '../../../shared/page/layout-host/app-slot';
-import {
-  type DocsParts,
-  type DrawnPart,
-  keepingFocusAndScroll,
-} from './layout/docs-parts';
+import { type DocsParts, type DrawnPart } from './layout/docs-parts';
+import { keepingFocusAndScroll } from '../../../shared/page/layout-host/keeping-focus';
 
 const BANNER_TEXT = 'Changed on disk since you opened it';
 const CONFLICT_TEXT = 'File changed on disk';

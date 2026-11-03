@@ -1,6 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { installFakeDom } from '../../../shared/page/test-dom';
-import { HARNESSES } from '../contract';
+import {
+  asHtml,
+  FakeElement,
+  findAll,
+  installFakeDom,
+} from '../../../shared/page/test-dom';
+import {
+  HARNESSES,
+  NEEDS_YOU_ACTIVITY,
+  type RowActivity,
+  type SessionRow,
+  type SessionsState,
+} from '../contract';
 import {
   PREVIEW_STATE,
   PREVIEW_STATUSES,
@@ -10,9 +21,27 @@ import {
 import {
   drawnRows,
   rowNamed,
+  sessionRow,
   sessionsViewSetup,
   stateOf,
 } from './sessions-view-fakes';
+
+const WORKING: RowActivity = { word: 'working', tone: 'running', rank: 20 };
+
+// The sample row whose label starts with `label`.
+function sampleNamed(label: string): SessionRow {
+  const found = PREVIEW_STATE.rows.find((row) => row.label.startsWith(label));
+  if (found === undefined) {
+    throw new Error(`no sample row ${label}`);
+  }
+  return found;
+}
+
+// One row's text in the `default` row's cell `className`, null when the row
+// draws no such cell.
+function cellText(row: FakeElement, className: string): string | null {
+  return findAll(row, className)[0]?.textContent ?? null;
+}
 
 beforeEach(() => {
   installFakeDom(vi.stubGlobal);
@@ -39,12 +68,35 @@ describe('sessions preview', () => {
 
   it('previewRowState_SampleRows_AreNeverOnScreen', () => {
     for (const row of PREVIEW_STATE.rows) {
-      expect(previewRowState(row.sessionId)).toEqual({
-        status: PREVIEW_STATUSES[row.sessionId] ?? null,
-        onScreen: false,
-      });
+      const state = previewRowState(row, 40);
+      expect(state.onScreen).toBe(false);
+      expect(state.status).toBe(PREVIEW_STATUSES[row.sessionId] ?? null);
     }
   });
+
+  it.each([
+    {
+      label: 'wigley-ai-marketplace',
+      title: 'Marketplace release notes',
+      activity: 'working',
+    },
+    { label: 'scratch', title: 'Scratchpad', activity: 'needs you' },
+    {
+      label: 'a-session-label-long-enough',
+      title: 'Look into why the docs index skips syml…',
+      activity: 'done',
+    },
+    { label: 'new-games-prototypes', title: null, activity: 'error' },
+    { label: 'wigley-ai-gui', title: null, activity: null },
+  ])(
+    'previewRowState_PinnedSample_ShowsItsTitleAndActivity ($label)',
+    ({ label, title, activity }) => {
+      const state = previewRowState(sampleNamed(label), 40);
+
+      expect(state.title).toBe(title);
+      expect(state.activity?.word ?? null).toBe(activity);
+    },
+  );
 
   it('sessionsView_PreviewShown_SendsNothingAndRestoresRealRows', () => {
     const { view, sideBar, activated } = sessionsViewSetup();
@@ -140,4 +192,174 @@ describe('sessions preview', () => {
       expect(isPreviewShown).toBe(false);
     },
   );
+});
+
+// One session row `s1` labelled `label s1` with an agent title, or none.
+function titledState(agent: string | null, marked = false): SessionsState {
+  const row = sessionRow('s1');
+  return {
+    rows: [{ ...row, marked, titles: { ...row.titles, agent } }],
+    selectedSessionId: 's1',
+  };
+}
+
+describe('session rows', () => {
+  it.each<{
+    case: string;
+    agent: string | null;
+    marked: boolean;
+    activity: RowActivity | null;
+    label: string;
+    detail: string | null;
+    word: string | null;
+    dots: number;
+  }>([
+    {
+      case: 'agent title',
+      agent: 'Fix the build',
+      marked: false,
+      activity: null,
+      label: 'Fix the build',
+      detail: 'label s1',
+      word: null,
+      dots: 0,
+    },
+    {
+      case: 'no title',
+      agent: null,
+      marked: false,
+      activity: null,
+      label: 'label s1',
+      detail: null,
+      word: null,
+      dots: 0,
+    },
+    {
+      case: 'working',
+      agent: null,
+      marked: false,
+      activity: WORKING,
+      label: 'label s1',
+      detail: null,
+      word: 'working',
+      dots: 1,
+    },
+    {
+      case: 'marked with an activity',
+      agent: null,
+      marked: true,
+      activity: NEEDS_YOU_ACTIVITY,
+      label: 'label s1',
+      detail: null,
+      word: 'needs you',
+      dots: 1,
+    },
+    {
+      case: 'marked alone',
+      agent: null,
+      marked: true,
+      activity: null,
+      label: 'label s1',
+      detail: null,
+      word: null,
+      dots: 1,
+    },
+  ])(
+    'sessionsView_Row_DrawsTitleFolderAndActivity ($case)',
+    ({ agent, marked, activity, label, detail, word, dots }) => {
+      const { view, sideBar } = sessionsViewSetup();
+      view.render(titledState(agent, marked));
+
+      view.setActivity('s1', 'chat', activity);
+
+      const [row] = drawnRows(sideBar);
+      expect(cellText(row, 'ui-row-label')).toBe(label);
+      expect(cellText(row, 'ui-row-detail')).toBe(detail);
+      expect(cellText(row, 'session-row-activity')).toBe(word);
+      expect(findAll(row, 'ui-dot')).toHaveLength(dots);
+    },
+  );
+
+  it('sessionsView_TitleLengthChanged_RedrawsRowsWithTheNewCut', () => {
+    let titleMaxLength = 40;
+    const { view, sideBar } = sessionsViewSetup(
+      undefined,
+      undefined,
+      () => titleMaxLength,
+    );
+    const row = sessionRow('s1');
+    view.render({
+      rows: [
+        {
+          ...row,
+          titles: {
+            ...row.titles,
+            firstMessage: 'Look into why the index skips symlinked folders',
+          },
+        },
+      ],
+      selectedSessionId: 's1',
+    });
+
+    titleMaxLength = 12;
+    view.redrawRows();
+
+    expect(cellText(drawnRows(sideBar)[0], 'ui-row-label')).toBe(
+      'Look into w…',
+    );
+  });
+
+  it('sessionsView_RowTooltip_JoinsTitleLabelAndStatus', () => {
+    const { view, sideBar } = sessionsViewSetup();
+    view.render(titledState('Fix the build'));
+
+    view.tabs
+      .add('s1', {
+        id: 'chat',
+        title: 'Chat',
+        icon: 'comment',
+        element: asHtml(new FakeElement('div')),
+        beforeClose: () => true,
+        shown: () => undefined,
+      })
+      .setStatus('thinking');
+
+    expect(drawnRows(sideBar)[0].title).toBe(
+      'Fix the build · label s1 · thinking',
+    );
+  });
+
+  it('sessionsView_SetActivityTopUnchanged_DrawsNothing', () => {
+    const { view, sideBar } = sessionsViewSetup();
+    view.render(stateOf(['s1'], 's1'));
+    view.setActivity('s1', 'forms', NEEDS_YOU_ACTIVITY);
+    const [before] = drawnRows(sideBar);
+
+    view.setActivity('s1', 'chat', WORKING);
+
+    expect(drawnRows(sideBar)[0]).toBe(before);
+  });
+
+  it('sessionsView_SetActivityBeforeItsRow_ShowsOnceTheRowArrives', () => {
+    const { view, sideBar } = sessionsViewSetup();
+    view.render(stateOf([], null));
+
+    view.setActivity('s1', 'chat', WORKING);
+    view.render(stateOf(['s1'], 's1'));
+
+    expect(cellText(drawnRows(sideBar)[0], 'session-row-activity')).toBe(
+      'working',
+    );
+  });
+
+  it('sessionsView_RowRemoved_DropsItsActivities', () => {
+    const { view, sideBar } = sessionsViewSetup();
+    view.render(stateOf(['s1'], 's1'));
+    view.setActivity('s1', 'chat', WORKING);
+
+    view.render(stateOf([], null));
+    view.render(stateOf(['s1'], 's1'));
+
+    expect(findAll(drawnRows(sideBar)[0], 'session-row-activity')).toEqual([]);
+  });
 });

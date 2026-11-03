@@ -1,6 +1,6 @@
 # 02 — The set_session_title tool
 
-Status: not started
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -24,3 +24,5 @@ Done when: compiles; the test gate runs the tests above
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 79a46745 · proof: diff read (SET_SESSION_TITLE_TOOL and startTitleTool present, deps as named TitleToolDeps), no type errors in sessions/main · concerns: start test's exactly-once check rests on the list refusing a duplicate name, since tools() is not reachable through exports; fake paths built inline to keep the layer rule

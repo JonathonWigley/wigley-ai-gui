@@ -1,14 +1,17 @@
 import { element } from '../../../shared/page/dom';
 import type { DrawnPart } from '../../../shared/page/layout-host/draw-part';
 import { rowAction } from '../../../shared/page/ui/row';
-import type { SessionRow, SessionsState } from '../contract';
+import type { RowActivity, SessionRow, SessionsState } from '../contract';
 import type { SessionsPart } from '../layouts/layout';
 import type { DrawnSideBar, SessionsParts } from './layout/sessions-parts';
 import { harnessText, hasOtherSession } from './tabs';
 
-// What a row draws beside its session: its second line, null for none, and
-// whether its session shows in a pane other than the focused one.
+// What a row draws beside its session: its shown title, its activity and its
+// second line, each null for none, and whether its session shows in a pane
+// other than the focused one.
 export interface RowState {
+  title: string | null;
+  activity: RowActivity | null;
   status: string | null;
   onScreen: boolean;
 }
@@ -24,7 +27,7 @@ export interface SidebarView {
   // a session step passes over, which decide whether its prompts show.
   render(
     state: SessionsState | null,
-    rowStateOf: (sessionId: string) => RowState,
+    rowStateOf: (row: SessionRow) => RowState,
     skip: ReadonlySet<string>,
   ): void;
 }
@@ -79,7 +82,7 @@ export function mountSidebarView(
           list,
           session,
           session.sessionId === selectedSessionId,
-          rowStateOf(session.sessionId),
+          rowStateOf(session),
           activate,
         ),
       );
@@ -92,21 +95,25 @@ function drawRow(
   list: HTMLElement,
   session: SessionRow,
   isSelected: boolean,
-  { status, onScreen }: RowState,
+  { title, activity, status, onScreen }: RowState,
   activate: (sessionId: string) => void,
 ): DrawnPart<SessionsPart> {
   const drawn = parts.row(list, {
     sessionId: session.sessionId,
+    title,
     label: session.label,
     harness: harnessText(session.harness),
     marked: session.marked,
+    activity:
+      activity === null ? null : { word: activity.word, tone: activity.tone },
     status,
     onScreen,
   });
   const entry = drawn.built.element;
   rowAction(entry, () => activate(session.sessionId));
-  entry.title =
-    status === null ? session.label : `${session.label} · ${status}`;
+  entry.title = [title, session.label, status]
+    .filter((part) => part !== null)
+    .join(' · ');
   entry.classList.toggle('is-selected', isSelected);
   if (isSelected) {
     entry.setAttribute('aria-current', 'true');

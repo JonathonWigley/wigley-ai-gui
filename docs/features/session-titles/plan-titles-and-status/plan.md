@@ -126,29 +126,64 @@ to `DotStatus`.
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Titles on session rows](01-row-titles.md)
+- [x] [Titles on session rows](01-row-titles.md)
 
 ### Wave 2
-- [ ] [The set_session_title tool](02-title-tool.md) — after 01
-- [ ] [Row title, activities and the rename dialog](03-row-drawing-and-rename.md) — after 01
-- [ ] [Chat saves titles, first-message fallback, the instruction](04-chat-titles.md) — after 01
+- [x] [The set_session_title tool](02-title-tool.md) — after 01
+- [x] [Row title, activities and the rename dialog](03-row-drawing-and-rename.md) — after 01
+- [x] [Chat saves titles, first-message fallback, the instruction](04-chat-titles.md) — after 01
 
 ### Wave 3
-- [ ] [Chat activities](05-chat-activities.md) — after 03
-- [ ] [Forms and primer set needs you](06-form-activities.md) — after 03
+- [x] [Chat activities](05-chat-activities.md) — after 03
+- [x] [Forms and primer set needs you](06-form-activities.md) — after 03
 
 ### Wave 4
-- [ ] [Doc re-read](07-doc-re-read.md) — after 02, 03, 04, 05, 06
+- [x] [Doc re-read](07-doc-re-read.md) — after 02, 03, 04, 05, 06
 
 ### Wave 5
-- [ ] [Final verification](08-final-verification.md) — after 07
+- [x] [Final verification](08-final-verification.md) — after 07
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: e38f1bb7
 
 ### Groups
+- 01 · 3b62145d · diff read (every Produces present), typecheck clean, lint clean per worker · concerns: worktree guard refuses nvm-sourced npm, so npm runs by its absolute v24.22.1 path; per-call limit covered across two table rows rather than one list
+- 02 · 79a46745 · diff read (SET_SESSION_TITLE_TOOL and startTitleTool present, deps as named TitleToolDeps), no type errors in sessions/main · concerns: start test's exactly-once check rests on the list refusing a duplicate name, since tools() is not reachable through exports; fake paths built inline to keep the layer rule
+- 04 · e9cb027c · diff read (SavedSession.titles, ResumeRequest.title, ChatSessions.titleChanged, deps widened all present), no type errors in chat, layers clean · concerns: agent-chat design.md saved-sessions field list omits titles (for 07); that doc says a resume keeps the first request's system prompt, so a pre-change conversation may not get the instruction on resume, against the plan's 'a resumed agent may rename once more'
+- 03 · f98fa386 · diff read (ActivityTone, RowActivity, NEEDS_YOU_ACTIVITY, setActivity, createRowActivities, SessionRowInput.title/activity, commands, scope, binds present), typecheck clean, lint and sessions self-test passed per worker · concerns: status-dot.css header 'Static: only the streaming indicator moves.' now stale (for 07); .session-rename-box is a third copy of the input reset in .docs-box and .settings-box-input; problem line stays while editing until next Enter; Esc during an in-flight invoke closes but the title still sets and logs
+- 06 · b24de12c · diff read (formShown dep present, forms and primer wired with own source ids), no type errors outside chat's in-progress files · concerns: forms-view.test.ts and primer-view.test.ts stubs gained setActivity, outside the Files list; start.ts files untouched since they pass the whole exports
+- 05 · 4de1cf63 · diff read (Unseen, rowActivity, unseenAfterTurnEnd, unseenAfterRest, markSent, ChatViewDeps listeners and Pick widened present), typecheck clean, lint and chat self-test passed per worker · concerns: needs you has no self-test step of its own: the fixture permission is asked during open, before any step; the permission card y step's 'none' line stands in; chat-state imports the value NEEDS_YOU_ACTIVITY from sessions' contract (layers pass); the done step depends on FAKE_VISUAL_HOLD_MS outlasting two key presses
+- 07 · f66c42a6 · diff read; keymap.md, AGENTS.md and layouts design.md read with no change needed · concerns: the CLI resume keeping the first request's system prompt is the agent-chat doc's claim with no code showing it; design.md Status still names the plan folder, which Close deletes
+- 08 · none · drive run st08 with real Claude: checks 1-6 pass (report /tmp/claude-session-titles/reports/08-1.md, captures .drive/st08/screenshots/) · concerns: at the least side-bar width the folder label ellipsizes alongside the title, and one title cut to a bare 'M' with no ellipsis while the label vanished; restored chat's first step header read '498243h 11m'; two stray rows appeared briefly after restart while the plan loaded
 ### Contract changes
+- createRowActivities(): inline return type → named RowActivities interface, same members · why: readability · consumers: 03 · group 03
+- startTitleTool deps: inline type → named TitleToolDeps, same shape · why: readability · consumers: 02 · group 02
 ### Rulings
+- setUserTitle(null) clears the user title, as an empty string does — channel type allows null — a caller expecting an error gets a clear · group 01 · group 01
+- titles(id) returns a copy, as state() does — keeps main's object private — none · group 01 · group 01
+- setTitle's unchanged check compares the normalized value — a whitespace-only change is no change — none · group 01 · group 01
+- an ended session is checked before the args — an ended session with bad args reads 'This session has ended.' — none · group 02 · group 02
+- an unknown tool name rejects with 'no sessions tool <name>', matching createAgentFormToolSession — unreachable through routing today — none · group 02 · group 02
+- a resumed title is capped at 200 code points by the same helper as the first message — keeps saved state small — none · group 04 · group 04
+- empty text means text === ''; a whitespace-only message calls setTitle, which normalizes to null — none · group 04 · group 04
+- openRow sets titles for restore, resume and start alike; the titleChanged it fires saves nothing since the row is not yet held, and the following save writes them — none · group 04 · group 04
+- activities live in the sessions view; forget runs in view.render for rows that left, from the same rowChanges sessionRemoved uses — none · group 03 · group 03
+- set returns true only when the drawn word or tone changes — a rank-only change does not redraw — none · group 03 · group 03
+- the titleMaxLength settings subscription is never disposed: PageStart has no dispose hook — a hot-reloaded part would hold a stale listener · group 03 · group 03
+- trailing grid column is minmax(max-content, 1fr), not bare max-content, so it sits at the line end without a spacer track — none · group 03 · group 03
+- row-drawing tests live in preview.test.ts under describe('session rows'), since Files named no sessions-view test — none · group 03 · group 03
+- the exact-call-list cases are a new test rather than rows in the existing sync test — reviewers may want them merged · group 06 · group 06
+- the row activity log line fires only on a change, compared by identity against shared constants — duplicate lines if the constants stopped being shared · group 05 · group 05
+- markSent, activeChanged and sessionHostChanged share one clearUnseen — none · group 05 · group 05
+- needs you's self-test is covered by the permission card step's 'none' line rather than a step of its own — changing the runner or fixture to re-ask a permission is out of the plan's scope; the unit table covers rowActivity's waiting row — a regression only in the view's wiring of waiting would slip past the self-test · lead
+- the plan's 'a resumed agent may rename once more' is dropped: per agent-chat design a resume keeps the first request's system prompt, so a pre-feature conversation never gets the instruction — if the CLI does re-read appended prompts on resume, the doc understates it · group 07 · group 07
+- the test gate, self-test and drive run all run in the worktree: this is an Electron app with no editor boundary, and the worktree has its own .vite and node_modules symlinked to the main tree — none · lead
+- triage by the user's standing word (go with every recommendation): fix now 1-8, 12-14, 16-18; leave 15 (a done on the visible session would linger after the user returns; the OS alert already names the finish) and 20 (invisible, and dropping late sets conflicts with set-before-row); follow-up 19 (shared input reset across five plugins) and 21 (pre-existing split picker) — none · lead
+- re-review 1 finding 1 (fake permission ask matched by folder) left: chat's session state holds no host session id, and the self-test's folders are distinct
 ### Review rounds
+- review 1 · 675f65f7 · NEEDS FIXES — 5 important, 15 minor, 1 pre-existing (/tmp/claude-session-titles/review-675f65f7.md); lead applied 9, 10, 11 in e3981051
+- re-review 1 · eb88d107 (fix commits 187973e1..eb88d107) · NEEDS FIXES — every prior finding closed; 2 minor: rename dialog redraw untested, fake permission ask routed by folder not host session id
+- re-review 2 · a2ba7507 · PASS — redraw test pins body, layout, box place, text and focus
 ### Test gate
+- Vitest: src/plugins/{sessions,chat,forms,primer}, src/shared/page/session-form-tabs.test.ts, keymap.test.ts, shared/keymap-checks.test.ts, agent-form-drive.test.ts — every touched plugin and the keymap/session-form-tabs seams the range edits; first run failed 3 in chat/main/start.test.ts (stale fake and instructions assertion from group 04), fixed in a dispatched test-only commit, re-run 1652/1652 pass · self-test --plugin sessions,chat,forms,primer: all passed (/tmp/claude-session-titles/selftest-gate.log) · lint clean

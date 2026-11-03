@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PartStore } from '../../../../shared/page/contributed-parts';
 import { withUser } from '../../../../shared/page/layout-host/test-layouts';
 import {
+  asFake,
   asHtml,
   FakeElement,
   findAll,
@@ -232,6 +233,51 @@ describe('sessions parts', () => {
           line.startsWith(`[sessions] layout mine ${partName} failed`),
         ),
       ).toHaveLength(1);
+    },
+  );
+
+  it.each<{ case: string; layout: Layout; drawnBy: string }>([
+    {
+      case: 'layout leaves the box out',
+      layout: {
+        renameDialog: (parent, input, kit) => {
+          const element = kit.el(parent, 'div', 'mine-rename');
+          kit.el(element, 'p', 'mine-hint', input.hint);
+          return { element };
+        },
+      },
+      drawnBy: 'mine',
+    },
+    {
+      case: 'layout places the box twice',
+      layout: {
+        renameDialog: (parent, _input, kit) => {
+          const element = kit.el(parent, 'div', 'mine-rename');
+          kit.textBox(element);
+          kit.textBox(element);
+          return { element };
+        },
+      },
+      drawnBy: 'default',
+    },
+  ])(
+    'sessionsParts_RenameDialog_BodyStartsWithTheBox ($case)',
+    ({ layout, drawnBy }) => {
+      const { view } = sessionsViewSetup();
+      view.setLayouts(withUser<Layout>(defaultLayout, layout));
+      const parent = document.createElement('div');
+      const box = document.createElement('div');
+
+      const drawn = view.parts.renameDialog(
+        parent,
+        { problem: null, hint: 'the hint' },
+        box,
+      );
+
+      const element = asFake(drawn.built.element);
+      expect(drawn.layoutName).toBe(drawnBy);
+      expect(element.children[0]).toBe(asFake(box));
+      expect(element.textContent).toContain('the hint');
     },
   );
 

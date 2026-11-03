@@ -22,6 +22,16 @@ export const DRIVE_SESSION_DEFAULTS = {
   deadlineSeconds: null;
 };
 
+// Every source a session title comes from, in the order the row prefers them:
+// the user's rename, the agent's `set_session_title`, the first message.
+export const TITLE_SOURCES = ['user', 'agent', 'firstMessage'] as const;
+
+export type TitleSource = (typeof TITLE_SOURCES)[number];
+
+// A session's title from each source, each normalized; null where that source
+// set none.
+export type SessionTitles = Record<TitleSource, string | null>;
+
 // What a form source knows about the session it serves.
 export interface SessionInfo {
   sessionId: string | null;
@@ -161,6 +171,14 @@ export interface SessionsMainExports {
   // row goes and `closed` is emitted. A session that ends loses its row
   // regardless.
   addCloseGuard(mayClose: (sessionId: string) => boolean): void;
+  // Stores the source's title, normalized, or clears it for null or a string
+  // that normalizes to empty; checks no limit, which callers own. A changed
+  // value sends the state when the session has a row and emits `titleChanged`
+  // either way. A session not connected is logged and ignored.
+  setTitle(sessionId: string, source: TitleSource, title: string | null): void;
+  // A copy of the session's titles, kept while its row is closed; null for a
+  // session not connected.
+  titles(sessionId: string): SessionTitles | null;
 }
 
 // `closed` is a row the user closed, or one `release` closed, every guard
@@ -170,19 +188,23 @@ export interface SessionsMainExports {
 // selected row closing or ending.
 // `hostSessionChanged` is an owned session moved to a new host id, emitted
 // after the state that carries it, with the session's info already updated.
+// `titleChanged` is a session's titles changing, after the state that carries
+// them when the session has a row.
 export interface SessionsMainEvents extends EventShape {
   connected: AgentSession;
   ended: { sessionId: string };
   closed: { sessionId: string };
   selected: { sessionId: string | null };
   hostSessionChanged: AgentSession;
+  titleChanged: { sessionId: string; titles: SessionTitles };
 }
 
 // One session's sidebar row; a connected session's row exists only while
 // marked, activated or holding a form. `marked` is a form not yet opened;
 // `projectDir`, `hostSessionId` and `harness` are the session's info, fixed
 // when the session connects, `hostSessionId` also changed by the owner through
-// `setHostSessionId`.
+// `setHostSessionId`. `titles` are the session's titles, kept across a host id
+// change.
 export interface SessionRow {
   sessionId: string;
   label: string;
@@ -190,6 +212,7 @@ export interface SessionRow {
   marked: boolean;
   projectDir: string | null;
   hostSessionId: string | null;
+  titles: SessionTitles;
 }
 
 export interface SessionsState {
@@ -201,11 +224,14 @@ export interface SessionsState {
 // closed or was already closed, false when a close guard kept it or main knows
 // no such session; the session stays connected either way.
 // `activated` arrives before the `stateChanged` the activation causes.
+// `setUserTitle` sets the user title, a string that normalizes to empty or
+// null clearing it; it throws a title past `sessions.titleMaxLength`.
 export interface SessionsChannel extends ChannelShape {
   invoke: {
     state(): SessionsState;
     activate(sessionId: string): void;
     closeSession(sessionId: string): boolean;
+    setUserTitle(sessionId: string, title: string | null): void;
   };
   messages: { stateChanged: SessionsState; activated: { sessionId: string } };
 }
@@ -257,6 +283,33 @@ export interface SessionPart {
   build(parent: HTMLElement, sessionId: string): { dispose?(): void };
 }
 
+// The tones a row's activity shows in, the members of the page kit's
+// `DotStatus`.
+export type ActivityTone =
+  | 'idle'
+  | 'running'
+  | 'success'
+  | 'warning'
+  | 'attention'
+  | 'error';
+
+// What a session is doing, as one plugin sees it: the word its row shows
+// beside a dot in `tone`. Of a session's activities its row shows the one of
+// highest `rank`.
+export interface RowActivity {
+  word: string;
+  tone: ActivityTone;
+  rank: number;
+}
+
+// A round or primer waiting on the user: the one copy chat, forms and primer
+// set.
+export const NEEDS_YOU_ACTIVITY: RowActivity = {
+  word: 'needs you',
+  tone: 'attention',
+  rank: 40,
+};
+
 // `addTab` attaches the tab's element before returning and selects the tab
 // when it is the session's first; it throws on a tab id the session already
 // holds. A tab added before its session's row waits for the row. A session's
@@ -265,7 +318,12 @@ export interface SessionPart {
 // pane, not main's selection. `addRowPart` adds a part under every session
 // row, `addBarPart` one in every session's tab bar. Each throws on a part id
 // already added to its surface; adding a part and disposing its `Disposable`
-// each redraw that surface: the rows or the tab bars.
+// each redraw that surface: the rows or the tab bars. `setActivity` sets the
+// activity `sourceId` (one per plugin or tab) holds for the session, null
+// removing it; the row shows the highest-ranked one, the latest set winning a
+// tie, and redraws only when that changed. An activity set before the
+// session's row arrives shows once it does; a row leaving drops its
+// activities, and every page load starts with none.
 export interface SessionsPageExports {
   addTab(sessionId: string, tab: SessionTabView): SessionTabHandle;
   addRowPart(part: SessionPart): Disposable;
@@ -274,6 +332,11 @@ export interface SessionsPageExports {
   activate(sessionId: string): void;
   // Asks each of the session's tabs `beforeClose`, then asks main to close it.
   closeSession(sessionId: string): void;
+  setActivity(
+    sessionId: string,
+    sourceId: string,
+    activity: RowActivity | null,
+  ): void;
 }
 
 // `activeChanged` fires when the focused chat pane's session changes, to

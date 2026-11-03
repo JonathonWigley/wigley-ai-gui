@@ -19,6 +19,7 @@ import {
   FAKE_HOLD_TEXT,
   FAKE_MICROTASK_TIMERS,
   FAKE_PAST_SESSIONS,
+  FAKE_PERMISSION_TEXT,
   FAKE_SIGN_IN_CODE,
   FAKE_SIGN_IN_URL,
   FAKE_STEPS_TEXT,
@@ -349,6 +350,130 @@ describe('createFakeAgentHarness', () => {
       ],
       ['activity', 'working'],
     ]);
+  });
+
+  it.each([
+    {
+      given: 'allowed',
+      ask: () => Promise.resolve(true),
+      result: { text: 'fake', isError: false },
+      reply: 'fake agent ran an allowed tool',
+    },
+    {
+      given: 'refused',
+      ask: () => Promise.resolve(false),
+      result: { text: 'Permission denied', isError: true },
+      reply: 'fake agent was refused',
+    },
+    {
+      given: 'the ask failing',
+      ask: () => Promise.reject(new Error('no chat session')),
+      result: { text: 'no chat session', isError: true },
+      reply: 'fake agent was refused',
+    },
+    {
+      given: 'no ask set',
+      ask: null,
+      result: {
+        text: 'fake harness has no permission ask',
+        isError: true,
+      },
+      reply: 'fake agent was refused',
+    },
+  ])(
+    'send_PermissionText_AsksThenFinishesTheTool given $given',
+    async ({ ask, result, reply }) => {
+      const { harness, agent, heard } = await startedProcess();
+      const asked: unknown[][] = [];
+      let answer: () => void = () => undefined;
+      if (ask !== null) {
+        harness.askPermissionsWith((...args) => {
+          asked.push(args);
+          return new Promise<boolean>((resolve, reject) => {
+            answer = () => ask().then(resolve, reject);
+          });
+        });
+      }
+
+      agent.send({ text: FAKE_PERMISSION_TEXT, images: [] });
+      await flush();
+      const whileAsking = heard.map(timelineLine);
+      answer();
+      await flush();
+      await flush();
+
+      const tool = {
+        kind: 'tool',
+        id: 'tool-1',
+        at: 1000,
+        toolUseId: 'fake-permission-1',
+        name: 'Bash',
+        input: { command: 'rm fake.txt' },
+        summary: 'rm fake.txt',
+      };
+      if (ask !== null) {
+        expect(whileAsking).toEqual([
+          'user user-1',
+          'activity working',
+          'tool tool-1',
+        ]);
+        expect(asked).toEqual([
+          [
+            request,
+            {
+              toolName: 'Bash',
+              input: tool.input,
+              toolUseId: 'fake-permission-1',
+            },
+          ],
+        ]);
+      }
+      expect(heard.slice(2, 5)).toEqual([
+        ['entry', { ...tool, result: null, raw: [{ fake: 'tool' }] }],
+        [
+          'entry',
+          {
+            ...tool,
+            result,
+            raw: [{ fake: 'tool' }, { fake: 'tool-result' }],
+          },
+        ],
+        [
+          'entry',
+          {
+            kind: 'assistant',
+            id: 'assistant-1',
+            at: 1000,
+            text: reply,
+            streaming: false,
+            raw: [{ fake: 'assistant', text: reply }],
+          },
+        ],
+      ]);
+      expect(heard.at(-1)).toEqual(['activity', 'idle']);
+    },
+  );
+
+  it('send_PermissionText_InterruptedWhileAsking_EmitsNothingOnTheAnswer', async () => {
+    const { harness, agent, heard } = await startedProcess();
+    let allow: (allowed: boolean) => void = () => undefined;
+    harness.askPermissionsWith(
+      () =>
+        new Promise<boolean>((resolve) => {
+          allow = resolve;
+        }),
+    );
+    agent.send({ text: FAKE_PERMISSION_TEXT, images: [] });
+    await flush();
+    agent.interrupt();
+    await flush();
+    const interrupted = heard.length;
+
+    allow(true);
+    await flush();
+
+    expect(heard.slice(interrupted)).toEqual([]);
+    expect(heard.at(-1)).toEqual(['activity', 'idle']);
   });
 
   it('send_VisualText_StreamsAnOpenBlockThenBothVisuals', async () => {

@@ -50,6 +50,28 @@ const STACKED_RESIZE_STEPS: SelfTestStep[] = [
   },
 ];
 
+// The title the first rename types, and so the text the second one empties.
+const RENAMED = 'Renamed in test';
+
+// `Space r r` renames panes-a, focused since the stacked resize, and a second
+// `Space r r` with the box emptied hands its naming back to the agent.
+const RENAME_STEPS: SelfTestStep[] = [
+  {
+    keys: [' ', 'r', 'r', ...RENAMED, 'Enter'],
+    expect: `[sessions] renamed panes-a to "${RENAMED}"`,
+  },
+  {
+    keys: [
+      ' ',
+      'r',
+      'r',
+      ...Array<string>(RENAMED.length).fill('Backspace'),
+      'Enter',
+    ],
+    expect: '[sessions] cleared the user title of panes-a',
+  },
+];
+
 // `Alt+;` splits panes-a's pane and Esc closes the new pane again; `Alt+w`
 // then closes panes-a's pane, its session staying a row.
 const CANCEL_AND_CLOSE_STEPS: SelfTestStep[] = [
@@ -116,6 +138,11 @@ export function sessionsSelfTestScript(
         name: 'stacked resize',
         why: 'Vertical dividers resize.',
         steps: STACKED_RESIZE_STEPS,
+      },
+      {
+        name: 'rename',
+        why: '<Leader>rr renames the focused session and an empty name hands naming back.',
+        steps: RENAME_STEPS,
       },
       {
         name: 'cancel and close',

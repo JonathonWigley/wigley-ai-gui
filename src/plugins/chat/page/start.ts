@@ -152,6 +152,14 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
         api.events.on('sessions.sessionRemoved', ({ sessionId }) =>
           listener(sessionId),
         ),
+      onActiveChanged: (listener) =>
+        api.events.on('sessions.activeChanged', ({ sessionId }) =>
+          listener(sessionId),
+        ),
+      onSessionHostChanged: (listener) =>
+        api.events.on('sessions.sessionHostChanged', ({ sessionId }) =>
+          listener(sessionId),
+        ),
       editor: services.editor,
       markdown: services.markdown,
       keys,

@@ -85,7 +85,7 @@ stays in themes.
 | `backlog` | `backlog.layout` | the repo and home side bar, the follow-up list and its rows, the detail and editor panes, plans and features, the picker rows and the confirm body |
 | `settings` | `settings.layout` | the section list, the setting, key, leader and advanced rows, the problem line, the picker rows |
 | `notes` | `notes.layout` | the note popup: fields, tags, images, target, session, actions, markup toolbar, the confirm and picker rows |
-| `sessions` | `sessions.layout` | the session rows in the side bar, each session's tab strip, and where other plugins' row and bar parts sit |
+| `sessions` | `sessions.layout` | the session rows in the side bar, each session's tab strip, where other plugins' row and bar parts sit, the rename dialog |
 | `agent-lines` | `agent-lines.layout` | the running subagent and task lines under each session row |
 | `agent-strip` | `agent-strip.layout` | the agent strip above the Chat composer's box: subagent and task boxes, a box opened in place |
 | `gallery` | `gallery.layout` | each primitive's sample block |

@@ -18,6 +18,7 @@ import { blurFocusedElement, element } from '../../../shared/page/dom';
 import { canvasEncoder } from '../../../shared/page/file-drop/canvas-encoder';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
 import type {
+  RowActivity,
   SessionsPageExports,
   SessionTabHandle,
 } from '../../sessions/contract';
@@ -42,7 +43,10 @@ import {
   folderName,
   isWorking,
   type PermissionEntry,
-  tabStatus,
+  rowActivity,
+  type Unseen,
+  unseenAfterRest,
+  unseenAfterTurnEnd,
   valueLabel,
 } from './chat-state';
 import { composerInputOf } from './composer-input';
@@ -85,10 +89,12 @@ export interface ChatSession extends SessionRef {
 }
 
 // The Chat view with what the commands read: the session a box belongs to,
-// and a held session by id.
+// and a held session by id. `markSent` clears the done or error the
+// session's row shows, as a message sent there does.
 export interface ChatTabs extends ChatView {
   session(sessionId: string): ChatSession | undefined;
   sessionOfEditor(editor: TextEditor): ChatSession | undefined;
+  markSent(sessionId: string): void;
 }
 
 // `allow` answers a permission entry allowed; `deny` asks for the reason
@@ -104,7 +110,10 @@ export type ChatTabScope = 'chat';
 // `setScope` sets the base scope; `otherSessionShown` runs when the
 // Chat tab shown is another session's than the Chat tab shown before;
 // `visibleSessionRested` runs when the visible Chat tab's process exits;
-// `onSessionRemoved` hears the sessions plugin drop a row's tabs. `run` runs
+// `onSessionRemoved` hears the sessions plugin drop a row's tabs,
+// `onActiveChanged` the focused pane's session change and
+// `onSessionHostChanged` a row's host id change; `sessions` also takes each
+// row's activity and names the focused pane's session. `run` runs
 // a command, as the composer's chips and send button do; `keys` also anchors
 // the composer's key hints; `layouts` holds the chat layouts the entries and
 // the composer draw with; `paths` names each tab by its project folder.
@@ -118,8 +127,13 @@ export type ChatTabScope = 'chat';
 export interface ChatViewDeps extends SurfaceKitDeps {
   channel: PageChannel<ChatChannel>;
   paths: Paths;
-  sessions: Pick<SessionsPageExports, 'addTab' | 'activate' | 'closeSession'>;
+  sessions: Pick<
+    SessionsPageExports,
+    'addTab' | 'activate' | 'closeSession' | 'setActivity' | 'selectedSessionId'
+  >;
   onSessionRemoved(listener: (sessionId: string) => void): void;
+  onActiveChanged(listener: (sessionId: string | null) => void): void;
+  onSessionHostChanged(listener: (sessionId: string) => void): void;
   editor: EditorHost;
   run(command: CommandId): void;
   layouts: ChatLayouts;
@@ -141,14 +155,16 @@ export interface ChatViewDeps extends SurfaceKitDeps {
 // A held session's Chat tab. `handle` is null until `addTab` returns, and
 // `box` and `dropTarget` until the editor mounts into the attached tab.
 // `composerSize` follows the drawn composer's height for as long as the tab is
-// held.
+// held. `unseen` is the finished turn the row still shows, and `activity` the
+// activity last set on the row.
 interface HeldTab {
   sessionId: string;
   name: string;
   state: ChatSessionState;
   closeConfirmed: boolean;
   handle: SessionTabHandle | null;
-  status: string;
+  unseen: Unseen;
+  activity: RowActivity | null;
   box: TextEditor | null;
   boxMode: VimMode;
   isBoxFocused: boolean;
@@ -168,7 +184,9 @@ const STARTING_MODE: VimMode = { mode: 'normal', subMode: '' };
 // main's messages. Each tab is selected in its session when added. A layout
 // change draws every tab's entries, pending rows and composer again, and a
 // composer part added or removed draws every tab's composer again, each box
-// keeping its text, vim mode and focus.
+// keeping its text, vim mode and focus. Each session's row shows what its
+// process does (needs you, working) and, once idle, a turn the user has not
+// seen end (done, error).
 export function mountChatView(deps: ChatViewDeps): ChatTabs {
   const { log } = deps;
   const tabs = new Map<string, HeldTab>();
@@ -262,13 +280,20 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     const tab = heldFor('activity', sessionId);
     if (tab !== undefined) {
       const isTurnEnded = tab.state.activity !== 'idle' && activity === 'idle';
+      const isTurnStarted =
+        tab.state.activity === 'idle' && activity !== 'idle';
       tab.state = { ...tab.state, activity };
       tab.entries.setWorking(isWorking(tab.state));
       if (isTurnEnded) {
         tab.entries.latest();
+        const focused = deps.sessions.selectedSessionId() === sessionId;
+        tab.unseen = unseenAfterTurnEnd(tab.unseen, focused);
+      }
+      if (isTurnStarted) {
+        tab.unseen = null;
       }
       log('chat', `${tab.name} is ${activity}`);
-      sendStatus(tab, tabStatus(activity));
+      drawActivity(tab, deps);
       drawBar(tab);
     }
   });
@@ -308,10 +333,12 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     if (tab === undefined) {
       return;
     }
+    const wasActive = tab.state.activity !== 'idle';
+    tab.unseen = unseenAfterRest(tab.unseen, error, wasActive);
     tab.state = { ...tab.state, running: false };
     tab.entries.setWorking(isWorking(tab.state));
     drawBar(tab);
-    sendStatus(tab, '');
+    drawActivity(tab, deps);
     if (tab.handle?.isVisible() === true) {
       deps.visibleSessionRested();
     }
@@ -338,6 +365,17 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     }
     log('chat', `session closed: ${tab.name}`);
   });
+  // Viewing a session, clearing its conversation or sending to it leaves
+  // nothing unseen.
+  const clearUnseen = (sessionId: string | null) => {
+    const tab = sessionId === null ? undefined : tabs.get(sessionId);
+    if (tab !== undefined) {
+      tab.unseen = null;
+      drawActivity(tab, deps);
+    }
+  };
+  deps.onActiveChanged(clearUnseen);
+  deps.onSessionHostChanged(clearUnseen);
   void channel
     .invoke('sessions')
     .then((states) => {
@@ -367,6 +405,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     session: (sessionId) => asSession(tabs.get(sessionId)),
     sessionOfEditor: (editor) =>
       asSession([...tabs.values()].find((tab) => tab.box === editor)),
+    markSent: clearUnseen,
   };
 }
 
@@ -486,7 +525,8 @@ function createTab(
     state,
     closeConfirmed: false,
     handle: null,
-    status: '',
+    unseen: null,
+    activity: null,
     box: null,
     boxMode: STARTING_MODE,
     isBoxFocused: false,
@@ -550,7 +590,7 @@ function createTab(
     element: root,
     take: (files) => void takeChatFiles(files, dropDeps),
   });
-  sendStatus(tab, tabStatus(state.activity));
+  drawActivity(tab, deps);
   tab.handle.select();
   return tab;
 }
@@ -611,12 +651,22 @@ function setControls(tab: HeldTab, controls: SessionControl[], log: Log) {
   }
 }
 
-// Sends the row's status only when it changed.
-function sendStatus(tab: HeldTab, status: string) {
-  if (tab.handle !== null && tab.status !== status) {
-    tab.status = status;
-    tab.handle.setStatus(status);
+// Sets the session's row activity under chat's source id, only when it
+// changed.
+function drawActivity(
+  tab: HeldTab,
+  deps: Pick<ChatViewDeps, 'sessions' | 'log'>,
+) {
+  const activity = rowActivity({
+    activity: tab.state.activity,
+    unseen: tab.unseen,
+  });
+  if (activity === tab.activity) {
+    return;
   }
+  tab.activity = activity;
+  deps.sessions.setActivity(tab.sessionId, 'chat', activity);
+  deps.log('chat', `row activity ${tab.name} ${activity?.word ?? 'none'}`);
 }
 
 // A session closes at once unless Claude is still working on it: then the

@@ -16,6 +16,7 @@ export function sessionRow(sessionId: string): SessionRow {
     marked: false,
     projectDir: null,
     hostSessionId: null,
+    titles: { user: null, agent: null, firstMessage: null },
   };
 }
 
@@ -30,10 +31,12 @@ export function stateOf(
 // each line as `[source] message`, `activated` recording each session a row
 // click activates, the row parts its rows draw (`rowParts`, a new store
 // unless one is handed in) and the bar parts its tab bars draw (`barParts`,
-// likewise). Runs under `installFakeDom`.
+// likewise), and the title length `titleMaxLength` reads (40 unless one is
+// handed in). Runs under `installFakeDom`.
 export function sessionsViewSetup(
   rowParts: PartStore<SessionPart> = createPartStore(),
   barParts: PartStore<SessionPart> = createPartStore(),
+  titleMaxLength: () => number = () => 40,
 ) {
   const { anchors, keys } = recordingAnchors();
   const logged: string[] = [];
@@ -48,6 +51,7 @@ export function sessionsViewSetup(
     paneFocused: () => undefined,
     rowParts,
     barParts,
+    titleMaxLength,
     markdown: {
       block: (text) => text,
       inline: (text) => text,

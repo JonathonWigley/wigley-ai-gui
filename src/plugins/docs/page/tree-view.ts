@@ -25,11 +25,8 @@ import {
   type TreeState,
   visibleRows,
 } from './docs-state';
-import {
-  type DocsParts,
-  type DrawnPart,
-  keepingFocusAndScroll,
-} from './layout/docs-parts';
+import { type DocsParts, type DrawnPart } from './layout/docs-parts';
+import { keepingFocusAndScroll } from '../../../shared/page/layout-host/keeping-focus';
 
 export interface TreeViewDeps {
   log: Log;

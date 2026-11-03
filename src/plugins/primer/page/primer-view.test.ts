@@ -24,6 +24,7 @@ import {
   installFakeDom,
 } from '../../../shared/page/test-dom';
 import type { AnchorOptions } from '../../keys/contract';
+import { NEEDS_YOU_ACTIVITY, type RowActivity } from '../../sessions/contract';
 import type { PrimerEntry } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type { PrimerLayout } from '../layouts/layout';
@@ -103,7 +104,8 @@ interface NamedAnchor {
 // `resizeTargets` every split handed to the resize keys, `focusTargets` every
 // target handed to the focus keys, `uiWrites` every
 // uiState write over the values `uiState` starts with, `targets` every drop
-// target the view registered, and `inserted` every insert into a box's editor.
+// target the view registered, `inserted` every insert into a box's editor, and
+// `activities` every row activity the view set.
 function primerTabSetup(
   parts: {
     entries?: PrimerEntry[];
@@ -148,6 +150,7 @@ function primerTabSetup(
   const uiValues = new Map(Object.entries(parts.uiState ?? {}));
   const uiWrites: [string, unknown][] = [];
   const tabs = new Map<string, FakeElement>();
+  const activities: [string, string, RowActivity | null][] = [];
   const view = mountPrimerTab({
     areas: {
       overlay: { contribute: () => ({ dispose: () => undefined }) },
@@ -163,6 +166,8 @@ function primerTabSetup(
           remove: () => undefined,
         };
       },
+      setActivity: (sessionId, sourceId, activity) =>
+        activities.push([sessionId, sourceId, activity]),
     },
     beforeClose: () => true,
     setScope: () => undefined,
@@ -244,6 +249,7 @@ function primerTabSetup(
     uiWrites,
     targets,
     inserted,
+    activities,
     sessionId: presented.sessionId,
     tab,
     tabs,
@@ -426,6 +432,24 @@ describe('primer tabs of several sessions', () => {
     const unfocused = tabs.get('p2-session') as FakeElement;
     expect(pane(unfocused, 'primer-form').hidden).not.toBe(true);
     expect(pane(unfocused, 'primer-card').hidden).toBe(false);
+  });
+});
+
+describe('primer tab row activity', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("sets the session's row to needs you while its primer shows, and clears it when the primer closes", () => {
+    const { store, sessionId, activities } = primerTabSetup();
+
+    store.dispatch({ type: 'formClosed', formId: 'p1' });
+
+    expect(activities).toEqual([
+      [sessionId, 'primer', NEEDS_YOU_ACTIVITY],
+      [sessionId, 'primer', null],
+    ]);
   });
 });
 

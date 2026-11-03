@@ -44,6 +44,7 @@ import {
   shownElsewhere,
 } from './pane-sessions';
 import { previewToggle } from './preview';
+import { createRenameDialog } from './rename-dialog';
 import { mountSessionsView, type SessionsView } from './sessions-view';
 import {
   isRoundToast,
@@ -130,6 +131,8 @@ function createExports(
           log('sessions', `session not closed: ${errorText(error)}`),
         );
     },
+    setActivity: (sessionId, sourceId, activity) =>
+      view.setActivity(sessionId, sourceId, activity),
   };
 }
 
@@ -151,7 +154,9 @@ function createExports(
 // for it until the first pane key that changes the panes. The side bar, panes
 // and tab bars draw with the layout the `layout` setting names. `openPreview`
 // swaps the side bar's rows for a sample of every row state and back,
-// page-only: it sends nothing to main.
+// page-only: it sends nothing to main. `renameSession` opens the rename dialog
+// over the focused pane's session; the rows draw titles cut to the
+// `titleMaxLength` setting, drawn again when it changes.
 export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
   manifest: sessionsManifest,
   start(api: SessionsApi) {
@@ -361,6 +366,16 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       log,
       rowParts,
       barParts,
+      titleMaxLength: () => api.settings().titleMaxLength,
+    });
+    // The page part lives for the page load, so the subscription is never
+    // disposed.
+    let titleMaxLength = api.settings().titleMaxLength;
+    api.onSettingsChanged((settings) => {
+      if (settings.titleMaxLength !== titleMaxLength) {
+        titleMaxLength = settings.titleMaxLength;
+        view.redrawRows();
+      }
     });
     const exports = createExports(
       api,
@@ -592,12 +607,23 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       log('sessions', `showed ${tab.title} tab in ${labelOf(sessionId)}`);
     };
 
+    const renameDialog = createRenameDialog({
+      pushScope: () => api.keys.pushScope('rename'),
+      setUserTitle: (sessionId, title) =>
+        api.channel.invoke('setUserTitle', sessionId, title),
+      titleMaxLength: () => api.settings().titleMaxLength,
+      parts: view.parts,
+      log,
+    });
+    api.areas.overlay.contribute(renameDialog.element);
+
     api.layouts.show<Layout>({
       defaultLayout,
       read: readSessionsLayout,
       userLayout: () => api.settings().layout,
       setLayouts: (shown) => {
         view.setLayouts(shown);
+        renameDialog.redraw();
         checkVisible(true);
       },
     });
@@ -612,6 +638,21 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       logSource: sessionsManifest.id,
     });
     api.areas.overlay.contribute(picker.element);
+
+    // Acts on the focused pane's session, as `closeSession` does.
+    const renameSession = () => {
+      if (!mode.isShown()) {
+        log('sessions', 'rename ignored: Sessions mode is hidden');
+        return;
+      }
+      const sessionId = view.panes.focusedSessionId();
+      const row = sessionId === null ? undefined : rowOf(sessionId);
+      if (row === undefined) {
+        log('sessions', 'no session to rename');
+        return;
+      }
+      renameDialog.open(row);
+    };
 
     // Asks which session the new pane `paneId` shows: the sessions no pane
     // shows, then a new one when chat can start one. A cancel while the pane
@@ -738,6 +779,9 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         pickerUp: () => picker.up(),
         pickerChoose: () => picker.choose(),
         pickerCancel: () => picker.cancel(),
+        renameSession,
+        renameAccept: () => renameDialog.accept(),
+        renameCancel: () => renameDialog.cancel(),
       },
       exports,
     };

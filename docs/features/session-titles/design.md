@@ -16,7 +16,9 @@ without opening each.
 
 ## Status
 
-Planned in `plan-titles-and-status/`.
+Built, in `src/plugins/sessions/` (titles, the tool, the dialog, row activities), `src/plugins/chat/` (saved
+titles, the instruction, chat's activities), `src/plugins/forms/` and `src/plugins/primer/` (the needs you
+activity), `src/shared/page/session-form-tabs.ts` and `src/plugins/keymap.ts`.
 
 ## Titles
 
@@ -26,7 +28,7 @@ A session holds up to three titles, one per source (`TitleSource`, `src/plugins/
 |---|---|---|
 | `user` | the rename dialog (`<Leader>rr`) | the user submits a name; an empty submit clears it |
 | `agent` | the `set_session_title` MCP tool | the agent calls it |
-| `firstMessage` | chat main | the first message sent in a row that has none yet, or the resumed session's title on resume |
+| `firstMessage` | chat main | the first message with text sent in a row that has none yet (leading whitespace dropped, then kept to 200 code points), or the resumed session's title on resume |
 
 The row shows `user`, else `agent`, else `firstMessage` cut to the limit with `…`, else no title.
 A user title therefore locks out the agent's renames until the user clears it, and the agent's
@@ -48,17 +50,28 @@ Sessions contributes `set_session_title` (`{ title: string }`) to every session.
 empty or over-long title with an error naming the limit, so the agent shortens it itself. Over a
 user title it saves the agent title and says the user's title shows.
 
-Claude Code defers MCP tools, so an agent sees only the tool's name until it loads it (seen at plan
-time: a session's MCP tools arrive as names under "deferred tools" and need a ToolSearch before
-use), so the tool's description alone does not prompt a rename. Chat adds one instruction to every session it starts
-(chat's `addInstructions`): set the title at the end of the first turn, and again only when the
-work's focus clearly changes. Terminal sessions get no instruction and keep their folder label
-unless their agent calls the tool on its own.
+Claude Code defers MCP tools: an agent sees only the tool's name until it loads it with ToolSearch, so
+the tool's description alone does not prompt a rename. Chat registers one instruction
+(`addInstructions`) that every process start it makes passes with `--append-system-prompt`: set the
+title at the end of the first turn, and again only when the work's focus clearly changes. Chat passes
+the instruction on every process start, a resume included (`claude-launch.ts`). `agent-chat/design.md`
+§ Saved sessions holds that the Claude CLI keeps the system prompt of a conversation's first request on
+resume, so a conversation first started before this feature may never receive the instruction. Such a
+conversation's row then shows one of two titles until its agent calls the tool on its own:
+
+- **Resumed from the past-sessions list**: the first-message title, which resume sets from the request's
+  title.
+- **Restored from an `open-sessions.json` written before this feature**: its folder label. The row loads
+  with no titles and as already sent, so no message gives it a first-message title.
+
+Terminal sessions get no instruction and keep their folder label unless their agent calls the tool on
+its own.
 
 ## Renaming by hand
 
 `<Leader>rr` (`sessions.renameSession`, the leader `r` group, "rename") opens a one-line dialog over
-the focused pane's session, prefilled with the title the row shows. Enter submits it as the `user`
+the focused pane's session, prefilled with the title the row would show uncut (`user`, else `agent`, else
+`firstMessage` in full). Enter submits it as the `user`
 title and Esc cancels; an empty submit clears the `user` title. A title past the limit keeps the
 dialog open with the problem shown.
 
@@ -77,7 +90,8 @@ new registration in the plugin that knows it, with no edit to sessions.
 | working | chat | 20 | `running`, pulsing | a turn runs |
 | done | chat | 10 | `success` | the turn ended while the session was not the focused pane's, until the user views it or sends a message |
 
-Idle draws nothing. "Views the session" is the session becoming the focused pane's session; a turn
+Idle draws nothing. "Views the session" is the session becoming the focused pane's session. Clearing the
+session's conversation, sending a message and the next turn starting also clear a done or error. A turn
 that ends while its session is the focused pane's skips done. While a row shows an activity, the
 default layout leaves out the row's separate attention dot (`marked`), which the needs you dot
 covers. Other tabs' status lines (workflow's stage, a form's progress) still draw on the row's

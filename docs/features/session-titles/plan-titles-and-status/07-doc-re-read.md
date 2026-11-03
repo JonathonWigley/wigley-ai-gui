@@ -1,6 +1,6 @@
 # 07 — Doc re-read
 
-Status: not started
+Status: done
 Type: Task
 Wave: 4 · Depends on: 02, 03, 04, 05, 06
 Plan: [plan.md](plan.md)
@@ -17,3 +17,5 @@ Done when: each doc above has been read against the code and its fixes committed
 Commit:    one commit for the group
 
 ## Proof
+
+Commit f66c42a6 · proof: diff read; keymap.md, AGENTS.md and layouts design.md read with no change needed · concerns: the CLI resume keeping the first request's system prompt is the agent-chat doc's claim with no code showing it; design.md Status still names the plan folder, which Close deletes

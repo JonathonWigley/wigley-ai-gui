@@ -311,8 +311,10 @@ function sessionFor(
 // attachments both empty send nothing. A message to a resting session starts
 // its process in main, and the entries follow the latest one and scroll to
 // the bottom. When main refuses the message, it goes back into the box (see
-// `putBack`). A registered app slash command runs in place of sending and
-// clears the box, leaving the images attached.
+// `putBack`). Once main accepts the message, the done or error the session's
+// row shows clears; a refused one leaves it. A registered app slash command
+// runs in place of sending, clears the box, leaving the images attached, and
+// clears the row's done or error at once.
 function send(deps: ChatCommandDeps, session: ChatSession) {
   const { log } = deps;
   const text = session.box.text();
@@ -324,10 +326,14 @@ function send(deps: ChatCommandDeps, session: ChatSession) {
   const matched = deps.slashCommands.match(text);
   if (matched !== null) {
     runSlashCommand(deps, session, matched.command, matched.args);
+    deps.tabs.markSent(session.sessionId);
     return;
   }
   void deps.channel
     .invoke('send', session.sessionId, { text, images })
+    .then(() => {
+      deps.tabs.markSent(session.sessionId);
+    })
     .catch((error: unknown) => {
       log('chat', `send failed: ${errorText(error)}`);
       deps.toast(`Message not sent: ${errorText(error)}`, 'error');

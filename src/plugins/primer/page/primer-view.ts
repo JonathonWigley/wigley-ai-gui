@@ -63,7 +63,10 @@ import {
 } from '../../../shared/page/ui/key-anchors';
 import { createSplit } from '../../../shared/page/ui/split';
 import type { AnchorOptions, KeysPageExports } from '../../keys/contract';
-import type { SessionsPageExports } from '../../sessions/contract';
+import {
+  NEEDS_YOU_ACTIVITY,
+  type SessionsPageExports,
+} from '../../sessions/contract';
 import type { PrimerEntry, PrimerView } from '../contract';
 import {
   type PrimerCommandName,
@@ -136,7 +139,7 @@ import type { PrimerStore } from './primer-store';
 // used last.
 export interface PrimerViewDeps {
   areas: Pick<PluginAreas, 'overlay'>;
-  sessions: Pick<SessionsPageExports, 'addTab'>;
+  sessions: Pick<SessionsPageExports, 'addTab' | 'setActivity'>;
   beforeClose(sessionId: string): boolean;
   setScope(scope: PrimerScopeName): void;
   // Hands the resize keys the split of the focused pane, and the focus keys
@@ -298,6 +301,12 @@ export function mountPrimerTab(deps: PrimerViewDeps): PrimerTab {
     idleText: "No primer open. The agent's next primer opens here.",
     beforeClose: (sessionId) => deps.beforeClose(sessionId),
     shown: () => setScopeFor(store.get()),
+    formShown: (sessionId, shown) =>
+      deps.sessions.setActivity(
+        sessionId,
+        'primer',
+        shown ? NEEDS_YOU_ACTIVITY : null,
+      ),
   });
   const dispatch = (action: PrimerAction) => store.dispatch(action);
   const confirm = createConfirmPrompt({

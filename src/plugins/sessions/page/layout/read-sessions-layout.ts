@@ -10,6 +10,7 @@ const LAYOUT_PARTS: Record<keyof Layout, true> = {
   tabBar: true,
   tab: true,
   emptyText: true,
+  renameDialog: true,
 };
 
 // The sessions layout a user's `layout.js` module exports as its default. A
