@@ -38,6 +38,7 @@ import {
   applyEntry,
   changedControls,
   folderName,
+  isTurnUnderway,
   isWorking,
   type PermissionEntry,
   rowActivity,
@@ -490,10 +491,10 @@ function drawComposer(tab: HeldTab) {
   }
 }
 
-// Hands the composer's activity dock the tab's entries and whether its session
-// works on its turn.
+// Hands the composer's activity dock the tab's entries and whether its
+// session's turn is under way.
 function drawTurn(tab: HeldTab) {
-  tab.composer.setTurn(tab.state.entries, isWorking(tab.state));
+  tab.composer.setTurn(tab.state.entries, isTurnUnderway(tab.state));
 }
 
 // Draws the status line, or the whole composer again when its update threw.

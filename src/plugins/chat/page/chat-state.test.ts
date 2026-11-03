@@ -7,6 +7,7 @@ import {
   changedControls,
   controlText,
   folderName,
+  isTurnUnderway,
   isWorking,
   oldestPendingPermission,
   rowActivity,
@@ -115,6 +116,19 @@ describe('chat state', () => {
     'isWorking_RunningAndActivity_TrueOnlyWhenRunningAndWorking: running $running, $activity → $expected',
     ({ running, activity, expected }) => {
       expect(isWorking({ running, activity })).toBe(expected);
+    },
+  );
+
+  it.each([
+    { running: true, activity: 'working', expected: true },
+    { running: true, activity: 'waiting', expected: true },
+    { running: true, activity: 'idle', expected: false },
+    { running: false, activity: 'working', expected: false },
+    { running: false, activity: 'waiting', expected: false },
+  ] as const)(
+    'isTurnUnderway_RunningAndActivity_TrueWhenRunningAndNotIdle: running $running, $activity → $expected',
+    ({ running, activity, expected }) => {
+      expect(isTurnUnderway({ running, activity })).toBe(expected);
     },
   );
 

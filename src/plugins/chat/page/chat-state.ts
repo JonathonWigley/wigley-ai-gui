@@ -101,6 +101,14 @@ export function isWorking(
   return state.running && state.activity === 'working';
 }
 
+// Whether the session's turn is under way: its process works on it, or waits
+// on a permission answer.
+export function isTurnUnderway(
+  state: Pick<ChatSessionState, 'running' | 'activity'>,
+): boolean {
+  return state.running && state.activity !== 'idle';
+}
+
 // The label of the choice holding the control's value, else the raw value,
 // else `unset` before the harness reports one.
 export function valueLabel(control: SessionControl): string {

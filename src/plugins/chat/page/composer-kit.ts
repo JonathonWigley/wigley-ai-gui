@@ -91,7 +91,8 @@ export interface ComposerSurface {
   // `images` is empty.
   drawAttachments(images: readonly ChatImage[]): void;
   // Hands the activity dock the session's entries after a change and whether
-  // the session works on its turn.
+  // the session's turn is under way: working, or waiting on a permission
+  // answer.
   setTurn(entries: readonly ChatEntry[], working: boolean): void;
   // Disposes every draw, the activity dock's tick and the status line's
   // anchors.

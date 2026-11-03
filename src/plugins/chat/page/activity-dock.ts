@@ -16,14 +16,15 @@ export interface ActivityDockDeps {
   changed(input: WorkingInput | null): void;
 }
 
-// The activity dock's data: what the composer's working slot shows for one session. While the session works, the
-// dock is live (`workingInput`), sent again only when its steps (by identity), state or start change, and once a
-// second with a new `now`; a live dock is held as shown while the turn holds no entries, so a turn's last result
-// leaves it running until the session goes idle. Once idle, the dock shows the turn's finished line (`doneInput`)
-// whenever any of its fields change, or hides (null) when no result follows the user's last message. Done and hidden
-// never tick.
+// The activity dock's data: what the composer's working slot shows for one session. While the session's turn is under
+// way (working, or waiting on a permission answer), the dock is live (`workingInput`), sent again only when its steps
+// (by identity), state or start change, and once a second with a new `now`; a live dock is held as shown while the turn
+// holds no entries, so a turn's last result leaves it running until the session goes idle. Once idle, the dock shows
+// the turn's finished line (`doneInput`) whenever any of its fields change, or hides (null) when no result follows the
+// user's last message. Done and hidden never tick.
 export interface ActivityDock {
-  // The session's entries after a change and whether the session works on its turn.
+  // The session's entries after a change and whether the session's turn is under way: working, or waiting on a
+  // permission answer.
   set(entries: readonly ChatEntry[], working: boolean): void;
   // What the dock shows now; null while hidden.
   input(): WorkingInput | null;
