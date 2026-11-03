@@ -1,6 +1,6 @@
 # 01 — Decoder reads turn lifecycle
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -65,4 +65,4 @@ Commit:    one commit for the group
 
 ## Proof
 
-<written by wigley:make: commit sha, proof result, concerns; empty until the group lands>
+Commit 38ee7cc9 · proof: diff read: five DecodedLine fields and command_lifecycle in DECODERS present; typecheck passes · concerns: none

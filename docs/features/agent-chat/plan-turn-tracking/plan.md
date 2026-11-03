@@ -218,7 +218,7 @@ uuid keys; the `AgentHarness` contract is unchanged.
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Decoder reads turn lifecycle](01-decoder-turn-lifecycle.md)
+- [x] [Decoder reads turn lifecycle](01-decoder-turn-lifecycle.md)
 
 ### Wave 2
 - [ ] [Turn tracker](02-turn-tracker.md) — after 01
@@ -237,7 +237,9 @@ uuid keys; the `AgentHarness` contract is unchanged.
 Review base: 578c0d08ecda7909910ef4254a06d47fef5e0f55
 
 ### Groups
+- 01 · 38ee7cc9 · diff read: five DecodedLine fields and command_lifecycle in DECODERS present; typecheck passes · concerns: none
 ### Contract changes
 ### Rulings
+- stringItems(value) helper shared by init capabilities and result user_message_uuids — one filter rule — inline it back if unwanted · group 01 · group 01
 ### Review rounds
 ### Test gate
