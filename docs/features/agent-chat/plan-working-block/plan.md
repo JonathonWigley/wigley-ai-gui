@@ -141,10 +141,10 @@ only its input and the base kit.
 - [x] [Entry list working slot](03-entry-list-working-slot.md) — after 01
 
 ### Wave 3
-- [ ] [Doc re-read](04-doc-re-read.md) — after 02, 03
+- [x] [Doc re-read](04-doc-re-read.md) — after 02, 03
 
 ### Wave 4
-- [ ] [Final verification](05-final-verification.md) — after 04
+- [x] [Final verification](05-final-verification.md) — after 04
 
 ## Run log
 
@@ -154,6 +154,8 @@ Review base: 578c0d08
 - 01 · 955b4304 · diff read: every Produces present; typecheck clean; worker ran the three tests 71/71 and lint · concerns: AGENTS.md's chat layout part list omits working (outside Files); ActivityInput open/live comments run ahead of layout.js until 02
 - 03 · f12a2964 · diff read: slot, place, tick, rebuild and dispose per spec; worker ran src/plugins/chat/page 265 pass and lint; typecheck errors only in 02's in-progress layout.test.ts, full compile re-run after 02 · concerns: none in its own files
 - 02 · 5df9b792 · diff read: working part, toolCounts, summary-only activity, toFixed(2), CSS and selftest entry present; full typecheck and lint clean after 02 and 03; worker ran layout and agents tests 86 pass · concerns: chat/main/selftest-script.ts:592 activity-line why still says live header and shortlist (outside Files)
+- 04 · 3f41d091 · diff read: four stale lines fixed, DESIGN.md and layout comments already true; typecheck and lint clean · concerns: two design.md lines now run past the file's wrap width
+- 05 · 3f41d091 · typecheck, lint, npm test 5629 pass; selftest chat and agents all passed; chat-activity-live.png shows the block under the last entry (0:00 Thinking…, box of 5 tool lines with Bash npm test current and Bash false failed, counts Read 3 Bash 2 Edit 1) under a one-line live summary; chat-activity-finished.png shows no block and the summary line · concerns: none
 ### Contract changes
 ### Rulings
 - Every bounds row asserts now, not one row — stronger than asked — a slightly longer table · group 01 · group 01

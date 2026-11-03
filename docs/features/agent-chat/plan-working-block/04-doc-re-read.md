@@ -1,6 +1,6 @@
 # 04 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 02, 03
 Plan: [plan.md](plan.md)
@@ -27,3 +27,5 @@ Done when: every line in those places matches the code; the fixes are committed
 Commit:    one commit, or none when nothing is stale
 
 ## Proof
+
+Commit 3f41d091 · proof: diff read: four stale lines fixed, DESIGN.md and layout comments already true; typecheck and lint clean · concerns: two design.md lines now run past the file's wrap width

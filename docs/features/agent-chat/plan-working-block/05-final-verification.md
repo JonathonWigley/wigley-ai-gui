@@ -1,6 +1,6 @@
 # 05 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 4 · Depends on: 04
 Plan: [plan.md](plan.md)
@@ -27,3 +27,5 @@ Done when: every check above passes, or each failure is fixed and its check run 
 Commit:    none, unless a fix lands
 
 ## Proof
+
+Commit 3f41d091 · proof: typecheck, lint, npm test 5629 pass; selftest chat and agents all passed; chat-activity-live.png shows the block under the last entry (0:00 Thinking…, box of 5 tool lines with Bash npm test current and Bash false failed, counts Read 3 Bash 2 Edit 1) under a one-line live summary; chat-activity-finished.png shows no block and the summary line · concerns: none
