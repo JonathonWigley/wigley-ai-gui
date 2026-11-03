@@ -8,13 +8,15 @@ import {
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 import {
   asFake,
-  type FakeElement,
+  asHtml,
+  FakeElement,
   installFakeDom,
 } from '../../../shared/page/test-dom';
 import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
 import { createHtmlFence } from './html-fence';
 import { createVisualParts } from './layout/visual-parts';
+import { createVisualRegistry, type VisualRegistry } from './visual-registry';
 
 // A user layout whose `visual` draws `div.mine` holding a label and never
 // calls `kit.frame`.
@@ -26,10 +28,13 @@ const MINE: Layout = {
   },
 };
 
-// An html fence over fake frames, its log lines kept as `[source] message`.
+// An html fence over fake frames, its log lines kept as `[source] message`
+// and each source its expand ran with in `expanded`.
 function fenceFixture() {
   const { frames, opened } = fakeVisualFrames();
   const logs: string[] = [];
+  const expanded: string[] = [];
+  const registry = createVisualRegistry();
   const parts = createVisualParts({
     defaultLayout,
     kit: {
@@ -48,9 +53,19 @@ function fenceFixture() {
   const fence = createHtmlFence({
     frames,
     parts,
+    registry,
     log: (source, message) => logs.push(`[${source}] ${message}`),
+    expand: (source) => expanded.push(source),
   });
-  return { fence, parts, opened, logs };
+  return { fence, parts, registry, opened, logs, expanded };
+}
+
+// The registry's sources under an `li` holding the view's host, since a
+// root's own class is not among its matches.
+function sourcesAround(registry: VisualRegistry, view: FenceView): string[] {
+  const entry = new FakeElement('li');
+  entry.append(asFake(view.element));
+  return registry.sourcesIn(asHtml(entry));
 }
 
 // The part root in the host's one `div.visual-draw`.
@@ -76,7 +91,9 @@ describe('createHtmlFence', () => {
       closed: false,
       opened: [],
       host: { part: 'visual-card', framed: false },
+      registered: [],
       logs: [],
+      expanded: [],
     },
     {
       name: 'closed block draws the frame',
@@ -85,38 +102,64 @@ describe('createHtmlFence', () => {
       closed: true,
       opened: ['<title> Flow </title><p>done</p>'],
       host: { part: 'visual', framed: true },
+      registered: ['<title> Flow </title><p>done</p>'],
       logs: ['[visual] visual mounted: Flow'],
+      expanded: [],
     },
     {
-      name: "left-out frame is placed at the root's end",
+      name: "left-out frame and expand are placed at the root's end",
       layouts: 'mine',
       source: '<b>x</b>',
       closed: true,
       opened: ['<b>x</b>'],
       host: { part: 'mine', framed: true },
+      registered: ['<b>x</b>'],
       logs: ['[visual] visual mounted: untitled'],
+      expanded: [],
+    },
+    {
+      name: 'expand runs with the source',
+      layouts: 'default',
+      source: '<i>e</i>',
+      closed: true,
+      opened: ['<i>e</i>'],
+      host: { part: 'visual', framed: true },
+      registered: ['<i>e</i>'],
+      logs: ['[visual] visual mounted: untitled'],
+      expanded: ['<i>e</i>'],
     },
   ])(
     'htmlFence_Mount_DrawsByClosedFlag $name',
-    ({ layouts, source, closed, opened, host, logs }) => {
+    ({ layouts, source, closed, opened, host, registered, ...want }) => {
       const test = fenceFixture();
       if (layouts === 'mine') {
         test.parts.setLayouts(withUser<Layout>(defaultLayout, MINE));
       }
 
       const view = test.fence.contribution.mount(source, closed);
+      if (want.expanded.length > 0) {
+        asFake(view.element).querySelector('.ui-icon-button')?.click();
+      }
 
       expect(test.opened.map((frame) => frame.source)).toEqual(opened);
       const root = partRoot(view);
       expect(root.classList.contains(host.part)).toBe(true);
       const slot = asFake(view.element).querySelector('.visual-frame-slot');
       if (host.framed) {
-        expect(root.lastElementChild).toBe(slot);
+        expect(slot?.parentNode).toBe(root);
         expect(slot?.children).toEqual([asFake(test.opened[0].element)]);
       } else {
         expect(slot).toBeNull();
       }
-      expect(test.logs).toEqual(logs);
+      if (layouts === 'mine') {
+        const ends = root.children.slice(-2);
+        expect(ends[0]).toBe(slot);
+        expect(ends[1].tagName).toBe('BUTTON');
+        expect(ends[1].classList.contains('ui-icon-button')).toBe(true);
+      }
+      expect(sourcesAround(test.registry, view)).toEqual(registered);
+      expect(test.logs).toEqual(want.logs);
+      expect(test.expanded).toEqual(want.expanded);
     },
   );
 
@@ -130,6 +173,7 @@ describe('createHtmlFence', () => {
     expect(test.opened.map((frame) => frame.disposed)).toEqual([true]);
     expect(slot).not.toBeNull();
     expect(slot?.parentNode).toBeNull();
+    expect(sourcesAround(test.registry, view)).toEqual([]);
   });
 
   it('htmlFence_Redraw_KeepsTheFrame', () => {

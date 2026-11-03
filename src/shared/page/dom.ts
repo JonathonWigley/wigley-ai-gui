@@ -37,3 +37,11 @@ export function button(
   node.addEventListener('click', onClick);
   return node;
 }
+
+// Blurs whatever holds focus, a text box included, so page keys fire.
+export function blurFocusedElement() {
+  const focused = document.activeElement;
+  if (focused instanceof HTMLElement) {
+    focused.blur();
+  }
+}

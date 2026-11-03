@@ -242,7 +242,7 @@ export function visualHashOf(url: string): string | null;
 - [x] [Visual frames service](04-visual-frames.md) — after 02
 
 ### Wave 3
-- [ ] [Visual plugin: fence, card and session note](05-visual-plugin.md) — after 01, 03, 04
+- [x] [Visual plugin: fence, card and session note](05-visual-plugin.md) — after 01, 03, 04
 
 ### Wave 4
 - [ ] [Overlay, key and chat wiring](06-overlay-and-chat.md) — after 05
@@ -265,6 +265,7 @@ Review base: d7578311fe99437ccefe407289916bbcfa049eb8
 - 03 · da9a67f · diff read: every Produces present, no --append-system-prompt outside src/main/claude-code; typecheck clean for its files; 262 tests pass filtered · concerns: none
 - 04 · cf5e079 · diff read: every Produces present, src set only after serveVisual resolves; lint clean; 25 tests pass filtered; typecheck errors only in task 01's in-flight fakes · concerns: fake-visual-frames.ts sits in src/shared/page beside task 01's files (no file of 01 edited)
 - 01 · 2a9c0ef · diff read: every Produces present, markdownElement gone; typecheck + lint clean; filtered tests 2779 pass · concerns: AGENTS.md says the mount reuses by language and source, but the key also holds the closed flag (for 08); a target redrawn without a view it lent out costs one extra mount
+- 05 · 9e07f590 · diff read: every Produces present; typecheck + lint clean; 15 tests pass filtered · concerns: DESIGN.md Surfaces lacks the visual card and box; a user layout that appends its root after kit.frame reloads the visual on a layouts change; visualMainPart start order before keys not run live
 ### Contract changes
 - MarkdownRenderer fakes: 22 files → 23 (composer-kit.test.ts too) · why: plan-time count missed it · consumers: none · group 01
 - shell kit log: from createShellChrome → from mountShellChrome · why: createShellChrome does not exist · consumers: none · group 01
@@ -277,5 +278,8 @@ Review base: d7578311fe99437ccefe407289916bbcfa049eb8
 - a superseded view in another target of the same parent is taken outright, not borrowed — it would be disposed anyway — an early dispose of a still-shown view if wrong · group 01 · group 01
 - a view lent to a sibling cannot be taken by another draw in the same task — avoids two placeholders sharing one view — an extra mount if wrong · group 01 · group 01
 - new views mount after the staged children are appended — a contribution sees a connected placeholder — none · group 01 · group 01
+- Drawn.element is the part's root and Drawn.dispose removes its div.visual-draw — fits redraw-then-dispose — none · group 05 · group 05
+- the card part gets a plain BaseKit, only visual gets frame — matches the Layout contract — none · group 05 · group 05
+- redraw runs over every live view with callEach so one failure does not stop the rest — none · group 05 · group 05
 ### Review rounds
 ### Test gate

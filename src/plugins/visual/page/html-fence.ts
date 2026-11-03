@@ -4,16 +4,21 @@ import type { VisualFrames } from '../../../contracts/visual-frames';
 import { callEach } from '../../../shared/call-each';
 import { element } from '../../../shared/page/dom';
 import type { Drawn, VisualParts } from './layout/visual-parts';
+import type { VisualRegistry } from './visual-registry';
 
+// `expand` is what a visual's expand control runs with its source.
 export interface HtmlFenceDeps {
   frames: VisualFrames;
   parts: VisualParts;
+  registry: VisualRegistry;
   log: Log;
+  expand(source: string): void;
 }
 
 // `contribution` is the live `html` fence: each view is a `div.visual-host`
 // holding the `card` part while its block is open, and once it is closed the
-// `visual` part around a frame opened on its source, logged as
+// `visual` part around a frame opened on its source, its host held in the
+// registry under that source until the view's dispose, logged as
 // `visual mounted: <title>`. `redraw` draws every live view's part again with
 // the layouts last set, keeping each view's frame loaded.
 export interface HtmlFence {
@@ -69,10 +74,14 @@ export function createHtmlFence(deps: HtmlFenceDeps): HtmlFence {
         const frame = deps.frames.open(source);
         const slot = element('div', 'visual-frame-slot');
         slot.append(frame.element);
+        const registered = deps.registry.add(host, source);
         const view = mountView(
           host,
-          (into) => deps.parts.visual(into, slot),
-          () => frame.dispose(),
+          (into) => deps.parts.visual(into, slot, () => deps.expand(source)),
+          () => {
+            registered.dispose();
+            frame.dispose();
+          },
         );
         deps.log('visual', `visual mounted: ${visualTitle(source)}`);
         return view;

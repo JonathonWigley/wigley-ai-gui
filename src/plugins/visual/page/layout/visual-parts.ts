@@ -1,12 +1,22 @@
 import type { Log } from '../../../../contracts/log';
 import type { ShownLayouts } from '../../../../contracts/plugin';
 import { appended, element } from '../../../../shared/page/dom';
+import { appSlot } from '../../../../shared/page/layout-host/app-slot';
 import type { OwnerKitServices } from '../../../../shared/page/layout-host/base-kit';
 import type { RollbackDeps } from '../../../../shared/page/layout-host/draw-part';
 import { createLayoutParts } from '../../../../shared/page/layout-host/layout-parts';
-import type { CompleteLayout, Layout } from '../../layouts/layout';
+import { iconButton } from '../../../../shared/page/ui/icon-button';
+import type {
+  CompleteLayout,
+  Layout,
+  OverlayInput,
+} from '../../layouts/layout';
 import { visualManifest } from '../../manifest';
-import { createVisualBaseKit, createVisualKit } from './visual-kit';
+import {
+  createOverlayKit,
+  createVisualBaseKit,
+  createVisualKit,
+} from './visual-kit';
 
 // A drawn part. `element` is the part's root; `dispose` removes the
 // `div.visual-draw` it was drawn into and disposes every anchor the part
@@ -25,13 +35,17 @@ export interface VisualPartsDeps {
 // Draws each visual part into a fresh `div.visual-draw` appended to `parent`,
 // with the layouts last set, `default` alone until the first `setLayouts`.
 // Each part picks its own layout and falls back to `default` on a throw.
-// `visual` places `frame`, the app's frame slot, where the part calls
-// `kit.frame`, else at the end of its root; drawn again with the same
-// `frame`, it moves the slot, so the visual stays loaded. `setLayouts` only
-// stores the set; the fence draws again.
+// `visual` and `overlay` place `frame`, the app's frame slot, where the part
+// calls `kit.frame`, else at the end of its root; drawn again with the same
+// `frame`, each moves the slot, so the visual stays loaded. `visual` also
+// places an expand button whose click runs `expand`, where the part calls
+// `kit.expand`, else at its root's end after the frame. `card` and `overlay`
+// anchor keys in no scope and the overlay's scope, `visual` in chat's.
+// `setLayouts` only stores the set; the fence and the overlay draw again.
 export interface VisualParts {
   card(parent: HTMLElement): Drawn;
-  visual(parent: HTMLElement, frame: HTMLElement): Drawn;
+  visual(parent: HTMLElement, frame: HTMLElement, expand: () => void): Drawn;
+  overlay(parent: HTMLElement, frame: HTMLElement, input: OverlayInput): Drawn;
   setLayouts(shown: ShownLayouts<Layout>): void;
 }
 
@@ -93,15 +107,38 @@ export function createVisualParts(deps: VisualPartsDeps): VisualParts {
   return {
     card(parent) {
       return draw('card', parent, (card, slot, rollback) =>
-        card(slot, createVisualBaseKit(deps.kit, rollback)),
+        card(slot, createVisualBaseKit(deps.kit, rollback, null)),
       );
     },
-    visual(parent, frame) {
+    visual(parent, frame, expand) {
       return draw('visual', parent, (visual, slot, rollback) => {
         const frameSlot = createFrameSlot(frame, rollback);
+        const button = iconButton('screen-full', 'Expand', expand, 'sm');
+        const expandSlot = appSlot(button, 'expand', rollback);
         const root = visual(
           slot,
-          createVisualKit(deps.kit, rollback, (at) => frameSlot.place(at)),
+          createVisualKit(
+            deps.kit,
+            rollback,
+            (at) => frameSlot.place(at),
+            (at) => {
+              expandSlot.place(at);
+              return button;
+            },
+          ),
+        );
+        frameSlot.placeIfLeftOut(root);
+        expandSlot.placeIfLeftOut(root);
+        return root;
+      });
+    },
+    overlay(parent, frame, input) {
+      return draw('overlay', parent, (overlay, slot, rollback) => {
+        const frameSlot = createFrameSlot(frame, rollback);
+        const root = overlay(
+          slot,
+          input,
+          createOverlayKit(deps.kit, rollback, (at) => frameSlot.place(at)),
         );
         frameSlot.placeIfLeftOut(root);
         return root;

@@ -1,6 +1,6 @@
 # 05 — Visual plugin: fence, card and session note
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 01, 03, 04
 Plan: [plan.md](plan.md)
@@ -180,4 +180,4 @@ Commit:    one commit for the group
 
 ## Proof
 
-<empty — wigley:make writes it>
+Commit 9e07f590 · proof: diff read: every Produces present; typecheck + lint clean; 15 tests pass filtered · concerns: DESIGN.md Surfaces lacks the visual card and box; a user layout that appends its root after kit.frame reloads the visual on a layouts change; visualMainPart start order before keys not run live

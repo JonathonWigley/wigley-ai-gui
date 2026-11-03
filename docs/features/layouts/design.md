@@ -91,7 +91,7 @@ stays in themes.
 | `usage` | `usage.layout` | the status-bar line (plan rows), each session's line in its tab bar (context bar, cache countdown, spend) and the right-bar details |
 | `keys` | `keys.layout` | the help overlay, the which-key panel, the title bar's Keys button |
 | `workflow` | `workflow.layout` | the stage chip under each session row, the strip above the Chat composer (stepper and actions), the Flow tab (stepper, plan checklist by wave, actions) |
-| `visual` | `visual.layout` | the "drawing visual…" card of an open html block, and each closed block's visual around its frame |
+| `visual` | `visual.layout` | the "drawing visual…" card of an open html block, each closed block's visual around its frame with its expand control, and the full-size overlay |
 
 Each owner's `layout.d.ts` names its parts exactly.
 

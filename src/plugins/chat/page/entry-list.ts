@@ -88,8 +88,9 @@ export interface TranscriptScroll extends ContentScroll {
 // focus moves to the latest stop as the list changes, except one on the last
 // row's activity line, which stays on it while the run is open and grows and
 // no pending row follows it. After every change, and whenever the list's own
-// box resizes, a following focus scrolls the list to its bottom; a hidden
-// list does not scroll, so its tab calls `scrollToFocus` each time it shows.
+// box or any slot's box resizes, a following focus scrolls the list to its
+// bottom; a hidden list does not scroll, so its tab calls `scrollToFocus` each
+// time it shows.
 // While a live run is drawn its line's time ticks once a second.
 export interface EntryList {
   element: HTMLOListElement;
@@ -124,6 +125,8 @@ export interface EntryList {
   scrollBy(step: ScrollStep, direction: 1 | -1): TranscriptScroll;
   // The focused stop; null with no focused stop.
   focused(): EntryListStop | null;
+  // The focused stop's slot element; null with no focused stop.
+  focusedElement(): HTMLElement | null;
   // On an activity line, opens the run when it is closed, else closes it. On
   // an entry, opens every expander when any is closed, else closes them all.
   // Null with no focused stop, or on a pending row, which toggles nothing.
@@ -308,7 +311,9 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       const input = queuedInput(message);
       const held = queuedSlots.get(id);
       if (held === undefined) {
-        next.set(id, buildQueuedSlot(message, input, queuedPart));
+        const created = buildQueuedSlot(message, input, queuedPart);
+        observeSlot(created.element);
+        next.set(id, created);
       } else {
         if (isQueuedChanged(held.input, input)) {
           updatePartSlot(held, input, queuedPart);
@@ -320,6 +325,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     for (const [id, gone] of queuedSlots) {
       if (!next.has(id)) {
         gone.drawn?.dispose();
+        slotSizes.unobserve(gone.element);
         gone.element.remove();
       }
     }
@@ -339,6 +345,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
         toggleRun(row.runId),
       );
       runSlots.set(row.runId, created);
+      observeSlot(created.element);
       list.insertBefore(created.element, slotElement(row.steps[0].id) ?? null);
     } else {
       if (isActivityChanged(held.input, input)) {
@@ -395,6 +402,9 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     }
   };
   const listSize = followListSize(list, followBottom);
+  const slotSizes = new ResizeObserver(followBottom);
+  const observeSlot = (slot: HTMLElement) =>
+    slotSizes.observe(slot, { box: 'border-box' });
 
   return {
     element: list,
@@ -404,6 +414,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       if (slot === undefined) {
         const created = buildSlot(entry, deps);
         slots.set(entry.id, created);
+        observeSlot(created.element);
         list.insertBefore(created.element, firstQueuedElement());
       } else {
         redrawSlot(slot, entry, deps);
@@ -422,11 +433,13 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       runSlots.clear();
       disposePartSlots(queuedSlots);
       queuedSlots.clear();
+      slotSizes.disconnect();
       list.replaceChildren();
       for (const entry of next) {
         const created = buildSlot(entry, deps);
         created.kit.expanders.restore(openStates.get(entry.id) ?? []);
         slots.set(entry.id, created);
+        observeSlot(created.element);
         list.append(created.element);
       }
       putQueued(queued);
@@ -470,6 +483,8 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       return { ...scroll, following: focus.following };
     },
     focused: focusedStop,
+    focusedElement: () =>
+      focus.entryId === null ? null : (slotElement(focus.entryId) ?? null),
     toggleFocused() {
       const stop = focusedStop();
       if (stop === null || stop.kind === 'queued') {
@@ -488,6 +503,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     },
     dispose() {
       listSize.disconnect();
+      slotSizes.disconnect();
       if (tick !== null) {
         deps.timers.clear(tick);
         tick = null;

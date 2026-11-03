@@ -70,7 +70,7 @@ function resultLine(input) {
 }
 
 // The text, then the thumbnails of any images under it, in place of what
-// `turn` held.
+// `turn` held. The user's own html block stays code.
 /**
  * @param {HTMLElement} turn
  * @param {import('../layout').UserInput} input
@@ -78,7 +78,7 @@ function resultLine(input) {
  */
 function fillUserTurn(turn, input, kit) {
   turn.replaceChildren();
-  kit.markdown(turn, input.text, 'md');
+  kit.markdown(turn, input.text, 'md', { liveFences: false });
   if (input.images.length > 0) {
     kit.images(turn);
   }
@@ -256,30 +256,37 @@ const layout = {
         },
       };
     },
+    // An update draws the new markdown before removing the old, so each
+    // unchanged visual moves across and stays loaded.
     assistant(parent, input, kit) {
       const entry = root(parent, 'chat-entry chat-assistant');
-      kit.markdown(entry, input.text, 'md');
+      let md = kit.markdown(entry, input.text, 'md');
       entry.classList.toggle('chat-streaming', input.streaming);
       return {
         element: entry,
         update(next) {
-          entry.replaceChildren();
-          kit.markdown(entry, next.text, 'md');
+          const drawn = kit.markdown(entry, next.text, 'md');
+          md.remove();
+          md = drawn;
           entry.classList.toggle('chat-streaming', next.streaming);
         },
       };
     },
+    // An update draws the new markdown before removing the old, as the
+    // assistant's does.
     thinking(parent, input, kit) {
       let current = input;
       /** @type {HTMLElement | null} */
       let body = null;
+      /** @type {HTMLElement | null} */
+      let md = null;
       const entry = root(parent, 'chat-entry chat-thinking');
       kit.collapsibleRow(entry, {
         summary: 'Thinking',
         body: () => {
           if (body === null) {
             body = el('div', 'chat-thinking-body');
-            kit.markdown(body, current.text, 'md');
+            md = kit.markdown(body, current.text, 'md');
           }
           return body;
         },
@@ -290,8 +297,9 @@ const layout = {
         update(next) {
           current = next;
           if (body !== null) {
-            body.replaceChildren();
-            kit.markdown(body, next.text, 'md');
+            const drawn = kit.markdown(body, next.text, 'md');
+            md?.remove();
+            md = drawn;
           }
           entry.classList.toggle('chat-streaming', next.streaming);
         },

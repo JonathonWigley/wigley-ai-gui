@@ -1,10 +1,9 @@
 import type { ChatImage } from '../../../contracts/agent';
 import type { PluginAreas, PushedScope } from '../../../contracts/plugin';
-import { element } from '../../../shared/page/dom';
+import { blurFocusedElement, element } from '../../../shared/page/dom';
 import '../../../shared/page/ui/dialog.css';
 import { imageUrl } from './attachments';
 import type { ImageViewerInput } from '../layouts/layout';
-import { blurFocusedElement } from './chat-dialogs';
 import { createImageViewerPart, type DialogPartDeps } from './dialog-kits';
 
 // The full-size image viewer over a message's images: `open` shows the image

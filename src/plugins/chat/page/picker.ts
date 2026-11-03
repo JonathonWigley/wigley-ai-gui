@@ -1,7 +1,7 @@
 import type { EditorHost } from '../../../contracts/editor';
 import type { Log } from '../../../contracts/log';
 import type { PluginAreas, PushedScope } from '../../../contracts/plugin';
-import { element } from '../../../shared/page/dom';
+import { blurFocusedElement, element } from '../../../shared/page/dom';
 import {
   createListPicker,
   type DrawnPickerRow,
@@ -14,7 +14,6 @@ import {
   chatScope,
 } from '../ids';
 import type { PickerItemInput, PickerRowKit } from '../layouts/layout';
-import { blurFocusedElement } from './chat-dialogs';
 import {
   type ChatLayouts,
   type SurfaceKitDeps,

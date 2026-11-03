@@ -408,7 +408,8 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   empty state `No plan yet — Space w f starts a feature`, and a read plan with no boxes shows none. A disabled action
   draws disabled.
 - **Floating:** pickers, which-key, help and dialogs use the floating material with `row-list` rows
-  and key hints right-aligned in `fg-tertiary`; dialogs, and chat's full-size image viewer, sit over the `scrim`.
+  and key hints right-aligned in `fg-tertiary`; dialogs, chat's full-size image viewer and the full-size visual
+  overlay sit over the `scrim`.
 - **Empty states:** one line saying what to do, and the key or action that does it. No
   illustrations.
 - **Splits** resize by drag and by `Alt+Shift+h`/`Alt+Shift+l` (`docs/keymap.md`), the side bar too, and

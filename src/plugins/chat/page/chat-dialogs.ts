@@ -12,14 +12,6 @@ import {
   type DialogPartDeps,
 } from './dialog-kits';
 
-// Blurs whatever holds focus, a text box included, so page keys fire.
-export function blurFocusedElement() {
-  const focused = document.activeElement;
-  if (focused instanceof HTMLElement) {
-    focused.blur();
-  }
-}
-
 // `keys` anchors the action buttons' key hints; the dialog's body draws
 // through the chat layout, again on each layout change.
 export interface DialogDeps extends DialogPartDeps {

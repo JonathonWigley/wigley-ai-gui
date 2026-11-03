@@ -14,7 +14,7 @@ import type { Paths } from '../../../contracts/paths';
 import type { PageChannel, ToastTone } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import type { PartStore } from '../../../shared/page/contributed-parts';
-import { element } from '../../../shared/page/dom';
+import { blurFocusedElement, element } from '../../../shared/page/dom';
 import { canvasEncoder } from '../../../shared/page/file-drop/canvas-encoder';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
 import type {
@@ -34,7 +34,7 @@ import {
   takeChatFiles,
 } from './attachments';
 import { pullBackQueued } from './chat-commands';
-import { blurFocusedElement, type CloseConfirm } from './chat-dialogs';
+import type { CloseConfirm } from './chat-dialogs';
 import type { ChatLayouts, SurfaceKitDeps } from './chat-layouts';
 import {
   applyEntry,
@@ -59,6 +59,9 @@ export interface ChatView {
   reveal(sessionId: string): void;
   // The session whose Chat tab is the visible tab.
   visibleSessionId(): string | null;
+  // The visible Chat tab's focused stop's slot element; null with no visible
+  // Chat tab or no focused stop.
+  focusedEntry(): HTMLElement | null;
 }
 
 // A session as a log line and a call to main name it.
@@ -359,6 +362,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       }
     },
     visibleSessionId: () => visibleTab()?.sessionId ?? null,
+    focusedEntry: () => visibleTab()?.entries.focusedElement() ?? null,
     session: (sessionId) => asSession(tabs.get(sessionId)),
     sessionOfEditor: (editor) =>
       asSession([...tabs.values()].find((tab) => tab.box === editor)),

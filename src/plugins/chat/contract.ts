@@ -282,8 +282,12 @@ export interface ChatComposerPart {
 // which is at a layout change and at a part add or removal, not on each bar
 // change, so a part whose content changes redraws into its wrapper itself. A
 // part is drawn in every Chat tab, the layout preview's included.
+// `focusedEntry` is the visible Chat tab's focused stop's slot element (an
+// entry, an activity line or a pending row); null with no visible Chat tab or
+// no focused stop.
 export interface ChatPageExports {
   addSlashCommand(command: AppSlashCommand): Disposable;
   fillComposer(sessionId: string, text: string): void;
   addComposerPart(part: ChatComposerPart): Disposable;
+  focusedEntry(): HTMLElement | null;
 }

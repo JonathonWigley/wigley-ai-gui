@@ -5,6 +5,7 @@ import type { Layout } from '../../layouts/layout';
 const LAYOUT_PARTS: Record<keyof Layout, true> = {
   card: true,
   visual: true,
+  overlay: true,
 };
 
 // The visual layout a user's `layout.js` module exports as its default. A

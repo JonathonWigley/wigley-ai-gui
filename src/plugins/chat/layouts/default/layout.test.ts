@@ -68,6 +68,15 @@ class FakeElement {
     this.children = [];
     this.append(...nodes);
   }
+
+  remove() {
+    if (this.parentNode !== null) {
+      this.parentNode.children = this.parentNode.children.filter(
+        (child) => child !== this,
+      );
+      this.parentNode = null;
+    }
+  }
 }
 
 function asHtml(element: FakeElement): HTMLElement {
@@ -89,14 +98,21 @@ function part(parent: HTMLElement, tag: string, name: string): HTMLElement {
 
 // A kit whose parts append tagged fake elements and record each call; each
 // collapsible row keeps its options, so a test opens it by calling `body()`.
+// `markdown` tags a draw with live fences off ` (fences off)` and records
+// how many children its parent held when called.
 function fakeKit() {
   const calls = {
     collapsibleRows: [] as CollapsibleCardOptions[],
     setOpen: [] as boolean[],
     setDotStatus: [] as [string | undefined, string][],
+    markdownSiblings: [] as number[],
   };
   const parts: Partial<ChatKit> = {
-    markdown: (parent, text) => part(parent, 'div', `markdown:${text}`),
+    markdown(parent, text, _className, options) {
+      calls.markdownSiblings.push(asFake(parent).children.length);
+      const fencesOff = options?.liveFences === false ? ' (fences off)' : '';
+      return part(parent, 'div', `markdown:${text}${fencesOff}`);
+    },
     json: (parent, value) =>
       part(parent, 'pre', `json:${JSON.stringify(value)}`),
     collapsibleRow(parent, options) {
@@ -175,12 +191,14 @@ describe('default chat layout', () => {
     const view = draw(entry, kit);
     const root = asFake(view.element);
     const turn = root.children[0];
-    expect(describeChildren(turn)).toEqual(['markdown:hello']);
+    expect(describeChildren(turn)).toEqual(['markdown:hello (fences off)']);
 
     view.update?.({ ...entry, text: 'hello there' });
     expect(asFake(view.element)).toBe(root);
     expect(root.children).toEqual([turn]);
-    expect(describeChildren(turn)).toEqual(['markdown:hello there']);
+    expect(describeChildren(turn)).toEqual([
+      'markdown:hello there (fences off)',
+    ]);
   });
 
   const userWithImage = {
@@ -194,9 +212,9 @@ describe('default chat layout', () => {
   it.each([
     {
       images: [{ mediaType: 'image/png', data: 'cG5n' }],
-      children: ['markdown:look', 'images'],
+      children: ['markdown:look (fences off)', 'images'],
     },
-    { images: [], children: ['markdown:look'] },
+    { images: [], children: ['markdown:look (fences off)'] },
   ])(
     'user entry with $images.length images holds $children',
     ({ images, children }) => {
@@ -210,7 +228,7 @@ describe('default chat layout', () => {
   );
 
   it('assistant_update_UpdatesInPlace', () => {
-    const { kit } = fakeKit();
+    const { kit, calls } = fakeKit();
     const entry = {
       kind: 'assistant' as const,
       id: 'a1',
@@ -224,6 +242,7 @@ describe('default chat layout', () => {
 
     view.update?.({ ...entry, text: 'Hi there', streaming: false });
     expect(asFake(view.element)).toBe(root);
+    expect(calls.markdownSiblings.at(-1)).toBe(1);
     expect(describeChildren(root)).toEqual(['markdown:Hi there']);
   });
 
@@ -245,6 +264,7 @@ describe('default chat layout', () => {
     expect(describeChildren(body)).toEqual(['markdown:step 1']);
 
     view.update?.({ ...entry, text: 'step 1 step 2' });
+    expect(calls.markdownSiblings.at(-1)).toBe(1);
     expect(asFake(calls.collapsibleRows[0].body())).toBe(body);
     expect(describeChildren(body)).toEqual(['markdown:step 1 step 2']);
     expect(calls.collapsibleRows).toHaveLength(1);

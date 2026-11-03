@@ -1,6 +1,6 @@
 # 06 — Overlay, key and chat wiring
 
-Status: not started
+Status: in progress
 Type: Batch
 Wave: 4 · Depends on: 05
 Plan: [plan.md](plan.md)

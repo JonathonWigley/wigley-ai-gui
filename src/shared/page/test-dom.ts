@@ -257,6 +257,7 @@ export function installFakeDom(
     'ResizeObserver',
     class {
       observe() {}
+      unobserve() {}
       disconnect() {}
     },
   );

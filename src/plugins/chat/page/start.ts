@@ -212,6 +212,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       fillComposer: (sessionId, text) =>
         fillComposer({ tabs: view, log: services.log }, sessionId, text),
       addComposerPart: (part) => composerParts.add(part),
+      focusedEntry: () => view.focusedEntry(),
     };
     return {
       commands: {
