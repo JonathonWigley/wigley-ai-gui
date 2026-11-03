@@ -16,7 +16,7 @@
 // - the session each button runs for: a part's buttons run for the session it draws, whether or not that session is
 //   selected; only keys act on the selected session;
 // - the countdown's ticking and its text: while one shows, the app draws the parts again once a second;
-// - the Flow tab's status line (the stage's label, and the countdown while one shows) and its scrolling.
+// - the Flow tab's scrolling.
 import type {
   BaseKit,
   ButtonVariant,

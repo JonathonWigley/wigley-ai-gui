@@ -86,6 +86,7 @@ function setUp() {
   const logged: string[] = [];
   const invoked: WorkflowActionRequest[] = [];
   const flows = new Map<string, SessionFlow>();
+  let isFlowOfBroken = false;
   const stages = createStageList<PageStage>();
   for (const stage of BUILT_IN_PAGE_STAGES) {
     stages.add(stage);
@@ -115,7 +116,12 @@ function setUp() {
     toast: () => undefined,
     paths: { join: (folder, ...segments) => [folder, ...segments].join('/') },
     stages,
-    flowOf: (sessionId) => flows.get(sessionId) ?? newFlow(sessionId, '/p'),
+    flowOf(sessionId) {
+      if (isFlowOfBroken) {
+        throw new Error('no flow');
+      }
+      return flows.get(sessionId) ?? newFlow(sessionId, '/p');
+    },
     nameOf: () => 'proj',
     isPreview: () => false,
     stripBuilt: () => undefined,
@@ -131,10 +137,14 @@ function setUp() {
   const advance = (ms: number) => {
     now += ms;
   };
+  const breakFlowOf = (broken: boolean) => {
+    isFlowOfBroken = broken;
+  };
   return {
     view,
     stages,
     put,
+    breakFlowOf,
     advance,
     sets,
     clears,
@@ -419,7 +429,7 @@ describe('workflow view', () => {
     const { view, put } = setUp();
     const recording = recordingLayout();
     view.setLayouts(withUser<Layout>(defaultLayout, recording.layout));
-    view.drawFlowTab(asHtml(new FakeElement('div')), 'a', () => undefined);
+    view.drawFlowTab(asHtml(new FakeElement('div')), 'a');
     const progress: PlanProgress = {
       checked: 2,
       total: 4,
@@ -476,7 +486,7 @@ describe('workflow view', () => {
       const { view, put } = setUp();
       const recording = recordingLayout();
       view.setLayouts(withUser<Layout>(defaultLayout, recording.layout));
-      view.drawFlowTab(asHtml(new FakeElement('div')), 'a', () => undefined);
+      view.drawFlowTab(asHtml(new FakeElement('div')), 'a');
 
       put(flowIn('make', { progress }));
 
@@ -525,15 +535,13 @@ describe('workflow view', () => {
   });
 
   it('hold_FirstDrawThrows_LetsThePartGo', () => {
-    const { view, put } = setUp();
+    const { view, put, breakFlowOf } = setUp();
     const body = new FakeElement('div');
     put(flowIn('planReady'));
+    breakFlowOf(true);
 
-    expect(() =>
-      view.drawFlowTab(asHtml(body), 'a', () => {
-        throw new Error('no status line');
-      }),
-    ).toThrow('no status line');
+    expect(() => view.drawFlowTab(asHtml(body), 'a')).toThrow('no flow');
+    breakFlowOf(false);
     put(flowIn('make', { progress: progressOf(1, [3]) }));
 
     expect(body.children).toEqual([]);

@@ -60,7 +60,7 @@ export interface WorkflowViewDeps {
 
 // `chipPart` draws a session's chip under its row, `stripPart` its strip
 // above its Chat composer, and `drawFlowTab` its Flow tab into `body` until
-// the returned dispose, setting the tab's status line on each draw. Every
+// the returned dispose. Every
 // held part draws again on `setFlow` for its session, on `setLayouts` and on
 // `redraw`, and each second while it shows a countdown. `setFlow` also logs
 // the session's stage, progress and countdown when each changes; `forget`
@@ -70,11 +70,7 @@ export interface WorkflowViewDeps {
 export interface WorkflowView {
   chipPart: SessionPart;
   stripPart: ChatComposerPart;
-  drawFlowTab(
-    body: HTMLElement,
-    sessionId: string,
-    setStatus: (status: string) => void,
-  ): Disposable;
+  drawFlowTab(body: HTMLElement, sessionId: string): Disposable;
   setFlow(flow: SessionFlow): void;
   forget(sessionId: string): void;
   setLayouts(shown: ShownLayouts<Layout>): void;
@@ -90,7 +86,6 @@ interface HeldPart {
   kind: PartKind;
   sessionId: string;
   wrapper: HTMLElement;
-  setStatus: ((status: string) => void) | null;
   drawn: Drawn | null;
   showsCountdown: boolean;
 }
@@ -226,11 +221,6 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
       case 'flowTab': {
         const input = flowTabInput(flow);
         part.drawn = parts.flowTab(part.wrapper, input, run);
-        part.setStatus?.(
-          input.countdown === null
-            ? input.label
-            : `${input.label} · ${input.countdown}`,
-        );
         return input.countdown !== null;
       }
     }
@@ -297,13 +287,11 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
     kind: PartKind,
     wrapper: HTMLElement,
     sessionId: string,
-    setStatus: ((status: string) => void) | null,
   ): Disposable => {
     const part: HeldPart = {
       kind,
       sessionId,
       wrapper,
-      setStatus,
       drawn: null,
       showsCountdown: false,
     };
@@ -368,17 +356,16 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
   const view: WorkflowView = {
     chipPart: {
       id: 'workflow.chip',
-      build: (wrapper, sessionId) => hold('chip', wrapper, sessionId, null),
+      build: (wrapper, sessionId) => hold('chip', wrapper, sessionId),
     },
     stripPart: {
       id: 'workflow.strip',
       build(wrapper, sessionId) {
         deps.stripBuilt(sessionId);
-        return hold('strip', wrapper, sessionId, null);
+        return hold('strip', wrapper, sessionId);
       },
     },
-    drawFlowTab: (body, sessionId, setStatus) =>
-      hold('flowTab', body, sessionId, setStatus),
+    drawFlowTab: (body, sessionId) => hold('flowTab', body, sessionId),
     setFlow(flow) {
       try {
         logFlow(flow);

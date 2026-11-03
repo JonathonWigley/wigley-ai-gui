@@ -7,8 +7,7 @@ import type { SessionFlow } from '../contract';
 
 // `addTab` is sessions' export. `flowOf` is the flow the session draws and
 // `nameOf` its name in the log. `draw` draws the session's Flow tab into
-// `body` until its dispose, setting the tab's status line on each draw (the
-// view's `drawFlowTab`). `shown` sets the Flow tab's key scope when the tab
+// `body` until its dispose (the view's `drawFlowTab`). `shown` sets the Flow tab's key scope when the tab
 // becomes the visible one.
 export interface FlowTabsDeps {
   addTab(sessionId: string, tab: SessionTabView): SessionTabHandle;
@@ -16,11 +15,7 @@ export interface FlowTabsDeps {
   log: Log;
   flowOf(sessionId: string): SessionFlow;
   nameOf(sessionId: string): string;
-  draw(
-    body: HTMLElement,
-    sessionId: string,
-    setStatus: (status: string) => void,
-  ): Disposable;
+  draw(body: HTMLElement, sessionId: string): Disposable;
   shown(): void;
 }
 
@@ -83,9 +78,7 @@ export function createFlowTabs(deps: FlowTabsDeps): FlowTabs {
     });
     let drawing: Disposable;
     try {
-      drawing = deps.draw(body, sessionId, (status) =>
-        handle.setStatus(status),
-      );
+      drawing = deps.draw(body, sessionId);
     } catch (error) {
       handle.remove();
       throw error;
