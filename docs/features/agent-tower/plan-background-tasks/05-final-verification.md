@@ -1,6 +1,6 @@
 # 05 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 4 · Depends on: 04
 Plan: [plan.md](plan.md)
@@ -27,3 +27,5 @@ Done when: both checks pass with their captures read, or the second is listed fo
 Commit:    none, unless a check turns up a fix (that fix is its own commit)
 
 ## Proof
+
+Commit none · proof: selftest all passed (roster lines 4/4/0), agents-subagent-lines(.png, -narrow.png) read: icon, description, elapsed, nested indent, one row at least width; real-Claude drive run .drive/20261102-182642-15b9: task-line.png shows the line after end_turn, task-gone.png shows it gone after the 20 s command · concerns: drive wait-log missed the [agents] lines-in line (the captures settled both points); Claude ran a second turn on its own to report the finished task

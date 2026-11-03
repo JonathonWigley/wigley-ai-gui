@@ -1,6 +1,6 @@
 # 04 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 01, 02, 03
 Plan: [plan.md](plan.md)
@@ -27,3 +27,5 @@ Commit:    one commit for the group, naming only these paths (`git commit -- <pa
            uncommitted edits in this tree
 
 ## Proof
+
+Commit 204a2746 · proof: diff read (each edit true to 01-03's code); lint pass · concerns: claude-stream.md and DESIGN.md left unchanged as already true; agent-tower design.md was largely already updated by the docs-ahead commit
