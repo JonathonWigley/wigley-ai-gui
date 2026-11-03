@@ -1,6 +1,6 @@
 # 10 — Agents log and workflow countdown skip replayed events
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -86,4 +86,4 @@ Commit:    one commit for the group: "agents and workflow: replayed chat events 
 
 ## Proof
 
-<written by wigley:make: commit sha, proof result, concerns; empty until the group lands>
+Commit 6b18de64 · proof: diff read; typecheck clean in its files; agents and workflow start tests 25 passed · concerns: the new unlogged-events table drops the old proof that a preview event and a real event log side by side

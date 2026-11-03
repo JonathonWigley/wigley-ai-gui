@@ -6,9 +6,11 @@ import type {
   AgentEvent,
   AgentProcessEvents,
   AgentStart,
+  ChatEntry,
   LogInEvents,
 } from '../../contracts/agent';
 import type { Clock } from '../../contracts/ambient';
+import type { PipeDirection, PipeLine } from '../../contracts/session-host';
 import { createMemoryFiles } from '../../shared/memory-files';
 import { posixPaths } from '../../shared/paths/posix-paths';
 import type { Files } from '../../contracts/files';
@@ -18,6 +20,7 @@ import {
   PLAN_USAGE_TIMEOUT_MS,
 } from './claude-code-harness';
 import { controlMessage, userMessage } from './claude-controls';
+import { createSessionFoldState, replayPipeLog } from './session-fold';
 
 const request: AgentStart = {
   processId: 'p-1',
@@ -535,7 +538,7 @@ describe('createClaudeCodeHarness', () => {
 
     expect(run.written).toEqual([
       contextUsageRequest('wigley-1'),
-      controlMessage('effort', 'high', 'uuid-1'),
+      controlMessage('effort', 'high', '00000000-1'),
       contextUsageRequest('wigley-2'),
     ]);
     expect(
@@ -1273,6 +1276,176 @@ describe('createClaudeCodeHarness', () => {
     await ending;
 
     expect(run.heard).toEqual([['ended', { code: null, error: null }]]);
+  });
+
+  it.each([
+    { case: 'no late line', lateLine: null },
+    { case: 'a late line', lateLine: lifecycleInit },
+  ])('end_ThenClose_ClearsEveryTimer ($case)', async ({ lateLine }) => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const run = await startedQuiet();
+    run.agent.send({ text: 'one', images: [] });
+    run.agent.interrupt();
+    const ending = run.agent.end();
+    await settle();
+
+    run.emitter.emit('close', 0, null);
+    if (lateLine !== null) {
+      writeLine(run.stdout, lateLine);
+    }
+    await ending;
+    await settle();
+
+    expect(vi.getTimerCount()).toBe(0);
+    vi.advanceTimersByTime(10000);
+    await settle();
+    const names = run.heard.map(([name]) => name);
+    expect(names.at(-1)).toBe('ended');
+    expect(noticeTexts(run.heard)).not.toContain(GRACE_NOTICE);
+  });
+
+  it('replayPipeLog_RecordedLiveSession_EqualsTheLiveRun', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    let at = 1000;
+    const recorded: PipeLine[] = [];
+    const record = (dir: PipeDirection, text: string) => {
+      recorded.push({ seq: recorded.length + 1, dir, at, text });
+    };
+    const fake = fakeChild();
+    const { stdin } = fake.child;
+    const writeStdin = stdin.write.bind(stdin) as (text: string) => boolean;
+    stdin.write = ((text: string) => {
+      record('in', text.trimEnd());
+      return writeStdin(text);
+    }) as typeof stdin.write;
+    const run = started(fake, createMemoryFiles(), { now: () => at });
+    await settle();
+    const startedAt = at;
+    const step = async (action: () => void) => {
+      at += 1000;
+      action();
+      await settle();
+    };
+    const out = (line: object | string) =>
+      step(() => {
+        const text = typeof line === 'string' ? line : JSON.stringify(line);
+        record('out', text);
+        run.stdout.write(`${text}\n`);
+      });
+
+    await out(contextReply('wigley-1', 1000000, 967000));
+    await step(() => run.agent.send({ text: 'hi', images: [] }));
+    await out(lifecycleInit);
+    await out(lifecycle('uuid-1', 'started'));
+    await out(REPLY_LINE);
+    await out(successResult('ok', ['uuid-1']));
+    await step(() => run.agent.setControl('mode', 'plan'));
+    await out({
+      type: 'control_response',
+      response: { subtype: 'success', request_id: 'wigley-3' },
+    });
+    await step(() => run.agent.setControl('effort', 'high'));
+    await out(successResult('Set effort level to high', ['00000000-2']));
+    await step(() => run.agent.send({ text: 'two', images: [] }));
+    await out(lifecycleInit);
+    await out(lifecycle('uuid-3', 'started'));
+    await step(() => run.agent.interrupt());
+    const interruptedAt = at;
+    await step(() => {
+      record('err', 'warn');
+      run.stderr.write('warn\n');
+    });
+    at = interruptedAt + 5000;
+    vi.advanceTimersByTime(5000);
+    await settle();
+
+    const state = createSessionFoldState(request);
+    const replay = replayPipeLog(state, recorded, at);
+
+    const lastVersions = (entries: readonly ChatEntry[]) => {
+      const byId = new Map<string, ChatEntry>();
+      for (const entry of entries) {
+        byId.set(entry.id, entry);
+      }
+      return [...byId.values()];
+    };
+    const liveEntries = lastVersions(
+      run.timeline.flatMap(([name, payload]) =>
+        name === 'entry' ? [payload as ChatEntry] : [],
+      ),
+    );
+    const replayEntries = replay.flatMap((effect) =>
+      effect.kind === 'entry' ? [effect.entry] : [],
+    );
+    expect(replayEntries).toEqual(liveEntries);
+    const ids = replayEntries.map((entry) => entry.id);
+    expect(ids).toEqual(
+      expect.arrayContaining([
+        'user-1',
+        'user-2',
+        'control-notice-1',
+        'control-notice-2',
+      ]),
+    );
+    for (const entries of [liveEntries, replayEntries]) {
+      expect(entries.find((entry) => entry.id === 'control-notice-2')?.at).toBe(
+        interruptedAt + 5000,
+      );
+    }
+
+    const liveEvents = run.timeline.flatMap(([name, payload]) =>
+      name === 'agentEvent' ? [payload as AgentEvent] : [],
+    );
+    const settingsRead: AgentEvent = {
+      type: 'usage',
+      agentId: 'main',
+      at: startedAt,
+      contextTokens: 0,
+      contextWindow: null,
+      autocompact: { configured: null, reported: null },
+      cacheExpiresAt: null,
+      spendUsd: null,
+    };
+    expect(liveEvents).toContainEqual(settingsRead);
+    expect(
+      replay.flatMap((effect) =>
+        effect.kind === 'agentEvent' ? [effect.event] : [],
+      ),
+    ).toEqual(
+      liveEvents.filter(
+        (event) => JSON.stringify(event) !== JSON.stringify(settingsRead),
+      ),
+    );
+
+    const liveControls = run.heard
+      .filter(([name]) => name === 'controls')
+      .at(-1)?.[1];
+    expect(replay.find((effect) => effect.kind === 'controls')).toEqual({
+      kind: 'controls',
+      controls: liveControls,
+    });
+    expect(liveControls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'mode', value: 'plan' }),
+        expect.objectContaining({ id: 'effort', value: 'high' }),
+      ]),
+    );
+    expect(lastActivity(run.heard)).toBe('idle');
+    expect(replay.at(-1)).toEqual({ kind: 'activity', activity: 'idle' });
+
+    const highestRequest = Math.max(
+      ...run.written.flatMap((line) => {
+        const id = (line as { request_id?: string }).request_id;
+        return id === undefined ? [] : [Number(id.replace('wigley-', ''))];
+      }),
+    );
+    expect(state).toMatchObject({
+      sendCount: 2,
+      requestCount: highestRequest,
+      lastStderr: 'warn',
+      graceDeadline: null,
+      isContextRequestOwed: false,
+    });
   });
 
   it('start_AgentEvents_StampedAtTheClockAndBracketedBySession', async () => {

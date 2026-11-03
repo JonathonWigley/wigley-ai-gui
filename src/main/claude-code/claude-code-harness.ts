@@ -1,5 +1,6 @@
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createInterface } from 'node:readline';
+import type { Readable } from 'node:stream';
 import {
   type AccountStatus,
   type AgentEvent,
@@ -7,35 +8,32 @@ import {
   type AgentProcess,
   type AgentProcessEvents,
   type AgentStart,
+  type ChatEntry,
   type LogInEvents,
   type LogInProcess,
-  MAIN_AGENT_ID,
   type PlanUsage,
   type ProcessActivity,
-  type SessionControl,
-  type UsageAgentEvent,
 } from '../../contracts/agent';
 import type { Clock, RandomUuid } from '../../contracts/ambient';
 import { type Files, readIfPresent } from '../../contracts/files';
 import type { Log } from '../../contracts/log';
 import type { Paths } from '../../contracts/paths';
+import type {
+  HostedExit,
+  HostedProcess,
+  HostedProcessEvents,
+  HostedSpawn,
+} from '../../contracts/session-host';
 import { errorText } from '../../shared/error-text';
-import { isSameJson } from '../../shared/json';
-import { type TypedSkill, typedSkill } from '../../shared/typed-skill';
-import {
-  type AgentDefinitions,
-  loadAgentDefinitions,
-} from './agent-definitions';
+import { loadAgentDefinitions } from './agent-definitions';
 import { readAccountStatus, signInLink } from './claude-auth';
 import { claudeConfigFolder, claudeEnv, claudeLaunch } from './claude-launch';
 import {
-  CLAUDE_CONTROLS,
-  type ClaudeControlId,
   controlMessage,
-  controlValue,
+  controlOf,
+  isChoice,
   userMessage,
 } from './claude-controls';
-import { createEntryStamp, type EntryDraft } from '../../shared/entry-stamp';
 import {
   listPastSessions,
   listProjectFolders,
@@ -45,27 +43,20 @@ import {
 } from './past-sessions';
 import { readPlanUsage } from './plan-usage';
 import {
+  advanceFold,
+  appCommandUuid,
+  createSessionFoldState,
+  type FoldEffect,
+  type FoldStep,
+  foldPipeLine,
+  foldUsageInput,
+} from './session-fold';
+import {
   configuredPercent,
-  contextUsageOf,
-  EMPTY_SESSION_USAGE,
-  foldContextUsage,
-  foldReply,
-  foldTurn,
-  usageEvent,
   withConfiguredPercent,
   withSavedReplies,
 } from './session-usage';
-import {
-  type AgentEventDraft,
-  createStreamDecoder,
-  type DecodedLine,
-} from './stream-decoder';
 import { projectFolderName } from './transcripts';
-import {
-  type ControlCommand,
-  createTurnTracker,
-  TERMINAL_STATES,
-} from './turn-tracker';
 
 export type ClaudeSpawn = (
   command: string,
@@ -79,8 +70,9 @@ export type ClaudeSpawn = (
 // saved transcripts, `homeDir` holds the default config folder `.claude`, is
 // what a `~` profile folder resolves against and is where `claude auth` and
 // `claude -p /usage` run, and `paths` joins and compares paths by the rules of
-// the OS `claude` runs on; `clock` stamps each live entry's and agent event's
-// `at`; `randomUuid` gives each stdin user message its `uuid`. `files` also
+// the OS `claude` runs on; `clock` gives each pipe line its `at`, which stamps
+// the entries and agent events the line folds to; `randomUuid` gives each stdin
+// user message its `uuid`. `files` also
 // reads the profile's `settings.json` and the agent definitions at each session
 // start.
 export interface ClaudeCodeHarnessDeps {
@@ -99,11 +91,6 @@ export interface ClaudeCodeHarnessDeps {
 // How long `end` waits after closing stdin before SIGTERM, and again before
 // SIGKILL.
 const END_GRACE_MS = 3000;
-// How long an interrupt waits for the turn to end before the session shows
-// idle.
-const INTERRUPT_GRACE_MS = 5000;
-// A typed `/effort <value>` or `/model <value>` sets that control.
-const CONTROL_COMMAND = /^\/(effort|model) (\S+)$/;
 // How long a `claude -p /usage` poll may run before it is killed.
 export const PLAN_USAGE_TIMEOUT_MS = 20_000;
 const PLAN_USAGE_ARGS = [
@@ -115,34 +102,13 @@ const PLAN_USAGE_ARGS = [
   '--no-session-persistence',
 ];
 
-// A sent message's user entry and the skill it starts (null for none), held
-// until the CLI takes the message in.
-interface HeldMessage {
-  draft: EntryDraft;
-  skill: TypedSkill | null;
-}
-
-type PendingRequest =
-  | { kind: 'mode'; value: string }
-  | { kind: 'interrupt' }
-  | { kind: 'contextUsage' };
-
-function controlOf(id: string) {
-  return CLAUDE_CONTROLS.find((control) => control.id === id);
-}
-
-function isChoice(id: ClaudeControlId, value: string): boolean {
-  const choices = controlOf(id)?.choices ?? [];
-  return choices.some((choice) => choice.value === value);
-}
-
-function exitText(code: number | null, signal: NodeJS.Signals | null): string {
+function exitText(code: number | null, signal: string | null): string {
   return code === null ? `signal ${signal}` : `code ${code}`;
 }
 
 function exitError(
   code: number | null,
-  signal: NodeJS.Signals | null,
+  signal: string | null,
   lastStderr: string | null,
 ): string {
   const how = exitText(code, signal);
@@ -152,21 +118,97 @@ function exitError(
 
 // Spawn reports a missing `cwd` as ENOENT just as it does a missing binary,
 // so the hint names both causes.
-function spawnError(error: Error, command: string, cwd: string): string {
-  const isMissing = (error as NodeJS.ErrnoException).code === 'ENOENT';
-  return isMissing
+function spawnError(error: string, command: string, cwd: string): string {
+  return error.includes('ENOENT')
     ? `claude was not found at ${command}, or the project folder ${cwd} does not exist; set claude.command`
-    : error.message;
+    : error;
 }
 
-// One `claude` process in stream-json mode. Events a call causes are emitted
-// in a microtask, never inside the call, as the fake harness does. Its agent
-// events open with `sessionStarted` and close with `sessionEnded`, just before
-// `ended`; a subagent still running then gets no `agentFinished`. Outside
-// fallback mode a sent message's user entry waits for its `started` line, or
-// for the init that fixes fallback mode; a message ended before it started is
-// reported through `messageDropped`, and one still held when the process
-// closes is dropped silently.
+// `launch.env` without its undefined values.
+function definedEnv(env: NodeJS.ProcessEnv): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(env).filter(
+      (pair): pair is [string, string] => pair[1] !== undefined,
+    ),
+  );
+}
+
+// The `claude` child as a `HostedProcess`. `seq` counts over stdout and stderr
+// together; `closed` fires once, on an `error` event at once, with or without a
+// pid.
+function spawnDirect(
+  deps: ClaudeCodeHarnessDeps,
+  request: HostedSpawn,
+  events: HostedProcessEvents,
+): HostedProcess {
+  const child = deps.spawn(request.command, request.args, {
+    cwd: request.cwd,
+    env: request.env,
+  });
+  let seq = 0;
+  let hasClosed = false;
+  let isDetached = false;
+
+  const readLines = (input: Readable, dir: 'out' | 'err') => {
+    createInterface({ input }).on('line', (text) => {
+      seq += 1;
+      if (!isDetached) {
+        events.line({ seq, dir, at: deps.clock.now(), text });
+      }
+    });
+  };
+
+  const close = (exit: HostedExit) => {
+    if (hasClosed || isDetached) {
+      return;
+    }
+    hasClosed = true;
+    events.closed(exit);
+  };
+
+  readLines(child.stdout, 'out');
+  readLines(child.stderr, 'err');
+  child.stdin.on('error', (error) => deps.log('claude', errorText(error)));
+  child.on('close', (code: number | null, signal: NodeJS.Signals | null) =>
+    close({ code, signal, error: null }),
+  );
+  child.on('error', (error: Error) =>
+    close({ code: null, signal: null, error: error.message }),
+  );
+
+  return {
+    id: request.id,
+    write(text) {
+      if (!isDetached) {
+        child.stdin.write(`${text}\n`);
+      }
+    },
+    endInput() {
+      if (!isDetached) {
+        child.stdin.end();
+      }
+    },
+    kill(signal) {
+      if (!isDetached) {
+        child.kill(signal);
+      }
+    },
+    detach() {
+      isDetached = true;
+    },
+  };
+}
+
+// One `claude` process in stream-json mode, its state a fold over its pipe lines
+// (`session-fold.ts`): every line written and read goes through the fold, and
+// this closure runs the fold's effects. Events a call causes are emitted in a
+// microtask, never inside the call, as the fake harness does. Its agent events
+// open with `sessionStarted` and close with `sessionEnded`, just before `ended`;
+// a subagent still running then gets no `agentFinished`. Outside fallback mode a
+// sent message's user entry waits for its `started` line, or for the init that
+// fixes fallback mode; a message ended before it started is reported through
+// `messageDropped`, and one still held when the process closes is dropped
+// silently. Once the process has closed, nothing more is emitted or written.
 function startClaudeProcess(
   deps: ClaudeCodeHarnessDeps,
   request: AgentStart,
@@ -180,182 +222,139 @@ function startClaudeProcess(
     deps.paths,
   );
   const command = deps.command();
-  const child = deps.spawn(command, launch.args, {
-    cwd: launch.cwd,
-    env: launch.env,
-  });
-  const stamp = createEntryStamp(deps.clock);
-  let controls: SessionControl[] = CLAUDE_CONTROLS.map((control) => ({
-    ...control,
-    value: request.controls[control.id] ?? null,
-  }));
-  let activity: ProcessActivity = 'idle';
-  let sendCount = 0;
-  let requestCount = 0;
-  let noticeCount = 0;
-  const pendingRequests = new Map<string, PendingRequest>();
-  // Keyed by the message's uuid, in write order; never filled in fallback mode.
-  const heldMessages = new Map<string, HeldMessage>();
-  // The session's agent definitions, empty until their load resolves.
-  let definitions: AgentDefinitions = new Map();
-  // The adapter's own `get_context_usage` replies stay out of the chat.
-  const decoder = createStreamDecoder(
-    (requestId) => pendingRequests.get(requestId)?.kind === 'contextUsage',
-    (agentType) => definitions.get(agentType) ?? null,
-  );
-  const tracker = createTurnTracker();
-  let lastStderr: string | null = null;
+  const state = createSessionFoldState(request);
   let isEndCalled = false;
   let hasClosed = false;
   let hasEmittedEnded = false;
   let endPromise: Promise<void> | null = null;
   const closeWaiters: (() => void)[] = [];
   const timers: ReturnType<typeof setTimeout>[] = [];
-  // Pending from an interrupt until a turn's result or idle.
+  // Armed for `armedGraceDeadline`, which follows `state.graceDeadline`.
   let graceTimer: ReturnType<typeof setTimeout> | null = null;
-  // A new session knows its context from the start; a resumed one waits for
-  // its transcript or its first live reply.
-  let usage = request.resume
-    ? EMPTY_SESSION_USAGE
-    : withSavedReplies(EMPTY_SESSION_USAGE, []);
-  let lastUsageEvent: UsageAgentEvent | null = null;
+  let armedGraceDeadline: number | null = null;
 
   // Every emission goes through the microtask queue, so events keep the
   // order of the calls and lines that caused them.
   const emit = (emission: () => void) => queueMicrotask(emission);
 
-  const emitControls = () => {
-    const reported = controls.map((control) => ({ ...control }));
-    emit(() => events.controls(reported));
+  const emitAgentEvent = (event: AgentEvent) =>
+    emit(() => events.agentEvent(event));
+
+  const emitActivity = (activity: ProcessActivity) =>
+    emit(() => events.activity(activity));
+
+  const stopTimers = () => {
+    for (const timer of timers) {
+      clearTimeout(timer);
+    }
+    graceTimer = null;
+    armedGraceDeadline = null;
   };
 
-  const emitActivity = (next: ProcessActivity) => {
-    activity = next;
-    emit(() => events.activity(next));
+  const runGraceDeadline = (deadline: number) => {
+    graceTimer = null;
+    armedGraceDeadline = null;
+    if (hasClosed || state.graceDeadline !== deadline) {
+      return;
+    }
+    runStep(advanceFold(state, deadline));
   };
 
-  const clearGraceTimer = () => {
+  const syncGraceTimer = () => {
+    const deadline = state.graceDeadline;
+    if (deadline === armedGraceDeadline) {
+      return;
+    }
     if (graceTimer !== null) {
       clearTimeout(graceTimer);
       graceTimer = null;
     }
+    armedGraceDeadline = deadline;
+    if (deadline !== null) {
+      graceTimer = setTimeout(
+        () => runGraceDeadline(deadline),
+        Math.max(deadline - deps.clock.now(), 0),
+      );
+      timers.push(graceTimer);
+    }
   };
 
-  // Emits the tracker's activity when it changed; a line read after `close`
-  // emits nothing, so no activity follows `ended`.
-  const syncActivity = () => {
+  const runEffect = (effect: FoldEffect) => {
+    switch (effect.kind) {
+      case 'entry':
+        emit(() => events.entry(effect.entry));
+        break;
+      case 'agentEvent':
+        emitAgentEvent(effect.event);
+        break;
+      case 'controls':
+        emit(() => events.controls(effect.controls));
+        break;
+      case 'activity':
+        emitActivity(effect.activity);
+        break;
+      case 'commands':
+        emit(() => events.commands(effect.commands));
+        break;
+      case 'planUsage':
+        emit(() => events.planUsage(effect.update));
+        break;
+      case 'messageDropped':
+        emit(() => events.messageDropped(effect.entryId));
+        break;
+      case 'requestContextUsage':
+        if (!isEndCalled && !hasClosed) {
+          requestContextUsage();
+        }
+        break;
+      case 'refuseHostRequest':
+        writeMessage({
+          type: 'control_response',
+          response: {
+            subtype: 'error',
+            request_id: effect.requestId,
+            error: `wigley-ai-gui answers no ${effect.subtype} requests`,
+          },
+        });
+        break;
+      case 'log':
+        deps.log('claude', effect.text);
+        break;
+    }
+  };
+
+  const runStep = (step: FoldStep) => {
     if (hasClosed) {
       return;
     }
-    const next = tracker.activity();
-    if (next !== activity) {
-      emitActivity(next);
-    }
-    if (next === 'idle') {
-      clearGraceTimer();
+    syncGraceTimer();
+    for (const effect of step.effects) {
+      runEffect(effect);
     }
   };
 
-  const emitEntry = (draft: EntryDraft) => {
-    const entry = stamp(draft);
-    emit(() => events.entry(entry));
-  };
-
-  const emitAgentEvent = (draft: AgentEventDraft) => {
-    const event = { ...draft, at: deps.clock.now() } as AgentEvent;
-    emit(() => events.agentEvent(event));
-  };
-
-  const emitUserMessage = ({ draft, skill }: HeldMessage) => {
-    emitEntry(draft);
-    emitAgentEvent({ type: 'userMessage' });
-    if (skill !== null) {
-      emitAgentEvent({
-        type: 'skillStarted',
-        agentId: MAIN_AGENT_ID,
-        ...skill,
-      });
-    }
-  };
-
-  // Emits a held message's entry on its `started` line, and reports one that
-  // ended without starting as dropped.
-  const releaseHeldMessage = (
-    lifecycle: NonNullable<DecodedLine['lifecycle']>,
-  ) => {
-    const held = heldMessages.get(lifecycle.uuid);
-    if (held === undefined) {
-      return;
-    }
-    if (lifecycle.state === 'started') {
-      heldMessages.delete(lifecycle.uuid);
-      emitUserMessage(held);
-    } else if (TERMINAL_STATES.has(lifecycle.state)) {
-      heldMessages.delete(lifecycle.uuid);
-      const entryId = held.draft.id;
-      emit(() => events.messageDropped(entryId));
-    }
-  };
-
-  const releaseAllHeldMessages = () => {
-    for (const held of heldMessages.values()) {
-      emitUserMessage(held);
-    }
-    heldMessages.clear();
-  };
-
-  // Emits the usage event when it differs from the last one in any field but
-  // `at`; once `ended` is emitted, emits nothing, so no usage follows it.
-  const emitUsage = () => {
-    if (hasEmittedEnded) {
-      return;
-    }
-    const event = usageEvent(usage, deps.clock.now());
-    const isRepeat =
-      event !== null &&
-      lastUsageEvent !== null &&
-      isSameJson({ ...event, at: 0 }, { ...lastUsageEvent, at: 0 });
-    if (event === null || isRepeat) {
-      return;
-    }
-    lastUsageEvent = event;
-    emit(() => events.agentEvent(event));
-  };
-
-  const harnessNotice = (
-    text: string,
-    tone: 'info' | 'error',
-    raw: unknown,
-  ) => {
-    noticeCount += 1;
-    emitEntry({
-      kind: 'notice',
-      id: `control-notice-${noticeCount}`,
+  const writeMessage = (message: object) => {
+    const text = JSON.stringify(message);
+    const step = foldPipeLine(state, {
+      seq: 0,
+      dir: 'in',
+      at: deps.clock.now(),
       text,
-      tone,
-      raw: [raw],
     });
+    pipe.write(text);
+    runStep(step);
   };
 
-  // True when the value changed.
-  const setValue = (id: ClaudeControlId, value: string | null): boolean => {
-    const current = controls.find((control) => control.id === id);
-    if (current?.value === value) {
-      return false;
-    }
-    controls = controls.map((control) =>
-      control.id === id ? { ...control, value } : control,
-    );
-    return true;
-  };
+  const nextRequestId = () => `wigley-${state.requestCount + 1}`;
 
-  const write = (message: object) => {
-    child.stdin.write(`${JSON.stringify(message)}\n`);
-  };
-
-  const nextRequestId = () => {
-    requestCount += 1;
-    return `wigley-${requestCount}`;
+  // Asked at start and after every turn, a control command's included:
+  // `/model` changes the window and the limit.
+  const requestContextUsage = () => {
+    writeMessage({
+      type: 'control_request',
+      request_id: nextRequestId(),
+      request: { subtype: 'get_context_usage' },
+    });
   };
 
   const requireRunning = () => {
@@ -369,17 +368,16 @@ function startClaudeProcess(
       return;
     }
     hasEmittedEnded = true;
-    emitAgentEvent({ type: 'sessionEnded' });
+    emitAgentEvent({ type: 'sessionEnded', at: deps.clock.now() });
     emit(() => events.ended(end));
   };
 
   // `end()` resolves after the `ended` emission it follows.
   const markClosed = () => {
     hasClosed = true;
-    heldMessages.clear();
-    for (const timer of timers) {
-      clearTimeout(timer);
-    }
+    state.heldMessages.clear();
+    state.graceDeadline = null;
+    stopTimers();
     const waiters = closeWaiters.splice(0);
     emit(() => {
       for (const resolve of waiters) {
@@ -388,195 +386,53 @@ function startClaudeProcess(
     });
   };
 
-  const answerControlResponse = (
-    response: NonNullable<DecodedLine['controlResponse']>,
-  ) => {
-    const pending = pendingRequests.get(response.requestId);
-    if (pending === undefined) {
-      return;
-    }
-    pendingRequests.delete(response.requestId);
-    if (pending.kind === 'contextUsage') {
-      if (response.error !== null) {
-        deps.log('claude', `get_context_usage failed: ${response.error}`);
-        return;
-      }
-      usage = foldContextUsage(usage, contextUsageOf(response.response));
-      emitUsage();
-      return;
-    }
-    if (pending.kind === 'interrupt') {
-      if (response.error !== null) {
-        harnessNotice(
-          `Could not interrupt: ${response.error}`,
-          'error',
-          response,
-        );
-      }
-      tracker.interruptAnswered();
-      syncActivity();
-      return;
-    }
-    if (response.error !== null) {
-      harnessNotice(
-        `Could not set Mode to ${pending.value}: ${response.error}`,
-        'error',
-        response,
-      );
-      return;
-    }
-    if (setValue('mode', pending.value)) {
-      emitControls();
-    }
-  };
-
-  const refuseHostRequest = (
-    hostRequest: NonNullable<DecodedLine['hostRequest']>,
-  ) => {
-    write({
-      type: 'control_response',
-      response: {
-        subtype: 'error',
-        request_id: hostRequest.requestId,
-        error: `wigley-ai-gui answers no ${hostRequest.subtype} requests`,
-      },
-    });
-  };
-
-  // Asked at start and after every turn, a control command's included:
-  // `/model` changes the window and the limit.
-  const requestContextUsage = () => {
-    const requestId = nextRequestId();
-    pendingRequests.set(requestId, { kind: 'contextUsage' });
-    write({
-      type: 'control_request',
-      request_id: requestId,
-      request: { subtype: 'get_context_usage' },
-    });
-  };
-
-  const foldUsage = (decoded: DecodedLine) => {
-    const { planRows, replyUsage, turnUsage } = decoded;
-    if (planRows !== null) {
-      emit(() => events.planUsage({ rows: planRows, at: deps.clock.now() }));
-    }
-    if (replyUsage !== null) {
-      usage = foldReply(usage, replyUsage, deps.clock.now());
-    }
-    if (turnUsage !== null) {
-      usage = foldTurn(usage, turnUsage);
-    }
-    if (replyUsage !== null || turnUsage !== null) {
-      emitUsage();
-    }
-  };
-
-  // A control command's own result entry is not shown; its success sets the
-  // control, since the turn's init still reports the value from before. A
-  // value that is not among the control's choices leaves the control unknown.
-  const handleLine = (line: string) => {
-    const decoded = decoder.decode(line);
-    const turn = tracker.read(decoded);
-    const { command } = turn;
-    if (decoded.lifecycle !== null) {
-      releaseHeldMessage(decoded.lifecycle);
-    }
-    if (turn.fellBack) {
-      releaseAllHeldMessages();
-    }
-    for (const entry of decoded.entries) {
-      const isCommandResult = command !== null && entry.kind === 'result';
-      if (!isCommandResult) {
-        emitEntry(entry);
-      }
-    }
-    if (turn.fellBack) {
-      deps.log(
-        'claude',
-        'msg_lifecycle_v1 missing from init capabilities; tracking turns by results',
-      );
-      harnessNotice(
-        'This Claude Code version reports no message lifecycle; the working state follows turn results only.',
-        'info',
-        line,
-      );
-    }
-    for (const draft of decoded.agentEvents) {
-      emitAgentEvent(draft);
-    }
-    let hasChanged = false;
-    for (const [id, value] of Object.entries(decoded.reported)) {
-      const controlId = id as ClaudeControlId;
-      hasChanged =
-        setValue(controlId, controlValue(controlId, value)) || hasChanged;
-    }
-    if (command !== null && !decoded.turnFailed) {
-      const value = controlValue(command.id, command.value);
-      const known = isChoice(command.id, value) ? value : null;
-      hasChanged = setValue(command.id, known) || hasChanged;
-    }
-    if (hasChanged) {
-      emitControls();
-    }
-    const { commands } = decoded;
-    if (commands !== null) {
-      emit(() => events.commands(commands));
-    }
-    foldUsage(decoded);
-    if (decoded.controlResponse !== null) {
-      answerControlResponse(decoded.controlResponse);
-    }
-    if (decoded.hostRequest !== null) {
-      refuseHostRequest(decoded.hostRequest);
-    }
-    if (decoded.turnEnded) {
-      clearGraceTimer();
-    }
-    const isRunning = !isEndCalled && !hasClosed;
-    if (decoded.turnEnded && isRunning) {
-      requestContextUsage();
-    }
-    syncActivity();
-  };
-
   const kill = () => {
     if (hasClosed) {
       return;
     }
     isEndCalled = true;
-    child.kill('SIGTERM');
+    pipe.kill('SIGTERM');
   };
 
-  createInterface({ input: child.stdout }).on('line', handleLine);
-  createInterface({ input: child.stderr }).on('line', (line) => {
-    deps.log('claude', line);
-    lastStderr = line;
-  });
-  child.stdin.on('error', (error) => deps.log('claude', errorText(error)));
-  child.on('close', (code: number | null, signal: NodeJS.Signals | null) => {
-    if (activity === 'working') {
-      emitActivity('idle');
-    }
-    const isCleanExit = code === 0 || isEndCalled;
-    emitEnded({
-      code,
-      error: isCleanExit ? null : exitError(code, signal, lastStderr),
-    });
-    markClosed();
-  });
-  child.on('error', (error: Error) => {
-    emitEnded({
-      code: null,
-      error: spawnError(error, command, launch.cwd),
-    });
-    // A child that never spawned has no pid and sends no `close` to wait for.
-    if (child.pid === undefined) {
+  const pipeEvents: HostedProcessEvents = {
+    line: (line) => runStep(foldPipeLine(state, line)),
+    closed(exit) {
+      if (state.activity === 'working') {
+        state.activity = 'idle';
+        emitActivity('idle');
+      }
+      const isCleanExit = exit.code === 0 || isEndCalled;
+      const exitFailure = isCleanExit
+        ? null
+        : exitError(exit.code, exit.signal, state.lastStderr);
+      emitEnded({
+        code: exit.code,
+        error:
+          exit.error === null
+            ? exitFailure
+            : spawnError(exit.error, command, launch.cwd),
+      });
       markClosed();
-    }
-  });
+    },
+  };
 
-  emitAgentEvent({ type: 'sessionStarted' });
-  emitControls();
+  const pipe = spawnDirect(
+    deps,
+    {
+      id: request.sessionId,
+      command,
+      args: launch.args,
+      cwd: launch.cwd,
+      env: definedEnv(launch.env),
+      idleRule: { key: 'type', value: 'result' },
+    },
+    pipeEvents,
+  );
+
+  emitAgentEvent({ type: 'sessionStarted', at: deps.clock.now() });
+  emit(() =>
+    events.controls(state.controls.map((control) => ({ ...control }))),
+  );
   emitActivity('idle');
   requestContextUsage();
   // The profile's autocompact override, read once: a change applies to the
@@ -590,8 +446,13 @@ function startClaudeProcess(
   const settingsPath = deps.paths.join(configFolder, 'settings.json');
   void readIfPresent(deps.files, settingsPath).then(
     (text) => {
-      usage = withConfiguredPercent(usage, configuredPercent(text));
-      emitUsage();
+      runStep(
+        foldUsageInput(
+          state,
+          (usage) => withConfiguredPercent(usage, configuredPercent(text)),
+          deps.clock.now(),
+        ),
+      );
     },
     (error: unknown) =>
       deps.log('claude', `settings.json not read: ${errorText(error)}`),
@@ -606,8 +467,13 @@ function startClaudeProcess(
       request.sessionId,
     ).then(
       (replies) => {
-        usage = withSavedReplies(usage, replies);
-        emitUsage();
+        runStep(
+          foldUsageInput(
+            state,
+            (usage) => withSavedReplies(usage, replies),
+            deps.clock.now(),
+          ),
+        );
       },
       (error: unknown) =>
         deps.log('claude', `saved usage not read: ${errorText(error)}`),
@@ -619,56 +485,32 @@ function startClaudeProcess(
     request.projectDir,
     configFolder,
   ).then((loaded) => {
-    definitions = loaded;
+    state.definitions = loaded;
   });
 
   return {
     send(userInput) {
       requireRunning();
-      const uuid = deps.randomUuid();
-      const message = userMessage(userInput, uuid);
-      write(message);
-      sendCount += 1;
-      const entryId = `user-${sendCount}`;
-      const typed = CONTROL_COMMAND.exec(userInput.text);
-      // Claude prints no skill line for a typed skill, so it starts with the
-      // message.
-      const skill = typed === null ? typedSkill(userInput.text) : null;
-      const sent: HeldMessage = {
-        draft: {
-          kind: 'user',
-          id: entryId,
-          text: userInput.text,
-          images: userInput.images,
-          raw: [message],
-        },
-        skill,
-      };
-      if (tracker.mode() === 'fallback') {
-        emitUserMessage(sent);
-      } else {
-        heldMessages.set(uuid, sent);
-      }
-      tracker.written(
-        uuid,
-        typed === null
-          ? null
-          : { id: typed[1] as ControlCommand['id'], value: typed[2] },
-      );
-      syncActivity();
-      return entryId;
+      writeMessage(userMessage(userInput, deps.randomUuid()));
+      return `user-${state.sendCount}`;
     },
     interrupt() {
       requireRunning();
-      if (activity !== 'working') {
+      if (state.activity !== 'working') {
         return;
       }
-      if (graceTimer !== null) {
-        harnessNotice(
-          'Interrupted again; ending the Claude process.',
-          'info',
-          null,
-        );
+      if (state.graceDeadline !== null) {
+        // A call makes this notice, not a line: a replay cannot rebuild it, so
+        // its id stays outside `noticeCount`.
+        const entry: ChatEntry = {
+          kind: 'notice',
+          id: 'control-notice-kill',
+          at: deps.clock.now(),
+          text: 'Interrupted again; ending the Claude process.',
+          tone: 'info',
+          raw: [null],
+        };
+        emit(() => events.entry(entry));
         deps.log(
           'claude',
           'second interrupt while working; killing the process',
@@ -676,34 +518,11 @@ function startClaudeProcess(
         kill();
         return;
       }
-      const requestId = nextRequestId();
-      const message = {
+      writeMessage({
         type: 'control_request',
-        request_id: requestId,
+        request_id: nextRequestId(),
         request: { subtype: 'interrupt' },
-      };
-      pendingRequests.set(requestId, { kind: 'interrupt' });
-      write(message);
-      harnessNotice('Interrupted', 'info', message);
-      graceTimer = setTimeout(() => {
-        graceTimer = null;
-        if (activity !== 'working') {
-          return;
-        }
-        tracker.abandon();
-        const grace = `${INTERRUPT_GRACE_MS / 1000} s`;
-        harnessNotice(
-          `Claude did not stop within ${grace}; showing the session idle.`,
-          'info',
-          null,
-        );
-        deps.log(
-          'claude',
-          `interrupt unanswered after ${grace}; dropping turn state`,
-        );
-        syncActivity();
-      }, INTERRUPT_GRACE_MS);
-      timers.push(graceTimer);
+      });
     },
     setControl(id, value) {
       requireRunning();
@@ -715,20 +534,17 @@ function startClaudeProcess(
         throw new Error(`Claude Code control ${id} has no choice ${value}`);
       }
       if (control.id === 'mode') {
-        const requestId = nextRequestId();
-        pendingRequests.set(requestId, { kind: 'mode', value });
-        write(controlMessage('mode', value, requestId));
+        writeMessage(controlMessage('mode', value, nextRequestId()));
         return;
       }
-      if (activity === 'working') {
+      if (state.activity === 'working') {
         throw new Error(
           `Claude is working; change ${control.label} when the turn ends`,
         );
       }
-      const uuid = deps.randomUuid();
-      write(controlMessage(control.id, value, uuid));
-      tracker.written(uuid, { id: control.id, value });
-      syncActivity();
+      writeMessage(
+        controlMessage(control.id, value, appCommandUuid(deps.randomUuid())),
+      );
     },
     end() {
       if (endPromise !== null) {
@@ -740,11 +556,11 @@ function startClaudeProcess(
         return endPromise;
       }
       endPromise = new Promise<void>((resolve) => closeWaiters.push(resolve));
-      child.stdin.end();
+      pipe.endInput();
       timers.push(
         setTimeout(() => {
-          child.kill('SIGTERM');
-          timers.push(setTimeout(() => child.kill('SIGKILL'), END_GRACE_MS));
+          pipe.kill('SIGTERM');
+          timers.push(setTimeout(() => pipe.kill('SIGKILL'), END_GRACE_MS));
         }, END_GRACE_MS),
       );
       return endPromise;

@@ -1,6 +1,6 @@
 # 03 — Relay holds a call across an app restart
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -231,3 +231,4 @@ an app restart and re-send it; find the Windows install in the newest app-* fold
 
 ## Proof
 
+Commit marketplace:524438dd · proof: diff read; all Produces present; forms suite 63 tests OK (2 Windows-only skipped); manifest check run after commit; Windows lookup not run (user's check) · concerns: cancel-then-new-call lets that call start the app inside the 30 s window, harmless under the single-instance lock; narrow race leaves such a call needs_manual_open; _reconnecting stays True after close; refused-hello test at 2.0 s does not catch dropping the refusal stop

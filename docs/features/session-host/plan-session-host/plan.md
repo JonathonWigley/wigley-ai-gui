@@ -284,14 +284,14 @@ Task 01 sets `replayed: false` at every `ChatAgentEvent` emitter in the tree (ch
 ### Wave 1
 - [x] [Session host contracts](01-session-host-contracts.md)
 - [x] [Local channel transport](02-local-channel.md)
-- [ ] [Relay holds a call across a restart](03-relay-hold-call.md)
+- [x] [Relay holds a call across a restart](03-relay-hold-call.md)
 - [x] [Windows per-version install](04-windows-install-folders.md)
 
 ### Wave 2
 - [ ] [Claude adapter pipe fold](05-claude-pipe-fold.md) — after 01
 - [ ] [Session host process](06-session-host-process.md) — after 01, 02
 - [ ] [Session host client](07-session-host-client.md) — after 01, 02
-- [ ] [Agents log and workflow skip replayed events](10-agents-replayed.md) — after 01
+- [x] [Agents log and workflow skip replayed events](10-agents-replayed.md) — after 01
 
 ### Wave 3
 - [ ] [Claude adapter on the host](08-claude-on-host.md) — after 05, 07
@@ -313,6 +313,8 @@ Review base: 7f956435
 - 04 · beff2ef0 · diff read; typecheck clean in scripts/; install-steps tests pass; PowerShell and ps listers not run (live checks are the user's) · concerns: Windows PowerShell paths unrun on this Mac; rmSync on leftovers has no retry, so a flat migration may need a second run to clear; isStableAppProcess table has no row for a wrong file name in app-* or a deeper nested path
 - 01 · ddfd4b33 · diff read; all Produces present; typecheck clean; both stub greps found · concerns: kill's comment leads the code until task 09 (chat still kills on quit); agents start.test.ts emits untyped chat.agentEvent without replayed, for task 10 to add; fake detach compares events by identity
 - 02 · c7be320e · diff read; all Produces present; typecheck clean in its files; layer check clean; local-channel and relay tests pass · concerns: any connect rejection counts as stale, so a live listener refusing with EACCES or EAGAIN would lose its socket file; close test waits a fixed 20 ms; readLines assumes Buffer chunks and does not resume a paused stream; followups.md 323 and 331 name relay/endpoint.ts, for task 11
+- 10 · 6b18de64 · diff read; typecheck clean in its files; agents and workflow start tests 25 passed · concerns: the new unlogged-events table drops the old proof that a preview event and a real event log side by side
+- 03 · marketplace:524438dd · diff read; all Produces present; forms suite 63 tests OK (2 Windows-only skipped); manifest check run after commit; Windows lookup not run (user's check) · concerns: cancel-then-new-call lets that call start the app inside the 30 s window, harmless under the single-instance lock; narrow race leaves such a call needs_manual_open; _reconnecting stays True after close; refused-hello test at 2.0 s does not catch dropping the refusal stop
 ### Contract changes
 ### Rulings
 - Marketplace review base is cbd8a9e; git fetch fails in this session (SSH key unavailable), so origin was not checked; neither main showed behind at the last fetch and nothing is pushed — a stale origin would surface at push · lead
@@ -324,5 +326,8 @@ Review base: 7f956435
 - The liveness connect runs only for a socket file, not on every listen — relay-server.test.ts connects right after startRelayServer and an always-async listen failed 15 cases — a real stale socket listens a few ms late · group 02 · group 02
 - mkdir, lstat and rm errors go through failed and listening false rather than throwing — listening never rejects and task 06 reads failures there — a relay whose socket folder cannot be made now logs where it threw · group 02 · group 02
 - close during the liveness connect stops the listen, listening false and failed not called — otherwise a closed server would start listening · group 02 · group 02
+- agentLog_UnloggedEvents asserts agents.sent on both rows, where the task names only the replayed row — keeps the table free of a per-row branch · group 10 · group 10
+- The poll waits one reconnect_poll before its first try — caps an app that accepts then drops at two connects a second — a restart already listening is seen up to 0.5 s later · group 03 · group 03
+- The cancelled-call test sends the second call before the cancel, the spec's order flakes when a poll check lands between them — the same rule is proved · group 03 · group 03
 ### Review rounds
 ### Test gate
