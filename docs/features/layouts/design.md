@@ -81,10 +81,13 @@ edit shows at once, and the committed edit ships as the next build's bundled cop
   redraw of a default in either app.
 - **CSS.** A default's `layout.css` holds the rules for what that layout draws. It loads through one stylesheet link
   of its own, kept whichever layout is picked (a user layout draws its missing parts from the default), and placed
-  before the user layouts' links. The link carries the live `layout.css` while a live default is loaded, else the
-  bundled copy, which ships as a file the loader links and the build never inlines; the link is attached only while it
-  has an href, so a rule deleted live is gone. CSS for parts the app draws itself (slots, panes, editors, text boxes)
-  stays in the plugin's page CSS and still needs a rebuild.
+  before the user layouts' links. The loader appends the link to the document head after all page and kit CSS, which
+  load with the page's bundle, so a page-CSS rule that overrides a default-look rule at equal specificity loses to the
+  default's rule; win it by raising the override's specificity or by putting the override in the default's
+  `layout.css`. The link carries the live `layout.css` while a live default is loaded, else the bundled copy, which
+  ships as a file the loader links and the build never inlines; the link is attached only while it has an href, so a
+  rule deleted live is gone. CSS for parts the app draws itself (slots, panes, editors, text boxes) stays in the
+  plugin's page CSS and still needs a rebuild.
 - **Fallback.** A missing clone draws the bundled default; a default that fails to load or read keeps its last good
   live version, else the bundled default. A live default must define every function part the bundled default
   defines; a missing part fails the load with `layout default has no <part>`. A load, read or missing-part failure
