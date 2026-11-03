@@ -22,8 +22,9 @@ import type {
   ButtonVariant,
 } from '../../../shared/page/layout-host/kit';
 
-// One stage in the stepper: done before the session's stage, current at it, ahead after it. Idle is not in the
-// stepper, so in idle every step is ahead.
+// One stage in the stepper: done before the session's stage, current at it (done at the last step), ahead after it.
+// Idle is not in the stepper, so in idle every step is ahead. Primer and feature share one step: the one the session
+// is in, otherwise feature.
 export interface StepInput {
   id: string;
   label: string;

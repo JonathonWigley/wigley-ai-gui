@@ -112,7 +112,7 @@ Everything draws through the `workflow` layout, its built-in `default`, and the 
 - **Row chip** — a row part (sessions' `addRowPart`): the stage, the progress and the main action's button. Idle draws
   nothing.
 - **Composer strip** — a part above the Chat composer (chat's `addComposerPart`): the stepper, with the current stage
-  lit, and the stage's buttons. Idle draws nothing.
+  lit, and the stage's buttons. Primer and feature share one step: the one the session is in, otherwise feature. Idle draws nothing.
 - **Flow tab** — a session tab (`addTab`) added when the session first leaves idle, kept from then on: the stepper,
   the plan's checklist by wave, and every action of the stage. Its status line is the stage, so a row shows it in text
   too.

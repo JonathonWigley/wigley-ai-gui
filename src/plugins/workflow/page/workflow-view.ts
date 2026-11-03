@@ -150,12 +150,12 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
     }));
 
   const steps = (stage: PageStage): StepInput[] => {
-    const inStepper = deps.stages.all().filter((each) => each.inStepper);
-    const current = inStepper.indexOf(stage);
-    return inStepper.map((step, index) => ({
+    const shown = stepperStages(deps.stages.all(), stage);
+    const current = shown.indexOf(stage);
+    return shown.map((step, index) => ({
       id: step.id,
       label: step.label,
-      state: stepState(index, current),
+      state: stepState(index, current, shown.length),
     }));
   };
 
@@ -426,14 +426,36 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
   return view;
 }
 
+// The stepper's stages, in order, one per step slot: the slot member that is
+// `stage`, otherwise the slot's last.
+function stepperStages(
+  stages: readonly PageStage[],
+  stage: PageStage,
+): PageStage[] {
+  const inStepper = stages.filter((each) => each.inStepper);
+  return inStepper.filter((each) => {
+    if (each.stepSlot === undefined) {
+      return true;
+    }
+    const slot = inStepper.filter((other) => other.stepSlot === each.stepSlot);
+    const holder = slot.includes(stage) ? stage : slot[slot.length - 1];
+    return each === holder;
+  });
+}
+
 // The state of the stepper's step at `index` while the flow's stage is the
 // step at `current`, -1 for a stage outside the stepper (idle), which leaves
-// every step ahead.
-function stepState(index: number, current: number): StepInput['state'] {
+// every step ahead. The last step is done once the flow reaches it.
+function stepState(
+  index: number,
+  current: number,
+  count: number,
+): StepInput['state'] {
+  const reachedLastStep = current === count - 1;
   if (current === -1 || index > current) {
     return 'ahead';
   }
-  return index === current ? 'current' : 'done';
+  return index === current && !reachedLastStep ? 'current' : 'done';
 }
 
 // `<checked>/<total>`, then ` wave <n>` while a wave is open and

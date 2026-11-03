@@ -61,11 +61,11 @@
 }
 
 .workflow-step[data-state='done'] {
-  color: var(--wg-fg-secondary);
+  color: var(--wg-status-success);
 }
 
 .workflow-step[data-state='current'] {
-  color: var(--wg-accent);
+  color: var(--wg-status-running);
   font-weight: var(--wg-weight-semibold);
 }
 

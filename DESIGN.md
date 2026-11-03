@@ -420,7 +420,8 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
 - **Workflow:** three parts, each drawn by the workflow plugin's `default` layout (`docs/features/workflow/design.md`).
   The chip is one line under a session row: the stage as an accent Tag, its detail in `fg-tertiary`, the countdown and
   the main action as a ghost button; an idle session draws no chip. The strip sits above the Chat composer: the stepper
-  with the current stage lit, the detail, the countdown and every action as buttons; an idle session draws no strip.
+  (steps ahead in `fg-tertiary`, the current one in `status-running`, done ones and a reached last step in
+  `status-success`), the detail, the countdown and every action as buttons; an idle session draws no strip.
   The Flow tab holds the stage's label as its header, the stepper, the stage's detail (which
   carries the plan's title from feature on, once a plan is read, after the progress in make and review so the chip's
   ellipsis cuts the title first) with the countdown, the plan's tasks under a header per wave (the current wave

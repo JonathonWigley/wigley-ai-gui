@@ -2,7 +2,7 @@ import { detailLine, isBusy, type PageStage } from '../../contract';
 
 export const planReadyPageStage: PageStage = {
   id: 'planReady',
-  label: 'Plan ready',
+  label: 'Plan',
   inStepper: true,
   order: 30,
   actions: [

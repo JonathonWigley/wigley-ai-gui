@@ -111,10 +111,13 @@ export interface StageActionSpec {
 
 export interface PageStage {
   id: StageId;
-  // The stepper's and the chip's word: 'Plan ready'.
+  // The stepper's and the chip's word: 'Plan'.
   label: string;
   // Idle is false.
   inStepper: boolean;
+  // Stages sharing a slot take one place in the stepper: the one the flow is
+  // in, otherwise the slot's last by order ('start': primer, feature).
+  stepSlot?: string;
   // Equal to the main half's order (page-stages.test.ts pins it); the stepper
   // sorts on it.
   order: number;

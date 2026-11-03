@@ -376,14 +376,34 @@ describe('workflow view', () => {
         (step) => `${step.textContent}:${step.dataset.state}`,
       ),
     ).toEqual([
-      'Primer:done',
       'Feature:done',
-      'Plan ready:done',
+      'Plan:done',
       'Make:current',
       'Review:ahead',
       'Closed:ahead',
     ]);
   });
+
+  it.each([
+    { stage: 'primer', start: 'Primer:current', closed: 'Closed:ahead' },
+    { stage: 'feature', start: 'Feature:current', closed: 'Closed:ahead' },
+    { stage: 'closed', start: 'Feature:done', closed: 'Closed:done' },
+  ])(
+    'steps_FlowIn_$stage_ShowsOneStartStepAndDoneOnLastStep',
+    ({ stage, start, closed }) => {
+      const { view, put } = setUp();
+      const wrapper = new FakeElement('div');
+      view.stripPart.build(asHtml(wrapper), 'a');
+
+      put(flowIn(stage));
+
+      const steps = findAll(wrapper, 'workflow-step').map(
+        (step) => `${step.textContent}:${step.dataset.state}`,
+      );
+      expect([steps[0], steps.at(-1)]).toEqual([start, closed]);
+      expect(steps).toHaveLength(5);
+    },
+  );
 
   it('waves_TasksAcrossWaves_GroupsInFileOrderAndMarksCurrent', () => {
     const { view, put } = setUp();
@@ -472,15 +492,7 @@ describe('workflow view', () => {
 
     expect(
       findAll(wrapper, 'workflow-step').map((step) => step.textContent),
-    ).toEqual([
-      'Primer',
-      'Feature',
-      'Plan ready',
-      'Checking',
-      'Make',
-      'Review',
-      'Closed',
-    ]);
+    ).toEqual(['Feature', 'Plan', 'Checking', 'Make', 'Review', 'Closed']);
   });
 
   it('chip_UserLayoutThrows_DrawsWithDefault', () => {
