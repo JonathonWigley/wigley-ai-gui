@@ -1,6 +1,6 @@
 # 09 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 5 · Depends on: 06, 07
 Plan: [plan.md](plan.md)
@@ -67,3 +67,4 @@ Commit:    none (no files change)
 
 ## Proof
 
+Commit none · proof: checks 1-7 passed from captures (chat-dock-live, chat-dock-done, chat-dock-after-interrupt, agent-strip-strip, drive activity-on-done, chat-chat-preview); agent-strip and agent-lines self-tests pass; chat self-test 8 fails, all one fit check nav.ui-tabs.session-tabs holds 120px in 99px at minimum width, also in groups this run did not touch (forms takeover, session controls, interrupt and close) · concerns: session-tabs fit failure at minimum width looks pre-existing (tab bar, not the dock); agent-strip strip boxes render as thin edges in the capture; sign-in toasts overlap the preview composer

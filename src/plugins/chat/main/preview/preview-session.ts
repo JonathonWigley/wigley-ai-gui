@@ -1,4 +1,8 @@
-import type { ChatEntry, SessionControl } from '../../../../contracts/agent';
+import {
+  type ChatEntry,
+  MAIN_AGENT_ID,
+  type SessionControl,
+} from '../../../../contracts/agent';
 import { FAKE_HISTORY_IMAGES } from '../../../../shared/fake-agent-harness';
 import { SAMPLE_VISUALS_TEXT } from '../../../../shared/sample-visuals';
 
@@ -67,6 +71,7 @@ export function previewEntries(): ChatEntry[] {
       kind: 'tool',
       id: 'preview-4',
       at: previewAt(3),
+      agentId: MAIN_AGENT_ID,
       toolUseId: 'preview-tool-4',
       name: 'Read',
       input: { file_path: 'src/app.ts' },
@@ -78,6 +83,7 @@ export function previewEntries(): ChatEntry[] {
       kind: 'tool',
       id: 'preview-5',
       at: previewAt(4),
+      agentId: MAIN_AGENT_ID,
       toolUseId: 'preview-tool-5',
       name: 'Bash',
       input: { command: 'false' },
@@ -89,6 +95,7 @@ export function previewEntries(): ChatEntry[] {
       kind: 'tool',
       id: 'preview-6',
       at: previewAt(5),
+      agentId: MAIN_AGENT_ID,
       toolUseId: 'preview-tool-6',
       name: 'Bash',
       input: { command: 'npm test' },

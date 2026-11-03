@@ -6,10 +6,12 @@
   gap: var(--wg-space-1);
   width: calc(var(--wg-space-6) * 10);
   /* Every closed box takes the height of the fullest one — a subagent's head,
-     meta, task, three recent tool lines and the cursor prompt: seven lines and
-     their six gaps, inside the padding and border. */
+     meta, task, three recent tool lines and the cursor prompt: seven lines
+     (`text-12` at the inherited `leading-ui`) and their six gaps, inside the
+     padding and the Card's hairline border. */
   min-height: calc(
-    7lh + 6 * var(--wg-space-1) + 2 * var(--wg-space-2) + 2px
+    7 * var(--wg-text-12) * var(--wg-leading-ui) + 6 * var(--wg-space-1) + 2 *
+      var(--wg-space-2) + 2 * 1px
   );
   padding: var(--wg-space-2);
   font-size: var(--wg-text-12);

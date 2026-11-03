@@ -385,30 +385,56 @@ setTurn(entries: readonly ChatEntry[], working: boolean): void;
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Tool entries carry the agent's id](01-tool-entry-agent-id.md)
+- [x] [Tool entries carry the agent's id](01-tool-entry-agent-id.md)
 
 ### Wave 2
-- [ ] [Working input's done state and the activityInTranscript flag](02-done-state-and-flag.md) — after 01
+- [x] [Working input's done state and the activityInTranscript flag](02-done-state-and-flag.md) — after 01
 
 ### Wave 3
-- [ ] [The composer's working slot](03-composer-working-slot.md) — after 02
-- [ ] [The activity dock module](04-activity-dock-module.md) — after 02
-- [ ] [Entry list hides activity rows and drops the working block](05-entry-list-hiding.md) — after 01, 02
+- [x] [The composer's working slot](03-composer-working-slot.md) — after 02
+- [x] [The activity dock module](04-activity-dock-module.md) — after 02
+- [x] [Entry list hides activity rows and drops the working block](05-entry-list-hiding.md) — after 01, 02
 
 ### Wave 4
-- [ ] [Wire the dock into the composer and the Chat tab](06-dock-wiring.md) — after 03, 04, 05
-- [ ] [Self-test scripts follow the dock](07-selftest-scripts.md) — after 05
+- [x] [Wire the dock into the composer and the Chat tab](06-dock-wiring.md) — after 03, 04, 05
+- [x] [Self-test scripts follow the dock](07-selftest-scripts.md) — after 05
 
 ### Wave 5
-- [ ] [Doc re-read](08-doc-re-read.md) — after 06, 07
-- [ ] [Final verification](09-final-verification.md) — after 06, 07
+- [x] [Doc re-read](08-doc-re-read.md) — after 06, 07
+- [x] [Final verification](09-final-verification.md) — after 06, 07
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 46f417b5
 
 ### Groups
+- 01 · 91ff7c11 · diff read: all three Produces present; typecheck green · concerns: permission-turn test literal in fake-agent-harness.test.ts gained agentId though tsc did not flag it (runtime toEqual)
+- 02 · 7d7f06b0 · diff read: every Produces present; typecheck green; check-layers, oxlint, oxfmt clean on touched files · concerns: npm run lint fails in check-styles on agent-strip.css:17 (pre-existing, 65d29099), so the lint script stops before oxlint
+- 03 · 8eebaabd · diff read: ComposerKit.working and the hidden slot present; tree typecheck green at worker's end · concerns: left-out placement uses parentNode?.insertBefore since the test DOM has no before()
+- 05 · 5a2b0c6a · diff read: createEntryList signature and every EntryList member kept, working block gone, isActivityInTranscript read at create and rebuild; typecheck green at worker's end · concerns: chat-view.ts:137 and other 'working block' comments outside the task are stale until tasks 06 and 07
+- 04 · c3a7867b · diff read: workingInput, isTurnEmpty, doneInput, ActivityDockDeps, ActivityDock, createActivityDock present as planned; typecheck green · concerns: isStepsChanged now duplicated in activity-dock.ts and entry-list.ts; LiveWorkingInput.startedAt comment still says held block (task 06)
+- 07 · 32bc4b7d · diff read: VISUAL_STEPS, TRANSCRIPT_FOCUS_STEPS, ACTIVITY_DOCK_STEPS and the transcript focus / activity dock groups present; typecheck green at worker's end; self-test runs in 09 · concerns: dock-done and dock-after-interrupt captures depend on task 06 calling drawTurn before the idle log line
+- 06 · a0119dbc · diff read: ComposerSurfaceDeps clock/timers and ComposerSurface.setTurn present; drawTurn at putEntry, entries, activity, sessionRunning, sessionRested, createTab; typecheck green · concerns: a default working draw that keeps throwing retries and logs once per tick; the slot hides and shows within one synchronous draw
+- 08 · b97c085d · diff read: one fix (layouts design Space z l c row); DESIGN.md, agent-chat and chat-bar designs, AGENTS.md paragraph checked true; working-block grep shows history only · concerns: none
+- 09 · none · checks 1-7 passed from captures (chat-dock-live, chat-dock-done, chat-dock-after-interrupt, agent-strip-strip, drive activity-on-done, chat-chat-preview); agent-strip and agent-lines self-tests pass; chat self-test 8 fails, all one fit check nav.ui-tabs.session-tabs holds 120px in 99px at minimum width, also in groups this run did not touch (forms takeover, session controls, interrupt and close) · concerns: session-tabs fit failure at minimum width looks pre-existing (tab bar, not the dock); agent-strip strip boxes render as thin edges in the capture; sign-in toasts overlap the preview composer
 ### Contract changes
 ### Rulings
+- Preflight: precondition 1's peer AGENTS.md hunk is committed (1b7363b5) and the tree is clean; origin is unreachable from this session (SSH publickey denied), so the run builds on local main at 46f417b5 — lead
+- fake-agent-harness.test agents-turn check asserts every tool emit (start and finish) as [id, agentId] — group 01 · group 01
+- layout.test.ts imports MAIN_AGENT_ID from src/contracts/agent — group 01 · group 01
+- DoneWorkingInput.steps comment leaves out the subagent-filter clause until task 06 writes it (D12) — group 02 · group 02
+- working-turn.ts workingInput returns LiveWorkingInput already (tsc narrowing), matching task 04's signature — group 02 · group 02
+- layout.test.ts uses a local MAIN_AGENT_ID = 'main' since check-layers forbids src/plugins/chat/layouts importing src/contracts; reverses group 01's import ruling — group 02 · group 02
+- left-out working slot placed in drawComposer after placeIfLeftOut, recorded via rollback.recordBox; app-slot.ts unchanged — group 03 · group 03
+- the working-placed-twice row asserts the default fallback and log, not before-box placement — group 03 · group 03
+- the list holds only slotted entries (transcriptEntries) so rows and stops never see a step or result under flag false — group 05 · group 05
+- every fancy buildEntry row builds over activityShown — group 05 · group 05
+- a no-change set keeps the shown input (old now) rather than swapping in the equal new one — group 04 · group 04
+- the tick returns without sending when it fires while not live (guard) — group 04 · group 04
+- agent-strip strip keys step why rewritten (G lands on the last entry), beyond the comment-only scope — group 07 · group 07
+- the dispose test proves the part's dispose through its recorded key anchor (PartView has no dispose) — group 06 · group 06
 ### Review rounds
+- R1 implementation review · 70d24747 · NEEDS FIXES (2 Important open, 1 Important + 2 Minor determined; 5 lead-applied in 3bee4a26; 2 pre-existing) · report /tmp/claude-activity-dock/review-70d24747.md
+- R2 re-review (correctness) of fix commits c7e983bb 6b2d57c9 beb90fc4 12226ccf 166f58c5: NEEDS FIXES. R1#1,3,4,6,7 closed. Important: R1#2 repeat (strip floor pushes the box out of tabs under ~553px). Minor: agent-strip/agent-lines SCROLLS_ITSELF lack .chat-working-done (repeat of R1#5); sessions strip contract does not name ui-tabs--scroll. Chat self-test reran: all passed. All three dispatched as fix cycle 2 under the user's standing approval; the lead picked the strip requirement (box always in the tab; floor in tall tabs only) and documenting the scroll variant.
 ### Test gate
+- Picked the 12 test files the range changed plus their areas (src/plugins/chat, src/main/claude-code, fake-agent-harness, agent-strip, agent-lines: 52 files, 1168 tests); the whole vitest suite then ran too, since it takes seconds (381 files, 6200 tests) · all passed; typecheck green; lint fails only on the pre-existing agent-strip.css:17 check-styles error (65d29099)

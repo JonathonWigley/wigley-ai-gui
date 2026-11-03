@@ -1,6 +1,6 @@
 # 08 — Doc re-read
 
-Status: not started
+Status: done
 Type: Task
 Wave: 5 · Depends on: 06, 07
 Plan: [plan.md](plan.md)
@@ -51,3 +51,4 @@ Commit:    one commit for the fixes, when there are any. `AGENTS.md` holds a pee
 
 ## Proof
 
+Commit b97c085d · proof: diff read: one fix (layouts design Space z l c row); DESIGN.md, agent-chat and chat-bar designs, AGENTS.md paragraph checked true; working-block grep shows history only · concerns: none

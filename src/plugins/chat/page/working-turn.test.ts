@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import type { ChatEntry, ChatEntryKind } from '../../../contracts/agent';
-import { workingInput } from './working-turn';
+import {
+  type ChatEntry,
+  type ChatEntryKind,
+  MAIN_AGENT_ID,
+} from '../../../contracts/agent';
+import { doneInput, workingInput } from './working-turn';
+
+const SUBAGENT_ID = 'agent-1';
 
 function entry(kind: ChatEntryKind, id: string, at: number): ChatEntry {
   switch (kind) {
@@ -14,6 +20,7 @@ function entry(kind: ChatEntryKind, id: string, at: number): ChatEntry {
         kind,
         id,
         at,
+        agentId: MAIN_AGENT_ID,
         toolUseId: `use-${id}`,
         name: 'Read',
         input: {},
@@ -49,16 +56,28 @@ function entry(kind: ChatEntryKind, id: string, at: number): ChatEntry {
 }
 
 // Each spec is `<kind>:<id>@<at>`, with an optional `!` after the kind for an
-// entry still open: a streaming assistant or thinking, a tool with no result,
-// a permission with no answer.
+// entry still open (a streaming assistant or thinking, a tool with no result,
+// a permission with no answer) and `~` for a subagent's tool. A result may add
+// `$<cost>` and `/<stop reason>` after its time.
 function entries(...specs: string[]): ChatEntry[] {
   return specs.map((spec) => {
-    const [kindAndId, at] = spec.split('@');
-    const [kindMark, id] = kindAndId.split(':');
-    const open = kindMark.endsWith('!');
-    const kind = kindMark.replace('!', '') as ChatEntryKind;
+    const match = /^(\w+)(!?)(~?):(\w+)@(\d+)(?:\$([\d.]+))?(?:\/(\w+))?$/.exec(
+      spec,
+    );
+    if (match === null) {
+      throw new Error(`bad spec ${spec}`);
+    }
+    const [, kindName, open, subagent, id, at, cost, stopReason] = match;
+    const kind = kindName as ChatEntryKind;
     const built = entry(kind, id, Number(at));
-    if (!open) {
+    if (built.kind === 'tool' && subagent !== '') {
+      built.agentId = SUBAGENT_ID;
+    }
+    if (built.kind === 'result') {
+      built.costUsd = cost === undefined ? null : Number(cost);
+      built.stopReason = stopReason ?? built.stopReason;
+    }
+    if (open === '') {
       return built;
     }
     switch (built.kind) {
@@ -112,6 +131,11 @@ describe('workingInput', () => {
       list: entries('user:u1@100', 'tool!:t@110', 'user:u2@120'),
       expected: 'thinking',
     },
+    {
+      given: "a finished main tool and a subagent's running tool",
+      list: entries('user:u@100', 'tool:a@110', 'tool!~:s@120'),
+      expected: 'thinking',
+    },
   ])('workingInput state with $given → $expected', ({ list, expected }) => {
     expect(workingInput(list, 900).state).toBe(expected);
   });
@@ -154,6 +178,12 @@ describe('workingInput', () => {
       expected: { startedAt: 100, steps: ['a', 'b', 'c'], now: 900 },
     },
     {
+      given: "a subagent's tool between two main tools",
+      list: entries('user:u@100', 'tool:a@110', 'tool~:s@115', 'tool:b@120'),
+      now: 900,
+      expected: { startedAt: 100, steps: ['a', 'b'], now: 900 },
+    },
+    {
       given: 'no entries',
       list: [],
       now: 500,
@@ -170,4 +200,130 @@ describe('workingInput', () => {
       }).toEqual(expected);
     },
   );
+});
+
+describe('doneInput', () => {
+  it.each([
+    {
+      given: 'one result with a cost',
+      list: entries('user:u@100', 'tool:a@110', 'result:r@900$0.25'),
+      expected: {
+        steps: ['a'],
+        startedAt: 100,
+        endedAt: 900,
+        stopReason: 'end_turn',
+        costUsd: 0.25,
+      },
+    },
+    {
+      given: 'two results, one with a null cost',
+      list: entries('user:u@100', 'result:r1@900$0.25', 'result:r2@1500'),
+      expected: {
+        steps: [],
+        startedAt: 100,
+        endedAt: 1500,
+        stopReason: 'end_turn',
+        costUsd: 0.25,
+      },
+    },
+    {
+      given: 'two results with costs',
+      list: entries('user:u@100', 'result:r1@900$0.25', 'result:r2@1500$0.5'),
+      expected: {
+        steps: [],
+        startedAt: 100,
+        endedAt: 1500,
+        stopReason: 'end_turn',
+        costUsd: 0.75,
+      },
+    },
+    {
+      given: 'every cost null',
+      list: entries('user:u@100', 'result:r1@900', 'result:r2@1500'),
+      expected: {
+        steps: [],
+        startedAt: 100,
+        endedAt: 1500,
+        stopReason: 'end_turn',
+        costUsd: null,
+      },
+    },
+    {
+      given: 'a last stop reason of max_tokens',
+      list: entries(
+        'user:u@100',
+        'result:r1@900$0.25/success',
+        'result:r2@1500/max_tokens',
+      ),
+      expected: {
+        steps: [],
+        startedAt: 100,
+        endedAt: 1500,
+        stopReason: 'max_tokens',
+        costUsd: 0.25,
+      },
+    },
+    {
+      given: 'no user entry',
+      list: entries('tool:a@200', 'raw:b@210', 'result:r@900$0.25'),
+      expected: {
+        steps: ['a', 'b'],
+        startedAt: 200,
+        endedAt: 900,
+        stopReason: 'end_turn',
+        costUsd: 0.25,
+      },
+    },
+    {
+      given: 'no result after the last user entry',
+      list: entries('user:u1@100', 'result:r@900$0.25', 'user:u2@1000'),
+      expected: null,
+    },
+    {
+      given: "a subagent's tool in the turn",
+      list: entries(
+        'user:u@100',
+        'tool:a@110',
+        'tool~:s@115',
+        'thinking:c@120',
+        'result:r@900',
+      ),
+      expected: {
+        steps: ['a', 'c'],
+        startedAt: 100,
+        endedAt: 900,
+        stopReason: 'end_turn',
+        costUsd: null,
+      },
+    },
+    {
+      given: 'a result before the last one, the live turn starting after it',
+      list: entries(
+        'user:u@100',
+        'result:r1@900$0.25',
+        'tool:a@1000',
+        'result:r2@1500$0.5',
+      ),
+      expected: {
+        steps: ['a'],
+        startedAt: 100,
+        endedAt: 1500,
+        stopReason: 'end_turn',
+        costUsd: 0.75,
+      },
+    },
+  ])('doneInput ($given)', ({ list, expected }) => {
+    const input = doneInput(list);
+    expect(
+      input === null
+        ? null
+        : {
+            steps: input.steps.map((step) => step.id),
+            startedAt: input.startedAt,
+            endedAt: input.endedAt,
+            stopReason: input.stopReason,
+            costUsd: input.costUsd,
+          },
+    ).toEqual(expected);
+  });
 });

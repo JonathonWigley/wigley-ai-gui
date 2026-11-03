@@ -1,6 +1,6 @@
 # 07 — Self-test scripts follow the dock
 
-Status: not started
+Status: done
 Type: Batch (chat's script groups; the two comment fixes in agent-strip's and agent-lines' scripts)
 Wave: 4 · Depends on: 05
 Plan: [plan.md](plan.md)
@@ -76,3 +76,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 32bc4b7d · proof: diff read: VISUAL_STEPS, TRANSCRIPT_FOCUS_STEPS, ACTIVITY_DOCK_STEPS and the transcript focus / activity dock groups present; typecheck green at worker's end; self-test runs in 09 · concerns: dock-done and dock-after-interrupt captures depend on task 06 calling drawTurn before the idle log line

@@ -1,6 +1,6 @@
 # 02 — Working input's done state and the activityInTranscript flag
 
-Status: not started
+Status: done
 Type: Batch (the `WorkingInput` union with the default `working` part; the layout flag with its reader and pick)
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -111,3 +111,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 7d7f06b0 · proof: diff read: every Produces present; typecheck green; check-layers, oxlint, oxfmt clean on touched files · concerns: npm run lint fails in check-styles on agent-strip.css:17 (pre-existing, 65d29099), so the lint script stops before oxlint

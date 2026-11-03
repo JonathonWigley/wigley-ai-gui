@@ -16,7 +16,8 @@ export const SET_SESSION_TITLE_TOOL: ToolDefinition = {
     properties: {
       title: {
         type: 'string',
-        description: 'A 2 to 4 word heading naming this session’s topic, at most 30 characters.',
+        description:
+          'A 2 to 4 word heading naming this session’s topic, at most 30 characters.',
       },
     },
     required: ['title'],

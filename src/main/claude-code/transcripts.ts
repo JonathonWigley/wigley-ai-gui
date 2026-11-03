@@ -1,4 +1,8 @@
-import type { ChatEntry, ChatImage } from '../../contracts/agent';
+import {
+  type ChatEntry,
+  type ChatImage,
+  MAIN_AGENT_ID,
+} from '../../contracts/agent';
 import { asArray, asJson, asString, type Json, parsed } from './json-fields';
 import { pairToolResult, toolUseEntry } from './tool-entries';
 
@@ -276,7 +280,7 @@ function addAssistantEntries(
         });
       }
     } else if (block.type === 'tool_use') {
-      const entry = { ...toolUseEntry(id, block, line), at };
+      const entry = { ...toolUseEntry(id, block, line, MAIN_AGENT_ID), at };
       toolEntries.set(entry.toolUseId, entry);
       entries.push(entry);
     } else {

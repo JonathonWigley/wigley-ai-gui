@@ -94,7 +94,8 @@ export interface SideBarPane extends SessionsPart {
   rows: HTMLElement;
 }
 
-// `strip` is the strip the app fills with its session's tabs; a child of `element`.
+// `strip` is the strip the app fills with its session's tabs; a child of `element`. A strip that should scroll its tabs
+// in a narrow bar carries `ui-tabs ui-tabs--scroll`, as the default layout's does.
 export interface TabBarPane extends SessionsPart {
   strip: HTMLElement;
 }

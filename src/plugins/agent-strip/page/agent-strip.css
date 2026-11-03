@@ -1,4 +1,13 @@
-/* The agent strip above the Chat composer's box: the app's scroller. */
+/* The agent strip above the Chat composer's box: the composer's cap for it,
+   then the app's scroller. */
+
+/* The composer's cap rises from half the tab while the strip shows boxes, so
+   the composer parts have room for one closed box beside the activity dock,
+   the message box and a wrapped status line in a 900x700 tab. The parts hold
+   no floor: in a shorter tab they still give up height first and scroll. */
+.ui-floating.chat-composer:has(.agent-strip-scroller) {
+  max-height: 80%;
+}
 
 /* An open box grows taller while the others keep the closed height. */
 .agent-strip-scroller > .ui-h-scroller-track {

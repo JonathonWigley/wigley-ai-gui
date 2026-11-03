@@ -57,7 +57,11 @@ const layout = {
   tabBar(parent, kit) {
     const element = kit.el(parent, 'div', 'session-tabs-bar');
     kit.prevTabEdge(element);
-    const strip = kit.el(element, 'nav', 'ui-tabs session-tabs');
+    const strip = kit.el(
+      element,
+      'nav',
+      'ui-tabs ui-tabs--scroll session-tabs',
+    );
     strip.setAttribute('aria-label', 'Tabs');
     kit.nextTabEdge(element);
     kit.contributedParts(element);

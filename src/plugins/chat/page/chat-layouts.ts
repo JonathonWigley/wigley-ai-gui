@@ -31,7 +31,10 @@ import type {
 import { chatManifest } from '../manifest';
 
 // The chat layout's parts beside the entries.
-export type ChatPartName = Exclude<keyof ChatLayout, 'entries'>;
+export type ChatPartName = Exclude<
+  keyof ChatLayout,
+  'entries' | 'activityInTranscript'
+>;
 
 // The chat layouts every surface draws with: `set` replaces them and tells
 // each `onChange` listener. `draw` draws a part with the user's layout when
@@ -85,6 +88,19 @@ export function pickEntry(
     shown.layouts,
     (layout) => layout.entries?.[kind] !== undefined,
   );
+}
+
+// Whether the entry list draws runs and result entries: the user's layout's
+// flag when it sets one, else default's.
+export function isActivityInTranscript(
+  shown: ShownLayouts<ChatLayout>,
+): boolean {
+  const { layout } = pickLayout(
+    [shown.user, DEFAULT_ENTRY_PICK.name],
+    shown.layouts,
+    (candidate) => candidate.activityInTranscript !== undefined,
+  );
+  return layout.activityInTranscript === true;
 }
 
 // What running a drawn view's update came to: it ran, the view has none, or

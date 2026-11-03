@@ -38,6 +38,7 @@ export interface ThinkingInput {
 export interface ToolInput {
   kind: 'tool';
   id: string;
+  agentId: string;
   toolUseId: string;
   name: string;
   input: unknown;
@@ -113,18 +114,40 @@ export interface ActivityInput {
 // with no result, `writing` while the last entry is streaming assistant text, else `thinking`.
 export type WorkingState = 'thinking' | 'writing' | 'working' | 'waiting';
 
-// The running turn. Times are epoch ms.
-export interface WorkingInput {
+// The running turn, drawn in the composer's activity dock. Times are epoch ms.
+export interface LiveWorkingInput {
   // What the turn is doing now.
   state: WorkingState;
-  // Every step of the turn in entry order, each the step's entry input; the layout picks the ones it shows.
+  // The turn's steps in entry order, each the step's entry input, leaving out subagents' tool calls (a tool whose
+  // `agentId` is not `main`); the layout picks the ones it shows.
   steps: StepInput[];
-  // When the turn began: its first entry. While the turn holds no entries, the held block's start: the finished
-  // turn's first entry until the session goes idle, else when the block was drawn.
+  // When the turn began: its first entry, the later of the user's last message and the first entry after the last
+  // result. While the turn holds no entries, the dock keeps the start it shows; a dock that was hidden or done starts
+  // at `now`.
   startedAt: number;
   // The time of this draw or update; the turn's time is `now - startedAt`.
   now: number;
 }
+
+// The finished turn: every entry from the user's last message on; the dock shows it while the session is idle,
+// until the user sends the next message. Times are epoch ms.
+export interface DoneWorkingInput {
+  state: 'done';
+  // The turn's steps in entry order, each the step's entry input, leaving out subagents' tool calls (a tool whose
+  // `agentId` is not `main`); the layout picks the ones it shows.
+  steps: StepInput[];
+  // The user's last message's `at`; the first entry's with no user entry. It can be earlier than the live turn's
+  // start, when the turn holds a result before its last one.
+  startedAt: number;
+  // The last result's `at`.
+  endedAt: number;
+  // The last result's stop reason.
+  stopReason: string;
+  // The sum of the results' non-null costs; null when none has one.
+  costUsd: number | null;
+}
+
+export type WorkingInput = LiveWorkingInput | DoneWorkingInput;
 
 // One pending message: its text as typed, how many images it carries, and whether the user sent it into the running
 // turn, so it waits only for the agent to take it in.
@@ -233,12 +256,16 @@ export interface ComposerInput {
   controls: ComposerControlInput[];
 }
 // The composer's pieces. Each slot and the box mounts once per draw: a second call throws `<part> placed twice`, and
-// the composer draws with `default`. A composer that leaves the box out gets it at the end of its element.
+// the composer draws with `default`. A composer that leaves the box out gets it at the end of its element, and the
+// working slot just above the box.
 export interface ComposerKit extends BaseKit {
   // `div.ui-floating`: the glass panel; the composer's root in the default layout.
   floatingPanel(parent: HTMLElement): HTMLElement;
   // The message box frame, its editor inside.
   box(parent: HTMLElement): HTMLElement;
+  // The slot the `working` part draws into: the activity dock. The app hides it while there is nothing to show. A
+  // composer that leaves it out gets it just above the box.
+  working(parent: HTMLElement): HTMLElement;
   // The slot the `attachments` part draws into; the app hides it while no image is attached.
   attachments(parent: HTMLElement): HTMLElement;
   // The slot the `statusLine` part draws into.
@@ -374,6 +401,10 @@ export type EntryBuilder<K extends EntryKind> = (
 // a part or entry kind left out draws with `default`. A dialog part draws into the dialog's body; the app keeps the
 // dialog's frame and title.
 export interface ChatLayout {
+  // Whether the entry list draws the agent's steps (activity lines and their step rows) and the `result` entries;
+  // `false` leaves them out of the list and the entry cursor. A user layout that wants the activity lines sets it
+  // `true`. Left out, the layout takes `default`'s.
+  activityInTranscript?: boolean;
   entries?: { [K in EntryKind]?: EntryBuilder<K> };
   // One run of the agent's steps (tool, thinking, raw entries between two other entries), drawn into its slot; the
   // app keeps the cursor, the click that opens it and the step rows.
@@ -382,8 +413,11 @@ export interface ChatLayout {
     input: ActivityInput,
     kit: BaseKit,
   ): PartView<ActivityInput>;
-  // The running turn, drawn into a slot after the last entry and before the pending rows while the session works; the
-  // app sends the input again on each change and once a second with a new `now`. The slot is not a cursor stop.
+  // The activity dock, drawn into the composer's working slot (`ComposerKit.working`): a `LiveWorkingInput` while the
+  // turn runs, a `DoneWorkingInput` while the session is idle after a finished turn, until the user sends the next
+  // message; a user part receives both and branches on `input.state`. The app sends the input again on each change
+  // and once a second with a new `now` while the turn is live. The slot hides while there is nothing to show; it is
+  // not a cursor stop.
   working?(
     parent: HTMLElement,
     input: WorkingInput,

@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ChatEntry } from '../../../contracts/agent';
+import type { Timers } from '../../../contracts/ambient';
 import type { CommandId } from '../../../contracts/commands';
 import { createPartStore } from '../../../shared/page/contributed-parts';
 import {
@@ -25,11 +27,28 @@ import { createComposerSurface } from './composer-kit';
 import { createSignInPart } from './dialog-kits';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 
+// Timers that run only when the test fires them, each armed one kept in
+// `armed`.
+function fakeTimers() {
+  let nextHandle = 1;
+  const armed = new Map<number, () => void>();
+  const timers: Timers = {
+    set: (run) => {
+      armed.set(nextHandle, run);
+      return nextHandle++;
+    },
+    clear: (handle) => {
+      armed.delete(handle);
+    },
+  };
+  return { timers, armed };
+}
+
 // The deps every surface takes, drawing with `user` as the user's layout,
 // or with `default` alone when `user` is null, and no composer or status part
 // until one is added to `deps.composerParts` or `deps.statusParts`; each
-// anchor is kept in `anchors`, each command run in `ran` and each log line in
-// `logs`.
+// anchor is kept in `anchors`, each command run in `ran`, each log line in
+// `logs` and each armed timer in `armed`, over a clock fixed at 5000.
 function surfaceDeps(user: ChatLayout | null) {
   const logs: string[] = [];
   const log = (_source: string, line: string) => logs.push(line);
@@ -39,6 +58,7 @@ function surfaceDeps(user: ChatLayout | null) {
   }
   const { anchors, keys } = recordingAnchors();
   const ran: CommandId[] = [];
+  const { timers, armed } = fakeTimers();
   const deps = {
     layouts,
     markdown: {
@@ -56,8 +76,10 @@ function surfaceDeps(user: ChatLayout | null) {
     composerParts: createPartStore<ChatComposerPart>(),
     statusParts: createPartStore<ChatStatusPart>(),
     log,
+    clock: { now: () => 5000 },
+    timers,
   };
-  return { deps, anchors, ran, logs };
+  return { deps, anchors, ran, logs, armed };
 }
 
 function composerInput(
@@ -154,6 +176,7 @@ describe('composer surface parts', () => {
       layout: 'mine',
       endsWithPieces: true,
       startsWithParts: false,
+      expectsWorkingBeforeBox: false,
       log: null,
     },
     {
@@ -163,6 +186,7 @@ describe('composer surface parts', () => {
       layout: 'mine',
       endsWithPieces: true,
       startsWithParts: false,
+      expectsWorkingBeforeBox: false,
       log: null,
     },
     {
@@ -179,6 +203,7 @@ describe('composer surface parts', () => {
       layout: 'default',
       endsWithPieces: false,
       startsWithParts: false,
+      expectsWorkingBeforeBox: false,
       log: 'layout mine composer failed: box placed twice',
     },
     {
@@ -197,6 +222,7 @@ describe('composer surface parts', () => {
       layout: 'mine',
       endsWithPieces: false,
       startsWithParts: true,
+      expectsWorkingBeforeBox: false,
       log: null,
     },
     {
@@ -214,11 +240,54 @@ describe('composer surface parts', () => {
       layout: 'default',
       endsWithPieces: false,
       startsWithParts: false,
+      expectsWorkingBeforeBox: false,
       log: 'layout mine composer failed: composer placed contributed parts twice',
+    },
+    {
+      name: 'a composer that never calls kit.working',
+      draw: () =>
+        drawComposer({
+          composer(parent, _input, kit) {
+            const panel = kit.floatingPanel(parent);
+            kit.box(panel);
+            kit.statusLine(panel);
+            return { element: panel };
+          },
+        }),
+      layout: 'mine',
+      endsWithPieces: false,
+      startsWithParts: false,
+      expectsWorkingBeforeBox: true,
+      log: null,
+    },
+    {
+      name: 'a composer that calls kit.working twice',
+      draw: () =>
+        drawComposer({
+          composer(parent, _input, kit) {
+            const panel = kit.floatingPanel(parent);
+            kit.working(panel);
+            kit.working(panel);
+            kit.box(panel);
+            return { element: panel };
+          },
+        }),
+      layout: 'default',
+      endsWithPieces: false,
+      startsWithParts: false,
+      expectsWorkingBeforeBox: false,
+      log: 'layout mine composer failed: working placed twice',
     },
   ])(
     'composerParts_PieceLeftOutOrPlacedTwice_KeysStillReachTheBox ($name)',
-    ({ draw, layout, endsWithPieces, startsWithParts, log }) => {
+    ({
+      draw,
+      layout,
+      endsWithPieces,
+      startsWithParts,
+      expectsWorkingBeforeBox,
+      log,
+    }) => {
       const { root, pieces, logs } = draw();
 
       expect(root.dataset.layout).toBe(layout);
@@ -232,6 +301,12 @@ describe('composer surface parts', () => {
       }
       if (startsWithParts) {
         expect(root.children[0]?.className).toBe('chat-composer-parts');
+      }
+      if (expectsWorkingBeforeBox) {
+        const [box] = pieces;
+        expect(root.children[root.children.indexOf(box) - 1]?.className).toBe(
+          'chat-working-slot',
+        );
       }
       expect(logs.filter((line) => line.includes('failed'))).toEqual(
         log === null ? [] : [log],
@@ -263,7 +338,12 @@ describe('composer surface parts', () => {
       'first',
       'second',
     ]);
-    expect(panel.children.indexOf(box)).toBeGreaterThan(0);
+    const workingSlot = panel.querySelector('.chat-working-slot');
+    const slotAt =
+      workingSlot === null ? -1 : panel.children.indexOf(workingSlot);
+    expect(slotAt).toBeGreaterThan(0);
+    expect(panel.children.indexOf(box)).toBeGreaterThan(slotAt);
+    expect(workingSlot?.hidden).toBe(true);
     expect(firstDraw).toEqual(['build:first:row-1', 'build:second:row-1']);
     expect(record.slice(firstDraw.length)).toEqual([
       'dispose:first:row-1',
@@ -521,5 +601,195 @@ describe('composer surface parts', () => {
     expect(newRoot.dataset.layout).toBe(USER_LAYOUT);
     expect(newRoot.children.filter((child) => child === box)).toEqual([box]);
     expect(oldRoot.contains(box)).toBe(false);
+  });
+});
+
+const userEntry = (id: string, at: number): ChatEntry => ({
+  kind: 'user',
+  id,
+  at,
+  text: 'ask',
+  images: [],
+  raw: [],
+});
+
+const readEntry = (id: string, at: number, running = false): ChatEntry => ({
+  kind: 'tool',
+  id,
+  at,
+  agentId: 'main',
+  toolUseId: `use-${id}`,
+  name: 'Read',
+  input: { file_path: `/repo/${id}.ts` },
+  summary: 'Read a file',
+  result: running ? null : { text: 'done', isError: false },
+  raw: [],
+});
+
+const resultEntry = (id: string, at: number): ChatEntry => ({
+  kind: 'result',
+  id,
+  at,
+  stopReason: 'end_turn',
+  costUsd: null,
+  durationMs: null,
+  raw: [],
+});
+
+describe('composer surface activity dock', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  // A surface over `user` whose composer is drawn into a fresh tab, and its
+  // working slot.
+  function setUpSurface(user: ChatLayout | null) {
+    const setUp = surfaceDeps(user);
+    const surface = createComposerSurface(setUp.deps, {
+      sessionId: 'row-1',
+      box: asHtml(boxWithEditor()),
+      removeImage: () => undefined,
+    });
+    const tab = asHtml(new FakeElement('div'));
+    const drawComposer = () => surface.drawComposer(tab, composerInput(true));
+    const panel = asFake(drawComposer());
+    const slot = panel.querySelector('.chat-working-slot');
+    if (slot === null) {
+      throw new Error('the composer placed no working slot');
+    }
+    return { ...setUp, surface, slot, drawComposer };
+  }
+
+  // A user `working` part anchoring the `newSession` hint in its root, so its
+  // draw's dispose shows on that anchor; its update throws when
+  // `throwsOnUpdate`.
+  function userWorking(throwsOnUpdate = false): ChatLayout['working'] {
+    return (parent, _input, kit) => {
+      const root = rootIn(parent);
+      kit.keyHint(root, 'newSession');
+      return {
+        element: root,
+        update: throwsOnUpdate
+          ? () => {
+              throw new Error('broken update');
+            }
+          : undefined,
+      };
+    };
+  }
+
+  it('working_SetTurn_LiveThenDoneThenHidden', () => {
+    const { surface, slot } = setUpSurface(null);
+    const asked = [userEntry('u1', 1000), readEntry('t1', 2000, true)];
+    const answered = [
+      userEntry('u1', 1000),
+      readEntry('t1', 2000),
+      resultEntry('r1', 66000),
+    ];
+    const read = () => ({
+      hidden: slot.hidden,
+      classes: slot.children.map((child) => child.className),
+      line:
+        slot.querySelector('.chat-working-action')?.textContent ??
+        slot.querySelector('.chat-working-done')?.textContent ??
+        null,
+    });
+
+    surface.setTurn(asked, true);
+    const live = read();
+    surface.setTurn(answered, false);
+    const done = read();
+    surface.setTurn([...answered, userEntry('u2', 70000)], false);
+    const hidden = read();
+
+    expect([live, done, hidden]).toEqual([
+      { hidden: false, classes: ['chat-working'], line: 'Read t1.ts' },
+      {
+        hidden: false,
+        classes: ['chat-working is-done'],
+        line: 'Done · 1m 05s · Read 1',
+      },
+      { hidden: true, classes: [], line: null },
+    ]);
+  });
+
+  it('working_UserUpdateThrows_RedrawsWithDefault', () => {
+    const { surface, slot, logs } = setUpSurface({
+      working: userWorking(true),
+    });
+
+    surface.setTurn([userEntry('u1', 1000), readEntry('t1', 2000, true)], true);
+    const firstLayout = slot.children[0]?.dataset.layout;
+    surface.setTurn(
+      [
+        userEntry('u1', 1000),
+        readEntry('t1', 2000),
+        readEntry('t2', 3000, true),
+      ],
+      true,
+    );
+
+    expect(firstLayout).toBe(USER_LAYOUT);
+    expect(slot.children.map((child) => child.dataset.layout)).toEqual([
+      'default',
+    ]);
+    expect(logs).toContain(
+      `layout ${USER_LAYOUT} working update failed: broken update`,
+    );
+  });
+
+  it('working_LayoutChange_RedrawsFreshWithTheNewLayout', () => {
+    const { deps, surface, slot, drawComposer } = setUpSurface(null);
+    surface.setTurn([userEntry('u1', 1000), readEntry('t1', 2000, true)], true);
+    const firstLayout = slot.children[0]?.dataset.layout;
+
+    deps.layouts.set(
+      withUser<ChatLayout>(defaultLayout, { working: userWorking() }),
+    );
+    drawComposer();
+
+    expect(firstLayout).toBe('default');
+    expect(slot.children.map((child) => child.dataset.layout)).toEqual([
+      USER_LAYOUT,
+    ]);
+  });
+
+  it('working_DefaultDrawThrows_HidesTheSlotAndLogs', () => {
+    vi.spyOn(defaultLayout, 'working').mockImplementation(() => {
+      throw new Error('broken default');
+    });
+    const { surface, slot, logs, armed, drawComposer } = setUpSurface(null);
+    const failures = () =>
+      logs.filter(
+        (line) => line === 'default layout working failed: broken default',
+      ).length;
+
+    surface.setTurn([userEntry('u1', 1000), readEntry('t1', 2000, true)], true);
+    [...armed.values()].forEach((run) => run());
+    const failuresBeforeComposerDraw = failures();
+    drawComposer();
+
+    expect(slot.hidden).toBe(true);
+    expect(slot.children).toEqual([]);
+    expect([failuresBeforeComposerDraw, failures()]).toEqual([1, 2]);
+  });
+
+  it('working_Dispose_DisposesThePartAndClearsTheTick', () => {
+    const { surface, armed, anchors } = setUpSurface({
+      working: userWorking(),
+    });
+    surface.setTurn([userEntry('u1', 1000), readEntry('t1', 2000, true)], true);
+    const armedWhileLive = armed.size;
+    const partAnchor = () =>
+      anchors.find((anchor) => anchor.command === chatCommand('newSession'));
+    const disposedWhileLive = partAnchor()?.isDisposed;
+
+    surface.dispose();
+
+    expect([armedWhileLive, disposedWhileLive]).toEqual([1, false]);
+    expect(partAnchor()?.isDisposed).toBe(true);
+    expect(armed.size).toBe(0);
   });
 });

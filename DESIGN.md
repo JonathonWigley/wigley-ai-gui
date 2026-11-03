@@ -291,7 +291,8 @@ The primitives, each a builder in `src/shared/page/ui/`:
   changes it.
 - **InputFrame** (`inputFrame`): the frame around a text box.
 - **Row** (`row`): a list or tree row, density `list` or `tree`.
-- **Tabs** (`tabStrip`, `tab`): the strip on a sheet's top edge, and one tab.
+- **Tabs** (`tabStrip`, `tab`): the strip on a sheet's top edge, and one tab. The `ui-tabs--scroll` strip scrolls
+  sideways with no scroll bar when too narrow for its tabs, each tab keeping its full width.
 - **Sheet** (`sheet`): the solid L2 content sheet.
 - **Split** (`createSplit`): two panes with a drag handle, each pane with a least width and no most
   width; the start pane's width lives in `uiState`, written when a drag ends and on each keyboard resize. The

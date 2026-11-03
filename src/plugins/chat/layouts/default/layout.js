@@ -1,14 +1,14 @@
 // @ts-check
 
 // The built-in chat look: the entries, the activity lines (each one summary
-// line, live or finished), the working block, the pending messages' rows, the
+// line, live or finished), the activity dock, the pending messages' rows, the
 // composer, the list rows, the dialogs' bodies and the image viewer. Every
 // collapsible row's body is built on its first open and kept, so an update
 // refills it in place whether it is open or closed.
 
-// The tool calls the working block's box lists; a user layout sets its own
+// The tool calls the activity dock's box lists; a user layout sets its own
 // box's length.
-const WORKING_ACTION_LINES = 5;
+const WORKING_ACTION_LINES = 3;
 
 // The input field holding the file a tool acts on, by tool name.
 /** @type {Record<string, string | undefined>} */
@@ -241,14 +241,42 @@ function workingBox(tools) {
   return box;
 }
 
-// The header (time, state), then, once the turn has a tool call, the box and
-// the tool counts.
+// The finished turn's one line: the word, the time, the cost when known, then
+// each tool's count, all joined with ` · `.
+/**
+ * @param {import('../layout').DoneWorkingInput} input
+ * @param {import('../layout').BaseKit} kit
+ */
+function doneLine(input, kit) {
+  const isFinished =
+    input.stopReason === 'end_turn' || input.stopReason === 'success';
+  const parts = [
+    isFinished ? 'Done' : input.stopReason,
+    kit.duration(input.endedAt - input.startedAt),
+  ];
+  if (input.costUsd !== null) {
+    parts.push(`$${input.costUsd.toFixed(2)}`);
+  }
+  for (const [name, count] of toolCounts(input.steps)) {
+    parts.push(`${name} ${count}`);
+  }
+  return parts.join(' · ');
+}
+
+// A finished turn's one line; a running turn's header (time, state), then,
+// once the turn has a tool call, the box and the tool counts.
 /**
  * @param {HTMLElement} block
  * @param {import('../layout').WorkingInput} input
+ * @param {import('../layout').BaseKit} kit
  */
-function fillWorking(block, input) {
+function fillWorking(block, input, kit) {
   block.replaceChildren();
+  block.classList.toggle('is-done', input.state === 'done');
+  if (input.state === 'done') {
+    block.append(el('div', 'chat-working-done', doneLine(input, kit)));
+    return;
+  }
   const head = el('div', 'chat-working-head');
   head.append(
     el('span', 'chat-working-time', turnTime(input.now - input.startedAt)),
@@ -324,6 +352,7 @@ function showImage(picture, counter, input) {
 
 /** @type {import('../layout').CompleteChatLayout} */
 const layout = {
+  activityInTranscript: false,
   entries: {
     user(parent, input, kit) {
       const entry = root(parent, 'chat-entry chat-user');
@@ -494,14 +523,15 @@ const layout = {
       },
     };
   },
-  // Every update draws the block afresh, as `activity` does.
-  working(parent, input) {
+  // The activity dock: every update draws it afresh, as `activity` does; a
+  // `done` input draws the finished turn's one line.
+  working(parent, input, kit) {
     const block = root(parent, 'chat-working');
-    fillWorking(block, input);
+    fillWorking(block, input, kit);
     return {
       element: block,
       update(next) {
-        fillWorking(block, next);
+        fillWorking(block, next, kit);
       },
     };
   },
@@ -520,12 +550,13 @@ const layout = {
       },
     };
   },
-  // The glass panel: other plugins' parts, the attached images, the box, then
-  // the status line.
+  // The glass panel: other plugins' parts, the working slot, the attached
+  // images, the box, then the status line.
   composer(parent, _input, kit) {
     const panel = kit.floatingPanel(parent);
     panel.classList.add('chat-composer');
     kit.contributedParts(panel);
+    kit.working(panel);
     kit.attachments(panel);
     kit.box(panel);
     kit.statusLine(panel);

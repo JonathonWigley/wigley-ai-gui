@@ -296,6 +296,7 @@ describe('createFakeAgentHarness', () => {
       kind: 'tool',
       id: 'tool-1',
       at: 1000,
+      agentId: MAIN_AGENT_ID,
       toolUseId: 'fake-tool-1',
       name: 'Bash',
       input: { command: 'echo fake' },
@@ -408,6 +409,7 @@ describe('createFakeAgentHarness', () => {
         kind: 'tool',
         id: 'tool-1',
         at: 1000,
+        agentId: MAIN_AGENT_ID,
         toolUseId: 'fake-permission-1',
         name: 'Bash',
         input: { command: 'rm fake.txt' },
@@ -860,6 +862,20 @@ describe('createFakeAgentHarness', () => {
       ['tool', 'agent-1-1-tool', 'fake'],
       ['tool', 'agent-1-2-tool', undefined],
       ['tool', 'agent-1-2-tool', 'fake'],
+    ]);
+    // Each tool entry as `[id, agentId]`.
+    expect(
+      heard.flatMap(([, payload]) => {
+        const entry = payload as ChatEntry;
+        return entry.kind === 'tool' ? [[entry.id, entry.agentId]] : [];
+      }),
+    ).toEqual([
+      ['agent-1-1', MAIN_AGENT_ID],
+      ['agent-1-2', MAIN_AGENT_ID],
+      ['agent-1-1-tool', 'fake-agent-1-1'],
+      ['agent-1-1-tool', 'fake-agent-1-1'],
+      ['agent-1-2-tool', 'fake-agent-1-2'],
+      ['agent-1-2-tool', 'fake-agent-1-2'],
     ]);
     expect(heard[2][1]).toMatchObject({
       toolUseId: 'fake-agent-1-1',

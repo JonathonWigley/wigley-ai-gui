@@ -1,7 +1,9 @@
-import type { ChatImage } from '../../../contracts/agent';
+import type { ChatEntry, ChatImage } from '../../../contracts/agent';
+import type { Clock, Timers } from '../../../contracts/ambient';
 import type { CommandId } from '../../../contracts/commands';
 import type { Disposable } from '../../../contracts/disposable';
 import type { Log } from '../../../contracts/log';
+import { errorText } from '../../../shared/error-text';
 import {
   type ContributedPartsPlace,
   type PartStore,
@@ -30,7 +32,9 @@ import type {
   ComposerKit,
   PartView,
   StatusLineKit,
+  WorkingInput,
 } from '../layouts/layout';
+import { createActivityDock } from './activity-dock';
 import { imageUrl } from './attachments';
 import {
   type ChatLayouts,
@@ -43,13 +47,16 @@ import { controlCommand } from './control-commands';
 
 // `run` runs a command, as the chips and Send do; `composerParts` holds the
 // parts other plugins added above every composer, `statusParts` those added
-// to every status line.
+// to every status line; `clock` and `timers` tick the activity dock's live
+// time.
 export interface ComposerSurfaceDeps extends SurfaceKitDeps {
   layouts: ChatLayouts;
   run(command: CommandId): void;
   composerParts: Pick<PartStore<ChatComposerPart>, 'parts'>;
   statusParts: Pick<PartStore<ChatStatusPart>, 'parts'>;
   log: Log;
+  clock: Clock;
+  timers: Timers;
 }
 
 // One Chat tab's app-owned pieces: the session whose parts the composer
@@ -62,14 +69,18 @@ export interface ComposerPieces {
 }
 
 // One Chat tab's composer, drawn through the chat layout. The box, the
-// attachments and status line slots, the status parts' slot and the status
-// line's key-holding parts are built once and placed again by each draw;
+// working, attachments and status line slots, the status parts' slot and the
+// status line's key-holding parts are built once and placed again by each draw;
 // other plugins' composer parts and status parts are built again by each
-// composer draw, not by a status line draw.
+// composer draw, not by a status line draw. The working slot holds the
+// activity dock: the `working` part, drawn with what the tab's activity dock
+// shows and hidden while it shows nothing or while the default `working` draw
+// has failed since the last composer draw.
 export interface ComposerSurface {
   // Draws the composer into `parent` in place of its last draw, then the
-  // status line with `input` and the last attached images; returns the
-  // composer's root.
+  // status line with `input`, the last attached images and the activity dock
+  // afresh, retrying a failed default `working` draw; returns the composer's
+  // root.
   drawComposer(parent: HTMLElement, input: ComposerInput): HTMLElement;
   // Runs the composer's update with `input`, then draws the status line with
   // it in place of its last draw. Returns false, drawing no status line, when
@@ -79,7 +90,12 @@ export interface ComposerSurface {
   // Draws the attachments in place of their last draw; the slot hides while
   // `images` is empty.
   drawAttachments(images: readonly ChatImage[]): void;
-  // Disposes every draw and the status line's anchors.
+  // Hands the activity dock the session's entries after a change and whether
+  // the session's turn is under way: working, or waiting on a permission
+  // answer.
+  setTurn(entries: readonly ChatEntry[], working: boolean): void;
+  // Disposes every draw, the activity dock's tick and the status line's
+  // anchors.
   dispose(): void;
 }
 
@@ -111,6 +127,8 @@ export function createComposerSurface(
   deps: ComposerSurfaceDeps,
   pieces: ComposerPieces,
 ): ComposerSurface {
+  const workingSlot = element('div', 'chat-working-slot');
+  workingSlot.hidden = true;
   const attachmentsSlot = element('div', 'chat-attachments-slot');
   attachmentsSlot.hidden = true;
   const statusLineSlot = element('div', 'chat-status-line-slot');
@@ -119,10 +137,56 @@ export function createComposerSurface(
   const composerDraws = chatPartDraws(deps.layouts, 'composer', deps.log);
   const statusLineDraws = chatPartDraws(deps.layouts, 'statusLine', deps.log);
   const attachmentsDraws = chatPartDraws(deps.layouts, 'attachments', deps.log);
+  const workingDraws = chatPartDraws(deps.layouts, 'working', deps.log);
   let composer: DrawnPart<BuiltPart<ComposerInput>> | null = null;
   let statusLine: DrawnPart<BuiltPart<ComposerInput>> | null = null;
   let attachments: DrawnPart<BuiltPart<AttachmentsInput>> | null = null;
+  let workingPart: DrawnPart<BuiltPart<WorkingInput>> | null = null;
   let images: readonly ChatImage[] = [];
+  let isWorkingFailed = false;
+
+  const clearWorking = () => {
+    workingPart?.dispose();
+    workingPart = null;
+    workingSlot.replaceChildren();
+    workingSlot.hidden = true;
+  };
+  // Draws the `working` part afresh with `input`, or leaves the slot hidden
+  // for null; a default that fails is logged once and leaves it hidden until
+  // the next composer draw.
+  const drawWorking = (input: WorkingInput | null) => {
+    clearWorking();
+    if (input === null || isWorkingFailed) {
+      return;
+    }
+    workingSlot.hidden = false;
+    try {
+      workingPart = workingDraws.draw(workingSlot, (builder, at, rollback) => {
+        const view = builder(at, input, surfaceBaseKit(deps, 'chat', rollback));
+        return { element: view.element, view };
+      });
+    } catch (error) {
+      deps.log('chat', `default layout working failed: ${errorText(error)}`);
+      isWorkingFailed = true;
+      clearWorking();
+    }
+  };
+  // Runs the drawn part's update with `input`; a part with no update, or
+  // whose update threw, is drawn again.
+  const showWorking = (input: WorkingInput | null) => {
+    const isUpdated =
+      input !== null &&
+      workingPart !== null &&
+      workingDraws.update(workingPart, input) === 'ran';
+    if (!isUpdated) {
+      drawWorking(input);
+    }
+  };
+  const dock = createActivityDock({
+    clock: deps.clock,
+    timers: deps.timers,
+    changed: showWorking,
+  });
 
   const surface: ComposerSurface = {
     drawComposer(parent, input) {
@@ -130,6 +194,7 @@ export function createComposerSurface(
       composer?.built.element.remove();
       composer = composerDraws.draw(parent, (builder, at, rollback) => {
         const box = appSlot(pieces.box, 'box', rollback);
+        const workingAt = appSlot(workingSlot, 'working', rollback);
         const attachmentsAt = appSlot(attachmentsSlot, 'attachments', rollback);
         const statusLineAt = appSlot(statusLineSlot, 'statusLine', rollback);
         statusPartsSlot.replaceChildren();
@@ -142,11 +207,17 @@ export function createComposerSurface(
           rollback,
         );
         let arePartsPlaced = false;
+        let isWorkingPlaced = false;
         const kit: ComposerKit = {
           ...surfaceBaseKit(deps, 'chat', rollback),
           floatingPanel: (panelParent) =>
             appended(panelParent, floatingPanel()),
           box: (boxParent) => box.place(boxParent),
+          working(slotParent) {
+            const placed = workingAt.place(slotParent);
+            isWorkingPlaced = true;
+            return placed;
+          },
           attachments: (slotParent) => attachmentsAt.place(slotParent),
           statusLine: (slotParent) => statusLineAt.place(slotParent),
           contributedParts(partsParent) {
@@ -170,10 +241,16 @@ export function createComposerSurface(
           root.prepend(kit.contributedParts(root));
         }
         box.placeIfLeftOut(root);
+        if (!isWorkingPlaced) {
+          pieces.box.parentNode?.insertBefore(workingSlot, pieces.box);
+          rollback.recordBox(() => workingSlot.remove());
+        }
         return { element: root, view };
       });
       drawStatusLinePart(input);
       surface.drawAttachments(images);
+      isWorkingFailed = false;
+      drawWorking(dock.input());
       return composer.built.element;
     },
     drawStatusLine(input) {
@@ -218,10 +295,15 @@ export function createComposerSurface(
         },
       );
     },
+    setTurn(entries, working) {
+      dock.set(entries, working);
+    },
     dispose() {
+      dock.dispose();
       composer?.dispose();
       statusLine?.dispose();
       attachments?.dispose();
+      workingPart?.dispose();
       disposeAnchors(parts.anchors);
     },
   };

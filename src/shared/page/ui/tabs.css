@@ -5,6 +5,17 @@
   background: transparent;
 }
 
+/* A strip too narrow for its tabs scrolls sideways with no scroll bar, each
+   tab keeping its full width, so no tab is clipped. */
+.ui-tabs--scroll {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.ui-tabs--scroll > .ui-tab {
+  flex: none;
+}
+
 .ui-tab {
   display: inline-flex;
   align-items: center;

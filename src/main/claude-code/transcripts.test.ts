@@ -248,6 +248,7 @@ describe('transcriptEntries', () => {
         kind: 'tool',
         id: 'history:a3-0',
         at: 0,
+        agentId: 'main',
         toolUseId: 't1',
         name: 'Bash',
         input: { command: 'ls' },

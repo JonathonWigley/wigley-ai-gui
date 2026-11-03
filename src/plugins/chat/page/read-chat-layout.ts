@@ -59,19 +59,27 @@ const PART_SET: Record<ChatPartName, true> = {
 };
 
 // The chat layout a user's `layout.js` module exports as its default. Every
-// part and every entry builder may be left out. Throws naming `composerBar`,
-// with the `statusLine` part it became, then the first key that is no part
-// (`entries.<key>` for an entry kind), then the first part or builder that is
-// not a function, or `entries` when it is not an object.
+// part, the `activityInTranscript` flag and every entry builder may be left
+// out. Throws naming `composerBar`, with the `statusLine` part it became, then
+// the first key that is no part, then the first part that is not a function,
+// then `activityInTranscript` when it is not a boolean, then `entries` when it
+// is not an object, then the first `entries.<key>` that is no entry kind or
+// not a function.
 export function readChatLayout(module: unknown, name: string): ChatLayout {
   const layout = readLayoutModule(module, name);
-  const { entries, ...parts } = layout;
+  const { entries, activityInTranscript, ...parts } = layout;
   if (Object.hasOwn(parts, 'composerBar')) {
     throw new Error(
       `layout ${name}: composerBar is not a layout part; it became the statusLine part`,
     );
   }
   requireLayoutParts(parts, name, PART_SET);
+  if (
+    activityInTranscript !== undefined &&
+    typeof activityInTranscript !== 'boolean'
+  ) {
+    throw new Error(`layout ${name}: activityInTranscript is not a boolean`);
+  }
   if (entries !== undefined) {
     if (!isRecord(entries)) {
       throw new Error(`layout ${name}: entries is not an object`);

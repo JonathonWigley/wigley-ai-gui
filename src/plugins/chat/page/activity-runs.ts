@@ -1,4 +1,5 @@
 import type { ChatEntry } from '../../../contracts/agent';
+import type { StepInput } from '../layouts/layout';
 
 // A step is a tool call, a thinking block or a raw entry; a run is a maximal
 // sequence of consecutive steps, ended by any other kind of entry.
@@ -10,6 +11,17 @@ export type StepEntry = Extract<
 export function isStep(entry: ChatEntry): entry is StepEntry {
   return (
     entry.kind === 'tool' || entry.kind === 'thinking' || entry.kind === 'raw'
+  );
+}
+
+// Whether any step is replaced, added or gone, by identity.
+export function isStepsChanged(
+  last: readonly StepInput[],
+  next: readonly StepInput[],
+): boolean {
+  return (
+    last.length !== next.length ||
+    last.some((step, index) => step !== next[index])
   );
 }
 

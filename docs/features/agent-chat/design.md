@@ -212,13 +212,13 @@ interview on 2026-10-23; this file is the record of both.
   - The key log lines are `focused activity line`, `expanded activity line` and `collapsed activity line`; a step row
     logs as its entry kind does (`focused tool entry`).
 - **Activity dock**: one row in the floating composer, under the composer parts (the workflow strip, the agent strip)
-  and above the attached images and the box, drawn by the layout's `working` part into the composer's `working` slot.
-  It shows the running turn while the session works on one (the harness reports `working`), then the finished turn's
-  one line until the user sends the next message. While the session is idle with no finished turn to show, the slot
-  is hidden and takes no space. It is display only: not a cursor stop, and it adds no key. It counts only the main
-  agent's tool calls (a `tool` entry's `agentId` is `main`); a subagent's calls show in its agent strip box.
-  Settled from the user's sketch in an interview on 2026-11-02, and moved into the composer in a second interview
-  that day (`docs/features/chat-bar/plan-activity-dock/`).
+  and above the attached images and the box, drawn by the layout's `working` part into the composer's `working` slot. It
+  shows the running turn while the session works on one or waits on a permission answer (the harness reports `working`
+  or `waiting`), then the finished turn's one line until the user sends the next message. While the session is idle with
+  no finished turn to show, the slot is hidden and takes no space. It is display only: not a cursor stop, and it adds no
+  key. It counts only the main agent's tool calls (a `tool` entry's `agentId` is `main`); a subagent's calls show in its
+  agent strip box. Settled from the user's sketch in an interview on 2026-11-02, and moved into the composer in a second
+  interview that day (`docs/features/chat-bar/plan-activity-dock/`).
   - **Header**: the turn's time, the state word, and `…`: `1:05 Working…`. The time counts from the turn's first
     entry to now: the later of the last user entry (a queued message from when it was sent) and the entry after the
     last result, so a turn Claude starts on its own after a background task counts from its own start. While the
@@ -246,6 +246,9 @@ interview on 2026-10-23; this file is the record of both.
   - **No live cost**: Claude reports cost only when the turn ends (`claude-stream.md` § Result), so only the
     finished line shows it. A live estimate from token counts and a price table was rejected for keeping Claude's
     prices out of the app.
+  - **Short tab**: when the composer outgrows its cap, the composer parts give up height first, then the dock, down
+    to one line, so the box and the status line keep their full height inside the tab. The built-in layout drops
+    whole parts from the end: the tool counts, then the action box, keeping the header or the finished line.
 - **Pending messages**: a message sent while the harness reports the session's turn running (the process runs and
   its own activity is not `idle`) is not written to the agent. A turn Claude runs on its own after a background task
   ends counts as running too: the session shows working through it, its messages wait, and the turn-finished alert

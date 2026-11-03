@@ -4,12 +4,18 @@ import { toolSummary } from './tool-summary';
 
 export type ToolEntry = Extract<EntryDraft, { kind: 'tool' }>;
 
-// The entry for a `tool_use` block, with no result yet.
-export function toolUseEntry(id: string, block: Json, raw: unknown): ToolEntry {
+// The entry for a `tool_use` block made by agent `agentId`, with no result yet.
+export function toolUseEntry(
+  id: string,
+  block: Json,
+  raw: unknown,
+  agentId: string,
+): ToolEntry {
   const name = asString(block.name);
   return {
     kind: 'tool',
     id,
+    agentId,
     toolUseId: asString(block.id),
     name,
     input: block.input,
