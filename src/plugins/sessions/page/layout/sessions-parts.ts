@@ -34,6 +34,8 @@ import type {
   PaneInput,
   PaneKit,
   PanePart,
+  RenameDialogInput,
+  RenameDialogKit,
   RowKit,
   SessionRowInput,
   SessionsKit,
@@ -92,6 +94,13 @@ export interface SessionsParts {
     parent: HTMLElement,
     input: EmptyTextInput,
     pickHint: HTMLElement,
+  ): DrawnPart<SessionsPart>;
+  // `textBox` is the dialog's own input frame, which `kit.textBox` moves in;
+  // the part's element starts with it when the layout leaves it out.
+  renameDialog(
+    parent: HTMLElement,
+    input: RenameDialogInput,
+    textBox: HTMLElement,
   ): DrawnPart<SessionsPart>;
 }
 
@@ -303,6 +312,20 @@ export function createSessionsParts(deps: SessionsPartsDeps): SessionsParts {
           pickHint: (hintParent) => slot.place(hintParent),
         };
         return builder(into, input, kit);
+      }),
+    renameDialog: (parent, input, textBox) =>
+      parts.draw('renameDialog', parent, (builder, into, rollback) => {
+        const slot = appSlot(textBox, 'textBox', rollback);
+        const kit: RenameDialogKit = {
+          ...sessionsKit(rollback),
+          textBox: (boxParent) => slot.place(boxParent),
+        };
+        const body = builder(into, input, kit);
+        slot.placeIfLeftOut(
+          requireElementIn(into, body.element, 'renameDialog'),
+          'start',
+        );
+        return body;
       }),
   };
 }

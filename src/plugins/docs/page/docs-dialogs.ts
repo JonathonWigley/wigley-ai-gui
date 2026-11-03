@@ -38,11 +38,8 @@ import {
   trashQuestion,
 } from './docs-state';
 import type { AppSlot } from '../../../shared/page/layout-host/app-slot';
-import {
-  type DocsParts,
-  type DrawnPart,
-  keepingFocusAndScroll,
-} from './layout/docs-parts';
+import { type DocsParts, type DrawnPart } from './layout/docs-parts';
+import { keepingFocusAndScroll } from '../../../shared/page/layout-host/keeping-focus';
 import { textBoxInput } from '../../../shared/page/text-box';
 
 // The scopes the dialogs push over the view's pane scope.

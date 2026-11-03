@@ -20,6 +20,7 @@ import type { Layout } from '../layouts/layout';
 import { shownTitle, titleLimit } from '../session-title';
 import {
   createSessionsParts,
+  type SessionsParts,
   type SessionsPartsDeps,
 } from './layout/sessions-parts';
 import { type PaneSessions, shownElsewhere } from './pane-sessions';
@@ -96,10 +97,12 @@ export interface SessionPanes {
 // `SessionsPageExports.setActivity` says, drawing the side bar again only when
 // the row's shown activity changed; `render` drops the activities of the rows
 // that left. `redrawRows` draws the side bar's rows again, for a changed
-// title length.
+// title length. `parts` draws through the sessions layout the view's
+// `setLayouts` sets, for the mode's dialogs.
 export interface SessionsView {
   element: HTMLElement;
   sideBar: HTMLElement;
+  parts: Pick<SessionsParts, 'renameDialog'>;
   tabs: SessionTabsView;
   panes: SessionPanes;
   render(state: SessionsState): void;
@@ -258,6 +261,7 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
   return {
     element: root,
     sideBar: sidebar.element,
+    parts,
     tabs,
     panes,
     render(next) {

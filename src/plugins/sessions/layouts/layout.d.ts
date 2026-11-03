@@ -32,6 +32,9 @@ import type { BaseKit, DotStatus } from '../../../shared/page/layout-host/kit';
 // The tab bodies, the sheet that holds them and the tab elements other plugins add stay the app's.
 // Every key prompt here has no scope, so it shows in every scope; a layout that leaves a kit prompt out leaves that
 // key unprompted.
+//
+// Dialogs. The Dialog primitive (scrim, panel and title) stays the app's; a part draws the dialog's body.
+// `renameDialog` draws the rename dialog's body each time the dialog opens and again whenever its input changes.
 
 // One session row. `title` is the session's title as the row shows it (the user's, else the agent's, else the first
 // message cut to the title length), null for none; `label` is the session's folder label (`gamma 2`); `harness` is
@@ -71,6 +74,13 @@ export interface SessionTabInput {
 export interface EmptyTextInput {
   text: string;
   hasHint: boolean;
+}
+
+// The rename dialog's body, scope `sessions.rename`. `problem` is why the typed title was refused, null for none;
+// `hint` says what an empty box does.
+export interface RenameDialogInput {
+  problem: string | null;
+  hint: string;
 }
 
 // A part's root, appended to `parent`.
@@ -141,6 +151,12 @@ export interface EmptyTextKit extends SessionsKit {
   pickHint(parent: HTMLElement): HTMLElement;
 }
 
+export interface RenameDialogKit extends SessionsKit {
+  // The InputFrame holding the app's title box; appended first when left out. A second call throws
+  // `textBox placed twice`, so the part draws with `default`.
+  textBox(parent: HTMLElement): HTMLElement;
+}
+
 export interface Layout {
   // The side bar: a header over the session rows.
   sideBar?(parent: HTMLElement, kit: SideBarKit): SideBarPane;
@@ -160,6 +176,12 @@ export interface Layout {
     parent: HTMLElement,
     input: EmptyTextInput,
     kit: EmptyTextKit,
+  ): SessionsPart;
+  // The rename dialog's body: the title box, why a title was refused, then the hint.
+  renameDialog?(
+    parent: HTMLElement,
+    input: RenameDialogInput,
+    kit: RenameDialogKit,
   ): SessionsPart;
 }
 

@@ -607,12 +607,23 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       log('sessions', `showed ${tab.title} tab in ${labelOf(sessionId)}`);
     };
 
+    const renameDialog = createRenameDialog({
+      pushScope: () => api.keys.pushScope('rename'),
+      setUserTitle: (sessionId, title) =>
+        api.channel.invoke('setUserTitle', sessionId, title),
+      titleMaxLength: () => api.settings().titleMaxLength,
+      parts: view.parts,
+      log,
+    });
+    api.areas.overlay.contribute(renameDialog.element);
+
     api.layouts.show<Layout>({
       defaultLayout,
       read: readSessionsLayout,
       userLayout: () => api.settings().layout,
       setLayouts: (shown) => {
         view.setLayouts(shown);
+        renameDialog.redraw();
         checkVisible(true);
       },
     });
@@ -627,15 +638,6 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       logSource: sessionsManifest.id,
     });
     api.areas.overlay.contribute(picker.element);
-
-    const renameDialog = createRenameDialog({
-      pushScope: () => api.keys.pushScope('rename'),
-      setUserTitle: (sessionId, title) =>
-        api.channel.invoke('setUserTitle', sessionId, title),
-      titleMaxLength: () => api.settings().titleMaxLength,
-      log,
-    });
-    api.areas.overlay.contribute(renameDialog.element);
 
     // Acts on the focused pane's session, as `closeSession` does.
     const renameSession = () => {

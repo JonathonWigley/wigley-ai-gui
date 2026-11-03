@@ -7,7 +7,8 @@
 // then other plugins' row parts (`contributedParts`) under them,
 // each chat pane's frame and focus edges, the tab bar's prompts around its
 // strip, other plugins' bar parts (`contributedParts`) after them, then its
-// close prompt and pane controls, and each tab's icon with no label, in the
+// close prompt and pane controls, each tab's icon with no label, and the
+// rename dialog's title box over why a title was refused and the hint, in the
 // class names `sessions.css` styles.
 
 /** @type {import('../layout').CompleteLayout} */
@@ -83,6 +84,16 @@ const layout = {
     if (input.hasHint) {
       kit.pickHint(text);
     }
+    return { element };
+  },
+
+  renameDialog(parent, input, kit) {
+    const element = kit.el(parent, 'div', 'session-rename');
+    kit.textBox(element);
+    if (input.problem !== null) {
+      kit.el(element, 'p', 'session-rename-problem', input.problem);
+    }
+    kit.el(element, 'p', 'session-rename-hint', input.hint);
     return { element };
   },
 };

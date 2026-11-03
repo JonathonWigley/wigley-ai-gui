@@ -280,6 +280,35 @@ describe('session rows', () => {
     },
   );
 
+  it('sessionsView_TitleLengthChanged_RedrawsRowsWithTheNewCut', () => {
+    let titleMaxLength = 40;
+    const { view, sideBar } = sessionsViewSetup(
+      undefined,
+      undefined,
+      () => titleMaxLength,
+    );
+    const row = sessionRow('s1');
+    view.render({
+      rows: [
+        {
+          ...row,
+          titles: {
+            ...row.titles,
+            firstMessage: 'Look into why the index skips symlinked folders',
+          },
+        },
+      ],
+      selectedSessionId: 's1',
+    });
+
+    titleMaxLength = 12;
+    view.redrawRows();
+
+    expect(cellText(drawnRows(sideBar)[0], 'ui-row-label')).toBe(
+      'Look into w…',
+    );
+  });
+
   it('sessionsView_RowTooltip_JoinsTitleLabelAndStatus', () => {
     const { view, sideBar } = sessionsViewSetup();
     view.render(titledState('Fix the build'));
