@@ -10,7 +10,7 @@ export const DEFAULT_PROFILES: ChatProfile[] = [
 
 export const chatManifest = definePlugin({
   id: 'chat',
-  dependsOn: ['sessions', 'keys'],
+  dependsOn: { main: ['sessions'], page: ['sessions', 'keys'] },
   commands: {
     newSession: { label: 'new session', group: 'sessions', runsIn: 'page' },
     focusBox: { label: 'type a message', group: 'box', runsIn: 'page' },

@@ -1,6 +1,7 @@
 import type { CommandId } from '../../contracts/commands';
 import type { Disposable } from '../../contracts/disposable';
 import type { ViewScope } from '../../contracts/keymap';
+import type { DependencyKey } from '../../contracts/plugin';
 
 // The page part's exports.
 
@@ -41,3 +42,8 @@ export interface KeysPageExports {
     options?: AnchorOptions,
   ): Disposable;
 }
+
+export const keysPageKey: DependencyKey<KeysPageExports, 'page', 'keys'> = {
+  id: 'keys',
+  process: 'page',
+};

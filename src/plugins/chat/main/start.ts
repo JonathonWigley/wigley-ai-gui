@@ -417,7 +417,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     };
     return {
       commands: {},
-      exports,
+      exports: () => exports,
       dispose: () => {
         chat.killAll();
         accounts.cancelRunning();

@@ -6,7 +6,10 @@ import { definePlugin } from '../../shared/define-plugin';
 // layout's key hints, and `chat` for its composer part and its self-test's launch.
 export const agentStripManifest = definePlugin({
   id: 'agent-strip',
-  dependsOn: ['agents', 'chat', 'sessions', 'keys'],
+  dependsOn: {
+    main: ['chat', 'sessions'],
+    page: ['agents', 'chat', 'sessions', 'keys'],
+  },
   commands: {
     prevBox: { label: 'previous box', group: 'agent strip', runsIn: 'page' },
     nextBox: { label: 'next box', group: 'agent strip', runsIn: 'page' },

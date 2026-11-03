@@ -280,7 +280,7 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
         halfPageUp: () => scrollFlowTab('halfPage', -1),
         openPreview: () => preview.press(),
       },
-      exports,
+      exports: () => exports,
     };
   },
 };

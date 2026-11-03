@@ -1,7 +1,7 @@
 // The agents plugin's records and its channel between its main and page parts.
 
 import type { Disposable } from '../../contracts/disposable';
-import type { ChannelShape } from '../../contracts/plugin';
+import type { ChannelShape, DependencyKey } from '../../contracts/plugin';
 
 // Whether a roster item is still running, or how it ended.
 export type RosterOutcome = 'running' | 'done' | 'failed';
@@ -59,6 +59,9 @@ export interface AgentsPageExports {
   roster(sessionId: string): Roster;
   onRosterChanged(listener: (sessionId: string) => void): Disposable;
 }
+
+export const agentsPageKey: DependencyKey<AgentsPageExports, 'page', 'agents'> =
+  { id: 'agents', process: 'page' };
 
 // Rosters are keyed by the app's sessionId (the session row's id). `rosters` returns every session's roster that
 // lists any item, finished ones included; `rosterChanged` carries a session's whole roster after each change, both

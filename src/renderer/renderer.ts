@@ -30,6 +30,7 @@ import { startPlugins } from '../shared/plugin-host';
 import { posixPaths } from '../shared/paths/posix-paths';
 import { windowsPaths } from '../shared/paths/windows-paths';
 import { qualify } from '../shared/plugin-manifests';
+import { createRegistrations } from '../shared/registrations';
 import { mountCodeColours } from './codemirror-vim/code-colours';
 import { announceNewProblems, createConfigPush } from './config-push';
 import { createCodeMirrorHighlighter } from './codemirror-vim/codemirror-highlighter';
@@ -258,9 +259,10 @@ async function start() {
       shell.setChromeLayout(shown.user);
     },
   });
-  const started = startPlugins(
+  const host = startPlugins(
     pageParts,
-    (part, dependency) => {
+    'page',
+    (part, context) => {
       const { id } = part.manifest;
       requireServedSettings(config, id);
       const started = part.start(
@@ -276,7 +278,8 @@ async function start() {
           services,
           uiState,
           run,
-          dependency,
+          dependency: context.dependency,
+          registrations: context.registrations,
           bus,
           layouts,
           paneTargets,
@@ -286,14 +289,20 @@ async function start() {
       const handlers: Record<string, (context: PageCommandContext) => void> =
         started.commands;
       for (const [short, handler] of Object.entries(handlers)) {
-        commands.register(qualify(id, short), handler);
+        context.registrations.track(
+          commands.register(qualify(id, short), handler),
+        );
       }
       return started;
     },
     manifests,
     pageLoadList,
   );
-  const keysExports = started.get(KEYS_PLUGIN_ID)?.exports;
+  // The core's own store for the chrome's view of keys, kept for the page load.
+  const shellRegistrations = createRegistrations();
+  const keysExports = host.started
+    .get(KEYS_PLUGIN_ID)
+    ?.exports?.(shellRegistrations);
   if (keysExports !== undefined) {
     chrome.setKeys(keysExports as BaseKitDeps['keys']);
     shell.setKeys(keysExports as BaseKitDeps['keys']);

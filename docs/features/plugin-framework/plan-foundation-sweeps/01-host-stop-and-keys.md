@@ -1,6 +1,6 @@
 # 01 — Host stop, registrations and dependency keys
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)

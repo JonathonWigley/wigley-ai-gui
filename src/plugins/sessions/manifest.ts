@@ -8,7 +8,7 @@ import { definePlugin } from '../../shared/define-plugin';
 // the layout the side bar, the panes and the tab bars draw with.
 export const sessionsManifest = definePlugin({
   id: 'sessions',
-  dependsOn: ['keys'],
+  dependsOn: { main: [], page: ['keys'] },
   commands: {
     showMode: {
       label: 'Sessions mode · toggle the sidebar',

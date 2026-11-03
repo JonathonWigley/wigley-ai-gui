@@ -283,7 +283,7 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
     );
     return {
       commands: {},
-      exports,
+      exports: () => exports,
       dispose: () => {
         layouts.dispose();
         driveActions?.dispose();

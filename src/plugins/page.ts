@@ -21,10 +21,10 @@ import { workflowPagePart } from './workflow/page/start';
 // otherwise.
 export const pageParts: readonly PagePart[] = [
   sessionsPagePart,
+  chatPagePart,
   formsPagePart,
   primerPagePart,
   keysPagePart,
-  chatPagePart,
   agentsPagePart,
   agentLinesPagePart,
   workflowPagePart,

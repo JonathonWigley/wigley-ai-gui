@@ -5,7 +5,7 @@ import { definePlugin } from '../../shared/define-plugin';
 // (agent-lines, agent-strip). It draws nothing itself.
 export const agentsManifest = definePlugin({
   id: 'agents',
-  dependsOn: ['sessions', 'chat'],
+  dependsOn: { main: ['sessions', 'chat'], page: ['sessions'] },
   commands: {
     openPreview: {
       label: 'open the agents sample session',

@@ -3,7 +3,11 @@
 // and the docs plugin's channel between its main and page parts.
 
 import type { Disposable } from '../../contracts/disposable';
-import type { ChannelShape, EventShape } from '../../contracts/plugin';
+import type {
+  ChannelShape,
+  DependencyKey,
+  EventShape,
+} from '../../contracts/plugin';
 
 // The kinds and sources the app knows; an index entry may name others, which
 // still load (`isKnownKind`, `isKnownSource`).
@@ -188,6 +192,11 @@ export interface DocsMainExports {
   watchDoc(path: string, changed: () => void): Promise<Disposable>;
 }
 
+export const docsMainKey: DependencyKey<DocsMainExports, 'main', 'docs'> = {
+  id: 'docs',
+  process: 'main',
+};
+
 // `indexLoaded`: a `loadIndex` or `rebuildIndex` channel call (the page's
 // own reads) finished reading the source `sourceId`.
 export interface DocsMainEvents extends EventShape {
@@ -216,6 +225,11 @@ export interface DocsPageExports {
   addView(sourceId: string, options: { isVisible(): boolean }): DocsViewHandle;
   openDoc(path: string, line?: number): void;
 }
+
+export const docsPageKey: DependencyKey<DocsPageExports, 'page', 'docs'> = {
+  id: 'docs',
+  process: 'page',
+};
 
 export type WriteResult =
   | { type: 'written' }

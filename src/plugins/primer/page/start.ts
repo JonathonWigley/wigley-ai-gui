@@ -211,7 +211,7 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
       },
     };
     return {
-      exports,
+      exports: () => exports,
       commands: primerCommandHandlers({
         store,
         boxes,

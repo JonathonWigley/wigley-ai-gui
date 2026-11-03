@@ -55,10 +55,11 @@ export const agentsPagePart: PagePart<typeof agentsManifest> = {
             );
           }),
       },
-      exports: {
-        roster: rosters.roster,
-        onRosterChanged: rosters.onRosterChanged,
-      } satisfies AgentsPageExports,
+      exports: () =>
+        ({
+          roster: rosters.roster,
+          onRosterChanged: rosters.onRosterChanged,
+        }) satisfies AgentsPageExports,
     };
   },
 };

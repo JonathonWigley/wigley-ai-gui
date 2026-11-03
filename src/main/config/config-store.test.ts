@@ -44,7 +44,7 @@ const DEFAULT_KEYMAP: DefaultKeymap = {
 
 const listPlugin = definePlugin({
   id: 'p',
-  dependsOn: [],
+  dependsOn: { main: [], page: [] },
   commands: {
     down: { label: 'Down', group: 'Moves', runsIn: 'page' },
     up: { label: 'Up', group: 'Moves', runsIn: 'page' },
@@ -327,7 +327,7 @@ describe('loadConfigStore', () => {
   it('keeps the last good settings when the list disables a needed plugin', async () => {
     const dependent = definePlugin({
       id: 'q',
-      dependsOn: ['p'],
+      dependsOn: { main: ['p'], page: [] },
       commands: {},
       scopes: {},
       settings: {},

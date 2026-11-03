@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentStart } from '../../../contracts/agent';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
+import { createRegistrations } from '../../../shared/registrations';
 import type {
   SessionTitles,
   TitleSource,
@@ -254,7 +255,7 @@ function startChatPart() {
     }
     return handler(...args);
   };
-  const exports = part.exports as ChatMainExports;
+  const exports = part.exports?.(createRegistrations()) as ChatMainExports;
   return {
     part,
     exports,

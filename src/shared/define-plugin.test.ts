@@ -3,7 +3,7 @@ import { definePlugin } from './define-plugin';
 
 const manifest = definePlugin({
   id: 'p',
-  dependsOn: [],
+  dependsOn: { main: [], page: [] },
   commands: {
     go: { label: 'Go', group: 'Moves', runsIn: 'page' },
     quit: { label: 'Quit', group: 'App', runsIn: 'main' },

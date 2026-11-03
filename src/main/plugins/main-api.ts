@@ -1,6 +1,7 @@
-import type { Disposable } from '../../contracts/disposable';
+import type { Disposable, Registrations } from '../../contracts/disposable';
 import type {
   ChannelShape,
+  DependencyKey,
   DriveHost,
   MainApi,
   MainServices,
@@ -18,10 +19,11 @@ import type { PluginChannels } from './plugin-channel';
 // config changes; `services` is shared by every main part, run mode included,
 // and `selfTestFor` gives each plugin its own self-test host, null outside the
 // self-test; `driveFor` gives each plugin its own drive host, null outside a
-// drive run; `dependency` is the host's; `bus` is shared by every main part;
-// `dataRoot` is the absolute folder that holds a folder per plugin, named by
-// its id; `layouts` is the core layouts service, which each plugin reaches
-// under its id.
+// drive run; `dependency` is the host's; `registrations` is the part's own
+// store, which the host disposes when the part stops; `bus` is shared by every
+// main part; `dataRoot` is the absolute folder that holds a folder per plugin,
+// named by its id; `layouts` is the core layouts service, which each plugin
+// reaches under its id.
 export interface MainApiDeps {
   channels: PluginChannels;
   pluginSettings(): Record<string, object>;
@@ -31,7 +33,8 @@ export interface MainApiDeps {
   services: Omit<MainServices, 'selfTest'>;
   selfTestFor(pluginId: string): SelfTestHost | null;
   driveFor(pluginId: string): DriveHost | null;
-  dependency<E>(pluginId: string): E;
+  dependency(pluginId: string): unknown;
+  registrations: Registrations;
   bus: EventBus;
   dataRoot: string;
   layouts: LayoutService;
@@ -60,7 +63,10 @@ export function createMainApi(
       });
     },
     services: { ...deps.services, selfTest: deps.selfTestFor(manifest.id) },
-    dependency: deps.dependency,
+    dependency: ((keyOrId: DependencyKey<unknown> | string) =>
+      deps.dependency(
+        typeof keyOrId === 'string' ? keyOrId : keyOrId.id,
+      )) as MainApi<PluginManifest, ChannelShape>['dependency'],
     data: scopedFiles(
       deps.services.files,
       deps.services.paths.join(deps.dataRoot, manifest.id),

@@ -262,7 +262,7 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
           }
         },
       },
-      exports: { sessionLinePart } satisfies UsagePageExports,
+      exports: () => ({ sessionLinePart }) satisfies UsagePageExports,
     };
   },
 };

@@ -29,16 +29,19 @@ type NullKindsDeclared<T> = [NullDefaultSettings<T>] extends [never]
 // so does a start function missing a declared command's handler, a top-level
 // setting defaulting to null whose kind `optionalSettings` leaves out, and a
 // `settingInfo` missing a leaf setting's path or naming a path that is no
-// leaf. Throws when the id holds anything but lowercase letters, digits and `-`.
+// leaf; a dependency key for a plugin missing from that process's list fails to
+// compile. Throws when the id holds anything but lowercase letters, digits and `-`.
 export function definePlugin<
   const Id extends string,
   const Cmds extends Record<string, CommandDecl>,
   const S extends string,
   T extends object,
+  const DM extends string = never,
+  const DP extends string = never,
 >(
   manifest: {
     id: Id;
-    dependsOn: readonly string[];
+    dependsOn: { main: readonly DM[]; page: readonly DP[] };
     commands: Cmds;
     scopes: Readonly<Record<S, string>>;
     keys?: PluginKeys<

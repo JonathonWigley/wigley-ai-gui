@@ -5,7 +5,10 @@ import { definePlugin } from '../../shared/define-plugin';
 // follow-up through Backlog, or to a new background session through chat.
 export const notesManifest = definePlugin({
   id: 'notes',
-  dependsOn: ['sessions', 'chat', 'backlog', 'keys'],
+  dependsOn: {
+    main: ['sessions', 'chat', 'backlog'],
+    page: ['sessions', 'keys'],
+  },
   commands: {
     open: {
       label: 'open or close the note popup',

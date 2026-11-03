@@ -605,7 +605,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         confirmYes: onActiveView('confirmYes'),
         confirmNo: onActiveView('confirmNo'),
       },
-      exports,
+      exports: () => exports,
     };
   },
 };

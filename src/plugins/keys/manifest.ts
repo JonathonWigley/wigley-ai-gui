@@ -11,7 +11,7 @@ import { definePlugin } from '../../shared/define-plugin';
 // off hides every anchored hint.
 export const keysManifest = definePlugin({
   id: 'keys',
-  dependsOn: [],
+  dependsOn: { main: [], page: [] },
   commands: {
     toggleHelp: { label: 'help', group: 'help', runsIn: 'page' },
     closeHelp: { label: 'close help', group: 'help', runsIn: 'page' },

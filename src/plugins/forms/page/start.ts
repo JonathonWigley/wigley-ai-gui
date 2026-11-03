@@ -209,7 +209,7 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
       addReviewColumn: (column) => contributions.addReviewColumn(column),
     };
     return {
-      exports,
+      exports: () => exports,
       commands: formsCommandHandlers({
         store,
         boxes,

@@ -3,7 +3,11 @@ import type {
   AgentFormMessages,
   PresentedAgentForm,
 } from '../../contracts/agent-forms';
-import type { ChannelShape, EventShape } from '../../contracts/plugin';
+import type {
+  ChannelShape,
+  DependencyKey,
+  EventShape,
+} from '../../contracts/plugin';
 
 // The feature primer's shapes: the open_primer call, the body the page sends
 // back, the payload both tools return, and the page part's events and exports.
@@ -104,3 +108,6 @@ export interface PrimerPageEvents extends EventShape {
 export interface PrimerPageExports {
   activePrimer(): PresentedPrimer | null;
 }
+
+export const primerPageKey: DependencyKey<PrimerPageExports, 'page', 'primer'> =
+  { id: 'primer', process: 'page' };

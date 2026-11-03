@@ -1,6 +1,6 @@
 # 03 — Relay advertises tool-list changes
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -102,3 +102,4 @@ Commit:    one commit on `main` of wigley-ai-marketplace (no branch: `<marketpla
 
 ## Proof
 
+Commit 29a16d1 · proof: marketplace branch foundation-sweeps; diff read; forms unittest 52 pass, 2 Windows-only skipped; check_manifests, check_pointers, claude plugin validate pass; check_manifests --against origin/main passes after commit; git fetch skipped (SSH access), compared with last fetched origin/main at 1.14.0 · concerns: README's test-suite list (515-516) omits the notice; host needs for listChanged unproven; no test for _drop's early return; a host may refetch twice around a connect

@@ -918,7 +918,7 @@ export const backlogMainPart: MainPart<typeof backlogManifest> = {
     const layouts = api.layouts.register({ layoutTypes });
     return {
       commands: {},
-      exports,
+      exports: () => exports,
       dispose() {
         layouts.dispose();
         backlog.dispose();

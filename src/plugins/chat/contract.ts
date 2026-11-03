@@ -8,7 +8,11 @@ import type {
   UserMessage,
 } from '../../contracts/agent';
 import type { Disposable } from '../../contracts/disposable';
-import type { ChannelShape, EventShape } from '../../contracts/plugin';
+import type {
+  ChannelShape,
+  DependencyKey,
+  EventShape,
+} from '../../contracts/plugin';
 
 // The `id` of the agent harness chat runs its sessions on: chat's profiles are
 // that harness's config folders.
@@ -281,6 +285,11 @@ export interface ChatMainExports {
   addInstructions(text: string): Disposable;
 }
 
+export const chatMainKey: DependencyKey<ChatMainExports, 'main', 'chat'> = {
+  id: 'chat',
+  process: 'main',
+};
+
 // The session an app slash command was sent in: `args` is the trimmed text
 // after the name, '' when none. A resting session takes notices.
 export interface SlashCommandContext {
@@ -363,3 +372,8 @@ export interface ChatPageExports {
   addStatusPart(part: ChatStatusPart): Disposable;
   focusedEntry(): HTMLElement | null;
 }
+
+export const chatPageKey: DependencyKey<ChatPageExports, 'page', 'chat'> = {
+  id: 'chat',
+  process: 'page',
+};

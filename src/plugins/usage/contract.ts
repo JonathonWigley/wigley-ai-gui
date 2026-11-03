@@ -1,7 +1,7 @@
 // The usage plugin's records and its channel between its main and page parts.
 
 import type { PlanUsage, UsageAgentEvent } from '../../contracts/agent';
-import type { ChannelShape } from '../../contracts/plugin';
+import type { ChannelShape, DependencyKey } from '../../contracts/plugin';
 
 // One chat profile's plan usage. `profileDir` is the profile's `configDir` as
 // chat's `profiles` setting writes it; `isDefault` is true for the first
@@ -56,3 +56,8 @@ export interface UsageLinePart {
 export interface UsagePageExports {
   sessionLinePart(id: string, log: (line: string) => void): UsageLinePart;
 }
+
+export const usagePageKey: DependencyKey<UsagePageExports, 'page', 'usage'> = {
+  id: 'usage',
+  process: 'page',
+};

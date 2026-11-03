@@ -1,5 +1,9 @@
 import type { Disposable } from '../../contracts/disposable';
-import type { ChannelShape, EventShape } from '../../contracts/plugin';
+import type {
+  ChannelShape,
+  DependencyKey,
+  EventShape,
+} from '../../contracts/plugin';
 
 // Every agent harness a session can run in; the relay hello's parse reads a
 // harness missing from this list as none.
@@ -181,6 +185,12 @@ export interface SessionsMainExports {
   titles(sessionId: string): SessionTitles | null;
 }
 
+export const sessionsMainKey: DependencyKey<
+  SessionsMainExports,
+  'main',
+  'sessions'
+> = { id: 'sessions', process: 'main' };
+
 // `closed` is a row the user closed, or one `release` closed, every guard
 // allowing; the session itself stays until it ends. `selected` is the selected
 // row changing, to another row or to none, emitted after the state that
@@ -338,6 +348,12 @@ export interface SessionsPageExports {
     activity: RowActivity | null,
   ): void;
 }
+
+export const sessionsPageKey: DependencyKey<
+  SessionsPageExports,
+  'page',
+  'sessions'
+> = { id: 'sessions', process: 'page' };
 
 // `activeChanged` fires when the focused chat pane's session changes, to
 // null for an empty pane. `sessionAdded` fires once for every row main sends,

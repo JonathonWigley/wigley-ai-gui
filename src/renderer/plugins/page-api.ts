@@ -1,11 +1,12 @@
 import type { Bridge } from '../../contracts/bridge';
 import type { CommandId } from '../../contracts/commands';
-import type { Disposable } from '../../contracts/disposable';
+import type { Disposable, Registrations } from '../../contracts/disposable';
 import type { PageDrops } from '../../contracts/drops';
 import type {
   Area,
   AreaName,
   ChannelShape,
+  DependencyKey,
   PageChannel,
   Modes,
   PageApi,
@@ -41,6 +42,8 @@ import type { PendingKeysHub } from '../pending-keys';
 // ui state. `layouts` shows each owner's layouts. `paneTargets` takes the
 // resize and focus targets and the outer panes a plugin hands the pane commands.
 // `drops` is the page's one drop registry, handed to every plugin as it is.
+// `registrations` is the part's own store, which the host disposes when the part
+// stops.
 export interface PageApiDeps {
   areas: Record<AreaName, Area>;
   modes: Modes;
@@ -53,7 +56,8 @@ export interface PageApiDeps {
   services: Omit<PageServices, 'uiState'>;
   uiState: { scoped(prefix: string): UiState };
   run(id: CommandId, context?: PageCommandContext): void;
-  dependency<E>(pluginId: string): E;
+  dependency(pluginId: string): unknown;
+  registrations: Registrations;
   bus: EventBus;
   layouts: PageLayouts;
   paneTargets: Pick<
@@ -117,7 +121,10 @@ export function createPageApi(
     platform: config.current().platform,
     commands: { run: deps.run },
     services: { ...deps.services, uiState: deps.uiState.scoped(manifest.id) },
-    dependency: deps.dependency,
+    dependency: ((keyOrId: DependencyKey<unknown> | string) =>
+      deps.dependency(
+        typeof keyOrId === 'string' ? keyOrId : keyOrId.id,
+      )) as PageApi<PluginManifest, ChannelShape>['dependency'],
     dataUrl: (path, revision) => dataUrl(manifest.id, revision, path),
     layouts: { show: (options) => deps.layouts.show(manifest.id, options) },
   };

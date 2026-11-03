@@ -5,7 +5,7 @@ import { definePlugin } from '../../shared/define-plugin';
 // usage's layout, as a sessions bar part. It owns no layout and no setting.
 export const usageTabLineManifest = definePlugin({
   id: 'usage-tab-line',
-  dependsOn: ['usage', 'sessions'],
+  dependsOn: { main: [], page: ['usage', 'sessions'] },
   commands: {},
   scopes: {},
   settings: {},

@@ -7,6 +7,7 @@ import {
 } from '../../../shared/followups/followup-file';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
+import { createRegistrations } from '../../../shared/registrations';
 import type {
   DocsMainExports,
   IndexEntry,
@@ -247,7 +248,7 @@ function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
     listeners.get(name)?.(payload);
   return {
     part,
-    exports: part.exports as BacklogMainExports,
+    exports: part.exports?.(createRegistrations()) as BacklogMainExports,
     docs,
     calls,
     refuse,

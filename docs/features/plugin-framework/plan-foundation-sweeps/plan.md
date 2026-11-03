@@ -401,7 +401,7 @@ Tasks 08, 09 and 10 apply this to each of their plugins, part by part:
 
 ### Wave 1
 - [ ] [Host stop, registrations and dependency keys](01-host-stop-and-keys.md)
-- [ ] [Relay advertises tool-list changes](03-relay-list-changed.md)
+- [x] [Relay advertises tool-list changes](03-relay-list-changed.md)
 
 ### Wave 2
 - [ ] [Page-side handles and recording](02-page-handles.md) — after 01
@@ -433,10 +433,14 @@ Tasks 08, 09 and 10 apply this to each of their plugins, part by part:
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 7f956435
 
 ### Groups
+- 03 · 29a16d1 · marketplace branch foundation-sweeps; diff read; forms unittest 52 pass, 2 Windows-only skipped; check_manifests, check_pointers, claude plugin validate pass; check_manifests --against origin/main passes after commit; git fetch skipped (SSH access), compared with last fetched origin/main at 1.14.0 · concerns: README's test-suite list (515-516) omits the notice; host needs for listChanged unproven; no test for _drop's early return; a host may refetch twice around a connect
 ### Contract changes
 ### Rulings
+- Worktree run on branch foundation-sweeps in both repos, on the user's word; marketplace review base is cbd8a9e; git fetch fails on SSH access in both repos, so origin was not checked and the run builds on local main; a stale origin would surface at push · lead
+- Task 03 commits on branch foundation-sweeps rather than main, since this is a worktree run; 1.14.1 will need reconciling with the peer's 1.15.0 at merge — one bump per pushed series · group 03 · group 03
+- _open, _drop and the test module docstrings changed beyond the task's Docs list, under Edits that reach every reference — if wrong, drop them · group 03 · group 03
 ### Review rounds
 ### Test gate

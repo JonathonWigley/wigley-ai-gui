@@ -397,7 +397,7 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
     };
     return {
       commands: {},
-      exports,
+      exports: () => exports,
       dispose: () => {
         layouts.dispose();
         watches.closeAll();

@@ -9,7 +9,7 @@ import { definePlugin } from '../../shared/define-plugin';
 // `pollIntervalSeconds` is how often each profile is polled, at least 60.
 export const usageManifest = definePlugin({
   id: 'usage',
-  dependsOn: ['chat', 'sessions', 'keys'],
+  dependsOn: { main: ['chat', 'sessions'], page: ['chat', 'sessions', 'keys'] },
   commands: {
     toggleDetails: {
       label: 'hide or show usage details',

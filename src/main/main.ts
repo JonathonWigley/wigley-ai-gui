@@ -54,7 +54,7 @@ import { CommandRegistry } from '../shared/command-registry';
 import { errorText } from '../shared/error-text';
 import { createEventBus } from '../shared/event-bus';
 import { createFakeAgentHarness } from '../shared/fake-agent-harness';
-import { startPlugins } from '../shared/plugin-host';
+import { type PluginHost, startPlugins } from '../shared/plugin-host';
 import {
   pluginThemeTokens,
   qualify,
@@ -650,9 +650,9 @@ function serveLayouts(
 // `store` serves with no self-test layer, one event bus, the shared
 // `services`, its own host from `selfTest` (null outside the self-test), its
 // own host from `driveRun` (null outside a drive run), its data folder under
-// `dataRoot`, and its layouts in `layouts`. `onStarted` sees each part, with
-// its plugin id, as it starts, so a part is known even when a later start
-// throws.
+// `dataRoot`, and its layouts in `layouts`. Each part's commands join `commands`
+// as it starts, tracked in its registrations, so stopping the part unregisters
+// them.
 function startMainParts(
   window: BrowserWindow,
   store: ConfigStore,
@@ -662,13 +662,14 @@ function startMainParts(
   selfTest: SelfTestDriver | null,
   driveRun: DriveRun | null,
   disabled: readonly string[],
-  onStarted: (pluginId: string, part: MainStart<PluginManifest>) => void,
-) {
+  commands: MainCommands,
+): PluginHost<MainStart<PluginManifest>> {
   const channels = createPluginChannels(ipcMain, () => livePage(window));
   const bus = createEventBus();
   return startPlugins(
     mainParts,
-    (part, dependency) => {
+    'main',
+    (part, context) => {
       const started = part.start(
         createMainApi(part.manifest, {
           channels,
@@ -678,37 +679,26 @@ function startMainParts(
           services,
           selfTestFor: (pluginId) => selfTest?.hostFor(pluginId) ?? null,
           driveFor: (pluginId) => driveRun?.driveFor(pluginId) ?? null,
-          dependency,
+          dependency: context.dependency,
+          registrations: context.registrations,
           bus,
           dataRoot,
           layouts,
         }),
       );
-      onStarted(part.manifest.id, started);
+      for (const [short, handler] of Object.entries<(chord: string) => void>(
+        started.commands,
+      )) {
+        context.registrations.track(
+          commands.register(qualify(part.manifest.id, short), handler),
+        );
+      }
       return started;
     },
     manifests,
     disabled,
+    services.log,
   );
-}
-
-function registerPartCommands(
-  commands: MainCommands,
-  started: ReadonlyMap<string, MainStart<PluginManifest>>,
-) {
-  for (const [pluginId, part] of started) {
-    for (const [short, handler] of Object.entries<(chord: string) => void>(
-      part.commands,
-    )) {
-      commands.register(qualify(pluginId, short), handler);
-    }
-  }
-}
-
-// Starts every part's dispose at once, in start order, and settles once every
-// dispose has.
-function disposeParts(parts: readonly MainStart<PluginManifest>[]) {
-  return Promise.allSettled(parts.map(async (part) => part.dispose?.()));
 }
 
 // The window's size is read once: the one window hides rather than closes,
@@ -763,12 +753,11 @@ function createWindow(
           selfTestFilterOf(process.env),
         )
       : null;
-  // On a normal quit a quit task disposes the parts that started; a failed
-  // start outside the self-test exits through failStart, which skips the quit
-  // tasks. In the self-test each part's dispose joins the teardown as the part
-  // starts, so an exit at any point disposes the parts started by then.
-  const startedParts: MainStart<PluginManifest>[] = [];
-  onQuit(() => disposeParts(startedParts));
+  // Quit and the self-test exit stop the started main parts through the host, in
+  // reverse start order, each awaited before the next; a start that throws leaves
+  // no host, so the parts started before it are not stopped.
+  let mainHost: PluginHost<MainStart<PluginManifest>> | null = null;
+  onSelfTestExit('the plugin parts', () => mainHost?.stopAll());
   const driveRun =
     inputs.driveRunDir === null
       ? null
@@ -800,7 +789,9 @@ function createWindow(
     runMode === 'selfTest',
     store.current().settings.plugins.disabled,
   );
-  const started = startMainParts(
+  const commands: MainCommands = new CommandRegistry<string>();
+  registerWindowCommands(commands, window, log);
+  mainHost = startMainParts(
     window,
     store,
     inputs.dataRoot,
@@ -831,13 +822,17 @@ function createWindow(
     selfTest,
     driveRun,
     startList,
-    (pluginId, part) => {
-      startedParts.push(part);
-      onSelfTestExit(`plugin ${pluginId}`, () => part.dispose?.());
-    },
+    commands,
   );
-  // After the parts' dispose, which disposes their registrations.
-  onQuit(() => layouts.dispose());
+  // The layouts service closes after every part's registrations, even when a
+  // part's stop rejects.
+  onQuit(async () => {
+    try {
+      await mainHost?.stopAll();
+    } finally {
+      layouts.dispose();
+    }
+  });
   onSelfTestExit('the layouts service', () => layouts.dispose());
   // The config needs the page binds and settings of the scripts the plugins
   // handed the self-test.
@@ -846,9 +841,6 @@ function createWindow(
     settings: {},
   };
 
-  const commands: MainCommands = new CommandRegistry<string>();
-  registerWindowCommands(commands, window, log);
-  registerPartCommands(commands, started);
   // Read at each request, so a page reload after a config edit starts on the
   // current config.
   const served = () =>

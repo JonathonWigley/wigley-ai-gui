@@ -5,7 +5,10 @@ import { definePlugin } from '../../shared/define-plugin';
 // from agents' page exports. It names `keys` for its layout's key hints and `chat` for its self-test's launch.
 export const agentLinesManifest = definePlugin({
   id: 'agent-lines',
-  dependsOn: ['agents', 'sessions', 'chat', 'keys'],
+  dependsOn: {
+    main: ['chat', 'sessions'],
+    page: ['agents', 'sessions', 'keys'],
+  },
   commands: {},
   scopes: {},
   settings: { layout: 'default' },

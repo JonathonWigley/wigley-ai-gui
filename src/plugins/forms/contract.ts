@@ -6,7 +6,11 @@ import type {
   AgentFormService,
   AgentFormSession,
 } from '../../contracts/agent-forms';
-import type { ChannelShape, EventShape } from '../../contracts/plugin';
+import type {
+  ChannelShape,
+  DependencyKey,
+  EventShape,
+} from '../../contracts/plugin';
 import { NUMBER_KEY_COUNT } from './manifest';
 
 export type NoticeBadge = 'Applied' | 'Dispatched' | 'Decided';
@@ -320,3 +324,8 @@ export interface FormsPageExports {
   addCardPart(part: FormsCardPart): Disposable;
   addReviewColumn(column: FormsReviewColumn): Disposable;
 }
+
+export const formsPageKey: DependencyKey<FormsPageExports, 'page', 'forms'> = {
+  id: 'forms',
+  process: 'page',
+};

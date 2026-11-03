@@ -35,7 +35,7 @@ const DEFAULT_KEYMAP: DefaultKeymap = {
 
 const listPlugin = definePlugin({
   id: 'p',
-  dependsOn: [],
+  dependsOn: { main: [], page: [] },
   commands: {
     down: { label: 'Down', group: 'Moves', runsIn: 'page' },
     up: { label: 'Up', group: 'Moves', runsIn: 'page' },
@@ -55,7 +55,7 @@ const listPlugin = definePlugin({
 
 const quietPlugin = definePlugin({
   id: 'quiet',
-  dependsOn: [],
+  dependsOn: { main: [], page: [] },
   commands: {},
   scopes: {},
   settings: {},
@@ -65,7 +65,7 @@ const quietPlugin = definePlugin({
 
 const dependentPlugin = definePlugin({
   id: 'q',
-  dependsOn: ['p'],
+  dependsOn: { main: ['p'], page: [] },
   commands: {},
   scopes: {},
   settings: {},
@@ -570,7 +570,7 @@ describe('createUserConfig', () => {
   it('gives a boolean control to a boolean default and a boolean kind', async () => {
     const flagPlugin = definePlugin({
       id: 'f',
-      dependsOn: [],
+      dependsOn: { main: [], page: [] },
       commands: {},
       scopes: {},
       settings: { wrap: true, strict: null as boolean | null },
@@ -640,7 +640,7 @@ describe('createUserConfig', () => {
   it("serves a plugin's accelerator in place of the default on its chord", async () => {
     const overPlugin = definePlugin({
       id: 'over',
-      dependsOn: [],
+      dependsOn: { main: [], page: [] },
       commands: { quit: { label: 'Quit', group: 'App', runsIn: 'main' } },
       scopes: {},
       keys: { app: [{ accelerator: 'CmdOrCtrl+Q', command: 'quit' }] },

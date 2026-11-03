@@ -10,12 +10,13 @@ import type {
 import { createEventBus } from '../../shared/event-bus';
 import { createMemoryFiles } from '../../shared/memory-files';
 import { posixPaths } from '../../shared/paths/posix-paths';
+import { createRegistrations } from '../../shared/registrations';
 import type { LayoutService } from '../layouts/layout-service';
 import { createMainApi, type MainApiDeps } from './main-api';
 
 const manifest: PluginManifest = {
   id: 'p',
-  dependsOn: [],
+  dependsOn: { main: [], page: [] },
   commands: {},
   scopes: {},
   settings: {},
@@ -54,6 +55,7 @@ function liveSettings(initial: Record<string, object>) {
 function apiOver(
   settings: ReturnType<typeof liveSettings>,
   layouts = {} as LayoutService,
+  dependency: MainApiDeps['dependency'] = () => undefined,
 ) {
   const deps: MainApiDeps = {
     channels: { forPlugin: () => ({}) as MainChannel<ChannelShape> },
@@ -61,7 +63,8 @@ function apiOver(
     services: { paths: posixPaths } as MainServices,
     selfTestFor: () => null,
     driveFor: () => null,
-    dependency: <E>() => undefined as E,
+    dependency,
+    registrations: createRegistrations(),
     bus: createEventBus(),
     dataRoot: '/d',
     layouts,
@@ -100,7 +103,8 @@ describe('createMainApi', () => {
       services: { paths: posixPaths } as MainServices,
       selfTestFor: () => null,
       driveFor: () => null,
-      dependency: <E>() => undefined as E,
+      dependency: () => undefined,
+      registrations: createRegistrations(),
       bus,
       dataRoot: '/d',
       layouts: {} as LayoutService,
@@ -121,7 +125,8 @@ describe('createMainApi', () => {
         services: { files, paths: posixPaths } as unknown as MainServices,
         selfTestFor: () => null,
         driveFor: () => null,
-        dependency: <E>() => undefined as E,
+        dependency: () => undefined,
+        registrations: createRegistrations(),
         bus: createEventBus(),
         dataRoot: '/d',
         layouts: {} as LayoutService,
@@ -151,7 +156,8 @@ describe('createMainApi', () => {
         } as unknown as MainServices,
         selfTestFor: (pluginId) => (pluginId === 'forms' ? host : null),
         driveFor: () => null,
-        dependency: <E>() => undefined as E,
+        dependency: () => undefined,
+        registrations: createRegistrations(),
         bus: createEventBus(),
         dataRoot: '/d',
         layouts: {} as LayoutService,
@@ -175,7 +181,8 @@ describe('createMainApi', () => {
         } as unknown as MainServices,
         selfTestFor: () => null,
         driveFor: (pluginId) => (pluginId === 'forms' ? formsHost : null),
-        dependency: <E>() => undefined as E,
+        dependency: () => undefined,
+        registrations: createRegistrations(),
         bus: createEventBus(),
         dataRoot: '/d',
         layouts: {} as LayoutService,
@@ -207,5 +214,21 @@ describe('createMainApi', () => {
       ['names', 'p'],
     ]);
     expect(names).toEqual(['default', 'mine']);
+  });
+
+  it.each([
+    { name: 'a key', arg: { id: 'a', process: 'main' } },
+    { name: 'an id', arg: 'a' },
+  ])('dependency asks the host for the plugin $name names', ({ arg }) => {
+    const asked: string[] = [];
+    const api = apiOver(liveSettings({ p: {} }), undefined, (pluginId) => {
+      asked.push(pluginId);
+      return { n: 1 };
+    });
+
+    const received = (api.dependency as (keyOrId: unknown) => unknown)(arg);
+
+    expect(received).toEqual({ n: 1 });
+    expect(asked).toEqual(['a']);
   });
 });

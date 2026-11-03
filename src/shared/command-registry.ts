@@ -1,15 +1,25 @@
 import type { CommandId } from '../contracts/commands';
+import type { Disposable } from '../contracts/disposable';
 
 // Maps command ids to what they do. `Context` is what the trigger hands the
 // command: the editor it fired in, or the chord that fired it.
 export class CommandRegistry<Context> {
   private readonly handlers = new Map<CommandId, (context: Context) => void>();
 
-  register(id: CommandId, handler: (context: Context) => void) {
+  // The returned handle's `dispose` unregisters the command while `handler` is
+  // still the one registered under `id`, and otherwise does nothing.
+  register(id: CommandId, handler: (context: Context) => void): Disposable {
     if (this.handlers.has(id)) {
       throw new Error(`Command "${id}" is already registered`);
     }
     this.handlers.set(id, handler);
+    return {
+      dispose: () => {
+        if (this.handlers.get(id) === handler) {
+          this.handlers.delete(id);
+        }
+      },
+    };
   }
 
   has(id: CommandId): boolean {

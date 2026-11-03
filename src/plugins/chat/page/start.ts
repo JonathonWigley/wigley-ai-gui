@@ -248,7 +248,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
         toggleArchive: () => startPrompt.toggleArchive(),
         showArchived: () => startPrompt.showArchived(),
       },
-      exports,
+      exports: () => exports,
     };
   },
 };

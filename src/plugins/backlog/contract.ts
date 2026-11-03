@@ -2,7 +2,7 @@
 // features home's follow-ups, plans and features, read through the docs
 // index, and the follow-up writes and commit the main part makes.
 
-import type { ChannelShape } from '../../contracts/plugin';
+import type { ChannelShape, DependencyKey } from '../../contracts/plugin';
 import type {
   FollowupDraft,
   FollowupEdit,
@@ -112,6 +112,12 @@ export interface BacklogMainExports {
     images: readonly Uint8Array[],
   ): Promise<BacklogWriteResult>;
 }
+
+export const backlogMainKey: DependencyKey<
+  BacklogMainExports,
+  'main',
+  'backlog'
+> = { id: 'backlog', process: 'main' };
 
 // Every method rejects with main's own error text when its handler throws.
 export interface BacklogChannel extends ChannelShape {

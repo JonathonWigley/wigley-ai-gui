@@ -37,9 +37,15 @@ export function qualify(pluginId: string, short: string): string {
   return `${pluginId}.${short}`;
 }
 
-// The manifests in the order their plugins start: repeatedly the first, in
-// list order, whose `dependsOn` have all been taken. A dependency on a plugin
-// not in `manifests` holds nothing back. Throws on a dependency cycle.
+// The ids in either of the manifest's `dependsOn` lists: its `main` list, then
+// its `page` list, each id once.
+function dependencyIds(manifest: PluginManifest): string[] {
+  return [...new Set([...manifest.dependsOn.main, ...manifest.dependsOn.page])];
+}
+
+// The manifests in dependency order: repeatedly the first, in list order, whose
+// dependencies in either `dependsOn` list have all been taken. A dependency on a
+// plugin not in `manifests` holds nothing back. Throws on a dependency cycle.
 export function dependencyOrder(
   manifests: readonly PluginManifest[],
 ): PluginManifest[] {
@@ -49,7 +55,7 @@ export function dependencyOrder(
   let pending = [...manifests];
   while (pending.length > 0) {
     const ready = pending.find((manifest) =>
-      manifest.dependsOn.every((id) => taken.has(id) || !listed.has(id)),
+      dependencyIds(manifest).every((id) => taken.has(id) || !listed.has(id)),
     );
     if (!ready) {
       const waiting = pending.map((manifest) => manifest.id).join(', ');
@@ -63,9 +69,10 @@ export function dependencyOrder(
 }
 
 // The problem with a `plugins.disabled` list: the first plugin it names that
-// a plugin it leaves started depends on, walking `manifests` in list order and
-// each one's `dependsOn` in order. Null when no started plugin depends on a
-// disabled one; an id no manifest has disables nothing.
+// a plugin it leaves started depends on in either `dependsOn` list, walking
+// `manifests` in list order and each one's lists in order, `main` then `page`.
+// Null when no started plugin depends on a disabled one; an id no manifest has
+// disables nothing.
 export function disabledDependencyProblem(
   disabled: readonly string[],
   manifests: readonly PluginManifest[],
@@ -74,7 +81,9 @@ export function disabledDependencyProblem(
     if (disabled.includes(manifest.id)) {
       continue;
     }
-    const dependency = manifest.dependsOn.find((id) => disabled.includes(id));
+    const dependency = dependencyIds(manifest).find((id) =>
+      disabled.includes(id),
+    );
     if (dependency !== undefined) {
       return `"plugins.disabled" names "${dependency}", which "${manifest.id}" depends on.`;
     }

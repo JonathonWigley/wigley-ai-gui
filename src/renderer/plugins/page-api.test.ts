@@ -18,6 +18,7 @@ import type {
 import type { AppConfig } from '../../contracts/settings';
 import type { PageLayouts } from '../../shared/page/layout-host/show-layouts';
 import { createEventBus } from '../../shared/event-bus';
+import { createRegistrations } from '../../shared/registrations';
 import { createScopeStack } from '../key-scope';
 import { createLiveConfig } from '../live-config';
 import { createPageUiState } from '../ui-state';
@@ -25,7 +26,7 @@ import { createPageApi, type PageApiDeps } from './page-api';
 
 const manifest: PluginManifest = {
   id: 'p',
-  dependsOn: [],
+  dependsOn: { main: [], page: [] },
   commands: {},
   scopes: { review: 'In review' },
   settings: {},
@@ -108,7 +109,8 @@ function deps(overrides: Partial<PageApiDeps>): PageApiDeps {
     services: {} as Omit<PageServices, 'uiState'>,
     uiState: createPageUiState({}, () => {}),
     run: () => {},
-    dependency: <E>() => undefined as E,
+    dependency: () => undefined,
+    registrations: createRegistrations(),
     bus: createEventBus(),
     layouts: {} as PageLayouts,
     paneTargets: {
@@ -408,5 +410,26 @@ describe('createPageApi', () => {
     show.dispose();
 
     expect(calls).toEqual(['show p', 'dispose']);
+  });
+
+  it.each([
+    { name: 'a key', arg: { id: 'a', process: 'page' } },
+    { name: 'an id', arg: 'a' },
+  ])('dependency asks the host for the plugin $name names', ({ arg }) => {
+    const asked: string[] = [];
+    const api = createPageApi(
+      manifest,
+      deps({
+        dependency: (pluginId) => {
+          asked.push(pluginId);
+          return { n: 1 };
+        },
+      }),
+    );
+
+    const received = (api.dependency as (keyOrId: unknown) => unknown)(arg);
+
+    expect(received).toEqual({ n: 1 });
+    expect(asked).toEqual(['a']);
   });
 });

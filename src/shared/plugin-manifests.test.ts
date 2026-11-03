@@ -25,7 +25,7 @@ function manifest(
 ): PluginManifest {
   return {
     id,
-    dependsOn: [],
+    dependsOn: { main: [], page: [] },
     commands: {},
     scopes: {},
     settings: {},
@@ -140,9 +140,9 @@ describe('mergeKeymap', () => {
   });
 
   it("a later plugin layer replaces an earlier one's bind", () => {
-    const binding = (id: string, dependsOn: string[]) =>
+    const binding = (id: string, main: string[]) =>
       manifest(id, {
-        dependsOn,
+        dependsOn: { main, page: [] },
         commands: { go: { label: 'Go', group: 'Moves', runsIn: 'page' } },
         keys: { binds: [{ keys: 'x', scope: 'any', command: 'go' }] },
       });
@@ -641,7 +641,7 @@ describe('mergeKeymap accelerators', () => {
 describe('dependencyOrder', () => {
   it('orders plugins by dependency, ties in list order', () => {
     const ordered = dependencyOrder([
-      manifest('a', { dependsOn: ['c'] }),
+      manifest('a', { dependsOn: { main: [], page: ['c'] } }),
       manifest('b'),
       manifest('c'),
     ]);
@@ -653,8 +653,8 @@ describe('dependencyOrder', () => {
 describe('disabledDependencyProblem', () => {
   const chain = [
     manifest('a'),
-    manifest('b', { dependsOn: ['a'] }),
-    manifest('c', { dependsOn: ['b'] }),
+    manifest('b', { dependsOn: { main: ['a'], page: [] } }),
+    manifest('c', { dependsOn: { main: [], page: ['b'] } }),
   ];
 
   it.each([

@@ -295,7 +295,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     const exports: WorkflowMainExports = { addStage };
     return {
       commands: {},
-      exports,
+      exports: () => exports,
       dispose() {
         layouts.dispose();
         settingsListener.dispose();

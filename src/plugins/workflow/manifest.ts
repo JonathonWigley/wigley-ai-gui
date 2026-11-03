@@ -9,7 +9,10 @@ import { WORKFLOW_COMMANDS } from './stages';
 // after a countdown when `autoClearAndMake` is on.
 export const workflowManifest = definePlugin({
   id: 'workflow',
-  dependsOn: ['chat', 'sessions', 'docs', 'keys'],
+  dependsOn: {
+    main: ['chat', 'sessions'],
+    page: ['chat', 'sessions', 'docs', 'keys'],
+  },
   commands: {
     ...WORKFLOW_COMMANDS,
     lineDown: { label: 'next line', group: 'flow tab', runsIn: 'page' },

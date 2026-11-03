@@ -3,7 +3,7 @@ import type { Alerts } from './alerts';
 import type { Clock, RandomHex, RandomUuid, Timers } from './ambient';
 import type { AppInstance } from './app-instance';
 import type { CommandId } from './commands';
-import type { Disposable } from './disposable';
+import type { Disposable, Registrations } from './disposable';
 import type { PageDrops } from './drops';
 import type { EditorHost, TextEditor } from './editor';
 import type { Files } from './files';
@@ -31,6 +31,19 @@ import type { UserConfig } from './user-config';
 import type { VisualFrames } from './visual-frames';
 
 export type ProcessName = 'page' | 'main';
+
+// A provider's `contract.ts` exports one per process that has exports, and a
+// dependent reads that view with `api.dependency(key)`; `exportsType` is never
+// set.
+export interface DependencyKey<
+  E,
+  P extends ProcessName = ProcessName,
+  Id extends string = string,
+> {
+  readonly id: Id;
+  readonly process: P;
+  readonly exportsType?: E; // type only; never set
+}
 
 // A command as a manifest declares it, under its short id.
 export interface CommandDecl {
@@ -109,8 +122,9 @@ export type SettingInfos<T> = [SettingPath<T>] extends [never]
 // declares each leaf setting's label and description by its dotted path, as
 // `SettingPath` names the leaves (`definePlugin` checks the paths); `themeTokens`
 // declares the plugin's own theme tokens by their unqualified names
-// (`origin-caused`), each with its kind and default; `dependsOn` names plugins
-// that start before this one.
+// (`origin-caused`), each with its kind and default; each `dependsOn` list names
+// the plugins whose exports that process reads or whose events it hears there;
+// they start before this plugin's part in that process.
 export interface PluginManifest<
   C extends string = string,
   S extends string = string,
@@ -119,7 +133,10 @@ export interface PluginManifest<
   // Lowercase letters, digits and `-`: the `wigley-data:` and `wigley-layout:`
   // URL hosts carry the id, and Chromium lowercases a URL's host.
   id: string;
-  dependsOn: readonly string[];
+  dependsOn: {
+    readonly main: readonly string[];
+    readonly page: readonly string[];
+  };
   commands: Record<C, CommandDecl>;
   scopes: Readonly<Record<S, string>>;
   keys?: PluginKeys<C, C, S>;
@@ -469,8 +486,9 @@ export interface PageTransparency {
 // `drops.addTarget` registers an element and what takes the files dropped or
 // pasted on it, returning the `Disposable` that removes it; `drops.savePasted`
 // saves a file with no path and returns its path.
-// `dependency` returns the exports of a plugin the manifest lists in
-// `dependsOn`, typed by the caller from that plugin's contract. `Ev` is the
+// `dependency` takes the page key from a provider's contract, for a plugin the
+// manifest lists in `dependsOn.page`, and returns this part's view of that
+// plugin's exports. `Ev` is the
 // plugin's own events and `Heard` the other plugins' events it hears, as
 // `PluginEvents` takes them; a part that declares no `Heard` hears nothing.
 // `dataUrl` is the `wigley-data:` URL of `path` in the plugin's data folder;
@@ -516,18 +534,25 @@ export interface PageApi<
   platform: Platform;
   commands: { run(id: CommandId, context?: PageCommandContext): void };
   services: PageServices;
+  dependency<E, Id extends M['dependsOn']['page'][number]>(
+    key: DependencyKey<E, 'page', Id>,
+  ): E;
+  /** @deprecated removed by plan task 11 */
   dependency<E>(pluginId: string): E;
   dataUrl(path: string, revision: number): string;
   layouts: { show<L>(options: ShowLayoutOptions<L>): LayoutShow };
 }
 
-// `exports` reaches the plugins that depend on this one.
 export interface PageStart<M extends PluginManifest> {
   commands: Record<
     CommandsRunIn<M, 'page'>,
     (context: PageCommandContext) => void
   >;
-  exports?: unknown;
+  // Called once for each dependent, with that dependent's registrations; returns
+  // that dependent's view.
+  exports?(consumer: Registrations): unknown;
+  // Runs when the host stops the part.
+  dispose?(): void | Promise<void>;
 }
 
 // Starts on every page load.
@@ -686,8 +711,9 @@ export interface MainServices {
   selfTest: SelfTestHost | null;
 }
 
-// `dependency` returns the exports of a plugin the manifest lists in
-// `dependsOn`, typed by the caller from that plugin's contract. `Ev` and
+// `dependency` takes the main key from a provider's contract, for a plugin the
+// manifest lists in `dependsOn.main`, and returns this part's view of that
+// plugin's exports. `Ev` and
 // `Heard` are as on `PageApi`. `data` is the files service scoped to the
 // plugin's data folder: its paths are `/`-separated and relative to that
 // folder on every OS, and one that resolves outside it fails. `settings`
@@ -711,6 +737,10 @@ export interface MainApi<
   settings(): M['settings'];
   onSettingsChanged(listener: (settings: M['settings']) => void): Disposable;
   services: MainServices;
+  dependency<E, Id extends M['dependsOn']['main'][number]>(
+    key: DependencyKey<E, 'main', Id>,
+  ): E;
+  /** @deprecated removed by plan task 11 */
   dependency<E>(pluginId: string): E;
   data: Files;
   drive: DriveHost | null;
@@ -720,11 +750,14 @@ export interface MainApi<
   };
 }
 
-// `exports` reaches the plugins that depend on this one; `dispose` runs when
-// the app quits, which may exit before a returned promise settles.
 export interface MainStart<M extends PluginManifest> {
   commands: Record<CommandsRunIn<M, 'main'>, (chord: string) => void>;
-  exports?: unknown;
+  // Called once for each dependent, with that dependent's registrations; returns
+  // that dependent's view.
+  exports?(consumer: Registrations): unknown;
+  // Runs when the host stops the part, before the host disposes the part's
+  // registrations, and undoes only what the plugin API cannot see. Quit stops
+  // every main part, and the live app may exit before a returned promise settles.
   dispose?(): void | Promise<void>;
 }
 

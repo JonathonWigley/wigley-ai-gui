@@ -1,12 +1,19 @@
 // Type tests, checked under `vitest --typecheck`: the line after each
 // `@ts-expect-error` must fail to compile.
 import { assertType, describe, it } from 'vitest';
-import type { PageStart, SettingInfos } from '../contracts/plugin';
+import type {
+  ChannelShape,
+  DependencyKey,
+  MainApi,
+  PageApi,
+  PageStart,
+  SettingInfos,
+} from '../contracts/plugin';
 import { definePlugin } from './define-plugin';
 
 const manifest = definePlugin({
   id: 'p',
-  dependsOn: [],
+  dependsOn: { main: [], page: [] },
   commands: {
     go: { label: 'Go', group: 'Moves', runsIn: 'page' },
     quit: { label: 'Quit', group: 'App', runsIn: 'main' },
@@ -94,5 +101,40 @@ describe('definePlugin', () => {
         list: { x: number }[];
       }>
     >({ 'window.width': info, 'fonts.ui': info, list: info });
+  });
+
+  it('types dependency keys so a wrong process or an undeclared id fails to compile', () => {
+    const q = definePlugin({
+      ...manifest,
+      id: 'q',
+      dependsOn: { main: [], page: ['a'] },
+    });
+    const pageApi = {} as PageApi<typeof q, ChannelShape>;
+    const mainApi = {} as MainApi<typeof q, ChannelShape>;
+    const aPageKey: DependencyKey<{ n: number }, 'page', 'a'> = {
+      id: 'a',
+      process: 'page',
+    };
+    const aMainKey: DependencyKey<{ n: number }, 'main', 'a'> = {
+      id: 'a',
+      process: 'main',
+    };
+    const bPageKey: DependencyKey<{ n: number }, 'page', 'b'> = {
+      id: 'b',
+      process: 'page',
+    };
+
+    // The body only type-checks: the APIs here are empty fakes.
+    const typeChecksOnly = () => {
+      assertType<{ n: number }>(pageApi.dependency(aPageKey));
+      // @ts-expect-error -- a main key on the page
+      pageApi.dependency(aMainKey);
+      // @ts-expect-error -- `b` is not in dependsOn.page
+      pageApi.dependency(bPageKey);
+      // @ts-expect-error -- dependsOn.main is empty
+      mainApi.dependency(aMainKey);
+      assertType<{ n: number }>(pageApi.dependency<{ n: number }>('a'));
+    };
+    assertType<() => void>(typeChecksOnly);
   });
 });

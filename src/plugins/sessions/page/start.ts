@@ -785,7 +785,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         renameAccept: () => renameDialog.accept(),
         renameCancel: () => renameDialog.cancel(),
       },
-      exports,
+      exports: () => exports,
     };
   },
 };

@@ -5,6 +5,7 @@ import { fakeDriveHost } from '../../../shared/fake-drive-host';
 import { FakeProcesses } from '../../../shared/fake-processes';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
+import { createRegistrations } from '../../../shared/registrations';
 import type { OwnedSession, SessionInfo } from '../../sessions/contract';
 import type { DocsMainExports, IndexDocument } from '../contract';
 import { MACHINE_INDEX_FILE } from './index-sources';
@@ -217,7 +218,7 @@ function startDocsPart() {
   const emit = (name: string, payload: unknown) => {
     listeners.get(name)?.(payload);
   };
-  const exports = part.exports as DocsMainExports;
+  const exports = part.exports?.(createRegistrations()) as DocsMainExports;
   return { part, exports, files, processes, invoke, emit, emitted };
 }
 

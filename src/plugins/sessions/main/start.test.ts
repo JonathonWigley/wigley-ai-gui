@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
+import { createRegistrations } from '../../../shared/registrations';
 import type {
   ConnectedSession,
   OwnedSession,
@@ -180,7 +181,9 @@ function startSessionsPart(titleMaxLength: number): SessionsMainExports {
     drive: null,
     layouts: { register: () => ({ dispose: () => undefined }) },
   } as unknown as Parameters<typeof sessionsMainPart.start>[0];
-  return sessionsMainPart.start(api).exports as SessionsMainExports;
+  return sessionsMainPart
+    .start(api)
+    .exports?.(createRegistrations()) as SessionsMainExports;
 }
 
 describe('sessions main part', () => {

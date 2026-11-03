@@ -6,7 +6,7 @@ import { definePlugin } from '../../shared/define-plugin';
 // accelerator `Cmd+,` reaches it.
 export const settingsManifest = definePlugin({
   id: 'settings',
-  dependsOn: ['keys'],
+  dependsOn: { main: [], page: ['keys'] },
   commands: {
     show: { label: 'settings', group: 'modes', runsIn: 'main' },
     showMode: {

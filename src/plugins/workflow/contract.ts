@@ -2,7 +2,7 @@
 // between its main and page parts.
 
 import type { Disposable } from '../../contracts/disposable';
-import type { ChannelShape } from '../../contracts/plugin';
+import type { ChannelShape, DependencyKey } from '../../contracts/plugin';
 import type { PlanProgress } from './plan-reader';
 
 // A stage module's id: 'idle', 'primer', 'feature', 'planReady', 'make',
@@ -144,9 +144,21 @@ export interface WorkflowMainExports {
   addStage(stage: MainStage): Disposable;
 }
 
+export const workflowMainKey: DependencyKey<
+  WorkflowMainExports,
+  'main',
+  'workflow'
+> = { id: 'workflow', process: 'main' };
+
 export interface WorkflowPageExports {
   addStage(stage: PageStage): Disposable;
 }
+
+export const workflowPageKey: DependencyKey<
+  WorkflowPageExports,
+  'page',
+  'workflow'
+> = { id: 'workflow', process: 'page' };
 
 export interface WorkflowActionRequest {
   sessionId: string;

@@ -166,7 +166,7 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
       anchor: anchors.anchor,
     };
     return {
-      exports,
+      exports: () => exports,
       commands: {
         toggleHelp(context) {
           if (helpScope !== null) {
