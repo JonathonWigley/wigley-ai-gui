@@ -1047,29 +1047,41 @@ describe('primer tab drop target', () => {
     bytes: async () => new Uint8Array(),
   };
 
-  it('primerView_DropTarget_FollowsThePrimer', async () => {
-    const { store, boxes, tab, targets, inserted } = primerTabSetup({
-      others: ['p2'],
-    });
-    const p1Root = pane(tab, 'primer-form');
-    const p1Targets = targets.filter(
-      ({ target }) => asFake(target.element) === p1Root,
-    );
-    expect(p1Targets).toHaveLength(1);
-    const [p1Target] = p1Targets;
+  it.each<{ name: string; actions: PrimerAction[] }>([
+    { name: 'its pane focused', actions: [] },
+    {
+      name: 'its pane unfocused by a Chat pane',
+      actions: [{ type: 'sessionActivated', sessionId: 'chat-session' }],
+    },
+  ])(
+    'primerView_DropTarget_FollowsThePrimer with $name',
+    async ({ actions }) => {
+      const { store, boxes, tab, targets, inserted } = primerTabSetup({
+        others: ['p2'],
+      });
+      for (const action of actions) {
+        store.dispatch(action);
+      }
+      const p1Root = pane(tab, 'primer-form');
+      const p1Targets = targets.filter(
+        ({ target }) => asFake(target.element) === p1Root,
+      );
+      expect(p1Targets).toHaveLength(1);
+      const [p1Target] = p1Targets;
 
-    p1Target.target.take([file]);
-    await new Promise((resolve) => setTimeout(resolve, 0));
+      p1Target.target.take([file]);
+      await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(inserted.map(({ text }) => text)).toEqual([
-      insertionText(['/d/a.md'], 'x'),
-    ]);
-    expect(boxes.boxOf(inserted[0].editor)?.primerId).toBe('p1');
+      expect(inserted.map(({ text }) => text)).toEqual([
+        insertionText(['/d/a.md'], 'x'),
+      ]);
+      expect(boxes.boxOf(inserted[0].editor)?.primerId).toBe('p1');
 
-    store.dispatch({ type: 'formClosed', formId: 'p1' });
+      store.dispatch({ type: 'formClosed', formId: 'p1' });
 
-    expect(targets.map(({ isDisposed }) => isDisposed)).toEqual(
-      targets.map((registered) => registered === p1Target),
-    );
-  });
+      expect(targets.map(({ isDisposed }) => isDisposed)).toEqual(
+        targets.map((registered) => registered === p1Target),
+      );
+    },
+  );
 });

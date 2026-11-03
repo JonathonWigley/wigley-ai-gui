@@ -289,8 +289,17 @@ describe('form tab drop target', () => {
     bytes: async () => new Uint8Array(),
   };
 
-  it('roundView_DropTarget_FollowsTheRound', async () => {
+  it.each<{ name: string; actions: FormsAction[] }>([
+    { name: 'its pane focused', actions: [] },
+    {
+      name: 'its pane unfocused by a Chat pane',
+      actions: [{ type: 'sessionActivated', sessionId: 'chat-session' }],
+    },
+  ])('roundView_DropTarget_FollowsTheRound with $name', async ({ actions }) => {
     const { store, boxes, tab, targets, inserted } = formTabSetup(['r2']);
+    for (const action of actions) {
+      store.dispatch(action);
+    }
     const [roundRoot] = findAll(tab, 'round');
     const r1Targets = targets.filter(
       ({ target }) => asFake(target.element) === roundRoot,

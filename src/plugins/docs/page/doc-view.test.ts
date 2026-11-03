@@ -338,7 +338,8 @@ describe('createDocView', () => {
   });
 
   // `writeBytes`: 'written' answers at once; 'refused' rejects; 'afterQuit'
-  // answers only once the test has quit the editor with `:q`.
+  // answers only once the test has quit the editor with `:q`. Each take
+  // settles before the next begins, unless `areOverlapping`.
   it.each([
     {
       name: 'a dropped image',
@@ -367,6 +368,14 @@ describe('createDocView', () => {
       toasts: ['Refused: outside the docs'],
     },
     {
+      name: 'a pasted image main refuses, then a dropped doc',
+      takes: [[pasted([1]), dropped('/n/notes/b.md', 'text/markdown')]],
+      writeBytes: 'refused',
+      writes: [['/n/docs/images/guide-20261102-090507.png', [1]]],
+      inserts: ['[b.md](../notes/b.md)'],
+      toasts: ['Refused: outside the docs'],
+    },
+    {
       name: 'a pasted image, then a dropped doc',
       takes: [[pasted([1]), dropped('/n/notes/b.md', 'text/markdown')]],
       writeBytes: 'written',
@@ -379,6 +388,21 @@ describe('createDocView', () => {
     {
       name: 'two takes in one second',
       takes: [[pasted([1])], [pasted([2])]],
+      writeBytes: 'written',
+      writes: [
+        ['/n/docs/images/guide-20261102-090507.png', [1]],
+        ['/n/docs/images/guide-20261102-090507-2.png', [2]],
+      ],
+      inserts: [
+        '![guide-20261102-090507.png](images/guide-20261102-090507.png)',
+        '![guide-20261102-090507-2.png](images/guide-20261102-090507-2.png)',
+      ],
+      toasts: [],
+    },
+    {
+      name: 'two takes in one second, the second begun before any write answers',
+      takes: [[pasted([1])], [pasted([2])]],
+      areOverlapping: true,
       writeBytes: 'written',
       writes: [
         ['/n/docs/images/guide-20261102-090507.png', [1]],
@@ -420,8 +444,11 @@ describe('createDocView', () => {
 
     for (const files of row.takes) {
       targets[0].target.take(files);
-      await settled();
+      if (row.areOverlapping !== true) {
+        await settled();
+      }
     }
+    await settled();
     if (row.writeBytes === 'afterQuit') {
       editors[0].events.quit(false);
       answerWrite();

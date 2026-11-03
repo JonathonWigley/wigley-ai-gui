@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { DropTarget } from '../../../contracts/drops';
+import type { DroppedFile, DropTarget } from '../../../contracts/drops';
 import type { EditorEvents, EditorHost } from '../../../contracts/editor';
 import type { FocusTarget, PaneDirection } from '../../../contracts/panes';
 import type { Paths } from '../../../contracts/paths';
 import type { PageChannel } from '../../../contracts/plugin';
 import type { FollowupItem } from '../../../shared/followups/followup-file';
+import { insertionText } from '../../../shared/page/file-drop/file-chips';
 import {
   type RecordedAnchor,
   recordingAnchors,
@@ -33,6 +34,8 @@ interface CreatedEditor {
   events: EditorEvents;
   isDestroyed: boolean;
   focusOptions: unknown[];
+  // Every text inserted at the cursor, which sits after an `x`.
+  inserted: string[];
 }
 
 function item(title: string): FollowupItem {
@@ -91,11 +94,16 @@ function fakeEditorHost() {
         events,
         isDestroyed: false,
         focusOptions: [],
+        inserted: [],
       };
       created.push(editor);
       return {
         text: () => editor.doc,
         setText: () => undefined,
+        insert: (text: string) => {
+          editor.inserted.push(text);
+        },
+        charBeforeCursor: () => 'x',
         focus: (options: unknown) => {
           editor.focusOptions.push(options);
           events.focused();
@@ -493,10 +501,22 @@ describe('backlog follow-up editor drop target', () => {
   });
 
   it('followupEditor_DropTarget_OnTheSlot', async () => {
-    const { sheet, targets } = await backlogSetup();
+    const { view, created, sheet, targets } = await backlogSetup();
+    const file: DroppedFile = {
+      name: 'a.md',
+      mediaType: 'text/markdown',
+      path: '/d/a.md',
+      bytes: async () => new Uint8Array(),
+    };
+    view.commands.create();
+
+    targets[0].take([file]);
+    await settle();
 
     const [slot] = findAll(sheet, 'backlog-editor');
     expect(targets).toHaveLength(1);
     expect(asFake(targets[0].element)).toBe(slot);
+    const [title] = liveEditors(created, 'title');
+    expect(title.inserted).toEqual([insertionText(['/d/a.md'], 'x')]);
   });
 });
