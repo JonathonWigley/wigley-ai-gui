@@ -148,7 +148,7 @@ function setUp(
     reveal: (sessionId) => revealed.push(sessionId),
     paths: posixPaths,
     homeDir: HOME,
-    log: (source, message) => logs.push(`[${source}] ${message}`),
+    log: (message) => logs.push(message),
     toast: (text, tone) => toasts.push({ text, tone }),
   });
   prompt.open();

@@ -70,7 +70,7 @@ function setUp(options: {
     files,
     paths: posixPaths,
     tempFolders: options.tempFolders ?? [],
-    log: (source, message) => logged.push(`[${source}] ${message}`),
+    log: (message) => logged.push(message),
   });
   return {
     choices,

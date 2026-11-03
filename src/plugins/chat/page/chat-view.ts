@@ -5,7 +5,7 @@ import type { Disposable } from '../../../contracts/disposable';
 import type { PageDrops } from '../../../contracts/drops';
 import type { EditorHost, TextEditor } from '../../../contracts/editor';
 import type { ChatEntryKind } from '../../../contracts/agent';
-import type { Log, PluginLog } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import type { PageChannel, ToastTone } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
@@ -109,6 +109,8 @@ export interface ChatTabs extends ChatView {
   session(sessionId: string): ChatSession | undefined;
   sessionOfEditor(editor: TextEditor): ChatSession | undefined;
   markSent(sessionId: string): void;
+  // Ends every held tab; no tab starts after it.
+  dispose(): void;
 }
 
 // `allow` answers a permission entry allowed; `deny` asks for the reason
@@ -226,6 +228,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
   deps.statusParts.onChanged(drawEveryComposer);
   let pendingReveal: string | null = null;
   let lastShownSessionId: string | null = null;
+  let isDisposed = false;
 
   const focusIfRevealed = (tab: HeldTab) => {
     const isWaiting = pendingReveal === tab.sessionId;
@@ -241,7 +244,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
   };
 
   const add = (state: ChatSessionState) => {
-    if (tabs.has(state.sessionId)) {
+    if (isDisposed || tabs.has(state.sessionId)) {
       return;
     }
     const tab = createTab(state, toastedKinds, deps, {
@@ -260,7 +263,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
           deps.otherSessionShown();
         }
         lastShownSessionId = shownTab.sessionId;
-        log('chat', `Chat tab shown in ${shownTab.name}`);
+        log(`Chat tab shown in ${shownTab.name}`);
         drawStatusLine(shownTab);
         shownTab.entries.scrollToFocus();
         focusIfRevealed(shownTab);
@@ -276,7 +279,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
   const heldFor = (message: string, sessionId: string) => {
     const tab = tabs.get(sessionId);
     if (tab === undefined) {
-      log('chat', `${message} for unknown session ${sessionId} ignored`);
+      log(`${message} for unknown session ${sessionId} ignored`);
     }
     return tab;
   };
@@ -318,7 +321,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       if (isTurnStarted) {
         tab.unseen = null;
       }
-      log('chat', `${tab.name} is ${activity}`);
+      log(`${tab.name} is ${activity}`);
       drawActivity(tab, deps);
       drawStatusLine(tab);
     }
@@ -327,7 +330,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     const tab = heldFor('background', sessionId);
     if (tab !== undefined) {
       tab.state = { ...tab.state, background };
-      log('chat', `${tab.name} has ${background} running in the background`);
+      log(`${tab.name} has ${background} running in the background`);
       drawActivity(tab, deps);
     }
   });
@@ -339,7 +342,6 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     tab.state = { ...tab.state, repo, branch };
     drawStatusLine(tab);
     log(
-      'chat',
       branch === null
         ? `${tab.name} is in ${repo}, no branch`
         : `${tab.name} is in ${repo} on ${branch}`,
@@ -357,7 +359,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       tab.state = { ...tab.state, entries };
       tab.entries.rebuild(entries);
       drawTurn(tab);
-      log('chat', `${entries.length} entries read in ${tab.name}`);
+      log(`${entries.length} entries read in ${tab.name}`);
     }
   });
   channel.on('queued', ({ sessionId, queued }) => {
@@ -365,7 +367,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     if (tab !== undefined) {
       tab.state = { ...tab.state, queued };
       tab.entries.setQueued(queued);
-      log('chat', `${queued.length} pending message(s) in ${tab.name}`);
+      log(`${queued.length} pending message(s) in ${tab.name}`);
     }
   });
   channel.on('sessionRunning', ({ sessionId }) => {
@@ -375,7 +377,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       tab.entries.setWorking(isWorking(tab.state));
       drawTurn(tab);
       drawStatusLine(tab);
-      log('chat', `${tab.name} running`);
+      log(`${tab.name} running`);
     }
   });
   channel.on('sessionRested', ({ sessionId, error }) => {
@@ -394,9 +396,9 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       deps.visibleSessionRested();
     }
     if (error === null) {
-      log('chat', `${tab.name} rested`);
+      log(`${tab.name} rested`);
     } else {
-      log('chat', `${tab.name} rested: ${error}`);
+      log(`${tab.name} rested: ${error}`);
       deps.toast(`${tab.name} stopped: ${error}`, 'error');
     }
   });
@@ -406,16 +408,11 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       return;
     }
     tabs.delete(sessionId);
-    tab.stop.leave();
-    tab.dropTarget?.dispose();
-    tab.box?.destroy();
-    tab.composerSize.disconnect();
-    tab.composer.dispose();
-    tab.entries.dispose();
+    tearDownTab(tab);
     if (pendingReveal === sessionId) {
       pendingReveal = null;
     }
-    log('chat', `session closed: ${tab.name}`);
+    log(`session closed: ${tab.name}`);
   });
   // Viewing a session, clearing its conversation or sending to it leaves
   // nothing unseen.
@@ -443,7 +440,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       }
     })
     .catch((error: unknown) =>
-      log('chat', `chat sessions not read: ${errorText(error)}`),
+      log(`chat sessions not read: ${errorText(error)}`),
     );
 
   const visibleTab = () =>
@@ -455,6 +452,9 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
 
   return {
     reveal(sessionId) {
+      if (isDisposed) {
+        return;
+      }
       pendingReveal = sessionId;
       const tab = tabs.get(sessionId);
       if (tab !== undefined) {
@@ -472,7 +472,24 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     sessionOfEditor: (editor) =>
       asSession([...tabs.values()].find((tab) => tab.box === editor)),
     markSent: clearUnseen,
+    dispose() {
+      isDisposed = true;
+      for (const tab of tabs.values()) {
+        tearDownTab(tab);
+      }
+      tabs.clear();
+    },
   };
+}
+
+// Ends what the tab holds that outlives its element.
+function tearDownTab(tab: HeldTab) {
+  tab.stop.leave();
+  tab.dropTarget?.dispose();
+  tab.box?.destroy();
+  tab.composerSize.disconnect();
+  tab.composer.dispose();
+  tab.entries.dispose();
 }
 
 // Draws the tab's composer through the chat layout in place of its last draw,
@@ -516,7 +533,7 @@ function askHistory(tab: HeldTab, deps: ChatViewDeps) {
   void deps.channel
     .invoke('loadHistory', tab.sessionId)
     .catch((error: unknown) => {
-      deps.log('chat', `history not loaded: ${errorText(error)}`);
+      deps.log(`history not loaded: ${errorText(error)}`);
       deps.toast(`history not loaded: ${errorText(error)}`, 'error');
     });
 }
@@ -683,10 +700,9 @@ function createTab(
           completionWords(deps.slashCommandNames(), tab.state.commands),
         offered: (words) =>
           deps.log(
-            'chat',
             `completions offered: ${words.map((word) => `/${word}`).join(', ')}`,
           ),
-        accepted: (word) => deps.log('chat', `completion accepted: /${word}`),
+        accepted: (word) => deps.log(`completion accepted: /${word}`),
       },
     },
   );
@@ -724,36 +740,36 @@ function attachReportOf(
 ): AttachReport {
   return {
     attached: (image) =>
-      deps.log('chat', `attached a ${image.mediaType} image in ${name}`),
+      deps.log(`attached a ${image.mediaType} image in ${name}`),
     refused: (reason) => {
-      deps.log('chat', `image refused: ${reason}`);
+      deps.log(`image refused: ${reason}`);
       deps.toast(reason, 'error');
     },
     failed: (fileName, what, error) => {
-      deps.log('chat', `${fileName} not ${what}: ${error}`);
+      deps.log(`${fileName} not ${what}: ${error}`);
       deps.toast(`${fileName} not ${what}: ${error}`, 'error');
     },
     inserted: (paths) =>
-      deps.log('chat', `inserted ${paths.length} file path(s) in ${name}`),
+      deps.log(`inserted ${paths.length} file path(s) in ${name}`),
   };
 }
 
-function putEntry(tab: HeldTab, entry: ChatEntry, log: Log) {
+function putEntry(tab: HeldTab, entry: ChatEntry, log: PluginLog) {
   const applied = applyEntry(tab.state.entries, entry);
   tab.state = { ...tab.state, entries: applied.entries };
   tab.entries.put(entry, applied.entries);
   drawTurn(tab);
   if (applied.added) {
-    log('chat', `${entry.kind} entry added in ${tab.name}`);
+    log(`${entry.kind} entry added in ${tab.name}`);
   }
 }
 
-function setControls(tab: HeldTab, controls: SessionControl[], log: Log) {
+function setControls(tab: HeldTab, controls: SessionControl[], log: PluginLog) {
   const changed = changedControls(tab.state.controls, controls);
   tab.state = { ...tab.state, controls };
   drawStatusLine(tab);
   for (const control of changed) {
-    log('chat', `${control.label} is ${valueLabel(control)} in ${tab.name}`);
+    log(`${control.label} is ${valueLabel(control)} in ${tab.name}`);
   }
 }
 
@@ -773,7 +789,7 @@ function drawActivity(
   }
   tab.activity = activity;
   deps.sessions.setActivity(tab.sessionId, 'chat', activity);
-  deps.log('chat', `row activity ${tab.name} ${activity?.word ?? 'none'}`);
+  deps.log(`row activity ${tab.name} ${activity?.word ?? 'none'}`);
 }
 
 // A session closes at once unless Claude is still working on it: then the
@@ -790,7 +806,7 @@ function mayClose(tab: HeldTab, deps: ChatViewDeps): boolean {
     tab.closeConfirmed = true;
     deps.sessions.closeSession(tab.sessionId);
   });
-  deps.log('chat', `closing the session asks to end ${tab.name}`);
+  deps.log(`closing the session asks to end ${tab.name}`);
   return false;
 }
 

@@ -166,7 +166,7 @@ export function createComposerSurface(
         return { element: view.element, view };
       });
     } catch (error) {
-      deps.log('chat', `default layout working failed: ${errorText(error)}`);
+      deps.log(`default layout working failed: ${errorText(error)}`);
       isWorkingFailed = true;
       clearWorking();
     }

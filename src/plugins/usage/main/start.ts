@@ -7,11 +7,11 @@ import type {
 import {
   CHAT_HARNESS_ID,
   type ChatMainEvents,
-  type ChatMainExports,
+  chatMainKey,
 } from '../../chat/contract';
-import type {
-  SessionsMainEvents,
-  SessionsMainExports,
+import {
+  type SessionsMainEvents,
+  sessionsMainKey,
 } from '../../sessions/contract';
 import type { UsageChannel, UsageSnapshot } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
@@ -50,9 +50,9 @@ export const usageMainPart: MainPart<typeof usageManifest> = {
   manifest: usageManifest,
   start(api: UsageApi) {
     const { services, channel, events } = api;
-    const layouts = api.layouts.register({ layoutTypes });
-    const chat = api.dependency<ChatMainExports>('chat');
-    const sessions = api.dependency<SessionsMainExports>('sessions');
+    api.layouts.register({ layoutTypes });
+    const chat = api.dependency(chatMainKey);
+    const sessions = api.dependency(sessionsMainKey);
     let state = EMPTY_USAGE_STATE;
     // `sessionUsage` callers still waiting, each for its session's usage.
     const usageWaits: { sessionId: string; resolve: () => void }[] = [];
@@ -102,7 +102,7 @@ export const usageMainPart: MainPart<typeof usageManifest> = {
     );
     const noHarness = `no agent harness "${CHAT_HARNESS_ID}"`;
     if (harness === undefined) {
-      services.log('usage', `${noHarness}: plan usage is not read`);
+      services.log(`${noHarness}: plan usage is not read`);
     }
     let poller: PlanPoller | null =
       harness === undefined
@@ -116,10 +116,7 @@ export const usageMainPart: MainPart<typeof usageManifest> = {
             roundStarted: (profiles) => apply(withProfiles(state, profiles)),
             polled: (profile, result) => {
               if (!result.ok) {
-                services.log(
-                  'usage',
-                  `poll ${profile.name} failed: ${result.error}`,
-                );
+                services.log(`poll ${profile.name} failed: ${result.error}`);
               }
               apply(withPollResult(state, profile.configDir, result));
             },
@@ -140,7 +137,7 @@ export const usageMainPart: MainPart<typeof usageManifest> = {
       }
       return poller.pollNow();
     };
-    const settingsListener = api.onSettingsChanged(() => poller?.reschedule());
+    api.onSettingsChanged(() => poller?.reschedule());
     poller?.start();
     const snapshot = () => state.snapshot;
     services.selfTest?.run(
@@ -156,25 +153,16 @@ export const usageMainPart: MainPart<typeof usageManifest> = {
         sessionUsage,
       }),
     );
-    const driveActions =
-      api.drive !== null
-        ? addDriveActions(api.drive, {
-            clock: services.clock,
-            selectedSessionId: () => sessions.selectedSessionId(),
-            snapshot,
-            seed,
-            pollNow,
-            harnesses: services.agentHarnesses,
-          })
-        : null;
-    return {
-      commands: {},
-      dispose() {
-        layouts.dispose();
-        settingsListener.dispose();
-        poller?.dispose();
-        driveActions?.dispose();
-      },
-    };
+    if (api.drive !== null) {
+      addDriveActions(api.drive, {
+        clock: services.clock,
+        selectedSessionId: () => sessions.selectedSessionId(),
+        snapshot,
+        seed,
+        pollNow,
+        harnesses: services.agentHarnesses,
+      });
+    }
+    return { commands: {}, dispose: () => poller?.dispose() };
   },
 };

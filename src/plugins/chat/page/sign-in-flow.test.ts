@@ -58,7 +58,7 @@ function setUp(logInAnswer: () => Promise<void> = () => Promise.resolve()) {
       return Promise.resolve();
     },
     toast: (text, tone) => toasts.push({ text, tone }),
-    log: (source, message) => logs.push(`[${source}] ${message}`),
+    log: (message) => logs.push(message),
   });
   const emit = <K extends keyof Messages & string>(
     message: K,

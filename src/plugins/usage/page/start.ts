@@ -8,11 +8,11 @@ import type {
 import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import { element } from '../../../shared/page/dom';
-import type { ChatPageExports } from '../../chat/contract';
-import type { KeysPageExports } from '../../keys/contract';
-import type {
-  SessionsPageEvents,
-  SessionsPageExports,
+import { chatPageKey } from '../../chat/contract';
+import { keysPageKey } from '../../keys/contract';
+import {
+  type SessionsPageEvents,
+  sessionsPageKey,
 } from '../../sessions/contract';
 import type {
   UsageChannel,
@@ -55,7 +55,8 @@ const REDRAW_MS = 60_000;
 // the usage details in the right bar while they are open (`toggleDetails`,
 // kept in `uiState`), all through the `usage.layout` layout. Exports
 // `sessionLinePart`, the same line as a part for another surface; every part
-// it made redraws with the page's own. Hears main's `changed` snapshots (after
+// it made redraws with the page's own until the dependent that asked for it
+// stops. Hears main's `changed` snapshots (after
 // one `snapshot` read) and `sessions.activeChanged` for the shown session, and
 // redraws all on each, on each layouts set and once a minute for the
 // countdowns; hears `sessions.sessionAdded` for each session's name in the log
@@ -67,10 +68,9 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
   manifest: usageManifest,
   start(api: UsageApi) {
     const { services } = api;
-    const log = (line: string) => services.log('usage', line);
-    const sessions = api.dependency<SessionsPageExports>('sessions');
-    const chat = api.dependency<ChatPageExports>('chat');
-    const keys = api.dependency<KeysPageExports>('keys');
+    const sessions = api.dependency(sessionsPageKey);
+    const chat = api.dependency(chatPageKey);
+    const keys = api.dependency(keysPageKey);
     const parts = createUsageParts({
       defaultLayout,
       kit: {
@@ -102,11 +102,8 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
     // Each session's name in the log, its side-bar label (`gamma 2`).
     const names = new Map<string, string>();
     const lineParts = createSessionLineParts();
-    const sessionLinePart: UsagePageExports['sessionLinePart'] = (
-      id,
-      partLog,
-    ) => {
-      const lines = createSessionLines({
+    const makeSessionLines = (id: string, partLog: (line: string) => void) =>
+      createSessionLines({
         id,
         line: sessionLineKind(parts),
         log: partLog,
@@ -114,14 +111,13 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
         latest: () =>
           snapshot === null ? null : { snapshot, now: services.clock.now() },
       });
-      lineParts.add(lines);
-      return lines.part;
-    };
-    chat.addStatusPart(sessionLinePart('usage.sessionLine', log));
+    const statusLines = makeSessionLines('usage.sessionLine', services.log);
+    lineParts.add(statusLines);
+    chat.addStatusPart(statusLines.part);
     const rowLines = createSessionLines({
       id: 'usage.rowLine',
       line: rowLineKind(parts),
-      log: (line) => log(`row ${line}`),
+      log: (line) => services.log(`row ${line}`),
       nameOf: (sessionId) => names.get(sessionId) ?? sessionId,
       latest: () =>
         snapshot === null ? null : { snapshot, now: services.clock.now() },
@@ -146,7 +142,7 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
       const text = statusLineText(input);
       if (text !== lastStatusText) {
         lastStatusText = text;
-        log(`status line ${text}`);
+        services.log(`status line ${text}`);
       }
     };
     // Draws the details again, the last draw disposed first, and returns
@@ -181,13 +177,13 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
       if (detailsContribution === null) {
         detailsContribution = api.areas.rightBar.contribute(detailsSlot);
         lastDetailsText = drawDetails(snapshot, now);
-        log(`details shown: ${lastDetailsText}`);
+        services.log(`details shown: ${lastDetailsText}`);
         return;
       }
       const text = drawDetails(snapshot, now);
       if (text !== lastDetailsText) {
         lastDetailsText = text;
-        log(`details drawn: ${text}`);
+        services.log(`details drawn: ${text}`);
       }
     };
     const closeDetails = () => {
@@ -203,7 +199,7 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
         [() => contribution.dispose(), () => last?.dispose()],
         (step) => step(),
       );
-      log('details hidden');
+      services.log('details hidden');
     };
 
     api.channel.on('changed', (next) => {
@@ -217,7 +213,8 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
           redraw();
         }
       },
-      (error: unknown) => log(`snapshot not read: ${errorText(error)}`),
+      (error: unknown) =>
+        services.log(`snapshot not read: ${errorText(error)}`),
     );
     api.events.on('sessions.activeChanged', ({ sessionId }) => {
       shownSessionId = sessionId;
@@ -262,7 +259,14 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
           }
         },
       },
-      exports: () => ({ sessionLinePart }) satisfies UsagePageExports,
+      exports: (consumer) =>
+        ({
+          sessionLinePart(id, partLog) {
+            const lines = makeSessionLines(id, partLog);
+            consumer.track(lineParts.add(lines));
+            return lines.part;
+          },
+        }) satisfies UsagePageExports,
     };
   },
 };

@@ -119,4 +119,27 @@ describe('session line parts', () => {
 
     expect(setup.logged).toEqual({ a: expected, b: expected });
   });
+
+  it('add_Disposed_RedrawAndForgetSkipIt', () => {
+    const lineSet = () => ({
+      part: { id: 'set', build: () => ({ dispose: () => undefined }) },
+      redraw: vi.fn(),
+      forget: vi.fn(),
+    });
+    const first = lineSet();
+    const second = lineSet();
+    const lineParts = createSessionLineParts();
+    const firstHandle = lineParts.add(first);
+    lineParts.add(second);
+
+    firstHandle.dispose();
+    firstHandle.dispose();
+    lineParts.redraw();
+    lineParts.forget('s1');
+
+    expect(first.redraw).toHaveBeenCalledTimes(0);
+    expect(first.forget).toHaveBeenCalledTimes(0);
+    expect(second.redraw).toHaveBeenCalledTimes(1);
+    expect(second.forget).toHaveBeenCalledTimes(1);
+  });
 });

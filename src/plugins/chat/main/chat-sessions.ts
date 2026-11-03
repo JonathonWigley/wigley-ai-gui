@@ -14,7 +14,7 @@ import type { Alerts } from '../../../contracts/alerts';
 import type { Clock, RandomUuid } from '../../../contracts/ambient';
 import type { Disposable } from '../../../contracts/disposable';
 import type { Git } from '../../../contracts/git';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type { MainChannel, PluginEvents } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { refusalOf } from '../image-rules';
@@ -79,7 +79,7 @@ export interface ChatSessionsDeps {
   window: { show(): void; isFocused(): boolean };
   // Reads each row's repo and branch at its open and after each turn.
   git: Pick<Git, 'topLevel' | 'currentBranch'>;
-  log: Log;
+  log: PluginLog;
   // Stamps the `at` of the notices and permission entries chat makes itself.
   clock: Clock;
 }
@@ -443,7 +443,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     deps.saved
       .save(snapshot())
       .catch((error: unknown) =>
-        log('chat', `open sessions not saved: ${errorText(error)}`),
+        log(`open sessions not saved: ${errorText(error)}`),
       );
   }
 
@@ -466,11 +466,11 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   function liveFor(method: string, sessionId: string): HeldSession | null {
     const session = held.get(sessionId) ?? null;
     if (session === null) {
-      log('chat', `${method} for unknown session ${sessionId} ignored`);
+      log(`${method} for unknown session ${sessionId} ignored`);
       return null;
     }
     if (!session.state.running) {
-      log('chat', `${method} for resting session ${sessionId} ignored`);
+      log(`${method} for resting session ${sessionId} ignored`);
       return null;
     }
     return session;
@@ -674,7 +674,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       restored.splice(index, 0, next);
       session.state.queued = restored;
       sendQueued(session);
-      log('chat', `queued message ${next.id} not sent: ${errorText(error)}`);
+      log(`queued message ${next.id} not sent: ${errorText(error)}`);
       return false;
     }
     return true;
@@ -687,7 +687,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     try {
       sentEntryId = deliver(session, userMessageOf(row));
     } catch (error) {
-      log('chat', `queued message ${row.id} not sent: ${errorText(error)}`);
+      log(`queued message ${row.id} not sent: ${errorText(error)}`);
       return false;
     }
     const sentRow = { ...row, sentEntryId };
@@ -729,10 +729,10 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       session.writtenMessages.delete(entryId);
       send('returned', { sessionId, messages: [written.message] });
     } else {
-      log('chat', `dropped message ${entryId} not held`);
+      log(`dropped message ${entryId} not held`);
       return;
     }
-    log('chat', `sent message ${entryId} returned: never taken in`);
+    log(`sent message ${entryId} returned: never taken in`);
   }
 
   // The state is dropped first, so every later event for the session is
@@ -746,12 +746,11 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   function logCloseExit(session: HeldSession) {
     const { sessionId } = session.state;
     if (session.exit === null) {
-      log('chat', `session ${sessionId} closed; no exit reported`);
+      log(`session ${sessionId} closed; no exit reported`);
       return;
     }
     const { code, error } = session.exit;
     log(
-      'chat',
       `session ${sessionId} closed (code ${code}${error === null ? '' : `, error: ${error}`})`,
     );
   }
@@ -863,9 +862,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         if (!isLive(session, processStart)) {
           return;
         }
-        log('chat', `session ${sessionId} ended (code ${code})`);
+        log(`session ${sessionId} ended (code ${code})`);
         if (error !== null) {
-          log('chat', `session ${sessionId} failed: ${error}`);
+          log(`session ${sessionId} failed: ${error}`);
         }
         // The row and its state stay, resting, until the user closes the row.
         session.state.running = false;
@@ -1001,7 +1000,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         send('branch', { sessionId: session.state.sessionId, repo, branch });
       },
       (error: unknown) =>
-        log('chat', `branch not read in ${folderName}: ${errorText(error)}`),
+        log(`branch not read in ${folderName}: ${errorText(error)}`),
     );
   }
 
@@ -1059,11 +1058,11 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     running.add(process);
     session.state.running = true;
     send('sessionRunning', { sessionId });
-    log('chat', `session ${sessionId} process started (resume ${resume})`);
+    log(`session ${sessionId} process started (resume ${resume})`);
     deps.recent
       .record(projectDir, profile.name)
       .catch((error: unknown) =>
-        log('chat', `recent folders not saved: ${errorText(error)}`),
+        log(`recent folders not saved: ${errorText(error)}`),
       );
   }
 
@@ -1132,7 +1131,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   async function sendMessage(sessionId: string, message: UserMessage) {
     const session = held.get(sessionId);
     if (session === undefined) {
-      log('chat', `send for unknown session ${sessionId} ignored`);
+      log(`send for unknown session ${sessionId} ignored`);
       return;
     }
     if (isTurnRunning(session)) {
@@ -1153,15 +1152,12 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       if (reading !== null) {
         await reading;
         if (held.get(sessionId) !== session) {
-          log(
-            'chat',
-            `send for session ${sessionId} closed while reading ignored`,
-          );
+          log(`send for session ${sessionId} closed while reading ignored`);
           return;
         }
       }
       if (isKilled) {
-        log('chat', `send for session ${sessionId} ignored: chat is stopping`);
+        log(`send for session ${sessionId} ignored: chat is stopping`);
         return;
       }
       if (!session.state.running) {
@@ -1174,7 +1170,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   async function sendAllNow(sessionId: string, message: UserMessage | null) {
     const session = held.get(sessionId);
     if (session === undefined) {
-      log('chat', `sendAllNow for unknown session ${sessionId} ignored`);
+      log(`sendAllNow for unknown session ${sessionId} ignored`);
       return;
     }
     if (!isTurnRunning(session)) {
@@ -1185,7 +1181,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     }
     const hasUnsent = session.state.queued.some(isUnsent);
     if (!hasUnsent && message === null) {
-      log('chat', `nothing to send now in ${sessionId}`);
+      log(`nothing to send now in ${sessionId}`);
       return;
     }
     if (message !== null) {
@@ -1206,7 +1202,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   function queue(session: HeldSession, message: UserMessage) {
     appendQueued(session, message);
     sendQueued(session);
-    log('chat', `queued a message in session ${session.state.sessionId}`);
+    log(`queued a message in session ${session.state.sessionId}`);
   }
 
   function appendQueued(session: HeldSession, message: UserMessage) {
@@ -1280,7 +1276,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     const session = startNew(request, { select: false });
     deliverWritten(session, request.message);
     const { sessionId } = session.state;
-    log('chat', `launched session ${sessionId} in ${request.projectDir}`);
+    log(`launched session ${sessionId} in ${request.projectDir}`);
     return sessionId;
   }
 
@@ -1304,7 +1300,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       holding(hostSessionId) !== undefined ||
       isOpenOnOtherRow(hostSessionId)
     ) {
-      log('chat', `session ${hostSessionId} already open; not restored`);
+      log(`session ${hostSessionId} already open; not restored`);
       return;
     }
     const profile = deps
@@ -1326,7 +1322,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         { select: false },
       );
     } catch (error) {
-      log('chat', `session ${hostSessionId} not restored: ${errorText(error)}`);
+      log(`session ${hostSessionId} not restored: ${errorText(error)}`);
       return;
     }
     if (record.busy) {
@@ -1337,10 +1333,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     }
     if (record.sent && profile !== undefined) {
       restoreSavedUsage(session, profile).catch((error: unknown) =>
-        log(
-          'chat',
-          `saved usage of ${hostSessionId} not read: ${errorText(error)}`,
-        ),
+        log(`saved usage of ${hostSessionId} not read: ${errorText(error)}`),
       );
     }
   }
@@ -1377,10 +1370,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     try {
       return await harness.lastUsage(hostSessionId, projectDir, profileDir);
     } catch (error) {
-      log(
-        'chat',
-        `saved usage of ${hostSessionId} not read: ${errorText(error)}`,
-      );
+      log(`saved usage of ${hostSessionId} not read: ${errorText(error)}`);
       return null;
     }
   }
@@ -1400,7 +1390,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
 
   function restore(saved: SavedSessions) {
     if (isKilled) {
-      log('chat', 'open sessions not restored: chat is stopping');
+      log('open sessions not restored: chat is stopping');
       return;
     }
     for (const record of saved.sessions) {
@@ -1430,7 +1420,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       return await harness.history(hostSessionId, projectDir, profileDir);
     } catch (error) {
       const reason = errorText(error);
-      log('chat', `history of ${hostSessionId} not read: ${reason}`);
+      log(`history of ${hostSessionId} not read: ${reason}`);
       return [
         {
           kind: 'notice',
@@ -1514,7 +1504,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     try {
       return await deps.archived.ids();
     } catch (error) {
-      log('chat', `archived sessions not read: ${errorText(error)}`);
+      log(`archived sessions not read: ${errorText(error)}`);
       return new Set();
     }
   }
@@ -1633,7 +1623,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     process
       .end()
       .catch((error: unknown) =>
-        log('chat', `session ${sessionId} end failed: ${errorText(error)}`),
+        log(`session ${sessionId} end failed: ${errorText(error)}`),
       );
     session.state.running = false;
     session.process = null;
@@ -1643,11 +1633,11 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   function clear(sessionId: string) {
     const session = held.get(sessionId);
     if (session === undefined) {
-      log('chat', `clear for unknown session ${sessionId} ignored`);
+      log(`clear for unknown session ${sessionId} ignored`);
       return;
     }
     if (isKilled) {
-      log('chat', `clear for session ${sessionId} ignored: chat is stopping`);
+      log(`clear for session ${sessionId} ignored: chat is stopping`);
       return;
     }
     const profile = profileNamed(session.state.profile);
@@ -1676,10 +1666,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     } finally {
       save();
     }
-    log(
-      'chat',
-      `conversation cleared in ${path.basename(session.state.projectDir)}`,
-    );
+    log(`conversation cleared in ${path.basename(session.state.projectDir)}`);
   }
 
   return {
@@ -1711,7 +1698,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     notice(sessionId, text, tone) {
       const session = held.get(sessionId);
       if (session === undefined) {
-        log('chat', `notice for unknown session ${sessionId} ignored`);
+        log(`notice for unknown session ${sessionId} ignored`);
         return;
       }
       addNotice(session, text, tone);
@@ -1730,18 +1717,18 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     pullBack(sessionId, queuedId) {
       const session = held.get(sessionId);
       if (session === undefined) {
-        log('chat', `pullBack for unknown session ${sessionId} ignored`);
+        log(`pullBack for unknown session ${sessionId} ignored`);
         return;
       }
       const pulled = session.state.queued.find(
         (queued) => queued.id === queuedId,
       );
       if (pulled === undefined) {
-        log('chat', `queued message ${queuedId} no longer queued`);
+        log(`queued message ${queuedId} no longer queued`);
         return;
       }
       if (!isUnsent(pulled)) {
-        log('chat', `queued message ${queuedId} already sent`);
+        log(`queued message ${queuedId} already sent`);
         return;
       }
       session.state.queued = session.state.queued.filter(
@@ -1753,16 +1740,16 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     sendNow(sessionId, queuedId) {
       const session = held.get(sessionId);
       if (session === undefined) {
-        log('chat', `sendNow for unknown session ${sessionId} ignored`);
+        log(`sendNow for unknown session ${sessionId} ignored`);
         return;
       }
       const row = session.state.queued.find((queued) => queued.id === queuedId);
       if (row === undefined) {
-        log('chat', `queued message ${queuedId} no longer queued`);
+        log(`queued message ${queuedId} no longer queued`);
         return;
       }
       if (!isUnsent(row)) {
-        log('chat', `queued message ${queuedId} already sent`);
+        log(`queued message ${queuedId} already sent`);
         return;
       }
       if (writeRowNow(session, row)) {
@@ -1785,7 +1772,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       }
       const pending = session.pending.get(entryId);
       if (!pending) {
-        log('chat', `answerPermission for unknown entry ${entryId} ignored`);
+        log(`answerPermission for unknown entry ${entryId} ignored`);
         return;
       }
       settlePermission(session, pending, answer);
@@ -1809,7 +1796,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           session.owned.end();
         },
         (error: unknown) => {
-          log('chat', `session ${sessionId} end failed: ${errorText(error)}`);
+          log(`session ${sessionId} end failed: ${errorText(error)}`);
           session.owned.end();
         },
       );

@@ -138,4 +138,20 @@ describe('agents preview', () => {
     expect(opened).toHaveLength(2);
     expect(Object.keys(preview.rosters())).toEqual(['row-2']);
   });
+
+  it('close_OpenPreview_SendsEmptyRoster', () => {
+    const { preview, ends, rosters } = setUp();
+    preview.toggle();
+
+    preview.close();
+    preview.close();
+
+    expect(rosters).toHaveLength(2);
+    expect(rosters[1]).toEqual({
+      sessionId: 'row-1',
+      roster: { agents: [], tasks: [] },
+    });
+    expect(preview.rosters()).toEqual({});
+    expect(ends).toEqual([]);
+  });
 });

@@ -4,7 +4,7 @@ import type {
   LogInEvents,
   LogInProcess,
 } from '../../../contracts/agent';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type { MainChannel } from '../../../contracts/plugin';
 import type { ChatChannel, ChatProfile } from '../contract';
 import { requireProfile } from './lookups';
@@ -41,7 +41,7 @@ export function createAccounts(deps: {
   harness(): AgentHarness;
   profiles(): readonly ChatProfile[];
   send: MainChannel<ChatChannel>['send'];
-  log: Log;
+  log: PluginLog;
 }): Accounts {
   const { send, log } = deps;
   let running: RunningLogIn | null = null;
@@ -60,7 +60,6 @@ export function createAccounts(deps: {
       link(url) {
         if (!isRunning()) {
           log(
-            'chat',
             `sign-in link for ${profile} dropped: that sign-in was cancelled`,
           );
           return;
@@ -69,7 +68,6 @@ export function createAccounts(deps: {
       },
       ended({ status, error }) {
         log(
-          'chat',
           `sign-in for ${profile} ended${error === null ? '' : `: ${error}`}`,
         );
         if (!isRunning()) {
@@ -84,10 +82,7 @@ export function createAccounts(deps: {
   // The running sign-in when it is `id`; logs `ignored` otherwise.
   function runningAs(id: number, ignored: string): RunningLogIn | null {
     if (running?.id !== id) {
-      log(
-        'chat',
-        `${ignored} for sign-in ${id}, which is not running, ignored`,
-      );
+      log(`${ignored} for sign-in ${id}, which is not running, ignored`);
       return null;
     }
     return running;
@@ -95,7 +90,7 @@ export function createAccounts(deps: {
 
   function stop(run: RunningLogIn) {
     running = null;
-    log('chat', `sign-in for ${run.profile} cancelled`);
+    log(`sign-in for ${run.profile} cancelled`);
     run.process.cancel();
   }
 
@@ -106,10 +101,7 @@ export function createAccounts(deps: {
     logIn(id, profile) {
       const configDir = configDirOf(profile);
       if (running !== null) {
-        log(
-          'chat',
-          `sign-in for ${profile} refused: one runs for ${running.profile}`,
-        );
+        log(`sign-in for ${profile} refused: one runs for ${running.profile}`);
         throw new Error(`A sign-in is already running for ${running.profile}`);
       }
       // Set before any event: the harness emits none inside `logIn`.
@@ -120,7 +112,7 @@ export function createAccounts(deps: {
       );
       run = { id, profile, process };
       running = run;
-      log('chat', `sign-in for ${profile} started`);
+      log(`sign-in for ${profile} started`);
     },
     sendCode(id, code) {
       runningAs(id, 'sign-in code')?.process.sendCode(code);
@@ -138,7 +130,7 @@ export function createAccounts(deps: {
     },
     async logOut(profile) {
       await deps.harness().logOut(configDirOf(profile));
-      log('chat', `signed out ${profile}`);
+      log(`signed out ${profile}`);
     },
   };
 }

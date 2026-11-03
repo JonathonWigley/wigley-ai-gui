@@ -6,9 +6,9 @@ import type {
   QualifiedEvents,
 } from '../../../contracts/plugin';
 import { createHScroller } from '../../../shared/page/ui/h-scroller';
-import type { AgentsPageExports } from '../../agents/contract';
-import type { ChatPageExports } from '../../chat/contract';
-import type { KeysPageExports } from '../../keys/contract';
+import { agentsPageKey } from '../../agents/contract';
+import { chatPageKey } from '../../chat/contract';
+import { keysPageKey } from '../../keys/contract';
 import type { SessionsPageEvents } from '../../sessions/contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
@@ -32,8 +32,8 @@ export const agentStripPagePart: PagePart<typeof agentStripManifest> = {
   manifest: agentStripManifest,
   start(api: AgentStripApi) {
     const { services } = api;
-    const chat = api.dependency<ChatPageExports>('chat');
-    const keys = api.dependency<KeysPageExports>('keys');
+    const chat = api.dependency(chatPageKey);
+    const keys = api.dependency(keysPageKey);
     // Each session's name in the log, its side-bar label (`gamma 2`).
     const names = new Map<string, string>();
     const strip = createAgentStrip({
@@ -49,7 +49,7 @@ export const agentStripPagePart: PagePart<typeof agentStripManifest> = {
       log: services.log,
       clock: services.clock,
       timers: services.timers,
-      agents: api.dependency<AgentsPageExports>('agents'),
+      agents: api.dependency(agentsPageKey),
       setScope: () => api.keys.setScope('strip'),
       nameOf: (sessionId) => names.get(sessionId) ?? sessionId,
       createScroller: createHScroller,

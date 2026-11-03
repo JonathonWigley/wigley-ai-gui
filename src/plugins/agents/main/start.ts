@@ -4,9 +4,9 @@ import type {
   QualifiedEvents,
 } from '../../../contracts/plugin';
 import { CHAT_PREVIEW_HOST_ID, type ChatMainEvents } from '../../chat/contract';
-import type {
-  SessionsMainEvents,
-  SessionsMainExports,
+import {
+  type SessionsMainEvents,
+  sessionsMainKey,
 } from '../../sessions/contract';
 import type { AgentsChannel, Roster } from '../contract';
 import { agentsManifest } from '../manifest';
@@ -41,12 +41,13 @@ function rowRoster(hosts: ReadonlyMap<string, Roster>): Roster {
 // every host id's subagents and tasks in the row, each list in fold order. A
 // host id's roster is dropped once its last item ends done or a message drops
 // its last failed one, and a row's rosters when it closes or ends. Holds agents' sample session,
-// whose roster `rosters` lists beside the live ones. Registers no layout and
-// hands the self-test no script: agent-lines and agent-strip draw the rosters.
+// whose roster `rosters` lists beside the live ones; a stop sends an open
+// preview's roster empty. Registers no layout and hands the self-test no script:
+// agent-lines and agent-strip draw the rosters.
 export const agentsMainPart: MainPart<typeof agentsManifest> = {
   manifest: agentsManifest,
   start(api: AgentsApi) {
-    const sessions = api.dependency<SessionsMainExports>('sessions');
+    const sessions = api.dependency(sessionsMainKey);
     const preview = createAgentsPreview({
       sessions,
       clock: api.services.clock,
@@ -121,6 +122,6 @@ export const agentsMainPart: MainPart<typeof agentsManifest> = {
     }));
     api.channel.handle('openPreview', () => preview.toggle());
 
-    return { commands: {} };
+    return { commands: {}, dispose: () => preview.close() };
   },
 };

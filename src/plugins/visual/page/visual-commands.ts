@@ -1,4 +1,4 @@
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type { ChatPageExports } from '../../chat/contract';
 import type { VisualOverlay } from './visual-overlay';
 import type { VisualRegistry } from './visual-registry';
@@ -7,7 +7,7 @@ export interface VisualCommandsDeps {
   chat: Pick<ChatPageExports, 'focusedEntry'>;
   registry: VisualRegistry;
   overlay: VisualOverlay;
-  log: Log;
+  log: PluginLog;
 }
 
 // The visual plugin's page commands: `openVisuals` opens the overlay on the
@@ -24,12 +24,12 @@ export function createVisualCommands(
     openVisuals() {
       const entry = deps.chat.focusedEntry();
       if (entry === null) {
-        deps.log('visual', 'no focused entry');
+        deps.log('no focused entry');
         return;
       }
       const sources = deps.registry.sourcesIn(entry);
       if (sources.length === 0) {
-        deps.log('visual', 'no visuals in the focused entry');
+        deps.log('no visuals in the focused entry');
         return;
       }
       deps.overlay.open(sources, 0);

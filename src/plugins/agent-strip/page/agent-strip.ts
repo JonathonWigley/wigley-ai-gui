@@ -135,8 +135,6 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
   // the shown ones, the tick draws running task boxes again instead.
   let updateFailedUnder: ShownLayouts<Layout> | null = null;
 
-  const log = (message: string) => deps.log(agentStripManifest.id, message);
-
   const boxesOf = (sessionId: string): StripBox[] =>
     orderStripBoxes(agents.roster(sessionId));
 
@@ -222,7 +220,7 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
       return;
     }
     loggedBoxes.set(sessionId, text);
-    log(text);
+    deps.log(text);
   };
 
   // Draws the session's boxes into its HScroller's track, making the
@@ -321,7 +319,7 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
       update.call(drawn.built, running.input);
       return true;
     } catch (error) {
-      log(
+      deps.log(
         `layout ${drawn.layoutName} taskBox update failed: ${errorText(error)}`,
       );
       updateFailedUnder = shown;
@@ -412,7 +410,7 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
   };
 
   const logSelected = (current: Selection, count: number) =>
-    log(
+    deps.log(
       `selected box ${current.index + 1} of ${count} in ${deps.nameOf(current.sessionId)}`,
     );
 
@@ -432,7 +430,7 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
     if (cleared === null) {
       return;
     }
-    log(`left strip in ${deps.nameOf(cleared.sessionId)}`);
+    deps.log(`left strip in ${deps.nameOf(cleared.sessionId)}`);
     exit(cleared.exits);
   };
 
@@ -444,10 +442,10 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
     const name = deps.nameOf(sessionId);
     if (openKeys.get(sessionId) === key) {
       openKeys.delete(sessionId);
-      log(`closed box ${index + 1} in ${name}`);
+      deps.log(`closed box ${index + 1} in ${name}`);
     } else {
       openKeys.set(sessionId, key);
-      log(`opened box ${index + 1} in ${name}`);
+      deps.log(`opened box ${index + 1} in ${name}`);
     }
     redraw(sessionId);
   };
@@ -553,7 +551,7 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
             return;
           }
           selection = null;
-          log(`left strip in ${deps.nameOf(sessionId)}`);
+          deps.log(`left strip in ${deps.nameOf(sessionId)}`);
           redraw(sessionId);
         },
       },

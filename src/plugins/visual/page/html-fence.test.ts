@@ -28,8 +28,8 @@ const MINE: Layout = {
   },
 };
 
-// An html fence over fake frames, its log lines kept as `[source] message`
-// and each source its expand ran with in `expanded`.
+// An html fence over fake frames, its log lines kept in `logs` and each source
+// its expand ran with in `expanded`.
 function fenceFixture() {
   const { frames, opened } = fakeVisualFrames();
   const logs: string[] = [];
@@ -54,7 +54,7 @@ function fenceFixture() {
     frames,
     parts,
     registry,
-    log: (source, message) => logs.push(`[${source}] ${message}`),
+    log: (message: string) => logs.push(message),
     expand: (source) => expanded.push(source),
   });
   return { fence, parts, registry, opened, logs, expanded };
@@ -103,7 +103,7 @@ describe('createHtmlFence', () => {
       opened: ['<title> Flow </title><p>done</p>'],
       host: { part: 'visual', framed: true },
       registered: ['<title> Flow </title><p>done</p>'],
-      logs: ['[visual] visual mounted: Flow'],
+      logs: ['visual mounted: Flow'],
       expanded: [],
     },
     {
@@ -114,7 +114,7 @@ describe('createHtmlFence', () => {
       opened: ['<b>x</b>'],
       host: { part: 'mine', framed: true },
       registered: ['<b>x</b>'],
-      logs: ['[visual] visual mounted: untitled'],
+      logs: ['visual mounted: untitled'],
       expanded: [],
     },
     {
@@ -125,7 +125,7 @@ describe('createHtmlFence', () => {
       opened: ['<i>e</i>'],
       host: { part: 'visual', framed: true },
       registered: ['<i>e</i>'],
-      logs: ['[visual] visual mounted: untitled'],
+      logs: ['visual mounted: untitled'],
       expanded: ['<i>e</i>'],
     },
   ])(
@@ -188,5 +188,27 @@ describe('createHtmlFence', () => {
     const root = partRoot(view);
     expect(root.classList.contains('mine')).toBe(true);
     expect(slot?.parentNode).toBe(root);
+  });
+
+  it('htmlFence_Dispose_DisposesEveryLiveView', () => {
+    const test = fenceFixture();
+    const drawVisual = vi.spyOn(test.parts, 'visual');
+    const views = [
+      test.fence.contribution.mount('<p>one</p>', true),
+      test.fence.contribution.mount('<p>two</p>', true),
+    ];
+    const disposeFirstDrawn = vi.spyOn(
+      drawVisual.mock.results[0].value,
+      'dispose',
+    );
+
+    test.fence.dispose();
+    views[0].dispose();
+
+    expect(test.opened.map((frame) => frame.disposed)).toEqual([true, true]);
+    for (const view of views) {
+      expect(sourcesAround(test.registry, view)).toEqual([]);
+    }
+    expect(disposeFirstDrawn).toHaveBeenCalledTimes(1);
   });
 });

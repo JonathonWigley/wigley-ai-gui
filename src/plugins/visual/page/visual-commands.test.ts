@@ -84,7 +84,7 @@ describe('createVisualCommands', () => {
         chat: { focusedEntry: () => entry },
         registry,
         overlay: fake.overlay,
-        log: (_source, message) => logged.push(message),
+        log: (message: string) => logged.push(message),
       });
 
       commands.openVisuals();

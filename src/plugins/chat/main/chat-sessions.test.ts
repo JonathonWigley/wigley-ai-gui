@@ -156,8 +156,7 @@ function setUp(
   const harnesses = options.harnesses ?? [harness];
   const data = createMemoryFiles();
   const logged: string[] = [];
-  const log = (source: string, message: string) =>
-    logged.push(`[${source}] ${message}`);
+  const log = (message: string) => logged.push(message);
   const opened: SessionInfo[] = [];
   const openOptions: (OpenOptions | undefined)[] = [];
   const marked: string[] = [];
@@ -739,7 +738,7 @@ describe('createChatSessions', () => {
     expect(sessionId).toBe(ROW_ID);
     expect(test.harness.processes.at(-1)?.request.resume).toBe(true);
     expect(test.logged).toContain(
-      `[chat] saved usage of ${hostId} not read: transcript unreadable`,
+      `saved usage of ${hostId} not read: transcript unreadable`,
     );
     expect(usageEmitted(test.emitted)).toEqual([]);
   });
@@ -1482,9 +1481,7 @@ describe('createChatSessions', () => {
     test.chat.pullBack(ROW_ID, firstId);
 
     expect(test.messages).toHaveLength(sentBefore);
-    expect(test.logged).toContain(
-      `[chat] queued message ${firstId} no longer queued`,
-    );
+    expect(test.logged).toContain(`queued message ${firstId} no longer queued`);
   });
 
   it('interrupt_Queued_ReturnsAllThenInterrupts', async () => {
@@ -1580,7 +1577,7 @@ describe('createChatSessions', () => {
     expect(test.process.calls).toHaveLength(callsBefore);
     expect(test.messages).toHaveLength(sentBefore);
     expect(test.logged).toContain(
-      `[chat] queued message ${row.queuedId} ${row.reason}`,
+      `queued message ${row.queuedId} ${row.reason}`,
     );
   });
 
@@ -1638,7 +1635,7 @@ describe('createChatSessions', () => {
               data: { sessionId: ROW_ID, messages: [second] },
             },
           ],
-          log: `[chat] sent message ${sentEntryIdOf(test, 1)} returned: never taken in`,
+          log: `sent message ${sentEntryIdOf(test, 1)} returned: never taken in`,
         };
       },
     },
@@ -1655,7 +1652,7 @@ describe('createChatSessions', () => {
               data: { sessionId: ROW_ID, messages: [message] },
             },
           ],
-          log: '[chat] sent message user-1 returned: never taken in',
+          log: 'sent message user-1 returned: never taken in',
         };
       },
     },
@@ -1664,7 +1661,7 @@ describe('createChatSessions', () => {
       arrange: () => ({
         entryId: 'user-9',
         sends: [],
-        log: '[chat] dropped message user-9 not held',
+        log: 'dropped message user-9 not held',
       }),
     },
   ])('messageDropped_ReturnsWhatChatHolds: $case', async (row) => {
@@ -1687,9 +1684,7 @@ describe('createChatSessions', () => {
     test.chat.pullBack(ROW_ID, 'queued-1');
 
     expect(test.messages).toHaveLength(sentBefore);
-    expect(test.logged).toContain(
-      '[chat] queued message queued-1 already sent',
-    );
+    expect(test.logged).toContain('queued message queued-1 already sent');
   });
 
   it('interrupt_SentAndUnsentRows_ReturnsOnlyTheUnsent', async () => {
@@ -2230,7 +2225,7 @@ describe('createChatSessions saved sessions', () => {
         test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' }),
       saved: ['host-a', 'uuid-1', 'host-b'],
       opened: ['uuid-1', 'host-a', 'host-b'],
-      logged: '[chat] session uuid-1 already open; not restored',
+      logged: 'session uuid-1 already open; not restored',
     },
     {
       given: 'a host id open on a relay row',
@@ -2238,21 +2233,21 @@ describe('createChatSessions saved sessions', () => {
         test.chat.sessionConnected(connected('row-relay', 'host-r')),
       saved: ['host-a', 'host-r', 'host-b'],
       opened: ['host-a', 'host-b'],
-      logged: '[chat] session host-r already open; not restored',
+      logged: 'session host-r already open; not restored',
     },
     {
       given: 'an open that throws',
       arrange: (test: ReturnType<typeof setUp>) => test.refuseOpen('host-x'),
       saved: ['host-a', 'host-x', 'host-b'],
       opened: ['host-a', 'host-b'],
-      logged: '[chat] session host-x not restored: open of host-x refused',
+      logged: 'session host-x not restored: open of host-x refused',
     },
     {
       given: 'a restore after killAll',
       arrange: (test: ReturnType<typeof setUp>) => test.chat.killAll(),
       saved: ['host-a', 'host-b'],
       opened: [],
-      logged: '[chat] open sessions not restored: chat is stopping',
+      logged: 'open sessions not restored: chat is stopping',
     },
   ])(
     'restore_RecordNotOpenable_SkippedAndLogged given $given',
@@ -2400,7 +2395,7 @@ describe('createChatSessions saved sessions', () => {
     await flush();
 
     expect(test.logged).toContain(
-      '[chat] saved usage of host-a not read: transcript unreadable',
+      'saved usage of host-a not read: transcript unreadable',
     );
     expect(usageEmitted(test.emitted)).toEqual([]);
   });
@@ -2433,7 +2428,7 @@ describe('createChatSessions saved sessions', () => {
         { method: 'send', text: 'hi', imageCount: 0 },
       ]);
       expect(test.logged).toContain(
-        `[chat] session ${ROW_ID} process started (resume ${sent})`,
+        `session ${ROW_ID} process started (resume ${sent})`,
       );
     },
   );
@@ -2770,12 +2765,12 @@ describe('createChatSessions saved sessions', () => {
     {
       given: 'the row closed',
       duringRead: (test: ReturnType<typeof setUp>) => test.chat.closed(ROW_ID),
-      logged: `[chat] send for session ${ROW_ID} closed while reading ignored`,
+      logged: `send for session ${ROW_ID} closed while reading ignored`,
     },
     {
       given: 'killAll',
       duringRead: (test: ReturnType<typeof setUp>) => test.chat.killAll(),
-      logged: `[chat] send for session ${ROW_ID} ignored: chat is stopping`,
+      logged: `send for session ${ROW_ID} ignored: chat is stopping`,
     },
   ])(
     'send_RowWithHistoryPending_StoppedDuringRead_StartsNothing given $given',
@@ -2899,7 +2894,7 @@ describe('createChatSessions branch', () => {
         topLevel: () => Promise.reject(new Error('git did not start')),
       },
       sent: [],
-      logged: '[chat] branch not read in app: git did not start',
+      logged: 'branch not read in app: git did not start',
     },
   ])('branchRead_$case', async ({ git, sent, logged }) => {
     const test = await started({ git });
@@ -3179,7 +3174,7 @@ describe('createChatSessions clear', () => {
       selectedHostSessionId: 'uuid-2',
     });
     expect(test.chat.sessions()[0].running).toBe(true);
-    expect(test.logged).toContain('[chat] conversation cleared in app');
+    expect(test.logged).toContain('conversation cleared in app');
   });
 
   it('clear_MidTurn_StopsOldProcessAndIgnoresItsLateEvents', async () => {
@@ -3315,13 +3310,13 @@ describe('createChatSessions clear', () => {
       given: 'an unknown session',
       arrange: () => {},
       sessionId: 'row-x',
-      logged: '[chat] clear for unknown session row-x ignored',
+      logged: 'clear for unknown session row-x ignored',
     },
     {
       given: 'killAll',
       arrange: (test: ReturnType<typeof setUp>) => test.chat.killAll(),
       sessionId: ROW_ID,
-      logged: `[chat] clear for session ${ROW_ID} ignored: chat is stopping`,
+      logged: `clear for session ${ROW_ID} ignored: chat is stopping`,
     },
   ])(
     'clear_Ignored_ChangesNothingAndLogs given $given',

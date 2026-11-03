@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { Disposable } from '../../../contracts/disposable';
+import type { Disposable, Registrations } from '../../../contracts/disposable';
 import type { Files } from '../../../contracts/files';
 import type {
   DriveHost,
@@ -14,10 +14,11 @@ import {
   requiredString,
 } from '../../../shared/drive-args';
 import { errorText } from '../../../shared/error-text';
-import type {
-  SessionsMainEvents,
-  SessionsMainExports,
-  ToolResult,
+import {
+  type SessionsMainEvents,
+  type SessionsMainExports,
+  sessionsMainKey,
+  type ToolResult,
 } from '../../sessions/contract';
 import type { ChatChannel, ChatMainEvents, ChatMainExports } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
@@ -139,14 +140,12 @@ export function addDriveActions(
         (reply) => {
           permissions.set(toolUseId, { state: 'answered', reply });
           services.log(
-            'chat',
             `drive permission ${toolUseId} answered: ${reply.content[0]?.text}`,
           );
         },
         (error: unknown) => {
           permissions.set(toolUseId, { state: 'failed', error });
           services.log(
-            'chat',
             `drive permission ${toolUseId} failed: ${errorText(error)}`,
           );
         },
@@ -191,7 +190,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
   manifest: chatManifest,
   start(api: ChatApi) {
     const { services } = api;
-    const sessions = api.dependency<SessionsMainExports>('sessions');
+    const sessions = api.dependency(sessionsMainKey);
     const recent = createRecentFolders({
       data: api.data,
       clock: services.clock,
@@ -245,7 +244,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     const ignoredInPreview = (method: string, sessionId: string) => {
       const inPreview = preview.holds(sessionId);
       if (inPreview) {
-        services.log('chat', `${method} in the chat preview ignored`);
+        services.log(`${method} in the chat preview ignored`);
       }
       return inPreview;
     };
@@ -351,7 +350,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     saved.load().then(
       (snapshot) => chat.restore(snapshot),
       (error: unknown) => {
-        services.log('chat', `open sessions not read: ${errorText(error)}`);
+        services.log(`open sessions not read: ${errorText(error)}`);
         // Lets saving start; the store refuses every write to the unread file.
         chat.restore({ sessions: [], selectedHostSessionId: null });
       },
@@ -365,24 +364,21 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
         harnesses: services.agentHarnesses,
       }),
     );
-    const driveActions: Disposable[] = [];
     if (api.drive !== null) {
-      driveActions.push(
-        ...addDriveActions(api.drive, {
-          services,
-          profileNames,
-          chat,
-          sessions,
-        }),
-      );
+      addDriveActions(api.drive, {
+        services,
+        profileNames,
+        chat,
+        sessions,
+      });
     }
-    const layouts = api.layouts.register({ layoutTypes });
+    api.layouts.register({ layoutTypes });
     const requireHeld = (sessionId: string) => {
       if (!chat.sessions().some((held) => held.sessionId === sessionId)) {
         throw new Error(`chat holds no session ${sessionId}`);
       }
     };
-    const exports: ChatMainExports = {
+    const exports = (consumer: Registrations): ChatMainExports => ({
       launch: async (request) => chat.launch(request),
       profileNames,
       profiles,
@@ -413,18 +409,18 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
         }
         await Promise.all(ended);
       },
-      addInstructions: (text) => chat.addInstructions(text),
-    };
+      addInstructions: (text) => consumer.track(chat.addInstructions(text)),
+    });
     return {
       commands: {},
-      exports: () => exports,
+      exports,
       dispose: () => {
         chat.killAll();
         accounts.cancelRunning();
-        for (const action of driveActions) {
-          action.dispose();
+        for (const resolveWait of endWaits.values()) {
+          resolveWait();
         }
-        layouts.dispose();
+        endWaits.clear();
       },
     };
   },

@@ -54,7 +54,7 @@ function setUp() {
     },
     setChatScope: () => calls.push('setChatScope'),
     changed: (holding) => calls.push(`changed ${holding}`),
-    log: (source, message) => logs.push(`[${source}] ${message}`),
+    log: (message) => logs.push(message),
   });
   return { holder, calls, logs, holdingAt };
 }
@@ -73,14 +73,14 @@ describe('composer stop holder', () => {
       enters: ['declines', 'takes'] as Enter[],
       holding: 'p2',
       calls: ['enter p1', 'enter p2', 'changed true'],
-      logs: ['[chat] composer part p2 took the cursor in app'],
+      logs: ['composer part p2 took the cursor in app'],
     },
     {
       case: 'two take',
       enters: ['takes', 'takes'] as Enter[],
       holding: 'p1',
       calls: ['enter p1', 'changed true'],
-      logs: ['[chat] composer part p1 took the cursor in app'],
+      logs: ['composer part p1 took the cursor in app'],
     },
     {
       case: 'the first throws',
@@ -94,8 +94,8 @@ describe('composer stop holder', () => {
         'changed true',
       ],
       logs: [
-        '[chat] composer part p1 stop failed: no roster',
-        '[chat] composer part p2 took the cursor in app',
+        'composer part p1 stop failed: no roster',
+        'composer part p2 took the cursor in app',
       ],
     },
     {
@@ -105,8 +105,8 @@ describe('composer stop holder', () => {
       holding: null,
       calls: ['enter p1', 'leave p1', 'setChatScope', 'enter p2'],
       logs: [
-        '[chat] composer part p1 stop failed: no roster',
-        '[chat] composer part p1 leave failed: gone',
+        'composer part p1 stop failed: no roster',
+        'composer part p1 leave failed: gone',
       ],
     },
   ])('offer_$case', ({ enters, firstLeaveThrows, holding, calls, logs }) => {
@@ -146,7 +146,7 @@ describe('composer stop holder', () => {
       'changed false',
       'toEntries',
     ]);
-    expect(run.logs.at(-1)).toBe('[chat] cursor back on the entries in app');
+    expect(run.logs.at(-1)).toBe('cursor back on the entries in app');
   });
 
   it.each(['insert', 'append'] as const)(
@@ -190,8 +190,8 @@ describe('composer stop holder', () => {
     expect(run.calls).toEqual(callsBefore);
     expect(run.holder.holding()).toBe(holdingBefore);
     expect(run.logs.slice(-2)).toEqual([
-      '[chat] stale composer stop exit in app ignored',
-      '[chat] stale composer stop exit in app ignored',
+      'stale composer stop exit in app ignored',
+      'stale composer stop exit in app ignored',
     ]);
   });
 
@@ -213,7 +213,7 @@ describe('composer stop holder', () => {
       'changed false',
     ]);
     expect(run.holder.holding()).toBeNull();
-    expect(run.logs.at(-1)).toBe('[chat] composer part strip left in app');
+    expect(run.logs.at(-1)).toBe('composer part strip left in app');
   });
 
   it.each([

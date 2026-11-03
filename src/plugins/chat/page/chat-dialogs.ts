@@ -118,7 +118,7 @@ export function createReasonBox(
       part.update({ toolName });
       dialog.show();
       editor.focus({ insert: true });
-      deps.log('chat', `deny reason box shown for ${toolName}`);
+      deps.log(`deny reason box shown for ${toolName}`);
     },
     submit() {
       const text = editor.text().trim();
@@ -126,7 +126,7 @@ export function createReasonBox(
     },
     cancel() {
       if (close() !== null) {
-        deps.log('chat', 'deny reason box closed');
+        deps.log('deny reason box closed');
       }
     },
   };
@@ -172,7 +172,7 @@ export function createCloseConfirm(deps: DialogDeps): CloseConfirm {
     keep() {
       const kept = hide();
       if (kept !== null) {
-        deps.log('chat', `kept ${kept.name}`);
+        deps.log(`kept ${kept.name}`);
       }
     },
   };

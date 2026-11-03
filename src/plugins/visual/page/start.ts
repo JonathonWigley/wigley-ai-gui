@@ -1,7 +1,8 @@
 import './visual.css';
 import type { PagePart, PageApi } from '../../../contracts/plugin';
-import type { ChatPageExports } from '../../chat/contract';
-import type { KeysPageExports } from '../../keys/contract';
+import { callEach } from '../../../shared/call-each';
+import { chatPageKey } from '../../chat/contract';
+import { keysPageKey } from '../../keys/contract';
 import type { VisualChannel } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
@@ -16,18 +17,18 @@ import { createVisualRegistry } from './visual-registry';
 
 type VisualApi = PageApi<typeof visualManifest, VisualChannel>;
 
-// Contributes the live `html` fence to the markdown service for the page's
-// life, so every markdown owner draws an agent's html block as a visual
-// through the `visual.layout` layout, and the full-size overlay, which `v`
-// opens on chat's focused entry's visuals and each visual's expand control
-// on that visual; each live view and the open overlay draw again on each
-// layouts set.
+// Contributes the live `html` fence to the markdown service while it runs, so
+// every markdown owner draws an agent's html block as a visual through the
+// `visual.layout` layout, and the full-size overlay, which `v` opens on chat's
+// focused entry's visuals and each visual's expand control on that visual;
+// each live view and the open overlay draw again on each layouts set. A stop
+// closes the overlay and disposes every live view.
 export const visualPagePart: PagePart<typeof visualManifest> = {
   manifest: visualManifest,
   start(api: VisualApi) {
     const { services } = api;
-    const keys = api.dependency<KeysPageExports>('keys');
-    const chat = api.dependency<ChatPageExports>('chat');
+    const keys = api.dependency(keysPageKey);
+    const chat = api.dependency(chatPageKey);
     const layoutsChanged: (() => void)[] = [];
     const registry = createVisualRegistry();
     const parts = createVisualParts({
@@ -81,6 +82,12 @@ export const visualPagePart: PagePart<typeof visualManifest> = {
         overlay,
         log: services.log,
       }),
+      dispose() {
+        callEach<() => void>(
+          [() => overlay.close(), () => fence.dispose()],
+          (step) => step(),
+        );
+      },
     };
   },
 };

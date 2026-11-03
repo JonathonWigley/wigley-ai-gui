@@ -54,7 +54,7 @@ function overlayFixture() {
     }),
     frames,
     parts,
-    log: (_source, message) => logs.push(message),
+    log: (message: string) => logs.push(message),
     onLayoutsChanged: (listener) => layoutsChanged.push(listener),
   });
   return {

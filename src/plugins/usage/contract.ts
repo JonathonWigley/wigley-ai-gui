@@ -51,8 +51,8 @@ export interface UsageLinePart {
 // `id` that draws a session's line through usage's layout into the wrapper its
 // host hands it, a zero line (context `0k`) while the session has no usage,
 // and logs through `log` `session line in <name>: <text>` when a session's
-// text changes, the name its side-bar label. Usage redraws every such part for
-// the page's life.
+// text changes, the name its side-bar label. Usage redraws every such part until
+// the dependent that asked for it stops.
 export interface UsagePageExports {
   sessionLinePart(id: string, log: (line: string) => void): UsageLinePart;
 }

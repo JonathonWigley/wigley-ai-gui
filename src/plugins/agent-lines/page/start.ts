@@ -5,11 +5,11 @@ import type {
   PagePart,
   QualifiedEvents,
 } from '../../../contracts/plugin';
-import type { AgentsPageExports } from '../../agents/contract';
-import type { KeysPageExports } from '../../keys/contract';
-import type {
-  SessionsPageEvents,
-  SessionsPageExports,
+import { agentsPageKey } from '../../agents/contract';
+import { keysPageKey } from '../../keys/contract';
+import {
+  type SessionsPageEvents,
+  sessionsPageKey,
 } from '../../sessions/contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
@@ -34,9 +34,9 @@ export const agentLinesPagePart: PagePart<typeof agentLinesManifest> = {
   manifest: agentLinesManifest,
   start(api: AgentLinesApi) {
     const { services } = api;
-    const agents = api.dependency<AgentsPageExports>('agents');
-    const sessions = api.dependency<SessionsPageExports>('sessions');
-    const keys = api.dependency<KeysPageExports>('keys');
+    const agents = api.dependency(agentsPageKey);
+    const sessions = api.dependency(sessionsPageKey);
+    const keys = api.dependency(keysPageKey);
     // Each session's name in the log, its side-bar label (`gamma 2`).
     const names = new Map<string, string>();
     const lines = createWorkingLines({

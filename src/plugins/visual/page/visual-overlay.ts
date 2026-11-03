@@ -1,4 +1,4 @@
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type { PluginAreas, PushedScope } from '../../../contracts/plugin';
 import type {
   VisualFrame,
@@ -31,7 +31,7 @@ export interface VisualOverlayDeps {
   pushScope(): PushedScope;
   frames: VisualFrames;
   parts: VisualParts;
-  log: Log;
+  log: PluginLog;
   onLayoutsChanged(listener: () => void): void;
 }
 
@@ -73,7 +73,7 @@ export function createVisualOverlay(deps: VisualOverlayDeps): VisualOverlay {
       slot,
       drawn: deps.parts.overlay(backdrop, slot, input),
     };
-    log('visual', `visual overlay showing ${index + 1} of ${input.count}`);
+    log(`visual overlay showing ${index + 1} of ${input.count}`);
   };
   const step = (direction: 1 | -1) => {
     if (open === null) {
@@ -81,7 +81,7 @@ export function createVisualOverlay(deps: VisualOverlayDeps): VisualOverlay {
     }
     const index = open.index + direction;
     if (index < 0 || index >= open.sources.length) {
-      log('visual', direction > 0 ? 'no next visual' : 'no previous visual');
+      log(direction > 0 ? 'no next visual' : 'no previous visual');
       return;
     }
     show(open, index);
@@ -124,7 +124,7 @@ export function createVisualOverlay(deps: VisualOverlayDeps): VisualOverlay {
       backdrop.hidden = true;
       hide(held.shown);
       held.scope.pop();
-      log('visual', 'visual overlay closed');
+      log('visual overlay closed');
     },
   };
   return overlay;

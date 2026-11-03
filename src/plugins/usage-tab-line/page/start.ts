@@ -3,8 +3,8 @@ import type {
   PageApi,
   PagePart,
 } from '../../../contracts/plugin';
-import type { SessionsPageExports } from '../../sessions/contract';
-import type { UsagePageExports } from '../../usage/contract';
+import { sessionsPageKey } from '../../sessions/contract';
+import { usagePageKey } from '../../usage/contract';
 import { usageTabLineManifest } from '../manifest';
 
 type UsageTabLineApi = PageApi<typeof usageTabLineManifest, ChannelShape>;
@@ -15,12 +15,10 @@ export const usageTabLinePagePart: PagePart<typeof usageTabLineManifest> = {
   manifest: usageTabLineManifest,
   start(api: UsageTabLineApi) {
     const { services } = api;
-    const usage = api.dependency<UsagePageExports>('usage');
-    const sessions = api.dependency<SessionsPageExports>('sessions');
+    const usage = api.dependency(usagePageKey);
+    const sessions = api.dependency(sessionsPageKey);
     sessions.addBarPart(
-      usage.sessionLinePart('usage-tab-line.sessionLine', (line) =>
-        services.log('usage-tab-line', line),
-      ),
+      usage.sessionLinePart('usage-tab-line.sessionLine', services.log),
     );
     return { commands: {} };
   },

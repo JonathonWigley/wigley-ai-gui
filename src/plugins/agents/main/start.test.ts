@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { MAIN_AGENT_ID, type AgentEvent } from '../../../contracts/agent';
 import { createMemoryFiles } from '../../../shared/memory-files';
+import {
+  fakeDependency,
+  startMainPart,
+} from '../../../shared/plugin-part-harness.test-support';
 import { CHAT_PREVIEW_HOST_ID } from '../../chat/contract';
-import type { SessionsMainExports } from '../../sessions/contract';
+import {
+  type SessionsMainExports,
+  sessionsMainKey,
+} from '../../sessions/contract';
 import type { Roster, RosterAgent, RosterTask } from '../contract';
 import { agentsMainPart } from './start';
 
@@ -146,7 +153,8 @@ function startAgentsPart() {
       log: () => undefined,
       clock: { now: () => 50_000 },
     },
-    dependency: (pluginId: string) => (pluginId === 'sessions' ? sessions : {}),
+    dependency: (key: { id: string }) =>
+      key.id === 'sessions' ? sessions : {},
   } as unknown as Parameters<typeof agentsMainPart.start>[0];
   agentsMainPart.start(api);
   const emit = (event: string, payload: unknown) => {
@@ -346,5 +354,77 @@ describe('agentsMainPart', () => {
     expect(second[PREVIEW_ROW].tasks).toHaveLength(
       first[PREVIEW_ROW].tasks.length + 1,
     );
+  });
+});
+
+// Agents' main part on the harness, over sessions whose `open` hands out a row
+// filed with `consumer.track`, as sessions' view does; `ended` counts its ends.
+function startOnHarness() {
+  const rows = { ended: 0 };
+  const harness = startMainPart(agentsMainPart, {
+    dependencies: [
+      fakeDependency(
+        sessionsMainKey,
+        (consumer) =>
+          ({
+            open() {
+              consumer.track({
+                dispose() {
+                  rows.ended += 1;
+                },
+              });
+              return { session: { id: 'row-1' } };
+            },
+            activate() {},
+          }) as unknown as SessionsMainExports,
+      ),
+    ],
+  });
+  return { harness, rows };
+}
+
+describe('agentsMainPart lifecycle', () => {
+  it.each([
+    { name: 'fresh start', opensPreview: false, ended: 0, sent: [] },
+    {
+      name: 'preview open',
+      opensPreview: true,
+      ended: 1,
+      sent: [{ sessionId: 'row-1', roster: { agents: [], tasks: [] } }],
+    },
+  ])(
+    'stop_LeavesNoLiveRegistration $name',
+    async ({ opensPreview, ended, sent }) => {
+      const { harness, rows } = startOnHarness();
+      if (opensPreview) {
+        harness.invoke('openPreview');
+      }
+      const sentBefore = harness.sent.length;
+      expect(harness.counts().registrations).toBeGreaterThan(0);
+
+      await harness.stop();
+
+      expect(harness.counts()).toEqual({
+        registrations: 0,
+        timers: 0,
+        listeners: 0,
+        observers: 0,
+        frames: 0,
+      });
+      expect(harness.sent.slice(sentBefore).map(({ data }) => data)).toEqual(
+        sent,
+      );
+      expect(rows.ended).toBe(ended);
+    },
+  );
+
+  it('stopThenStart_StartsAgain', async () => {
+    const { harness } = startOnHarness();
+    const before = harness.counts();
+
+    await harness.restart();
+
+    expect(harness.counts()).toEqual(before);
+    expect(harness.invoke('rosters')).toEqual({});
   });
 });

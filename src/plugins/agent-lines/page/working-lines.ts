@@ -94,7 +94,7 @@ export function createWorkingLines(deps: WorkingLinesDeps): WorkingLines {
       return;
     }
     loggedCounts.set(sessionId, count);
-    deps.log('agent-lines', `running in ${deps.nameOf(sessionId)}: ${count}`);
+    deps.log(`running in ${deps.nameOf(sessionId)}: ${count}`);
   };
 
   const isLineShown = () =>

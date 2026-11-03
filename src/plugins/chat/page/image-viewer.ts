@@ -49,7 +49,7 @@ export function createImageViewer(deps: ImageViewerDeps): ImageViewer {
   const show = (shown: OpenImages, draw: (input: ImageViewerInput) => void) => {
     const input = inputOf(shown);
     draw(input);
-    log('chat', `image viewer showing ${input.index + 1} of ${input.count}`);
+    log(`image viewer showing ${input.index + 1} of ${input.count}`);
   };
   const step = (direction: 1 | -1) => {
     if (open === null) {
@@ -57,7 +57,7 @@ export function createImageViewer(deps: ImageViewerDeps): ImageViewer {
     }
     const index = open.index + direction;
     if (index < 0 || index >= open.images.length) {
-      log('chat', direction > 0 ? 'no next image' : 'no previous image');
+      log(direction > 0 ? 'no next image' : 'no previous image');
       return;
     }
     open.index = index;
@@ -89,7 +89,7 @@ export function createImageViewer(deps: ImageViewerDeps): ImageViewer {
       backdrop.hidden = true;
       part.clear();
       held.scope.pop();
-      log('chat', 'image viewer closed');
+      log('image viewer closed');
     },
   };
   return viewer;

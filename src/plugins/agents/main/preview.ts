@@ -1,5 +1,5 @@
 import type { Clock } from '../../../contracts/ambient';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type { MainChannel } from '../../../contracts/plugin';
 import type {
   OwnedSession,
@@ -19,16 +19,19 @@ export interface AgentsPreviewDeps {
   sessions: Pick<SessionsMainExports, 'open' | 'activate'>;
   clock: Clock;
   send: MainChannel<AgentsChannel>['send'];
-  log: Log;
+  log: PluginLog;
 }
 
 // `toggle` opens the preview's row, or ends it while it is open. `rosters` is
 // the preview's roster while it is open, `{}` while closed. `closed` ends the
-// preview when `sessionId` is its row.
+// preview when `sessionId` is its row. `close` sends an open preview's roster
+// empty and forgets the preview, leaving its row to whoever ends it; it does
+// nothing while closed.
 export interface AgentsPreview {
   toggle(): void;
   rosters(): Record<string, Roster>;
   closed(sessionId: string): void;
+  close(): void;
 }
 
 const PREVIEW_HOST_ID = 'agents-layout-preview';
@@ -126,21 +129,24 @@ export function createAgentsPreview(deps: AgentsPreviewDeps): AgentsPreview {
   const { sessions, send, log } = deps;
   let preview: OpenPreview | null = null;
 
-  // Ends the open preview's row and empties its roster.
-  const end = (open: OpenPreview) => {
-    preview = null;
-    open.owned.end();
+  const sendEmptyRoster = (open: OpenPreview) =>
     send('rosterChanged', {
       sessionId: open.owned.session.id,
       roster: { agents: [], tasks: [] },
     });
+
+  // Ends the open preview's row and empties its roster.
+  const end = (open: OpenPreview) => {
+    preview = null;
+    open.owned.end();
+    sendEmptyRoster(open);
   };
 
   return {
     toggle() {
       if (preview !== null) {
         end(preview);
-        log('agents', 'agents preview closed');
+        log('agents preview closed');
         return;
       }
       const owned = sessions.open(
@@ -159,7 +165,7 @@ export function createAgentsPreview(deps: AgentsPreviewDeps): AgentsPreview {
         sessionId: owned.session.id,
         roster: copyRoster(preview.roster),
       });
-      log('agents', 'agents preview opened');
+      log('agents preview opened');
     },
     rosters: () =>
       preview === null
@@ -168,6 +174,13 @@ export function createAgentsPreview(deps: AgentsPreviewDeps): AgentsPreview {
     closed(sessionId) {
       if (preview !== null && preview.owned.session.id === sessionId) {
         end(preview);
+      }
+    },
+    close() {
+      if (preview !== null) {
+        const open = preview;
+        preview = null;
+        sendEmptyRoster(open);
       }
     },
   };

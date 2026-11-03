@@ -1,4 +1,4 @@
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type { FenceContribution } from '../../../contracts/markdown';
 import type { VisualFrames } from '../../../contracts/visual-frames';
 import { callEach } from '../../../shared/call-each';
@@ -15,7 +15,7 @@ export interface HtmlFenceDeps {
   frames: VisualFrames;
   parts: VisualParts;
   registry: VisualRegistry;
-  log: Log;
+  log: PluginLog;
   expand(source: string): void;
 }
 
@@ -26,10 +26,12 @@ export interface HtmlFenceDeps {
 // `visual mounted: <title>`. `redraw` draws every live view's part again with
 // the layouts last set, moving each view's frame into the new part: it stays
 // loaded only when its host is in the document and the part places it in an
-// element already there.
+// element already there. `dispose` disposes every live view; a view's second
+// `dispose` does nothing, so its markdown owner may still call it.
 export interface HtmlFence {
   contribution: FenceContribution;
   redraw(): void;
+  dispose(): void;
 }
 
 // One mounted view: its host, the part drawn in it now, and how to draw that
@@ -38,6 +40,7 @@ interface LiveView {
   host: HTMLElement;
   drawn: Drawn;
   draw(host: HTMLElement): Drawn;
+  dispose(): void;
 }
 
 const TITLE = /<title[^>]*>([\s\S]*?)<\/title>/i;
@@ -50,18 +53,21 @@ export function createHtmlFence(deps: HtmlFenceDeps): HtmlFence {
     draw: (host: HTMLElement) => Drawn,
     disposeView: () => void,
   ) => {
-    const view: LiveView = { host, drawn: draw(host), draw };
-    views.add(view);
-    return {
-      element: host,
+    const view: LiveView = {
+      host,
+      drawn: draw(host),
+      draw,
       dispose() {
-        views.delete(view);
-        callEach<() => void>(
-          [() => view.drawn.dispose(), disposeView],
-          (step) => step(),
-        );
+        if (views.delete(view)) {
+          callEach<() => void>(
+            [() => view.drawn.dispose(), disposeView],
+            (step) => step(),
+          );
+        }
       },
     };
+    views.add(view);
+    return { element: host, dispose: view.dispose };
   };
 
   return {
@@ -87,7 +93,7 @@ export function createHtmlFence(deps: HtmlFenceDeps): HtmlFence {
             frame.dispose();
           },
         );
-        deps.log('visual', `visual mounted: ${visualTitle(source)}`);
+        deps.log(`visual mounted: ${visualTitle(source)}`);
         return view;
       },
     },
@@ -98,6 +104,9 @@ export function createHtmlFence(deps: HtmlFenceDeps): HtmlFence {
         view.drawn = next;
         last.dispose();
       });
+    },
+    dispose() {
+      callEach([...views], (view) => view.dispose());
     },
   };
 }

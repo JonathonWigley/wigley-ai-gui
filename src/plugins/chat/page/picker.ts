@@ -164,7 +164,7 @@ export function createPicker(deps: PickerDeps): Picker {
         },
         cancelled: () => {
           shown = null;
-          deps.log('chat', `picker closed: ${next.title}`);
+          deps.log(`picker closed: ${next.title}`);
         },
         drawRow: (parent, item, row) =>
           drawPickerRow(deps, nextScope, parent, next.rowInput(item), row),

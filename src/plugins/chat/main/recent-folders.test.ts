@@ -18,7 +18,7 @@ function setUp() {
     data,
     clock: { now: () => now },
     paths: posixPaths,
-    log: (source, message) => logged.push(`[${source}] ${message}`),
+    log: (message) => logged.push(message),
   });
   return {
     data,

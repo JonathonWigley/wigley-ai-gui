@@ -24,8 +24,7 @@ export const agentsPagePart: PagePart<typeof agentsManifest> = {
   manifest: agentsManifest,
   start(api: AgentsApi) {
     const { services } = api;
-    const log = (line: string) => services.log('agents', line);
-    const rosters = createPageRosters({ log });
+    const rosters = createPageRosters({ log: services.log });
 
     api.events.on('sessions.sessionRemoved', ({ sessionId }) => {
       rosters.forget(sessionId);
@@ -39,7 +38,7 @@ export const agentsPagePart: PagePart<typeof agentsManifest> = {
         rosters.settle();
       },
       (error: unknown) => {
-        log(`rosters not read: ${errorText(error)}`);
+        services.log(`rosters not read: ${errorText(error)}`);
         rosters.settle();
       },
     );
@@ -48,17 +47,18 @@ export const agentsPagePart: PagePart<typeof agentsManifest> = {
       commands: {
         openPreview: () =>
           void api.channel.invoke('openPreview').catch((error: unknown) => {
-            log(`agents preview not opened: ${errorText(error)}`);
+            services.log(`agents preview not opened: ${errorText(error)}`);
             services.toast(
               `Agents preview not opened: ${errorText(error)}`,
               'error',
             );
           }),
       },
-      exports: () =>
+      exports: (consumer) =>
         ({
           roster: rosters.roster,
-          onRosterChanged: rosters.onRosterChanged,
+          onRosterChanged: (listener) =>
+            consumer.track(rosters.onRosterChanged(listener)),
         }) satisfies AgentsPageExports,
     };
   },

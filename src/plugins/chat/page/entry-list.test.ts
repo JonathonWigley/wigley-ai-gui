@@ -323,7 +323,7 @@ function setUpList(shown: ShownLayouts<ChatLayout>) {
   const pulled: string[] = [];
   const toasts: string[] = [];
   const disposed: CommandId[] = [];
-  const log = (...parts: string[]) => logs.push(parts.at(-1) ?? '');
+  const log = (message: string) => logs.push(message);
   const layouts = createChatLayouts(log);
   layouts.set(shown);
   const { timers, armed, fireAll } = fakeTimers();

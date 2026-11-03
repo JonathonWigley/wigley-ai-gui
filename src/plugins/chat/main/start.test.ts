@@ -1,13 +1,20 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { AgentStart } from '../../../contracts/agent';
+import type { AgentHarness, AgentStart } from '../../../contracts/agent';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
+import {
+  fakeDependency,
+  startMainPart,
+} from '../../../shared/plugin-part-harness.test-support';
 import { createRegistrations } from '../../../shared/registrations';
-import type {
-  SessionTitles,
-  TitleSource,
-  ToolResult,
+import {
+  type SessionsMainExports,
+  sessionsMainKey,
+  type SessionTitles,
+  type TitleSource,
+  type ToolResult,
 } from '../../sessions/contract';
 import type { ChatMainExports, ChatSessionState } from '../contract';
+import { OPEN_SESSIONS_FILE } from './open-sessions';
 import { addDriveActions, chatMainPart } from './start';
 
 // A chat holding one session, `held`, whose permission calls wait until the
@@ -228,7 +235,7 @@ function startChatPart() {
     },
     settings: () => ({ profiles: [{ name: 'work', configDir: '/work' }] }),
     services: {
-      log: (_plugin: string, line: string) => logged.push(line),
+      log: (line: string) => logged.push(line),
       agentHarnesses: [harness],
       randomUuid: () => 'host-1',
       clock: { now: () => 5000 },
@@ -451,5 +458,134 @@ describe('chat main part', () => {
     await chat.part.dispose?.();
 
     expect(chat.cancelLogIn).toHaveBeenCalledOnce();
+  });
+
+  it('exports_ConsumerDisposed_DropsItsInstructions', () => {
+    const chat = startChatPart();
+    const consumer = createRegistrations();
+    const view = chat.part.exports?.(consumer) as ChatMainExports;
+    view.addInstructions('note');
+
+    consumer.dispose();
+    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+
+    expect(chat.startInstructions.at(-1)).toEqual([
+      expect.stringContaining('set_session_title'),
+    ]);
+  });
+});
+
+// Chat's main part on the part harness, over a sessions fake that files each
+// contribution and owned row with `consumer.track`, as sessions' view does. A
+// row's end is recorded in `ended` and emits `sessions.ended`. A process's kill
+// is recorded in `kills` and reports its exit, as a real one does.
+function startChatOnHarness() {
+  const ended: string[] = [];
+  const kills = { count: 0 };
+  let rows = 0;
+  const agentHarness = {
+    id: 'claude',
+    start: (
+      _request: AgentStart,
+      events: { ended(exit: { code: number; error: string | null }): void },
+    ) => ({
+      send: () => undefined,
+      end: () => Promise.resolve(),
+      interrupt: () => undefined,
+      kill() {
+        kills.count += 1;
+        events.ended({ code: 0, error: null });
+      },
+    }),
+  } as unknown as AgentHarness;
+  const harness = startMainPart(chatMainPart, {
+    services: {
+      agentHarnesses: [agentHarness],
+      git: {
+        topLevel: () => Promise.resolve(null),
+        currentBranch: () => Promise.resolve(null),
+      } as never,
+    },
+    dependencies: [
+      fakeDependency(
+        sessionsMainKey,
+        (consumer) =>
+          ({
+            contributeTools: () => consumer.track({ dispose() {} }),
+            open: () => {
+              rows += 1;
+              const id = `row-${rows}`;
+              const owned = {
+                session: { id },
+                end() {
+                  ended.push(id);
+                  harness.emit('sessions.ended', { sessionId: id });
+                },
+                setHostSessionId() {},
+              };
+              consumer.track({ dispose: () => owned.end() });
+              return owned;
+            },
+            activate() {},
+            selectedSessionId: () => null,
+            setTitle() {},
+            titles: () => null,
+          }) as unknown as SessionsMainExports,
+      ),
+    ],
+  });
+  return { harness, ended, kills };
+}
+
+// Lets the part's pending file reads and writes finish.
+const settleFiles = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+describe('chat main part on the harness', () => {
+  it('stop_LeavesNoLiveRegistration', async () => {
+    const { harness } = startChatOnHarness();
+    expect(harness.counts().registrations).toBeGreaterThan(0);
+
+    await harness.stop();
+
+    expect(harness.counts()).toEqual({
+      registrations: 0,
+      timers: 0,
+      listeners: 0,
+      observers: 0,
+      frames: 0,
+    });
+  });
+
+  it('stopThenStart_StartsAgain', async () => {
+    const { harness } = startChatOnHarness();
+
+    await harness.restart();
+
+    expect(harness.started().exports).toBeTypeOf('function');
+  });
+
+  it('stop_EndsRowsAndSavesNothing', async () => {
+    const { harness, ended, kills } = startChatOnHarness();
+    await settleFiles();
+    // The part's files view copies `write` at its start, so a spy set now hears
+    // none of its writes; memory files report every write to a watch.
+    const writes: string[] = [];
+    const watch = harness.files.watch('/data/chat', (changed) =>
+      writes.push(changed),
+    );
+    const openSessionsWrites = () =>
+      writes.filter((changed) => changed === OPEN_SESSIONS_FILE).length;
+    harness.invoke('start', { projectDir: '/p', profile: 'work' });
+    await settleFiles();
+    const writesBeforeStop = openSessionsWrites();
+    expect(writesBeforeStop).toBeGreaterThan(0);
+
+    await harness.stop();
+    await settleFiles();
+    watch.dispose();
+
+    expect(kills.count).toBe(1);
+    expect(ended).toEqual(['row-1']);
+    expect(openSessionsWrites()).toBe(writesBeforeStop);
   });
 });

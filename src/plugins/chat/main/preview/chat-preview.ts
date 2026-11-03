@@ -1,6 +1,6 @@
 import type { ChatEntry } from '../../../../contracts/agent';
 import type { Clock } from '../../../../contracts/ambient';
-import type { Log } from '../../../../contracts/log';
+import type { PluginLog } from '../../../../contracts/log';
 import type { MainChannel } from '../../../../contracts/plugin';
 import type {
   OwnedSession,
@@ -28,7 +28,7 @@ export interface ChatPreviewDeps {
   sessions: Pick<SessionsMainExports, 'open' | 'activate'>;
   send: MainChannel<ChatChannel>['send'];
   emit: (event: 'agentEvent', data: ChatAgentEvent) => void;
-  log: Log;
+  log: PluginLog;
   clock: Clock;
 }
 
@@ -65,7 +65,7 @@ export function createChatPreview(deps: ChatPreviewDeps): ChatPreview {
     open() {
       if (preview !== null) {
         sessions.activate(preview.state.sessionId);
-        log('chat', 'chat preview shown');
+        log('chat preview shown');
         return;
       }
       const owned = sessions.open(
@@ -103,7 +103,7 @@ export function createChatPreview(deps: ChatPreviewDeps): ChatPreview {
           event,
         });
       }
-      log('chat', 'chat preview opened');
+      log('chat preview opened');
     },
     holds: (sessionId) => preview?.state.sessionId === sessionId,
     states: () => (preview === null ? [] : [{ ...preview.state }]),

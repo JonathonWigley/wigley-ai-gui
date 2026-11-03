@@ -214,7 +214,7 @@ function setUp(
       toasts.push(text);
       toastTones.push(tone);
     },
-    log: (source, message) => logs.push(`[${source}] ${message}`),
+    log: (message) => logs.push(message),
   };
   return {
     handlers: chatCommandHandlers(deps),
@@ -346,7 +346,7 @@ describe('chat commands', () => {
     run.handlers.toggleEntry({});
 
     expect(entries.counts.toggles).toBe(1);
-    expect(run.logs).toEqual(['[chat] expanded activity line']);
+    expect(run.logs).toEqual(['expanded activity line']);
   });
 
   it('toggleEntry_pendingRow_pullsItBack', () => {
@@ -371,7 +371,7 @@ describe('chat commands', () => {
         { id: 'q-2', sentEntryId: null },
       ],
       invoked: [['pullBack', 'row-1', 'q-2']],
-      logs: ['[chat] pulling back a pending message in app'],
+      logs: ['pulling back a pending message in app'],
     },
     {
       given: 'the newest sent, the older unsent',
@@ -380,7 +380,7 @@ describe('chat commands', () => {
         { id: 'q-2', sentEntryId: 'entry-7' },
       ],
       invoked: [['pullBack', 'row-1', 'q-1']],
-      logs: ['[chat] pulling back a pending message in app'],
+      logs: ['pulling back a pending message in app'],
     },
     {
       given: 'every queued sent',
@@ -389,13 +389,13 @@ describe('chat commands', () => {
         { id: 'q-2', sentEntryId: 'entry-7' },
       ],
       invoked: [],
-      logs: ['[chat] no pending message in app'],
+      logs: ['no pending message in app'],
     },
     {
       given: 'none queued',
       queued: [],
       invoked: [],
-      logs: ['[chat] no pending message in app'],
+      logs: ['no pending message in app'],
     },
   ])(
     'pullBackQueued given $given pulls back the newest unsent',
@@ -433,7 +433,7 @@ describe('chat commands', () => {
       left: 'draft',
       marked: [],
       latests: 0,
-      logs: ['[chat] sending a pending message now in app'],
+      logs: ['sending a pending message now in app'],
     },
     {
       given: 'a pending row focused, text in the focused box',
@@ -445,7 +445,7 @@ describe('chat commands', () => {
       left: '',
       marked: ['row-1'],
       latests: 1,
-      logs: ['[chat] sending now in app'],
+      logs: ['sending now in app'],
     },
     {
       given: 'a pending row focused and unsent, the focused box empty',
@@ -457,7 +457,7 @@ describe('chat commands', () => {
       left: '',
       marked: [],
       latests: 0,
-      logs: ['[chat] sending now in app'],
+      logs: ['sending now in app'],
     },
     {
       given: 'only a sent row, the focused box empty',
@@ -469,7 +469,7 @@ describe('chat commands', () => {
       left: '',
       marked: [],
       latests: 0,
-      logs: ['[chat] nothing to send'],
+      logs: ['nothing to send'],
     },
     {
       given: 'an entry focused, text in the unfocused box',
@@ -481,7 +481,7 @@ describe('chat commands', () => {
       left: '',
       marked: ['row-1'],
       latests: 1,
-      logs: ['[chat] sending now in app'],
+      logs: ['sending now in app'],
     },
     {
       given: 'an app slash command in the focused box',
@@ -493,7 +493,7 @@ describe('chat commands', () => {
       left: '',
       marked: ['row-1'],
       latests: 0,
-      logs: ['[chat] ran /status in app'],
+      logs: ['ran /status in app'],
     },
   ])(
     'sendNow given $given sends the row or the box',
@@ -544,8 +544,8 @@ describe('chat commands', () => {
     await flush();
 
     expect(run.logs).toEqual([
-      '[chat] sending a pending message now in app',
-      '[chat] sendNow failed: session gone',
+      'sending a pending message now in app',
+      'sendNow failed: session gone',
     ]);
   });
 
@@ -564,7 +564,7 @@ describe('chat commands', () => {
       takenBy: null,
       offered: 1,
       moves: 1,
-      logs: ['[chat] focused activity line'],
+      logs: ['focused activity line'],
     },
     {
       case: 'not at the last stop',
@@ -572,7 +572,7 @@ describe('chat commands', () => {
       takenBy: 'agent-strip.strip',
       offered: 0,
       moves: 1,
-      logs: ['[chat] focused activity line'],
+      logs: ['focused activity line'],
     },
   ])('nextEntry_$case', ({ atLastStop, takenBy, offered, moves, logs }) => {
     const counts = { offered: 0, moves: 0 };
@@ -771,7 +771,7 @@ describe('chat commands', () => {
       await flush();
 
       expect(run.toasts).toEqual(['Message not sent: profile gone']);
-      expect(run.logs).toContainEqual(`[chat] ${method} failed: profile gone`);
+      expect(run.logs).toContainEqual(`${method} failed: profile gone`);
       expect(message.held.text).toBe(text);
       expect(shown.attachments.images()).toEqual(images);
       expect(run.marked).toEqual([]);
@@ -823,7 +823,7 @@ describe('chat commands', () => {
       text: 'x',
       box: 'draft',
       revealed: [],
-      logged: ['[chat] fillComposer for unknown session other ignored'],
+      logged: ['fillComposer for unknown session other ignored'],
     },
   ])(
     'fillComposer_$case',

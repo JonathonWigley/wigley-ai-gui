@@ -31,7 +31,7 @@ function setUpHeldFiles() {
   };
   const agentLog = createAgentLog({
     files,
-    log: (source, message) => logged.push(`[${source}] ${message}`),
+    log: (message: string) => logged.push(message),
   });
   return { calls, settles, logged, agentLog };
 }
@@ -83,7 +83,7 @@ describe('createAgentLog', () => {
     await expect(first).resolves.toBeUndefined();
     await expect(second).resolves.toBeUndefined();
     expect(test.logged).toEqual([
-      '[agents] event not logged to logs/h1.jsonl: disk full',
+      'event not logged to logs/h1.jsonl: disk full',
     ]);
     expect(test.calls.map((call) => call.text)).toEqual([
       JSON.stringify(e1) + '\n',

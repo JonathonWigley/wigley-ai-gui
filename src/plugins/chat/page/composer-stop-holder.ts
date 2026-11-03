@@ -1,4 +1,4 @@
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import { errorText } from '../../../shared/error-text';
 import type {
   ChatComposerPart,
@@ -36,7 +36,7 @@ export interface ComposerStopHolderDeps {
   toBox(how: 'insert' | 'append'): void;
   setChatScope(): void;
   changed(holding: boolean): void;
-  log: Log;
+  log: PluginLog;
 }
 
 // The part holding the cursor; `exits` are the ones its `enter` was handed.
@@ -63,21 +63,21 @@ export function createComposerStopHolder(
     const exits: ComposerStopExits = {
       toEntries() {
         if (held?.exits !== exits) {
-          log('chat', `stale composer stop exit in ${name} ignored`);
+          log(`stale composer stop exit in ${name} ignored`);
           return;
         }
         release();
         deps.toEntries();
-        log('chat', `cursor back on the entries in ${name}`);
+        log(`cursor back on the entries in ${name}`);
       },
       toBox(how) {
         if (held?.exits !== exits) {
-          log('chat', `stale composer stop exit in ${name} ignored`);
+          log(`stale composer stop exit in ${name} ignored`);
           return;
         }
         release();
         deps.toBox(how);
-        log('chat', `focused the box in ${name}`);
+        log(`focused the box in ${name}`);
       },
     };
     return exits;
@@ -87,7 +87,7 @@ export function createComposerStopHolder(
     try {
       stop.leave(deps.sessionId);
     } catch (error: unknown) {
-      log('chat', `composer part ${id} leave failed: ${errorText(error)}`);
+      log(`composer part ${id} leave failed: ${errorText(error)}`);
     }
   };
 
@@ -98,7 +98,7 @@ export function createComposerStopHolder(
     const { id, stop } = held;
     held = null;
     leavePart(id, stop);
-    log('chat', `composer part ${id} left in ${name}`);
+    log(`composer part ${id} left in ${name}`);
     deps.changed(false);
   };
 
@@ -109,14 +109,14 @@ export function createComposerStopHolder(
         return false;
       }
     } catch (error: unknown) {
-      log('chat', `composer part ${id} stop failed: ${errorText(error)}`);
+      log(`composer part ${id} stop failed: ${errorText(error)}`);
       leavePart(id, stop);
       deps.setChatScope();
       return false;
     }
     held = { id, stop, exits };
     deps.changed(true);
-    log('chat', `composer part ${id} took the cursor in ${name}`);
+    log(`composer part ${id} took the cursor in ${name}`);
     return true;
   };
 

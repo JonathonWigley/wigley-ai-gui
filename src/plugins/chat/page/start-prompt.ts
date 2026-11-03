@@ -1,4 +1,4 @@
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import type { PageChannel, ToastTone } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
@@ -35,7 +35,7 @@ export interface StartPromptDeps {
   reveal(sessionId: string): void;
   paths: Paths;
   homeDir: string;
-  log: Log;
+  log: PluginLog;
   toast(text: string, tone: ToastTone): void;
 }
 
@@ -96,7 +96,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
     if (isCurrent()) {
       return false;
     }
-    log('chat', `${what} dropped: the start prompt opened again`);
+    log(`${what} dropped: the start prompt opened again`);
     return true;
   };
 
@@ -112,14 +112,14 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
         }
         const profiles = deps.profiles();
         if (profiles.length === 0) {
-          log('chat', 'no profiles in the chat settings');
+          log('no profiles in the chat settings');
           deps.toast("Add a profile to chat's profiles setting first", 'error');
           return;
         }
         openFolderStep({ deps, isCurrent, recent, profiles });
       },
       (error: unknown) => {
-        log('chat', `start prompt not opened: ${errorText(error)}`);
+        log(`start prompt not opened: ${errorText(error)}`);
         deps.toast(`Start prompt not opened: ${errorText(error)}`, 'error');
       },
     );
@@ -147,14 +147,14 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
           return;
         }
         if (projectDir === null) {
-          log('chat', 'no folder chosen');
+          log('no folder chosen');
           openFolderStep(context);
           return;
         }
         openProfileStep(context, projectDir);
       },
       (error: unknown) => {
-        log('chat', `folder dialog failed: ${errorText(error)}`);
+        log(`folder dialog failed: ${errorText(error)}`);
         deps.toast(`Folder dialog failed: ${errorText(error)}`, 'error');
       },
     );
@@ -199,7 +199,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
           listSessions(context, projectDir, profile);
           return;
         }
-        log('chat', `${profile.name} is signed out`);
+        log(`${profile.name} is signed out`);
         deps.signIn.open(profile.name, (signedIn) => {
           if (isStale(context.isCurrent, `${profile.name}'s sign-in`)) {
             return;
@@ -208,11 +208,11 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
             listSessions(context, projectDir, profile);
             return;
           }
-          log('chat', `no session started: ${profile.name} is signed out`);
+          log(`no session started: ${profile.name} is signed out`);
         });
       },
       (error: unknown) => {
-        log('chat', `account status not read: ${errorText(error)}`);
+        log(`account status not read: ${errorText(error)}`);
         if (isStale(context.isCurrent, `${profile.name}'s status`)) {
           return;
         }
@@ -255,7 +255,7 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
         openWith(rows);
       },
       (error: unknown) => {
-        log('chat', `saved sessions not listed: ${errorText(error)}`);
+        log(`saved sessions not listed: ${errorText(error)}`);
         if (isStale(context.isCurrent, 'saved sessions')) {
           return;
         }
@@ -307,16 +307,16 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
     const shown = shownStep();
     const cursor = deps.picker.cursorIndex();
     if (shown === null || cursor === null) {
-      log('chat', 'no session under the cursor');
+      log('no session under the cursor');
       return;
     }
     const item = shown.items[cursor];
     if (item.kind === 'new') {
-      log('chat', 'New session cannot be archived');
+      log('New session cannot be archived');
       return;
     }
     if (shown.isWriting) {
-      log('chat', 'archive ignored: an archive write is in flight');
+      log('archive ignored: an archive write is in flight');
       return;
     }
     const { hostSessionId, title } = item.row;
@@ -330,11 +330,11 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
           return;
         }
         reopenSessionStep(shown, shown.items, deps.picker.cursorIndex());
-        log('chat', `${archived ? 'archived' : 'restored'} ${title}`);
+        log(`${archived ? 'archived' : 'restored'} ${title}`);
       },
       (error: unknown) => {
         shown.isWriting = false;
-        log('chat', `archive failed: ${errorText(error)}`);
+        log(`archive failed: ${errorText(error)}`);
         deps.toast(`Archive failed: ${errorText(error)}`, 'error');
       },
     );
@@ -343,14 +343,14 @@ export function createStartPrompt(deps: StartPromptDeps): StartPrompt {
   const toggleShowArchived = () => {
     const shown = shownStep();
     if (shown === null) {
-      log('chat', 'no session list shown');
+      log('no session list shown');
       return;
     }
     const before = shown.items;
     const cursor = deps.picker.cursorIndex();
     shown.showArchived = !shown.showArchived;
     reopenSessionStep(shown, before, cursor);
-    log('chat', `archived sessions ${shown.showArchived ? 'shown' : 'hidden'}`);
+    log(`archived sessions ${shown.showArchived ? 'shown' : 'hidden'}`);
   };
 
   return {
@@ -364,7 +364,6 @@ function resumeSession(step: SessionStep, row: PastSessionRow) {
   const { deps } = step.context;
   const { projectDir, profile } = step;
   deps.log(
-    'chat',
     `resuming ${row.title} in ${displayPath(projectDir, deps.homeDir, deps.paths)} with ${profile.name}`,
   );
   void deps.channel
@@ -377,7 +376,7 @@ function resumeSession(step: SessionStep, row: PastSessionRow) {
     .then(
       (sessionId) => deps.reveal(sessionId),
       (error: unknown) => {
-        deps.log('chat', `session not resumed: ${errorText(error)}`);
+        deps.log(`session not resumed: ${errorText(error)}`);
         deps.toast(`Session not resumed: ${errorText(error)}`, 'error');
       },
     );
@@ -390,13 +389,12 @@ function startSession(
 ) {
   const { deps } = context;
   deps.log(
-    'chat',
     `starting a session in ${displayPath(projectDir, deps.homeDir, deps.paths)} with ${profile.name}`,
   );
   void deps.channel.invoke('start', { projectDir, profile: profile.name }).then(
     (sessionId) => deps.reveal(sessionId),
     (error: unknown) => {
-      deps.log('chat', `session not started: ${errorText(error)}`);
+      deps.log(`session not started: ${errorText(error)}`);
       deps.toast(`Session not started: ${errorText(error)}`, 'error');
     },
   );

@@ -4,7 +4,7 @@ import type {
   UserMessage,
 } from '../../../contracts/agent';
 import type { ScrollStep } from '../../../contracts/editor';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type {
   PageChannel,
   PageCommandContext,
@@ -40,7 +40,7 @@ type ChatInvoke = Pick<PageChannel<ChatChannel>, 'invoke'>;
 export interface PermissionActionDeps {
   channel: ChatInvoke;
   reasonBox: Pick<ReasonBox, 'open'>;
-  log: Log;
+  log: PluginLog;
 }
 
 // Allow answers at once; deny opens the reason box and answers with what the
@@ -62,17 +62,17 @@ export function createPermissionActions(
         reason,
       })
       .catch((error: unknown) =>
-        log('chat', `answerPermission failed: ${errorText(error)}`),
+        log(`answerPermission failed: ${errorText(error)}`),
       );
   return {
     allow(session, entry) {
       answer(session, entry.id, true, null);
-      log('chat', `allowed ${entry.toolName} in ${session.name}`);
+      log(`allowed ${entry.toolName} in ${session.name}`);
     },
     deny(session, entry) {
       deps.reasonBox.open(entry.toolName, (reason) => {
         answer(session, entry.id, false, reason);
-        log('chat', `denied ${entry.toolName} in ${session.name}`);
+        log(`denied ${entry.toolName} in ${session.name}`);
       });
     },
   };
@@ -89,7 +89,7 @@ export interface ChatCommandDeps {
   slashCommands: Pick<SlashCommands, 'match'>;
   viewer: ImageViewer;
   toast(text: string, tone: ToastTone): void;
-  log: Log;
+  log: PluginLog;
 }
 
 type Handler = (context: PageCommandContext) => void;
@@ -112,7 +112,7 @@ export function chatCommandHandlers(
     (context) => {
       const session = sessionFor(tabs, context);
       if (session === undefined) {
-        log('chat', 'no Chat tab shown');
+        log('no Chat tab shown');
         return;
       }
       act(session, context);
@@ -121,7 +121,7 @@ export function chatCommandHandlers(
   const inRunningSession = (act: (session: ChatSession) => void): Handler =>
     inSession((session) => {
       if (!session.running) {
-        log('chat', `${session.name} has no running process`);
+        log(`${session.name} has no running process`);
         return;
       }
       act(session);
@@ -130,7 +130,7 @@ export function chatCommandHandlers(
     inRunningSession((session) => {
       const control = session.state.controls.find((held) => held.id === id);
       if (control === undefined) {
-        log('chat', `${session.name} has no ${id} control`);
+        log(`${session.name} has no ${id} control`);
         return;
       }
       openChoices(deps, session, control);
@@ -139,29 +139,29 @@ export function chatCommandHandlers(
   return {
     focusBox: inSession((session) => {
       session.box.focus({ insert: true });
-      log('chat', `focused the box in ${session.name}`);
+      log(`focused the box in ${session.name}`);
     }),
     appendBox: inSession((session) => {
       session.box.focus({ insertAtEnd: true });
-      log('chat', `focused the box in ${session.name}`);
+      log(`focused the box in ${session.name}`);
     }),
     leaveBox: inSession((session, context) => {
       (context.editor ?? session.box).blur();
-      log('chat', 'left the box');
+      log('left the box');
     }),
     send: inSession((session) => send(deps, session)),
     sendNow: inSession((session) => sendNow(deps, session)),
     interrupt: inRunningSession((session) => {
       if (session.state.activity === 'idle') {
-        log('chat', `nothing to interrupt in ${session.name}`);
+        log(`nothing to interrupt in ${session.name}`);
         return;
       }
       void channel
         .invoke('interrupt', session.sessionId)
         .catch((error: unknown) =>
-          log('chat', `interrupt failed: ${errorText(error)}`),
+          log(`interrupt failed: ${errorText(error)}`),
         );
-      log('chat', `interrupted ${session.name}`);
+      log(`interrupted ${session.name}`);
     }),
     // On the last stop, a composer part's stop may take the cursor; the
     // holder logs the part that took it.
@@ -174,12 +174,11 @@ export function chatCommandHandlers(
     prevEntry: inSession((session) => moveEntry(session, -1, log)),
     latestEntry: inSession((session) => {
       session.entries.latest();
-      log('chat', 'following the latest entry');
+      log('following the latest entry');
     }),
     firstEntry: inSession((session) => {
       const focused = session.entries.first();
       log(
-        'chat',
         focused === null
           ? `no entries in ${session.name}`
           : 'focused the first entry',
@@ -210,17 +209,16 @@ export function chatCommandHandlers(
       }
       const toggled = session.entries.toggleFocused();
       if (toggled === null) {
-        log('chat', `no entries in ${session.name}`);
+        log(`no entries in ${session.name}`);
         return;
       }
       const { stop, result } = toggled;
       if (stop.kind === 'activity') {
-        log('chat', `${result} activity line`);
+        log(`${result} activity line`);
         return;
       }
       const { kind } = stop.entry;
       log(
-        'chat',
         result === 'nothing'
           ? `${kind} entry has nothing to expand`
           : `${result} ${kind} entry`,
@@ -229,7 +227,7 @@ export function chatCommandHandlers(
     allowPermission: inSession((session) => {
       const pending = oldestPendingPermission(session.state.entries);
       if (pending === null) {
-        log('chat', `no pending permission in ${session.name}`);
+        log(`no pending permission in ${session.name}`);
         return;
       }
       deps.permissions.allow(session, pending);
@@ -237,7 +235,7 @@ export function chatCommandHandlers(
     denyPermission: inSession((session) => {
       const pending = oldestPendingPermission(session.state.entries);
       if (pending === null) {
-        log('chat', `no pending permission in ${session.name}`);
+        log(`no pending permission in ${session.name}`);
         return;
       }
       deps.permissions.deny(session, pending);
@@ -250,7 +248,7 @@ export function chatCommandHandlers(
     pickControl: inRunningSession((session) => {
       const { controls } = session.state;
       if (controls.length === 0) {
-        log('chat', `${session.name} has no controls`);
+        log(`${session.name} has no controls`);
         return;
       }
       picker.open({
@@ -267,16 +265,16 @@ export function chatCommandHandlers(
         (queued) => queued.sentEntryId === null,
       );
       if (newest === undefined) {
-        log('chat', `no pending message in ${session.name}`);
+        log(`no pending message in ${session.name}`);
         return;
       }
       pullBackQueued(deps, session, newest.id);
     }),
     removeImage: inSession((session) => {
       if (session.attachments.removeLast()) {
-        log('chat', `removed the last attached image in ${session.name}`);
+        log(`removed the last attached image in ${session.name}`);
       } else {
-        log('chat', 'no attached image');
+        log('no attached image');
       }
     }),
     nextImage: () => deps.viewer.next(),
@@ -295,7 +293,7 @@ export function chatCommandHandlers(
     pickerList: () => picker.leaveFilter(),
     openPreview: () =>
       void channel.invoke('openPreview').catch((error: unknown) => {
-        log('chat', `chat preview not opened: ${errorText(error)}`);
+        log(`chat preview not opened: ${errorText(error)}`);
         deps.toast(`Chat preview not opened: ${errorText(error)}`, 'error');
       }),
   };
@@ -329,7 +327,7 @@ function send(deps: ChatCommandDeps, session: ChatSession) {
   const { log } = deps;
   const message = boxMessage(session);
   if (message === null) {
-    log('chat', 'nothing to send');
+    log('nothing to send');
     return;
   }
   if (ranSlashCommand(deps, session, message.text)) {
@@ -346,7 +344,7 @@ function send(deps: ChatCommandDeps, session: ChatSession) {
     message.images.length === 0
       ? ''
       : ` with ${message.images.length} image(s)`;
-  log('chat', `sent a message${withImages} in ${session.name}`);
+  log(`sent a message${withImages} in ${session.name}`);
 }
 
 // Cmd+Enter: with the box unfocused and a pending row focused, sends that row
@@ -367,7 +365,7 @@ function sendNow(deps: ChatCommandDeps, session: ChatSession) {
     (queued) => queued.sentEntryId === null,
   );
   if (message === null && !hasUnsent) {
-    deps.log('chat', 'nothing to send');
+    deps.log('nothing to send');
     return;
   }
   if (message !== null && ranSlashCommand(deps, session, message.text)) {
@@ -384,7 +382,7 @@ function sendNow(deps: ChatCommandDeps, session: ChatSession) {
   if (message !== null) {
     clearBox(session);
   }
-  deps.log('chat', `sending now in ${session.name}`);
+  deps.log(`sending now in ${session.name}`);
 }
 
 // The box's text as typed with the attached images; null when both are empty.
@@ -426,10 +424,10 @@ function refused(
   message: UserMessage | null,
 ) {
   return (error: unknown) => {
-    deps.log('chat', `${method} failed: ${errorText(error)}`);
+    deps.log(`${method} failed: ${errorText(error)}`);
     deps.toast(`Message not sent: ${errorText(error)}`, 'error');
     if (message !== null && putBack(deps, session, [message])) {
-      deps.log('chat', `put the refused message back in ${session.name}`);
+      deps.log(`put the refused message back in ${session.name}`);
     }
   };
 }
@@ -474,7 +472,7 @@ export function fillComposer(
 ): void {
   const session = deps.tabs.session(sessionId);
   if (session === undefined) {
-    deps.log('chat', `fillComposer for unknown session ${sessionId} ignored`);
+    deps.log(`fillComposer for unknown session ${sessionId} ignored`);
     return;
   }
   session.box.setText(text);
@@ -484,32 +482,30 @@ export function fillComposer(
 // Asks main to take the queued message out of the session's queue; it
 // arrives back as `returned`.
 export function pullBackQueued(
-  deps: { channel: ChatInvoke; log: Log },
+  deps: { channel: ChatInvoke; log: PluginLog },
   session: SessionRef,
   queuedId: string,
 ) {
   void deps.channel
     .invoke('pullBack', session.sessionId, queuedId)
     .catch((error: unknown) =>
-      deps.log('chat', `pullBack failed: ${errorText(error)}`),
+      deps.log(`pullBack failed: ${errorText(error)}`),
     );
-  deps.log('chat', `pulling back a pending message in ${session.name}`);
+  deps.log(`pulling back a pending message in ${session.name}`);
 }
 
 // Asks main to write the queued message into the running turn now; its row
 // stays, drawn as sending, until the agent takes it in. Main refuses a row
 // already sent.
 export function sendQueuedNow(
-  deps: { channel: ChatInvoke; log: Log },
+  deps: { channel: ChatInvoke; log: PluginLog },
   session: SessionRef,
   queuedId: string,
 ) {
   void deps.channel
     .invoke('sendNow', session.sessionId, queuedId)
-    .catch((error: unknown) =>
-      deps.log('chat', `sendNow failed: ${errorText(error)}`),
-    );
-  deps.log('chat', `sending a pending message now in ${session.name}`);
+    .catch((error: unknown) => deps.log(`sendNow failed: ${errorText(error)}`));
+  deps.log(`sending a pending message now in ${session.name}`);
 }
 
 // Runs the command for the session and clears the box; a run that throws or
@@ -527,16 +523,16 @@ function runSlashCommand(
     args,
   };
   session.box.setText('');
-  log('chat', `ran /${command.name} in ${session.name}`);
+  log(`ran /${command.name} in ${session.name}`);
   void (async () => command.run(context))().catch((error: unknown) => {
-    log('chat', `/${command.name} failed: ${errorText(error)}`);
+    log(`/${command.name} failed: ${errorText(error)}`);
     deps.toast(`/${command.name} failed: ${errorText(error)}`, 'error');
   });
 }
 
-function moveEntry(session: ChatSession, step: 1 | -1, log: Log) {
+function moveEntry(session: ChatSession, step: 1 | -1, log: PluginLog) {
   const focused = session.entries.move(step);
-  log('chat', focusedLine(focused, session.name));
+  log(focusedLine(focused, session.name));
 }
 
 function focusedLine(stop: EntryListStop | null, sessionName: string): string {
@@ -556,16 +552,13 @@ function scrollTranscript(
   session: ChatSession,
   step: ScrollStep,
   direction: 1 | -1,
-  log: Log,
+  log: PluginLog,
 ) {
   const scroll = session.entries.scrollBy(step, direction);
   const following = scroll.following
     ? 'following the latest entry'
     : 'not following';
-  log(
-    'chat',
-    `${scrollText('the transcript', step, direction, scroll)}; ${following}`,
-  );
+  log(`${scrollText('the transcript', step, direction, scroll)}; ${following}`);
 }
 
 // The control's choices picker, the current value highlighted; a pick asks
@@ -592,13 +585,9 @@ function openChoices(
       void deps.channel
         .invoke('setControl', session.sessionId, control.id, choice.value)
         .then(
-          () =>
-            log(
-              'chat',
-              `set ${control.id} to ${choice.value} in ${session.name}`,
-            ),
+          () => log(`set ${control.id} to ${choice.value} in ${session.name}`),
           (error: unknown) => {
-            log('chat', `setControl failed: ${errorText(error)}`);
+            log(`setControl failed: ${errorText(error)}`);
             deps.toast(errorText(error), 'error');
           },
         );

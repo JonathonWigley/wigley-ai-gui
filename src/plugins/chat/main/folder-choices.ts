@@ -1,6 +1,6 @@
 import type { AgentHarness, ProjectFolder } from '../../../contracts/agent';
 import type { Files, FileStat } from '../../../contracts/files';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import { errorText } from '../../../shared/error-text';
 import type { ChatProfile, RecentFolder } from '../contract';
@@ -63,7 +63,7 @@ export function createFolderChoices(deps: {
   files: Pick<Files, 'stat'>;
   paths: Paths;
   tempFolders: readonly string[];
-  log: Log;
+  log: PluginLog;
 }): FolderChoices {
   const { files, paths, tempFolders, log } = deps;
 
@@ -75,10 +75,7 @@ export function createFolderChoices(deps: {
       const folders = await harness.listProjects(profile.configDir);
       return folders.map((folder) => ({ profile: profile.name, folder }));
     } catch (error) {
-      log(
-        'chat',
-        `project folders of ${profile.name} not listed: ${errorText(error)}`,
-      );
+      log(`project folders of ${profile.name} not listed: ${errorText(error)}`);
       return [];
     }
   }
@@ -95,10 +92,7 @@ export function createFolderChoices(deps: {
     try {
       return await files.stat(folder.projectDir);
     } catch (error) {
-      log(
-        'chat',
-        `folder ${folder.projectDir} not checked: ${errorText(error)}`,
-      );
+      log(`folder ${folder.projectDir} not checked: ${errorText(error)}`);
       return null;
     }
   }

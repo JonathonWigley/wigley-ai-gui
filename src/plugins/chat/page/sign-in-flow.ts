@@ -1,4 +1,4 @@
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type {
   PageChannel,
   PushedScope,
@@ -26,7 +26,7 @@ export interface SignInFlowDeps {
   pushScope(): PushedScope;
   writeClipboard(text: string): Promise<void>;
   toast(text: string, tone: ToastTone): void;
-  log: Log;
+  log: PluginLog;
 }
 
 interface OpenSignIn {
@@ -64,24 +64,24 @@ export function createSignInFlow(deps: SignInFlowDeps): SignInDialog {
     void channel
       .invoke('cancelLogIn', cancelled.id)
       .catch((error: unknown) =>
-        log('chat', `cancelLogIn failed: ${errorText(error)}`),
+        log(`cancelLogIn failed: ${errorText(error)}`),
       );
     cancelled.finished(false);
-    log('chat', `sign-in cancelled for ${cancelled.profile}`);
+    log(`sign-in cancelled for ${cancelled.profile}`);
   };
 
   channel.on('logInLink', ({ id, profile, url }) => {
     if (open?.id !== id) {
-      log('chat', `sign-in link for ${profile} with no dialog open for it`);
+      log(`sign-in link for ${profile} with no dialog open for it`);
       return;
     }
     open.url = url;
     view.showLink(url);
-    log('chat', `sign-in link shown for ${profile}`);
+    log(`sign-in link shown for ${profile}`);
   });
   channel.on('logInEnded', ({ id, profile, status, error }) => {
     if (open?.id !== id) {
-      log('chat', `sign-in for ${profile} ended with its dialog closed`);
+      log(`sign-in for ${profile} ended with its dialog closed`);
       return;
     }
     // A failed sign-in may still read signed in, as a wrong code on a profile
@@ -89,7 +89,7 @@ export function createSignInFlow(deps: SignInFlowDeps): SignInDialog {
     const isSignedIn = status?.signedIn === true && error === null;
     close()?.finished(isSignedIn);
     if (isSignedIn) {
-      log('chat', `signed in to ${profile}`);
+      log(`signed in to ${profile}`);
       deps.toast(
         `Signed in to ${profile} as ${accountText(status.account)}`,
         'success',
@@ -97,14 +97,14 @@ export function createSignInFlow(deps: SignInFlowDeps): SignInDialog {
       return;
     }
     const reason = error ?? `${profile} is still signed out`;
-    log('chat', `sign-in failed for ${profile}: ${reason}`);
+    log(`sign-in failed for ${profile}: ${reason}`);
     deps.toast(`Sign-in failed: ${reason}`, 'error');
   });
 
   return {
     open(profile, finished = () => undefined) {
       if (open !== null) {
-        log('chat', `sign-in for ${open.profile} replaced`);
+        log(`sign-in for ${open.profile} replaced`);
         cancel();
       }
       const opened: OpenSignIn = {
@@ -116,7 +116,7 @@ export function createSignInFlow(deps: SignInFlowDeps): SignInDialog {
       };
       open = opened;
       view.show(profile);
-      log('chat', `sign-in dialog shown for ${profile}`);
+      log(`sign-in dialog shown for ${profile}`);
       void channel
         .invoke('logIn', opened.id, profile)
         .catch((error: unknown) => {
@@ -124,7 +124,7 @@ export function createSignInFlow(deps: SignInFlowDeps): SignInDialog {
             close();
             finished(false);
           }
-          log('chat', `sign-in not started: ${errorText(error)}`);
+          log(`sign-in not started: ${errorText(error)}`);
           deps.toast(`Sign-in not started: ${errorText(error)}`, 'error');
         });
     },
@@ -134,27 +134,26 @@ export function createSignInFlow(deps: SignInFlowDeps): SignInDialog {
       }
       const code = view.code().trim();
       if (code === '') {
-        log('chat', 'no sign-in code to send');
+        log('no sign-in code to send');
         return;
       }
       void channel
         .invoke('logInCode', open.id, code)
         .catch((error: unknown) =>
-          log('chat', `logInCode failed: ${errorText(error)}`),
+          log(`logInCode failed: ${errorText(error)}`),
         );
-      log('chat', `sign-in code sent for ${open.profile}`);
+      log(`sign-in code sent for ${open.profile}`);
     },
     cancel,
     copyLink() {
       const url = open?.url ?? null;
       if (url === null) {
-        log('chat', 'no sign-in link yet');
+        log('no sign-in link yet');
         return;
       }
       void deps.writeClipboard(url).then(
-        () => log('chat', 'sign-in link copied'),
-        (error: unknown) =>
-          log('chat', `sign-in link not copied: ${errorText(error)}`),
+        () => log('sign-in link copied'),
+        (error: unknown) => log(`sign-in link not copied: ${errorText(error)}`),
       );
     },
   };

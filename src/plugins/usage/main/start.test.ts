@@ -6,14 +6,20 @@ import type {
 } from '../../../contracts/agent';
 import type { QualifiedEvents } from '../../../contracts/plugin';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
-import type {
-  ChatMainEvents,
-  ChatMainExports,
-  ChatProfile,
+import {
+  fakeDependency,
+  startMainPart,
+} from '../../../shared/plugin-part-harness.test-support';
+import {
+  type ChatMainEvents,
+  type ChatMainExports,
+  chatMainKey,
+  type ChatProfile,
 } from '../../chat/contract';
-import type {
-  SessionsMainEvents,
-  SessionsMainExports,
+import {
+  type SessionsMainEvents,
+  type SessionsMainExports,
+  sessionsMainKey,
 } from '../../sessions/contract';
 import type { UsageSnapshot } from '../contract';
 import type { UsageSelfTestDeps } from './selftest-script';
@@ -116,7 +122,7 @@ function startUsagePart(harnesses: Partial<AgentHarness>[]) {
     settings: () => ({ pollIntervalSeconds: 300, layout: 'default' }),
     onSettingsChanged: () => ({ dispose: () => undefined }),
     services: {
-      log: (_plugin: string, line: string) => logs.push(line),
+      log: (line: string) => logs.push(line),
       clock: { now: () => NOW },
       timers: {
         set: (_run: () => void, ms: number) => {
@@ -130,8 +136,8 @@ function startUsagePart(harnesses: Partial<AgentHarness>[]) {
       selfTest: { run: () => undefined },
     },
     drive: drive.host,
-    dependency: (pluginId: string) =>
-      ({ chat, sessions })[pluginId as 'chat' | 'sessions'] ?? {},
+    dependency: (key: { id: string }) =>
+      ({ chat, sessions })[key.id as 'chat' | 'sessions'] ?? {},
     layouts: { register: () => ({ dispose: () => undefined }) },
   } as unknown as Parameters<typeof usageMainPart.start>[0];
   usageMainPart.start(api);
@@ -347,5 +353,76 @@ describe('sessionUsage', () => {
     await settled();
 
     expect(isResolved).toBe(resolved);
+  });
+});
+
+// Usage's main part on the harness in a drive run, its one harness's `planUsage`
+// answering with `read`.
+function startOnHarness(read: () => Promise<PlanUsage>) {
+  return startMainPart(usageMainPart, {
+    drive: true,
+    dependencies: [
+      fakeDependency(
+        chatMainKey,
+        () => ({ profiles: () => [PERSONAL] }) as unknown as ChatMainExports,
+      ),
+      fakeDependency(
+        sessionsMainKey,
+        () =>
+          ({
+            selectedSessionId: () => SELECTED,
+          }) as unknown as SessionsMainExports,
+      ),
+    ],
+    services: {
+      agentHarnesses: [
+        { id: 'claude', planUsage: read } as unknown as AgentHarness,
+      ],
+    },
+  });
+}
+
+describe('usageMainPart lifecycle', () => {
+  it('stop_LeavesNoLiveRegistration', async () => {
+    const harness = startOnHarness(() => Promise.resolve(POLLED));
+    expect(harness.counts().registrations).toBeGreaterThan(0);
+    expect(harness.counts().timers).toBe(1);
+
+    await harness.stop();
+
+    expect(harness.counts()).toEqual({
+      registrations: 0,
+      timers: 0,
+      listeners: 0,
+      observers: 0,
+      frames: 0,
+    });
+  });
+
+  it('stop_PollInFlight_ReportsNothing', async () => {
+    let answer: (usage: PlanUsage) => void = () => undefined;
+    const harness = startOnHarness(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+    );
+    await settled();
+    const sentBefore = harness.sent.length;
+
+    await harness.stop();
+    answer(POLLED);
+    await settled();
+
+    expect(harness.sent).toHaveLength(sentBefore);
+  });
+
+  it('stopThenStart_StartsAgain', async () => {
+    const harness = startOnHarness(() => Promise.resolve(POLLED));
+    const before = harness.counts();
+
+    await harness.restart();
+
+    expect(harness.counts()).toEqual(before);
   });
 });

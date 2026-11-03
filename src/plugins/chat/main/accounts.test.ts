@@ -48,7 +48,7 @@ function setUp() {
     harness: () => counted,
     profiles: () => PROFILES,
     send: (message, data) => messages.push({ message, data } as Message),
-    log: (source, message) => logged.push(`[${source}] ${message}`),
+    log: (message) => logged.push(message),
   });
   return { accounts, harness, messages, logged, logIns: () => logIns };
 }

@@ -1,6 +1,6 @@
 import type { AgentEvent } from '../../../contracts/agent';
 import type { Files } from '../../../contracts/files';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import { errorText } from '../../../shared/error-text';
 
 // Each host session's agent events, one JSON line per event in
@@ -14,7 +14,7 @@ export interface AgentLog {
 
 export function createAgentLog(deps: {
   files: Pick<Files, 'append'>;
-  log: Log;
+  log: PluginLog;
 }): AgentLog {
   const tails = new Map<string, Promise<void>>();
   return {
@@ -24,10 +24,7 @@ export function createAgentLog(deps: {
       const tail: Promise<void> = (tails.get(path) ?? Promise.resolve())
         .then(() => deps.files.append(path, line))
         .catch((error: unknown) => {
-          deps.log(
-            'agents',
-            `event not logged to ${path}: ${errorText(error)}`,
-          );
+          deps.log(`event not logged to ${path}: ${errorText(error)}`);
         })
         .then(() => {
           if (tails.get(path) === tail) {

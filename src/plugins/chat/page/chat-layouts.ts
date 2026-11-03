@@ -1,6 +1,6 @@
 import type { ChatEntryKind } from '../../../contracts/agent';
 import type { Disposable } from '../../../contracts/disposable';
-import type { Log, PluginLog } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type { ShownLayouts } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import {
@@ -122,7 +122,7 @@ export interface ChatPartDraws<K extends ChatPartName> {
 export function chatPartDraws<K extends ChatPartName>(
   layouts: ChatLayouts,
   key: K,
-  log: Log,
+  log: PluginLog,
 ): ChatPartDraws<K> {
   // The layouts shown when an update threw; the part draws with `default`
   // while they are still the shown ones.
@@ -143,7 +143,6 @@ export function chatPartDraws<K extends ChatPartName>(
         return 'ran';
       } catch (error) {
         log(
-          'chat',
           `layout ${drawn.layoutName} ${key} update failed: ${errorText(error)}`,
         );
         failedUnder = layouts.shown();

@@ -1,5 +1,6 @@
 import '../../../shared/page/markdown.css';
 import './chat.css';
+import type { Registrations } from '../../../contracts/disposable';
 import type {
   PageApi,
   PagePart,
@@ -7,10 +8,10 @@ import type {
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { createPartStore } from '../../../shared/page/contributed-parts';
-import type { KeysPageExports } from '../../keys/contract';
-import type {
-  SessionsPageEvents,
-  SessionsPageExports,
+import { keysPageKey } from '../../keys/contract';
+import {
+  type SessionsPageEvents,
+  sessionsPageKey,
 } from '../../sessions/contract';
 import type {
   ChatChannel,
@@ -76,10 +77,10 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
     void api.channel
       .invoke('loaded')
       .catch((error: unknown) =>
-        services.log('chat', `chat page load not sent: ${errorText(error)}`),
+        services.log(`chat page load not sent: ${errorText(error)}`),
       );
-    const sessions = api.dependency<SessionsPageExports>('sessions');
-    const keys = api.dependency<KeysPageExports>('keys');
+    const sessions = api.dependency(sessionsPageKey);
+    const keys = api.dependency(keysPageKey);
     const run = (command: string) => api.commands.run(command);
     const layouts = createChatLayouts(services.log);
     // What every surface's layout kit reads.
@@ -195,13 +196,12 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       if (session !== undefined) {
         if (putBack({ tabs: view }, session, messages)) {
           services.log(
-            'chat',
             `pulled back ${messages.length} message(s) in ${session.name}`,
           );
         }
         return;
       }
-      services.log('chat', `returned for unknown session ${sessionId} ignored`);
+      services.log(`returned for unknown session ${sessionId} ignored`);
     });
     api.layouts.show<ChatLayout>({
       defaultLayout,
@@ -221,14 +221,14 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       log: services.log,
       toast: services.toast,
     });
-    const exports: ChatPageExports = {
-      addSlashCommand: (command) => slashCommands.add(command),
+    const exports = (consumer: Registrations): ChatPageExports => ({
+      addSlashCommand: (command) => consumer.track(slashCommands.add(command)),
       fillComposer: (sessionId, text) =>
         fillComposer({ tabs: view, log: services.log }, sessionId, text),
-      addComposerPart: (part) => composerParts.add(part),
-      addStatusPart: (part) => statusParts.add(part),
+      addComposerPart: (part) => consumer.track(composerParts.add(part)),
+      addStatusPart: (part) => consumer.track(statusParts.add(part)),
       focusedEntry: () => view.focusedEntry(),
-    };
+    });
     return {
       commands: {
         ...chatCommandHandlers({
@@ -248,7 +248,8 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
         toggleArchive: () => startPrompt.toggleArchive(),
         showArchived: () => startPrompt.showArchived(),
       },
-      exports: () => exports,
+      exports,
+      dispose: () => view.dispose(),
     };
   },
 };

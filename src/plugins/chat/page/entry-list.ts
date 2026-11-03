@@ -719,7 +719,7 @@ function drawSlotPart<K extends SlotPartName>(
       return { element: view.element, view };
     });
   } catch (error) {
-    deps.log('chat', `default layout ${part} failed: ${errorText(error)}`);
+    deps.log(`default layout ${part} failed: ${errorText(error)}`);
     slot.append(element('div', 'chat-entry chat-raw', part));
     return null;
   }
@@ -751,13 +751,11 @@ function redrawSlot(slot: Slot, entry: ChatEntry, deps: EntryListDeps) {
     } catch (error) {
       if (slot.isBundledView) {
         deps.log(
-          'chat',
           `default layout ${entry.kind} entry update failed: ${errorText(error)}`,
         );
       } else {
         const { name } = pickEntry(deps.layouts.shown(), entry.kind);
         deps.log(
-          'chat',
           `layout ${name} ${entry.kind} entry update failed: ${errorText(error)}`,
         );
         slot.drawsWithDefault = true;
@@ -844,10 +842,7 @@ function buildEntry(
       dispose: drawn.dispose,
     };
   } catch (error) {
-    deps.log(
-      'chat',
-      `default layout ${entry.kind} entry failed: ${errorText(error)}`,
-    );
+    deps.log(`default layout ${entry.kind} entry failed: ${errorText(error)}`);
     slot.append(element('div', 'chat-entry chat-raw', entry.kind));
     const kit = createEntryKit(entry, deps.kit);
     return {

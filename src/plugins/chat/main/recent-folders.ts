@@ -1,6 +1,6 @@
 import type { Clock } from '../../../contracts/ambient';
 import { type Files, readIfPresent } from '../../../contracts/files';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import { errorText } from '../../../shared/error-text';
 import type { RecentFolder } from '../contract';
@@ -44,7 +44,7 @@ export function createRecentFolders(deps: {
   data: Files;
   clock: Clock;
   paths: Paths;
-  log: Log;
+  log: PluginLog;
 }): RecentFolders {
   const { data, clock, paths, log } = deps;
   let lastWrite: Promise<void> = Promise.resolve();
@@ -59,7 +59,7 @@ export function createRecentFolders(deps: {
     try {
       return await readSaved();
     } catch (error) {
-      log('chat', `${RECENT_FOLDERS_FILE} unreadable: ${errorText(error)}`);
+      log(`${RECENT_FOLDERS_FILE} unreadable: ${errorText(error)}`);
       return [];
     }
   }
