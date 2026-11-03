@@ -25,6 +25,7 @@ import { createAgentStrip } from './agent-strip';
 
 const NOW = 1_000_000;
 const SESSION = 'row-1';
+const OTHER_SESSION = 'row-2';
 const EMPTY: Roster = { agents: [], tasks: [] };
 
 function agent(
@@ -110,12 +111,23 @@ function fakeScrollers() {
   return { create, made, reveals, refreshes: () => refreshes };
 }
 
+// The indexes of the boxes in `wrapper` that carry `className`.
+function boxesWith(wrapper: FakeElement, className: string): number[] {
+  return findAll(wrapper, 'agent-strip-box').flatMap((box, index) =>
+    box.classList.contains(className) ? [index] : [],
+  );
+}
+
 // A strip over agents whose rosters `setRoster` changes, announcing each
 // change; timers record each `set` and `clear`; `exits` records each exit
-// called; every session is named `proj`.
+// called; every session is named `proj`. `OTHER_SESSION` lists `initial` too
+// and never changes.
 function setUp(initial: Roster = EMPTY) {
   let now = NOW;
-  const rosters = new Map<string, Roster>([[SESSION, initial]]);
+  const rosters = new Map<string, Roster>([
+    [SESSION, initial],
+    [OTHER_SESSION, initial],
+  ]);
   const listeners: ((sessionId: string) => void)[] = [];
   const sets: { run: () => void; handle: number }[] = [];
   const clears: number[] = [];
@@ -172,14 +184,8 @@ function setUp(initial: Roster = EMPTY) {
   const build = () => strip.part.build(asHtml(wrapper), SESSION);
   const enter = () => strip.part.stop!.enter(SESSION, exits);
   const boxes = () => findAll(wrapper, 'agent-strip-box');
-  const selected = () =>
-    boxes().flatMap((box, index) =>
-      box.classList.contains('is-selected') ? [index] : [],
-    );
-  const opened = () =>
-    boxes().flatMap((box, index) =>
-      box.classList.contains('is-open') ? [index] : [],
-    );
+  const selected = () => boxesWith(wrapper, 'is-selected');
+  const opened = () => boxesWith(wrapper, 'is-open');
   return {
     strip,
     wrapper,
@@ -236,6 +242,32 @@ describe('agent strip', () => {
     expect(logged.at(-1)).toBe('[agent-strip] selected box 2 of 3 in proj');
   });
 
+  it('enter_WhileOtherSessionSelected_HandsItsCursorBack', () => {
+    const { strip, build, enter, exitCalls, selected } = setUp(MIXED);
+    build();
+    const otherWrapper = new FakeElement('div');
+    strip.part.build(asHtml(otherWrapper), OTHER_SESSION);
+    const otherExitCalls: string[] = [];
+    strip.part.stop!.enter(OTHER_SESSION, {
+      toEntries: () => otherExitCalls.push('toEntries'),
+      toBox: (how) => otherExitCalls.push(`toBox ${how}`),
+    });
+
+    enter();
+
+    expect({
+      otherExitCalls,
+      otherSelected: boxesWith(otherWrapper, 'is-selected'),
+      selected: selected(),
+      exitCalls,
+    }).toEqual({
+      otherExitCalls: ['toEntries'],
+      otherSelected: [],
+      selected: [1],
+      exitCalls: [],
+    });
+  });
+
   it.each<{ key: string; leave: 'leave' | 'insert' | 'append'; exit: string }>([
     { key: 'k', leave: 'leave', exit: 'toEntries' },
     { key: 'i', leave: 'insert', exit: 'toBox insert' },
@@ -258,13 +290,15 @@ describe('agent strip', () => {
   });
 
   // `enter` selects box 2 of MIXED, a2; `revealed` is the box index each
-  // reveal after the roster change scrolled to.
+  // reveal after the roster change scrolled to; `nextBox` is what `nextBox`
+  // logs after the change, nothing once the selection is gone.
   it.each<{
     case: string;
     roster: Roster;
     selected: number[];
     revealed: number[];
     exitCalls: string[];
+    nextBox: string[];
   }>([
     {
       case: 'empties: returns to entries',
@@ -272,6 +306,7 @@ describe('agent strip', () => {
       selected: [],
       revealed: [],
       exitCalls: ['toEntries'],
+      nextBox: [],
     },
     {
       case: 'drops an earlier box: follows and reveals its box',
@@ -279,21 +314,46 @@ describe('agent strip', () => {
       selected: [0],
       revealed: [0],
       exitCalls: [],
+      nextBox: ['[agent-strip] selected box 2 of 2 in proj'],
+    },
+    {
+      case: 'adds a later box: keeps its place unrevealed',
+      roster: { ...MIXED, agents: [...MIXED.agents, agent('a3', 10_000)] },
+      selected: [1],
+      revealed: [],
+      exitCalls: [],
+      nextBox: ['[agent-strip] selected box 3 of 4 in proj'],
     },
   ])('rosterChangedWhileSelected_$case', (row) => {
-    const { build, enter, setRoster, exitCalls, scrollers, boxes, selected } =
-      setUp(MIXED);
+    const {
+      strip,
+      build,
+      enter,
+      setRoster,
+      exitCalls,
+      scrollers,
+      boxes,
+      selected,
+      logged,
+    } = setUp(MIXED);
     build();
     enter();
     const revealsBefore = scrollers.reveals.length;
 
     setRoster(row.roster);
+    const afterChange = {
+      selected: selected(),
+      revealed: scrollers.reveals
+        .slice(revealsBefore)
+        .map((element) => boxes().findIndex((box) => asHtml(box) === element)),
+      loggedCount: logged.length,
+    };
+    strip.nextBox();
 
-    expect(selected()).toEqual(row.selected);
-    expect(scrollers.reveals.slice(revealsBefore)).toEqual(
-      row.revealed.map((index) => boxes()[index]),
-    );
+    expect(afterChange.selected).toEqual(row.selected);
+    expect(afterChange.revealed).toEqual(row.revealed);
     expect(exitCalls).toEqual(row.exitCalls);
+    expect(logged.slice(afterChange.loggedCount)).toEqual(row.nextBox);
   });
 
   it('toggleBox_DrawsToolListInOpenAgentBox', () => {
@@ -320,19 +380,46 @@ describe('agent strip', () => {
     ]);
   });
 
-  it('tick_RunningTaskShown_RedrawsAndStopsWhenNone', () => {
-    const { build, boxes, sets, clears, advance, setRoster } = setUp(MIXED);
+  // Box 1 of MIXED, a2, is open; box 2 is the running task. A layout whose
+  // taskBox has no `update` gets that box drawn again in its place.
+  it.each<{ case: string; taskBoxKept: boolean }>([
+    { case: 'default updates the task box in place', taskBoxKept: true },
+    { case: 'a taskBox with no update is replaced', taskBoxKept: false },
+  ])('tick_RunningTaskShown_$case', ({ taskBoxKept }) => {
+    const { strip, build, boxes, sets, clears, advance, setRoster } =
+      setUp(MIXED);
+    if (!taskBoxKept) {
+      const noUpdate: Layout = {
+        taskBox: (parent, input, kit) => ({
+          element: defaultLayout.taskBox(parent, input, kit).element,
+        }),
+      };
+      strip.setLayouts(withUser<Layout>(defaultLayout, noUpdate));
+    }
     build();
+    boxes()[1].click();
     expect(sets).toHaveLength(1);
-    const before = boxes()[2].textContent;
+    const before = boxes();
+    const toolList = findAll(before[1], 'agent-strip-toolList')[0];
+    const beforeText = before[2].textContent;
 
     advance(1000);
     sets[0].run();
-    const afterTick = { text: boxes()[2].textContent, sets: sets.length };
+    const after = boxes();
+    const afterTick = {
+      agentBoxesKept: [after[0] === before[0], after[1] === before[1]],
+      toolListKept: findAll(after[1], 'agent-strip-toolList')[0] === toolList,
+      taskBoxKept: after[2] === before[2],
+      text: after[2].textContent,
+      sets: sets.length,
+    };
     setRoster({ ...MIXED, tasks: [task('t1', 30_000, 'done')] });
 
-    expect(before).toContain('main · 30s');
+    expect(beforeText).toContain('main · 30s');
     expect(afterTick).toEqual({
+      agentBoxesKept: [true, true],
+      toolListKept: true,
+      taskBoxKept,
       text: expect.stringContaining('main · 31s'),
       sets: 2,
     });

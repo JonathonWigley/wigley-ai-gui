@@ -39,13 +39,11 @@ const layout = {
     kit.statusDot(head, input.status);
     kit.icon(head, 'terminal', 'agent-strip-task-icon');
     kit.el(head, 'span', 'agent-strip-name', input.description);
-    kit.el(
+    const meta = kit.el(
       element,
       'div',
       'agent-strip-meta',
-      input.elapsedMs === null
-        ? input.owner
-        : `${input.owner} · ${kit.duration(input.elapsedMs)}`,
+      taskMeta(input, kit),
     );
     if (input.isOpen) {
       kit.el(
@@ -58,7 +56,12 @@ const layout = {
     if (input.isSelected) {
       cursorPrompt(element, kit);
     }
-    return { element };
+    return {
+      element,
+      update(next) {
+        meta.textContent = taskMeta(next, kit);
+      },
+    };
   },
   toolList(parent, input, kit) {
     const element = kit.el(parent, 'div', 'agent-strip-toolList');
@@ -83,6 +86,17 @@ function boxClass(kindClass, input) {
   ]
     .filter((name) => name !== '')
     .join(' ');
+}
+
+/**
+ * A task box's owner, then its elapsed time while it runs.
+ * @param {import('../layout').TaskBoxInput} input
+ * @param {AgentStripKit} kit
+ */
+function taskMeta(input, kit) {
+  return input.elapsedMs === null
+    ? input.owner
+    : `${input.owner} · ${kit.duration(input.elapsedMs)}`;
 }
 
 /**

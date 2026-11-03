@@ -13,7 +13,8 @@
 // - the key scope `agent-strip.strip` the kit's key hints name;
 // - the scrolling track and its chevrons, and revealing the selected box;
 // - a box's click, and no focus: a box takes none;
-// - the redraw once a second while any task box runs, which draws every box again with the new elapsed time.
+// - the elapsed time once a second while a task box runs: the app runs that box's `update` with the new `elapsedMs`,
+//   or draws a box with no `update` again and replaces its element; every other box keeps its element.
 // `kit.duration` formats the elapsed time as chat's activity line does: `42s`, `3m 05s` or `1h 02m`.
 import type { BaseKit } from '../../../shared/page/layout-host/kit';
 
@@ -68,6 +69,12 @@ export interface AgentStripPart {
   element: HTMLElement;
 }
 
+// What `taskBox` returns: its root, appended to `parent`, and an optional `update` the app runs once a second while
+// the task runs, with the input the box was drawn with and the new `elapsedMs`, in place of drawing the box again.
+export interface TaskBoxPart extends AgentStripPart {
+  update?(input: TaskBoxInput): void;
+}
+
 // Each part comes from the first layout that defines it among the `agent-strip.layout` setting and `default`; a part
 // that throws, returns no element appended to `parent`, or appends other nodes beside it is drawn by `default` instead.
 export interface Layout {
@@ -80,7 +87,7 @@ export interface Layout {
     parent: HTMLElement,
     input: TaskBoxInput,
     kit: AgentStripKit,
-  ): AgentStripPart;
+  ): TaskBoxPart;
   toolList?(
     parent: HTMLElement,
     input: ToolListInput,

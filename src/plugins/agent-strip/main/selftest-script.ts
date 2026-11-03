@@ -67,6 +67,21 @@ const GROUPS: SelfTestGroup[] = [
         ],
       },
       {
+        keys: ['j'],
+        expect: selectedLine(1),
+        alsoExpect: [
+          /^\[chat\] composer part agent-strip\.strip took the cursor in agent-strip-selftest$/,
+        ],
+        why: 'k put the cursor back on the last stop and chat holds no part, so j hands it to the strip again.',
+      },
+      {
+        keys: ['k'],
+        expect: `[agent-strip] left strip in ${SELFTEST_PROJECT_NAME}`,
+        alsoExpect: [
+          /^\[chat\] cursor back on the entries in agent-strip-selftest$/,
+        ],
+      },
+      {
         keys: ['<C-c>'],
         expect: boxesLine(4, 0),
         screenshot: 'strip-finished',

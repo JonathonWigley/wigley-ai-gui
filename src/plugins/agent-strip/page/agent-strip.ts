@@ -16,6 +16,8 @@ import type { HScroller } from '../../../shared/page/ui/h-scroller';
 import type {
   AgentsPageExports,
   Roster,
+  RosterAgent,
+  RosterTask,
   RosterTool,
 } from '../../agents/contract';
 import type { ChatComposerPart, ComposerStopExits } from '../../chat/contract';
@@ -25,6 +27,8 @@ import type {
   AgentStripPart,
   CompleteLayout,
   Layout,
+  TaskBoxInput,
+  TaskBoxPart,
   ToolLineInput,
 } from '../layouts/layout';
 import { agentStripManifest } from '../manifest';
@@ -72,14 +76,24 @@ export interface AgentStrip {
 }
 
 // A wrapper chat handed `part.build`, the HScroller it holds while the
-// session lists any box, the parts drawn into it last, and each box's root in
-// box order.
+// session lists any box, the parts drawn into it last, each box's root in box
+// order, and its running task boxes.
 interface HeldWrapper {
   wrapper: HTMLElement;
   scroller: HScroller | null;
   parts: DrawnPart<AgentStripPart>[];
   boxElements: HTMLElement[];
-  showsRunningTask: boolean;
+  runningTasks: RunningTaskBox[];
+}
+
+// A running task box as drawn last: its key, its index in box order, its part,
+// the input it was drawn or updated with, and when its task started.
+interface RunningTaskBox {
+  key: string;
+  index: number;
+  drawn: DrawnPart<TaskBoxPart>;
+  input: TaskBoxInput;
+  startedAt: number;
 }
 
 // The strip holding the entry cursor: its session, the exits its `enter` was
@@ -97,8 +111,9 @@ const RECENT_TOOLS = 3;
 // The strip of each session's subagent and task boxes. A session's HScroller
 // lives as long as it lists a box, so the user's scroll position and the
 // chevrons survive each redraw. While any held strip shows a running task box,
-// one tick a second redraws every strip, since a box has no hook to update its
-// elapsed time alone. After each draw it logs `boxes in <name>: <count>
+// one tick a second updates each running task box's elapsed time, through its
+// part's `update`, else by drawing that box again; every other box keeps its
+// element. After each draw it logs `boxes in <name>: <count>
 // (<running> running)` when that text differs from the last one logged for the
 // session, which starts as the empty strip's.
 export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
@@ -129,7 +144,7 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
     const parts = holder.parts;
     holder.parts = [];
     holder.boxElements = [];
-    holder.showsRunningTask = false;
+    holder.runningTasks = [];
     callEach(parts, (part) => part.dispose());
   };
 
@@ -151,52 +166,37 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
     }
   };
 
-  const drawBox = (
+  const drawAgentBox = (
     track: HTMLElement,
-    box: StripBox,
-    roster: Roster,
-    state: { isSelected: boolean; isOpen: boolean; now: number },
+    agent: RosterAgent,
+    state: { isSelected: boolean; isOpen: boolean },
   ): DrawnPart<AgentStripPart> => {
-    const { isSelected, isOpen, now } = state;
-    if (box.kind === 'agent') {
-      const { agent } = box;
-      const look = boxLook(agent.outcome);
-      return layoutParts.draw('agentBox', track, (agentBox, slot, rollback) =>
-        agentBox(
-          slot,
-          {
-            name: agent.name,
-            meta: agentMeta(agent),
-            description: agent.description,
-            recentTools: agent.tools.slice(-RECENT_TOOLS).map(toolLineInput),
-            status: look.dot,
-            isDimmed: look.isDimmed,
-            isSelected,
-            isOpen,
-          },
-          kitFor(rollback),
-        ),
-      );
-    }
-    const { task } = box;
-    const look = boxLook(task.outcome);
-    return layoutParts.draw('taskBox', track, (taskBox, slot, rollback) =>
-      taskBox(
+    const look = boxLook(agent.outcome);
+    return layoutParts.draw('agentBox', track, (agentBox, slot, rollback) =>
+      agentBox(
         slot,
         {
-          description: task.description,
-          owner: taskOwner(task, roster.agents),
-          elapsedMs: task.outcome === 'running' ? now - task.startedAt : null,
-          command: task.command,
+          name: agent.name,
+          meta: agentMeta(agent),
+          description: agent.description,
+          recentTools: agent.tools.slice(-RECENT_TOOLS).map(toolLineInput),
           status: look.dot,
           isDimmed: look.isDimmed,
-          isSelected,
-          isOpen,
+          isSelected: state.isSelected,
+          isOpen: state.isOpen,
         },
         kitFor(rollback),
       ),
     );
   };
+
+  const drawTaskBox = (
+    track: HTMLElement,
+    input: TaskBoxInput,
+  ): DrawnPart<TaskBoxPart> =>
+    layoutParts.draw('taskBox', track, (taskBox, slot, rollback) =>
+      taskBox(slot, input, kitFor(rollback)),
+    );
 
   const drawToolList = (
     boxElement: HTMLElement,
@@ -242,30 +242,82 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
     const selectedKey =
       selection?.sessionId === sessionId ? selection.key : null;
     const openKey = openKeys.get(sessionId);
-    for (const box of boxes) {
-      const isOpen = box.key === openKey;
-      const drawn = drawBox(track, box, roster, {
+    for (const [index, box] of boxes.entries()) {
+      const state = {
         isSelected: box.key === selectedKey,
-        isOpen,
-        now,
-      });
-      holder.parts.push(drawn);
-      const { element } = drawn.built;
+        isOpen: box.key === openKey,
+      };
+      let element: HTMLElement;
+      if (box.kind === 'agent') {
+        const drawn = drawAgentBox(track, box.agent, state);
+        holder.parts.push(drawn);
+        element = drawn.built.element;
+        if (state.isOpen) {
+          holder.parts.push(drawToolList(element, box.agent.tools));
+        }
+      } else {
+        const { task } = box;
+        const input = taskBoxInput(task, roster, state, now);
+        const drawn = drawTaskBox(track, input);
+        holder.parts.push(drawn);
+        element = drawn.built.element;
+        if (task.outcome === 'running') {
+          const { key } = box;
+          const { startedAt } = task;
+          holder.runningTasks.push({ key, index, drawn, input, startedAt });
+        }
+      }
       holder.boxElements.push(element);
-      element.addEventListener('click', () => toggleOpen(sessionId, box.key));
-      if (isOpen && box.kind === 'agent') {
-        holder.parts.push(drawToolList(element, box.agent.tools));
-      }
-      if (box.kind === 'task' && box.task.outcome === 'running') {
-        holder.showsRunningTask = true;
-      }
+      listenForClick(element, sessionId, box.key);
     }
     holder.scroller.refresh();
     logBoxes(sessionId, boxes);
   };
 
+  const listenForClick = (
+    element: HTMLElement,
+    sessionId: string,
+    key: string,
+  ) => element.addEventListener('click', () => toggleOpen(sessionId, key));
+
+  // Draws the running task box again with its input and puts its element in
+  // the old one's place.
+  const replaceTaskBox = (
+    sessionId: string,
+    holder: HeldWrapper,
+    running: RunningTaskBox,
+  ) => {
+    const old = running.drawn;
+    const oldElement = old.built.element;
+    if (holder.scroller === null) {
+      throw new Error(`task box ${running.key} has no strip to draw into`);
+    }
+    const next = drawTaskBox(holder.scroller.track, running.input);
+    const { element } = next.built;
+    oldElement.replaceWith(element);
+    holder.parts[holder.parts.indexOf(old)] = next;
+    holder.boxElements[running.index] = element;
+    running.drawn = next;
+    listenForClick(element, sessionId, running.key);
+    old.dispose();
+  };
+
+  // Sets each running task box's elapsed time to now.
+  const tickRunningTasks = (sessionId: string, holder: HeldWrapper) => {
+    const now = clock.now();
+    callEach(holder.runningTasks, (running) => {
+      running.input = { ...running.input, elapsedMs: now - running.startedAt };
+      const part = running.drawn.built;
+      if (part.update === undefined) {
+        replaceTaskBox(sessionId, holder, running);
+      } else {
+        part.update(running.input);
+      }
+    });
+  };
+
   const isRunningTaskShown = () =>
-    [...held.values()].some((holder) => holder.showsRunningTask);
+    [...held.values()].some((holder) => holder.runningTasks.length > 0);
 
   // Sets the tick while a running task box shows and none is pending; clears
   // a pending one once none shows.
@@ -301,7 +353,13 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
 
   const tick = () => {
     pendingTick = null;
-    drawAll();
+    try {
+      callEach([...held], ([sessionId, holder]) =>
+        tickRunningTasks(sessionId, holder),
+      );
+    } finally {
+      updateTicker();
+    }
   };
 
   const revealSelected = () => {
@@ -373,8 +431,8 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
   };
 
   // After the session's roster changed: the selection follows its box and is
-  // scrolled into view, or hands the cursor back once no box is left, and the
-  // open box closes once its box is gone.
+  // scrolled into view when its index moved, or hands the cursor back once no
+  // box is left, and the open box closes once its box is gone.
   const rosterChanged = (sessionId: string) => {
     const boxes = boxesOf(sessionId);
     const openKey = openKeys.get(sessionId);
@@ -382,19 +440,19 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
       openKeys.delete(sessionId);
     }
     let handBack: ComposerStopExits | null = null;
-    let keptSelection = false;
+    let selectionMoved = false;
     if (selection?.sessionId === sessionId) {
       const index = reselect(selection.key, selection.index, boxes);
       if (index === null) {
         handBack = selection.exits;
         selection = null;
       } else {
+        selectionMoved = index !== selection.index;
         selection = { ...selection, index, key: boxes[index].key };
-        keptSelection = true;
       }
     }
     redraw(sessionId);
-    if (keptSelection) {
+    if (selectionMoved) {
       revealSelected();
     }
     handBack?.toEntries();
@@ -412,7 +470,7 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
           scroller: null,
           parts: [],
           boxElements: [],
-          showsRunningTask: false,
+          runningTasks: [],
         };
         held.set(sessionId, holder);
         try {
@@ -437,13 +495,15 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
         };
       },
       stop: {
+        // A selection another session's strip holds hands its cursor back
+        // first.
         enter(sessionId, exits) {
           const boxes = boxesOf(sessionId);
           const index = entryIndex(boxes);
           if (index === null) {
             return false;
           }
-          clearSelection();
+          leaveStrip((otherExits) => otherExits.toEntries());
           selection = { sessionId, exits, key: boxes[index].key, index };
           deps.setScope();
           redraw(sessionId);
@@ -481,6 +541,25 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
         selection = null;
       }
     },
+  };
+}
+
+function taskBoxInput(
+  task: RosterTask,
+  roster: Roster,
+  state: { isSelected: boolean; isOpen: boolean },
+  now: number,
+): TaskBoxInput {
+  const look = boxLook(task.outcome);
+  return {
+    description: task.description,
+    owner: taskOwner(task, roster.agents),
+    elapsedMs: task.outcome === 'running' ? now - task.startedAt : null,
+    command: task.command,
+    status: look.dot,
+    isDimmed: look.isDimmed,
+    isSelected: state.isSelected,
+    isOpen: state.isOpen,
   };
 }
 
