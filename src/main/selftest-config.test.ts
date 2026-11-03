@@ -11,7 +11,10 @@ import {
   checkGroups,
   type HandedScript,
   mergeSelfTestConfigs,
+  SELFTEST_FILTER_ENV,
   screenshotFiles,
+  selectScripts,
+  selfTestFilterOf,
 } from './selftest-config';
 
 function handed(
@@ -366,5 +369,118 @@ describe('checkGroups', () => {
       ]);
 
     expect(check).toThrow(new RegExp(`forms.*narrow.*\\(x\\).*width ${width}`));
+  });
+});
+
+describe('selectScripts', () => {
+  const groupsOf = (...names: string[]): SelfTestGroup[] =>
+    names.map((name) => ({ name, why: 'w', steps: [] }));
+  const scripts = [
+    withGroups('forms', groupsOf('gallery', 'side bar', 'review')),
+    withGroups('settings', groupsOf('side bar', 'keymap')),
+    withGroups('docs', groupsOf('editor', 'pickers', 'side bar', 'stars')),
+  ];
+  const kept = (plugins: string[], groups: string[]) =>
+    selectScripts(scripts, { plugins, groups }).map((run) => [
+      run.pluginId,
+      run.script.groups.map((group) => group.name),
+      run.checksResult,
+    ]);
+
+  it.each([
+    {
+      filter: 'nothing',
+      plugins: [],
+      groups: [],
+      runs: [
+        ['forms', ['gallery', 'side bar', 'review'], true],
+        ['settings', ['side bar', 'keymap'], true],
+        ['docs', ['editor', 'pickers', 'side bar', 'stars'], true],
+      ],
+    },
+    {
+      filter: 'two plugins, in hand-over order',
+      plugins: ['docs', 'forms'],
+      groups: [],
+      runs: [
+        ['forms', ['gallery', 'side bar', 'review'], true],
+        ['docs', ['editor', 'pickers', 'side bar', 'stars'], true],
+      ],
+    },
+    {
+      filter: 'a qualified group, with the groups before it',
+      plugins: [],
+      groups: ['docs: pickers'],
+      runs: [['docs', ['editor', 'pickers'], false]],
+    },
+    {
+      filter: 'a bare group, in every script holding it',
+      plugins: [],
+      groups: ['side bar'],
+      runs: [
+        ['forms', ['gallery', 'side bar'], false],
+        ['settings', ['side bar'], false],
+        ['docs', ['editor', 'pickers', 'side bar'], false],
+      ],
+    },
+    {
+      filter: "a script's last group",
+      plugins: [],
+      groups: ['keymap', 'forms: gallery'],
+      runs: [
+        ['forms', ['gallery'], false],
+        ['settings', ['side bar', 'keymap'], true],
+      ],
+    },
+    {
+      filter: 'a plugin and a group of another',
+      plugins: ['settings'],
+      groups: ['docs: editor'],
+      runs: [
+        ['settings', ['side bar', 'keymap'], true],
+        ['docs', ['editor'], false],
+      ],
+    },
+  ])('keeps $filter', ({ plugins, groups, runs }) => {
+    expect(kept(plugins, groups)).toEqual(runs);
+  });
+
+  it.each([
+    {
+      name: 'an unknown plugin',
+      plugins: ['chat'],
+      groups: [],
+      message: /chat.*forms, settings, docs/,
+    },
+    {
+      name: 'an unknown group',
+      plugins: [],
+      groups: ['settings: review'],
+      message:
+        /"settings: review".*forms: gallery.*settings: keymap.*docs: stars/,
+    },
+  ])(
+    'throws on $name, naming the known ones',
+    ({ plugins, groups, message }) => {
+      expect(() => selectScripts(scripts, { plugins, groups })).toThrow(
+        message,
+      );
+    },
+  );
+});
+
+describe('selfTestFilterOf', () => {
+  it.each([
+    { env: {}, filter: { plugins: [], groups: [] } },
+    { env: { [SELFTEST_FILTER_ENV]: '' }, filter: { plugins: [], groups: [] } },
+    {
+      env: {
+        [SELFTEST_FILTER_ENV]:
+          '{"plugins":["settings"],"groups":["docs: stars"]}',
+      },
+      filter: { plugins: ['settings'], groups: ['docs: stars'] },
+    },
+  ])('reads $env', ({ env, filter }) => {
+    expect(selfTestFilterOf(env)).toEqual(filter);
   });
 });

@@ -173,3 +173,103 @@ export function applySelfTestConfig(
     pluginSettings: overrideSettings(config.pluginSettings, selfTest.settings),
   };
 }
+
+// The environment variable `npm run selftest` sets to the run's filter, as
+// the JSON of a `SelfTestFilter`; unset, the run runs every script.
+export const SELFTEST_FILTER_ENV = 'PROOF_SELFTEST_FILTER';
+
+// Which scripts a self-test run runs: every group of each plugin in `plugins`,
+// and each group `groups` names, as `<plugin>: <name>` or as a bare name that
+// names the group of that name in every script. Both empty runs everything.
+export interface SelfTestFilter {
+  plugins: string[];
+  groups: string[];
+}
+
+// A handed script as a run runs it: `script.groups` holds the groups the run
+// keeps, and `checksResult` is false when the run left later groups out, since
+// a script's result waits on its last groups.
+export interface ScriptRun extends HandedScript {
+  checksResult: boolean;
+}
+
+// The filter `env` carries, or an empty one when it carries none.
+export function selfTestFilterOf(env: NodeJS.ProcessEnv): SelfTestFilter {
+  const json = env[SELFTEST_FILTER_ENV];
+  if (!json) {
+    return { plugins: [], groups: [] };
+  }
+  const { plugins = [], groups = [] } = JSON.parse(
+    json,
+  ) as Partial<SelfTestFilter>;
+  return { plugins, groups };
+}
+
+export function isFiltered(filter: SelfTestFilter): boolean {
+  return filter.plugins.length > 0 || filter.groups.length > 0;
+}
+
+// The runs `filter` keeps, in hand-over order. A plugin `plugins` names runs
+// whole. A script with a group `groups` names runs from its first group
+// through the last named one, since a group's steps start from the page the
+// groups before it left; its result is checked only when that reaches its last
+// group. Throws, naming the known ones, on a plugin no handed script belongs
+// to and on a group name no script holds.
+export function selectScripts(
+  handed: readonly HandedScript[],
+  filter: SelfTestFilter,
+): ScriptRun[] {
+  if (!isFiltered(filter)) {
+    return handed.map((entry) => ({ ...entry, checksResult: true }));
+  }
+  const pluginIds = handed.map((entry) => entry.pluginId);
+  for (const pluginId of filter.plugins) {
+    if (!pluginIds.includes(pluginId)) {
+      throw new Error(
+        `No self-test script of plugin ${pluginId}; the scripts are ${pluginIds.join(', ')}`,
+      );
+    }
+  }
+  const qualifiedNames = handed.flatMap(({ pluginId, script }) =>
+    script.groups.map((group) => `${pluginId}: ${group.name}`),
+  );
+  for (const name of filter.groups) {
+    const isKnown = handed.some(({ pluginId, script }) =>
+      script.groups.some((group) => namesGroup(name, pluginId, group.name)),
+    );
+    if (!isKnown) {
+      throw new Error(
+        `No self-test group ${JSON.stringify(name)}; the groups are ${qualifiedNames.join(', ')}`,
+      );
+    }
+  }
+  return handed.flatMap(({ pluginId, script }) => {
+    if (filter.plugins.includes(pluginId)) {
+      return [{ pluginId, script, checksResult: true }];
+    }
+    const lastKept = script.groups.findLastIndex((group) =>
+      filter.groups.some((name) => namesGroup(name, pluginId, group.name)),
+    );
+    if (lastKept === -1) {
+      return [];
+    }
+    const groups = script.groups.slice(0, lastKept + 1);
+    return [
+      {
+        pluginId,
+        script: { ...script, groups },
+        checksResult: groups.length === script.groups.length,
+      },
+    ];
+  });
+}
+
+// Whether `name` from a filter names group `groupName` of plugin `pluginId`'s
+// script: as `<plugin>: <name>`, or bare.
+function namesGroup(
+  name: string,
+  pluginId: string,
+  groupName: string,
+): boolean {
+  return name === groupName || name === `${pluginId}: ${groupName}`;
+}

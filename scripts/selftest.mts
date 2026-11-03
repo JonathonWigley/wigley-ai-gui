@@ -1,6 +1,7 @@
 // `npm run selftest`: runs the app's self-test through Electron Forge, its
 // output passed through, and exits 0 only when the self-test reports that all
-// its steps passed. It holds `.drive/start.lock` from before the spawn, since
+// its steps passed. `--plugin` and `--group` narrow the run
+// (`selftest-args.mts`), passed to the app in its environment. It holds `.drive/start.lock` from before the spawn, since
 // every `electron-forge start` rewrites the shared `.vite/build` and the
 // page's startup reload reads its preload from there, until the self-test
 // prints that the page load after that reload starts its run, or
@@ -9,6 +10,7 @@
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { createInterface } from 'node:readline';
+import { filterEnvOf, parseSelfTestArgs } from './selftest-args.mts';
 import {
   isAlive,
   mayReleaseStartLock,
@@ -26,6 +28,7 @@ const PASSED_LINE = '[selftest] all passed';
 
 let startLock: StartLock | undefined;
 try {
+  const filterEnv = filterEnvOf(parseSelfTestArgs(process.argv.slice(2)));
   startLock = await takeStartLock(START_LOCK_FILE, {
     timeoutMs: LOCK_TIMEOUT_MS,
     pollMs: LOCK_POLL_MS,
@@ -33,7 +36,7 @@ try {
     onWait: (holder) =>
       console.log(`Waiting for another dev start (pid ${holder}) to finish`),
   });
-  runSelfTest(startLock);
+  runSelfTest(startLock, filterEnv);
 } catch (error) {
   startLock?.release();
   console.error(error instanceof Error ? error.message : String(error));
@@ -42,8 +45,11 @@ try {
 
 // Spawns the self-test and releases `startLock` once `mayReleaseStartLock`
 // holds for the page loads its lines report, or when it closes or fails to
-// start.
-function runSelfTest(startLock: StartLock): void {
+// start. `filterEnv` joins the self-test's environment.
+function runSelfTest(
+  startLock: StartLock,
+  filterEnv: Record<string, string>,
+): void {
   const isWindows = process.platform === 'win32';
   const forge = path.join(
     REPO_DIR,
@@ -57,7 +63,7 @@ function runSelfTest(startLock: StartLock): void {
     cwd: REPO_DIR,
     stdio: ['ignore', 'pipe', 'pipe'],
     shell: isWindows,
-    env: { ...process.env, PROOF_SELFTEST: '1' },
+    env: { ...process.env, ...filterEnv, PROOF_SELFTEST: '1' },
   });
 
   let hasPassed = false;

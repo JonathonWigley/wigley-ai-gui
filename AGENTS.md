@@ -652,7 +652,14 @@ round; primer: an open primer), since main, not the page, decides.
   (`typecheck` in `vitest.config.mts`), and runs them once more at run time. Two adapters of one contract run one
   suite of shared cases, kept in a `*.test-support.ts` module (the Files contract in
   `src/shared/files-contract.test-support.ts`).
-- `npm run selftest` is the agent's loop, and the user allows the agent to run it any time. It renders the window
+- `npm run selftest` is the agent's loop, and the user allows the agent to run it any time. An agent proving a change
+  runs the touched plugins' groups, and runs the whole self-test only when the user asks for it, since a whole run
+  takes half an hour or more: `npm run selftest -- --plugin <id>` runs only that plugin's script (repeat the flag or
+  give a comma list), and `--group <name>` (repeatable) runs that group, named `<plugin>: <name>` as the report prints
+  it or bare for that name in every script, together with the groups before it in its script, since a group starts
+  from the page they left. A filtered run serves the page every script's binds and settings, checks a script's result
+  only when the run reaches the script's last group, skips the end-of-run placement check, and fails before any step
+  on a plugin or group no script holds, naming the known ones. It renders the window
   offscreen as an accessory app, so it never takes the user's foreground; the core's driver (`src/main/selftest.ts`,
   its step runner in `src/main/selftest-runner.ts`) runs the script a plugin hands it — the forms plugin's opens
   fixture sessions through `sessions` and their rounds through `FormsService` — drives keys with

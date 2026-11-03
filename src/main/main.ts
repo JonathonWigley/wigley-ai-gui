@@ -105,7 +105,7 @@ import { createPluginChannels } from './plugins/plugin-channel';
 import { createNodeProcesses } from './processes/node-processes';
 import { failSelfTest, type SelfTestDriver, startSelfTest } from './selftest';
 import { createSelfTestTeardown } from './selftest-teardown';
-import { applySelfTestConfig } from './selftest-config';
+import { applySelfTestConfig, selfTestFilterOf } from './selftest-config';
 import { tempFolders } from './temp-folders';
 import {
   type DriveHarnessName,
@@ -726,6 +726,7 @@ function createWindow(
           scopedFiles(files, inputs.homeDir, paths),
           cleanUpSelfTest,
           path.join(app.getAppPath(), '.selftest', 'screenshots'),
+          selfTestFilterOf(process.env),
         )
       : null;
   // On a normal quit a quit task disposes the parts that started; a failed
