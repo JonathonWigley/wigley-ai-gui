@@ -147,6 +147,7 @@ function shownPlan(
 function statusLinePlan(plan: ProfilePlan | null): StatusLinePlanInput {
   return {
     plans: plan?.usage?.rows.map(rowMeter) ?? [],
+    extraUsage: extraUsageText(plan),
     note: planNote(plan),
     stale: plan !== null && plan.usage !== null && plan.stale,
   };
@@ -264,8 +265,8 @@ function ago(ms: number): string {
   return ms < MINUTE_MS ? 'just now' : `${formatDuration(ms)} ago`;
 }
 
-function extraUsageText(plan: ProfilePlan): string | null {
-  const extra = plan.usage?.extraUsage ?? null;
+function extraUsageText(plan: ProfilePlan | null): string | null {
+  const extra = plan?.usage?.extraUsage ?? null;
   if (extra === null) {
     return null;
   }

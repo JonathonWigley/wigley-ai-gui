@@ -145,7 +145,7 @@ In `src/contracts/agent.ts`, beside `AgentHarness`:
 - **Page** draws, through the `usage` layout:
   - a status-bar line, always on, aligned to the end: every profile stacked, one line each, its name before its plan
     rows, each limit in a column shared across the profiles. The 5h and Week rows always show; any other row shows
-    only while used. Each meter is tinted by its severity. A stale profile's rows draw muted. The input also carries
+    only while used, and extra usage shows last only while on and spent, dropped in a window 640 px wide or less. Each meter is tinted by its severity. A stale profile's rows draw muted. The input also carries
     the shown session's profile's plan rows (the default profile while no session shows), for a layout that shows
     one profile.
   - each Chat session's line, a status part (chat's `addStatusPart`) in its Chat status line; the optional

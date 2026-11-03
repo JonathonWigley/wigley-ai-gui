@@ -190,15 +190,35 @@ describe('statusLineInput', () => {
       {
         name: 'work',
         plans: [{ label: '5h', text: '42%', percent: 42, tone: 'normal' }],
+        extraUsage: null,
         note: null,
         stale: false,
       },
       {
         name: 'personal',
         plans: [{ label: 'Week', text: '61%', percent: 61, tone: 'normal' }],
+        extraUsage: null,
         note: null,
         stale: true,
       },
+    ]);
+  });
+
+  it('statusLineInput_ExtraUsage_EachProfileCarriesItsOwn', () => {
+    const [work, personal] = twoProfiles([]).plans;
+    const snapshot: UsageSnapshot = {
+      plans: [
+        { ...work, usage: { rows: [], extraUsage: extra({}), at: NOW } },
+        personal,
+      ],
+      sessions: [],
+    };
+
+    const input = statusLineInput(snapshot, null);
+
+    expect(input.profiles.map((each) => each.extraUsage)).toEqual([
+      '$12.34 / $50.00',
+      null,
     ]);
   });
 
@@ -526,6 +546,7 @@ function lineInput(overrides: Partial<StatusLineInput>): StatusLineInput {
   return {
     profileName: 'work',
     plans: [{ label: '5h', text: '42%', percent: 42, tone: 'normal' }],
+    extraUsage: null,
     note: null,
     stale: false,
     profiles: [],

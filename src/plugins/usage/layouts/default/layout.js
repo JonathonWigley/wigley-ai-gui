@@ -7,8 +7,8 @@
 // narrow; each session's row line as its context meter and text; and the
 // details as one card per profile, its freshness beside its name. In the status
 // line and the details, the 5h and Week rows always show; any other row (a
-// model-scoped limit) shows only while used, and extra usage only while on and
-// spent.
+// model-scoped limit) shows only while used, and extra usage, the status line's
+// last column until the window narrows, only while on and spent.
 
 // Labels the adapter gives the session and weekly limits.
 const ALWAYS_SHOWN_ROWS = new Set(['5h', 'Week']);
@@ -30,7 +30,12 @@ const layout = {
         ),
       ),
     ];
-    line.style.setProperty('--usage-columns', String(1 + labels.length * 3));
+    const hasExtraUsage = input.profiles.some(
+      (profile) =>
+        profile.note === null && isExtraUsageShown(profile.extraUsage),
+    );
+    const columns = 1 + labels.length * 3 + (hasExtraUsage ? 2 : 0);
+    line.style.setProperty('--usage-columns', String(columns));
     for (const profile of input.profiles) {
       const group = kit.el(line, 'span', 'usage-group usage-profile-line');
       group.classList.toggle('is-stale', profile.stale);
@@ -51,6 +56,13 @@ const layout = {
         kit.el(group, 'span', 'usage-label', meter.label);
         kit.meter(group, meter.percent, meter.tone);
         kit.el(group, 'span', 'usage-text', meter.text);
+      }
+      if (isExtraUsageShown(profile.extraUsage)) {
+        kit.el(group, 'span', 'usage-label usage-extra', 'Extra');
+        kit.el(group, 'span', 'usage-text usage-extra', profile.extraUsage);
+      } else if (hasExtraUsage) {
+        kit.el(group, 'span', 'usage-label usage-extra');
+        kit.el(group, 'span', 'usage-extra');
       }
     }
     return line;
@@ -119,7 +131,7 @@ function isRowShown(row) {
  * @returns {extraUsage is string}
  */
 function isExtraUsageShown(extraUsage) {
-  if (extraUsage === null || extraUsage === 'off') {
+  if (!extraUsage || extraUsage === 'off') {
     return false;
   }
   const used = extraUsage.split(' / ')[0];

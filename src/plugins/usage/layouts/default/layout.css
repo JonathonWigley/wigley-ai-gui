@@ -36,6 +36,20 @@
   text-align: end;
 }
 
+/* Each profile starts its own row, whichever cells a narrow window drops. */
+[data-layout-owner='usage'][data-layout='default'].usage-status-line
+  .usage-profile-name {
+  grid-column: 1;
+}
+
+/* A narrow window drops extra usage, so the profile names and meters still fit. */
+@media (max-width: 640px) {
+  [data-layout-owner='usage'][data-layout='default'].usage-status-line
+    .usage-extra {
+    display: none;
+  }
+}
+
 [data-layout-owner='usage'][data-layout='default'] .usage-profile-name {
   color: var(--wg-fg-secondary);
   font-weight: var(--wg-weight-semibold);

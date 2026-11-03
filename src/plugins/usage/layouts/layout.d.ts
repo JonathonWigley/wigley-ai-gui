@@ -29,9 +29,11 @@ export interface RowLineInput {
   context: MeterInput;
 }
 // One plan as the status bar shows it. `note` (`plan loading`, `plan unavailable`, `no plan rows`, `no profiles`)
-// stands in place of `plans` when set. `stale` is true while the plan's last poll failed after a good one.
+// stands in place of `plans` when set. `extraUsage` reads as in `DetailsProfileInput`. `stale` is true while the
+// plan's last poll failed after a good one.
 export interface StatusLinePlanInput {
   plans: readonly MeterInput[];
+  extraUsage: string | null;
   note: string | null;
   stale: boolean;
 }

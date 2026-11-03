@@ -74,6 +74,7 @@ const GROUPS: SelfTestGroup[] = [
         keys: TOGGLE,
         expect: DETAILS_HIDDEN,
         screenshot: 'status-line-narrow',
+        checksFit: true,
       },
     ],
   },
