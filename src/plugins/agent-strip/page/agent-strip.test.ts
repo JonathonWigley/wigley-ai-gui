@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MAIN_AGENT_ID } from '../../../contracts/agent';
 import {
   recordingAnchors,
+  USER_LAYOUT,
   withUser,
 } from '../../../shared/page/layout-host/test-layouts';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
@@ -120,9 +121,9 @@ function boxesWith(wrapper: FakeElement, className: string): number[] {
 
 // A strip over agents whose rosters `setRoster` changes, announcing each
 // change; timers record each `set` and `clear`; `exits` records each exit
-// called; every session is named `proj`. `OTHER_SESSION` lists `initial` too
-// and never changes.
-function setUp(initial: Roster = EMPTY) {
+// called; every session is named `proj`; `onSetScope` runs on each scope set.
+// `OTHER_SESSION` lists `initial` too and never changes.
+function setUp(initial: Roster = EMPTY, onSetScope: () => void = () => {}) {
   let now = NOW;
   const rosters = new Map<string, Roster>([
     [SESSION, initial],
@@ -166,6 +167,7 @@ function setUp(initial: Roster = EMPTY) {
     },
     setScope: () => {
       scopeSets += 1;
+      onSetScope();
     },
     nameOf: () => 'proj',
     createScroller: scrollers.create,
@@ -242,26 +244,30 @@ describe('agent strip', () => {
     expect(logged.at(-1)).toBe('[agent-strip] selected box 2 of 3 in proj');
   });
 
+  // `calls` holds the other session's exits and every scope set, in order.
   it('enter_WhileOtherSessionSelected_HandsItsCursorBack', () => {
-    const { strip, build, enter, exitCalls, selected } = setUp(MIXED);
+    const calls: string[] = [];
+    const { strip, build, enter, exitCalls, selected } = setUp(MIXED, () =>
+      calls.push('setScope'),
+    );
     build();
     const otherWrapper = new FakeElement('div');
     strip.part.build(asHtml(otherWrapper), OTHER_SESSION);
-    const otherExitCalls: string[] = [];
     strip.part.stop!.enter(OTHER_SESSION, {
-      toEntries: () => otherExitCalls.push('toEntries'),
-      toBox: (how) => otherExitCalls.push(`toBox ${how}`),
+      toEntries: () => calls.push('toEntries'),
+      toBox: (how) => calls.push(`toBox ${how}`),
     });
+    const callsBefore = calls.length;
 
     enter();
 
     expect({
-      otherExitCalls,
+      calls: calls.slice(callsBefore),
       otherSelected: boxesWith(otherWrapper, 'is-selected'),
       selected: selected(),
       exitCalls,
     }).toEqual({
-      otherExitCalls: ['toEntries'],
+      calls: ['toEntries', 'setScope'],
       otherSelected: [],
       selected: [1],
       exitCalls: [],
@@ -381,20 +387,60 @@ describe('agent strip', () => {
   });
 
   // Box 1 of MIXED, a2, is open; box 2 is the running task. A layout whose
-  // taskBox has no `update` gets that box drawn again in its place.
-  it.each<{ case: string; taskBoxKept: boolean }>([
-    { case: 'default updates the task box in place', taskBoxKept: true },
-    { case: 'a taskBox with no update is replaced', taskBoxKept: false },
-  ])('tick_RunningTaskShown_$case', ({ taskBoxKept }) => {
-    const { strip, build, boxes, sets, clears, advance, setRoster } =
-      setUp(MIXED);
-    if (!taskBoxKept) {
-      const noUpdate: Layout = {
+  // taskBox has no `update`, or an `update` that throws, gets that box drawn
+  // again in its place each tick; the throw is logged once. Each tick
+  // refreshes the scroller once.
+  it.each<{
+    case: string;
+    update: 'none' | 'throws' | null;
+    taskBoxKept: boolean;
+    updateFailures: string[];
+  }>([
+    {
+      case: 'default updates the task box in place',
+      update: null,
+      taskBoxKept: true,
+      updateFailures: [],
+    },
+    {
+      case: 'a taskBox with no update is replaced',
+      update: 'none',
+      taskBoxKept: false,
+      updateFailures: [],
+    },
+    {
+      case: 'a throwing update is logged once and replaced',
+      update: 'throws',
+      taskBoxKept: false,
+      updateFailures: [
+        `[agent-strip] layout ${USER_LAYOUT} taskBox update failed: broken update`,
+      ],
+    },
+  ])('tick_RunningTaskShown_$case', (row) => {
+    const {
+      strip,
+      build,
+      boxes,
+      sets,
+      clears,
+      advance,
+      setRoster,
+      logged,
+      scrollers,
+    } = setUp(MIXED);
+    if (row.update !== null) {
+      const update = row.update;
+      const userTaskBox: Layout = {
         taskBox: (parent, input, kit) => ({
           element: defaultLayout.taskBox(parent, input, kit).element,
+          ...(update === 'throws' && {
+            update() {
+              throw new Error('broken update');
+            },
+          }),
         }),
       };
-      strip.setLayouts(withUser<Layout>(defaultLayout, noUpdate));
+      strip.setLayouts(withUser<Layout>(defaultLayout, userTaskBox));
     }
     build();
     boxes()[1].click();
@@ -402,29 +448,41 @@ describe('agent strip', () => {
     const before = boxes();
     const toolList = findAll(before[1], 'agent-strip-toolList')[0];
     const beforeText = before[2].textContent;
+    const refreshesBefore = scrollers.refreshes();
 
-    advance(1000);
-    sets[0].run();
+    const texts: (string | null)[] = [];
+    for (const index of [0, 1]) {
+      advance(1000);
+      sets[index].run();
+      texts.push(boxes()[2].textContent);
+    }
     const after = boxes();
-    const afterTick = {
+    const afterTicks = {
       agentBoxesKept: [after[0] === before[0], after[1] === before[1]],
       toolListKept: findAll(after[1], 'agent-strip-toolList')[0] === toolList,
       taskBoxKept: after[2] === before[2],
-      text: after[2].textContent,
+      texts,
+      refreshes: scrollers.refreshes() - refreshesBefore,
+      updateFailures: logged.filter((line) => line.includes('update failed')),
       sets: sets.length,
     };
     setRoster({ ...MIXED, tasks: [task('t1', 30_000, 'done')] });
 
     expect(beforeText).toContain('main · 30s');
-    expect(afterTick).toEqual({
+    expect(afterTicks).toEqual({
       agentBoxesKept: [true, true],
       toolListKept: true,
-      taskBoxKept,
-      text: expect.stringContaining('main · 31s'),
-      sets: 2,
+      taskBoxKept: row.taskBoxKept,
+      texts: [
+        expect.stringContaining('main · 31s'),
+        expect.stringContaining('main · 32s'),
+      ],
+      refreshes: 2,
+      updateFailures: row.updateFailures,
+      sets: 3,
     });
-    expect(clears).toEqual([sets[1].handle]);
-    expect(sets).toHaveLength(2);
+    expect(clears).toEqual([sets[2].handle]);
+    expect(sets).toHaveLength(3);
   });
 
   it.each<{ part: keyof Layout }>([

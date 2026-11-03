@@ -2,6 +2,7 @@ import type { Clock, Timers } from '../../../contracts/ambient';
 import type { Log } from '../../../contracts/log';
 import type { ShownLayouts } from '../../../contracts/plugin';
 import { callEach } from '../../../shared/call-each';
+import { errorText } from '../../../shared/error-text';
 import {
   createBaseKit,
   type OwnerKitServices,
@@ -113,7 +114,8 @@ const RECENT_TOOLS = 3;
 // chevrons survive each redraw. While any held strip shows a running task box,
 // one tick a second updates each running task box's elapsed time, through its
 // part's `update`, else by drawing that box again; every other box keeps its
-// element. After each draw it logs `boxes in <name>: <count>
+// element. Once an `update` throws, the tick draws boxes again until the
+// layouts change. After each draw it logs `boxes in <name>: <count>
 // (<running> running)` when that text differs from the last one logged for the
 // session, which starts as the empty strip's.
 export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
@@ -129,6 +131,9 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
   const loggedBoxes = new Map<string, string>();
   let selection: Selection | null = null;
   let pendingTick: number | null = null;
+  // The layouts shown when a task box's `update` threw; while they are still
+  // the shown ones, the tick draws running task boxes again instead.
+  let updateFailedUnder: ShownLayouts<Layout> | null = null;
 
   const log = (message: string) => deps.log(agentStripManifest.id, message);
 
@@ -302,18 +307,48 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
     old.dispose();
   };
 
-  // Sets each running task box's elapsed time to now.
+  // Runs the running task box's `update` with its input; false when it has
+  // none, or when it threw, logging `layout <name> taskBox update failed:
+  // <error>`, or threw earlier under the layouts still shown.
+  const updateTaskBox = (running: RunningTaskBox): boolean => {
+    const { drawn } = running;
+    const { update } = drawn.built;
+    const shown = layoutParts.shown();
+    if (update === undefined || updateFailedUnder === shown) {
+      return false;
+    }
+    try {
+      update.call(drawn.built, running.input);
+      return true;
+    } catch (error) {
+      log(
+        `layout ${drawn.layoutName} taskBox update failed: ${errorText(error)}`,
+      );
+      updateFailedUnder = shown;
+      return false;
+    }
+  };
+
+  // Sets each running task box's elapsed time to now, through its `update`,
+  // else by drawing it again, then refreshes the strip's HScroller.
   const tickRunningTasks = (sessionId: string, holder: HeldWrapper) => {
+    if (holder.runningTasks.length === 0) {
+      return;
+    }
     const now = clock.now();
-    callEach(holder.runningTasks, (running) => {
-      running.input = { ...running.input, elapsedMs: now - running.startedAt };
-      const part = running.drawn.built;
-      if (part.update === undefined) {
-        replaceTaskBox(sessionId, holder, running);
-      } else {
-        part.update(running.input);
-      }
-    });
+    try {
+      callEach(holder.runningTasks, (running) => {
+        running.input = {
+          ...running.input,
+          elapsedMs: now - running.startedAt,
+        };
+        if (!updateTaskBox(running)) {
+          replaceTaskBox(sessionId, holder, running);
+        }
+      });
+    } finally {
+      holder.scroller?.refresh();
+    }
   };
 
   const isRunningTaskShown = () =>

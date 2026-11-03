@@ -70,7 +70,8 @@ export interface AgentStripPart {
 }
 
 // What `taskBox` returns: its root, appended to `parent`, and an optional `update` the app runs once a second while
-// the task runs, with the input the box was drawn with and the new `elapsedMs`, in place of drawing the box again.
+// the task runs, with the input the box was drawn with and the new `elapsedMs`, in place of drawing the box again. Once
+// an `update` throws, the app logs it and draws its task boxes again instead until the layouts change.
 export interface TaskBoxPart extends AgentStripPart {
   update?(input: TaskBoxInput): void;
 }
