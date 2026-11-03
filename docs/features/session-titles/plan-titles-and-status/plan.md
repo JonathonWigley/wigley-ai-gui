@@ -180,8 +180,10 @@ Review base: e38f1bb7
 - the plan's 'a resumed agent may rename once more' is dropped: per agent-chat design a resume keeps the first request's system prompt, so a pre-feature conversation never gets the instruction — if the CLI does re-read appended prompts on resume, the doc understates it · group 07 · group 07
 - the test gate, self-test and drive run all run in the worktree: this is an Electron app with no editor boundary, and the worktree has its own .vite and node_modules symlinked to the main tree — none · lead
 - triage by the user's standing word (go with every recommendation): fix now 1-8, 12-14, 16-18; leave 15 (a done on the visible session would linger after the user returns; the OS alert already names the finish) and 20 (invisible, and dropping late sets conflicts with set-before-row); follow-up 19 (shared input reset across five plugins) and 21 (pre-existing split picker) — none · lead
+- re-review 1 finding 1 (fake permission ask matched by folder) left: chat's session state holds no host session id, and the self-test's folders are distinct
 ### Review rounds
 - review 1 · 675f65f7 · NEEDS FIXES — 5 important, 15 minor, 1 pre-existing (/tmp/claude-session-titles/review-675f65f7.md); lead applied 9, 10, 11 in e3981051
 - re-review 1 · eb88d107 (fix commits 187973e1..eb88d107) · NEEDS FIXES — every prior finding closed; 2 minor: rename dialog redraw untested, fake permission ask routed by folder not host session id
+- re-review 2 · a2ba7507 · PASS — redraw test pins body, layout, box place, text and focus
 ### Test gate
 - Vitest: src/plugins/{sessions,chat,forms,primer}, src/shared/page/session-form-tabs.test.ts, keymap.test.ts, shared/keymap-checks.test.ts, agent-form-drive.test.ts — every touched plugin and the keymap/session-form-tabs seams the range edits; first run failed 3 in chat/main/start.test.ts (stale fake and instructions assertion from group 04), fixed in a dispatched test-only commit, re-run 1652/1652 pass · self-test --plugin sessions,chat,forms,primer: all passed (/tmp/claude-session-titles/selftest-gate.log) · lint clean
