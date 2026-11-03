@@ -98,14 +98,14 @@ export interface ClaudeCodeHarnessDeps {
   randomUuid: RandomUuid;
 }
 
-// A stdout line of type `result` ends a turn. `command_lifecycle` follows a
-// turn's `result`, and `control_response` answers the app's `control_request`,
-// which it writes between turns for the context usage.
+// A stdout line of type `result` ends a turn. The app's `user` line starts one,
+// and `assistant` or `stream_event` shows one Claude started by itself, after a
+// background task ended. `system` and the rest also print between turns.
 export const CLAUDE_IDLE_RULE: IdleRule = {
   key: 'type',
   value: 'result',
-  ignoredStdoutValues: ['command_lifecycle', 'control_response'],
-  ignoredStdinValues: ['control_request'],
+  busyStdoutValues: ['assistant', 'stream_event'],
+  busyStdinValues: ['user'],
 };
 // How long `end` waits after closing stdin before SIGTERM, and again before
 // SIGKILL.

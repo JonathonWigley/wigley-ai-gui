@@ -3,7 +3,8 @@ import { execFile, type ExecFileException } from 'node:child_process';
 const REPORT_LIMIT_MS = 5000;
 const PS_LINE = /^(\S+\s+\S+\s+\d+\s+\S+\s+\d+)\s+(.+)$/;
 
-// What the OS says of a running process. Two reports of one process are equal, whichever host asked.
+// What the OS says of a running process. Two reports of one process hold one `startedAt`, whichever host asked; its
+// `command` can change.
 export interface ProcessReport {
   startedAt: string;
   command: string;

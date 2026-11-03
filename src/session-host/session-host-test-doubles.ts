@@ -12,8 +12,8 @@ import type { ProcessSubscriber } from './process-table';
 export const IDLE_RULE = {
   key: 'type',
   value: 'result',
-  ignoredStdoutValues: ['note'],
-  ignoredStdinValues: ['ask'],
+  busyStdoutValues: ['assistant', 'stream_event'],
+  busyStdinValues: ['user'],
 };
 
 export function spawnRequest(id: string): HostedSpawn {

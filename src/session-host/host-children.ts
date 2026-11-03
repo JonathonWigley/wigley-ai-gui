@@ -96,7 +96,8 @@ export function createHostChildren(deps: HostChildrenDeps): HostChildren {
     return [];
   }
 
-  // Whether `leftover`'s pid is still the process recorded. Every signal to a leftover follows a true from this.
+  // Whether `leftover`'s pid is still the process recorded: an exec or a retitle changes a process's command, never its
+  // start time. Every signal to a leftover follows a true from this.
   async function isStillRecorded(leftover: RecordedChild): Promise<boolean> {
     const { pid, startedAt, command } = leftover;
     let now: ProcessReport | null;
@@ -109,7 +110,7 @@ export function createHostChildren(deps: HostChildrenDeps): HostChildren {
     if (now === null) {
       return false;
     }
-    if (now.startedAt === startedAt && now.command === command) {
+    if (now.startedAt === startedAt) {
       return true;
     }
     report(

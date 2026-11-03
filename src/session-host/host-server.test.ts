@@ -511,7 +511,7 @@ describe('host lifetime', () => {
     const connection = await client(running.channel);
     const idle = await spawned(running, connection, 'idle');
     const busy = await spawned(running, connection, 'busy');
-    connection.send({ type: 'write', id: 'busy', text: 'go' });
+    connection.send({ type: 'write', id: 'busy', text: '{"type":"user"}' });
     await settled(connection);
 
     connection.send({ type: 'drain' });

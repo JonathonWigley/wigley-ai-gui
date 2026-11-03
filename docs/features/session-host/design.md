@@ -50,17 +50,19 @@ session under it.
 
 - The host spawns a command with args, folder and environment, writes lines to its stdin, closes its stdin, kills
   it, and logs every pipe line. It knows no harness: the Claude adapter, and a Codex adapter later, hand it a command
-  and one **idle rule**: a top-level JSON key and the value that marks a stdout line as the end of a turn (for Claude
-  `"type": "result"`), and the values of that key that are bookkeeping on each pipe (for Claude `command_lifecycle` and
-  `control_response` on stdout, `control_request` on stdin).
-- A process starts **idle**, turns idle on a stdout line that ends a turn, and reads busy after any other line
-  on stdin or stdout, so an unknown line keeps a process alive rather than ending it mid-turn. A bookkeeping line
-  leaves the state alone. While no app is connected, an idle process is ended once the keep window has passed since
-  the later of its turn end and the app's last disconnect: stdin closed, then SIGTERM after a 3 s grace, then SIGKILL after 3 s more. The app sends
-  the window (`chat.keepIdleMinutes`, default 60, the prompt cache's life) on connect and on each change. The host sees
-  only pipe lines, so a background shell that stays silent past the window ends with its process. A process ending
-  this way, or through a drain, lists as not running and refuses an attach: its stdin is closed, so its row rests and
-  the next message resumes the session.
+  and one **idle rule**: a top-level JSON key, the value that marks a stdout line as the end of a turn (for Claude
+  `"type": "result"`), and the values of that key that start a turn on each pipe (for Claude `user` on stdin,
+  `assistant` and `stream_event` on stdout, the last for a turn Claude starts by itself after a background task).
+- A process starts **idle**, reads busy on a line that starts a turn, and turns idle on a stdout line that ends one.
+  Every other line leaves the state alone, on any pipe and whatever its shape, so a `system` line after a mode change
+  or from a start hook, or the context request and its answer, keeps no process alive. While no app is connected, an
+  idle process is ended once the keep window has passed since the later of its turn end and the app's last disconnect:
+  stdin closed, then SIGTERM after a 3 s grace, then SIGKILL after 3 s more. The app sends the window
+  (`chat.keepIdleMinutes`, default 60, the prompt cache's life) on connect and on each change. The host sees only pipe
+  lines, so a background shell that stays silent past the window ends with its process, and so does a background
+  subagent that has printed only `system` lines since the turn's `result`; one whose own `assistant` lines have reached
+  stdout reads busy until the `result` of the turn its end starts. A process ending this way, or through a drain, lists
+  as not running and refuses an attach: its stdin is closed, so its row rests and the next message resumes the session.
 - The host outlives its logs: a pipe log that cannot be created fails only that spawn; one whose append fails stops
   appending, keeps delivering lines live, and refuses an attach, since it can no longer rebuild the state, so the
   process runs on with its row unheld.
@@ -80,9 +82,11 @@ session under it.
   - Each host keeps its children's pids, start times and commands in the children record, replaced whole from a
     child's spawn, once the OS has reported it, to its close. A new host, once it owns the channel, ends what the record
     left: SIGTERM, then SIGKILL after 3 s, about 6 s at most, on macOS and Windows alike through the platform's kill
-    (on Windows either signal ends the process at once). Before each signal it compares the recorded start time and
-    command with what `ps` or PowerShell reports; a pid it cannot confirm, an unreadable record included, is left alone
-    and logged. A process left alone this way can still write beside a resumed one.
+    (on Windows either signal ends the process at once). Before each signal it compares the recorded start time with
+    what `ps` or PowerShell reports, since a pid with the same start time is the same process whatever its command has
+    become through an exec or a retitle; the recorded command is kept for the log. A pid it cannot confirm, an
+    unreadable record included, is left alone and logged. A process left alone this way can still write beside a resumed
+    one.
   - Until that ends the new host answers only `hello`, `list`, `subscribe` and `setKeepIdle`, each of which finds an
     empty table. Every other message waits in order and so does the exit rule, so no `spawn` runs beside a leftover. A
     resume always goes through a new host, and that host's start ends the leftovers even when no resume ever comes. The

@@ -94,16 +94,16 @@ function valueAtKey(text: string, key: string): unknown {
   }
 }
 
-function isIgnored(value: unknown, ignoredValues: readonly string[]): boolean {
-  return typeof value === 'string' && ignoredValues.includes(value);
+function isBusyValue(value: unknown, busyValues: readonly string[]): boolean {
+  return typeof value === 'string' && busyValues.includes(value);
 }
 
 // Every line reads the rule, so a bad one would otherwise throw far from the request that carried it.
 function requireIdleRule({ id, idleRule }: HostedSpawn) {
   const isWellFormed =
     typeof idleRule?.key === 'string' &&
-    Array.isArray(idleRule.ignoredStdoutValues) &&
-    Array.isArray(idleRule.ignoredStdinValues);
+    Array.isArray(idleRule.busyStdoutValues) &&
+    Array.isArray(idleRule.busyStdinValues);
   if (!isWellFormed) {
     throw new Error(`process ${id} has no well-formed idle rule`);
   }
@@ -191,7 +191,7 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
     const value = valueAtKey(text, rule.key);
     if (value === rule.value) {
       turnIdle(hosted);
-    } else if (!isIgnored(value, rule.ignoredStdoutValues)) {
+    } else if (isBusyValue(value, rule.busyStdoutValues)) {
       turnBusy(hosted);
     }
   }
@@ -319,7 +319,7 @@ export function createProcessTable(deps: ProcessTableDeps): ProcessTable {
       }
       hosted.log.append('in', text);
       const value = valueAtKey(text, hosted.idleRule.key);
-      if (!isIgnored(value, hosted.idleRule.ignoredStdinValues)) {
+      if (isBusyValue(value, hosted.idleRule.busyStdinValues)) {
         turnBusy(hosted);
       }
       hosted.child.stdin.write(`${text}\n`);

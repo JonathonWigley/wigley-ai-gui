@@ -24,6 +24,9 @@ import {
 } from './session-host-test-doubles';
 
 const HOUR_MS = 3_600_000;
+const USER = '{"type":"user"}';
+const RESULT = '{"type":"result"}';
+const SYSTEM = '{"type":"system"}';
 const folders: string[] = [];
 
 afterEach(() => {
@@ -94,92 +97,121 @@ describe('process table', () => {
 
   it.each([
     { label: 'start', steps: [], idle: true },
-    { label: 'in', steps: [['in', 'hi']], idle: false },
+    {
+      label: 'a turn-starting in, then silence',
+      steps: [['in', USER]],
+      idle: false,
+    },
     {
       label: 'out matching the rule',
       steps: [
-        ['in', 'hi'],
-        ['out', '{"type":"result"}'],
+        ['in', USER],
+        ['out', RESULT],
       ],
       idle: true,
     },
     {
-      label: 'out with another value',
+      label: 'a turn-starting in after the turn end',
       steps: [
-        ['in', 'hi'],
-        ['out', '{"type":"result"}'],
+        ['in', USER],
+        ['out', RESULT],
+        ['in', USER],
+      ],
+      idle: false,
+    },
+    {
+      label: 'the first turn-starting out after the turn end',
+      steps: [
+        ['in', USER],
+        ['out', RESULT],
         ['out', '{"type":"assistant"}'],
       ],
       idle: false,
     },
     {
-      label: 'ignored out after the rule',
+      label: 'another turn-starting out after the turn end',
       steps: [
-        ['in', 'hi'],
-        ['out', '{"type":"result"}'],
-        ['out', '{"type":"note"}'],
+        ['in', USER],
+        ['out', RESULT],
+        ['out', '{"type":"stream_event"}'],
+      ],
+      idle: false,
+    },
+    {
+      label: 'a mode-change line after the turn end, no app connected',
+      steps: [
+        ['in', USER],
+        ['out', RESULT],
+        ['out', SYSTEM],
       ],
       idle: true,
     },
     {
-      label: 'ignored in after the rule, then its answer',
+      label: 'a hook line before any message',
+      steps: [['out', SYSTEM]],
+      idle: true,
+    },
+    {
+      label: 'the context request and its answer after the turn end',
       steps: [
-        ['in', 'hi'],
-        ['out', '{"type":"result"}'],
-        ['in', '{"type":"ask"}'],
-        ['out', '{"type":"note"}'],
+        ['in', USER],
+        ['out', RESULT],
+        ['in', '{"type":"control_request"}'],
+        ['out', '{"type":"command_lifecycle"}'],
+        ['out', '{"type":"control_response"}'],
       ],
       idle: true,
     },
     {
-      label: 'ignored in at start',
-      steps: [['in', '{"type":"ask"}']],
+      label: 'another in at start',
+      steps: [['in', '{"type":"control_request"}']],
       idle: true,
     },
     {
-      label: 'ignored out while busy',
+      label: 'another out while busy',
       steps: [
-        ['in', 'hi'],
-        ['out', '{"type":"note"}'],
+        ['in', USER],
+        ['out', SYSTEM],
       ],
       idle: false,
     },
     {
       label: 'in on only the stdout list',
-      steps: [['in', '{"type":"note"}']],
-      idle: false,
+      steps: [['in', '{"type":"assistant"}']],
+      idle: true,
     },
     {
       label: 'out on only the stdin list',
-      steps: [['out', '{"type":"ask"}']],
-      idle: false,
+      steps: [['out', USER]],
+      idle: true,
+    },
+    {
+      label: 'in not JSON',
+      steps: [['in', 'hi']],
+      idle: true,
     },
     {
       label: 'out not JSON',
-      steps: [
-        ['in', 'hi'],
-        ['out', '{"type":"result"}'],
-        ['out', 'not json'],
-      ],
-      idle: false,
+      steps: [['out', 'not json']],
+      idle: true,
     },
     {
       label: 'out JSON null',
-      steps: [
-        ['in', 'hi'],
-        ['out', '{"type":"result"}'],
-        ['out', 'null'],
-      ],
-      idle: false,
+      steps: [['out', 'null']],
+      idle: true,
     },
     {
-      label: 'err after idle',
-      steps: [
-        ['in', 'hi'],
-        ['out', '{"type":"result"}'],
-        ['err', 'warning'],
-      ],
+      label: 'err naming a turn start',
+      steps: [['err', '{"type":"assistant"}']],
       idle: true,
+    },
+    {
+      label: 'err matching the rule while busy',
+      steps: [
+        ['in', USER],
+        ['err', RESULT],
+      ],
+      idle: false,
     },
   ])(
     'idleRule_LineCases_SetsTheState: $label → idle $idle',
@@ -206,7 +238,7 @@ describe('process table', () => {
   it('keepWindow_IdleNoClient_EndsAfterTheWindowThenGraces', async () => {
     const { table, time, children } = setUp();
     table.spawn(spawnRequest('a'), recordingSubscriber().subscriber);
-    table.write('a', 'hi');
+    table.write('a', USER);
     children[0].stdout.write('{"type":"result"}\n');
     await streamsDelivered();
 
@@ -230,7 +262,7 @@ describe('process table', () => {
     const { table, time, children } = setUp();
     table.setClientConnected(true);
     table.spawn(spawnRequest('a'), recordingSubscriber().subscriber);
-    children[0].stdout.write('{"type":"result"}\n');
+    children[0].stdout.write(`${RESULT}\n${SYSTEM}\n`);
     await streamsDelivered();
 
     time.advanceTo(HOUR_MS);
@@ -271,7 +303,7 @@ describe('process table', () => {
     const { table, time, children } = setUp();
     table.setClientConnected(true);
     table.spawn(spawnRequest('a'), recordingSubscriber().subscriber);
-    table.write('a', 'hi');
+    table.write('a', USER);
     table.setClientConnected(false);
 
     time.advanceTo(1000);
@@ -284,17 +316,17 @@ describe('process table', () => {
     expect(children[0].stdin.writableEnded).toBe(true);
   });
 
-  it('keepWindow_IgnoredLinesAfterTheTurnEnd_CountsFromTheTurnEnd', async () => {
+  it('keepWindow_OtherLinesAfterTheTurnEnd_CountsFromTheTurnEnd', async () => {
     const { table, time, children } = setUp();
     table.spawn(spawnRequest('a'), recordingSubscriber().subscriber);
-    table.write('a', 'hi');
+    table.write('a', USER);
     time.advanceTo(1000);
-    children[0].stdout.write('{"type":"result"}\n');
+    children[0].stdout.write(`${RESULT}\n`);
     await streamsDelivered();
 
     time.advanceTo(2000);
-    table.write('a', '{"type":"ask"}');
-    children[0].stdout.write('{"type":"note"}\n');
+    table.write('a', '{"type":"control_request"}');
+    children[0].stdout.write(`${SYSTEM}\n`);
     await streamsDelivered();
 
     time.advanceTo(HOUR_MS + 999);
@@ -304,15 +336,15 @@ describe('process table', () => {
   });
 
   it.each([
-    { label: 'ignored', afterTurn: '{"type":"note"}', ends: true },
-    { label: 'unlisted', afterTurn: '{"type":"assistant"}', ends: false },
+    { label: 'a mode-change line', afterTurn: SYSTEM, ends: true },
+    { label: 'a turn start', afterTurn: '{"type":"assistant"}', ends: false },
   ])(
     'drain_LineAfterTheTurnEnd_EndsOnlyAnIdleProcess: $label → ends $ends',
     async ({ afterTurn, ends }) => {
       const { table, children } = setUp();
       table.spawn(spawnRequest('a'), recordingSubscriber().subscriber);
-      table.write('a', 'hi');
-      children[0].stdout.write(`{"type":"result"}\n${afterTurn}\n`);
+      table.write('a', USER);
+      children[0].stdout.write(`${RESULT}\n${afterTurn}\n`);
       await streamsDelivered();
 
       table.drain();

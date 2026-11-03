@@ -8,12 +8,12 @@ export interface PipeLine {
   text: string;
 }
 // A stdout line whose top-level JSON `key` equals `value` ends a turn (Claude: `type` is `result`).
-// A line whose `key` holds a value its direction's list names leaves the idle state alone; any other line reads busy.
+// A line whose `key` holds a value its direction's list names starts one; every other line leaves the state alone.
 export interface IdleRule {
   key: string;
   value: string;
-  ignoredStdoutValues: readonly string[];
-  ignoredStdinValues: readonly string[];
+  busyStdoutValues: readonly string[];
+  busyStdinValues: readonly string[];
 }
 export interface HostedSpawn {
   id: string;

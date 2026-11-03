@@ -20,8 +20,8 @@ function spawnRequest(id: string): HostedSpawn {
     idleRule: {
       key: 'type',
       value: 'result',
-      ignoredStdoutValues: [],
-      ignoredStdinValues: [],
+      busyStdoutValues: [],
+      busyStdinValues: [],
     },
   };
 }

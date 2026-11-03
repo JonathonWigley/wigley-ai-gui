@@ -24,9 +24,8 @@ import { type FakeChild, fakeChild } from './session-host-test-doubles';
 
 const REPORT: ProcessReport = { startedAt: 'then', command: '/bin/agent' };
 const SECONDS_PER_REAL_SECOND = 30;
-// `:` keeps `sh` from replacing itself with `sleep`, which would change its command.
-const ENDS_ON_SIGTERM = 'echo ready; sleep 3; :';
-const IGNORES_SIGTERM = 'trap "" TERM; echo ready; sleep 3; :';
+const ENDS_ON_SIGTERM = 'echo ready; sleep 3';
+const IGNORES_SIGTERM = 'trap "" TERM; echo ready; sleep 3';
 
 // Real time run fast, so a grace passes in a tenth of a second.
 const fastTimers: Timers = {
@@ -108,23 +107,34 @@ describe.skipIf(process.platform === 'win32')('a real leftover', () => {
     {
       label: 'it ends on SIGTERM',
       script: ENDS_ON_SIGTERM,
+      recordedCommand: null,
       signals: ['SIGTERM'],
     },
     {
       label: 'it ignores SIGTERM',
       script: IGNORES_SIGTERM,
+      recordedCommand: null,
       signals: ['SIGTERM', 'SIGKILL'],
     },
+    {
+      label: 'its command changed since the record',
+      script: ENDS_ON_SIGTERM,
+      recordedCommand: '/usr/bin/env',
+      signals: ['SIGTERM'],
+    },
   ])(
-    'endLeftovers_ConfirmedPid_EndsIt: $label',
-    async ({ script, signals: expected }) => {
+    'endLeftovers_SameStartTime_EndsIt: $label',
+    async ({ script, recordedCommand, signals: expected }) => {
       const { processes, signals, real } = realProcesses();
       const { children, file } = setUp(processes);
       const { child, pid } = await runningShell(script);
       const exited = once(child, 'exit');
+      const report = (await real.report(pid)) as ProcessReport;
       writeFileSync(
         file,
-        JSON.stringify([{ pid, ...(await real.report(pid)) }]),
+        JSON.stringify([
+          { pid, ...report, command: recordedCommand ?? report.command },
+        ]),
       );
 
       await children.endLeftovers();
@@ -136,40 +146,25 @@ describe.skipIf(process.platform === 'win32')('a real leftover', () => {
     },
   );
 
-  it.each([
-    {
-      label: 'another start time',
-      recorded: (report: ProcessReport) => ({
-        ...report,
-        startedAt: 'long ago',
-      }),
-    },
-    {
-      label: 'another command',
-      recorded: (report: ProcessReport) => ({
-        ...report,
-        command: '/bin/agent',
-      }),
-    },
-  ])(
-    'endLeftovers_ReusedPid_LeavesItAloneAndReports: $label',
-    async ({ recorded }) => {
-      const { processes, signals, real } = realProcesses();
-      const { children, file, reports } = setUp(processes);
-      const { child, pid } = await runningShell(ENDS_ON_SIGTERM);
-      const report = (await real.report(pid)) as ProcessReport;
-      writeFileSync(file, JSON.stringify([{ pid, ...recorded(report) }]));
+  it('endLeftovers_AnotherStartTime_LeavesItAloneAndReports', async () => {
+    const { processes, signals, real } = realProcesses();
+    const { children, file, reports } = setUp(processes);
+    const { child, pid } = await runningShell(ENDS_ON_SIGTERM);
+    const report = (await real.report(pid)) as ProcessReport;
+    writeFileSync(
+      file,
+      JSON.stringify([{ pid, startedAt: 'long ago', command: report.command }]),
+    );
 
-      await children.endLeftovers();
+    await children.endLeftovers();
 
-      expect(signals).toEqual([]);
-      expect(child.exitCode).toBeNull();
-      expect(child.signalCode).toBeNull();
-      expect(reports).toHaveLength(1);
-      expect(reports[0]).toContain(`pid ${pid} left alone`);
-      expect(existsSync(file)).toBe(false);
-    },
-  );
+    expect(signals).toEqual([]);
+    expect(child.exitCode).toBeNull();
+    expect(child.signalCode).toBeNull();
+    expect(reports).toHaveLength(1);
+    expect(reports[0]).toContain(`pid ${pid} left alone`);
+    expect(existsSync(file)).toBe(false);
+  });
 
   it('endLeftovers_PidGone_SignalsNothing', async () => {
     const { processes, signals, real } = realProcesses();
@@ -217,7 +212,7 @@ describe.skipIf(process.platform === 'win32')('a real leftover', () => {
       const pids = (
         JSON.parse(readFileSync(file, 'utf8')) as { pid: number }[]
       ).map(({ pid }) => pid);
-      expect(pids).toEqual([first.pid, second.pid]);
+      expect(new Set(pids)).toEqual(new Set([first.pid, second.pid]));
     });
 
     children.killAll();

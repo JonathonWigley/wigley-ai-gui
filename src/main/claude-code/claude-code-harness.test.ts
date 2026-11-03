@@ -2302,11 +2302,8 @@ describe('createClaudeCodeHarness on the session host', () => {
       idleRule: {
         key: 'type',
         value: 'result',
-        ignoredStdoutValues: expect.arrayContaining([
-          'command_lifecycle',
-          'control_response',
-        ]),
-        ignoredStdinValues: expect.arrayContaining(['control_request']),
+        busyStdoutValues: expect.arrayContaining(['assistant', 'stream_event']),
+        busyStdinValues: expect.arrayContaining(['user']),
       },
     });
     expect(host.processes[0].writes[0]).toBe(
@@ -2314,14 +2311,26 @@ describe('createClaudeCodeHarness on the session host', () => {
     );
   });
 
-  it('idleRule_LinesOfARunningTurn_AreNotIgnored', () => {
-    const turnLines = ['assistant', 'stream_event', 'user', 'system'];
-    const ignored = [
-      ...CLAUDE_IDLE_RULE.ignoredStdoutValues,
-      ...CLAUDE_IDLE_RULE.ignoredStdinValues,
+  it('idleRule_LinesBetweenTurns_AreNotBusy', () => {
+    // `user` on stdout: a `set_model` acknowledgement prints one with no turn.
+    const stdoutBetweenTurns = [
+      'system',
+      'command_lifecycle',
+      'control_response',
+      'user',
     ];
+    const stdinBetweenTurns = ['control_request', 'control_response'];
 
-    expect(ignored.filter((value) => turnLines.includes(value))).toEqual([]);
+    expect(
+      CLAUDE_IDLE_RULE.busyStdoutValues.filter((value) =>
+        stdoutBetweenTurns.includes(value),
+      ),
+    ).toEqual([]);
+    expect(
+      CLAUDE_IDLE_RULE.busyStdinValues.filter((value) =>
+        stdinBetweenTurns.includes(value),
+      ),
+    ).toEqual([]);
   });
 
   it('start_EnvWithUndefined_SpawnsWithoutIt', () => {
