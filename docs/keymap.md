@@ -111,6 +111,7 @@ is the group's main action, `n`/`p` are next and previous, and uppercase is a va
 | `f`                | none: find                           | reserved: `ff` file, `fs` text, `fa` command palette                                                                                                                                                                                |
 | `v`                | view                                 | `vt` hide or show the docs tree, `vd` show or hide done follow-ups, `va` show only agent-ready follow-ups (Backlog), `vu` hide or show usage details                                                                                |
 | `w`                | workflow                             | `ww` the session's next workflow step (Clear & make when a plan is ready, Cancel during its countdown), `wn` make in a new session, `wr` resume make, `wo` open the plan, `wt` retro, `wf` start feature, `wd` dismiss a closed run |
+| `r`                | rename                               | `rr` rename the focused session                                                                                                                                                                                                     |
 | `c`                | chat controls                        | in a box only: `cm` mode, `ce` effort, `co` model, `cc` every control, `cx` remove the last attached image, `cp` pull back the newest pending message, `cy` copy the sign-in link (sign-in dialog)                                  |
 | `a`                | answer                               | in a box only: `a1`…`a9` pick the numbered choice or action header, `ac` clear                                                                                                                                                      |
 | `x`                | none: forms not applicable           | in a box only: `x`                                                                                                                                                                                                                  |
@@ -122,7 +123,7 @@ groups, and its description here is only for readers of this table.
 
 Reserved to match Rider and Neovim, for when the app has the action: `.` context actions, `i`
 info, `e` errors and attention (`en`/`ep`), `j` jump to session N, `s` search, `o` open (config
-files), `r` rename.
+files).
 
 ## Adding a bind
 

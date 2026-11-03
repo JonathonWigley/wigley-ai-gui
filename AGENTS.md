@@ -161,12 +161,14 @@ src/renderer/    core page; renderer.ts is its composition root
                  flattened to a PNG                         → the only fabric import
 src/plugins/     every plugin, one folder each; manifests.ts lists every built-in manifest, keymap.ts holds
                  every built-in default key, main.ts and page.ts the parts each root starts
-  sessions/      manifest.ts, contract.ts, main/ (the session list — rows, the selected session, tool routing — relay,
-                 endpoint files, MCP adapter → the only @modelcontextprotocol import), page/ (Sessions mode: the
-                 sidebar, the pane tree of whole sessions with its split, swap and close commands and the shared
-                 list picker's `picker` scope, each session's tabs, the row and bar parts other plugins add, and the
-                 layout preview rows),
-                 layouts/ (the sessions Layout contract and the built-in `default` layout)
+  sessions/      manifest.ts, contract.ts, session-title.ts (the title rules main and page share), main/ (the
+                 session list — rows, their titles, the selected session, tool routing — the `set_session_title`
+                 tool, relay, endpoint files, MCP adapter → the only @modelcontextprotocol import), page/ (Sessions
+                 mode: the sidebar, the pane tree of whole sessions with its split, swap and close commands and the
+                 shared list picker's `picker` scope, each session's tabs, the row and bar parts other plugins add,
+                 each row's activities, the rename dialog, and the layout preview rows),
+                 layouts/ (the sessions Layout contract and the built-in `default` layout);
+                 `docs/features/session-titles/design.md`
   agents/        manifest.ts, contract.ts, roster.ts (the pure reducer folding agent events into a session's roster),
                  main/ (hears `chat.agentEvent`, keeps each session's roster, appends each event to
                  `logs/<host session id>.jsonl` in its plugin data, the layout preview), page/ (the running subagent
@@ -306,6 +308,11 @@ round; primer: an open primer), since main, not the page, decides.
   `addRowPart`; the agents plugin's subagent lines are one. A **bar part** draws in every session's tab bar, which moves
   with its session between panes, through `addBarPart`; the usage plugin's per-session context line is one.
   Information about one session goes in a session part, not on a shared bar.
+- **A row activity** is the short state a session's row shows beside its title — a status dot and a word (working,
+  needs you, done, error). A page plugin sets one per session under its own source id through the `sessions` page
+  export `setActivity`, and the row shows the highest rank, so a new state is a registration in the plugin that knows
+  it, never an edit to sessions. A **session title** has three sources (user, agent, first message) kept on the row;
+  the agent sets its own through the `set_session_title` tool (`docs/features/session-titles/design.md`).
 - **A composer part** is what a plugin draws above the Chat composer, through the `chat` page export
   `addComposerPart`, the same shape as a session part: chat hands each part a wrapper and the session id. The workflow
   plugin's strip is one.
