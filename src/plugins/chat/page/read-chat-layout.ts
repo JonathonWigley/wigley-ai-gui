@@ -46,6 +46,7 @@ void [
 // compile.
 const PART_SET: Record<ChatPartName, true> = {
   activity: true,
+  working: true,
   queuedMessage: true,
   composer: true,
   composerBar: true,

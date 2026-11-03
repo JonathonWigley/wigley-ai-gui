@@ -679,6 +679,7 @@ type SurfacePart = Exclude<keyof ChatLayout, 'entries'>;
 // Every part beside the entries; a part left out fails to compile.
 const SURFACE_PARTS: Record<SurfacePart, true> = {
   activity: true,
+  working: true,
   queuedMessage: true,
   composer: true,
   composerBar: true,

@@ -148,7 +148,7 @@ only its input and the base kit.
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 578c0d08
 
 ### Groups
 ### Contract changes

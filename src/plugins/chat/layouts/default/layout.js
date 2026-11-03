@@ -413,6 +413,11 @@ const layout = {
       },
     };
   },
+  // A stub that task 02 of the working-block plan replaces.
+  working(parent, _input, _kit) {
+    const block = root(parent, 'chat-working');
+    return { element: block, update() {} };
+  },
   // The dim label, with the image count when there are images, over the text
   // as typed.
   queuedMessage(parent, input) {

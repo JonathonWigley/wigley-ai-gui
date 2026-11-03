@@ -95,9 +95,10 @@ export interface ActivityInput {
   steps: StepInput[];
   // The last step.
   current: StepInput;
-  // The session works on this run, and it is the last entry.
+  // The session works on this run, and it is the last entry. The default layout draws a live run as its summary line.
   live: boolean;
-  // The user has the line open: the part draws only its header, and the app places the step rows under it.
+  // The user has the line open, and the app places the step rows under it. The default layout draws its summary line
+  // whether open or not.
   open: boolean;
   // When the run began: the entry before it, or its first step when the run opens the list.
   startedAt: number;
@@ -105,6 +106,22 @@ export interface ActivityInput {
   endedAt: number | null;
   // The time of this draw or update; the app sends it again once a second while the run is live. A live line's time
   // is `now - startedAt`, a finished one's `endedAt - startedAt`.
+  now: number;
+}
+
+// What the running turn is doing, the first that holds: `waiting` on an unanswered permission, `working` on a tool
+// with no result, `writing` while the last entry is streaming assistant text, else `thinking`.
+export type WorkingState = 'thinking' | 'writing' | 'working' | 'waiting';
+
+// The running turn. Times are epoch ms.
+export interface WorkingInput {
+  // What the turn is doing now.
+  state: WorkingState;
+  // Every step of the turn in entry order, each the step's entry input; the layout picks the ones it shows.
+  steps: StepInput[];
+  // When the turn began: its first entry.
+  startedAt: number;
+  // The time of this draw or update; the turn's time is `now - startedAt`.
   now: number;
 }
 
@@ -338,6 +355,13 @@ export interface ChatLayout {
     input: ActivityInput,
     kit: BaseKit,
   ): PartView<ActivityInput>;
+  // The running turn, drawn into a slot after the last entry and before the pending rows while the session works; the
+  // app sends the input again on each change and once a second with a new `now`. The slot is not a cursor stop.
+  working?(
+    parent: HTMLElement,
+    input: WorkingInput,
+    kit: BaseKit,
+  ): PartView<WorkingInput>;
   // One pending message's row, appended to the entry list after the last entry; the app marks the focused row and
   // handles its click.
   queuedMessage?(
