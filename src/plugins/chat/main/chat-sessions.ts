@@ -335,11 +335,12 @@ function savedSessionOf(
 }
 
 // The first-message title held for a message: a pasted wall of text stays out
-// of every state, and the row cuts it further.
+// of every state, and the row cuts it further. Leading whitespace goes before
+// the cap, so a message opening on a wall of blanks still keeps its text.
 const FIRST_MESSAGE_TITLE_CAP = 200;
 
 function firstMessageTitleOf(text: string): string {
-  return [...text].slice(0, FIRST_MESSAGE_TITLE_CAP).join('');
+  return [...text.trimStart()].slice(0, FIRST_MESSAGE_TITLE_CAP).join('');
 }
 
 // Chat's owned sessions: each one's agent process while it runs, its chat
@@ -935,19 +936,20 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   }
 
   // A row whose first-message title is already set, such as a cleared one,
-  // keeps it; an images-only message, or a row sessions no longer holds, sets
-  // none.
+  // keeps it; a message with no text but whitespace, such as an images-only
+  // one, or a row sessions no longer holds, sets none.
   function setFirstMessageTitle(session: HeldSession, text: string) {
     const { sessionId } = session.state;
     const titles = sessions.titles(sessionId);
     const isRowGone = titles === null;
     const hasFirstMessageTitle =
       titles !== null && titles.firstMessage !== null;
-    const isImagesOnly = text === '';
-    if (isRowGone || hasFirstMessageTitle || isImagesOnly) {
+    const title = firstMessageTitleOf(text);
+    const isTextless = title === '';
+    if (isRowGone || hasFirstMessageTitle || isTextless) {
       return;
     }
-    sessions.setTitle(sessionId, 'firstMessage', firstMessageTitleOf(text));
+    sessions.setTitle(sessionId, 'firstMessage', title);
   }
 
   function launch(request: LaunchRequest): string {

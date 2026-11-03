@@ -2590,7 +2590,25 @@ describe('createChatSessions titles', () => {
         await chat.send(ROW_ID, { text: '  fix the\nlogin bug', images: [] });
         await chat.send(ROW_ID, { text: 'and the logout', images: [] });
       },
-      expected: [[ROW_ID, 'firstMessage', '  fix the\nlogin bug']],
+      expected: [[ROW_ID, 'firstMessage', 'fix the\nlogin bug']],
+    },
+    {
+      given: 'a first message over 200 code points',
+      act: (chat: ChatSessions) =>
+        chat.send(ROW_ID, { text: '🙂a'.repeat(150), images: [] }),
+      expected: [[ROW_ID, 'firstMessage', '🙂a'.repeat(100)]],
+    },
+    {
+      given: 'a first message opening with 250 spaces',
+      act: (chat: ChatSessions) =>
+        chat.send(ROW_ID, { text: `${' '.repeat(250)}fix it`, images: [] }),
+      expected: [[ROW_ID, 'firstMessage', 'fix it']],
+    },
+    {
+      given: 'a whitespace-only first message',
+      act: (chat: ChatSessions) =>
+        chat.send(ROW_ID, { text: ' \n\t ', images: [] }),
+      expected: [],
     },
     {
       given: 'an images-only first message',
@@ -2622,23 +2640,33 @@ describe('createChatSessions titles', () => {
     expect(test.titlesOf(ROW_ID)?.firstMessage).toBe('first');
   });
 
-  it('resume_SetsTheRequestTitleAndSavesIt', async () => {
-    const test = setUp();
-    test.chat.restore(NOTHING_SAVED);
+  it.each([
+    { given: 'a short title', title: 'Past work', expected: 'Past work' },
+    {
+      given: 'a title over 200 code points',
+      title: '🙂a'.repeat(150),
+      expected: '🙂a'.repeat(100),
+    },
+  ])(
+    'resume_SetsTheRequestTitleAndSavesIt given $given',
+    async ({ title, expected }) => {
+      const test = setUp();
+      test.chat.restore(NOTHING_SAVED);
 
-    await test.chat.resume({
-      projectDir: '/w/app',
-      profile: 'work',
-      hostSessionId: PAST_ONE.sessionId,
-      title: 'Past work',
-    });
+      await test.chat.resume({
+        projectDir: '/w/app',
+        profile: 'work',
+        hostSessionId: PAST_ONE.sessionId,
+        title,
+      });
 
-    expect(test.titleCalls).toEqual([[ROW_ID, 'firstMessage', 'Past work']]);
-    expect(test.saved.last()?.sessions[0].titles).toEqual({
-      ...NO_TITLES,
-      firstMessage: 'Past work',
-    });
-  });
+      expect(test.titleCalls).toEqual([[ROW_ID, 'firstMessage', expected]]);
+      expect(test.saved.last()?.sessions[0].titles).toEqual({
+        ...NO_TITLES,
+        firstMessage: expected,
+      });
+    },
+  );
 
   it('restore_SavedTitles_SetsEachSavedSource', () => {
     const test = setUp();

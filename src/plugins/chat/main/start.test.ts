@@ -258,6 +258,7 @@ function startChatPart() {
     processEvents,
     holdProcessEnds,
     ended,
+    listeners,
   };
 }
 
@@ -410,6 +411,24 @@ describe('chat main part', () => {
     expect(chat.ended).toEqual(['row-3', 'row-1']);
     const listed = chat.invoke('sessions') as ChatSessionState[];
     expect(listed.map((state) => state.sessionId)).toEqual(['row-2']);
+  });
+
+  it('sessionsTitleChanged_HeldRow_Saves', async () => {
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+    const chat = startChatPart();
+    await settle();
+    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    await settle();
+    // The harness's data folder refuses every write, so each save logs this.
+    const saveAttempts = () =>
+      chat.logged.filter((line) => line.startsWith('open sessions not saved'))
+        .length;
+    const before = saveAttempts();
+
+    chat.listeners.get('sessions.titleChanged')?.({ sessionId: 'row-1' });
+    await settle();
+
+    expect(saveAttempts()).toBe(before + 1);
   });
 
   it('dispose_SignInRunning_CancelsIt', async () => {

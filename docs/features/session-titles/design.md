@@ -28,7 +28,7 @@ A session holds up to three titles, one per source (`TitleSource`, `src/plugins/
 |---|---|---|
 | `user` | the rename dialog (`<Leader>rr`) | the user submits a name; an empty submit clears it |
 | `agent` | the `set_session_title` MCP tool | the agent calls it |
-| `firstMessage` | chat main | the first message with text sent in a row that has none yet (kept to 200 code points), or the resumed session's title on resume |
+| `firstMessage` | chat main | the first message with text sent in a row that has none yet (leading whitespace dropped, then kept to 200 code points), or the resumed session's title on resume |
 
 The row shows `user`, else `agent`, else `firstMessage` cut to the limit with `…`, else no title.
 A user title therefore locks out the agent's renames until the user clears it, and the agent's
@@ -53,11 +53,19 @@ user title it saves the agent title and says the user's title shows.
 Claude Code defers MCP tools: an agent sees only the tool's name until it loads it with ToolSearch, so
 the tool's description alone does not prompt a rename. Chat registers one instruction
 (`addInstructions`) that every process start it makes passes with `--append-system-prompt`: set the
-title at the end of the first turn, and again only when the work's focus clearly changes. A resumed
-conversation keeps the system prompt of its first request (`agent-chat/design.md` § Saved sessions), so
-a conversation first started before this feature never receives the instruction; its row keeps the
-first-message title unless its agent calls the tool on its own. Terminal sessions get no instruction and
-keep their folder label unless their agent calls the tool on its own.
+title at the end of the first turn, and again only when the work's focus clearly changes. Chat passes
+the instruction on every process start, a resume included (`claude-launch.ts`). `agent-chat/design.md`
+§ Saved sessions holds that the Claude CLI keeps the system prompt of a conversation's first request on
+resume, so a conversation first started before this feature may never receive the instruction. Such a
+conversation's row then shows one of two titles until its agent calls the tool on its own:
+
+- **Resumed from the past-sessions list**: the first-message title, which resume sets from the request's
+  title.
+- **Restored from an `open-sessions.json` written before this feature**: its folder label. The row loads
+  with no titles and as already sent, so no message gives it a first-message title.
+
+Terminal sessions get no instruction and keep their folder label unless their agent calls the tool on
+its own.
 
 ## Renaming by hand
 
