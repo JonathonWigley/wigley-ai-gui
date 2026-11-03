@@ -27,6 +27,7 @@ import type {
 } from '../contract';
 import { newFlow } from '../flow';
 import defaultLayout from '../layouts/default/layout.js';
+import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { Layout } from '../layouts/layout';
 import { workflowManifest } from '../manifest';
 import { createStageList } from '../stage-list';
@@ -233,7 +234,7 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
 
     api.layouts.show<Layout>({
       defaultLayout,
-      defaultStylesheet: null,
+      defaultStylesheet,
       read: readWorkflowLayout,
       userLayout: () => api.settings().layout,
       setLayouts: (shown) => view.setLayouts(shown),

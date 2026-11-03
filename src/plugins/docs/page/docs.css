@@ -9,47 +9,11 @@
   outline: none;
 }
 
-/* The default tree pane's tracks: the header, the status, the filter, the
-   line between the filter and the rows, and the rows. */
-.docs-tree-pane {
-  display: grid;
-  grid-template-rows: auto auto auto auto minmax(0, 1fr);
-  min-height: 0;
-  min-width: 0;
-}
-
 /* The slots the app draws a part into add no box of their own: the tree's
    line slot, and the doc scroller's slot per doc part. */
 .docs-line-slot,
 .docs-slot {
   display: contents;
-}
-
-/* The tree's box hints, wrapping in a narrow pane, then the `⌥L doc ›` edge
-   prompt at the header's end. */
-.docs-tree-header {
-  align-items: baseline;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--wg-space-1) var(--wg-space-3);
-  padding: var(--wg-space-1) var(--wg-space-3);
-}
-
-/* An edge prompt: an anchor and its chevron, kept together. */
-.docs-edge--end {
-  margin-inline-start: auto;
-}
-
-/* A selected leaf's row: its label and end at their natural width, then the
-   cursor prompt, which takes a line of its own under the label when the row
-   has no room for it. */
-.docs-row--prompted {
-  flex-wrap: wrap;
-  row-gap: 0;
-}
-
-.docs-row--prompted > .ui-row-trailing {
-  flex: none;
 }
 
 .docs-row-actions {
@@ -73,47 +37,10 @@
   white-space: nowrap;
 }
 
-/* The muted line above the rows while a filter is on. */
-.docs-filtered {
-  align-items: baseline;
-  color: var(--wg-fg-tertiary);
-  display: flex;
-  font-size: var(--wg-text-12);
-  gap: var(--wg-space-2);
-  min-width: 0;
-  overflow: hidden;
-  padding: var(--wg-space-1) var(--wg-space-3);
-  white-space: nowrap;
-}
-
-.docs-filtered-text {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* A tree line's keys and words, kept whole above the rows. */
-.docs-hint {
-  display: inline-flex;
-  flex: none;
-}
-
 /* The empty index and no-match lines wrap inside a narrow pane, a long
-   filter breaking anywhere and the hint between its keys and words. */
+   filter breaking anywhere. */
 .docs-line-slot > .ui-empty {
   overflow-wrap: anywhere;
-}
-
-.docs-line-slot > .ui-empty .docs-hint {
-  flex: 0 1 auto;
-  min-width: 0;
-}
-
-.docs-line-slot > .ui-empty .docs-hint > .ui-key-prompt {
-  flex-wrap: wrap;
-  justify-content: center;
-  min-width: 0;
-  white-space: normal;
 }
 
 .docs-filter {
@@ -146,32 +73,6 @@
   padding: 0;
 }
 
-.docs-row-caret {
-  color: var(--wg-fg-tertiary);
-  display: inline-flex;
-  flex: none;
-  justify-content: center;
-  width: var(--wg-icon-size);
-}
-
-/* A starred leaf's star, in its caret slot. */
-.docs-row-star {
-  color: var(--wg-fg-secondary);
-}
-
-/* A leaf's end: its last-loaded time, then its status dot. */
-.docs-row-end {
-  align-items: center;
-  display: inline-flex;
-  gap: var(--wg-space-1_5);
-  white-space: nowrap;
-}
-
-.docs-row-time {
-  font-size: var(--wg-text-12);
-  font-variant-numeric: tabular-nums;
-}
-
 /* Docs mode's sheet holds the doc pane, which scrolls itself. */
 .docs-sheet {
   display: grid;
@@ -190,34 +91,12 @@
   height: 100%;
 }
 
-/* The doc pane holds the layout's doc pane; the default one is its
-   `‹ tree ⌥H` row above the scroller. */
-.docs-doc-pane,
-.docs-doc-frame {
+/* The doc pane holds the layout's doc pane. */
+.docs-doc-pane {
   display: flex;
   flex-direction: column;
   min-height: 0;
   min-width: 0;
-}
-
-.docs-doc-frame {
-  flex: 1;
-}
-
-/* The edge to the tree shows only with a doc open: the empty state names the
-   tree's key. */
-[data-doc='none'] .docs-doc-top {
-  display: none;
-}
-
-/* While the tree is hidden `⌥H` reaches no tree, so the edge prompt to it
-   goes; Esc (`docs.backToTree`) reveals the tree. */
-.is-tree-hidden .docs-edge--start {
-  display: none;
-}
-
-.docs-doc-top {
-  padding: var(--wg-space-3) var(--wg-space-6) 0;
 }
 
 /* Stacked, a session Docs tab's tree takes a fixed 40% of the height and the
@@ -255,126 +134,9 @@
   overflow: hidden;
 }
 
-/* The editor's frame fills the scroller's height while editing. */
-.docs-editor-frame {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-height: 0;
-}
-
 .docs-editor {
   flex: 1;
   min-height: 0;
-}
-
-/* The title, its line ending in the `i edit` hint, over the path and chips. */
-.docs-header {
-  align-items: baseline;
-  column-gap: var(--wg-space-3);
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  margin-bottom: var(--wg-space-3);
-  min-width: 0;
-}
-
-.docs-header > .docs-path,
-.docs-header > .docs-chips {
-  grid-column: 1 / -1;
-}
-
-.docs-title {
-  font-size: var(--wg-text-20);
-  font-weight: var(--wg-weight-semibold);
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-
-.docs-path {
-  color: var(--wg-fg-tertiary);
-  font-family: var(--wg-font-mono);
-  font-size: var(--wg-text-12);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.docs-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--wg-space-1_5);
-  margin-top: var(--wg-space-1_5);
-}
-
-.docs-loaded {
-  align-self: center;
-  color: var(--wg-fg-tertiary);
-  font-size: var(--wg-text-12);
-  font-variant-numeric: tabular-nums;
-}
-
-.docs-readonly {
-  color: var(--wg-fg-secondary);
-  margin-bottom: var(--wg-space-3);
-}
-
-.docs-banner,
-.docs-prompt {
-  border-radius: var(--wg-radius-md);
-  color: var(--wg-fg);
-  margin-bottom: var(--wg-space-3);
-  padding: var(--wg-space-1_5) var(--wg-space-3);
-}
-
-.docs-banner {
-  background: var(--wg-status-warning-tint);
-  box-shadow: inset var(--wg-indicator-width) 0 0 var(--wg-status-warning);
-}
-
-.docs-prompt {
-  align-items: baseline;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--wg-space-1) var(--wg-space-3);
-  background: var(--wg-status-attention-tint);
-  box-shadow: inset var(--wg-indicator-width) 0 0 var(--wg-status-attention);
-  font-weight: var(--wg-weight-medium);
-}
-
-.docs-frontmatter-box {
-  margin-bottom: var(--wg-space-4);
-  overflow-x: auto;
-}
-
-.docs-frontmatter {
-  border-collapse: collapse;
-}
-
-.docs-frontmatter th,
-.docs-frontmatter td {
-  border: 1px solid var(--wg-border-subtle);
-  padding: var(--wg-space-1) var(--wg-space-2);
-  text-align: left;
-  vertical-align: top;
-}
-
-.docs-frontmatter th {
-  color: var(--wg-fg-secondary);
-  font-weight: var(--wg-weight-medium);
-  white-space: nowrap;
-}
-
-/* The changed-on-disk prompt's answers. */
-.docs-prompt-keys {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: var(--wg-space-1) var(--wg-space-3);
-  font-weight: var(--wg-weight-regular);
-}
-
-/* The path box's `⇥ complete` hint, under the box. */
-.docs-box-hint {
-  display: block;
 }
 
 /* The path box's completion list, under the box. */
@@ -389,17 +151,7 @@
   font-size: var(--wg-text-12);
 }
 
-/* The Trash confirmation's question. */
-.docs-confirm-text {
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-
 @media (max-width: 800px) {
-  .docs-doc-top {
-    padding: var(--wg-space-2) var(--wg-space-3) 0;
-  }
-
   .docs-doc {
     padding: var(--wg-space-2) var(--wg-space-3) var(--wg-space-4);
   }

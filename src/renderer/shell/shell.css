@@ -113,23 +113,6 @@
   display: none;
 }
 
-/* The shown mode's context: one line, cut short with an ellipsis, draggable
-   like the bar under it. */
-.title-bar-context {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.title-bar-context-title {
-  font-weight: var(--wg-weight-medium);
-}
-
-.title-bar-context-detail {
-  color: var(--wg-fg-secondary);
-  margin-inline-start: var(--wg-space-2);
-}
-
 /* Each chrome bar draws one hairline, on its edge toward the content. */
 .shell-activity-bar {
   border-right: 1px solid var(--wg-material-chrome-edge);
@@ -138,35 +121,6 @@
   grid-area: activity;
   overflow-y: auto;
   width: var(--wg-activitybar-width);
-}
-
-/* A mode's icon button; the shown mode's carries the accent mark along its
-   window-side edge. Hover is a plain fill, as for any control on glass. */
-.activity-item {
-  align-items: center;
-  background: transparent;
-  border: 0;
-  color: var(--wg-fg-secondary);
-  cursor: pointer;
-  display: flex;
-  flex: none;
-  height: var(--wg-activitybar-width);
-  justify-content: center;
-  padding: 0;
-  width: 100%;
-}
-
-.activity-item:hover,
-.activity-item.is-shown {
-  color: var(--wg-fg);
-}
-
-.activity-item:hover {
-  background: var(--wg-button-ghost-hover);
-}
-
-.activity-item.is-shown {
-  box-shadow: inset var(--wg-indicator-width) 0 0 var(--wg-accent);
 }
 
 /* Its padding insets the rounded hover and selection fills of the list in
@@ -293,15 +247,6 @@
 .shell-status-bar > .shell-track {
   align-items: stretch;
   flex-wrap: wrap;
-}
-
-/* The config problem badge, in the title bar's drag region: it opts out of
-   the drag so it takes the mouse and shows its tooltip. */
-.config-problem-badge {
-  max-width: calc(var(--wg-space-8) * 12);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  -webkit-app-region: no-drag;
 }
 
 /* Over everything, with no hit area of its own: only what is drawn in it

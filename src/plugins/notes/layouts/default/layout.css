@@ -1,0 +1,116 @@
+/* The default note layout: the field rows, the image strip, and the confirm
+   and markup groups. */
+.notes-row {
+  align-items: start;
+  border-radius: var(--wg-radius-sm);
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  padding: var(--wg-space-1) var(--wg-space-2);
+}
+
+/* A row's keys at its end: the key that picks its value. It hides, keeping its
+   space, while a box holds the keys. */
+.notes-row-keys {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--wg-space-2);
+  min-height: var(--wg-row-list);
+}
+
+/* The field the popup's keys act on, while no box holds focus. */
+.notes-row.is-cursor {
+  box-shadow: inset 0 0 0 1px var(--wg-focus-border);
+}
+
+.notes-row-label {
+  color: var(--wg-fg-secondary);
+  font-family: var(--wg-font-ui);
+  font-size: var(--wg-text-12);
+  line-height: var(--wg-row-list);
+}
+
+.notes-empty {
+  color: var(--wg-fg-tertiary);
+}
+
+/* Roots of the default layout that only group what the app's container lays
+   out: the container lays out their children as its own. */
+.notes-tags,
+.notes-session-value,
+.notes-actions,
+.notes-markup-groups {
+  display: contents;
+}
+
+/* A long tag wraps anywhere, so it never widens the popup. */
+.notes-tags > .ui-tag {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+/* An action button's label stays on one line, as in any dialog's actions. */
+.notes-actions > .ui-button {
+  white-space: nowrap;
+}
+
+/* A long path stays on one line, cut with an ellipsis. */
+.notes-target {
+  color: var(--wg-fg);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notes-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-2);
+}
+
+.notes-image {
+  border-radius: var(--wg-radius-sm);
+  position: relative;
+}
+
+.notes-image.is-selected {
+  box-shadow: 0 0 0 1px var(--wg-focus-border);
+}
+
+.notes-image-thumbnail {
+  border-radius: var(--wg-radius-sm);
+  display: block;
+  height: calc(var(--wg-space-8) * 2);
+  object-fit: cover;
+  width: calc(var(--wg-space-8) * 2);
+}
+
+.notes-image-pen {
+  bottom: var(--wg-space-0_5);
+  color: var(--wg-fg);
+  left: var(--wg-space-0_5);
+  position: absolute;
+}
+
+.notes-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-3);
+}
+
+.notes-confirm-text {
+  color: var(--wg-fg-secondary);
+  margin: 0;
+}
+
+.notes-markup-group {
+  align-items: center;
+  display: flex;
+  gap: var(--wg-space-1);
+}
+
+.notes-markup-group .is-active {
+  background: var(--wg-accent-tint);
+  color: var(--wg-fg);
+}

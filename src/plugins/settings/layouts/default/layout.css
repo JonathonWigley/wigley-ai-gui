@@ -1,0 +1,112 @@
+/* The default settings layout's look: its panes, edge prompts, section header and rows. */
+
+/* The default pane roots draw no box of their own: a pane's parts lay out as
+   its container's children. */
+.settings-pane {
+  display: contents;
+}
+
+/* An edge prompt: a focus move's keys beside the chevron toward the pane it
+   moves to. */
+.settings-edge {
+  flex: none;
+}
+
+.settings-edge--end {
+  align-self: flex-end;
+  padding: var(--wg-space-1) 0;
+}
+
+.settings-edge--start {
+  font-weight: var(--wg-weight-regular);
+}
+
+/* The rows' section header: the start edge, the title, then the filter key
+   at the end. */
+.settings-head {
+  justify-content: flex-start;
+  gap: var(--wg-space-3);
+}
+
+/* A setting or command row: the Row primitive's states, on two lines. */
+.settings-row {
+  min-height: var(--wg-row-list);
+  padding: var(--wg-space-1) var(--wg-space-2);
+  border-radius: var(--wg-radius-sm);
+  color: var(--wg-fg);
+  cursor: pointer;
+  transition:
+    background-color var(--wg-duration-fast) var(--wg-ease-out),
+    color var(--wg-duration-fast) var(--wg-ease-out);
+}
+
+.settings-row:not(.is-selected):hover {
+  background: var(--wg-list-hover-background);
+}
+
+.settings-row.is-selected {
+  background: var(--wg-list-active-background);
+  color: var(--wg-list-active-foreground);
+}
+
+/* The pane without focus keeps its selection in the inactive fill. */
+.is-pane-inactive .settings-row.is-selected {
+  background: var(--wg-list-inactive-selection-background);
+  color: var(--wg-fg);
+}
+
+.settings-row.is-cursor {
+  box-shadow: inset 0 0 0 1px var(--wg-focus-border);
+}
+
+.settings-row-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--wg-space-3);
+  min-height: calc(var(--wg-row-list) - var(--wg-space-1) * 2);
+}
+
+.settings-row-label {
+  flex: none;
+}
+
+.settings-row-end {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--wg-space-2);
+  margin-left: auto;
+  min-width: 0;
+  text-align: right;
+}
+
+.settings-row-value {
+  overflow-wrap: anywhere;
+}
+
+.settings-row-value.is-unset,
+.settings-row-default {
+  color: var(--wg-fg-tertiary);
+}
+
+.settings-row-default {
+  font-size: var(--wg-text-12);
+}
+
+.settings-row-description {
+  color: var(--wg-fg-secondary);
+  font-size: var(--wg-text-12);
+}
+
+/* A command row's binds, one line each: the keys, then their tags. */
+.settings-binds {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--wg-space-1);
+}
+
+.settings-group-header {
+  padding: var(--wg-space-3) var(--wg-space-2) 0;
+}

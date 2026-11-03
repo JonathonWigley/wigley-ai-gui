@@ -48,8 +48,7 @@
   padding: var(--wg-space-4) var(--wg-space-6) var(--wg-space-8);
 }
 
-.primer-tab .primer-card > *,
-.primer-tab .primer-review {
+.primer-tab .primer-card > * {
   max-width: var(--wg-prose-measure);
 }
 
@@ -98,11 +97,6 @@
   overflow-y: auto;
 }
 
-.primer-tasks-list,
-.primer-items-list {
-  padding: var(--wg-space-2);
-}
-
 /* The keys on the selected row, on a line of their own under its label,
    wrapping when the column is narrow. The label takes the first line's free
    space, so the line breaks before the prompt only. */
@@ -149,10 +143,6 @@
   overflow: hidden;
 }
 
-.primer-tasks-list > .ui-section-header {
-  margin-top: var(--wg-space-3);
-}
-
 .primer-task-trailing {
   align-items: center;
   display: inline-flex;
@@ -176,45 +166,6 @@
 }
 
 /* Card */
-.primer-card-heading {
-  font-size: var(--wg-text-20);
-  font-weight: var(--wg-weight-semibold);
-  margin: 0 0 var(--wg-space-2);
-}
-
-.primer-card-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--wg-space-1_5);
-  margin-bottom: var(--wg-space-3);
-}
-
-.primer-card-section {
-  margin-top: var(--wg-space-4);
-}
-
-.primer-card-section-body {
-  margin-top: var(--wg-space-1);
-}
-
-/* The item card's `⌃H ‹ n of m › ⌃L` header. */
-.primer-item-step {
-  align-items: baseline;
-  color: var(--wg-fg-tertiary);
-  display: flex;
-  font-size: var(--wg-text-12);
-  gap: var(--wg-space-1);
-  margin-bottom: var(--wg-space-2);
-}
-
-/* The item card's include mark, its word and its key. */
-.primer-item-include {
-  align-items: center;
-  display: flex;
-  gap: var(--wg-space-2);
-  margin-bottom: var(--wg-space-3);
-}
-
 /* Text boxes: the input frame owns background, border, radius and the focus
    ring; this sets the editor's height only. Editors grow with their text up
    to a cap, then scroll. */
@@ -272,69 +223,6 @@
 }
 
 /* Review */
-.primer-review-tallies {
-  color: var(--wg-fg-secondary);
-  font-variant-numeric: tabular-nums;
-  margin: 0 0 var(--wg-space-3);
-}
-
-.primer-review-problem-list {
-  color: var(--wg-status-warning);
-  margin: var(--wg-space-1) 0 var(--wg-space-3);
-  padding-left: var(--wg-space-6);
-}
-
-.primer-review-block {
-  border-top: 1px solid var(--wg-border-default);
-  padding: var(--wg-space-3) 0;
-}
-
-.primer-review-fields {
-  display: grid;
-  gap: var(--wg-space-1) var(--wg-space-4);
-  grid-template-columns: auto 1fr;
-  margin: var(--wg-space-1) 0 0;
-}
-
-.primer-review-field-label {
-  color: var(--wg-fg-secondary);
-}
-
-.primer-review-field-value {
-  margin: 0;
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
-}
-
-.primer-review-task-head,
-.primer-review-item-line {
-  align-items: baseline;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--wg-space-2);
-}
-
-.primer-review-task-name {
-  font-weight: var(--wg-weight-semibold);
-  overflow-wrap: anywhere;
-}
-
-.primer-review-items {
-  margin: var(--wg-space-2) 0 0;
-  padding-left: var(--wg-space-6);
-}
-
-.primer-review-item-text {
-  overflow-wrap: anywhere;
-}
-
-.primer-review-comment {
-  color: var(--wg-fg-secondary);
-  margin: var(--wg-space-1) 0 0;
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
-}
-
 .primer-review-actions {
   display: flex;
   flex-wrap: wrap;

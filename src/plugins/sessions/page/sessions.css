@@ -1,7 +1,9 @@
 /* Sessions mode: the chat panes, each a session's tab area. Its session
    list is the mode's side bar, which the shell's side bar area draws. The
    pane tree draws the focused pane's border; `.session-pane.is-focused`
-   draws nothing here, the class being there for user layouts. */
+   draws nothing here, the class being there for user layouts. The default
+   layout's pane, side bar, row cards, tab bar and empty text are in its
+   `layout.css`. */
 .sessions {
   display: flex;
   height: 100%;
@@ -9,24 +11,6 @@
 
 .sessions > .pane-tree {
   flex: 1 1 0;
-}
-
-/* A pane fills its slot; its body shows the session's frame or the empty
-   text in one cell, and its focus edges sit on its sides. */
-.session-pane {
-  position: relative;
-  display: flex;
-  flex: 1 1 0;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-}
-
-.session-pane-body {
-  display: grid;
-  flex: 1 1 0;
-  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
-  min-height: 0;
 }
 
 .session-pane-body > * {
@@ -39,10 +23,6 @@
    corner, each clear of the resize prompt. The up and down prompts sit in an
    inset their pane's sheet leaves free, the up one between the tab bar and
    the sheet, so no content draws under them. */
-.session-pane {
-  --session-edge-inset: var(--wg-space-6);
-}
-
 .session-pane-edge {
   position: absolute;
   z-index: 2;
@@ -84,180 +64,9 @@
   bottom: var(--wg-space-1);
 }
 
-/* The side bar: the "Sessions" header over the rows. */
-.session-side {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.session-side > .ui-section-header {
-  padding: 0 var(--wg-space-2);
-}
-
 /* `⌥⇧I ▲ ▼ ⌥⇧O` on the list's header. */
 .session-edge {
   font-weight: var(--wg-weight-regular);
-}
-
-.session-sidebar {
-  display: flex;
-  flex-direction: column;
-  gap: var(--wg-space-1_5);
-  min-height: 0;
-}
-
-/* Each row is a card, so its title, status and parts read as one session:
-   `card-background` under a `card-border` hairline with `radius-md`, the
-   title and activity on top and a footer under them. Hover strengthens the
-   border; the selected card keeps the row primitive's accent fill, and the
-   keyboard cursor its focus ring. */
-.ui-row.session-row {
-  align-items: center;
-  padding-block: var(--wg-space-1_5);
-  border: 1px solid var(--wg-card-border);
-  border-radius: var(--wg-radius-md);
-  overflow: hidden;
-}
-
-/* The footer holds the status then other plugins' row parts on one line,
-   wrapping when full, on `block-background` under a `border-subtle`
-   hairline, bleeding to the card's edges. A footer with nothing in it
-   takes no space. */
-.session-row-foot {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  column-gap: var(--wg-space-2);
-  grid-column: 1 / -1;
-  min-width: 0;
-  margin: var(--wg-space-1_5) calc(-1 * var(--wg-space-2))
-    calc(-1 * var(--wg-space-1_5));
-  padding: var(--wg-space-1) var(--wg-space-2);
-  border-top: 1px solid var(--wg-border-subtle);
-  background: var(--wg-block-background);
-}
-
-.session-row-foot:not(
-  :has(> .session-row-status, .session-row-part:not(:empty))
-) {
-  display: none;
-}
-
-.ui-row.session-row:not(.is-selected) {
-  background: var(--wg-card-background);
-}
-
-.ui-row.session-row:not(.is-disabled, .is-selected):hover,
-.ui-row.session-row.is-hover:not(.is-disabled, .is-selected) {
-  border-color: var(--wg-border-strong);
-}
-
-.ui-row.session-row.is-selected {
-  border-color: var(--wg-accent-tint-strong);
-}
-
-.session-row > .ui-row-label {
-  font-weight: var(--wg-weight-medium);
-}
-
-/* A row whose session shows in an unfocused pane. */
-.ui-row.session-row.is-on-screen {
-  border-color: var(--wg-border-strong);
-  box-shadow: inset 0 0 0 1px var(--wg-border-strong);
-}
-
-/* A row's first line never wraps: the title, then the folder label (the
-   folder label alone for a row with no title), then the trailing cell at the
-   line's end, holding the activity's dot then its word, or the attention dot.
-   The trailing cell keeps its full width and never shrinks. The title and the
-   folder label share the rest evenly, each ellipsizing past its share, and
-   neither goes under `--session-row-least`, one character and its ellipsis.
-   Under 170px of list, where the two at that least and the trailing cell's
-   longest word no longer fit one line, the folder label drops and the title
-   takes the line. The footer takes the whole second line. Each part has its
-   own column, so a row missing its folder label or trailing cell keeps the
-   others in place. The trailing column's least width is the trailing cell's
-   own, so the footer, which spans every column, ellipsizes or wraps inside
-   the row rather than widens it. Two classes, so the grid beats
-   the row primitive's flex line whichever sheet loads last. */
-.session-sidebar {
-  container: session-rows / inline-size;
-}
-
-.ui-row.session-row {
-  --session-row-least: var(--wg-space-6);
-
-  display: grid;
-  grid-template-columns:
-    minmax(auto, max-content) minmax(auto, max-content)
-    minmax(auto, 1fr);
-  column-gap: 0;
-}
-
-.session-row > .ui-row-label {
-  grid-column: 1;
-  min-width: var(--session-row-least);
-}
-
-.session-row > .ui-row-detail {
-  grid-column: 2;
-  min-width: var(--session-row-least);
-  margin-left: var(--wg-space-2);
-}
-
-@container session-rows (width < 170px) {
-  .session-row > .ui-row-detail {
-    display: none;
-  }
-}
-
-.session-row > .ui-row-trailing {
-  display: flex;
-  align-items: center;
-  gap: var(--wg-space-1);
-  grid-column: 3;
-  justify-self: end;
-  margin-left: var(--wg-space-2);
-}
-
-.session-row-activity {
-  font-size: var(--wg-text-12);
-  white-space: nowrap;
-}
-
-/* A running activity's dot pulses: it reports the agent at work. Its cycle is
-   `duration-pulse`, not the transition durations, which pulse fast enough to
-   read as flashing. Under reduced motion it is static. */
-@keyframes session-dot-pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-
-  50% {
-    opacity: 0.35;
-  }
-}
-
-.session-row .ui-dot[data-status='running'] {
-  animation: session-dot-pulse var(--wg-duration-pulse) ease-in-out infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .session-row .ui-dot[data-status='running'] {
-    animation: none;
-  }
-}
-
-.session-row-status {
-  flex: 0 1 auto;
-  color: var(--wg-fg-secondary);
-  font-size: var(--wg-text-12);
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* Other plugins' row parts share the footer's line after the status,
@@ -284,17 +93,6 @@
   grid-template-rows: auto minmax(0, 1fr);
   height: 100%;
   min-height: 0;
-}
-
-/* `⌥I ‹`, the strip, `› ⌥O`, other plugins' bar parts, then `⌘W` and the
-   pane controls at the bar's end. The bar takes the strip's margin, so the
-   strip sits flush between its prompts; only the strip and the bar parts
-   shrink. */
-.session-tabs-bar {
-  display: flex;
-  align-items: center;
-  gap: var(--wg-space-1);
-  margin: var(--wg-sheet-gutter) var(--wg-sheet-gutter) 0;
 }
 
 .session-tabs-bar > * {
@@ -331,44 +129,11 @@
   margin-left: auto;
 }
 
-/* A prompt or key with nothing to act on takes no space here, so an
-   unfocused pane's controls are bare icons and the strip keeps room in a
-   280px pane. */
-.session-tabs-bar .is-no-target {
-  display: none;
-}
-
 /* A pane control holds its icon and its key side by side. */
 .ui-icon-button.session-pane-control {
   gap: var(--wg-space-1);
   width: auto;
   padding: 0 var(--wg-space-1);
-}
-
-.ui-tabs.session-tabs {
-  flex: 0 1 auto;
-  min-width: 0;
-  margin: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-/* A tab keeps its full width, so a narrow strip scrolls instead of clipping
-   its icons. */
-.session-tabs .ui-tab {
-  flex: none;
-}
-
-/* A tab draws its icon alone: `fg-secondary` at rest, `fg` on hover or
-   while active. */
-.session-tab-icon {
-  color: var(--wg-fg-secondary);
-}
-
-.ui-tab:hover .session-tab-icon,
-.ui-tab.is-hover .session-tab-icon,
-.ui-tab.is-active .session-tab-icon {
-  color: var(--wg-fg);
 }
 
 /* A session's tab body and the text saying why no tab shows share one
@@ -386,15 +151,7 @@
   min-height: 0;
 }
 
-/* Why a pane shows no tab: no sessions, none in the pane, or nothing open in
-   its session. */
-.sessions-empty {
-  display: grid;
-  place-content: center;
-}
-
-/* The rename dialog: its box, why a title was refused under it, then the
-   hint. */
+/* The rename dialog's box. */
 .session-rename-box {
   background: transparent;
   border: 0;
@@ -404,18 +161,4 @@
   outline: none;
   padding: 0;
   width: 100%;
-}
-
-.session-rename-problem,
-.session-rename-hint {
-  margin: 0;
-  font-size: var(--wg-text-12);
-}
-
-.session-rename-problem {
-  color: var(--wg-status-error);
-}
-
-.session-rename-hint {
-  color: var(--wg-fg-tertiary);
 }

@@ -19,6 +19,7 @@ import type {
   ChatStatusPart,
 } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
+import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { ChatLayout } from '../layouts/layout';
 import { chatManifest } from '../manifest';
 import { addAccountCommands } from './account-commands';
@@ -204,7 +205,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
     });
     api.layouts.show<ChatLayout>({
       defaultLayout,
-      defaultStylesheet: null,
+      defaultStylesheet,
       read: readChatLayout,
       userLayout: () => api.settings().layout,
       setLayouts: (shown) => layouts.set(shown),

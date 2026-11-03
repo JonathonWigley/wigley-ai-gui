@@ -23,6 +23,7 @@ import type {
   PrimerPageExports,
 } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
+import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { PrimerLayout } from '../layouts/layout';
 import { primerManifest } from '../manifest';
 import { focusActionFor, PRIMER_BOX_IDENTITY, type PrimerBox } from './boxes';
@@ -172,7 +173,7 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
     );
     api.layouts.show<PrimerLayout>({
       defaultLayout,
-      defaultStylesheet: null,
+      defaultStylesheet,
       read: readPrimerLayout,
       userLayout: () => api.settings().layout,
       setLayouts: (shown) => view.setLayouts(shown),

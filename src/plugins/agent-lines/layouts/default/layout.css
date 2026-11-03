@@ -1,0 +1,15 @@
+/* The default layout's working line under a session row: a running dot and the elapsed time. */
+
+.agent-lines-line {
+  display: flex;
+  align-items: center;
+  gap: var(--wg-space-1_5);
+  min-height: var(--wg-row-tree);
+  font-size: var(--wg-text-12);
+}
+
+.agent-lines-line-elapsed {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--wg-fg-tertiary);
+}

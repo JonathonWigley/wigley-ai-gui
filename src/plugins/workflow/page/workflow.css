@@ -1,29 +1,6 @@
-/* The default layout's workflow parts: the chip under a session row, the
-   strip above the Chat composer and the Flow tab. */
-
-.workflow-chip {
-  display: flex;
-  align-items: center;
-  gap: var(--wg-space-2);
-  min-height: var(--wg-row-tree);
-  min-width: 0;
-  white-space: nowrap;
-  font-size: var(--wg-text-12);
-}
-
-.workflow-strip {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--wg-space-2);
-  padding: var(--wg-space-1) var(--wg-space-2);
-  border-bottom: 1px solid var(--wg-border-subtle);
-  font-size: var(--wg-text-12);
-}
-
-.workflow-strip-detail {
-  color: var(--wg-fg-secondary);
-}
+/* The workflow parts the kit and the Flow tab draw: the stepper, its steps,
+   the countdown and the Flow tab. The default layout's chip, strip and flow
+   are in its `layout.css`. */
 
 .workflow-stepper {
   display: flex;
@@ -57,33 +34,4 @@
   overflow-y: auto;
   padding: var(--wg-space-4);
   font-size: var(--wg-text-13);
-}
-
-.workflow-flow {
-  display: flex;
-  flex-direction: column;
-  gap: var(--wg-space-2);
-}
-
-.workflow-flow-detail {
-  display: flex;
-  gap: var(--wg-space-2);
-  margin: 0;
-  color: var(--wg-fg-secondary);
-}
-
-.workflow-flow .ui-section-header.is-current {
-  color: var(--wg-accent);
-}
-
-.workflow-flow-tasks {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.workflow-flow-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--wg-space-2);
 }

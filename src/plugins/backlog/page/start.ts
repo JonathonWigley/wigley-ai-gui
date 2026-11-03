@@ -5,6 +5,7 @@ import type { DocsPageExports } from '../../docs/contract';
 import type { KeysPageExports } from '../../keys/contract';
 import type { BacklogChannel } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
+import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { BacklogLayout } from '../layouts/layout';
 import { backlogManifest } from '../manifest';
 import { createBacklogView } from './backlog-view';
@@ -91,7 +92,7 @@ export const backlogPagePart: PagePart<typeof backlogManifest> = {
 
     api.layouts.show<BacklogLayout>({
       defaultLayout,
-      defaultStylesheet: null,
+      defaultStylesheet,
       read: readBacklogLayout,
       userLayout: () => api.settings().layout,
       setLayouts: (shown) => view.setLayouts(shown),

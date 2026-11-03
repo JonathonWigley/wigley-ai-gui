@@ -23,6 +23,7 @@ import type {
   FormsPageExports,
 } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
+import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { Layout } from '../layouts/layout';
 import { formsManifest } from '../manifest';
 import { startRoundAutosave } from './autosave';
@@ -187,7 +188,7 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
     listenForRounds(api, store, sessions);
     const layoutShow = api.layouts.show<Layout>({
       defaultLayout,
-      defaultStylesheet: null,
+      defaultStylesheet,
       read: readLayout,
       userLayout: () => api.settings().layout,
       namesInUse: () =>

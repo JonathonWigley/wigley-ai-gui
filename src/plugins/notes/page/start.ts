@@ -12,6 +12,7 @@ import type {
 } from '../../sessions/contract';
 import type { NoteSession, NotesChannel } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
+import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { Layout } from '../layouts/layout';
 import { notesManifest } from '../manifest';
 import { readNotesLayout } from './layout/read-notes-layout';
@@ -87,7 +88,7 @@ export const notesPagePart: PagePart<typeof notesManifest> = {
     });
     api.layouts.show<Layout>({
       defaultLayout,
-      defaultStylesheet: null,
+      defaultStylesheet,
       read: readNotesLayout,
       userLayout: () => api.settings().layout,
       setLayouts: (shown) => popup.setLayouts(shown),

@@ -20,6 +20,7 @@ import type {
   UsageSnapshot,
 } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
+import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { Layout } from '../layouts/layout';
 import { usageManifest } from '../manifest';
 import { readUsageLayout } from './layout/read-usage-layout';
@@ -237,7 +238,7 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
 
     api.layouts.show<Layout>({
       defaultLayout,
-      defaultStylesheet: null,
+      defaultStylesheet,
       read: readUsageLayout,
       userLayout: () => api.settings().layout,
       setLayouts(shown) {

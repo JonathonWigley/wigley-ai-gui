@@ -24,6 +24,7 @@ import type {
   SessionsState,
 } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
+import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { Layout } from '../layouts/layout';
 import { sessionsManifest } from '../manifest';
 import { readSessionsLayout } from './layout/read-sessions-layout';
@@ -619,7 +620,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
 
     api.layouts.show<Layout>({
       defaultLayout,
-      defaultStylesheet: null,
+      defaultStylesheet,
       read: readSessionsLayout,
       userLayout: () => api.settings().layout,
       setLayouts: (shown) => {

@@ -12,6 +12,7 @@ import type {
   SessionsPageExports,
 } from '../../sessions/contract';
 import defaultLayout from '../layouts/default/layout.js';
+import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { Layout } from '../layouts/layout';
 import { agentLinesManifest } from '../manifest';
 import { readAgentLinesLayout } from './layout/read-agent-lines-layout';
@@ -69,7 +70,7 @@ export const agentLinesPagePart: PagePart<typeof agentLinesManifest> = {
 
     api.layouts.show<Layout>({
       defaultLayout,
-      defaultStylesheet: null,
+      defaultStylesheet,
       read: readAgentLinesLayout,
       userLayout: () => api.settings().layout,
       setLayouts: (shown) => lines.setLayouts(shown),

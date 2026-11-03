@@ -11,6 +11,7 @@ import type { ChatPageExports } from '../../chat/contract';
 import type { KeysPageExports } from '../../keys/contract';
 import type { SessionsPageEvents } from '../../sessions/contract';
 import defaultLayout from '../layouts/default/layout.js';
+import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { Layout } from '../layouts/layout';
 import { agentStripManifest } from '../manifest';
 import { createAgentStrip } from './agent-strip';
@@ -65,7 +66,7 @@ export const agentStripPagePart: PagePart<typeof agentStripManifest> = {
 
     api.layouts.show<Layout>({
       defaultLayout,
-      defaultStylesheet: null,
+      defaultStylesheet,
       read: readAgentStripLayout,
       userLayout: () => api.settings().layout,
       setLayouts: (shown) => strip.setLayouts(shown),

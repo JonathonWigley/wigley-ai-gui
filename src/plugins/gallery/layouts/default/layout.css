@@ -1,0 +1,81 @@
+/* The default layout's status line, sections, state cells and frames. */
+
+.gallery-status {
+  display: flex;
+  align-items: center;
+  gap: var(--wg-space-2);
+  flex: none;
+  padding: var(--wg-space-2) var(--wg-sheet-gutter) 0;
+  font-size: var(--wg-text-12);
+  color: var(--wg-fg-secondary);
+}
+
+.gallery-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-2);
+  min-width: 0;
+}
+
+.gallery-section--framed {
+  grid-column: 1 / -1;
+}
+
+.gallery-states {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--wg-space-3);
+}
+
+.gallery-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--wg-space-1);
+  min-width: 0;
+  margin: 0;
+}
+
+.gallery-cell--wide {
+  align-items: stretch;
+  width: calc(var(--wg-row-list) * 8);
+  max-width: 100%;
+}
+
+.gallery-caption {
+  font-size: var(--wg-text-11);
+  color: var(--wg-fg-tertiary);
+}
+
+/* A frame keeps what it holds — a split, a floating panel, a shown dialog —
+   inside its own box and stacking order. */
+.gallery-frame {
+  position: relative;
+  isolation: isolate;
+  height: calc(var(--wg-row-list) * 6);
+  border: 1px solid var(--wg-border-default);
+  border-radius: var(--wg-radius-md);
+  overflow: hidden;
+}
+
+/* A shown dialog sits inside the scrim's padding. */
+.gallery-frame--dialog {
+  height: calc(var(--wg-row-list) * 8);
+}
+
+.gallery-frame > .ui-split {
+  height: 100%;
+}
+
+.gallery-frame > .ui-floating {
+  position: absolute;
+  top: var(--wg-space-4);
+  left: var(--wg-space-4);
+  width: calc(var(--wg-row-list) * 8);
+  max-width: calc(100% - var(--wg-space-4) * 2);
+}
+
+.gallery-frame .ui-scrim {
+  position: absolute;
+}

@@ -33,6 +33,7 @@ import {
   sessionSourceId,
 } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
+import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { Layout } from '../layouts/layout';
 import { docsManifest } from '../manifest';
 import { type DocChangeRecord, UNSAVED_TEXT } from './docs-state';
@@ -264,7 +265,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     // Each set redraws every view's parts its pick changed for.
     api.layouts.show<Layout>({
       defaultLayout,
-      defaultStylesheet: null,
+      defaultStylesheet,
       read: readDocsLayout,
       userLayout: () => api.settings().layout,
       setLayouts(shown) {

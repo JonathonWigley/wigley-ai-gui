@@ -14,66 +14,14 @@
   z-index: calc(var(--wg-z-dialog) + 1);
 }
 
-.which-key-list {
-  column-gap: var(--wg-space-4);
-  columns: calc(var(--wg-space-8) * 7);
-}
-
-.which-key-row {
-  break-inside: avoid;
-}
-
-.which-key-row.is-command .ui-row-label {
-  color: var(--wg-keys-which-key-command);
-}
-
-.which-key-row.is-prefix .ui-row-label {
-  color: var(--wg-keys-which-key-prefix);
-}
-
 /* Help: every bound key, in a dialog wider than a prose one so its sections
    sit side by side. */
 .ui-dialog.keys-help-dialog {
   width: min(100%, calc(var(--wg-space-8) * 28));
 }
 
-.keys-help-sections {
-  display: grid;
-  gap: var(--wg-space-4) var(--wg-space-6);
-  grid-template-columns: repeat(
-    auto-fit,
-    minmax(min(calc(var(--wg-space-8) * 8), 100%), 1fr)
-  );
-}
-
-.keys-help-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
 /* The Keys button's slot draws no box, so the button sits in the title bar's
    end track. */
 .keys-title-bar-slot {
   display: contents;
-}
-
-/* The title bar's Keys button, its key prompt inside it after the icon. */
-.keys-title-bar-button {
-  gap: var(--wg-space-1);
-  padding: 0 var(--wg-space-1);
-  width: auto;
-}
-
-/* At 640px and narrower the title bar's end track is narrower than the
-   button and its prompt, so the button shows its icon alone. */
-@media (max-width: 640px) {
-  .keys-title-bar-button {
-    padding: 0;
-    width: var(--wg-icon-button-sm);
-  }
-
-  .keys-title-bar-hint {
-    display: none;
-  }
 }

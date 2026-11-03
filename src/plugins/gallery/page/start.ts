@@ -5,6 +5,7 @@ import { scrollContent, scrollText } from '../../../shared/content-scroll';
 import { textLineHeightPx } from '../../../shared/page/text-line';
 import type { KeysPageExports } from '../../keys/contract';
 import defaultLayout from '../layouts/default/layout.js';
+import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { Layout } from '../layouts/layout';
 import { galleryManifest } from '../manifest';
 import { createGalleryView } from './gallery-view';
@@ -52,7 +53,7 @@ export const galleryPagePart: PagePart<typeof galleryManifest> = {
     let isShown = false;
     api.layouts.show<Layout>({
       defaultLayout,
-      defaultStylesheet: null,
+      defaultStylesheet,
       read: readGalleryLayout,
       userLayout: () => api.settings().layout,
       setLayouts(shown) {

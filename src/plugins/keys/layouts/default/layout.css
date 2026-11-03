@@ -1,0 +1,53 @@
+/* The default Keys layout: the which-key list, the help dialog's sections, and the title bar's Keys button. */
+
+.which-key-list {
+  column-gap: var(--wg-space-4);
+  columns: calc(var(--wg-space-8) * 7);
+}
+
+.which-key-row {
+  break-inside: avoid;
+}
+
+.which-key-row.is-command .ui-row-label {
+  color: var(--wg-keys-which-key-command);
+}
+
+.which-key-row.is-prefix .ui-row-label {
+  color: var(--wg-keys-which-key-prefix);
+}
+
+.keys-help-sections {
+  display: grid;
+  gap: var(--wg-space-4) var(--wg-space-6);
+  grid-template-columns: repeat(
+    auto-fit,
+    minmax(min(calc(var(--wg-space-8) * 8), 100%), 1fr)
+  );
+}
+
+.keys-help-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* The title bar's Keys button, its key prompt inside it after the icon. */
+.keys-title-bar-button {
+  gap: var(--wg-space-1);
+  padding: 0 var(--wg-space-1);
+  width: auto;
+}
+
+/* At 640px and narrower the title bar's end track is narrower than the
+   button and its prompt, so the button shows its icon alone. */
+@media (max-width: 640px) {
+  .keys-title-bar-button {
+    padding: 0;
+    width: var(--wg-icon-button-sm);
+  }
+
+  .keys-title-bar-hint {
+    display: none;
+  }
+}

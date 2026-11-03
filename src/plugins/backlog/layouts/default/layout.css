@@ -1,0 +1,103 @@
+/* The default layout's homes pane, list pane, detail head and editor pane. */
+
+/* The default homes pane's tracks: the load's status line, then each repo's
+   header over its homes. */
+.backlog-homes > .backlog-pane {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  min-width: 0;
+}
+
+.backlog-repo {
+  padding: var(--wg-space-2) var(--wg-space-2) 0;
+}
+
+/* The default list pane's tracks: its header of keys, the filter, then the
+   rows. */
+.backlog-list > .backlog-pane {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-height: 0;
+  min-width: 0;
+}
+
+/* The keys that act on the open home, then the edge prompt to the detail. */
+.backlog-list-header {
+  align-items: baseline;
+  display: flex;
+  gap: var(--wg-space-3);
+  padding: var(--wg-space-2) var(--wg-space-3) 0;
+}
+
+.backlog-list-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-3);
+}
+
+/* An edge prompt: an anchor and its chevron on a pane header's end. */
+.backlog-edge--start {
+  margin-right: auto;
+}
+
+.backlog-edge--end {
+  margin-left: auto;
+}
+
+.backlog-tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-1);
+}
+
+/* The header covers the pane's top padding as well, so no text scrolls
+   above it. */
+.backlog-detail-head {
+  align-items: baseline;
+  background: var(--wg-sheet-background);
+  display: flex;
+  gap: var(--wg-space-3);
+  margin-top: calc(var(--wg-space-3) * -1);
+  padding: var(--wg-space-3) 0 var(--wg-space-2);
+  position: sticky;
+  top: calc(var(--wg-space-3) * -1);
+  z-index: 1;
+}
+
+.backlog-followup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-2);
+}
+
+.backlog-detail-title,
+.backlog-editor-heading {
+  font-size: var(--wg-text-16);
+  font-weight: var(--wg-weight-semibold);
+  margin: 0;
+}
+
+.backlog-detail-line {
+  color: var(--wg-fg-secondary);
+}
+
+/* The default editor pane: its heading, the fields, then the keys. */
+.backlog-editor > .backlog-pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-3);
+}
+
+.backlog-editor-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-1);
+}
+
+/* The editor's footer of keys. */
+.backlog-editor-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-3);
+}

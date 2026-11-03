@@ -1,0 +1,73 @@
+/* The default Form layout: the rail's list, the round head, an item's status, and the review. */
+
+/* Rail */
+:where(.form-tab) .rail-list {
+  list-style: none;
+  margin: 0;
+  padding: var(--wg-space-2);
+}
+
+/* Round head */
+:where(.form-tab) .round-head {
+  margin-bottom: var(--wg-space-4);
+}
+
+:where(.form-tab) .round-heading {
+  font-size: var(--wg-text-20);
+  font-weight: var(--wg-weight-semibold);
+  margin: 0 0 var(--wg-space-2);
+}
+
+:where(.form-tab) .round-overview {
+  color: var(--wg-fg-secondary);
+}
+
+/* Items */
+:where(.form-tab) .item[data-status='not_applicable'] .item-status {
+  color: var(--wg-fg-secondary);
+}
+
+:where(.form-tab) .item[data-status='not_applicable'] .context {
+  opacity: 0.6;
+}
+
+:where(.form-tab) .finding-proof .context-body {
+  color: var(--wg-fg-secondary);
+}
+
+:where(.form-tab) .round-overview code {
+  background: var(--wg-block-background);
+  border-radius: var(--wg-radius-sm);
+  font-family: var(--wg-font-mono);
+  font-size: var(--wg-text-12);
+  padding: 0 var(--wg-space-1);
+}
+
+:where(.form-tab) .review .field-note {
+  border-top: 1px solid var(--wg-border-default);
+  margin-top: var(--wg-space-6);
+  padding-top: var(--wg-space-4);
+}
+
+/* Review */
+:where(.form-tab) .review-title {
+  font-size: var(--wg-text-16);
+  font-weight: var(--wg-weight-semibold);
+  margin: 0;
+}
+
+:where(.form-tab) .review-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-0_5);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+:where(.form-tab) .review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-2);
+  margin-top: var(--wg-space-4);
+}

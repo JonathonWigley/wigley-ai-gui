@@ -5,6 +5,7 @@ import { qualify } from '../../../shared/plugin-manifests';
 import type { KeysPageExports } from '../../keys/contract';
 import type { SettingsChannel } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
+import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { SettingsLayout } from '../layouts/layout';
 import { settingsManifest } from '../manifest';
 import { readSettingsLayout } from './layout/read-layout';
@@ -73,7 +74,7 @@ export const settingsPagePart: PagePart<typeof settingsManifest> = {
 
     api.layouts.show<SettingsLayout>({
       defaultLayout,
-      defaultStylesheet: null,
+      defaultStylesheet,
       read: readSettingsLayout,
       userLayout: () => api.settings().layout,
       setLayouts: (shown) => view.setLayouts(shown),

@@ -1,0 +1,175 @@
+/* The default usage layout's look, under each part's root. */
+
+/* One grid row per profile: the name, then a label, meter and text column
+   trio per limit (the layout sets `--usage-columns`), so each limit's meter
+   lines up across profiles. */
+[data-layout-owner='usage'][data-layout='default'].usage-status-line {
+  align-items: center;
+  column-gap: var(--wg-space-1_5);
+  display: grid;
+  font-size: var(--wg-text-12);
+  font-variant-numeric: tabular-nums;
+  grid-template-columns: repeat(var(--usage-columns, 2), auto);
+  justify-content: end;
+  padding: 0 var(--wg-space-2);
+  white-space: nowrap;
+}
+
+[data-layout-owner='usage'][data-layout='default'].usage-status-line
+  > .usage-group {
+  display: contents;
+}
+
+[data-layout-owner='usage'][data-layout='default'].usage-status-line
+  .usage-label {
+  margin-inline-start: var(--wg-space-1_5);
+}
+
+[data-layout-owner='usage'][data-layout='default'].usage-status-line
+  .usage-text {
+  text-align: end;
+}
+
+[data-layout-owner='usage'][data-layout='default'].usage-status-line
+  .usage-note {
+  grid-column: 2 / -1;
+  text-align: end;
+}
+
+[data-layout-owner='usage'][data-layout='default'] .usage-profile-name {
+  color: var(--wg-fg-secondary);
+  font-weight: var(--wg-weight-semibold);
+}
+
+/* A session's line in its Chat status line or tab bar: one row held to one
+   line's height, so an item that does not fit wraps onto the hidden row below
+   and shows whole or not at all, spend first, then cache, then the context
+   text. It shrinks below its content so the drop can happen. */
+[data-layout-owner='usage'][data-layout='default'].usage-session-line {
+  --usage-session-line-height: calc(var(--wg-text-12) * var(--wg-leading-ui));
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: var(--wg-text-12);
+  font-variant-numeric: tabular-nums;
+  gap: 0 var(--wg-space-1_5);
+  height: var(--usage-session-line-height);
+  line-height: var(--wg-leading-ui);
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+[data-layout-owner='usage'][data-layout='default'].usage-row-line {
+  align-items: center;
+  color: var(--wg-fg-tertiary);
+  display: flex;
+  font-size: var(--wg-text-12);
+  font-variant-numeric: tabular-nums;
+  gap: var(--wg-space-1_5);
+  min-height: var(--wg-row-tree);
+  white-space: nowrap;
+}
+
+/* The meter's row is a full line tall, so a wrapped text starts below it. The
+   margin assumes the meter is `space-1` tall (`src/shared/page/ui/meter.css`);
+   a shorter meter lets the wrapped text show through. */
+[data-layout-owner='usage'][data-layout='default'].usage-session-line
+  > .ui-meter {
+  margin-block: calc(
+    (var(--usage-session-line-height) - var(--wg-space-1)) / 2
+  );
+}
+
+[data-layout-owner='usage'][data-layout='default'] .usage-note,
+[data-layout-owner='usage'][data-layout='default'] .usage-group.is-stale {
+  color: var(--wg-fg-tertiary);
+}
+
+/* The details: a card per profile. */
+[data-layout-owner='usage'][data-layout='default'].usage-details {
+  display: flex;
+  flex-direction: column;
+  font-variant-numeric: tabular-nums;
+  gap: var(--wg-space-3);
+  padding: var(--wg-space-2);
+}
+
+/* A details row fits the bar's least width: the detail and the trailing end
+   share the room the label leaves, the trailing end never less than its meter
+   and text, a long text wrapping at its spaces; the detail and then the label
+   ellipsize. */
+[data-layout-owner='usage'][data-layout='default'] .ui-row-detail {
+  flex: 1 1 0;
+}
+
+[data-layout-owner='usage'][data-layout='default'] .ui-row-trailing {
+  display: flex;
+  flex: 1 1 0;
+  justify-content: flex-end;
+}
+
+[data-layout-owner='usage'][data-layout='default'] .usage-trailing {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--wg-space-1_5);
+  white-space: nowrap;
+}
+
+[data-layout-owner='usage'][data-layout='default']
+  .usage-trailing
+  > .usage-text {
+  overflow-wrap: normal;
+  text-align: end;
+  white-space: normal;
+}
+
+/* A meter's percent is never narrower than `100%` in its own font, so meters
+   line up from row to row however wide their number. */
+[data-layout-owner='usage'][data-layout='default'] .ui-meter + .usage-text {
+  display: inline-block;
+  text-align: end;
+}
+
+[data-layout-owner='usage'][data-layout='default']
+  .ui-meter
+  + .usage-text::after {
+  content: '100%';
+  display: block;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+}
+
+/* A card's header sits flush with its rows. */
+[data-layout-owner='usage'][data-layout='default'] .usage-profile {
+  padding: var(--wg-space-1) var(--wg-space-2);
+}
+
+/* Name, then freshness beside it, then the default tag at the end. */
+[data-layout-owner='usage'][data-layout='default'] .ui-section-header {
+  gap: var(--wg-space-1_5);
+  justify-content: flex-start;
+}
+
+[data-layout-owner='usage'][data-layout='default']
+  .ui-section-header
+  > .ui-tag {
+  margin-inline-start: auto;
+}
+
+[data-layout-owner='usage'][data-layout='default'] .usage-freshness,
+[data-layout-owner='usage'][data-layout='default'] .usage-error {
+  font-size: var(--wg-text-12);
+  margin: 0;
+}
+
+[data-layout-owner='usage'][data-layout='default'] .usage-freshness {
+  color: var(--wg-fg-tertiary);
+  font-weight: var(--wg-weight-regular);
+}
+
+[data-layout-owner='usage'][data-layout='default'] .usage-error {
+  color: var(--wg-status-error);
+  padding: 0 var(--wg-space-2);
+}

@@ -4,6 +4,7 @@ import type { ChatPageExports } from '../../chat/contract';
 import type { KeysPageExports } from '../../keys/contract';
 import type { VisualChannel } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
+import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { Layout } from '../layouts/layout';
 import { visualManifest } from '../manifest';
 import { createHtmlFence } from './html-fence';
@@ -61,7 +62,7 @@ export const visualPagePart: PagePart<typeof visualManifest> = {
 
     api.layouts.show<Layout>({
       defaultLayout,
-      defaultStylesheet: null,
+      defaultStylesheet,
       read: readVisualLayout,
       userLayout: () => api.settings().layout,
       setLayouts(shown) {

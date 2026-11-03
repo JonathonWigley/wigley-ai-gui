@@ -6,6 +6,7 @@ import { PLACEMENT_CHECK_EVENT } from '../../../shared/placement-check';
 import { qualify } from '../../../shared/plugin-manifests';
 import type { KeysPageExports } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
+import defaultStylesheet from '../layouts/default/layout.css?url';
 import type { Layout } from '../layouts/layout';
 import { keysManifest } from '../manifest';
 import { createAnchors } from './anchors';
@@ -122,7 +123,7 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
     let keysButton: Drawn = parts.titleBarButton(keysButtonSlot);
     api.layouts.show<Layout>({
       defaultLayout,
-      defaultStylesheet: null,
+      defaultStylesheet,
       read: readKeysLayout,
       userLayout: () => api.settings().layout,
       setLayouts(shown) {

@@ -6,6 +6,12 @@ declare module '*?raw' {
   export default text;
 }
 
+// Vite's `?url` suffix imports a file's URL.
+declare module '*?url' {
+  const url: string;
+  export default url;
+}
+
 interface Window {
   wigley: import('./contracts/bridge').Bridge;
 }

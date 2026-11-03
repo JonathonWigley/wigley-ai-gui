@@ -46,6 +46,7 @@ import { createPaneTargets } from './pane-targets';
 import { createPendingKeys } from './pending-keys';
 import { createPageApi } from './plugins/page-api';
 import defaultChromeLayout from './shell/layouts/default/layout.js';
+import defaultChromeStylesheet from './shell/layouts/default/layout.css?url';
 import type { Layout as ChromeLayout } from './shell/layouts/layout';
 import { createModes, SIDE_BAR_OVER_QUERY } from './shell/modes';
 import { readShellLayout } from './shell/read-shell-layout';
@@ -249,7 +250,7 @@ async function start() {
   });
   layouts.show<ChromeLayout>('shell', {
     defaultLayout: defaultChromeLayout,
-    defaultStylesheet: null,
+    defaultStylesheet: defaultChromeStylesheet,
     read: readShellLayout,
     userLayout: () => live.current().settings.shell.layout,
     setLayouts(shown) {

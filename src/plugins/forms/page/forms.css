@@ -92,12 +92,6 @@
 }
 
 /* Rail */
-:where(.form-tab) .rail-list {
-  list-style: none;
-  margin: 0;
-  padding: var(--wg-space-2);
-}
-
 :where(.form-tab) .rail-lead {
   align-items: center;
   display: inline-flex;
@@ -121,20 +115,6 @@
 }
 
 /* Round head */
-:where(.form-tab) .round-head {
-  margin-bottom: var(--wg-space-4);
-}
-
-:where(.form-tab) .round-heading {
-  font-size: var(--wg-text-20);
-  font-weight: var(--wg-weight-semibold);
-  margin: 0 0 var(--wg-space-2);
-}
-
-:where(.form-tab) .round-overview {
-  color: var(--wg-fg-secondary);
-}
-
 :where(.form-tab) .round-progress {
   color: var(--wg-fg-tertiary);
   font-size: var(--wg-text-13);
@@ -153,14 +133,6 @@
   font-size: var(--wg-text-12);
 }
 
-:where(.form-tab) .item[data-status='not_applicable'] .item-status {
-  color: var(--wg-fg-secondary);
-}
-
-:where(.form-tab) .item[data-status='not_applicable'] .context {
-  opacity: 0.6;
-}
-
 /* An item's text sits open under its section headers; a hairline sets the
    answer apart below it. */
 :where(.form-tab) .context {
@@ -169,10 +141,6 @@
 
 :where(.form-tab) .context-body {
   margin-top: var(--wg-space-1);
-}
-
-:where(.form-tab) .finding-proof .context-body {
-  color: var(--wg-fg-secondary);
 }
 
 :where(.form-tab) .answer {
@@ -247,8 +215,7 @@
   min-width: 0;
 }
 
-:where(.form-tab) .choice-text code,
-:where(.form-tab) .round-overview code {
+:where(.form-tab) .choice-text code {
   background: var(--wg-block-background);
   border-radius: var(--wg-radius-sm);
   font-family: var(--wg-font-mono);
@@ -456,31 +423,10 @@
   min-height: var(--wg-row-list);
 }
 
-:where(.form-tab) .review .field-note {
-  border-top: 1px solid var(--wg-border-default);
-  margin-top: var(--wg-space-6);
-  padding-top: var(--wg-space-4);
-}
-
 /* Review */
-:where(.form-tab) .review-title {
-  font-size: var(--wg-text-16);
-  font-weight: var(--wg-weight-semibold);
-  margin: 0;
-}
-
 :where(.form-tab) .review-summary {
   color: var(--wg-fg-secondary);
   margin: var(--wg-space-1) 0 var(--wg-space-3);
-}
-
-:where(.form-tab) .review-rows {
-  display: flex;
-  flex-direction: column;
-  gap: var(--wg-space-0_5);
-  list-style: none;
-  margin: 0;
-  padding: 0;
 }
 
 /* Two-line rows: the answer text carries the status. */
@@ -560,11 +506,4 @@
   font-size: var(--wg-text-12);
   margin: 0 var(--wg-space-3) var(--wg-space-1) 0;
   overflow-wrap: anywhere;
-}
-
-:where(.form-tab) .review-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--wg-space-2);
-  margin-top: var(--wg-space-4);
 }
