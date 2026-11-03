@@ -91,6 +91,7 @@ profile's `settings.json`, which is why the configured limit is read there.
         ▼
  usage page ──▶ status bar line (the shown session's profile's plan rows)
             ──▶ chat.addStatusPart: each Chat session's context, cache and spend in its status line
+            ──▶ sessions.addRowPart (usage.rowLine): each session's context meter under its side-bar row
  usage-tab-line page (optional) ──▶ sessions.addBarPart: the same line in each session's tab bar
             ──▶ right bar details (every profile, the shown session)   toggled by Space v u
 ```
@@ -141,6 +142,9 @@ In `src/contracts/agent.ts`, beside `AgentHarness`:
     event yet draws no line. The line redraws on each snapshot, each `sessions.activeChanged`, each layouts set and the
     minute tick. Each surface logs `session line in <name>: <text>` under its own plugin when a session's text
     changes, `<name>` the session's side-bar label (its id while none is known).
+  - each session's row line, a sessions row part (`usage.rowLine`, added through `sessions.addRowPart`) under its
+    side-bar row: the session's context meter alone, drawn by the `rowLine` layout part and redrawn like the session
+    line.
   - the details bar in the right bar, toggled by `usage.toggleDetails` (`Space v u`), its open state kept in
     `uiState`: every profile's rows with reset times, extra usage as `spent / limit` in its currency (or `off`), the
     poll's staleness and error, and the shown session's context, both autocompact limits and the marker when they

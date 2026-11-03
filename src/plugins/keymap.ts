@@ -466,7 +466,7 @@ export const defaultKeymap = {
       command: 'agent-strip.toggleBox',
     },
 
-    // ── Visual─────────────────────────────────────────────────────────────
+    // ── Visual ─────────────────────────────────────────────────────────────
     { keys: 'v', scope: 'chat.chat', command: 'visual.openVisuals' },
     { keys: 'h', scope: 'visual.overlay', command: 'visual.prevVisual' },
     { keys: 'l', scope: 'visual.overlay', command: 'visual.nextVisual' },

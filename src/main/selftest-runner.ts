@@ -393,9 +393,8 @@ function reportWhys(group: SelfTestGroup, step: SelfTestStep) {
 // result, reporting each under `pluginId` and each group's name before its
 // steps; the shown line, its `alsoShown` lines and each step's lines are
 // waited for up to `stepTimeoutMs`, a result that has not settled within it
-// once the steps end
-// fails as timed out, and a result that rejects, even before the steps end,
-// stops the run and rejects with its error. The window starts and ends the
+// once the steps end fails as timed out, and a result that rejects, even
+// before the steps end, stops the run and rejects with its error. The window starts and ends the
 // script at `startWidth`, the content width the self-test started on: a run
 // that opens on another (a reload interrupted a held width) resizes back first,
 // and a width a step held is restored once the result is checked. `screenshots`

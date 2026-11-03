@@ -300,9 +300,6 @@ const LAYERS: Record<string, LayerRule> = {
     layers: [
       'src/contracts',
       'src/shared',
-      'src/shared/page',
-      'src/shared/page/ui',
-      'src/shared/page/layout-host',
       'src/plugins/agents',
       'src/plugins/agents/contract.ts',
       'src/plugins/sessions/contract.ts',

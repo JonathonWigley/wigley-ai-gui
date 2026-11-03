@@ -623,12 +623,13 @@ function serveLayouts(
 }
 
 // Starts every plugin's main part `disabled` does not name, each with its own
-// API over one plugin channel router to the window's page, the settings `store` serves with no
-// self-test layer, one event bus, the shared `services`, its own host from
-// `selfTest` (null outside the self-test), its own host from `driveRun` (null
-// outside a drive run), its data folder under `dataRoot`, and its layouts in
-// `layouts`. `onStarted` sees each part, with its plugin id, as it starts, so
-// a part is known even when a later start throws.
+// API over one plugin channel router to the window's page, the settings
+// `store` serves with no self-test layer, one event bus, the shared
+// `services`, its own host from `selfTest` (null outside the self-test), its
+// own host from `driveRun` (null outside a drive run), its data folder under
+// `dataRoot`, and its layouts in `layouts`. `onStarted` sees each part, with
+// its plugin id, as it starts, so a part is known even when a later start
+// throws.
 function startMainParts(
   window: BrowserWindow,
   store: ConfigStore,

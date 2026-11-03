@@ -339,8 +339,9 @@ round; primer: an open primer), since main, not the page, decides.
   the agent sets its own through the `set_session_title` tool (`docs/features/session-titles/design.md`).
 - **A composer part** is what a plugin draws above the Chat composer's box, through the `chat` page export
   `addComposerPart`, the same shape as a session part: chat hands each part a wrapper and the session id. The workflow
-  plugin's strip and the agent strip are two. A part may offer a **stop**: `j` on the last transcript entry hands the
-  entry cursor to it, and the part holds its own key scope until it hands the cursor back.
+  plugin's strip and the agent strip are two. A part may offer a **stop**: `j` on the entry cursor's last stop (the
+  newest pending row, else the last entry or an open last run's last step) hands the cursor to it, and the part holds
+  its own key scope until it hands the cursor back.
 - **A status part** is what a plugin draws in the Chat status line under the box, through the `chat` page export
   `addStatusPart`, the same shape; the usage plugin's context, cache and spend are one.
 - **A chat pane** is one pane of Sessions mode's pane tree (`src/shared/page/pane-tree/`, the sessions plugin its

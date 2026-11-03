@@ -162,4 +162,4 @@ Primer tabs keep it.
 
 ## Proof
 
-Commit 2db2f106 · proof: diff read: usage page calls chat.addStatusPart(sessionLinePart(...)), no addBarPart left in usage, usage-tab-line listed in manifests/page and LAYERS; typecheck checked; worker's 13 test files (237 tests) pass · concerns: usage self-test waits on sessionUsage with no timeout of its own; check-layers gives usage/main src/shared/paths; usage/design.md edited outside the Files line
+Commit f353447b · proof: diff read: usage page calls chat.addStatusPart(sessionLinePart(...)), no addBarPart left in usage, usage-tab-line listed in manifests/page and LAYERS; typecheck checked; worker's 13 test files (237 tests) pass · concerns: usage self-test waits on sessionUsage with no timeout of its own; check-layers gives usage/main src/shared/paths; usage/design.md edited outside the Files line

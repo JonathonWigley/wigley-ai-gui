@@ -287,7 +287,7 @@ export interface ComposerStop {
   enter(sessionId: string, exits: ComposerStopExits): boolean;
   // The cursor left by a chat action (the box took focus, the tab hid); the
   // part drops its selection and scope. It sets no scope: chat, or the view
-  // that took the keys, has set one already.
+  // that took the keys, sets one.
   leave(sessionId: string): void;
 }
 

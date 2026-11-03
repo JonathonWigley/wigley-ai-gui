@@ -58,7 +58,7 @@ unchanged. Each event carries `at`, epoch milliseconds from the adapter's inject
 |---|---|---|
 | `sessionStarted` / `sessionEnded` | — | enter the tower / results screen |
 | `agentSpawned` | agent id, parent agent id, agent type, description, name (the label the agent was given, its type when none), model and effort (each null when unknown) | a party member joins |
-| `agentReplied` | agent id, model, session spend so far in USD (null before a priced reply) | — |
+| `agentReplied` | agent id, model (the reply's, or the launch receipt's resolved model), the subagent's estimated spend so far in USD (cumulative; null before its first reply or when any reply used an unpriced model) | — |
 | `agentFinished` | agent id, done or failed | the member steps back |
 | `taskStarted` | task id, agent id (the agent that started it), description, command (null when the harness names none) | — |
 | `taskFinished` | task id, done or failed | — |
@@ -106,8 +106,8 @@ would emit the same events into `chat.agentEvent`'s payload shape.
   and `onRosterChanged(listener)` to the views that draw it. A message drops a cleared host's finished items.
 - **`agent-lines`** (a separate plugin, in `plugins.disabled` by default; its `layout` setting is `agent-lines.layout`)
   adds a row part through sessions' `addRowPart` and draws, under each session row, one `workingLine` while the
-  session runs any subagent or task: a running dot and the elapsed time since the earliest running item started, with
-  the counts of running subagents and tasks. The line goes when none runs. It takes no keys and no focus; a click on it
+  session runs any subagent or task: a running dot and the elapsed time since the earliest running item started. The
+  layout input also carries the counts of running subagents and tasks, for a user layout to draw. The line goes when none runs. It takes no keys and no focus; a click on it
   selects its session, as the row does. The elapsed time ticks once a second while any line shows.
 - **`agent-strip`** draws the same roster as boxes above the Chat composer's box (`docs/features/chat-bar/design.md`).
 
