@@ -23,7 +23,7 @@ or touches their data, so start one whenever a check needs it.
 1. `npm run drive -- start` returns once the page is ready and prints the run id and folder; a
    dev start first waits up to 10 s for the dev server's startup reload (lock paragraph below).
    `.drive/current` names the newest run, and a command without `--run` goes there; `start --run
-   <id>` names a run and reuses its home when the folder exists; a run id is one folder name
+   <id>` names a run and reuses its home when the folder still holds one; a run id is one folder name
    inside `.drive/`, with no `/`, `\` or `..`. When another run may be live —
    a second run of the agent's, or a peer agent's — pass `--run <id>` on every command, since
    any newer `start` moves `.drive/current` to its own run. `--user-config` copies the user's
@@ -56,7 +56,10 @@ or touches their data, so start one whenever a check needs it.
 4. Capture and read: `screenshot` saves the window, or one element by selector, under the run
    folder; Read the PNG. `query` returns a selector's text, box and computed style.
 5. `npm run drive -- quit` when done; it waits for the ui-state write, part disposal and any
-   recording to finish before the app exits. Run folders stay for reading back; `.drive/` is git-ignored.
+   recording to finish before the app exits, then deletes the run's `home/` and `user-data/`, so
+   its test repos leave the machine's docs index: `screenshots/`, `videos/` and `app.log` stay for
+   reading back. Every `start` deletes each other run folder untouched for over a day whose app is
+   not running. `.drive/` is git-ignored.
 
 A page edit hot reloads into a running run. A main-process edit needs `restart`, which keeps the
 temp home and the start flags and does not copy the user config again, so a check that something

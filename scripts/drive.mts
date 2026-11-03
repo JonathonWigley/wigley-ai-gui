@@ -13,6 +13,7 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from 'node:fs';
 import { homedir } from 'node:os';
@@ -24,6 +25,11 @@ import {
   type DriveInvocation,
   parseDriveArgs,
 } from './drive-args.mts';
+import {
+  idleRunIds,
+  QUIT_REMOVED_ENTRIES,
+  type RunFolder,
+} from './drive-runs.mts';
 import { isAlive, mayReleaseStartLock, takeStartLock } from './start-lock.mts';
 
 const REPO_DIR = path.resolve(import.meta.dirname, '..');
@@ -69,7 +75,9 @@ async function main(invocation: DriveInvocation): Promise<void> {
   } else if (invocation.kind === 'restart') {
     await restart(currentRun(invocation.run));
   } else if (invocation.kind === 'quit') {
-    await stop(currentRun(invocation.run));
+    const runId = currentRun(invocation.run);
+    await stop(runId);
+    removeQuitEntries(runId);
   } else if (invocation.kind === 'help') {
     await printHelp(invocation.run);
   } else {
@@ -82,7 +90,8 @@ async function main(invocation: DriveInvocation): Promise<void> {
 }
 
 // Starts the app into `.drive/<runId>/`, reusing its home when the folder
-// exists, and returns once the page is ready for keys. `copyUserConfig` false
+// still holds one, and returns once the page is ready for keys. It first
+// deletes every other run folder gone idle (`idleRunIds`). `copyUserConfig` false
 // keeps the home's config as the run left it, on a restart. A dev start holds
 // `.drive/start.lock` from spawn until `ready` reports the page load after the
 // dev server's startup reload, since every `electron-forge start` rewrites the
@@ -108,6 +117,7 @@ async function start(
   if (running !== 'not running') {
     throw new Error(`Run ${runId} is already running`);
   }
+  removeIdleRuns(runId);
   const userConfig =
     options.userConfig && copyUserConfig ? requireUserConfig() : null;
   rmSync(driveFile, { force: true });
@@ -420,6 +430,52 @@ async function stop(runId: string): Promise<void> {
     }
   }
   rmSync(path.join(runDirOf(runId), 'drive.json'), { force: true });
+}
+
+// Deletes the quit run's scratch folders, keeping its captures and log.
+function removeQuitEntries(runId: string): void {
+  for (const entry of QUIT_REMOVED_ENTRIES) {
+    rmSync(path.join(runDirOf(runId), entry), { recursive: true, force: true });
+  }
+}
+
+// Deletes every run folder but `startingRun` that `idleRunIds` names, and
+// prints how many it deleted.
+function removeIdleRuns(startingRun: string): void {
+  if (!existsSync(DRIVE_DIR)) {
+    return;
+  }
+  const runs: RunFolder[] = readdirSync(DRIVE_DIR, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => runFolderOf(entry.name));
+  const idleIds = idleRunIds(runs, startingRun, Date.now());
+  for (const runId of idleIds) {
+    rmSync(runDirOf(runId), { recursive: true, force: true });
+  }
+  if (idleIds.length > 0) {
+    console.log(`Deleted ${idleIds.length} drive runs idle over a day`);
+  }
+}
+
+function runFolderOf(runId: string): RunFolder {
+  const runDir = runDirOf(runId);
+  const entryTimes = readdirSync(runDir).map(
+    (entry) => statSync(path.join(runDir, entry)).mtimeMs,
+  );
+  const lastUsedMs = Math.max(statSync(runDir).mtimeMs, ...entryTimes);
+  const isLive = recordedPids(runDir).some((pid) => isRunProcess(pid, runDir));
+  return { id: runId, lastUsedMs, isLive };
+}
+
+// The pids the run's `start.json` and `drive.json` record; none for a file
+// that is missing.
+function recordedPids(runDir: string): number[] {
+  const startFile = path.join(runDir, 'start.json');
+  const start = existsSync(startFile)
+    ? (JSON.parse(readFileSync(startFile, 'utf8')) as StartFile)
+    : null;
+  const drive = readDriveFile(runDir);
+  return [start?.pid, drive?.pid].filter((pid) => pid !== undefined);
 }
 
 // Whether every one of `pids` exits within the quit timeout.
