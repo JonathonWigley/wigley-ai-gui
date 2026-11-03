@@ -1,7 +1,7 @@
 import path from 'node:path';
 import type { Clock, RandomHex } from '../../../contracts/ambient';
 import type { Disposable } from '../../../contracts/disposable';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type { PluginEvents } from '../../../contracts/plugin';
 import { createListeners } from '../../../shared/listeners';
 import type {
@@ -24,7 +24,7 @@ import { normalizedTitle, titleProblem } from '../session-title';
 export interface SessionListDeps {
   randomHex: RandomHex;
   clock: Clock;
-  log: Log;
+  log: PluginLog;
   emit: PluginEvents<SessionsMainEvents>['emit'];
   stateChanged(state: SessionsState): void;
   // The user activated a session; called before the state it changes is sent.
@@ -49,6 +49,9 @@ export interface SessionList extends SessionsMainExports {
     title: string | null,
     maxLength: number,
   ): void;
+  // Ends every session the list holds, connected and owned, each as its own
+  // `end()` does.
+  endAll(): void;
 }
 
 interface Contribution {
@@ -373,7 +376,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       rows[index].hostSessionId = newHostId;
       sendState();
     }
-    deps.log('sessions', `owned session ${appId} now host ${newHostId}`);
+    deps.log(`owned session ${appId} now host ${newHostId}`);
     deps.emit('hostSessionChanged', entry.session);
   };
 
@@ -384,7 +387,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
   ) => {
     const entry = entries.get(sessionId);
     if (entry === undefined) {
-      deps.log('sessions', `setTitle for unknown session ${sessionId} ignored`);
+      deps.log(`setTitle for unknown session ${sessionId} ignored`);
       return;
     }
     const value = title === null ? null : normalizedTitle(title) || null;
@@ -412,7 +415,6 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     const isTakingOver = entry.joinedBy !== null;
     entry.joinedBy = handle;
     deps.log(
-      'sessions',
       isTakingOver
         ? `newer relay took over session ${appId}`
         : `relay joined session ${appId}`,
@@ -423,7 +425,6 @@ export function createSessionList(deps: SessionListDeps): SessionList {
         const hostId = entry.session.info.sessionId;
         if (hostId !== joinedHostId) {
           deps.log(
-            'sessions',
             `call ${name} from relay of retired host ${String(joinedHostId)} on session ${appId} refused`,
           );
           return Promise.reject(
@@ -439,7 +440,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
           return;
         }
         entry.joinedBy = null;
-        deps.log('sessions', `relay left session ${appId}`);
+        deps.log(`relay left session ${appId}`);
       },
     };
   };
@@ -503,7 +504,6 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       if (retiringEntry !== undefined) {
         const appId = retiringEntry.session.id;
         deps.log(
-          'sessions',
           `connect for retired host ${hostId} of session ${appId} refused`,
         );
         throw new Error(
@@ -543,7 +543,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     mark(sessionId) {
       const entry = entries.get(sessionId);
       if (entry === undefined) {
-        deps.log('sessions', `mark for unknown session ${sessionId} ignored`);
+        deps.log(`mark for unknown session ${sessionId} ignored`);
         return;
       }
       // A connected session with no row, or a row the user closed, gets its
@@ -575,10 +575,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     activate(sessionId) {
       const entry = entries.get(sessionId);
       if (entry === undefined) {
-        deps.log(
-          'sessions',
-          `activate for unknown session ${sessionId} ignored`,
-        );
+        deps.log(`activate for unknown session ${sessionId} ignored`);
         return;
       }
       // A connected session with no row, or a row the user closed, gets its
@@ -588,7 +585,6 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     activateExistingRow(sessionId) {
       if (!entries.has(sessionId)) {
         deps.log(
-          'sessions',
           `activateExistingRow for unknown session ${sessionId} ignored`,
         );
         return;
@@ -596,7 +592,6 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       const index = rowIndex(sessionId);
       if (index === -1) {
         deps.log(
-          'sessions',
           `activateExistingRow for session ${sessionId} with no row ignored`,
         );
         return;
@@ -611,10 +606,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
         return;
       }
       if (!everyGuardAllows(sessionId)) {
-        deps.log(
-          'sessions',
-          `release for session ${sessionId} kept by a close guard`,
-        );
+        deps.log(`release for session ${sessionId} kept by a close guard`);
         return;
       }
       if (sessionId === selectedSessionId) {
@@ -633,10 +625,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     },
     closeSession(sessionId) {
       if (!entries.has(sessionId)) {
-        deps.log(
-          'sessions',
-          `closeSession for unknown session ${sessionId} ignored`,
-        );
+        deps.log(`closeSession for unknown session ${sessionId} ignored`);
         return false;
       }
       const index = rowIndex(sessionId);
@@ -644,10 +633,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
         return true;
       }
       if (!everyGuardAllows(sessionId)) {
-        deps.log(
-          'sessions',
-          `closeSession for session ${sessionId} kept by a close guard`,
-        );
+        deps.log(`closeSession for session ${sessionId} kept by a close guard`);
         return false;
       }
       closeRow(index, sessionId);
@@ -674,5 +660,10 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     tools: () => contributions.flatMap((contribution) => contribution.tools),
     onToolsChanged: (listener) => toolsChanged.add(listener),
     state,
+    endAll() {
+      for (const entry of entries.values()) {
+        end(entry);
+      }
+    },
   };
 }

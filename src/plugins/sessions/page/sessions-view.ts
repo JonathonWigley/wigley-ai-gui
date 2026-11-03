@@ -98,7 +98,8 @@ export interface SessionPanes {
 // the row's shown activity changed; `render` drops the activities of the rows
 // that left. `redrawRows` draws the side bar's rows again, for a changed
 // title length. `parts` draws through the sessions layout the view's
-// `setLayouts` sets, for the mode's dialogs.
+// `setLayouts` sets, for the mode's dialogs. `dispose` stops the pane tree
+// watching its size and pointer.
 export interface SessionsView {
   element: HTMLElement;
   sideBar: HTMLElement;
@@ -116,6 +117,7 @@ export interface SessionsView {
     activity: RowActivity | null,
   ): void;
   redrawRows(): void;
+  dispose(): void;
 }
 
 // Sessions mode's two parts: the side bar of session rows, which the shell
@@ -300,5 +302,6 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
       }
     },
     redrawRows: () => drawSidebar(),
+    dispose: () => treeView.dispose(),
   };
 }

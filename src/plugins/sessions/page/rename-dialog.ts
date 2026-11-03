@@ -1,4 +1,4 @@
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type { PushedScope } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import type { DrawnPart } from '../../../shared/page/layout-host/draw-part';
@@ -25,7 +25,7 @@ export interface RenameDialogDeps {
   setUserTitle(sessionId: string, title: string | null): Promise<void>;
   titleMaxLength(): number;
   parts: Pick<SessionsParts, 'renameDialog'>;
-  log: Log;
+  log: PluginLog;
 }
 
 // `open` shows the dialog for the row's session, the box holding the title
@@ -116,7 +116,8 @@ export function createRenameDialog(deps: RenameDialogDeps): RenameDialog {
     const shown = renaming;
     dialog.hide();
     disposeBody();
-    shown?.scope.pop();
+    // An answer landing after the plugin stopped closes here too, so no `pop`.
+    shown?.scope.dispose();
     renaming = null;
     isAccepting = false;
     restoreFocus(shown?.focusedBefore ?? null);
@@ -176,11 +177,11 @@ export function createRenameDialog(deps: RenameDialogDeps): RenameDialog {
           if (renaming === shown) {
             hide();
           }
-          deps.log('sessions', renamedLine(shown.label, title));
+          deps.log(renamedLine(shown.label, title));
         })
         .catch((error: unknown) => {
           if (renaming !== shown) {
-            deps.log('sessions', `rename failed: ${errorText(error)}`);
+            deps.log(`rename failed: ${errorText(error)}`);
             return;
           }
           isAccepting = false;

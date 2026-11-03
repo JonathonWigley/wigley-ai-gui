@@ -59,9 +59,11 @@ function dialogSetup(answer: () => Promise<void> = async () => undefined) {
       pushes += 1;
       return {
         pop: () => {
+          throw new Error('the dialog closes by dispose');
+        },
+        dispose: () => {
           pops += 1;
         },
-        dispose: () => undefined,
         onBaseChanged: (listener) => {
           onBaseChanged = listener;
           return { dispose: () => undefined };
@@ -74,7 +76,7 @@ function dialogSetup(answer: () => Promise<void> = async () => undefined) {
     },
     titleMaxLength: () => 40,
     parts: view.parts,
-    log: (source, message) => logged.push(`[${source}] ${message}`),
+    log: (message) => logged.push(message),
   });
   const root = asFake(dialog.element);
   const opener = new FocusFakeElement('div');
@@ -129,8 +131,8 @@ describe('createRenameDialog', () => {
     expect(pops()).toBe(1);
     expect(logged).toEqual([
       title === null
-        ? '[sessions] cleared the user title of gamma'
-        : `[sessions] renamed gamma to "${title}"`,
+        ? 'cleared the user title of gamma'
+        : `renamed gamma to "${title}"`,
     ]);
   });
 
@@ -188,13 +190,13 @@ describe('createRenameDialog', () => {
     {
       case: 'main sets it',
       settleWith: (pending: ReturnType<typeof deferred>) => pending.resolve(),
-      line: '[sessions] renamed gamma to "Fix it"',
+      line: 'renamed gamma to "Fix it"',
     },
     {
       case: 'main refuses it',
       settleWith: (pending: ReturnType<typeof deferred>) =>
         pending.reject(new Error('main said no')),
-      line: '[sessions] rename failed: main said no',
+      line: 'rename failed: main said no',
     },
   ])(
     'cancel_WhileAnInvokeIsInFlight_ClosesAndLogsTheOutcome ($case)',

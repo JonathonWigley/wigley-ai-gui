@@ -1,17 +1,30 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { once } from 'node:events';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { connect as connectSocket } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
+import { createInterface } from 'node:readline';
 import { describe, expect, it, vi } from 'vitest';
-import { fakeDriveHost } from '../../../shared/fake-drive-host';
-import { createRegistrations } from '../../../shared/registrations';
 import type {
-  ConnectedSession,
-  OwnedSession,
-  SessionInfo,
-  SessionsMainExports,
-  ToolResult,
-  ToolSession,
+  MainPart,
+  PluginEvents,
+  QualifiedEvents,
+} from '../../../contracts/plugin';
+import { fakeDriveHost } from '../../../shared/fake-drive-host';
+import { startMainPart } from '../../../shared/plugin-part-harness.test-support';
+import { createRegistrations } from '../../../shared/registrations';
+import {
+  type ConnectedSession,
+  type OwnedSession,
+  RELAY_PROTOCOL,
+  type RelayHello,
+  type SessionInfo,
+  type SessionsMainEvents,
+  type SessionsMainExports,
+  type ToolResult,
+  type ToolSession,
 } from '../contract';
+import { channelPath } from './relay/endpoint';
 import { addDriveActions, sessionsMainPart } from './start';
 import { SET_SESSION_TITLE_TOOL, startTitleTool } from './title-tool';
 
@@ -235,6 +248,45 @@ function viewOf(
   return started.exports?.(consumer) as SessionsMainExports;
 }
 
+// The app instance id the harness's fake services carry.
+const HARNESS_APP_ID = 'wigley-ai-gui-dev';
+
+const RELAY_HELLO: RelayHello = {
+  protocol: RELAY_PROTOCOL,
+  session_id: 'host-relay',
+  project_dir: null,
+  deadline_seconds: null,
+  harness: 'claude',
+};
+
+// A part started before sessions, so stopped after it, which keeps the id of
+// each session that connected and ended.
+function sessionEventsProbe() {
+  const connected: string[] = [];
+  const ended: string[] = [];
+  const part: MainPart = {
+    manifest: {
+      id: 'probe',
+      dependsOn: { main: [], page: [] },
+      commands: {},
+      scopes: {},
+      settings: {},
+      settingInfo: {},
+      themeTokens: {},
+    },
+    start(api) {
+      const events = api.events as unknown as PluginEvents<
+        Record<never, never>,
+        QualifiedEvents<'sessions', SessionsMainEvents>
+      >;
+      events.on('sessions.connected', ({ id }) => connected.push(id));
+      events.on('sessions.ended', ({ sessionId }) => ended.push(sessionId));
+      return { commands: {} };
+    },
+  };
+  return { part, connected, ended };
+}
+
 describe('sessions main part', () => {
   it('contributes set_session_title once, titling the calling session at the setting limit', async () => {
     const exports = viewOf(startSessionsPart(10));
@@ -320,6 +372,72 @@ describe('sessions main part', () => {
     } finally {
       await started.dispose?.();
       rmSync(homeDir, { recursive: true });
+    }
+  });
+
+  it('stops with nothing live and starts again', async () => {
+    const harness = startMainPart(sessionsMainPart);
+
+    await harness.stop();
+    expect(harness.counts()).toEqual({
+      registrations: 0,
+      timers: 0,
+      listeners: 0,
+      observers: 0,
+      frames: 0,
+    });
+
+    await harness.restart();
+    await harness.stop();
+  });
+
+  it('stop ends a session connected before it', async () => {
+    const probe = sessionEventsProbe();
+    const harness = startMainPart(sessionsMainPart, { parts: [probe.part] });
+    const view = harness
+      .started()
+      .exports?.(createRegistrations()) as SessionsMainExports;
+    const connected = view.connect(hostInfo('host-1'));
+
+    await harness.stop();
+
+    expect(probe.ended).toEqual([connected.session.id]);
+  });
+
+  it('stop_ConnectedThroughRelay_EndsOnce', async () => {
+    // macOS caps a socket path near 104 bytes, so the folder name stays short.
+    const homeDir = mkdtempSync(path.join(os.tmpdir(), 'wr-'));
+    const probe = sessionEventsProbe();
+    const harness = startMainPart(sessionsMainPart, {
+      parts: [probe.part],
+      services: { runMode: 'live', homeDir },
+    });
+    const socket = connectSocket(
+      channelPath(
+        process.platform,
+        homeDir,
+        os.userInfo().username,
+        HARNESS_APP_ID,
+      ),
+    );
+    socket.on('error', () => undefined);
+    try {
+      await once(socket, 'connect');
+      socket.write(`${JSON.stringify(RELAY_HELLO)}\n`);
+      await once(createInterface({ input: socket }), 'line');
+
+      await harness.stop();
+
+      expect(probe.connected).toHaveLength(1);
+      expect(probe.ended).toEqual(probe.connected);
+      expect(
+        existsSync(
+          path.join(homeDir, '.agents', HARNESS_APP_ID, 'endpoint.json'),
+        ),
+      ).toBe(true);
+    } finally {
+      socket.destroy();
+      rmSync(homeDir, { recursive: true, force: true });
     }
   });
 });

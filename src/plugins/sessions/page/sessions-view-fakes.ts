@@ -28,7 +28,7 @@ export function stateOf(
 }
 
 // A sessions view over fake keys that record each anchor, a log that records
-// each line as `[source] message`, `activated` recording each session a row
+// each line, `activated` recording each session a row
 // click activates, the row parts its rows draw (`rowParts`, a new store
 // unless one is handed in) and the bar parts its tab bars draw (`barParts`,
 // likewise), and the title length `titleMaxLength` reads (40 unless one is
@@ -60,7 +60,7 @@ export function sessionsViewSetup(
     },
     platform: 'macos',
     commands: { exists: () => true, run: () => undefined },
-    log: (...parts: string[]) => logged.push(parts.at(-1) ?? ''),
+    log: (message) => logged.push(message),
   });
   const sideBar = asFake(view.sideBar);
   const area = asFake(view.element);

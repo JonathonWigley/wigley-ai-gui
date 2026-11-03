@@ -235,7 +235,8 @@ export function addDriveActions(
 // its own view of the exports, which files its registrations under it. In the
 // self-test it opens no relay and writes
 // no file, and hands its pane keys' script; a drive run opens it in the run's
-// own home and gets the drive actions.
+// own home and gets the drive actions. A stop ends every session, then closes
+// the relay, which finds nothing left to end.
 export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
   manifest: sessionsManifest,
   start(api: SessionsApi) {
@@ -288,7 +289,7 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
             ),
           )
         : null;
-    const layouts = api.layouts.register({ layoutTypes });
+    api.layouts.register({ layoutTypes });
     api.services.selfTest?.run(
       sessionsSelfTestScript(exports, () => list.state()),
     );
@@ -296,9 +297,9 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
       commands: {},
       exports: (consumer) => sessionsMainView(exports, consumer),
       dispose: () => {
-        layouts.dispose();
         driveActions?.dispose();
-        opened?.relay.close();
+        list.endAll();
+        return opened?.relay.close();
       },
     };
   },

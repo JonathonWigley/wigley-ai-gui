@@ -63,7 +63,7 @@ function setUp() {
       return hexCount.toString(16).padStart(8, '0');
     },
     clock,
-    log: (source, message) => logged.push(`[${source}] ${message}`),
+    log: (message) => logged.push(message),
     emit: (event, data) => {
       emitted.push([event, data]);
       calls.push(`emit ${event}`);
@@ -1343,7 +1343,7 @@ describe('createSessionList', () => {
       },
       sent: [],
       events: [],
-      logs: ['[sessions] release for session 00000001 kept by a close guard'],
+      logs: ['release for session 00000001 kept by a close guard'],
     },
     {
       name: 'one of two guards keeps the row',
@@ -1354,7 +1354,7 @@ describe('createSessionList', () => {
       },
       sent: [],
       events: [],
-      logs: ['[sessions] release for session 00000001 kept by a close guard'],
+      logs: ['release for session 00000001 kept by a close guard'],
     },
     {
       name: 'an owned session keeps its row',
@@ -1614,4 +1614,31 @@ describe('createSessionList', () => {
       ).toEqual(expected);
     },
   );
+
+  it('endAll ends every connected and owned session once', () => {
+    const { list, emitted } = setUp();
+    let toolSessionEnds = 0;
+    list.contributeTools([tool('ask')], () => ({
+      call: async () => ({ content: [] }),
+      end: () => {
+        toolSessionEnds++;
+      },
+    }));
+    const connected = list.connect(owned('host-1'));
+    const opened = list.open(owned('host-2'));
+    const endedIds = () =>
+      emitted
+        .filter(([event]) => event === 'ended')
+        .map(([, data]) => (data as { sessionId: string }).sessionId);
+
+    list.endAll();
+
+    expect(endedIds()).toEqual([connected.session.id, opened.session.id]);
+    expect(toolSessionEnds).toBe(2);
+    expect(list.state().rows).toEqual([]);
+
+    list.endAll();
+
+    expect(endedIds()).toHaveLength(2);
+  });
 });

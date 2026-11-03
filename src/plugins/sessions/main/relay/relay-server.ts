@@ -2,7 +2,7 @@ import { mkdirSync, rmSync } from 'node:fs';
 import { createServer, type Socket } from 'node:net';
 import path from 'node:path';
 import type { Readable, Writable } from 'node:stream';
-import type { Log } from '../../../../contracts/log';
+import type { PluginLog } from '../../../../contracts/log';
 import { errorText } from '../../../../shared/error-text';
 import {
   type ConnectedSession,
@@ -26,7 +26,7 @@ export interface RelayServerDeps {
   channel: string;
   connect(info: SessionInfo): ConnectedSession;
   serve: ServeSession;
-  log: Log;
+  log: PluginLog;
 }
 
 const PIPE_PREFIX = '\\\\.\\pipe\\';
@@ -90,7 +90,7 @@ function replyLine(reply: RelayHelloReply): string {
 }
 
 function refuse(socket: Socket, error: string, deps: RelayServerDeps) {
-  deps.log('relay', `refused a relay: ${error}`);
+  deps.log(`refused a relay: ${error}`);
   socket.end(replyLine({ ok: false, error }));
 }
 
@@ -125,7 +125,7 @@ function startSession(socket: Socket, line: string, deps: RelayServerDeps) {
 // followed the newline put back in front.
 function acceptConnection(socket: Socket, deps: RelayServerDeps) {
   socket.on('error', (error) =>
-    deps.log('relay', `a relay connection failed: ${error.message}`),
+    deps.log(`a relay connection failed: ${error.message}`),
   );
   let received = Buffer.alloc(0);
   const onData = (chunk: Buffer) => {
@@ -156,7 +156,7 @@ export function startRelayServer(deps: RelayServerDeps): {
     acceptConnection(socket, deps);
   });
   server.on('error', (error) =>
-    deps.log('relay', `channel ${deps.channel} failed: ${error.message}`),
+    deps.log(`channel ${deps.channel} failed: ${error.message}`),
   );
   if (!deps.channel.startsWith(PIPE_PREFIX)) {
     mkdirSync(path.dirname(deps.channel), { recursive: true });

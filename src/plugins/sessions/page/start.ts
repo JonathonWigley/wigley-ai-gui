@@ -14,7 +14,7 @@ import {
   type SplitAxis,
 } from '../../../shared/page/pane-tree/pane-tree';
 import { qualify } from '../../../shared/plugin-manifests';
-import type { KeysPageExports } from '../../keys/contract';
+import { keysPageKey } from '../../keys/contract';
 import type {
   SessionPart,
   SessionRow,
@@ -123,15 +123,10 @@ function createExports(
         .invoke('closeSession', sessionId)
         .then((closed) => {
           if (!closed) {
-            log(
-              'sessions',
-              `session close kept by main: ${labelOf(sessionId)}`,
-            );
+            log(`session close kept by main: ${labelOf(sessionId)}`);
           }
         })
-        .catch((error) =>
-          log('sessions', `session not closed: ${errorText(error)}`),
-        );
+        .catch((error) => log(`session not closed: ${errorText(error)}`));
     },
     setActivity: (sessionId, sourceId, activity) =>
       view.setActivity(sessionId, sourceId, activity),
@@ -164,7 +159,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
   start(api: SessionsApi) {
     const { log } = api.services;
     const { uiState } = api.services;
-    const keys = api.dependency<KeysPageExports>('keys');
+    const keys = api.dependency(keysPageKey);
     let state: SessionsState = { rows: [], selectedSessionId: null };
     // Undefined until the first state is published.
     let published: string | null | undefined;
@@ -209,7 +204,6 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       if (next === 'none') {
         api.keys.setScope('idle');
         log(
-          'sessions',
           sessionId === null
             ? 'nothing shown'
             : `nothing shown in ${labelOf(sessionId)}`,
@@ -244,7 +238,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       const wasPublished = published;
       published = sessionId;
       if (focused !== undefined) {
-        log('sessions', `activated ${focused.label}`);
+        log(`activated ${focused.label}`);
       }
       api.events.emit('activeChanged', { sessionId });
       if (
@@ -289,7 +283,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         })
         .catch((error) => {
           pendingEchoes = [];
-          log('sessions', `session not activated: ${errorText(error)}`);
+          log(`session not activated: ${errorText(error)}`);
         });
     };
 
@@ -353,7 +347,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       },
       paneFocused(paneId) {
         const panes = view.panes.sessions();
-        log('sessions', `pane focused ${paneLabel(panes, paneId)}`);
+        log(`pane focused ${paneLabel(panes, paneId)}`);
         const sessionId = panes.get(paneId) ?? null;
         if (!isPlacing && sessionId !== null && sessionId !== mainSelection()) {
           tellMain(sessionId);
@@ -370,8 +364,6 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       barParts,
       titleMaxLength: () => api.settings().titleMaxLength,
     });
-    // The page part lives for the page load, so the subscription is never
-    // disposed.
     let titleMaxLength = api.settings().titleMaxLength;
     api.onSettingsChanged((settings) => {
       if (settings.titleMaxLength !== titleMaxLength) {
@@ -436,7 +428,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       }
       for (const [paneId, sessionId] of loads) {
         view.panes.load(paneId, sessionId);
-        log('sessions', `pane restored ${labelOf(sessionId)}`);
+        log(`pane restored ${labelOf(sessionId)}`);
       }
     };
 
@@ -450,7 +442,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       for (const paneId of paneIds) {
         view.panes.close(paneId);
       }
-      log('sessions', 'waiting panes closed');
+      log('waiting panes closed');
     };
 
     // Applies the selection rules (`selectionAction`) to the state `apply`
@@ -479,7 +471,6 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         );
         if (target.kind === 'loadEndingWait') {
           log(
-            'sessions',
             `wait ended: ${labelOf(action.sessionId)} loaded into a waiting pane`,
           );
         }
@@ -545,8 +536,10 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
     // before that state arrives and the round never toasts.
     api.channel.on('activated', () => mode.show());
 
-    // A state read that a stateChanged overtook is stale. A failed read is
-    // logged and leaves the view blank, never claiming there are no sessions.
+    // A state read that a stateChanged overtook is stale, as is one that lands
+    // after the stop. A failed read is logged and leaves the view blank, never
+    // claiming there are no sessions.
+    let isStopped = false;
     let hasStateChanged = false;
     api.channel.on('stateChanged', (next) => {
       hasStateChanged = true;
@@ -555,11 +548,11 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
     api.channel
       .invoke('state')
       .then((first) => {
-        if (!hasStateChanged) {
+        if (!hasStateChanged && !isStopped) {
           apply(first);
         }
       })
-      .catch((error) => log('sessions', `state not read: ${errorText(error)}`));
+      .catch((error) => log(`state not read: ${errorText(error)}`));
 
     const showMode = () => {
       if (!mode.isShown()) {
@@ -602,11 +595,11 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       );
       const tab = tabs.find((candidate) => candidate.id === tabId);
       if (tab === undefined) {
-        log('sessions', `no other tab in ${labelOf(sessionId)}`);
+        log(`no other tab in ${labelOf(sessionId)}`);
         return;
       }
       view.tabs.select(sessionId, tab.id);
-      log('sessions', `showed ${tab.title} tab in ${labelOf(sessionId)}`);
+      log(`showed ${tab.title} tab in ${labelOf(sessionId)}`);
     };
 
     const renameDialog = createRenameDialog({
@@ -631,9 +624,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       },
     });
 
-    const openPreview = previewToggle(mode, view, (message) =>
-      log('sessions', message),
-    );
+    const openPreview = previewToggle(mode, view, log);
 
     const picker = createListPicker({
       pushScope: () => api.keys.pushScope('picker'),
@@ -644,13 +635,13 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
     // Acts on the focused pane's session, as `closeSession` does.
     const renameSession = () => {
       if (!mode.isShown()) {
-        log('sessions', 'rename ignored: Sessions mode is hidden');
+        log('rename ignored: Sessions mode is hidden');
         return;
       }
       const sessionId = view.panes.focusedSessionId();
       const row = sessionId === null ? undefined : rowOf(sessionId);
       if (row === undefined) {
-        log('sessions', 'no session to rename');
+        log('no session to rename');
         return;
       }
       renameDialog.open(row);
@@ -682,7 +673,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
             return;
           }
           view.panes.load(paneId, choice.row.sessionId);
-          log('sessions', `pane loaded ${choice.row.label}`);
+          log(`pane loaded ${choice.row.label}`);
           exports.activate(choice.row.sessionId);
         },
         cancelled() {
@@ -690,7 +681,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
             isPaneLive() && view.panes.sessions().get(paneId) === null;
           if (isStillEmpty) {
             view.panes.close(paneId);
-            log('sessions', 'split cancelled');
+            log('split cancelled');
             checkVisible(true);
           }
         },
@@ -701,7 +692,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
     // it is hidden.
     const paneKey = (run: () => void) => () => {
       if (!mode.isShown()) {
-        log('sessions', 'pane keys ignored: Sessions mode is hidden');
+        log('pane keys ignored: Sessions mode is hidden');
         return;
       }
       run();
@@ -712,7 +703,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
     // close could leave the picker over a closed pane.
     const unlessPicking = (run: () => void) => () => {
       if (picker.isOpen()) {
-        log('sessions', 'pane keys ignored: the split picker is open');
+        log('pane keys ignored: the split picker is open');
         return;
       }
       run();
@@ -722,30 +713,30 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
     const split = (axis: SplitAxis) => {
       const paneId = view.panes.split(axis);
       if (paneId === null) {
-        log('sessions', 'pane too small to split');
+        log('pane too small to split');
         return;
       }
-      log('sessions', `pane split ${axis === 'column' ? 'down' : 'right'}`);
+      log(`pane split ${axis === 'column' ? 'down' : 'right'}`);
       closeWaiting();
       openSplitPicker(paneId);
     };
 
     const closePane = () => {
       if (!view.panes.close(view.panes.focusedPaneId())) {
-        log('sessions', 'last pane stays');
+        log('last pane stays');
         return;
       }
-      log('sessions', 'pane closed');
+      log('pane closed');
       closeWaiting();
       checkVisible(true);
     };
 
     const swapPane = (direction: PaneDirection) => {
       if (!view.panes.swap(direction)) {
-        log('sessions', `no pane ${direction}`);
+        log(`no pane ${direction}`);
         return;
       }
-      log('sessions', 'panes swapped');
+      log('panes swapped');
       closeWaiting();
       checkVisible(true);
     };
@@ -762,7 +753,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         // never on a row the user cannot see.
         closeSession: () => {
           if (!mode.isShown()) {
-            log('sessions', 'close ignored: Sessions mode is hidden');
+            log('close ignored: Sessions mode is hidden');
             return;
           }
           const sessionId = view.panes.focusedSessionId();
@@ -786,6 +777,10 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         renameCancel: () => renameDialog.cancel(),
       },
       exports: (consumer) => sessionsPageView(exports, consumer),
+      dispose() {
+        isStopped = true;
+        view.dispose();
+      },
     };
   },
 };
