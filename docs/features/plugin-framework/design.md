@@ -8,6 +8,7 @@
 - **Sessions (plan A2)** — tabs as agent sessions, the relay, tab lifecycle.
 - **Keymap (plan A2)** — the user's new keys, from the keymap rounds.
 - **Keys plugin (plan B)** — the `keys` plugin, all page but a main part that registers its layouts: which-key, help on `Space ?`, the scope stack, titled scopes, the key hints that replaced the bar.
+- **Foundation sweeps (Wave 1)** — stopping a plugin, who undoes each registration, typed dependency keys, scoped logs, tool contributions in live sessions, derived layer rules.
 
 The decisions the user settled in the 2026-10-18 interview rounds, kept so plans A2 and B are written from them once
 the plan before has landed. Each plan reads this file and the code as it then stands; a decision here stands unless
@@ -126,3 +127,31 @@ keys into an element a view names, and the plugin's `showHints` setting (`"keys"
 - The bottom bar split first: forms and the primer kept the mode and save state (the shared `.ui-status-line`; round
   progress stayed on the session tab) and the keys plugin's own row listed the keys that don't start with the
   leader. Key hints in place removed the key list and the mode item; the save state moved to each form's rail header.
+
+## Foundation sweeps (Wave 1)
+
+Settled in the 2026-11-03 interview for Wave 1 of `docs/features/intent-alignment/master-plan.md`. Plan folder
+`plan-foundation-sweeps/`.
+
+- **One owner for each registration.** The plugin API records every registration it hands out, and the host
+  disposes them when the plugin stops. A plugin's own `dispose` covers only what the API cannot see. Making each
+  plugin collect its own handles was rejected: the maps found dozens of handles dropped, and any new plugin could drop
+  another.
+- **Per-dependent exports.** A provider's `exports(consumer)` files each registration a dependent makes under that
+  dependent, so the host undoes `keys.anchor`, `sessions.addRowPart` and the rest when the dependent stops. Before
+  this, most callers threw those handles away.
+- **Per-plugin service views.** Timers, file watches, running processes, editors and alert counts are held per
+  plugin, so a stop clears them with no plugin code. `ProcessRunner.run` takes an abort signal for this.
+- **Late registrations.** A registration made after its plugin stopped (a `then` that resolves late) is disposed at
+  once rather than leaked.
+- **Stop now, reload later.** `stop(id)` lands in Wave 1, and quit uses it for main parts in reverse start order,
+  so disposal has a real caller before Wave 4's reload. Reload and the live enable switch stay in Wave 4.
+- **Typed keys per process.** `dependsOn` splits into `main` and `page` lists, so an edge only the page uses (workflow
+  on docs) no longer orders or blocks the main part. A list still names a plugin whose events the process only
+  hears, since start order is how a listener exists before the first emit.
+- **Scoped logs on both sides.** Most hand-typed log sources were on main, so both processes get the scoped log.
+  Sessions' relay lines log as `[sessions]`. A `child` sub-source was rejected, since only sessions had one.
+- **Tool lists change live.** A contribution and its disposal reach every live session with
+  `notifications/tools/list_changed`, which Claude Code honours (code.claude.com/docs/en/mcp, Dynamic tool updates).
+  The relay in wigley-ai-marketplace advertises `listChanged` when it answers `initialize` for an absent app, since its
+  replayed handshake drops the app's own answer.

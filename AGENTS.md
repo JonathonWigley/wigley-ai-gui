@@ -5,7 +5,7 @@
 - **Intent** — what every change is judged by: everything a plugin, everything drawn through a layout, everything hot reloads, macOS and Windows now,
   any agent harness or model later, one user and no backwards compatibility.
 - **Architecture** — build every change for extensibility with `wigley:codebase-design`; the core and its plugins, the
-  layers, the relay and agent sessions, and where a new plugin, shell area, mode, session tab, key, event, setting,
+  layers, the relay and agent sessions, and where a new plugin, registration, shell area, mode, session tab, key, event, setting,
   user config file, theme, plugin data, layout, agent harness, session control, agent form type, MCP tool or
   third-party tool goes, and the layer check.
 - **Review** — every review recommendation taken without a form round.
@@ -283,22 +283,35 @@ round; primer: an open primer), since main, not the page, decides.
   and the process it runs in), key scopes (each with the title help shows over its keys), settings
   and the plugins it depends on (a built-in plugin's default keys sit in `src/plugins/keymap.ts`); `main/`
   and `page/` each export a part, the manifest with a start function that receives that process's plugin API and
-  returns the handlers for the manifest's commands that run in that process, plus the `exports` its dependents read
-  (and, in main, a `dispose`). The compiler checks every command that runs in a process has a handler there and
+  returns the handlers for the manifest's commands that run in that process, plus `exports` and `dispose`.
+  `exports(consumer)` gives each dependent its own view of the plugin's exports, and every registration a
+  dependent makes through it is filed with `consumer.track`, so the host undoes it when that dependent stops.
+  `dispose` undoes only what the plugin API cannot see (A registration, below). The compiler checks every command that runs in a process has a handler there and
   every key names a declared command running in the key's process (page and editor keys a page command; app,
   global and intercept keys a main one). A built-in plugin's manifest joins `src/plugins/manifests.ts`, which main
   builds the served keymap, labels and settings from, and its parts join `src/plugins/main.ts` and
   `src/plugins/page.ts`; a part whose manifest is missing from the list throws at startup. A main part starts once;
-  a page part starts on every page load.
+  a page part starts on every page load. The plugin host's `stop(id)` stops the plugin's dependents first, in
+  reverse start order, then awaits the part's `dispose` and disposes its registrations. Quit stops every main
+  part this way.
+- **A registration** — a listener, a handler, a contribution, a scope, a mode, a timer, a watch, a command —
+  returns a `Disposable` (`src/contracts/disposable.ts`), so a plugin can stop and start again. The plugin API
+  records each registration a plugin makes through `api`, its per-plugin service views included (timers,
+  `files.watch`, `processes.run`, editors, alert counts), and the host disposes them when the plugin stops. A
+  registration made after the stop is disposed at once. A plugin's own `dispose` undoes only what `api` cannot see:
+  DOM listeners on `window` or `document`, observers, animation frames, and promises it still waits on.
 - **A disabled plugin** is one named in the core setting `plugins.disabled`: the plugin host starts none of its parts.
   A page part follows the list on each page load, a main part on each app start. Naming a plugin that a started
   plugin depends on is a config problem, so the last good config stays. A view that can be switched off is its own
   plugin over a data plugin that stays on (`docs/features/chat-bar/design.md` § Optional plugins).
 - **A plugin talks** to its other process over its own channel (`api.channel`), typed by its `contract.ts`, and to
-  another plugin through the exported API of a plugin its manifest depends on, or through events. A plugin imports
+  another plugin through the exported API of a plugin its manifest depends on, or through events. The manifest's
+  `dependsOn` has a `main` and a `page` list, each naming the plugins whose exports that process reads or whose
+  events it hears there. A plugin reads a dependency with `api.dependency(key)`, where the key is the typed
+  `DependencyKey` the provider's `contract.ts` exports for that process (`sessionsMainKey`, `keysPageKey`). The
+  compiler rejects a key for the other process or for a plugin missing from that process's list. A plugin imports
   only `src/contracts`, `src/shared`, its own folder, and the `contract.ts` of a plugin its manifest depends on,
-  which types that plugin's exports and events. A dependency with no part in a process starts nowhere
-  there, and its exports read as `undefined` in that process.
+  which types that plugin's exports, keys and events.
 - **An event** is published with `api.events.emit` under the publishing plugin's id (`activeChanged` in plugin
   `sessions` is `sessions.activeChanged`) and heard with `api.events.on` by any plugin; its payload type lives in
   the publisher's `contract.ts`. Each process has its own bus, and nothing crosses processes on it: a plugin's own
@@ -542,9 +555,15 @@ round; primer: an open primer), since main, not the page, decides.
   doc in Docs mode with `openDoc`.
 - **An MCP tool** is contributed to the `sessions` plugin by the plugin that runs it, with a handler per session;
   sessions writes every contributed tool into `tools.json` and routes each call by tool name, so its MCP adapter
-  names no tool.
+  names no tool. `contributeTools` returns a `Disposable`, and a contribution or its disposal reaches every live
+  session: sessions starts or ends the contribution's tool session there and sends MCP
+  `notifications/tools/list_changed`. Stopping sessions leaves `endpoint.json` and `tools.json` in place, since the
+  relay answers `tools/list` from `tools.json` while the app is away.
 - **An ambient service** — the clock, timers, ids, the home folder, files (with watching), processes, git (main only), image re-encoding (`images`, main only), opening a link in the default browser, how the app was started (`runMode`: live, self-test or drive) — reaches a plugin
-  through `api.services`, filled in by the composition root, so a test hands the plugin a fake. The page's home folder
+  through `api.services`, filled in by the composition root, so a test hands the plugin a fake. Each plugin gets
+  its own view of the services that hold something open, so stopping the plugin clears its pending timers, closes its
+  watches, aborts its running processes, destroys its editors and zeroes its alert counts. `services.log` is
+  already scoped to the plugin's id: a plugin calls `log(message)`, and the line shows as `[<id>] message`. The page's home folder
   is the real path of main's, served in the config, so every view shows a folder under it as `~` through
   `services.homeDir`.
 - **A path** is handled through `services.paths` on both sides, the `Paths` contract (`src/contracts/paths.ts`)
@@ -654,8 +673,13 @@ round; primer: an open primer), since main, not the page, decides.
     `kit.contributedParts`, else at the card's end) and `addReviewColumn` (one `span.review-cell` per review row). The
     page emits `roundShown`, `answerChanged`, `roundFinished` and `viewChanged` (`FormsPageEvents`, from
     `page/forms-events.ts`), each logged as `[forms] event <name> …`.
-- `npm run lint` runs `scripts/check-layers.mts`, which fails on an import crossing a boundary its `LAYERS` table does
-  not allow. A new layer, adapter or plugin folder gets a `LAYERS` entry, and the composition root's entry lists it.
+- `npm run lint` runs `scripts/check-layers.mts`, which fails on an import crossing a boundary its rules do not
+  allow. A plugin's rules are derived from the folder convention and its manifest's per-process `dependsOn`: its
+  `main/` may import the `contract.ts` of each plugin in `dependsOn.main`, and its `page/` those in
+  `dependsOn.page`. A plugin needing more, such as a `node:` package or an extra sublayer, gets an entry in the
+  script's `PLUGIN_EXTRAS` table. The script also fails when `src/plugins/main.ts`, `page.ts` or `manifests.ts`
+  misses a plugin folder's part or manifest, or lists one twice. A new core layer or adapter gets a `LAYERS` entry,
+  and the composition root's entry lists it.
   Every plugin's `page/` layer and `src/shared/page` may import `src/shared/page/ui`.
 - It also runs `scripts/check-styles.mts`, which fails on a raw colour, length, duration or font stack in CSS or an
   inline style under `src/`, and on `backdrop-filter` outside `src/shared/page/ui/materials.css`. It judges every file under
