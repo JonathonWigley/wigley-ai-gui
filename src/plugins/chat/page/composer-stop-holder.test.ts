@@ -253,4 +253,30 @@ describe('composer stop holder', () => {
 
     expect(run.calls.slice(callsBefore)).toEqual(after);
   });
+
+  it.each([
+    {
+      case: 'holding, visible',
+      holds: true,
+      isVisible: true,
+      after: ['leave strip', 'changed false', 'toEntries'],
+    },
+    {
+      case: 'holding, not visible',
+      holds: true,
+      isVisible: false,
+      after: ['leave strip', 'changed false'],
+    },
+    { case: 'not holding', holds: false, isVisible: true, after: [] },
+  ])('composerRedrawn_$case', ({ holds, isVisible, after }) => {
+    const run = setUp();
+    const strip = part('strip', holds ? 'takes' : 'declines', run.calls);
+    run.holder.offer([strip]);
+    const callsBefore = run.calls.length;
+
+    run.holder.composerRedrawn(isVisible);
+
+    expect(run.calls.slice(callsBefore)).toEqual(after);
+    expect(run.holder.holding()).toBeNull();
+  });
 });

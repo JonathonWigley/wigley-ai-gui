@@ -211,12 +211,12 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     toastedKinds.clear();
     for (const tab of tabs.values()) {
       tab.entries.rebuild(tab.state.entries);
-      drawComposer(tab, deps);
+      drawComposer(tab);
     }
   });
   const drawEveryComposer = () => {
     for (const tab of tabs.values()) {
-      drawComposer(tab, deps);
+      drawComposer(tab);
     }
   };
   deps.composerParts.onChanged(drawEveryComposer);
@@ -258,7 +258,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
         }
         lastShownSessionId = shownTab.sessionId;
         log('chat', `Chat tab shown in ${shownTab.name}`);
-        drawStatusLine(shownTab, deps);
+        drawStatusLine(shownTab);
         shownTab.entries.scrollToFocus();
         focusIfRevealed(shownTab);
       },
@@ -291,7 +291,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
   channel.on('controls', ({ sessionId, controls }) => {
     const tab = heldFor('controls', sessionId);
     if (tab !== undefined) {
-      setControls(tab, controls, deps);
+      setControls(tab, controls, log);
     }
   });
   channel.on('activity', ({ sessionId, activity }) => {
@@ -312,7 +312,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       }
       log('chat', `${tab.name} is ${activity}`);
       drawActivity(tab, deps);
-      drawStatusLine(tab, deps);
+      drawStatusLine(tab);
     }
   });
   channel.on('branch', ({ sessionId, repo, branch }) => {
@@ -321,7 +321,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       return;
     }
     tab.state = { ...tab.state, repo, branch };
-    drawStatusLine(tab, deps);
+    drawStatusLine(tab);
     log(
       'chat',
       branch === null
@@ -356,7 +356,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     if (tab !== undefined) {
       tab.state = { ...tab.state, running: true };
       tab.entries.setWorking(isWorking(tab.state));
-      drawStatusLine(tab, deps);
+      drawStatusLine(tab);
       log('chat', `${tab.name} running`);
     }
   });
@@ -369,7 +369,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     tab.unseen = unseenAfterRest(tab.unseen, error, wasActive);
     tab.state = { ...tab.state, running: false };
     tab.entries.setWorking(isWorking(tab.state));
-    drawStatusLine(tab, deps);
+    drawStatusLine(tab);
     drawActivity(tab, deps);
     if (tab.handle?.isVisible() === true) {
       deps.visibleSessionRested();
@@ -461,13 +461,8 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
 // height observer follows the new composer. The parts are built again, so a
 // part holding the entry cursor leaves first, and a visible tab's cursor goes
 // back on the entries.
-function drawComposer(tab: HeldTab, deps: Pick<ChatViewDeps, 'setScope'>) {
-  if (tab.stop.holding() !== null) {
-    tab.stop.leave();
-    if (tab.handle?.isVisible() === true) {
-      cursorToEntries(tab, deps);
-    }
-  }
+function drawComposer(tab: HeldTab) {
+  tab.stop.composerRedrawn(tab.handle?.isVisible() === true);
   const hadFocus = tab.isBoxFocused;
   const composer = tab.composer.drawComposer(tab.root, composerInputOf(tab));
   tab.composerSize.disconnect();
@@ -478,9 +473,9 @@ function drawComposer(tab: HeldTab, deps: Pick<ChatViewDeps, 'setScope'>) {
 }
 
 // Draws the status line, or the whole composer again when its update threw.
-function drawStatusLine(tab: HeldTab, deps: Pick<ChatViewDeps, 'setScope'>) {
+function drawStatusLine(tab: HeldTab) {
   if (!tab.composer.drawStatusLine(composerInputOf(tab))) {
-    drawComposer(tab, deps);
+    drawComposer(tab);
   }
 }
 
@@ -622,7 +617,7 @@ function createTab(
   entries.rebuild(state.entries);
   entries.setQueued(state.queued);
   entries.setWorking(isWorking(state));
-  drawComposer(tab, deps);
+  drawComposer(tab);
   tab.handle = deps.sessions.addTab(state.sessionId, {
     id: 'chat',
     title: 'Chat',
@@ -640,12 +635,12 @@ function createTab(
         tab.stop.boxFocused();
         tab.isBoxFocused = true;
         tab.root.classList.add('is-box-focused');
-        drawStatusLine(tab, deps);
+        drawStatusLine(tab);
       },
       blurred: () => {
         tab.isBoxFocused = false;
         tab.root.classList.remove('is-box-focused');
-        drawStatusLine(tab, deps);
+        drawStatusLine(tab);
       },
       // The cursor's shape shows the vim mode; the status line names none.
       modeChanged: () => undefined,
@@ -723,19 +718,12 @@ function putEntry(tab: HeldTab, entry: ChatEntry, log: Log) {
   }
 }
 
-function setControls(
-  tab: HeldTab,
-  controls: SessionControl[],
-  deps: Pick<ChatViewDeps, 'setScope' | 'log'>,
-) {
+function setControls(tab: HeldTab, controls: SessionControl[], log: Log) {
   const changed = changedControls(tab.state.controls, controls);
   tab.state = { ...tab.state, controls };
-  drawStatusLine(tab, deps);
+  drawStatusLine(tab);
   for (const control of changed) {
-    deps.log(
-      'chat',
-      `${control.label} is ${valueLabel(control)} in ${tab.name}`,
-    );
+    log('chat', `${control.label} is ${valueLabel(control)} in ${tab.name}`);
   }
 }
 

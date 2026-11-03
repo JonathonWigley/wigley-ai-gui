@@ -10,17 +10,19 @@ import type {
 // `offer` asks each part with a stop, in order, until one takes the cursor,
 // and returns its id; null when none does. A part whose `enter` throws is
 // logged, its `leave` called and chat's scope set again, and the next asked.
-// An offer while a part holds leaves that part first. `leave` calls the holding part's `leave` once and holds nothing.
-// `holding` is the holding part's id, null while none holds. `boxFocused`
-// leaves the holding part and sets chat's scope again; `scopeChanged` leaves it
-// when the tab is no longer the visible tab. Each does nothing while none
-// holds.
+// An offer while a part holds leaves that part first. `leave` calls the
+// holding part's `leave` once and holds nothing. `holding` is the holding
+// part's id, null while none holds. `boxFocused` leaves the holding part and
+// sets chat's scope again; `scopeChanged` leaves it when the tab is no longer
+// the visible tab; `composerRedrawn` leaves it and, on the visible tab, hands
+// the cursor back to the entries. Each does nothing while none holds.
 export interface ComposerStopHolder {
   offer(parts: readonly ChatComposerPart[]): string | null;
   leave(): void;
   holding(): string | null;
   boxFocused(): void;
   scopeChanged(isVisible: boolean): void;
+  composerRedrawn(isVisible: boolean): void;
 }
 
 // `name` is the tab's name in log lines. `toEntries` and `toBox` hand the
@@ -140,6 +142,15 @@ export function createComposerStopHolder(
     scopeChanged(isVisible) {
       if (!isVisible) {
         leave();
+      }
+    },
+    composerRedrawn(isVisible) {
+      if (held === null) {
+        return;
+      }
+      leave();
+      if (isVisible) {
+        deps.toEntries();
       }
     },
   };

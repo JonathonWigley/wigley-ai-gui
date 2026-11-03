@@ -35,7 +35,7 @@ describe('readChatLayout', () => {
     { layout: { compose: builder }, error: 'compose is not a layout part' },
     {
       layout: { composerBar: builder },
-      error: 'composerBar is not a layout part',
+      error: 'composerBar is not a layout part; it became the statusLine part',
     },
     { layout: { activity: 'line' }, error: 'activity is not a function' },
     { layout: { working: 'block' }, error: 'working is not a function' },
