@@ -51,7 +51,7 @@ import {
   moveFocus,
   START_FOCUS,
 } from './entry-focus';
-import { workingInput } from './working-turn';
+import { isTurnEmpty, workingInput } from './working-turn';
 
 // `layouts` are the ones every session's entries, activity lines, working
 // block and pending rows are built with; `toastedKinds` the kinds whose failed
@@ -87,7 +87,8 @@ export interface TranscriptScroll extends ContentScroll {
 // of steps also drawn as one activity line slot right before its first step's
 // slot; a closed run's step slots are hidden. While the session works on its
 // turn, one working block slot follows the last entry, drawn by the layout's
-// `working` part; it goes when the turn ends. The session's queued messages
+// `working` part; it goes when the turn ends, and while the turn holds no
+// entries it keeps what it last showed. The session's queued messages
 // follow it, else the last entry, as pending rows, oldest first. The cursor
 // stops on each entry and activity line, on each step of an open run, then on
 // each pending row, never on the working block; the focused stop's slot is
@@ -329,10 +330,13 @@ export function createEntryList(deps: EntryListDeps): EntryList {
 
   // While the session works on its turn, draws the working block before the
   // first pending row, or updates it when what it shows changed; after, removes
-  // it.
+  // it. A held block is left as drawn while the turn holds no entries.
   const putWorking = () => {
     if (!working) {
       removeWorking();
+      return;
+    }
+    if (workingSlot !== null && isTurnEmpty(entries)) {
       return;
     }
     const input = workingInput(entries, deps.clock.now());

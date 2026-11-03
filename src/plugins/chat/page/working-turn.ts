@@ -4,7 +4,7 @@ import { isStep } from './activity-runs';
 
 // The running turn's block input. The turn starts at the later of the last
 // `user` entry and the first entry after the last `result` entry; with
-// neither, it is every entry.
+// neither, it is every entry. A turn with no entries starts at `now`.
 export function workingInput(
   entries: readonly ChatEntry[],
   now: number,
@@ -16,6 +16,12 @@ export function workingInput(
     startedAt: turn.length > 0 ? turn[0].at : now,
     now,
   };
+}
+
+// Whether the running turn holds no entries: the last entry is a `result`,
+// or there are none.
+export function isTurnEmpty(entries: readonly ChatEntry[]): boolean {
+  return turnStart(entries) >= entries.length;
 }
 
 function turnStart(entries: readonly ChatEntry[]): number {

@@ -792,6 +792,15 @@ describe('working block', () => {
     ...tool(id),
     result: { text: 'ok', isError: false },
   });
+  const result = (id: string): ChatEntry => ({
+    kind: 'result',
+    id,
+    at: 2000,
+    stopReason: 'end_turn',
+    costUsd: null,
+    durationMs: null,
+    raw: [],
+  });
 
   it('working_SetWorkingThenIdle_SlotAfterEntriesThenGone', () => {
     const { list, put } = setUpList(defaultShown());
@@ -871,6 +880,42 @@ describe('working block', () => {
       ],
     },
     {
+      name: 'a message queued after the turn finished, before idle',
+      before: ({ put, clock }) => {
+        put(toolDone('t1'));
+        clock.time = 3000;
+        put(result('r1'));
+        clock.time = 5000;
+      },
+      act: ({ list }) => list.setQueued([queued('q1')]),
+      calls: [],
+      slots: [
+        'chat-entry-slot',
+        'chat-entry-slot chat-activity-slot',
+        'chat-entry-slot chat-step-slot hidden',
+        'chat-entry-slot',
+        'chat-entry-slot chat-working-slot',
+        'chat-entry-slot chat-queued-slot is-cursor',
+      ],
+    },
+    {
+      name: 'a message queued in a turn begun with no entries',
+      before: ({ list, put, clock }) => {
+        list.setWorking(false);
+        put(result('r1'));
+        list.setWorking(true);
+        clock.time = 5000;
+      },
+      act: ({ list }) => list.setQueued([queued('q1')]),
+      calls: [],
+      slots: [
+        'chat-entry-slot',
+        'chat-entry-slot',
+        'chat-entry-slot chat-working-slot',
+        'chat-entry-slot chat-queued-slot is-cursor',
+      ],
+    },
+    {
       name: 'a rebuild with the same entries',
       before: ({ put }) => put(tool('t1')),
       act: ({ list, entries }) => list.rebuild(entries()),
@@ -908,22 +953,50 @@ describe('working block', () => {
     ]);
   });
 
-  it('working_Tick_UpdatesTheBlockWithNow', () => {
+  it.each<{
+    name: string;
+    arrange: (setUp: ListSetUp) => void;
+    startedAt: number;
+  }>([
+    {
+      name: 'a turn with entries',
+      arrange: ({ list, put }) => {
+        put(user('u1'));
+        list.setWorking(true);
+      },
+      startedAt: 1000,
+    },
+    {
+      name: 'a turn with no entries, the list changed since its draw',
+      arrange: ({ list, put, clock }) => {
+        put(user('u1'));
+        put(result('r1'));
+        clock.time = 1500;
+        list.setWorking(true);
+        clock.time = 3000;
+        list.setQueued([queued('q1')]);
+      },
+      startedAt: 1500,
+    },
+  ])('working_Tick_UpdatesTheBlockWithNow $name', (row) => {
     const calls: WorkingCall[] = [];
     const others: string[] = [];
-    const { list, put, fireAll, clock } = setUpList(
-      recordingWorking(calls, others),
-    );
-    put(user('u1'));
-    list.setWorking(true);
+    const setUp = setUpList(recordingWorking(calls, others));
+    row.arrange(setUp);
     calls.length = 0;
     others.length = 0;
-    clock.time = 7000;
+    setUp.clock.time = 7000;
 
-    fireAll();
+    setUp.fireAll();
 
     expect(calls).toEqual([
-      { how: 'update', input: expect.objectContaining({ now: 7000 }) },
+      {
+        how: 'update',
+        input: expect.objectContaining({
+          startedAt: row.startedAt,
+          now: 7000,
+        }),
+      },
     ]);
     expect(others).toEqual([]);
   });

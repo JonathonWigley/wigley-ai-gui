@@ -206,8 +206,10 @@ interview on 2026-10-23; this file is the record of both.
   2026-11-02.
   - **Header**: the turn's time, the state word, and `…`: `1:05 Working…`. The time counts from the turn's first
     entry to now: the later of the last user entry (a queued message from when it was sent) and the entry after the
-    last result, so a turn Claude starts on its own after a background task counts from its own start. It ticks
-    once a second, as `m:ss` (`h:mm:ss` past an hour).
+    last result, so a turn Claude starts on its own after a background task counts from its own start. While the
+    turn holds no entries, the block keeps what it showed: a block drawn then counts from when it was drawn, and
+    one held when the result lands keeps the finished turn until the session goes idle. It ticks once a second, as
+    `m:ss` (`h:mm:ss` past an hour).
   - **State**: one of four, the first that holds: **Waiting** while a permission entry in the turn is unanswered,
     **Working** while a tool in the turn has no result, **Writing** while the last entry is streaming assistant
     text, else **Thinking**. A pure module picks it, so a layout only words it.
