@@ -1,6 +1,6 @@
 # 03 — Entry list working slot
 
-Status: not started
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -62,3 +62,5 @@ Done when: `npm run typecheck`, `npm test` and `npm run lint` pass
 Commit:    one commit for the group
 
 ## Proof
+
+Commit f12a2964 · proof: diff read: slot, place, tick, rebuild and dispose per spec; worker ran src/plugins/chat/page 265 pass and lint; typecheck errors only in 02's in-progress layout.test.ts, full compile re-run after 02 · concerns: none in its own files

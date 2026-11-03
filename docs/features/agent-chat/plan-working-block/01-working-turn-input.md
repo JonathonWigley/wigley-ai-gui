@@ -1,6 +1,6 @@
 # 01 — Working turn input
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -73,3 +73,5 @@ Done when: `npm run typecheck` passes; `npm test` passes `working-turn.test.ts`,
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 955b4304 · proof: diff read: every Produces present; typecheck clean; worker ran the three tests 71/71 and lint · concerns: AGENTS.md's chat layout part list omits working (outside Files); ActivityInput open/live comments run ahead of layout.js until 02

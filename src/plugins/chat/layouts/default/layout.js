@@ -1,13 +1,31 @@
 // @ts-check
 
-// The built-in chat look: the entries, the activity lines, the pending
-// messages' rows, the composer, the list rows, the dialogs' bodies and the
-// image viewer. Every collapsible row's body is built on its first open and
-// kept, so an update refills it in place whether it is open or closed.
+// The built-in chat look: the entries, the activity lines (each one summary
+// line, live or finished), the working block, the pending messages' rows, the
+// composer, the list rows, the dialogs' bodies and the image viewer. Every
+// collapsible row's body is built on its first open and kept, so an update
+// refills it in place whether it is open or closed.
 
-// The steps a live, closed activity line lists under its header; a user
-// layout sets its own shortlist's length.
-const LIVE_STEP_LINES = 5;
+// The tool calls the working block's box lists; a user layout sets its own
+// box's length.
+const WORKING_ACTION_LINES = 5;
+
+// The input field holding the file a tool acts on, by tool name.
+/** @type {Record<string, string | undefined>} */
+const TARGET_PATH_FIELDS = {
+  Read: 'file_path',
+  Edit: 'file_path',
+  Write: 'file_path',
+  MultiEdit: 'file_path',
+  NotebookEdit: 'notebook_path',
+};
+
+const WORKING_STATE_WORDS = {
+  thinking: 'Thinking…',
+  writing: 'Writing…',
+  working: 'Working…',
+  waiting: 'Waiting…',
+};
 
 /**
  * @param {string} tag
@@ -61,7 +79,7 @@ function toolStatus(input) {
 function resultLine(input) {
   const parts = [input.stopReason];
   if (input.costUsd !== null) {
-    parts.push(`$${input.costUsd.toFixed(4)}`);
+    parts.push(`$${input.costUsd.toFixed(2)}`);
   }
   if (input.durationMs !== null) {
     parts.push(`${(input.durationMs / 1000).toFixed(1)} s`);
@@ -101,14 +119,6 @@ function root(parent, className, text) {
 }
 
 /** @param {import('../layout').StepInput} step */
-function stepAction(step) {
-  if (step.kind === 'tool') {
-    return toolLine(step);
-  }
-  return step.kind === 'thinking' ? 'Thinking' : 'Raw event';
-}
-
-/** @param {import('../layout').StepInput} step */
 function isFailedStep(step) {
   return step.kind === 'tool' && step.result !== null && step.result.isError;
 }
@@ -119,9 +129,12 @@ function stepCount(count) {
 }
 
 // Each tool's name with its count, most used first, ties in order of first
-// use; a tool used once is named alone.
-/** @param {import('../layout').StepInput[]} steps */
-function toolTally(steps) {
+// use.
+/**
+ * @param {import('../layout').StepInput[]} steps
+ * @returns {[string, number][]}
+ */
+function toolCounts(steps) {
   /** @type {Map<string, number>} */
   const counts = new Map();
   for (const step of steps) {
@@ -129,13 +142,11 @@ function toolTally(steps) {
       counts.set(step.name, (counts.get(step.name) ?? 0) + 1);
     }
   }
-  return [...counts]
-    .sort((left, right) => right[1] - left[1])
-    .map(([name, count]) => (count === 1 ? name : `${name} ${count}`));
+  return [...counts].sort((left, right) => right[1] - left[1]);
 }
 
-// The finished line: the step count and the tools, then the failed count,
-// then the time.
+// The summary line: the step count and the tools, a tool used once named
+// alone, then the failed count, then the time.
 /**
  * @param {import('../layout').ActivityInput} input
  * @param {HTMLElement} time
@@ -146,7 +157,12 @@ function activitySummary(input, time) {
     el(
       'span',
       'chat-activity-steps',
-      [stepCount(input.steps.length), ...toolTally(input.steps)].join(' · '),
+      [
+        stepCount(input.steps.length),
+        ...toolCounts(input.steps).map(([name, count]) =>
+          count === 1 ? name : `${name} ${count}`,
+        ),
+      ].join(' · '),
     ),
   );
   const failed = input.steps.filter(isFailedStep).length;
@@ -157,22 +173,8 @@ function activitySummary(input, time) {
   return summary;
 }
 
-// The latest steps, oldest first, the last one current.
-/** @param {import('../layout').StepInput[]} steps */
-function activityShortlist(steps) {
-  const shortlist = el('div', 'chat-activity-shortlist');
-  const shown = steps.slice(-LIVE_STEP_LINES);
-  shown.forEach((step, index) => {
-    const line = el('div', 'chat-activity-step', stepAction(step));
-    line.classList.toggle('is-current', index === shown.length - 1);
-    line.classList.toggle('is-failed', isFailedStep(step));
-    shortlist.append(line);
-  });
-  return shortlist;
-}
-
-// A live run: its header, over the shortlist while closed. A finished run:
-// the summary line, open or closed.
+// The summary line, live or finished, open or closed; a live run's time
+// runs to now.
 /**
  * @param {HTMLElement} line
  * @param {import('../layout').ActivityInput} input
@@ -186,21 +188,93 @@ function fillActivity(line, input, kit) {
     'chat-activity-time',
     `· ${kit.duration((input.endedAt ?? input.now) - input.startedAt)}`,
   );
-  if (!input.live) {
-    line.append(activitySummary(input, time));
+  line.append(activitySummary(input, time));
+}
+
+// `m:ss` under an hour, `h:mm:ss` from one; a negative span is 0:00.
+/** @param {number} ms */
+function turnTime(ms) {
+  const total = Math.floor(Math.max(0, ms) / 1000);
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = String(total % 60).padStart(2, '0');
+  if (hours === 0) {
+    return `${minutes}:${seconds}`;
+  }
+  return `${hours}:${String(minutes).padStart(2, '0')}:${seconds}`;
+}
+
+// The file name in the tool's path field, else its summary.
+/** @param {import('../layout').ToolInput} step */
+function actionTarget(step) {
+  const field = TARGET_PATH_FIELDS[step.name];
+  const fields =
+    typeof step.input === 'object' && step.input !== null
+      ? /** @type {Record<string, unknown>} */ (step.input)
+      : {};
+  const path = field === undefined ? undefined : fields[field];
+  if (typeof path !== 'string') {
+    return step.summary;
+  }
+  return path.slice(
+    Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\')) + 1,
+  );
+}
+
+/** @param {import('../layout').ToolInput} step */
+function actionLine(step) {
+  const target = actionTarget(step);
+  return target === '' ? step.name : `${step.name} ${target}`;
+}
+
+// The latest tool calls, oldest first, the newest current.
+/** @param {import('../layout').ToolInput[]} tools */
+function workingBox(tools) {
+  const box = el('div', 'chat-working-box');
+  const shown = tools.slice(-WORKING_ACTION_LINES);
+  shown.forEach((step, index) => {
+    const line = el('div', 'chat-working-action', actionLine(step));
+    line.classList.toggle('is-current', index === shown.length - 1);
+    line.classList.toggle('is-failed', isFailedStep(step));
+    box.append(line);
+  });
+  return box;
+}
+
+// The header (time, state), then, once the turn has a tool call, the box and
+// the tool counts.
+/**
+ * @param {HTMLElement} block
+ * @param {import('../layout').WorkingInput} input
+ */
+function fillWorking(block, input) {
+  block.replaceChildren();
+  const head = el('div', 'chat-working-head');
+  head.append(
+    el('span', 'chat-working-time', turnTime(input.now - input.startedAt)),
+    el('span', 'chat-working-state', WORKING_STATE_WORDS[input.state]),
+  );
+  block.append(head);
+  /** @type {import('../layout').ToolInput[]} */
+  const tools = [];
+  for (const step of input.steps) {
+    if (step.kind === 'tool') {
+      tools.push(step);
+    }
+  }
+  if (tools.length === 0) {
     return;
   }
-  const head = el('div', 'chat-activity-head');
-  line.append(head);
-  kit.statusDot(head, 'running');
-  head.append(
-    el('span', 'chat-activity-action', stepAction(input.current)),
-    el('span', 'chat-activity-count', `· ${stepCount(input.steps.length)}`),
-    time,
+  block.append(
+    workingBox(tools),
+    el(
+      'div',
+      'chat-working-counts',
+      toolCounts(tools)
+        .map(([name, count]) => `${name} ${count}`)
+        .join(' '),
+    ),
   );
-  if (!input.open) {
-    line.append(activityShortlist(input.steps));
-  }
 }
 
 /** @param {number} imageCount */
@@ -401,8 +475,9 @@ const layout = {
       };
     },
   },
-  // Every update draws the line afresh, so a run turning finished or a tick
-  // moving `now` redraws only this line.
+  // The summary line, live or finished, open or closed. Every update draws
+  // the line afresh, so a run turning finished or a tick moving `now` redraws
+  // only this line.
   activity(parent, input, kit) {
     const line = root(parent, 'chat-activity');
     fillActivity(line, input, kit);
@@ -413,10 +488,16 @@ const layout = {
       },
     };
   },
-  // A stub that task 02 of the working-block plan replaces.
-  working(parent, _input, _kit) {
+  // Every update draws the block afresh, as `activity` does.
+  working(parent, input) {
     const block = root(parent, 'chat-working');
-    return { element: block, update() {} };
+    fillWorking(block, input);
+    return {
+      element: block,
+      update(next) {
+        fillWorking(block, next);
+      },
+    };
   },
   // The dim label, with the image count when there are images, over the text
   // as typed.

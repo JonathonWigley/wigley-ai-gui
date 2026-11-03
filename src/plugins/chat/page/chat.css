@@ -97,9 +97,9 @@
   color: var(--wg-status-error);
 }
 
-/* Activity lines: a live run's header (dot, current action, step count,
-   time) over its shortlist of the latest steps, or a finished run's one dim
-   summary. Opened, the step rows sit indented under the line as its list. */
+/* Activity lines: one dim summary per run, live or finished (step count,
+   tools, failed count, time). Opened, the step rows sit indented under the
+   line as its list. */
 .chat-activity-slot {
   cursor: pointer;
 }
@@ -113,15 +113,6 @@
   font-family: var(--wg-font-ui);
   font-size: var(--wg-text-ui);
   font-variant-numeric: tabular-nums;
-}
-
-.chat-activity-head {
-  align-items: center;
-  color: var(--wg-fg);
-  display: flex;
-  gap: var(--wg-space-2);
-  min-width: 0;
-  white-space: nowrap;
 }
 
 .chat-activity-summary {
@@ -139,8 +130,34 @@
   color: var(--wg-fg-tertiary);
 }
 
-.chat-activity-action,
-.chat-activity-step {
+/* The working block: the turn's time and state, a card of its latest tool
+   calls (the newest in fg), then its tool counts, dim. */
+.chat-working {
+  display: flex;
+  flex-direction: column;
+  font-family: var(--wg-font-ui);
+  font-size: var(--wg-text-ui);
+  gap: var(--wg-space-1);
+}
+
+.chat-working-head {
+  color: var(--wg-fg);
+  display: flex;
+  gap: var(--wg-space-2);
+}
+
+.chat-working-time {
+  font-variant-numeric: tabular-nums;
+}
+
+.chat-working-box {
+  background: var(--wg-card-background);
+  border-radius: var(--wg-radius-md);
+  padding: var(--wg-space-2) var(--wg-space-3);
+}
+
+.chat-working-action {
+  color: var(--wg-fg-tertiary);
   font-family: var(--wg-font-mono);
   font-size: var(--wg-text-mono);
   min-width: 0;
@@ -149,20 +166,16 @@
   white-space: nowrap;
 }
 
-.chat-activity-shortlist {
-  padding-left: var(--wg-space-4);
-}
-
-.chat-activity-step {
-  color: var(--wg-fg-tertiary);
-}
-
-.chat-activity-step.is-current {
+.chat-working-action.is-current {
   color: var(--wg-fg);
 }
 
-.chat-activity-step.is-failed {
+.chat-working-action.is-failed {
   color: var(--wg-status-error);
+}
+
+.chat-working-counts {
+  color: var(--wg-fg-tertiary);
 }
 
 /* Pending messages: a dim label over the text as typed, its line breaks

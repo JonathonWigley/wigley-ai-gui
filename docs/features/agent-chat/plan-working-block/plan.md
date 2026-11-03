@@ -134,11 +134,11 @@ only its input and the base kit.
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Working turn input](01-working-turn-input.md)
+- [x] [Working turn input](01-working-turn-input.md)
 
 ### Wave 2
 - [ ] [Default layout look](02-default-layout-look.md) — after 01
-- [ ] [Entry list working slot](03-entry-list-working-slot.md) — after 01
+- [x] [Entry list working slot](03-entry-list-working-slot.md) — after 01
 
 ### Wave 3
 - [ ] [Doc re-read](04-doc-re-read.md) — after 02, 03
@@ -151,7 +151,13 @@ only its input and the base kit.
 Review base: 578c0d08
 
 ### Groups
+- 01 · 955b4304 · diff read: every Produces present; typecheck clean; worker ran the three tests 71/71 and lint · concerns: AGENTS.md's chat layout part list omits working (outside Files); ActivityInput open/live comments run ahead of layout.js until 02
+- 03 · f12a2964 · diff read: slot, place, tick, rebuild and dispose per spec; worker ran src/plugins/chat/page 265 pass and lint; typecheck errors only in 02's in-progress layout.test.ts, full compile re-run after 02 · concerns: none in its own files
 ### Contract changes
 ### Rulings
+- Every bounds row asserts now, not one row — stronger than asked — a slightly longer table · group 01 · group 01
+- AGENTS.md's chat-layout surface-part list joins task 04's doc re-read, since 01's worker found it omits working — the doc stays true — one more file in 04 · lead · group 01
+- followLiveRun renamed followWorking; runTick always re-arms while working, the timer cleared when working goes false — a block with no live run keeps ticking — if wrong the tick stops after one second · group 03 · group 03
+- Changes table gains a streaming-assistant row (update writing []) so a dropped state clause in isWorkingChanged is caught — the plan's tool-result row changes steps and state together · group 03 · group 03
 ### Review rounds
 ### Test gate

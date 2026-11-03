@@ -100,9 +100,9 @@ export function agentsSelfTestScript(deps: AgentsSelfTestDeps): SelfTestScript {
     pageBinds: [],
     settings: {},
     // A line's type and description, its session row's status, and each of
-    // the transcript's live activity steps (the Agent calls carry the
-    // subagents' prompts), end in an ellipsis inside their own boxes, as their
-    // CSS says. The tab bar's parts clip in their own box. The side bar
+    // the working block's tool calls (the Agent calls carry the subagents'
+    // prompts), end in an ellipsis inside their own boxes, as their CSS
+    // says. The tab bar's parts clip in their own box. The side bar
     // handle's resize prompt shows past its box for a second after each resize
     // step, and the split handle of the preview pane's Docs tab holds its
     // prompt, hidden until hovered, over both panes.
@@ -111,7 +111,7 @@ export function agentsSelfTestScript(deps: AgentsSelfTestDeps): SelfTestScript {
       '.agents-line-description',
       '.session-row-status',
       '.session-bar-parts',
-      '.chat-activity-step',
+      '.chat-working-action',
       '.shell-side-bar-handle',
       '.ui-split-handle',
     ],
