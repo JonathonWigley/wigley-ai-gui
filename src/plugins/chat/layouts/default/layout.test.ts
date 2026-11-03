@@ -14,6 +14,8 @@ import type {
   QueuedMessageInput,
   SignInKit,
   StepInput,
+  WorkingInput,
+  WorkingState,
 } from '../layout';
 import type { KitRowOptions } from '../../../../shared/page/layout-host/kit';
 import layout from './layout.js';
@@ -158,13 +160,16 @@ function draw<K extends EntryKind>(
   return view as EntryView<K>;
 }
 
-// Each child as its kit part, or as its classes and text when the layout made it.
-function describeChildren(element: FakeElement): string[] {
-  return element.children.map(
-    (child) =>
-      child.dataset.part ??
-      `${child.tagName.toLowerCase()}.${child.className}:${child.textContent}`,
+// The element as its kit part, or as its classes and text when the layout made it.
+function describeElement(element: FakeElement): string {
+  return (
+    element.dataset.part ??
+    `${element.tagName.toLowerCase()}.${element.className}:${element.textContent}`
   );
+}
+
+function describeChildren(element: FakeElement): string[] {
+  return element.children.map(describeElement);
 }
 
 beforeEach(() => {
@@ -355,7 +360,9 @@ describe('default chat layout', () => {
   });
 
   it.each([
-    { costUsd: 0.01234, durationMs: 4210, line: 'end_turn · $0.0123 · 4.2 s' },
+    { costUsd: 0.01234, durationMs: 4210, line: 'end_turn · $0.01 · 4.2 s' },
+    { costUsd: 0.5, durationMs: null, line: 'end_turn · $0.50' },
+    { costUsd: 0.004, durationMs: null, line: 'end_turn · $0.00' },
     { costUsd: null, durationMs: null, line: 'end_turn' },
   ])('result_lineFormats ($line)', ({ costUsd, durationMs, line }) => {
     const { kit } = fakeKit();
@@ -447,8 +454,8 @@ const sevenSteps = [
   { kind: 'raw', id: 'x1', raw: [] } as StepInput,
   toolStep('Bash', 'npm test', null),
 ];
-const sevenStepHead =
-  'dot:running span.chat-activity-action:Bash · npm test span.chat-activity-count:· 7 steps span.chat-activity-time:· 12s';
+const sevenStepSummary =
+  'span.chat-activity-steps:7 steps · Read 2 · Grep · Edit · Bash span.chat-activity-failed:· 1 failed span.chat-activity-time:· 12s';
 
 function drawActivity(input: ActivityInput): PartView<ActivityInput> {
   const parent = new FakeElement('div');
@@ -457,17 +464,12 @@ function drawActivity(input: ActivityInput): PartView<ActivityInput> {
   return view;
 }
 
-// The part's root classes, then each line: the header or the summary as its
-// pieces, each shortlist step as its classes and text.
+// The part's root classes, then the summary line as its pieces.
 function activityLines(view: PartView<ActivityInput>): string[] {
   const line = asFake(view.element);
   return [
     line.className,
-    ...line.children.flatMap((child) =>
-      child.className === 'chat-activity-shortlist'
-        ? describeChildren(child)
-        : [describeChildren(child).join(' ')],
-    ),
+    ...line.children.map((child) => describeChildren(child).join(' ')),
   ];
 }
 
@@ -520,29 +522,20 @@ describe('default chat layout activity', () => {
     {
       state: 'LiveClosed',
       input: liveRun(sevenSteps, false, 12000),
-      lines: [
-        'chat-activity is-live',
-        sevenStepHead,
-        'div.chat-activity-step:Thinking',
-        'div.chat-activity-step is-failed:Grep · todo',
-        'div.chat-activity-step:Edit · a.ts',
-        'div.chat-activity-step:Raw event',
-        'div.chat-activity-step is-current:Bash · npm test',
-      ],
+      lines: ['chat-activity is-live', sevenStepSummary],
     },
     {
       state: 'LiveClosedOneStep',
       input: liveRun([toolStep('Read', 'a.ts', null)], false, 3000),
       lines: [
         'chat-activity is-live',
-        'dot:running span.chat-activity-action:Read · a.ts span.chat-activity-count:· 1 step span.chat-activity-time:· 3s',
-        'div.chat-activity-step is-current:Read · a.ts',
+        'span.chat-activity-steps:1 step · Read span.chat-activity-time:· 3s',
       ],
     },
     {
       state: 'LiveOpen',
       input: liveRun(sevenSteps, true, 12000),
-      lines: ['chat-activity is-live', sevenStepHead],
+      lines: ['chat-activity is-live', sevenStepSummary],
     },
     {
       state: 'UpdatedFromLiveToFinished',
@@ -589,6 +582,145 @@ describe('default chat layout activity', () => {
 
     const timeLine = asFake(view.element).children[0];
     expect(timeLine.children.at(-1)?.textContent).toBe(`· ${text}`);
+  });
+});
+
+// A turn of `steps` in `state`, started at `startedAt`, drawn at `now`.
+function workingTurn(
+  state: WorkingState,
+  steps: StepInput[],
+  now: number,
+  startedAt = 0,
+): WorkingInput {
+  return { state, steps, startedAt, now };
+}
+
+function drawWorking(input: WorkingInput): PartView<WorkingInput> {
+  const parent = new FakeElement('div');
+  const view = layout.working(asHtml(parent), input, fakeKit().kit);
+  expect(parent.children).toEqual([asFake(view.element)]);
+  return view;
+}
+
+// The part's root classes, then the header as its pieces, then each box line
+// and the counts as their classes and text.
+function workingLines(view: PartView<WorkingInput>): string[] {
+  const block = asFake(view.element);
+  return [
+    block.className,
+    ...block.children.flatMap((child) => {
+      if (child.className === 'chat-working-head') {
+        return [describeChildren(child).join(' ')];
+      }
+      return child.className === 'chat-working-box'
+        ? describeChildren(child)
+        : [describeElement(child)];
+    }),
+  ];
+}
+
+// A Read whose summary the adapter cut at 80 characters.
+const chatKitRead: StepInput = {
+  kind: 'tool',
+  id: 'read-chat-kit',
+  toolUseId: 'toolu-read-chat-kit',
+  name: 'Read',
+  input: { file_path: '/a/b/chat-kit.ts' },
+  summary: `/a/b/${'x'.repeat(74)}…`,
+  result: { text: '', isError: false },
+  raw: [],
+};
+
+describe('default chat layout working', () => {
+  beforeEach(() => {
+    vi.stubGlobal('document', {
+      createElement: (tag: string) => new FakeElement(tag),
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it.each([
+    {
+      name: 'NoStep',
+      input: workingTurn('thinking', [], 0),
+      lines: [
+        'chat-working',
+        'span.chat-working-time:0:00 span.chat-working-state:Thinking…',
+      ],
+    },
+    {
+      name: 'NineSteps',
+      input: workingTurn(
+        'working',
+        [
+          toolStep('Read', 'a.ts'),
+          thinkingStep('t1'),
+          toolStep('Read', 'b.ts'),
+          toolStep('Bash', 'ls'),
+          toolStep('Edit', 'a.ts'),
+          thinkingStep('t2'),
+          toolStep('Read', 'c.ts'),
+          toolStep('Grep', 'todo', true),
+          toolStep('Bash', 'npm test', null),
+        ],
+        65000,
+      ),
+      lines: [
+        'chat-working',
+        'span.chat-working-time:1:05 span.chat-working-state:Working…',
+        'div.chat-working-action:Bash ls',
+        'div.chat-working-action:Edit a.ts',
+        'div.chat-working-action:Read c.ts',
+        'div.chat-working-action is-failed:Grep todo',
+        'div.chat-working-action is-current:Bash npm test',
+        'div.chat-working-counts:Read 3 Bash 2 Edit 1 Grep 1',
+      ],
+    },
+    {
+      name: 'FilePathOverAnHour',
+      input: workingTurn('waiting', [chatKitRead], 3725000),
+      lines: [
+        'chat-working',
+        'span.chat-working-time:1:02:05 span.chat-working-state:Waiting…',
+        'div.chat-working-action is-current:Read chat-kit.ts',
+        'div.chat-working-counts:Read 1',
+      ],
+    },
+    {
+      name: 'SummaryTarget',
+      input: workingTurn('writing', [toolStep('Bash', 'npm test')], 59000),
+      lines: [
+        'chat-working',
+        'span.chat-working-time:0:59 span.chat-working-state:Writing…',
+        'div.chat-working-action is-current:Bash npm test',
+        'div.chat-working-counts:Bash 1',
+      ],
+    },
+    {
+      name: 'NowBeforeStart',
+      input: workingTurn('thinking', [], 4000, 5000),
+      lines: [
+        'chat-working',
+        'span.chat-working-time:0:00 span.chat-working-state:Thinking…',
+      ],
+    },
+  ])('working_draws ($name)', ({ input, lines }) => {
+    expect(workingLines(drawWorking(input))).toEqual(lines);
+  });
+
+  it('working_update_RedrawsTheTime', () => {
+    const view = drawWorking(workingTurn('thinking', [], 0));
+    const block = view.element;
+
+    view.update?.(workingTurn('thinking', [], 61000));
+
+    expect(view.element).toBe(block);
+    expect(workingLines(view)[1]).toBe(
+      'span.chat-working-time:1:01 span.chat-working-state:Thinking…',
+    );
   });
 });
 
@@ -679,6 +811,7 @@ type SurfacePart = Exclude<keyof ChatLayout, 'entries'>;
 // Every part beside the entries; a part left out fails to compile.
 const SURFACE_PARTS: Record<SurfacePart, true> = {
   activity: true,
+  working: true,
   queuedMessage: true,
   composer: true,
   composerBar: true,

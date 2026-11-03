@@ -139,8 +139,12 @@ export interface AgentFormType<Form, Body, Payload> {
 // The parts of the sessions plugin's main exports a presenter uses.
 export interface AgentFormSessions {
   mark(sessionId: string): void;
-  activate(sessionId: string): void;
+  // Selects the session's row only when it holds one.
+  activateExistingRow(sessionId: string): void;
   addCloseGuard(mayClose: (sessionId: string) => boolean): void;
+  // Closes a connected session's row once every close guard allows; any other
+  // session is left alone.
+  release(sessionId: string): void;
 }
 
 // The sessions contract's ToolResult and ToolSession, restated: the contracts layer imports no plugin.

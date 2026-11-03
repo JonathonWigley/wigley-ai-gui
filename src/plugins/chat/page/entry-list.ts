@@ -21,6 +21,8 @@ import type {
   EntryView,
   PartView,
   QueuedMessageInput,
+  StepInput,
+  WorkingInput,
 } from '../layouts/layout';
 import type { BaseKit } from '../../../shared/page/layout-host/kit';
 import {
@@ -49,12 +51,14 @@ import {
   moveFocus,
   START_FOCUS,
 } from './entry-focus';
+import { isTurnEmpty, workingInput } from './working-turn';
 
-// `layouts` are the ones every session's entries, activity lines and pending
-// rows are built with; `toastedKinds` the kinds whose failed draw has toasted
-// since they were shown, shared by every session's list. `timers` and `clock`
-// tick a live activity line's time. `pullBack` is what a click on a pending
-// row calls with its message's id.
+// `layouts` are the ones every session's entries, activity lines, working
+// block and pending rows are built with; `toastedKinds` the kinds whose failed
+// draw has toasted since they were shown, shared by every session's list.
+// `timers` and `clock` tick a live activity line's time and the working
+// block's. `pullBack` is what a click on a pending row calls with its
+// message's id.
 export interface EntryListDeps {
   layouts: ChatLayouts;
   toastedKinds: Set<ChatEntryKind>;
@@ -81,29 +85,36 @@ export interface TranscriptScroll extends ContentScroll {
 
 // One session's entries, one slot per entry in the session's order, each run
 // of steps also drawn as one activity line slot right before its first step's
-// slot; a closed run's step slots are hidden. The session's queued messages
-// follow the last entry as pending rows, oldest first. The cursor stops on
-// each entry and activity line, on each step of an open run, then on each
-// pending row; the focused stop's slot is marked `is-cursor`. A following
-// focus moves to the latest stop as the list changes, except one on the last
-// row's activity line, which stays on it while the run is open and grows and
-// no pending row follows it. After every change, and whenever the list's own
-// box or any slot's box resizes, a following focus scrolls the list to its
-// bottom; a hidden list does not scroll, so its tab calls `scrollToFocus` each
-// time it shows.
-// While a live run is drawn its line's time ticks once a second.
+// slot; a closed run's step slots are hidden. While the session works on its
+// turn, one working block slot follows the last entry, drawn by the layout's
+// `working` part; it goes when the turn ends, and while the turn holds no
+// entries it keeps what it last showed. The session's queued messages
+// follow it, else the last entry, as pending rows, oldest first. The cursor
+// stops on each entry and activity line, on each step of an open run, then on
+// each pending row, never on the working block; the focused stop's slot is
+// marked `is-cursor`. A following focus moves to the latest stop as the list
+// changes, except one on the last row's activity line, which stays on it while
+// the run is open and grows and no pending row follows it. After every change,
+// and whenever the list's own box or any slot's box resizes, a following focus
+// scrolls the list to its bottom; a hidden list does not scroll, so its tab
+// calls `scrollToFocus` each time it shows.
+// While the session works on its turn, the live run's line time and the
+// working block's tick once a second.
 export interface EntryList {
   element: HTMLOListElement;
   // Builds an entry new to the list, or redraws the one holding its id;
   // `entries` is the session's list after the change.
   put(entry: ChatEntry, entries: readonly ChatEntry[]): void;
-  // Builds every entry and pending row again with the shown layouts, keeping
-  // the focus, each entry's open expanders by id and each run's open state.
+  // Builds every entry, the working block and every pending row again with
+  // the shown layouts, keeping the focus, each entry's open expanders by id
+  // and each run's open state.
   rebuild(entries: readonly ChatEntry[]): void;
-  // Draws one pending row per message after the last entry, in order,
-  // updating a row whose message it already holds and removing the rest.
+  // Draws one pending row per message after the working block, else the last
+  // entry, in order, updating a row whose message it already holds and
+  // removing the rest.
   setQueued(queued: readonly QueuedMessage[]): void;
-  // Whether the session works on its turn: only then is a last run live.
+  // Whether the session works on its turn: only then is a last run live and
+  // the working block shown.
   setWorking(working: boolean): void;
   // The focused stop after the move; null with no stops.
   move(step: 1 | -1): EntryListStop | null;
@@ -132,8 +143,8 @@ export interface EntryList {
   // Null with no focused stop, or on a pending row, which toggles nothing.
   toggleFocused(): { stop: ListStop; result: ToggleResult } | null;
   // Stops following the list's size and the tick, disposes every entry's kit,
-  // every activity line and every pending row, and forgets the open runs; the
-  // list's owner calls it when it drops the list.
+  // every activity line, the working block and every pending row, and forgets
+  // the open runs; the list's owner calls it when it drops the list.
   dispose(): void;
 }
 
@@ -173,6 +184,7 @@ type RunRow = Extract<ListRow, { kind: 'run' }>;
 // The parts a list slot of its own draws, by the input each takes.
 interface SlotPartInputs {
   activity: ActivityInput;
+  working: WorkingInput;
   queuedMessage: QueuedMessageInput;
 }
 
@@ -222,10 +234,17 @@ export function createEntryList(deps: EntryListDeps): EntryList {
   const runSlots = new Map<string, RunSlot>();
   // Each pending row's slot by its stop id, oldest first.
   let queuedSlots = new Map<string, QueuedSlot>();
+  // The working block's slot, held only while the session works on its turn.
+  let workingSlot: PartSlot<'working'> | null = null;
   const openRuns = new Set<string>();
   const activity: SlotPartDraws<'activity'> = {
     part: 'activity',
     draws: chatPartDraws(deps.layouts, 'activity', deps.log),
+    deps,
+  };
+  const workingPart: SlotPartDraws<'working'> = {
+    part: 'working',
+    draws: chatPartDraws(deps.layouts, 'working', deps.log),
     deps,
   };
   const queuedPart: SlotPartDraws<'queuedMessage'> = {
@@ -245,9 +264,13 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     runSlots.get(id)?.element ??
     queuedSlots.get(id)?.element;
 
-  // Where a new entry slot goes: before the first pending row, else last.
+  // Where the working block goes: before the first pending row, else last.
   const firstQueuedElement = () =>
     [...queuedSlots.values()].at(0)?.element ?? null;
+
+  // Where a new entry slot goes: before the working block, else before the
+  // first pending row, else last.
+  const entryPlace = () => workingSlot?.element ?? firstQueuedElement();
 
   // The stop the list ends on: the newest pending row, else the last row's.
   const lastStopId = () => [...queuedSlots.keys()].at(-1) ?? lastRowId(rows);
@@ -266,25 +289,26 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     }
   };
 
-  // Runs the live run's part update with the time now, and arms the next
-  // tick.
+  // Runs the live run's and the working block's part updates with the time
+  // now, and arms the next tick.
   const runTick = () => {
     tick = null;
+    const now = deps.clock.now();
     const live = liveRunSlot(runSlots);
-    if (live === undefined) {
-      return;
+    if (live !== undefined && live.drawn !== null) {
+      updatePartSlot(live, { ...live.input, now }, activity);
     }
-    if (live.drawn !== null) {
-      updatePartSlot(live, { ...live.input, now: deps.clock.now() }, activity);
+    if (workingSlot !== null && workingSlot.drawn !== null) {
+      updatePartSlot(workingSlot, { ...workingSlot.input, now }, workingPart);
     }
     tick = deps.timers.set(runTick, TICK_MS);
   };
 
-  const followLiveRun = () => {
-    const hasLive = rows.some((row) => row.kind === 'run' && row.live);
-    if (hasLive && tick === null) {
+  // Arms the tick while the session works on its turn, and clears it after.
+  const followWorking = () => {
+    if (working && tick === null) {
       tick = deps.timers.set(runTick, TICK_MS);
-    } else if (!hasLive && tick !== null) {
+    } else if (!working && tick !== null) {
       deps.timers.clear(tick);
       tick = null;
     }
@@ -297,13 +321,51 @@ export function createEntryList(deps: EntryListDeps): EntryList {
         putRun(row);
       }
     }
+    putWorking();
     order = [...cursorStops(rows, openRuns), ...queuedSlots.keys()];
     focus = focusAfterChange(focus, order, lastStopId());
     drawFocus('follow');
-    followLiveRun();
+    followWorking();
   };
 
-  // Draws `messages` as the pending rows, in order, after the entries.
+  // While the session works on its turn, draws the working block before the
+  // first pending row, or updates it when what it shows changed; after, removes
+  // it. A held block is left as drawn while the turn holds no entries.
+  const putWorking = () => {
+    if (!working) {
+      removeWorking();
+      return;
+    }
+    if (workingSlot !== null && isTurnEmpty(entries)) {
+      return;
+    }
+    const input = workingInput(entries, deps.clock.now());
+    if (workingSlot === null) {
+      const slot = element('li', 'chat-entry-slot chat-working-slot');
+      workingSlot = {
+        element: slot,
+        input,
+        drawn: drawSlotPart(slot, input, workingPart),
+      };
+      observeSlot(slot);
+      list.insertBefore(slot, firstQueuedElement());
+    } else if (isWorkingChanged(workingSlot.input, input)) {
+      updatePartSlot(workingSlot, input, workingPart);
+    }
+  };
+
+  const removeWorking = () => {
+    if (workingSlot === null) {
+      return;
+    }
+    workingSlot.drawn?.dispose();
+    slotSizes.unobserve(workingSlot.element);
+    workingSlot.element.remove();
+    workingSlot = null;
+  };
+
+  // Draws `messages` as the pending rows, in order, after the entries and the
+  // working block.
   const putQueued = (messages: readonly QueuedMessage[]) => {
     const next = new Map<string, QueuedSlot>();
     for (const message of messages) {
@@ -415,7 +477,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
         const created = buildSlot(entry, deps);
         slots.set(entry.id, created);
         observeSlot(created.element);
-        list.insertBefore(created.element, firstQueuedElement());
+        list.insertBefore(created.element, entryPlace());
       } else {
         redrawSlot(slot, entry, deps);
       }
@@ -433,6 +495,8 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       runSlots.clear();
       disposePartSlots(queuedSlots);
       queuedSlots.clear();
+      workingSlot?.drawn?.dispose();
+      workingSlot = null;
       slotSizes.disconnect();
       list.replaceChildren();
       for (const entry of next) {
@@ -511,6 +575,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       disposeSlots(slots);
       disposePartSlots(runSlots);
       disposePartSlots(queuedSlots);
+      workingSlot?.drawn?.dispose();
       openRuns.clear();
     },
   };
@@ -569,15 +634,34 @@ function activityInput(row: RunRow, open: boolean, now: number): ActivityInput {
 // step replaced, added or gone, or the run's state or times. `now` changes
 // only on a tick.
 function isActivityChanged(last: ActivityInput, next: ActivityInput): boolean {
-  const isStepsChanged =
-    last.steps.length !== next.steps.length ||
-    last.steps.some((step, index) => step !== next.steps[index]);
   return (
-    isStepsChanged ||
+    isStepsChanged(last.steps, next.steps) ||
     last.live !== next.live ||
     last.open !== next.open ||
     last.startedAt !== next.startedAt ||
     last.endedAt !== next.endedAt
+  );
+}
+
+// Whether a block drawn with `last` shows something else with `next`: any
+// step replaced, added or gone, or the turn's state or start. `now` changes
+// only on a tick.
+function isWorkingChanged(last: WorkingInput, next: WorkingInput): boolean {
+  return (
+    isStepsChanged(last.steps, next.steps) ||
+    last.state !== next.state ||
+    last.startedAt !== next.startedAt
+  );
+}
+
+// Whether any step is replaced, added or gone, by identity.
+function isStepsChanged(
+  last: readonly StepInput[],
+  next: readonly StepInput[],
+): boolean {
+  return (
+    last.length !== next.length ||
+    last.some((step, index) => step !== next[index])
   );
 }
 

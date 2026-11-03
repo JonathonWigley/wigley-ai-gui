@@ -121,11 +121,12 @@ export interface SessionsMainExports {
     tools: ToolDefinition[],
     start: (session: AgentSession) => ToolSession,
   ): void;
-  // Adds the session's row, unmarked and unselected, or joins the owned session
-  // whose host id the info carries, adding no row. A newer relay for that host
-  // id takes the join from an older one still connected; the older handle's
-  // `end` then leaves the join alone. Throws for a host id an owned session
-  // moved away from, unless another owned session holds it.
+  // Connects the session with no row, sending no state, or joins the owned
+  // session whose host id the info carries; `mark` or `activate` adds a
+  // connected session's row, and `release` closes it. A newer relay for that
+  // host id takes the join from an older one still connected; the older
+  // handle's `end` then leaves the join alone. Throws for a host id an owned
+  // session moved away from, unless another owned session holds it.
   connect(info: SessionInfo): ConnectedSession;
   // Starts an owned session with its row selected, or, with `options.select`
   // false, added unmarked and the selected row (or none) left as it was.
@@ -133,23 +134,40 @@ export interface SessionsMainExports {
   // host id.
   open(info: SessionInfo, options?: OpenOptions): OwnedSession;
   // Attention for the session: selects its row when none is selected, else
-  // marks it; a row the user closed comes back at the end first.
+  // marks it; a connected session with no row, or a row the user closed, gets
+  // its row at the end first. A row `release` closed while selected comes back
+  // selected when this mark comes within 30 seconds of the release, unless in
+  // between came an `activate` or `activateExistingRow`, a selecting `open`,
+  // a mark that selected another session from none, or a `release` of another
+  // selected row; the session's end drops it too.
   mark(sessionId: string): void;
+  // The user's pick: selects the session's row and clears its mark; a
+  // connected session with no row, or a row the user closed, gets its row at
+  // the end first.
   activate(sessionId: string): void;
+  // `activate` for a session that holds a row; adds none, and logs and
+  // ignores a session with no row.
+  activateExistingRow(sessionId: string): void;
+  // Closes a connected session's row once every close guard allows, emitting
+  // `closed`; a guard refusing keeps the row and logs. An unknown or owned
+  // session, or one with no row, is left alone without a log line.
+  release(sessionId: string): void;
   selectedSessionId(): string | null;
   // The session's side-bar label (`gamma 2`), kept while its row is closed;
   // null for a session not connected.
   label(sessionId: string): string | null;
-  // The user closing a session's row asks every guard first, and the row stays
-  // while any answers false; once every guard allows, the row goes and
-  // `closed` is emitted. A session that ends loses its row regardless.
+  // The user closing a session's row, or `release`, asks every guard first,
+  // and the row stays while any answers false; once every guard allows, the
+  // row goes and `closed` is emitted. A session that ends loses its row
+  // regardless.
   addCloseGuard(mayClose: (sessionId: string) => boolean): void;
 }
 
-// `closed` is the user closing a row every guard allowed; the session itself
-// stays until it ends. `selected` is the selected row changing, to another row
-// or to none, emitted after the state that carries it: an open that selects,
-// an activate or mark that selects, or the selected row closing or ending.
+// `closed` is a row the user closed, or one `release` closed, every guard
+// allowing; the session itself stays until it ends. `selected` is the selected
+// row changing, to another row or to none, emitted after the state that
+// carries it: an open that selects, an activate or mark that selects, or the
+// selected row closing or ending.
 // `hostSessionChanged` is an owned session moved to a new host id, emitted
 // after the state that carries it, with the session's info already updated.
 export interface SessionsMainEvents extends EventShape {
@@ -160,9 +178,11 @@ export interface SessionsMainEvents extends EventShape {
   hostSessionChanged: AgentSession;
 }
 
-// One connected session's sidebar row. `marked` is a form not yet opened;
-// `projectDir`, `hostSessionId` and `harness` are the session's info, fixed at
-// connect, `hostSessionId` also changed by the owner through `setHostSessionId`.
+// One session's sidebar row; a connected session's row exists only while
+// marked, activated or holding a form. `marked` is a form not yet opened;
+// `projectDir`, `hostSessionId` and `harness` are the session's info, fixed
+// when the session connects, `hostSessionId` also changed by the owner through
+// `setHostSessionId`.
 export interface SessionRow {
   sessionId: string;
   label: string;
@@ -177,8 +197,9 @@ export interface SessionsState {
   selectedSessionId: string | null;
 }
 
-// `closeSession` returns whether the row closed: false when a close guard kept
-// it or main holds no such row; the session stays connected either way.
+// `closeSession` returns whether the session's row is closed: true when it
+// closed or was already closed, false when a close guard kept it or main knows
+// no such session; the session stays connected either way.
 // `activated` arrives before the `stateChanged` the activation causes.
 export interface SessionsChannel extends ChannelShape {
   invoke: {

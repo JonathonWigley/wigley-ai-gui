@@ -108,7 +108,7 @@ const EXTRA_TASK_STEPS: SelfTestStep[] = [
 
 // The review opens, closes and opens again; the cancel prompt opens from the
 // review's cancel key and from closing the session, and is dismissed each
-// time; the review submits, and the session, holding no primer now, closes.
+// time; the review submits, which closes the session's row.
 const REVIEW_STEPS: SelfTestStep[] = [
   {
     keys: [' ', ' '],
@@ -126,11 +126,11 @@ const REVIEW_STEPS: SelfTestStep[] = [
       '[primer] closing the session asks to cancel primer-selftest · Self-test primer',
   },
   { keys: ['Escape'], expect: '[page] Escape ran primer.dismissConfirm' },
-  { keys: ['<D-Enter>'], expect: '[primer] submitted' },
   {
-    keys: ['<D-w>'],
-    expect: '[sessions] activated Layout preview',
-    why: "Closing selects the session's left neighbour, the Layout preview session forms' script reopened last.",
+    keys: ['<D-Enter>'],
+    expect: '[primer] submitted',
+    alsoExpect: [/^\[sessions\] activated Layout preview$/],
+    why: "Sending closes the session's row, which selects its left neighbour, the Layout preview session forms' script reopened last.",
   },
 ];
 
@@ -246,7 +246,7 @@ export function primerSelfTestScript(
       },
       {
         name: 'review and cancel',
-        why: 'Esc closes the review; C in the review and closing the session each ask to cancel the primer, and n or Esc keeps it; once the primer is sent, its session closes with no prompt.',
+        why: 'Esc closes the review; C in the review and closing the session each ask to cancel the primer, and n or Esc keeps it; sending the primer closes its row with no prompt.',
         steps: REVIEW_STEPS,
       },
       {

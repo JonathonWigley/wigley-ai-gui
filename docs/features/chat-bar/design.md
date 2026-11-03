@@ -57,7 +57,8 @@ The sidebar's subagent lines and the tab bar's usage line stay available as plug
   any process Claude reports that is not a subagent (`agent-tower/design.md` § The agents plugin, Tasks).
 - **A subagent box:** a status dot, the name (the Agent call's `name` when given, else its agent type), then
   `model · effort · $cost`, the description, and the latest 3 tool calls as mono lines.
-- **A task box:** a terminal icon, the description, the owning agent's name (or `main`) and the elapsed time.
+- **A task box:** a terminal icon, the description, the owning agent's name (or `main`) and, while it runs, the
+  elapsed time.
 - **Lifetime:** a running box shows a running dot. A finished box stays, dimmed, with a done or failed dot, until the
   user sends the next message (`userMessage`); the roster then drops every finished item.
 - **Scrolling:** the strip scrolls sideways; `‹` and `›` buttons at its ends scroll it by one box and hide when there
@@ -70,6 +71,7 @@ The sidebar's subagent lines and the tab bar's usage line stay available as plug
 
 ## The status line
 
+- **Type hint:** the `i`/`a` keys that focus the box, after the repo and branch.
 - **Repo:** the name of the session folder's git top folder; outside git, the folder name, and no branch.
 - **Branch:** the current branch, or the short commit on a detached HEAD. Chat main reads it through the Git
   service's `currentBranch` when the session starts and again when each turn ends.
@@ -84,12 +86,14 @@ The sidebar's subagent lines and the tab bar's usage line stay available as plug
 Only the Claude adapter knows Claude's shapes, so it alone fills these into agent events:
 
 - **Name:** the Agent call's `name` input, else its `subagent_type`.
-- **Model:** the model of the subagent's latest reply; before its first reply, the `model` its agent definition names.
-- **Effort:** the `effort` its agent definition names; none when no definition names one. Definitions are the agent
+- **Model:** the model of the subagent's latest reply; before its first reply, the Agent call's `model` input, else
+  the `model` its agent definition names.
+- **Effort:** the Agent call's `effort` input, else the `effort` its agent definition names; none when neither names
+  one. Definitions are the agent
   `.md` files in the project's `.claude/agents/`, the profile's `agents/`, and each installed plugin's `agents/`,
   matched on the agent type (`plugin:name` for a plugin's agent).
 - **Cost:** an estimate: the subagent's reply token usage (input, output, cache write by TTL, cache read) priced by a
-  per-model list-price table in the adapter. A model the table lacks shows no cost. The session's own spend stays
+  per-model list-price table in the adapter. A subagent with any reply on a model the table lacks shows no cost. The session's own spend stays
   Claude's `total_cost_usd`.
 - **Tool calls:** each tool call carries the id of the agent that made it, so a box lists its own calls and the
   transcript stays as it is.
@@ -103,8 +107,8 @@ Only the Claude adapter knows Claude's shapes, so it alone fills these into agen
   config problem and keeps the last good config.
 - `agents` keeps the roster, the event log and its channel, and draws nothing. `agent-lines` draws the sidebar lines;
   `agent-strip` draws the strip. Both read the agents roster.
-- `usage` keeps the polls, the status-bar plan line, the right bar and the status part. `usage-tab-line` draws the
-  session line in each tab bar.
+- `usage` keeps the polls, the status-bar plan line, the right bar and the status part. `usage-tab-line` draws usage's
+  own session-line part in each tab bar, so the line has one look.
 
 ## Decisions
 

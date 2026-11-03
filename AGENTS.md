@@ -178,9 +178,10 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  main/ (hears `chat.agentEvent`, keeps each session's roster, appends each event to
                  `logs/<host session id>.jsonl` in its plugin data, the layout preview); draws nothing: its page
                  part only exports the rosters to the views below; `docs/features/agent-tower/design.md`
-  agent-lines/   page/ (the subagent and task lines under each session row, through sessions' `addRowPart`),
-                 layouts/ (its Layout contract and `default` layout); in `plugins.disabled` by default
-  agent-strip/   page/ (the strip of subagent and task boxes above the Chat composer's box, through chat's
+  agent-lines/   main/ (registers its layouts, hands the lines' self-test script), page/ (the subagent and task
+                 lines under each session row, through sessions' `addRowPart`), layouts/ (its Layout contract and
+                 `default` layout); in `plugins.disabled` by default
+  agent-strip/   main/ (registers its layouts, hands its self-test script), page/ (the strip of subagent and task boxes above the Chat composer's box, through chat's
                  `addComposerPart`, with a stop on chat's entry cursor), layouts/ (its Layout contract and `default`
                  layout); `docs/features/chat-bar/design.md`
   forms/         manifest.ts, contract.ts, main/ (the round form type, its MCP tools, the preview
@@ -231,7 +232,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  layouts/ (the usage Layout contract and the built-in `default` layout),
                  `docs/features/usage/design.md`; its session numbers draw in the Chat status line through chat's
                  `addStatusPart`
-  usage-tab-line/ page/ (each session's usage line in its tab bar through sessions' `addBarPart`), layouts/; in
+  usage-tab-line/ page/ only (each session's usage line in its tab bar through sessions' `addBarPart`, drawn by
+                 usage's own session-line part through a usage page export, so the line has one look); in
                  `plugins.disabled` by default
   workflow/      manifest.ts, contract.ts, flow.ts (the pure fold of signals into a session's flow), plan-reader.ts
                  (ticked, total, wave and review rounds from a plan.md), stages/<stage>/ (one wigley workflow stage
@@ -255,8 +257,12 @@ the `retro` skill reads, and the relay's side of the channel). A change to eithe
 lands in both repos together. Each relay connection is one agent session, owned by the `sessions` plugin. A
 connected session (one the app did not start, such as a terminal `claude` or Codex session) has no row in the sessions
 sidebar until a plugin needs the user there: `mark` or `activate` adds its row, as a form opening does, and `release` closes it
-again once every close guard allows, as the form presenter does when the session's last form closes, by submit,
-cancel or any other close. The user may also close the row; it leaves when the session disconnects. A session the
+again once every close guard allows, as the form presenter does after every form close, by submit, cancel or
+any other close (the close guard of a session's other open form keeps the row). The user may also close the row,
+which `mark` or `activate` brings back; it leaves for good when the session disconnects. A row `release` closed
+while selected comes back selected when the session's next form marks it within 30 seconds (a back-to-back
+round), unless the user picked another row first; later, it comes back marked. A form's notification click
+selects only a row its session still holds (`activateExistingRow`), so a stale click adds none. A session the
 app starts (`open`) is an owned session: its row exists from start, the relay connection whose hello carries its
 host session id joins that row instead of adding one (a newer relay takes the join from an older one still
 connected, as when the harness restarts its MCP connection), and the row ends when its owner ends it: chat keeps
@@ -323,8 +329,9 @@ round; primer: an open primer), since main, not the page, decides.
 - **A session part** (`SessionPart`) is what a plugin draws for every session on a sessions surface: sessions hands
   it a wrapper and the session id, and the part draws through its own plugin's layout. It has the same shape as forms'
   `addCardPart`. A **row part** draws under every session row in the side bar, through the `sessions` page export
-  `addRowPart`; the agent-lines plugin's subagent lines are one. A **bar part** draws in every session's tab bar, which
-  moves with its session between panes, through `addBarPart`; the usage-tab-line plugin's per-session line is one.
+  `addRowPart`; the agent-lines plugin's subagent and task lines are one. A **bar part** draws in every session's tab
+  bar, which moves with its session between panes, through `addBarPart`; the usage-tab-line plugin's per-session line
+  is one.
   Information about one session goes in a session part, not on a shared bar.
 - **A row activity** is the short state a session's row shows beside its title — a status dot and a word (working,
   needs you, done, error). A page plugin sets one per session under its own source id through the `sessions` page
@@ -596,10 +603,10 @@ round; primer: an open primer), since main, not the page, decides.
   `permissionActions` (Allow once / Deny with their keys), and `images` (a user entry's thumbnails, which open the
   image viewer). Every part takes its parent first. Beside the entries, the layout draws the other Chat tab surfaces
   through parts that take `(parent, input, kit)` and return a `PartView`: `activity` (one run of the agent's steps,
-  `docs/features/agent-chat/design.md` § Activity line), `queuedMessage` (one pending message's row, § Pending
-  messages), `composer`, `composerBar`, `attachments`, `pickerRow`, `signIn`, `reasonBox`, `closeConfirm` and
-  `imageViewer`, each with a kit that extends the base kit (`activity`, `queuedMessage` and `imageViewer` take the base
-  kit itself).
+  `docs/features/agent-chat/design.md` § Activity line), `working` (the running turn, § Working block),
+  `queuedMessage` (one pending message's row, § Pending messages), `composer`, `composerBar`, `attachments`, `pickerRow`, `signIn`, `reasonBox`, `closeConfirm` and
+  `imageViewer`, each with a kit that extends the base kit (`activity`, `working`, `queuedMessage` and `imageViewer`
+  take the base kit itself).
   A user chat layout defines only the entry builders and the parts it changes: a kind or part it leaves out draws with
   `default`, with no toast. A user builder that throws draws with `default`; the entry toasts once per kind, naming what
   drew it: `default`, or a bare line when `default` throws too.
@@ -701,7 +708,7 @@ round; primer: an open primer), since main, not the page, decides.
   `sendInputEvent`, checks the lines each step adds to the page's log and the result the script checks, and exits
   non-zero on a failure. A key behaviour the agent adds or fixes gets a step in its plugin's self-test script
   (`src/plugins/forms/main/selftest-script.ts` for forms, `src/plugins/primer/main/selftest-script.ts` for the
-  primer, `src/plugins/agents/main/selftest-script.ts` for agents, `src/plugins/workflow/main/selftest-script.ts` for
+  primer, `src/plugins/agent-lines/main/selftest-script.ts` for the sidebar lines, `src/plugins/agent-strip/main/selftest-script.ts` for the strip, `src/plugins/workflow/main/selftest-script.ts` for
   workflow); a step with no keys waits for its line, and a step's `writeFile` writes a file under the self-test's temp
   home before its keys, as an outside change on disk, and a step's `screenshot` (a lowercase name in words joined by
   `-`) saves a PNG of the window, once the step's line has been waited for, to
@@ -719,7 +726,8 @@ round; primer: an open primer), since main, not the page, decides.
   the cap without `until` fails. It reports one line, `<keys> ×<presses> -> <until>`, and its `screenshot` saves one
   PNG per press, `<plugin>-<name>-<n>.png`, file n after press n. A step's `alsoExpect` holds patterns that must each
   match a line logged after the step began, before or after `expect`, for a line carrying a value the script cannot
-  know (chat's clear step matches the notes line naming the row's random new host id). The self-test's user config
+  know (chat's clear step matches the notes line naming the row's random new host id) or a second line the step's keys
+  cause, in either order. The self-test's user config
   folder sits in its temp home. The script's `settings` override plugin settings in the config main serves the page
   (forms' sets a short `keys.whichKeyTimeoutMs`, so a step can wait out the panel); main parts start on the
   ConfigStore's config, which under the self-test is the empty config folder in its temp home, so the defaults, with

@@ -961,7 +961,8 @@ probes 1, 2, 4, 6 and 7), plus three top-level keys the main agent's lines lack:
   <tasks>/bvrvtgapv.output …`). The `result` of the turn comes next, and the task keeps running past it. Its end is
   `task_updated` (`patch.status` `completed`), then `task_notification` with the same `task_id` and `tool_use_id`,
   `status` `completed`, `output_file`, and `summary` `Background command "Sleep 6 seconds in background" completed (exit
-  code 0)`, then `background_tasks_changed` with `[]`.
+  code 0)`, then `background_tasks_changed` with `[]`. In the app's own session (a drive run, 2026-11-02), Claude then
+  ran a turn of its own to report the finished command, as it does after a background subagent ends.
 
 **The Agent call's `tool_result`.**
 
