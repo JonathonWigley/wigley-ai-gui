@@ -416,62 +416,102 @@ describe('chat commands', () => {
     message: { id: 'q-2', text: 'later', images: [], sentEntryId: null },
   };
 
+  const unsentRow = { ...pendingStop.message };
+  const sentRow = { ...pendingStop.message, id: 'q-1', sentEntryId: 'e-1' };
+
   it.each([
     {
       given: 'a pending row focused, the box unfocused',
       focused: pendingStop,
       boxFocused: false,
       typed: 'draft',
+      queued: [unsentRow],
       invoked: [['sendNow', 'row-1', 'q-2']],
       left: 'draft',
       marked: [],
+      latests: 0,
     },
     {
       given: 'a pending row focused, text in the focused box',
       focused: pendingStop,
       boxFocused: true,
       typed: 'now',
+      queued: [unsentRow],
       invoked: [['sendAllNow', 'row-1', { text: 'now', images: [] }]],
       left: '',
       marked: ['row-1'],
+      latests: 1,
     },
     {
-      given: 'a pending row focused, the focused box empty',
+      given: 'a pending row focused and unsent, the focused box empty',
       focused: pendingStop,
       boxFocused: true,
       typed: '',
+      queued: [unsentRow],
       invoked: [['sendAllNow', 'row-1', null]],
       left: '',
       marked: [],
+      latests: 0,
+    },
+    {
+      given: 'only a sent row, the focused box empty',
+      focused: { kind: 'entry', entry: userEntry } as EntryListStop,
+      boxFocused: true,
+      typed: '',
+      queued: [sentRow],
+      invoked: [],
+      left: '',
+      marked: [],
+      latests: 0,
     },
     {
       given: 'an entry focused, text in the unfocused box',
       focused: { kind: 'entry', entry: userEntry } as EntryListStop,
       boxFocused: false,
       typed: 'now',
+      queued: [],
       invoked: [['sendAllNow', 'row-1', { text: 'now', images: [] }]],
       left: '',
       marked: ['row-1'],
+      latests: 1,
     },
     {
       given: 'an app slash command in the focused box',
       focused: pendingStop,
       boxFocused: true,
       typed: '/status',
+      queued: [unsentRow],
       invoked: [],
       left: '',
       marked: ['row-1'],
+      latests: 0,
     },
   ])(
     'sendNow given $given sends the row or the box',
-    async ({ focused, boxFocused, typed, invoked, left, marked }) => {
+    async ({
+      focused,
+      boxFocused,
+      typed,
+      queued,
+      invoked,
+      left,
+      marked,
+      latests,
+    }) => {
       const commands = createSlashCommands();
       commands.add({ name: 'status', description: 'Show', run: () => {} });
       const message = box(typed);
       const entries = focusedOnStop(focused);
-      const shown = Object.assign(session(true), {
+      let latestCalls = 0;
+      const shown = session(true);
+      Object.assign(shown, {
+        state: { ...shown.state, queued },
         box: message,
-        entries: Object.assign(entries, { latest: () => undefined }),
+        entries: Object.assign(entries, {
+          latest: () => {
+            latestCalls++;
+          },
+        }),
         isBoxFocused: () => boxFocused,
       });
       const run = setUp(shown, undefined, true, commands);
@@ -482,6 +522,7 @@ describe('chat commands', () => {
       expect(run.invoked).toEqual(invoked);
       expect(message.held.text).toBe(left);
       expect(run.marked).toEqual(marked);
+      expect(latestCalls).toBe(latests);
     },
   );
 

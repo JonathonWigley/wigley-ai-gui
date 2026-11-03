@@ -140,7 +140,7 @@ export interface ChatSessions {
   // fresh one at once under a new host session id with the row's held mode and
   // the model and effort the user picked that a report confirmed. Waiting
   // permission calls are cancelled, and messages written but not taken in
-  // returned, then every queued message; the old
+  // and every queued message returned in the order written; the old
   // process raises no exit notice and no turn-finished alert. The entries
   // become one `Conversation cleared` notice. A resting session just starts its
   // fresh process. Throws before changing anything when the profile or harness
@@ -207,6 +207,11 @@ interface PendingPermission {
   onAbort(): void;
 }
 
+interface WrittenMessage {
+  message: UserMessage;
+  order: number;
+}
+
 // `process` is null whenever the session rests, and while the harness's
 // `start` runs.
 interface HeldSession {
@@ -227,9 +232,15 @@ interface HeldSession {
   noticeCount: number;
   // Messages ever queued in this row, numbering their ids.
   queuedCount: number;
-  // Harness entry id → each message written with no queued row, in write
-  // order, until its entry arrives; ids restart with each process.
-  writtenMessages: Map<string, UserMessage>;
+  // Messages ever queued, or written with no queued row, in this row,
+  // stamping each with its place in the order written.
+  heldCount: number;
+  // Each queued row → its stamp from `heldCount`.
+  rowOrders: WeakMap<QueuedMessage, number>;
+  // Harness entry id → each message written with no queued row, with its
+  // stamp from `heldCount`, until its entry arrives; ids restart with each
+  // process.
+  writtenMessages: Map<string, WrittenMessage>;
   // Processes started in this row, the one running included.
   processStarts: number;
   // Ids of the controls whose pick in this row a report confirmed; a start
@@ -332,6 +343,14 @@ function confirmPicks(
 
 function userMessageOf(queued: QueuedMessage): UserMessage {
   return { text: queued.text, images: queued.images };
+}
+
+function rowOrderOf(session: HeldSession, row: QueuedMessage): number {
+  const order = session.rowOrders.get(row);
+  if (order === undefined) {
+    throw new Error(`queued message ${row.id} has no write order`);
+  }
+  return order;
 }
 
 function isUnsent(queued: QueuedMessage): boolean {
@@ -555,14 +574,20 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   }
 
   // Empties the queue and the written messages, and sends every message they
-  // held back to the page: the written ones in write order, then every row,
-  // sent now or not, oldest first; sends nothing when both are empty.
+  // held back to the page in the order written, rows sent now or not; sends
+  // nothing when both are empty.
   function returnAllHeld(session: HeldSession) {
     const { queued } = session.state;
-    const messages = [
+    const held: WrittenMessage[] = [
       ...session.writtenMessages.values(),
-      ...queued.map(userMessageOf),
+      ...queued.map((row) => ({
+        message: userMessageOf(row),
+        order: rowOrderOf(session, row),
+      })),
     ];
+    const messages = held
+      .sort((a, b) => a.order - b.order)
+      .map((written) => written.message);
     session.writtenMessages.clear();
     if (queued.length > 0) {
       session.state.queued = [];
@@ -600,7 +625,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     session.state.queued = session.state.queued.filter((row) => row !== next);
     sendQueued(session);
     try {
-      deliverWritten(session, userMessageOf(next));
+      deliverWritten(session, userMessageOf(next), rowOrderOf(session, next));
     } catch (error) {
       const restored = [...session.state.queued];
       restored.splice(index, 0, next);
@@ -622,8 +647,10 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       log('chat', `queued message ${row.id} not sent: ${errorText(error)}`);
       return false;
     }
+    const sentRow = { ...row, sentEntryId };
+    session.rowOrders.set(sentRow, rowOrderOf(session, row));
     session.state.queued = session.state.queued.map((queued) =>
-      queued === row ? { ...row, sentEntryId } : queued,
+      queued === row ? sentRow : queued,
     );
     return true;
   }
@@ -657,7 +684,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       send('returned', { sessionId, messages: [userMessageOf(row)] });
     } else if (written !== undefined) {
       session.writtenMessages.delete(entryId);
-      send('returned', { sessionId, messages: [written] });
+      send('returned', { sessionId, messages: [written.message] });
     } else {
       log('chat', `dropped message ${entryId} not held`);
       return;
@@ -879,6 +906,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       permissionCount: 0,
       noticeCount: 0,
       queuedCount: 0,
+      heldCount: 0,
+      rowOrders: new WeakMap(),
       writtenMessages: new Map(),
       processStarts: 0,
       userSetControls: new Set(),
@@ -1131,10 +1160,18 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
 
   function appendQueued(session: HeldSession, message: UserMessage) {
     session.queuedCount += 1;
-    session.state.queued = [
-      ...session.state.queued,
-      { ...message, id: `queued-${session.queuedCount}`, sentEntryId: null },
-    ];
+    const row = {
+      ...message,
+      id: `queued-${session.queuedCount}`,
+      sentEntryId: null,
+    };
+    session.rowOrders.set(row, nextHeldOrder(session));
+    session.state.queued = [...session.state.queued, row];
+  }
+
+  function nextHeldOrder(session: HeldSession): number {
+    session.heldCount += 1;
+    return session.heldCount;
   }
 
   // Writes `message` to the agent and returns the id of the entry the agent
@@ -1156,9 +1193,13 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   }
 
   // Delivers a message that has no queued row, holding it until its entry
-  // arrives.
-  function deliverWritten(session: HeldSession, message: UserMessage) {
-    session.writtenMessages.set(deliver(session, message), message);
+  // arrives under `order`, a new stamp when none is given.
+  function deliverWritten(
+    session: HeldSession,
+    message: UserMessage,
+    order = nextHeldOrder(session),
+  ) {
+    session.writtenMessages.set(deliver(session, message), { message, order });
   }
 
   // A row whose first-message title is already set, such as a cleared one,

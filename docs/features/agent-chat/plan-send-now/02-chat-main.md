@@ -28,7 +28,7 @@ Decisions:
 - `writeNextQueued` takes the oldest **unsent** row. On a throw it goes back at its original index, so sent rows keep their places.
 - `pullBack` on a sent row: nothing, and log `queued message <id> already sent`.
 - Interrupt: returns every unsent row, oldest first, as today; sent rows stay.
-- Exit and the clear's process swap share one return helper (it replaces `returnAllQueued`). It sends one `returned` whose `messages` are the held messages with no row, in write order, then every row, sent and unsent, in queue order. It sends that `returned` whenever the list is not empty, even with an empty queue. Then it empties the queue and the held messages.
+- Exit and the clear's process swap share one return helper (it replaces `returnAllQueued`). It sends one `returned` whose `messages` are the held messages with no row, and every row, sent and unsent, merged in the order written: a row is stamped when queued, a message with no row when written, and a row the idle writes keeps its stamp. It sends that `returned` whenever the list is not empty, even with an empty queue. Then it empties the queue and the held messages.
 - The queue's persistence across a page reload already carries `sentEntryId` through `copyState`.
 - Update, in the same edit, the comments the change makes false. In `chat-sessions.ts`: the interface comments on `send`, `interrupt`, `clear` and `pullBack`, and the comments on `returnAllQueued` (or its replacement) and `writeNextQueued`. In `contract.ts`: the `QueuedMessage` comment, and the channel comments on `send`, `interrupt`, `clear` and `pullBack`; `sendNow` and `sendAllNow` get their own.
 

@@ -351,9 +351,11 @@ function send(deps: ChatCommandDeps, session: ChatSession) {
 
 // Cmd+Enter: with the box unfocused and a pending row focused, sends that row
 // now (see `sendQueuedNow`), leaving the box alone. Otherwise asks main to
-// send the box, null when it is empty, and every pending row now: into the
-// running turn, or as `send` does when none runs. The box is read, cleared and
-// put back on a refusal as `send` does, and an app slash command runs as there.
+// send the box and every pending row now: into the running turn, or as `send`
+// does when none runs. The box is read, cleared and put back on a refusal as
+// `send` does, and an app slash command runs as there. An empty box sends the
+// unsent pending rows alone, leaving the box and entries as they are, and
+// with no unsent row sends nothing.
 function sendNow(deps: ChatCommandDeps, session: ChatSession) {
   const focused = session.entries.focused();
   if (!session.isBoxFocused() && focused?.kind === 'queued') {
@@ -361,6 +363,13 @@ function sendNow(deps: ChatCommandDeps, session: ChatSession) {
     return;
   }
   const message = boxMessage(session);
+  const hasUnsent = session.state.queued.some(
+    (queued) => queued.sentEntryId === null,
+  );
+  if (message === null && !hasUnsent) {
+    deps.log('chat', 'nothing to send');
+    return;
+  }
   if (message !== null && ranSlashCommand(deps, session, message.text)) {
     return;
   }
@@ -372,7 +381,9 @@ function sendNow(deps: ChatCommandDeps, session: ChatSession) {
       }
     })
     .catch(refused(deps, session, 'sendAllNow', message));
-  clearBox(session);
+  if (message !== null) {
+    clearBox(session);
+  }
   deps.log('chat', `sending now in ${session.name}`);
 }
 

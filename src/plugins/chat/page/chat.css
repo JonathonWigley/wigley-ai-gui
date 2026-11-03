@@ -352,6 +352,11 @@
   visibility: hidden;
 }
 
+/* Stop and send now keep the gap the type hint puts between its keys. */
+.chat-running-key + .chat-running-key {
+  margin-left: var(--wg-space-2);
+}
+
 /* A chip's keys after its value. */
 .chat-chip-key {
   display: inline-flex;

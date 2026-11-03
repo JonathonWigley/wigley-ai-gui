@@ -317,6 +317,9 @@ function assistant(id: string, text: string): ChatEntry {
 }
 
 // Two messages sent while the session's harness reports `working`.
+const IDLE_SEND: UserMessage = { text: 'idle send', images: [] };
+const PENDING: UserMessage = { text: 'pending', images: [] };
+
 function queueTwo(
   test: Awaited<ReturnType<typeof started>>,
 ): [UserMessage, UserMessage] {
@@ -1592,28 +1595,42 @@ describe('createChatSessions', () => {
   );
 
   it.each([
-    { queue: 'a sent row', queueOne: true },
-    { queue: 'an empty queue', queueOne: false },
-  ])(
-    'processExit_WrittenMessages_ReturnedBeforeRows ($queue)',
-    async ({ queueOne }) => {
-      const test = await started();
-      const idleSend: UserMessage = { text: 'idle send', images: [] };
-      const pending: UserMessage = { text: 'pending', images: [] };
-      test.chat.send(ROW_ID, idleSend);
-      if (queueOne) {
+    {
+      given: 'an idle send, then a sent row',
+      hold: (test: Awaited<ReturnType<typeof started>>) => {
+        test.chat.send(ROW_ID, IDLE_SEND);
         test.activity('working');
-        test.chat.send(ROW_ID, pending);
+        test.chat.send(ROW_ID, PENDING);
         test.chat.sendNow(ROW_ID, 'queued-1');
-      }
+        return [IDLE_SEND, PENDING];
+      },
+    },
+    {
+      given: 'an idle send and an empty queue',
+      hold: (test: Awaited<ReturnType<typeof started>>) => {
+        test.chat.send(ROW_ID, IDLE_SEND);
+        return [IDLE_SEND];
+      },
+    },
+    {
+      given: 'a sent row older than the row the idle wrote',
+      hold: (test: Awaited<ReturnType<typeof started>>) => {
+        const [first, second] = queueTwo(test);
+        test.chat.sendNow(ROW_ID, 'queued-1');
+        test.activity('idle');
+        return [first, second];
+      },
+    },
+  ])(
+    'processExit_WrittenMessagesAndRows_ReturnedInWriteOrder ($given)',
+    async ({ hold }) => {
+      const test = await started();
+      const held = hold(test);
 
       test.process.events.ended({ code: 0, error: null });
 
       expect(test.sent('returned')).toEqual([
-        {
-          sessionId: ROW_ID,
-          messages: queueOne ? [idleSend, pending] : [idleSend],
-        },
+        { sessionId: ROW_ID, messages: held },
       ]);
       expect(test.chat.sessions()[0].queued).toEqual([]);
     },

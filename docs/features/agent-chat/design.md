@@ -243,12 +243,15 @@ interview on 2026-10-23; this file is the record of both.
     the queue and logs `queued message <id> not sent: <error>`. Every message, sent at idle or sent now, joins the
     transcript as its user entry when the agent takes it in, at the place it really ran: the Claude adapter adds the
     entry on the message's `started` lifecycle line (claude-stream.md § Message lifecycle), or at the write when the
-    CLI reports no lifecycle. `AgentProcess.send` returns the id that entry will carry.
+    CLI's init has reported no lifecycle; a message sent before that init joins on it. `AgentProcess.send` returns
+    the id that entry will carry.
   - **Send now**: two routes write a message to the agent at once, ahead of the rest of the queue. Cmd+Enter on the
     focused pending row, with the box unfocused, sends that row only (`chat.sendNow`, bound to `<D-Enter>` in
     `chat.chat`); the rest of the queue keeps waiting in order. Cmd+Enter in the box, while the harness reports the turn
     running, sends every unsent pending message in the order written, then the box's text and images as a last
-    message; with the box empty it sends the pending messages alone. While the session is idle it sends the box as
+    message; with the box empty it sends the pending messages alone and leaves the box and the entries as they are,
+    and with no unsent pending message it sends nothing and logs `nothing to send`, as Enter does. While the turn
+    runs the status line's running indicator shows `⌘↩ send now` beside `stop`. While the session is idle it sends the box as
     Enter does, and an app slash command in the box runs as on Enter. Claude folds a message sent now into a running
     tool turn at the turn's next model request, or runs it as its own turn straight after a turn with no tool call
     (claude-stream.md § Queued messages). The page logs `sending a pending message now in <session>` for a row and
@@ -279,7 +282,8 @@ interview on 2026-10-23; this file is the record of both.
   - **Interrupt and exit**: Ctrl+C returns every unsent queued message, oldest first, then interrupts the running
     turn; the oldest ends at the top of the box. A sent row stays: Claude's interrupt cancels nothing it holds, so the
     message runs as its own turn straight after (claude-stream.md § Queued messages, B). A process that exits, and Clear,
-    return every queued message, sent rows included, and every written message not yet taken in, so nothing is
+    return every queued message, sent rows included, and every written message not yet taken in, in the order written
+    (a row counts from when it was queued, a message with no row from its write), so nothing is
     written to a process started later without the user sending it again.
   - App slash commands run at once, working or not, and never queue; the agent's slash commands queue like any
     message.
