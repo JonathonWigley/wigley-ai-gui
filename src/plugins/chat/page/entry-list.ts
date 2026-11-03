@@ -91,13 +91,12 @@ export interface TranscriptScroll extends ContentScroll {
 // follow it, else the last entry, as pending rows, oldest first. The cursor
 // stops on each entry and activity line, on each step of an open run, then on
 // each pending row, never on the working block; the focused stop's slot is
-// marked `is-cursor`. A following
-// focus moves to the latest stop as the list changes, except one on the last
-// row's activity line, which stays on it while the run is open and grows and
-// no pending row follows it. After every change, and whenever the list's own
-// box or any slot's box resizes, a following focus scrolls the list to its
-// bottom; a hidden list does not scroll, so its tab calls `scrollToFocus` each
-// time it shows.
+// marked `is-cursor`. A following focus moves to the latest stop as the list
+// changes, except one on the last row's activity line, which stays on it while
+// the run is open and grows and no pending row follows it. After every change,
+// and whenever the list's own box or any slot's box resizes, a following focus
+// scrolls the list to its bottom; a hidden list does not scroll, so its tab
+// calls `scrollToFocus` each time it shows.
 // While the session works on its turn, the live run's line time and the
 // working block's tick once a second.
 export interface EntryList {

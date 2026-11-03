@@ -192,7 +192,7 @@ interview on 2026-10-23; this file is the record of both.
     `6 steps · Read 3 · Bash 2 · Edit · 42s` (most used first, a single use named alone); a failed tool step adds
     `· 1 failed` in the error colour before the time.
   - **Open**: Enter on the focused activity line, or a click on it, opens it, and again closes it. The open line keeps
-    its header and lists one plain row per step under it, each drawn by the `tool`, `thinking` or `raw` entry builder;
+    its summary line and lists one plain row per step under it, each drawn by the `tool`, `thinking` or `raw` entry builder;
     each step row is a cursor stop, `j` / `k` walk into them, and Enter on a step row opens its input and result in
     place. Closing the line makes it one stop again; a cursor on one of its steps moves to the line. A cursor
     following the last activity line stays on it as steps arrive, and `G` lands on that line. A line stays open or
@@ -408,7 +408,7 @@ interview on 2026-10-23; this file is the record of both.
   reason), `closeConfirm` (the end-session confirm) and `imageViewer`. The `activity` part's input is the run's steps
   (each the step's entry input), the current step (the last), whether the run is live, whether it is open, and its times:
   `startedAt`, `endedAt` (null while live) and `now`, which the app sends again each second while the run is live, so a
-  user layout formats its own time; while open it draws only its header, and the app places the step rows under it. The built-in step builders draw a plain
+  user layout formats its own time; the part draws the summary line open or closed, and the app places the step rows under it when open. The built-in step builders draw a plain
   one-line row through the kit's `collapsibleRow`; a user layout that redraws `tool`, `thinking` or `raw` draws the
   open line's rows. Each part's kit extends the base kit with the app parts it places (the editor frame, the
   dialog actions). The app keeps the composer's box and its draft, the dialogs' frames and titles, the keys and the

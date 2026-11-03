@@ -589,7 +589,7 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'activity line',
-    why: "A held steps turn draws the live header and shortlist with the box focused (no frame, no marked entry); Ctrl+C ends it into the finished line with its failed count; Esc shows the focused entry's left bar; k focuses the finished line and G follows the latest again.",
+    why: "A held steps turn draws the live summary line and the working block with the box focused (no frame, no marked entry); Ctrl+C ends it into the finished line with its failed count; Esc shows the focused entry's left bar; k focuses the finished line and G follows the latest again.",
     steps: ACTIVITY_LINE_STEPS,
   },
   {

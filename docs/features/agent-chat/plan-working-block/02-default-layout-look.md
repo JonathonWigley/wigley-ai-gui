@@ -1,6 +1,6 @@
 # 02 — Default layout look
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -82,3 +82,5 @@ Done when: `npm run typecheck`, `npm test` and `npm run lint` pass
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 5df9b792 · proof: diff read: working part, toolCounts, summary-only activity, toFixed(2), CSS and selftest entry present; full typecheck and lint clean after 02 and 03; worker ran layout and agents tests 86 pass · concerns: chat/main/selftest-script.ts:592 activity-line why still says live header and shortlist (outside Files)

@@ -110,10 +110,11 @@ export type ChatTabScope = 'chat';
 // the composer draw with; `paths` names each tab by its project folder.
 // `slashCommandNames` reads the app slash commands registered now, which the
 // `/` completion offers ahead of the agent's. `viewer` opens a sent message's
-// images full size. `timers` and `clock` tick a live activity line's time and the working block's.
-// `composerParts` holds the parts other plugins draw above every composer.
-// `drops` registers each Chat tab as the target of the files dropped or
-// pasted on it, and saves a pasted file that is not an image.
+// images full size. `timers` and `clock` tick a live activity line's time and
+// the working block's. `composerParts` holds the parts other plugins draw
+// above every composer. `drops` registers each Chat tab as the target of the
+// files dropped or pasted on it, and saves a pasted file that is not an
+// image.
 export interface ChatViewDeps extends SurfaceKitDeps {
   channel: PageChannel<ChatChannel>;
   paths: Paths;
