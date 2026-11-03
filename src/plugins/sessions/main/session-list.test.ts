@@ -212,18 +212,44 @@ describe('createSessionList', () => {
     expect(emitted).toEqual([['connected', connected.session]]);
   });
 
-  it('numbers sessions of one folder by the lowest free number', () => {
-    const { list } = setUp();
-    connectWithRow(list, info('/work/x'));
-    const b = connectWithRow(list, info('/work/x'));
-    connectWithRow(list, info('/work/x'));
-    expect(labels(list.state())).toEqual(['x', 'x 2', 'x 3']);
+  // `hidden` connects that many sessions with no row before the three rows;
+  // the second row's session then ends and a fourth row connects.
+  it.each<{
+    name: string;
+    hidden: number;
+    before: string[];
+    after: string[];
+  }>([
+    {
+      name: 'rows only',
+      hidden: 0,
+      before: ['x', 'x 2', 'x 3'],
+      after: ['x', 'x 3', 'x 2'],
+    },
+    {
+      name: 'a connected session with no row holds its number',
+      hidden: 1,
+      before: ['x 2', 'x 3', 'x 4'],
+      after: ['x 2', 'x 4', 'x 3'],
+    },
+  ])(
+    'numbers sessions of one folder by the lowest free number: $name',
+    ({ hidden, before, after }) => {
+      const { list } = setUp();
+      for (let count = 0; count < hidden; count++) {
+        list.connect(info('/work/x'));
+      }
+      connectWithRow(list, info('/work/x'));
+      const b = connectWithRow(list, info('/work/x'));
+      connectWithRow(list, info('/work/x'));
+      expect(labels(list.state())).toEqual(before);
 
-    b.end();
-    connectWithRow(list, info('/work/x'));
+      b.end();
+      connectWithRow(list, info('/work/x'));
 
-    expect(labels(list.state())).toEqual(['x', 'x 3', 'x 2']);
-  });
+      expect(labels(list.state())).toEqual(after);
+    },
+  );
 
   it('label_IsTheRowsLabel_KeptWhileTheRowIsClosed_NullOnceTheSessionEnds', () => {
     const { list } = setUp();
@@ -525,19 +551,19 @@ describe('createSessionList', () => {
     expect(list.state().rows).toEqual([]);
   });
 
-  it('ignores unknown sessions and rows it does not hold, with a log line', () => {
+  it('ignores unknown sessions, with a log line', () => {
     const { list, states, logged, activated } = setUp();
-    const connected = list.connect(info('/work/x'));
+    connectWithRow(list, info('/work/x'));
     const sentBefore = states.length;
 
     list.mark('ffffffff');
     list.activate('fffffffe');
-    expect(list.closeSession(connected.session.id)).toBe(false);
+    expect(list.closeSession('fffffffd')).toBe(false);
 
     expect(logged).toEqual([
       expect.stringMatching(/mark .*ffffffff/),
       expect.stringMatching(/activate .*fffffffe/),
-      expect.stringMatching(/closeSession .*00000001/),
+      expect.stringMatching(/closeSession .*fffffffd/),
     ]);
     expect(activated).toEqual([]);
     expect(states).toHaveLength(sentBefore);
@@ -911,7 +937,7 @@ describe('createSessionList', () => {
     expect(list.state().rows.map((row) => row.sessionId)).toEqual(['00000001']);
   });
 
-  it('emits no closed for a row a guard keeps or a row already gone', () => {
+  it('emits no closed for a row a guard keeps', () => {
     const { list, emitted } = setUp();
     const connected = connectWithRow(list, info('/work/x'));
     const id = connected.session.id;
@@ -924,9 +950,56 @@ describe('createSessionList', () => {
 
     allow = true;
     list.closeSession(id);
-    expect(list.closeSession(id)).toBe(false);
     expect(closedEvents()).toHaveLength(1);
   });
+
+  // Each row arranges a fresh list and returns the id `closeSession` gets. A
+  // close guard refusing every close shows the row's closed state is not
+  // asked of the guards again.
+  it.each<{ name: string; arrange: (list: SessionList) => string }>([
+    {
+      name: 'a row the user closed',
+      arrange: (list) => {
+        const { id } = connectWithRow(list, info('/work/x')).session;
+        list.closeSession(id);
+        return id;
+      },
+    },
+    {
+      name: 'a row release closed',
+      arrange: (list) => {
+        const { id } = connectWithRow(list, info('/work/x')).session;
+        list.release(id);
+        return id;
+      },
+    },
+    {
+      name: 'a connected session that never had a row',
+      arrange: (list) => list.connect(info('/work/x')).session.id,
+    },
+    {
+      name: 'an owned row the user closed',
+      arrange: (list) => {
+        const { id } = list.open(owned('h1')).session;
+        list.closeSession(id);
+        return id;
+      },
+    },
+  ])(
+    'closeSession_RowAlreadyClosed_ReturnsTrueAndChangesNothing: $name',
+    ({ arrange }) => {
+      const { list, states, emitted, logged } = setUp();
+      const sessionId = arrange(list);
+      list.addCloseGuard(() => false);
+      const lengthsBefore = [states.length, emitted.length, logged.length];
+
+      expect(list.closeSession(sessionId)).toBe(true);
+
+      expect([states.length, emitted.length, logged.length]).toEqual(
+        lengthsBefore,
+      );
+    },
+  );
 
   // Each row arranges a fresh list and returns the id `release` gets; ids
   // count up from 00000001 in connect and open order. `sent` is each state
@@ -953,6 +1026,17 @@ describe('createSessionList', () => {
     {
       name: 'a guard keeps the row',
       arrange: (list) => {
+        list.addCloseGuard(() => false);
+        return connectWithRow(list, info('/work/x')).session.id;
+      },
+      sent: [],
+      events: [],
+      logs: ['[sessions] release for session 00000001 kept by a close guard'],
+    },
+    {
+      name: 'one of two guards keeps the row',
+      arrange: (list) => {
+        list.addCloseGuard(() => true);
         list.addCloseGuard(() => false);
         return connectWithRow(list, info('/work/x')).session.id;
       },

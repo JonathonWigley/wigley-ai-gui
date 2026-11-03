@@ -189,8 +189,9 @@ export interface SessionsState {
   selectedSessionId: string | null;
 }
 
-// `closeSession` returns whether the row closed: false when a close guard kept
-// it or main holds no such row; the session stays connected either way.
+// `closeSession` returns whether the session's row is closed: true when it
+// closed or was already closed, false when a close guard kept it or main knows
+// no such session; the session stays connected either way.
 // `activated` arrives before the `stateChanged` the activation causes.
 export interface SessionsChannel extends ChannelShape {
   invoke: {

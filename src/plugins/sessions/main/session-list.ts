@@ -31,7 +31,8 @@ export interface SessionList extends SessionsMainExports {
   tools(): ToolDefinition[];
   state(): SessionsState;
   // The user's close, which every close guard must allow; returns whether the
-  // row closed, emitting `closed` when it did. The session stays connected.
+  // row is closed, true for a row already closed, emitting `closed` only for a
+  // row it closes. The session stays connected.
   closeSession(sessionId: string): boolean;
 }
 
@@ -151,11 +152,12 @@ function routeCall(
 // its label while it lasts; a closed row comes back at the end with the
 // session's next mark or activate. `mark`, `activate`, `release` and
 // `closeSession` send the whole state only when it changed; `mark`, `activate`
-// and `closeSession` log and ignore a session they cannot act on, `release`
-// ignores one silently. `release` and `closeSession` log and keep a row a close
-// guard refuses, and emit `closed` for a row they close; `closeSession` returns
-// false for every row it leaves open. Every state sent with a selection other
-// than the last sent emits `selected` after it.
+// and `closeSession` log and ignore an unknown session, `release` silently
+// ignores a session it cannot act on. `release` and `closeSession` log and
+// keep a row a close guard refuses, and emit `closed` for a row they close;
+// `closeSession` returns true for a row it closes and for a known session
+// whose row is already closed, false otherwise. Every state sent with a
+// selection other than the last sent emits `selected` after it.
 export function createSessionList(deps: SessionListDeps): SessionList {
   const contributions: Contribution[] = [];
   const closeGuards: ((sessionId: string) => boolean)[] = [];
@@ -197,26 +199,6 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     }
   };
 
-  // The index of the session's row, or null after logging why it was ignored.
-  const knownRow = (method: string, sessionId: string): number | null => {
-    if (!entries.has(sessionId)) {
-      deps.log(
-        'sessions',
-        `${method} for unknown session ${sessionId} ignored`,
-      );
-      return null;
-    }
-    const index = rowIndex(sessionId);
-    if (index === -1) {
-      deps.log(
-        'sessions',
-        `${method} for session ${sessionId} with no row ignored`,
-      );
-      return null;
-    }
-    return index;
-  };
-
   const end = (entry: SessionEntry) => {
     if (!entries.delete(entry.session.id)) {
       return;
@@ -248,13 +230,9 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     deps.emit('closed', { sessionId });
   };
 
-  // Builds the session's entry, adding its row at the end when `addsRow`; a
-  // throwing contribution start leaves neither.
-  const addEntry = (
-    info: SessionInfo,
-    owned: boolean,
-    addsRow: boolean,
-  ): SessionEntry => {
+  // Builds and holds the session's entry, adding no row; a throwing
+  // contribution start leaves no entry.
+  const addEntry = (info: SessionInfo, owned: boolean): SessionEntry => {
     const session: AgentSession = { id: deps.randomHex(), info };
     const group = groupOf(info);
     const entry: SessionEntry = {
@@ -267,9 +245,6 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       retiredHostIds: new Set(),
     };
     entries.set(session.id, entry);
-    if (addsRow) {
-      rows.push(rowOf(entry));
-    }
     return entry;
   };
 
@@ -399,7 +374,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
           `Host session ${hostId} was retired by session ${appId}`,
         );
       }
-      const entry = addEntry(info, false, false);
+      const entry = addEntry(info, false);
       deps.emit('connected', entry.session);
       return {
         session: entry.session,
@@ -415,7 +390,8 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       if (entriesHolding(hostId).length > 0) {
         throw new Error(`Host session ${hostId} is already open`);
       }
-      const entry = addEntry(info, true, true);
+      const entry = addEntry(info, true);
+      rows.push(rowOf(entry));
       if (options?.select !== false) {
         select(rows.at(-1));
       }
@@ -489,9 +465,16 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       closeGuards.push(mayClose);
     },
     closeSession(sessionId) {
-      const index = knownRow('closeSession', sessionId);
-      if (index === null) {
+      if (!entries.has(sessionId)) {
+        deps.log(
+          'sessions',
+          `closeSession for unknown session ${sessionId} ignored`,
+        );
         return false;
+      }
+      const index = rowIndex(sessionId);
+      if (index === -1) {
+        return true;
       }
       if (!everyGuardAllows(sessionId)) {
         deps.log(
