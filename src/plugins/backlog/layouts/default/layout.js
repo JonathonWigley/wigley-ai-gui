@@ -1,7 +1,7 @@
 // @ts-check
 
 // The built-in Backlog look. Each pane's root is `div.backlog-pane`, whose
-// tracks `backlog.css` sets by the container it fills.
+// tracks its `layout.css` sets by the container it fills.
 
 const FIELD_LABELS = /** @type {const} */ ([
   ['title', 'Title'],

@@ -9,7 +9,7 @@
 // strip, other plugins' bar parts (`contributedParts`) after them, then its
 // close prompt and pane controls, each tab's icon with no label, and the
 // rename dialog's title box over why a title was refused and the hint, in the
-// class names `sessions.css` styles.
+// class names its `layout.css` styles.
 
 /** @type {import('../layout').CompleteLayout} */
 const layout = {

@@ -249,7 +249,7 @@ describe('createPageLayouts', () => {
     expect(show.shown[0].layouts.get('default')).toBe(BUILT_IN);
   });
 
-  it('show_DefaultStylesheet_HandedToTheLoader', () => {
+  it('showLayouts_DefaultStylesheet_HandedToTheLoader', () => {
     const page = pageLayoutsWith();
 
     showing(page, 'default', undefined, 'bundled.css');

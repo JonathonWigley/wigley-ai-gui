@@ -1,6 +1,6 @@
 // @ts-check
 
-// The built-in notes look, with the class names `notes.css` styles. A root
+// The built-in notes look, with the class names its `layout.css` styles. A root
 // that only groups what the app's container lays out (`notes-tags`,
 // `notes-session-value`, `notes-actions`, `notes-markup-groups`) is
 // `display: contents` there, so the container lays out its children as its

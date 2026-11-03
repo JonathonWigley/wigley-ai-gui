@@ -697,9 +697,9 @@ export interface MainServices {
 // `layouts.register` writes the plugin's layout contract `layoutTypes` to its
 // layouts folder and watches that folder, and the plugin's default folder
 // `src/plugins/<id>/layouts/default` in the repo clone, until the returned
-// `Disposable`'s `dispose`; it throws for a second registration. `layouts.names` lists the
-// plugin's layouts, `default` first; only `default` before the folder has been
-// listed or while unregistered.
+// `Disposable`'s `dispose`; it throws for a second registration.
+// `layouts.names` lists the plugin's layouts, `default` first; only `default`
+// before the folder has been listed or while unregistered.
 export interface MainApi<
   M extends PluginManifest,
   Ch extends ChannelShape,

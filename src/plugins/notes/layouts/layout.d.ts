@@ -15,8 +15,8 @@ import type {
 // The app's container lays out each part's root as one item: the fields grid a `row`, the row's value slot (a
 // wrapping flex line) a value part, the dialog's actions row `actions`, the confirmation's body `confirm`, and the
 // markup view's wrapping flex toolbar `markupToolbar`. `default`'s roots that only group (`.notes-tags`,
-// `.notes-session-value`, `.notes-actions`, `.notes-markup-groups`) are `display: contents` in the app's stylesheet,
-// so the container lays out their children; a layout's own root that should do the same sets `display: contents` in
+// `.notes-session-value`, `.notes-actions`, `.notes-markup-groups`) are `display: contents` in `default`'s
+// `layout.css`, which stays linked whichever layout is picked, so the container lays out their children; a layout's own root that should do the same sets `display: contents` in
 // its `layout.css`.
 //
 // What a part leaves out:

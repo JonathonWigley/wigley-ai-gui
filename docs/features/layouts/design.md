@@ -85,10 +85,11 @@ edit shows at once, and the committed edit ships as the next build's bundled cop
   bundled copy, which ships as a file the loader links and the build never inlines; the link is attached only while it
   has an href, so a rule deleted live is gone. CSS for parts the app draws itself (slots, panes, editors, text boxes)
   stays in the plugin's page CSS and still needs a rebuild.
-- **Fallback.** A missing clone and a default that fails to load or read draw the bundled default. A live default
-  must define every function part the bundled default defines; a missing part fails the load with
-  `layout default has no <part>`. A load, read or missing-part failure raises the toast a failed user layout raises;
-  a part that throws while drawing logs and draws the bundled part, as a user layout's part does.
+- **Fallback.** A missing clone draws the bundled default; a default that fails to load or read keeps its last good
+  live version, else the bundled default. A live default must define every function part the bundled default
+  defines; a missing part fails the load with `layout default has no <part>`. A load, read or missing-part failure
+  raises the toast a failed user layout raises; a part that throws while drawing logs and draws the bundled part, as a
+  user layout's part does.
 
 ## What a layout draws
 
@@ -101,7 +102,9 @@ A layout draws every pane, and every repeated row, card or entry of its owner's 
 - dialogs' and prompts' lifecycle, the status lines and the saved state
 
 A layout's CSS restyles only under its own root: every part root carries `data-layout="<name>"` and
-`data-layout-owner="<owner>"`, so two owners' layouts of one name never share selectors. The shell's frames are
+`data-layout-owner="<owner>"`, so two owners' layouts of one name never share selectors. The default's
+`layout.css` is the exception: it keeps the page CSS's unscoped selectors and is linked whichever layout is picked,
+so it also styles a user layout's parts that carry its classes. The shell's frames are
 CSS-only: the five chrome areas (`CHROME_AREAS`: title bar, activity bar, side bar, right bar, status bar) carry the
 shell layout's attributes, and its JS parts draw only what the core puts in them. The app-wide look of the primitives
 stays in themes.
@@ -173,7 +176,8 @@ can be iterated in place. The sample sends nothing and raises no notification or
   list picker and confirm prompt expose hooks (`drawRow`, `drawBody`) that each owner fills, so shared code names no
   owner.
 - **CSS stays inside the layout's root.** Restyling a primitive app-wide from a layout is out of scope: themes carry
-  the app-wide look, and a layout rule selects under its own `data-layout` root.
+  the app-wide look, and a layout rule selects under its own `data-layout` root; the default's `layout.css` keeps
+  the page CSS's unscoped selectors and is linked under every pick.
 - **Defaults load live from the repo clone, not a config override.** The user is the app's only user and wants every
   look change in the shipped app, so the repo edit is the live edit and the shipped edit, with no second copy to
   carry over. The bundled copy keeps the app drawing when the clone is missing or broken.

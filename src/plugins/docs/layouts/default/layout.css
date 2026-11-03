@@ -106,13 +106,10 @@
    scroller. */
 .docs-doc-frame {
   display: flex;
+  flex: 1;
   flex-direction: column;
   min-height: 0;
   min-width: 0;
-}
-
-.docs-doc-frame {
-  flex: 1;
 }
 
 /* The edge to the tree shows only with a doc open: the empty state names the
