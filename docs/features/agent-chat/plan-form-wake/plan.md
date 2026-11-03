@@ -154,7 +154,7 @@ Forms and primer reach chat only through `api.dependency<ChatMainExports>('chat'
 - [x] [Drive: chat.start returns the session's host id](02-drive-host-id.md)
 
 ### Wave 2
-- [ ] [Wire the wake into forms and the primer](03-wire-forms-primer.md) — after 01
+- [x] [Wire the wake into forms and the primer](03-wire-forms-primer.md) — after 01
 
 ### Wave 3
 - [ ] [Doc re-read](04-doc-re-read.md) — after 01, 02, 03
@@ -169,11 +169,15 @@ Review base: 9b795658
 ### Groups
 - 02 · 54f72bb2 · diff read: hostSessionIdOf and the { sessionId, hostSessionId } result present as planned; chat-sessions.test.ts and start.test.ts 152 passed; whole-tree typecheck waits on 01 · concerns: no test row pins chat.start's hostSessionId result or its null throw (plan asked none); worker's nvm prefix was refused, ran on default node (v24.22.1 matches .nvmrc)
 - 01 · d3ba371b · diff read: AgentFormWake, AgentFormServiceDeps.wake, ChatFormWakeTarget, createChatFormWake, NO_FORM_WAKE present as planned; npm run typecheck passes; worker ran the 4 test files, 107 passed · concerns: re-send row has both callers>0 and askTurn set, so it isolates neither clause (each clause pinned by its own row); rejection test's two microtask flushes depend on promise-chain depth
+- 03 · cb955812 + fix 1cac2422 · diff read: dependsOn ['sessions', 'chat', 'keys'] and createChatFormWake on both live services, NO_FORM_WAKE on previews; typecheck and lint pass; plugin-manifests.test.ts passes; selftest --plugin chat,forms,primer failed 92 steps on the first dispatch (start order put chat's left-open chat-second row in forms' wrap steps) and passes after fix 1cac2422 · concerns: first dispatch failed the layer check (forms/primer main may not import chat/contract) and the self-test; the whole self-test is not run, so scripts other than chat that now start before forms are unchecked; forms+primer-only self-test not re-run after the fix
 ### Contract changes
 ### Rulings
 - drive SKILL.md stated no chat.start result, so one sentence was added after the chat.start profile line — the Files field expects the skill to state it — one sentence to drop if wrong · group 02 · group 02
 - start.test.ts (outside Files) gains hostSessionIdOf on its fakeChat, no new row — the widened Pick needs it to typecheck — none · group 02 · group 02
 - forms and primer start.ts pass NO_FORM_WAKE to all four services as a placeholder so the tree compiles — group 03 replaces the two live ones with createChatFormWake — if 03 misses it the live app never wakes · group 01 · group 01
 - host-move GIVEN is its own it in the 'a session moved to a new host id' block, not a column of its it.each — that table's second row has a waiting call, so a wake column would pass trivially — one extra test · group 01 · group 01
+- forms' three wrap steps repeat their key until their row activates (stepAcrossWrapTo, max 12), rather than chat's script closing chat-second at its end — scripts here close the previous run's fixture at their next open, and forms must hold any earlier script's rows — fails at the cap past 12 foreign rows · group 03 · group 03
+- forms/main and primer/main LAYERS entries gain src/plugins/chat/contract.ts, as agents/main has — the layer check refused the import — none · group 03 · group 03
+- chat/main/start.ts reformatted with oxfmt on that file only — lint flagged group 02's lines — formatting only · group 03 · group 03
 ### Review rounds
 ### Test gate
