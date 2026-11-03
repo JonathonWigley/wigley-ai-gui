@@ -109,10 +109,17 @@ In `src/contracts/agent.ts`, beside `AgentHarness`:
 - `PlanRowUpdate` — the live rows a session saw: `rows` of `PlanRowPatch` (`{ kind, percent, resetsAt, severity }`), `at`. Folded into
   the profile's last `PlanUsage` by `kind`; a kind the poll has not reported yet is held until it does.
 - `AgentHarness.planUsage(profileDir)` — runs one poll and resolves its `PlanUsage`, or rejects with the reason.
+- `AgentHarness.lastUsage(sessionId, projectDir, profileDir)` — the main agent's `usage` event as the saved session's
+  last main reply left it: `at` is that reply's time, `contextTokens` and `cacheExpiresAt` come from that reply, and
+  the window, both limits and spend are null, since only a running process knows them. It resolves null when the
+  session has no main reply, and rejects, naming the path, when the transcript is missing.
 - `AgentProcessEvents.planUsage(update)` and `AgentProcessEvents.agentEvent(event)`.
 - `AgentEvent` — the agent-tower union, built here with its first member, `usage`: `agentId` (`main`), `at`,
   `contextTokens`, `contextWindow` (null until the harness reports it), `autocompact` (`configured` and `reported`, each
   tokens or null), `cacheExpiresAt` (epoch ms or null), `spendUsd` (null until the first result).
+- A process emits its first `usage` event once it knows the context. A new session knows it from the start (0 tokens),
+  so its line gains the limit when `get_context_usage` replies. A resumed session first seeds the context from its
+  saved transcript, the same read as `lastUsage`, unless a live reply came first, so it never reports a false 0.
 
 ## The usage plugin
 
@@ -123,8 +130,11 @@ In `src/contracts/agent.ts`, beside `AgentHarness`:
   under `MIN_POLL_SECONDS` = 60; read at each reschedule and rescheduled on a settings change) through the injected
   main `timers`. It folds each
   `chat.planUsage` update into that profile's plan usage, records each session's profile from `chat.sessionOpened`
-  (so the line shows the right profile before the session's first turn ends), keeps each session's last `usage` agent
-  event from `chat.agentEvent`, and drops a session when it ends. It sends one snapshot over its channel on every change.
+  (so the line shows the right profile before the session's first turn ends), keeps each session's latest `usage`
+  agent event from `chat.agentEvent` (an event whose `at` is older than the kept one's changes nothing), and drops a
+  session when it ends. Chat sends a restored row's saved usage the same way: on restoring a row that ever sent a
+  message, it reads `harness.lastUsage` and emits the result as the row's `agentEvent`. A failed read is logged, and
+  the row keeps the 0 line. It sends one snapshot over its channel on every change.
 - A failed poll keeps the profile's last plan usage, marks it stale with the time of the last good poll, and carries
   the reason, which the details bar shows; the next good poll clears both. With no good poll yet the profile has no
   usage: the line says `plan loading` (or `plan unavailable` after a failure) and the details say `no good read yet`.
@@ -138,8 +148,9 @@ In `src/contracts/agent.ts`, beside `AgentHarness`:
     `addBarPart`) in each session's tab bar. The line: its context bar
     (`used/limit`), its cache countdown and its spend. The context bar is tinted by its share of the limit (`warning`
     from 70 %, `critical` from 90 %); with no autocompact limit it shows tokens alone. A narrow bar drops whole items
-    from the line's end (spend, then cache, then the context text) and keeps the context bar. A session with no usage
-    event yet draws no line. The line redraws on each snapshot, each `sessions.activeChanged`, each layouts set and the
+    from the line's end (spend, then cache, then the context text) and keeps the context bar. Every session draws a line:
+    one with no usage event yet (a new chat, a restored row before its saved usage is read, a session usage does not
+    track) draws a zero line, its context `0k` with no cache or spend. The line redraws on each snapshot, each `sessions.activeChanged`, each layouts set and the
     minute tick. Each surface logs `session line in <name>: <text>` under its own plugin when a session's text
     changes, `<name>` the session's side-bar label (its id while none is known).
   - each session's row line, a sessions row part (`usage.rowLine`, added through `sessions.addRowPart`) under its
@@ -185,6 +196,10 @@ contributes to it through `api.areas.rightBar`.
 - **Autocompact limit:** the configured override wins, the reported limit shows beside it, and a difference is marked.
 - **Cache time** is the prompt-cache expiry, not an autocompact timer: autocompact fires on tokens alone.
 - **Main gains injected `timers`,** matching the page's, since the poller is main's first periodic work.
+- **Every chat shows its line.** A session with no usage draws a zero line rather than nothing. A restored or resumed
+  session's context and cache come from its saved transcript (`lastUsage`), which covers every saved session, sessions
+  from before this shipped included, with no saved state of the app's own to keep in sync. The limit and spend
+  arrive with the session's process.
 
 ## Rejected
 
