@@ -79,6 +79,17 @@ const NO_TITLES: SessionTitles = {
   firstMessage: null,
 };
 
+// The usage `agentEvent`s chat emitted, as sent.
+function usageEmitted(
+  emitted: readonly Emitted[],
+): ChatMainEvents['agentEvent'][] {
+  return emitted.flatMap((each) =>
+    each.event === 'agentEvent' && each.data.event.type === 'usage'
+      ? [each.data]
+      : [],
+  );
+}
+
 const NOTHING_SAVED: SavedSessions = {
   sessions: [],
   selectedHostSessionId: null,
@@ -677,6 +688,60 @@ describe('createChatSessions', () => {
       expect.stringMatching(new RegExp(`${hostId}.*cannot read`)),
     );
     expect(test.harness.processes.at(-1)?.request.resume).toBe(true);
+  });
+
+  it.each([
+    {
+      given: 'saved usage',
+      saved: fakeUsageEvent(2, 1500),
+      emitted: [
+        {
+          sessionId: ROW_ID,
+          profileDir: '~/.claude',
+          hostSessionId: PAST_ONE.sessionId,
+          event: fakeUsageEvent(2, 1500),
+        },
+      ],
+    },
+    { given: 'none saved', saved: null, emitted: [] },
+  ])(
+    'resume_SavedUsage_EmitsItAsTheNewRowsAgentEvent given $given',
+    async ({ saved, emitted }) => {
+      const test = setUp();
+      const hostId = PAST_ONE.sessionId;
+      test.harness.setLastUsage(hostId, saved);
+
+      await test.chat.resume({
+        projectDir: '/w/app',
+        profile: 'work',
+        hostSessionId: hostId,
+        title: PAST_ONE.title,
+      });
+
+      expect(test.harness.lastUsageCalls).toEqual([hostId]);
+      expect(usageEmitted(test.emitted)).toEqual(emitted);
+    },
+  );
+
+  it('resume_SavedUsageReadFails_LogsAndStillResumes', async () => {
+    const test = setUp();
+    const hostId = PAST_ONE.sessionId;
+    test.harness.setLastUsage(hostId, fakeUsageEvent(2, 1500));
+    test.harness.failNextLastUsage('transcript unreadable');
+
+    const sessionId = await test.chat.resume({
+      projectDir: '/w/app',
+      profile: 'work',
+      hostSessionId: hostId,
+      title: PAST_ONE.title,
+    });
+
+    expect(sessionId).toBe(ROW_ID);
+    expect(test.harness.processes.at(-1)?.request.resume).toBe(true);
+    expect(test.logged).toContain(
+      `[chat] saved usage of ${hostId} not read: transcript unreadable`,
+    );
+    expect(usageEmitted(test.emitted)).toEqual([]);
   });
 
   it('resume_AlreadyOpen_Rejects', async () => {
@@ -2231,6 +2296,113 @@ describe('createChatSessions saved sessions', () => {
     expect(test.chat.sessions()[0].entries).toEqual(
       entries.map((entry) => expect.objectContaining(entry)),
     );
+  });
+
+  it.each([
+    {
+      given: 'a sent session with saved usage',
+      sent: true,
+      profile: 'work',
+      saved: fakeUsageEvent(2, 1500),
+      calls: ['host-a'],
+      emitted: [
+        {
+          sessionId: ROW_ID,
+          profileDir: '~/.claude',
+          hostSessionId: 'host-a',
+          event: fakeUsageEvent(2, 1500),
+        },
+      ],
+    },
+    {
+      given: 'a sent session with none saved',
+      sent: true,
+      profile: 'work',
+      saved: null,
+      calls: ['host-a'],
+      emitted: [],
+    },
+    {
+      given: 'an unsent session',
+      sent: false,
+      profile: 'work',
+      saved: fakeUsageEvent(2, 1500),
+      calls: [],
+      emitted: [],
+    },
+    {
+      given: 'a sent session whose profile is missing',
+      sent: true,
+      profile: 'gone',
+      saved: fakeUsageEvent(2, 1500),
+      calls: [],
+      emitted: [],
+    },
+  ])(
+    'restore_SavedUsage_EmitsItAsTheRowsAgentEvent given $given',
+    async ({ sent, profile, saved, calls, emitted }) => {
+      const test = setUp();
+      test.harness.setLastUsage('host-a', saved);
+
+      test.chat.restore({
+        sessions: [record('host-a', { sent, profile })],
+        selectedHostSessionId: null,
+      });
+      await flush();
+
+      expect(test.harness.lastUsageCalls).toEqual(calls);
+      expect(usageEmitted(test.emitted)).toEqual(emitted);
+    },
+  );
+
+  it.each([
+    {
+      given: 'the row closed',
+      act: (test: ReturnType<typeof setUp>) => test.chat.closed(ROW_ID),
+    },
+    {
+      given: 'the row cleared',
+      act: (test: ReturnType<typeof setUp>) => test.chat.clear(ROW_ID),
+    },
+    {
+      given: 'chat stopped',
+      act: (test: ReturnType<typeof setUp>) => test.chat.killAll(),
+    },
+  ])(
+    'restore_SavedUsageReadAfterRowGone_EmitsNothing given $given',
+    async ({ act }) => {
+      const test = setUp();
+      test.harness.setLastUsage('host-a', fakeUsageEvent(2, 1500));
+      const release = test.harness.holdNextLastUsage();
+      test.chat.restore({
+        sessions: [record('host-a', { sent: true })],
+        selectedHostSessionId: null,
+      });
+
+      act(test);
+      release();
+      await flush();
+
+      expect(test.harness.lastUsageCalls).toEqual(['host-a']);
+      expect(usageEmitted(test.emitted)).toEqual([]);
+    },
+  );
+
+  it('restore_SavedUsageReadFails_LogsAndEmitsNothing', async () => {
+    const test = setUp();
+    test.harness.setLastUsage('host-a', fakeUsageEvent(2, 1500));
+    test.harness.failNextLastUsage('transcript unreadable');
+
+    test.chat.restore({
+      sessions: [record('host-a', { sent: true })],
+      selectedHostSessionId: null,
+    });
+    await flush();
+
+    expect(test.logged).toContain(
+      '[chat] saved usage of host-a not read: transcript unreadable',
+    );
+    expect(usageEmitted(test.emitted)).toEqual([]);
   });
 
   it.each([{ sent: true }, { sent: false }])(

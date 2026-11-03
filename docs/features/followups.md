@@ -151,11 +151,24 @@ Defects seen in a drive run, a transcript or the user's own use.
   `entry-focus.test.ts` row pinning `onLine`). The one-line fix kept in reserve:
   `focusLatest(isListed ? ids.at(-1) ?? null : lastStopId)`. Source session: Claude Code
   b8ee3503-3c04-48fc-bd7d-bc4f2ec56c17 in wigley-ai-gui.
-- **A restored chat's first step header reads hundreds of thousands of hours** — *agent-ready*: in a drive run, after
-  `restart` restored a chat row, the restored conversation's first step header read "1 step · 498243h 11m", a
-  duration measured from a zero or epoch start time. The activity line takes its start from
-  `startedAt: previousAt ?? steps[0].at` (`src/plugins/chat/page/activity-runs.ts`); trace the `at` stamps of
-  `loadHistory` entries (`src/plugins/chat/main/chat-sessions.ts`) and give history entries a real or absent start.
+- **A restored chat's first step header reads hundreds of thousands of hours** — *agent-ready*: after an app restart
+  restored a session (seen live, and in a drive run after `restart`), an entry header read `1 step · 498246h 44m`
+  (about 56.8 years), a run whose `startedAt` is 0. Cause: `transcriptEntries`
+  (`src/main/claude-code/transcripts.ts`, `let lastAt = 0` at line 127, a second copy at 151) stamps every entry
+  before the transcript's first timestamped line with `at` 0, raw entries from unparsed or untimed lines included,
+  and those are steps; `listRows` (`src/plugins/chat/page/activity-runs.ts:60`, `startedAt: previousAt ?? steps[0].at`)
+  opens a run at 0 and closes it at the next timed entry. Two fixes: backfill the untimed leading lines with the first
+  later timestamp in `transcripts.ts`, or have `listRows` treat `at` 0 as unknown and draw no duration. Default: the
+  backfill, unless an existing test pins `0` for those entries; then say so in the report and take the `listRows`
+  fix. Source session: Claude Code 76f5a6f5-89a8-4d05-a525-af23402d29ad in wigley-ai-gui.
+- **Chat self-test fails the minimum-width fit on the session tab bar** — *agent-ready*:
+  `npm run selftest -- --plugin chat` fails 8 steps with `<keys> fits the minimum width: nav.ui-tabs.session-tabs
+  holds 120px in 99px` (groups: permission round Cmd+Enter, transcript focus Enter twice, controls e and Escape,
+  interrupt and close three times). It fails the same on base 46f417b5, so it predates the usage change. The session
+  tab bar (`.ui-tabs.session-tabs`, `src/plugins/sessions/page/sessions.css` near line 348, with the usage line from
+  `usage-tab-line` in its tab line) does not fit at the minimum width. Find what grew it (check recent commits
+  touching the sessions tab bar or the usage tab line, such as 4c8a2b0b and 4b7f175a) and make the bar fit or
+  scroll. Source session: Claude Code 76f5a6f5-89a8-4d05-a525-af23402d29ad in wigley-ai-gui.
 - **Esc in the split's session picker** — *agent-ready*: while the split's "Show session" picker is open, focus stays
   in the chat editor, so Esc reaches the editor (`<Esc> has no bind in sessions.picker`) and the picker stays open;
   the picker should take focus when it opens (`openSplitPicker`, `src/plugins/sessions/page/start.ts`).
@@ -604,6 +617,19 @@ because the earlier items rewrite many of these tests anyway.
   (`src/plugins/primer/main/selftest-script.ts`) expects `[sessions] activated Layout preview`. That line depends on
   forms' self-test running just before and leaving its preview row to the left, so a change in plugin start order
   breaks it. Fix: a close log line of its own in the sessions page, or activate a known session first.
+- **Restored row with a missing profile never gets its saved usage** — `restoreRecord`
+  (`src/plugins/chat/main/chat-sessions.ts`, near line 1337; the `lastUsage` read at 1353) reads `harness.lastUsage`
+  only when the profile is found at restore. History recovers once the profile returns (`loadHistory` retries, pinned
+  by `loadHistory_ProfileMissing_ReadsOnceItIsBack`); usage does not, so the row draws `0k` until its first live turn.
+  Choice: retry the saved-usage read from `loadHistory` when it reads (default: the same retry point as history), or
+  on a profiles change. Source session: Claude Code 76f5a6f5-89a8-4d05-a525-af23402d29ad in wigley-ai-gui.
+- **Restored saved usage is appended to the agents plugin's session log** — *needs a feature plan*: chat emits a
+  restored (and resumed) row's saved usage on the shared `chat.agentEvent` bus, and the agents plugin appends every
+  `chat.agentEvent` to `logs/<hostSessionId>.jsonl` (`src/plugins/agents/main/start.ts` near lines 65-68). Each app
+  start therefore appends one replayed `usage` line, with an old `at`, per sent restored session. Workflow and the
+  roster ignore `usage`. Choice: keep the bus and let the log skip replays (a marker on the event), or send saved
+  usage to the usage store on its own route. Source session: Claude Code 76f5a6f5-89a8-4d05-a525-af23402d29ad in
+  wigley-ai-gui.
 - **Docs page test seam for a session's host id change** — *agent-ready*: after `/clear`, the docs page hears
   `sessions.sessionHostChanged` and calls `DocsView.sourceReplaced()`, which rebuilds a session Docs tab that has
   shown (`src/plugins/docs/page/start.ts`, `docs-view.ts`). No test pins it: the docs page has no unit test file, and
@@ -629,3 +655,9 @@ because the earlier items rewrite many of these tests anyway.
 - **One test naming style** — *agent-ready*: sentences. `Name_Case_Result` names remain in `main-api.test.ts`,
   `layout-loader.test.ts`, `layout-registry.test.ts`, `card-input.test.ts`, `which-key.test.ts`,
   `help-sections.test.ts` and `docs-state.test.ts`.
+- **`$name_<suffix>` vitest titles lose their case name** — *agent-ready*: vitest reads `$name_BadId…` as one key
+  `name_BadId…`, so each row's title loses its name (the repo's own note, `src/shared/fake-agent-harness.test.ts:875`).
+  Six sites: `src/plugins/usage/main/drive-actions.test.ts:101`, `src/plugins/workflow/page/workflow-view.test.ts:484`,
+  `src/plugins/workflow/layouts/default/layout.test.ts:117`, `src/plugins/workflow/main/flow-store.test.ts:87` and
+  `src/main/drive/drive-commands.test.ts:131` and `:152`. Fix as the note says: each row carries its whole name, and
+  the title is `'$name'`. Source session: Claude Code 76f5a6f5-89a8-4d05-a525-af23402d29ad in wigley-ai-gui.

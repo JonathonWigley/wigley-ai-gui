@@ -7,6 +7,7 @@ import type {
   ChatEntry,
   ProcessActivity,
   SessionControl,
+  UsageAgentEvent,
   UserMessage,
 } from '../../../contracts/agent';
 import type { Alerts } from '../../../contracts/alerts';
@@ -1334,6 +1335,67 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     if (profile === undefined) {
       addNotice(session, missingProfileText(record.profile), 'error');
     }
+    if (record.sent && profile !== undefined) {
+      restoreSavedUsage(session, profile).catch((error: unknown) =>
+        log(
+          'chat',
+          `saved usage of ${hostSessionId} not read: ${errorText(error)}`,
+        ),
+      );
+    }
+  }
+
+  // Emits the session's saved usage as its row's `agentEvent`, unless the row
+  // closed or cleared, or chat stopped, while it was read.
+  async function restoreSavedUsage(session: HeldSession, profile: ChatProfile) {
+    const { sessionId } = session.state;
+    const { hostId } = session;
+    const profileDir = profileDirOf(profile);
+    const event = await readSavedUsage(
+      requireHarness(),
+      hostId,
+      session.state.projectDir,
+      profileDir,
+    );
+    if (event === null || isKilled) {
+      return;
+    }
+    if (isClosedOrCleared(session, sessionId, hostId)) {
+      return;
+    }
+    emitSavedUsage(session, profileDir, event);
+  }
+
+  // The session's saved usage, or null when it has none or it cannot be read,
+  // so a usage failure never fails the restore or resume reading it.
+  async function readSavedUsage(
+    harness: AgentHarness,
+    hostSessionId: string,
+    projectDir: string,
+    profileDir: string,
+  ): Promise<UsageAgentEvent | null> {
+    try {
+      return await harness.lastUsage(hostSessionId, projectDir, profileDir);
+    } catch (error) {
+      log(
+        'chat',
+        `saved usage of ${hostSessionId} not read: ${errorText(error)}`,
+      );
+      return null;
+    }
+  }
+
+  function emitSavedUsage(
+    session: HeldSession,
+    profileDir: string,
+    event: UsageAgentEvent,
+  ) {
+    deps.emit('agentEvent', {
+      sessionId: session.state.sessionId,
+      profileDir,
+      hostSessionId: session.hostId,
+      event,
+    });
   }
 
   function restore(saved: SavedSessions) {
@@ -1400,6 +1462,16 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     return session.historyRead;
   }
 
+  // Whether the row `sessionId` no longer holds `session`, or `session` left
+  // `hostId` for a new one.
+  function isClosedOrCleared(
+    session: HeldSession,
+    sessionId: string,
+    hostId: string,
+  ): boolean {
+    return held.get(sessionId) !== session || session.hostId !== hostId;
+  }
+
   async function prependHistory(
     session: HeldSession,
     profile: ChatProfile,
@@ -1413,9 +1485,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       session.state.projectDir,
       profileDirOf(profile),
     );
-    const isClosedOrCleared =
-      held.get(sessionId) !== session || session.hostId !== hostId;
-    if (isClosedOrCleared) {
+    if (isClosedOrCleared(session, sessionId, hostId)) {
       return;
     }
     session.state.entries = [...history, ...session.state.entries];
@@ -1481,13 +1551,12 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     if (isOpenOnOtherRow(hostSessionId)) {
       throw new Error(`session ${hostSessionId} is already open in the app`);
     }
-    const entries = await readHistory(
-      harness,
-      hostSessionId,
-      projectDir,
-      profileDirOf(profile),
-    );
-    return openAndStart(
+    const profileDir = profileDirOf(profile);
+    const [entries, usage] = await Promise.all([
+      readHistory(harness, hostSessionId, projectDir, profileDir),
+      readSavedUsage(harness, hostSessionId, projectDir, profileDir),
+    ]);
+    const session = openAndStart(
       harness,
       profile,
       projectDir,
@@ -1501,7 +1570,11 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         },
       },
       { select: true },
-    ).state.sessionId;
+    );
+    if (usage !== null) {
+      emitSavedUsage(session, profileDir, usage);
+    }
+    return session.state.sessionId;
   }
 
   function askPermission(

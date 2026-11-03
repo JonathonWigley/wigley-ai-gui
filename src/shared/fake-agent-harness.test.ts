@@ -1373,6 +1373,50 @@ describe('createFakeAgentHarness', () => {
     expect(await harness.planUsage(null)).toEqual(fakePlanUsage(1000));
   });
 
+  it('lastUsage_ScriptedUnscriptedAndFailNext_RecordsEveryCall', async () => {
+    const harness = createFakeAgentHarness(
+      clock,
+      createMemoryFiles(),
+      FAKE_MICROTASK_TIMERS,
+    );
+    const event = fakeUsageEvent(2, 5000);
+    harness.setLastUsage('s-1', event);
+    harness.setLastUsage('s-2', null);
+
+    expect(await harness.lastUsage('s-1', '/a', null)).toEqual(event);
+    expect(await harness.lastUsage('s-2', '/a', null)).toBeNull();
+    expect(await harness.lastUsage('s-3', '/a', null)).toBeNull();
+    harness.failNextLastUsage('cannot read');
+    await expect(harness.lastUsage('s-1', '/a', null)).rejects.toThrow(
+      'cannot read',
+    );
+    expect(await harness.lastUsage('s-1', '/a', null)).toEqual(event);
+    expect(harness.lastUsageCalls).toEqual(['s-1', 's-2', 's-3', 's-1', 's-1']);
+    expect(harness.pastSessionCalls).toEqual([]);
+  });
+
+  it('lastUsage_Held_ResolvesOnlyAfterRelease', async () => {
+    const harness = createFakeAgentHarness(
+      clock,
+      createMemoryFiles(),
+      FAKE_MICROTASK_TIMERS,
+    );
+    const event = fakeUsageEvent(1, 5000);
+    harness.setLastUsage('s-1', event);
+    const release = harness.holdNextLastUsage();
+    let resolved: unknown = 'pending';
+
+    const read = harness.lastUsage('s-1', '/a', null).then((value) => {
+      resolved = value;
+    });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(resolved).toBe('pending');
+    release();
+    await read;
+
+    expect(resolved).toEqual(event);
+  });
+
   it('isFakeAgentHarness_TellsTheFakeFromAnother', () => {
     // A copy has every member of the fake but is not the object it made.
     const other: AgentHarness = {

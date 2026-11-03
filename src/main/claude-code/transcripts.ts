@@ -3,7 +3,9 @@ import {
   type ChatImage,
   MAIN_AGENT_ID,
 } from '../../contracts/agent';
+import { isJsonObject } from '../../shared/json';
 import { asArray, asJson, asString, type Json, parsed } from './json-fields';
+import { replyUsageOf, type SavedReply } from './session-usage';
 import { pairToolResult, toolUseEntry } from './tool-entries';
 
 // Claude's saved session transcripts: one JSON object per line in
@@ -21,6 +23,8 @@ export const TITLE_LENGTH = 80;
 export const UNTITLED_SESSION = 'Untitled session';
 export const SESSION_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+// Local slash commands answer with an assistant message of this model.
+export const SYNTHETIC_MODEL = '<synthetic>';
 
 // Line types that carry the CLI's bookkeeping, not the conversation.
 const SKIPPED_LINE_TYPES: ReadonlySet<string> = new Set([
@@ -140,6 +144,33 @@ export function transcriptEntries(text: string): ChatEntry[] {
     addLineEntries(line, lineNumber, lastAt, entries, toolEntries);
   }
   return entries;
+}
+
+// The main conversation's model replies, oldest first: every `assistant` line
+// that is not a sidechain's, whose model is not `SYNTHETIC_MODEL`, and that
+// carries `message.usage`. Each `at` follows `transcriptEntries`' rule; a line
+// that does not parse is skipped.
+export function mainReplies(text: string): SavedReply[] {
+  const replies: SavedReply[] = [];
+  let lastAt = 0;
+  for (const lineText of text.split('\n')) {
+    const json = parsed(lineText);
+    if (!json.ok) {
+      continue;
+    }
+    const line = asJson(json.value);
+    lastAt = lineAt(line, lastAt);
+    const message = asJson(line.message);
+    const isMainReply =
+      line.type === 'assistant' &&
+      line.isSidechain !== true &&
+      message.model !== SYNTHETIC_MODEL &&
+      isJsonObject(message.usage);
+    if (isMainReply) {
+      replies.push({ reply: replyUsageOf(asJson(message.usage)), at: lastAt });
+    }
+  }
+  return replies;
 }
 
 // A line's top-level `timestamp` (ISO 8601) in epoch milliseconds, or

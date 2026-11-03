@@ -107,25 +107,47 @@ Promise<UsageAgentEvent | null>`.
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Claude adapter knows a saved session's usage](01-adapter-saved-usage.md)
-- [ ] [Usage store keeps the newest event](02-store-newest-usage.md)
-- [ ] [Page draws a zero line](03-page-zero-line.md)
+- [x] [Claude adapter knows a saved session's usage](01-adapter-saved-usage.md)
+- [x] [Usage store keeps the newest event](02-store-newest-usage.md)
+- [x] [Page draws a zero line](03-page-zero-line.md)
 
 ### Wave 2
-- [ ] [Chat reads a restored row's saved usage](04-chat-restored-usage.md) — after 01
+- [x] [Chat reads a restored row's saved usage](04-chat-restored-usage.md) — after 01
 
 ### Wave 3
-- [ ] [Doc re-read](05-doc-re-read.md) — after 01–04
+- [x] [Doc re-read](05-doc-re-read.md) — after 01–04
 
 ### Wave 4
-- [ ] [Final verification](06-final-verification.md) — after 05
+- [x] [Final verification](06-final-verification.md) — after 05
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 46f417b5
 
 ### Groups
+- 02 · 7e37654f · diff read matches Decisions; tsc clean on usage-store · concerns: none
+- 03 · 278491fc · diff read matches Decisions; Produces signatures present; tsc clean outside group 01's in-progress files · concerns: brief named a rowLineInput table in usage-view-model.test.ts that did not exist; worker added one
+- 01 · 6dd19915 · diff read matches Decisions; every Produces present; no hasReply left; npm run typecheck clean · concerns: none beyond rulings; resume read logs a rejection even after close (matches the settings read)
+- 04 · 804e0855 · diff read matches Decisions; Produces present; npm run typecheck clean · concerns: none
+- 05 · none · no changes: design.md matches the landed code; two loose lines handed to the review · concerns: lastUsage doc names only the missing-transcript rejection, not the bad-id one; store doc says an older event changes nothing though it records the profile
+- 06 · none · drive run 20261103-004411-8700 (real Claude, ~$0.31+): check 1 PASS (0k then 0k/300k in row and status); check 2 PASS (restored row 49k, status 49k cache 3m before any send; row line is context-only by design, the check's 'cache in both' wording was wrong); check 3 on an open row only activates it (chat-sessions.ts:1517) — rerun 3b on a closed row: limit arrives, but both lines flash 0k before the transcript seed lands (to the review) · concerns: resume of a closed session draws the page zero line until the adapter seed lands — plan expected no 0k between; restored entry header reads '1 step · 498246h 44m' (epoch-start duration, code this run did not touch)
 ### Contract changes
+- readTranscript (new export): none → export async function readTranscript(files: Files, paths: Paths, projectsFolder: string, sessionId: string): Promise<string> in past-sessions.ts · why: readHistory, readLastUsage and the harness's resume seed share one session-id check and path · consumers: 01 · group 01
+- readTranscript: exported → module-private; readSavedReplies(files, paths, projectsFolder, sessionId): Promise<SavedReply[]> exported in past-sessions.ts · why: review finding 6, one place reads a saved session's main replies · consumers: readLastUsage, the harness's resume seed · review fix
 ### Rulings
+- A session holding no usage takes an incoming usage whatever its at — the Decisions line conditions the skip on a kept usage — none expected · group 02 · group 02
+- Same-state identity is pinned by its own toBe test beside the toEqual table — the table cannot see identity — one extra test · group 02 · group 02
+- Zero meter built by a private zeroContextMeter() through formatTokens(0), fresh object per call — keeps one formatter — one allocation per draw · group 03 · group 03
+- NoSnapshotYet moved out of the build table into build_NoSnapshotYet_DrawsNothing, since the table's other rows now draw — clarity — none · group 03 · group 03
+- Resume seed reads readTranscript + mainReplies + withSavedReplies on the live state rather than calling readLastUsage — the Decisions line folds into the live state — none · group 01 · group 01
+- New session starts as withSavedReplies(EMPTY_SESSION_USAGE, []) rather than a named constant — reuses the empty-list rule — a reviewer may prefer a constant · group 01 · group 01
+- New-session leading events are pinned by extending start_Turn_EmitsUsageEventsAndAsksContextUsage; with its 30% override the second event's configured limit is 300000 — 'both limits null' holds for the first event only — none · group 01 · group 01
+- Fake lastUsage takes a pending fail and hold at call time; a held failing call rejects after release — none · group 01 · group 01
+- requireHarness() runs inside the async emitSavedUsage, so a missing harness is a logged rejection and restore never throws — keeps restore synchronous — a log line in place of a throw · group 04 · group 04
+- oxfmt --write on chat-sessions.test.ts (43a3c7ec) as lead editor-tooling — one formatter rewrap in group 04's test; agent-strip.css, chat/main/start.ts and sessions/title-tool lint/format failures predate the run (base 46f417b5) and are left — none · lead
+- Check 3 closed after fix 7a2ebec0 (drive 3c): a resumed closed session paints its saved context (49k, cache 4m) then 49k/300k; a 0k line is still logged once for the new row but never painted (page builds the row from the prior snapshot) — removing the log needs a design change the review left as-is — a one-line log · lead
 ### Review rounds
+- implementation review · 2c774d03 · NEEDS FIXES (2 Important, 5 Minor, 3 pre-existing; 1 prose fix lead-applied 38feb604)
+- re-review (correctness) · fix commits 36893a00, 7a2ebec0 · PASS (findings 1, 2, 4-doc, 5, 6, 7 closed; 3, 4-route, 8, 9, 10 to follow-ups fa06fcba)
 ### Test gate
+- vitest src/main/claude-code, src/shared/fake-agent-harness.test.ts, src/plugins/usage, src/plugins/usage-tab-line, src/plugins/chat (every touched module and the usage line's other host) · 1260 passed; selftest --plugin usage,chat,agent-lines (the zero line changes first-draw logging in the usage, chat status and side-bar row lines) · usage and agent-lines pass; chat's 8 minimum-width fit checks (nav.ui-tabs.session-tabs holds 120px in 99px) fail identically on base 46f417b5, pre-existing; npm run typecheck clean; oxlint/oxfmt clean on the run's files (agent-strip.css, chat/main/start.ts, sessions/title-tool predate the run)

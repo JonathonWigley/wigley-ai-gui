@@ -25,6 +25,7 @@ import {
   turnUsageOf,
 } from './session-usage';
 import { pairToolResult, type ToolEntry, toolUseEntry } from './tool-entries';
+import { SYNTHETIC_MODEL } from './transcripts';
 
 // What one stdout line of `claude` in stream-json mode means to the chat.
 // `entries` are whole entries, not yet stamped with `at`, each replacing an
@@ -76,8 +77,6 @@ export interface StreamDecoder {
 type TextEntry = Extract<EntryDraft, { kind: 'assistant' | 'thinking' }>;
 type RawEntry = Extract<EntryDraft, { kind: 'raw' }>;
 
-// Local slash commands answer with an assistant event of this model.
-const SYNTHETIC_MODEL = '<synthetic>';
 const LOCAL_OUTPUT_OPEN = '<local-command-stdout>';
 const LOCAL_OUTPUT_CLOSE = '</local-command-stdout>';
 

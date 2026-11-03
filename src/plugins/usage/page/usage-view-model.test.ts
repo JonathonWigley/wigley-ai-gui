@@ -15,6 +15,7 @@ import type {
 import {
   detailsInput,
   detailsStatesText,
+  rowLineInput,
   sessionLineInput,
   sessionLineText,
   statusLineInput,
@@ -98,6 +99,17 @@ function twoProfiles(sessions: readonly SessionUsage[]): UsageSnapshot {
 // One session `s1` with `usage` on the work profile.
 function withSession(usage: UsageAgentEvent): UsageSnapshot {
   return { plans: [plan()], sessions: [session('s1', WORK_DIR, usage)] };
+}
+
+// `s1` with usage, `s2` before its first turn, and no `s9`.
+function snapshotWithoutUsage(): UsageSnapshot {
+  return {
+    plans: [plan()],
+    sessions: [
+      session('s1', WORK_DIR, usageEvent()),
+      session('s2', WORK_DIR, null),
+    ],
+  };
 }
 
 function meter(
@@ -298,16 +310,36 @@ describe('sessionLineInput', () => {
   it.each([
     { case: 'AbsentSession', sessionId: 's9' },
     { case: 'SessionBeforeItsFirstTurn', sessionId: 's2' },
-  ])('sessionLineInput_Null_$case', ({ sessionId }) => {
-    const snapshot: UsageSnapshot = {
-      plans: [plan()],
-      sessions: [
-        session('s1', WORK_DIR, usageEvent()),
-        session('s2', WORK_DIR, null),
-      ],
-    };
+  ])('sessionLineInput_NoUsage_ZeroLine_$case', ({ sessionId }) => {
+    expect(sessionLineInput(snapshotWithoutUsage(), sessionId, NOW)).toEqual({
+      context: { label: 'Context', text: '0k', percent: 0, tone: 'normal' },
+      cache: null,
+      spend: null,
+    });
+  });
+});
 
-    expect(sessionLineInput(snapshot, sessionId, NOW)).toBeNull();
+describe('rowLineInput', () => {
+  it.each([
+    {
+      case: 'SessionWithUsage',
+      sessionId: 's1',
+      expected: meter('180k/300k', 60, 'normal'),
+    },
+    {
+      case: 'AbsentSession',
+      sessionId: 's9',
+      expected: { label: 'Context', text: '0k', percent: 0, tone: 'normal' },
+    },
+    {
+      case: 'SessionBeforeItsFirstTurn',
+      sessionId: 's2',
+      expected: { label: 'Context', text: '0k', percent: 0, tone: 'normal' },
+    },
+  ])('rowLineInput_$case', ({ sessionId, expected }) => {
+    expect(rowLineInput(snapshotWithoutUsage(), sessionId)).toEqual({
+      context: expected,
+    });
   });
 });
 

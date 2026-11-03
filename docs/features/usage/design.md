@@ -129,13 +129,14 @@ In `src/contracts/agent.ts`, beside `AgentHarness`:
 - **Main** keeps one plan per chat profile (re-read at the start of each poll round, so a profile added or removed in
   settings joins or leaves), polls every one at start and then every `usage.pollIntervalSeconds` (default 300, never
   under `MIN_POLL_SECONDS` = 60; read at each reschedule and rescheduled on a settings change) through the injected
-  main `timers`. It folds each
-  `chat.planUsage` update into that profile's plan usage, records each session's profile from `chat.sessionOpened`
-  (so the line shows the right profile before the session's first turn ends), keeps each session's latest `usage`
-  agent event from `chat.agentEvent` (an event whose `at` is older than the kept one's changes nothing), and drops a
-  session when it ends. Chat sends a restored row's saved usage the same way: on restoring a row that ever sent a
-  message, it reads `harness.lastUsage` and emits the result as the row's `agentEvent`. A failed read is logged, and
-  the row keeps the 0 line. It sends one snapshot over its channel on every change.
+  main `timers`. It folds each `chat.planUsage` update into that profile's plan usage, records each session's profile
+  from `chat.sessionOpened` (so the line shows the right profile before the session's first turn ends), keeps each
+  session's latest `usage` agent event from `chat.agentEvent` (an event whose `at` is older than the kept one's records
+  only the session's profile, keeping the kept usage), and drops a session when it ends. Chat sends a restored or
+  resumed row's saved usage the same way: it reads `harness.lastUsage` on restoring a row that ever sent a message,
+  and on resuming a session from the past-sessions picker beside its history read, and emits the result as the row's
+  `agentEvent` (a resumed row's as soon as the row opens, before its process emits). A failed read is logged, and the
+  row keeps the zero line until its process reports. It sends one snapshot over its channel on every change.
 - A failed poll keeps the profile's last plan usage, marks it stale with the time of the last good poll, and carries
   the reason, which the details bar shows; the next good poll clears both. With no good poll yet the profile has no
   usage: the line says `plan loading` (or `plan unavailable` after a failure) and the details say `no good read yet`.

@@ -7,6 +7,7 @@ import {
   listPastSessions,
   listProjectFolders,
   readHistory,
+  readLastUsage,
   TRANSCRIPT_READ_BATCH,
 } from './past-sessions';
 import {
@@ -358,7 +359,10 @@ describe('listPastSessions', () => {
 });
 
 describe('readHistory', () => {
-  it('readHistory_BadId_RejectsBeforeReading', async () => {
+  it.each([
+    { name: 'readHistory_BadId_RejectsBeforeReading', read: readHistory },
+    { name: 'readLastUsage_BadId_RejectsBeforeReading', read: readLastUsage },
+  ])('$name', async ({ read }) => {
     const stored = createMemoryFiles();
     const readPaths: string[] = [];
     const files: Files = {
@@ -369,9 +373,9 @@ describe('readHistory', () => {
       },
     };
 
-    await expect(
-      readHistory(files, posixPaths, FOLDER, '../x'),
-    ).rejects.toThrow('../x');
+    await expect(read(files, posixPaths, FOLDER, '../x')).rejects.toThrow(
+      '../x',
+    );
     expect(readPaths).toEqual([]);
   });
 
@@ -379,6 +383,70 @@ describe('readHistory', () => {
     await expect(
       readHistory(createMemoryFiles(), posixPaths, FOLDER, OLD_ID),
     ).rejects.toThrow(`${FOLDER}/${OLD_ID}.jsonl`);
+  });
+});
+
+// A main reply line at `timestamp` whose context is `inputTokens` plus the
+// cache tokens it wrote (1 h) and read.
+function replyLine(
+  timestamp: string,
+  inputTokens: number,
+  written1h: number,
+  read: number,
+): string {
+  return JSON.stringify({
+    type: 'assistant',
+    timestamp,
+    isSidechain: false,
+    message: {
+      model: 'claude-opus-5-5',
+      role: 'assistant',
+      content: [{ type: 'text', text: 'ok' }],
+      usage: {
+        input_tokens: inputTokens,
+        cache_creation_input_tokens: written1h,
+        cache_read_input_tokens: read,
+        output_tokens: 0,
+        cache_creation: { ephemeral_1h_input_tokens: written1h },
+      },
+    },
+  });
+}
+
+describe('readLastUsage', () => {
+  it('readLastUsage_NoMainReply_Null', async () => {
+    const files = createMemoryFiles();
+    await files.write(
+      `${FOLDER}/${OLD_ID}.jsonl`,
+      transcript('/w/app', 'hello'),
+    );
+
+    expect(await readLastUsage(files, posixPaths, FOLDER, OLD_ID)).toBeNull();
+  });
+
+  it('readLastUsage_WriteThenReadOnly_LastReplyAtWithTheWrittenLifetime', async () => {
+    const files = createMemoryFiles();
+    await files.write(
+      `${FOLDER}/${OLD_ID}.jsonl`,
+      [
+        transcript('/w/app', 'hello'),
+        replyLine('2026-10-27T16:07:09.193Z', 5, 2000, 0),
+        replyLine('2026-10-27T16:07:12.500Z', 7, 0, 2005),
+      ].join('\n'),
+    );
+
+    const event = await readLastUsage(files, posixPaths, FOLDER, OLD_ID);
+
+    expect(event).toEqual({
+      type: 'usage',
+      agentId: 'main',
+      at: 1793117232500,
+      contextTokens: 2012,
+      contextWindow: null,
+      autocompact: { configured: null, reported: null },
+      cacheExpiresAt: 1793120832500,
+      spendUsd: null,
+    });
   });
 });
 

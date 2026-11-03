@@ -1,6 +1,6 @@
 # 02 — Usage store keeps the newest event
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -22,3 +22,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 7e37654f · proof: diff read matches Decisions; tsc clean on usage-store · concerns: none

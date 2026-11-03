@@ -10,10 +10,10 @@ import {
 } from './usage-view-model';
 
 // Which usage line a host's part draws: `input` reads a session's input from a
-// snapshot, null while it has no usage; `text` is the input as the page log
-// writes it; `draw` draws it through usage's layout.
+// snapshot, the zero line while it has no usage; `text` is the input as the
+// page log writes it; `draw` draws it through usage's layout.
 export interface SessionLineKind<I> {
-  input(snapshot: UsageSnapshot, sessionId: string, now: number): I | null;
+  input(snapshot: UsageSnapshot, sessionId: string, now: number): I;
   text(input: I): string;
   draw(parent: HTMLElement, input: I): Drawn;
 }
@@ -53,8 +53,8 @@ export interface SessionLinesDeps<I> {
 }
 
 // `part` draws a session's usage line into the wrapper its host hands it (a
-// Chat status line, a tab bar or a side-bar row), nothing while the session
-// has no usage.
+// Chat status line, a tab bar or a side-bar row), the zero line while the
+// session has no usage.
 // `redraw` draws every held session's line again from `latest`, nothing before
 // the first snapshot; `forget` drops a session that left.
 export interface SessionLines {
@@ -69,19 +69,17 @@ interface HeldWrapper {
   line: Drawn | null;
 }
 
-const NO_LINE = 'none';
-
 // Each session's logged text outlives its wrapper, which a host redraw builds
 // and disposes many times. After each draw it logs
 // `session line in <name>: <text>` when the text differs from the last one
-// logged for that session, so a host redraw or a name change alone logs
-// nothing new.
+// logged for that session, so a session's first draw always logs and a host
+// redraw or a name change alone logs nothing new.
 export function createSessionLines<I>(deps: SessionLinesDeps<I>): SessionLines {
   const held = new Map<string, HeldWrapper>();
   const loggedTexts = new Map<string, string>();
 
   const logText = (sessionId: string, text: string) => {
-    if (text === (loggedTexts.get(sessionId) ?? NO_LINE)) {
+    if (text === loggedTexts.get(sessionId)) {
       return;
     }
     loggedTexts.set(sessionId, text);
@@ -102,14 +100,12 @@ export function createSessionLines<I>(deps: SessionLinesDeps<I>): SessionLines {
       [
         () => last?.dispose(),
         () => {
-          if (input !== null) {
-            holder.line = deps.line.draw(holder.wrapper, input);
-          }
+          holder.line = deps.line.draw(holder.wrapper, input);
         },
       ],
       (step) => step(),
     );
-    logText(sessionId, input === null ? NO_LINE : deps.line.text(input));
+    logText(sessionId, deps.line.text(input));
   };
 
   return {

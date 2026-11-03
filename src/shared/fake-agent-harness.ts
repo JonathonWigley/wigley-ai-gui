@@ -164,6 +164,11 @@ export interface FakePastSessionCall {
 // in. `listProjects` lists the folders `start` ran under the profile, the last
 // started first. `planUsage` resolves `fakePlanUsage` at the clock's time in a
 // later microtask; `failNextPlanUsage` makes the next one reject `message`.
+// `lastUsage` resolves the event `setLastUsage` gave its session id, null for
+// an id given none; `failNextLastUsage` makes the next one reject `message`,
+// and `holdNextLastUsage` makes the next one wait until the release it returns
+// runs. `lastUsageCalls` lists every `lastUsage` call's session id in call
+// order, failed ones included. The fake's processes emit no startup `usage`.
 // `timers` runs the `fake: visual` hold. `askPermissionsWith` sets the ask a
 // `fake: permission` turn calls, replacing any earlier one; with none set, the
 // turn's tool fails.
@@ -173,6 +178,10 @@ export interface FakeAgentHarness extends AgentHarness {
   failNextStart(message: string): void;
   failNextHistory(message: string): void;
   failNextPlanUsage(message: string): void;
+  readonly lastUsageCalls: readonly string[];
+  setLastUsage(sessionId: string, event: UsageAgentEvent | null): void;
+  failNextLastUsage(message: string): void;
+  holdNextLastUsage(): () => void;
   holdEnd(): void;
   releaseEnd(): void;
   askPermissionsWith(ask: FakePermissionAsk): void;
@@ -895,6 +904,10 @@ export function createFakeAgentHarness(
   let nextStartFailure: string | null = null;
   let nextHistoryFailure: string | null = null;
   let nextPlanUsageFailure: string | null = null;
+  const lastUsages = new Map<string, UsageAgentEvent | null>();
+  const lastUsageCalls: string[] = [];
+  let nextLastUsageFailure: string | null = null;
+  let nextLastUsageHold: Promise<void> | null = null;
   let isEndHeld = false;
   const heldEnds: (() => void)[] = [];
   // Profiles `logOut` signed out and no sign-in has signed in since.
@@ -1456,6 +1469,34 @@ export function createFakeAgentHarness(
     },
     failNextHistory(message) {
       nextHistoryFailure = message;
+    },
+    lastUsageCalls,
+    async lastUsage(sessionId) {
+      lastUsageCalls.push(sessionId);
+      const failure = nextLastUsageFailure;
+      const hold = nextLastUsageHold;
+      nextLastUsageFailure = null;
+      nextLastUsageHold = null;
+      if (hold !== null) {
+        await hold;
+      }
+      if (failure !== null) {
+        throw new Error(failure);
+      }
+      return lastUsages.get(sessionId) ?? null;
+    },
+    setLastUsage(sessionId, event) {
+      lastUsages.set(sessionId, event);
+    },
+    failNextLastUsage(message) {
+      nextLastUsageFailure = message;
+    },
+    holdNextLastUsage() {
+      let release = () => {};
+      nextLastUsageHold = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      return () => release();
     },
     async accountStatus(profileDir) {
       return statusOf(profileDir);
