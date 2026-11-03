@@ -158,6 +158,7 @@ function startChatPart(
   options: {
     list?: () => Promise<HostedProcessInfo[]>;
     data?: Files;
+    harnessId?: string;
   } = {},
 ) {
   const handlers = new Map<string, (...args: unknown[]) => unknown>();
@@ -182,7 +183,7 @@ function startChatPart(
   };
   const harnessAttaches: AgentStart[] = [];
   const harness = {
-    id: 'claude',
+    id: options.harnessId ?? 'claude',
     logIn: () => ({ sendCode: () => undefined, cancel: cancelLogIn }),
     attach: (request: AgentStart) => {
       harnessAttaches.push(request);
@@ -597,6 +598,23 @@ describe('chat main part', () => {
       expect(chat.harnessAttaches).toEqual([]);
     },
   );
+
+  it('restore_Throws_LogsAndSettlesTheHold', async () => {
+    const chat = startChatPart({
+      harnessId: 'not-chats',
+      list: () =>
+        Promise.resolve([
+          { id: 'p1', startedAt: 1, running: true, current: true },
+        ]),
+      data: await dataWithSavedRow(),
+    });
+
+    await expect(chat.heldConnects[0]).resolves.toBeUndefined();
+
+    expect(chat.logged).toContainEqual(
+      expect.stringContaining('open sessions not restored'),
+    );
+  });
 
   it('restore_SessionHostListFails_LogsAndRestsEveryRow given a list that resolves first', async () => {
     const chat = startChatPart({ list: () => Promise.resolve([]) });

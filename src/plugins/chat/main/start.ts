@@ -392,7 +392,11 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
         return { sessions: [], selectedHostSessionId: null };
       }),
       listHostedProcesses(services),
-    ]).then(([snapshot, hosted]) => chat.restore(snapshot, hosted));
+    ])
+      .then(([snapshot, hosted]) => chat.restore(snapshot, hosted))
+      .catch((error: unknown) => {
+        services.log('chat', `open sessions not restored: ${errorText(error)}`);
+      });
     sessions.holdConnects(restored);
     const passKeepIdle = (keepIdleMinutes: number) =>
       services.sessionHost.setKeepIdleMinutes(Math.max(0, keepIdleMinutes));

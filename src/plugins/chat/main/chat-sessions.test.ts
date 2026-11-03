@@ -68,6 +68,13 @@ const ROW_ID = 'row-1';
 const PROJECT_DIR = '/work/app';
 const PAST_ONE = FAKE_PAST_SESSIONS[0];
 const PAST_TWO = FAKE_PAST_SESSIONS[1];
+// A process of `PAST_ONE` running in the current host.
+const HOSTED_PAST_ONE: HostedProcessInfo = {
+  id: `${PAST_ONE.sessionId}-1-900`,
+  startedAt: 900,
+  running: true,
+  current: true,
+};
 
 const BASH_ARGS = {
   tool_name: 'Bash',
@@ -756,6 +763,118 @@ describe('createChatSessions', () => {
       `[chat] saved usage of ${hostId} not read: transcript unreadable`,
     );
     expect(usageEmitted(test.emitted)).toEqual([]);
+  });
+
+  it.each([
+    {
+      given: 'its process running here',
+      list: [{ ...HOSTED_PAST_ONE }],
+      rejects: null,
+      attaches: [HOSTED_PAST_ONE.id],
+      startResumes: [],
+    },
+    {
+      given: 'its process running in another app version',
+      list: [{ ...HOSTED_PAST_ONE, current: false }],
+      rejects:
+        'This session is still finishing in another app version. Send again once it ends.',
+      attaches: [],
+      startResumes: [],
+    },
+    {
+      given: 'its process ended',
+      list: [{ ...HOSTED_PAST_ONE, running: false }],
+      rejects: null,
+      attaches: [],
+      startResumes: [true],
+    },
+    {
+      given: "another session's process running",
+      list: [{ ...HOSTED_PAST_ONE, id: `${PAST_TWO.sessionId}-1-900` }],
+      rejects: null,
+      attaches: [],
+      startResumes: [true],
+    },
+    {
+      given: 'the list rejecting',
+      list: null,
+      rejects: 'no host',
+      attaches: [],
+      startResumes: [],
+    },
+  ])(
+    'resume_ListsTheHostFirst given $given',
+    async ({ list, rejects, attaches, startResumes }) => {
+      const test = setUp({
+        sessionHost: {
+          list: () =>
+            list === null
+              ? Promise.reject(new Error('no host'))
+              : Promise.resolve(list),
+        },
+      });
+      test.harness.scriptAttach(HOSTED_PAST_ONE.id, {
+        outcome: 'process',
+        turns: 0,
+        replay() {},
+      });
+
+      const resuming = test.chat.resume({
+        projectDir: '/w/app',
+        profile: 'work',
+        hostSessionId: PAST_ONE.sessionId,
+        title: PAST_ONE.title,
+      });
+      if (rejects === null) {
+        await expect(resuming).resolves.toBe(ROW_ID);
+      } else {
+        await expect(resuming).rejects.toThrow(rejects);
+      }
+      await flush();
+
+      expect(
+        test.harness.attachCalls.map((request) => request.processId),
+      ).toEqual(attaches);
+      expect(
+        test.harness.processes
+          .filter((process) => !process.attached)
+          .map((process) => process.request.resume),
+      ).toEqual(startResumes);
+      expect(test.opened).toHaveLength(rejects === null ? 1 : 0);
+      if (list === null) {
+        expect(test.logged).toContain(
+          '[chat] session host not listed: no host',
+        );
+      }
+    },
+  );
+
+  it('resume_ProcessRunningHere_ReadsHistoryUpToItsStart', async () => {
+    const test = setUp({
+      sessionHost: { list: () => Promise.resolve([HOSTED_PAST_ONE]) },
+    });
+    test.harness.scriptAttach(HOSTED_PAST_ONE.id, {
+      outcome: 'process',
+      turns: 0,
+      replay() {},
+    });
+    test.chat.restore(NOTHING_SAVED, []);
+
+    await test.chat.resume({
+      projectDir: '/w/app',
+      profile: 'work',
+      hostSessionId: PAST_ONE.sessionId,
+      title: PAST_ONE.title,
+    });
+    await test.chat.loadHistory(ROW_ID);
+
+    expect(test.openOptions).toEqual([{ select: true }]);
+    expect(
+      test.harness.pastSessionCalls
+        .filter((call) => call.method === 'history')
+        .map((call) => call.before),
+    ).toEqual([HOSTED_PAST_ONE.startedAt]);
+    expect(test.saved.last()?.sessions[0].processId).toBe(HOSTED_PAST_ONE.id);
   });
 
   it('resume_AlreadyOpen_Rejects', async () => {
@@ -3784,7 +3903,7 @@ describe('createChatSessions restoring hosted processes', () => {
       fields: {},
       hosted: null,
       attaches: 0,
-      notices: [{ kind: 'notice', tone: 'info', text: QUIT_NOTICE }],
+      notices: [],
       running: false,
     },
     {
@@ -3792,7 +3911,7 @@ describe('createChatSessions restoring hosted processes', () => {
       fields: { processId: null },
       hosted: null,
       attaches: 0,
-      notices: [{ kind: 'notice', tone: 'info', text: QUIT_NOTICE }],
+      notices: [],
       running: false,
     },
   ])(
@@ -3851,28 +3970,68 @@ describe('createChatSessions restoring hosted processes', () => {
     },
   );
 
-  it('restore_SkippedRecord_LeftOutOnceAHeldRowHoldsItsHostId', async () => {
+  it.each([
+    { given: 'the start succeeding', startFails: false },
+    { given: 'the start throwing', startFails: true },
+  ])(
+    'restore_SkippedRecord_ANewHeldRowTakesOverItsQueued given $given',
+    async ({ startFails }) => {
+      const test = setUp();
+      const hostId = PAST_ONE.sessionId;
+      const queued = [{ text: 'saved', images: [] }];
+      test.chat.sessionConnected(connected('row-relay', hostId));
+      test.chat.restore(
+        { sessions: [record(hostId, { queued })], selectedHostSessionId: null },
+        [],
+      );
+      test.chat.sessionEnded('row-relay');
+      if (startFails) {
+        test.harness.failNextStart('no start');
+      }
+
+      const resuming = test.chat.resume({
+        projectDir: '/w/app',
+        profile: 'work',
+        hostSessionId: hostId,
+        title: PAST_ONE.title,
+      });
+      if (startFails) {
+        await expect(resuming).rejects.toThrow('no start');
+      } else {
+        await resuming;
+      }
+
+      expect(test.sent('queued')[0].queued.map((row) => row.text)).toEqual([
+        'saved',
+      ]);
+      const saved = test.saved.last()?.sessions ?? [];
+      expect(saved.map((each) => each.hostSessionId)).toEqual([hostId]);
+      if (startFails) {
+        expect(test.chat.sessions()).toEqual([]);
+        expect(saved[0].queued).toEqual(queued);
+      }
+    },
+  );
+
+  it('restore_RecordOfAHeldRow_TheRowTakesOverItsQueued', () => {
     const test = setUp();
-    const hostId = PAST_ONE.sessionId;
-    test.chat.sessionConnected(connected('row-relay', hostId));
+
     test.chat.restore(
       {
-        sessions: [record(hostId, { queued: [{ text: 'a', images: [] }] })],
+        sessions: [
+          record('host-a', { queued: [{ text: 'first', images: [] }] }),
+          record('host-a', { queued: [{ text: 'second', images: [] }] }),
+        ],
         selectedHostSessionId: null,
       },
       [],
     );
-    test.chat.sessionEnded('row-relay');
 
-    await test.chat.resume({
-      projectDir: '/w/app',
-      profile: 'work',
-      hostSessionId: hostId,
-      title: PAST_ONE.title,
-    });
-
-    expect(test.saved.last()?.sessions.map((each) => each.queued)).toEqual([
-      [],
+    const saved = test.saved.last()?.sessions ?? [];
+    expect(saved.map((each) => each.hostSessionId)).toEqual(['host-a']);
+    expect(saved[0].queued.map((message) => message.text)).toEqual([
+      'first',
+      'second',
     ]);
   });
 });
@@ -3895,6 +4054,18 @@ describe('createChatSessions attaching', () => {
       calls: [{ method: 'end' }],
       ownedEnds: 1,
       callsAtOwnedEnd: [{ method: 'end' }],
+      resting: null,
+    },
+    {
+      given: 'a closed row, then detachAll',
+      act: (test: ReturnType<typeof setUp>) => {
+        test.chat.closed(ROW_ID);
+        test.chat.detachAll();
+      },
+      replayEnds: false,
+      calls: [{ method: 'kill' }],
+      ownedEnds: 1,
+      callsAtOwnedEnd: [{ method: 'kill' }],
       resting: null,
     },
     {
@@ -4005,6 +4176,7 @@ describe('createChatSessions attaching', () => {
         events.activity('idle');
         events.agentEvent({ type: 'turnEnded', at: 1000 });
         events.planUsage(fakePlanRowUpdate(1, 1000));
+        events.agentEvent({ type: 'sessionEnded', at: 1500 });
       },
     });
     restoreOne(test, hostedRecord(), [hostedP1()]);
@@ -4024,6 +4196,7 @@ describe('createChatSessions attaching', () => {
       ),
     ).toEqual([
       [1000, true],
+      [1500, false],
       [2000, false],
     ]);
     expect(test.emitted.filter((each) => each.event === 'planUsage')).toEqual(
@@ -4097,11 +4270,27 @@ describe('createChatSessions attaching', () => {
     async ({ script, logged }) => {
       const test = setUp();
       test.harness.scriptAttach('p1', script);
+      const attach = test.harness.attach.bind(test.harness);
+      test.harness.attach = (request, events) => {
+        events.activity('working');
+        events.agentEvent({
+          type: 'taskStarted',
+          at: 0,
+          taskId: 'task-1',
+          agentId: MAIN_AGENT_ID,
+          description: 'task',
+          command: null,
+        });
+        return attach(request, events);
+      };
 
       restoreOne(test, hostedRecord({ busy: true, sent: true }), [hostedP1()]);
+      expect(test.chat.sessions()[0].background).toBe(1);
       expect(test.harness.lastUsageCalls).toEqual([]);
       await flush();
 
+      expect(test.chat.sessions()[0].background).toBe(0);
+      expect(test.saved.last()?.sessions[0].busy).toBe(false);
       expect(test.chat.sessions()[0].running).toBe(false);
       expect(test.sent('sessionRested')).toEqual([
         { sessionId: ROW_ID, error: null },
@@ -4120,6 +4309,39 @@ describe('createChatSessions attaching', () => {
       ).toEqual([null]);
     },
   );
+
+  it('attach_ProcessExitsDuringTheReplay_KeepsItsSavedQueued', async () => {
+    const test = setUp();
+    const queued = [{ text: 'a', images: [] }];
+    test.harness.scriptAttach('p1', {
+      outcome: 'process',
+      turns: 0,
+      replay: (events) => events.ended({ code: 0, error: null }),
+    });
+
+    restoreOne(test, hostedRecord({ queued }), [hostedP1()]);
+    await flush();
+
+    expect(test.sent('returned')).toEqual([]);
+    expect(test.chat.sessions()[0].queued.map((row) => row.text)).toEqual([
+      'a',
+    ]);
+    expect(test.saved.last()?.sessions[0].queued).toEqual(queued);
+  });
+
+  it('loadHistory_BeforeAnAttachResolvesNull_ReadsWithNoCut', async () => {
+    const test = setUp();
+    test.harness.scriptAttach('p1', { outcome: 'null' });
+    restoreOne(test, hostedRecord({ sent: true }), [hostedP1()]);
+
+    await test.chat.loadHistory(ROW_ID);
+
+    expect(
+      test.harness.pastSessionCalls
+        .filter((call) => call.method === 'history')
+        .map((call) => call.before),
+    ).toEqual([null]);
+  });
 
   it('send_WhileAttaching_WaitsForTheAttach', async () => {
     const test = setUp();
@@ -4281,17 +4503,37 @@ describe('createChatSessions unheld processes', () => {
     },
   );
 
-  it('unheldGuard_ClosedRow_LogsTheProcessLeftRunning', async () => {
-    const { test } = await unheldRow('profileBack');
+  it.each([
+    {
+      given: 'an unheld row',
+      arrange: async () => (await unheldRow('profileBack')).test,
+    },
+    {
+      given: 'an attach that then rejects',
+      arrange: () => {
+        const test = setUp();
+        test.harness.scriptAttach('p1', {
+          outcome: 'reject',
+          message: 'defs failed',
+        });
+        restoreOne(test, hostedRecord({ sent: true }), [hostedP1()]);
+        return Promise.resolve(test);
+      },
+    },
+  ])(
+    'unheldGuard_ClosedRow_LogsTheProcessLeftRunning given $given',
+    async ({ arrange }) => {
+      const test = await arrange();
 
-    test.chat.closed(ROW_ID);
-    await flush();
+      test.chat.closed(ROW_ID);
+      await flush();
 
-    expect(test.logged).toContain(
-      `[chat] session ${ROW_ID} closed; process p1 left running on the session host`,
-    );
-    expect(test.ownedEnds()).toBe(1);
-  });
+      expect(test.logged).toContain(
+        `[chat] session ${ROW_ID} closed; process p1 left running on the session host`,
+      );
+      expect(test.ownedEnds()).toBe(1);
+    },
+  );
 
   it('unheldGuard_ClearedRow_LogsAndStartsFresh', async () => {
     const { test } = await unheldRow('profileBack');
@@ -4327,11 +4569,23 @@ describe('createChatSessions unheld processes', () => {
     await expect(test.chat.send(ROW_ID, message)).rejects.toThrow('no host');
     expect(test.logged).toContain('[chat] session host not listed: no host');
     expect(test.harness.processes).toEqual([]);
+    expect(noticesOf(test).map((notice) => notice.text)).toEqual([
+      OLDER_HOST_NOTICE,
+    ]);
 
     held.list = () => Promise.resolve([hostedP1({ running: false })]);
     await test.chat.send(ROW_ID, message);
     await flush();
 
+    expect(noticesOf(test).map((notice) => notice.text)).not.toContain(
+      OLDER_HOST_NOTICE,
+    );
+    expect(
+      test
+        .sent('entries')
+        .flatMap(({ entries }) => entries)
+        .map((entry) => (entry.kind === 'notice' ? entry.text : null)),
+    ).not.toContain(OLDER_HOST_NOTICE);
     expect(
       test.harness.pastSessionCalls.filter((call) => call.method === 'history'),
     ).toHaveLength(1);
@@ -4399,6 +4653,29 @@ describe('createChatSessions stopAll', () => {
       false,
     ]);
     expect(test.logged).toContain('[chat] stopped 2 session process(es)');
+  });
+
+  it('stopAll_WorkingRow_RaisesNoAlertAndWritesNothingQueued', async () => {
+    const test = await started();
+    const queued = { text: 'queued', images: [] };
+    test.setFocused(false);
+    test.activity('working');
+    await test.chat.send(ROW_ID, queued);
+
+    test.chat.stopAll();
+    // The harness reports a closed process idle before its `ended`.
+    test.activity('idle');
+    await flush();
+
+    expect(test.process.calls).toEqual([{ method: 'kill' }]);
+    expect(test.announced).toEqual([]);
+    expect(test.marked).toEqual([]);
+    expect(test.sent('returned')).toEqual([
+      { sessionId: ROW_ID, messages: [queued] },
+    ]);
+    expect(noticesOf(test).map((notice) => notice.text)).toEqual([
+      STOPPED_NOTICE,
+    ]);
   });
 
   it('stopAll_SkipsAnAttachingRow', async () => {
