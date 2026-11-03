@@ -1,6 +1,6 @@
 # 10 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 6 · Depends on: 01, 02, 03, 04, 05, 06, 07, 08, 09
 Plan: [plan.md](plan.md)
@@ -50,3 +50,5 @@ Done when: every doc above is re-read and its stale lines fixed; the grep in ste
 Commit:    one commit, the doc paths only, by name.
 
 ## Proof
+
+Commit d5393f34 · proof: diff read: each named doc updated against HEAD (after peer row trim a0b7282f); step 5 grep finds no stale name outside the plan folder; AGENTS.md committed by hunk, the unowned uncommitted layout-edit paragraph left in the tree · concerns: plugin-framework/design.md and usage/design.md only grepped, not re-read line by line; docs describe agent-lines as the peer's workingLine since a0b7282f landed mid-task
