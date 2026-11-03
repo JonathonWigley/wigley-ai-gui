@@ -3,7 +3,8 @@
 // The built-in agents look: one line per running subagent, a running dot
 // before its type, its task cut to one line, then its elapsed time and its
 // tool-call count; one line per running task, a terminal icon before what it
-// runs, cut to one line, then its elapsed time, indented under its subagent.
+// runs, cut to one line, then its elapsed time, indented when drawn under its
+// subagent.
 
 /** @type {import('../layout').CompleteLayout} */
 const layout = {

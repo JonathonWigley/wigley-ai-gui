@@ -51,9 +51,11 @@ export const FAKE_STEPS_TEXT = 'fake: steps';
 // (failed), the next send other than `FAKE_END_TEXT` (done) or the process's
 // end (no `agentFinished`). An interrupt or send queued before the end still
 // finishes them. The turn also starts two tasks, one owned by `main` and one by
-// the first subagent; the next send leaves them running and an interrupt ends
-// them (failed). Real Claude may keep a background Bash past an interrupt; the
-// fake ends it to keep the self-test row's count exact.
+// the first subagent; the next send leaves them running, and an interrupt of an
+// open turn, this one or a later one, ends them (failed); the process's end
+// sends no `taskFinished`, since `sessionEnded` clears a roster. Real Claude
+// may keep a background Bash past an interrupt; the fake ends it to keep the
+// self-test row's count exact.
 export const FAKE_AGENTS_TEXT = 'fake: agents';
 // A send of this text ends the process on its own, as a CLI that exits.
 export const FAKE_END_TEXT = 'fake: end';
