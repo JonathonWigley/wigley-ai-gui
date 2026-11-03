@@ -39,6 +39,8 @@ GIVEN a `system/init` with `capabilities: ["msg_lifecycle_v1", "x"]` WHEN decode
 `capabilities` is `["msg_lifecycle_v1", "x"]`
 GIVEN an init without `capabilities` WHEN decoded THEN `capabilities` is `[]`
 GIVEN any line that is no init WHEN decoded THEN `turnStarted` is false and `capabilities` is null
+GIVEN a `command_lifecycle` line with no `command_uuid` WHEN decoded THEN `lifecycle` is null and the line still
+joins the turn's events entry
 GIVEN a `command_lifecycle` line WHEN decoded THEN `lifecycle` holds its `command_uuid` and `state`, and the line joins
 the turn's events entry (same entry id as the turn's init)
 GIVEN a result with `user_message_uuid` `"a"` and `user_message_uuids` `["a","b"]` WHEN decoded THEN `turnOpener` is
@@ -47,17 +49,16 @@ GIVEN a result without the two keys WHEN decoded THEN `turnOpener` is null and `
 
 Tests:
 - `decode_Init_ReportsCommandsAndControls` — add assertions `turnStarted` true and `capabilities` equal to the
-  capabilities the test's init carries (add a `capabilities` array with two strings and one number to its init; the
-  number is left out).
+  capabilities the test's init carries: add `capabilities: ['msg_lifecycle_v1', 7, 'x']` to its init and expect
+  `['msg_lifecycle_v1', 'x']`.
 - `decode_InitWithoutCapabilities_ReportsEmptyCapabilities` — new; `capabilities` is `[]`, `turnStarted` true.
 - `decode_ResultOrigin_MarksTurnsClaudeRanOnItsOwn` (the `it.each` at the `turnUnrequested` assertion) — leave as is.
 - `decode_ResultMessageUuids_ReportsOpenerAndMessages` — new `it.each`, rows: both keys present (`"a"`, `["a","b"]`);
   both keys absent (null, `[]`); `user_message_uuid` a number (null).
-- `decode_CommandLifecycle_ReportsStateAndGathers` — new; an init, then a lifecycle line: `lifecycle` equals
-  `{ uuid: 'u-1', state: 'started' }`, `turnStarted` false, `capabilities` null, and the entry is the init's events
-  entry (same id, `raw` holds both lines).
-- `decode_UnnamedEventTypes_EachGetsItsOwnRawEntry` — if it uses a `command_lifecycle` line as its unknown type,
-  change that line to another unknown type.
+- `decode_CommandLifecycle_ReportsStateAndGathers` — new `it.each`; each row decodes an init, then a lifecycle
+  line, and asserts `turnStarted` false, `capabilities` null, and that the entry is the init's events entry (same id,
+  `raw` holds both lines). Rows: `command_uuid` `'u-1'`, `state` `'started'` → `lifecycle` `{ uuid: 'u-1', state:
+  'started' }`; no `command_uuid` → `lifecycle` null.
 
 Done when: `npm run typecheck` passes; the test gate runs the tests above.
 Commit:    one commit for the group
