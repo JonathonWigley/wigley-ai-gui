@@ -1,6 +1,6 @@
 # 04 — Doc re-read
 
-Status: not started
+Status: done
 Type: Task
 Wave: 3 · Depends on: 02, 03
 Plan: [plan.md](plan.md)
@@ -22,3 +22,4 @@ Commit:    one commit for the group, when there is a change
 
 ## Proof
 
+Commit 5c54dac · proof: diff read: AGENTS.md relay paragraph and docs-browser sidebar bullet match landed code; drive SKILL.md:62 true, unchanged; typecheck clean · concerns: presenter doc comment rewrap still leaves one line past width; docs-browser design.md sidebar bullet line past 120 cols; preview-round.ts:28 sample finding cites 'mark … with no row ignored', which no path emits now (fictional sample, left)

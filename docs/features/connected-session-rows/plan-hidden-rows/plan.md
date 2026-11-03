@@ -109,10 +109,10 @@ through `AgentFormSessions`.
 
 ### Wave 2
 - [x] [Presenter releases the session on close](02-presenter-release.md) — after 01
-- [ ] [Row-only fixtures open owned sessions](03-fixtures-open-owned.md) — after 01
+- [x] [Row-only fixtures open owned sessions](03-fixtures-open-owned.md) — after 01
 
 ### Wave 3
-- [ ] [Doc re-read](04-doc-re-read.md) — after 02, 03
+- [x] [Doc re-read](04-doc-re-read.md) — after 02, 03
 - [ ] [Final verification](05-final-verification.md) — after 04
 
 ## Run log
@@ -122,10 +122,13 @@ Review base: d757831
 ### Groups
 - 01 · 6145731 · diff read: release on SessionsMainExports, list and exports present; typecheck clean; sessions tests 230 pass · concerns: SessionEntry.group comment still says fixed at connect (label, left); activate no longer logs 'with no row ignored' for a known session — forms preview-round.ts:28 still cites the 'mark … with no row ignored' line, which no path emits; selftest pane fixtures now owned host ids
 - 02 · def3f45 · diff read: release on AgentFormSessions present, presenter close releases after formClosed; worker typecheck clean; presenter test 12 pass; tree-wide typecheck re-run after 03 lands · concerns: none; presenter doc comment line runs past the file's width
+- 03 · 367e51d · diff read: four sessions deps typed Pick<'open'|'activate'>, openDocsFixtureSession at every reference; typecheck clean; full npm test 340 files / 5299 pass · concerns: touched docs/main/start.test.ts and usage selftest-script.test.ts outside the list (stubs retyped); open still emits sessions.connected so docs' per-session index source registers for the fixture
+- 04 · 5c54dac · diff read: AGENTS.md relay paragraph and docs-browser sidebar bullet match landed code; drive SKILL.md:62 true, unchanged; typecheck clean · concerns: presenter doc comment rewrap still leaves one line past width; docs-browser design.md sidebar bullet line past 120 cols; preview-round.ts:28 sample finding cites 'mark … with no row ignored', which no path emits now (fictional sample, left)
 ### Contract changes
 ### Rulings
 - addEntry takes a separate addsRow flag, equal to owned today — keeps the row rule apart from ownership — one redundant parameter if wrong · group 01 · group 01
 - activate on a known row-less session adds the row instead of logging 'activate … with no row ignored' — per the activate decision — a caller relying on that log line loses it · group 01 · group 01
 - presenter test fake logs release into the shared calls log and each close test asserts ['send formClosed','release app-1'] — one assertion covers once, id, order and none-for-gone — a test rewrite if wrong · group 02 · group 02
+- docs drive action keeps the name docs.connectSession and its connected/connects locals — renaming breaks drive scripts and docs — one more rename pass if wrong · group 03 · group 03
 ### Review rounds
 ### Test gate

@@ -1,6 +1,6 @@
 # 03 — Row-only fixtures open owned sessions
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -42,3 +42,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 367e51d · proof: diff read: four sessions deps typed Pick<'open'|'activate'>, openDocsFixtureSession at every reference; typecheck clean; full npm test 340 files / 5299 pass · concerns: touched docs/main/start.test.ts and usage selftest-script.test.ts outside the list (stubs retyped); open still emits sessions.connected so docs' per-session index source registers for the fixture

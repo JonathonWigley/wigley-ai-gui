@@ -3,7 +3,6 @@ import type { SelfTestScript, SelfTestStep } from '../../../contracts/plugin';
 import type { UserConfig } from '../../../contracts/user-config';
 import { emptyUserFiles } from '../../../shared/empty-user-files';
 import type {
-  ConnectedSession,
   Harness,
   SessionsMainExports,
   ToolResult,
@@ -1072,21 +1071,23 @@ function payloadProblems(payload: AnswersPayload): string[] {
 
 // Each run ends the previous run's sessions and empties both user files, since
 // a run a reload cut off can leave `forms.layout` set or the leader moved;
-// then it connects four sessions: a Claude and a Codex session in project
-// `selftest`, a Claude session there for the layouts round, and a Codex
-// session with no project that never shows a round. Asks the fixture round in
-// the first, a second round in the second, which the steps never answer, the
-// layouts round in the third, and the unknown-layout round in the fourth,
-// which refuses it. The first round is marked first, so its row is selected;
-// the script checks the answers the first call returns and the fourth call's
-// refusal. The result rejects when this open's emptying fails. An open
-// superseded by a later one before its files are emptied connects nothing,
-// and its result settles only by rejecting, when its own emptying fails.
+// then it connects three sessions: a Claude and a Codex session in project
+// `selftest`, and a Claude session there for the layouts round. Asks the
+// fixture round in the first, a second round in the second, which the steps
+// never answer, and the layouts round in the third; each shows at once, so
+// their rows come in that order and the first is selected. Then it opens a
+// Codex session with no project in the background, whose row follows theirs
+// though it never shows a round, and asks the unknown-layout round there
+// through a relay joining it, which refuses it. The script checks the answers
+// the first call returns and the unknown-layout call's refusal. The result
+// rejects when this open's emptying fails. An open superseded by a later one
+// before its files are emptied connects nothing, and its result settles only
+// by rejecting, when its own emptying fails.
 export function formsSelfTestScript(
-  sessions: Pick<SessionsMainExports, 'connect'>,
+  sessions: Pick<SessionsMainExports, 'connect' | 'open'>,
   userConfig: Pick<UserConfig, 'read' | 'writeSettings' | 'writeKeymap'>,
 ): SelfTestScript {
-  let connected: ConnectedSession[] = [];
+  let started: { end(): void }[] = [];
   let latestOpen = 0;
   const connect = (
     sessionId: string,
@@ -1105,10 +1106,10 @@ export function formsSelfTestScript(
     scrollsItself: SCROLLS_ITSELF,
     open(run) {
       const thisOpen = ++latestOpen;
-      for (const session of connected) {
+      for (const session of started) {
         session.end();
       }
-      connected = [];
+      started = [];
       const result: Promise<FormsSelfTestResult> = emptyUserFiles(
         userConfig,
       ).then(() => {
@@ -1122,14 +1123,27 @@ export function formsSelfTestScript(
           'selftest',
           'claude',
         );
-        const idle = connect(`selftest-${run}-3`, null, 'codex');
-        connected = [first, second, layouts, idle];
         const fixture = askFixtureRound(first, fixtureRound(run));
         // Nothing checks the second and layouts calls' end: a later run ends
         // their sessions.
         askFixtureRound(second, secondRound(run)).catch(() => undefined);
         askFixtureRound(layouts, layoutsRound(run)).catch(() => undefined);
-        const unknownLayout = askFixtureRound(idle, unknownLayoutRound(run));
+        const idleSessionId = `selftest-${run}-3`;
+        const idle = sessions.open(
+          {
+            sessionId: idleSessionId,
+            projectDir: null,
+            deadlineSeconds: 120,
+            harness: 'codex',
+          },
+          { select: false },
+        );
+        const idleRelay = connect(idleSessionId, null, 'codex');
+        started = [first, second, layouts, idleRelay, idle];
+        const unknownLayout = askFixtureRound(
+          idleRelay,
+          unknownLayoutRound(run),
+        );
         return Promise.all([fixture, unknownLayout]).then(
           ([fixture, unknownLayout]) => ({ fixture, unknownLayout }),
         );
