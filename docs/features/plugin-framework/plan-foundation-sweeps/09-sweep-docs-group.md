@@ -1,6 +1,6 @@
 # 09 — Sweep: docs, backlog, notes, workflow
 
-Status: not started
+Status: in progress
 Type: Parallel
 Wave: 6 · Depends on: 06, 07
 Plan: [plan.md](plan.md)

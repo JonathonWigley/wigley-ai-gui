@@ -1,8 +1,8 @@
 import '../../../shared/page/markdown.css';
 import './backlog.css';
 import type { PageApi, PagePart } from '../../../contracts/plugin';
-import type { DocsPageExports } from '../../docs/contract';
-import type { KeysPageExports } from '../../keys/contract';
+import { docsPageKey } from '../../docs/contract';
+import { keysPageKey } from '../../keys/contract';
 import type { BacklogChannel } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
@@ -24,8 +24,8 @@ export const backlogPagePart: PagePart<typeof backlogManifest> = {
   manifest: backlogManifest,
   start(api: BacklogApi) {
     const { services } = api;
-    const keys = api.dependency<KeysPageExports>('keys');
-    const docs = api.dependency<DocsPageExports>('docs');
+    const keys = api.dependency(keysPageKey);
+    const docs = api.dependency(docsPageKey);
     let isShown = false;
     const view = createBacklogView({
       channel: api.channel,
@@ -112,6 +112,7 @@ export const backlogPagePart: PagePart<typeof backlogManifest> = {
 
     return {
       commands: { showMode, ...view.commands },
+      dispose: () => view.dispose(),
     };
   },
 };

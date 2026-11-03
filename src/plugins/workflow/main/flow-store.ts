@@ -1,5 +1,5 @@
 import { type Files, readIfPresent } from '../../../contracts/files';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import { errorText } from '../../../shared/error-text';
 import type { SessionFlow } from '../contract';
@@ -54,7 +54,7 @@ interface SavedEntry {
 // `files` is workflow's data folder.
 export function createFlowStore(deps: {
   files: Files;
-  log: Log;
+  log: PluginLog;
   paths: Paths;
 }): FlowStore {
   const { files, log, paths } = deps;
@@ -72,7 +72,7 @@ export function createFlowStore(deps: {
     lastWrite = lastWrite
       .then(() => files.write(FLOWS_FILE, text))
       .catch((error: unknown) => {
-        log('workflow', `${FLOWS_FILE} not written: ${errorText(error)}`);
+        log(`${FLOWS_FILE} not written: ${errorText(error)}`);
       });
   };
 
@@ -93,7 +93,7 @@ export function createFlowStore(deps: {
       }
       const entries = parseFlowsFile(text);
       if (entries === null) {
-        log('workflow', `${FLOWS_FILE} unreadable; starting with no flows`);
+        log(`${FLOWS_FILE} unreadable; starting with no flows`);
         return;
       }
       for (const { hostSessionId, flow } of entries) {

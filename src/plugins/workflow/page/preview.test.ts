@@ -78,7 +78,7 @@ function setUpPreview() {
     closed: (sessionId) => flowTabs.removeTab(sessionId),
     clock: { now: () => NOW },
     autoStartSeconds: () => 7,
-    log: (_source, line) => lines.push(line),
+    log: (line) => lines.push(line),
   });
   flowTabs.chatTabBuilt(PREVIEW_ROW);
   const steps = {

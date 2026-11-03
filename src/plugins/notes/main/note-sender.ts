@@ -1,6 +1,6 @@
 import type { ChatImage } from '../../../contracts/agent';
 import type { EncodableImage, ImageEncoder } from '../../../contracts/images';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import { errorText } from '../../../shared/error-text';
 import { SHRINK_REFUSED, shrinkToFit } from '../../../shared/shrink-image';
@@ -27,7 +27,7 @@ export interface NoteSenderDeps {
   launchBrief(): string;
   paths: Paths;
   homeDir: Promise<string>;
-  log: Log;
+  log: PluginLog;
 }
 
 // Sends the kept draft and clears it once the send succeeded; a refused or
@@ -77,7 +77,7 @@ async function draftPngs(
 async function fitToCap(
   pngs: readonly Uint8Array[],
   encoder: ImageEncoder,
-  log: Log,
+  log: PluginLog,
 ): Promise<Uint8Array[] | null> {
   let fitted: (EncodableImage | null)[];
   try {
@@ -87,7 +87,7 @@ async function fitToCap(
       ),
     );
   } catch (error) {
-    log('notes', `image not shrunk: ${errorText(error)}`);
+    log(`image not shrunk: ${errorText(error)}`);
     return null;
   }
   const sent: Uint8Array[] = [];
@@ -180,7 +180,7 @@ export function createNoteSender(deps: NoteSenderDeps): NoteSender {
           images,
         );
       } catch (error) {
-        log('notes', `follow-up not filed: ${errorText(error)}`);
+        log(`follow-up not filed: ${errorText(error)}`);
         return refused(errorText(error));
       }
       const outcome = followupOutcome(result, target);
@@ -215,7 +215,7 @@ export function createNoteSender(deps: NoteSenderDeps): NoteSender {
       try {
         await chat.launch({ projectDir, profile, message });
       } catch (error) {
-        log('notes', `session not started: ${errorText(error)}`);
+        log(`session not started: ${errorText(error)}`);
         return refused(errorText(error));
       }
       const home = await deps.homeDir;

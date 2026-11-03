@@ -2,7 +2,7 @@
 // every built-in stage, the plan-ready countdown on the second plan ready.
 // The stage ids are sample data, not stage rules.
 import type { Clock } from '../../../contracts/ambient';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import { CHAT_PREVIEW_HOST_ID } from '../../chat/contract';
 import type { StageId, SessionFlow } from '../contract';
 import type { PlanProgress, PlanTaskLine } from '../plan-reader';
@@ -102,7 +102,7 @@ export interface PreviewDeps {
   closed(sessionId: string): void;
   clock: Clock;
   autoStartSeconds(): number;
-  log: Log;
+  log: PluginLog;
 }
 
 // `press` is the preview key: the first press opens chat's preview session
@@ -126,7 +126,7 @@ interface ShownSample {
 }
 
 export function createPreview(deps: PreviewDeps): Preview {
-  const log = (line: string) => deps.log('workflow', line);
+  const { log } = deps;
   // Made once per step, so its countdown runs down.
   let shown: ShownSample | null = null;
   let awaitingRow = false;

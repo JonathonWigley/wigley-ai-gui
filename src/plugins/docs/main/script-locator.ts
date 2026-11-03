@@ -1,5 +1,5 @@
 import { type Files, readIfPresent } from '../../../contracts/files';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import { errorText } from '../../../shared/error-text';
 import { isJsonObject } from '../../../shared/json';
@@ -23,7 +23,7 @@ export function installedPluginsFile(configDir: string, paths: Paths): string {
 export async function readClaudeConfigDirs(
   files: Files,
   homeDir: string,
-  log: Log,
+  log: PluginLog,
   paths: Paths,
 ): Promise<string[]> {
   const config = await readJson(
@@ -51,7 +51,7 @@ export async function locateScript(
   files: Files,
   homeDir: string,
   scriptPath: string,
-  log: Log,
+  log: PluginLog,
   paths: Paths,
 ): Promise<string | null> {
   if (scriptPath !== '') {
@@ -72,7 +72,7 @@ export async function locateScript(
 async function installedScripts(
   files: Files,
   configDir: string,
-  log: Log,
+  log: PluginLog,
   paths: Paths,
 ): Promise<string[]> {
   const installed = await readJson(
@@ -100,13 +100,13 @@ async function installedScripts(
 async function readJson(
   files: Files,
   path: string,
-  log: Log,
+  log: PluginLog,
 ): Promise<unknown> {
   try {
     const text = await readIfPresent(files, path);
     return text === null ? undefined : JSON.parse(text);
   } catch (error) {
-    log('docs', `${path} not read: ${errorText(error)}`);
+    log(`${path} not read: ${errorText(error)}`);
     return undefined;
   }
 }

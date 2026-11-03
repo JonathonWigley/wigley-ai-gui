@@ -18,11 +18,12 @@ import {
 } from '../../../shared/drive-args';
 import { errorText } from '../../../shared/error-text';
 import type { JsonObject } from '../../../shared/json';
-import type {
-  AgentSession,
-  OwnedSession,
-  SessionsMainEvents,
-  SessionsMainExports,
+import {
+  type AgentSession,
+  type OwnedSession,
+  type SessionsMainEvents,
+  type SessionsMainExports,
+  sessionsMainKey,
 } from '../../sessions/contract';
 import {
   type DocsChannel,
@@ -245,7 +246,7 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
   manifest: docsManifest,
   start(api: DocsApi) {
     const { services, channel } = api;
-    const layouts = api.layouts.register({ layoutTypes });
+    api.layouts.register({ layoutTypes });
     const registry = createIndexSourceRegistry();
     const docs = startDocs(
       services,
@@ -253,7 +254,7 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
       () => registry.loadedEntries(),
     );
     docs.catch((error: unknown) =>
-      services.log('docs', `docs not started: ${errorText(error)}`),
+      services.log(`docs not started: ${errorText(error)}`),
     );
     addStartedSource(
       registry,
@@ -362,7 +363,7 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
         { fetch },
       ),
     );
-    const sessions = api.dependency<SessionsMainExports>('sessions');
+    const sessions = api.dependency(sessionsMainKey);
     services.selfTest?.run(
       docsSelfTestScript({
         files: services.files,
@@ -382,29 +383,21 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
             channel,
           })
         : null;
-    const exports: DocsMainExports = {
-      addSource: (source) => registry.add(source),
-      machineIndex: () => registry.load(MACHINE_SOURCE_ID),
-      rebuildMachineIndex: () => registry.rebuild(MACHINE_SOURCE_ID),
-      readDoc,
-      writeDoc,
-      writeBytes,
-      trashDoc,
-      watchDoc: async (path, changed) =>
-        (await docs).docFiles.watch(path, changed),
-    };
     return {
       commands: {},
-      exports: () => exports,
-      dispose: () => {
-        layouts.dispose();
-        watches.closeAll();
-        driveActions?.dispose();
-        for (const source of sessionSources.values()) {
-          source.dispose();
-        }
-        sessionSources.clear();
-      },
+      exports: (consumer): DocsMainExports => ({
+        addSource: (source) => consumer.track(registry.add(source)),
+        machineIndex: () => registry.load(MACHINE_SOURCE_ID),
+        rebuildMachineIndex: () => registry.rebuild(MACHINE_SOURCE_ID),
+        readDoc,
+        writeDoc,
+        writeBytes,
+        trashDoc,
+        watchDoc: async (path, changed) =>
+          consumer.track(await (await docs).docFiles.watch(path, changed)),
+      }),
+      // Ends the sessions `docs.connectSession` opened.
+      dispose: () => driveActions?.dispose(),
     };
   },
 };

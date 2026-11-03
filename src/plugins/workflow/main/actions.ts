@@ -1,11 +1,11 @@
 import type { UserMessage } from '../../../contracts/agent';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type { ChatMainExports } from '../../chat/contract';
 import { isBusy, type SessionFlow, type WorkflowSignal } from '../contract';
 
 export interface WorkflowActionsDeps {
   chat: Pick<ChatMainExports, 'send' | 'clear' | 'launch' | 'profileOf'>;
-  log: Log;
+  log: PluginLog;
   flowOf(sessionId: string): SessionFlow | null;
   signal(sessionId: string, signal: WorkflowSignal): void;
   cancelCountdown(sessionId: string): void;
@@ -70,7 +70,6 @@ export function createWorkflowActions(deps: WorkflowActionsDeps): {
       }
       if (IDLE_ONLY_COMMANDS.has(command) && isBusy(flow)) {
         deps.log(
-          'workflow',
           `${command} not run in session ${sessionId}: the session is busy`,
         );
         return false;

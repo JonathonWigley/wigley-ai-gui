@@ -4,7 +4,7 @@ import {
   type FileWatch,
   readIfPresent,
 } from '../../../contracts/files';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import { errorText } from '../../../shared/error-text';
 import type { WorkflowSignal } from '../contract';
 import { readPlanProgress } from '../plan-reader';
@@ -36,7 +36,7 @@ interface Watched {
 
 export function createPlanWatch(deps: {
   files: Pick<Files, 'read' | 'stat' | 'watch'>;
-  log: Log;
+  log: PluginLog;
   signal(sessionId: string, signal: WorkflowSignal): void;
 }): PlanWatch {
   const { files, log } = deps;
@@ -70,10 +70,7 @@ export function createPlanWatch(deps: {
   };
 
   const logFailure = (entry: Watched) => (error: unknown) => {
-    log(
-      'workflow',
-      `plan.md not read in ${entry.planDir}: ${errorText(error)}`,
-    );
+    log(`plan.md not read in ${entry.planDir}: ${errorText(error)}`);
   };
 
   const read = (sessionId: string, entry: Watched) => {

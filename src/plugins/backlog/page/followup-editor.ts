@@ -85,7 +85,7 @@ export function createFollowupEditor(deps: FollowupEditorDeps): FollowupEditor {
       describe: (field) => `${EDITOR_FIELD_LABELS[field]} box`,
     },
   );
-  // The slot lives as long as the page, so its target is never disposed.
+  // The page API disposes the target when backlog stops.
   deps.drops.addTarget({
     element: deps.element,
     take: boxDropTake(() => boxes.fileEditor(FOLLOWUP_FORM_ID, () => true), {

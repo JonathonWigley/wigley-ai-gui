@@ -189,16 +189,17 @@ export interface BacklogView {
   // again with `shown`, keeping an open editor's draft and focused box, an
   // open filter, the scroll, the selection and the focus.
   setLayouts(shown: ShownLayouts<BacklogLayout>): void;
+  // Ends the list split's observer and `window` listeners.
+  dispose(): void;
   commands: Record<BacklogCommand, () => void>;
 }
 
 export function createBacklogView(deps: BacklogViewDeps): BacklogView {
   const { channel, paths, homeDir } = deps;
-  const log = (message: string) => deps.log(PLUGIN_ID, message);
   const tilde = (path: string) => paths.tilde(path, homeDir);
   // A new element, made once for the view's life, that the keys plugin draws
-  // the keys of `command` in `scope` into, then `label` when given. The view
-  // lives as long as the page, so it keeps no anchor to dispose.
+  // the keys of `command` in `scope` into, then `label` when given. The keys
+  // plugin disposes the anchor when backlog stops.
   const anchored = (
     command: BacklogCommand,
     scope: BacklogBaseScope,
@@ -815,7 +816,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
         }
       })
       .catch((error) => {
-        log(`not read ${path}: ${errorText(error)}`);
+        deps.log(`not read ${path}: ${errorText(error)}`);
         if (request === detailRequest) {
           drawDocDetail(path, '', errorText(error));
         }
@@ -857,11 +858,11 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     const { editor } = state;
     if (editor !== null && editorDraw === null) {
       drawEditorPane(editor);
-      log(`editor open ${editor.kind}`);
+      deps.log(`editor open ${editor.kind}`);
       followupEditor.focus('title', { insertAtEnd: true });
     } else if (editor === null && editorDraw !== null) {
       closeEditorPane();
-      log('editor closed');
+      deps.log('editor closed');
     }
   };
 
@@ -895,14 +896,14 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
       const home = openHome(state);
       deps.homeShown(home);
       if (home !== null) {
-        log(`opened ${home.repo} ${tilde(home.root)}`);
+        deps.log(`opened ${home.repo} ${tilde(home.root)}`);
       }
     }
     if (state.selectedKey !== shownSelectedKey) {
       shownSelectedKey = state.selectedKey;
       const shown = selectedRow(state);
       if (shown !== null) {
-        log(`selected ${rowTitle(shown)}`);
+        deps.log(`selected ${rowTitle(shown)}`);
       }
     }
   };
@@ -940,13 +941,13 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     }
     loadedCount += 1;
     dispatch({ type: 'loaded', read: result });
-    log(`loaded ${String(result.homes.length)} homes`);
+    deps.log(`loaded ${String(result.homes.length)} homes`);
   };
 
   // Logs and toasts a failed read in place of throwing it.
   const readQuietly = (method: 'load' | 'rescan'): Promise<void> =>
     read(method).catch((error) => {
-      log(`not loaded: ${errorText(error)}`);
+      deps.log(`not loaded: ${errorText(error)}`);
       deps.toast(errorText(error), 'error');
     });
 
@@ -962,7 +963,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     isDraftKept: boolean,
   ): Promise<boolean> => {
     const result = await channel.invoke('applyEdit', homeRoot, path, edit);
-    log(`wrote ${path ?? tilde(homeRoot)} ${result.type}`);
+    deps.log(`wrote ${path ?? tilde(homeRoot)} ${result.type}`);
     switch (result.type) {
       case 'applied':
         await readQuietly('load');
@@ -1005,7 +1006,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     edit: BacklogEdit,
   ) => {
     write(homeRoot, path, edit, false).catch((error) => {
-      log(`write failed: ${errorText(error)}`);
+      deps.log(`write failed: ${errorText(error)}`);
       deps.toast(errorText(error), 'error');
     });
   };
@@ -1057,10 +1058,10 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     }
     try {
       const message = await channel.invoke('commit', home.root);
-      log(`committed ${root}`);
+      deps.log(`committed ${root}`);
       deps.toast(message, 'success');
     } catch (error) {
-      log(`commit failed ${root}: ${errorText(error)}`);
+      deps.log(`commit failed ${root}: ${errorText(error)}`);
       deps.toast(errorText(error), 'error');
       return;
     }
@@ -1069,7 +1070,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
 
   // ── Filter, picker and scroll ──────────────────────────────────────────
   const closeFilter = () => {
-    log(`filter ${store.get().filter}`);
+    deps.log(`filter ${store.get().filter}`);
     filterScope?.pop();
     filterScope = null;
     render(true);
@@ -1162,7 +1163,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
       direction,
       textLineHeightPx(detailPane),
     );
-    log(scrollText('the detail', step, direction, scroll));
+    deps.log(scrollText('the detail', step, direction, scroll));
   };
 
   const openInDocs = () => {
@@ -1219,17 +1220,19 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     pickTag,
     commit() {
       commit().catch((error) => {
-        log(`commit failed: ${errorText(error)}`);
+        deps.log(`commit failed: ${errorText(error)}`);
         deps.toast(errorText(error), 'error');
       });
     },
     toggleDone() {
       dispatch({ type: 'toggleDone' });
-      log(store.get().isDoneShown ? 'done shown' : 'done hidden');
+      deps.log(store.get().isDoneShown ? 'done shown' : 'done hidden');
     },
     toggleAgentReadyOnly() {
       dispatch({ type: 'toggleAgentReadyOnly' });
-      log(`agent-ready only ${store.get().isAgentReadyOnly ? 'on' : 'off'}`);
+      deps.log(
+        `agent-ready only ${store.get().isAgentReadyOnly ? 'on' : 'off'}`,
+      );
     },
     openInDocs,
     lineDown: () => scrollDetail('line', 1),
@@ -1238,7 +1241,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     halfPageUp: () => scrollDetail('halfPage', -1),
     save() {
       save().catch((error) => {
-        log(`write failed: ${errorText(error)}`);
+        deps.log(`write failed: ${errorText(error)}`);
         deps.toast(errorText(error), 'error');
       });
     },
@@ -1296,7 +1299,7 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
     reload: () => readQuietly('load'),
     shown() {
       render(true);
-      log('shown');
+      deps.log('shown');
     },
     sideBarHidden() {
       if (store.get().focus === 'homes') {
@@ -1324,6 +1327,9 @@ export function createBacklogView(deps: BacklogViewDeps): BacklogView {
       picker.redraw();
       deletePrompt.redraw();
       discardPrompt.redraw();
+    },
+    dispose() {
+      split.dispose();
     },
     commands,
   };

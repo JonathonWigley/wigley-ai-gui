@@ -2,7 +2,7 @@ import type { Clock } from '../../../contracts/ambient';
 import type { Disposable } from '../../../contracts/disposable';
 import { type Files, isMissingFile } from '../../../contracts/files';
 import type { Git } from '../../../contracts/git';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import type {
   MainApi,
@@ -21,6 +21,7 @@ import {
 import {
   type DocsMainEvents,
   type DocsMainExports,
+  docsMainKey,
   MACHINE_SOURCE_ID,
   type SourceRead,
 } from '../../docs/contract';
@@ -81,7 +82,7 @@ interface BacklogDeps {
   files: Pick<Files, 'realPath' | 'list'>;
   paths: Paths;
   clock: Clock;
-  log: Log;
+  log: PluginLog;
   channel: Pick<MainChannel<BacklogChannel>, 'send'>;
 }
 
@@ -99,8 +100,8 @@ function relativePath(
   return paths.segmentsBelow(path, folder)?.join('/') ?? null;
 }
 
-function logSkipped(log: Log, path: string, error: unknown): void {
-  log('backlog', `${path}: ${errorText(error)}`);
+function logSkipped(log: PluginLog, path: string, error: unknown): void {
+  log(`${path}: ${errorText(error)}`);
 }
 
 // `path` below an in-git home at `homeRoot`, relative to its clone: an in-git
@@ -398,7 +399,7 @@ function createBacklogMain(deps: BacklogDeps) {
   const { docs, git, files, paths, clock, log, channel } = deps;
   let last: BacklogRead | null = null;
   let watches: Disposable[] = [];
-  // Counts loads, and the dispose, so only the newest load keeps its watches.
+  // Counts loads, so only the newest load keeps its watches.
   let loads = 0;
 
   function homeAt(homeRoot: string): BacklogHome {
@@ -482,7 +483,7 @@ function createBacklogMain(deps: BacklogDeps) {
     try {
       const { error } = await docs.trashDoc(path);
       if (error !== null) {
-        log('backlog', `${path}: ${error}`);
+        log(`${path}: ${error}`);
       }
     } catch (error) {
       logSkipped(log, path, error);
@@ -837,13 +838,6 @@ function createBacklogMain(deps: BacklogDeps) {
     applyEdit,
     fileNote,
     commit,
-    dispose() {
-      loads += 1;
-      for (const watch of watches) {
-        watch.dispose();
-      }
-      watches = [];
-    },
   };
 }
 
@@ -875,10 +869,10 @@ export const backlogMainPart: MainPart<typeof backlogManifest> = {
   manifest: backlogManifest,
   start(api: BacklogApi) {
     const { services, channel } = api;
-    const docs = api.dependency<DocsMainExports>('docs');
+    const docs = api.dependency(docsMainKey);
     const fixture = startFixture(services);
     fixture.catch((error: unknown) =>
-      services.log('backlog', `fixture not written: ${errorText(error)}`),
+      services.log(`fixture not written: ${errorText(error)}`),
     );
     const backlog = createBacklogMain({
       docs,
@@ -915,14 +909,10 @@ export const backlogMainPart: MainPart<typeof backlogManifest> = {
         reload: () => channel.send('changed', { homeRoot: null }),
       }),
     );
-    const layouts = api.layouts.register({ layoutTypes });
+    api.layouts.register({ layoutTypes });
     return {
       commands: {},
       exports: () => exports,
-      dispose() {
-        layouts.dispose();
-        backlog.dispose();
-      },
     };
   },
 };

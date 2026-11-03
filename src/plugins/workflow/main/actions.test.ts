@@ -39,7 +39,7 @@ function startActions(
       profileOf: () =>
         options.profile === undefined ? 'personal' : options.profile,
     },
-    log: (_source, line) => logs.push(line),
+    log: (line) => logs.push(line),
     flowOf: () => flow,
     signal: (_sessionId, signal) => signals.push(signal),
     cancelCountdown: (sessionId) => calls.push(['cancelCountdown', sessionId]),

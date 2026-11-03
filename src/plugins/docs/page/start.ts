@@ -19,11 +19,11 @@ import { sheet } from '../../../shared/page/ui/sheet';
 import type { RollbackDeps } from '../../../shared/page/layout-host/draw-part';
 import { createSplit, type Split } from '../../../shared/page/ui/split';
 import { qualify } from '../../../shared/plugin-manifests';
-import type { KeysPageExports } from '../../keys/contract';
-import type {
-  SessionTabHandle,
-  SessionsPageEvents,
-  SessionsPageExports,
+import { keysPageKey } from '../../keys/contract';
+import {
+  type SessionTabHandle,
+  type SessionsPageEvents,
+  sessionsPageKey,
 } from '../../sessions/contract';
 import {
   type DocsChannel,
@@ -119,14 +119,12 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
   start(api: DocsApi) {
     const { services } = api;
     const { log } = services;
-    const sessions = api.dependency<SessionsPageExports>('sessions');
-    const keys = api.dependency<KeysPageExports>('keys');
+    const sessions = api.dependency(sessionsPageKey);
+    const keys = api.dependency(keysPageKey);
     // A page reload leaves main's watches for the old page's views.
     api.channel
       .invoke('unwatchAll')
-      .catch((error) =>
-        log('docs', `watches not cleared: ${errorText(error)}`),
-      );
+      .catch((error) => log(`watches not cleared: ${errorText(error)}`));
 
     let isDocsModeShown = false;
     // View id → the added view.
@@ -270,7 +268,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       userLayout: () => api.settings().layout,
       setLayouts(shown) {
         current = shown;
-        log('docs', `layouts shown: ${shown.user}`);
+        log(`layouts shown: ${shown.user}`);
         callEach(allViews(), (view) => view.layoutsChanged());
       },
     });
@@ -332,9 +330,14 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     });
     // A narrowing hides the side bar without telling the mode, so the machine
     // view's edge prompt follows the window too, once the core has laid out.
-    window.addEventListener('resize', () =>
-      requestAnimationFrame(() => showTreeEdge(machineView)),
-    );
+    let pendingResizeFrame: number | null = null;
+    const onWindowResize = () => {
+      pendingResizeFrame ??= requestAnimationFrame(() => {
+        pendingResizeFrame = null;
+        showTreeEdge(machineView);
+      });
+    };
+    window.addEventListener('resize', onWindowResize);
     api.modes.onChanged((modeId) => {
       isDocsModeShown = modeId === 'docs.docs';
     });
@@ -346,7 +349,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       added.split.setStartHidden(isHidden);
       added.isTreeHidden = isHidden;
       showTreeEdge(added.view);
-      log('docs', isHidden ? 'tree hidden' : 'tree shown');
+      log(isHidden ? 'tree hidden' : 'tree shown');
       if (isHidden) {
         treeHiddenIn(added.view);
       }
@@ -400,7 +403,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
           api.keys.setScope(added.view.focusScope());
           api.panes.setResizeTarget(split);
           api.panes.setFocusTarget(added.view.focusTarget);
-          log('docs', 'Docs tab shown');
+          log('Docs tab shown');
           added.view.showFirstTime();
         },
         hasUnsavedEdits: () => added.view.hasUnsavedEdits(),
@@ -423,10 +426,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         tab: null,
       };
       sessionDocs.set(sessionId, held);
-      log(
-        'docs',
-        `Docs tab added for ${projectDir ?? 'a session with no folder'}`,
-      );
+      log(`Docs tab added for ${projectDir ?? 'a session with no folder'}`);
       held.tab = sessions.addTab(sessionId, {
         id: 'docs',
         title: 'Docs',
@@ -442,14 +442,18 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         shown: () => held.view.shown(),
       });
     });
+    // The tab goes first, so it never holds a disposed view.
+    const disposeSessionDocs = (held: SessionDocs) => {
+      held.tab?.dispose();
+      held.view.dispose();
+    };
     api.events.on('sessions.sessionRemoved', ({ sessionId }) => {
       const held = sessionDocs.get(sessionId);
       if (held === undefined) {
         return;
       }
       sessionDocs.delete(sessionId);
-      held.tab?.dispose();
-      held.view.dispose();
+      disposeSessionDocs(held);
     });
     // Main replaces a session's index source when its host id changes.
     api.events.on('sessions.sessionHostChanged', ({ sessionId }) => {
@@ -512,7 +516,6 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       const isRunnable =
         docCommand !== null && !TREE_COMMAND_IDS.has(docCommand);
       log(
-        'docs',
         `tree out of sight: ${command} ran ${isRunnable ? docCommand : 'nothing'} in the doc`,
       );
       if (isRunnable) {
@@ -560,10 +563,6 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
       }
     };
 
-    const exports: DocsPageExports = {
-      addView: (sourceId, options) => addView(sourceId, options).handle,
-      openDoc: (path, line) => openDoc(path, line ?? null),
-    };
     return {
       commands: {
         showMode,
@@ -605,7 +604,22 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         confirmYes: onActiveView('confirmYes'),
         confirmNo: onActiveView('confirmNo'),
       },
-      exports: () => exports,
+      exports: (consumer): DocsPageExports => ({
+        addView: (sourceId, options) =>
+          consumer.track(addView(sourceId, options).handle),
+        openDoc: (path, line) => openDoc(path, line ?? null),
+      }),
+      dispose() {
+        window.removeEventListener('resize', onWindowResize);
+        if (pendingResizeFrame !== null) {
+          cancelAnimationFrame(pendingResizeFrame);
+        }
+        for (const held of sessionDocs.values()) {
+          disposeSessionDocs(held);
+        }
+        sessionDocs.clear();
+        machineView.dispose();
+      },
     };
   },
 };

@@ -5,10 +5,10 @@ import type {
   QualifiedEvents,
 } from '../../../contracts/plugin';
 import { canvasEncoder } from '../../../shared/page/file-drop/canvas-encoder';
-import type { KeysPageExports } from '../../keys/contract';
-import type {
-  SessionsPageEvents,
-  SessionsPageExports,
+import { keysPageKey } from '../../keys/contract';
+import {
+  type SessionsPageEvents,
+  sessionsPageKey,
 } from '../../sessions/contract';
 import type { NoteSession, NotesChannel } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
@@ -33,8 +33,8 @@ export const notesPagePart: PagePart<typeof notesManifest> = {
   manifest: notesManifest,
   start(api: NotesApi) {
     const { services } = api;
-    const sessions = api.dependency<SessionsPageExports>('sessions');
-    const keys = api.dependency<KeysPageExports>('keys');
+    const sessions = api.dependency(sessionsPageKey);
+    const keys = api.dependency(keysPageKey);
     const rows = new Map<string, NoteSession>();
 
     api.events.on('sessions.sessionAdded', (row) => {
@@ -42,7 +42,7 @@ export const notesPagePart: PagePart<typeof notesManifest> = {
       if (hostSessionId !== null) {
         rows.set(sessionId, { sessionId, harness, hostSessionId, projectDir });
       }
-      services.log('notes', `session ${hostSessionId ?? 'none'} listed`);
+      services.log(`session ${hostSessionId ?? 'none'} listed`);
     });
     api.events.on('sessions.sessionRemoved', ({ sessionId }) => {
       rows.delete(sessionId);
@@ -59,10 +59,7 @@ export const notesPagePart: PagePart<typeof notesManifest> = {
           return;
         }
         rows.set(sessionId, { ...row, hostSessionId });
-        services.log(
-          'notes',
-          `session ${row.hostSessionId} moved to ${hostSessionId}`,
-        );
+        services.log(`session ${row.hostSessionId} moved to ${hostSessionId}`);
       },
     );
 
@@ -93,6 +90,6 @@ export const notesPagePart: PagePart<typeof notesManifest> = {
       userLayout: () => api.settings().layout,
       setLayouts: (shown) => popup.setLayouts(shown),
     });
-    return { commands: popup.commands };
+    return { commands: popup.commands, dispose: () => popup.dispose() };
   },
 };

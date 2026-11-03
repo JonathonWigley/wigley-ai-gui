@@ -4,7 +4,7 @@ import {
   isMissingFile,
   readIfPresent,
 } from '../../../contracts/files';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import { errorText } from '../../../shared/error-text';
 import type {
@@ -28,7 +28,7 @@ import { installedPluginsFile, readClaudeConfigDirs } from './script-locator';
 export interface DocFilesDeps {
   files: Files;
   homeDir: string;
-  log: Log;
+  log: PluginLog;
   paths: Paths;
   // Every loaded view's entries (the machine index's and each session's), for
   // the guard.
@@ -295,7 +295,7 @@ export function createDocFiles(deps: DocFilesDeps): DocFiles {
       {
         recursive: false,
         onError: (error) =>
-          log('docs', `watch ${requested} stopped: ${errorText(error)}`),
+          log(`watch ${requested} stopped: ${errorText(error)}`),
       },
     );
   }
@@ -450,7 +450,7 @@ async function realPathOrSelf(files: Files, path: string): Promise<string> {
 async function guardFolders(
   files: Files,
   homeDir: string,
-  log: Log,
+  log: PluginLog,
   paths: Paths,
 ): Promise<GuardFolders> {
   const configDirs = await readClaudeConfigDirs(files, homeDir, log, paths);

@@ -119,12 +119,12 @@ async function setUp() {
   await files.write(`${CLAUDE_CACHE}/hooks/hooks.json`, HOOKS_TEXT);
   await files.write(`${CODEX_CACHE}/hooks/hooks.json`, HOOKS_TEXT);
   const git = cleanGit();
-  const logged: [string, string][] = [];
+  const logged: string[] = [];
   const deps = {
     git,
     files,
     paths: posixPaths,
-    log: (source: string, message: string) => logged.push([source, message]),
+    log: (message: string) => logged.push(message),
   };
   const read = (entries: readonly IndexEntry[], fetch = false) =>
     readPluginStatus(entries, deps, { fetch });
@@ -354,9 +354,7 @@ describe('readPluginStatus', () => {
     expect(status.clones[0].fetchFailed).toBe(false);
     expect(status.clones[0].files[A.id].uncommitted).toBe(true);
     expect(test.git.upstreamBlobs).not.toHaveBeenCalled();
-    expect(test.logged).toEqual([
-      ['docs', expect.stringContaining('/Users/u/dev/m')],
-    ]);
+    expect(test.logged).toEqual([expect.stringContaining('/Users/u/dev/m')]);
   });
 
   it('readPluginStatus_TwoClones_OrderOfFirstEntry', async () => {

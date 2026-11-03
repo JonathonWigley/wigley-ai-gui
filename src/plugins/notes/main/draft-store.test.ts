@@ -24,9 +24,7 @@ function setUp() {
         : files.trash(path),
   };
   const logged: string[] = [];
-  const store = createDraftStore(storeFiles, (source, message) =>
-    logged.push(`[${source}] ${message}`),
-  );
+  const store = createDraftStore(storeFiles, (message) => logged.push(message));
   return { files, failing, logged, store };
 }
 
@@ -50,9 +48,7 @@ describe('createDraftStore', () => {
     await files.write('draft.json', '{ not json');
 
     expect(await store.draft()).toEqual(emptyDraft(1));
-    expect(logged).toEqual([
-      '[notes] draft.json unreadable; starting a fresh draft',
-    ]);
+    expect(logged).toEqual(['draft.json unreadable; starting a fresh draft']);
   });
 
   it('addImage_WritesPngAndListsIt', async () => {

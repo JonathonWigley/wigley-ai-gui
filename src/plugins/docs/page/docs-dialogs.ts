@@ -1,4 +1,4 @@
-import type { Log, PluginLog } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import type {
   PageChannel,
@@ -76,7 +76,7 @@ interface TextBoxDeps {
   channel: PageChannel<DocsChannel>;
   homeDir: string;
   paths: Paths;
-  log: Log;
+  log: PluginLog;
   pushScope(): PushedScope;
   closed(): void;
   parts: DocsParts;
@@ -108,7 +108,7 @@ function createTextBox(deps: TextBoxDeps): TextBox {
     const listed = deps.channel
       .invoke('listFolder', folder)
       .catch((error: unknown) => {
-        deps.log('docs', `not listed ${folder}: ${errorText(error)}`);
+        deps.log(`not listed ${folder}: ${errorText(error)}`);
         return [];
       });
     listings.set(folder, listed);
@@ -173,7 +173,7 @@ function createTextBox(deps: TextBoxDeps): TextBox {
   const refreshQuietly = () => {
     if (request?.completes === true) {
       refresh().catch((error) =>
-        deps.log('docs', `completion failed: ${errorText(error)}`),
+        deps.log(`completion failed: ${errorText(error)}`),
       );
     }
   };
@@ -235,11 +235,9 @@ function createTextBox(deps: TextBoxDeps): TextBox {
           input.value = completeTyped(typed, matches, deps.paths);
           cursorToEnd();
           await refresh();
-          deps.log('docs', `completed to ${input.value}`);
+          deps.log(`completed to ${input.value}`);
         })
-        .catch((error) =>
-          deps.log('docs', `completion failed: ${errorText(error)}`),
-        );
+        .catch((error) => deps.log(`completion failed: ${errorText(error)}`));
     },
     accept() {
       const shown = request;
@@ -491,7 +489,7 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
         trailing: () => trailing,
       }));
 
-  const createCancelled = () => log('docs', 'create cancelled');
+  const createCancelled = () => log('create cancelled');
 
   const failed = (error: unknown) => toast(errorText(error), 'error');
 
@@ -520,7 +518,7 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
         deps.dialogClosed();
       },
     });
-    log('docs', `create ${kindTitle}: pick a place`);
+    log(`create ${kindTitle}: pick a place`);
   };
 
   const nameDoc = (kind: CreateKind, place: CreatePlace) => {
@@ -556,7 +554,6 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
           deps.changed({ type: 'created', entry }, null);
           await deps.openInEditor(entry, created.line);
           log(
-            'docs',
             kind === 'followup'
               ? `created follow-up ${name.trim()}`
               : `created ${paths.base(created.path)}`,
@@ -567,7 +564,7 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
       },
       cancelled: createCancelled,
     });
-    log('docs', `create ${kindTitle}: name it`);
+    log(`create ${kindTitle}: name it`);
   };
 
   const dialogs: DocsDialogs = {
@@ -593,7 +590,7 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
           deps.dialogClosed();
         },
       });
-      log('docs', 'create: pick a kind');
+      log('create: pick a kind');
     },
     createByPath(folder) {
       const { homeDir } = deps;
@@ -616,14 +613,14 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
             );
             deps.changed({ type: 'created', entry }, null);
             await deps.openInEditor(entry, created.line);
-            log('docs', `created ${paths.base(created.path)}`);
+            log(`created ${paths.base(created.path)}`);
           } catch (error) {
             failed(error);
           }
         },
         cancelled: createCancelled,
       });
-      log('docs', 'create by path: type the path');
+      log('create by path: type the path');
     },
     rename(entry) {
       box.open({
@@ -641,23 +638,22 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
             const record = renameRecord(entry.path, renamed, paths);
             deps.changed(record, renamed);
             log(
-              'docs',
               `renamed ${paths.base(record.from)} to ${paths.base(record.to)}`,
             );
           } catch (error) {
             failed(error);
           }
         },
-        cancelled: () => log('docs', 'rename cancelled'),
+        cancelled: () => log('rename cancelled'),
       });
-      log('docs', 'rename: type the new path');
+      log('rename: type the new path');
     },
     // Main names what goes before the question, so a link's target is named
     // beside the link; a delete while that is asked is ignored. A trash that
     // fails partway still applies what moved, and toasts the failure.
     trash(entry) {
       if (isTrashAsking) {
-        log('docs', 'delete ignored: one is already being asked');
+        log('delete ignored: one is already being asked');
         return;
       }
       isTrashAsking = true;
@@ -679,20 +675,19 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
                     null,
                   );
                   if (result.error === null) {
-                    log('docs', `moved ${name} to the Trash`);
+                    log(`moved ${name} to the Trash`);
                   } else {
                     failed(result.error);
                     log(
-                      'docs',
                       `moved ${result.trashed.map((path) => paths.base(path)).join(', ')} to the Trash, then failed: ${result.error}`,
                     );
                   }
                 })
                 .catch(failed);
             },
-            () => log('docs', `kept ${name}`),
+            () => log(`kept ${name}`),
           );
-          log('docs', `asked to move ${name} to the Trash`);
+          log(`asked to move ${name} to the Trash`);
         })
         .catch(failed);
     },

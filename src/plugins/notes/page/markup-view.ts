@@ -1,4 +1,4 @@
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type {
   MarkupEditor,
   MarkupSession,
@@ -32,7 +32,7 @@ export interface MarkupViewDeps {
   closed(): void;
   // Main saved the markup and answered with the draft.
   saved(draft: NoteDraft): void;
-  log: Log;
+  log: PluginLog;
   toast(text: string, tone: ToastTone): void;
 }
 
@@ -124,7 +124,7 @@ export function createMarkupView(deps: MarkupViewDeps): MarkupView {
     const colour = MARKUP_COLOURS[index];
     session.setColour(readColour(colour));
     markActive();
-    deps.log('notes', `colour ${colour}`);
+    deps.log(`colour ${colour}`);
   };
 
   // Hides the view and pops its scope; returns what it showed.
@@ -161,14 +161,14 @@ export function createMarkupView(deps: MarkupViewDeps): MarkupView {
       });
       session.setTool(tool);
       session.setColour(readColour(MARKUP_COLOURS[colourIndex]));
-      deps.log('notes', `markup shown for image ${entry.pos}`);
+      deps.log(`markup shown for image ${entry.pos}`);
     } catch (error) {
       if (shown !== entry) {
         return;
       }
       const message = `Markup not opened: ${errorText(error)}`;
       deps.toast(message, 'error');
-      deps.log('notes', message);
+      deps.log(message);
       hide();
     }
   };
@@ -177,11 +177,11 @@ export function createMarkupView(deps: MarkupViewDeps): MarkupView {
     try {
       const draft = await deps.channel.invoke('saveMarkup', entry.id, json);
       deps.saved(draft);
-      deps.log('notes', `markup saved for image ${entry.pos}`);
+      deps.log(`markup saved for image ${entry.pos}`);
     } catch (error) {
       const message = `Markup not saved: ${errorText(error)}`;
       deps.toast(message, 'error');
-      deps.log('notes', message);
+      deps.log(message);
     }
   };
 
@@ -216,7 +216,7 @@ export function createMarkupView(deps: MarkupViewDeps): MarkupView {
         entry.changed && entry.session !== null ? entry.session.toJson() : null;
       hide();
       if (json === null) {
-        deps.log('notes', `markup closed for image ${entry.pos}`);
+        deps.log(`markup closed for image ${entry.pos}`);
         return;
       }
       const save = saveMarkup(entry, json);
@@ -231,7 +231,7 @@ export function createMarkupView(deps: MarkupViewDeps): MarkupView {
       tool = next;
       session.setTool(next);
       markActive();
-      deps.log('notes', `tool ${next}`);
+      deps.log(`tool ${next}`);
     },
     stepColour(step) {
       pickColour(
@@ -242,14 +242,14 @@ export function createMarkupView(deps: MarkupViewDeps): MarkupView {
       const session = sessionNow();
       if (session !== null) {
         session.undo();
-        deps.log('notes', 'undo');
+        deps.log('undo');
       }
     },
     redo() {
       const session = sessionNow();
       if (session !== null) {
         session.redo();
-        deps.log('notes', 'redo');
+        deps.log('redo');
       }
     },
     redrawToolbar: drawToolbar,

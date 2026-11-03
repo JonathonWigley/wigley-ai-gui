@@ -169,6 +169,8 @@ export interface SourceRead extends IndexLoad {
 // machine source, and `watchDoc`, which takes a callback. `addSource` throws
 // on an id already registered; while the source is registered, the entries it
 // last loaded allow changes to their docs. None of them emits `indexLoaded`.
+// A source and a watch are filed under the dependent, so its stop disposes them,
+// and a watch that lands after that stop closes at once.
 export interface DocsMainExports {
   addSource(source: IndexSource): Disposable;
   // The machine index source's load, as Docs mode reads it.
@@ -207,15 +209,15 @@ export interface DocsMainEvents extends EventShape {
 // split. `shown` runs each time the caller shows the element (the view's
 // first show reads its index); `hasUnsavedEdits` is the caller's close guard;
 // `dispose` takes the view out of the docs plugin.
-export interface DocsViewHandle {
+export interface DocsViewHandle extends Disposable {
   element: HTMLElement;
   shown(): void;
   hasUnsavedEdits(): boolean;
-  dispose(): void;
 }
 
 // The docs page part's exports. `addView` builds a docs view over the index
-// source registered as `sourceId`, its keys active while `isVisible`.
+// source registered as `sourceId`, its keys active while `isVisible`, filed
+// under the dependent, so its stop disposes the view.
 // `openDoc` shows Docs mode and opens `path` there at the 1-based `line`. When
 // the machine index's first read does not list `path` and a rebuild is coming
 // or running, it waits for that one rebuild; it toasts when the index still

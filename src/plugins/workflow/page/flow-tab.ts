@@ -1,6 +1,6 @@
 import type { Timers } from '../../../contracts/ambient';
 import type { Disposable } from '../../../contracts/disposable';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import { element } from '../../../shared/page/dom';
 import type { SessionTabHandle, SessionTabView } from '../../sessions/contract';
 import type { SessionFlow } from '../contract';
@@ -12,7 +12,7 @@ import type { SessionFlow } from '../contract';
 export interface FlowTabsDeps {
   addTab(sessionId: string, tab: SessionTabView): SessionTabHandle;
   timers: Timers;
-  log: Log;
+  log: PluginLog;
   flowOf(sessionId: string): SessionFlow;
   nameOf(sessionId: string): string;
   draw(body: HTMLElement, sessionId: string): Disposable;
@@ -45,7 +45,7 @@ interface HeldTab {
 const FLOW_TAB_ID = 'workflow.flow';
 
 export function createFlowTabs(deps: FlowTabsDeps): FlowTabs {
-  const log = (line: string) => deps.log('workflow', line);
+  const { log } = deps;
   const built = new Set<string>();
   const tabs = new Map<string, HeldTab>();
   const pendingAdds = new Map<string, number>();

@@ -70,7 +70,7 @@ function setUp(
   const docFiles = createDocFiles({
     files: options.files ?? files,
     homeDir: options.homeDir ?? HOME,
-    log: (source, message) => logged.push(`[${source}] ${message}`),
+    log: (message) => logged.push(message),
     paths: options.paths ?? posixPaths,
     entries: () => options.entries ?? ENTRIES,
   });

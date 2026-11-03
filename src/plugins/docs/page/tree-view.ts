@@ -1,5 +1,5 @@
 import type { Disposable } from '../../../contracts/disposable';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type { PushedScope } from '../../../contracts/plugin';
 import { element } from '../../../shared/page/dom';
 import type { AppSlot } from '../../../shared/page/layout-host/app-slot';
@@ -29,7 +29,7 @@ import { type DocsParts, type DrawnPart } from './layout/docs-parts';
 import { keepingFocusAndScroll } from '../../../shared/page/layout-host/keeping-focus';
 
 export interface TreeViewDeps {
-  log: Log;
+  log: PluginLog;
   // Draws the pane, the line and the rows through the docs layout.
   parts: DocsParts;
   // Whether the tree is Docs mode's, over the machine's index.
@@ -330,12 +330,12 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
       const isExpanding = action.type === 'expand';
       setExpanded(node.id, isExpanding);
       const verb = isExpanding ? 'expanded' : 'collapsed';
-      deps.log('docs', `${verb} ${node.title}`);
+      deps.log(`${verb} ${node.title}`);
       draw();
     } else if (action.type === 'select') {
       state = { ...state, selectedId: action.id };
       draw();
-      deps.log('docs', `selected ${selectedRow()?.node.title}`);
+      deps.log(`selected ${selectedRow()?.node.title}`);
     }
   };
 
@@ -351,7 +351,7 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
     }
     state = { ...state, selectedId };
     draw();
-    deps.log('docs', `selected ${selectedRow()?.node.title}`);
+    deps.log(`selected ${selectedRow()?.node.title}`);
   };
 
   // Pops the box's scope; `refocus` returns focus to the tree.
@@ -437,13 +437,12 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
         return;
       }
       deps.log(
-        'docs',
         state.filter === ''
           ? 'cleared the filter'
           : `filtered the tree: ${state.filter}`,
       );
       if (state.filter !== '' && rows.length === 0) {
-        deps.log('docs', `no docs match "${state.filter}"`);
+        deps.log(`no docs match "${state.filter}"`);
       }
       closeFilter(true);
     },
@@ -453,7 +452,7 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
       }
       state = { ...state, filter: '' };
       draw();
-      deps.log('docs', 'cleared the filter');
+      deps.log('cleared the filter');
       closeFilter(true);
     },
     dismissFilter() {

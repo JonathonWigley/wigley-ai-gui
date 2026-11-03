@@ -1,7 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
-import type { BacklogMainExports, BacklogRead } from '../../backlog/contract';
+import {
+  fakeDependency,
+  startMainPart,
+} from '../../../shared/plugin-part-harness.test-support';
+import {
+  type BacklogMainExports,
+  backlogMainKey,
+  type BacklogRead,
+} from '../../backlog/contract';
 import type { ChatMainExports } from '../../chat/contract';
 import { emptyDraft, fieldsOf } from '../draft';
 import type { NoteDraft, NoteSendResult } from '../contract';
@@ -74,8 +82,8 @@ function startNotesPart() {
       images: { encode: () => Promise.reject(new Error('not reached')) },
       selfTest: { run: () => undefined },
     },
-    dependency: (pluginId: string) =>
-      pluginId === 'backlog' ? backlog : pluginId === 'chat' ? chat : {},
+    dependency: (key: { id: string }) =>
+      key.id === 'backlog' ? backlog : key.id === 'chat' ? chat : {},
     data,
     drive: null,
     layouts: { register: () => ({ dispose: () => undefined }) },
@@ -151,5 +159,38 @@ describe('notes main part', () => {
     await new Promise((settle) => setImmediate(settle));
     expect(sent.type).toBe('sent');
     expect(resolved).toBe(true);
+  });
+
+  it.each([{ drive: false }, { drive: true }])(
+    'stop_LeavesNoLiveRegistration (drive $drive)',
+    async ({ drive }) => {
+      const harness = startMainPart(notesMainPart, { drive });
+      expect(harness.counts().registrations).toBeGreaterThan(0);
+
+      await harness.stop();
+
+      expect(harness.counts()).toEqual({
+        registrations: 0,
+        timers: 0,
+        listeners: 0,
+        observers: 0,
+        frames: 0,
+      });
+    },
+  );
+
+  it('stopThenStart_StartsAgain', async () => {
+    const harness = startMainPart(notesMainPart, {
+      dependencies: [
+        fakeDependency(
+          backlogMainKey,
+          () => ({ tags: () => ['ui'] }) as unknown as BacklogMainExports,
+        ),
+      ],
+    });
+
+    await harness.restart();
+
+    expect(harness.invoke('tags')).toEqual(['ui']);
   });
 });

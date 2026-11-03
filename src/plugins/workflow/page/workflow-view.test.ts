@@ -103,7 +103,7 @@ function setUp() {
       commands: { exists: () => true, run: () => undefined },
       platform: 'macos',
     },
-    log: (...parts: string[]) => logged.push(parts.at(-1) ?? ''),
+    log: (line: string) => logged.push(line),
     clock: { now: () => now },
     timers: {
       set(run) {

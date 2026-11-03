@@ -414,7 +414,7 @@ Tasks 08, 09 and 10 apply this to each of their plugins, part by part:
 - [x] [Plugin part test harness](07-part-harness.md) — after 04
 
 ### Wave 5
-- [ ] [Shared modules take a plugin log and dispose](06-shared-modules.md) — after 05
+- [x] [Shared modules take a plugin log and dispose](06-shared-modules.md) — after 05
 
 ### Wave 6
 - [ ] [Sweep: chat, agents, agent-strip, agent-lines, usage, usage-tab-line, visual](08-sweep-chat-group.md) — after 06, 07
@@ -442,6 +442,7 @@ Review base: 7f956435
 - 04 · 5a86c47e · diff read; typecheck and lint clean; every handle in the plan's table returns Disposable, service views and pluginLog present; worker ran 13 named test files, 286 pass; second disposeRegistration is a no-op, pinned by a watch-count test · concerns: on Windows, zeroing alert counts at quit may call setOverlayIcon on a destroyed window, so stopAll would reject; a stale channel handle disposed after re-registering the same function drops the new one; spreading files and userConfig would lose prototype methods on a class; FakeProcesses settles a few microtasks later with a signal; no live quit run
 - 05 · 06a5e4ff · diff read; typecheck and lint clean; contributeTools, addCloseGuard and SessionTabHandle produce Disposables, consumer views on both sides; worker ran 10 named test files, 212 pass, and a wider 643 across sessions and neighbours; SDK's sendToolListChanged confirmed in version 2.3.1 · concerns: a throwing tool-session end skips the remaining ends and the notice; at quit chat's sessions end during its registrations' disposal with its listeners live, read as safe, and hosts get list_changed with a shrinking list; a notice can precede initialize; a consumer's tracked session end stays filed after the session ends itself; contributeTools fakes returning void were not read one by one; write-failure test opens a real socket
 - 07 · 53947ab6 · diff read; harness tests 20 pass with no type errors in its files, run while task 06 was editing other files, so whole-tree typecheck and lint were clean at the worker's check and are re-proved at 06's landing; .css?url loads as an empty string under vitest; real keys page part starts and restarts on it · concerns: page-global counts include real provider parts; installFocusFakeDom goes stale against the document copy; document listeners cannot be fired; the trial stopped at the first string-id dependency in 16 of 17 page parts, so parts may need services faked; replaced editor and userConfig are not tracked; channel.handle overwrites where the real one throws; keys page part leaks its PLACEMENT_CHECK_EVENT document listener, for task 10
+- 06 · b3b719e0 · Diff read (channel-presenter, autosave, reducer-store); typecheck clean; lint clean (1009 layer, 694 style files); worker's 248 test files, 3861 tests pass; grep logSource finds only layout-registry, its test and layout-service, which the task keeps · concerns: After autosave dispose an in-flight draft keeps savingRevision (Saving…). Disposed form service startSession and preview show can still start. EditorBoxes.dispose: an editor whose destroy throws skips the rest; an event after dispose can still run activate. Presenter dispose leaves forms open and the count until trackedAlerts zeroes it. followups.md:127 mentions logSource, for task 13. Log-source moves are checked by unit tests only. Tasks 08-10's documents may describe [<id>] assertions in test files now checking the message alone.
 ### Contract changes
 - PagePartHarness: send, fireWindow, showLayouts, pushKeymap → the same plus readonly fences · why: the task's test asserts recorded fences are empty and no member read them · consumers: 08, 09, 10 · group 07
 - Harness exports: as listed → also FakeMainApi<M> and FakePageApi<M> · why: the type test must show a string id failing on the fake API while MainPart.start takes MainApi, whose deprecated overload accepts one until task 11 · consumers: test-d only · group 07
@@ -464,5 +465,10 @@ Review base: 7f956435
 - dataUrl uses the real helper's form, not the task table's stale one · group 07 · group 07
 - A replaced files, processes or alerts service still runs through its per-plugin view, so its run options carry a signal and alerts sees the zeroing call at stop · group 07 · group 07
 - Channel state is per part, so a test driving a real provider's channel cannot; panes members do nothing · group 07 · group 07
+- 06: presenter holds its four handles in a createRegistrations() store, so tracked handles are wrapped twice · group 06
+- 06: reducer store sweeps disposed subscriptions only when the outermost dispatch ends (runningDispatches counter, one extra test) · group 06
+- 06: startAutosave's Disposable has its own isDisposed guard · group 06
+- 06: test fakes outside the Files list assert the message alone; the [<id>] source is not pinned until the plugin tasks · group 06
+- 06: shell-chrome.ts passes shellLog to the base kit (the plan said it passes no log), so a fence failing in a shell layout logs [shell] rather than [markdown] · group 06
 ### Review rounds
 ### Test gate

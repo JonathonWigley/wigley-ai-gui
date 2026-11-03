@@ -1,8 +1,8 @@
 import type { MainApi, MainPart } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
-import type { BacklogMainExports } from '../../backlog/contract';
-import type { ChatMainExports } from '../../chat/contract';
-import type { SessionsMainExports } from '../../sessions/contract';
+import { backlogMainKey } from '../../backlog/contract';
+import { chatMainKey } from '../../chat/contract';
+import { sessionsMainKey } from '../../sessions/contract';
 import type { NotesChannel } from '../contract';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { notesManifest } from '../manifest';
@@ -23,12 +23,11 @@ export const notesMainPart: MainPart<typeof notesManifest> = {
   manifest: notesManifest,
   start(api: NotesApi) {
     const { services, channel } = api;
-    const backlog = api.dependency<BacklogMainExports>('backlog');
+    const backlog = api.dependency(backlogMainKey);
     const homeDir = services.files
       .realPath(services.homeDir)
       .catch((error: unknown) => {
         services.log(
-          'notes',
           `home folder not resolved; using ${services.homeDir}: ${errorText(error)}`,
         );
         return services.homeDir;
@@ -38,7 +37,7 @@ export const notesMainPart: MainPart<typeof notesManifest> = {
       store,
       images: services.images,
       backlog,
-      chat: api.dependency<ChatMainExports>('chat'),
+      chat: api.dependency(chatMainKey),
       launchBrief: () => api.settings().launchBrief,
       paths: services.paths,
       homeDir,
@@ -78,7 +77,7 @@ export const notesMainPart: MainPart<typeof notesManifest> = {
         homeDir: services.homeDir,
         files: services.files,
         paths: services.paths,
-        sessions: api.dependency<SessionsMainExports>('sessions'),
+        sessions: api.dependency(sessionsMainKey),
         harnesses: services.agentHarnesses,
         store,
         nextSessionSend: () =>
@@ -87,17 +86,10 @@ export const notesMainPart: MainPart<typeof notesManifest> = {
           }),
       }),
     );
-    const driveActions =
-      api.drive !== null
-        ? addDriveActions(api.drive, { store, data: api.data })
-        : null;
-    const layouts = api.layouts.register({ layoutTypes });
-    return {
-      commands: {},
-      dispose: () => {
-        layouts.dispose();
-        driveActions?.dispose();
-      },
-    };
+    if (api.drive !== null) {
+      addDriveActions(api.drive, { store, data: api.data });
+    }
+    api.layouts.register({ layoutTypes });
+    return { commands: {} };
   },
 };

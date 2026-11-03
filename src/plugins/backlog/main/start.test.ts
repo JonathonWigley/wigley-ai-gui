@@ -7,11 +7,16 @@ import {
 } from '../../../shared/followups/followup-file';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
+import {
+  fakeDependency,
+  startMainPart,
+} from '../../../shared/plugin-part-harness.test-support';
 import { createRegistrations } from '../../../shared/registrations';
-import type {
-  DocsMainExports,
-  IndexEntry,
-  SourceRead,
+import {
+  type DocsMainExports,
+  docsMainKey,
+  type IndexEntry,
+  type SourceRead,
 } from '../../docs/contract';
 import type {
   BacklogEdit,
@@ -229,8 +234,7 @@ function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
       paths: posixPaths,
       clock: { now: () => NOW },
       runMode: 'live',
-      log: (source: string, message: string) =>
-        logged.push(`[${source}] ${message}`),
+      log: (message: string) => logged.push(message),
     },
     dependency: () => docs,
     settings: () => ({ tags: ['agent-ready'], layout: 'default' }),
@@ -263,6 +267,32 @@ function startBacklog(entries: IndexEntry[], disk: Record<string, string>) {
     invoke,
     emit,
   };
+}
+
+// Backlog's main part on the harness over a docs fake that lists FOLLOWUPS and
+// files each watch under the part, as docs' view does. `watched` lists each live
+// watch's path.
+function startBacklogOnHarness() {
+  const watched: string[] = [];
+  const docs = fakeDependency(
+    docsMainKey,
+    (consumer) =>
+      ({
+        machineIndex: async () => indexRead([entry('followup', FOLLOWUPS)]),
+        readDoc: async () => FOLLOWUPS_TEXT,
+        watchDoc: async (path: string) => {
+          watched.push(path);
+          return consumer.track({
+            dispose: () => watched.splice(watched.indexOf(path), 1),
+          });
+        },
+      }) as unknown as DocsMainExports,
+  );
+  const harness = startMainPart(backlogMainPart, {
+    dependencies: [docs],
+    services: { git: fakeGit(), runMode: 'live' },
+  });
+  return { harness, watched };
 }
 
 describe('backlog main part', () => {
@@ -693,15 +723,32 @@ describe('backlog main part', () => {
     expect(backlog.watched.map((watch) => watch.path)).toEqual([UI_FOLLOWUPS]);
   });
 
-  it('dispose_DisposesEveryWatch', async () => {
-    const backlog = startBacklog([entry('followup', FOLLOWUPS)], {
-      [FOLLOWUPS]: FOLLOWUPS_TEXT,
+  it('stop_LeavesNoLiveRegistration', async () => {
+    const { harness, watched } = startBacklogOnHarness();
+    await harness.invoke('load');
+    expect(watched).toEqual([FOLLOWUPS]);
+
+    await harness.stop();
+
+    expect(watched).toEqual([]);
+    expect(harness.counts()).toEqual({
+      registrations: 0,
+      timers: 0,
+      listeners: 0,
+      observers: 0,
+      frames: 0,
     });
-    await backlog.invoke('load');
+  });
 
-    await backlog.part.dispose?.();
+  it('stopThenStart_StartsAgain', async () => {
+    const { harness, watched } = startBacklogOnHarness();
+    await harness.invoke('load');
 
-    expect(backlog.watched).toEqual([]);
+    await harness.restart();
+    await harness.invoke('load');
+
+    expect(harness.started().exports).toBeDefined();
+    expect(watched).toEqual([FOLLOWUPS]);
   });
 
   it.each([

@@ -9,15 +9,12 @@ import type {
 import { scrollContent, scrollText } from '../../../shared/content-scroll';
 import { errorText } from '../../../shared/error-text';
 import { textLineHeightPx } from '../../../shared/page/text-line';
+import { CHAT_PREVIEW_HOST_ID, chatPageKey } from '../../chat/contract';
+import { docsPageKey } from '../../docs/contract';
+import { keysPageKey } from '../../keys/contract';
 import {
-  CHAT_PREVIEW_HOST_ID,
-  type ChatPageExports,
-} from '../../chat/contract';
-import type { DocsPageExports } from '../../docs/contract';
-import type { KeysPageExports } from '../../keys/contract';
-import type {
-  SessionsPageEvents,
-  SessionsPageExports,
+  type SessionsPageEvents,
+  sessionsPageKey,
 } from '../../sessions/contract';
 import type {
   PageStage,
@@ -74,11 +71,11 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
   manifest: workflowManifest,
   start(api: WorkflowApi) {
     const { services } = api;
-    const log = (line: string) => services.log('workflow', line);
-    const sessions = api.dependency<SessionsPageExports>('sessions');
-    const chat = api.dependency<ChatPageExports>('chat');
-    const docs = api.dependency<DocsPageExports>('docs');
-    const keys = api.dependency<KeysPageExports>('keys');
+    const { log } = services;
+    const sessions = api.dependency(sessionsPageKey);
+    const chat = api.dependency(chatPageKey);
+    const docs = api.dependency(docsPageKey);
+    const keys = api.dependency(keysPageKey);
     const heard = new Map<string, HeardSession>();
     const flows = new Map<string, SessionFlow>();
     const stages = createStageList<PageStage>();
@@ -263,7 +260,6 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
       log(scrollText('the Flow tab', step, direction, scroll));
     };
 
-    const exports: WorkflowPageExports = { addStage };
     return {
       commands: {
         mainAction: runOnSelected('mainAction'),
@@ -280,7 +276,9 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
         halfPageUp: () => scrollFlowTab('halfPage', -1),
         openPreview: () => preview.press(),
       },
-      exports: () => exports,
+      exports: (consumer): WorkflowPageExports => ({
+        addStage: (stage) => consumer.track(addStage(stage)),
+      }),
     };
   },
 };

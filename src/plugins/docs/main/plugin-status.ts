@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { Files } from '../../../contracts/files';
 import type { Git } from '../../../contracts/git';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import { errorText } from '../../../shared/error-text';
 import type {
@@ -24,7 +24,7 @@ export interface PluginStatusDeps {
   git: Git;
   files: Files;
   paths: Paths;
-  log: Log;
+  log: PluginLog;
 }
 
 // A marketplace clone: one `root`, and the index entries merged into it.
@@ -95,7 +95,7 @@ async function readClone(
   try {
     await markStatuses(clone, entries, deps, marks);
   } catch (error) {
-    deps.log('docs', `plugin status ${clone.root}: ${errorText(error)}`);
+    deps.log(`plugin status ${clone.root}: ${errorText(error)}`);
   }
   return {
     root: clone.root,

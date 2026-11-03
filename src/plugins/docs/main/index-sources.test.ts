@@ -63,13 +63,13 @@ function deferred<T>() {
 function setUp(scriptPath = SCRIPT) {
   const files = createMemoryFiles();
   const processes = new FakeProcesses();
-  const logged: [string, string][] = [];
+  const logged: string[] = [];
   const deps = {
     files,
     processes,
     homeDir: HOME,
     scriptPath: () => scriptPath,
-    log: (source: string, message: string) => logged.push([source, message]),
+    log: (message: string) => logged.push(message),
     paths: posixPaths,
   };
   const machine = createMachineSource(deps);
@@ -142,7 +142,7 @@ describe('machine source', () => {
     expect(load.message).toBe('ValueError: bad root');
     expect(load.document?.entries).toEqual([ENTRY]);
     expect(test.logged).toEqual([
-      ['docs', expect.stringContaining('ValueError: bad root')],
+      expect.stringContaining('ValueError: bad root'),
     ]);
   });
 
@@ -267,7 +267,7 @@ describe('session source', () => {
       .load();
 
     expect(test.logged).toEqual([
-      ['docs', expect.stringContaining('warning: slow disk')],
+      expect.stringContaining('warning: slow disk'),
     ]);
   });
 
@@ -298,10 +298,9 @@ describe('session source', () => {
       ['-X', 'utf8', SCRIPT, 'session', 'abc'],
       ['-X', 'utf8', SCRIPT, 'context', '/p'],
     ]);
-    expect(test.logged).toContainEqual([
-      'docs',
+    expect(test.logged).toContainEqual(
       expect.stringContaining('LookupError: no transcript for abc'),
-    ]);
+    );
   });
 
   it('load_NoScript_NotFoundMessageWithoutFallback', async () => {

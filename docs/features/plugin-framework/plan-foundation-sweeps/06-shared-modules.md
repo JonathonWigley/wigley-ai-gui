@@ -1,6 +1,6 @@
 # 06 — Shared modules take a plugin log and dispose
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 5 · Depends on: 05
 Plan: [plan.md](plan.md)
@@ -231,3 +231,4 @@ Commit: one commit for the group
 
 ## Proof
 
+Commit b3b719e0 · proof: Diff read (channel-presenter, autosave, reducer-store); typecheck clean; lint clean (1009 layer, 694 style files); worker's 248 test files, 3861 tests pass; grep logSource finds only layout-registry, its test and layout-service, which the task keeps · concerns: After autosave dispose an in-flight draft keeps savingRevision (Saving…). Disposed form service startSession and preview show can still start. EditorBoxes.dispose: an editor whose destroy throws skips the rest; an event after dispose can still run activate. Presenter dispose leaves forms open and the count until trackedAlerts zeroes it. followups.md:127 mentions logSource, for task 13. Log-source moves are checked by unit tests only. Tasks 08-10's documents may describe [<id>] assertions in test files now checking the message alone.

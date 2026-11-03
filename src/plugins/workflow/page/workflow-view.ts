@@ -101,9 +101,8 @@ const TASKS_GROUP_TITLE = 'Tasks';
 // text changes. One tick a second redraws every part showing a countdown
 // while any does.
 export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
-  const { log: writeLog, clock, timers } = deps;
-  const log = (line: string) => writeLog('workflow', line);
-  const parts = createWorkflowParts({ kit: deps.kit, log: writeLog });
+  const { log, clock, timers } = deps;
+  const parts = createWorkflowParts({ kit: deps.kit, log });
   const held = new Set<HeldPart>();
   const loggedStages = new Map<string, string>();
   const loggedProgress = new Map<string, string>();

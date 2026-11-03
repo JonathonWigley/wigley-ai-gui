@@ -1,6 +1,6 @@
 import type { Disposable } from '../../../contracts/disposable';
 import { type Files, readIfPresent } from '../../../contracts/files';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import type { ProcessRunner } from '../../../contracts/processes';
 import { errorText } from '../../../shared/error-text';
@@ -37,7 +37,7 @@ export interface IndexSourcesDeps {
   homeDir: string;
   // Read at each index run.
   scriptPath(): string;
-  log: Log;
+  log: PluginLog;
   paths: Paths;
 }
 
@@ -236,7 +236,6 @@ async function sessionIndex(
   const fallbackDir = run.command === 'session' ? spec.projectDir : null;
   if (!outcome.ok && !outcome.isScriptMissing && fallbackDir !== null) {
     deps.log(
-      'docs',
       `session ${run.argument} not indexed (${outcome.message}); indexing ${fallbackDir} instead`,
     );
     outcome = await runScript(deps, 'context', [fallbackDir]);
@@ -268,7 +267,8 @@ function sessionRun(
 // Runs `python3 -X utf8 <script> <command> <args>`, logging what it wrote to
 // stderr. UTF-8 mode lets the script print the index's `→` to a Windows
 // console's cp1252 pipe. A failed run's message is stderr's last non-empty
-// line, where a traceback puts its cause.
+// line, where a traceback puts its cause. A run the plugin's stop ended rejects
+// the caller: it is not a failure, so nothing logs it and no fallback runs.
 async function runScript(
   deps: IndexSourcesDeps,
   command: ScriptCommand,
@@ -294,14 +294,14 @@ async function runScript(
       ...args,
     ]);
   } catch (error) {
+    if (isStoppedRun(error)) {
+      throw error;
+    }
     return { ok: false, message: errorText(error), isScriptMissing: false };
   }
   const stderr = result.stderr.trim();
   if (result.code !== 0) {
-    deps.log(
-      'docs',
-      `docs_index.py ${command} exited ${result.code}: ${stderr}`,
-    );
+    deps.log(`docs_index.py ${command} exited ${result.code}: ${stderr}`);
     return {
       ok: false,
       message: lastLine(stderr) ?? `docs_index.py exited ${result.code}`,
@@ -309,9 +309,14 @@ async function runScript(
     };
   }
   if (stderr !== '') {
-    deps.log('docs', `docs_index.py ${command} wrote to stderr: ${stderr}`);
+    deps.log(`docs_index.py ${command} wrote to stderr: ${stderr}`);
   }
   return { ok: true, stdout: result.stdout };
+}
+
+// `ProcessRunner.run`'s rejection for a run its `signal` aborted.
+function isStoppedRun(error: unknown): boolean {
+  return errorText(error).startsWith('Stopped ');
 }
 
 function lastLine(text: string): string | null {

@@ -29,7 +29,7 @@ async function loadStore(text: string | null) {
   const logs: string[] = [];
   const store = createFlowStore({
     files,
-    log: (_source, line) => logs.push(line),
+    log: (line) => logs.push(line),
     paths: posixPaths,
   });
   await store.load();

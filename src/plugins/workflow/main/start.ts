@@ -6,10 +6,10 @@ import type {
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import layoutTypes from '../layouts/layout.d.ts?raw';
-import type { ChatMainEvents, ChatMainExports } from '../../chat/contract';
-import type {
-  SessionsMainEvents,
-  SessionsMainExports,
+import { type ChatMainEvents, chatMainKey } from '../../chat/contract';
+import {
+  type SessionsMainEvents,
+  sessionsMainKey,
 } from '../../sessions/contract';
 import type {
   MainStage,
@@ -55,11 +55,11 @@ export interface WorkflowSelfTestHooks {
 export const workflowMainPart: MainPart<typeof workflowManifest> = {
   manifest: workflowManifest,
   start(api: WorkflowApi) {
-    const layouts = api.layouts.register({ layoutTypes });
+    api.layouts.register({ layoutTypes });
     const { services, channel, events } = api;
     const { log, clock } = services;
-    const chat = api.dependency<ChatMainExports>('chat');
-    const sessions = api.dependency<SessionsMainExports>('sessions');
+    const chat = api.dependency(chatMainKey);
+    const sessions = api.dependency(sessionsMainKey);
     const stages = createStageList<MainStage>();
     const store = createFlowStore({
       files: api.data,
@@ -67,10 +67,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       paths: services.paths,
     });
     const ready = store.load().catch((error: unknown) => {
-      log(
-        'workflow',
-        `flows.json not read: ${errorText(error)}; starting with no flows`,
-      );
+      log(`flows.json not read: ${errorText(error)}; starting with no flows`);
     });
     // Host session id and project folder of each connected session, until
     // chat opens it.
@@ -170,18 +167,17 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       actions.run(sessionId, command).then(
         (ran) => {
           if (ran) {
-            log('workflow', `ran ${command} in ${name}`);
+            log(`ran ${command} in ${name}`);
           }
         },
         (error: unknown) => {
-          log('workflow', `auto-start failed: ${errorText(error)}`);
+          log(`auto-start failed: ${errorText(error)}`);
         },
       );
     }
 
-    const addStage = (stage: MainStage) => stages.add(stage);
     for (const stage of BUILT_IN_MAIN_STAGES) {
-      addStage(stage);
+      stages.add(stage);
     }
 
     events.on('sessions.connected', ({ id, info }) => {
@@ -196,7 +192,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       void ready.then(() => {
         const pair = connected.get(sessionId);
         if (pair === undefined) {
-          log('workflow', `session ${sessionId} opened with no host session`);
+          log(`session ${sessionId} opened with no host session`);
           return;
         }
         connected.delete(sessionId);
@@ -241,12 +237,11 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       });
     });
 
-    const settingsListener = api.onSettingsChanged((settings) => {
+    api.onSettingsChanged((settings) => {
       void ready.then(() => {
         const onOff = settings.autoClearAndMake ? 'on' : 'off';
         const seconds = Math.max(1, settings.autoStartSeconds);
         log(
-          'workflow',
           `settings: autoClearAndMake ${onOff}, autoStartSeconds ${String(seconds)}`,
         );
         if (!settings.autoClearAndMake) {
@@ -292,16 +287,11 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       );
     }
 
-    const exports: WorkflowMainExports = { addStage };
     return {
       commands: {},
-      exports: () => exports,
-      dispose() {
-        layouts.dispose();
-        settingsListener.dispose();
-        planWatch.dispose();
-        countdown.dispose();
-      },
+      exports: (consumer): WorkflowMainExports => ({
+        addStage: (stage) => consumer.track(stages.add(stage)),
+      }),
     };
   },
 };

@@ -1,10 +1,12 @@
-import { describe, expect, it } from 'vitest';
-import type { Disposable } from '../../../contracts/disposable';
+import { describe, expect, it, vi } from 'vitest';
+import type { Disposable, Registrations } from '../../../contracts/disposable';
 import type { RunMode } from '../../../contracts/plugin';
+import type { ProcessResult } from '../../../contracts/processes';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
 import { FakeProcesses } from '../../../shared/fake-processes';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
+import { startMainPart } from '../../../shared/plugin-part-harness.test-support';
 import { createRegistrations } from '../../../shared/registrations';
 import type { OwnedSession, SessionInfo } from '../../sessions/contract';
 import type { DocsMainExports, IndexDocument } from '../contract';
@@ -440,5 +442,137 @@ describe('docs main part', () => {
     await docs.exports.rebuildMachineIndex();
 
     expect(docs.emitted).toEqual([]);
+  });
+});
+
+const NOTES = '/notes.md';
+const NOTHING_LIVE = {
+  registrations: 0,
+  timers: 0,
+  listeners: 0,
+  observers: 0,
+  frames: 0,
+};
+
+// Docs' main part on the harness, live over an empty root, so it writes no
+// fixture, running `/script.py`.
+function startDocsOnHarness() {
+  const harness = startMainPart(docsMainPart, {
+    drive: true,
+    settings: { ...docsMainPart.manifest.settings, scriptPath: '/script.py' },
+    services: { homeDir: '/', runMode: 'live' },
+  });
+  const exportsTo = (consumer: Registrations) =>
+    harness.started().exports?.(consumer) as DocsMainExports;
+  return { harness, exportsTo };
+}
+
+function sourceWithId(id: string) {
+  return {
+    id,
+    title: id,
+    load: () => Promise.resolve({ document: null, message: null }),
+  };
+}
+
+describe('docs main part lifecycle', () => {
+  it('stop_LeavesNoLiveRegistration', async () => {
+    const { harness } = startDocsOnHarness();
+    await harness.files.write(NOTES, 'one');
+    await harness.invoke('watchDoc', 'v', NOTES);
+
+    await harness.stop();
+
+    expect(harness.counts()).toEqual(NOTHING_LIVE);
+  });
+
+  it('stopThenStart_StartsAgain', async () => {
+    const { harness } = startDocsOnHarness();
+
+    await harness.restart();
+
+    expect(harness.started().exports).toBeDefined();
+  });
+
+  it('exports_ConsumerDisposed_FreesTheSourceId', () => {
+    const { exportsTo } = startDocsOnHarness();
+    const first = createRegistrations();
+    exportsTo(first).addSource(sourceWithId('extra'));
+
+    first.dispose();
+
+    expect(() =>
+      exportsTo(createRegistrations()).addSource(sourceWithId('extra')),
+    ).not.toThrow();
+  });
+
+  it('exports_ConsumerDisposed_ClosesItsWatch', async () => {
+    const { harness, exportsTo } = startDocsOnHarness();
+    await harness.files.write(NOTES, 'one');
+    const consumer = createRegistrations();
+    const changed = vi.fn();
+    await exportsTo(consumer).watchDoc(NOTES, changed);
+
+    consumer.dispose();
+    await harness.files.write(NOTES, 'two');
+
+    expect(changed).toHaveBeenCalledTimes(0);
+  });
+
+  it('exports_DisposedBeforeWatchResolves_ClosesItAtOnce', async () => {
+    const { harness, exportsTo } = startDocsOnHarness();
+    const consumer = createRegistrations();
+    const changed = vi.fn();
+    const watching = exportsTo(consumer).watchDoc(NOTES, changed);
+
+    consumer.dispose();
+    await watching;
+    await harness.files.write(NOTES, 'two');
+
+    expect(changed).toHaveBeenCalledTimes(0);
+  });
+
+  it('stop_ClosesViewWatches', async () => {
+    const { harness } = startDocsOnHarness();
+    await harness.files.write(NOTES, 'one');
+    await harness.invoke('watchDoc', 'v', NOTES);
+    await harness.files.write(NOTES, 'two');
+    const sentWhileLive = harness.sent.length;
+
+    await harness.stop();
+    await harness.files.write(NOTES, 'three');
+
+    expect(sentWhileLive).toBe(1);
+    expect(harness.sent).toHaveLength(sentWhileLive);
+  });
+
+  it('stop_IndexRunInFlight_LogsNoFailure', async () => {
+    const { harness } = startDocsOnHarness();
+    harness.processes.script(
+      'python3',
+      ['-X', 'utf8', '/script.py', 'session', 'abc'],
+      Promise.withResolvers<ProcessResult>().promise,
+    );
+    harness.emit('sessions.connected', {
+      id: 'row-1',
+      info: {
+        sessionId: 'abc',
+        projectDir: '/p',
+        deadlineSeconds: null,
+        harness: 'claude',
+      },
+    });
+    const load = harness.invoke(
+      'loadIndex',
+      'session:row-1',
+    ) as Promise<unknown>;
+    await vi.waitFor(() => expect(harness.processes.runs).toHaveLength(1));
+    const loadStopped = expect(load).rejects.toThrow('Stopped python3');
+
+    await harness.stop();
+
+    await loadStopped;
+    expect(harness.logs).toEqual([]);
+    expect(harness.processes.runs).toHaveLength(1);
   });
 });

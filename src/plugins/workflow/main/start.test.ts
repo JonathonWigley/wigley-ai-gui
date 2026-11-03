@@ -4,13 +4,19 @@ import type { Files } from '../../../contracts/files';
 import type { QualifiedEvents } from '../../../contracts/plugin';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
+import {
+  type MainPartHarness,
+  startMainPart,
+} from '../../../shared/plugin-part-harness.test-support';
+import { createRegistrations } from '../../../shared/registrations';
 import type { ChatMainEvents, ChatMainExports } from '../../chat/contract';
 import type {
   AgentSession,
   SessionsMainEvents,
   SessionsMainExports,
 } from '../../sessions/contract';
-import type { SessionFlow } from '../contract';
+import type { MainStage, SessionFlow, WorkflowMainExports } from '../contract';
+import type { workflowManifest } from '../manifest';
 import { readPlanProgress } from '../plan-reader';
 import { FLOWS_FILE } from './flow-store';
 import { workflowMainPart } from './start';
@@ -90,7 +96,7 @@ function startWorkflowPart(
   const listeners = new Map<string, ((data: unknown) => void)[]>();
   const handlers = new Map<string, (...args: unknown[]) => unknown>();
   const sent: SessionFlow[][] = [];
-  const logs: [string, string][] = [];
+  const logs: string[] = [];
   const chatCalls: unknown[][] = [];
   let settingsListener: (next: WorkflowTestSettings) => void = () => undefined;
   const data = createMemoryFiles();
@@ -139,13 +145,13 @@ function startWorkflowPart(
     },
     services: {
       files: projectFiles,
-      log: (source: string, line: string) => logs.push([source, line]),
+      log: (line: string) => logs.push(line),
       clock: time.clock,
       timers: time.timers,
       paths: posixPaths,
       selfTest: null,
     },
-    dependency: (pluginId: string) => dependencies[pluginId] ?? {},
+    dependency: (key: { id: string }) => dependencies[key.id] ?? {},
     data,
     drive: null,
     layouts: { register: () => ({ dispose: () => undefined }) },
@@ -219,6 +225,35 @@ async function runFeatureTurn(
   await workflow.agentEvent({ type: 'turnEnded', at: 1 });
 }
 
+// Runs a wigley:feature turn that writes the plan, over the part harness, so
+// the flow holds a plan watch and a running countdown.
+async function reachPlanReady(
+  harness: MainPartHarness<typeof workflowManifest>,
+): Promise<void> {
+  const agentEvent = async (event: AgentEvent) => {
+    harness.emit('chat.agentEvent', {
+      sessionId: 's1',
+      profileDir: '~/.claude',
+      hostSessionId: 'h1',
+      event,
+    });
+    await settled();
+  };
+  harness.emit('sessions.connected', session('s1', 'h1'));
+  harness.emit('chat.sessionOpened', { sessionId: 's1', profileDir: '~/.c' });
+  await settled();
+  await agentEvent(skill('wigley:feature', ''));
+  await agentEvent({ type: 'turnStarted', at: 1 });
+  await harness.files.write(PLAN_FILE, PLAN);
+  await agentEvent({
+    type: 'fileWritten',
+    at: 1,
+    agentId: 'main',
+    path: PLAN_FILE,
+  });
+  await agentEvent({ type: 'turnEnded', at: 1 });
+}
+
 describe('workflowMainPart', () => {
   it.each([
     { name: 'its side-bar label', sessionLabel: 'r 2', ranIn: 'r 2' },
@@ -254,10 +289,7 @@ describe('workflowMainPart', () => {
         ['clear', 's1'],
         ['send', 's1', `/wigley:make ${PLAN_DIR}`],
       ]);
-      expect(workflow.logs).toContainEqual([
-        'workflow',
-        `ran clearAndMake in ${ranIn}`,
-      ]);
+      expect(workflow.logs).toContainEqual(`ran clearAndMake in ${ranIn}`);
     },
   );
 
@@ -377,7 +409,61 @@ describe('workflowMainPart', () => {
         autoStartSeconds: seconds,
       });
 
-      expect(workflow.logs).toEqual([['workflow', line]]);
+      expect(workflow.logs).toEqual([line]);
     },
   );
+
+  it.each([
+    {
+      state: 'fresh start',
+      act: () => Promise.resolve(),
+      liveTimers: 0,
+    },
+    {
+      state: 'a plan watched and its countdown running',
+      act: reachPlanReady,
+      liveTimers: 1,
+    },
+  ])('stop_LeavesNoLiveRegistration ($state)', async ({ act, liveTimers }) => {
+    const harness = startMainPart(workflowMainPart, {
+      settings: { ...SETTINGS, autoClearAndMake: true },
+    });
+    await act(harness);
+    expect(harness.counts().timers).toBe(liveTimers);
+    expect(harness.counts().registrations).toBeGreaterThan(0);
+
+    await harness.stop();
+    await settled();
+
+    expect(harness.counts()).toEqual({
+      registrations: 0,
+      timers: 0,
+      listeners: 0,
+      observers: 0,
+      frames: 0,
+    });
+  });
+
+  it('stopThenStart_StartsAgain', async () => {
+    const harness = startMainPart(workflowMainPart);
+
+    await harness.restart();
+
+    expect(await harness.invoke('flows')).toEqual([]);
+  });
+
+  it('exports_ConsumerDisposed_FreesTheStageId', () => {
+    const harness = startMainPart(workflowMainPart);
+    const exportsFor = (consumer: ReturnType<typeof createRegistrations>) =>
+      harness.started().exports?.(consumer) as WorkflowMainExports;
+    const stage: MainStage = { id: 'extra', order: 70, enter: () => null };
+    const consumerA = createRegistrations();
+    exportsFor(consumerA).addStage(stage);
+
+    consumerA.dispose();
+
+    expect(() =>
+      exportsFor(createRegistrations()).addStage(stage),
+    ).not.toThrow();
+  });
 });

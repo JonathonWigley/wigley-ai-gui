@@ -538,7 +538,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       case 'external':
         deps.channel
           .invoke('openExternal', target.url)
-          .then(() => deps.log('docs', `opened link ${target.url}`))
+          .then(() => deps.log(`opened link ${target.url}`))
           .catch((error) => deps.toast(errorText(error), 'error'));
         break;
       case 'heading':
@@ -584,9 +584,7 @@ export function createDocView(deps: DocViewDeps): DocView {
   const watchFile = (path: string | null, name: string) => {
     deps.channel
       .invoke('watchDoc', deps.viewId, path)
-      .catch((error) =>
-        deps.log('docs', `not watching ${name}: ${errorText(error)}`),
-      );
+      .catch((error) => deps.log(`not watching ${name}: ${errorText(error)}`));
   };
 
   // Shows the detail's field table, the file it edits let go.
@@ -627,7 +625,7 @@ export function createDocView(deps: DocViewDeps): DocView {
   // pane had as the editor opened, set again once the body draws.
   const closeEditor = (doc: ShownDoc) => {
     dropEditor();
-    deps.log('docs', `closed the editor on ${doc.name}`);
+    deps.log(`closed the editor on ${doc.name}`);
     pane.focus();
     const scrollTop = scrollTopBeforeEdit;
     pane.scrollTop = scrollTop;
@@ -644,7 +642,7 @@ export function createDocView(deps: DocViewDeps): DocView {
           pane.scrollTop = scrollTop;
         }
       })
-      .catch((error) => deps.log('docs', `not rendered: ${errorText(error)}`));
+      .catch((error) => deps.log(`not rendered: ${errorText(error)}`));
   };
 
   const writeEditor = (overwrite: boolean, after: AfterWrite) => {
@@ -663,20 +661,20 @@ export function createDocView(deps: DocViewDeps): DocView {
         }
         if (result.type === 'changedOnDisk') {
           showConflict(result.diskText, after);
-          deps.log('docs', `changed on disk, not written: ${doc.name}`);
+          deps.log(`changed on disk, not written: ${doc.name}`);
           return;
         }
         doc.text = text;
         showBanner(false);
         deps.toast(`Wrote ${doc.name}`, 'success');
-        deps.log('docs', `wrote ${doc.name}`);
+        deps.log(`wrote ${doc.name}`);
         if (after === 'close') {
           closeEditor(doc);
         }
       })
       .catch((error) => {
         deps.toast(errorText(error), 'error');
-        deps.log('docs', `not written ${doc.name}: ${errorText(error)}`);
+        deps.log(`not written ${doc.name}: ${errorText(error)}`);
       })
       .finally(() => {
         writingText = null;
@@ -691,13 +689,12 @@ export function createDocView(deps: DocViewDeps): DocView {
     if (hasUnsaved && !force) {
       deps.toast(UNSAVED_TEXT, 'error');
       deps.log(
-        'docs',
         `refused to close the editor with unsaved edits on ${shown.name}`,
       );
       return;
     }
     if (hasUnsaved) {
-      deps.log('docs', `dropped edits on ${shown.name}`);
+      deps.log(`dropped edits on ${shown.name}`);
     }
     closeEditor(shown);
   };
@@ -718,7 +715,7 @@ export function createDocView(deps: DocViewDeps): DocView {
     if (editor !== null) {
       if (diskText !== doc.text) {
         showBanner(true);
-        deps.log('docs', `changed on disk: ${doc.name}`);
+        deps.log(`changed on disk: ${doc.name}`);
       }
       return;
     }
@@ -739,7 +736,7 @@ export function createDocView(deps: DocViewDeps): DocView {
     doc.bodyStartLine = rendered.bodyStartLine;
     drawBody(rendered);
     pane.scrollTop = scrollTop;
-    deps.log('docs', `reloaded ${doc.name}`);
+    deps.log(`reloaded ${doc.name}`);
   };
 
   // The index each pasted file of a take at `now` is named with, in order;
@@ -773,11 +770,11 @@ export function createDocView(deps: DocViewDeps): DocView {
     );
     try {
       await deps.channel.invoke('writeBytes', path, await file.bytes());
-      deps.log('docs', `saved pasted ${file.name} as ${path}`);
+      deps.log(`saved pasted ${file.name} as ${path}`);
       return path;
     } catch (error) {
       deps.toast(errorText(error), 'error');
-      deps.log('docs', `not saved pasted ${file.name}: ${errorText(error)}`);
+      deps.log(`not saved pasted ${file.name}: ${errorText(error)}`);
       return null;
     }
   };
@@ -809,7 +806,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       links.push(docLinkOf(path, doc.filePath, file.mediaType, deps.paths));
     }
     if (shown !== doc || editor !== taking) {
-      deps.log('docs', `not linked: the editor on ${doc.name} closed`);
+      deps.log(`not linked: the editor on ${doc.name} closed`);
       if (savedPaths.length > 0) {
         deps.toast(
           `Saved ${savedPaths.join(', ')}, not linked: the editor closed`,
@@ -822,7 +819,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       return;
     }
     taking.insert(docLinksText(links, taking.charBeforeCursor()));
-    deps.log('docs', `linked ${String(links.length)} in ${doc.name}`);
+    deps.log(`linked ${String(links.length)} in ${doc.name}`);
   };
 
   // The frame draws first, so the editor mounts into an attached host.
@@ -844,14 +841,14 @@ export function createDocView(deps: DocViewDeps): DocView {
       element: pane,
       take: (files) => {
         takeFiles(files).catch((error) =>
-          deps.log('docs', `not linked: ${errorText(error)}`),
+          deps.log(`not linked: ${errorText(error)}`),
         );
       },
     });
     showEditHint();
     showDocState();
     editor.focus();
-    deps.log('docs', `editing ${doc.name}`);
+    deps.log(`editing ${doc.name}`);
   };
 
   // Opens the file the detail finds in the editor, watched while it edits.
@@ -921,7 +918,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       } catch (error) {
         const failure = `Could not open ${deps.paths.tilde(target.path, deps.homeDir)}: ${errorText(error)}`;
         deps.toast(failure, 'error');
-        deps.log('docs', failure);
+        deps.log(failure);
         return false;
       }
       if (count !== openCount || isDisposed || view.hasUnsavedEdits()) {
@@ -946,7 +943,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       drawBody(rendered);
       pane.scrollTop = 0;
       watchFile(target.detail === null ? target.path : null, name);
-      deps.log('docs', `opened ${name}`);
+      deps.log(`opened ${name}`);
       if (target.line !== null) {
         scrollToLine(target.line, rendered.bodyStartLine);
       }
@@ -994,7 +991,7 @@ export function createDocView(deps: DocViewDeps): DocView {
         return;
       }
       reread(doc).catch((error) =>
-        deps.log('docs', `not reloaded ${doc.name}: ${errorText(error)}`),
+        deps.log(`not reloaded ${doc.name}: ${errorText(error)}`),
       );
     },
     edit(line) {
@@ -1006,7 +1003,6 @@ export function createDocView(deps: DocViewDeps): DocView {
       if (readOnly !== null) {
         deps.toast(readOnlyText(readOnly), 'info');
         deps.log(
-          'docs',
           readOnly.type === 'downloaded'
             ? `refused to edit ${doc.name}, a downloaded copy`
             : `refused to edit ${doc.name} in the plugin cache`,
@@ -1046,16 +1042,16 @@ export function createDocView(deps: DocViewDeps): DocView {
           direction,
           textLineHeightPx(pane),
         );
-        deps.log('docs', scrollText(name, step, direction, scroll));
+        deps.log(scrollText(name, step, direction, scroll));
         return;
       }
       editor
         .scrollBy(step, direction)
         .then((scroll) =>
-          deps.log('docs', editorScrollText(name, step, direction, scroll)),
+          deps.log(editorScrollText(name, step, direction, scroll)),
         )
         .catch((error) =>
-          deps.log('docs', `not scrolled ${name}: ${errorText(error)}`),
+          deps.log(`not scrolled ${name}: ${errorText(error)}`),
         );
     },
     focus() {
@@ -1072,7 +1068,7 @@ export function createDocView(deps: DocViewDeps): DocView {
         return false;
       }
       deps.toast(UNSAVED_TEXT, 'error');
-      deps.log('docs', `refused to leave ${shown?.name} with unsaved edits`);
+      deps.log(`refused to leave ${shown?.name} with unsaved edits`);
       return true;
     },
     conflictReload() {
@@ -1084,7 +1080,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       editor.setText(held.diskText);
       shown.text = held.diskText;
       showBanner(false);
-      deps.log('docs', `reloaded ${shown.name}`);
+      deps.log(`reloaded ${shown.name}`);
     },
     conflictOverwrite() {
       const held = conflict;
@@ -1099,7 +1095,7 @@ export function createDocView(deps: DocViewDeps): DocView {
         return;
       }
       endConflict(true);
-      deps.log('docs', `kept editing ${shown.name}`);
+      deps.log(`kept editing ${shown.name}`);
     },
     closeConflict() {
       endConflict(false);

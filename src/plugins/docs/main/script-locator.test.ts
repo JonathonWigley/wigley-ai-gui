@@ -135,7 +135,7 @@ describe('readClaudeConfigDirs', () => {
     const dirs = await readClaudeConfigDirs(
       files,
       HOME,
-      (source, message) => logged.push(`[${source}] ${message}`),
+      (message) => logged.push(message),
       posixPaths,
     );
 
@@ -157,7 +157,7 @@ describe('readClaudeConfigDirs', () => {
     const dirs = await readClaudeConfigDirs(
       files,
       HOME,
-      (source, message) => logged.push(`[${source}] ${message}`),
+      (message) => logged.push(message),
       posixPaths,
     );
 
@@ -172,7 +172,7 @@ describe('readClaudeConfigDirs', () => {
     const dirs = await readClaudeConfigDirs(
       files,
       HOME,
-      (_source, message) => logged.push(message),
+      (message) => logged.push(message),
       posixPaths,
     );
 
@@ -200,7 +200,7 @@ describe('locateScript failures', () => {
       files,
       HOME,
       '',
-      (_source, message) => logged.push(message),
+      (message) => logged.push(message),
       posixPaths,
     );
 

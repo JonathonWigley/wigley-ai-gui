@@ -1,5 +1,5 @@
 import { type Files, isMissingFile } from '../../../contracts/files';
-import type { Log } from '../../../contracts/log';
+import type { PluginLog } from '../../../contracts/log';
 import { errorText } from '../../../shared/error-text';
 import type { NoteDraft, NoteFields, NoteImage } from '../contract';
 import {
@@ -45,7 +45,7 @@ function markupPath(id: number): string {
   return `images/${String(id)}.markup.json`;
 }
 
-async function readDraft(files: Files, log: Log): Promise<NoteDraft> {
+async function readDraft(files: Files, log: PluginLog): Promise<NoteDraft> {
   let text: string;
   try {
     text = await files.read(DRAFT_FILE);
@@ -57,7 +57,7 @@ async function readDraft(files: Files, log: Log): Promise<NoteDraft> {
   }
   const draft = parseDraft(text);
   if (draft === null) {
-    log('notes', `${DRAFT_FILE} unreadable; starting a fresh draft`);
+    log(`${DRAFT_FILE} unreadable; starting a fresh draft`);
     return emptyDraft(1);
   }
   return draft;
@@ -71,7 +71,7 @@ function writeDraft(files: Files, draft: NoteDraft): Promise<void> {
 // that stays.
 async function trashImage(
   files: Files,
-  log: Log,
+  log: PluginLog,
   image: NoteImage,
 ): Promise<void> {
   const paths = image.hasMarkup
@@ -81,13 +81,13 @@ async function trashImage(
     try {
       await files.trash(path);
     } catch (error) {
-      log('notes', `${path} not removed: ${errorText(error)}`);
+      log(`${path} not removed: ${errorText(error)}`);
     }
   }
 }
 
 // `files` is notes' data folder. The draft is read once and kept in memory.
-export function createDraftStore(files: Files, log: Log): DraftStore {
+export function createDraftStore(files: Files, log: PluginLog): DraftStore {
   let kept: NoteDraft | null = null;
   let last: Promise<unknown> = Promise.resolve();
 
@@ -152,7 +152,7 @@ export function createDraftStore(files: Files, log: Log): DraftStore {
         try {
           await writeDraft(files, next);
         } catch (error) {
-          log('notes', `draft not cleared: ${errorText(error)}`);
+          log(`draft not cleared: ${errorText(error)}`);
           return next;
         }
         for (const image of old.images) {

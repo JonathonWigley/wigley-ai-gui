@@ -116,6 +116,10 @@ export interface NotePopup {
   // Draws every part again with `shown`, keeping the boxes, their text and
   // focus, an open picker and an open markup session.
   setLayouts(shown: ShownLayouts<Layout>): void;
+  // Closes an open markup session, starting its save, and ends autosave: an
+  // edit it has not saved yet is dropped. A send still in flight then closes
+  // nothing, since its scopes end with the plugin.
+  dispose(): void;
 }
 
 // The note popup: a modal dialog over any mode editing the one kept draft
@@ -168,7 +172,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
 
   // A new element the keys plugin draws the keys of `command` into, then
   // `label` when given, while `scope` is in force. Each is made once: the
-  // popup lives as long as the page, so it keeps no anchor to dispose.
+  // keys plugin disposes the anchor when notes stops.
   const anchored = (
     command: NotesPageCommand,
     scope: NotesScope,
@@ -422,10 +426,10 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
   // ── Saving ────────────────────────────────────────────────────────────────
   const saveFields = async (fields: NoteFields) => {
     await channel.invoke('saveDraft', fields);
-    log('notes', 'draft saved');
+    log('draft saved');
   };
 
-  startAutosave({
+  const autosave = startAutosave({
     subscribe: (listener) => store.subscribe(listener),
     drafts: () => (isLocked() ? [] : [store.get()]),
     idOf: () => 'note',
@@ -453,7 +457,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     } catch (error) {
       const message = errorText(error);
       dispatch({ type: 'saveFinished', revision, error: message });
-      log('notes', `draft not saved for note: ${message}`);
+      log(`draft not saved for note: ${message}`);
       throw error;
     }
     dispatch({ type: 'saveFinished', revision, error: null });
@@ -467,7 +471,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     run: () => Promise<void>,
   ) => {
     if (inFlight !== null) {
-      log('notes', `${operation} skipped: ${inFlight} in flight`);
+      log(`${operation} skipped: ${inFlight} in flight`);
       return;
     }
     inFlight = operation;
@@ -529,7 +533,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
       images: draft.images,
       imageIndex: pos - 1,
     });
-    log('notes', `image ${pos} attached (${how})`);
+    log(`image ${pos} attached (${how})`);
   };
 
   // Each image file as a PNG shrunk to fit the cap, added in order.
@@ -546,7 +550,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
         );
         if (fitted === null) {
           toast(SHRINK_REFUSED, 'error');
-          log('notes', `image refused: ${SHRINK_REFUSED}`);
+          log(`image refused: ${SHRINK_REFUSED}`);
           continue;
         }
         const draft = await channel.invoke('addImage', fitted.bytes);
@@ -554,7 +558,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
       } catch (error) {
         const message = `Image not attached: ${errorText(error)}`;
         toast(message, 'error');
-        log('notes', message);
+        log(message);
       }
     }
   };
@@ -573,11 +577,11 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
           images: draft.images,
           imageIndex: imageCursorAfterRemove(draft.images.length, index),
         });
-        log('notes', `image ${index + 1} removed`);
+        log(`image ${index + 1} removed`);
       } catch (error) {
         const message = `Image not removed: ${errorText(error)}`;
         toast(message, 'error');
-        log('notes', message);
+        log(message);
       }
     });
 
@@ -612,7 +616,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
       },
       cancelled: () => {
         render();
-        log('notes', `picker closed: ${title}`);
+        log(`picker closed: ${title}`);
       },
     });
     render();
@@ -640,7 +644,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
 
   const keepDraft = () => {
     if (hideConfirm()) {
-      log('notes', 'draft kept');
+      log('draft kept');
     }
   };
 
@@ -672,7 +676,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
 
   const moveTo = (field: NoteField) => {
     dispatch({ type: 'fieldMoved', field });
-    log('notes', `field ${field}`);
+    log(`field ${field}`);
   };
 
   // Puts the draft main answered with into the page, as saved.
@@ -719,7 +723,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     } catch (error) {
       phase = 'closed';
       toast(`Note not opened: ${errorText(error)}`, 'error');
-      log('notes', `note not opened: ${errorText(error)}`);
+      log(`note not opened: ${errorText(error)}`);
       return;
     }
     const scope = deps.pushScope('popup');
@@ -741,7 +745,6 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     }
     const { fields, images: held } = store.get();
     log(
-      'notes',
       `popup shown: title "${fields.title}", ${held.length} images, target ${targetName(fields.target)}, session ${fields.session?.hostSessionId ?? 'none'}`,
     );
   };
@@ -764,7 +767,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     popupScope?.pop();
     popupScope = null;
     dialog.hide();
-    log('notes', 'popup closed');
+    log('popup closed');
   };
 
   // ── Capture ───────────────────────────────────────────────────────────────
@@ -773,7 +776,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
 
   const capture = () =>
     runDraftOperation('capture', async () => {
-      log('notes', 'capture started');
+      log('capture started');
       blurBoxes();
       dialog.hide();
       try {
@@ -783,7 +786,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
         await imageAdded(draft, 'capture');
       } catch (error) {
         toast(`Capture failed: ${errorText(error)}`, 'error');
-        log('notes', `capture failed: ${errorText(error)}`);
+        log(`capture failed: ${errorText(error)}`);
       } finally {
         if (phase === 'open') {
           dialog.show();
@@ -795,13 +798,13 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
   // ── Sending ───────────────────────────────────────────────────────────────
   const refuse = (text: string) => {
     toast(text, 'error');
-    log('notes', `send refused: ${text}`);
+    log(`send refused: ${text}`);
   };
 
   // Whether a send of `kind` may start now; logs or toasts why not.
   const maySend = (kind: SendKind): boolean => {
     if (inFlight !== null) {
-      log('notes', `${inFlight} in flight`);
+      log(`${inFlight} in flight`);
       return false;
     }
     const refusal = sendRefusal(store.get().fields, kind);
@@ -859,7 +862,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     loadDraft(result.draft);
     close();
     toast(result.toast, 'success');
-    log('notes', `sent: ${result.toast}`);
+    log(`sent: ${result.toast}`);
   };
 
   // Runs one send from its first step: `prepare` returns the delivery, or
@@ -974,7 +977,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     );
     pick('Target', homes, homeLabel, selected, (home) => {
       edit({ target: home.root, targetPicked: true });
-      log('notes', `target ${home.repo}`);
+      log(`target ${home.repo}`);
     });
   };
 
@@ -999,7 +1002,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
       (item) => {
         const next = toggleTag(store.get().fields.tags, item);
         edit({ tags: next });
-        log('notes', `tags ${next.length === 0 ? 'none' : next.join(', ')}`);
+        log(`tags ${next.length === 0 ? 'none' : next.join(', ')}`);
       },
     );
   };
@@ -1023,7 +1026,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
           type: 'edited',
           fields: attachSession(store.get().fields, session, homes, paths),
         });
-        log('notes', `session ${session.hostSessionId}`);
+        log(`session ${session.hostSessionId}`);
       },
     );
   };
@@ -1033,14 +1036,14 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
       return;
     }
     dispatch({ type: 'edited', fields: detachSession(store.get().fields) });
-    log('notes', 'session none');
+    log('session none');
   };
 
   const openMarkup = () => {
     const { images: held, imageIndex } = store.get();
     const image = held[imageIndex];
     if (image === undefined) {
-      log('notes', 'no image to mark up');
+      log('no image to mark up');
       return;
     }
     blurBoxes();
@@ -1094,7 +1097,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     confirmScope = scope;
     confirm.show();
     render();
-    log('notes', 'discard asked');
+    log('discard asked');
   };
 
   const confirmDiscard = async () => {
@@ -1108,11 +1111,11 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
         await cacheImages(draft);
         showDraft(draft);
         dispatch({ type: 'fieldMoved', field: 'body' });
-        log('notes', 'draft discarded');
+        log('draft discarded');
       } catch (error) {
         const message = `Draft not discarded: ${errorText(error)}`;
         toast(message, 'error');
-        log('notes', message);
+        log(message);
       }
     });
   };
@@ -1122,7 +1125,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
   const saveFailed = (file: DroppedFile, error: string) => {
     const message = `${file.name} not saved: ${error}`;
     toast(message, 'error');
-    log('notes', message);
+    log(message);
   };
 
   // Puts the paths of `files` into the Body at its cursor, unless the popup
@@ -1146,18 +1149,18 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     if (!fieldsShown() || !isBodyFree || !isSameDraft) {
       const message = `Paths not inserted, popup changed: ${filePaths.join(' ')}`;
       toast(message, 'info');
-      log('notes', message);
+      log(message);
       return;
     }
     body.insert(insertionText(filePaths, body.charBeforeCursor()));
-    log('notes', `${filePaths.length} paths inserted`);
+    log(`${filePaths.length} paths inserted`);
   };
 
   // Images join the Images field; every other file goes into the Body as its
   // path.
   const take = (files: readonly DroppedFile[]) => {
     if (!mayEdit()) {
-      log('notes', `files skipped: ${inFlight ?? 'popup not editable'}`);
+      log(`files skipped: ${inFlight ?? 'popup not editable'}`);
       return;
     }
     const imageFiles = files.filter((file) =>
@@ -1173,7 +1176,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
       void insertPaths(otherFiles);
     }
   };
-  // The popup lives as long as the page, so it keeps no target to dispose.
+  // The page API disposes the target when notes stops.
   deps.drops.addTarget({ element: dialog.element, take });
 
   render();
@@ -1223,7 +1226,7 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
       if (field === 'title' || field === 'body') {
         focusBox(field);
       } else {
-        log('notes', `no box on ${field}`);
+        log(`no box on ${field}`);
       }
     }),
     nextBox: whileEditable(() =>
@@ -1272,5 +1275,14 @@ export function createNotePopup(deps: NotePopupDeps): NotePopup {
     confirmYes: () => void confirmDiscard(),
     confirmNo: keepDraft,
   };
-  return { commands, setLayouts };
+  return {
+    commands,
+    setLayouts,
+    dispose() {
+      markupView.close();
+      blurBoxes();
+      phase = 'closed';
+      autosave.dispose();
+    },
+  };
 }

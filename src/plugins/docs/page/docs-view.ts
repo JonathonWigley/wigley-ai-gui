@@ -542,7 +542,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
 
   const focusDocAndLog = () => {
     focusDoc();
-    log('docs', 'doc focused');
+    log('doc focused');
   };
 
   const focusTreePane = () => {
@@ -553,7 +553,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
 
   const focusTreePaneAndLog = () => {
     focusTreePane();
-    log('docs', 'tree focused');
+    log('tree focused');
   };
 
   const focusTarget: FocusTarget = {
@@ -657,7 +657,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
                 built,
               ),
         );
-        log('docs', resultLine(result, run));
+        log(resultLine(result, run));
         if (number === startedLoads) {
           tree.setStatus(result.message);
         }
@@ -665,7 +665,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       })
       .catch((error: unknown) => {
         firstRead.resolve();
-        log('docs', `${deps.sourceId}: ${errorText(error)}`);
+        log(`${deps.sourceId}: ${errorText(error)}`);
         if (number === startedLoads) {
           tree.setStatus(errorText(error));
         }
@@ -690,12 +690,12 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         statusRead = read;
         files = fileStatuses(read);
         const verb = fetch ? 'fetched' : 'read';
-        log('docs', `plugin status ${verb}: ${read.clones.length} clones`);
+        log(`plugin status ${verb}: ${read.clones.length} clones`);
         tree.statusesChanged();
         doc.refreshChips();
       })
       .catch((error: unknown) => {
-        log('docs', `plugin status: ${errorText(error)}`);
+        log(`plugin status: ${errorText(error)}`);
       })
       .finally(() => {
         if (fetch) {
@@ -857,7 +857,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         contextFolder = choice.folder;
         doc.refreshChips();
         tree.statusesChanged();
-        log('docs', `context ${deps.paths.tilde(choice.folder, homeDir)}`);
+        log(`context ${deps.paths.tilde(choice.folder, homeDir)}`);
       },
     });
   };
@@ -875,7 +875,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     }
     deps.starred.toggle(entry.id);
     const isStarred = deps.starred.has(entry.id);
-    log('docs', `${isStarred ? 'starred' : 'unstarred'} ${entry.title}`);
+    log(`${isStarred ? 'starred' : 'unstarred'} ${entry.title}`);
   };
 
   const commands: DocsViewCommands = {

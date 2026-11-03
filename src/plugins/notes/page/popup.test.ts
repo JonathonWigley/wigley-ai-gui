@@ -29,6 +29,7 @@ import { posixPaths } from '../../../shared/paths/posix-paths';
 import type {
   NoteDraft,
   NoteFields,
+  NoteSendResult,
   NoteSession,
   NotesChannel,
 } from '../contract';
@@ -65,6 +66,8 @@ const DRAFT: NoteDraft = {
 };
 
 const PASTED_PATH = '/app/pasted/20261102-090000-1.txt';
+
+const AUTOSAVE_DELAY_MS = 1000;
 
 // The most bytes whose base64 text fits the cap.
 const CAP_BYTES = (MAX_IMAGE_BASE64 / 4) * 3;
@@ -103,6 +106,16 @@ interface Harness {
   inserts: string[];
   // The fields of each `saveDraft` call, in order.
   saved: NoteFields[];
+  // How many pushed scopes `pop` was called on.
+  pops(): number;
+  // The arguments of each `saveMarkup` call, in order.
+  savedMarkups: [number, string][];
+  // Reports a change from the open markup session's editor.
+  changeMarkup(): void;
+  // The timers set and not yet run or cleared.
+  liveTimers(): number;
+  // Moves the fake clock by `ms`, running each timer that came due.
+  advance(ms: number): void;
   // What the popup's drop target, the core's save and main's `addImage` do;
   // a test replaces one before it acts.
   fakes: Fakes;
@@ -114,6 +127,7 @@ interface Fakes {
   savePasted(file: DroppedFile): Promise<string>;
   encode: ImageEncoder['encode'];
   addImage(bytes: Uint8Array): Promise<NoteDraft>;
+  sendToFollowup(): Promise<NoteSendResult>;
 }
 
 function droppedFile(
@@ -164,7 +178,10 @@ function fakeEditor(
   };
 }
 
-function fakeMarkupEditor(markups: FakeMarkup[]): MarkupEditor {
+function fakeMarkupEditor(
+  markups: FakeMarkup[],
+  changeListeners: (() => void)[],
+): MarkupEditor {
   return {
     open() {
       const made: FakeMarkup = { tools: [], isDisposed: false };
@@ -174,7 +191,7 @@ function fakeMarkupEditor(markups: FakeMarkup[]): MarkupEditor {
         setColour: () => undefined,
         undo: () => undefined,
         redo: () => undefined,
-        onChange: () => undefined,
+        onChange: (listener: () => void) => changeListeners.push(listener),
         finishEdit: () => undefined,
         toJson: () => '{}',
         toPng: () => Promise.resolve(new Uint8Array()),
@@ -186,12 +203,42 @@ function fakeMarkupEditor(markups: FakeMarkup[]): MarkupEditor {
   } as unknown as MarkupEditor;
 }
 
-// Main's side: `addImage` and `saveDraft` record what they get.
+// Timers a test runs by hand, as `advance` moves the clock.
+function handTimers() {
+  const pending = new Map<number, { run: () => void; dueAt: number }>();
+  let now = 0;
+  let lastHandle = 0;
+  return {
+    timers: {
+      set(run: () => void, ms: number) {
+        lastHandle += 1;
+        pending.set(lastHandle, { run, dueAt: now + ms });
+        return lastHandle;
+      },
+      clear(handle: number) {
+        pending.delete(handle);
+      },
+    },
+    live: () => pending.size,
+    advance(ms: number) {
+      now += ms;
+      for (const [handle, { run, dueAt }] of pending) {
+        if (dueAt <= now) {
+          pending.delete(handle);
+          run();
+        }
+      }
+    },
+  };
+}
+
+// Main's side: `addImage`, `saveDraft` and `saveMarkup` record what they get.
 function fakeChannel(
   draft: NoteDraft,
   fakes: Fakes,
   added: number[][],
   saved: NoteFields[],
+  savedMarkups: [number, string][],
 ): PageChannel<NotesChannel> {
   return {
     invoke(name: string, ...args: unknown[]) {
@@ -212,8 +259,11 @@ function fakeChannel(
         case 'saveDraft':
           saved.push(args[0] as NoteFields);
           return Promise.resolve();
+        case 'saveMarkup':
+          savedMarkups.push([args[0] as number, args[1] as string]);
+          return Promise.resolve(draft);
         case 'sendToFollowup':
-          return new Promise(() => undefined);
+          return fakes.sendToFollowup();
         default:
           return Promise.reject(new Error(`no ${name} in the fake`));
       }
@@ -233,6 +283,9 @@ async function openPopup(draft: NoteDraft = DRAFT): Promise<Harness> {
   const added: number[][] = [];
   const inserts: string[] = [];
   const saved: NoteFields[] = [];
+  const savedMarkups: [number, string][] = [];
+  const markupChangeListeners: (() => void)[] = [];
+  const time = handTimers();
   let images = draft.images;
   const fakes: Fakes = {
     savePasted: () => Promise.resolve(PASTED_PATH),
@@ -242,11 +295,15 @@ async function openPopup(draft: NoteDraft = DRAFT): Promise<Harness> {
       images = [...images, { id, hasMarkup: false }];
       return Promise.resolve({ ...draft, images });
     },
+    sendToFollowup: () => new Promise(() => undefined),
   };
   const targets: DropTarget[] = [];
   let body: TextEditor | null = null;
+  let pops = 0;
   const pushed = (): PushedScope => ({
-    pop: () => undefined,
+    pop() {
+      pops += 1;
+    },
     dispose: () => undefined,
     onBaseChanged: () => ({ dispose: () => undefined }),
   });
@@ -266,17 +323,17 @@ async function openPopup(draft: NoteDraft = DRAFT): Promise<Harness> {
       document: () => Promise.resolve(''),
       ...NO_FENCES,
     },
-    markup: fakeMarkupEditor(markups),
+    markup: fakeMarkupEditor(markups, markupChangeListeners),
     toast: (text: string, tone: ToastTone) => toasts.push([text, tone]),
-    log: (_source: string, line: string) => logged.push(line),
-    timers: { set: () => 0, clear: () => undefined },
+    log: (line: string) => logged.push(line),
+    timers: time.timers,
     clock: { now: () => 0 },
     paths: posixPaths,
     homeDir: '/home/me',
     uiState: { get: () => undefined, set: () => undefined },
   } as unknown as PageServices;
   const popup = createNotePopup({
-    channel: fakeChannel(draft, fakes, added, saved),
+    channel: fakeChannel(draft, fakes, added, saved, savedMarkups),
     services,
     keys: recordingAnchors().keys,
     overlay: {
@@ -288,7 +345,7 @@ async function openPopup(draft: NoteDraft = DRAFT): Promise<Harness> {
     commands: { exists: () => true, run: () => undefined },
     platform: 'macos',
     pushScope: pushed,
-    autosaveDelayMs: () => 1000,
+    autosaveDelayMs: () => AUTOSAVE_DELAY_MS,
     selectedSession: () => null,
     sessionRows: () => SESSIONS,
     drops: {
@@ -318,6 +375,15 @@ async function openPopup(draft: NoteDraft = DRAFT): Promise<Harness> {
     added,
     inserts,
     saved,
+    pops: () => pops,
+    savedMarkups,
+    changeMarkup() {
+      for (const listener of markupChangeListeners) {
+        listener();
+      }
+    },
+    liveTimers: time.live,
+    advance: time.advance,
     fakes,
     take: (files) => targets[0].take(files),
   };
@@ -614,5 +680,56 @@ describe('note popup', () => {
 
     expect(harness.added.slice(addedBefore)).toEqual([]);
     expect(harness.inserts).toEqual([]);
+  });
+
+  it('dispose_MarkupOpen_SavesAndHidesIt', async () => {
+    const harness = await openPopup();
+    harness.popup.commands.nextField();
+    harness.popup.commands.nextField();
+    harness.popup.commands.act();
+    await settle();
+    harness.changeMarkup();
+
+    harness.popup.dispose();
+    await settle();
+
+    expect(harness.savedMarkups).toEqual([[1, '{}']]);
+    expect(harness.markups[0].isDisposed).toBe(true);
+  });
+
+  it('dispose_AfterEdit_SchedulesNoSave', async () => {
+    const harness = await openPopup();
+    harness.body.insert('an edit');
+    expect(harness.liveTimers()).toBeGreaterThan(0);
+    const savedBefore = harness.saved.length;
+
+    harness.popup.dispose();
+    harness.advance(AUTOSAVE_DELAY_MS);
+    await settle();
+
+    expect(harness.saved).toHaveLength(savedBefore);
+  });
+
+  it('dispose_SendInFlight_LateSentPopsNoScope', async () => {
+    const harness = await openPopup({
+      ...DRAFT,
+      target: '/home/me/a',
+      title: 'A note',
+    });
+    let answerSend: (result: NoteSendResult) => void = () => undefined;
+    harness.fakes.sendToFollowup = () =>
+      new Promise((resolve) => {
+        answerSend = resolve;
+      });
+    harness.popup.commands.sendFollowup();
+    await settle();
+
+    harness.popup.dispose();
+    const popsAtDispose = harness.pops();
+    answerSend({ type: 'sent', draft: DRAFT, toast: 'Follow-up added' });
+    await settle();
+
+    expect(harness.pops()).toBe(popsAtDispose);
+    expect(harness.toasts).toEqual([['Follow-up added', 'success']]);
   });
 });
