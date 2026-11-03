@@ -151,6 +151,7 @@
     "duration-base": "140ms",
     "duration-slow": "220ms",
     "duration-instant": "1ms",
+    "duration-pulse": "2s",
     "ease-out": "cubic-bezier(0.2, 0, 0, 1)",
     "ease-in": "cubic-bezier(0.4, 0, 1, 1)",
     "z-chrome": "10",

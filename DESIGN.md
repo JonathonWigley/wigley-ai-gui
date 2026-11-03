@@ -190,7 +190,8 @@ means something.
 ## Motion
 
 - **Durations:** `duration-fast` (hover, press), `duration-base` (small things opening and
-  closing), `duration-slow` (panels, sheets, the composer).
+  closing), `duration-slow` (panels, sheets, the composer), `duration-pulse` (one cycle of a looping
+  agent-state pulse, such as a session row's running dot; slow enough to read as breathing, not flashing).
 - **Easing:** `ease-out` entering, `ease-in` leaving. No bounce and no overshoot.
 - **What moves:** motion answers a user action or reports agent state (the streaming indicator, a
   session row's pulsing running dot, a tool step settling from running to done). Content does not animate in, and nothing moves on its
