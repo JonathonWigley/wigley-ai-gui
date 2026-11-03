@@ -7,7 +7,7 @@
 - **Flow** — a session from start to end, with a form swapping in and back.
 - **Agent harness seam** — the contract, the Claude adapter, the fake, chat entries, controls, images, accounts.
 - **Sessions and tabs** — owned sessions, joining the relay, take over and give back, the attention mark.
-- **Chat plugin** — the Chat tab, activity lines, the start prompt, sign-in, app slash commands, images, permission cards, alerts, keys.
+- **Chat plugin** — the Chat tab, activity lines, the activity dock, the start prompt, sign-in, app slash commands, images, permission cards, alerts, keys.
 - **Layouts** — chat layouts on the core layout service and the page host.
 - **Plans** — what plans A to F each land.
 - **Out of scope** — follow-ups.
@@ -25,7 +25,8 @@ interview on 2026-10-23; this file is the record of both.
   next ones). Its seam is `AgentHarness` in `src/contracts/agent.ts`; each harness is one **harness adapter**.
 - **Agent process** — one running session of a harness, started by the app: one `claude` child process.
 - **Chat entry** — one item in a session's chat, in the app's own shape: a user message, an assistant message,
-  thinking, a tool call (with its result), a permission request, a turn result, a notice, or a raw entry. Every entry
+  thinking, a tool call (with its result and the id of the agent that made it: `main` for the session's own agent,
+  else the subagent's id the agent events use), a permission request, a turn result, a notice, or a raw entry. Every entry
   carries the raw harness events it was built from. Of Claude's stream events it keeps only a text or thinking block's
   `content_block_start`; every other stream event is left out, since the entry's start event or the final `assistant`
   event already holds what it carries. Every entry carries `at`, the epoch milliseconds it first appeared; a later
@@ -37,8 +38,10 @@ interview on 2026-10-23; this file is the record of both.
 - **Step** — a `tool`, `thinking` or `raw` chat entry. A **run** is the steps between two other entries (user,
   assistant, permission, notice, result): any other entry ends it. The **live run** is the run that is the last entry
   while the session is working (`running` and activity `working`); every other run is finished.
-- **Activity line** — a run as the Chat tab draws it: one slot and one cursor stop, drawn by the chat layout's
-  `activity` part (§ Activity line).
+- **Activity line** — a run as the Chat tab draws it under a chat layout that sets `activityInTranscript`: one slot
+  and one cursor stop, drawn by the chat layout's `activity` part (§ Activity line). The default layout draws none.
+- **Activity dock** — the composer row that shows the running turn, then the finished turn's one line, drawn by the
+  chat layout's `working` part (§ Activity dock).
 - **Session control** — a setting of a running session the harness adapter declares (id, label, choices, current
   value): Claude declares `mode` (permission mode), `effort` and `model`.
 - **Profile** — a named Claude config folder (`work` → `~/.claude`, `personal` → `~/.claude-personal`); it sets the
@@ -173,7 +176,9 @@ interview on 2026-10-23; this file is the record of both.
   the vim mode (changed by ui-design plan C). Enter sends in insert and normal mode, Shift+Enter in insert mode adds a line, Cmd+Enter sends from any mode. `i` /
   `a` focus the box, `j` / `k` move between entries, `Enter` opens or closes the focused entry or activity line and pulls
   back a focused pending message, `G` jumps to the latest, Ctrl+C interrupts and pulls back every pending message
-  (§ Pending messages). The agent's steps show as activity lines (§ Activity line). While the box
+  (§ Pending messages). The transcript shows the messages, permission prompts, notices and pending rows; the agent's
+  steps and the turn results show in the composer's activity dock (§ Activity dock), and in the transcript as
+  activity lines and result entries only under a layout that sets `activityInTranscript` (§ Activity line). While the box
   has focus no entry is marked and the box draws no focused frame; once it loses focus (Esc) the focused entry shows a
   thin left bar (DESIGN.md § Keys and focus). These keys act only on the Chat tab on screen and its session: on any other tab or mode they do
   nothing, and the control pickers and the chat's dialogs close when another session's Chat tab shows, or when the
@@ -181,14 +186,17 @@ interview on 2026-10-23; this file is the record of both.
   no session, stay open). A resting session (§ Saved sessions) keys in the
   same `chat.chat` scope as a running one; interrupt and the control pickers log and do nothing until its process
   runs.
-- **Activity line**: the entry list groups each run into one slot, a cursor stop, drawn by the layout's `activity`
-  part.
+- **Activity line**: under a chat layout that sets `activityInTranscript: true`, the entry list groups each run into
+  one slot, a cursor stop, drawn by the layout's `activity` part, and draws each `result` entry as its own row. The
+  default layout sets it `false`: the list then builds no slot and no cursor stop for a run, its steps or a `result`
+  entry, and the agent's work shows in the activity dock alone. A user layout that leaves the flag out takes
+  `default`'s. Everything below holds while the flag is `true`.
   - **Time**: each line ends with how long its run took, from the entry before the run (the user message or mid-turn
     assistant text; a run that opens the list starts at its first step) to the entry after it, compact in tabular
     numerals: `8s`, `42s`, `1m 05s`, `1h 02m`. A live line's time ticks once a second to now, so it covers the
     thinking before the first step; only that line redraws. A finished run that is the last entry ends at its last
     step.
-  - **Live run**: drawn as a finished run's line that grows as steps arrive, its time ticking; the working block
+  - **Live run**: drawn as a finished run's line that grows as steps arrive, its time ticking; the activity dock
     (below) carries the live look.
   - **Finished run**: one dim line, the step count, the tools used and the time, such as
     `6 steps · Read 3 · Bash 2 · Edit · 42s` (most used first, a single use named alone); a failed tool step adds
@@ -202,28 +210,41 @@ interview on 2026-10-23; this file is the record of both.
   - Permission prompts, notices and the turn result stay entries of their own, and each ends the run before it.
   - The key log lines are `focused activity line`, `expanded activity line` and `collapsed activity line`; a step row
     logs as its entry kind does (`focused tool entry`).
-- **Working block**: while the session works on a turn (the harness reports `working`), one block sits after the
-  last entry and before any pending row, drawn by the layout's `working` part; it goes when the turn ends, leaving
-  the run lines and the result entry. It is not a cursor stop. Settled from the user's sketch in an interview on
-  2026-11-02.
+- **Activity dock**: one row in the floating composer, under the composer parts (the workflow strip, the agent strip)
+  and above the attached images and the box, drawn by the layout's `working` part into the composer's `working` slot.
+  It shows the running turn while the session works on one (the harness reports `working`), then the finished turn's
+  one line until the user sends the next message. While the session is idle with no finished turn to show, the slot
+  is hidden and takes no space. It is display only: not a cursor stop, and it adds no key. It counts only the main
+  agent's tool calls (a `tool` entry's `agentId` is `main`); a subagent's calls show in its agent strip box.
+  Settled from the user's sketch in an interview on 2026-11-02, and moved into the composer in a second interview
+  that day (`docs/features/chat-bar/plan-activity-dock/`).
   - **Header**: the turn's time, the state word, and `…`: `1:05 Working…`. The time counts from the turn's first
     entry to now: the later of the last user entry (a queued message from when it was sent) and the entry after the
     last result, so a turn Claude starts on its own after a background task counts from its own start. While the
-    turn holds no entries, the block keeps what it showed: a block drawn then counts from when it was drawn, and
-    one held when the result lands keeps the finished turn until the session goes idle. It ticks once a second, as
-    `m:ss` (`h:mm:ss` past an hour).
+    turn holds no entries, the dock keeps what it showed: a live dock drawn then counts from when it was drawn, and
+    one live when the result lands keeps the finished turn's live look until the session goes idle. It ticks once a
+    second, as `m:ss` (`h:mm:ss` past an hour).
   - **State**: one of four, the first that holds: **Waiting** while a permission entry in the turn is unanswered,
     **Working** while a tool in the turn has no result, **Writing** while the last entry is streaming assistant
     text, else **Thinking**. A pure module picks it, so a layout only words it.
-  - **Action box**: the turn's latest tool calls, oldest first and the newest highlighted, each the tool and what
-    it acted on, a file path as its file name (`Read chat-kit.ts`, `Bash npm test`). The built-in layout shows 5
-    and lists tool calls only: thinking shows as the state, and raw entries only in an open activity line. The
-    part's input carries every step of the turn, so a user layout may list more.
-  - **Tool counts**: every tool the turn used with its count, most used first, always numbered:
+  - **Action box**: the main agent's latest tool calls in the turn, oldest first and the newest highlighted, each the
+    tool and what it acted on, a file path as its file name (`Read chat-kit.ts`, `Bash npm test`). The built-in
+    layout shows 3 and lists tool calls only: thinking shows as the state. The part's input carries every step of
+    the turn but the subagents' tool calls, so a user layout may list more.
+  - **Tool counts**: every tool the main agent used in the turn with its count, most used first, always numbered:
     `Read 3 Bash 2 Edit 1`.
-  - **No cost**: Claude reports cost only when the turn ends (`claude-stream.md` § Result), when the block is gone;
-    the result entry shows the turn's cost in cents, `$0.50`. A live estimate from token counts and a price table
-    was rejected for keeping Claude's prices out of the app.
+  - **Finished line**: once the session goes idle, the dock shrinks to one dim line: the word, the time, the cost
+    and the tool counts, `Done · 1m 05s · $0.57 · Bash 6 · Read 2`. The finished turn is every entry since the
+    user's last message, so a turn Claude ran on its own after it (a `success` result) joins it, and the line
+    updates in place when such a result lands before the user sends again. The word is `Done` when the last result's
+    stop reason is `end_turn` or `success`, else the stop reason itself (`max_tokens`). The time runs from the
+    user's last message to the last result, compact (`8s`, `1m 05s`, `1h 02m`). The cost is the sum of every result's
+    cost since that message, in cents (`$0.57`); a result with no cost adds nothing, and the line shows no cost when
+    no result has one. A finished turn with no result entry (the process ended without one) shows no line. Sending
+    the next message starts the next turn's live dock in its place.
+  - **No live cost**: Claude reports cost only when the turn ends (`claude-stream.md` § Result), so only the
+    finished line shows it. A live estimate from token counts and a price table was rejected for keeping Claude's
+    prices out of the app.
 - **Pending messages**: a message sent while the harness reports the session's turn running (the process runs and
   its own activity is not `idle`) is not written to the agent. A turn Claude runs on its own after a background task
   ends counts as running too: the session shows working through it, its messages wait, and the turn-finished alert
@@ -424,8 +445,9 @@ interview on 2026-10-23; this file is the record of both.
   layouts are folders in `~/.config/wigley-ai-gui/layouts/chat/`, reloaded on save; an entry that throws is rolled
   back and drawn with the default layout. The `chat.layout` setting names the user's layout.
 - Besides the entries, a layout draws the Chat tab's other surfaces through parts that take `(parent, input, kit)`
-  and return a `PartView`: `activity` (a run of steps, § Activity line), `working` (the running turn, § Working
-  block: its state, its steps and its times `startedAt` and `now`, sent again each second), `queuedMessage` (one pending message, § Pending
+  and return a `PartView`: `activity` (a run of steps, § Activity line), `working` (the activity dock, § Activity
+  dock: the running turn's state, its steps and its times `startedAt` and `now`, sent again each second, else the
+  finished turn's `done` state with its steps, `startedAt`, `endedAt`, stop reason and cost), `queuedMessage` (one pending message, § Pending
   messages: its text, how many images it carries, and whether it was sent now), `composer`, `statusLine`, `attachments` (the
   strip of attached images), `pickerRow` (a row of the start prompt and the pickers), `signIn`, `reasonBox` (the deny
   reason), `closeConfirm` (the end-session confirm) and `imageViewer`. The `activity` part's input is the run's steps
@@ -434,8 +456,12 @@ interview on 2026-10-23; this file is the record of both.
   user layout formats its own time; the part draws the summary line open or closed, and the app places the step rows
   under it when open. The built-in step builders draw a plain one-line row through the kit's `collapsibleRow`; a user layout that redraws `tool`, `thinking` or `raw` draws the
   open line's rows. Each part's kit extends the base kit with the app parts it places (the editor frame, the
-  dialog actions). The app keeps the composer's box and its draft, the dialogs' frames and titles, the keys and the
-  focus; a part a user layout leaves out draws with `default`.
+  dialog actions). The composer's kit places the `working` slot the activity dock draws into; a composer that leaves
+  it out gets it just above the box. The app keeps the composer's box and its draft, the dialogs' frames and titles,
+  the keys and the focus; a part a user layout leaves out draws with `default`.
+- Beside its parts, a layout holds one flag, `activityInTranscript`: `true` draws the runs as activity lines and the
+  `result` entries in the transcript, `false` leaves them out of the list and the cursor. The flag is read through
+  the same pick as a part: a user layout that leaves it out takes `default`'s, which is `false`.
 
 ## Plans
 
@@ -456,6 +482,9 @@ interview on 2026-10-23; this file is the record of both.
   values carried into every process start.
 - **Plan G — working block** (`plan-working-block/`, settled in an interview on 2026-11-02): the turn's working
   block from the user's sketch, the live run drawn as its summary line, and the result entry's cost in cents.
+- **Activity dock** (`docs/features/chat-bar/plan-activity-dock/`, settled in an interview on 2026-11-02): the
+  working block moved into the composer as the activity dock with its finished line, the main agent's tool calls
+  only (`agentId` on tool entries), and the `activityInTranscript` flag, `false` in the default layout.
 
 ## Out of scope
 

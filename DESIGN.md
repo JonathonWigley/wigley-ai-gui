@@ -379,20 +379,24 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   comment) or the feature card while the tasks column has focus, an item card (the item, its ToggleMark and its
   comment box) while the items column has focus. A review pane of every answer opens before it sends.
 - **Chat:** user turns are a `card-background` block, not a bubble. Assistant prose is markdown on
-  the sheet. The agent's steps (tool calls, thinking, raw events) between two other entries form
-  one **activity line**: one dim `fg-tertiary` line, live or finished: the step count and the tools used, such as
+  the sheet. The transcript shows the messages, permission prompts, notices and pending rows only: the agent's steps
+  (tool calls, thinking, raw events) and the turn results show in the composer's **activity dock**. While the session
+  works on a turn, the dock shows a header (the turn's time as `m:ss` in tabular numerals and a state word,
+  `1:05 Working…`), a `radius-md` card listing the main agent's latest three tool calls in mono (the newest in `fg`,
+  the older ones in `fg-tertiary`, a failed one in `status-error`), and the main agent's tool counts, dim
+  (`Read 3 Bash 2 Edit 1`). When the turn ends, the dock shrinks to one dim `fg-tertiary` line, such as
+  `Done · 1m 05s · $0.57 · Bash 6 · Read 2`, its time compact in tabular numerals, and keeps it until the user sends
+  the next message; with no finished turn to show it takes no space. A chat layout that sets `activityInTranscript`
+  draws the steps in the transcript again, each run between two other entries as one **activity line**: one dim
+  `fg-tertiary` line, live or finished: the step count and the tools used, such as
   `6 steps · Read 3 · Bash 2 · Edit · 42s`, with `· 1 failed` in `status-error` before the time when a step failed.
-  The time is compact in tabular numerals (`8s`, `1m 05s`, `1h 02m`) and dim; a live line's ticks once a second.
-  While the session works on a turn, a **working block** sits under the last entry: a header (the turn's time as
-  `m:ss` in tabular numerals and a state word, `1:05 Working…`), a `radius-md` card listing the latest five tool
-  calls in mono (the newest in `fg`, the older ones in `fg-tertiary`, a failed one in `status-error`), and the
-  turn's tool counts, dim (`Read 3 Bash 2 Edit 1`). An opened activity line
-  lists one plain row per step (the plain collapsible: a tool's status dot and its mono
+  The time is compact in tabular numerals (`8s`, `1m 05s`, `1h 02m`) and dim; a live line's ticks once a second. An
+  opened activity line lists one plain row per step (the plain collapsible: a tool's status dot and its mono
   summary, `Thinking`, `Raw event`), and a step row opens its input and result in place under it,
   with no card. Permission prompts are cards with a
   `status-attention` edge and plain verbs (Allow once, Deny). The composer floats (L3,
   `radius-xl`, inset `space-3`) with the transcript scrolling beneath it, and holds, top to bottom: other plugins'
-  composer parts (the workflow strip, the agent strip), the strip of attached images' thumbnails, the box (no mode
+  composer parts (the workflow strip, the agent strip), the activity dock, the strip of attached images' thumbnails, the box (no mode
   label: the cursor's shape shows the vim mode), and the status line, drawn in this order: repo and branch in `fg-secondary`, the `i`/`a`
   type hint, one model · effort chip, every other control's chip, the status parts other plugins add (usage: context,
   cache, spend), the running dot, then Send.

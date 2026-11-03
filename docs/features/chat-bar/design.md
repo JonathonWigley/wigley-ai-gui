@@ -3,8 +3,9 @@
 **Contents**
 
 - **Intent** — what the user watches under the transcript, and why.
-- **Vocabulary** — strip, box, status line, stop, disabled plugin.
+- **Vocabulary** — strip, box, activity dock, status line, stop, disabled plugin.
 - **The composer, top to bottom** — what draws where, and which plugin draws it.
+- **The activity dock** — the running turn and the finished line, in the composer.
 - **The agent strip** — the boxes, their lifetime, and the keys.
 - **The status line** — repo, branch, controls, usage, send.
 - **Subagent facts** — name, model, effort and cost, and where each comes from.
@@ -12,14 +13,15 @@
 - **Decisions** — what the user settled, with the reason for each.
 - **Rejected** — the alternatives weighed and why each lost.
 
-The decisions from the 2026-11-02 interview, kept so a later change does not reopen them. How each surface looks is in
+The decisions from the 2026-11-02 interviews, kept so a later change does not reopen them. How each surface looks is in
 `DESIGN.md`; the plugin seams are in AGENTS.md § Architecture.
 
 ## Intent
 
 The user drives several agents from one Chat tab and wants, beside the box they type in, what the session's helpers
 are doing and the session's vital numbers: each running subagent and background task as a small box the cursor can
-reach, and one status line with the repo, the branch, the model and effort, the context used and the money spent.
+reach, the main agent's live activity as one dock row that shrinks to a finished line when the turn ends, and one
+status line with the repo, the branch, the model and effort, the context used and the money spent.
 The sidebar's working line (shown while a session runs a subagent or task) and the tab bar's usage line stay available as plugins the user switches on.
 
 ## Vocabulary
@@ -27,6 +29,8 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
 - **Agent strip** — the horizontal row of boxes above the Chat composer's box, one box per subagent and per task the
   session's roster lists. Drawn by the `agent-strip` plugin.
 - **Box** — one subagent's or one task's card in the strip.
+- **Activity dock** — the composer row under the strips that shows the running turn, then the finished turn's one
+  line. Drawn by chat's `working` layout part.
 - **Status line** — the line under the Chat composer's box that replaces the composer bar.
 - **Stop** — a place the chat's entry cursor (`j`/`k`) can rest that is not a transcript entry: a composer part
   offers one (`ChatComposerPart.stop`).
@@ -38,6 +42,7 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
 ┌ composer (L3 floating) ───────────────────────────────────────────────┐
 │ workflow strip                                  workflow (composer part)
 │ ‹ [box] [box] [box] … ›                         agent-strip (composer part, with a stop)
+│ 1:05 Working…  ┌ 3 latest tool calls ┐ counts   chat (activity dock; one dim line once the turn ends)
 │ attachments strip                               chat
 │ ┌ box ─────────────────────────────────────┐    chat (no mode label; the cursor shape shows the mode)
 │ └──────────────────────────────────────────┘
@@ -45,7 +50,9 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
 └───────────────────────────────────────────────────────────────────────┘
 ```
 
-- Composer parts draw in plugin start order above the attachments: the workflow strip, then the agent strip.
+- Composer parts draw in plugin start order above the activity dock: the workflow strip, then the agent strip.
+- The activity dock is chat's own slot in the composer (`ComposerKit.working`), between the composer parts and the
+  attachments.
 - The status line is chat's `statusLine` layout part. Chat draws the repo, the branch and the control chips itself;
   other plugins draw into it through chat's page export `addStatusPart`, the same shape as `addComposerPart`. Usage
   draws the context bar, the cache countdown and the spend there.
@@ -68,6 +75,19 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
   box); the strip then holds its own key scope: `h`/`l` move between boxes, `k` returns to the last entry, `i` and `a` focus the chat box, Enter opens the selected box in place to list every tool call of that
   subagent (a task shows its command), and Enter again closes it. `G` and a following cursor stay on the last entry,
   so new output never moves the cursor into the strip. The selected box takes the focus ring.
+
+## The activity dock
+
+- **While a turn runs:** the turn's time `m:ss` and its state word (`1:05 Working…`), the main agent's latest 3 tool
+  calls (the newest in `fg`, older ones dim, a failed one in the error colour), and the main agent's tool counts. It
+  replaces the working block that sat under the transcript's last entry.
+- **When the turn ends:** one dim line, `Done · 1m 05s · $0.57 · Bash 6 · Read 2`, kept until the user sends the next
+  message; the next turn's live dock then takes its place. Idle with no finished turn, the dock takes no space.
+- **Main agent only:** a subagent's tool calls show in its strip box, not in the dock.
+- **Display only:** the dock is not a stop and has no keys.
+- **The transcript shows messages only:** the default chat layout sets `activityInTranscript` to `false`, so the
+  activity lines, their steps and the `result` entries leave the transcript and the entry cursor. A user layout that
+  sets it `true` brings them back. The rules for the dock's lines are in `agent-chat/design.md` § Activity dock.
 
 ## The status line
 
@@ -95,8 +115,8 @@ Only the Claude adapter knows Claude's shapes, so it alone fills these into agen
 - **Cost:** an estimate: the subagent's reply token usage (input, output, cache write by TTL, cache read) priced by a
   per-model list-price table in the adapter. A subagent with any reply on a model the table lacks shows no cost. The session's own spend stays
   Claude's `total_cost_usd`.
-- **Tool calls:** each tool call carries the id of the agent that made it, so a box lists its own calls and the
-  transcript stays as it is.
+- **Tool calls:** each tool call carries the id of the agent that made it, in the agent events and on the chat's
+  `tool` entry (`agentId`), so a box lists its own calls and the activity dock lists the main agent's alone.
 
 ## Optional plugins
 
@@ -113,7 +133,12 @@ Only the Claude adapter knows Claude's shapes, so it alone fills these into agen
 
 ## Decisions
 
-- **The strip shows subagents and tasks, not the main chat.** The main agent's work is the transcript.
+- **The strip shows subagents and tasks, not the main chat.** The main agent's work is the activity dock.
+- **The live activity sits in the composer, and the transcript shows messages.** The user reads the conversation in
+  the transcript and glances at the dock for what the agent does now; the steps and turn results stay one layout
+  flag away (`activityInTranscript`). Settled in the second 2026-11-02 interview (`plan-activity-dock/`).
+- **The dock keeps the `working` layout part.** Its slot moved into the composer; the part's name and signature
+  stayed, so a user layout's `working` part draws the dock.
 - **Views are plugins the user switches off.** A view and its data split: the data plugin stays on, each view is its
   own plugin, so turning one view off never starves another (the follow-up's "a behaviour is a plugin to enable").
 - **A disable list read at start, not a live stop.** A live `PluginHost.stop` is a framework change of its own; the
@@ -130,9 +155,11 @@ Only the Claude adapter knows Claude's shapes, so it alone fills these into agen
 
 ## Rejected
 
-- **Running-action list and tool counts above the composer** — from another sketch; not this feature.
 - **A setting inside the plugin that draws a view** (`agents.sideBarLines`) — the user wants behaviours to be plugins.
 - **Chat reading usage and agents data itself** — chat would name other plugins; parts keep each plugin drawing what
   it owns.
 - **A leader key or scroll chords for the strip** — the user wanted the strip on the `j`/`k` cursor with `h`/`l`.
 - **Moving the tab-bar line wholesale** — the Form and Primer tabs would lose it with no way back.
+
+The first interview rejected a running-action list and tool counts above the composer as another sketch's; the second
+interview took them up as the activity dock (`plan-activity-dock/`), so that rejection no longer holds.
