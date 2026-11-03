@@ -167,3 +167,4 @@ Review base: 578c0d08
 - src/plugins/chat/main/selftest-script.ts (the activity-line why) joins task 04's doc re-read, as 02's worker found it stale — keeps the self-test's prose true — one more file in 04 · lead · group 02
 ### Review rounds
 ### Test gate
+- full npm test (vitest, 17 s — the whole suite is cheap, and the change reaches the shared entry list and default layout) 5629/5629 pass; npm run selftest --plugin chat --plugin agents (task 05 checks 2–3) all passed; typecheck and lint clean · pass
