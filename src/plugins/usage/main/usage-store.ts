@@ -140,8 +140,9 @@ export function withLiveRows(
   return held === state.held ? state : { ...state, held };
 }
 
-// Replaces the session's entry, or appends one for a new id; `usage` null
-// records only the session's profile, keeping a known session's usage.
+// Replaces the session's entry, or appends one for a new id; `usage` null, or
+// one whose `at` is older than the kept usage's, records only the session's
+// profile, keeping a known session's usage. An equal `at` replaces.
 export function withSessionUsage(
   state: UsageState,
   sessionId: string,
@@ -154,10 +155,12 @@ export function withSessionUsage(
     return withSessions(state, [...sessions, { sessionId, profileDir, usage }]);
   }
   const known = sessions[index];
+  const isOlderThanKept =
+    usage !== null && known.usage !== null && usage.at < known.usage.at;
   const entry: SessionUsage = {
     sessionId,
     profileDir,
-    usage: usage ?? known.usage,
+    usage: usage === null || isOlderThanKept ? known.usage : usage,
   };
   if (known.profileDir === profileDir && known.usage === entry.usage) {
     return state;

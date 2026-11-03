@@ -67,11 +67,11 @@ function planOf(state: UsageState, profile: ChatProfile): ProfilePlan {
   return plan;
 }
 
-function usageEvent(contextTokens: number): UsageAgentEvent {
+function usageEvent(contextTokens: number, at = 500): UsageAgentEvent {
   return {
     type: 'usage',
     agentId: 'main',
-    at: 500,
+    at,
     contextTokens,
     contextWindow: 1_000_000,
     autocompact: { configured: 300_000, reported: 967_000 },
@@ -527,6 +527,9 @@ describe('withProfiles', () => {
 describe('session usage', () => {
   const FIRST = usageEvent(42_000);
   const SECOND = usageEvent(84_000);
+  const AT_1000 = usageEvent(21_000, 1_000);
+  const AT_2000 = usageEvent(63_000, 2_000);
+  const ALSO_AT_2000 = usageEvent(97_000, 2_000);
   type Step = (state: UsageState) => UsageState;
   const event =
     (sessionId: string, profileDir: string, event: UsageAgentEvent): Step =>
@@ -599,6 +602,46 @@ describe('session usage', () => {
       ],
     },
     {
+      case: 'OlderEventSameProfileKeepsTheUsage',
+      steps: [
+        event('s1', '~/.claude-work', AT_2000),
+        event('s1', '~/.claude-work', AT_1000),
+      ],
+      expected: [
+        { sessionId: 's1', profileDir: '~/.claude-work', usage: AT_2000 },
+      ],
+    },
+    {
+      case: 'OlderEventNewProfileTakesTheProfileAndKeepsTheUsage',
+      steps: [
+        event('s1', '~/.claude-work', AT_2000),
+        event('s1', '~/.claude-personal', AT_1000),
+      ],
+      expected: [
+        { sessionId: 's1', profileDir: '~/.claude-personal', usage: AT_2000 },
+      ],
+    },
+    {
+      case: 'NewerEventReplaces',
+      steps: [
+        event('s1', '~/.claude-work', AT_1000),
+        event('s1', '~/.claude-work', AT_2000),
+      ],
+      expected: [
+        { sessionId: 's1', profileDir: '~/.claude-work', usage: AT_2000 },
+      ],
+    },
+    {
+      case: 'EqualAtReplaces',
+      steps: [
+        event('s1', '~/.claude-work', AT_2000),
+        event('s1', '~/.claude-work', ALSO_AT_2000),
+      ],
+      expected: [
+        { sessionId: 's1', profileDir: '~/.claude-work', usage: ALSO_AT_2000 },
+      ],
+    },
+    {
       case: 'WithoutSessionRemovesIt',
       steps: [
         event('s1', '~/.claude-work', FIRST),
@@ -622,5 +665,11 @@ describe('session usage', () => {
     const state = event('s1', '~/.claude-work', FIRST)(EMPTY_USAGE_STATE);
 
     expect(withoutSession(state, 's9')).toBe(state);
+  });
+
+  it('sessionUsage_OlderEventSameProfile_ReturnsSameState', () => {
+    const state = event('s1', '~/.claude-work', AT_2000)(EMPTY_USAGE_STATE);
+
+    expect(event('s1', '~/.claude-work', AT_1000)(state)).toBe(state);
   });
 });
