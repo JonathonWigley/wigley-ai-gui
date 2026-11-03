@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_IMAGE_BASE64 } from '../../image-types';
-import {
-  shrinkToFit,
-  type EncodableImage,
-  type ImageEncoder,
-} from './shrink-image';
+import type { EncodableImage, ImageEncoder } from '../contracts/images';
+import { MAX_IMAGE_BASE64 } from './image-types';
+import { shrinkToFit } from './shrink-image';
 
 // The most bytes whose base64 text fits the cap.
 const CAP_BYTES = (MAX_IMAGE_BASE64 / 4) * 3;

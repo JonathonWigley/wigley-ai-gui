@@ -1,5 +1,6 @@
 import type { DroppedFile, PageDrops } from '../../../contracts/drops';
 import type { TextEditor } from '../../../contracts/editor';
+import type { ImageEncoder } from '../../../contracts/images';
 import type { Platform } from '../../../contracts/platform';
 import type {
   CommandsRunIn,
@@ -16,11 +17,7 @@ import { element } from '../../../shared/page/dom';
 import type { KitCommands } from '../../../shared/page/layout-host/base-kit';
 import { insertionText } from '../../../shared/page/file-drop/file-chips';
 import { pathOf } from '../../../shared/page/file-drop/file-path';
-import {
-  type ImageEncoder,
-  SHRINK_REFUSED,
-  shrinkToFit,
-} from '../../../shared/page/file-drop/shrink-image';
+import { SHRINK_REFUSED, shrinkToFit } from '../../../shared/shrink-image';
 import { createListPicker } from '../../../shared/page/list-picker';
 import { createReducerStore } from '../../../shared/page/reducer-store';
 import { textBoxInput } from '../../../shared/page/text-box';

@@ -1,16 +1,12 @@
 import type { ChatImage } from '../../../contracts/agent';
 import type { DroppedFile } from '../../../contracts/drops';
 import type { TextEditor } from '../../../contracts/editor';
+import type { EncodableImage, ImageEncoder } from '../../../contracts/images';
 import { errorText } from '../../../shared/error-text';
 import { IMAGE_TYPES, base64Of } from '../../../shared/image-types';
 import { insertionText } from '../../../shared/page/file-drop/file-chips';
 import { pathOf } from '../../../shared/page/file-drop/file-path';
-import {
-  type EncodableImage,
-  type ImageEncoder,
-  SHRINK_REFUSED,
-  shrinkToFit,
-} from '../../../shared/page/file-drop/shrink-image';
+import { SHRINK_REFUSED, shrinkToFit } from '../../../shared/shrink-image';
 
 // The images attached to one Chat tab's next message, in the order attached.
 // Each change tells every `onChange` listener the images held after it.

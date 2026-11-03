@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatImage } from '../../../contracts/agent';
 import type { DroppedFile } from '../../../contracts/drops';
+import type { ImageEncoder } from '../../../contracts/images';
 import { insertionText } from '../../../shared/page/file-drop/file-chips';
-import {
-  type ImageEncoder,
-  SHRINK_REFUSED,
-} from '../../../shared/page/file-drop/shrink-image';
+import { SHRINK_REFUSED } from '../../../shared/shrink-image';
 import { MAX_IMAGE_BASE64, refusalOf } from '../image-rules';
 import {
   type ChatDropDeps,

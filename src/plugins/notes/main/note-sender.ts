@@ -1,7 +1,9 @@
 import type { ChatImage } from '../../../contracts/agent';
+import type { ImageEncoder } from '../../../contracts/images';
 import type { Log } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import { errorText } from '../../../shared/error-text';
+import { SHRINK_REFUSED, shrinkToFit } from '../../../shared/shrink-image';
 import type {
   BacklogMainExports,
   BacklogWriteResult,
@@ -14,9 +16,11 @@ import { sessionLine } from '../session-ref';
 import type { DraftStore } from './draft-store';
 import { firstSentence, followupText, launchText } from './note-text';
 
-// `homeDir` is the real home path, its links resolved.
+// `homeDir` is the real home path, its links resolved. `images` shrinks each
+// image over the API's cap before it is sent.
 export interface NoteSenderDeps {
   store: DraftStore;
+  images: ImageEncoder;
   backlog: Pick<BacklogMainExports, 'fileNote'>;
   chat: Pick<ChatMainExports, 'launch' | 'profileNames' | 'profileOf'>;
   launchBrief(): string;
@@ -28,6 +32,8 @@ export interface NoteSenderDeps {
 // Sends the kept draft and clears it once the send succeeded; a refused or
 // failed send keeps it. `flattened` holds one entry per draft image, in strip
 // order: the PNG with its markup drawn in, or null to send the stored image.
+// Each image over the API's cap is shrunk first; one that will not shrink
+// under it refuses the send with SHRINK_REFUSED.
 // Each throws when `flattened` and the draft hold different image counts.
 export interface NoteSender {
   toFollowup(
@@ -44,22 +50,37 @@ function refused(reason: string): NoteSendResult {
   return { type: 'refused', reason };
 }
 
-// The bytes to send for each draft image, in strip order.
-function imagesToSend(
+// The PNG bytes to send for each draft image, in strip order, each shrunk
+// under the API's cap; null when one will not shrink under it.
+async function imagesToSend(
   store: DraftStore,
+  encoder: ImageEncoder,
   draft: NoteDraft,
   flattened: readonly (Uint8Array | null)[],
-): Promise<Uint8Array[]> {
+): Promise<Uint8Array[] | null> {
   if (flattened.length !== draft.images.length) {
     throw new Error(
       `flattened holds ${String(flattened.length)} images; the draft holds ${String(draft.images.length)}`,
     );
   }
-  return Promise.all(
+  const pngs = await Promise.all(
     draft.images.map(
       (image, index) => flattened[index] ?? store.image(image.id),
     ),
   );
+  const fitted = await Promise.all(
+    pngs.map((bytes) =>
+      shrinkToFit({ bytes, mediaType: 'image/png' }, encoder),
+    ),
+  );
+  const sent: Uint8Array[] = [];
+  for (const image of fitted) {
+    if (image === null) {
+      return null;
+    }
+    sent.push(image.bytes);
+  }
+  return sent;
 }
 
 function followupTarget(
@@ -130,7 +151,10 @@ export function createNoteSender(deps: NoteSenderDeps): NoteSender {
       if (home === null) {
         throw new Error('sendRefusal passed a draft with no target');
       }
-      const images = await imagesToSend(store, draft, flattened);
+      const images = await imagesToSend(store, deps.images, draft, flattened);
+      if (images === null) {
+        return refused(SHRINK_REFUSED);
+      }
       const line = await lineOf(draft);
       const target = followupTarget(draft, request);
       let result: BacklogWriteResult;
@@ -158,7 +182,10 @@ export function createNoteSender(deps: NoteSenderDeps): NoteSender {
       if (refusal !== null) {
         return refused(refusal);
       }
-      const images = await imagesToSend(store, draft, flattened);
+      const images = await imagesToSend(store, deps.images, draft, flattened);
+      if (images === null) {
+        return refused(SHRINK_REFUSED);
+      }
       const owner =
         draft.session === null ? null : chat.profileOf(draft.session.sessionId);
       const profile = owner ?? chat.profileNames().at(0);

@@ -89,6 +89,7 @@ const LAYERS: Record<string, LayerRule> = {
     packages: [],
   },
   'src/main/alerts': { layers: ['src/contracts'], packages: ['electron'] },
+  'src/main/images': { layers: ['src/contracts'], packages: ['electron'] },
   'src/main/files': { layers: ['src/contracts'], packages: ['node:'] },
   // Runs the Files contract suite, which the memory adapter runs too.
   'src/main/files/node-files.test.ts': {
@@ -143,6 +144,7 @@ const LAYERS: Record<string, LayerRule> = {
       'src/main/config',
       'src/main/ui-state',
       'src/main/alerts',
+      'src/main/images',
       'src/main/files',
       'src/main/processes',
       'src/main/git',

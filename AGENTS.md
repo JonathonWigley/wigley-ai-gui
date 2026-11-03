@@ -91,7 +91,8 @@ src/shared/      implementation both processes use (CommandRegistry, the plugin 
                  text, in the file's own shape (triage.md § The project's follow-ups in wigley-ai-marketplace) →
                  pure, no I/O; Backlog and Docs' create dialog both write follow-ups through it
   image-types.ts the image media types the app attaches and pastes (chat and notes share it), the 5 MB base64 cap `MAX_IMAGE_BASE64`, and the helpers `extensionOf`, `base64LengthOf` and `base64Of`
-  page/          page-only DOM builders plugins share: the paste and drop helpers (`file-drop/`: the text-paste rule, the file chip pattern, the image shrink and its canvas encoder), the layout host
+  shrink-image.ts `shrinkToFit`: steps an image over the 5 MB cap down until it fits, through an `ImageEncoder` (the page's canvas adapter, or main's `services.images`)
+  page/          page-only DOM builders plugins share: the paste and drop helpers (`file-drop/`: the text-paste rule, the file chip pattern, the canvas adapter behind `ImageEncoder`), the layout host
                  (`layout-host/`: showing layouts, the pick chain, drawing a part, rollback, `BaseKit` (the kit every
                  owner's kit extends, with the shared `icon`, `chevron`, `edge`, `rowTrailing` and `duration`) and
                  `ownerBaseKitDeps` (the deps an owner's base kit is built from), the markdown mount
@@ -122,6 +123,7 @@ src/main/        core main process; main.ts is its composition root
   ui-state/      the uiState file: app-written view state (`ui-state.json`) in the app instance's user data folder
   alerts/        native notification, Dock bounce or taskbar flash, and the badge, behind Alerts; the badge sums the
                  open counts each source sets
+  images/        Electron's nativeImage behind ImageEncoder: re-encodes an image smaller, as PNG or JPEG only
   claude-code/   Claude Code CLI adapter behind AgentHarness, which also lists and reads Claude's saved sessions and
                  project folders, runs `claude auth` sign-in, sign-out and status and `claude -p /usage` (the plan usage
                  poll), and asks each session for `get_context_usage` → the only place the app spawns `claude`
@@ -495,7 +497,7 @@ round; primer: an open primer), since main, not the page, decides.
 - **An MCP tool** is contributed to the `sessions` plugin by the plugin that runs it, with a handler per session;
   sessions writes every contributed tool into `tools.json` and routes each call by tool name, so its MCP adapter
   names no tool.
-- **An ambient service** — the clock, timers, ids, the home folder, files (with watching), processes, git (main only), opening a link in the default browser, how the app was started (`runMode`: live, self-test or drive) — reaches a plugin
+- **An ambient service** — the clock, timers, ids, the home folder, files (with watching), processes, git (main only), image re-encoding (`images`, main only), opening a link in the default browser, how the app was started (`runMode`: live, self-test or drive) — reaches a plugin
   through `api.services`, filled in by the composition root, so a test hands the plugin a fake. The page's home folder
   is the real path of main's, served in the config, so every view shows a folder under it as `~` through
   `services.homeDir`.

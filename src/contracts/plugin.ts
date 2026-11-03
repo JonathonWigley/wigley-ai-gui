@@ -8,6 +8,7 @@ import type { PageDrops } from './drops';
 import type { EditorHost, TextEditor } from './editor';
 import type { Files } from './files';
 import type { Git } from './git';
+import type { ImageEncoder } from './images';
 import type {
   InterceptBind,
   KeyBind,
@@ -640,7 +641,8 @@ export interface DriveHost {
 // paths, none in the self-test; a folder inside one is scratch space.
 // `userConfig` reads and writes the user's `settings.json` and `keymap.json`
 // layers through the ConfigStore's checks. `appInstance` names which app runs,
-// the stable or the dev one.
+// the stable or the dev one. `images` re-encodes an image smaller, as PNG or
+// JPEG only, for `shrinkToFit`.
 export interface MainServices {
   files: Files;
   processes: ProcessRunner;
@@ -655,6 +657,7 @@ export interface MainServices {
   userConfig: UserConfig;
   paths: Paths;
   alerts: Alerts;
+  images: ImageEncoder;
   agentHarnesses: readonly AgentHarness[];
   window: {
     show(): void;

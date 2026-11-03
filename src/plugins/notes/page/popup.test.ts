@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DropTarget, DroppedFile } from '../../../contracts/drops';
 import type { EditorEvents, TextEditor } from '../../../contracts/editor';
+import type { ImageEncoder } from '../../../contracts/images';
 import type { MarkupEditor, MarkupSession } from '../../../contracts/markup';
 import type {
   PageChannel,
@@ -9,10 +10,7 @@ import type {
   ToastTone,
 } from '../../../contracts/plugin';
 import { insertionText } from '../../../shared/page/file-drop/file-chips';
-import {
-  type ImageEncoder,
-  SHRINK_REFUSED,
-} from '../../../shared/page/file-drop/shrink-image';
+import { SHRINK_REFUSED } from '../../../shared/shrink-image';
 import { MAX_IMAGE_BASE64 } from '../../../shared/image-types';
 import {
   recordingAnchors,

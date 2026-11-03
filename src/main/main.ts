@@ -102,6 +102,7 @@ import { createMainApi } from './plugins/main-api';
 import { createPageLog } from './page-log';
 import { createPastedFiles } from './pasted-files';
 import { createPluginChannels } from './plugins/plugin-channel';
+import { nativeImageEncoder } from './images/native-image-encoder';
 import { createNodeProcesses } from './processes/node-processes';
 import { failSelfTest, type SelfTestDriver, startSelfTest } from './selftest';
 import { createSelfTestTeardown } from './selftest-teardown';
@@ -775,6 +776,7 @@ function createWindow(
       tempFolders: inputs.tempFolders,
       userConfig,
       paths,
+      images: nativeImageEncoder,
       runMode,
       appInstance,
       ...modeServices.forWindow({

@@ -1,24 +1,7 @@
-// Shrinks an image over the API's cap by re-encoding it smaller, behind an
-// encoder seam so the step-down rule runs without a canvas.
-import {
-  IMAGE_TYPES,
-  MAX_IMAGE_BASE64,
-  base64LengthOf,
-} from '../../image-types';
-
-export interface EncodableImage {
-  bytes: Uint8Array;
-  mediaType: string;
-}
-
-export interface ImageEncoder {
-  // Re-encodes `image` scaled by `scale` (0–1] as `mediaType`.
-  encode(
-    image: EncodableImage,
-    scale: number,
-    mediaType: string,
-  ): Promise<Uint8Array>;
-}
+// Shrinks an image over the API's cap by re-encoding it smaller, through the
+// ImageEncoder seam: the page's canvas, main's native image, or a test fake.
+import type { EncodableImage, ImageEncoder } from '../contracts/images';
+import { IMAGE_TYPES, MAX_IMAGE_BASE64, base64LengthOf } from './image-types';
 
 // The toast for an image still over the API's cap after every shrink step.
 export const SHRINK_REFUSED = 'Image could not be shrunk under 5 MB';
