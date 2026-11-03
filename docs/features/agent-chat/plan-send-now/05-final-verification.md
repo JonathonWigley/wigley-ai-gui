@@ -1,6 +1,6 @@
 # 05 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 5 · Depends on: 04
 Plan: [plan.md](plan.md)
@@ -19,3 +19,4 @@ Commit:    none
 
 ## Proof
 
+Commit none · proof: live on real Claude (Opus, ~$0.40), drive run .drive/send-now-05: 1 fold PASS (send-now-fold-before/-sending/-after; ran the box route since one Esc only leaves insert mode — the row route was exercised in check 3); 2 box PASS (send-now-box, -after: three rows sending, folded alpha/beta/gamma in one turn); 3 interrupt PASS (send-now-interrupt-sending/-interrupt/-after: unsent returned to box, sent row ran straight after); 4 idle entry PASS (idle-send-entry) · concerns: two Escapes leave the box after an Enter send (box stays in insert mode); drive cannot read main-process log lines, so 'returned: never taken in' unverified live

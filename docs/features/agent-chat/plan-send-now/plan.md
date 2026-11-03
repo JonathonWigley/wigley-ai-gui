@@ -134,7 +134,7 @@ No new files. Boundary rule: nothing outside `src/main/claude-code/` names lifec
 - [x] [Doc re-read](04-doc-re-read.md) — after 03
 
 ### Wave 5
-- [ ] [Final verification](05-final-verification.md) — after 04
+- [x] [Final verification](05-final-verification.md) — after 04
 
 ## Run log
 
@@ -145,6 +145,7 @@ Review base: 495866206a2877ebce1a939c301f551fbe01d49b
 - 02 · f9ab864e · diff read: sentEntryId on QueuedMessage, sendNow and sendAllNow on ChatChannel invoke and ChatSessions, both start.ts handlers via ignoredInPreview present; whole-tree tsc clean; worker's chat-sessions and start tests pass (195) · concerns: worker ran npx prettier (downloaded to ~/.npm/_npx/b388654678d519d9, hard-gate breach, reported to user) then restored formatting with the repo's oxfmt; sentEntryId: null added to fakes in page/entry-list.test.ts and page/chat-commands.test.ts (03's files); start.ts SESSION_TITLE_INSTRUCTION line not oxfmt-clean at HEAD either
 - 03 · 2583f5b8 · diff read: chat.sendNow in manifest, <D-Enter> chat.chat bound to chat.sendNow, exported sendQueuedNow, ChatSession.isBoxFocused, QueuedMessageInput.sent all present; tsc clean; worker's 3 test files (138) pass; chat self-test (--plugin chat) passes both new steps · concerns: <D-Enter> chat.sendNow has no key anchor (Send button anchors chat.send, which now has no chat.chat bind) — the whole self-test's anchor check would fail; design call for triage; oxfmt flags start.ts/title-tool files outside the task; keymap.md and design.md still name <Leader>cs (task 04)
 - 04 · fff51890 · diff read: Send now, Interrupt and exit, Chat tab lines match chat-commands/chat-sessions; keymap.md cs removed, oxfmt --check clean after lead ran the repo formatter (tooling-only) · concerns: design.md ~:80 flow diagram still reads 'Enter (normal) / Cmd+Enter' (the Enter session's area); sendNow on a sent row logs 'no longer queued' while pullBack logs 'already sent'; § Chat tab still says Ctrl+C pulls back every pending message (only unsent now)
+- 05 · none · live on real Claude (Opus, ~$0.40), drive run .drive/send-now-05: 1 fold PASS (send-now-fold-before/-sending/-after; ran the box route since one Esc only leaves insert mode — the row route was exercised in check 3); 2 box PASS (send-now-box, -after: three rows sending, folded alpha/beta/gamma in one turn); 3 interrupt PASS (send-now-interrupt-sending/-interrupt/-after: unsent returned to box, sent row ran straight after); 4 idle entry PASS (idle-send-entry) · concerns: two Escapes leave the box after an Enter send (box stays in insert mode); drive cannot read main-process log lines, so 'returned: never taken in' unverified live
 ### Contract changes
 - TurnTracker exports: mode() and TurnMode → plus TERMINAL_STATES exported · why: the adapter reads the same terminal set rather than copying it · consumers: none · group 01
 - sendAllNow on ChatChannel invoke and ChatSessions: void → Promise<void> · why: the idle path is send's async path, which may start a process and reject; matches send's shape · consumers: 03 · group 02
