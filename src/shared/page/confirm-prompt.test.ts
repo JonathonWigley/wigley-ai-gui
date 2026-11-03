@@ -56,7 +56,11 @@ function promptSetup(
       calls.push('push');
       return {
         pop: () => calls.push('pop'),
-        onBaseChanged: (listener) => baseListeners.push(listener),
+        dispose: () => undefined,
+        onBaseChanged: (listener) => {
+          baseListeners.push(listener);
+          return { dispose: () => undefined };
+        },
       };
     },
     isAsked: () => caller.asked,

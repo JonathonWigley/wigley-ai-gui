@@ -13,7 +13,11 @@ const ITEMS = ['one', 'two', 'three'];
 
 function pickerSetup() {
   const picker = createListPicker({
-    pushScope: () => ({ pop: () => undefined, onBaseChanged: () => undefined }),
+    pushScope: () => ({
+      pop: () => undefined,
+      dispose: () => undefined,
+      onBaseChanged: () => ({ dispose: () => undefined }),
+    }),
     log: vi.fn(),
     logSource: 'test',
   });
@@ -37,7 +41,11 @@ function filteredPickerSetup() {
     },
   } as unknown as EditorHost;
   const picker = createListPicker({
-    pushScope: () => ({ pop: () => undefined, onBaseChanged: () => undefined }),
+    pushScope: () => ({
+      pop: () => undefined,
+      dispose: () => undefined,
+      onBaseChanged: () => ({ dispose: () => undefined }),
+    }),
     log: vi.fn(),
     logSource: 'test',
     filterEditor,

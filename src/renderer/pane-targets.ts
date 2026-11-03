@@ -11,12 +11,14 @@ import type {
 // returns true and logs when none does. A focus while `isScopePushed()`
 // asks no target and logs; a resize goes through. `dropViewTargets` forgets
 // the view's two targets and keeps the outer panes, which stay until
-// `setOuterPanes(null)`.
+// `setOuterPanes(null)`. `release` empties every slot holding `target`, by
+// identity, and leaves a slot holding anything else.
 export interface PaneTargets {
   setResizeTarget(target: ResizeTarget | null): void;
   setFocusTarget(target: FocusTarget | null): void;
   setOuterPanes(panes: OuterPanes | null): void;
   dropViewTargets(): void;
+  release(target: ResizeTarget | FocusTarget | OuterPanes): void;
   resize(direction: PaneDirection): void;
   focus(direction: PaneDirection): void;
 }
@@ -42,6 +44,17 @@ export function createPaneTargets(
     dropViewTargets() {
       resizeTarget = null;
       focusTarget = null;
+    },
+    release(target) {
+      if (resizeTarget === target) {
+        resizeTarget = null;
+      }
+      if (focusTarget === target) {
+        focusTarget = null;
+      }
+      if (outerPanes === target) {
+        outerPanes = null;
+      }
     },
     resize(direction) {
       const resized =

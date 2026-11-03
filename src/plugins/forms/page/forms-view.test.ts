@@ -47,7 +47,7 @@ function fakeHost(inserted: Inserted[]): EditorHost {
     },
     contains: () => false,
     typeInto: () => {},
-    onPendingKeys: () => {},
+    onPendingKeys: () => ({ dispose: () => {} }),
     cancelPendingKeys: () => {},
     setKeymap: () => {},
   };
@@ -114,7 +114,8 @@ function formTabSetup(others: string[] = []) {
       calls.push(['setResizeTarget', target === null ? null : 'target']),
     pushConfirmScope: () => ({
       pop: () => undefined,
-      onBaseChanged: () => undefined,
+      dispose: () => undefined,
+      onBaseChanged: () => ({ dispose: () => undefined }),
     }),
     store,
     boxes,

@@ -10,7 +10,10 @@ function setup(isNarrow = false) {
   const calls: string[] = [];
   const told: string[] = [];
   const modes = createModes({
-    place: (mode) => calls.push(`place ${mode.id}`),
+    place: (mode) => {
+      calls.push(`place ${mode.id}`);
+      return { dispose: () => calls.push(`unplace ${mode.id}`) };
+    },
     marked: (modeId) => calls.push(`marked ${modeId}`),
     layOutSideBar: (layout) => calls.push(`side bar ${layout}`),
     showContext: (context) => calls.push(`context ${context?.title ?? null}`),
@@ -314,6 +317,86 @@ describe('createModes', () => {
   });
 });
 
+describe('disposing a mode', () => {
+  it('disposing the shown mode unplaces it, shows the first remaining mode and tells listeners', () => {
+    const { modes, calls, add } = setup();
+    const a = add('a', 'A');
+    const b = add('b', 'B');
+    add('c', 'C');
+    calls.length = 0;
+
+    a.handle.dispose();
+
+    expect(calls).toEqual([
+      'unplace a',
+      'marked b',
+      'side bar hidden',
+      'context null',
+      'shown b',
+      'changed b',
+    ]);
+    expect(modes.shown()).toBe('b');
+    expect(b.element.hidden).toBe(false);
+  });
+
+  it('disposing a hidden mode unplaces it and keeps the shown mode', () => {
+    const { modes, calls, add } = setup();
+    add('a', 'A');
+    const b = add('b', 'B');
+    calls.length = 0;
+
+    b.handle.dispose();
+
+    expect(calls).toEqual(['unplace b']);
+    expect(modes.shown()).toBe('a');
+  });
+
+  it('disposing the only mode leaves none shown, and its id adds again', () => {
+    const { modes, calls, add } = setup();
+    const a = add('a', 'A');
+    calls.length = 0;
+
+    a.handle.dispose();
+
+    expect(calls).toEqual(['unplace a', 'side bar hidden', 'context null']);
+    expect(() => modes.shown()).toThrow('No mode is added yet');
+
+    add('a', 'A');
+
+    expect(calls).toContain('shown a');
+  });
+
+  it('a disposed mode handle does nothing', () => {
+    const { calls, add } = setup();
+    const a = add('a', 'A', true);
+    a.handle.dispose();
+    calls.length = 0;
+
+    a.handle.dispose();
+    a.handle.show();
+    a.handle.setContext({ title: 'late', detail: null });
+    a.handle.toggleSideBar();
+    a.handle.picked();
+
+    expect(calls).toEqual([]);
+    expect(a.handle.isShown()).toBe(false);
+    expect(a.handle.sideBarShown()).toBe(false);
+  });
+
+  it('stops telling an onChanged listener once disposed', () => {
+    const { modes, add } = setup();
+    add('a', 'A');
+    const b = add('b', 'B');
+    const heard: string[] = [];
+    const listening = modes.onChanged((modeId) => heard.push(modeId));
+
+    listening.dispose();
+    b.handle.show();
+
+    expect(heard).toEqual([]);
+  });
+});
+
 describe('side bar callbacks', () => {
   it('toggleSideBar tells the shown mode its side bar hid while wide', () => {
     const { told, add } = setup();
@@ -419,7 +502,7 @@ describe('side bar callbacks', () => {
   it('calls sideBarHidden after shown, and tells a mode with no side bar nothing', () => {
     const events: string[] = [];
     const modes = createModes({
-      place: () => undefined,
+      place: () => ({ dispose: () => undefined }),
       marked: () => undefined,
       layOutSideBar: () => undefined,
       showContext: () => undefined,

@@ -1,3 +1,4 @@
+import type { Disposable } from '../contracts/disposable';
 import type { Log } from '../contracts/log';
 import type {
   EventShape,
@@ -5,32 +6,33 @@ import type {
   UntypedEvents,
 } from '../contracts/plugin';
 import { errorText } from './error-text';
+import { createListeners, type Listeners } from './listeners';
 import { qualify } from './plugin-manifests';
 
 // One process's events, each under its qualified name. `emit` runs the
 // listeners of exactly that name in subscription order before it returns; a
 // listener's throw leaves `emit` and skips the listeners after it, and one
-// added during an emit hears only later emits.
+// added during an emit hears only later emits. `on` hears until the returned
+// handle's `dispose`, a registration disposed during an emit hears no more of
+// it, and each registration of one listener is disposed on its own.
 export interface EventBus {
   emit(qualifiedEvent: string, data: unknown): void;
-  on(qualifiedEvent: string, listener: (data: unknown) => void): void;
+  on(qualifiedEvent: string, listener: (data: unknown) => void): Disposable;
 }
 
 type Listener = (data: unknown) => void;
 
 export function createEventBus(): EventBus {
-  const listeners = new Map<string, Listener[]>();
+  const listeners = new Map<string, Listeners<unknown>>();
 
   return {
     emit: (qualifiedEvent, data) => {
-      for (const listener of listeners.get(qualifiedEvent)?.slice() ?? []) {
-        listener(data);
-      }
+      listeners.get(qualifiedEvent)?.tell(data);
     },
     on: (qualifiedEvent, listener) => {
-      const named = listeners.get(qualifiedEvent) ?? [];
-      named.push(listener);
+      const named = listeners.get(qualifiedEvent) ?? createListeners<unknown>();
       listeners.set(qualifiedEvent, named);
+      return named.add(listener);
     },
   };
 }

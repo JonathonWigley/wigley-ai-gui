@@ -46,7 +46,11 @@ function overlayFixture() {
       pop: () => {
         scope.pops += 1;
       },
-      onBaseChanged: (listener) => scope.baseChanged.push(() => listener('x')),
+      dispose: () => undefined,
+      onBaseChanged: (listener) => {
+        scope.baseChanged.push(() => listener('x'));
+        return { dispose: () => undefined };
+      },
     }),
     frames,
     parts,

@@ -1,3 +1,4 @@
+import type { Disposable } from './disposable';
 import type { LayoutOwner, LayoutSet } from './layouts';
 import type { Log } from './log';
 import type { AppConfig } from './settings';
@@ -41,12 +42,13 @@ export interface Bridge {
   // Calls `method` on the main part of plugin `pluginId`; rejects with main's
   // own error text when the handler throws.
   invoke(pluginId: string, method: string, args: unknown[]): Promise<unknown>;
-  // Calls `listener` with each `message` main sends plugin `pluginId`.
+  // Calls `listener` with each `message` main sends plugin `pluginId`, until
+  // the returned handle's `dispose`.
   onMessage(
     pluginId: string,
     message: string,
     listener: (data: unknown) => void,
-  ): void;
+  ): Disposable;
   // The full path on disk of a dropped `file`; '' for a file with no path, as
   // a clipboard image.
   pathForFile(file: File): string;

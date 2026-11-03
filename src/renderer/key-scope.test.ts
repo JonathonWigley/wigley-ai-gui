@@ -131,6 +131,49 @@ describe('createScopeStack', () => {
     expect(order).toEqual(['onChange', 'onBaseChanged', 'onBaseChange']);
   });
 
+  it.each([
+    { case: 'not popped', popFirst: false },
+    { case: 'already popped', popFirst: true },
+  ])('dispose pops a pushed scope once ($case)', ({ popFirst }) => {
+    const stack = createScopeStack('any');
+    const heard: string[] = [];
+    stack.onChange((scope) => heard.push(scope));
+    const pushed = stack.push('a.x');
+
+    if (popFirst) {
+      pushed.pop();
+    }
+    pushed.dispose();
+    pushed.dispose();
+
+    expect(stack.current()).toBe('any');
+    expect(heard).toEqual(['a.x', 'any']);
+  });
+
+  it('stops telling an onChange listener once disposed', () => {
+    const stack = createScopeStack('any');
+    const heard: string[] = [];
+    const listening = stack.onChange((scope) => heard.push(scope));
+
+    listening.dispose();
+    stack.setBase('b');
+
+    expect(heard).toEqual([]);
+  });
+
+  it('stops telling an onBaseChanged listener once disposed, leaving the others', () => {
+    const stack = createScopeStack('any');
+    const pushed = stack.push('a.x');
+    const heard: string[] = [];
+    const listening = pushed.onBaseChanged((base) => heard.push(base));
+    pushed.onBaseChanged((base) => heard.push(`other ${base}`));
+
+    listening.dispose();
+    stack.setBase('b');
+
+    expect(heard).toEqual(['other b']);
+  });
+
   it('lets a pushed scope pop itself when the base changes', () => {
     const stack = createScopeStack('forms.forms');
     const help = stack.push('keys.help');

@@ -55,7 +55,7 @@ function fakeHost() {
     },
     contains: () => false,
     typeInto: () => {},
-    onPendingKeys: () => {},
+    onPendingKeys: () => ({ dispose: () => {} }),
     cancelPendingKeys: () => {},
     setKeymap: () => {},
   };

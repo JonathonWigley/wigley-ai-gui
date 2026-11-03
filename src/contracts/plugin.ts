@@ -182,8 +182,8 @@ export interface ChannelShape {
 
 // `invoke` rejects with main's own error text when main's handler throws.
 // `on` calls `listener` with each `message` main sends, until the returned
-// handle's `remove`; a second `remove` does nothing. Listening twice with one
-// listener registers it twice, each `remove` dropping its own registration.
+// handle's `dispose`; a second `dispose` does nothing. Listening twice with one
+// listener registers it twice, each `dispose` dropping its own registration.
 export interface PageChannel<Ch extends ChannelShape> {
   invoke<K extends keyof Ch['invoke'] & string>(
     method: K,
@@ -192,7 +192,7 @@ export interface PageChannel<Ch extends ChannelShape> {
   on<K extends keyof Ch['messages'] & string>(
     message: K,
     listener: (data: Ch['messages'][K]) => void,
-  ): { remove(): void };
+  ): Disposable;
 }
 
 export interface MainChannel<Ch extends ChannelShape> {
@@ -226,10 +226,10 @@ export type QualifiedEvents<Id extends string, Ev extends EventShape> = {
 // name (`<pluginId>.<event>`), rejecting an undeclared name or a wrong
 // payload. `on` hears another plugin's event by its qualified name, naming
 // only an event in `Heard` (built with `QualifiedEvents` from each
-// publisher's contract), its listener typed from it; a part that declares no
-// `Heard` hears nothing. Listeners run before `emit` returns; a listener's
-// throw is logged under the listening plugin's id and never reaches the
-// emitter or the other listeners.
+// publisher's contract), its listener typed from it, until the returned
+// handle's `dispose`; a part that declares no `Heard` hears nothing. Listeners
+// run before `emit` returns; a listener's throw is logged under the listening
+// plugin's id and never reaches the emitter or the other listeners.
 export interface PluginEvents<
   Ev extends EventShape,
   Heard extends EventShape = Record<never, never>,
@@ -238,7 +238,7 @@ export interface PluginEvents<
   on<K extends keyof Heard & string>(
     qualifiedEvent: K,
     listener: (data: Heard[K]) => void,
-  ): void;
+  ): Disposable;
 }
 
 export type AreaName =
@@ -326,8 +326,12 @@ export interface Mode {
 // `side bar hidden`, only when the shown mode's overlay was open; a hidden
 // mode's overlay closes for its next show. Otherwise it does nothing.
 // `sideBarShown` is true while the mode shows and its side bar lies beside or
-// over the content.
-export interface ModeHandle {
+// over the content. `dispose` takes the mode's element, side bar and activity
+// item out of the window, without calling its `hidden`, and frees its id; a
+// disposed shown mode gives way to the first remaining mode in add order, as
+// `show` would show it, and `onChanged` listeners hear its id. Once disposed,
+// every member does nothing, and `isShown` and `sideBarShown` return false.
+export interface ModeHandle extends Disposable {
   show(): void;
   isShown(): boolean;
   setContext(context: ModeContext | null): void;
@@ -339,16 +343,17 @@ export interface ModeHandle {
 // The first mode added shows and every later one is added hidden; a hidden
 // mode keeps its DOM and state. `add` throws on an id already added, and calls
 // the first mode's `shown`, and its side bar callback, before it returns, so
-// that neither can read the handle. `shown` is the shown mode's id and throws before any `add`. A `show`
+// that neither can read the handle. `shown` is the shown mode's id and throws
+// before any `add` and once every mode is disposed. A `show`
 // that changes the shown mode hides the old mode's element and side bar, calls
 // the old mode's `hidden`, unhides the new mode's element and side bar, marks
 // it in the activity bar, lays out its side bar, shows its context, calls its
 // `shown` and then `sideBarHidden` or `sideBarOpenedOver` by its side bar's
-// layout, then `onChanged` listeners hear the new id.
+// layout, then `onChanged` listeners hear the new id, until their `dispose`.
 export interface Modes {
   add(mode: Mode): ModeHandle;
   shown(): string;
-  onChanged(listener: (modeId: string) => void): void;
+  onChanged(listener: (modeId: string) => void): Disposable;
 }
 
 // An area the layout splits by alignment: `element` is the area's own element,
@@ -433,11 +438,13 @@ export interface PageServices {
 }
 
 // A scope `keys.pushScope` laid over the set scope. `pop` removes it wherever
-// it sits and throws on a second call; `onBaseChanged` listeners hear the set
-// scope, qualified, each time it changes while this scope is pushed.
-export interface PushedScope {
+// it sits and throws on a second call; `dispose` pops it when it is still
+// pushed and otherwise does nothing. `onBaseChanged` listeners hear the set
+// scope, qualified, each time it changes while this scope is pushed, until
+// their `dispose`.
+export interface PushedScope extends Disposable {
   pop(): void;
-  onBaseChanged(listener: (base: ViewScope) => void): void;
+  onBaseChanged(listener: (base: ViewScope) => void): Disposable;
 }
 
 // The page's session override of the `transparency` setting. `override` holds
@@ -453,9 +460,10 @@ export interface PageTransparency {
 // `keys.setScope` sets the scope page keys fire in, under any pushed scope;
 // `keys.pushScope` lays a scope over it until the `PushedScope`'s `pop`.
 // `keys.scope` is the qualified scope keys fire in now, and
-// `keys.onScopeChanged` hears it each time it changes. `keys.onPending` hears
-// the keys of an unfinished sequence on the page or in an editor, `null` once
-// none are pending; `keys.holdPending` keeps a pending page sequence past its
+// `keys.onScopeChanged` hears it each time it changes, until its `dispose`.
+// `keys.onPending` hears the keys of an unfinished sequence on the page or in
+// an editor, `null` once none are pending, until its `dispose`;
+// `keys.holdPending` keeps a pending page sequence past its
 // timeout until it ends, and `keys.cancelPending` drops whichever sequence is
 // pending, running nothing. `keys.keymap` reads the merged keymap as the user
 // config now sets it, every plugin's binds qualified, and
@@ -473,7 +481,8 @@ export interface PageTransparency {
 // restores the default layout; that `dispose` does nothing once another
 // `setLayout` replaced the layout.
 // `transparency` is the page's one transparency override, shared by every
-// plugin (see `PageTransparency`).
+// plugin (see `PageTransparency`); stopping the plugin clears the override only
+// while it still holds the value this plugin last set.
 // `panes.setResizeTarget` hands the core the divider its resize commands move
 // and `panes.setFocusTarget` the view's own panes its focus commands move
 // between, null for none; a view calls both after each `keys.setScope`, since
@@ -483,6 +492,8 @@ export interface PageTransparency {
 // target, then the outer panes', and does neither while a scope is pushed,
 // since a move would dismiss it. `panes.setOuterPanes` hands over the panes
 // around the view, kept across scope changes until their owner sets null.
+// Stopping the plugin clears each of the three only while it still holds what
+// this plugin last set.
 // `drops.addTarget` registers an element and what takes the files dropped or
 // pasted on it, returning the `Disposable` that removes it; `drops.savePasted`
 // saves a file with no path and returns its path.
@@ -510,8 +521,8 @@ export interface PageApi<
     setScope(scope: keyof M['scopes'] & string): void;
     pushScope(scope: keyof M['scopes'] & string): PushedScope;
     scope(): ViewScope;
-    onScopeChanged(listener: (scope: ViewScope) => void): void;
-    onPending(listener: (pending: PendingKeys | null) => void): void;
+    onScopeChanged(listener: (scope: ViewScope) => void): Disposable;
+    onPending(listener: (pending: PendingKeys | null) => void): Disposable;
     holdPending(): void;
     cancelPending(): void;
     keymap(): Keymap;

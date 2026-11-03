@@ -247,7 +247,8 @@ async function openPopup(draft: NoteDraft = DRAFT): Promise<Harness> {
   let body: TextEditor | null = null;
   const pushed = (): PushedScope => ({
     pop: () => undefined,
-    onBaseChanged: () => undefined,
+    dispose: () => undefined,
+    onBaseChanged: () => ({ dispose: () => undefined }),
   });
   const services = {
     editor: {

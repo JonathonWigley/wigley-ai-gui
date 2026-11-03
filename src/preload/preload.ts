@@ -1,4 +1,9 @@
-import { contextBridge, ipcRenderer, webUtils } from 'electron';
+import {
+  contextBridge,
+  ipcRenderer,
+  type IpcRendererEvent,
+  webUtils,
+} from 'electron';
 import { type Bridge, BRIDGE_CHANNELS } from '../contracts/bridge';
 import type { LayoutSet } from '../contracts/layouts';
 import type { AppConfig } from '../contracts/settings';
@@ -51,14 +56,25 @@ const bridge: Bridge = {
     }
   },
   onMessage: (pluginId, message, listener) => {
-    ipcRenderer.on(
-      BRIDGE_CHANNELS.pluginMessage,
-      (_event, toPlugin: string, sent: string, data: unknown) => {
-        if (toPlugin === pluginId && sent === message) {
-          listener(data);
-        }
+    const onPluginMessage = (
+      _event: IpcRendererEvent,
+      toPlugin: string,
+      sent: string,
+      data: unknown,
+    ) => {
+      if (toPlugin === pluginId && sent === message) {
+        listener(data);
+      }
+    };
+    ipcRenderer.on(BRIDGE_CHANNELS.pluginMessage, onPluginMessage);
+    return {
+      dispose: () => {
+        ipcRenderer.removeListener(
+          BRIDGE_CHANNELS.pluginMessage,
+          onPluginMessage,
+        );
       },
-    );
+    };
   },
   pathForFile: (file) => webUtils.getPathForFile(file),
   savePasted: async (bytes, mediaType) => {

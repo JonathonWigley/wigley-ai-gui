@@ -1,4 +1,5 @@
 import type { AppInstance } from '../../contracts/app-instance';
+import type { Disposable } from '../../contracts/disposable';
 import type { Log } from '../../contracts/log';
 import type {
   Alignment,
@@ -34,13 +35,13 @@ type ShellKeys = BaseKitDeps['keys'];
 // The chrome the core draws through the shell layout. `showContext` and
 // `showProblems` draw the title bar's context and config problems again for
 // a new value; `addMode` adds the mode's activity item, which shows the mode
-// on a click; `markMode` marks the shown mode's item, logging only when the
+// on a click, until the returned handle's `dispose`; `markMode` marks the shown mode's item, logging only when the
 // marked mode changed; `setLayouts` draws every part again with new layouts;
 // `setKeys` draws every part again with the keys plugin's keys.
 export interface ShellChrome {
   showContext(context: ModeContext | null): void;
   showProblems(problems: readonly ConfigProblem[]): void;
-  addMode(mode: Mode, handle: ModeHandle): void;
+  addMode(mode: Mode, handle: ModeHandle): Disposable;
   markMode(modeId: string): void;
   setLayouts(shown: ShownLayouts<Layout>): void;
   setKeys(keys: ShellKeys): void;
@@ -71,10 +72,11 @@ function createShellKit(
 }
 
 // A part's place in its area: the app-owned `span.shell-part-slot`, which
-// keeps its place in the track across redraws, and the dispose of the part
-// drawn in it.
+// keeps its place in the track across redraws, its contribution to the area,
+// and the dispose of the part drawn in it.
 interface Slot {
   element: HTMLElement;
+  contribution: Disposable;
   disposeDrawn(): void;
 }
 
@@ -223,6 +225,13 @@ export function mountShellChrome(deps: ShellChromeDeps): ShellChrome {
       };
       items.set(mode.id, item);
       drawItem(item);
+      return {
+        dispose() {
+          clearSlot(item.slot);
+          item.slot.contribution.dispose();
+          items.delete(mode.id);
+        },
+      };
     },
     markMode(modeId) {
       const isChanged = markedId !== modeId;
@@ -247,12 +256,12 @@ export function mountShellChrome(deps: ShellChromeDeps): ShellChrome {
 }
 
 function contributeSlot(area: Area, align: Alignment): Slot {
-  const slot: Slot = {
-    element: element('span', 'shell-part-slot'),
+  const slotElement = element('span', 'shell-part-slot');
+  return {
+    element: slotElement,
+    contribution: area.contribute(slotElement, { align }),
     disposeDrawn: NO_DRAWN,
   };
-  area.contribute(slot.element, { align });
-  return slot;
 }
 
 // Disposes the part drawn in `slot` and empties it.

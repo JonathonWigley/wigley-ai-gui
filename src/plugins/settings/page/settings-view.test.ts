@@ -78,7 +78,7 @@ function fakeChannel() {
   };
   const channel = {
     invoke,
-    on: () => ({ remove: () => undefined }),
+    on: () => ({ dispose: () => undefined }),
   } as unknown as PageChannel<SettingsChannel>;
   return { channel, written };
 }
@@ -110,7 +110,11 @@ async function shownView(isSideBarShown = true) {
     setScope: (scope) => handed.push(scope),
     setFocusTarget: (target) => handed.push(target),
     isSideBarShown: () => isSideBarShown,
-    pushScope: () => ({ pop: () => undefined, onBaseChanged: () => undefined }),
+    pushScope: () => ({
+      pop: () => undefined,
+      dispose: () => undefined,
+      onBaseChanged: () => ({ dispose: () => undefined }),
+    }),
     addOverlay(element) {
       overlay.append(asFake(element));
       return { dispose: () => undefined };

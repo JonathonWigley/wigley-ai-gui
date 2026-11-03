@@ -61,8 +61,10 @@ function dialogSetup(answer: () => Promise<void> = async () => undefined) {
         pop: () => {
           pops += 1;
         },
+        dispose: () => undefined,
         onBaseChanged: (listener) => {
           onBaseChanged = listener;
+          return { dispose: () => undefined };
         },
       };
     },

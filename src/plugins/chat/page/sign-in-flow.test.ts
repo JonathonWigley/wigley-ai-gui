@@ -28,7 +28,7 @@ function setUp(logInAnswer: () => Promise<void> = () => Promise.resolve()) {
     }) as SignInFlowDeps['channel']['invoke'],
     on: ((message: string, listener: (data: never) => void) => {
       listeners.set(message, listener);
-      return { remove: () => listeners.delete(message) };
+      return { dispose: () => listeners.delete(message) };
     }) as SignInFlowDeps['channel']['on'],
   };
   const flow = createSignInFlow({
@@ -49,7 +49,8 @@ function setUp(logInAnswer: () => Promise<void> = () => Promise.resolve()) {
         pop: () => {
           pushedScopes -= 1;
         },
-        onBaseChanged: () => undefined,
+        dispose: () => undefined,
+        onBaseChanged: () => ({ dispose: () => undefined }),
       };
     },
     writeClipboard: (text) => {

@@ -76,6 +76,7 @@ function handle(): ModeHandle & { show: Mock<() => void> } {
     toggleSideBar: () => undefined,
     picked: () => undefined,
     sideBarShown: () => false,
+    dispose: () => undefined,
   };
 }
 
@@ -225,6 +226,19 @@ describe('mountShellChrome', () => {
 
     expect(docs.show).toHaveBeenCalledTimes(1);
     expect(sessions.show).not.toHaveBeenCalled();
+  });
+
+  it('addMode_Dispose_RemovesTheActivityItem', () => {
+    const { chrome, activityBar } = mountChrome();
+    const docs = handle();
+    const added = chrome.addMode(mode('sessions', 'Sessions'), handle());
+    chrome.addMode(mode('docs', 'Docs'), docs);
+
+    added.dispose();
+
+    expect(parts(activityBar).length).toBe(1);
+    parts(activityBar)[0]?.click();
+    expect(docs.show).toHaveBeenCalledTimes(1);
   });
 
   // `text` and `title`: what the badge's text and tooltip match; null for a

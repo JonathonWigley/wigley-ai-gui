@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Log } from '../contracts/log';
 import type { EventShape } from '../contracts/plugin';
-import { createEventBus, pluginEvents } from './event-bus';
+import { createEventBus, type EventBus, pluginEvents } from './event-bus';
 
 function logInto(lines: [string, string][]): Log {
   return (source, message) => lines.push([source, message]);
@@ -62,6 +62,52 @@ describe('createEventBus', () => {
   });
 });
 
+describe('createEventBus registrations', () => {
+  it.each([
+    {
+      case: 'before the emit',
+      heard: ['b'],
+      arrange(bus: EventBus, heard: string[]) {
+        const a = bus.on('p.x', () => heard.push('a'));
+        bus.on('p.x', () => heard.push('b'));
+        a.dispose();
+      },
+    },
+    {
+      case: 'by an earlier listener during the emit',
+      heard: ['first'],
+      arrange(bus: EventBus, heard: string[]) {
+        bus.on('p.x', () => {
+          heard.push('first');
+          second.dispose();
+        });
+        const second = bus.on('p.x', () => heard.push('second'));
+      },
+    },
+    {
+      case: 'one of two registrations of one listener',
+      heard: ['l'],
+      arrange(bus: EventBus, heard: string[]) {
+        const l = () => heard.push('l');
+        const first = bus.on('p.x', l);
+        bus.on('p.x', l);
+        first.dispose();
+      },
+    },
+  ])(
+    'stops delivering to a registration once it is disposed ($case)',
+    ({ arrange, heard: expected }) => {
+      const bus = createEventBus();
+      const heard: string[] = [];
+      arrange(bus, heard);
+
+      bus.emit('p.x', 1);
+
+      expect(heard).toEqual(expected);
+    },
+  );
+});
+
 describe('pluginEvents', () => {
   it("qualifies a plugin's emitted event with its id", () => {
     const bus = createEventBus();
@@ -101,6 +147,22 @@ describe('pluginEvents', () => {
     expect(lines).toEqual([
       ['forms', expect.stringMatching(/sessions\.connected.*boom/)],
     ]);
+  });
+
+  it('stops a listener once the handle `on` returned is disposed', () => {
+    const bus = createEventBus();
+    const heard: number[] = [];
+    const listening = pluginEvents<
+      EventShape,
+      { 'sessions.connected': number }
+    >(bus, 'forms', logInto([])).on('sessions.connected', (data) =>
+      heard.push(data),
+    );
+
+    listening.dispose();
+    bus.emit('sessions.connected', 1);
+
+    expect(heard).toEqual([]);
   });
 
   it("lets a plugin hear another plugin's event", () => {

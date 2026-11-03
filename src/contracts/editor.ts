@@ -1,3 +1,4 @@
+import type { Disposable } from './disposable';
 import type { EditorBind, EditorKeymap } from './keymap';
 import type { Log } from './log';
 import type { Paths } from './paths';
@@ -176,8 +177,9 @@ export interface EditorHost {
   // mode. A count with no key after it (`3`) and an operator waiting for its
   // motion (`d`) are no sequence and report `[]`. An editor losing focus
   // discards every unfinished command, count, operator and register included,
-  // and reports `[]` before any other editor reports.
-  onPendingKeys(listener: (keys: string[]) => void): void;
+  // and reports `[]` before any other editor reports. Hears until the returned
+  // handle's `dispose`.
+  onPendingKeys(listener: (keys: string[]) => void): Disposable;
   // Discards the unfinished sequence, as Esc does, without running the bind
   // on Esc; does nothing when no keys are pending.
   cancelPendingKeys(): void;

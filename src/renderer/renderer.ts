@@ -152,11 +152,13 @@ async function start() {
   const narrow = window.matchMedia(SIDE_BAR_OVER_QUERY);
   const modes = createModes({
     place(mode, handle) {
-      areas.main.contribute(mode.element);
+      const placement = createRegistrations();
+      placement.track(areas.main.contribute(mode.element));
       if (mode.sideBar !== undefined) {
-        areas.sideBar.contribute(mode.sideBar);
+        placement.track(areas.sideBar.contribute(mode.sideBar));
       }
-      chrome.addMode(mode, handle);
+      placement.track(chrome.addMode(mode, handle));
+      return placement;
     },
     marked: (modeId) => chrome.markMode(modeId),
     layOutSideBar: (layout) => shell.layOutSideBar(layout),

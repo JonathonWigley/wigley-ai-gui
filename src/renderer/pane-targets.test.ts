@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type {
   FocusTarget,
+  OuterPanes,
   PaneDirection,
   ResizeTarget,
 } from '../contracts/panes';
-import { createPaneTargets } from './pane-targets';
+import { createPaneTargets, type PaneTargets } from './pane-targets';
 
 // Targets that answer `answer` and record each ask as `<target> <direction>`,
 // with every log line the pane targets wrote.
@@ -202,6 +203,57 @@ describe('createPaneTargets', () => {
 
       expect(fakes.asked).toEqual(asked);
       expect(fakes.logged).toEqual(logged);
+    },
+  );
+
+  it.each<{
+    case: string;
+    act(targets: PaneTargets, resize: ResizeTarget, outer: OuterPanes): void;
+    asked: string[];
+  }>([
+    {
+      case: 'the resize target',
+      act(targets, resize) {
+        targets.setResizeTarget(resize);
+        targets.release(resize);
+        targets.resize('left');
+      },
+      asked: ['side bar left'],
+    },
+    {
+      case: 'the outer panes',
+      act(targets, _resize, outer) {
+        targets.setOuterPanes(outer);
+        targets.release(outer);
+        targets.focus('left');
+      },
+      asked: [],
+    },
+    {
+      case: 'another object',
+      act(targets, resize) {
+        targets.setResizeTarget(resize);
+        targets.release({ nudge: () => true });
+        targets.resize('left');
+      },
+      asked: ['view left'],
+    },
+  ])(
+    'release clears only the slots holding the target ($case)',
+    ({ act, asked }) => {
+      const fakes = recordingTargets();
+      const targets = createPaneTargets(
+        fakes.resizer('side bar', true),
+        () => false,
+        fakes.log,
+      );
+
+      act(targets, fakes.resizer('view', true), {
+        focus: fakes.mover('outer focus', true),
+        resize: fakes.resizer('outer resize', true),
+      });
+
+      expect(fakes.asked).toEqual(asked);
     },
   );
 

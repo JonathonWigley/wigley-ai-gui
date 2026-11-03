@@ -15,6 +15,7 @@ function fakeSources() {
     editor: {
       onPendingKeys: (listener: (keys: string[]) => void) => {
         editorListener = listener;
+        return { dispose: () => {} };
       },
       cancelPendingKeys: () => calls.push('editor.cancel'),
     },
@@ -39,6 +40,18 @@ describe('createPendingKeys', () => {
     expect(heard).toEqual([
       { where: 'editor', keys: ['<Space>', 'a'], scope: 'forms.forms' },
     ]);
+  });
+
+  it('stops telling an onPending listener once disposed', () => {
+    const { sources } = fakeSources();
+    const hub = createPendingKeys(sources);
+    const heard: (PendingKeys | null)[] = [];
+    const listening = hub.onPending((pending) => heard.push(pending));
+
+    listening.dispose();
+    hub.reportPage(['g'], 'any');
+
+    expect(heard).toEqual([]);
   });
 
   it('sends hold and cancel to the source whose keys are pending', () => {

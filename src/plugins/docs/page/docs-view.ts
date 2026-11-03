@@ -1036,7 +1036,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     unsavedPath: () => (doc.hasUnsavedEdits() ? doc.openPath() : null),
     dispose() {
       view.closeOverlays();
-      listening.remove();
+      listening.dispose();
       starChange.dispose();
       for (const overlay of overlays) {
         overlay.dispose();

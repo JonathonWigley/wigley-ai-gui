@@ -31,6 +31,7 @@ import type {
   EditorKeymap,
   EditorMode,
 } from '../../contracts/keymap';
+import type { Disposable } from '../../contracts/disposable';
 import type { Paths } from '../../contracts/paths';
 import {
   DOCUMENT_EX_COMMANDS,
@@ -50,6 +51,7 @@ import { codeColours } from './code-colours';
 import { editorTheme } from './editor-theme';
 import { exBindName } from './ex-command-name';
 import { isScrolledToEnd, scrollStepPx } from '../../shared/content-scroll';
+import { createListeners } from '../../shared/listeners';
 import { findLanguageByFile, loadLanguage } from './languages';
 import { prefixCompletion } from './prefix-completion';
 import {
@@ -680,12 +682,12 @@ function escapeCancelsUnfinishedInput() {
 // them; a report from any editor replaces the last. Keys never outlive their
 // editor's focus, so the holder is always the editor that last reported.
 class PendingKeys {
-  private readonly listeners: ((keys: string[]) => void)[] = [];
+  private readonly listeners = createListeners<string[]>();
   private reported: string[] = [];
   private holder: VimEditor | undefined;
 
-  listen(listener: (keys: string[]) => void) {
-    this.listeners.push(listener);
+  listen(listener: (keys: string[]) => void): Disposable {
+    return this.listeners.add((keys) => listener([...keys]));
   }
 
   reportFrom(cm: VimEditor) {
@@ -714,9 +716,7 @@ class PendingKeys {
       return;
     }
     this.reported = keys;
-    for (const listener of this.listeners) {
-      listener([...keys]);
-    }
+    this.listeners.tell(keys);
   }
 }
 

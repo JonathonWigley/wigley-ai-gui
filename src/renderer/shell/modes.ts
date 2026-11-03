@@ -1,3 +1,4 @@
+import type { Disposable } from '../../contracts/disposable';
 import type { Log } from '../../contracts/log';
 import type {
   Mode,
@@ -5,6 +6,7 @@ import type {
   ModeHandle,
   Modes,
 } from '../../contracts/plugin';
+import { createListeners } from '../../shared/listeners';
 
 // Where the shown mode's side bar lies: beside the content, over it, or
 // hidden.
@@ -64,11 +66,11 @@ const SIDE_BAR_LOGS: Record<SideBarLayout, string> = {
 
 // What the mode registry drives outside itself. `place` puts a mode's element
 // and side bar in the window, and its item in the activity bar, once at its
-// `add`; `marked` marks the shown mode in the activity bar; `layOutSideBar`
+// `add`, and the `Disposable` it returns takes them out; `marked` marks the shown mode in the activity bar; `layOutSideBar`
 // lays out the side bar area; `showContext` shows the title bar's context;
 // `isNarrow` is whether the window starts narrow (`SIDE_BAR_OVER_QUERY`).
 export interface ModesDeps {
-  place(mode: Mode, handle: ModeHandle): void;
+  place(mode: Mode, handle: ModeHandle): Disposable;
   marked(modeId: string): void;
   layOutSideBar(layout: SideBarLayout): void;
   showContext(context: ModeContext | null): void;
@@ -93,11 +95,12 @@ interface AddedMode {
 
 // The core's mode registry: each mode is placed once, and showing a mode only
 // toggles `hidden`, so a hidden mode keeps its DOM and state. Each mode keeps
-// its own side bar choice and title bar context, applied while it shows.
+// its own side bar choice and title bar context, applied while it shows. With
+// no mode left, the title bar context and the side bar clear.
 export function createModes(deps: ModesDeps): CoreModes {
   const { log } = deps;
   const added = new Map<string, AddedMode>();
-  const listeners: ((modeId: string) => void)[] = [];
+  const listeners = createListeners<string>();
   let shownMode: AddedMode | null = null;
   let isNarrow = deps.isNarrow;
 
@@ -143,6 +146,17 @@ export function createModes(deps: ModesDeps): CoreModes {
     tellSideBarChanged(entry, null);
   };
 
+  const showFirstRemaining = () => {
+    const first = added.values().next().value;
+    if (first === undefined) {
+      deps.layOutSideBar('hidden');
+      deps.showContext(null);
+      return;
+    }
+    reveal(first);
+    listeners.tell(first.mode.id);
+  };
+
   return {
     add(mode) {
       if (added.has(mode.id)) {
@@ -150,9 +164,10 @@ export function createModes(deps: ModesDeps): CoreModes {
       }
       const entry: AddedMode = { mode, sideBar: SIDE_BAR_START, context: null };
       added.set(mode.id, entry);
+      const isDisposed = () => added.get(mode.id) !== entry;
       const handle: ModeHandle = {
         show() {
-          if (shownMode === entry) {
+          if (shownMode === entry || isDisposed()) {
             return;
           }
           if (shownMode !== null) {
@@ -160,9 +175,7 @@ export function createModes(deps: ModesDeps): CoreModes {
             shownMode.mode.hidden();
           }
           reveal(entry);
-          for (const listener of listeners) {
-            listener(mode.id);
-          }
+          listeners.tell(mode.id);
         },
         isShown: () => shownMode === entry,
         setContext(context) {
@@ -172,6 +185,9 @@ export function createModes(deps: ModesDeps): CoreModes {
           }
         },
         toggleSideBar() {
+          if (isDisposed()) {
+            return;
+          }
           if (mode.sideBar === undefined) {
             throw new Error(`Mode "${mode.id}" has no side bar`);
           }
@@ -195,8 +211,19 @@ export function createModes(deps: ModesDeps): CoreModes {
           }
         },
         sideBarShown: () => shownMode === entry && layoutOf(entry) !== 'hidden',
+        dispose() {
+          if (isDisposed()) {
+            return;
+          }
+          added.delete(mode.id);
+          placement.dispose();
+          if (shownMode === entry) {
+            shownMode = null;
+            showFirstRemaining();
+          }
+        },
       };
-      deps.place(mode, handle);
+      const placement = deps.place(mode, handle);
       if (shownMode === null) {
         reveal(entry);
       } else {
@@ -210,9 +237,7 @@ export function createModes(deps: ModesDeps): CoreModes {
       }
       return shownMode.mode.id;
     },
-    onChanged(listener) {
-      listeners.push(listener);
-    },
+    onChanged: (listener) => listeners.add(listener),
     narrowChanged(next) {
       const before = shownMode === null ? null : layoutOf(shownMode);
       isNarrow = next;

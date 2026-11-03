@@ -400,7 +400,7 @@ Tasks 08, 09 and 10 apply this to each of their plugins, part by part:
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Host stop, registrations and dependency keys](01-host-stop-and-keys.md)
+- [x] [Host stop, registrations and dependency keys](01-host-stop-and-keys.md)
 - [x] [Relay advertises tool-list changes](03-relay-list-changed.md)
 
 ### Wave 2
@@ -437,10 +437,13 @@ Review base: 7f956435
 
 ### Groups
 - 03 · 29a16d1 · marketplace branch foundation-sweeps; diff read; forms unittest 52 pass, 2 Windows-only skipped; check_manifests, check_pointers, claude plugin validate pass; check_manifests --against origin/main passes after commit; git fetch skipped (SSH access), compared with last fetched origin/main at 1.14.0 · concerns: README's test-suite list (515-516) omits the notice; host needs for listChanged unproven; no test for _drop's early return; a host may refetch twice around a connect
+- 01 · 27f4cba7 · diff read; typecheck and lint clean; every Produces found, 14 keys by grep; worker ran the 14 named test files, 310 pass. Start orders equal before and after — main: keys sessions chat forms primer agents agent-lines agent-strip docs settings backlog notes usage workflow visual gallery; page: keys sessions chat forms primer agents agent-lines docs workflow agent-strip gallery settings backlog notes usage usage-tab-line visual · concerns: live quit does not hold, so a dispose that really suspends (chat's, forms' on an unfinished write) cuts off later parts, and task 14 check 4's drive run holds the quit so cannot show it; self-test teardown can close layout watches twice until task 04's disposeRegistration guard; stop and stopAll have no overlap guard; disabledDependencyProblem may name a different id when two dependencies are disabled; dependency overload written inline in both APIs
 ### Contract changes
 ### Rulings
 - Worktree run on branch foundation-sweeps in both repos, on the user's word; marketplace review base is cbd8a9e; git fetch fails on SSH access in both repos, so origin was not checked and the run builds on local main; a stale origin would surface at push · lead
 - Task 03 commits on branch foundation-sweeps rather than main, since this is a worktree run; 1.14.1 will need reconciling with the peer's 1.15.0 at merge — one bump per pushed series · group 03 · group 03
 - _open, _drop and the test module docstrings changed beyond the task's Docs list, under Edits that reach every reference — if wrong, drop them · group 03 · group 03
+- Quit task wraps stopAll in try/finally so layouts.dispose still runs when a stop rejects, beyond the task's literal two statements · group 01 · group 01
+- A dispose that throws after a failed start is logged and the start's error rethrown; on the page, with no log, it is dropped · group 01 · group 01
 ### Review rounds
 ### Test gate

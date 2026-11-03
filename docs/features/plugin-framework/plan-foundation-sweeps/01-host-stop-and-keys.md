@@ -1,6 +1,6 @@
 # 01 — Host stop, registrations and dependency keys
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -401,3 +401,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit 27f4cba7 · proof: diff read; typecheck and lint clean; every Produces found, 14 keys by grep; worker ran the 14 named test files, 310 pass. Start orders equal before and after — main: keys sessions chat forms primer agents agent-lines agent-strip docs settings backlog notes usage workflow visual gallery; page: keys sessions chat forms primer agents agent-lines docs workflow agent-strip gallery settings backlog notes usage usage-tab-line visual · concerns: live quit does not hold, so a dispose that really suspends (chat's, forms' on an unfinished write) cuts off later parts, and task 14 check 4's drive run holds the quit so cannot show it; self-test teardown can close layout watches twice until task 04's disposeRegistration guard; stop and stopAll have no overlap guard; disabledDependencyProblem may name a different id when two dependencies are disabled; dependency overload written inline in both APIs

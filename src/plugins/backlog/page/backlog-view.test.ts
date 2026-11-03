@@ -183,7 +183,11 @@ async function backlogSetup() {
       focusTarget = target;
       calls.push(['setFocusTarget', target === null ? null : 'target']);
     },
-    pushScope: () => ({ pop: () => undefined, onBaseChanged: () => undefined }),
+    pushScope: () => ({
+      pop: () => undefined,
+      dispose: () => undefined,
+      onBaseChanged: () => ({ dispose: () => undefined }),
+    }),
     addOverlay: (element) => {
       overlays.push(asFake(element));
       return { dispose: () => undefined };

@@ -1,5 +1,7 @@
+import type { Disposable } from '../contracts/disposable';
 import type { ViewScope } from '../contracts/keymap';
 import type { PushedScope } from '../contracts/plugin';
+import { createListeners, type Listeners } from '../shared/listeners';
 
 // The scope page keys fire in: the base a plugin's view sets, under the scopes
 // modal views push over it. `current` is the scope pushed last and not yet
@@ -8,19 +10,21 @@ import type { PushedScope } from '../contracts/plugin';
 // a pushed scope's `onBaseChanged` listeners run each time the base changes
 // while it is pushed, after the `onChange` listeners. `onBaseChange` listeners
 // run each time `setBase` moves the base to another scope, after both; a push
-// or a pop runs none.
+// or a pop runs none. `onChange` and `onBaseChanged` hear until their handle's
+// `dispose`. A pushed scope's `dispose` pops it through the same path as `pop`
+// when it is still pushed, and otherwise does nothing.
 export interface ScopeStack {
   setBase(scope: ViewScope): void;
   push(scope: ViewScope): PushedScope;
   current(): ViewScope;
   anyPushed(): boolean;
-  onChange(listener: (scope: ViewScope) => void): void;
+  onChange(listener: (scope: ViewScope) => void): Disposable;
   onBaseChange(listener: (base: ViewScope) => void): void;
 }
 
 interface PushedEntry {
   scope: ViewScope;
-  baseListeners: ((base: ViewScope) => void)[];
+  baseListeners: Listeners<ViewScope>;
 }
 
 export function createScopeStack(initial: ViewScope): ScopeStack {
@@ -28,7 +32,7 @@ export function createScopeStack(initial: ViewScope): ScopeStack {
   // Each entry is its own object, so a handle finds its entry when another
   // entry holds the same scope.
   const pushed: PushedEntry[] = [];
-  const listeners: ((scope: ViewScope) => void)[] = [];
+  const listeners = createListeners<ViewScope>();
   const baseListeners: ((base: ViewScope) => void)[] = [];
   const current = () => pushed.at(-1)?.scope ?? base;
 
@@ -37,11 +41,8 @@ export function createScopeStack(initial: ViewScope): ScopeStack {
     const before = current();
     change();
     const after = current();
-    if (after === before) {
-      return;
-    }
-    for (const listener of listeners) {
-      listener(after);
+    if (after !== before) {
+      listeners.tell(after);
     }
   };
 
@@ -49,11 +50,8 @@ export function createScopeStack(initial: ViewScope): ScopeStack {
   // still pushed before its listeners run.
   const tellPushedOfBase = () => {
     for (const entry of pushed.slice()) {
-      if (!pushed.includes(entry)) {
-        continue;
-      }
-      for (const listener of entry.baseListeners) {
-        listener(base);
+      if (pushed.includes(entry)) {
+        entry.baseListeners.tell(base);
       }
     }
   };
@@ -72,26 +70,34 @@ export function createScopeStack(initial: ViewScope): ScopeStack {
       }
     },
     push(scope) {
-      const entry: PushedEntry = { scope, baseListeners: [] };
+      const entry: PushedEntry = {
+        scope,
+        baseListeners: createListeners<ViewScope>(),
+      };
       changing(() => pushed.push(entry));
+      const remove = (index: number) => {
+        changing(() => pushed.splice(index, 1));
+      };
       return {
         pop() {
           const index = pushed.indexOf(entry);
           if (index === -1) {
             throw new Error(`Scope ${scope} was already popped`);
           }
-          changing(() => pushed.splice(index, 1));
+          remove(index);
         },
-        onBaseChanged(listener) {
-          entry.baseListeners.push(listener);
+        dispose() {
+          const index = pushed.indexOf(entry);
+          if (index !== -1) {
+            remove(index);
+          }
         },
+        onBaseChanged: (listener) => entry.baseListeners.add(listener),
       };
     },
     current,
     anyPushed: () => pushed.length > 0,
-    onChange(listener) {
-      listeners.push(listener);
-    },
+    onChange: (listener) => listeners.add(listener),
     onBaseChange(listener) {
       baseListeners.push(listener);
     },

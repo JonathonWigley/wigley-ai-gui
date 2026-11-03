@@ -81,5 +81,6 @@ export const noAnchor = () => ({ dispose: () => undefined });
 // A scope push that pops and hears nothing.
 export const fakePushedScope = () => ({
   pop: () => undefined,
-  onBaseChanged: () => undefined,
+  dispose: () => undefined,
+  onBaseChanged: () => ({ dispose: () => undefined }),
 });
