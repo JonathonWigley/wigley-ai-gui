@@ -217,5 +217,8 @@ Review base: ad87d46f110e63f41f0a1d404e1c3db1d19d82fa
 - drawStatusLine notifies once after the fallback, so both GIVENs hold from one line; a throw from the fallback's drawComposer skips it, as before · group 07 · group 07
 - Session rows take text-12 and gap space-1 space-2 to match the section heads — one CSS line if wrong · group 07 · group 07
 - The short-tab follow-up is rewritten rather than deleted, keeping its reverted-CSS history — a wrong keep costs one stale follow-up · group 08 · group 08
+- The context line's meter has min-width 0 rather than the plan's floor, because the composer's least width does not hold the floor — the meter shrinks to nothing past about 32 px more text · lead
 ### Review rounds
 ### Test gate
+- npm test, whole suite, because task 09 names it and vitest takes 16 s: every changed plugin's tests plus its neighbours · 416 files, 7467 tests pass, typecheck and lint clean
+- filtered self-test (chat, agent-strip, usage, workflow, agent-lines, agent-skills), named by task 09 · first run one failure: compacting-narrow, context line 342 px in 326 px; fixed in c4bcaf4a; usage self-test re-run passes, 20 PASS, usage tests 201 pass
