@@ -504,3 +504,4 @@ Review base: 7f956435
 ### Test gate
 - Whole unit suite, picked since every plugin and the plugin API changed: npm test, 6591 of 6591 on the full re-run; one earlier run timed out in node-files watch_NotRecursive (passed twice alone, full re-run passed). Self-test --plugin sessions forms primer chat: all passed. The rest of the self-test not run, no user yes.
 - Live checks at f1544064: filtered self-test (sessions, forms, primer, chat) all passed, 466 PASS, 1 SKIP, 0 FAIL, with 9 no-main-handler lines from the page after the stop (follow-up). Driven quit on the fake harness: plugin-host stopping lines in reverse start order for restart and quit, no quit task failed. A live CLI child's end at quit is not settled by this; the user's check.
+- Final gate at 0dad8e65: typecheck and lint clean (layers 1033, styles 696), 6652 tests passed across 415 files.
