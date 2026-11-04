@@ -1,6 +1,6 @@
 # 06 — Chat page: dock, held row, divider
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 5 · Depends on: 04, 05
 Plan: [plan.md](plan.md)
@@ -276,3 +276,4 @@ These override any earlier line of this task that they contradict.
 
 ## Proof
 
+Commit 23e805df · proof: Diff read against Produces: dock compacting state, bar, held row label with skip key, divider entry, ChatKit.tokens, compactionLabel, composerInputOf, preview entry; lead reran whole-tree typecheck, clean; worker ran 919 chat tests and lint, clean · concerns: chat-view compaction handler and the divider cursor stop have no unit test; a long gate reason may overflow the dock head; bar look is unseen until task 09

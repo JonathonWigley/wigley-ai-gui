@@ -82,7 +82,7 @@ src/contracts/   interfaces and records crossing a seam, the plugin API among th
 src/config/      core commands and scopes, default settings, the core token registry and the built-in
                  themes  → read only by main
 src/shared/      implementation both processes use (CommandRegistry, the plugin host, manifest merging, the event bus,
-                 theme variables, `errorText`, the fake agent harness)
+                 theme variables, `errorText`, `formatTokens` (`182k`), the fake agent harness)
   layouts/       the layout registry behind the core LayoutService (main side)
   layout-url.ts  the `wigley-layout:` URLs that serve layout files to the page
   visual-url.ts  the `wigley-visual:` URLs that serve a visual's document by its source hash
@@ -203,6 +203,10 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
   agent-strip/   main/ (registers its layouts, hands its self-test script), page/ (the strip of subagent and task boxes above the Chat composer's box, through chat's
                  `addComposerPart`, with a stop on chat's entry cursor), layouts/ (its Layout contract and `default`
                  layout); `docs/features/chat-bar/design.md`
+  auto-compact/  manifest.ts and main/ only (folds `chat.agentEvent` into each host session's last main usage,
+                 registers the send gate that compacts a cold-cache session before a message when its context is above
+                 the `minTokens` setting, and gives chat the same threshold for the harness's idle compaction);
+                 `docs/features/auto-compact/design.md`
   forms/         manifest.ts, contract.ts, main/ (the round form type, its MCP tools, the preview
                  round), page/ (the Form tab), layouts/ (the Layout contract and the built-in `default` layout)
   primer/        manifest.ts, contract.ts, main/ (the feature primer form type, its MCP tools, fixtures,
@@ -229,8 +233,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  the start prompt with its folder, profile, sign-in and session steps), layouts/ (the chat Layout contract
                  and the built-in `default` chat layout); `image-rules.ts` at the root holds the attach rules both
                  parts share; main exports `launch` (a background session with a first message), `profileNames` and
-                 `profileOf` to notes, `send` and `profileOf` to forms and the primer (the form wake), and `addInstructions` (text every session chat starts carries to its harness)
-                 to visual; page exports `focusedEntry` (the focused entry's element) to visual
+                 `profileOf` to notes, `send` and `profileOf` to forms and the primer (the form wake), `addInstructions` (text every session chat starts carries to its harness)
+                 to visual, and `addSendGate` and `addIdleCompactThreshold` to auto-compact; page exports `focusedEntry` (the focused entry's element) to visual
   keys/          manifest.ts, contract.ts, main/ (registers the layouts only), page/ (which-key, the help overlay,
                  the title bar's Keys button, and the hint anchors and keys-for-command lookup it exports), layouts/
                  (the keys Layout contract and the built-in `default` layout)
@@ -376,8 +380,8 @@ round; primer: an open primer), since main, not the page, decides.
 - **A status part** is what a plugin draws in the Chat status line under the box, through the `chat` page export
   `addStatusPart`, the same shape; the usage plugin's context, cache and spend are one.
 - **A send gate** is a rule a plugin runs before chat main writes a message to an idle session, through the `chat`
-  main export `addSendGate`. A gate answers a hold (`{ action: 'compact', reason }`) or nothing; chat does the
-  holding, so a new pre-send rule is a gate in its own plugin. The `auto-compact` plugin's is the first
+  main export `addSendGate`. A gate answers a hold (`{ action: 'compact', reason }`) or nothing, and the first hold
+  wins; chat does the holding, so a new pre-send rule is a gate in its own plugin. The `auto-compact` plugin's is the first
   (`docs/features/auto-compact/design.md`).
 - **A chat pane** is one pane of Sessions mode's pane tree (`src/shared/page/pane-tree/`, the sessions plugin its
   owner): it shows one whole session, tab bar included, and a session shows in at most one pane. The side bar drives

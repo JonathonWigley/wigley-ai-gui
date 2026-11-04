@@ -28,8 +28,9 @@ and after it ends, whatever started it: the user's `/compact`, the harness's own
 - **Auto-compact** — the `auto-compact` plugin. It registers a send gate that holds a send to a session whose cache
   is cold and whose context is above its `minTokens` setting (`"auto-compact": { "minTokens": … }` in
   `settings.json`).
-- **Send gate** — a function a plugin registers through chat main's `addSendGate`. Chat asks every gate before it
-  writes a message to an idle session. A gate answers a hold or nothing.
+- **Send gate** — a function a plugin registers through chat main's `addSendGate`. Chat asks the gates in
+  registration order before it writes a message to an idle session; the first hold wins and no later gate is asked.
+  A gate answers a hold or nothing.
 - **Hold** — chat keeps the message as a pending row, compacts the session, and writes the row when the compaction
   ends. The row carries the gate's reason.
 - **Compaction entry** — the `compaction` chat entry kind: the transcript's `Compacted 182k → 24k · auto · 9s` divider.
@@ -41,7 +42,7 @@ and after it ends, whatever started it: the user's `/compact`, the harness's own
 user sends ─▶ chat main sendMessage ─▶ session idle? ── no ──▶ queue as today
                                           │ yes
                                           ▼
-                              ask each send gate (auto-compact's)
+                              ask the send gates (auto-compact's)
                                 │ null                 │ { action: 'compact', reason }
                                 ▼                      ▼
                          write as today        pending row (holdReason = reason)
@@ -62,7 +63,7 @@ harness ─▶ adapter ─▶ compactionStarted{trigger} ──────┤�
   harness's end line, on a failed result, on an interrupt, and before `sessionEnded` when the process ends mid-way.
 - `ChatEntry` kind `compaction { id, at, trigger, beforeTokens, afterTokens, durationMs, raw }`. `afterTokens` is null
   until the next main reply's context is known; the adapter then emits the same entry id again with it set.
-- `AgentProcess.compact()` starts a compaction with trigger `app`. It throws after `end` and while a turn runs. It
+- `AgentProcess.compact()` starts a compaction with trigger `app`. It throws after `end` and while the session is not idle. It
   makes no user entry.
 - Chat main's export `addSendGate(gate: SendGate): () => void`, with
   `SendGate = (input: SendGateInput) => SendGateVerdict | null`, `SendGateInput { sessionId, hostSessionId, profileDir, text, now }`, and
@@ -87,7 +88,7 @@ harness ─▶ adapter ─▶ compactionStarted{trigger} ──────┤�
 
   | Trigger | Dock (`Compacting…` then) | Usage chip | Divider |
   |---|---|---|---|
-  | `app` | the gate's reason (`auto · cache cold · 182k`) | `compacting · auto` | `auto` |
+  | `app` | the gate's reason (`auto · cache cold · 182k`; `auto` when the compaction has none) | `compacting · auto` | `auto` |
   | `manual` | `/compact` | `compacting` | `manual` |
   | `harness` | `autocompact` | `compacting · autocompact` | `autocompact` |
 
