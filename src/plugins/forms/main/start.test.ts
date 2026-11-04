@@ -9,53 +9,17 @@ import {
   noCounts,
   startMainPart,
 } from '../../../shared/plugin-part-harness.test-support';
-import { fakeChat, previewSessions } from '../../agent-form-fakes.test-support';
 import {
-  type ConnectedSession,
-  type SessionInfo,
-  sessionsMainKey,
-  type ToolResult,
-} from '../../sessions/contract';
+  fakeChat,
+  fakeEndedEvent,
+  fakeSessions,
+  previewSessions,
+  SUBMITTED,
+} from '../../agent-form-fakes.test-support';
+import { sessionsMainKey } from '../../sessions/contract';
 import { sessionsMainPart } from '../../sessions/main/start';
 import type { formsManifest } from '../manifest';
 import { addDriveActions, formsMainPart, registerLayoutsAfter } from './start';
-
-// Sessions whose `ask_round` calls wait until the test answers them.
-function fakeSessions() {
-  const connectedInfo: SessionInfo[] = [];
-  const answers: ((result: ToolResult) => void)[] = [];
-  return {
-    connectedInfo,
-    answers,
-    connect(info: SessionInfo): ConnectedSession {
-      connectedInfo.push(info);
-      const id = `row-${String(info.sessionId)}`;
-      return {
-        session: { id, info },
-        call: () =>
-          new Promise<ToolResult>((resolve) => {
-            answers.push(resolve);
-          }),
-        end: () => undefined,
-      };
-    },
-  };
-}
-
-// The sessions plugin's ended event, which the test emits by row id.
-function fakeEndedEvent() {
-  const listeners: ((rowId: string) => void)[] = [];
-  return {
-    on: (listener: (rowId: string) => void) => listeners.push(listener),
-    emit: (rowId: string) => {
-      for (const listener of listeners) {
-        listener(rowId);
-      }
-    },
-  };
-}
-
-const SUBMITTED: ToolResult = { content: [{ type: 'text', text: 'done' }] };
 
 describe('forms drive actions', () => {
   it('openRound connects a session with the fixture defaults', async () => {

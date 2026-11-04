@@ -693,7 +693,14 @@ function fakeMainApi(
         capture: () =>
           Promise.reject(new Error('part harness: no window to capture')),
       },
-      openExternal: async () => {},
+      async openExternal(url) {
+        const scheme = URL.parse(url)?.protocol;
+        if (scheme !== 'http:' && scheme !== 'https:') {
+          throw new Error(
+            `Refused to open ${url}: only http and https links open outside the app`,
+          );
+        }
+      },
       agentHarnesses: [],
       git: notFaked<Git>('git'),
       images: notFaked<ImageEncoder>('images'),
@@ -869,7 +876,11 @@ function fakeModes(
         show() {},
         isShown: () => liveModes[0] === id,
         setContext() {},
-        toggleSideBar() {},
+        toggleSideBar() {
+          if (mode.sideBar === undefined && liveModes.includes(id)) {
+            throw new Error(`Mode "${id}" has no side bar`);
+          }
+        },
         picked() {},
         sideBarShown: () => false,
         dispose() {
@@ -891,6 +902,10 @@ function fakeModes(
   };
 }
 
+function fenceKey({ language }: FenceContribution): string {
+  return language.trim().toLowerCase();
+}
+
 function fakeMarkdown(
   world: PageWorld,
   counts: PartCounts,
@@ -898,6 +913,10 @@ function fakeMarkdown(
 ): MarkdownRenderer {
   const fences = notFaked<MarkdownRenderer>('markdown', {
     addFence(fence) {
+      const key = fenceKey(fence);
+      if (world.fences.some((live) => fenceKey(live) === key)) {
+        throw new Error(`fence ${key} is already registered`);
+      }
       world.fences.push(fence);
       return countedHandle(
         {
@@ -1283,7 +1302,8 @@ export function deferred<T>() {
 }
 
 // An editor host that counts the editors it holds live and every one it made;
-// `type` edits the last one made.
+// `type` edits the last one made. After `stop()`, `live` cannot fail, as the
+// per-plugin view destroys what the part left: it is only meaningful mid-life.
 export function countingEditors() {
   let live = 0;
   let made = 0;

@@ -52,7 +52,6 @@ describe('forms page part', () => {
 
     await harness.stop();
     expect(harness.counts()).toEqual(noCounts);
-    expect(editors.live()).toBe(0);
 
     await harness.restart();
     await harness.stop();
@@ -72,7 +71,6 @@ describe('forms page part', () => {
     await settle();
 
     expect(dataEmitted(harness, 'forms.roundShown')).toEqual([]);
-    expect(editors.live()).toBe(0);
   });
 
   it('an open-rounds read that lands before stop shows its round', async () => {
@@ -90,7 +88,7 @@ describe('forms page part', () => {
     await harness.stop();
   });
 
-  it('a draft reply that lands after stop dispatches and draws nothing', async () => {
+  it('a draft reply that lands after stop draws nothing', async () => {
     const saved = deferred<void>();
     const drafts: unknown[] = [];
     const editors = countingEditors();
@@ -117,7 +115,6 @@ describe('forms page part', () => {
     await settle();
 
     expect(editors.made()).toBe(made);
-    expect(editors.live()).toBe(0);
     expect(harness.logs).toHaveLength(logged);
   });
 
@@ -146,7 +143,6 @@ describe('forms page part', () => {
       expect.stringContaining('not finished'),
     );
     expect(editors.made()).toBe(made);
-    expect(editors.live()).toBe(0);
   });
 
   it.each<{

@@ -63,6 +63,21 @@ const depFake = fakeDependency(depMainKey, (consumer) => ({
 
 const element = {} as HTMLElement;
 
+const browseMode = {
+  id: 'browse',
+  title: 'Browse',
+  icon: 'book',
+  element,
+  shown() {},
+  hidden() {},
+};
+
+const sampleFence = {
+  language: 'sample',
+  live: false,
+  mount: () => ({ element, dispose() {} }),
+};
+
 const mainSample: MainPart<typeof mainManifest> = {
   manifest: mainManifest,
   start(api) {
@@ -107,6 +122,7 @@ function pageSample(kind: 'tidy' | 'leaky'): PagePart<typeof pageManifest> {
 }
 
 type MainSampleApi = Parameters<MainPart<typeof mainManifest>['start']>[0];
+type PageSampleApi = Parameters<PagePart<typeof pageManifest>['start']>[0];
 
 function mainPart(
   start: MainPart<typeof mainManifest>['start'],
@@ -315,20 +331,15 @@ describe('plugin part harness', () => {
   });
 
   it('counts the markdown fence a page part adds', async () => {
-    const fence = {
-      language: 'sample',
-      live: false,
-      mount: () => ({ element, dispose() {} }),
-    };
     const part = pagePart((api) => {
-      api.services.markdown.addFence(fence);
+      api.services.markdown.addFence(sampleFence);
       return { commands: { run() {} } };
     });
     const harness = startPagePart(part);
 
     // The fence and the command.
     expect(harness.counts().registrations).toBe(2);
-    expect(harness.fences).toEqual([fence]);
+    expect(harness.fences).toEqual([sampleFence]);
 
     await harness.stop();
 
@@ -454,21 +465,69 @@ describe('plugin part harness', () => {
     },
   );
 
-  it('throws as modes.add does on an id still live, and takes it again once disposed', async () => {
-    const mode = {
-      id: 'browse',
-      title: 'Browse',
-      icon: 'book',
-      element,
-      shown() {},
-      hidden() {},
-    };
+  it.each<{
+    member: string;
+    misuse(api: PageSampleApi): void;
+    message: string;
+  }>([
+    {
+      member: 'markdown.addFence',
+      misuse({ services: { markdown } }) {
+        markdown.addFence(sampleFence);
+        markdown.addFence({ ...sampleFence, language: 'other' });
+        markdown.addFence({ ...sampleFence, language: ' Sample ' });
+      },
+      message: 'fence sample is already registered',
+    },
+    {
+      member: 'ModeHandle.toggleSideBar',
+      misuse({ modes }) {
+        const gone = modes.add({ ...browseMode, id: 'gone' });
+        gone.dispose();
+        gone.toggleSideBar();
+        modes
+          .add({ ...browseMode, id: 'beside', sideBar: element })
+          .toggleSideBar();
+        modes.add(browseMode).toggleSideBar();
+      },
+      message: 'Mode "sample.browse" has no side bar',
+    },
+  ])('throws as $member does on a misuse only', ({ misuse, message }) => {
+    const part = pagePart((api) => {
+      misuse(api);
+      return { commands: { run() {} } };
+    });
 
+    expect(() => startPagePart(part)).toThrow(message);
+  });
+
+  it('rejects as services.openExternal does on anything but a web link', async () => {
+    const harness = startMainPart(
+      mainPart((api) => {
+        api.channel.handle('open', (url: string) =>
+          api.services.openExternal(url),
+        );
+        return { commands: { run() {} } };
+      }),
+    );
+
+    await expect(
+      harness.invoke('open', 'https://a.test/'),
+    ).resolves.toBeUndefined();
+    await expect(harness.invoke('open', 'file:///a')).rejects.toThrow(
+      'Refused to open file:///a',
+    );
+    await expect(harness.invoke('open', 'not a url')).rejects.toThrow(
+      'Refused to open not a url',
+    );
+  });
+
+  it('throws as modes.add does on an id still live, and takes it again once disposed', async () => {
     expect(() =>
       startPagePart(
         pagePart((api) => {
-          api.modes.add(mode);
-          api.modes.add(mode);
+          api.modes.add(browseMode);
+          api.modes.add(browseMode);
           return { commands: { run() {} } };
         }),
       ),
@@ -476,7 +535,7 @@ describe('plugin part harness', () => {
 
     const harness = startPagePart(
       pagePart((api) => {
-        api.modes.add(mode);
+        api.modes.add(browseMode);
         return { commands: { run() {} } };
       }),
     );
@@ -492,14 +551,7 @@ describe('plugin part harness', () => {
       const shown = vi.fn();
       startPagePart(
         pagePart((api) => {
-          api.modes.add({
-            id: 'browse',
-            title: 'Browse',
-            icon: 'book',
-            element,
-            shown,
-            hidden() {},
-          });
+          api.modes.add({ ...browseMode, shown });
           return { commands: { run() {} } };
         }),
         { firstModeTaken },
@@ -514,11 +566,7 @@ describe('plugin part harness', () => {
     const fenceDisposed = vi.fn();
     const part = pagePart((api) => {
       api.services.editor.create(element, 'text', {} as EditorEvents);
-      api.services.markdown.addFence({
-        language: 'sample',
-        live: false,
-        mount: () => ({ element, dispose() {} }),
-      });
+      api.services.markdown.addFence(sampleFence);
       return { commands: { run() {} } };
     });
     const harness = startPagePart(part, {

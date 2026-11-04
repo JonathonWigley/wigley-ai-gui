@@ -7,56 +7,16 @@ import {
   noCounts,
   startMainPart,
 } from '../../../shared/plugin-part-harness.test-support';
-import { fakeChat, previewSessions } from '../../agent-form-fakes.test-support';
 import {
-  type ConnectedSession,
-  type SessionInfo,
-  type ToolResult,
-} from '../../sessions/contract';
+  fakeChat,
+  fakeEndedEvent,
+  fakeSessions,
+  previewSessions,
+  SUBMITTED,
+} from '../../agent-form-fakes.test-support';
 import { sessionsMainPart } from '../../sessions/main/start';
 import { SAMPLE_PRIMER_ARGS } from './fixtures';
 import { addDriveActions, primerMainPart } from './start';
-
-// Sessions whose `open_primer` calls wait until the test answers them; each
-// call's tool name and args are kept in `calls`.
-function fakeSessions() {
-  const connectedInfo: SessionInfo[] = [];
-  const answers: ((result: ToolResult) => void)[] = [];
-  const calls: [string, unknown][] = [];
-  return {
-    connectedInfo,
-    answers,
-    calls,
-    connect(info: SessionInfo): ConnectedSession {
-      connectedInfo.push(info);
-      const id = `row-${String(info.sessionId)}`;
-      return {
-        session: { id, info },
-        call: (tool, args) =>
-          new Promise<ToolResult>((resolve) => {
-            calls.push([tool, args]);
-            answers.push(resolve);
-          }),
-        end: () => undefined,
-      };
-    },
-  };
-}
-
-// The sessions plugin's ended event, which the test emits by row id.
-function fakeEndedEvent() {
-  const listeners: ((rowId: string) => void)[] = [];
-  return {
-    on: (listener: (rowId: string) => void) => listeners.push(listener),
-    emit: (rowId: string) => {
-      for (const listener of listeners) {
-        listener(rowId);
-      }
-    },
-  };
-}
-
-const SUBMITTED: ToolResult = { content: [{ type: 'text', text: 'done' }] };
 
 describe('primer drive actions', () => {
   it('openPrimer connects a session with the fixture defaults', async () => {

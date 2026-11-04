@@ -33,21 +33,17 @@ const SESSION: ChatSessionState = {
 
 // Chat's page part on the part harness, over sessions and keys fakes that file
 // each tab and anchor with `consumer.track`, as their views do. `invoke`
-// answers the part's `channel.invoke`; `editorMade` hears each editor the part
-// makes, and `destroyEditor` is each one's `destroy`.
+// answers the part's `channel.invoke`, and `destroyEditor` is each editor's
+// `destroy`.
 function startChatPage(
   invoke: (method: string) => Promise<unknown>,
   destroyEditor: () => void = () => undefined,
-  editorMade: () => void = () => undefined,
 ) {
   return startPagePart(chatPagePart, {
     invoke,
     services: {
       editor: {
-        create() {
-          editorMade();
-          return { destroy: destroyEditor, focus() {} };
-        },
+        create: () => ({ destroy: destroyEditor, focus() {} }),
       } as unknown as EditorHost,
       markdown: {
         block: (text: string) => text,
@@ -134,14 +130,13 @@ describe('chat page part', () => {
     destroyEditor.mockImplementationOnce(() => {
       throw new Error('box gone');
     });
-    const editorMade = vi.fn<() => void>();
-    const harness = startChatPage(noSessions, destroyEditor, editorMade);
+    const harness = startChatPage(noSessions, destroyEditor);
     harness.send('sessionStarted', SESSION);
     harness.send('sessionStarted', { ...SESSION, sessionId: 's2' });
+    expect(harness.counts().observers).toBeGreaterThan(0);
 
     await expect(harness.stop()).rejects.toThrow('box gone');
 
-    expect(destroyEditor).toHaveBeenCalledTimes(editorMade.mock.calls.length);
     expect(harness.counts()).toEqual(noCounts);
   });
 
