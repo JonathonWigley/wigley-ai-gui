@@ -126,15 +126,16 @@ Everything draws through the `workflow` layout, its built-in `default`, and the 
   countdown and the main action. It draws the stepper only until the session has a plan. After that the side pane holds
   the stepper, the detail and the other actions, so a hidden pane leaves the status line, the main action and the
   `Space w` keys. Idle draws nothing.
-- **Side pane** — a part beside the Chat tab's transcript (chat's `addSidePart`), from the first read of a plan until
+- **Side pane** — the Plan section of the session hub beside the Chat tab's transcript (chat's `addSidePart`,
+  `docs/features/chat-bar/design.md` § The session hub), from the first read of a plan until
   Dismiss or a new plan: the status line, the plan's title and detail, the stepper, a progress bar, the checklist and
   every action of the stage. The checklist folds finished waves into one row, shows the current wave in full, and shows
   each later wave as one line. The current wave's open tasks show running or paused only in make, because the plan file
   does not say which task an agent works on.
 
-  `<Leader>ws` shows or hides the pane in every session, and the choice survives a relaunch. The pane also hides while
-  the Chat tab is narrower than 640 px, set in the chat layout's CSS, so the transcript keeps a readable width in a
-  split. The pane takes no keyboard focus, so `Alt+h/j/k/l` still moves between chat panes, and its list scrolls with
+  `<Leader>ws` shows or hides the pane in every session, and the choice survives a relaunch. The pane also hides with
+  the hub: while the Chat tab is narrower than 640 px, set in the chat layout's CSS, so the transcript keeps a readable
+  width in a split, and on `<Leader>vs`. The pane takes no keyboard focus, so `Alt+h/j/k/l` still moves between chat panes, and its list scrolls with
   the mouse.
 
 Primer and feature share one step: the one the session is in, otherwise feature. Plan ready and make share the Make
