@@ -272,8 +272,8 @@ Defects seen in a drive run, a transcript or the user's own use.
 - **The `chat: visuals` self-test step failed once** — *agent-ready*: `v -> [visual] visual overlay showing 2 of 2`
   (`src/plugins/chat/main/selftest-script.ts`) failed in 1 of 4 filtered runs at 914024cd, with no page reload in the
   log, then passed twice under `--plugin chat` and once under the same wider filter. The cause isn't traced; a late
-  rest position on the reply's last block is one lead, as the chat cursor had changed that morning. Source session:
-  Claude Code 368f2c4b-5d54-47bf-8285-14fec015fc6b in wigley-ai-gui.
+  rest position on the reply's last block is one lead, since `d3ca10c9` had just changed the chat cursor's band move.
+  Source session: Claude Code 368f2c4b-5d54-47bf-8285-14fec015fc6b in wigley-ai-gui.
 - **Skills lists a slash the CLI did not recognise** — *agent-ready*: on the real harness, `/tiny` drew a Skills row
   `tiny main` while the agent replied that `/tiny` isn't a command in this session. The skill's file was written after
   the session started, so a loaded skill was not seen doing this. The event source is not traced; start at
