@@ -6,6 +6,7 @@ import type { Layout } from '../../layouts/layout';
 const LAYOUT_PARTS: Record<keyof Layout, true> = {
   chip: true,
   strip: true,
+  sidePane: true,
   flowTab: true,
 };
 

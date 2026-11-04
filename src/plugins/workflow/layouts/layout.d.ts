@@ -1,9 +1,14 @@
 // The workflow layout contract: what a layout in `layouts/workflow/<name>/layout.js` draws each session's place in
-// the user's wigley workflow with. The app draws three parts for a session:
-// - `chip`, under the session's row in the side bar, in the row part's wrapper: the stage, its detail, the countdown
-//   and the main action's button. An idle session draws no chip.
-// - `strip`, above the Chat tab's composer, in the composer part's wrapper: the stepper with the current stage lit,
-//   the detail, the countdown and the stage's buttons. An idle session draws no strip.
+// the user's wigley workflow with. The app draws four parts for a session:
+// - `chip`, under the session's row in the side bar, in the row part's wrapper: the stage's label and status as one
+//   tag, and the countdown. Its input also carries the detail and the main action. An idle session draws no chip.
+// - `strip`, above the Chat tab's composer, in the composer part's wrapper: the status mark, the status line, the
+//   stepper until the session has a plan, the countdown and the main action. Its input also carries the detail and
+//   every action. An idle session draws no strip.
+// - `sidePane`, beside the Chat tab's transcript, in the side part's wrapper: the status mark and line, the detail, the
+//   stepper, a progress bar, the plan's checklist (finished waves folded, the current wave in full, a line per later
+//   wave) and every action of the stage. An idle session, a session with no plan read, and a hidden pane draw no pane.
+//   The app does not draw it again for the countdown, so a pane that shows the countdown updates on the next flow push.
 // - `flowTab`, in the session's Flow tab: the stage's label, the stepper, the stage's detail (the plan's title in it),
 //   the plan's checklist by wave (or, with no plan, a `No plan yet` empty state) and every action of the stage.
 // The app sets `data-layout-owner="workflow"` and `data-layout="<name>"` on the element each part returns, `<name>`
@@ -15,20 +20,28 @@
 // - the workflow commands and their keys (`<Leader>w…`), and what each runs;
 // - the session each button runs for: a part's buttons run for the session it draws, whether or not that session is
 //   selected; only keys act on the selected session;
-// - the countdown's ticking and its text: while one shows, the app draws the parts again once a second;
+// - the countdown's ticking and its text: while a chip, a strip or a Flow tab shows one, the app draws those parts
+//   again once a second;
+// - whether the side pane shows, each session's finished-waves fold, and the scroll of the list `kit.sideList` draws;
 // - the Flow tab's scrolling.
 import type {
   BaseKit,
   ButtonVariant,
 } from '../../../shared/page/layout-host/kit';
 
-// One stage in the stepper: done before the session's stage, current at it (done at the last step), ahead after it.
-// Idle is not in the stepper, so in idle every step is ahead. Primer and feature share one step: the one the session
-// is in, otherwise feature.
+// What a stage is doing now; null on an input for a stage with no status.
+export type StageStatus = 'running' | 'paused' | 'ready' | 'done';
+
+// What a mark shows: a stage's status, or `pending` for a step or a task not reached.
+export type MarkState = StageStatus | 'pending';
+
+// One stage in the stepper: done before the session's stage, the stage's status at it, pending after it. Idle is not
+// in the stepper, so in idle every step is pending. Stages sharing a step take one place: primer and feature the one
+// the session is in, otherwise feature; plan ready and make the one the session is in, otherwise make.
 export interface StepInput {
   id: string;
   label: string;
-  state: 'done' | 'current' | 'ahead';
+  state: MarkState;
 }
 
 // One action the stage offers: the workflow command it runs (`clearAndMake`), its button text, whether it can run
@@ -41,25 +54,59 @@ export interface ActionInput {
   main: boolean;
 }
 
-// `stage` is the stage's id (`make`), `label` its word (`Make`), `detail` its line (`3/7 · wave 2 · Claim grants`, the
-// plan's title in it from feature on once a plan is read, or ''), `countdown` the auto-start's seconds left (`9s`) or
-// null, and `mainAction` the stage's main action, null when it has none.
+// `stage` is the stage's id (`make`), `label` its word (`Make`), `status` what it is doing, `statusText` the two as one
+// (`Make · running`), `detail` its line (`3/7 · wave 2 · Claim grants`, the plan's title in it from feature on once a
+// plan is read, or ''), `countdown` the auto-start's seconds left (`9s`) or null, and `mainAction` the stage's main
+// action, null when it has none.
 export interface ChipInput {
   stage: string;
   label: string;
+  status: StageStatus | null;
+  statusText: string;
   detail: string;
   countdown: string | null;
   mainAction: ActionInput | null;
 }
 
-// As ChipInput, with every step of the stepper and every action of the stage, the main action first.
+// As ChipInput, with `statusLine` the status text and the stage's progress (`Make · running 3/9`), every step of the
+// stepper, every action of the stage, the main action first, and `hasPlan`, whether a plan was read.
 export interface StripInput {
   stage: string;
   label: string;
+  status: StageStatus | null;
+  statusText: string;
+  statusLine: string;
   detail: string;
   countdown: string | null;
   steps: readonly StepInput[];
   actions: readonly ActionInput[];
+  hasPlan: boolean;
+}
+
+// One box of the plan's checklist in the side pane: its text and its mark. A ticked box is `done`; an open box in the
+// current wave shows the stage's status while the stage runs tasks; every other open box is `pending`.
+export interface SideTaskInput {
+  text: string;
+  state: MarkState;
+}
+
+// The boxes under one `### Wave N` (`Wave 2`), or those under no wave heading (`Tasks`), in file order.
+export interface SideWaveInput {
+  title: string;
+  tasks: readonly SideTaskInput[];
+}
+
+// As StripInput, with the plan's title ('' for a plan with no title), `checked` of its `total` boxes ticked, and its
+// waves in file order: `finishedWaves` each with every box ticked, `currentWave` the first other, null when every wave
+// is finished, and `laterWaves` the rest. `finishedOpen` is whether the session's finished waves are unfolded.
+export interface SidePaneInput extends StripInput {
+  planTitle: string;
+  checked: number;
+  total: number;
+  finishedWaves: readonly SideWaveInput[];
+  finishedOpen: boolean;
+  currentWave: SideWaveInput | null;
+  laterWaves: readonly SideWaveInput[];
 }
 
 // One box of the plan's `## Tasks`: its text, and whether it is ticked.
@@ -76,8 +123,8 @@ export interface PlanWaveInput {
   current: boolean;
 }
 
-// As StripInput, with the plan's title (null before a plan is read, '' for a read plan with no title) and its
-// checklist by wave, empty before a plan is read.
+// The stage's fields, the steps and the actions as StripInput has them, with the plan's title (null before a plan is
+// read, '' for a read plan with no title) and its checklist by wave, empty before a plan is read.
 export interface FlowTabInput {
   stage: string;
   label: string;
@@ -106,10 +153,24 @@ export interface WorkflowKit extends BaseKit {
     action: ActionInput,
     options?: ActionButtonOptions,
   ): HTMLButtonElement;
-  // `ol.workflow-stepper`: one `li.workflow-step` per step, carrying `data-state` and the step's label.
+  // `ol.workflow-stepper`: one `li.workflow-step` per step, carrying `data-state`, holding a `statusMark`, a
+  // `span.workflow-step-label` and a `span.workflow-step-status` reading the state, which shows only in a rule that
+  // sets its `display`.
   stepper(parent: HTMLElement, steps: readonly StepInput[]): HTMLElement;
   // `span.workflow-countdown` reading `text`, in tabular numerals.
   countdown(parent: HTMLElement, text: string): HTMLElement;
+  // `span.workflow-mark`, carrying `data-state`: one codicon per state, in that state's colour. A running mark pulses.
+  statusMark(parent: HTMLElement, state: MarkState): HTMLElement;
+  // `button.workflow-finished-fold` reading `▸ <text>`, or `▾ <text>` while `open`, with `aria-expanded` and the key of
+  // `workflow.toggleFinishedWaves`. A click opens or folds the finished waves of the session the part draws.
+  finishedFold(
+    parent: HTMLElement,
+    text: string,
+    open: boolean,
+  ): HTMLButtonElement;
+  // `div.workflow-side-list`: the side pane's scrolling list, which takes the height the pane leaves it. The app keeps
+  // its scroll across each draw.
+  sideList(parent: HTMLElement): HTMLElement;
 }
 
 // What a part returns: its root, appended to `parent`.
@@ -125,6 +186,11 @@ export interface Layout {
   strip?(
     parent: HTMLElement,
     input: StripInput,
+    kit: WorkflowKit,
+  ): WorkflowPart;
+  sidePane?(
+    parent: HTMLElement,
+    input: SidePaneInput,
     kit: WorkflowKit,
   ): WorkflowPart;
   flowTab?(

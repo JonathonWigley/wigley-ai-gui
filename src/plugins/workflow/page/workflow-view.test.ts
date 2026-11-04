@@ -16,11 +16,17 @@ import type {
 } from '../contract';
 import { newFlow } from '../flow';
 import defaultLayout from '../layouts/default/layout.js';
-import type { FlowTabInput, Layout, StripInput } from '../layouts/layout';
+import type {
+  FlowTabInput,
+  Layout,
+  MarkState,
+  SidePaneInput,
+  StripInput,
+} from '../layouts/layout';
 import type { PlanProgress } from '../plan-reader';
 import { createStageList } from '../stage-list';
 import { BUILT_IN_PAGE_STAGES } from '../stages';
-import { createWorkflowView } from './workflow-view';
+import { createWorkflowView, type WorkflowView } from './workflow-view';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 
 const NOW = 1_000_000;
@@ -76,10 +82,30 @@ const BUSY: Record<string, Partial<SessionFlow>> = {
   subagent: { runningSubagents: ['agent-1'] },
 };
 
+// A plan of `tasks`, `[wave, done]` each, its tasks named by position
+// (`w3.2` is wave 3's second task; `t.1` the first under no wave heading).
+function planOf(tasks: [wave: number | null, done: boolean][]): PlanProgress {
+  const seen = new Map<number | null, number>();
+  const lines = tasks.map(([wave, done]) => {
+    const at = (seen.get(wave) ?? 0) + 1;
+    seen.set(wave, at);
+    return { wave, done, text: `${wave === null ? 't' : `w${wave}`}.${at}` };
+  });
+  return {
+    checked: lines.filter((line) => line.done).length,
+    total: lines.length,
+    wave: lines.find((line) => !line.done)?.wave ?? null,
+    reviewRounds: 0,
+    title: 'Plan x',
+    tasks: lines,
+  };
+}
+
 // A view over the built-in page stages whose timers record each `set` (its
 // handle the set's count) and each `clear`, whose channel records each
-// `runAction`, and whose `nameOf` reads every session as `proj`.
-function setUp() {
+// `runAction`, and whose `nameOf` reads every session as `proj`. Every session
+// in `previews` shows the preview.
+function setUp(previews: readonly string[] = []) {
   let now = NOW;
   const sets: { run: () => void; handle: number }[] = [];
   const clears: number[] = [];
@@ -123,7 +149,7 @@ function setUp() {
       return flows.get(sessionId) ?? newFlow(sessionId, '/p');
     },
     nameOf: () => 'proj',
-    isPreview: () => false,
+    isPreview: (sessionId) => previews.includes(sessionId),
     stripBuilt: () => undefined,
     openDoc: () => undefined,
     runAction: async (request) => {
@@ -153,13 +179,19 @@ function setUp() {
   };
 }
 
-// A user layout whose strip and Flow tab record each input they draw.
+// A user layout whose strip, side pane and Flow tab record each input they
+// draw.
 function recordingLayout() {
   const strips: StripInput[] = [];
+  const sidePanes: SidePaneInput[] = [];
   const flowTabs: FlowTabInput[] = [];
   const layout: Layout = {
     strip(parent, input, kit) {
       strips.push(input);
+      return { element: kit.el(parent, 'div') };
+    },
+    sidePane(parent, input, kit) {
+      sidePanes.push(input);
       return { element: kit.el(parent, 'div') };
     },
     flowTab(parent, input, kit) {
@@ -167,7 +199,11 @@ function recordingLayout() {
       return { element: kit.el(parent, 'div') };
     },
   };
-  return { layout, strips, flowTabs };
+  return { layout, strips, sidePanes, flowTabs };
+}
+
+function stepTexts(input: { steps: StripInput['steps'] }): string[] {
+  return input.steps.map((step) => `${step.label}:${step.state}`);
 }
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -384,46 +420,401 @@ describe('workflow view', () => {
     expect(findAll(wrapper, 'workflow-countdown')).toEqual([]);
   });
 
-  it('steps_FlowInMake_MarksDoneCurrentAhead', () => {
+  it.each([
+    {
+      stage: 'primer',
+      busy: 'none',
+      steps: [
+        'Primer:paused',
+        'Make:pending',
+        'Review:pending',
+        'Close:pending',
+      ],
+    },
+    {
+      stage: 'feature',
+      busy: 'turn',
+      steps: [
+        'Feature:running',
+        'Make:pending',
+        'Review:pending',
+        'Close:pending',
+      ],
+    },
+    {
+      stage: 'planReady',
+      busy: 'none',
+      steps: ['Feature:done', 'Make:ready', 'Review:pending', 'Close:pending'],
+    },
+    {
+      stage: 'make',
+      busy: 'subagent',
+      steps: [
+        'Feature:done',
+        'Make:running',
+        'Review:pending',
+        'Close:pending',
+      ],
+    },
+    {
+      stage: 'make',
+      busy: 'none',
+      steps: ['Feature:done', 'Make:paused', 'Review:pending', 'Close:pending'],
+    },
+    {
+      stage: 'review',
+      busy: 'turn',
+      steps: ['Feature:done', 'Make:done', 'Review:running', 'Close:pending'],
+    },
+    {
+      stage: 'closed',
+      busy: 'none',
+      steps: ['Feature:done', 'Make:done', 'Review:done', 'Close:done'],
+    },
+  ])(
+    'steps_FlowIn_$stage_$busy_CarryThePinnedStates',
+    ({ stage, busy, steps }) => {
+      const { view, put } = setUp();
+      const recording = recordingLayout();
+      view.setLayouts(withUser<Layout>(defaultLayout, recording.layout));
+      view.stripPart.build(asHtml(new FakeElement('div')), 'a');
+
+      put(flowIn(stage, BUSY[busy]));
+
+      expect(stepTexts(recording.strips.at(-1)!)).toEqual(steps);
+    },
+  );
+
+  it('steps_IdleFlow_LeavesEveryStepPending', () => {
+    const { view, put } = setUp();
+    const recording = recordingLayout();
+    view.setLayouts(withUser<Layout>(defaultLayout, recording.layout));
+    view.drawFlowTab(asHtml(new FakeElement('div')), 'a');
+
+    put(flowIn('idle'));
+
+    expect(stepTexts(recording.flowTabs.at(-1)!)).toEqual([
+      'Feature:pending',
+      'Make:pending',
+      'Review:pending',
+      'Close:pending',
+    ]);
+  });
+
+  it('stepper_NoPlan_DrawsAMarkLabelAndStatusPerStep', () => {
     const { view, put } = setUp();
     const wrapper = new FakeElement('div');
     view.stripPart.build(asHtml(wrapper), 'a');
 
-    put(flowIn('make', { progress: progressOf(1, [3]) }));
+    put(flowIn('planReady', { progress: null }));
 
     expect(
-      findAll(wrapper, 'workflow-step').map(
-        (step) => `${step.textContent}:${step.dataset.state}`,
-      ),
+      findAll(wrapper, 'workflow-step').map((step) => [
+        step.dataset.state,
+        findAll(step, 'workflow-mark')[0].dataset.state,
+        findAll(step, 'workflow-step-label')[0].textContent,
+        findAll(step, 'workflow-step-status')[0].textContent,
+      ]),
     ).toEqual([
-      'Feature:done',
-      'Plan:done',
-      'Make:current',
-      'Review:ahead',
-      'Closed:ahead',
+      ['done', 'done', 'Feature', 'done'],
+      ['ready', 'ready', 'Make', 'ready'],
+      ['pending', 'pending', 'Review', 'pending'],
+      ['pending', 'pending', 'Close', 'pending'],
     ]);
   });
 
+  it.each<{ state: MarkState; icon: string }>([
+    { state: 'pending', icon: 'codicon-circle-large' },
+    { state: 'running', icon: 'codicon-loading' },
+    { state: 'ready', icon: 'codicon-play-circle' },
+    { state: 'paused', icon: 'codicon-debug-pause' },
+    { state: 'done', icon: 'codicon-pass-filled' },
+  ])('statusMark_$state_DrawsItsCodicon', ({ state, icon }) => {
+    const { view, put } = setUp();
+    const wrapper = new FakeElement('div');
+    const drawsMark: Layout = {
+      strip(parent, _input, kit) {
+        const strip = kit.el(parent, 'div');
+        kit.statusMark(strip, state);
+        return { element: strip };
+      },
+    };
+    view.setLayouts(withUser<Layout>(defaultLayout, drawsMark));
+    view.stripPart.build(asHtml(wrapper), 'a');
+
+    put(flowIn('make'));
+
+    const mark = findAll(wrapper, 'workflow-mark')[0];
+    expect(mark.dataset.state).toBe(state);
+    expect(findAll(mark, icon)).toHaveLength(1);
+  });
+
   it.each([
-    { stage: 'primer', start: 'Primer:current', closed: 'Closed:ahead' },
-    { stage: 'feature', start: 'Feature:current', closed: 'Closed:ahead' },
-    { stage: 'closed', start: 'Feature:done', closed: 'Closed:done' },
+    {
+      name: 'waves 1 and 2 done, 3 open, 4 and 5 later, make busy',
+      stage: 'make',
+      busy: 'turn',
+      plan: planOf([
+        [1, true],
+        [2, true],
+        [3, true],
+        [3, false],
+        [4, false],
+        [5, false],
+      ]),
+      finishedWaves: [
+        { title: 'Wave 1', tasks: [{ text: 'w1.1', state: 'done' }] },
+        { title: 'Wave 2', tasks: [{ text: 'w2.1', state: 'done' }] },
+      ],
+      currentWave: {
+        title: 'Wave 3',
+        tasks: [
+          { text: 'w3.1', state: 'done' },
+          { text: 'w3.2', state: 'running' },
+        ],
+      },
+      laterWaves: [
+        { title: 'Wave 4', tasks: [{ text: 'w4.1', state: 'pending' }] },
+        { title: 'Wave 5', tasks: [{ text: 'w5.1', state: 'pending' }] },
+      ],
+    },
+    {
+      name: 'make not busy',
+      stage: 'make',
+      busy: 'none',
+      plan: planOf([
+        [3, false],
+        [4, false],
+      ]),
+      finishedWaves: [],
+      currentWave: {
+        title: 'Wave 3',
+        tasks: [{ text: 'w3.1', state: 'paused' }],
+      },
+      laterWaves: [
+        { title: 'Wave 4', tasks: [{ text: 'w4.1', state: 'pending' }] },
+      ],
+    },
+    {
+      name: 'review busy runs no tasks',
+      stage: 'review',
+      busy: 'turn',
+      plan: planOf([[3, false]]),
+      finishedWaves: [],
+      currentWave: {
+        title: 'Wave 3',
+        tasks: [{ text: 'w3.1', state: 'pending' }],
+      },
+      laterWaves: [],
+    },
+    {
+      name: 'a done wave after an open wave is finished',
+      stage: 'make',
+      busy: 'none',
+      plan: planOf([
+        [1, false],
+        [2, true],
+        [3, false],
+        [3, true],
+      ]),
+      finishedWaves: [
+        { title: 'Wave 2', tasks: [{ text: 'w2.1', state: 'done' }] },
+      ],
+      currentWave: {
+        title: 'Wave 1',
+        tasks: [{ text: 'w1.1', state: 'paused' }],
+      },
+      laterWaves: [
+        {
+          title: 'Wave 3',
+          tasks: [
+            { text: 'w3.1', state: 'pending' },
+            { text: 'w3.2', state: 'done' },
+          ],
+        },
+      ],
+    },
+    {
+      name: 'boxes under no wave heading are the current wave',
+      stage: 'make',
+      busy: 'turn',
+      plan: planOf([
+        [null, true],
+        [null, false],
+      ]),
+      finishedWaves: [],
+      currentWave: {
+        title: 'Tasks',
+        tasks: [
+          { text: 't.1', state: 'done' },
+          { text: 't.2', state: 'running' },
+        ],
+      },
+      laterWaves: [],
+    },
+    {
+      name: 'every wave finished',
+      stage: 'make',
+      busy: 'none',
+      plan: planOf([
+        [1, true],
+        [2, true],
+      ]),
+      finishedWaves: [
+        { title: 'Wave 1', tasks: [{ text: 'w1.1', state: 'done' }] },
+        { title: 'Wave 2', tasks: [{ text: 'w2.1', state: 'done' }] },
+      ],
+      currentWave: null,
+      laterWaves: [],
+    },
   ])(
-    'steps_FlowIn_$stage_ShowsOneStartStepAndDoneOnLastStep',
-    ({ stage, start, closed }) => {
+    'side pane groups the plan and states its tasks: $name',
+    ({ stage, busy, plan, finishedWaves, currentWave, laterWaves }) => {
       const { view, put } = setUp();
-      const wrapper = new FakeElement('div');
-      view.stripPart.build(asHtml(wrapper), 'a');
+      const recording = recordingLayout();
+      view.setLayouts(withUser<Layout>(defaultLayout, recording.layout));
+      view.sidePart.build(asHtml(new FakeElement('div')), 'a');
 
-      put(flowIn(stage));
+      put(flowIn(stage, { ...BUSY[busy], progress: plan }));
 
-      const steps = findAll(wrapper, 'workflow-step').map(
-        (step) => `${step.textContent}:${step.dataset.state}`,
-      );
-      expect([steps[0], steps.at(-1)]).toEqual([start, closed]);
-      expect(steps).toHaveLength(5);
+      const input = recording.sidePanes.at(-1)!;
+      expect({
+        finishedWaves: input.finishedWaves,
+        currentWave: input.currentWave,
+        laterWaves: input.laterWaves,
+      }).toEqual({ finishedWaves, currentWave, laterWaves });
     },
   );
+
+  it.each([
+    {
+      name: 'idle',
+      flow: flowIn('idle', { progress: progressOf(1, [3]) }),
+      hidden: false,
+    },
+    {
+      name: 'no plan read',
+      flow: flowIn('make', { progress: null }),
+      hidden: false,
+    },
+    { name: 'hidden', flow: flowIn('make'), hidden: true },
+  ])(
+    'side pane draws only with a plan and while shown: $name',
+    ({ flow, hidden }) => {
+      const { view, put } = setUp();
+      const wrapper = new FakeElement('div');
+      view.setSidePaneHidden(hidden);
+      put(flow);
+
+      view.sidePart.build(asHtml(wrapper), 'a');
+
+      expect(wrapper.children).toHaveLength(0);
+    },
+  );
+
+  it('setSidePaneHidden_HiddenThenShown_RemovesAndDrawsThePane', () => {
+    const { view, put } = setUp();
+    const wrapper = new FakeElement('div');
+    put(flowIn('make'));
+    view.sidePart.build(asHtml(wrapper), 'a');
+    const paneCount = () => findAll(wrapper, 'workflow-side-pane').length;
+    const first = paneCount();
+
+    view.setSidePaneHidden(true);
+    const whileHidden = wrapper.children.length;
+    view.setSidePaneHidden(false);
+
+    expect([first, whileHidden, paneCount()]).toEqual([1, 0, 1]);
+  });
+
+  it('sidePane_FlowPushed_KeepsTheListsScroll', () => {
+    const { view, put } = setUp();
+    const wrapper = new FakeElement('div');
+    put(flowIn('make'));
+    view.sidePart.build(asHtml(wrapper), 'a');
+    const before = findAll(wrapper, 'workflow-side-list')[0];
+    before.scrollTop = 120;
+
+    put(flowIn('make', { progress: progressOf(1, [3, 3, 1]) }));
+
+    const after = findAll(wrapper, 'workflow-side-list')[0];
+    expect(after).not.toBe(before);
+    expect(after.scrollTop).toBe(120);
+  });
+
+  it.each([
+    {
+      name: 'a toggle opens only its session',
+      previews: [],
+      act: async (view: WorkflowView) => view.toggleFinishedWaves('a'),
+      open: { a: true, b: false },
+    },
+    {
+      name: 'a second toggle folds it',
+      previews: [],
+      act: async (view: WorkflowView) => {
+        view.toggleFinishedWaves('a');
+        view.toggleFinishedWaves('a');
+      },
+      open: { a: false, b: false },
+    },
+    {
+      name: 'forget drops it',
+      previews: [],
+      act: async (view: WorkflowView) => {
+        view.toggleFinishedWaves('a');
+        view.forget('a');
+        view.redraw();
+      },
+      open: { a: false, b: false },
+    },
+    {
+      name: 'a preview session flips it through runFor',
+      previews: ['a'],
+      act: (view: WorkflowView) => view.runFor('a', 'toggleFinishedWaves'),
+      open: { a: true, b: false },
+    },
+  ])('the fold is kept per session: $name', async ({ previews, act, open }) => {
+    const { view, put } = setUp(previews);
+    const recording = recordingLayout();
+    view.setLayouts(withUser<Layout>(defaultLayout, recording.layout));
+    const planTitled = (title: string) => ({
+      progress: { ...progressOf(1, [1, 1]), title },
+    });
+    put(flowIn('make', planTitled('a'), 'a'));
+    put(flowIn('make', planTitled('b'), 'b'));
+    view.sidePart.build(asHtml(new FakeElement('div')), 'a');
+    view.sidePart.build(asHtml(new FakeElement('div')), 'b');
+
+    await act(view);
+
+    const lastOpen = (title: string) =>
+      recording.sidePanes.filter((input) => input.planTitle === title).at(-1)!
+        .finishedOpen;
+    expect({ a: lastOpen('a'), b: lastOpen('b') }).toEqual(open);
+  });
+
+  it('finishedFold_Click_OpensItsSessionsWavesAndStatesIt', async () => {
+    const { view, put } = setUp();
+    const wrapper = new FakeElement('div');
+    put(flowIn('make', { progress: progressOf(1, [1, 1]) }));
+    view.sidePart.build(asHtml(wrapper), 'a');
+    const fold = () => findAll(wrapper, 'workflow-finished-fold')[0];
+    const closed = {
+      text: fold().textContent,
+      expanded: fold().attributes.get('aria-expanded'),
+    };
+
+    fold().click();
+    await settle();
+
+    expect(closed).toEqual({
+      text: '▸ 1 wave · 1 done',
+      expanded: 'false',
+    });
+    expect(fold().textContent).toBe('▾ 1 wave · 1 done');
+    expect(fold().attributes.get('aria-expanded')).toBe('true');
+  });
 
   it('waves_TasksAcrossWaves_GroupsInFileOrderAndMarksCurrent', () => {
     const { view, put } = setUp();
@@ -496,8 +887,9 @@ describe('workflow view', () => {
 
   it('registry_StageAddedOutOfOrder_SortsOnOrder', () => {
     const { view, stages, put } = setUp();
-    const wrapper = new FakeElement('div');
-    view.stripPart.build(asHtml(wrapper), 'a');
+    const recording = recordingLayout();
+    view.setLayouts(withUser<Layout>(defaultLayout, recording.layout));
+    view.stripPart.build(asHtml(new FakeElement('div')), 'a');
     const checking: PageStage = {
       id: 'checking',
       label: 'Checking',
@@ -505,14 +897,20 @@ describe('workflow view', () => {
       order: 35,
       actions: [],
       detail: () => '',
+      status: () => null,
+      statusLine: () => 'Checking',
     };
 
     stages.add(checking);
     put(flowIn('make', { progress: progressOf(1, [3]) }));
 
-    expect(
-      findAll(wrapper, 'workflow-step').map((step) => step.textContent),
-    ).toEqual(['Feature', 'Plan', 'Checking', 'Make', 'Review', 'Closed']);
+    expect(recording.strips.at(-1)!.steps.map((step) => step.label)).toEqual([
+      'Feature',
+      'Checking',
+      'Make',
+      'Review',
+      'Close',
+    ]);
   });
 
   it('chip_UserLayoutThrows_DrawsWithDefault', () => {

@@ -8,6 +8,7 @@ import type {
   CompleteLayout,
   FlowTabInput,
   Layout,
+  SidePaneInput,
   StripInput,
 } from '../../layouts/layout';
 import { workflowManifest } from '../../manifest';
@@ -23,8 +24,8 @@ export interface Drawn {
 // `run` runs a workflow command for the session the part draws.
 export type RunCommand = (command: string) => void;
 
-// The scope the Flow tab's keys fire in; the chip and the strip take none, so
-// their hints show in every scope.
+// The scope the Flow tab's keys fire in; the chip, the strip and the side pane
+// take none, so their hints show in every scope.
 const FLOW_TAB_SCOPE = 'flow';
 
 // Draws each workflow part into `parent` with the layouts last set, `default`
@@ -34,6 +35,7 @@ const FLOW_TAB_SCOPE = 'flow';
 export interface WorkflowParts {
   chip(parent: HTMLElement, input: ChipInput, run: RunCommand): Drawn;
   strip(parent: HTMLElement, input: StripInput, run: RunCommand): Drawn;
+  sidePane(parent: HTMLElement, input: SidePaneInput, run: RunCommand): Drawn;
   flowTab(parent: HTMLElement, input: FlowTabInput, run: RunCommand): Drawn;
   setLayouts(shown: ShownLayouts<Layout>): void;
 }
@@ -73,6 +75,16 @@ export function createWorkflowParts(deps: {
       toDrawn(
         layoutParts.draw('strip', parent, (strip, slot, rollback) =>
           strip(slot, input, createWorkflowKit(deps.kit, null, rollback, run)),
+        ),
+      ),
+    sidePane: (parent, input, run) =>
+      toDrawn(
+        layoutParts.draw('sidePane', parent, (sidePane, slot, rollback) =>
+          sidePane(
+            slot,
+            input,
+            createWorkflowKit(deps.kit, null, rollback, run),
+          ),
         ),
       ),
     flowTab: (parent, input, run) =>

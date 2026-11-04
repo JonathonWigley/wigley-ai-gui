@@ -1,5 +1,6 @@
 /* The default layout's workflow parts: the chip under a session row, the
-   strip above the Chat composer and the Flow tab's flow. */
+   strip above the Chat composer, the side pane beside the transcript and the
+   Flow tab's flow. */
 
 .workflow-chip {
   display: flex;
@@ -20,8 +21,68 @@
   font-size: var(--wg-text-12);
 }
 
-.workflow-strip-detail {
+.workflow-status-line {
   color: var(--wg-fg-secondary);
+}
+
+.workflow-side-pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-2);
+  width: calc(var(--wg-space-6) * 11);
+  height: 100%;
+  padding: var(--wg-space-2);
+  border-left: 1px solid var(--wg-border-default);
+  background: var(--wg-card-background);
+  font-size: var(--wg-text-12);
+}
+
+.workflow-side-status {
+  display: flex;
+  align-items: center;
+  gap: var(--wg-space-2);
+}
+
+.workflow-side-detail {
+  margin: 0;
+  color: var(--wg-fg-secondary);
+}
+
+.workflow-side-detail:empty {
+  display: none;
+}
+
+.workflow-side-pane .workflow-stepper {
+  flex-wrap: nowrap;
+  justify-content: space-between;
+}
+
+.workflow-side-pane .workflow-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+}
+
+.workflow-side-pane .workflow-step-status {
+  display: block;
+}
+
+.workflow-side-pane .ui-meter {
+  display: block;
+  width: 100%;
+}
+
+.workflow-side-tasks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.workflow-side-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wg-space-2);
 }
 
 .workflow-flow {

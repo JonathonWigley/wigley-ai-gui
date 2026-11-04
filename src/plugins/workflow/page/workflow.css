@@ -1,6 +1,7 @@
 /* The workflow parts the kit and the Flow tab draw: the stepper, its steps,
-   the countdown and the Flow tab. The default layout's chip, strip and flow
-   are in its `layout.css`. */
+   the status marks, the side pane's list and the fold over it, the countdown
+   and the Flow tab. The default layout's chip, strip, side pane and flow are in
+   its `layout.css`. */
 
 .workflow-stepper {
   display: flex;
@@ -12,16 +13,84 @@
 }
 
 .workflow-step {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--wg-space-1);
+}
+
+.workflow-step-status {
+  display: none;
+}
+
+.workflow-step[data-state='pending'],
+.workflow-mark[data-state='pending'] {
   color: var(--wg-fg-tertiary);
 }
 
-.workflow-step[data-state='done'] {
+.workflow-step[data-state='running'],
+.workflow-mark[data-state='running'] {
+  color: var(--wg-status-running);
+}
+
+.workflow-step[data-state='ready'],
+.workflow-mark[data-state='ready'] {
+  color: var(--wg-accent);
+}
+
+.workflow-step[data-state='paused'],
+.workflow-mark[data-state='paused'] {
+  color: var(--wg-status-warning);
+}
+
+.workflow-step[data-state='done'],
+.workflow-mark[data-state='done'] {
   color: var(--wg-status-success);
 }
 
-.workflow-step[data-state='current'] {
-  color: var(--wg-status-running);
+.workflow-step[data-state='running'],
+.workflow-step[data-state='ready'],
+.workflow-step[data-state='paused'] {
   font-weight: var(--wg-weight-semibold);
+}
+
+.workflow-mark {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+}
+
+/* A running mark reports the agent at work, so it loops at `duration-pulse`,
+   and under reduced motion it is static. */
+@keyframes workflow-mark-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.workflow-mark[data-state='running'] {
+  animation: workflow-mark-pulse var(--wg-duration-pulse) ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workflow-mark[data-state='running'] {
+    animation: none;
+  }
+}
+
+.workflow-side-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.workflow-finished-fold {
+  width: 100%;
+  justify-content: flex-start;
 }
 
 .workflow-countdown {
