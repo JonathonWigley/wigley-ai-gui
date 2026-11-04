@@ -62,23 +62,19 @@ export function createWorkflowParts(deps: {
     chip: (parent, input, run) =>
       toDrawn(
         layoutParts.draw('chip', parent, (chip, slot, rollback) =>
-          chip(slot, input, createWorkflowKit(deps.kit, null, rollback, run)),
+          chip(slot, input, createWorkflowKit(deps.kit, rollback, run)),
         ),
       ),
     strip: (parent, input, run) =>
       toDrawn(
         layoutParts.draw('strip', parent, (strip, slot, rollback) =>
-          strip(slot, input, createWorkflowKit(deps.kit, null, rollback, run)),
+          strip(slot, input, createWorkflowKit(deps.kit, rollback, run)),
         ),
       ),
     sidePane: (parent, input, run) =>
       toDrawn(
         layoutParts.draw('sidePane', parent, (sidePane, slot, rollback) =>
-          sidePane(
-            slot,
-            input,
-            createWorkflowKit(deps.kit, null, rollback, run),
-          ),
+          sidePane(slot, input, createWorkflowKit(deps.kit, rollback, run)),
         ),
       ),
     setLayouts: (shown) => layoutParts.setLayouts(shown),

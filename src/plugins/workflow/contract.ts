@@ -142,9 +142,9 @@ export interface PageStage {
   // Equal to the main half's order (page-stages.test.ts pins it); the stepper
   // sorts on it.
   order: number;
-  // Actions in order, the main action first. `ww` and the chip's button run
-  // the first available one; when that one is disabled, they run nothing and
-  // log `nothing to run`.
+  // Actions in order, the main action first. `ww` and the main action's button
+  // run the first available one; when that one is disabled, they run nothing
+  // and log `nothing to run`.
   actions: readonly StageActionSpec[];
   // The side pane's detail line: '3/7 · wave 2 · Claim grants'; '' for none.
   // The chip's input and the strip's input still carry it for a user layout.

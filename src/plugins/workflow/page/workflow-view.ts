@@ -29,7 +29,11 @@ import type {
 } from '../layouts/layout';
 import type { PlanProgress } from '../plan-reader';
 import { countdownText } from './countdown';
-import { SIDE_LIST_CLASS, TOGGLE_FINISHED_WAVES } from './layout/workflow-kit';
+import {
+  MAIN_ACTION,
+  SIDE_LIST_CLASS,
+  TOGGLE_FINISHED_WAVES,
+} from './layout/workflow-kit';
 import {
   createWorkflowParts,
   type Drawn,
@@ -103,7 +107,6 @@ interface PlanWave {
 }
 
 const TICK_MS = 1000;
-const MAIN_ACTION = 'mainAction';
 const PLAN_FILE = 'plan.md';
 const TASKS_GROUP_TITLE = 'Tasks';
 const PENDING: MarkState = 'pending';
@@ -495,7 +498,7 @@ function stepperStages(
 }
 
 // The state of the stepper's step at `index` while the flow's stage is the
-// step at `current`, -1 for a stage outside the stepper (idle), which leaves
+// step at `current`, -1 for a stage added with `inStepper: false`, which leaves
 // every step pending. The flow's step shows `status`, a stage with none
 // pending.
 function stepState(
@@ -503,7 +506,7 @@ function stepState(
   current: number,
   status: StageStatus | null,
 ): MarkState {
-  if (current === -1 || index > current) {
+  if (index > current) {
     return PENDING;
   }
   return index < current ? 'done' : (status ?? PENDING);

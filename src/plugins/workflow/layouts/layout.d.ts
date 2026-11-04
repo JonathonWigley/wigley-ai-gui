@@ -32,8 +32,8 @@ export type StageStatus = 'running' | 'paused' | 'ready' | 'done';
 // What a mark shows: a stage's status, or `pending` for a step or a task not reached.
 export type MarkState = StageStatus | 'pending';
 
-// One stage in the stepper: done before the session's stage, the stage's status at it, pending after it. Idle is not
-// in the stepper, so in idle every step is pending. Stages sharing a step take one place: primer and feature the one
+// One stage in the stepper: done before the session's stage, the stage's status at it, pending after it. A stage added
+// with `inStepper: false` leaves every step pending. Stages sharing a step take one place: primer and feature the one
 // the session is in, otherwise feature; plan ready and make the one the session is in, otherwise make.
 export interface StepInput {
   id: string;

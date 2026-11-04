@@ -279,7 +279,7 @@ export function workflowSelfTestScript(
   return {
     pageBinds: [],
     settings: {},
-    // The strip wraps, and the chip ellipsizes inside its row.
+    // The strip wraps, and the chip's one tag keeps its width.
     scrollsItself: [],
     open() {
       marks = markRun(harnesses);

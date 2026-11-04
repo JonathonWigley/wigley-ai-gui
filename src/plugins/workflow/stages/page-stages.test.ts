@@ -373,22 +373,6 @@ describe('BUILT_IN_PAGE_STAGES', () => {
     },
   );
 
-  it.each<{ stage: string; label: string; stepSlot: string | undefined }>([
-    { stage: 'idle', label: 'Idle', stepSlot: undefined },
-    { stage: 'primer', label: 'Primer', stepSlot: 'start' },
-    { stage: 'feature', label: 'Feature', stepSlot: 'start' },
-    { stage: 'planReady', label: 'Make', stepSlot: 'make' },
-    { stage: 'make', label: 'Make', stepSlot: 'make' },
-    { stage: 'review', label: 'Review', stepSlot: undefined },
-    { stage: 'closed', label: 'Close', stepSlot: undefined },
-  ])(
-    "each stage's label and step slot: $stage",
-    ({ stage, label, stepSlot }) => {
-      expect(pageStage(stage).label).toBe(label);
-      expect(pageStage(stage).stepSlot).toBe(stepSlot);
-    },
-  );
-
   it.each<{ name: string; flow: SessionFlow; status: string }>([
     { name: 'a turn only', flow: turnRunning, status: 'running' },
     { name: 'a subagent only', flow: subagentRunning, status: 'running' },

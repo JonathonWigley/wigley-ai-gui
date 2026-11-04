@@ -1,7 +1,6 @@
 import {
   createBaseKit,
   type OwnerKitServices,
-  type OwnerScope,
   ownerBaseKitDeps,
 } from '../../../../shared/page/layout-host/base-kit';
 import type { RollbackDeps } from '../../../../shared/page/layout-host/draw-part';
@@ -11,8 +10,8 @@ import { textButton } from '../../../../shared/page/ui/button';
 import type { MarkState, WorkflowKit } from '../../layouts/layout';
 import { workflowManifest } from '../../manifest';
 
-const MAIN_ACTION = 'mainAction';
-
+// The command the main action's button runs.
+export const MAIN_ACTION = 'mainAction';
 // The command the fold runs, which only changes what the side pane shows.
 export const TOGGLE_FINISHED_WAVES = 'toggleFinishedWaves';
 // The class of the list whose scroll the view keeps across a draw.
@@ -26,20 +25,18 @@ const MARK_ICONS: Record<MarkState, string> = {
   done: 'pass-filled',
 };
 
-// The kit one part draw builds with: the base kit with its keys in `scope`
-// (null for none), naming workflow's own commands by their short names, plus
-// the action button, the stepper, the countdown, the status mark, the finished
-// waves' fold and the side pane's list. `run` runs a workflow command for the
+// The kit one part draw builds with: the base kit with no key scope, naming
+// workflow's own commands by their short names, plus the action button, the
+// stepper, the countdown, the status mark, the finished waves' fold and the side pane's list. `run` runs a workflow command for the
 // session the part draws; the main action's button runs `mainAction`, as
 // `<Leader>ww` does. Each anchor it names is recorded in `rollback`.
 export function createWorkflowKit(
   services: OwnerKitServices,
-  scope: OwnerScope | null,
   rollback: RollbackDeps,
   run: (command: string) => void,
 ): WorkflowKit {
   const base = createBaseKit(
-    ownerBaseKitDeps(workflowManifest, services, scope, rollback),
+    ownerBaseKitDeps(workflowManifest, services, null, rollback),
   );
   const kit: WorkflowKit = {
     ...base,

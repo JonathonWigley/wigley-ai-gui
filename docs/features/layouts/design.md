@@ -88,7 +88,8 @@ edit shows at once, and the committed edit ships as the next build's bundled cop
   `layout.css`. The link carries the live `layout.css` while a live default is loaded, else the bundled copy, which
   ships as a file the loader links and the build never inlines; the link is attached only while it has an href, so a
   rule deleted live is gone. CSS for parts the app draws itself (slots, panes, editors, text boxes) stays in the
-  plugin's page CSS and still needs a rebuild.
+  plugin's page CSS and still needs a rebuild. Chat's side parts holder is the one exception: the width at which it
+  hides sits in chat's default `layout.css`, editable live.
 - **Fallback.** A missing clone draws the bundled default; a default that fails to load or read keeps its last good
   live version, else the bundled default. A live default must define every function part the bundled default
   defines; a missing part fails the load with `layout default has no <part>`. A load, read or missing-part failure
@@ -186,8 +187,9 @@ can be iterated in place. The sample sends nothing and raises no notification or
 - **Defaults load live from the repo clone, not a config override.** The user is the app's only user and wants every
   look change in the shipped app, so the repo edit is the live edit and the shipped edit, with no second copy to
   carry over. The bundled copy keeps the app drawing when the clone is missing or broken.
-- **Only a layout's own look reloads live.** App-drawn parts keep their CSS in the page bundle: a part that needs a
-  live look becomes a layout part, rather than gaining a second live path for plugin CSS.
+- **Only a layout's own look reloads live.** App-drawn parts keep their CSS in the page bundle, chat's side parts
+  holder's hide width aside: a part that needs a live look becomes a layout part, rather than gaining a second live
+  path for plugin CSS.
 
 ## Out of scope
 
