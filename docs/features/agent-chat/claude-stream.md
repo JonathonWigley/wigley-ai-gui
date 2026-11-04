@@ -1,7 +1,7 @@
 Measured on `claude --version` → `2.1.304 (Claude Code)`, 2026-10-20, macOS.
 
-§ Subagents and § Compaction measured on 2.1.316, 2026-11-01. § Queued messages, § Message lifecycle and § Interrupt's
-idle case measured on 2.1.317, 2026-11-02.
+§ Subagents and § Compaction's opening probe measured on 2.1.316, 2026-11-01. § Queued messages, § Message lifecycle
+and § Interrupt's idle case measured on 2.1.317, 2026-11-02. § Compaction's subsections measured on 2.1.318, 2026-11-03.
 
 # Claude Code stream-json wire facts
 
@@ -1108,11 +1108,12 @@ background subagent finished (the `task_*` lines of § Subagents arrived between
 ```
 
 - **`system/compact_boundary`** is the compaction marker. `compact_metadata`: `trigger` (`"manual"` here; an automatic
-  compaction's value was not measured), `pre_tokens` (37559), **`post_tokens`** (9023: the after-size key exists),
+  compaction's is `"auto"`, § Automatic compaction), `pre_tokens` (37559), **`post_tokens`** (9023: the after-size key exists),
   `cumulative_dropped_tokens` (28536, which is `pre_tokens − post_tokens`), `duration_ms`, `preserved_segment`
   (`head_uuid`, `anchor_uuid`, `tail_uuid`) and `preserved_messages` (`anchor_uuid`, `uuids`, `all_uuids`). The line
   also has top-level `logical_parent_uuid`.
-- **`/compact` prints no synthetic `assistant` event** (unlike § Effort's local commands). The lines, in order:
+- **A `/compact` that succeeds prints no synthetic `assistant` event** (unlike § Effort's local commands; one that
+  fails prints one, § Interrupt during /compact and § /compact with nothing to compact). The lines, in order:
   `system/status compacting`, the `SessionStart:compact` hook pair, `system/status` with `status: null` and
   `compact_result: "success"`, `system/init`, `compact_boundary`, a `user` event whose string `content` is the
   summary prompt, a `user` replay `<local-command-stdout>Compacted </local-command-stdout>` (`isReplay: true`), and a
@@ -1128,4 +1129,200 @@ background subagent finished (the `task_*` lines of § Subagents arrived between
   and tools.
 - The next call after the compaction rebuilt the cache: `"diagnostics":{"cache_miss_reason":{"type":"messages_changed","cache_missed_input_tokens":22479}}`
   and `"input_transformations":[{"type":"thinking_dropped",…}]` on the 16.61 `assistant`.
-- Not measured: an automatic compaction (`trigger` other than `manual`), and the lines it prints.
+
+The subsections below were measured on 2.1.318, 2026-11-03, as § How every probe ran. Each stdin user message carries a
+client `uuid` (§ Message lifecycle), and each process has its own project folder. `IN` marks a line the driver wrote,
+seconds count from spawn, and uuids are cut to their last characters. `T1` is U(Reply with the single word ok.), whose
+reply reads 34,856 tokens of context. Every process ran with the user's config folder, whose `settings.json` `env` sets
+`CLAUDE_AUTOCOMPACT_PCT_OVERRIDE=30` even though the driver strips that variable from the child's env.
+
+### Automatic compaction
+
+Child env adds `CLAUDE_CODE_AUTO_COMPACT_WINDOW=100000` and `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE=5`. Stdin: `T1`, then after
+its `result`, U(Use the Bash tool to run cat notes.txt, then reply with the single word done.) with uuid `…9189`. No
+fallback was needed. Turn 2 printed two compaction attempts: one failed before the first model request, and one
+succeeded between the tool result and the next model request.
+
+```
+ 1.65 IN  U(Use the Bash tool…) uuid …9189
+ 1.65 command_lifecycle …9189 queued
+ 1.65 command_lifecycle …9189 started
+ 1.67 system/init
+ 1.67 {"type":"system","subtype":"status","status":"requesting","user_message_uuids":["…9189"]}
+ 1.67 {"type":"system","subtype":"status","status":"compacting","compact_output_chars":0}
+ 1.67 {"type":"system","subtype":"status","status":null,"compact_result":"failed","compact_error":"too_few_groups"}
+ 2.74 stream_event message_start
+ 3.82 assistant [tool_use Bash "cat notes.txt"]  usage {"input_tokens":2,"cache_creation_input_tokens":12985,"cache_read_input_tokens":24111,…}
+ 6.07 user [tool_result "spike"]
+ 6.08 {"type":"system","subtype":"status","status":"requesting","user_message_uuids":["…9189"]}
+ 6.08 {"type":"system","subtype":"status","status":"compacting","compact_output_chars":0}
+16.64 {"type":"system","subtype":"hook_started","hook_name":"SessionStart:compact",…}
+16.65 {"type":"system","subtype":"hook_response","hook_name":"SessionStart:compact",…,"exit_code":0,"outcome":"success"}
+16.65 {"type":"system","subtype":"status","status":null,"compact_result":"success"}
+16.66 {"type":"system","subtype":"compact_boundary","compact_metadata":{"trigger":"auto","pre_tokens":37384,"post_tokens":9176,"cumulative_dropped_tokens":28208,"duration_ms":10552,"preserved_segment":{"head_uuid":…,"anchor_uuid":…,"tail_uuid":…},"preserved_messages":{"anchor_uuid":…,"uuids":[…],"all_uuids":[…]}},"logical_parent_uuid":…}
+16.66 {"type":"user","message":{"role":"user","content":[{"type":"text","text":"This session is being continued from a previous conversation that ran out of context.…"}]},"parent_tool_use_id":null,…,"isSynthetic":true}
+17.86 stream_event message_start
+19.09 assistant [text "done"]  usage {"input_tokens":2,"cache_creation_input_tokens":24288,"cache_read_input_tokens":13463,"output_tokens":5}
+19.12 {"type":"result","subtype":"success","is_error":false,"result":"done","stop_reason":"end_turn","num_turns":3,"terminal_reason":"completed","user_message_uuid":"…9189","user_message_uuids":["…9189"],…}
+19.12 command_lifecycle …9189 completed
+```
+
+- **Trigger.** `compact_metadata.trigger` is `"auto"`.
+- **Start.** `system/status` `compacting` comes before the boundary: 10.58 s before it in the attempt that succeeded.
+- **Repeats.** Turn 2 has two `compacting` lines. Each opens its own attempt, and its own `status: null` line closes
+  that attempt. No attempt printed a second `compacting` line. So a `compacting` line after a closed attempt is a new
+  start.
+- **A failed attempt.** `compact_result: "failed"` with `compact_error: "too_few_groups"` prints no hook pair, no
+  boundary and no other line, and the turn goes on to its model request.
+- **Fields.** `compacting` carries `compact_output_chars` (0 both times; a `/compact`'s line does not have this field).
+  It carries neither `user_message_uuid` nor `user_message_uuids`, in any probe here. An automatic compaction has no
+  lifecycle frames of its own: only `…9189`'s three frames, with `completed` after the `result`.
+- **Line order.** `requesting`, `compacting`, the `SessionStart:compact` hook pair, `status: null`, the boundary, the
+  summary `user` line. Unlike `/compact`:
+  - no `system/init` comes inside the compaction
+  - no `<local-command-stdout>` replay comes
+  - the compaction has no `result`: the turn's one `result` comes at its end (`num_turns` 3)
+  - the summary's `content` is an array with one text block, where `/compact`'s is a string
+  - no second `requesting` comes before the next model request
+- **After-size.** The next reply's context is 37,753 (`2 + 24288 + 13463`), next to `pre_tokens` 37384 and `post_tokens`
+  9176. The after-size reads from the next `usage`, as above.
+- **Levers.** The compaction fired at about 37k of context with the 100k window. The context here is above both 5 % and
+  30 % of 100k, so this probe does not tell whether the child env's 5 or `settings.json`'s 30 applied.
+- No other line type (for example `autocompact_state`) came in the compaction.
+
+### Interrupt during /compact
+
+Stdin: `T1`; after its `result`, `U(/compact)` with uuid `…1351`; at the first `compacting` line,
+`{"type":"control_request","request_id":"probe-int","request":{"subtype":"interrupt"}}`; 30 s later,
+U(Reply with the single word after.). One sample, with the interrupt written within 10 ms of `compacting`.
+
+```
+ 1.64 IN  U(/compact) uuid …1351
+ 1.64 command_lifecycle …1351 queued
+ 1.64 command_lifecycle …1351 started
+ 1.64 {"type":"system","subtype":"status","status":"compacting"}
+ 1.64 IN  {"type":"control_request","request_id":"probe-int","request":{"subtype":"interrupt"}}
+ 1.65 {"type":"control_response","response":{"subtype":"success","request_id":"probe-int","response":{"still_queued":[]}}}
+ 1.65 {"type":"system","subtype":"status","status":null,"compact_result":"failed","compact_error":"API Error: Request was aborted."}
+ 1.65 system/init
+ 1.65 {"type":"assistant","message":{"model":"<synthetic>",…,"content":[{"type":"text","text":"Compaction canceled."}],"usage":{"input_tokens":0,…}},"local_command_source":"<local-command-stdout>Compaction canceled.</local-command-stdout>",…}
+ 1.65 {"type":"result","subtype":"success","is_error":false,"result":"","stop_reason":null,"num_turns":0,"local_command":"compact","user_message_uuid":"…1351","user_message_uuids":["…1351"],…}
+ 1.66 command_lifecycle …1351 cancelled
+      (no line for 30 s)
+31.64 IN  U(Reply with the single word after.)
+31.68 system/init
+33.15 {"type":"result","subtype":"success","is_error":false,…,"terminal_reason":"completed",…}
+```
+
+- **A plain interrupt stops `/compact`.** No boundary and no hook pair come. The first end line is `status: null` with
+  `compact_result: "failed"`, 10 ms after the interrupt; the last compaction line, `cancelled`, comes 20 ms after it.
+- The command's `result` is not an error: `is_error` false, `result` empty, and no `terminal_reason`. No
+  `[Request interrupted by user]` line comes. The lifecycle frame `cancelled` and the synthetic `Compaction canceled.`
+  are the marks of the cancel. (§ Message lifecycle's `cancelled` after an error `result` is a model turn's shape.)
+- The `after` turn runs as a normal turn on the uncompacted context (37,212 tokens).
+
+### A message during /compact
+
+Stdin: `T1`; after its `result`, `U(/compact)` with uuid `…705e`; at the first `compacting` line,
+U(Reply with the single word two.) with uuid `…2142`.
+
+```
+ 1.55 IN  U(/compact) uuid …705e
+ 1.55 command_lifecycle …705e queued
+ 1.55 command_lifecycle …705e started
+ 1.55 {"type":"system","subtype":"status","status":"compacting"}
+ 1.55 IN  U(Reply with the single word two.) uuid …2142
+ 1.56 command_lifecycle …2142 queued
+ 6.49 {"type":"system","subtype":"hook_started","hook_name":"SessionStart:compact",…}
+ 6.50 {"type":"system","subtype":"hook_response","hook_name":"SessionStart:compact",…}
+ 6.51 {"type":"system","subtype":"status","status":null,"compact_result":"success"}
+ 6.51 system/init  user_message_uuids ["…705e"]
+ 6.51 {"type":"system","subtype":"compact_boundary","compact_metadata":{"trigger":"manual","pre_tokens":34860,"post_tokens":8681,"cumulative_dropped_tokens":26179,"duration_ms":4932},…}
+ 6.51 user (summary, string content, "isReplay":false,"isSynthetic":true)
+ 6.51 user <local-command-stdout>Compacted </local-command-stdout> ("isReplay":true)
+ 6.51 {"type":"result","subtype":"success","result":"","num_turns":0,"local_command":"compact","user_message_uuid":"…705e",…}
+ 6.51 command_lifecycle …705e completed
+ 6.51 command_lifecycle …2142 started
+ 6.54 system/init  user_message_uuids ["…2142"]
+ 7.79 assistant [text "2"]  usage {"input_tokens":2,"cache_creation_input_tokens":23957,"cache_read_input_tokens":13463,"output_tokens":1}
+ 7.82 {"type":"result","subtype":"success","is_error":false,"result":"2","num_turns":1,"terminal_reason":"completed","user_message_uuid":"…2142","user_message_uuids":["…2142"],…}
+ 7.82 command_lifecycle …2142 completed
+```
+
+- **The message waits, then runs as its own turn.** It stays `queued` for the whole compaction. It is `started` right
+  after the `/compact`'s `completed`, with its own `init` and its own `result`. It is neither folded nor cancelled.
+- It runs on the small context: its reply reads 37,422 (`2 + 23957 + 13463`), next to `post_tokens` 8681.
+- This boundary's `compact_metadata` has only the five fields above: `preserved_segment` and `preserved_messages` are
+  optional.
+
+### /compact with nothing to compact
+
+Stdin: `U(/compact)` with uuid `…aa45`, as a new process's first message. Logged for 20 s.
+
+```
+ 0.00 IN  U(/compact) uuid …aa45
+ 0.28 system/hook_started  SessionStart:startup
+ 0.31 system/hook_response SessionStart:startup
+ 0.33 command_lifecycle …aa45 queued
+ 0.34 command_lifecycle …aa45 started
+ 0.37 {"type":"system","subtype":"status","status":"compacting"}
+ 0.37 {"type":"system","subtype":"status","status":null,"compact_result":"failed","compact_error":"Not enough messages to compact."}
+ 0.38 system/init
+ 0.38 {"type":"assistant","message":{"model":"<synthetic>",…,"content":[{"type":"text","text":"Not enough messages to compact."}],…},"local_command_source":"<local-command-stdout>Not enough messages to compact.</local-command-stdout>","local_command_run":{"command":"compact","args":""},…}
+ 0.38 {"type":"result","subtype":"success","is_error":false,"result":"Not enough messages to compact.","stop_reason":null,"num_turns":0,"local_command":"compact","user_message_uuid":"…aa45",…,"total_cost_usd":0}
+ 0.38 command_lifecycle …aa45 completed
+      (no line for 20 s)
+```
+
+- A refused `/compact` **does** print `compacting`, closed at once by `status: null` with `compact_result: "failed"`.
+- The `result` is not an error (`is_error` false). Its `result` text holds the reason, and the lifecycle ends
+  `completed`. Only `compact_result` and `compact_error` tell this from a success.
+
+### Saved transcript lines
+
+Read from each session's `<session id>.jsonl`. The folder name comes from the resolved cwd: `/tmp/…/project-a` runs as
+`/private/tmp/…/project-a`, so the folder is `-private-tmp-…-project-a`.
+
+The boundary, automatic (A) and manual (C), with `trigger` verbatim:
+
+```
+{"parentUuid":null,"logicalParentUuid":"…92c6","isSidechain":false,"type":"system","subtype":"compact_boundary","content":"Conversation compacted","level":"info","compactMetadata":{"trigger":"auto","preTokens":37384,"postTokens":9176,"cumulativeDroppedTokens":28208,"durationMs":10552,"preservedSegment":{"headUuid":…,"anchorUuid":…,"tailUuid":…},"preservedMessages":{"anchorUuid":…,"uuids":[…],"allUuids":[…]},"runningTurnSends":{"uuids":["…9189"],"openerUuid":"…9189"}},"uuid":"…a898","timestamp":"2026-11-04T00:53:22.662Z",…}
+{"parentUuid":null,"logicalParentUuid":"…a5c1","isSidechain":false,"type":"system","subtype":"compact_boundary","content":"Conversation compacted","isMeta":false,"level":"info","compactMetadata":{"trigger":"manual","preTokens":34860,"durationMs":4932,"postTokens":8681,"cumulativeDroppedTokens":26179},"uuid":"…fb50","timestamp":"2026-11-04T00:54:57.884Z",…}
+```
+
+- **Keys.** The saved metadata key is `compactMetadata`, in camelCase: `trigger`, `preTokens`, `postTokens`,
+  `cumulativeDroppedTokens`, `durationMs`. `preservedSegment`, `preservedMessages` and `runningTurnSends` are optional;
+  `runningTurnSends` is not on the wire line. `parentUuid` is null and `logicalParentUuid` holds the parent.
+- **The summary line** (A and C): `"type":"user","isVisibleInTranscriptOnly":true,"isCompactSummary":true`, no `isMeta`,
+  and `message.content` a string starting `This session is being continued from a previous conversation that ran out of
+  context.` A's also has `"summarizedTurnPromptUuids":["…9189"]`.
+- **After a boundary from `/compact`** (C), in order: the boundary, the summary, a `user` line with `isMeta: true` and
+  `<local-command-caveat>…`, the typed `user` line `<command-name>/compact</command-name>…`, and a `user` line
+  `<local-command-stdout>Compacted </local-command-stdout>`.
+- **After an automatic boundary** (A): attachments and the summary. No `/compact`, caveat or `Compacted` line.
+- **No `system` `local_command` line says `Compacted`.** That text is a `user` line, and only for `/compact`.
+- **An interrupted `/compact`** (B) has no boundary and no summary. What marks it: the caveat, the typed `/compact` line,
+  and `{"type":"system","subtype":"local_command","content":"<local-command-stdout>Compaction canceled.</local-command-stdout>","level":"info","isMeta":false}`.
+- **A refused `/compact`** (the nothing-to-compact process) has the same shape, with content
+  `<local-command-stdout>Not enough messages to compact.</local-command-stdout>` and `"commandRun":{"command":"compact","args":""}`.
+
+### Idle compaction
+
+Result: pending
+
+Setup. Child env adds `CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS=100000` and `CLAUDE_CODE_PROMPT_CACHE_TTL=1h`; the flags add
+`--debug-file`. The binary accepted `1h`: turn 1's `usage.cache_creation` reads `"ephemeral_1h_input_tokens":156969,
+"ephemeral_5m_input_tokens":0`. The earlier probes, with no such variable, also wrote the 1-hour cache: this account's
+default. Stdin: one message, about 400,000 characters of numbered plain lines followed by `Reply with the single word
+ok.`; then nothing. Turn 1's reply reads 170,434 tokens of context (`2 + 156969 + 13463`), above the 100k floor. The
+driver waits until a boundary prints or 65 minutes from spawn pass, then closes stdin.
+
+- The bulk is plain, repeated lines because a first attempt with shuffled common words ended in a refusal (`result`
+  `stop_reason: "refusal"`, `terminal_reason: "api_error"`, `is_error` true, lifecycle `cancelled`, text `Start a new
+  session to continue`). That process had no idle wait.
+- From the binary's code, not measured: the timer fires at 90 % of the cache lifetime after the last activity (54
+  minutes), and a timer more than 60 s late, as after a machine sleep, gives the outcome `lapsed`.
+
+Not measured: an interrupt after the summary request has run for a while (the probe's interrupt came within 10 ms of
+`compacting`); an interrupt or a message during an automatic compaction; a `compacting` line repeating inside one attempt
+(`compact_output_chars` above 0); which of the child env and `settings.json` `env` wins for the same variable.
