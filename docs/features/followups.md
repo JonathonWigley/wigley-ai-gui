@@ -18,7 +18,7 @@ Core seams that most items below assume.
 - **Disposable registrations, disposed per plugin** — *agent-ready*: every registration returns a `Disposable`, and
   each plugin disposes its own. Already returning a handle: `PageChannel.on`, `Modes.add` (`ModeHandle`),
   `Area.contribute` and `Files.watch` — the model. Still returning `void` (`src/contracts/plugin.ts`): `EventBus.on` /
-  `PluginEvents.on`, `MainChannel.handle`, `Bridge.onMessage` (preload adds a fresh `ipcRenderer` listener per call),
+  `PluginEvents.on`, `MainChannel.handle`, `Bridge.onMessage`,
   `CommandRegistry.register`, `Modes.onChanged`, `keys.onScopeChanged` / `onPending`, `PushedScope.onBaseChanged`,
   `EditorHost.onPendingKeys`. `createMainApi` / `createPageApi` record each handle per plugin, so the host can unload
   a plugin without its help. Then each plugin collects and disposes its handles: forms page (`start.ts`,
@@ -745,10 +745,6 @@ because the earlier items rewrite many of these tests anyway.
   millisecond tie, so the chat script's single `<A-S-o>` and `<A-S-i>` steps between its two rows may land elsewhere.
   It passes today and was not audited for ties or rows left open. Forms' `stepToRow` and sessions' `stepNextTo` hold
   the shape, and could become one shared helper. Source session: Claude Code e8ba2d1d-78ea-49b9-9c2e-b2a0b2382d85 in
-  wigley-ai-gui.
-- **`MaxListenersExceededWarning` on `plugin:message`** — *agent-ready*: a drive run's console showed 11 listeners. No
-  link to a cause is known; `Bridge.onMessage` adding a fresh `ipcRenderer` listener per call (see Disposable
-  registrations) is the first place to read. Source session: Claude Code e8ba2d1d-78ea-49b9-9c2e-b2a0b2382d85 in
   wigley-ai-gui.
 - **Sessions header wraps at the side bar's least width** — *agent-ready*: `Sessions` draws as `Session` / `s` at
   160 px in the default layout. Its markup predates the session groups work. Source session: Claude Code
