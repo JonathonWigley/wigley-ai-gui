@@ -131,7 +131,7 @@ function and imports no `Git`; only `main/start.ts` names `api.services.git`.
 ### Wave 1
 - [x] [Git origin repo name](01-git-origin-repo-name.md)
 - [ ] [DragReorder primitive](03-drag-reorder-primitive.md)
-- [ ] [Side bar order, recency and favorites modules](04-order-modules.md)
+- [x] [Side bar order, recency and favorites modules](04-order-modules.md)
 - [ ] [Section and group layout parts](05-layout-parts.md)
 
 ### Wave 2
@@ -152,9 +152,13 @@ Review base: 693cb8d04eb48c87e6cba0406a0e2d850f90db54
 
 ### Groups
 - 01 · 7dfb580e · diff read; Produces originRepoName present on the contract; compile clean for the group's files · concerns: AGENTS.md line 155's adapter list omits the origin repo name (goes to task 07); the empty-name branch and the cannot-start rejection have no test row, per the task's row list
+- 04 · 2b0be629 · diff read; every Produces signature present in the three modules; the place, move and toggle GIVENs traced by hand against the code; compile clean · concerns: keepOnly with an empty or partial list wipes saved recency, so task 06 must prune only on a real row list; AGENTS.md's sessions page tree line may want the three modules (goes to task 07); the layer check was not run by the worker
 ### Contract changes
 ### Rulings
 - The user takes every review recommendation in this run, so no triage round is sent — the user's word this run — a recommendation the user would have overridden lands anyway and shows in the wrap-up · lead
 - The test gate and drive checks run in the worktree rather than waiting for the main tree — this is no Unity project, so nothing needs an editor, and a worktree has its own .vite — none; merging back still waits for the user's word · lead
+- Both stores read uiState once at creation, as createStarredDocs does — matches the nearest sibling — a page-side writer of these keys would go unseen; nothing writes them today · group 04 · group 04
+- A name in shown that is no longer a favorite counts as absent in move and place; move of a favorite not in shown returns false — a drag holds redraws, so shown can go stale — a drop on a stale list can land off by the stale names before it · group 04 · group 04
+- keepOnly and remove write nothing when nothing changes; place always writes — keepOnly runs on row updates — one redundant write per no-op drop · group 04 · group 04
 ### Review rounds
 ### Test gate

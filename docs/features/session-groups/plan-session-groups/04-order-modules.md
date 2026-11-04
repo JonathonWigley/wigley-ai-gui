@@ -1,6 +1,6 @@
 # 04 — Side bar order, recency and favorites modules
 
-Status: in progress
+Status: done
 Type: Batch
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -72,3 +72,5 @@ Done when: compiles; the test gate runs the tests above
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 2b0be629 · proof: diff read; every Produces signature present in the three modules; the place, move and toggle GIVENs traced by hand against the code; compile clean · concerns: keepOnly with an empty or partial list wipes saved recency, so task 06 must prune only on a real row list; AGENTS.md's sessions page tree line may want the three modules (goes to task 07); the layer check was not run by the worker

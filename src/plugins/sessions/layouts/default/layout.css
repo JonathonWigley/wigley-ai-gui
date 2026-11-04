@@ -1,4 +1,5 @@
-/* The default layout's sessions parts: the pane, the side bar and its row cards, the tab bar and the empty text. */
+/* The default layout's sessions parts: the pane, the side bar with its sections, groups and row cards, the tab bar and
+   the empty text. */
 
 /* A pane fills its slot; its body shows the session's frame or the empty
    text in one cell, and its focus edges sit on its sides. */
@@ -23,7 +24,7 @@
   --session-edge-inset: var(--wg-space-6);
 }
 
-/* The side bar: the "Sessions" header over the rows. */
+/* The side bar: the "Sessions" header over the sections. */
 .session-side {
   display: flex;
   flex-direction: column;
@@ -39,6 +40,125 @@
   flex-direction: column;
   gap: var(--wg-space-1_5);
   min-height: 0;
+}
+
+/* A section with no groups hides until a drag, so a group can be dragged into
+   it; then its drop hint is a dashed box, under the empty groups box that
+   takes the drop. */
+.session-section {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-1_5);
+  min-height: 0;
+}
+
+.session-section.is-empty {
+  display: none;
+}
+
+.is-reordering > .session-section.is-empty {
+  display: flex;
+}
+
+.is-reordering > .session-section.is-empty > .session-section-groups {
+  position: absolute;
+  inset: 0;
+}
+
+.session-section-groups,
+.session-group,
+.session-group-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-1_5);
+  min-height: 0;
+}
+
+/* A section's label, then a hairline filling the line. */
+.session-section-label {
+  display: none;
+  align-items: center;
+  gap: var(--wg-space-2);
+  padding: 0 var(--wg-space-2);
+  color: var(--wg-fg-secondary);
+  font-size: var(--wg-text-12);
+  font-weight: var(--wg-weight-semibold);
+}
+
+.session-section-label::after {
+  content: '';
+  flex: 1 1 0;
+  height: 1px;
+  background: var(--wg-border-subtle);
+}
+
+.has-favorites > .session-section > .session-section-label,
+.is-reordering > .session-section > .session-section-label {
+  display: flex;
+}
+
+.session-section-drop-hint {
+  display: none;
+  padding: var(--wg-space-2);
+  border: 1px dashed var(--wg-border-default);
+  border-radius: var(--wg-radius-md);
+  color: var(--wg-fg-tertiary);
+  font-size: var(--wg-text-12);
+}
+
+.is-reordering > .session-section.is-empty > .session-section-drop-hint {
+  display: block;
+}
+
+/* A project's header: the grip and star, the name, then the count. The grip
+   and a non-favorite's star keep their space until the header is hovered, so
+   the name never shifts and a hidden star takes no click. */
+.session-group-header {
+  display: flex;
+  align-items: center;
+  gap: var(--wg-space-1);
+  min-width: 0;
+  color: var(--wg-fg-secondary);
+  font-size: var(--wg-text-12);
+}
+
+.session-group-grip {
+  display: inline-flex;
+  flex: none;
+}
+
+.session-group-grip,
+.session-group-star:not(.is-active) {
+  visibility: hidden;
+}
+
+.session-group-header:hover .session-group-grip,
+.session-group-header:hover .session-group-star {
+  visibility: visible;
+}
+
+.ui-icon-button.session-group-star.is-active {
+  background: transparent;
+  color: var(--wg-status-warning);
+}
+
+.ui-icon-button.session-group-star.is-active:hover {
+  background: var(--wg-button-ghost-hover);
+}
+
+.session-group-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--wg-fg);
+  font-weight: var(--wg-weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-group-count {
+  flex: none;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Each row is a card, so its title, status and parts read as one session:

@@ -1,6 +1,9 @@
 // @ts-check
 
-// The built-in Sessions look: the side bar's "Sessions" header over its rows,
+// The built-in Sessions look: the side bar's "Sessions" header over its two
+// sections, Favorites then Recent, each a label beside a hairline and a drop
+// hint over its groups, each group a project's header (grip, star, name and
+// count) over its rows,
 // each row a card: its title (the folder label for a row with no title; no
 // harness name), its activity's dot and word or, with no activity, its
 // attention dot, and its on-screen mark, over a footer holding its status then
@@ -20,6 +23,25 @@ const layout = {
     const rows = kit.el(element, 'nav', 'session-sidebar');
     rows.setAttribute('aria-label', 'Sessions');
     return { element, rows };
+  },
+
+  section(parent, input, kit) {
+    const element = kit.el(parent, 'div', 'session-section');
+    kit.el(element, 'div', 'session-section-label', input.label);
+    kit.el(element, 'div', 'session-section-drop-hint', input.dropHint);
+    const groups = kit.el(element, 'div', 'session-section-groups');
+    return { element, groups };
+  },
+
+  group(parent, input, kit) {
+    const element = kit.el(parent, 'div', 'session-group');
+    const header = kit.el(element, 'div', 'session-group-header');
+    kit.dragHandle(header);
+    kit.favoriteToggle(header);
+    kit.el(header, 'span', 'session-group-name', input.project);
+    kit.el(header, 'span', 'session-group-count', String(input.count));
+    const rows = kit.el(element, 'div', 'session-group-rows');
+    return { element, header, rows };
   },
 
   row(parent, input, kit) {
