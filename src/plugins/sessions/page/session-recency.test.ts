@@ -126,8 +126,15 @@ describe('createSessionRecency', () => {
       after: [rowUnderHost('a', 'i'), rowUnderHost('b', 'j')],
       saved: { i: 5, j: 7 },
     },
+    {
+      case: 'a row added as the old row on its key leaves takes the stamp',
+      stamps: { h: 5 },
+      before: [rowUnderHost('old', 'h')],
+      after: [rowUnderHost('new', 'h')],
+      saved: { h: 5 },
+    },
   ])(
-    'recency_AKeyARowHoldsKeepsItsStamp: $case',
+    'recency_LeavingAKeyARowHoldsLeavesItsStamp: $case',
     ({ stamps, before, after, saved }) => {
       const state = fakeUiState([['recency', { stamps, needsYou: [] }]]);
       const recency = createSessionRecency({ now: () => 100 }, state);

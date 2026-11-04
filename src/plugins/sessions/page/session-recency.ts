@@ -19,9 +19,10 @@ const MAX_SAVED_STAMPS = 200;
 // and is the only call that moves or drops a stamp: a row in `after` with no
 // stamp is stamped, all of them with one time so they tie and keep main's order;
 // a row whose host id changed takes its stamp along; a row that left loses its
-// stamp, so it stamps again if it comes back. A key a row in `after` holds keeps
-// its stamp, since two rows can share a host id. A row merely absent keeps its
-// stamp, since a relaunch's first state lacks the rows main has yet to resume.
+// stamp, so it stamps again if it comes back. Two rows can share a host id, so a
+// row leaving or moving off a key leaves the stamp there while a row in `after`
+// holds that key. A row merely absent keeps its stamp, since a relaunch's first
+// state lacks the rows main has yet to resume.
 // `noteNeedsYou` stamps `row` unless its session is still marked from an earlier
 // call, so a source re-sending needs you after a page reload stamps nothing.
 // `needsYouEnded` clears that mark. A mark goes too when its row leaves, or when
