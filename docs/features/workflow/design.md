@@ -122,9 +122,10 @@ Everything draws through the `workflow` layout, its built-in `default`, and the 
 - **Row chip** — a row part (sessions' `addRowPart`): the built-in layout draws the label and status as one accent tag
   (`Make · running`) and the countdown. A user layout can also draw the progress and the main action's button, which
   the chip's input carries. Idle draws nothing.
-- **Composer strip** — a part above the Chat composer (chat's `addComposerPart`): the status mark, the status line, the
-  countdown and the main action. It draws the stepper only until the session has a plan. After that the side pane holds
-  the stepper, the detail and the other actions, so a hidden pane leaves the status line, the main action and the
+- **Composer strip** — a part above the Chat composer (chat's `addComposerPart`): the countdown and the main action,
+  with the stepper until the session has a plan and the status mark and line otherwise. A stage outside the stepper
+  keeps the status mark and line, since the stepper does not show it. Once a plan is read the side pane holds the
+  stepper, the detail and the other actions, so a hidden pane leaves the status line, the main action and the
   `Space w` keys. Idle draws nothing.
 - **Side pane** — the Plan section of the session hub beside the Chat tab's transcript (chat's `addSidePart`,
   `docs/features/chat-bar/design.md` § The session hub), from the first read of a plan until

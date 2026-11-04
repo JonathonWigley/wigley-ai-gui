@@ -162,6 +162,42 @@ describe('default layout strip', () => {
       ]);
     },
   );
+
+  it.each([
+    {
+      name: 'no plan, stage in the stepper: the stepper alone shows it',
+      hasPlan: false,
+      stepId: 'make',
+      statusParts: [],
+    },
+    {
+      name: 'no plan, stage outside the stepper: the status line shows it',
+      hasPlan: false,
+      stepId: 'review',
+      statusParts: ['mark:running', 'el:workflow-status-line'],
+    },
+    {
+      name: 'a plan, no stepper: the status line shows it',
+      hasPlan: true,
+      stepId: 'make',
+      statusParts: ['mark:running', 'el:workflow-status-line'],
+    },
+  ])('strip_StatusLine_$name', ({ hasPlan, stepId, statusParts }) => {
+    const parent = new FakeElement('parent');
+    const input: StripInput = {
+      ...stripInput(hasPlan),
+      steps: [{ id: stepId, label: stepId, state: 'running' }],
+    };
+
+    const parts = drawn(layout.strip(asHtml(parent), input, fakeKit()));
+
+    expect(
+      parts.filter(
+        (part) =>
+          part.startsWith('mark:') || part === 'el:workflow-status-line',
+      ),
+    ).toEqual(statusParts);
+  });
 });
 
 describe('default layout sidePane', () => {

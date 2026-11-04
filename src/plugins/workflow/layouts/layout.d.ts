@@ -2,9 +2,9 @@
 // the user's wigley workflow with. The app draws three parts for a session:
 // - `chip`, under the session's row in the side bar, in the row part's wrapper: the stage's label and status as one
 //   tag, and the countdown. Its input also carries the detail and the main action. An idle session draws no chip.
-// - `strip`, above the Chat tab's composer, in the composer part's wrapper: the status mark, the status line, the
-//   stepper until the session has a plan, the countdown and the main action. Its input also carries the detail and
-//   every action. An idle session draws no strip.
+// - `strip`, above the Chat tab's composer, in the composer part's wrapper: the stepper until the session has a plan,
+//   the status mark and status line when the stepper does not show the stage, the countdown and the main action. Its
+//   input also carries the detail and every action. An idle session draws no strip.
 // - `sidePane`, beside the Chat tab's transcript, in the side part's wrapper: the status mark and line, the detail, the
 //   stepper, a progress bar, the plan's checklist (finished waves folded, the current wave in full, a line per later
 //   wave) and every action of the stage. An idle session, a session with no plan read, and a hidden pane draw no pane.

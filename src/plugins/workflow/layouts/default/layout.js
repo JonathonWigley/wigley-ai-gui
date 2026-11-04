@@ -2,8 +2,9 @@
 
 // The built-in workflow look: a one-line chip under the session row (the
 // stage and its status as an accent tag and the countdown), a strip above the
-// composer (the status mark and line, the stepper until a plan is read, the
-// countdown and the main action), and the side pane beside the transcript (the
+// composer (the stepper until a plan is read, the status mark and line when the
+// stepper does not show the stage, the countdown and the main action), and the
+// side pane beside the transcript (the
 // status mark and line, the detail, the stepper, the progress bar, the
 // checklist and every action).
 
@@ -113,7 +114,11 @@ const layout = {
 
   strip(parent, input, kit) {
     const strip = kit.el(parent, 'div', 'workflow-strip');
-    drawStatusLine(strip, input, kit);
+    const stepperShowsStage =
+      !input.hasPlan && input.steps.some((step) => step.id === input.stage);
+    if (!stepperShowsStage) {
+      drawStatusLine(strip, input, kit);
+    }
     if (!input.hasPlan) {
       kit.stepper(strip, input.steps);
     }
