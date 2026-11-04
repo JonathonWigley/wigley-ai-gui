@@ -1,6 +1,6 @@
 # 05 — Skills section
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01, 02
 Plan: [plan.md](plan.md)
@@ -47,3 +47,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 4c790705 · proof: diff read: every Produces present and check-layers holds only agent-skills entries; worker: typecheck and lint clean, 154 tests in the touched folders pass · concerns: the self-test has not run, and the fit check may need another selector at minimum width; a very long subagent name on a flex-none tag could scroll the section sideways; the log fires from a draw, so a never-opened tab logs late

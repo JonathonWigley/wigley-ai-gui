@@ -1,6 +1,6 @@
 # 07 — Session section
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 01, 04 (04 shares `chat-view.ts`, and this task consumes nothing from it)
 Plan: [plan.md](plan.md)
@@ -46,3 +46,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 6b720a24 · proof: diff read: every Produces present; typecheck and lint clean over the whole tree at the commit; worker: 171 tests in the touched files pass · concerns: the subgrid label column and value ellipsis are unseen until task 09; facts listeners fire on every status line draw, box focus included, patching about five rows, unmeasured; session-part.ts and chat-view.ts import each other, type-only at one end
