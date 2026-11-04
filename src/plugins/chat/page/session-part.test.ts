@@ -181,24 +181,36 @@ describe('Session part', () => {
     expect(parent.children).toEqual([]);
   });
 
-  it('build_LayoutUpdateThrows_DrawsTheNewFactsWithDefault', () => {
+  it.each<{
+    case: string;
+    update: (() => void) | undefined;
+    drawnBy: string;
+  }>([
+    {
+      case: 'Throws_DrawsTheNewFactsWithDefault',
+      update: () => {
+        throw new Error('update failed');
+      },
+      drawnBy: 'default',
+    },
+    {
+      case: 'Missing_DrawsTheNewFactsWithTheSameLayout',
+      update: undefined,
+      drawnBy: 'user',
+    },
+  ])('build_LayoutUpdate$case', ({ update, drawnBy }) => {
     const { source, change } = fakeSource(factsWithBranch('main'));
     const { layouts, parent, part } = partOver(source);
-    const brokenLayout: ChatLayout = {
+    const userLayout: ChatLayout = {
       sessionFacts(at, input, kit) {
         const view = defaultLayout.sessionFacts(at, input, kit);
-        return {
-          element: view.element,
-          update() {
-            throw new Error('update failed');
-          },
-        };
+        return { element: view.element, update };
       },
     };
     layouts.set({
-      user: 'broken',
+      user: 'user',
       layouts: new Map([
-        ['broken', brokenLayout],
+        ['user', userLayout],
         ['default', defaultLayout],
       ]),
     });
@@ -209,7 +221,7 @@ describe('Session part', () => {
 
     expect(parent.children).toHaveLength(1);
     expect(parent.children[0]).not.toBe(drawnFirst);
-    expect(parent.children[0].dataset.layout).toBe('default');
+    expect(parent.children[0].dataset.layout).toBe(drawnBy);
     expect(findAll(parent, 'chat-session-fact-value')[1].textContent).toBe(
       'feature',
     );

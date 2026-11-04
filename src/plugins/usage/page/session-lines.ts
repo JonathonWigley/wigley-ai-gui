@@ -82,8 +82,8 @@ export function rowLineKind(
   };
 }
 
-// The side-bar row's cache mark: nothing while the session has no cache expiry,
-// so a null input draws a stand-in holding no element of its own.
+// The side-bar row's cache mark: cold while the session has no usage yet, nothing
+// for a session the snapshot does not hold or usage with no cache expiry, so a null input draws a stand-in holding no element of its own.
 export function rowCacheKind(
   parts: Pick<UsageParts, 'rowCache'>,
 ): SessionLineKind<RowCacheInput | null> {

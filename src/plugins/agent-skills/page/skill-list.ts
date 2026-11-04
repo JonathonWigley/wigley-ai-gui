@@ -122,9 +122,8 @@ export function createSkillList(deps: SkillListDeps): SkillList {
     if (skills.length > 0) {
       holder.list = drawList(holder, skills);
     }
-    holder.section.setSummary(
-      skills.length === 0 ? null : String(skills.length),
-    );
+    const skillCount = new Set(skills.map(({ skill }) => skill)).size;
+    holder.section.setSummary(skillCount === 0 ? null : String(skillCount));
     logSkills(sessionId, skills);
   };
 

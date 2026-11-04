@@ -379,24 +379,48 @@ describe('default chat layout', () => {
   });
 
   it.each([
-    { costUsd: 0.01234, durationMs: 4210, line: 'end_turn · $0.01 · 4.2 s' },
-    { costUsd: 0.5, durationMs: null, line: 'end_turn · $0.50' },
-    { costUsd: 0.004, durationMs: null, line: 'end_turn · $0.00' },
-    { costUsd: null, durationMs: null, line: 'end_turn' },
-  ])('result_lineFormats ($line)', ({ costUsd, durationMs, line }) => {
-    const { kit } = fakeKit();
-    const entry = {
-      kind: 'result' as const,
-      id: 'r1',
+    {
       stopReason: 'end_turn',
-      costUsd,
-      durationMs,
-      raw: [] as unknown[],
-    };
+      durationMs: 4210,
+      stepCount: 31,
+      line: 'Turn ended · 4s · 31 steps',
+    },
+    {
+      stopReason: 'success',
+      durationMs: 9000,
+      stepCount: 1,
+      line: 'Turn ended · 9s · 1 step',
+    },
+    {
+      stopReason: 'max_tokens',
+      durationMs: null,
+      stepCount: 2,
+      line: 'max_tokens · 2 steps',
+    },
+    {
+      stopReason: 'end_turn',
+      durationMs: null,
+      stepCount: 0,
+      line: 'Turn ended',
+    },
+  ])(
+    'result_lineFormats ($line)',
+    ({ stopReason, durationMs, stepCount, line }) => {
+      const { kit } = fakeKit();
+      const entry = {
+        kind: 'result' as const,
+        id: 'r1',
+        stopReason,
+        costUsd: null,
+        durationMs,
+        stepCount,
+        raw: [] as unknown[],
+      };
 
-    const view = draw(entry, kit);
-    expect(asFake(view.element).textContent).toBe(line);
-  });
+      const view = draw(entry, kit);
+      expect(asFake(view.element).textContent).toBe(line);
+    },
+  );
 
   it('raw_rowShowsTheEvents', () => {
     const { kit, calls } = fakeKit();
@@ -1257,8 +1281,7 @@ describe('default chat layout surfaces', () => {
         'modelEffort',
         'chip:mode',
         'statusParts',
-        'running',
-        'send',
+        'div.chat-status-end:',
       ],
     },
     {
@@ -1270,8 +1293,7 @@ describe('default chat layout surfaces', () => {
         'modelEffort',
         'chip:mode',
         'statusParts',
-        'running',
-        'send',
+        'div.chat-status-end:',
       ],
     },
     {
@@ -1283,8 +1305,7 @@ describe('default chat layout surfaces', () => {
         'typeHint',
         'chip:mode',
         'statusParts',
-        'running',
-        'send',
+        'div.chat-status-end:',
       ],
     },
   ])(
@@ -1294,7 +1315,12 @@ describe('default chat layout surfaces', () => {
 
       const view = drawSurface('statusLine', input, kit);
 
-      expect(describeChildren(asFake(view.element))).toEqual(line);
+      const root = asFake(view.element);
+      expect(describeChildren(root)).toEqual(line);
+      expect(describeChildren(root.children[line.length - 1])).toEqual([
+        'running',
+        'send',
+      ]);
     },
   );
 

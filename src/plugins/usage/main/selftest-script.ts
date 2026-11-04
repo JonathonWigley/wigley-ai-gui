@@ -88,7 +88,7 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'compacting',
-    why: "A compaction draws the trigger's chip at the start of the context line and the tab bar's session line and drops it when the compaction ends; `compacting-narrow` is read by eye for the chip beside its meter at the window's least width.",
+    why: "A compaction draws the trigger's chip at the start of the context line and the tab bar's session line and drops it when the compaction ends, and the context line with its chip fits the window's least width; `compacting-narrow` is read by eye for the chip beside its meter there.",
     steps: [
       {
         width: 'start',
@@ -140,12 +140,13 @@ export function usageSelfTestScript(deps: UsageSelfTestDeps): SelfTestScript {
   return {
     pageBinds: [],
     settings: {},
-    // The tab bar's parts and the session line clip in their own box, and the
-    // activity dock's tool calls, one line and done line end in an ellipsis
-    // inside theirs.
+    // The tab bar's parts, the session line and the activity dock's one line clip
+    // in their own box, and the dock's tool calls and done line end in an
+    // ellipsis inside theirs.
     scrollsItself: [
       '.session-bar-parts',
       '.usage-session-line',
+      '.usage-context-line > .ui-tag',
       '.chat-working-action',
       '.chat-working-line',
       '.chat-working-done',

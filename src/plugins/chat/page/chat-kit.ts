@@ -143,8 +143,9 @@ interface PermissionPart {
 }
 
 // Allow once and Deny, built once, each with its keys anchored in the Chat
-// tab's scope; once the entry carries its answer, the answer text, the two
-// anchors disposed.
+// tab's scope; a click on Allow once only allows, though its key also copies
+// with no permission pending. Once the entry carries its answer, the answer
+// text, the two anchors disposed.
 function createPermissionPart(
   entry: PermissionEntry,
   deps: KitDeps,
@@ -177,7 +178,7 @@ function createPermissionPart(
   };
   if (entry.answer === null) {
     part.append(
-      actionButton('Allow once', 'primary', 'allowPermission', (answered) =>
+      actionButton('Allow once', 'primary', 'allowOrCopy', (answered) =>
         deps.allow(answered),
       ),
       actionButton('Deny', 'secondary', 'denyPermission', (answered) =>

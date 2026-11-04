@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { withUser } from '../../../shared/page/layout-host/test-layouts';
 import { installMarkdownDom } from '../../../shared/page/markdown-mount.test-support';
-import { asFake, asHtml, FakeElement } from '../../../shared/page/test-dom';
+import {
+  asFake,
+  asHtml,
+  FakeElement,
+  findAll,
+} from '../../../shared/page/test-dom';
 import type { SessionTabView } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
@@ -56,7 +61,7 @@ describe('session tabs view', () => {
     {
       case: 'a focus change',
       act: ({ view }) => view.panes.focus('pane-2'),
-      moved: ['a', 'c'],
+      moved: [],
     },
     {
       case: 'a layout redraw',
@@ -66,7 +71,7 @@ describe('session tabs view', () => {
     {
       case: 'a pane close',
       act: ({ view }) => view.panes.close('pane-2'),
-      moved: ['a', 'c'],
+      moved: ['c'],
     },
     {
       case: 'a restore dropping a pane',
@@ -75,7 +80,7 @@ describe('session tabs view', () => {
           { root: { kind: 'leaf', id: 'pane-1' }, focusedId: 'pane-1' },
           new Map([['pane-1', 'a']]),
         ),
-      moved: ['a', 'c'],
+      moved: ['c'],
     },
   ])('sessionsView_FramesMoved_MoveConnected ($case)', ({ act, moved }) => {
     const setup = sessionsViewSetup();
@@ -108,5 +113,94 @@ describe('session tabs view', () => {
       expect(frame.isConnected).toBe(true);
       expect(moves).toContainEqual({ element: frame, to: frame.parentNode });
     }
+  });
+
+  it.each<{ case: string; pane: Layout['pane']; keepsPart: boolean }>([
+    { case: 'an update', pane: undefined, keepsPart: true },
+    {
+      case: 'no update',
+      pane: (parent, _input, kit) => {
+        const element = kit.el(parent, 'div', 'session-pane');
+        return { element, body: kit.el(element, 'div') };
+      },
+      keepsPart: false,
+    },
+    {
+      case: 'an update that throws',
+      pane: (parent, _input, kit) => {
+        const element = kit.el(parent, 'div', 'session-pane');
+        return {
+          element,
+          body: kit.el(element, 'div'),
+          update: () => {
+            throw new Error('broken');
+          },
+        };
+      },
+      keepsPart: false,
+    },
+  ])(
+    'sessionsView_FocusChange_KeepsPartWithUpdate ($case)',
+    ({ pane, keepsPart }) => {
+      const setup = sessionsViewSetup();
+      setup.area.isPageRoot = true;
+      setup.view.setLayouts(withUser<Layout>(defaultLayout, { pane }));
+      const a = tabView('a');
+      const c = tabView('c');
+      setup.view.tabs.add('a', a);
+      setup.view.tabs.add('c', c);
+      setup.view.render(stateOf(['a', 'c'], 'a'));
+      setup.view.panes.restore(
+        TWO_PANES,
+        new Map([
+          ['pane-1', 'a'],
+          ['pane-2', 'c'],
+        ]),
+      );
+      const [, pressed] = findAll(setup.area, 'session-pane');
+
+      setup.view.panes.focus('pane-2');
+
+      expect(findAll(setup.area, 'session-pane')[1] === pressed).toBe(
+        keepsPart,
+      );
+      expect(frameOf(c).isConnected).toBe(true);
+    },
+  );
+
+  it('sessionsView_FocusChange_UpdatesPaneInPlace', () => {
+    const setup = sessionsViewSetup();
+    setup.area.isPageRoot = true;
+    setup.view.tabs.add('a', tabView('a'));
+    setup.view.tabs.add('c', tabView('c'));
+    setup.view.render(stateOf(['a', 'c'], 'a'));
+    setup.view.panes.restore(
+      TWO_PANES,
+      new Map([
+        ['pane-1', 'a'],
+        ['pane-2', 'c'],
+      ]),
+    );
+    const [first, second] = findAll(setup.area, 'session-pane');
+    const edgeClasses = (pane: FakeElement) =>
+      findAll(pane, 'session-pane-edge').map((edge) => edge.className);
+    const expectFocused = (focused: FakeElement, other: FakeElement) => {
+      expect(focused.classList.contains('is-focused')).toBe(true);
+      expect(other.classList.contains('is-focused')).toBe(false);
+      expect(edgeClasses(other)).toEqual([]);
+    };
+    expectFocused(first, second);
+    const firstEdges = edgeClasses(first);
+
+    setup.view.panes.focus('pane-2');
+
+    expectFocused(second, first);
+    expect(edgeClasses(second)).toHaveLength(1);
+    expect(edgeClasses(second)[0]).toContain('is-left');
+
+    setup.view.panes.focus('pane-1');
+
+    expectFocused(first, second);
+    expect(edgeClasses(first)).toEqual(firstEdges);
   });
 });

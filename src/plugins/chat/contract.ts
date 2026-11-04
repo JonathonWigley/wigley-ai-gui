@@ -440,9 +440,9 @@ export interface ChatSideSection {
 // composer, as one section: chat draws the frame with `title` and hands `build`
 // the frame's body, the tab's session id and the section. Chat sorts the sections
 // by `order`, equal orders keeping add order. The body adds its own padding, so
-// the part adds none. A part that draws nothing, by drawing no child in `parent`
-// or by setting `hidden` on each, hides its section. It takes no stop and no key
-// scope.
+// the part adds none. A part that draws nothing, by drawing no child element in
+// `parent` or by setting `hidden` on each, hides its section. It takes no stop
+// and no key scope.
 export interface ChatSidePart {
   id: string;
   title: string;
@@ -481,6 +481,8 @@ export interface ChatSidePart {
 // `focusedEntry` is the visible Chat tab's focused stop's slot element (an
 // entry, an activity line or a pending row); null with no visible Chat tab, no
 // focused stop, or while a composer part's stop holds the cursor.
+// `focusedBlock` is the visible Chat tab's cursor block element, inside that
+// slot; null in the same cases and on a stop with no blocks.
 // `activeTime` is the session's clock as main last sent it, null for a session
 // the page does not hold; read the total at a moment with `activeMsAt`.
 export interface ChatPageExports {
@@ -490,6 +492,7 @@ export interface ChatPageExports {
   addStatusPart(part: ChatStatusPart): Disposable;
   addSidePart(part: ChatSidePart): Disposable;
   focusedEntry(): HTMLElement | null;
+  focusedBlock(): HTMLElement | null;
   activeTime(sessionId: string): ActiveTime | null;
 }
 

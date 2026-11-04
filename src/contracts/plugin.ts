@@ -412,6 +412,8 @@ export interface PageServices {
   paths: Paths;
   // The home folder the served config names, which `paths.tilde` shows as `~`.
   homeDir: string;
+  // How the app was started, as the served config names it.
+  runMode: RunMode;
   // This plugin's own ui state, its keys kept apart from every other plugin's.
   uiState: UiState;
 }

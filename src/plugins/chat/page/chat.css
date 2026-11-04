@@ -1,8 +1,7 @@
 /* A session's Chat tab fills its session's sheet: a row of `.chat-main` and the
-   session hub, as a container for width rules. In `.chat-main`
-   the entries scroll under the floating composer, which `chat-view.ts` measures
-   into `--chat-composer-height` (unitless pixels) on the tab so the last entry
-   stops above it. */
+   session hub, the tab a container for width rules. In `.chat-main` the entries
+   scroll under the floating composer, which `chat-view.ts` measures into `--chat-composer-height` (unitless pixels) on the
+   tab so the last entry stops above it. */
 .chat-tab {
   container-name: chat-tab;
   container-type: inline-size;
@@ -17,19 +16,44 @@
   position: relative;
 }
 
-/* The session hub keeps the tab's height. Each section takes its content's
-   height, and shrinks and scrolls in its own body when the column is too short.
+/* The session hub keeps the tab's height. Main agent keeps its own height, which
+   the dock bounds. Each other section takes its content's height, and when the
+   column is too short gives up height by its content's share, scrolling in its
+   own body and keeping its whole head.
    A section whose part draws nothing takes no space, and the hub with none left
-   takes none either. */
+   takes none either. Its width is the user's (`--chat-side-width`), and always
+   leaves `.chat-main` its least width (`--chat-side-end-min`), both unitless
+   pixels. */
 .chat-side-parts {
+  --chat-side-head-height: calc(
+    var(--wg-text-12) * var(--wg-leading-ui) + 2 * var(--wg-space-1)
+  );
+
   align-self: stretch;
   background: var(--wg-block-background);
   border-left: 1px solid var(--wg-border-default);
   display: flex;
   flex: none;
   flex-direction: column;
+  max-width: calc(100% - var(--chat-side-end-min) * 1px);
   min-height: 0;
-  width: calc(var(--wg-space-6) * 11);
+  position: relative;
+  width: calc(var(--chat-side-width) * 1px);
+}
+
+/* The hub's drag handle lies centred on its hairline, taking no space. No key
+   resizes the hub, so it shows no resize prompt. */
+.chat-side-handle {
+  bottom: 0;
+  left: calc(var(--wg-space-1) / -2 - 1px);
+  position: absolute;
+  top: 0;
+  width: var(--wg-space-1);
+  z-index: 1;
+}
+
+.chat-side-handle > .ui-split-prompt {
+  display: none;
 }
 
 .is-side-hidden .chat-side-parts {
@@ -37,11 +61,16 @@
 }
 
 .chat-side-part {
+  box-sizing: content-box;
   display: flex;
   flex: 0 1 auto;
   flex-direction: column;
-  min-height: 0;
+  min-height: var(--chat-side-head-height);
   overflow: hidden;
+}
+
+.chat-side-part[data-part='chat.mainAgent'] {
+  flex: none;
 }
 
 .chat-side-part:not(:has(.chat-side-section-body > :not([hidden]))) {
@@ -73,6 +102,7 @@
   flex: none;
   font: inherit;
   gap: var(--wg-space-1);
+  min-height: var(--chat-side-head-height);
   padding: var(--wg-space-1) var(--wg-space-3);
   text-align: left;
   width: 100%;
@@ -84,7 +114,15 @@
   flex-direction: column;
   min-height: 0;
   overflow-y: auto;
-  padding: var(--wg-space-2) var(--wg-space-3);
+  padding: 0 var(--wg-space-3);
+}
+
+/* The body's block padding, in flow so the body can shrink to nothing. */
+.chat-side-section-body::before,
+.chat-side-section-body::after {
+  content: '';
+  flex: none;
+  height: var(--wg-space-2);
 }
 
 .chat-side-section.is-collapsed .chat-side-section-body {
@@ -105,21 +143,103 @@
   );
 }
 
-/* The chat's focus exception: the focused entry draws a left bar, not the
-   ring, and while the box has focus no entry and no box frame is marked; while
-   a composer part's stop holds the cursor no entry is marked either. */
+/* The chat's focus exception: the focused block, or the focused entry when it
+   has no blocks, draws a left bar, not the ring, and while the box has focus no
+   entry and no box frame is marked; while a composer part's stop holds the
+   cursor no entry is marked either. A range tints each of its stops. */
 .chat-entry-slot {
+  --chat-slot-gutter: var(--wg-space-2);
+
   margin: var(--wg-space-1) 0;
-  padding: var(--wg-space-1) var(--wg-space-2);
+  padding: var(--wg-space-1) var(--chat-slot-gutter);
 }
 
-.chat-entry-slot.is-cursor {
+.chat-entry-slot.is-cursor,
+[data-md-lines].is-cursor {
+  box-shadow: inset var(--wg-indicator-width) 0 0 var(--wg-focus-border);
+}
+
+/* A paragraph starts at its text, so its box reaches into the slot's gutter to
+   keep the bar off the first glyph; the text stays where it was. */
+.chat-entries p[data-md-lines] {
+  margin-inline-start: calc(var(--chat-slot-gutter) * -1);
+  padding-inline-start: var(--chat-slot-gutter);
+}
+
+/* A pseudo-element draws the bar and tint of a stop whose own box cannot show
+   them. A list item's marker sits outside its box and follows its edge, so the
+   pseudo-element runs from the same gutter to that edge, painting over the
+   marker: a range's tint lies across it. A contributed fence's child and a
+   changes list's items paint over their box, so it lies over the whole box,
+   above those children. */
+.chat-entries :where(li, .md-fence, .md-changes)[data-md-lines] {
+  isolation: isolate;
+  position: relative;
+}
+
+.chat-entries li[data-md-lines] {
+  --chat-mark-left: calc(
+    (var(--md-list-indent) + var(--chat-slot-gutter)) * -1
+  );
+  --chat-mark-right: 100%;
+}
+
+.chat-entries :where(.md-fence, .md-changes)[data-md-lines] {
+  --chat-mark-left: 0;
+  --chat-mark-right: 0;
+}
+
+.chat-entries
+  :where(li, .md-fence, .md-changes)[data-md-lines]:is(
+    .is-cursor,
+    .is-range
+  )::before {
+  bottom: 0;
+  content: '';
+  left: var(--chat-mark-left);
+  pointer-events: none;
+  position: absolute;
+  right: var(--chat-mark-right);
+  top: 0;
+  z-index: 1;
+}
+
+.chat-entries :where(li, .md-fence, .md-changes)[data-md-lines].is-cursor {
+  box-shadow: none;
+}
+
+.chat-entries
+  :where(li, .md-fence, .md-changes)[data-md-lines].is-cursor::before {
   box-shadow: inset var(--wg-indicator-width) 0 0 var(--wg-focus-border);
 }
 
 .chat-tab.is-box-focused .chat-entry-slot.is-cursor,
-.chat-tab.is-at-stop .chat-entry-slot.is-cursor {
+.chat-tab.is-box-focused [data-md-lines].is-cursor,
+.chat-tab.is-box-focused [data-md-lines].is-cursor::before,
+.chat-tab.is-at-stop .chat-entry-slot.is-cursor,
+.chat-tab.is-at-stop [data-md-lines].is-cursor,
+.chat-tab.is-at-stop [data-md-lines].is-cursor::before {
   box-shadow: none;
+}
+
+.chat-entry-slot.is-range,
+[data-md-lines].is-range,
+.chat-entries
+  :where(li, .md-fence, .md-changes)[data-md-lines].is-range::before {
+  background: var(--wg-accent-tint);
+}
+
+.chat-entries :where(.md-fence, .md-changes)[data-md-lines].is-range {
+  background: none;
+}
+
+/* A rule has no box to mark, so it takes the mark's colour itself. */
+.chat-entries hr[data-md-lines].is-range {
+  border-top-color: var(--wg-accent-tint);
+}
+
+.chat-tab:not(.is-box-focused, .is-at-stop) hr[data-md-lines].is-cursor {
+  border-top-color: var(--wg-focus-border);
 }
 
 @media (max-width: 800px) {
@@ -203,11 +323,13 @@
 .chat-composer-parts {
   display: flex;
   flex-direction: column;
+  gap: var(--wg-space-2);
   min-height: 0;
   overflow-y: auto;
 }
 
-.chat-composer-parts:empty {
+.chat-composer-parts:empty,
+.chat-composer-part:empty {
   display: none;
 }
 
@@ -255,7 +377,8 @@
 
 /* `i` and `a` are vim's inside the box, so the type hint hides, keeping its
    space, while the box has focus. */
-.chat-type-hint {
+.chat-type-hint,
+.chat-cursor-keys {
   display: inline-flex;
   gap: var(--wg-space-3);
 }

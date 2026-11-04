@@ -64,6 +64,9 @@ export interface ResultInput {
   stopReason: string;
   costUsd: number | null;
   durationMs: number | null;
+  // The main agent's steps in the turn this result ends, from its start: the later of the last user message and the
+  // previous result.
+  stepCount: number;
   raw: unknown[];
 }
 export interface NoticeInput {
@@ -337,7 +340,8 @@ export interface ComposerKit extends BaseKit {
 }
 // The status line's pieces. Each piece holding keys places the same element on every draw.
 export interface StatusLineKit extends BaseKit {
-  // The `i` and `a` prompts; hidden, keeping its space, while the box has focus.
+  // The `i` and `a` prompts, then `J`, `K`, `V` and `y` with no labels; hidden, keeping its space, while the box has
+  // focus.
   typeHint(parent: HTMLElement): HTMLElement;
   // One chip for the model and effort: the model control's label, then `<model> · <effort>` (the model alone while
   // `effort` is null). It opens the model picker and holds the model and effort pick keys (the model's alone while
@@ -447,7 +451,8 @@ export interface ImageViewerInput {
   count: number;
 }
 export interface SideSectionKit extends BaseKit {
-  // `button.chat-side-section-head`, which toggles the section on click and takes no key and no focus.
+  // `button.chat-side-section-head`, which toggles the section on click and takes no key and no focus: a click in the
+  // focused pane leaves the focus where it was, and one in another pane moves it to that pane's box.
   head(parent: HTMLElement): HTMLButtonElement;
   // `div.chat-side-section-body`, the part's content inside; the same element on every draw. Mounts once per draw;
   // left out, it ends the part's element.
@@ -455,7 +460,10 @@ export interface SideSectionKit extends BaseKit {
 }
 
 // Builds one entry into `parent` from the entry and a kit made for that entry: the builder appends its element to
-// `parent` and returns it in `element`.
+// `parent` and returns it in `element`. A `user` or `assistant` builder gets one cursor stop per block when it draws
+// the text with `kit.markdown`; an entry with no marked block has one stop, and a body drawn later is not read until
+// the next redraw. Copy reads the entry's source lines by a block's position, so copy per block needs the layout to
+// draw `input.text` itself.
 export type EntryBuilder<K extends EntryKind> = (
   parent: HTMLElement,
   input: EntryInput<K>,
@@ -466,8 +474,8 @@ export type EntryBuilder<K extends EntryKind> = (
 // a part or entry kind left out draws with `default`. A dialog part draws into the dialog's body; the app keeps the
 // dialog's frame and title.
 export interface ChatLayout {
-  // Whether the entry list draws the agent's steps (activity lines and their step rows) and the `result` entries;
-  // `false` leaves them out of the list and the entry cursor. A user layout that wants the activity lines sets it
+  // Whether the entry list draws the agent's steps (activity lines and their step rows); `false` leaves them out of
+  // the list and the entry cursor. A user layout that wants the activity lines sets it
   // `true`. Left out, the layout takes `default`'s.
   activityInTranscript?: boolean;
   entries?: { [K in EntryKind]?: EntryBuilder<K> };
@@ -509,7 +517,8 @@ export interface ChatLayout {
     input: ComposerInput,
     kit: ComposerKit,
   ): PartView<ComposerInput>;
-  // The status line under the box, drawn into the composer's status line slot again on each change.
+  // The status line under the box, drawn into the composer's status line slot again on each change other than
+  // `isBoxFocused`, which the app applies to the type hint in place.
   statusLine?(
     parent: HTMLElement,
     input: ComposerInput,
@@ -563,7 +572,7 @@ export interface ChatLayout {
     input: SideSectionInput,
     kit: SideSectionKit,
   ): PartView<SideSectionInput>;
-  // The session hub's Session section body. The app sends the input again after each status line change; a part with
+  // The session hub's Session section body. The app sends the input again after each status line draw; a part with
   // no `update` draws again.
   sessionFacts?(
     parent: HTMLElement,

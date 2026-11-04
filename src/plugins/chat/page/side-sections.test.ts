@@ -20,6 +20,7 @@ import { createSideSections, type SideTab } from './side-sections';
 
 const COLLAPSED = 'collapsed-sections';
 const HIDDEN = 'hub-hidden';
+const WIDTH = 'hub-width';
 
 function fakeUiState(initial: Record<string, unknown> = {}): UiState {
   const held = new Map(Object.entries(initial));
@@ -55,6 +56,7 @@ function setUp(uiState = fakeUiState()) {
     },
     parts,
     uiState,
+    timers: { set: () => 0, clear: () => undefined },
     log,
   });
   const tabs: { root: FakeElement; side: SideTab }[] = [];
@@ -107,6 +109,30 @@ function headOf(root: FakeElement) {
 
 function summaryOf(root: FakeElement) {
   return findAll(root, 'chat-side-section-summary')[0].textContent;
+}
+
+function holderOf(root: FakeElement) {
+  return findAll(root, 'chat-side-parts')[0];
+}
+
+// A primary press on `root`'s hub handle at `from`, a move to `to` and the
+// release, `root` drawn 1000 px wide with its left edge at the client's origin.
+function dragHandle(root: FakeElement, from: number, to: number) {
+  vi.spyOn(root, 'getBoundingClientRect').mockReturnValue({
+    left: 0,
+    top: 0,
+    width: 1000,
+    height: 500,
+  });
+  const handle = findAll(root, 'chat-side-handle')[0];
+  const captured = new Set<number>();
+  Object.assign(handle, {
+    setPointerCapture: (id: number) => captured.add(id),
+    hasPointerCapture: (id: number) => captured.has(id),
+  });
+  handle.fire('pointerdown', { button: 0, pointerId: 1, clientX: from });
+  handle.fire('pointermove', { pointerId: 1, clientX: to });
+  (window as unknown as FakeElement).fire('pointerup', { pointerId: 1 });
 }
 
 describe('createSideSections', () => {
@@ -261,6 +287,49 @@ describe('createSideSections', () => {
     const { openTab } = setUp(fakeUiState({ [HIDDEN]: true }));
 
     expect(openTab().root.classList.contains('is-side-hidden')).toBe(true);
+  });
+
+  it('a drag on one hub handle widens every tab, keeps the width, and a later tab reads it', () => {
+    const { uiState, openTab, logs } = setUp();
+    const first = openTab();
+    const second = openTab();
+
+    dragHandle(first.root, 736, 636);
+
+    for (const { root } of [first, second]) {
+      expect(holderOf(root).style['--chat-side-width']).toBe('364');
+    }
+    expect(uiState.get(WIDTH)).toBe(364);
+    expect(logs).toContain('session hub width 364');
+    expect(holderOf(openTab().root).style['--chat-side-width']).toBe('364');
+  });
+
+  it.each([
+    { to: 950, width: '200' },
+    { to: 10, width: '680' },
+  ])(
+    'a drag to $to stops at width $width, leaving the hub and the entries their least widths',
+    ({ to, width }) => {
+      const { openTab } = setUp();
+      const { root } = openTab();
+
+      dragHandle(root, 736, to);
+
+      expect(holderOf(root).style['--chat-side-width']).toBe(width);
+    },
+  );
+
+  it('a part added to a tab sits before the hub handle', () => {
+    const { parts, openTab } = setUp();
+    parts.add(recordingPart('first').part);
+    const { root, side } = openTab();
+
+    parts.add(recordingPart('second').part);
+    side.sync();
+
+    const classes = holderOf(root).children.map((child) => child.className);
+    expect(classes.at(-1)).toContain('chat-side-handle');
+    expect(sectionOrder(root)).toEqual(['first', 'second']);
   });
 
   it.each([

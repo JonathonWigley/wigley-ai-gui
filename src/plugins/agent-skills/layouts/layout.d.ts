@@ -9,15 +9,16 @@
 // - no keys and no focus: the list takes neither.
 import type { BaseKit } from '../../../shared/page/layout-host/kit';
 
-// One skill an agent started. `ownerName` names that agent as it was when the skill started: `main`, or the subagent's
-// name. `isMain` is true for the main agent's skill alone, since a subagent may be named `main`.
+// One skill an agent started. `ownerName` names that agent as it was when the skill started: `main`, the subagent's
+// name, or `subagent` for one never listed. `isMain` is true for the main agent's skill alone, since a subagent may be
+// named `main`.
 export interface SkillRowInput {
   skill: string;
   ownerName: string;
   isMain: boolean;
 }
 
-// The session's skills, in start order.
+// The session's skills, one entry per skill and agent, in start order.
 export interface SkillListInput {
   skills: readonly SkillRowInput[];
 }

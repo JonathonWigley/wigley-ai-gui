@@ -108,7 +108,7 @@ describe('createRowClock', () => {
     {
       name: 'paused at 0',
       time: { totalMs: 0, since: null },
-      ms: null,
+      ms: 0,
       ticks: 0,
     },
     {
@@ -191,15 +191,15 @@ describe('createRowClock', () => {
     expect(armed.size).toBe(1);
   });
 
-  it('changed_ClockResetToZero_ClearsTheWrapper', () => {
-    const { rowClock, records, drawRow, armed } = setUp();
+  it('changed_ClockResetToZero_ShowsTheZeroText', () => {
+    const { rowClock, records, drawRow, duration, armed } = setUp();
     records.set(SESSION, { totalMs: 0, since: NOW - 1000 });
     const { wrapper } = drawRow();
 
     records.set(SESSION, { totalMs: 0, since: null });
     rowClock.changed(SESSION);
 
-    expect(wrapper.childNodes).toEqual([]);
+    expect(wrapper.textContent).toBe(duration(0));
     expect(armed.size).toBe(0);
   });
 

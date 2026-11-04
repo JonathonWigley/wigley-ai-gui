@@ -381,6 +381,62 @@ describe('composer surface parts', () => {
     expect(madeFor(chatCommand('send'))).toHaveLength(1);
   });
 
+  it.each<{ case: string; next: Partial<ComposerInput>; isRebuilt: boolean }>([
+    { case: 'same input', next: {}, isRebuilt: false },
+    { case: 'box focus', next: { isBoxFocused: true }, isRebuilt: false },
+    { case: 'branch', next: { branch: 'feature' }, isRebuilt: true },
+    { case: 'repo', next: { repo: 'other' }, isRebuilt: true },
+    { case: 'running', next: { running: false }, isRebuilt: true },
+    { case: 'working', next: { working: true }, isRebuilt: true },
+    {
+      case: 'control value',
+      next: {
+        controls: [{ id: 'mode', label: 'Mode', value: 'Plan', enabled: true }],
+      },
+      isRebuilt: true,
+    },
+    {
+      case: 'model and effort',
+      next: {
+        modelEffort: {
+          model: { id: 'model', label: 'Model', value: 'Big', enabled: true },
+          effort: null,
+        },
+      },
+      isRebuilt: true,
+    },
+  ])(
+    'statusLine_InputChange_RebuildsOnlyWhatItDraws ($case)',
+    ({ next, isRebuilt }) => {
+      const { deps, ran } = surfaceDeps(null);
+      const surface = createComposerSurface(deps, {
+        sessionId: 'row-1',
+        box: asHtml(boxWithEditor()),
+        removeImage: () => undefined,
+      });
+      const panel = asFake(
+        surface.drawComposer(
+          asHtml(new FakeElement('div')),
+          composerInput(false),
+        ),
+      );
+      const pressed = panel.querySelector('.chat-status-line');
+      const send = panel.querySelector('.chat-status-end')?.children.at(-1);
+
+      surface.drawStatusLine({ ...composerInput(false), ...next });
+      send?.click();
+
+      const isKept = panel.querySelector('.chat-status-line') === pressed;
+      expect(isKept).toBe(!isRebuilt);
+      expect(ran).toEqual([chatCommand('send')]);
+      expect(
+        panel
+          .querySelector('.chat-type-hint')
+          ?.classList.contains('is-box-focused'),
+      ).toBe(next.isBoxFocused === true);
+    },
+  );
+
   it('statusLine_StatusParts_BuiltAtComposerDrawOnly', () => {
     const { deps } = surfaceDeps(null);
     const record: string[] = [];

@@ -131,17 +131,19 @@ afterEach(() => {
 function viewOf(tree: PaneTree) {
   const changed: PaneTree[] = [];
   const focused: string[] = [];
+  const pressFocused: string[] = [];
   const view = createPaneTreeView({
     initialId: tree.focusedId,
     anchor: () => ({ dispose: () => undefined }),
     timers,
     changed: (next) => changed.push(next),
     focused: (id) => focused.push(id),
+    pressFocused: (id) => pressFocused.push(id),
     leaving: () => undefined,
   });
   view.restore(tree);
   asFake(view.element).isPageRoot = true;
-  return { view, changed, focused };
+  return { view, changed, focused, pressFocused };
 }
 
 function asPane(node: HTMLElement): PaneFakeElement {
@@ -157,6 +159,20 @@ function outerSplit(view: PaneTreeView, width: number) {
   box.rect = { left: 0, top: 0, width, height: 600 };
   handle.rect = { left: 0, top: 0, width: 4, height: 600 };
   return { box, handle };
+}
+
+// The window hears a press and its release in its capture phase.
+function press(target: HTMLElement) {
+  fakeWin.fire('pointerdown', { target });
+}
+
+function release(target: HTMLElement) {
+  fakeWin.fire('pointerup', { target });
+}
+
+function pressAndRelease(target: HTMLElement) {
+  press(target);
+  release(target);
 }
 
 function outerRatio(view: PaneTreeView): number {
@@ -398,11 +414,8 @@ describe('createPaneTreeView focused', () => {
       expected: ['b'],
     },
     {
-      name: 'a press on another pane',
-      act: (view: PaneTreeView) =>
-        asPane(view.element).dispatch('pointerdown', {
-          target: view.slot('b'),
-        }),
+      name: 'a press and release on another pane',
+      act: (view: PaneTreeView) => pressAndRelease(view.slot('b')),
       expected: ['b'],
     },
     {
@@ -438,4 +451,139 @@ describe('createPaneTreeView focused', () => {
 
     expect(focused).toEqual(expected);
   });
+
+  it.each([
+    {
+      name: 'a press alone',
+      act: (view: PaneTreeView) => press(view.slot('b')),
+      expected: 'a',
+    },
+    {
+      name: 'a press and release on another pane',
+      act: (view: PaneTreeView) => pressAndRelease(view.slot('b')),
+      expected: 'b',
+    },
+    {
+      name: 'a release in the pane the press left for',
+      act: (view: PaneTreeView) => {
+        press(view.slot('b'));
+        release(view.slot('c'));
+      },
+      expected: 'b',
+    },
+    {
+      name: 'a release outside the tree',
+      act: (view: PaneTreeView) => {
+        press(view.slot('b'));
+        release(document.createElement('div'));
+      },
+      expected: 'b',
+    },
+    {
+      name: 'a press on the focused pane released in another',
+      act: (view: PaneTreeView) => {
+        press(view.slot('a'));
+        release(view.slot('b'));
+      },
+      expected: 'a',
+    },
+    {
+      name: 'a press outside the slots released in another pane',
+      act: (view: PaneTreeView) => {
+        press(document.createElement('div'));
+        release(view.slot('b'));
+      },
+      expected: 'a',
+    },
+    {
+      name: 'a cancelled press, then a stray release',
+      act: (view: PaneTreeView) => {
+        press(view.slot('b'));
+        fakeWin.fire('pointercancel', { target: view.slot('b') });
+        release(view.slot('b'));
+      },
+      expected: 'a',
+    },
+    {
+      name: 'a press with no release, then a press outside the slots released',
+      act: (view: PaneTreeView) => {
+        press(view.slot('b'));
+        pressAndRelease(document.createElement('div'));
+      },
+      expected: 'a',
+    },
+    {
+      name: 'a press with no release, then a press and release on a third pane',
+      act: (view: PaneTreeView) => {
+        press(view.slot('b'));
+        pressAndRelease(view.slot('c'));
+      },
+      expected: 'c',
+    },
+    {
+      name: 'a second release',
+      act: (view: PaneTreeView) => {
+        pressAndRelease(view.slot('b'));
+        view.focus('c');
+        release(view.slot('b'));
+      },
+      expected: 'c',
+    },
+    {
+      name: 'a release after the pressed pane closed',
+      act: (view: PaneTreeView) => {
+        press(view.slot('b'));
+        view.close('b');
+        release(view.slot('a'));
+      },
+      expected: 'a',
+    },
+  ])(
+    'moves focus when a press ends, to the pane it began in: $name',
+    ({ act, expected }) => {
+      const { view } = viewOf({
+        root: row(0.4, leaf('a'), row(0.5, leaf('b'), leaf('c'))),
+        focusedId: 'a',
+      });
+
+      act(view);
+
+      expect(view.tree().focusedId).toBe(expected);
+    },
+  );
+
+  it.each([
+    {
+      name: 'a press and release on another pane',
+      act: (view: PaneTreeView) => pressAndRelease(view.slot('b')),
+      expected: ['b'],
+    },
+    {
+      name: 'a press and release on the focused pane',
+      act: (view: PaneTreeView) => pressAndRelease(view.slot('a')),
+      expected: [],
+    },
+    {
+      name: 'focus on another pane by call',
+      act: (view: PaneTreeView) => view.focus('b'),
+      expected: [],
+    },
+    {
+      name: 'a focus move',
+      act: (view: PaneTreeView) => view.outer.focus.move('right'),
+      expected: [],
+    },
+  ])(
+    'reports a release only when it moved focus: $name',
+    ({ act, expected }) => {
+      const { view, pressFocused } = viewOf({
+        root: row(0.5, leaf('a'), leaf('b')),
+        focusedId: 'a',
+      });
+
+      act(view);
+
+      expect(pressFocused).toEqual(expected);
+    },
+  );
 });

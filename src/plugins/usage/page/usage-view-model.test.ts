@@ -459,6 +459,21 @@ describe('rowCacheInput', () => {
   });
 });
 
+describe('rowCacheInput without usage', () => {
+  it.each([
+    { case: 'AbsentSession', sessionId: 's9', expected: null },
+    {
+      case: 'SessionBeforeItsFirstTurnIsCold',
+      sessionId: 's2',
+      expected: { isCold: true, tooltip: 'cache cold' },
+    },
+  ])('rowCacheInput_$case', ({ sessionId, expected }) => {
+    expect(rowCacheInput(snapshotWithoutUsage(), sessionId, NOW)).toEqual(
+      expected,
+    );
+  });
+});
+
 describe('detailsInput', () => {
   it.each([
     {

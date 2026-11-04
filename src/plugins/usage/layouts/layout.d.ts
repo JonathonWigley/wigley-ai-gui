@@ -109,8 +109,8 @@ export interface UsageKit extends BaseKit {}
 // draws the chip first and pulses the meter), `contextLine` its context and cache above its Chat box (the same zero
 // line, chip and pulse), `spendLine` its spend in its Chat status line (still one element while spend is null, which
 // the default layout hides), `rowLine` one session's line under its side-bar row (its context `0k` while that
-// session has no usage), `rowCache` one session's cache mark on that row (not drawn while the session has no cache
-// expiry), and `details` the right-bar details.
+// session has no usage), `rowCache` one session's cache mark on that row (cold while that session has no usage; not drawn for a
+// session the snapshot does not hold or usage with no cache expiry), and `details` the right-bar details.
 export interface Layout {
   statusLine?(
     parent: HTMLElement,

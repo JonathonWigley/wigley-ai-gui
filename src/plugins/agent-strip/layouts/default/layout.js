@@ -5,7 +5,8 @@
 // its model and effort, its latest tool calls in mono, which an open box drops,
 // and a footer of its context bar and cost. The app draws an open subagent box's
 // list of every call after all of these. A task box is a row the composer's
-// width: its running dot, Shell tag, command in mono and runtime on one line.
+// width: its running dot, Shell tag (Task when it has no command), command or
+// else description in mono and runtime on one line.
 // An open row wraps the command and adds its owner under the line. The selected
 // box takes the focus ring and the prompt of the keys that type in the chat box.
 
@@ -56,7 +57,7 @@ const layout = {
     const element = kit.card(parent, boxClass('agent-strip-task', input));
     const line = kit.el(element, 'div', 'agent-strip-row-line');
     kit.statusDot(line, 'running');
-    kit.tag(line, 'Shell', 'accent');
+    kit.tag(line, input.command === null ? 'Task' : 'Shell', 'accent');
     kit.el(
       line,
       'div',

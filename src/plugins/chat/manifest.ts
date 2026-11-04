@@ -46,8 +46,24 @@ export const chatManifest = definePlugin({
     prevImage: { label: 'previous image', group: 'image', runsIn: 'page' },
     closeImage: { label: 'close the image', group: 'image', runsIn: 'page' },
     interrupt: { label: 'interrupt the turn', group: 'chat', runsIn: 'page' },
-    nextEntry: { label: 'next entry', group: 'entries', runsIn: 'page' },
-    prevEntry: { label: 'previous entry', group: 'entries', runsIn: 'page' },
+    nextEntry: { label: 'next block', group: 'entries', runsIn: 'page' },
+    prevEntry: { label: 'previous block', group: 'entries', runsIn: 'page' },
+    nextMessage: { label: 'next message', group: 'entries', runsIn: 'page' },
+    prevMessage: {
+      label: 'previous message',
+      group: 'entries',
+      runsIn: 'page',
+    },
+    toggleRange: {
+      label: 'start or end a range',
+      group: 'entries',
+      runsIn: 'page',
+    },
+    cancelRange: {
+      label: 'cancel the range',
+      group: 'entries',
+      runsIn: 'page',
+    },
     toggleEntry: {
       label: 'expand or collapse the entry',
       group: 'entries',
@@ -75,8 +91,8 @@ export const chatManifest = definePlugin({
       group: 'entries',
       runsIn: 'page',
     },
-    allowPermission: {
-      label: 'allow the tool once',
+    allowOrCopy: {
+      label: 'allow the tool once, or copy',
       group: 'permissions',
       runsIn: 'page',
     },
@@ -141,7 +157,7 @@ export const chatManifest = definePlugin({
       runsIn: 'page',
     },
     toggleSideParts: {
-      label: 'Hide or show the session hub',
+      label: 'hide or show the session hub',
       group: 'view',
       runsIn: 'page',
     },

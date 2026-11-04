@@ -240,7 +240,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  and the built-in `default` chat layout); `image-rules.ts` at the root holds the attach rules both
                  parts share; main exports `launch` (a background session with a first message) and
                  `defaultProfile` to notes, `send` and `profileOf` to forms and the primer (the form wake), `send`, `clear`, `launch` and `profileOf` to workflow, `profiles` to usage, `addInstructions` (text every session chat starts carries to its harness)
-                 to visual, and `addSendGate` and `addIdleCompactThreshold` to auto-compact, and `launch` and `closeSessionsIn` to self-test scripts; page exports `focusedEntry` (the focused entry's element) to visual and `activeTime` (a session's clock)
+                 to visual, and `addSendGate` and `addIdleCompactThreshold` to auto-compact, and `launch` and `closeSessionsIn` to self-test scripts; page exports `focusedEntry` (the focused entry's element) and `focusedBlock` (the cursor's block element) to visual and `activeTime` (a session's clock)
                  with the `activeTimeChanged` event; its page also draws each session's run time under its row, through
                  sessions' `addRowPart` and a `rowClock` layout part; main keeps each session's clock, `docs/features/session-clock/design.md`
   keys/          manifest.ts, contract.ts, main/ (registers the layouts only), page/ (which-key, the help overlay,
@@ -276,7 +276,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  registration), page/ (`html-fence.ts`, the `html` fence contribution: the "drawing visual…" card for
                  an open block, a visual frame for a closed one; `visual-registry.ts` the source of each closed
                  visual on the page; `visual-overlay.ts` and `visual-commands.ts` the full-size overlay and its `v` key on chat's
-                 focused entry, `h`/`l` between visuals and `Esc` to close),
+                 focused entry, opening at the first visual in the cursor's block, `h`/`l` between visuals and `Esc` to close),
                  layouts/ (the visual Layout contract and the built-in `default` layout);
                  `docs/features/visuals/design.md`
 ```
@@ -375,19 +375,19 @@ round; primer: an open primer), since main, not the page, decides.
   bar, which moves with its session between panes, through `addBarPart`; the usage-tab-line plugin's per-session line
   is one.
   Information about one session goes in a session part, not on a shared bar.
-- **A row activity** is the short state a session's row shows beside its title — a status dot, with its word (working,
-  needs you, done, error) in the row's tooltip. A page plugin sets one per session under its own source id through the
+- **A row activity** is the short state a session's row shows beside its title — a label holding its word (working,
+  needs you, done, error), also in the row's tooltip. A page plugin sets one per session under its own source id through the
   `sessions` page export `setActivity`, and the row shows the highest rank, so a new state is a registration in the
   plugin that knows it, never an edit to sessions. A **session title** has three sources (user, agent, first message) kept on the row;
   the agent sets its own through the `set_session_title` tool (`docs/features/session-titles/design.md`).
 - **A composer part** is what a plugin draws above the Chat composer's box, through the `chat` page export
   `addComposerPart`, the same shape as a session part: chat hands each part a wrapper and the session id. The workflow
   plugin's strip and the agent strip are two. A part may offer a **stop**: `j` on the entry cursor's last stop (the
-  newest pending row, else the last entry or an open last run's last step) hands the cursor to it, and the part holds
+  newest pending row, else the last block of the last entry or an open last run's last step) hands the cursor to it, and the part holds
   its own key scope until it hands the cursor back.
 - **A side part** is what a plugin draws in the session hub beside the Chat tab's transcript, through the `chat` page
   export `addSidePart`: a composer part's shape plus a `title` and an `order`, and `build` also gets a handle that sets
-  the section's summary. Chat draws each part's section frame and keeps its collapse. The workflow plugin's side pane and
+  the section's summary. Chat draws each part's section frame, keeps its collapse and sizes the hub by a drag on its start edge. The workflow plugin's side pane and
   the agent-skills plugin's list are two. A side part takes no key scope and no stop.
 - **A status part** is what a plugin draws in the Chat status line under the box, through the `chat` page export
   `addStatusPart`, the same shape; the usage plugin's spend is one. Usage's context line is a composer part.
@@ -670,7 +670,7 @@ round; primer: an open primer), since main, not the page, decides.
   `queuedMessage` (one pending message's row, § Pending messages), `composer`, `statusLine`, `attachments`, `pickerRow`, `signIn`, `reasonBox`, `closeConfirm` and
   `imageViewer`, each with a kit that extends the base kit (`activity`, `working`, `queuedMessage` and `imageViewer`
   take the base kit itself). Beside the parts, the boolean `activityInTranscript` says whether the entry list draws
-  the activity lines, their steps and the `result` entries; a layout that leaves it out takes `default`'s, `false`.
+  the activity lines and their steps; a layout that leaves it out takes `default`'s, `false`.
   A user chat layout defines only the entry builders and the parts it changes: a kind or part it leaves out draws with
   `default`, with no toast. A user builder that throws draws with `default`; the entry toasts once per kind, naming what
   drew it: `default`, or a bare line when `default` throws too.
@@ -702,14 +702,13 @@ round; primer: an open primer), since main, not the page, decides.
     `kit.contributedParts`, else at the card's end) and `addReviewColumn` (one `span.review-cell` per review row). The
     page emits `roundShown`, `answerChanged`, `roundFinished` and `viewChanged` (`FormsPageEvents`, from
     `page/forms-events.ts`), each logged as `[forms] event <name> …`.
-- `npm run lint` runs `scripts/check-layers.mts`, which fails on an import crossing a boundary its rules do not
-  allow. A plugin's rules are derived from the folder convention and its manifest's per-process `dependsOn`: its
-  `main/` may import the `contract.ts` of each plugin in `dependsOn.main`, and its `page/` those in
-  `dependsOn.page`. A plugin needing more, such as a `node:` package or an extra sublayer, gets an entry in the
-  script's `PLUGIN_EXTRAS` table. The script also fails when `src/plugins/main.ts`, `page.ts` or `manifests.ts`
-  misses a plugin folder's part or manifest, or lists one twice. A new core layer or adapter gets a `LAYERS` entry,
-  and the composition root's entry lists it.
-  Every plugin's `page/` layer and `src/shared/page` may import `src/shared/page/ui`.
+- `npm run lint` runs `scripts/check-layers.mts`, which fails on an import crossing a boundary its hand-kept
+  `LAYERS` table does not allow. A file belongs to the entry with the longest matching path, and an import is
+  allowed only when the imported file's own entry is listed exactly. A new plugin gets one entry per part — its root,
+  `layouts/`, `main/` and `page/` — listing the core layers, its own parts and each other plugin's `contract.ts` it
+  imports; a `node:` package or other package goes in the entry's `packages`. A new core layer or adapter gets an
+  entry too, and the composition root's entry lists it. The script checks imports only: it does not check that a plugin
+  is registered in `src/plugins/main.ts`, `page.ts` and `manifests.ts`.
 - It also runs `scripts/check-styles.mts`, which fails on a raw colour, length, duration or font stack in CSS or an
   inline style under `src/`, and on `backdrop-filter` outside `src/shared/page/ui/materials.css`. It judges every file under
   `src/` and takes no argument.

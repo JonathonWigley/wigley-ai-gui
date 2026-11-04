@@ -170,15 +170,20 @@ interview on 2026-10-23; this file is the record of both.
 
 - `src/plugins/chat/`, depending on `sessions` and `keys`. Main keeps every owned session's entries, so a page
   reload redraws the chat whole (the dev server reloads twice at start).
-- **Chat tab**: the entries under a floating composer: a vim message box and, under it, a status line, drawn in this order: repo, branch, the `i`/`a` type hint, the model · effort chip, every other
-  control's chip, the status parts other plugins add (usage: spend), the running dot, Send. The box's cursor shape shows
+- **Chat tab**: the entries under a floating composer: a vim message box and, under it, a status line, drawn in this order: repo, branch, the key prompts (`i`/`a`, then `J`, `K`, `V`, `y`, with no labels), the model · effort chip, every other
+  control's chip, the status parts other plugins add (usage: spend), the running dot, Send. `J`, `K`, `V` and `y` carry no labels because labelled they overflowed the line at minimum width, and hiding them when narrow hid them in the default window. The box's cursor shape shows
   the vim mode (changed by ui-design plan C). Enter sends in insert and normal mode, Shift+Enter in insert mode adds a line, Cmd+Enter sends from any mode, and while a turn runs sends the pending messages with it (§ Pending messages, Send now). `i` /
-  `a` focus the box, `j` / `k` move between entries, `Enter` opens or closes the focused entry or activity line and pulls
-  back a focused pending message, `G` jumps to the latest, Ctrl+C interrupts and pulls back every unsent pending message
-  (§ Pending messages). The transcript shows the messages, permission prompts, notices and pending rows; the agent's
-  steps and the turn results show in the session hub's activity dock (§ Activity dock), and in the transcript as
-  activity lines and result entries only under a layout that sets `activityInTranscript` (§ Activity line). While the box
-  has focus no entry is marked and the box draws no focused frame; once it loses focus (Esc) the focused entry shows a
+  `a` focus the box, `j` / `k` move between blocks, `J` / `K` jump between messages, `V` starts or ends a range, `y`
+  copies the range as markdown source while one is open (a range with nothing to copy, on an activity line or a permission card, toasts that and stays open), else allows a waiting permission, else copies the block, page `Esc` cancels the range, and a
+  plain click moves the cursor to the block under it. A block is a paragraph, heading, top-level list item, code block,
+  table or quote of a user or assistant message; any other row is one stop, and the turn and compaction dividers are
+  none. When the transcript scrolls away from the cursor, it moves to the nearest block wholly in view; a block too tall for the view counts while any of it shows; with no such block, it moves to the nearest that shows. `j` or `J` onto the last stop scrolls to the bottom and follows, unless the stop is too tall for the view: then its start shows, and it follows only once a scroll lands on the bottom. A layout gets block stops when it draws the text with `kit.markdown`; an entry with no marked block has one stop; a body drawn later is not read until the next redraw; copy reads source lines by position, so copy per block needs the layout to draw `input.text` itself. `Enter` opens or closes
+  the entry holding the cursor or the focused activity line and pulls back a focused pending message, `G` jumps to the latest, Ctrl+C interrupts and pulls back every unsent pending message
+  (§ Pending messages). The transcript shows the messages, permission prompts, notices, turn dividers and pending rows; the agent's
+  steps show in the session hub's activity dock (§ Activity dock), and in the transcript as
+  activity lines only under a layout that sets `activityInTranscript` (§ Activity line). Each `result` entry is a
+  turn divider, its step count the main agent's steps since the last user message or result. While the box
+  has focus no entry is marked and the box draws no focused frame; once it loses focus (Esc) the cursor's block (the entry, when it has no blocks) shows a
   thin left bar (DESIGN.md § Keys and focus). These keys act only on the Chat tab on screen and its session: on any other tab or mode they do
   nothing, and the control pickers and the chat's dialogs close when another session's Chat tab shows, or when the
   shown session's process exits (the image viewer stays open then; the start prompt and the sign-in dialog, tied to
@@ -186,9 +191,8 @@ interview on 2026-10-23; this file is the record of both.
   same `chat.chat` scope as a running one; interrupt and the control pickers log and do nothing until its process
   runs.
 - **Activity line**: under a chat layout that sets `activityInTranscript: true`, the entry list groups each run into
-  one slot, a cursor stop, drawn by the layout's `activity` part, and draws each `result` entry as its own row. The
-  default layout sets it `false`: the list then builds no slot and no cursor stop for a run, its steps or a `result`
-  entry, and the agent's work shows in the activity dock alone. A user layout that leaves the flag out takes
+  one slot, a cursor stop, drawn by the layout's `activity` part. The
+  default layout sets it `false`: the list then builds no slot and no cursor stop for a run or its steps, and the agent's work shows in the activity dock alone. A user layout that leaves the flag out takes
   `default`'s. Everything below holds while the flag is `true`.
   - **Time**: each line ends with how long its run took, from the entry before the run (the user message or mid-turn
     assistant text; a run that opens the list starts at its first step) to the entry after it, compact in tabular
@@ -204,7 +208,8 @@ interview on 2026-10-23; this file is the record of both.
     its summary line and lists one plain row per step under it, each drawn by the `tool`, `thinking` or `raw` entry
     builder; each step row is a cursor stop, `j` / `k` walk into them, and Enter on a step row opens its input and
     result in place. Closing the line makes it one stop again; a cursor on one of its steps moves to the line. A cursor
-    following the last activity line stays on it as steps arrive, and `G` lands on that line. A line stays open or
+    following the last activity line stays on it as steps arrive, and `G` lands on that line, until the open run
+    overflows: at the bottom, whether or not the list had to scroll there, the cursor moves to the nearest step in view, and it follows the last step from there. A line stays open or
     closed by itself across a layout reload, a history read and the live run finishing.
   - Permission prompts, notices and the turn result stay entries of their own, and each ends the run before it.
   - The key log lines are `focused activity line`, `expanded activity line` and `collapsed activity line`; a step row
@@ -440,7 +445,7 @@ interview on 2026-10-23; this file is the record of both.
   does not clip the slash completion list.
 - **Permissions**: a session runs in the `mode` its row holds, `auto` when it holds none; anything that mode would
   still prompt reaches chat's `permission_prompt` MCP tool, contributed to sessions as forms contributes its tools,
-  and shows as a permission entry. `y` allows, `n` denies and opens a box for an optional reason Claude reads, each
+  and shows as a permission entry. `y` allows (with no range open), `n` denies and opens a box for an optional reason Claude reads, each
   answering the oldest pending permission of the session on screen.
 - **Status**: a row's tab status reads what the chat is doing — working, waiting for a permission — and is empty
   while idle.
@@ -506,8 +511,8 @@ interview on 2026-10-23; this file is the record of both.
   dialog actions). The composer's kit places the `working` slot the layout's `workingLine` part draws into; a composer that leaves
   it out gets it just above the box. The app keeps the composer's box and its draft, the dialogs' frames and titles,
   the keys and the focus; a part a user layout leaves out draws with `default`.
-- Beside its parts, a layout holds one flag, `activityInTranscript`: `true` draws the runs as activity lines and the
-  `result` entries in the transcript, `false` leaves them out of the list and the cursor. The flag is read through
+- Beside its parts, a layout holds one flag, `activityInTranscript`: `true` draws the runs as activity lines
+  in the transcript, `false` leaves them out of the list and the cursor. The flag is read through
   the same pick as a part: a user layout that leaves it out takes `default`'s, which is `false`.
 
 ## Plans

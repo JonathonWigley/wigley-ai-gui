@@ -75,10 +75,10 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
 ```
 .chat-tab  (inline-size container)
 ├── .chat-main        entries + floating composer
-└── .chat-side-parts  264 px wide
+└── .chat-side-parts  264 px wide until the user drags it
       ▾ Main agent   2:05     chat: the activity dock
       ▾ Plan         5/7      workflow: the side pane (`workflow/design.md` § Where it draws)
-      ▾ Skills       4        agent-skills: each skill an agent started
+      ▾ Skills       4        agent-skills: each skill agents started
       ▾ Session               chat: project, branch, folder, harness, model · effort
 ```
 
@@ -87,16 +87,27 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
 - **A section's frame:** its title, the summary its part sets (the turn's time, `5/7`, the skill count), and a chevron
   that collapses it. A click on the title toggles the section. Collapsed sections are kept in `uiState` by part id and
   apply to every session. A section takes no key and no focus.
-- **Height:** each section takes its content's height. When the column is too short, each section shrinks and scrolls
-  in its own body. A section whose part draws nothing hides.
+- **Height:** Main agent always shows whole at its own height, which the dock bounds: about 60 px idle, about 155 px
+  running. Plan, Skills and Session each take their content's height. When the column is too short they share what is
+  left by their content's height, and each scrolls in its own body and keeps its whole head, down to the head alone.
+  Plan's action buttons stick to the section's bottom over a task list of at least two rows, or its own height when it
+  holds less, so a short list leaves no blank. With a long plan and three
+  buttons in the 264 px hub, all three show down to a window about 390 px high, about 490 px during a running turn. Below
+  that the section's scroll reaches them, while it has any body left: during a running turn at the 360 px minimum height
+  it has none. A section whose part draws nothing hides.
 - **When the hub shows:** every Chat tab, in every pane, while its width is at least 640 px and the user has not hidden
   it. `Space v s` hides or shows it in every session, and the choice survives a relaunch. `Space w s` still hides only
   the plan's side pane.
+- **Width:** a drag on the hub's start edge sets it, at least 200 px and always leaving the transcript 320 px, in every
+  session, kept in `uiState` as `hub-width` across a relaunch. No key moves it: `Alt+Shift+h`/`l` stay with the chat panes'
+  dividers.
 - **Plan:** the section is the workflow plugin's side pane, unchanged in what it draws. It draws from the first read of
   a plan until Dismiss or a new plan, so the section hides at every other time.
 - **Skills:** the skills each agent started in this row's session, by a Skill call or a typed slash command (the
-  `skillStarted` agent event): one row per skill and agent, in start order, tagged `main` or the subagent's name. A row
-  stays through a compaction, the agent's end and a `/clear`, until the session's row ends. After an app relaunch a re-attached process's
+  `skillStarted` agent event): one row per skill, in start order, with a tag per owner name, `main` or the subagent's name, and `×n`
+  when n agents of that name started it; the summary counts skills. The roster keeps one row per skill and agent, and
+  the default layout groups them, so a user layout may draw them apart. A skill's row and tags
+  stay through a compaction, the agent's end and a `/clear`, until the session's row ends. After an app relaunch a re-attached process's
   log brings its skills back, and a resumed session's list starts empty, because the roster is not saved. It does not say the skill's text is still in the agent's context.
 - **Session:** the repo name, the branch (left out when none), the session folder with the home folder as `~`, the
   harness id and the model · effort. These read chat's own state, so chat names no other plugin. The spend stays in the
@@ -113,8 +124,9 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
   ones fading), then a context bar with `84k/200k` (the warning colour at 80% or more; `84k` alone until the window is
   known) and the estimated cost. The tag reads Background agent once Claude's launch receipt says the call runs in the
   background, else Subagent.
-- **A task row:** one line: a running dot, the Shell tag, the command in mono (the description when the harness names no
-  command) and the elapsed time. A task has no context or cost. Rows stack under the cards and scroll past four rows.
+- **A task row:** one line: a running dot, the Shell tag, the command in mono (the Task tag and the description when the
+  harness names no command) and the elapsed time. A task has no context or cost. Rows stack under the cards and scroll
+  past four rows.
 - **Lifetime:** a box leaves the strip the moment its subagent or task ends, done or failed, and every box leaves
   when the session's process exits. Nothing stays to be closed, so the strip has no close control.
 - **Scrolling:** the cards scroll sideways; `‹` and `›` buttons at their ends scroll by one card and hide when there
@@ -137,9 +149,9 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
   hub is not visible, the composer's activity line shows the same time and state (`1:05 Working…`), or the finished line
   once the turn ends. The two read one dock, so they cannot disagree. CSS alone picks which one shows, so no code
   measures the Chat tab.
-- **The transcript shows messages only:** the default chat layout sets `activityInTranscript` to `false`, so the
-  activity lines, their steps and the `result` entries leave the transcript and the entry cursor. A user layout that
-  sets it `true` brings them back. The rules for the dock's lines are in `agent-chat/design.md` § Activity dock.
+- **The transcript shows messages and turn dividers:** the default chat layout sets `activityInTranscript` to `false`,
+  so the activity lines and their steps leave the transcript and the entry cursor. A user layout that sets it `true`
+  brings them back. Each `result` entry stays as a dim turn divider, so a turn's end shows with no user message after it. The rules for the dock's lines are in `agent-chat/design.md` § Activity dock.
 
 ## The context line
 
@@ -192,7 +204,7 @@ Only the Claude adapter knows Claude's shapes, so it alone fills these into agen
 
 - **The strip shows subagents and tasks, not the main chat.** The main agent's work is the activity dock.
 - **The live activity sits in the hub, and the transcript shows messages.** The user reads the conversation in the
-  transcript and glances at the hub for what the agent does now; the steps and turn results stay one layout flag away
+  transcript and glances at the hub for what the agent does now; the steps stay one layout flag away
   (`activityInTranscript`). The dock moved from the composer to the hub on 2026-11-03, with the plan steps beside it.
 - **The hub is one column per Chat tab, not one right bar.** The user chose this over a right bar that follows the
   focused pane, so every split pane shows its own session's hub, at the cost of each pane's width.

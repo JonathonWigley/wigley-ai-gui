@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { ChatEntry } from '../../../../contracts/agent';
+import { type ChatEntry, MAIN_AGENT_ID } from '../../../../contracts/agent';
 import type { SessionInfo } from '../../../sessions/contract';
 import {
   CHAT_PREVIEW_HOST_ID,
@@ -138,7 +138,7 @@ describe('chat preview', () => {
     );
   });
 
-  it('previewAgentEvents_ListsTwoSubagentsOneFinishedAndATaskWithACommand', () => {
+  it('previewAgentEvents_ListsTwoSubagentsOneFinishedATaskWithACommandAndASkillForMainAndASubagent', () => {
     const events = previewAgentEvents(5000);
     const count = (type: string) =>
       events.filter((event) => event.type === type).length;
@@ -153,12 +153,22 @@ describe('chat preview', () => {
       tasksWithCommand: events.filter(
         (event) => event.type === 'taskStarted' && event.command !== null,
       ).length,
+      skillsByMain: events.filter(
+        (event) =>
+          event.type === 'skillStarted' && event.agentId === MAIN_AGENT_ID,
+      ).length,
+      skillsBySubagents: events.filter(
+        (event) =>
+          event.type === 'skillStarted' && event.agentId !== MAIN_AGENT_ID,
+      ).length,
     }).toEqual({
       agentSpawned: 2,
       agentReplied: 1,
       agentLaunched: 0,
       agentFinished: ['done'],
       tasksWithCommand: 1,
+      skillsByMain: 1,
+      skillsBySubagents: 1,
     });
   });
 

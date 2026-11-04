@@ -33,7 +33,12 @@ export interface SessionListDeps {
 }
 
 // The session list and its rows. `tools` lists every contributed tool in contribution order.
-export interface SessionList extends Omit<SessionsMainExports, 'holdConnects'> {
+export interface SessionList extends Omit<
+  SessionsMainExports,
+  'holdConnects' | 'activate'
+> {
+  // `SessionsMainExports.activate`; true when it sent the state.
+  activate(sessionId: string): boolean;
   tools(): ToolDefinition[];
   state(): SessionsState;
   // The user's close, which every close guard must allow; returns whether the
@@ -269,17 +274,18 @@ export function createSessionList(deps: SessionListDeps): SessionList {
   const everyGuardAllows = (sessionId: string) =>
     closeGuards.every((mayClose) => mayClose(sessionId));
 
-  // The user's pick of the row at `index`: reports `activated`, then selects
-  // it and clears its mark.
+  // The user's pick of the row at `index`: reports `activated`, then selects it
+  // and clears its mark. True when that changed the state, which it sends.
   const activateRow = (sessionId: string, index: number) => {
     deps.activated(sessionId);
     reselectOnReturn = null;
     const row = rows[index];
     if (sessionId === selectedSessionId && !row.marked) {
-      return;
+      return false;
     }
     select(row);
     sendState();
+    return true;
   };
 
   // Removes the row, sends the state, then emits `closed`.
@@ -558,11 +564,11 @@ export function createSessionList(deps: SessionListDeps): SessionList {
           'sessions',
           `activate for unknown session ${sessionId} ignored`,
         );
-        return;
+        return false;
       }
       // A connected session with no row, or a row the user closed, gets its
       // row at the end, then is selected like any other.
-      activateRow(sessionId, rowIndexAdding(entry));
+      return activateRow(sessionId, rowIndexAdding(entry));
     },
     activateExistingRow(sessionId) {
       if (!entries.has(sessionId)) {

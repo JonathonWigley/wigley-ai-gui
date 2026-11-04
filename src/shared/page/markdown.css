@@ -32,7 +32,9 @@
 
 .md ul,
 .md ol {
-  padding-left: var(--wg-space-6);
+  --md-list-indent: var(--wg-space-6);
+
+  padding-left: var(--md-list-indent);
 }
 
 .md-h {

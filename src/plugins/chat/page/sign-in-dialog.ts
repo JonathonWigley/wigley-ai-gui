@@ -6,6 +6,7 @@ import { inputFrame } from '../../../shared/page/ui/input-frame';
 import type { ChatChannel } from '../contract';
 import { chatCommand, chatScope } from '../ids';
 import type { SignInInput } from '../layouts/layout';
+import type { WriteClipboard } from './clipboard';
 import {
   createChatDialog,
   type DialogDeps,
@@ -21,6 +22,7 @@ import { createSignInFlow } from './sign-in-flow';
 export interface SignInDialogDeps extends DialogDeps {
   editor: EditorHost;
   channel: Pick<PageChannel<ChatChannel>, 'invoke' | 'on'>;
+  writeClipboard: WriteClipboard;
   toast(text: string, tone: ToastTone): void;
 }
 
@@ -117,7 +119,7 @@ export function createSignInDialog(deps: SignInDialogDeps): SignInDialog {
     },
     channel: deps.channel,
     pushScope: deps.pushScope,
-    writeClipboard: (text) => navigator.clipboard.writeText(text),
+    writeClipboard: deps.writeClipboard,
     toast: deps.toast,
     log: deps.log,
   });

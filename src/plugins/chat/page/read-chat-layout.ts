@@ -24,9 +24,11 @@ const KIND_SET: Record<ChatEntryKind, true> = {
 // input, and the contract's kinds and the layout's kinds are one set. A
 // variant missing or renaming an input's field, or a drifted kind, makes a
 // member `never`, which `true` cannot fill. Without strictNullChecks a field
-// turning nullable is not caught.
+// turning nullable is not caught. A result's input also holds the step count
+// the entry list adds.
 type VariantFitsInput = {
-  [K in ChatEntryKind]: Extract<ChatEntry, { kind: K }> extends EntryInput<K>
+  [K in ChatEntryKind]: Extract<ChatEntry, { kind: K }> &
+    (K extends 'result' ? { stepCount: number } : unknown) extends EntryInput<K>
     ? true
     : never;
 };

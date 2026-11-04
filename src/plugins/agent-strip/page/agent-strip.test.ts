@@ -377,6 +377,14 @@ describe('agent strip', () => {
       nextBox: ['[agent-strip] selected box 2 of 2 in proj'],
     },
     {
+      case: 'drops its box: reveals the next box at its index',
+      roster: { ...MIXED, agents: [MIXED.agents[0], agent('a3', 10_000)] },
+      selected: [1],
+      revealed: [1],
+      exitCalls: [],
+      nextBox: ['[agent-strip] selected box 3 of 3 in proj'],
+    },
+    {
       case: 'adds a later box: keeps its place unrevealed',
       roster: { ...MIXED, agents: [...MIXED.agents, agent('a3', 10_000)] },
       selected: [1],
@@ -552,7 +560,7 @@ describe('agent strip', () => {
     setRoster(EMPTY);
 
     expect(beforeTexts[0]).toContain('Subagent1m 30s');
-    expect(beforeTexts[2]).toBe('ShellRun t130s');
+    expect(beforeTexts[2]).toBe('TaskRun t130s');
     expect(afterTicks).toEqual({
       agentBoxesKept: [row.agentBoxesKept, row.agentBoxesKept],
       toolListKept: row.agentBoxesKept,
@@ -564,12 +572,12 @@ describe('agent strip', () => {
         [
           expect.stringContaining('1m 31s'),
           expect.stringContaining('1m 01s'),
-          'ShellRun t131s',
+          'TaskRun t131s',
         ],
         [
           expect.stringContaining('1m 32s'),
           expect.stringContaining('1m 02s'),
-          'ShellRun t132s',
+          'TaskRun t132s',
         ],
       ],
       refreshes: 2,
@@ -857,6 +865,69 @@ describe('agent strip', () => {
     strip.nextBox();
 
     expect(scrolled.mock.contexts).toEqual([boxes()[2]]);
+    scrolled.mockRestore();
+  });
+
+  // `enter` selects box 0 of MIXED and `nextBoxes` moves the selection on; the
+  // toggled box is the one scrolled into view, a card revealed in its scroller
+  // too.
+  it.each<{
+    case: string;
+    nextBoxes: number;
+    toggle: 'toggleBox' | 'click';
+    toggled: number;
+    revealedCards: number[];
+  }>([
+    {
+      case: 'toggleBox on the selected row',
+      nextBoxes: 2,
+      toggle: 'toggleBox',
+      toggled: 2,
+      revealedCards: [],
+    },
+    {
+      case: 'toggleBox on the selected card',
+      nextBoxes: 1,
+      toggle: 'toggleBox',
+      toggled: 1,
+      revealedCards: [1],
+    },
+    {
+      case: 'click on an unselected row',
+      nextBoxes: 0,
+      toggle: 'click',
+      toggled: 2,
+      revealedCards: [],
+    },
+    {
+      case: 'click on an unselected card',
+      nextBoxes: 0,
+      toggle: 'click',
+      toggled: 1,
+      revealedCards: [1],
+    },
+  ])('toggle_RevealsTheToggledBox ($case)', (row) => {
+    const scrolled = vi.spyOn(FakeElement.prototype, 'scrollIntoView');
+    const { strip, build, enter, boxes, opened, scrollers } = setUp(MIXED);
+    build();
+    enter();
+    for (let moved = 0; moved < row.nextBoxes; moved += 1) {
+      strip.nextBox();
+    }
+    scrolled.mockClear();
+    const revealsBefore = scrollers.reveals.length;
+
+    if (row.toggle === 'toggleBox') {
+      strip.toggleBox();
+    } else {
+      boxes()[row.toggled].click();
+    }
+
+    expect(opened()).toEqual([row.toggled]);
+    expect(scrolled.mock.contexts).toEqual([boxes()[row.toggled]]);
+    expect(scrollers.reveals.slice(revealsBefore)).toEqual(
+      row.revealedCards.map((index) => boxes()[index]),
+    );
     scrolled.mockRestore();
   });
 

@@ -6,7 +6,12 @@ import {
 } from '../../../contracts/agent';
 import type { SessionCompaction } from '../contract';
 import type { WorkingState } from '../layouts/layout';
-import { dockSummary, doneInput, workingInput } from './working-turn';
+import {
+  dockSummary,
+  doneInput,
+  resultStepCount,
+  workingInput,
+} from './working-turn';
 
 const SUBAGENT_ID = 'agent-1';
 
@@ -276,6 +281,64 @@ describe('workingInput', () => {
       }).toEqual({ state, compaction: label, startedAt });
     },
   );
+});
+
+describe('resultStepCount', () => {
+  const subagentTool: ChatEntry = {
+    ...entry('tool', 'sub', 5),
+    agentId: SUBAGENT_ID,
+  } as ChatEntry;
+
+  it.each<{ case: string; entries: ChatEntry[]; id: string; count: number }>([
+    {
+      case: 'steps since the user message, a subagent tool left out',
+      entries: [
+        entry('tool', 'old', 1),
+        entry('user', 'u', 2),
+        entry('tool', 't1', 3),
+        entry('thinking', 'k1', 4),
+        subagentTool,
+        entry('assistant', 'a', 6),
+        entry('result', 'r', 7),
+      ],
+      id: 'r',
+      count: 2,
+    },
+    {
+      case: 'steps since the previous result, with no user message between',
+      entries: [
+        entry('user', 'u', 1),
+        entry('tool', 't1', 2),
+        entry('result', 'r1', 3),
+        entry('tool', 't2', 4),
+        entry('tool', 't3', 5),
+        entry('tool', 't4', 6),
+        entry('result', 'r2', 7),
+      ],
+      id: 'r2',
+      count: 3,
+    },
+    {
+      case: 'an earlier result leaves out the steps after it',
+      entries: [
+        entry('user', 'u', 1),
+        entry('tool', 't1', 2),
+        entry('result', 'r1', 3),
+        entry('tool', 't2', 4),
+        entry('result', 'r2', 5),
+      ],
+      id: 'r1',
+      count: 1,
+    },
+    {
+      case: 'a turn with no steps',
+      entries: [entry('user', 'u', 1), entry('result', 'r', 2)],
+      id: 'r',
+      count: 0,
+    },
+  ])('$case', ({ entries, id, count }) => {
+    expect(resultStepCount(entries, id)).toBe(count);
+  });
 });
 
 describe('dockSummary', () => {

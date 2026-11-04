@@ -33,7 +33,7 @@ A session holds up to three titles, one per source (`TitleSource`, `src/plugins/
 The row shows `user`, else `agent`, else `firstMessage` cut to the limit with `…`, else no title.
 A user title therefore locks out the agent's renames until the user clears it, and the agent's
 later titles are still kept underneath. A row with a title shows it as the main text in place of
-its folder label (`gamma 2`); the tooltip carries both.
+its folder label (`gamma 2`); the tooltip carries both. A row with no title reads `New Chat`, its folder label in the tooltip.
 
 The limit is the `sessions.titleMaxLength` setting (default 30), counted in code points after
 whitespace runs collapse to one space. A `user` or `agent` title past it is refused, never cut; a
@@ -53,7 +53,7 @@ user title it saves the agent title and says the user's title shows.
 Claude Code defers MCP tools: an agent sees only the tool's name until it loads it with ToolSearch, so
 the tool's description alone does not prompt a rename. Chat registers one instruction
 (`addInstructions`) that every process start it makes passes with `--append-system-prompt`: set the
-title at the end of the first turn, and again only when the work's focus clearly changes. Both the
+title as the first thing in the first turn, before any other work, and again only when the work's focus clearly changes. Both the
 instruction and the tool's description ask for a 2 to 4 word heading naming the topic ("Agent Status Line"),
 not a sentence describing the request, so a title fits the row without a cut. Chat passes
 the instruction on every process start, a resume included (`claude-launch.ts`). `agent-chat/design.md`
@@ -63,10 +63,10 @@ conversation's row then shows one of two titles until its agent calls the tool o
 
 - **Resumed from the past-sessions list**: the first-message title, which resume sets from the request's
   title.
-- **Restored from an `open-sessions.json` written before this feature**: its folder label. The row loads
+- **Restored from an `open-sessions.json` written before this feature**: `New Chat`. The row loads
   with no titles and as already sent, so no message gives it a first-message title.
 
-Terminal sessions get no instruction and keep their folder label unless their agent calls the tool on
+Terminal sessions get no instruction and read `New Chat` unless their agent calls the tool on
 its own.
 
 ## Renaming by hand
@@ -79,25 +79,26 @@ dialog open with the problem shown.
 
 ## Row status
 
-A row's **activity** is the short state drawn at its trailing end, on the title's line: a status
-dot. Its word appears only in the row's tooltip, after the folder label and before the status. Any
+A row's **activity** is the short state drawn at its trailing end, on the title's line: a label
+holding its word, capitalized. A state the user should act on takes a Tag; any other is plain text.
+The word also appears in the row's tooltip, after the folder label and before the status. Any
 page plugin sets one per session under its own source id through the `sessions` page
 export `setActivity(sessionId, sourceId, activity | null)`; the row shows the highest `rank` of the
 session's activities, the last set winning a tie, and nothing when it has none. A new state is a
 new registration in the plugin that knows it, with no edit to sessions.
 
-| Activity | Set by | Rank | Dot tone | Shows while |
+| Activity | Set by | Rank | Label | Shows while |
 |---|---|---|---|---|
-| needs you | chat (a permission prompt waits); forms and primer (a form is open) | 40 | `attention` | the wait lasts |
-| error | chat | 30 | `error` | the process stopped while a turn ran or with an error, until the user views the session or sends a message |
-| working | chat | 20 | `running`, pulsing | a turn runs |
-| done | chat | 10 | `success` | the turn ended while the session was not the focused pane's, until the user views it or sends a message |
+| needs you | chat (a permission prompt waits); forms and primer (a form is open) | 40 | `attention` Tag | the wait lasts |
+| error | chat | 30 | `error` Tag | the process stopped while a turn ran or with an error, until the user views the session or sends a message |
+| working | chat | 20 | `status-running` text, pulsing | a turn runs |
+| done | chat | 10 | `fg-tertiary` text | the turn ended while the session was not the focused pane's, until the user views it or sends a message |
 
 Idle draws nothing. "Views the session" is the session becoming the focused pane's session. Clearing the
 session's conversation, sending a message and the next turn starting also clear a done or error. A turn
-that ends while its session is the focused pane's skips done. While a row shows an activity, the
-default layout leaves out the row's separate attention dot (`marked`), which the needs you dot
-covers. Other tabs' status lines (a form's or primer's name and count) still draw on the row's
+that ends while its session is the focused pane's skips done. A `marked` row with no activity draws
+the needs you label; while a row shows an activity, the default layout draws that activity's label alone.
+Other tabs' status lines (a form's or primer's name and count) still draw on the row's
 second line; chat no longer sends one.
 
 Activities live in the page and start blank on a page load.

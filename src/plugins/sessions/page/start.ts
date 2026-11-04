@@ -6,6 +6,7 @@ import {
   createPartStore,
   type PartStore,
 } from '../../../shared/page/contributed-parts';
+import { blurFocusedElement, holdsTextEntry } from '../../../shared/page/dom';
 import { createListPicker } from '../../../shared/page/list-picker';
 import {
   leafIds,
@@ -31,12 +32,14 @@ import { readSessionsLayout } from './layout/read-sessions-layout';
 import {
   type ActivationTarget,
   activationTarget,
+  echoesAfterReply,
   fillPlan,
   liveWaits,
   type PaneSessions,
   type PendingEcho,
   panesToClose,
   pickerRows,
+  pressedFocusAction,
   restorePlan,
   type SelectionTarget,
   savedPaneSessions,
@@ -278,9 +281,8 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       pendingEchoes.at(-1)?.sessionId ?? state.selectedSessionId;
 
     // Asks main to select `sessionId`, recording the echo its state will
-    // carry when that differs from the selection main will hold. Main sends
-    // that state before the invoke resolves, so an echo still pending then
-    // is one main never answers (an unknown session), and is dropped.
+    // carry when that differs from the selection main will hold, until
+    // `echoesAfterReply` drops it.
     const tellMain = (sessionId: string) => {
       const echo = sessionId === mainSelection() ? null : { sessionId };
       if (echo !== null) {
@@ -288,8 +290,8 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       }
       api.channel
         .invoke('activate', sessionId)
-        .then(() => {
-          pendingEchoes = pendingEchoes.filter((pending) => pending !== echo);
+        .then((sentState) => {
+          pendingEchoes = echoesAfterReply(pendingEchoes, echo, sentState);
         })
         .catch((error) => {
           pendingEchoes = [];
@@ -361,6 +363,31 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         const sessionId = panes.get(paneId) ?? null;
         if (!isPlacing && sessionId !== null && sessionId !== mainSelection()) {
           tellMain(sessionId);
+        }
+      },
+      // The keys follow a release into its pane, as `pressedFocusAction` says.
+      panePressed(pane) {
+        const selection = window.getSelection();
+        const focused = document.activeElement;
+        const sessionId = view.panes.focusedSessionId();
+        const action = pressedFocusAction({
+          hasSelectionInPane:
+            selection?.isCollapsed === false &&
+            pane.contains(selection.anchorNode),
+          isFocusInPane: pane.contains(focused),
+          doesFocusTakeText: holdsTextEntry(focused),
+          isChatTabShown:
+            sessionId !== null &&
+            view.tabs.selectedTabOf(sessionId)?.id === 'chat',
+        });
+        if (action === 'keep') {
+          return;
+        }
+        blurFocusedElement();
+        const canFocusBox =
+          sessionId !== null && api.keys.command('chat.focusBox') !== undefined;
+        if (canFocusBox) {
+          api.commands.run('chat.focusBox');
         }
       },
       markdown: api.services.markdown,
@@ -696,6 +723,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         choices.push({ kind: 'new' });
       }
       const isPaneLive = () => leafIds(view.panes.tree()).includes(paneId);
+      blurFocusedElement();
       picker.open<PickerChoice>({
         title: 'Show session',
         items: choices,

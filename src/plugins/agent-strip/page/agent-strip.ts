@@ -63,8 +63,8 @@ export interface AgentStripDeps {
 // `stop` takes the entry cursor. The commands act on the strip holding the
 // cursor and do nothing while none does: `prevBox` / `nextBox` move the
 // selection, `leave` hands the cursor back to the entries, `toBox` to the chat
-// box, `toggleBox` opens or closes the selected box. `setLayouts` redraws every
-// strip; `forget` drops a session that left.
+// box, `toggleBox` opens or closes the selected box and scrolls it into view.
+// `setLayouts` redraws every strip; `forget` drops a session that left.
 export interface AgentStrip {
   part: ChatComposerPart;
   prevBox(): void;
@@ -347,7 +347,11 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
     boxElement: HTMLElement,
     sessionId: string,
     key: string,
-  ) => boxElement.addEventListener('click', () => toggleOpen(sessionId, key));
+  ) =>
+    boxElement.addEventListener('click', () => {
+      toggleOpen(sessionId, key);
+      revealBox(sessionId, key);
+    });
 
   // The element the box draws into: the track for an agent box, the rows
   // element for a task box.
@@ -533,11 +537,14 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
   };
 
   const revealSelected = () => {
-    if (selection === null) {
-      return;
+    if (selection !== null) {
+      revealBox(selection.sessionId, selection.key);
     }
-    const holder = held.get(selection.sessionId);
-    const box = holder?.boxes[selection.index];
+  };
+
+  const revealBox = (sessionId: string, key: string) => {
+    const holder = held.get(sessionId);
+    const box = holder?.boxes.find((drawn) => drawn.key === key);
     if (box === undefined) {
       return;
     }
@@ -612,8 +619,9 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
   };
 
   // After the session's roster changed: the selection follows its box and is
-  // scrolled into view when its index moved, or hands the cursor back once no
-  // box is left, and the open box closes once its box is gone.
+  // scrolled into view when its index moved or another box took its place, or
+  // hands the cursor back once no box is left, and the open box closes once its
+  // box is gone.
   const rosterChanged = (sessionId: string) => {
     const boxes = boxesOf(sessionId);
     const openKey = openKeys.get(sessionId);
@@ -628,7 +636,8 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
         handBack = selection.exits;
         selection = null;
       } else {
-        selectionMoved = index !== selection.index;
+        selectionMoved =
+          index !== selection.index || boxes[index].key !== selection.key;
         selection = { ...selection, index, key: boxes[index].key };
       }
     }
@@ -709,6 +718,7 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
     toggleBox() {
       if (selection !== null) {
         toggleOpen(selection.sessionId, selection.key);
+        revealSelected();
       }
     },
     setLayouts(shown) {

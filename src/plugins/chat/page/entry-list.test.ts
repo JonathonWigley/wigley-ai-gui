@@ -7,7 +7,10 @@ import { withUser } from '../../../shared/page/layout-host/test-layouts';
 import {
   asFake,
   FakeElement,
+  fakeWindow,
+  FocusFakeElement,
   installFakeDom,
+  installFocusFakeDom,
 } from '../../../shared/page/test-dom';
 import type { QueuedMessage } from '../contract';
 import { chatCommand } from '../ids';
@@ -21,7 +24,12 @@ import type {
   EntryView,
 } from '../layouts/layout';
 import { createChatLayouts } from './chat-layouts';
-import { createEntryList, type EntryListStop } from './entry-list';
+import {
+  createEntryList,
+  type EntryList,
+  type EntryListStop,
+  sourceOfLines,
+} from './entry-list';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 
 type AnyBuilder = (
@@ -61,7 +69,7 @@ function fancyLayout(
 
 // Names a key hint and draws a card through the kit, then throws.
 const anchorsThenThrows: AnyBuilder = (parent, _input, kit) => {
-  kit.keyHint(parent, 'allowPermission');
+  kit.keyHint(parent, 'allowOrCopy');
   kit.card(parent);
   throw new Error('boom');
 };
@@ -156,10 +164,7 @@ const rows: Row[] = [
     ],
     logs: ['[chat] layout fancy tool entry failed: boom'],
     toasts: ['Chat layout fancy: tool entries drawn with default'],
-    disposedAnchors: [
-      chatCommand('allowPermission'),
-      chatCommand('allowPermission'),
-    ],
+    disposedAnchors: [chatCommand('allowOrCopy'), chatCommand('allowOrCopy')],
   },
   {
     name: 'default throws while default is shown',
@@ -186,7 +191,7 @@ const rows: Row[] = [
       '[chat] default layout notice entry failed: broken default',
     ],
     toasts: ['Chat layout fancy: notice entries drawn as bare lines'],
-    disposedAnchors: [chatCommand('allowPermission')],
+    disposedAnchors: [chatCommand('allowOrCopy')],
   },
   {
     name: 'update throws under the shown layout',
@@ -479,7 +484,10 @@ describe('entry list', () => {
 });
 
 describe('activity lines', () => {
-  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  beforeEach(() => {
+    installFakeDom((name, value) => vi.stubGlobal(name, value));
+    vi.stubGlobal('getComputedStyle', () => ({ scrollPaddingBottom: '0px' }));
+  });
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
@@ -691,7 +699,10 @@ describe('activity lines', () => {
 });
 
 describe('pending rows', () => {
-  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  beforeEach(() => {
+    installFakeDom((name, value) => vi.stubGlobal(name, value));
+    vi.stubGlobal('getComputedStyle', () => ({ scrollPaddingBottom: '0px' }));
+  });
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
@@ -756,7 +767,9 @@ describe('pending rows', () => {
     list.setQueued([queued('q1'), queued('q2')]);
     list.move(-1);
 
-    slotOf(list.element, 'chat-queued-slot', 1).click();
+    const row = slotOf(list.element, 'chat-queued-slot', 1);
+    row.click();
+    asFake(list.element).fire('click', { target: row });
 
     expect(pulled).toEqual(['q2']);
     expect(list.focused()).toEqual(pendingStop('q1'));
@@ -884,7 +897,10 @@ describe('pending rows', () => {
 });
 
 describe('activity hidden', () => {
-  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  beforeEach(() => {
+    installFakeDom((name, value) => vi.stubGlobal(name, value));
+    vi.stubGlobal('getComputedStyle', () => ({ scrollPaddingBottom: '0px' }));
+  });
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
@@ -932,16 +948,18 @@ describe('activity hidden', () => {
         'chat-entry-slot',
         'chat-entry-slot',
         'chat-entry-slot',
+        'chat-entry-slot',
         'chat-entry-slot is-cursor',
       ],
       kinds: [
         'chat-user',
         'chat-assistant',
         'chat-permission',
+        'chat-result',
         'chat-compaction',
         'chat-notice',
       ],
-      stops: ['u1', 'a1', 'p1', 'c1', 'n1'],
+      stops: ['u1', 'a1', 'p1', 'n1'],
       focused: 'n1',
     },
     {
@@ -970,7 +988,7 @@ describe('activity hidden', () => {
         'chat-compaction',
         'chat-notice',
       ],
-      stops: ['u1', 'activity:t1', 'a1', 'p1', 'r1', 'c1', 'n1'],
+      stops: ['u1', 'activity:t1', 'a1', 'p1', 'n1'],
       focused: 'n1',
     },
     {
@@ -988,16 +1006,18 @@ describe('activity hidden', () => {
         'chat-entry-slot',
         'chat-entry-slot',
         'chat-entry-slot',
+        'chat-entry-slot',
         'chat-entry-slot is-cursor',
       ],
       kinds: [
         'chat-user',
         'chat-assistant',
         'chat-permission',
+        'chat-result',
         'chat-compaction',
         'chat-notice',
       ],
-      stops: ['u1', 'a1', 'p1', 'c1', 'n1'],
+      stops: ['u1', 'a1', 'p1', 'n1'],
       focused: 'n1',
     },
     {
@@ -1030,7 +1050,7 @@ describe('activity hidden', () => {
         'chat-compaction',
         'chat-notice',
       ],
-      stops: ['u1', 'activity:t1', 'a1', 'p1', 'r1', 'c1', 'n1'],
+      stops: ['u1', 'activity:t1', 'a1', 'p1', 'n1'],
       focused: 'n1',
     },
     {
@@ -1172,5 +1192,931 @@ describe('slots and focus', () => {
     expect(list.focusedElement()).toBe(assistantSlot);
     list.move(-1);
     expect(list.focusedElement()).toBe(userSlot);
+  });
+});
+
+// Draws one marked `div` per paragraph of the entry's text, with the paragraph's
+// source lines, as `kit.markdown` marks a block.
+const marksParagraphs: AnyBuilder = (parent, input, kit) => {
+  const root = kit.el(parent, 'div', 'marked');
+  const draw = (next: EntryInput<EntryKind>) => {
+    root.replaceChildren();
+    const lines = (next as { text: string }).text.split('\n');
+    let start = -1;
+    lines.forEach((line, index) => {
+      if (line !== '' && start < 0) {
+        start = index;
+      }
+      const nextIsBlank =
+        lines[index + 1] === undefined || lines[index + 1] === '';
+      if (line !== '' && nextIsBlank) {
+        kit.el(root, 'div').dataset.mdLines = `${start},${index + 1}`;
+        start = -1;
+      }
+    });
+  };
+  draw(input);
+  return { element: root, update: draw };
+};
+
+// Draws one `div` marked with each of `marks`, whatever the entry holds.
+const marksLines =
+  (...marks: string[]): AnyBuilder =>
+  (parent, _input, kit) => {
+    const root = kit.el(parent, 'div', 'marked');
+    for (const mark of marks) {
+      kit.el(root, 'div').dataset.mdLines = mark;
+    }
+    return { element: root };
+  };
+
+function blocksShown(
+  overrides: Partial<Record<EntryKind, AnyBuilder>> = {},
+): ShownLayouts<ChatLayout> {
+  return withUser<ChatLayout>(
+    defaultLayout,
+    {
+      entries: {
+        user: marksParagraphs,
+        assistant: marksParagraphs,
+        ...overrides,
+      },
+    },
+    'marked',
+  );
+}
+
+const userText = (id: string, text: string): ChatEntry => ({
+  kind: 'user',
+  id,
+  at: 1000,
+  text,
+  images: [],
+  raw: [],
+});
+const assistantText = (id: string, text: string): ChatEntry => ({
+  ...assistant(text),
+  id,
+});
+
+// The cursor's stop as `<id>#<block>`, `<id>` on a stop with no blocks.
+function cursorLabel(list: EntryList): string | null {
+  const stop = list.focused();
+  if (stop === null) {
+    return null;
+  }
+  const id =
+    stop.kind === 'entry'
+      ? stop.entry.id
+      : stop.kind === 'activity'
+        ? stop.runId
+        : stop.message.id;
+  const block = list.focusedBlock();
+  if (block === null) {
+    return id;
+  }
+  const fake = asFake(block);
+  return `${id}#${fake.parentNode!.children.indexOf(fake)}`;
+}
+
+function stopLabels(list: EntryList): string[] {
+  const labels: string[] = [];
+  list.first();
+  while (list.focused() !== null) {
+    labels.push(cursorLabel(list)!);
+    if (list.isAtLastStop()) {
+      break;
+    }
+    list.move(1);
+  }
+  return labels;
+}
+
+// The `index`th marked block of the list's slot at `slotIndex`.
+function blockAt(list: EntryList, slotIndex: number, index: number) {
+  return asFake(list.element).children[slotIndex].querySelectorAll(
+    '[data-md-lines]',
+  )[index] as FocusFakeElement;
+}
+
+function marksOf(list: EntryList, mark: string, slotIndex = 0): number[] {
+  return asFake(list.element)
+    .children[slotIndex].querySelectorAll('[data-md-lines]')
+    .flatMap((block, index) => (block.classList.contains(mark) ? [index] : []));
+}
+
+describe('block stops', () => {
+  const fourBlocks = 'zero\n\none\n\ntwo\n\nthree';
+
+  beforeEach(() => {
+    installFocusFakeDom((name, value) => vi.stubGlobal(name, value));
+    vi.stubGlobal('getComputedStyle', () => ({
+      scrollPaddingBottom: '20px',
+      lineHeight: '20px',
+      fontSize: '14px',
+      getPropertyValue: () => '',
+    }));
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it.each<{
+    case: string;
+    overrides?: Partial<Record<EntryKind, AnyBuilder>>;
+    puts: ChatEntry[];
+    focused: string;
+    stops: string[];
+  }>([
+    {
+      case: 'messages split, a result has no stop, a notice has one',
+      puts: [
+        userText('u', 'ask'),
+        assistantText('a', 'one\n\ntwo\n\nthree'),
+        result('r'),
+        notice('n'),
+      ],
+      focused: 'n',
+      stops: ['u#0', 'a#0', 'a#1', 'a#2', 'n'],
+    },
+    {
+      case: 'a divider after the last block leaves the following focus on it',
+      puts: [assistantText('a', 'one\n\ntwo'), result('r')],
+      focused: 'a#1',
+      stops: ['a#0', 'a#1'],
+    },
+    {
+      case: 'a message with no marked block has one stop',
+      puts: [userText('u', 'ask'), assistantText('a', '')],
+      focused: 'a',
+      stops: ['u#0', 'a'],
+    },
+    {
+      case: 'a permission card with marks keeps one stop',
+      overrides: { permission: marksLines('0,1', '1,2') },
+      puts: [permission('p'), userText('u', 'ask')],
+      focused: 'u#0',
+      stops: ['p', 'u#0'],
+    },
+  ])('stops_ListBuilds ($case)', ({ overrides, puts, focused, stops }) => {
+    const { list, put, entries } = setUpList(blocksShown(overrides));
+    puts.forEach(put);
+
+    expect(cursorLabel(list)).toBe(focused);
+    expect(stopLabels(list)).toEqual(stops);
+    list.rebuild(entries());
+    expect(stopLabels(list)).toEqual(stops);
+  });
+
+  it.each<{
+    case: string;
+    before?: string;
+    act: (list: EntryList) => void;
+    redraw: string;
+    focused: string;
+    following: boolean;
+  }>([
+    {
+      case: 'a following focus takes the new last block',
+      act: () => undefined,
+      redraw: 'one\n\ntwo\n\nthree',
+      focused: 'a#2',
+      following: true,
+    },
+    {
+      case: 'a focus off the end stays on its block',
+      act: (list) => list.move(-1),
+      redraw: 'one\n\ntwo\n\nthree',
+      focused: 'a#0',
+      following: false,
+    },
+    {
+      case: 'a following focus takes the last block left',
+      act: () => undefined,
+      redraw: 'one',
+      focused: 'a#0',
+      following: true,
+    },
+    {
+      case: 'a focus on a block that went moves to the last left',
+      before: 'one\n\ntwo\n\nthree',
+      act: (list) => list.move(-1),
+      redraw: 'one',
+      focused: 'a#0',
+      following: false,
+    },
+  ])('stops_RedrawChangesBlocks ($case)', (row) => {
+    const { list, put } = setUpList(blocksShown());
+    put(assistantText('a', row.before ?? 'one\n\ntwo'));
+    row.act(list);
+
+    put(assistantText('a', row.redraw));
+
+    expect(cursorLabel(list)).toBe(row.focused);
+    const scroller = asFake(list.element);
+    scroller.scrollTop = 7;
+    (scroller as unknown as { scrollHeight: number }).scrollHeight = 900;
+    list.followBottom();
+    expect(scroller.scrollTop === 900).toBe(row.following);
+  });
+
+  it.each<{
+    case: string;
+    start: (list: EntryList) => void;
+    step: 1 | -1;
+    focused: string;
+  }>([
+    {
+      case: 'next skips the rest of the message and the notice',
+      start: (list) => list.first(),
+      step: 1,
+      focused: 'b#0',
+    },
+    {
+      case: 'previous lands on the first block of the earlier message',
+      start: () => undefined,
+      step: -1,
+      focused: 'a#0',
+    },
+    {
+      case: 'from a notice, next is the following message',
+      start: (list) => {
+        list.first();
+        list.move(1);
+        list.move(1);
+      },
+      step: 1,
+      focused: 'b#0',
+    },
+    {
+      case: 'at the first message, previous stays on the stop',
+      start: (list) => {
+        list.first();
+        list.move(1);
+      },
+      step: -1,
+      focused: 'a#1',
+    },
+    {
+      case: 'at the last message, next stays on the stop',
+      start: () => undefined,
+      step: 1,
+      focused: 'b#1',
+    },
+  ])('moveToMessage ($case)', ({ start, step, focused }) => {
+    const { list, put } = setUpList(blocksShown());
+    [
+      assistantText('a', 'one\n\ntwo'),
+      notice('n'),
+      userText('b', 'three\n\nfour'),
+    ].forEach(put);
+    start(list);
+
+    const stop = list.moveToMessage(step);
+
+    expect(cursorLabel(list)).toBe(focused);
+    expect(stop).toEqual(list.focused());
+  });
+
+  it('moveToMessage_NoStops_Null', () => {
+    expect(setUpList(blocksShown()).list.moveToMessage(1)).toBeNull();
+  });
+
+  it('focusedStop_OnABlock_NamesTheEntryAndItsSlotAndBlock', () => {
+    const { list, put } = setUpList(blocksShown());
+    const entry = assistantText('a', 'one\n\ntwo');
+    put(entry);
+    const scrolled = vi.spyOn(FakeElement.prototype, 'scrollIntoView');
+    put(notice('n'));
+
+    const stop = list.move(-1);
+
+    expect(stop).toEqual({ kind: 'entry', entry });
+    expect(list.focusedElement()).toBe(asFake(list.element).children[0]);
+    expect(list.focusedBlock()).toBe(blockAt(list, 0, 1));
+    expect(scrolled.mock.contexts).toEqual([blockAt(list, 0, 1)]);
+    list.move(1);
+    expect(list.focusedBlock()).toBeNull();
+    expect(list.focusedElement()).toBe(asFake(list.element).children[1]);
+  });
+
+  it.each([
+    {
+      case: 'a stop that fits scrolls to the bottom and follows',
+      startsOnLastStop: false,
+      lastStop: { top: 30, height: 10 },
+      scrollsToStop: false,
+      scrollTop: 900,
+      afterPut: 'n',
+    },
+    {
+      case: 'a stop too tall shows itself and does not follow',
+      startsOnLastStop: false,
+      lastStop: { top: 30, height: 150 },
+      scrollsToStop: true,
+      scrollTop: 100,
+      afterPut: 'a#1',
+    },
+    {
+      case: 'a clamped move while reading a stop too tall stays put',
+      startsOnLastStop: true,
+      lastStop: { top: -20, height: 150 },
+      scrollsToStop: true,
+      scrollTop: 100,
+      afterPut: 'a#1',
+    },
+  ])(
+    'move_OntoTheLastStop ($case)',
+    ({ startsOnLastStop, lastStop, scrollsToStop, scrollTop, afterPut }) => {
+      const { list, put } = setUpList(blocksShown());
+      const scroller = asFake(list.element) as FocusFakeElement & {
+        scrollHeight: number;
+        clientHeight: number;
+      };
+      scroller.rectHeight = 100;
+      scroller.clientHeight = 100;
+      scroller.scrollHeight = 900;
+      put(assistantText('a', 'one\n\ntwo'));
+      const first = blockAt(list, 0, 0);
+      const last = blockAt(list, 0, 1);
+      first.rectTop = 30;
+      first.rectHeight = 10;
+      last.rectTop = lastStop.top;
+      last.rectHeight = lastStop.height;
+      if (!startsOnLastStop) {
+        list.move(-1);
+      }
+      scroller.scrollTop = 100;
+      scroller.fire('scroll');
+      const scrolled = vi.spyOn(FakeElement.prototype, 'scrollIntoView');
+
+      list.move(1);
+
+      expect(scrolled.mock.contexts).toEqual(scrollsToStop ? [last] : []);
+      expect(scroller.scrollTop).toBe(scrollTop);
+      expect(cursorLabel(list)).toBe('a#1');
+      scroller.fire('scroll');
+      put(notice('n'));
+      expect(cursorLabel(list)).toBe(afterPut);
+    },
+  );
+
+  it('scrollToFocus_FollowingOnAStopTooTall_ScrollsToTheBottom', () => {
+    const { list, put } = setUpList(blocksShown());
+    const scroller = asFake(list.element) as FocusFakeElement & {
+      scrollHeight: number;
+    };
+    scroller.rectHeight = 100;
+    scroller.scrollHeight = 900;
+    put(assistantText('a', 'one\n\ntwo'));
+    blockAt(list, 0, 1).rectHeight = 150;
+    const scrolled = vi.spyOn(FakeElement.prototype, 'scrollIntoView');
+    scroller.scrollTop = 0;
+
+    list.scrollToFocus();
+
+    expect(scrolled).not.toHaveBeenCalled();
+    expect(scroller.scrollTop).toBe(900);
+  });
+
+  it('marks_CursorAndRange_DrawnOnTheStopsAndClearedAfter', () => {
+    const { list, put } = setUpList(blocksShown());
+    put(assistantText('a', fourBlocks));
+    put(notice('n'));
+    const noticeSlot = asFake(list.element).children[1];
+    expect(noticeSlot.classList.contains('is-cursor')).toBe(true);
+    expect(marksOf(list, 'is-cursor')).toEqual([]);
+
+    list.move(-1);
+    expect(noticeSlot.classList.contains('is-cursor')).toBe(false);
+    expect(marksOf(list, 'is-cursor')).toEqual([3]);
+    expect(marksOf(list, 'is-range')).toEqual([]);
+
+    list.toggleRange();
+    list.move(-1);
+    expect(marksOf(list, 'is-range')).toEqual([2, 3]);
+    expect(marksOf(list, 'is-cursor')).toEqual([2]);
+
+    list.first();
+    expect(marksOf(list, 'is-range')).toEqual([0, 1, 2, 3]);
+    expect(list.selectedSource()?.blockCount).toBe(4);
+
+    list.latest();
+    expect(marksOf(list, 'is-range')).toEqual([3]);
+    expect(noticeSlot.classList.contains('is-range')).toBe(true);
+
+    expect(list.cancelRange()).toBe(true);
+    expect(list.cancelRange()).toBe(false);
+    expect(marksOf(list, 'is-range')).toEqual([]);
+    expect(noticeSlot.classList.contains('is-range')).toBe(false);
+  });
+
+  it('toggleRange_Twice_ClosesTheRange', () => {
+    const { list, put } = setUpList(blocksShown());
+    put(assistantText('a', fourBlocks));
+
+    expect(list.toggleRange()).toBe(true);
+    expect(list.isRangeOpen()).toBe(true);
+    list.toggleRange();
+    list.move(-1);
+
+    expect(list.isRangeOpen()).toBe(false);
+    expect(marksOf(list, 'is-range')).toEqual([]);
+    expect(list.cancelRange()).toBe(false);
+  });
+
+  it('toggleRange_NoStops_FalseAndNoRange', () => {
+    const { list } = setUpList(blocksShown());
+
+    expect(list.toggleRange()).toBe(false);
+    expect(list.isRangeOpen()).toBe(false);
+  });
+
+  it.each<{
+    case: string;
+    overrides?: Partial<Record<EntryKind, AnyBuilder>>;
+    shown?: () => ShownLayouts<ChatLayout>;
+    puts: ChatEntry[];
+    queued?: QueuedMessage[];
+    act: (list: EntryList) => void;
+    source: { text: string; blockCount: number } | null;
+  }>([
+    {
+      case: 'a range of three blocks',
+      puts: [assistantText('a', 'one\ntail\n\ntwo\n\nthree')],
+      act: (list) => {
+        list.first();
+        list.toggleRange();
+        list.move(1);
+        list.move(1);
+      },
+      source: { text: 'one\ntail\n\ntwo\n\nthree', blockCount: 3 },
+    },
+    {
+      case: 'the cursor alone with no range',
+      puts: [assistantText('a', 'one\n\ntwo')],
+      act: (list) => list.first(),
+      source: { text: 'one', blockCount: 1 },
+    },
+    {
+      case: 'a fence block',
+      puts: [assistantText('a', 'intro\n\n```ts\nconst a = 1;\n```')],
+      act: () => undefined,
+      source: { text: '```ts\nconst a = 1;\n```', blockCount: 1 },
+    },
+    {
+      case: 'a range across messages, a notice and a divider',
+      puts: [
+        userText('u', 'ask'),
+        result('r'),
+        notice('n'),
+        assistantText('a', 'one\n\ntwo'),
+      ],
+      act: (list) => {
+        list.first();
+        list.toggleRange();
+        list.latest();
+      },
+      source: { text: 'ask\n\nhi\n\none\n\ntwo', blockCount: 4 },
+    },
+    {
+      case: 'a message with no blocks gives nothing when empty',
+      puts: [assistantText('a', '')],
+      act: () => undefined,
+      source: null,
+    },
+    {
+      case: 'a pending row gives its message',
+      puts: [userText('u', 'ask')],
+      queued: [queued('q1')],
+      act: () => undefined,
+      source: { text: 'text of q1', blockCount: 1 },
+    },
+    {
+      case: 'a permission card gives nothing, and leaves a range its parts',
+      puts: [userText('u', 'ask'), permission('p')],
+      act: (list) => {
+        list.toggleRange();
+        list.first();
+      },
+      source: { text: 'ask', blockCount: 1 },
+    },
+    {
+      case: 'a permission card alone gives nothing',
+      puts: [permission('p')],
+      act: () => undefined,
+      source: null,
+    },
+    {
+      case: 'an activity line gives nothing',
+      shown: () =>
+        activityShown({
+          entries: { assistant: marksParagraphs, user: marksParagraphs },
+        }),
+      puts: [tool('t1')],
+      act: () => undefined,
+      source: null,
+    },
+    {
+      case: 'a layout drawing other text gives the whole text once',
+      overrides: { assistant: marksLines('0,1', '1,2', '2,9') },
+      puts: [assistantText('a', 'only\nlines')],
+      act: (list) => {
+        list.first();
+        list.toggleRange();
+        list.latest();
+      },
+      source: { text: 'only\nlines', blockCount: 1 },
+    },
+  ])('selectedSource ($case)', (row) => {
+    const shown =
+      row.shown === undefined ? blocksShown(row.overrides) : row.shown();
+    const { list, put } = setUpList(shown);
+    row.puts.forEach(put);
+    list.setQueued(row.queued ?? []);
+    row.act(list);
+
+    expect(list.selectedSource()).toEqual(row.source);
+  });
+
+  it.each([
+    { case: 'a middle slice', start: 1, end: 3, source: 'b\nc' },
+    { case: 'trailing blanks removed', start: 0, end: 4, source: 'a\nb\nc' },
+    { case: 'only blank lines', start: 3, end: 5, source: '' },
+    { case: 'an empty range', start: 2, end: 2, source: '' },
+  ])('sourceOfLines ($case)', ({ start, end, source }) => {
+    expect(sourceOfLines('a\nb\nc\n\n  \nd', start, end)).toBe(source);
+  });
+
+  // Each block's box after the scroll; every box sits in the band before it. The
+  // list's box runs 0 to 100, its band 0 to 80 under the 20px scroll padding.
+  const above = { top: -50, height: 10 };
+  const inBand = { top: 30, height: 10 };
+  const below = { top: 200, height: 10 };
+
+  it.each<{
+    case: string;
+    cursor: number;
+    from: number;
+    to: number;
+    clientHeight?: number;
+    boxes: { top: number; height: number }[];
+    focused: string;
+    following: boolean;
+  }>([
+    {
+      case: 'a cursor above the band, scrolling down',
+      cursor: 0,
+      from: 100,
+      to: 300,
+      boxes: [above, above, inBand, inBand],
+      focused: 'a#2',
+      following: false,
+    },
+    {
+      case: 'a cursor below the band, scrolling up',
+      cursor: 3,
+      from: 300,
+      to: 100,
+      boxes: [inBand, inBand, below, below],
+      focused: 'a#1',
+      following: false,
+    },
+    {
+      case: 'a sliver left at the top edge moves down',
+      cursor: 1,
+      from: 100,
+      to: 300,
+      boxes: [above, { top: -8, height: 10 }, inBand, inBand],
+      focused: 'a#2',
+      following: false,
+    },
+    {
+      case: 'a sliver left at the bottom edge moves up',
+      cursor: 2,
+      from: 300,
+      to: 100,
+      boxes: [inBand, inBand, { top: 78, height: 10 }, below],
+      focused: 'a#1',
+      following: false,
+    },
+    {
+      case: 'a stop clipped by under 1px at the top edge stays',
+      cursor: 1,
+      from: 100,
+      to: 300,
+      boxes: [above, { top: -0.5, height: 10 }, inBand, inBand],
+      focused: 'a#1',
+      following: false,
+    },
+    {
+      case: 'a stop clipped by under 1px at the bottom edge stays',
+      cursor: 1,
+      from: 300,
+      to: 100,
+      boxes: [inBand, { top: 70.5, height: 10 }, below, below],
+      focused: 'a#1',
+      following: false,
+    },
+    {
+      case: 'a stop taller than the band stays while it overlaps',
+      cursor: 1,
+      from: 100,
+      to: 300,
+      boxes: [above, { top: -200, height: 201 }, inBand, inBand],
+      focused: 'a#1',
+      following: false,
+    },
+    {
+      case: 'a stop taller than the band covering it stays',
+      cursor: 1,
+      from: 100,
+      to: 300,
+      boxes: [above, { top: -200, height: 900 }, below, below],
+      focused: 'a#1',
+      following: false,
+    },
+    {
+      case: 'a stop taller than the band past its edge moves',
+      cursor: 1,
+      from: 100,
+      to: 300,
+      boxes: [above, { top: -200, height: 190 }, inBand, inBand],
+      focused: 'a#2',
+      following: false,
+    },
+    {
+      case: 'a cursor under the scroll padding moves back up',
+      cursor: 3,
+      from: 100,
+      to: 300,
+      boxes: [above, inBand, inBand, { top: 85, height: 10 }],
+      focused: 'a#2',
+      following: false,
+    },
+    {
+      case: 'every stop straddling an edge takes the nearest that overlaps',
+      cursor: 0,
+      from: 100,
+      to: 300,
+      boxes: [above, { top: -30, height: 90 }, { top: 60, height: 90 }, below],
+      focused: 'a#1',
+      following: false,
+    },
+    {
+      case: 'nothing in the band leaves the cursor',
+      cursor: 0,
+      from: 100,
+      to: 300,
+      boxes: [above, above, below, below],
+      focused: 'a#0',
+      following: false,
+    },
+    {
+      case: 'an unchanged scrollTop leaves the cursor',
+      cursor: 0,
+      from: 300,
+      to: 300,
+      boxes: [above, above, inBand, inBand],
+      focused: 'a#0',
+      following: false,
+    },
+    {
+      case: 'a hidden list leaves the cursor',
+      cursor: 0,
+      from: 100,
+      to: 300,
+      clientHeight: 0,
+      boxes: [above, above, inBand, inBand],
+      focused: 'a#0',
+      following: false,
+    },
+    {
+      case: 'a scroll landing on the bottom still follows from an earlier stop',
+      cursor: 0,
+      from: 100,
+      to: 900,
+      boxes: [above, inBand, inBand, inBand],
+      focused: 'a#1',
+      following: true,
+    },
+  ])('scroll_MovesTheCursorIntoTheBand ($case)', (row) => {
+    const { list, put } = setUpList(blocksShown());
+    const scroller = asFake(list.element) as FocusFakeElement & {
+      scrollHeight: number;
+      clientHeight: number;
+    };
+    scroller.rectHeight = 100;
+    scroller.scrollHeight = 1000;
+    scroller.clientHeight = 100;
+    put(assistantText('a', fourBlocks));
+    list.first();
+    for (let moved = 0; moved < row.cursor; moved++) {
+      list.move(1);
+    }
+    row.boxes.forEach((_box, index) => {
+      blockAt(list, 0, index).rectTop = inBand.top;
+      blockAt(list, 0, index).rectHeight = inBand.height;
+    });
+    scroller.scrollTop = row.from;
+    scroller.fire('scroll');
+
+    row.boxes.forEach((box, index) => {
+      blockAt(list, 0, index).rectTop = box.top;
+      blockAt(list, 0, index).rectHeight = box.height;
+    });
+    scroller.clientHeight = row.clientHeight ?? 100;
+    scroller.scrollTop = row.to;
+    scroller.fire('scroll');
+
+    expect(cursorLabel(list)).toBe(row.focused);
+    expect(marksOf(list, 'is-cursor')).toEqual([Number(row.focused.at(-1))]);
+    expect(scroller.scrollTop).toBe(row.to);
+    scroller.scrollHeight = 2000;
+    list.followBottom();
+    expect(scroller.scrollTop === 2000).toBe(row.following);
+  });
+
+  it('scroll_OverflowingOpenLastRun_MovesAFollowingCursorOffItsLineAndFollows', () => {
+    const { list, put } = setUpList(activityShown());
+    const scroller = asFake(list.element) as FocusFakeElement & {
+      scrollHeight: number;
+      clientHeight: number;
+    };
+    scroller.rectHeight = 100;
+    scroller.clientHeight = 100;
+    [user('u1'), tool('t1'), tool('t2')].forEach(put);
+    list.toggleFocused();
+    const line = slotOf(list.element, 'chat-activity-slot') as FocusFakeElement;
+    const firstStep = slotOf(
+      list.element,
+      'chat-step-slot',
+    ) as FocusFakeElement;
+    const lastStep = slotOf(
+      list.element,
+      'chat-step-slot',
+      1,
+    ) as FocusFakeElement;
+    for (const offScreen of [line, firstStep]) {
+      offScreen.rectTop = above.top;
+      offScreen.rectHeight = above.height;
+    }
+    lastStep.rectTop = inBand.top;
+    lastStep.rectHeight = inBand.height;
+    scroller.scrollHeight = 400;
+
+    scroller.scrollTop = 300;
+    scroller.fire('scroll');
+
+    expect(list.focused()).toEqual({ kind: 'entry', entry: tool('t2') });
+    put(tool('t3'));
+    expect(list.focused()).toEqual({ kind: 'entry', entry: tool('t3') });
+  });
+
+  it.each([
+    {
+      case: 'moves the cursor into the band and follows',
+      clientHeight: 100,
+      focused: { kind: 'entry', entry: tool('t2') },
+      afterPut: { kind: 'entry', entry: tool('t3') },
+    },
+    {
+      case: 'on a hidden list stays on the line',
+      clientHeight: 0,
+      focused: {
+        kind: 'activity',
+        runId: 'activity:t1',
+        steps: [tool('t1'), tool('t2')],
+      },
+      afterPut: {
+        kind: 'activity',
+        runId: 'activity:t1',
+        steps: [tool('t1'), tool('t2'), tool('t3')],
+      },
+    },
+  ])(
+    'latest_AtTheBottomOverAnOverflowingOpenRun ($case)',
+    ({ clientHeight, focused, afterPut }) => {
+      const { list, put } = setUpList(activityShown());
+      const scroller = asFake(list.element) as FocusFakeElement & {
+        scrollHeight: number;
+        clientHeight: number;
+      };
+      scroller.rectHeight = 100;
+      scroller.clientHeight = 100;
+      [user('u1'), tool('t1'), tool('t2')].forEach(put);
+      list.toggleFocused();
+      const [line, firstStep, lastStep] = [
+        slotOf(list.element, 'chat-activity-slot'),
+        slotOf(list.element, 'chat-step-slot'),
+        slotOf(list.element, 'chat-step-slot', 1),
+      ] as FocusFakeElement[];
+      for (const offScreen of [line, firstStep]) {
+        offScreen.rectTop = above.top;
+        offScreen.rectHeight = above.height;
+      }
+      lastStep.rectTop = inBand.top;
+      lastStep.rectHeight = inBand.height;
+      scroller.scrollHeight = 400;
+      scroller.scrollTop = 400;
+      scroller.fire('scroll');
+      scroller.clientHeight = clientHeight;
+
+      list.latest();
+
+      expect(list.focused()).toEqual(focused);
+      expect(scroller.scrollTop).toBe(400);
+      scroller.scrollTop = 399;
+      scroller.fire('scroll');
+      expect(list.focused()).toEqual(focused);
+      put(tool('t3'));
+      expect(list.focused()).toEqual(afterPut);
+    },
+  );
+
+  it.each<{
+    case: string;
+    target: (list: EntryList) => FakeElement;
+    collapsed?: boolean;
+    focused: string;
+  }>([
+    {
+      case: 'a block moves the cursor',
+      target: (list) => blockAt(list, 0, 0),
+      focused: 'a#0',
+    },
+    {
+      case: 'text inside a block moves the cursor',
+      target: (list) => {
+        const inner = new FocusFakeElement('em');
+        blockAt(list, 0, 1).append(inner);
+        return inner;
+      },
+      focused: 'a#1',
+    },
+    {
+      case: 'a slot with no blocks moves the cursor',
+      target: (list) => asFake(list.element).children[2],
+      focused: 'n',
+    },
+    {
+      case: 'a non-collapsed selection leaves it',
+      target: (list) => blockAt(list, 0, 0),
+      collapsed: false,
+      focused: 'p',
+    },
+    {
+      case: 'a link inside a block leaves it',
+      target: (list) => {
+        const link = new FocusFakeElement('a');
+        blockAt(list, 0, 0).append(link);
+        return link;
+      },
+      focused: 'p',
+    },
+    {
+      case: 'a fence inside a block leaves it',
+      target: (list) => {
+        const fence = new FocusFakeElement('div');
+        fence.className = 'md-fence';
+        blockAt(list, 0, 0).append(fence);
+        return fence;
+      },
+      focused: 'p',
+    },
+    {
+      case: 'a divider leaves it',
+      target: (list) => asFake(list.element).children[1],
+      focused: 'p',
+    },
+    {
+      case: 'the padding of a slot with blocks leaves it',
+      target: (list) => asFake(list.element).children[0],
+      focused: 'p',
+    },
+    {
+      case: 'the list itself leaves it',
+      target: (list) => asFake(list.element),
+      focused: 'p',
+    },
+  ])('click ($case)', ({ target, collapsed, focused }) => {
+    const { list, put } = setUpList(blocksShown());
+    [
+      assistantText('a', 'one\n\ntwo'),
+      result('r'),
+      notice('n'),
+      permission('p'),
+    ].forEach(put);
+    const scroller = asFake(list.element);
+    const clicked = target(list);
+    list.latest();
+    scroller.scrollTop = 123;
+    fakeWindow().isSelectionCollapsed = collapsed ?? true;
+
+    scroller.fire('click', { target: clicked });
+
+    expect(cursorLabel(list)).toBe(focused);
+    expect(scroller.scrollTop).toBe(123);
   });
 });

@@ -7,6 +7,7 @@ import type {
 import { errorText } from '../../../shared/error-text';
 import type { ChatChannel } from '../contract';
 import { accountText } from './account-commands';
+import type { WriteClipboard } from './clipboard';
 import type { SignInDialog } from './sign-in-dialog';
 
 // The dialog's look, which the flow drives: `show` shows it for the profile
@@ -24,7 +25,7 @@ export interface SignInFlowDeps {
   channel: Pick<PageChannel<ChatChannel>, 'invoke' | 'on'>;
   // Pushes the dialog's own scope.
   pushScope(): PushedScope;
-  writeClipboard(text: string): Promise<void>;
+  writeClipboard: WriteClipboard;
   toast(text: string, tone: ToastTone): void;
   log: Log;
 }

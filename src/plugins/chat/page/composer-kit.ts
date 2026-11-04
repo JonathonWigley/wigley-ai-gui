@@ -97,9 +97,11 @@ export interface ComposerSurface {
   // composer's root.
   drawComposer(parent: HTMLElement, input: ComposerInput): HTMLElement;
   // Runs the composer's update with `input`, then draws the status line with
-  // it in place of its last draw. Returns false, drawing no status line, when
-  // the update threw: the composer then draws with `default` until the
-  // layouts change, and the caller draws it again.
+  // it in place of its last draw. A change to `isBoxFocused` alone moves only the
+  // type hint, and an unchanged input draws nothing, so the elements under a
+  // release that focused the pane stay in the document for its click. Returns
+  // false, drawing no status line, when the update threw: the composer then
+  // draws with `default` until the layouts change, and the caller draws it again.
   drawStatusLine(input: ComposerInput): boolean;
   // Draws the attachments in place of their last draw; the slot hides while
   // `images` is empty.
@@ -134,9 +136,10 @@ interface DockPart {
 }
 
 // The status line's parts holding keys, each anchored once in `chat.chat`:
-// the type hint (`i` and `a`), the running indicator (dot and interrupt
-// keys), Send, and a key span per pick command, which the first chip running
-// it holds.
+// the type hint (`i` and `a`, then `.chat-cursor-keys`, the page keys that read
+// the entries: `J`, `K`, `V` and `y`, with no labels), the
+// running indicator (dot and interrupt keys), Send, and a key span per pick
+// command, which the first chip running it holds.
 interface StatusLineParts {
   typeHint: HTMLElement;
   running: HTMLElement;
@@ -166,6 +169,7 @@ export function createComposerSurface(
   const attachmentsDraws = chatPartDraws(deps.layouts, 'attachments', deps.log);
   let composer: DrawnPart<BuiltPart<ComposerInput>> | null = null;
   let statusLine: DrawnPart<BuiltPart<ComposerInput>> | null = null;
+  let statusLineDrawnFor: string | null = null;
   let attachments: DrawnPart<BuiltPart<AttachmentsInput>> | null = null;
   let images: readonly ChatImage[] = [];
 
@@ -261,6 +265,10 @@ export function createComposerSurface(
       if (isComposerStale) {
         return false;
       }
+      if (statusLineDrawnFor === statusLineFacts(input)) {
+        showBoxFocus(parts, input);
+        return true;
+      }
       drawStatusLinePart(input);
       return true;
     },
@@ -313,6 +321,7 @@ export function createComposerSurface(
   };
 
   const drawStatusLinePart = (input: ComposerInput) => {
+    statusLineDrawnFor = null;
     statusLine?.dispose();
     statusLineSlot.replaceChildren();
     statusLine = statusLineDraws.draw(
@@ -331,9 +340,23 @@ export function createComposerSurface(
         return { element: view.element, view };
       },
     );
+    statusLineDrawnFor = statusLineFacts(input);
   };
 
   return surface;
+}
+
+// What a status line draw depends on: all of `input` but `isBoxFocused`, which
+// `showBoxFocus` applies in place.
+function statusLineFacts(input: ComposerInput): string {
+  return JSON.stringify({ ...input, isBoxFocused: false });
+}
+
+function showBoxFocus(
+  parts: Pick<StatusLineParts, 'typeHint'>,
+  input: ComposerInput,
+) {
+  parts.typeHint.classList.toggle('is-box-focused', input.isBoxFocused);
 }
 
 // `key`'s part in a new hidden `div.<slotClass>`, which shows while the part has
@@ -439,7 +462,13 @@ function createStatusLineParts(
   const typeKey = element('span', 'chat-type-key');
   const appendKey = element('span', 'chat-type-key');
   const typeHint = element('span', 'chat-type-hint');
-  typeHint.append(typeKey, appendKey);
+  const nextMessageKey = element('span', 'chat-type-key');
+  const prevMessageKey = element('span', 'chat-type-key');
+  const rangeKey = element('span', 'chat-type-key');
+  const copyKey = element('span', 'chat-type-key');
+  const cursorKeys = element('span', 'chat-cursor-keys');
+  cursorKeys.append(nextMessageKey, prevMessageKey, rangeKey, copyKey);
+  typeHint.append(typeKey, appendKey, cursorKeys);
   const interruptKey = element('span', 'chat-running-key');
   const sendNowKey = element('span', 'chat-running-key');
   const running = element('span', 'chat-running');
@@ -468,6 +497,10 @@ function createStatusLineParts(
       ...scope,
       label: 'to append',
     }),
+    deps.keys.anchor(nextMessageKey, chatCommand('nextMessage'), scope),
+    deps.keys.anchor(prevMessageKey, chatCommand('prevMessage'), scope),
+    deps.keys.anchor(rangeKey, chatCommand('toggleRange'), scope),
+    deps.keys.anchor(copyKey, chatCommand('allowOrCopy'), scope),
     deps.keys.anchor(sendKey, chatCommand('send'), scope),
   ];
   const chipKeys = new Map<ChatCommandName, HTMLElement>();
@@ -500,7 +533,7 @@ function statusLineKit(
   return {
     ...base,
     typeHint(parent) {
-      parts.typeHint.classList.toggle('is-box-focused', input.isBoxFocused);
+      showBoxFocus(parts, input);
       return appended(parent, parts.typeHint);
     },
     modelEffortChip(parent, modelEffort) {

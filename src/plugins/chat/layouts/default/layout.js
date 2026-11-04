@@ -1,11 +1,12 @@
 // @ts-check
 
 // The built-in chat look: the entries, the activity lines (each one summary
-// line, live or finished), the activity dock and its one line, the pending
-// messages' rows, the composer, the list rows, the dialogs' bodies, the image viewer and the run
-// time under a session's row. Every
-// collapsible row's body is built on its first open and kept, so an update
-// refills it in place whether it is open or closed.
+// line, live or finished), the activity dock, its one line and that line's place
+// just above the composer's box, the pending messages' rows, the composer, the
+// list rows, the dialogs' bodies, the image viewer, the run time under a session's
+// row, and the session hub's section frames and Session rows. Every collapsible
+// row's body is built on its first open and kept, so an update refills it in
+// place whether it is open or closed.
 
 // The tool calls the activity dock's box lists; a user layout sets its own
 // box's length.
@@ -84,14 +85,26 @@ function toolStatus(input) {
   return input.result.isError ? 'error' : 'success';
 }
 
-/** @param {import('../layout').ResultInput} input */
-function resultLine(input) {
-  const parts = [input.stopReason];
-  if (input.costUsd !== null) {
-    parts.push(`$${input.costUsd.toFixed(2)}`);
-  }
+// Whether the turn stopped because the agent finished, not on a limit or error.
+/** @param {string} stopReason */
+function isFinishedStop(stopReason) {
+  return stopReason === 'end_turn' || stopReason === 'success';
+}
+
+// The turn break's line: how the turn stopped, then its time and steps when known.
+/**
+ * @param {import('../layout').ResultInput} input
+ * @param {import('../layout').ChatKit} kit
+ */
+function resultLine(input, kit) {
+  const parts = [
+    isFinishedStop(input.stopReason) ? 'Turn ended' : input.stopReason,
+  ];
   if (input.durationMs !== null) {
-    parts.push(`${(input.durationMs / 1000).toFixed(1)} s`);
+    parts.push(kit.duration(input.durationMs));
+  }
+  if (input.stepCount > 0) {
+    parts.push(stepCount(input.stepCount));
   }
   return parts.join(' · ');
 }
@@ -277,10 +290,8 @@ function workingBox(tools) {
  * @param {import('../layout').BaseKit} kit
  */
 function doneLine(input, kit) {
-  const isFinished =
-    input.stopReason === 'end_turn' || input.stopReason === 'success';
   const parts = [
-    isFinished ? 'Done' : input.stopReason,
+    isFinishedStop(input.stopReason) ? 'Done' : input.stopReason,
     kit.duration(input.endedAt - input.startedAt),
   ];
   if (input.costUsd !== null) {
@@ -593,16 +604,17 @@ const layout = {
       kit.permissionActions(prompt);
       return { element: entry };
     },
-    result(parent, input) {
+    // A turn break: one line between two rules.
+    result(parent, input, kit) {
       const entry = root(
         parent,
-        'chat-entry chat-result chat-muted',
-        resultLine(input),
+        'chat-entry chat-result',
+        resultLine(input, kit),
       );
       return {
         element: entry,
         update(next) {
-          entry.textContent = resultLine(next);
+          entry.textContent = resultLine(next, kit);
         },
       };
     },
@@ -770,7 +782,7 @@ const layout = {
   },
   // The repo and branch, the type hint, the model · effort chip, a chip per
   // other control, other plugins' status parts, then the running indicator
-  // and send at the end.
+  // and send as one group that ends the line, on whichever row it wraps to.
   statusLine(parent, input, kit) {
     const line = root(parent, 'chat-status-line');
     line.append(el('span', 'chat-status-repo', input.repo));
@@ -785,8 +797,10 @@ const layout = {
       kit.controlChip(line, control);
     }
     kit.statusParts(line);
-    kit.running(line);
-    kit.sendButton(line);
+    const end = el('div', 'chat-status-end');
+    line.append(end);
+    kit.running(end);
+    kit.sendButton(end);
     return { element: line };
   },
   attachments(parent, input, kit) {

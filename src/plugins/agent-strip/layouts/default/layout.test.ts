@@ -164,6 +164,12 @@ describe('default agent-strip layout', () => {
       tag: 'Background agent',
     },
     { case: 'task', box: () => drawTask(), name: null, tag: 'Shell' },
+    {
+      case: 'task without a command',
+      box: () => drawTask({ command: null }),
+      name: null,
+      tag: 'Task',
+    },
   ])('head_$case', ({ box, name, tag }) => {
     const { root } = box();
 

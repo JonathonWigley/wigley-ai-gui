@@ -139,8 +139,9 @@ export interface WorkflowKit extends BaseKit {
     text: string,
     open: boolean,
   ): HTMLButtonElement;
-  // `div.workflow-side-list`: the side pane's scrolling list, which takes the height the pane leaves it. The app keeps
-  // its scroll across each draw, and while the pane has no layout box.
+  // `div.workflow-side-list`: the side pane's scrolling list, which takes the height the pane leaves it, at least two
+  // rows or its own height when it holds less. The app keeps its scroll across each draw, and while the pane has no
+  // layout box.
   sideList(parent: HTMLElement): HTMLElement;
 }
 

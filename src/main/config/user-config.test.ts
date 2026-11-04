@@ -116,6 +116,7 @@ async function create(
       displayName: 'Auri Dev',
       isDev: true,
     },
+    runMode: 'live',
     log: () => undefined,
   });
   return createUserConfig({
@@ -594,6 +595,7 @@ describe('createUserConfig', () => {
         displayName: 'Auri Dev',
         isDev: true,
       },
+      runMode: 'live',
       log: () => undefined,
     });
 
@@ -661,6 +663,7 @@ describe('createUserConfig', () => {
         displayName: 'Auri Dev',
         isDev: true,
       },
+      runMode: 'live',
       log: () => undefined,
     });
 
@@ -690,6 +693,7 @@ describe('createUserConfig', () => {
         displayName: 'Auri Dev',
         isDev: true,
       },
+      runMode: 'live',
       log: () => undefined,
     });
     const undeclared = {

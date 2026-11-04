@@ -13,6 +13,11 @@ export type AnchorNamer<Options> = (
   options?: Options,
 ) => Disposable;
 
+// The anchor function of a divider no key moves: its prompt names no key.
+export const NO_ANCHOR: AnchorNamer<never> = () => ({
+  dispose: () => undefined,
+});
+
 // `anchor`, keeping each Disposable it returns in `anchors`, so their owner
 // disposes them together.
 export function recordingAnchor<Options>(

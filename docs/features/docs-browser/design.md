@@ -70,7 +70,7 @@ Each plan lands green on its own, the self-test passing, and is reviewed on its 
   `Space ;` and `<Leader>;` close the selected session's sidebar entry, asking first when a round is open, as they
   closed its tab before.
 - A new round in Sessions mode selects its session and its Form tab, as today. A round arriving while Docs mode shows
-  leaves Docs in place: a toast names the session and the key (`Space k s`), and the sidebar row gets its dot.
+  leaves Docs in place: a toast names the session and the key (`Space k s`), and the sidebar row gets its Needs you label.
   Sessions decides this (it owns activation and reads which mode shows); forms stays unaware of modes.
 - **Harness**: the relay hello gains an optional `harness` field, `claude` when `CLAUDECODE=1`, else `codex`
   (wigley-ai-marketplace `relay.py` and its README). An older relay without it shows no harness. Codex sets neither

@@ -167,6 +167,7 @@ function mounted(
       kit,
       parts: sideParts,
       uiState: { get: () => undefined, set: noEvent },
+      timers: { set: () => 0, clear: noEvent },
       log,
     }),
     ...kit,
@@ -273,7 +274,8 @@ describe('mountChatView side parts', () => {
     });
     const tabChildren = (sessionId: string) =>
       (view.tabElements.get(sessionId) as FakeElement).children;
-    const wrappers = (sessionId: string) => tabChildren(sessionId)[1].children;
+    const wrappers = (sessionId: string) =>
+      findAll(tabChildren(sessionId)[1], 'chat-side-part');
     const wrapperTexts = (sessionId: string) =>
       wrappers(sessionId).map(
         (wrapper) => findAll(wrapper, 'chat-side-section-body')[0].textContent,
@@ -370,9 +372,11 @@ describe('mountChatView side parts', () => {
     });
 
     expect(attempts).toBe(1);
-    expect(holder().children.map((wrapper) => wrapper.dataset.part)).toEqual([
-      'other',
-    ]);
+    expect(
+      findAll(holder(), 'chat-side-part').map(
+        (wrapper) => wrapper.dataset.part,
+      ),
+    ).toEqual(['other']);
 
     added.dispose();
     view.sideParts.add(failing);

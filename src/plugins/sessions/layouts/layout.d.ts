@@ -44,10 +44,10 @@ import type { BaseKit, DotStatus } from '../../../shared/page/layout-host/kit';
 // change.
 
 // One session row. `title` is the session's title as the row shows it (the user's, else the agent's, else the first
-// message cut to the title length), null for none; `label` is the session's folder label (`gamma 2`); `harness` is
+// message cut to the title length), null for none, which `default` draws as `New Chat`; `label` is the session's folder label (`gamma 2`); `harness` is
 // the harness's name, '' for none; `marked` is true while a round waits unopened; `activity` is what the session is
-// doing, its word and the tone of its dot, null for none; `default` draws the dot alone, and no separate `marked` dot
-// while it is set; `status` starts the row's second line, null for none, and the contributed parts follow it on that line, which `default` never wraps; `onScreen` is true while the session shows in a pane other than
+// doing, its word and its tone, null for none; `default` draws the word as a label, a Tag for attention, warning and
+// error, and draws a needs you label for `marked` only while no activity is set; `status` starts the row's second line, null for none, and the contributed parts follow it on that line, which `default` never wraps; `onScreen` is true while the session shows in a pane other than
 // the focused one.
 export interface SessionRowInput {
   sessionId: string;
@@ -138,8 +138,12 @@ export interface TabBarPane extends SessionsPart {
 }
 
 // `body` is the box the app fills with the pane's session or empty text; a child of `element`.
+// What `pane` returns: its root, appended to `parent`, its body, and an optional `update` the app runs with the pane's
+// new input in place of drawing the pane again, so the click of a release that focuses the pane reaches what it landed
+// on. Without `update`, or when it throws (logged), the app draws the pane again and that click is lost.
 export interface PanePart extends SessionsPart {
   body: HTMLElement;
+  update?(input: PaneInput): void;
 }
 
 export interface SessionsKit extends BaseKit {}

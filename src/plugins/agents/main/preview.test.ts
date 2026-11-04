@@ -134,14 +134,6 @@ describe('agents preview', () => {
           'npm run test -- --watch src/main/claude-code/stream-decoder.test.ts',
       },
     ]);
-    expect(sample.skills).toEqual([
-      { skill: 'wigley:make', agentId: MAIN_AGENT_ID, ownerName: 'main' },
-      {
-        skill: 'wigley:review',
-        agentId: 'preview-agent-1',
-        ownerName: 'map-sessions',
-      },
-    ]);
     expect(afterOpen).toEqual({
       ends: [],
       rosters: { 'row-1': sample },

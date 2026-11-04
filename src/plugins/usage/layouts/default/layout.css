@@ -90,8 +90,9 @@
   text-overflow: ellipsis;
 }
 
-/* A session's context line above its Chat box: the meter takes the room the
-   chip and the texts leave, however little, and they keep their width. */
+/* A session's context line above its Chat box: the texts keep their width. As
+   room runs out, the meter narrows to its usual width, the chip then ellipsizes
+   away, and the meter gives up the rest. */
 [data-layout-owner='usage'][data-layout='default'].usage-context-line {
   align-items: center;
   display: flex;
@@ -104,15 +105,27 @@
 
 [data-layout-owner='usage'][data-layout='default'].usage-context-line
   > .ui-meter {
-  flex: 1 1 auto;
+  flex: 1 1 calc(var(--wg-space-8) * 1.5);
   min-width: 0;
   width: auto;
 }
 
-[data-layout-owner='usage'][data-layout='default'].usage-context-line > .ui-tag,
+[data-layout-owner='usage'][data-layout='default'].usage-context-line
+  > .ui-tag {
+  flex: 0 9999 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 [data-layout-owner='usage'][data-layout='default'].usage-context-line
   > .usage-text {
   flex: none;
+}
+
+[data-layout-owner='usage'][data-layout='default'].usage-spend-line {
+  font-size: var(--wg-text-12);
+  font-variant-numeric: tabular-nums;
 }
 
 [data-layout-owner='usage'][data-layout='default'].usage-row-line {
@@ -127,8 +140,10 @@
 }
 
 /* When the row's parts outgrow its line the bar shrinks away first, the used
-   tokens staying whole. */
+   tokens staying whole. The stronger track keeps an empty bar visible on the
+   row's card. */
 [data-layout-owner='usage'][data-layout='default'].usage-row-line > .ui-meter {
+  background: var(--wg-border-strong);
   flex: 0 1 auto;
   min-width: 0;
 }

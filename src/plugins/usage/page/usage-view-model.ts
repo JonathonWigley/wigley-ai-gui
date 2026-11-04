@@ -131,15 +131,21 @@ export function rowLineText(input: RowLineInput): string {
   return `context ${input.context.text}`;
 }
 
-// `sessionId`'s side-bar cache mark; null while the snapshot holds no such
-// session or it has no cache expiry.
+// `sessionId`'s side-bar cache mark: cold while the session has no usage yet;
+// null while the snapshot holds no such session or its usage has no cache expiry.
 export function rowCacheInput(
   snapshot: UsageSnapshot,
   sessionId: string,
   now: number,
 ): RowCacheInput | null {
-  const cacheExpiresAt =
-    findSession(snapshot, sessionId)?.usage?.cacheExpiresAt ?? null;
+  const session = findSession(snapshot, sessionId);
+  if (session === null) {
+    return null;
+  }
+  if (session.usage === null) {
+    return { isCold: true, tooltip: 'cache cold' };
+  }
+  const { cacheExpiresAt } = session.usage;
   if (cacheExpiresAt === null) {
     return null;
   }

@@ -109,6 +109,15 @@ function chatEntryPageBinds() {
     { keys: 'a', scope, command: 'chat.appendBox' as const },
     { keys: 'j', scope, command: 'chat.nextEntry' as const },
     { keys: 'k', scope, command: 'chat.prevEntry' as const },
+    { keys: 'J', scope, command: 'chat.nextMessage' as const },
+    { keys: 'K', scope, command: 'chat.prevMessage' as const },
+    { keys: 'V', scope, command: 'chat.toggleRange' as const },
+    {
+      keys: '<Esc>',
+      scope,
+      command: 'chat.cancelRange' as const,
+      where: 'page' as const,
+    },
     { keys: '<CR>', scope, command: 'chat.toggleEntry' as const },
     { keys: 'G', scope, command: 'chat.latestEntry' as const },
     { keys: 'gg', scope, command: 'chat.firstEntry' as const },
@@ -365,7 +374,7 @@ export const defaultKeymap = {
 
     // ── Chat ───────────────────────────────────────────────────────────────
     ...chatEntryPageBinds(),
-    { keys: 'y', scope: 'chat.chat', command: 'chat.allowPermission' },
+    { keys: 'y', scope: 'chat.chat', command: 'chat.allowOrCopy' },
     { keys: 'n', scope: 'chat.chat', command: 'chat.denyPermission' },
     { keys: '<C-c>', scope: 'chat.chat', command: 'chat.interrupt' },
     { keys: '<D-Enter>', scope: 'chat.chat', command: 'chat.sendNow' },

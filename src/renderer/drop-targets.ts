@@ -6,6 +6,7 @@ import {
   type PageDrops,
 } from '../contracts/drops';
 import type { ToastTone } from '../contracts/plugin';
+import { holdsTextEntry } from '../shared/page/dom';
 import { insertionText } from '../shared/page/file-drop/file-chips';
 import { pathOf } from '../shared/page/file-drop/file-path';
 import { filesOf, holdsPastedText } from '../shared/page/file-drop/pasted-text';
@@ -29,21 +30,6 @@ interface Registration {
 const WHITESPACE = /\s/;
 
 const ONE_LINE_INPUT_TYPES = new Set(['text', 'search', 'url']);
-
-// Input types that take no typed text, so focus in one leaves no field the
-// user is typing in.
-const NON_TEXT_INPUT_TYPES = new Set([
-  'button',
-  'checkbox',
-  'color',
-  'file',
-  'hidden',
-  'image',
-  'radio',
-  'range',
-  'reset',
-  'submit',
-]);
 
 // The toast for a file drag that holds no File, such as a folder the OS gives
 // none for.
@@ -217,20 +203,6 @@ function asOneLineInput(element: EventTarget | null): OneLineInput | null {
     ONE_LINE_INPUT_TYPES.has((input as HTMLInputElement).type);
   const isEditable = !input?.readOnly && !input?.disabled;
   return (isTextArea || isTextInput) && isEditable ? input : null;
-}
-
-// Whether `element` is a field the user types in: a text-taking input, a
-// textarea, or contenteditable content such as an editor.
-function holdsTextEntry(element: Element | null): boolean {
-  const field = element as HTMLElement | null;
-  const isTextInput =
-    field?.tagName === 'INPUT' &&
-    !NON_TEXT_INPUT_TYPES.has((field as HTMLInputElement).type);
-  return (
-    isTextInput ||
-    field?.tagName === 'TEXTAREA' ||
-    field?.isContentEditable === true
-  );
 }
 
 function droppedFile(
