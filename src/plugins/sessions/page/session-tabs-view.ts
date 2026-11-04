@@ -1,4 +1,5 @@
 import type { PaneDirection } from '../../../contracts/panes';
+import { callEach } from '../../../shared/call-each';
 import { element, moveConnected } from '../../../shared/page/dom';
 import type { DrawnPart } from '../../../shared/page/layout-host/draw-part';
 import { rowAction } from '../../../shared/page/ui/row';
@@ -117,6 +118,8 @@ export interface SessionTabsView {
   // Drops the session's frame, its tabs and their elements; their handles
   // then do nothing. Runs no `changed`.
   drop(sessionId: string): void;
+  // Drops every frame as `drop` does, a throw not skipping the rest.
+  dropAll(): void;
   // The session's tabs, in add order.
   tabsOf(sessionId: string): SessionTabView[];
   statusesOf(sessionId: string): string[];
@@ -418,6 +421,19 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     changed();
   };
 
+  const drop = (sessionId: string) => {
+    const frame = frames.get(sessionId);
+    if (frame === undefined) {
+      return;
+    }
+    disposeTabs(frame);
+    disposeText(frame);
+    frame.bar.dispose();
+    frame.element.remove();
+    frames.delete(sessionId);
+    draw();
+  };
+
   return {
     holder,
     render(next) {
@@ -512,18 +528,8 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
           liveTab(sessionId, tab)?.tabs.selectedTabId === view.id,
       };
     },
-    drop(sessionId) {
-      const frame = frames.get(sessionId);
-      if (frame === undefined) {
-        return;
-      }
-      disposeTabs(frame);
-      disposeText(frame);
-      frame.bar.dispose();
-      frame.element.remove();
-      frames.delete(sessionId);
-      draw();
-    },
+    drop,
+    dropAll: () => callEach([...frames.keys()], drop),
     tabsOf: (sessionId) =>
       [...(frames.get(sessionId)?.entries.values() ?? [])].map(
         (tab) => tab.view,

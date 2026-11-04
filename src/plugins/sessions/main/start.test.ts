@@ -147,25 +147,11 @@ describe('sessions drive actions', () => {
     expect(sessions.activate).not.toHaveBeenCalled();
   });
 
-  it('dispose removes the actions and ends each session still connected', async () => {
-    const drive = fakeDriveHost();
-    const sessions = fakeSessions();
-    const actions = addDriveActions(drive.host, sessions, fakeEndedEvent().on);
-    await drive.run('connect', { sessionId: 'a' });
-    await drive.run('connect', { sessionId: 'b' });
-    await drive.run('end', { sessionId: 'a' });
-
-    actions.dispose();
-
-    expect(sessions.ended).toEqual(['row-a', 'row-b']);
-    expect([...drive.actions.keys()]).toEqual([]);
-  });
-
   it('a session that ends outside end leaves the map, so its id connects again', async () => {
     const drive = fakeDriveHost();
     const sessions = fakeSessions();
     const ended = fakeEndedEvent();
-    const actions = addDriveActions(drive.host, sessions, ended.on);
+    addDriveActions(drive.host, sessions, ended.on);
     await drive.run('connect', { sessionId: 'a' });
 
     ended.emit('row-a');
@@ -174,8 +160,6 @@ describe('sessions drive actions', () => {
       sessionId: 'a',
       rowId: 'row-a',
     });
-    actions.dispose();
-    expect(sessions.ended).toEqual(['row-a']);
   });
 });
 
@@ -402,6 +386,38 @@ describe('sessions main part', () => {
     await harness.stop();
 
     expect(probe.ended).toEqual([connected.session.id]);
+  });
+
+  it('stop_ToolSessionEndThrows_ClosesTheRelayAndThrows', async () => {
+    const homeDir = mkdtempSync(path.join(os.tmpdir(), 'wr-'));
+    const harness = startMainPart(sessionsMainPart, {
+      services: { runMode: 'live', homeDir },
+    });
+    const view = harness
+      .started()
+      .exports?.(createRegistrations()) as SessionsMainExports;
+    view.contributeTools([ASK_TOOL], () => ({
+      call: async () => ASK_RESULT,
+      end: () => {
+        throw new Error('end failed');
+      },
+    }));
+    view.connect(hostInfo('host-1'));
+    try {
+      await expect(harness.stop()).rejects.toThrow('end failed');
+
+      const socket = connectSocket(
+        channelPath(
+          process.platform,
+          homeDir,
+          os.userInfo().username,
+          HARNESS_APP_ID,
+        ),
+      );
+      await expect(once(socket, 'connect')).rejects.toThrow();
+    } finally {
+      rmSync(homeDir, { recursive: true, force: true });
+    }
   });
 
   it('stop_ConnectedThroughRelay_EndsOnce', async () => {

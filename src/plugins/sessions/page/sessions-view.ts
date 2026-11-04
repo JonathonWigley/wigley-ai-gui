@@ -5,6 +5,7 @@ import {
   type PaneDirection,
 } from '../../../contracts/panes';
 import type { ShownLayouts } from '../../../contracts/plugin';
+import { callEach } from '../../../shared/call-each';
 import type { PartStore } from '../../../shared/page/contributed-parts';
 import { element } from '../../../shared/page/dom';
 import {
@@ -99,7 +100,7 @@ export interface SessionPanes {
 // that left. `redrawRows` draws the side bar's rows again, for a changed
 // title length. `parts` draws through the sessions layout the view's
 // `setLayouts` sets, for the mode's dialogs. `dispose` stops the pane tree
-// watching its size and pointer.
+// watching its size and pointer and drops every frame.
 export interface SessionsView {
   element: HTMLElement;
   sideBar: HTMLElement;
@@ -302,6 +303,11 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
       }
     },
     redrawRows: () => drawSidebar(),
-    dispose: () => treeView.dispose(),
+    dispose() {
+      callEach<() => void>(
+        [() => treeView.dispose(), () => tabs.dropAll()],
+        (step) => step(),
+      );
+    },
   };
 }

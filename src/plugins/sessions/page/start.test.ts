@@ -2,8 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PagePart } from '../../../contracts/plugin';
 import { installFakeDom } from '../../../shared/page/test-dom';
 import { startPagePart } from '../../../shared/plugin-part-harness.test-support';
+import { createRegistrations } from '../../../shared/registrations';
 import { keysPagePart } from '../../keys/page/start';
-import type { SessionsState } from '../contract';
+import type { SessionsPageExports, SessionsState } from '../contract';
 import { sessionRow, stateOf } from './sessions-view-fakes';
 import { sessionsPagePart } from './start';
 
@@ -53,10 +54,26 @@ describe('sessions page part', () => {
     vi.unstubAllGlobals();
   });
 
-  it('stops with nothing live and starts again', async () => {
-    const harness = startPagePart(sessionsPagePart, { parts: [keysPagePart] });
+  it.each([
+    { case: 'no session', state: stateOf([], null), barPartDisposes: 0 },
+    { case: 'a session held', state: stateOf(['s1'], 's1'), barPartDisposes: 1 },
+  ])('stops with nothing live and starts again: $case', async ({
+    state,
+    barPartDisposes,
+  }) => {
+    const harness = startPagePart(sessionsPagePart, {
+      parts: [keysPagePart],
+      invoke: async () => state,
+    });
+    await settle();
+    const dispose = vi.fn();
+    const exports = harness
+      .started()
+      .exports?.(createRegistrations()) as SessionsPageExports;
+    exports.addBarPart({ id: 'bar-part', build: () => ({ dispose }) });
 
     await harness.stop();
+    expect(dispose).toHaveBeenCalledTimes(barPartDisposes);
     expect(harness.counts()).toEqual({
       registrations: 0,
       timers: 0,

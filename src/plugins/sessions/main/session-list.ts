@@ -3,6 +3,7 @@ import type { Clock, RandomHex } from '../../../contracts/ambient';
 import type { Disposable } from '../../../contracts/disposable';
 import type { PluginLog } from '../../../contracts/log';
 import type { PluginEvents } from '../../../contracts/plugin';
+import { callEach } from '../../../shared/call-each';
 import { createListeners } from '../../../shared/listeners';
 import type {
   AgentSession,
@@ -50,7 +51,7 @@ export interface SessionList extends SessionsMainExports {
     maxLength: number,
   ): void;
   // Ends every session the list holds, connected and owned, each as its own
-  // `end()` does.
+  // `end()` does, a throw not skipping the rest, then throws the first error.
   endAll(): void;
 }
 
@@ -128,8 +129,13 @@ function rowOf(entry: SessionEntry): SessionRow {
   };
 }
 
+function endEach(toolSessions: readonly ToolSession[]): void {
+  callEach(toolSessions, (toolSession) => toolSession.end());
+}
+
 // One tool session per item; a start that throws ends the tool sessions already
-// started, then rethrows.
+// started, each whatever another's `end` throws, then rethrows that start's
+// error.
 function startAllOrNone<Item>(
   items: Iterable<Item>,
   start: (item: Item) => ToolSession,
@@ -140,8 +146,10 @@ function startAllOrNone<Item>(
       started.set(item, start(item));
     }
   } catch (error) {
-    for (const toolSession of started.values()) {
-      toolSession.end();
+    try {
+      endEach([...started.values()]);
+    } catch {
+      // The start's error is the one thrown.
     }
     throw error;
   }
@@ -261,6 +269,8 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     }
   };
 
+  // Every step runs whatever an earlier one throws; the first error is rethrown
+  // after them.
   const end = (entry: SessionEntry) => {
     if (!entries.delete(entry.session.id)) {
       return;
@@ -268,15 +278,20 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     if (reselectOnReturn?.sessionId === entry.session.id) {
       reselectOnReturn = null;
     }
-    for (const toolSession of entry.toolSessions.values()) {
-      toolSession.end();
-    }
-    const index = rowIndex(entry.session.id);
-    if (index !== -1) {
-      removeRow(index);
-      sendState();
-    }
-    deps.emit('ended', { sessionId: entry.session.id });
+    callEach<() => void>(
+      [
+        () => endEach([...entry.toolSessions.values()]),
+        () => {
+          const index = rowIndex(entry.session.id);
+          if (index !== -1) {
+            removeRow(index);
+            sendState();
+          }
+        },
+        () => deps.emit('ended', { sessionId: entry.session.id }),
+      ],
+      (step) => step(),
+    );
   };
 
   // The index of the session's row, adding it at the end when it has none.
@@ -332,21 +347,21 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       (entry) => entry.session.info.sessionId === hostId,
     );
 
-  // Ends the contribution's tool session in every live entry and frees its
-  // tool names.
+  // Ends the contribution's tool session in every live entry, each whatever
+  // another's `end` throws, and frees its tool names.
   const withdrawContribution = (contribution: Contribution) => {
     contributions.splice(contributions.indexOf(contribution), 1);
     for (const tool of contribution.tools) {
       toolNames.delete(tool.name);
     }
-    for (const entry of entries.values()) {
+    callEach([...entries.values()], (entry) => {
       const toolSession = entry.toolSessions.get(contribution);
       entry.toolSessions.delete(contribution);
       for (const tool of contribution.tools) {
         entry.toolRoutes.delete(tool.name);
       }
       toolSession?.end();
-    }
+    });
   };
 
   // Changes `sessionId` inside the session's one info object, so every holder
@@ -481,8 +496,13 @@ export function createSessionList(deps: SessionListDeps): SessionList {
             return;
           }
           isDisposed = true;
-          withdrawContribution(contribution);
-          toolsChanged.tell();
+          callEach<() => void>(
+            [
+              () => withdrawContribution(contribution),
+              () => toolsChanged.tell(),
+            ],
+            (step) => step(),
+          );
         },
       };
     },
@@ -661,9 +681,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     onToolsChanged: (listener) => toolsChanged.add(listener),
     state,
     endAll() {
-      for (const entry of entries.values()) {
-        end(entry);
-      }
+      callEach([...entries.values()], end);
     },
   };
 }

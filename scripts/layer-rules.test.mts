@@ -32,6 +32,14 @@ const KEYS: PluginFolder = {
   dependsOn: { main: [], page: [] },
 };
 const FOLDERS = [NOTES, CHAT, KEYS];
+const MAIN_ONLY: PluginFolder = {
+  id: 'mainOnly',
+  hasContract: false,
+  hasMain: true,
+  hasPage: false,
+  hasLayouts: false,
+  dependsOn: { main: [], page: [] },
+};
 
 const SHARED = [
   'src/contracts',
@@ -198,13 +206,25 @@ describe('pluginLayers', () => {
   );
 
   it.each([
-    { part: 'contract', extra: { contract: { layers: ['src/shared'] } } },
-    { part: 'main', extra: { main: { packages: ['node:'] } } },
-  ])('pluginLayers_ExtraForAnAbsentPart_Throws: $part', ({ part, extra }) => {
-    expect(() => pluginLayers(FOLDERS, { keys: extra })).toThrow(
-      `PLUGIN_EXTRAS adds to keys's ${part}, which it lacks`,
-    );
-  });
+    {
+      id: 'keys',
+      part: 'contract',
+      extra: { contract: { layers: ['src/shared'] } },
+    },
+    { id: 'keys', part: 'main', extra: { main: { packages: ['node:'] } } },
+    {
+      id: 'mainOnly',
+      part: 'page',
+      extra: { page: { layers: ['src/shared'] } },
+    },
+  ])(
+    'pluginLayers_ExtraForAnAbsentPart_Throws: $id $part',
+    ({ id, part, extra }) => {
+      expect(() =>
+        pluginLayers([...FOLDERS, MAIN_ONLY], { [id]: extra }),
+      ).toThrow(`PLUGIN_EXTRAS adds to ${id}'s ${part}, which it lacks`);
+    },
+  );
 });
 
 describe('readDependsOn', () => {

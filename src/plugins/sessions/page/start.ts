@@ -1,6 +1,10 @@
 import './sessions.css';
 import type { PaneDirection } from '../../../contracts/panes';
-import type { PageApi, PagePart } from '../../../contracts/plugin';
+import type {
+  PageApi,
+  PagePart,
+  QualifiedEvents,
+} from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import {
   createPartStore,
@@ -63,7 +67,8 @@ import {
 type SessionsApi = PageApi<
   typeof sessionsManifest,
   SessionsChannel,
-  SessionsPageEvents
+  SessionsPageEvents,
+  QualifiedEvents<'sessions', SessionsPageEvents>
 >;
 
 // The uiState key holding the chat panes: the pane tree and each pane's
@@ -776,7 +781,12 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         renameAccept: () => renameDialog.accept(),
         renameCancel: () => renameDialog.cancel(),
       },
-      exports: (consumer) => sessionsPageView(exports, consumer),
+      exports: (consumer) =>
+        sessionsPageView(exports, consumer, (listener) =>
+          api.events.on('sessions.sessionRemoved', ({ sessionId }) =>
+            listener(sessionId),
+          ),
+        ),
       dispose() {
         isStopped = true;
         view.dispose();

@@ -1,12 +1,15 @@
 import type { Registrations } from '../../../contracts/disposable';
 import type { SessionsMainExports } from '../contract';
 
-// Files the session under the consumer, whose stop ends it.
+// Files the session under the consumer, whose stop ends it. Its `end` goes
+// through the filed handle, so an ended session leaves the store and ends once.
 function endedWith<Session extends { end(): void }>(
   consumer: Registrations,
   session: Session,
 ): Session {
-  consumer.track({ dispose: () => session.end() });
+  const ownEnd = session.end;
+  const handle = consumer.track({ dispose: () => ownEnd.call(session) });
+  session.end = () => handle.dispose();
   return session;
 }
 

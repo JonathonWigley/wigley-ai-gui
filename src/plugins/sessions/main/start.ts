@@ -1,5 +1,4 @@
 import os from 'node:os';
-import type { Disposable } from '../../../contracts/disposable';
 import type {
   DriveHost,
   MainApi,
@@ -138,12 +137,11 @@ type StartedSession = Pick<OwnedSession, 'session' | 'end'>;
 // `drive-session-<n>` unless the caller names one; `rowId` is the app's own
 // id, which `activate` takes. A session that ends leaves the map, so its id
 // starts again. `onSessionEnded` hears each session that ends, by its row id.
-// Disposing removes the actions and ends every session still started.
 export function addDriveActions(
   host: DriveHost,
   sessions: Pick<SessionsMainExports, 'connect' | 'open' | 'activate'>,
   onSessionEnded: (listener: (rowId: string) => void) => void,
-): Disposable {
+): void {
   const started = new Map<string, StartedSession>();
   let defaultIds = 0;
   onSessionEnded((rowId) => {
@@ -171,58 +169,45 @@ export function addDriveActions(
     started.set(sessionId, session);
     return { sessionId, rowId: session.session.id };
   };
-  const actions = [
-    host.add('connect', {
-      description:
-        'Connects an agent session with no form, as a relay would; it gets no row until a form shows.',
-      args: sessionArgs,
-      run: async (rawArgs) =>
-        startSession(rawArgs, (info) => sessions.connect(info)),
-    }),
-    host.add('open', {
-      description:
-        'Opens an owned agent session with no form and selects its row; forms.openRound and primer.openPrimer join it under its sessionId, so a round and a primer share the row.',
-      args: sessionArgs,
-      run: async (rawArgs) =>
-        startSession(rawArgs, (info) => sessions.open(info)),
-    }),
-    host.add('end', {
-      description: 'Ends a session sessions.connect or sessions.open started.',
-      args: '{ sessionId: string }',
-      async run(rawArgs) {
-        const sessionId = requiredString(argsObject(rawArgs), 'sessionId');
-        const session = started.get(sessionId);
-        if (session === undefined) {
-          throw new Error(
-            `no session ${sessionId} from sessions.connect or sessions.open`,
-          );
-        }
-        started.delete(sessionId);
-        session.end();
-        return { sessionId };
-      },
-    }),
-    host.add('activate', {
-      description: "Selects a session's row and shows it.",
-      args: '{ rowId: string }',
-      async run(rawArgs) {
-        const rowId = requiredString(argsObject(rawArgs), 'rowId');
-        sessions.activate(rowId);
-        return { rowId };
-      },
-    }),
-  ];
-  return {
-    dispose() {
-      for (const action of actions) {
-        action.dispose();
+  host.add('connect', {
+    description:
+      'Connects an agent session with no form, as a relay would; it gets no row until a form shows.',
+    args: sessionArgs,
+    run: async (rawArgs) =>
+      startSession(rawArgs, (info) => sessions.connect(info)),
+  });
+  host.add('open', {
+    description:
+      'Opens an owned agent session with no form and selects its row; forms.openRound and primer.openPrimer join it under its sessionId, so a round and a primer share the row.',
+    args: sessionArgs,
+    run: async (rawArgs) =>
+      startSession(rawArgs, (info) => sessions.open(info)),
+  });
+  host.add('end', {
+    description: 'Ends a session sessions.connect or sessions.open started.',
+    args: '{ sessionId: string }',
+    async run(rawArgs) {
+      const sessionId = requiredString(argsObject(rawArgs), 'sessionId');
+      const session = started.get(sessionId);
+      if (session === undefined) {
+        throw new Error(
+          `no session ${sessionId} from sessions.connect or sessions.open`,
+        );
       }
-      for (const session of started.values()) {
-        session.end();
-      }
-      started.clear();
+      started.delete(sessionId);
+      session.end();
+      return { sessionId };
     },
-  };
+  });
+  host.add('activate', {
+    description: "Selects a session's row and shows it.",
+    args: '{ rowId: string }',
+    async run(rawArgs) {
+      const rowId = requiredString(argsObject(rawArgs), 'rowId');
+      sessions.activate(rowId);
+      return { rowId };
+    },
+  });
 }
 
 // Owns agent sessions: the relay they connect through, the tools other
@@ -236,7 +221,7 @@ export function addDriveActions(
 // self-test it opens no relay and writes
 // no file, and hands its pane keys' script; a drive run opens it in the run's
 // own home and gets the drive actions. A stop ends every session, then closes
-// the relay, which finds nothing left to end.
+// the relay, which finds nothing left to end, even when an end threw.
 export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
   manifest: sessionsManifest,
   start(api: SessionsApi) {
@@ -281,14 +266,11 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
         maxLength: () => titleLimit(api.settings().titleMaxLength),
       }),
     );
-    const driveActions =
-      api.drive !== null
-        ? addDriveActions(api.drive, exports, (listener) =>
-            api.events.on('sessions.ended', ({ sessionId }) =>
-              listener(sessionId),
-            ),
-          )
-        : null;
+    if (api.drive !== null) {
+      addDriveActions(api.drive, exports, (listener) =>
+        api.events.on('sessions.ended', ({ sessionId }) => listener(sessionId)),
+      );
+    }
     api.layouts.register({ layoutTypes });
     api.services.selfTest?.run(
       sessionsSelfTestScript(exports, () => list.state()),
@@ -296,10 +278,12 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
     return {
       commands: {},
       exports: (consumer) => sessionsMainView(exports, consumer),
-      dispose: () => {
-        driveActions?.dispose();
-        list.endAll();
-        return opened?.relay.close();
+      dispose: async () => {
+        try {
+          list.endAll();
+        } finally {
+          await opened?.relay.close();
+        }
       },
     };
   },

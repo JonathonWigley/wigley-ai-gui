@@ -4,6 +4,7 @@ import type {
   AgentSession,
   ConnectedSession,
   Harness,
+  OwnedSession,
   SessionInfo,
   SessionsState,
   SessionTitles,
@@ -548,6 +549,27 @@ describe('createSessionList', () => {
     expect(first.started).toHaveLength(1);
     expect(first.ends()).toBe(1);
     expect(emitted).toEqual([]);
+  });
+
+  it('keeps the start error and ends the rest when an end throws undoing a start', () => {
+    const { list } = setUp();
+    list.contributeTools([tool('a')], () => ({
+      call: async () => RESULT,
+      end: () => {
+        throw new Error('end failed');
+      },
+    }));
+    const later = fakeContribution();
+    list.contributeTools([tool('b')], later.start);
+    list.contributeTools([tool('c')], () => {
+      throw new Error('forms could not start');
+    });
+
+    expect(() => list.connect(info('/work/x'))).toThrow(
+      'forms could not start',
+    );
+
+    expect(later.ends()).toBe(1);
   });
 
   it('keeps a row a close guard refuses, with a log line and false, until every guard allows it', () => {
@@ -1612,6 +1634,75 @@ describe('createSessionList', () => {
           .filter(([event]) => event === 'selected')
           .map(([, data]) => (data as { sessionId: string | null }).sessionId),
       ).toEqual(expected);
+    },
+  );
+
+  it.each<{
+    case: string;
+    act(list: SessionList, first: OwnedSession, handle: Disposable): void;
+    throwingEnds: number;
+    laterEnds: number;
+    rows: string[];
+    ended: string[];
+    toolsChanged: number;
+  }>([
+    {
+      case: 'one session ending',
+      act: (_list, first) => first.end(),
+      throwingEnds: 1,
+      laterEnds: 1,
+      rows: ['00000002'],
+      ended: ['00000001'],
+      toolsChanged: 0,
+    },
+    {
+      case: 'endAll',
+      act: (list) => list.endAll(),
+      throwingEnds: 2,
+      laterEnds: 2,
+      rows: [],
+      ended: ['00000001', '00000002'],
+      toolsChanged: 0,
+    },
+    {
+      case: 'the contribution withdrawn',
+      act: (_list, _first, handle) => handle.dispose(),
+      throwingEnds: 2,
+      laterEnds: 0,
+      rows: ['00000001', '00000002'],
+      ended: [],
+      toolsChanged: 1,
+    },
+  ])(
+    'a tool session end that throws skips nothing and rethrows: $case',
+    ({ act, throwingEnds, laterEnds, rows, ended, toolsChanged }) => {
+      const { list, emitted } = setUp();
+      let thrown = 0;
+      const handle = list.contributeTools([tool('throws')], () => ({
+        call: async () => RESULT,
+        end: () => {
+          thrown++;
+          throw new Error(`end failed ${thrown}`);
+        },
+      }));
+      const later = fakeContribution();
+      list.contributeTools([tool('later')], later.start);
+      const first = list.open(owned('h1'));
+      list.open(owned('h2'));
+      const toolsChangedListener = vi.fn();
+      list.onToolsChanged(toolsChangedListener);
+
+      expect(() => act(list, first, handle)).toThrow('end failed 1');
+
+      expect(thrown).toBe(throwingEnds);
+      expect(later.ends()).toBe(laterEnds);
+      expect(list.state().rows.map((row) => row.sessionId)).toEqual(rows);
+      expect(
+        emitted
+          .filter(([event]) => event === 'ended')
+          .map(([, data]) => (data as { sessionId: string }).sessionId),
+      ).toEqual(ended);
+      expect(toolsChangedListener).toHaveBeenCalledTimes(toolsChanged);
     },
   );
 
