@@ -1,3 +1,4 @@
+import type { Timers } from '../../../contracts/ambient';
 import type { Log } from '../../../contracts/log';
 import type { UiState } from '../../../contracts/ui-state';
 import { errorText } from '../../../shared/error-text';
@@ -13,6 +14,12 @@ import {
   type DrawnPart,
   requireElementIn,
 } from '../../../shared/page/layout-host/draw-part';
+import { NO_ANCHOR } from '../../../shared/page/ui/key-anchors';
+import {
+  createSplitDivider,
+  type SplitDivider,
+} from '../../../shared/page/ui/split';
+import type { SplitLimits } from '../../../shared/page/ui/split-width';
 import type { ChatSidePart, ChatSideSection } from '../contract';
 import type {
   PartView,
@@ -28,6 +35,13 @@ import {
 
 const COLLAPSED_KEY = 'collapsed-sections';
 const HUB_HIDDEN_KEY = 'hub-hidden';
+const HUB_WIDTH_KEY = 'hub-width';
+
+// `endMin` is what the hub leaves `.chat-main`; the hub hides below a 640 px tab,
+// so the two limits always fit.
+const HUB_WIDTH: SplitLimits = { initial: 264, min: 200, endMin: 320 };
+
+const WIDTH_HANDLE_CLASSES = 'ui-split-handle chat-side-handle';
 
 const SIDE_PARTS: ContributedPartsPlace = {
   owner: 'chat',
@@ -41,6 +55,7 @@ export interface SideSectionsDeps {
   kit: SurfaceKitDeps;
   parts: Pick<PartStore<ChatSidePart>, 'parts'>;
   uiState: UiState;
+  timers: Timers;
   log: Log;
 }
 
@@ -59,9 +74,10 @@ export interface SideTab {
 
 // The session hub of every Chat tab: each side part in a section frame drawn
 // through the chat layout's `sideSection` part, the sections sorted by `order`
-// (equal orders keep add order). A section's collapse and the hub's hide apply
-// to every tab and session and are kept in `uiState`; a frame change updates the
-// frame in place and never rebuilds the part.
+// (equal orders keep add order). A section's collapse, the hub's hide and its
+// width, which a drag on its start edge sets, apply to every tab and session and
+// are kept in `uiState`; a frame change updates the frame in place and never
+// rebuilds the part.
 export interface SideSections {
   // Appends the hub's holder to `root`, which takes `is-side-hidden` while the
   // hub is hidden. Builds no part: the caller runs `sync`.
@@ -94,12 +110,25 @@ interface SideBuild {
 interface OpenTab {
   root: HTMLElement;
   frames: Map<string, Frame>;
+  widthDivider: SplitDivider;
 }
 
 export function createSideSections(deps: SideSectionsDeps): SideSections {
   const { log, uiState } = deps;
   const draws = chatPartDraws(deps.layouts, 'sideSection', log);
   const openTabs = new Set<OpenTab>();
+
+  // Every tab's divider writes through this, so one drag moves every tab's hub.
+  const sharedWidthState: UiState = {
+    get: (key) => uiState.get(key),
+    set(key, value) {
+      uiState.set(key, value);
+      log('chat', `session hub width ${String(value)}`);
+      for (const tab of openTabs) {
+        tab.widthDivider.reloadWidth();
+      }
+    },
+  };
 
   const inputOf = (frame: Frame): SideSectionInput => ({
     title: frame.part.title,
@@ -226,7 +255,23 @@ export function createSideSections(deps: SideSectionsDeps): SideSections {
         'is-side-hidden',
         uiState.get(HUB_HIDDEN_KEY) === true,
       );
-      const opened: OpenTab = { root, frames: new Map() };
+      holder.style.setProperty('--chat-side-end-min', String(HUB_WIDTH.endMin));
+      const widthDivider = createSplitDivider({
+        ...HUB_WIDTH,
+        uiState: sharedWidthState,
+        stateKey: HUB_WIDTH_KEY,
+        sizedPane: 'end',
+        handle: appended(holder, element('div', WIDTH_HANDLE_CLASSES)),
+        measure() {
+          const { left, width } = root.getBoundingClientRect();
+          return { left, span: width };
+        },
+        show: (width) =>
+          holder.style.setProperty('--chat-side-width', String(width)),
+        anchor: NO_ANCHOR,
+        timers: deps.timers,
+      });
+      const opened: OpenTab = { root, frames: new Map(), widthDivider };
       openTabs.add(opened);
       const builds = new Map<string, SideBuild>();
 
@@ -280,6 +325,7 @@ export function createSideSections(deps: SideSectionsDeps): SideSections {
         },
         close() {
           disposeBuilds();
+          widthDivider.dispose();
           openTabs.delete(opened);
         },
       };
@@ -308,6 +354,7 @@ function inOrder(parts: readonly ChatSidePart[]): ChatSidePart[] {
 
 // The holder's built wrappers keep their order, so only a wrapper just appended
 // differs from its sorted place; a built one never moves, and its scroll stays.
+// The width handle ends up after every wrapper.
 function moveNewWrappersIntoOrder(
   holder: HTMLElement,
   parts: readonly ChatSidePart[],

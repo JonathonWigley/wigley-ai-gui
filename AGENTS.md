@@ -387,7 +387,7 @@ round; primer: an open primer), since main, not the page, decides.
   its own key scope until it hands the cursor back.
 - **A side part** is what a plugin draws in the session hub beside the Chat tab's transcript, through the `chat` page
   export `addSidePart`: a composer part's shape plus a `title` and an `order`, and `build` also gets a handle that sets
-  the section's summary. Chat draws each part's section frame and keeps its collapse. The workflow plugin's side pane and
+  the section's summary. Chat draws each part's section frame, keeps its collapse and sizes the hub by a drag on its start edge. The workflow plugin's side pane and
   the agent-skills plugin's list are two. A side part takes no key scope and no stop.
 - **A status part** is what a plugin draws in the Chat status line under the box, through the `chat` page export
   `addStatusPart`, the same shape; the usage plugin's spend is one. Usage's context line is a composer part.

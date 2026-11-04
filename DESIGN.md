@@ -471,7 +471,7 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
 - **Empty states:** one line saying what to do, and the key or action that does it. No
   illustrations.
 - **Splits** resize by drag and by `Alt+Shift+h`/`Alt+Shift+l` (`docs/keymap.md`), the side bar too, and
-  stacked chat panes by `Alt+Shift+j`/`Alt+Shift+k`; the app keeps the sizes.
+  stacked chat panes by `Alt+Shift+j`/`Alt+Shift+k`; the right bar and the session hub by drag alone; the app keeps the sizes.
 
 ## Icons and copy
 

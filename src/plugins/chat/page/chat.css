@@ -20,7 +20,9 @@
 /* The session hub keeps the tab's height. Each section takes its content's
    height, and shrinks and scrolls in its own body when the column is too short.
    A section whose part draws nothing takes no space, and the hub with none left
-   takes none either. */
+   takes none either. Its width is the user's (`--chat-side-width`), and always
+   leaves `.chat-main` its least width (`--chat-side-end-min`), both unitless
+   pixels. */
 .chat-side-parts {
   align-self: stretch;
   background: var(--wg-block-background);
@@ -28,8 +30,25 @@
   display: flex;
   flex: none;
   flex-direction: column;
+  max-width: calc(100% - var(--chat-side-end-min) * 1px);
   min-height: 0;
-  width: calc(var(--wg-space-6) * 11);
+  position: relative;
+  width: calc(var(--chat-side-width) * 1px);
+}
+
+/* The hub's drag handle lies centred on its hairline, taking no space. No key
+   resizes the hub, so it shows no resize prompt. */
+.chat-side-handle {
+  bottom: 0;
+  left: calc(var(--wg-space-1) / -2 - 1px);
+  position: absolute;
+  top: 0;
+  width: var(--wg-space-1);
+  z-index: 1;
+}
+
+.chat-side-handle > .ui-split-prompt {
+  display: none;
 }
 
 .is-side-hidden .chat-side-parts {

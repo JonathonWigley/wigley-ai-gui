@@ -75,10 +75,10 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
 ```
 .chat-tab  (inline-size container)
 ├── .chat-main        entries + floating composer
-└── .chat-side-parts  264 px wide
+└── .chat-side-parts  264 px wide until the user drags it
       ▾ Main agent   2:05     chat: the activity dock
       ▾ Plan         5/7      workflow: the side pane (`workflow/design.md` § Where it draws)
-      ▾ Skills       4        agent-skills: each skill an agent started
+      ▾ Skills       4        agent-skills: each skill agents started
       ▾ Session               chat: project, branch, folder, harness, model · effort
 ```
 
@@ -92,11 +92,16 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
 - **When the hub shows:** every Chat tab, in every pane, while its width is at least 640 px and the user has not hidden
   it. `Space v s` hides or shows it in every session, and the choice survives a relaunch. `Space w s` still hides only
   the plan's side pane.
+- **Width:** a drag on the hub's start edge sets it, at least 200 px and always leaving the transcript 320 px, in every
+  session, kept in `uiState` as `hub-width` across a relaunch. No key moves it: `Alt+Shift+h`/`l` stay with the chat panes'
+  dividers.
 - **Plan:** the section is the workflow plugin's side pane, unchanged in what it draws. It draws from the first read of
   a plan until Dismiss or a new plan, so the section hides at every other time.
 - **Skills:** the skills each agent started in this row's session, by a Skill call or a typed slash command (the
-  `skillStarted` agent event): one row per skill and agent, in start order, tagged `main` or the subagent's name. A row
-  stays through a compaction, the agent's end and a `/clear`, until the session's row ends. After an app relaunch a re-attached process's
+  `skillStarted` agent event): one row per skill, in start order, with a tag per owner name, `main` or the subagent's name, and `×n`
+  when n agents of that name started it; the summary counts skills. The roster keeps one row per skill and agent, and
+  the default layout groups them, so a user layout may draw them apart. A skill's row and tags
+  stay through a compaction, the agent's end and a `/clear`, until the session's row ends. After an app relaunch a re-attached process's
   log brings its skills back, and a resumed session's list starts empty, because the roster is not saved. It does not say the skill's text is still in the agent's context.
 - **Session:** the repo name, the branch (left out when none), the session folder with the home folder as `~`, the
   harness id and the model · effort. These read chat's own state, so chat names no other plugin. The spend stays in the

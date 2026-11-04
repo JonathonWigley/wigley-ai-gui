@@ -163,6 +163,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       kit: partDeps,
       parts: sideParts,
       uiState: services.uiState,
+      timers: services.timers,
       log: services.log,
     });
     const rowClock = createRowClock({

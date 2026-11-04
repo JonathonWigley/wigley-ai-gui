@@ -12,7 +12,7 @@ import type {
 } from '../../contracts/plugin';
 import type { UiState } from '../../contracts/ui-state';
 import type { BaseKitDeps } from '../../shared/page/layout-host/base-kit';
-import type { AnchorNamer } from '../../shared/page/ui/key-anchors';
+import { type AnchorNamer, NO_ANCHOR } from '../../shared/page/ui/key-anchors';
 import { createSplitDivider } from '../../shared/page/ui/split';
 import { clampSplitWidth } from '../../shared/page/ui/split-width';
 import type { SideBarLayout } from './modes';
@@ -191,10 +191,6 @@ function createForwardingAnchor(): {
     },
   };
 }
-
-// The right bar handle's anchor function: its handle carries no resize
-// prompt keys.
-const NO_ANCHOR: AnchorNamer<never> = () => ({ dispose: () => undefined });
 
 // The areas whose frames a user shell layout restyles.
 const CHROME_AREAS: readonly AreaName[] = [
