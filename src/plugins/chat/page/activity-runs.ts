@@ -91,14 +91,23 @@ export function listRows(
   return rows;
 }
 
+// Whether the entry cursor stops on `row`: every row but a turn or compaction
+// divider.
+export function isCursorRow(row: ListRow): boolean {
+  return (
+    row.kind !== 'entry' ||
+    (row.entry.kind !== 'result' && row.entry.kind !== 'compaction')
+  );
+}
+
 // The ids the entry cursor steps through: an entry's id, a run's id, and each
-// step's id after its run's when `openRuns` holds the run.
+// step's id after its run's when `openRuns` holds the run. A divider has none.
 export function cursorStops(
   rows: readonly ListRow[],
   openRuns: ReadonlySet<string>,
 ): string[] {
   const stops: string[] = [];
-  for (const row of rows) {
+  for (const row of rows.filter(isCursorRow)) {
     stops.push(rowId(row));
     if (row.kind === 'run' && openRuns.has(row.runId)) {
       for (const step of row.steps) {

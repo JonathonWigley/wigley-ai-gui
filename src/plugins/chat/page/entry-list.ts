@@ -27,6 +27,7 @@ import type {
 import type { BaseKit } from '../../../shared/page/layout-host/kit';
 import {
   cursorStops,
+  isCursorRow,
   isStep,
   isStepsChanged,
   type ListRow,
@@ -92,10 +93,11 @@ export interface TranscriptScroll extends ContentScroll {
 // of steps also drawn as one activity line slot right before its first step's
 // slot; a closed run's step slots are hidden. While the shown layouts leave
 // activity out of the transcript, steps get no slot, so no run or step is drawn
-// or stopped on; the flag is read when the list is created and at each rebuild. The session's queued messages follow
-// the last entry as pending rows, oldest first. The cursor stops on each
-// entry and activity line, on each step of an open run, then on each pending
-// row; the focused stop's slot is marked `is-cursor`. A following focus moves
+// or stopped on; the flag is read when the list is created and at each rebuild.
+// The session's queued messages follow the last entry as pending rows, oldest
+// first. The cursor stops on each entry but a turn or compaction divider, on
+// each activity line, on each step of an open run, then on each pending row; the
+// focused stop's slot is marked `is-cursor`. A following focus moves
 // to the latest stop as the list changes, except one on the last row's
 // activity line, which stays on it while the run is open and grows and no
 // pending row follows it. After every change, and whenever the list's own box
@@ -606,8 +608,9 @@ function entryInput(
     : entry;
 }
 
+// The last row the cursor can stop on; a divider after it has no stop.
 function lastRowId(rows: readonly ListRow[]): string | null {
-  const last = rows.at(-1);
+  const last = rows.findLast(isCursorRow);
   return last === undefined ? null : rowId(last);
 }
 

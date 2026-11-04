@@ -943,7 +943,7 @@ describe('activity hidden', () => {
         'chat-compaction',
         'chat-notice',
       ],
-      stops: ['u1', 'a1', 'p1', 'r1', 'c1', 'n1'],
+      stops: ['u1', 'a1', 'p1', 'n1'],
       focused: 'n1',
     },
     {
@@ -972,7 +972,7 @@ describe('activity hidden', () => {
         'chat-compaction',
         'chat-notice',
       ],
-      stops: ['u1', 'activity:t1', 'a1', 'p1', 'r1', 'c1', 'n1'],
+      stops: ['u1', 'activity:t1', 'a1', 'p1', 'n1'],
       focused: 'n1',
     },
     {
@@ -1001,7 +1001,7 @@ describe('activity hidden', () => {
         'chat-compaction',
         'chat-notice',
       ],
-      stops: ['u1', 'a1', 'p1', 'r1', 'c1', 'n1'],
+      stops: ['u1', 'a1', 'p1', 'n1'],
       focused: 'n1',
     },
     {
@@ -1034,7 +1034,7 @@ describe('activity hidden', () => {
         'chat-compaction',
         'chat-notice',
       ],
-      stops: ['u1', 'activity:t1', 'a1', 'p1', 'r1', 'c1', 'n1'],
+      stops: ['u1', 'activity:t1', 'a1', 'p1', 'n1'],
       focused: 'n1',
     },
     {

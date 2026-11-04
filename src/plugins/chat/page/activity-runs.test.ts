@@ -200,6 +200,15 @@ describe('activity runs', () => {
       expected: ['u', 'activity:t1', 't1', 'w', 'a'],
     },
     {
+      given: 'a turn divider and a compaction divider',
+      rows: listRows(
+        entries('user:u', 'result:r', 'compaction:c', 'assistant:a'),
+        false,
+      ),
+      open: [],
+      expected: ['u', 'a'],
+    },
+    {
       given: 'two runs, the second open',
       rows: twoRuns,
       open: [runIdOf('k')],
