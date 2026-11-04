@@ -17,7 +17,8 @@ export interface PluginHost<Started> {
   // Stops the started dependents of `pluginId` in this process, in reverse start order, then awaits the part's
   // `dispose`, then disposes its registrations, then forgets it. Does nothing for a part not started. Every step
   // runs even when one throws; the returned promise rejects with the first error. A part already stopping is not
-  // stopped twice: this call waits on the stop in flight and shares its errors.
+  // stopped twice: this call waits on the stop in flight and shares its errors, so a part's own `dispose` must not
+  // call it on that part.
   stop(pluginId: string): Promise<void>;
   // Stops every started part in reverse start order, with the same error and overlap rules.
   stopAll(): Promise<void>;
