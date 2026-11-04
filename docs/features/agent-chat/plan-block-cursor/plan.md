@@ -189,5 +189,6 @@ Review base: e976884ea34536afc67f149b90cdf9797c672647
 - J, K, V and y prompts sit in the status line's type hint, hidden with it while the box has focus — the existing place for page keys the box takes over, no new part or CSS — moving them touches only composer-kit.ts · group 04
 - The y prompt reads to copy or allow — it shows during a permission too, where a plain to copy would misstate it — slightly longer copy · group 04
 - DESIGN.md needed no edit — each block cursor line matches chat.css and entry-focus.ts — one stale line stays if wrong · group 05
+- The status line's J, K, V and y prompts move into their own group that hides when the chat tab is too narrow for it — the type hint overflowed at minimum width, 17 fit failures in the filtered self-test — those keys show in help alone in a narrow tab · lead
 ### Review rounds
 ### Test gate

@@ -170,7 +170,7 @@ interview on 2026-10-23; this file is the record of both.
 
 - `src/plugins/chat/`, depending on `sessions` and `keys`. Main keeps every owned session's entries, so a page
   reload redraws the chat whole (the dev server reloads twice at start).
-- **Chat tab**: the entries under a floating composer: a vim message box and, under it, a status line, drawn in this order: repo, branch, the key prompts (`i`/`a`, `J`/`K`, `V`, `y`), the model · effort chip, every other
+- **Chat tab**: the entries under a floating composer: a vim message box and, under it, a status line, drawn in this order: repo, branch, the key prompts (`i`/`a`, then `J`/`K`, `V`, `y`, hidden in a narrow tab), the model · effort chip, every other
   control's chip, the status parts other plugins add (usage: spend), the running dot, Send. The box's cursor shape shows
   the vim mode (changed by ui-design plan C). Enter sends in insert and normal mode, Shift+Enter in insert mode adds a line, Cmd+Enter sends from any mode, and while a turn runs sends the pending messages with it (§ Pending messages, Send now). `i` /
   `a` focus the box, `j` / `k` move between blocks, `J` / `K` jump between messages, `V` starts or ends a range, `y`

@@ -433,7 +433,7 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   `radius-xl`, inset `space-3`) with the transcript scrolling beneath it, and holds, top to bottom: other plugins'
   composer parts (the workflow strip, the agent strip, the context line), `space-2` apart, the activity line, the strip of attached images' thumbnails, the box (no mode
   label: the cursor's shape shows the vim mode), and the status line, drawn in this order: repo and branch in `fg-secondary`, the `i`/`a`
-  type hint, one model · effort chip, every other control's chip, the status parts other plugins add (usage: spend),
+  type hint (with `J`/`K`, `V` and `y` when the composer has room), one model · effort chip, every other control's chip, the status parts other plugins add (usage: spend),
   then the running dot and Send as one group that ends the line, on whichever row it wraps to. The **context line** is a Meter that fills the composer's width, then `58k/300k` and
   `cache 59m` in `text-12` tabular numerals.
   The **agent strip** holds its subagents as an HScroller of cards, each a `card-background` Card with `radius-md`,

@@ -1,8 +1,8 @@
 /* A session's Chat tab fills its session's sheet: a row of `.chat-main` and the
-   session hub, as a container for width rules. In `.chat-main`
-   the entries scroll under the floating composer, which `chat-view.ts` measures
-   into `--chat-composer-height` (unitless pixels) on the tab so the last entry
-   stops above it. */
+   session hub, each of the tab and `.chat-main` a container for width rules. In
+   `.chat-main` the entries scroll under the floating composer, which
+   `chat-view.ts` measures into `--chat-composer-height` (unitless pixels) on the
+   tab so the last entry stops above it. */
 .chat-tab {
   container-name: chat-tab;
   container-type: inline-size;
@@ -11,6 +11,8 @@
 }
 
 .chat-main {
+  container-name: chat-main;
+  container-type: inline-size;
   flex: 1;
   height: 100%;
   min-width: 0;
@@ -305,13 +307,22 @@
 
 /* `i` and `a` are vim's inside the box, so the type hint hides, keeping its
    space, while the box has focus. */
-.chat-type-hint {
+.chat-type-hint,
+.chat-cursor-keys {
   display: inline-flex;
   gap: var(--wg-space-3);
 }
 
 .chat-type-hint.is-box-focused {
   visibility: hidden;
+}
+
+/* The hint keeps `i` and `a` when `.chat-main` is too narrow for the cursor's
+   keys. */
+@container chat-main (width < 680px) {
+  .chat-cursor-keys {
+    display: none;
+  }
 }
 
 /* The running indicator sits at the line's end before send, and keeps its

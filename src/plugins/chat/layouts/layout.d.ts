@@ -340,7 +340,8 @@ export interface ComposerKit extends BaseKit {
 }
 // The status line's pieces. Each piece holding keys places the same element on every draw.
 export interface StatusLineKit extends BaseKit {
-  // The `i`, `a`, `J`, `K`, `V` and `y` prompts; hidden, keeping its space, while the box has focus.
+  // The `i` and `a` prompts, then `J`, `K`, `V` and `y`, which hide in a narrow tab; hidden, keeping its space, while the
+  // box has focus.
   typeHint(parent: HTMLElement): HTMLElement;
   // One chip for the model and effort: the model control's label, then `<model> · <effort>` (the model alone while
   // `effort` is null). It opens the model picker and holds the model and effort pick keys (the model's alone while

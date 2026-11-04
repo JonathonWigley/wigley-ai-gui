@@ -136,10 +136,10 @@ interface DockPart {
 }
 
 // The status line's parts holding keys, each anchored once in `chat.chat`:
-// the type hint (`i` and `a`, then the page keys that read the entries: `J`,
-// `K`, `V` and `y`), the running indicator (dot and interrupt
-// keys), Send, and a key span per pick command, which the first chip running
-// it holds.
+// the type hint (`i` and `a`, then `.chat-cursor-keys`, the page keys that read
+// the entries: `J`, `K`, `V` and `y`, hidden in a narrow `.chat-main`), the
+// running indicator (dot and interrupt keys), Send, and a key span per pick
+// command, which the first chip running it holds.
 interface StatusLineParts {
   typeHint: HTMLElement;
   running: HTMLElement;
@@ -466,14 +466,9 @@ function createStatusLineParts(
   const prevMessageKey = element('span', 'chat-type-key');
   const rangeKey = element('span', 'chat-type-key');
   const copyKey = element('span', 'chat-type-key');
-  typeHint.append(
-    typeKey,
-    appendKey,
-    nextMessageKey,
-    prevMessageKey,
-    rangeKey,
-    copyKey,
-  );
+  const cursorKeys = element('span', 'chat-cursor-keys');
+  cursorKeys.append(nextMessageKey, prevMessageKey, rangeKey, copyKey);
+  typeHint.append(typeKey, appendKey, cursorKeys);
   const interruptKey = element('span', 'chat-running-key');
   const sendNowKey = element('span', 'chat-running-key');
   const running = element('span', 'chat-running');
