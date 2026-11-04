@@ -1,6 +1,6 @@
 # 09 — Final verification
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 7 · Depends on: 08
 Plan: [plan.md](plan.md)
@@ -55,3 +55,5 @@ any check left to the user is listed in the run's wrap-up with its steps.
 Commit:    none, unless a fix lands; a fix is its own commit naming the check it fixes
 
 ## Proof
+
+Commit 64bf958e · proof: Drive runs ac91, ac92, fix8, frames under /tmp/claude-autocompact/drive. PASS 1, 2, 3, 4, 5, 7, 8 (after the chip fix), 9 on real Claude at about 0.3 s, grace path not exercised. 6 as written is unreachable: a hold's activity reads working on both harnesses, so idle never occurs; the hints were seen during the hold. 10 goes to the user: the drive has no media emulation. · concerns: At the 420 px minimum window the chip reads c with a clipped ellipsis; composer's bottom row spills under a full composer at 720x600, pre-existing max-height 50% with nothing scrolling, the chip adds one row

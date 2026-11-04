@@ -244,7 +244,7 @@ read as `api.settings().minTokens` at each ask; the user writes `"auto-compact":
 - [x] [Doc re-read](08-doc-re-read.md)
 
 ### Wave 7
-- [ ] [Final verification](09-final-verification.md)
+- [x] [Final verification](09-final-verification.md)
 
 ## Run log
 
@@ -259,6 +259,7 @@ Review base: 693cb8d04eb48c87e6cba0406a0e2d850f90db54
 - 07 · 6522eec6 · Diff read: manifest, send-gate fold and verdict, start wiring, layer rules, plugin lists; lead reran auto-compact tests, 30 pass; app start with the plugin is proven at the lead's self-test after wave 5 · concerns: A compaction's result line may refill the dropped usage with pre-compaction tokens; lastUsage re-emitted at restore may predate a compaction; each costs one needless compaction
 - 06 · 23e805df · Diff read against Produces: dock compacting state, bar, held row label with skip key, divider entry, ChatKit.tokens, compactionLabel, composerInputOf, preview entry; lead reran whole-tree typecheck, clean; worker ran 919 chat tests and lint, clean · concerns: chat-view compaction handler and the divider cursor stop have no unit test; a long gate reason may overflow the dock head; bar look is unseen until task 09
 - 08 · 14bd0fb5 · Doc diff read; worker read each listed doc against the code; no autoCompact.minTokens exists; the compacted grep finds no stale mention outside the plan folder; DESIGN.md, usage/design.md and claude-stream.md needed no change · concerns: none
+- 09 · 64bf958e · Drive runs ac91, ac92, fix8, frames under /tmp/claude-autocompact/drive. PASS 1, 2, 3, 4, 5, 7, 8 (after the chip fix), 9 on real Claude at about 0.3 s, grace path not exercised. 6 as written is unreachable: a hold's activity reads working on both harnesses, so idle never occurs; the hints were seen during the hold. 10 goes to the user: the drive has no media emulation. · concerns: At the 420 px minimum window the chip reads c with a clipped ellipsis; composer's bottom row spills under a full composer at 720x600, pre-existing max-height 50% with nothing scrolling, the chip adds one row
 ### Contract changes
 - Compaction state and events: claude-code-harness.ts handleLine → session-fold.ts SessionFoldState.compaction, with new exports foldProcessClosed and nextFoldDeadline, plus compact() writing under appCommandUuid so a replay reads it as the app's · why: at the tip the line logic lives in the fold the session host extracted, and an attach replays it · consumers: none outside the adapter · group 02
 ### Rulings
@@ -273,5 +274,8 @@ Review base: 693cb8d04eb48c87e6cba0406a0e2d850f90db54
 - Self-test runs by the lead only after wave 5: workers share .selftest/ and the page needs task 06's compaction kind first. chat-view.test.ts stateOf literal, activity-runs.test.ts and working-turn.test.ts go to task 06.
 - sendGateVerdict(usage, minTokens, text, now); the fold takes replayed events so a re-attach rebuilds the map · group 07
 - The compacting log line is alsoExpect on the after cold step, not its own step: it is logged once during that step, and a later step's mark would miss it · group 06
+- Composer overflow not fixed: same rule on main and it overflows with no chip under fake: steps · group 09
+- Probe F: no idle compaction in 65 minutes on 2.1.318 under stream-json, cause unsettled. Docs record it; AgentStart.idleCompactMinTokens stays since the user's round 3 decided it and it is harmless if the timer never runs; the review judges whether it earns its place. Lead edited these two doc lines inline, since a dispatch costs more than the edit.
 ### Review rounds
 ### Test gate
+- Whole Vitest suite, 404 files and 6995 tests pass, at 23e805df: task 09 asks for the whole tree once since typecheck broke across waves. Self-tests chat and usage pass. After the chip fix (64bf958e, CSS only): usage Vitest, 183 tests, and the usage self-test pass; the chat self-test did not rerun, since the fix touches no chat file.

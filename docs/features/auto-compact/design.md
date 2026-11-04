@@ -115,7 +115,9 @@ harness ─▶ adapter ─▶ compactionStarted{trigger} ──────┤�
 - **One threshold with Claude's idle compaction** (round 3) — Claude Code 2.1.317 compacts an idle 1-hour-cache
   session before its cache expires (`idleCompaction`, on by default). The app passes `minTokens` to it as
   `CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS` at each process start, through `AgentStart.idleCompactMinTokens`. The app's gate
-  still covers what Claude's misses: a session whose process ended, and a 5-minute-cache session.
+  still covers what Claude's misses: a session whose process ended, and a 5-minute-cache session. Measured on 2.1.318,
+  one idle process run by the app's flags did not compact in 65 minutes (`docs/features/agent-chat/claude-stream.md`
+  § Idle compaction), so the gate may be all that compacts a cold session; the threshold is passed in case Claude's runs.
 
 ## Rejected
 

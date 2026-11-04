@@ -1309,7 +1309,12 @@ The boundary, automatic (A) and manual (C), with `trigger` verbatim:
 
 ### Idle compaction
 
-Result: pending
+Result: no compaction in one 65-minute run on 2.1.318 under `--print --output-format stream-json`. Stdout printed nothing
+after turn 1's `completed` lifecycle line, the transcript holds no `compact_boundary`, and the debug log names no idle
+attempt. The machine stayed awake: the driver's 60 s heartbeat never gapped past 61 s, so the timer was not `lapsed`. The
+idle wait ran 3,896 s, past the 54 minutes the binary's code gives. Not settled: whether this mode never starts the timer
+or another condition held it off, such as this profile's `settings.json` `env`, which sets
+`CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` and `CLAUDE_AFK_TIMEOUT_MS`.
 
 Setup. Child env adds `CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS=100000` and `CLAUDE_CODE_PROMPT_CACHE_TTL=1h`; the flags add
 `--debug-file`. The binary accepted `1h`: turn 1's `usage.cache_creation` reads `"ephemeral_1h_input_tokens":156969,
