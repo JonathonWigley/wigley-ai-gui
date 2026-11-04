@@ -180,9 +180,16 @@ The layout preview opens on `<Leader>zlw`.
 - **Review rounds stay a count.** The Run log gives the number of logged rounds, so the status line names the round and
   the checklist draws no row per round.
 - **A plan reader of its own.** Backlog reads only plan titles, and the docs index's counts carry no waves or Run log.
+- **Only scroll events move the side list's kept scroll.** A draw writes the kept value and never reads the list. A
+  list with no box drops the write and reads 0, so a draw that read it back jumped the list to the top. A list that
+  shrinks until it stops overflowing keeps its old value and returns there when it grows.
+- **The pane's width follows the theme, the 640 px rule does not.** The width is a spacing token times a number, because
+  the style check rejects a raw length. Only a theme that rescales spacing can make them disagree, and none ships.
 
 ## Out of scope
 
 - Terminal sessions: they reach the app only through the forms relay and carry no agent events.
 - Codex and wigley-harness: their adapters emit the same events when they land.
 - Stages for `wigley:debug`, `wigley:explore` and the rest: each is a stage module later.
+- A running state or a timer per task: the plan file does not say which task an agent works on.
+- Keyboard scroll of the side list: the pane takes no keyboard focus.
