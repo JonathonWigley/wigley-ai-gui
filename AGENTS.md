@@ -765,7 +765,7 @@ stops for the user, per `~/wigley-agents/AGENTS.md` § Hard gates.
   self-signed certificate `npm run create-signing-identity` makes once per Mac, in a keychain of its own, and
   ad hoc on a Mac without one. macOS ties an ad hoc app's privacy grants to its code hash, so each ad hoc install
   loses them and asks again; a denied Documents grant makes every session in `~/Documents` exit with `EPERM`. The
-  installed app's icon is `assets/icon/` (`icon.ico`, `icon.icns` and `icon.png`, drawn from `auri-source.png`),
+  `install` skill (`.agents/skills/install/SKILL.md`) holds the steps. The installed app's icon is `assets/icon/` (`icon.ico`, `icon.icns` and `icon.png`, drawn from `auri-source.png`),
   which `node scripts/make-icon.mts` rebuilds on Windows (`make-icon.ps1` holds the crop); the dev app keeps Electron's icon.
 - Node is pinned in `.nvmrc`. A shell that started on another version runs commands as
   `source ~/.nvm/nvm.sh && nvm use && npm run …`.
