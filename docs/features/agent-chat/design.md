@@ -171,12 +171,12 @@ interview on 2026-10-23; this file is the record of both.
 - `src/plugins/chat/`, depending on `sessions` and `keys`. Main keeps every owned session's entries, so a page
   reload redraws the chat whole (the dev server reloads twice at start).
 - **Chat tab**: the entries under a floating composer: a vim message box and, under it, a status line, drawn in this order: repo, branch, the `i`/`a` type hint, the model · effort chip, every other
-  control's chip, the status parts other plugins add (usage: context, cache, spend), the running dot, Send. The box's cursor shape shows
+  control's chip, the status parts other plugins add (usage: spend), the running dot, Send. The box's cursor shape shows
   the vim mode (changed by ui-design plan C). Enter sends in insert and normal mode, Shift+Enter in insert mode adds a line, Cmd+Enter sends from any mode, and while a turn runs sends the pending messages with it (§ Pending messages, Send now). `i` /
   `a` focus the box, `j` / `k` move between entries, `Enter` opens or closes the focused entry or activity line and pulls
   back a focused pending message, `G` jumps to the latest, Ctrl+C interrupts and pulls back every unsent pending message
   (§ Pending messages). The transcript shows the messages, permission prompts, notices and pending rows; the agent's
-  steps and the turn results show in the composer's activity dock (§ Activity dock), and in the transcript as
+  steps and the turn results show in the session hub's activity dock (§ Activity dock), and in the transcript as
   activity lines and result entries only under a layout that sets `activityInTranscript` (§ Activity line). While the box
   has focus no entry is marked and the box draws no focused frame; once it loses focus (Esc) the focused entry shows a
   thin left bar (DESIGN.md § Keys and focus). These keys act only on the Chat tab on screen and its session: on any other tab or mode they do
@@ -209,14 +209,15 @@ interview on 2026-10-23; this file is the record of both.
   - Permission prompts, notices and the turn result stay entries of their own, and each ends the run before it.
   - The key log lines are `focused activity line`, `expanded activity line` and `collapsed activity line`; a step row
     logs as its entry kind does (`focused tool entry`).
-- **Activity dock**: one row in the floating composer, under the composer parts (the workflow strip, the agent strip)
-  and above the attached images and the box, drawn by the layout's `working` part into the composer's `working` slot. It
-  shows the running turn while the session works on one or waits on a permission answer (the harness reports `working`
+- **Activity dock**: the Main agent section of the session hub (`docs/features/chat-bar/design.md` § The session hub),
+  drawn by the layout's `working` part. While the hub is not visible, the layout's `workingLine` part draws its time and
+  state, or its finished line, into the composer's `working` slot, under the composer parts and above the attached images
+  and the box; both read one dock. It shows the running turn while the session works on one or waits on a permission answer (the harness reports `working`
   or `waiting`), then the finished turn's one line until the user sends the next message. While the session is idle with
   no finished turn to show, the slot is hidden and takes no space. It is display only: not a cursor stop, and it adds no
   key. It counts only the main agent's tool calls (a `tool` entry's `agentId` is `main`); a subagent's calls show in its
   agent strip box. Settled from the user's sketch in an interview on 2026-11-02, and moved into the composer in a second
-  interview that day (`docs/features/chat-bar/plan-activity-dock/`).
+  interview that day (`docs/features/chat-bar/plan-activity-dock/`), then into the session hub on 2026-11-03.
   - **Header**: the turn's time, the state word, and `…`: `1:05 Working…`. The time counts from the turn's first
     entry to now: the later of the last user entry (a queued message from when it was sent) and the entry after the
     last result, so a turn Claude starts on its own after a background task counts from its own start. While the
@@ -480,7 +481,7 @@ interview on 2026-10-23; this file is the record of both.
   layouts are folders in `~/.config/wigley-ai-gui/layouts/chat/`, reloaded on save; an entry that throws is rolled
   back and drawn with the default layout. The `chat.layout` setting names the user's layout.
 - Besides the entries, a layout draws the Chat tab's other surfaces through parts that take `(parent, input, kit)`
-  and return a `PartView`: `activity` (a run of steps, § Activity line), `working` (the activity dock, § Activity
+  and return a `PartView`: `activity` (a run of steps, § Activity line), `working` (the activity dock in the hub's Main agent section, § Activity
   dock: the running turn's state, its steps and its times `startedAt` and `now`, sent again each second, else the
   finished turn's `done` state with its steps, `startedAt`, `endedAt`, stop reason and cost), `queuedMessage` (one pending message, § Pending
   messages: its text, how many images it carries, and whether it was sent now), `composer`, `statusLine`, `attachments` (the
@@ -491,7 +492,7 @@ interview on 2026-10-23; this file is the record of both.
   user layout formats its own time; the part draws the summary line open or closed, and the app places the step rows
   under it when open. The built-in step builders draw a plain one-line row through the kit's `collapsibleRow`; a user layout that redraws `tool`, `thinking` or `raw` draws the
   open line's rows. Each part's kit extends the base kit with the app parts it places (the editor frame, the
-  dialog actions). The composer's kit places the `working` slot the activity dock draws into; a composer that leaves
+  dialog actions). The composer's kit places the `working` slot the layout's `workingLine` part draws into; a composer that leaves
   it out gets it just above the box. The app keeps the composer's box and its draft, the dialogs' frames and titles,
   the keys and the focus; a part a user layout leaves out draws with `default`.
 - Beside its parts, a layout holds one flag, `activityInTranscript`: `true` draws the runs as activity lines and the
