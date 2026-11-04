@@ -498,7 +498,6 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     };
     const exports: ChatMainExports = {
       launch: async (request) => chat.launch(request),
-      profileNames,
       profiles,
       profileOf,
       defaultProfile,

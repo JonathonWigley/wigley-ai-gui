@@ -332,11 +332,9 @@ export interface ChatMainExports {
   // opening nothing, on an image chat refuses (with the refusal text), an
   // unknown profile, or no chat harness.
   launch(request: LaunchRequest): Promise<string>;
-  // Chat's profile names, in settings order.
-  profileNames(): string[];
-  // Chat's profiles, in settings order, read at each call. The first is
-  // chat's default profile: the one a drive `chat.start` takes when it names
-  // none, and the only choice the start prompt skips to.
+  // Chat's profiles, in settings order, read at each call. The first profile
+  // is the one a drive `chat.start` takes when it names none, and the only
+  // choice the start prompt skips to.
   profiles(): readonly ChatProfile[];
   // The profile of a session chat owns; null for any other session id.
   profileOf(sessionId: string): string | null;

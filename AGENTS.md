@@ -238,8 +238,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  Chat tab with its attached images and image viewer, app slash commands and the sign-in dialog,
                  the start prompt with its folder, profile, sign-in and session steps), layouts/ (the chat Layout contract
                  and the built-in `default` chat layout); `image-rules.ts` at the root holds the attach rules both
-                 parts share; main exports `launch` (a background session with a first message), `profileNames` and
-                 `profileOf` to notes, `send` and `profileOf` to forms and the primer (the form wake), `addInstructions` (text every session chat starts carries to its harness)
+                 parts share; main exports `launch` (a background session with a first message) and
+                 `defaultProfile` to notes, `send` and `profileOf` to forms and the primer (the form wake), `addInstructions` (text every session chat starts carries to its harness)
                  to visual, and `addSendGate` and `addIdleCompactThreshold` to auto-compact; page exports `focusedEntry` (the focused entry's element) to visual and `activeTime` (a session's clock)
                  with the `activeTimeChanged` event; its page also draws each session's run time under its row, through
                  sessions' `addRowPart` and a `rowClock` layout part; main keeps each session's clock, `docs/features/session-clock/design.md`

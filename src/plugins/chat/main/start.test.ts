@@ -565,35 +565,64 @@ describe('chat main part', () => {
     },
   );
 
-  it('startSessionTool_UnownedCaller_StartsASessionWithThePromptFirst', async () => {
-    const chat = startChatPart();
-    const contribution = chat.contributions.find(({ tools }) =>
-      tools.some((tool) => tool.name === 'start_session'),
-    );
-
-    const result = await contribution
-      ?.start({
-        id: 'relay-row',
-        info: {
-          sessionId: 'host-relay',
-          projectDir: '/p',
-          deadlineSeconds: null,
-          harness: 'claude',
-        },
-      })
-      .call(
-        'start_session',
-        { prompt: 'hi' },
-        { toolUseId: null, signal: new AbortController().signal },
+  it.each([
+    {
+      given: 'a caller chat does not hold',
+      callerProfile: null,
+      callerId: 'relay-row',
+      launchedId: 'row-1',
+      startsAfter: 1,
+      expected: 'first',
+    },
+    {
+      given: 'a caller chat holds',
+      callerProfile: 'second',
+      callerId: 'row-1',
+      launchedId: 'row-2',
+      startsAfter: 2,
+      expected: 'second',
+    },
+  ])(
+    'startSessionTool_NoProfileNamed_LaunchesOnTheCallersDefaultWithThePromptFirst_given $given',
+    async ({ callerProfile, callerId, launchedId, startsAfter, expected }) => {
+      const chat = startChatPart({
+        profiles: ['first', 'second'].map((name) => ({
+          name,
+          configDir: `/${name}`,
+        })),
+      });
+      if (callerProfile !== null) {
+        chat.invoke('start', { projectDir: '/p', profile: callerProfile });
+      }
+      const contribution = chat.contributions.find(({ tools }) =>
+        tools.some((tool) => tool.name === 'start_session'),
       );
 
-    expect(result?.isError ?? false).toBe(false);
-    expect(chat.starts.count).toBe(1);
-    expect(chat.processSends).toHaveBeenCalledExactlyOnceWith({
-      text: 'hi',
-      images: [],
-    });
-  });
+      const result = await contribution
+        ?.start({
+          id: callerId,
+          info: {
+            sessionId: 'host-relay',
+            projectDir: '/p',
+            deadlineSeconds: null,
+            harness: 'claude',
+          },
+        })
+        .call(
+          'start_session',
+          { prompt: 'hi' },
+          { toolUseId: null, signal: new AbortController().signal },
+        );
+
+      expect(result?.isError ?? false).toBe(false);
+      expect(chat.exports.profileOf(launchedId)).toBe(expected);
+      expect(chat.starts.count).toBe(startsAfter);
+      expect(chat.processSends).toHaveBeenCalledExactlyOnceWith({
+        text: 'hi',
+        images: [],
+      });
+    },
+  );
 
   it('exports_AddSendGate_HoldsAnExportedSend', async () => {
     const chat = startChatPart();
