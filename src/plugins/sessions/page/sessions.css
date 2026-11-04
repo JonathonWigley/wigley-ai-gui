@@ -71,8 +71,8 @@
 
 /* Other plugins' row parts share the footer's line after the status and stay
    on it; each part styles its own content and may set its
-   own wrapper's `order`. The holder shrinks only after the status has given up
-   its width (`.session-row-status`). */
+   own wrapper's `order`. Under `default`, the holder shrinks only after the
+   status has given up its width (`.session-row-status`). */
 .session-row-parts {
   display: flex;
   flex: 1 1 auto;
@@ -83,8 +83,9 @@
 }
 
 /* A part's wrapper keeps its content's width, so the status gives up its
-   width first; a part whose content can be long shrinks in its own CSS. An
-   empty wrapper takes no room, its column gap included. */
+   width first; a part whose content can be long sets `flex: 0 1 auto;
+   min-width: 0` on its own wrapper. An empty wrapper takes no room, its column
+   gap included. */
 .session-row-part {
   flex: none;
 }

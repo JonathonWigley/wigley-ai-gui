@@ -143,7 +143,9 @@ Conventions:
   the video starts with the window as captured at `record start` and holds the last frame until
   `record stop`, so a still page records too. It encodes with `ffmpeg` from the app's PATH.
 - `fit [width] [selector,…]` lists what the page cuts off at the minimum width, or at a given
-  width; a lone non-numeric argument is the list of selectors that scroll themselves.
+  width; a lone non-numeric argument is the list of selectors that scroll themselves. The width is the
+  window's content width, not a dragged side bar's: to check a row at a side-bar width, drag
+  `.shell-side-bar-handle` and measure with `query`.
 - `start --packaged` drives the packaged build; run `npm run package` first.
 
 ## Checking a screen

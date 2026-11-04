@@ -326,7 +326,11 @@ export const NEEDS_YOU_ACTIVITY: RowActivity = {
 // pane, not main's selection. `addRowPart` adds a part under every session
 // row, `addBarPart` one in every session's tab bar. Each throws on a part id
 // already added to its surface; adding a part and disposing its `Disposable`
-// each redraw that surface: the rows or the tab bars. `setActivity` sets the
+// each redraw that surface: the rows or the tab bars. A row part shares one
+// line that never wraps: its wrapper keeps its content's width, an empty
+// wrapper takes no room, and a part may set its own wrapper's `order`. A part
+// whose content can be long sets `flex: 0 1 auto; min-width: 0` on its wrapper,
+// `.session-row-part[data-part='<id>']`. `setActivity` sets the
 // activity `sourceId` (one per plugin or tab) holds for the session, null
 // removing it; the row shows the highest-ranked one, the latest set winning a
 // tie, and redraws only when that changed. An activity set before the

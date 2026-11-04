@@ -103,6 +103,9 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
     // Each session's name in the log, its side-bar label (`gamma 2`).
     const names = new Map<string, string>();
     const lineParts = createSessionLineParts();
+    const nameOf = (sessionId: string) => names.get(sessionId) ?? sessionId;
+    const latest = () =>
+      snapshot === null ? null : { snapshot, now: services.clock.now() };
     const sessionLinePart: UsagePageExports['sessionLinePart'] = (
       id,
       partLog,
@@ -111,9 +114,8 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
         id,
         line: sessionLineKind(parts),
         log: partLog,
-        nameOf: (sessionId) => names.get(sessionId) ?? sessionId,
-        latest: () =>
-          snapshot === null ? null : { snapshot, now: services.clock.now() },
+        nameOf,
+        latest,
       });
       lineParts.add(lines);
       return lines.part;
@@ -123,9 +125,8 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
       id: 'usage.rowLine',
       line: rowLineKind(parts),
       log: (line) => log(`row ${line}`),
-      nameOf: (sessionId) => names.get(sessionId) ?? sessionId,
-      latest: () =>
-        snapshot === null ? null : { snapshot, now: services.clock.now() },
+      nameOf,
+      latest,
     });
     lineParts.add(rowLines);
     sessions.addRowPart(rowLines.part);
@@ -133,9 +134,8 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
       id: 'usage.rowCache',
       line: rowCacheKind(parts),
       log: (line) => log(`row cache ${line}`),
-      nameOf: (sessionId) => names.get(sessionId) ?? sessionId,
-      latest: () =>
-        snapshot === null ? null : { snapshot, now: services.clock.now() },
+      nameOf,
+      latest,
     });
     lineParts.add(rowCaches);
     sessions.addRowPart(rowCaches.part);

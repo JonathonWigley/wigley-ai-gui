@@ -32,9 +32,11 @@ Built.
 ## Across relaunch
 
 - Chat saves each session's total at the moment of the save, the open span included, with the session
-  (`SavedSession.activeMs`). It saves at each start and stop of the clock, at every other save chat makes, and once
-  more when the app quits, so a quit mid-turn keeps the span up to the quit. A restored session's clock starts
-  paused at that total.
+  (`SavedSession.activeMs`). It saves at each start and stop of the clock, at every other save chat makes, and tries once
+  more when the app quits. The app does not wait for that last write, so a quit that cuts it short leaves the last
+  saved total, which can lack the whole open span. A restored session's clock starts paused at that total.
+- A kept run's work while the app is closed is not counted. A run still working restarts its clock at relaunch, and a
+  turn that ended meanwhile adds nothing, so the row's time can run below the run's own.
 - A session opened from Claude's saved history (the resume picker) starts at zero: no active time was recorded for
   it.
 - `/clear` resets the clock to zero: the run time describes the conversation in the row, as the title, transcript,

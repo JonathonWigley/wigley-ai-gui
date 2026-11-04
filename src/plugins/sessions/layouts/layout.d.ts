@@ -154,7 +154,8 @@ export interface RowKit extends SessionsKit {
   // `div.session-row-parts`, holding one `div.session-row-part` (`data-part="<id>"`) per part other plugins added
   // for every row, in the order they were added; returns the `div.session-row-parts`. Call it once, where the parts
   // go: a row that leaves it out gets the parts appended at the end of its element. A part that throws is logged and
-  // draws nothing. A second call throws `row placed contributed parts twice`, so the row draws with `default`.
+  // draws nothing. A second call throws `row placed contributed parts twice`, so the row draws with `default`. The
+  // holder keeps its parts on one line under every layout, and each part keeps its content's width.
   contributedParts(parent: HTMLElement): HTMLElement;
 }
 
