@@ -149,7 +149,7 @@ usage reach sessions only through `SessionsPageExports.addRowPart`.
 - [x] [Doc re-read](06-doc-re-read.md)
 
 ### Wave 5
-- [ ] [Final verification](07-final-verification.md)
+- [x] [Final verification](07-final-verification.md)
 
 ## Run log
 
@@ -162,6 +162,7 @@ Review base: 693cb8d04eb48c87e6cba0406a0e2d850f90db54
 - 03 · 017d5cb4 · diff read; every Produces present; typecheck clean; layer check refuses contract.ts importing src/shared, fixed by the contract change landing next · concerns: layouts design Adopters and AGENTS chat prose lag (task 06); preview rows show no run time; empty wrapper keeps margin-left auto and gap, unchecked on screen; row part and layouts.onChange Disposables dropped, chat keeps no registrations
 - 05 · 78c67d8d · Before capture (side bar 240px, three sessions, each with a status): /private/tmp/claude-502/-Users-jonathonwigley-Documents-ai-dev/b0a392a1-28c1-4b90-a35c-e74802e74682/scratchpad/row-before-240.png. Card height before: 89.98px per row. Fixture limits: usage.seed fills one session only (180k on one row, 0k on two); 240px comes from dragging .shell-side-bar-handle. Lint and typecheck pass. · concerns: .session-sidebar no longer holds rows, so the card gap went on .session-group-rows; .session-sidebar keeps space-1_5.
 - 06 · 465533a3 · Every line in scope checked against the landed code; lint passes. · concerns: None from the doc read. layout.css sets .session-group-rows gap in two rules, the second overriding the first: for review.
+- 07 · cbe61c25 · Live checks at 240px, captures in /private/tmp/claude-502/-Users-jonathonwigley-Documents-ai-dev/b0a392a1-28c1-4b90-a35c-e74802e74682/scratchpad/live-checks and /private/tmp/claude-502/-Users-jonathonwigley-Documents-ai-dev/b0a392a1-28c1-4b90-a35c-e74802e74682/scratchpad/live-recheck. 1: pass after fix, card 62.19px vs 89.98px, foot 217/217. 2: pass, 1000-1002ms ticks, stops at turn end. 3: warm fg-secondary and cold status-error pass; cold reached by shifting Date.now, no past-expiry fixture route. 4: pass after fix, including long status and 50m clock. 5: pass. · concerns: First run failed checks 1 and 4 (parts squeezed and overlapped); fixed in this commit. drive fit 240 reported no problems on the overflow. No fixture reached a workflow chip longer than Plan; a long chip keeps its content width.
 ### Contract changes
 - ActiveTime: export interface in src/shared/active-time.ts → export interface in src/contracts/active-time.ts · why: scripts/check-layers.mts refuses src/plugins/chat/contract.ts importing src/shared, and AGENTS.md puts records crossing a seam in src/contracts; src/shared/active-time.ts now imports that type, so it no longer imports nothing · consumers: 02, 03 · group 03 fix
 ### Rulings
@@ -173,3 +174,4 @@ Review base: 693cb8d04eb48c87e6cba0406a0e2d850f90db54
 - Lead: precondition met. session-groups merged to local main at 5b06f4e7, plan folder closed, reported by its run. main merged into row-clock; the UsageTone conflict kept both sides.
 ### Review rounds
 ### Test gate
+- Picks: active-time (added), row-clock (added), chat-sessions and open-sessions (clock and save), chat-view, chat-commands, read-chat-layout, chat default layout (edited for the part), session-lines and usage-view-model (row text and cache). Sessions CSS earns no pick: styling, checked live.

@@ -1,6 +1,6 @@
 # 07 — Final verification
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 5 · Depends on: 06
 Plan: [plan.md](plan.md)
@@ -35,3 +35,4 @@ Commit:    none
 
 ## Proof
 
+Commit cbe61c25 · proof: Live checks at 240px, captures in /private/tmp/claude-502/-Users-jonathonwigley-Documents-ai-dev/b0a392a1-28c1-4b90-a35c-e74802e74682/scratchpad/live-checks and /private/tmp/claude-502/-Users-jonathonwigley-Documents-ai-dev/b0a392a1-28c1-4b90-a35c-e74802e74682/scratchpad/live-recheck. 1: pass after fix, card 62.19px vs 89.98px, foot 217/217. 2: pass, 1000-1002ms ticks, stops at turn end. 3: warm fg-secondary and cold status-error pass; cold reached by shifting Date.now, no past-expiry fixture route. 4: pass after fix, including long status and 50m clock. 5: pass. · concerns: First run failed checks 1 and 4 (parts squeezed and overlapped); fixed in this commit. drive fit 240 reported no problems on the overflow. No fixture reached a workflow chip longer than Plan; a long chip keeps its content width.
