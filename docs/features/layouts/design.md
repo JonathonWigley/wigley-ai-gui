@@ -131,7 +131,7 @@ stays in themes.
 | `gallery` | `gallery.layout` | each primitive's sample block |
 | `usage` | `usage.layout` | the status-bar line (plan rows), each session's context meter under its row, each session's usage line (context bar, cache countdown, spend), drawn in the Chat status line and, through the optional `usage-tab-line` plugin, in each tab bar; the right-bar details |
 | `keys` | `keys.layout` | the help overlay, the which-key panel, the title bar's Keys button |
-| `workflow` | `workflow.layout` | the stage chip under each session row, the strip above the Chat composer (stepper and actions), the Flow tab (stepper, plan checklist by wave, actions) |
+| `workflow` | `workflow.layout` | the status chip under each session row, the strip above the Chat composer (status and main action), the side pane beside the transcript (stepper, plan checklist by wave, actions) |
 | `visual` | `visual.layout` | the "drawing visual…" card of an open html block, each closed block's visual around its frame with its expand control, and the full-size overlay |
 
 Each owner's `layout.d.ts` names its parts exactly.

@@ -264,7 +264,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  each: main.ts its entry rule and main actions, page.ts its look and page actions, registered through
                  `addStage`), main/ (hears `chat.agentEvent` and the sessions events, keeps each session's flow in its
                  plugin data, watches plan folders, runs Clear & make), page/ (the row chip, the composer strip, the
-                 Flow tab, the preview), layouts/ (the workflow Layout contract and the built-in `default` layout);
+                 side pane, the preview), layouts/ (the workflow Layout contract and the built-in `default` layout);
                  `docs/features/workflow/design.md`
   visual/        manifest.ts, contract.ts, main/ (the session note it hands chat's `addInstructions`, the layout
                  registration), page/ (`html-fence.ts`, the `html` fence contribution: the "drawing visual…" card for
@@ -379,6 +379,8 @@ round; primer: an open primer), since main, not the page, decides.
   plugin's strip and the agent strip are two. A part may offer a **stop**: `j` on the entry cursor's last stop (the
   newest pending row, else the last entry or an open last run's last step) hands the cursor to it, and the part holds
   its own key scope until it hands the cursor back.
+- **A side part** is what a plugin draws beside the Chat tab's transcript, through the `chat` page export `addSidePart`,
+  the same shape as a composer part. The workflow plugin's side pane is one. A side part takes no key scope and no stop.
 - **A status part** is what a plugin draws in the Chat status line under the box, through the `chat` page export
   `addStatusPart`, the same shape; the usage plugin's context, cache and spend are one.
 - **A send gate** is a rule a plugin runs before chat main writes a message to an idle session, through the `chat`
