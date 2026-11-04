@@ -219,6 +219,7 @@ Review base: ad87d46f110e63f41f0a1d404e1c3db1d19d82fa
 - The short-tab follow-up is rewritten rather than deleted, keeping its reverted-CSS history — a wrong keep costs one stale follow-up · group 08 · group 08
 - The context line's meter has min-width 0 rather than the plan's floor, because the composer's least width does not hold the floor — the meter shrinks to nothing past about 32 px more text · lead
 ### Review rounds
+- 1 · pin f2748613, commits 13367469 fe66c847 11ecd75f 9abd4356 e063716c 4c790705 6b720a24 336c30c7 c4bcaf4a · correctness x4, plan-and-design x3 · Verdict: NEEDS FIXES · 31 findings, report /tmp/claude-session-hub/review-f2748613.md · determined fixes 0d5afc70 84f97d47 4940c1a8 24ef24ec 118fd0a3 · AGENTS.md:705-709 dismissed: written ahead for the unmerged foundation-sweeps branch · redundant usage fit check dropped · user took every recommendation by the round's note, standing for this session
 ### Test gate
 - npm test, whole suite, because task 09 names it and vitest takes 16 s: every changed plugin's tests plus its neighbours · 416 files, 7467 tests pass, typecheck and lint clean
 - filtered self-test (chat, agent-strip, usage, workflow, agent-lines, agent-skills), named by task 09 · first run one failure: compacting-narrow, context line 342 px in 326 px; fixed in c4bcaf4a; usage self-test re-run passes, 20 PASS, usage tests 201 pass
