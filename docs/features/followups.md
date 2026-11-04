@@ -248,6 +248,11 @@ Defects seen in a drive run, a transcript or the user's own use.
   leaves the last saved total, which can lack the whole span of a long turn. Deciding means choosing between a bounded
   hold on the quit path and a synchronous write. `docs/features/session-clock/design.md` § Across relaunch states the
   current behaviour.
+- **`/clear` then relaunch loses the row's selection** — *agent-ready*: select a row, `/clear` it (running or idle),
+  and restart; no row is selected and the main pane says `Pick a session in the side bar`, though
+  `open-sessions.json`'s `selectedHostSessionId` holds the row's new host id. A selected row with no `/clear` stays
+  selected. Seen on the fake harness through a drive `restart`; the cause isn't traced, and it may be fixture-only,
+  since the fake has no saved history for the new id.
 
 ## Harness seams
 

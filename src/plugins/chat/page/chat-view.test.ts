@@ -275,6 +275,9 @@ describe('mountChatView active time', () => {
       ['row-2', RUNNING],
     ]);
     expect(mount.view.activeTime('row-2')).toEqual(RUNNING);
+    expect(mount.logs).toEqual([
+      'chat sessions not all added: listener failed',
+    ]);
   });
 
   it('activeTime_MessageForAnUnheldSession_IgnoredWithNoCall', () => {

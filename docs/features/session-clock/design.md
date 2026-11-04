@@ -40,7 +40,7 @@ Built.
 - A session opened from Claude's saved history (the resume picker) starts at zero, unless a saved record the restore
   skipped holds that session: the row takes over that record's total with its messages. A record of a row already
   open adds its total the same way.
-- `/clear` resets the clock to zero: the run time describes the conversation in the row, as the title, transcript,
+- `/clear` resets the clock to zero: the run time describes the conversation in the row, as the transcript,
   context and cache do, and `/clear` starts a new conversation.
 
 ## The side-bar row
@@ -66,13 +66,14 @@ mark at the line's end:
   from two plugins order only as whole parts.
 - **The second line never wraps**: the parts stay whole and the row stays two lines. When the line is too narrow the
   status gives way first (it ellipsizes, to nothing), then the meter's bar shrinks to nothing, the used tokens
-  staying whole (`usage.rowLine` shrinks, its bar is the only part of it that can). A container query on
-  `div.session-row-parts` was not used: `container-type: inline-size` gives the holder no intrinsic width, so with
-  `flex: 1 1 auto` the status takes the whole line and the parts get none. Below that the other parts clip at
-  the card edge with no ellipsis: measured at 12m 05s clocks, a plain row (meter, clock, cache) needs about 113px
-  of line and clips below a side bar of about 136px, under `SIDE_BAR_MIN` (160), and a row with the workflow chip,
-  the working line, meter, clock and cache needs about 258px of line, a side bar of about 282px, so it clips at
-  the default 256 and below.
+  staying whole (`usage.rowLine` shrinks, its bar is the only part of it that can). No container query is used on
+  `div.session-row-parts`: `container-type: inline-size` gives the holder no intrinsic width. Below that the other
+  parts clip at the card edge with no ellipsis: measured at 12m 05s clocks, a plain row (meter, clock, cache) needs
+  about 113px of line and clips below a side bar of about 136px, under `SIDE_BAR_MIN` (160). A row with five
+  parts (workflow chip, working line, meter, clock, cache) is an estimate: about 258px of line, a side bar of about
+  282px, so it would clip at the default 256 and below. It assumes an injected 62px `Reviewing` chip, which is not
+  a built-in label (the labels are Idle, Primer, Plan, Make, Review, Closed), and the working line comes from
+  `agent-lines`, which is off by default.
 - **The cache mark turns cold at usage's next redraw**: usage redraws its lines once a minute, so the mark can lag
   the expiry by up to a minute.
 

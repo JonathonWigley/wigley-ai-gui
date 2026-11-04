@@ -306,9 +306,9 @@ round; primer: an open primer), since main, not the page, decides.
   global and intercept keys a main one). A built-in plugin's manifest joins `src/plugins/manifests.ts`, which main
   builds the served keymap, labels and settings from, and its parts join `src/plugins/main.ts` and
   `src/plugins/page.ts`; a part whose manifest is missing from the list throws at startup. A main part starts once;
-  a page part starts on every page load. The plugin host's `stop(id)` stops the plugin's dependents first, in
-  reverse start order, then awaits the part's `dispose` and disposes its registrations. Quit stops every main
-  part this way.
+  a page part starts on every page load. On quit, `disposeParts` (`src/main/main.ts`) starts every main part's
+  `dispose` at once, in start order, and settles once every dispose has; `src/shared/plugin-host.ts` exports only
+  `startPlugins`, with no `stop(id)`.
 - **A registration** — a listener, a handler, a contribution, a scope, a mode, a timer, a watch, a command —
   returns a `Disposable` (`src/contracts/disposable.ts`), so a plugin can stop and start again. The plugin API
   records each registration a plugin makes through `api`, its per-plugin service views included (timers,

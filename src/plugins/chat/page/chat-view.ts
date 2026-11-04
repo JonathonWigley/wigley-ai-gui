@@ -474,12 +474,17 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       tab.stop.scopeChanged(tab.handle?.isVisible() === true);
     }
   });
-  void channel
-    .invoke('sessions')
-    .then((states) => callEach(states, add))
-    .catch((error: unknown) =>
+  void channel.invoke('sessions').then(
+    (states) => {
+      try {
+        callEach(states, add);
+      } catch (error) {
+        log('chat', `chat sessions not all added: ${errorText(error)}`);
+      }
+    },
+    (error: unknown) =>
       log('chat', `chat sessions not read: ${errorText(error)}`),
-    );
+  );
 
   const visibleTab = () =>
     [...tabs.values()].find((tab) => tab.handle?.isVisible() === true);

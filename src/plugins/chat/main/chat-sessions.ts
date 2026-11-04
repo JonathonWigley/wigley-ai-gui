@@ -235,8 +235,8 @@ export interface ChatSessions {
   stopAll(): void;
   // Detaches every held process, which keeps running on the session host, and
   // kills every other process not yet exited, a closed or cleared session's
-  // still ending, for an app quit or a chat plugin reload. A closed row's attach
-  // resolving after it is killed too; a held row's is detached. It tries one
+  // still ending, for an app quit. A closed row's attach resolving after it is
+  // killed too; a held row's is detached. It tries one
   // last save first, a running clock's span up to now included, and returns that
   // write's promise, which never rejects: a write that fails or is cut short
   // leaves the last saved total. Nothing is saved or started after it, and every
@@ -1392,22 +1392,24 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       )
       .then(
         (process) => {
-          replay.isReplaying = false;
           session.attaching = null;
           if (process === null) {
+            // The replay stays on while the row rests, so clearing its
+            // background count does not start the clock.
             restAfterFailedAttach(
               session,
               profile,
               `process ${hosted.id} is not running`,
               busy,
             );
+            replay.isReplaying = false;
           } else {
+            replay.isReplaying = false;
             holdAttached(session, process, started);
           }
           return null;
         },
         (error: unknown) => {
-          replay.isReplaying = false;
           session.attaching = null;
           const reason = errorText(error);
           // The host may still run the process, whatever the row does next, so
@@ -1416,6 +1418,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
             session.unheldProcessId = hosted.id;
           }
           restAfterFailedAttach(session, profile, reason, false);
+          replay.isReplaying = false;
           return reason;
         },
       );

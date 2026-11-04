@@ -4070,6 +4070,7 @@ describe('createChatSessions active time', () => {
         since: null,
       });
       expect(test.saved.last()?.sessions[0].activeMs).toBe(42000);
+      expect(test.sent('activeTime')).toEqual([]);
     },
   );
 
@@ -4083,13 +4084,20 @@ describe('createChatSessions active time', () => {
   });
 
   it.each([
-    { outcome: 'null' as const, message: '' },
-    { outcome: 'reject' as const, message: 'no attach' },
+    { outcome: 'null' as const, message: '', background: false },
+    { outcome: 'reject' as const, message: 'no attach', background: false },
+    { outcome: 'null' as const, message: '', background: true },
+    { outcome: 'reject' as const, message: 'no attach', background: true },
   ])(
-    'attach_FailsAfterReplayingWorking_ClockStaysPaused: $outcome',
-    async ({ outcome, message }) => {
+    'attach_FailsAfterReplayingWorking_ClockStaysPaused: $outcome, background $background',
+    async ({ outcome, message, background }) => {
       const test = setUp();
-      const replay = (events: AgentProcessEvents) => events.activity('working');
+      const replay = (events: AgentProcessEvents) => {
+        events.activity('working');
+        if (background) {
+          events.agentEvent(backgroundEvent(100, 1));
+        }
+      };
       test.harness.scriptAttach(
         'p1',
         outcome === 'null' ? { outcome, replay } : { outcome, message, replay },
