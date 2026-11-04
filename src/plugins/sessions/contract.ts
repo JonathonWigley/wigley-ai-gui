@@ -301,9 +301,9 @@ export type ActivityTone =
   | 'attention'
   | 'error';
 
-// What a session is doing, as one plugin sees it: the word its row shows
-// beside a dot in `tone`. Of a session's activities its row shows the one of
-// highest `rank`.
+// What a session is doing, as one plugin sees it: the word its row's tooltip
+// shows and the `tone` of its dot. Of a session's activities its row shows the
+// one of highest `rank`.
 export interface RowActivity {
   word: string;
   tone: ActivityTone;

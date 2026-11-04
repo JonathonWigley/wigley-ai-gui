@@ -254,7 +254,7 @@ function drawRow(
   });
   const entry = drawn.built.element;
   rowAction(entry, () => activate(session.sessionId));
-  entry.title = [title, session.label, status]
+  entry.title = [title, session.label, activity?.word ?? null, status]
     .filter((part) => part !== null)
     .join(' · ');
   entry.classList.toggle('is-selected', isSelected);
