@@ -117,8 +117,10 @@ Review base: 4de544d7
 - FileStat is a type import from src/contracts/files, past the boundary rule's two contracts, because the Produces names it; the layer check passes — the deps' stat type needs another source if wrong · group 01 · group 01
 - errorText is a run-time import from src/shared/error-text, reading the boundary rule as covering plugin contracts and how chat and files are reached; the layer check passes — a one-line local copy if wrong · group 01 · group 01
 - A named profile when chat has no profiles gets the unknown-profile error reading Profiles: none. — wording only if wrong · group 01 · group 01
+- Round 1 took every recommendation on the user's word for the rest of the session, reaching marketplace commits cc177ce and 8b61df1 and the preload fix bc716b0a — the live warning check passed on a fake-harness run · lead
 ### Review rounds
 - 1 · 752a22b3 · NEEDS FIXES: 10 findings, 3 pre-existing; 2 lead-applied
 - 2, re-review of c96ca5ed bc716b0a da9ea5c9 and marketplace cc177ce · da9ea5c9 · NEEDS FIXES: 4 determined, no repeat; profile match traced and holds
+- 3, re-review of 5a8baec5 and marketplace 8b61df1 · 5a8baec5 · PASS; 1 pre-existing doc line lead-applied
 ### Test gate
 - start-session-tool.test.ts: the new handler's rules; start.test.ts: the contribution and the hoisted profileOf export; title-tool.test.ts: the sibling tool whose pattern the module follows · 3 files, 71 tests pass
