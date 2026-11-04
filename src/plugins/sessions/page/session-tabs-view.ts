@@ -118,7 +118,8 @@ export interface SessionTabsView {
   // Drops the session's frame, its tabs and their elements; their handles
   // then do nothing. Runs no `changed`.
   drop(sessionId: string): void;
-  // Drops every frame as `drop` does, a throw not skipping the rest.
+  // Drops every frame as `drop` does, then every pane with its part and text,
+  // a throw not skipping the rest.
   dropAll(): void;
   // The session's tabs, in add order.
   tabsOf(sessionId: string): SessionTabView[];
@@ -216,6 +217,14 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     drawn.text?.dispose();
     drawn.text?.built.element.remove();
     drawn.text = null;
+  };
+
+  const dropPane = (paneId: string, pane: DrawnPane) => {
+    panes.delete(paneId);
+    callEach<() => void>(
+      [() => disposeText(pane), () => pane.part?.dispose()],
+      (step) => step(),
+    );
   };
 
   // Scrolls the strip alone to the selected tab once each time the selection
@@ -327,9 +336,7 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     const placedIds = new Set(placed.map((pane) => pane.id));
     for (const [paneId, pane] of panes) {
       if (!placedIds.has(paneId)) {
-        disposeText(pane);
-        pane.part?.dispose();
-        panes.delete(paneId);
+        dropPane(paneId, pane);
       }
     }
     const shown = new Map<HTMLElement, HTMLElement>();
@@ -529,7 +536,15 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
       };
     },
     drop,
-    dropAll: () => callEach([...frames.keys()], drop),
+    // Panes last: each `drop` draws the empty panes' text again.
+    dropAll: () =>
+      callEach<() => void>(
+        [
+          () => callEach([...frames.keys()], drop),
+          () => callEach([...panes], ([id, pane]) => dropPane(id, pane)),
+        ],
+        (step) => step(),
+      ),
     tabsOf: (sessionId) =>
       [...(frames.get(sessionId)?.entries.values() ?? [])].map(
         (tab) => tab.view,

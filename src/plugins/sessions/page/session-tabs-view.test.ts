@@ -1,7 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { PANE_FOCUS_COMMANDS } from '../../../contracts/panes';
 import { withUser } from '../../../shared/page/layout-host/test-layouts';
 import { installMarkdownDom } from '../../../shared/page/markdown-mount.test-support';
-import { asFake, asHtml, FakeElement } from '../../../shared/page/test-dom';
+import {
+  asFake,
+  asHtml,
+  FakeElement,
+  findAll,
+} from '../../../shared/page/test-dom';
 import type { SessionTabView } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
@@ -128,5 +134,26 @@ describe('session tabs view', () => {
 
     expect(view.tabs.selectedTabOf('s')).toBe(a);
     expect(view.tabs.tabsOf('s')).toEqual([a]);
+  });
+
+  it('a disposed view leaves no pane part or empty text live', () => {
+    const { view, area, anchors } = sessionsViewSetup();
+    view.tabs.add('a', tabView('a'));
+    view.render(stateOf(['a'], 'a'));
+    view.panes.restore(TWO_PANES, new Map([['pane-2', 'a']]));
+    const pickHint = findAll(area, 'sessions-pick-hint')[0]!;
+    expect(pickHint.parentNode).not.toBeNull();
+    const liveFocusEdges = () =>
+      anchors.filter(
+        (anchor) =>
+          anchor.command.endsWith(PANE_FOCUS_COMMANDS.right) &&
+          !anchor.isDisposed,
+      );
+    expect(liveFocusEdges()).toHaveLength(1);
+
+    view.dispose();
+
+    expect(liveFocusEdges()).toEqual([]);
+    expect(pickHint.parentNode).toBeNull();
   });
 });

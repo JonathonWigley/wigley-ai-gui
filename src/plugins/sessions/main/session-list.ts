@@ -4,6 +4,7 @@ import type { Disposable } from '../../../contracts/disposable';
 import type { PluginLog } from '../../../contracts/log';
 import type { PluginEvents } from '../../../contracts/plugin';
 import { callEach } from '../../../shared/call-each';
+import { errorText } from '../../../shared/error-text';
 import { createListeners } from '../../../shared/listeners';
 import type {
   AgentSession,
@@ -135,10 +136,11 @@ function endEach(toolSessions: readonly ToolSession[]): void {
 
 // One tool session per item; a start that throws ends the tool sessions already
 // started, each whatever another's `end` throws, then rethrows that start's
-// error.
+// error. A throw from those ends is logged, so it cannot hide the start's.
 function startAllOrNone<Item>(
   items: Iterable<Item>,
   start: (item: Item) => ToolSession,
+  log: PluginLog,
 ): Map<Item, ToolSession> {
   const started = new Map<Item, ToolSession>();
   try {
@@ -148,8 +150,10 @@ function startAllOrNone<Item>(
   } catch (error) {
     try {
       endEach([...started.values()]);
-    } catch {
-      // The start's error is the one thrown.
+    } catch (endError) {
+      log(
+        `ending tool sessions after a failed start failed: ${errorText(endError)}`,
+      );
     }
     throw error;
   }
@@ -169,9 +173,12 @@ function routeTools(
 function startToolSessions(
   contributions: Contribution[],
   session: AgentSession,
+  log: PluginLog,
 ): Pick<SessionEntry, 'toolSessions' | 'toolRoutes'> {
-  const toolSessions = startAllOrNone(contributions, (contribution) =>
-    contribution.start(session),
+  const toolSessions = startAllOrNone(
+    contributions,
+    (contribution) => contribution.start(session),
+    log,
   );
   const toolRoutes = new Map<string, ToolSession>();
   for (const [contribution, toolSession] of toolSessions) {
@@ -332,7 +339,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
       session,
       group,
       number: freeNumber(entries.values(), group),
-      ...startToolSessions(contributions, session),
+      ...startToolSessions(contributions, session, deps.log),
       owned,
       joinedBy: null,
       retiredHostIds: new Set(),
@@ -477,8 +484,10 @@ export function createSessionList(deps: SessionListDeps): SessionList {
         namesInThisContribution.add(tool.name);
       }
       const contribution: Contribution = { tools, start };
-      const started = startAllOrNone(entries.values(), (entry) =>
-        contribution.start(entry.session),
+      const started = startAllOrNone(
+        entries.values(),
+        (entry) => contribution.start(entry.session),
+        deps.log,
       );
       for (const tool of tools) {
         toolNames.add(tool.name);

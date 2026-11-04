@@ -551,8 +551,8 @@ describe('createSessionList', () => {
     expect(emitted).toEqual([]);
   });
 
-  it('keeps the start error and ends the rest when an end throws undoing a start', () => {
-    const { list } = setUp();
+  it('keeps the start error, logs the end error and ends the rest when an end throws undoing a start', () => {
+    const { list, logged } = setUp();
     list.contributeTools([tool('a')], () => ({
       call: async () => RESULT,
       end: () => {
@@ -570,6 +570,7 @@ describe('createSessionList', () => {
     );
 
     expect(later.ends()).toBe(1);
+    expect(logged).toEqual([expect.stringContaining('end failed')]);
   });
 
   it('keeps a row a close guard refuses, with a log line and false, until every guard allows it', () => {
