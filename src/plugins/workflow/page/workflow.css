@@ -60,8 +60,9 @@
 
 /* A running mark reports the agent at work, so it loops at `duration-pulse`.
    Each draw builds a new mark, so the clock starts its animation where the
-   last mark had it, and a redraw never jumps the pulse. Under reduced motion it
-   is static. */
+   last mark had it, and a redraw of a showing mark never jumps the pulse. A
+   mark drawn out of view starts when it shows, so its next draw may jump once.
+   Under reduced motion it is static. */
 @keyframes workflow-mark-pulse {
   0%,
   100% {

@@ -29,8 +29,8 @@ const MARK_ICONS: Record<MarkState, string> = {
 // The kit one part draw builds with: the base kit with no key scope, naming
 // workflow's own commands by their short names, plus the action button, the
 // stepper, the countdown, the status mark, the finished waves' fold and the
-// side pane's list. `run` runs a workflow command for the session the part draws; the main action's button runs `mainAction`, as
-// `<Leader>ww` does. Each anchor it names is recorded in `rollback`. Each status
+// side pane's list. `run` runs a workflow command for the session the part
+// draws; the main action's button runs `mainAction`, as `<Leader>ww` does. Each anchor it names is recorded in `rollback`. Each status
 // mark carries `clock`'s time, which places its pulse.
 export function createWorkflowKit(
   services: OwnerKitServices,

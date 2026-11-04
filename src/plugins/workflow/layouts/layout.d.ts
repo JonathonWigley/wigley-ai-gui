@@ -130,7 +130,7 @@ export interface WorkflowKit extends BaseKit {
   // `span.workflow-countdown` reading `text`, in tabular numerals.
   countdown(parent: HTMLElement, text: string): HTMLElement;
   // `span.workflow-mark`, carrying `data-state`: one codicon per state, in that state's colour. A running mark pulses,
-  // and a redraw never jumps the pulse.
+  // and a redraw of a showing mark never jumps the pulse.
   statusMark(parent: HTMLElement, state: MarkState): HTMLElement;
   // `button.workflow-finished-fold` reading `▸ <text>`, or `▾ <text>` while `open`, with `aria-expanded` and the key of
   // `workflow.toggleFinishedWaves`. A click opens or folds the finished waves of the session the part draws.

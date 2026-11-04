@@ -74,8 +74,8 @@ export interface WorkflowViewDeps {
 // countdown when each changes; `forget` drops what it logged for a session that
 // left and its finished waves' fold. `setSidePaneHidden` shows or hides the side
 // pane in every session, and `toggleFinishedWaves` opens or folds one session's
-// finished waves, logging and changing nothing while the pane would draw no
-// fold. `mainAction` is the spec the main action runs, and `runFor` the one path
+// finished waves, logging `nothing to run` and changing nothing while the pane
+// would draw no fold. `mainAction` is the spec the main action runs, and `runFor` the one path
 // that runs a workflow command for a session; only `toggleFinishedWaves` runs in
 // the preview.
 export interface WorkflowView {
