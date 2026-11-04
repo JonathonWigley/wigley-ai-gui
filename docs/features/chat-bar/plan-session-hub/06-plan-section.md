@@ -1,6 +1,6 @@
 # 06 — Plan section
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -27,3 +27,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 9abd4356 · proof: diff read: section summary and CSS move present; worker: typecheck and lint clean, workflow-view tests 65 pass; the tree compile waits on 04 and 05 in flight · concerns: .workflow-side-list keeps flex 1 inside a flex 0 1 auto pane and a scrolling section body, so whether the actions row stays in view rests on check 4 in task 09

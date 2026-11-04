@@ -1,6 +1,6 @@
 # 04 — Activity move
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01, 02, 03
 Plan: [plan.md](plan.md)
@@ -43,3 +43,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit e063716c · proof: diff read: every Produces present; worker: 226 tests in the touched files pass, lint clean but for 05's file; typecheck names only 05's in-flight Roster.skills · concerns: a throwing onDockChanged listener stops the dock's tick until the next set, and the only listener cannot realistically throw; a failed default working draw shows nothing at hub width until the next composer draw; self-test and composerOf wiring rest on task 09; agent-strip.css:5-6 still says beside the activity dock, for the review

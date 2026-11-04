@@ -1,6 +1,6 @@
 # 07 — Session section
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 3 · Depends on: 01, 04 (04 shares `chat-view.ts`, and this task consumes nothing from it)
 Plan: [plan.md](plan.md)
