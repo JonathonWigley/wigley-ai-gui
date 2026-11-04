@@ -216,8 +216,10 @@ The keyboard is first; the mouse works everywhere.
   colour on a card or an input frame). The user must always see where the keys go.
   - **Chat is the one exception.** While the chat's message box has focus, the caret is the
     cursor: the box draws no focused frame and no entry is marked. Once the box loses focus (Esc),
-    the focused entry shows a thin left bar (`indicator-width`, `focus-border`) in place of the
-    ring.
+    the focused block shows a thin left bar (`indicator-width`, `focus-border`) in place of the
+    ring, on the entry itself when it has no blocks. A range of blocks shows `accent-tint` behind each one.
+    The bar stays on screen: when the transcript scrolls away from it, it moves to the nearest visible
+    block.
 - **Buttons never take focus**, so Enter and Space stay with the page keys; a click runs them.
 - **Key hints** draw through the Kbd primitive, which prints chords through `formatChord` for the
   platform. On macOS the modifiers and Return, Tab, Esc, Backspace, Delete and the arrows print

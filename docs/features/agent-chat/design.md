@@ -173,12 +173,16 @@ interview on 2026-10-23; this file is the record of both.
 - **Chat tab**: the entries under a floating composer: a vim message box and, under it, a status line, drawn in this order: repo, branch, the `i`/`a` type hint, the model · effort chip, every other
   control's chip, the status parts other plugins add (usage: spend), the running dot, Send. The box's cursor shape shows
   the vim mode (changed by ui-design plan C). Enter sends in insert and normal mode, Shift+Enter in insert mode adds a line, Cmd+Enter sends from any mode, and while a turn runs sends the pending messages with it (§ Pending messages, Send now). `i` /
-  `a` focus the box, `j` / `k` move between entries, `Enter` opens or closes the focused entry or activity line and pulls
-  back a focused pending message, `G` jumps to the latest, Ctrl+C interrupts and pulls back every unsent pending message
+  `a` focus the box, `j` / `k` move between blocks, `J` / `K` jump between messages, `V` starts or ends a range, `y`
+  copies the block or range as markdown source unless a permission prompt is open, page `Esc` cancels the range, and a
+  plain click moves the cursor to the block under it. A block is a paragraph, heading, top-level list item, code block,
+  table or quote of a user or assistant message; any other row is one stop, and the turn and compaction dividers are
+  none. When the transcript scrolls away from the cursor, it moves to the nearest visible block. `Enter` opens or closes
+  the entry holding the cursor or the focused activity line and pulls back a focused pending message, `G` jumps to the latest, Ctrl+C interrupts and pulls back every unsent pending message
   (§ Pending messages). The transcript shows the messages, permission prompts, notices, turn dividers and pending rows; the agent's
   steps show in the session hub's activity dock (§ Activity dock), and in the transcript as
   activity lines only under a layout that sets `activityInTranscript` (§ Activity line). Each `result` entry is a
-  turn divider and a cursor stop, its step count the main agent's steps since the last user message or result. While the box
+  turn divider, its step count the main agent's steps since the last user message or result. While the box
   has focus no entry is marked and the box draws no focused frame; once it loses focus (Esc) the focused entry shows a
   thin left bar (DESIGN.md § Keys and focus). These keys act only on the Chat tab on screen and its session: on any other tab or mode they do
   nothing, and the control pickers and the chat's dialogs close when another session's Chat tab shows, or when the
