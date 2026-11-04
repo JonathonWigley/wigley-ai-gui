@@ -90,10 +90,11 @@ profile's `settings.json`, which is why the configured limit is read there.
         │ channel: snapshot
         ▼
  usage page ──▶ status bar line (the shown session's profile's plan rows)
-            ──▶ chat.addStatusPart: each Chat session's context, cache and spend in its status line
+            ──▶ chat.addComposerPart: each Chat session's context line (context bar and cache countdown) above its box
+            ──▶ chat.addStatusPart: each Chat session's spend in its status line
             ──▶ sessions.addRowPart (usage.rowLine): each session's context meter and used tokens under its side-bar row
             ──▶ sessions.addRowPart (usage.rowCache): each session's cache mark, warm or cold, under its side-bar row
- usage-tab-line page (optional) ──▶ sessions.addBarPart: the same line in each session's tab bar
+ usage-tab-line page (optional) ──▶ sessions.addBarPart: the whole session line (context, cache and spend) in each session's tab bar
             ──▶ right bar details (every profile, the shown session)   toggled by Space v u
 ```
 
@@ -161,7 +162,7 @@ In `src/contracts/agent.ts`, beside `AgentHarness`:
     one with no usage event yet (a new chat, a restored row before its saved usage is read, a session usage does not
     track) draws a zero line, its context `0k` with no cache or spend. The line redraws on each snapshot, each `sessions.activeChanged`, each layouts set and the
     minute tick. Each surface logs `<label> in <name>: <text>` under its own plugin when a session's text
-    changes (`context line` for the composer's line, `spend` for the status part, `session line` for the tab-bar line and the row parts), `<name>` the session's side-bar label (its id while none is known).
+    changes (`context line` for the composer's line, `spend` for the status part, `session line` for the tab-bar line, `row session line` for the row line, `row cache session line` for the cache mark), `<name>` the session's side-bar label (its id while none is known).
   - each session's row line, a sessions row part (`usage.rowLine`, added through `sessions.addRowPart`) under its
     side-bar row: the session's context meter and its used tokens (`121k`, no limit), drawn by the `rowLine` layout
     part and redrawn like the session line.
@@ -194,8 +195,8 @@ contributes to it through `api.areas.rightBar`.
 - **Credits:** spend against the monthly limit when the plan has it; `off` when extra usage is disabled.
 - **Always-on status-bar line, details one key away in a right bar.**
 - **Session numbers sit on the session, plan numbers on the shared bar.** With several panes, one shared line can
-  show only one session's context, so each session's context, cache and spend draw on that session (its Chat status
-  line, and its tab bar with usage-tab-line on); the plan rows are account facts every pane shares and stay on the
+  show only one session's context, so each session's context, cache and spend draw on that session (context and
+  cache above its Chat box, spend in its Chat status line, all three in its tab bar with usage-tab-line on); the plan rows are account facts every pane shares and stay on the
   status bar.
 - **The session line is a part, never chat input.** Usage draws the context line into chat's `addComposerPart` and the
   spend into its `addStatusPart` (`docs/features/chat-bar/design.md`) and, through the optional `usage-tab-line`

@@ -88,7 +88,7 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'compacting',
-    why: "A compaction draws the trigger's chip at the start of the context line and the tab bar's session line and drops it when the compaction ends; `compacting-narrow` is read by eye for the chip beside its meter at the window's least width.",
+    why: "A compaction draws the trigger's chip at the start of the context line and the tab bar's session line and drops it when the compaction ends, and the context line with its chip fits the window's least width; `compacting-narrow` is read by eye for the chip beside its meter there.",
     steps: [
       {
         width: 'start',
@@ -105,6 +105,7 @@ const GROUPS: SelfTestGroup[] = [
         expect: `[usage] ${COMPACTING_LINE}`,
         alsoExpect: [COMPACTING_TAB_LINE],
         screenshot: 'compacting-narrow',
+        checksFit: true,
       },
       { keys: ['<C-c>'], expect: `[usage] ${FRESH_LINE}` },
     ],

@@ -74,19 +74,7 @@ const layout = {
   },
   sessionLine(parent, input, kit) {
     const line = kit.el(parent, 'span', 'usage-session-line');
-    line.classList.toggle('is-compacting', input.compacting !== null);
-    if (input.compacting !== null) {
-      kit.tag(line, input.compacting, 'accent');
-      line.style.setProperty(
-        '--usage-compacting-elapsed',
-        `${input.compactingElapsedMs}ms`,
-      );
-    }
-    kit.meter(line, input.context.percent, input.context.tone);
-    kit.el(line, 'span', 'usage-text', input.context.text);
-    if (input.cache !== null) {
-      kit.el(line, 'span', 'usage-text', input.cache);
-    }
+    drawContextItems(line, input, kit);
     if (input.spend !== null) {
       kit.el(line, 'span', 'usage-text', input.spend);
     }
@@ -94,23 +82,11 @@ const layout = {
   },
   contextLine(parent, input, kit) {
     const line = kit.el(parent, 'span', 'usage-context-line');
-    line.classList.toggle('is-compacting', input.compacting !== null);
-    if (input.compacting !== null) {
-      kit.tag(line, input.compacting, 'accent');
-      line.style.setProperty(
-        '--usage-compacting-elapsed',
-        `${input.compactingElapsedMs}ms`,
-      );
-    }
-    kit.meter(line, input.context.percent, input.context.tone);
-    kit.el(line, 'span', 'usage-text', input.context.text);
-    if (input.cache !== null) {
-      kit.el(line, 'span', 'usage-text', input.cache);
-    }
+    drawContextItems(line, input, kit);
     return line;
   },
   spendLine(parent, input, kit) {
-    const text = kit.el(parent, 'span', 'usage-text', input.spend ?? '');
+    const text = kit.el(parent, 'span', 'usage-spend-line', input.spend ?? '');
     text.hidden = input.spend === null;
     return text;
   },
@@ -161,6 +137,29 @@ const layout = {
     return root;
   },
 };
+
+// The chip while the session compacts, then the meter and the context and cache
+// texts, into a session's line or context line.
+/**
+ * @param {HTMLElement} line
+ * @param {import('../layout').ContextLineInput} input
+ * @param {import('../layout').UsageKit} kit
+ */
+function drawContextItems(line, input, kit) {
+  line.classList.toggle('is-compacting', input.compacting !== null);
+  if (input.compacting !== null) {
+    kit.tag(line, input.compacting, 'accent');
+    line.style.setProperty(
+      '--usage-compacting-elapsed',
+      `${input.compactingElapsedMs}ms`,
+    );
+  }
+  kit.meter(line, input.context.percent, input.context.tone);
+  kit.el(line, 'span', 'usage-text', input.context.text);
+  if (input.cache !== null) {
+    kit.el(line, 'span', 'usage-text', input.cache);
+  }
+}
 
 /** @param {import('../layout').MeterInput} row */
 function isRowShown(row) {

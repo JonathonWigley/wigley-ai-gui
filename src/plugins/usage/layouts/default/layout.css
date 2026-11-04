@@ -115,6 +115,11 @@
   flex: none;
 }
 
+[data-layout-owner='usage'][data-layout='default'].usage-spend-line {
+  font-size: var(--wg-text-12);
+  font-variant-numeric: tabular-nums;
+}
+
 [data-layout-owner='usage'][data-layout='default'].usage-row-line {
   align-items: center;
   color: var(--wg-fg-tertiary);

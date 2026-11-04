@@ -234,7 +234,8 @@ Defects seen in a drive run, a transcript or the user's own use.
 - **Composer spills past its cap in a short pane** — *needs a feature plan*: `.ui-floating.chat-composer` caps at
   `max-height: 50%` (`src/plugins/chat/layouts/default/layout.css`) with nothing under it able to scroll enough, so its
   status line and Send run out of the panel's bottom edge: at 720x600 under `fake: steps`, and at 420x600 under
-  `fake: hold`. To decide: raise the cap, let the dock scroll, or lower the box's floor. Source session: Claude Code
+  `fake: hold`. The dock now draws in the session hub, and these measurements predate that move; recheck both sizes
+  before planning. To decide: raise the cap or lower the box's floor. Source session: Claude Code
   c2cde885-2f45-42e7-ad71-cd59618615db in wigley-ai-gui.
 - **Background subagent misattributed and dropped early** — *needs a feature plan*: two faults a real session showed
   on 2026-11-03, a haiku background subagent under an Opus main told to run `sleep 90`. Take the first one first; it
