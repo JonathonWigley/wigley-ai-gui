@@ -1,6 +1,6 @@
 # 02 — Doc re-read
 
-Status: not started
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -18,3 +18,4 @@ Commit:    one commit, only if a line changed
 
 ## Proof
 
+Commit none · proof: both written-ahead lines read against 87fd8df5: the design.md bullet and the AGENTS.md chat/ line hold; launch passes select false in chat-sessions.ts; no line changed · concerns: none

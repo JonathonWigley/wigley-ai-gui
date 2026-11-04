@@ -94,10 +94,10 @@ Boundary rules:
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [The start_session tool](01-start-session-tool.md)
+- [x] [The start_session tool](01-start-session-tool.md)
 
 ### Wave 2
-- [ ] [Doc re-read](02-doc-re-read.md) — after 01
+- [x] [Doc re-read](02-doc-re-read.md) — after 01
 
 ### Wave 3
 - [ ] [Final verification](03-final-verification.md) — after 02
@@ -107,9 +107,15 @@ Boundary rules:
 Review base: 4de544d7
 
 ### Groups
+- 01 · 87fd8df5 · diff read: all three Produces present, profileOf hoisted, contribution beside PERMISSION_TOOLS, no start order moved; worker: typecheck and lint clean, 63 tests in the two touched files pass · concerns: third private textResult copy (title-tool.ts:35, chat-sessions.ts:407); a launch throw reaches the caller but no log line unless startNew logs it; check order between prompt, profile and folder is pinned only through stat not called; non-object args other than null have no row
+- 02 · none · both written-ahead lines read against 87fd8df5: the design.md bullet and the AGENTS.md chat/ line hold; launch passes select false in chat-sessions.ts; no line changed · concerns: none
 ### Contract changes
 ### Rulings
 - The preflight line requiring plan-session-hub closed is met by isolation, not by that run closing: the user asked for a worktree while the hub run was still open, so the shared start.ts is reconciled at the merge — a merge conflict in start.ts if wrong · lead
 - The test gate and the drive run stay in the worktree: worktree-runs.md defers them because they need the Unity editor, which this repo has none of, and AGENTS.md sends drive checks beside a peer's into a worktree — none if wrong · lead
+- FileStat is a type import from src/contracts/files, past the boundary rule's two contracts, because the Produces names it; the layer check passes — the deps' stat type needs another source if wrong · group 01 · group 01
+- errorText is a run-time import from src/shared/error-text, reading the boundary rule as covering plugin contracts and how chat and files are reached; the layer check passes — a one-line local copy if wrong · group 01 · group 01
+- A named profile when chat has no profiles gets the unknown-profile error reading Profiles: none. — wording only if wrong · group 01 · group 01
 ### Review rounds
 ### Test gate
+- start-session-tool.test.ts: the new handler's rules; start.test.ts: the contribution and the hoisted profileOf export; title-tool.test.ts: the sibling tool whose pattern the module follows · 3 files, 71 tests pass

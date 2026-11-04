@@ -1,6 +1,6 @@
 # 01 — The start_session tool
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -60,3 +60,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 87fd8df5 · proof: diff read: all three Produces present, profileOf hoisted, contribution beside PERMISSION_TOOLS, no start order moved; worker: typecheck and lint clean, 63 tests in the two touched files pass · concerns: third private textResult copy (title-tool.ts:35, chat-sessions.ts:407); a launch throw reaches the caller but no log line unless startNew logs it; check order between prompt, profile and folder is pinned only through stat not called; non-object args other than null have no row
