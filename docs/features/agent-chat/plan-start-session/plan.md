@@ -104,10 +104,12 @@ Boundary rules:
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 4de544d7
 
 ### Groups
 ### Contract changes
 ### Rulings
+- The preflight line requiring plan-session-hub closed is met by isolation, not by that run closing: the user asked for a worktree while the hub run was still open, so the shared start.ts is reconciled at the merge — a merge conflict in start.ts if wrong · lead
+- The test gate and the drive run stay in the worktree: worktree-runs.md defers them because they need the Unity editor, which this repo has none of, and AGENTS.md sends drive checks beside a peer's into a worktree — none if wrong · lead
 ### Review rounds
 ### Test gate

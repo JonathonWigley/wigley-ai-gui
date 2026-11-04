@@ -36,6 +36,10 @@ import { PERMISSION_TOOLS } from './permission-tool';
 import { createChatPreview } from './preview/chat-preview';
 import { createRecentFolders } from './recent-folders';
 import { chatSelfTestScript } from './selftest-script';
+import {
+  START_SESSION_TOOL,
+  startSessionToolSession,
+} from './start-session-tool';
 
 type ChatApi = MainApi<
   typeof chatManifest,
@@ -427,6 +431,19 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     sessions.contributeTools(PERMISSION_TOOLS, (session) =>
       chat.permissionToolSession(session),
     );
+    const profileOf = (sessionId: string) =>
+      chat.sessions().find((held) => held.sessionId === sessionId)?.profile ??
+      null;
+    sessions.contributeTools(
+      [START_SESSION_TOOL],
+      startSessionToolSession({
+        launch: (request) => chat.launch(request),
+        profileOf,
+        profileNames,
+        isAbsolute: (path) => services.paths.isAbsolute(path),
+        stat: (path) => services.files.stat(path),
+      }),
+    );
     const restored = Promise.all([
       saved.load().catch((error: unknown) => {
         services.log('chat', `open sessions not read: ${errorText(error)}`);
@@ -477,9 +494,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       launch: async (request) => chat.launch(request),
       profileNames,
       profiles,
-      profileOf: (sessionId) =>
-        chat.sessions().find((held) => held.sessionId === sessionId)?.profile ??
-        null,
+      profileOf,
       send: async (sessionId, message) => {
         requireHeld(sessionId);
         return chat.send(sessionId, message);

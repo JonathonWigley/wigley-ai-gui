@@ -11,9 +11,12 @@ import { fakeDriveHost } from '../../../shared/fake-drive-host';
 import { createFakeSessionHost } from '../../../shared/fake-session-host';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import type {
+  AgentSession,
   SessionTitles,
   TitleSource,
+  ToolDefinition,
   ToolResult,
+  ToolSession,
 } from '../../sessions/contract';
 import type { ChatMainExports, ChatSessionState } from '../contract';
 import { OPEN_SESSIONS_FILE } from './open-sessions';
@@ -185,6 +188,7 @@ describe('chat drive actions', () => {
 // `processEvents` holds each process's events, by start, and
 // `holdProcessEnds` keeps every process's `end` pending until the function it
 // returns is called. Paths compare equal ignoring a trailing `/`.
+// `contributions` holds each `contributeTools` call's arguments.
 // `exports` is the part's main exports. `sessionHost` is a fake host whose `list`
 // is `options.list` when given, and `timers` a manual `Timers`. `options.data`
 // replaces the data folder. `holdConnects` holds each promise held, `harnessAttaches`
@@ -262,8 +266,17 @@ function startChatPart(
   const ended: string[] = [];
   let rows = 0;
   const titles = new Map<string, SessionTitles>();
+  const contributions: {
+    tools: ToolDefinition[];
+    start: (session: AgentSession) => ToolSession;
+  }[] = [];
   const sessions = {
-    contributeTools: () => undefined,
+    contributeTools: (
+      tools: ToolDefinition[],
+      start: (session: AgentSession) => ToolSession,
+    ) => {
+      contributions.push({ tools, start });
+    },
     open: () => {
       rows += 1;
       const id = `row-${rows}`;
@@ -322,9 +335,13 @@ function startChatPart(
       clock,
       timers,
       sessionHost,
+      files: {
+        stat: () => Promise.resolve({ isFolder: true, isLink: false }),
+      },
       paths: {
         samePath: (a: string, b: string) =>
           a.replace(/\/$/, '') === b.replace(/\/$/, ''),
+        isAbsolute: () => true,
       },
       selfTest: null,
     },
@@ -367,6 +384,7 @@ function startChatPart(
     timerRuns,
     heldConnects,
     harnessAttaches,
+    contributions,
     settingsChange: (settings: unknown) => settingsListener(settings),
   };
 }
@@ -504,6 +522,36 @@ describe('chat main part', () => {
     await chat.exports.send('row-1', message);
 
     expect(chat.processSends).toHaveBeenCalledExactlyOnceWith(message);
+  });
+
+  it('startSessionTool_UnownedCaller_StartsASessionWithThePromptFirst', async () => {
+    const chat = startChatPart();
+    const contribution = chat.contributions.find(({ tools }) =>
+      tools.some((tool) => tool.name === 'start_session'),
+    );
+
+    const result = await contribution
+      ?.start({
+        id: 'relay-row',
+        info: {
+          sessionId: 'host-relay',
+          projectDir: '/p',
+          deadlineSeconds: null,
+          harness: 'claude',
+        },
+      })
+      .call(
+        'start_session',
+        { prompt: 'hi' },
+        { toolUseId: null, signal: new AbortController().signal },
+      );
+
+    expect(result?.isError).toBe(false);
+    expect(chat.starts.count).toBe(1);
+    expect(chat.processSends).toHaveBeenCalledExactlyOnceWith({
+      text: 'hi',
+      images: [],
+    });
   });
 
   it('exports_AddSendGate_HoldsAnExportedSend', async () => {
