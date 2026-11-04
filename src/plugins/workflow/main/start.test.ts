@@ -5,8 +5,9 @@ import type { QualifiedEvents } from '../../../contracts/plugin';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import {
-  type MainPartHarness,
+  noCounts,
   startMainPart,
+  type MainPartHarness,
 } from '../../../shared/plugin-part-harness.test-support';
 import { createRegistrations } from '../../../shared/registrations';
 import type { ChatMainEvents, ChatMainExports } from '../../chat/contract';
@@ -481,13 +482,7 @@ describe('workflowMainPart', () => {
       project.release();
       await settled();
 
-      expect(harness.counts()).toEqual({
-        registrations: 0,
-        timers: 0,
-        listeners: 0,
-        observers: 0,
-        frames: 0,
-      });
+      expect(harness.counts()).toEqual(noCounts);
       expect(await readIfPresent(harness.files, FLOWS_PATH)).toBe(savedAtStop);
     },
   );

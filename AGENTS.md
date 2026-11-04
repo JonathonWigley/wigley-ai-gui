@@ -697,7 +697,8 @@ round; primer: an open primer), since main, not the page, decides.
   `PLUGIN_EXTRAS` table in `check-layers.mts`. The script also fails when `src/plugins/main.ts`, `page.ts` or
   `manifests.ts` misses a plugin folder's part or manifest, or lists one twice. A new core layer or adapter gets a
   `CORE_LAYERS` entry in `check-layers.mts`, and the composition root's entry lists it. A plugin's test follows its
-  folder's rules; a test that starts a real provider part has an exact-file entry.
+  folder's rules, faking a provider with `fakeDependency`; a test that must start a real provider part has a whole-file
+  `sublayers` entry under its plugin in `PLUGIN_EXTRAS`.
 - It also runs `scripts/check-styles.mts`, which fails on a raw colour, length, duration or font stack in CSS or an
   inline style under `src/`, and on `backdrop-filter` outside `src/shared/page/ui/materials.css`. It judges every file under
   `src/` and takes no argument.

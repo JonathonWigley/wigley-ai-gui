@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { UserConfig } from '../../../contracts/user-config';
-import { startMainPart } from '../../../shared/plugin-part-harness.test-support';
+import {
+  noCounts,
+  startMainPart,
+} from '../../../shared/plugin-part-harness.test-support';
 import { settingsMainPart } from './start';
 
 describe('settings main part', () => {
@@ -17,13 +20,7 @@ describe('settings main part', () => {
     });
 
     await harness.stop();
-    expect(harness.counts()).toEqual({
-      registrations: 0,
-      timers: 0,
-      listeners: 0,
-      observers: 0,
-      frames: 0,
-    });
+    expect(harness.counts()).toEqual(noCounts);
     expect(liveListeners.size).toBe(0);
 
     await harness.restart();

@@ -498,5 +498,6 @@ Review base: 7f956435
 - Check 6's second notification arrives on the next tools/call: the relay and its README match plan.md (when the channel reopens), and task 14's 'once the app is back' wording was wrong; the relay has no watcher · group 14
 - Check 3 recorded as not run, since the user gave no yes · group 14
 ### Review rounds
+- Round 1, 3308f3db, 8 lanes: NEEDS FIXES, 31 findings, report /tmp/claude-foundation/review-3308f3db.md. Open findings settled by the lead's recommendation on the user's word in place of triage. Check 3 still not run, no user answer yet; its plugins: agent-lines agent-strip backlog docs notes settings usage workflow.
 ### Test gate
 - Whole unit suite, picked since every plugin and the plugin API changed: npm test, 6591 of 6591 on the full re-run; one earlier run timed out in node-files watch_NotRecursive (passed twice alone, full re-run passed). Self-test --plugin sessions forms primer chat: all passed. The rest of the self-test not run, no user yes.

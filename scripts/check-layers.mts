@@ -40,11 +40,69 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
     contract: { layers: ['src/plugins/forms'] },
     // A round is an agent form with a `node:crypto` fingerprint.
     main: { layers: ['src/shared/agent-forms'], packages: ['node:'] },
+    sublayers: {
+      // Starts the real sessions main, which refuses a tool name contributed twice;
+      // a real home folder holds what the stop rows open.
+      'src/plugins/forms/main/start.test.ts': {
+        layers: [
+          'src/contracts',
+          'src/shared',
+          'src/plugins/agent-form-fakes.test-support.ts',
+          'src/plugins/forms',
+          'src/plugins/forms/main',
+          'src/plugins/sessions/contract.ts',
+          'src/plugins/sessions/main',
+        ],
+        packages: ['node:'],
+      },
+      // Starts the real sessions and keys pages, whose exports forms files under.
+      'src/plugins/forms/page/start.test.ts': {
+        layers: [
+          'src/contracts',
+          'src/shared',
+          'src/shared/page',
+          'src/plugins/forms/contract.ts',
+          'src/plugins/forms/page',
+          'src/plugins/sessions/page',
+          'src/plugins/keys/page',
+        ],
+        packages: [],
+      },
+    },
   },
   // Its self-test script builds a PNG with `node:zlib`.
   notes: { main: NODE_ONLY },
-  // A primer is an agent form with a `node:crypto` fingerprint.
-  primer: { main: { layers: ['src/shared/agent-forms'], packages: ['node:'] } },
+  primer: {
+    // A primer is an agent form with a `node:crypto` fingerprint.
+    main: { layers: ['src/shared/agent-forms'], packages: ['node:'] },
+    sublayers: {
+      // Starts the real sessions main, which refuses a tool name contributed twice;
+      // a real home folder holds what the stop rows open.
+      'src/plugins/primer/main/start.test.ts': {
+        layers: [
+          'src/shared',
+          'src/plugins/agent-form-fakes.test-support.ts',
+          'src/plugins/primer/main',
+          'src/plugins/sessions/contract.ts',
+          'src/plugins/sessions/main',
+        ],
+        packages: ['node:'],
+      },
+      // Starts the real sessions and keys pages, whose exports primer files under.
+      'src/plugins/primer/page/start.test.ts': {
+        layers: [
+          'src/contracts',
+          'src/shared',
+          'src/shared/page',
+          'src/plugins/primer/contract.ts',
+          'src/plugins/primer/page',
+          'src/plugins/sessions/page',
+          'src/plugins/keys/page',
+        ],
+        packages: [],
+      },
+    },
+  },
   // Its relay's socket and its MCP adapter's SDK sit in sublayers of main.
   sessions: {
     main: {
@@ -276,6 +334,15 @@ const CORE_LAYERS: Record<string, LayerRule> = {
     ],
     packages: [],
   },
+  // The chat and sessions fakes forms' and primer's main tests share.
+  'src/plugins/agent-form-fakes.test-support.ts': {
+    layers: [
+      'src/shared',
+      'src/plugins/chat/contract.ts',
+      'src/plugins/sessions/contract.ts',
+    ],
+    packages: [],
+  },
   // Opens a round and a primer on one owned session through the three
   // plugins' drive actions over the real session list.
   'src/plugins/agent-form-drive.test.ts': {
@@ -286,90 +353,6 @@ const CORE_LAYERS: Record<string, LayerRule> = {
       'src/plugins/primer/main',
       'src/plugins/sessions/contract.ts',
       'src/plugins/sessions/main',
-    ],
-    packages: [],
-  },
-  // Starts the real keys page, whose exports gallery files its anchors under.
-  'src/plugins/gallery/page/start.test.ts': {
-    layers: [
-      'src/shared',
-      'src/shared/page',
-      'src/plugins/gallery/layouts',
-      'src/plugins/gallery/page',
-      'src/plugins/keys/page',
-    ],
-    packages: [],
-  },
-  // Starts the real keys page, whose exports sessions files its anchors under.
-  'src/plugins/sessions/page/start.test.ts': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/shared/page',
-      'src/plugins/sessions/contract.ts',
-      'src/plugins/sessions/page',
-      'src/plugins/keys/page',
-    ],
-    packages: [],
-  },
-  // Starts the real keys page, whose exports settings files its anchors under.
-  'src/plugins/settings/page/start.test.ts': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/shared/page',
-      'src/plugins/settings/page',
-      'src/plugins/keys/page',
-    ],
-    packages: [],
-  },
-  // Starts the real sessions main, which refuses a tool name contributed twice.
-  'src/plugins/forms/main/start.test.ts': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/plugins/forms',
-      'src/plugins/forms/main',
-      'src/plugins/chat/contract.ts',
-      'src/plugins/sessions/contract.ts',
-      'src/plugins/sessions/main',
-    ],
-    packages: [],
-  },
-  // Starts the real sessions and keys pages, whose exports forms files under.
-  'src/plugins/forms/page/start.test.ts': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/shared/page',
-      'src/plugins/forms/contract.ts',
-      'src/plugins/forms/page',
-      'src/plugins/sessions/page',
-      'src/plugins/keys/page',
-    ],
-    packages: [],
-  },
-  // Starts the real sessions main, which refuses a tool name contributed twice.
-  'src/plugins/primer/main/start.test.ts': {
-    layers: [
-      'src/shared',
-      'src/plugins/primer/main',
-      'src/plugins/chat/contract.ts',
-      'src/plugins/sessions/contract.ts',
-      'src/plugins/sessions/main',
-    ],
-    packages: [],
-  },
-  // Starts the real sessions and keys pages, whose exports primer files under.
-  'src/plugins/primer/page/start.test.ts': {
-    layers: [
-      'src/contracts',
-      'src/shared',
-      'src/shared/page',
-      'src/plugins/primer/contract.ts',
-      'src/plugins/primer/page',
-      'src/plugins/sessions/page',
-      'src/plugins/keys/page',
     ],
     packages: [],
   },

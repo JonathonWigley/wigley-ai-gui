@@ -9,6 +9,7 @@ import {
 } from '../../../shared/page/test-dom';
 import {
   fakeDependency,
+  noCounts,
   startPagePart,
 } from '../../../shared/plugin-part-harness.test-support';
 import { type ChatPageExports, chatPageKey } from '../../chat/contract';
@@ -87,13 +88,7 @@ describe('visualPagePart', () => {
 
     await started.harness.stop();
 
-    expect(started.harness.counts()).toEqual({
-      registrations: 0,
-      timers: 0,
-      listeners: 0,
-      observers: 0,
-      frames: 0,
-    });
+    expect(started.harness.counts()).toEqual(noCounts);
     expect(started.harness.fences).toEqual([]);
     expect(started.opened.map((frame) => frame.disposed)).toEqual(opened);
   });

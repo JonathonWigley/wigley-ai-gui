@@ -1,9 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { installFakeDom } from '../../../shared/page/test-dom';
-import { startPagePart } from '../../../shared/plugin-part-harness.test-support';
-import { keysPagePart } from '../../keys/page/start';
+import {
+  fakeDependency,
+  noCounts,
+  startPagePart,
+} from '../../../shared/plugin-part-harness.test-support';
+import { type KeysPageExports, keysPageKey } from '../../keys/contract';
 import defaultLayout from '../layouts/default/layout.js';
 import { galleryPagePart } from './start';
+
+const fakeKeys = fakeDependency(keysPageKey, (consumer): KeysPageExports => ({
+  keysFor: () => null,
+  onChanged: () => consumer.track({ dispose: () => undefined }),
+  anchor: () => consumer.track({ dispose: () => undefined }),
+}));
 
 describe('gallery page part', () => {
   beforeEach(() => {
@@ -14,23 +24,21 @@ describe('gallery page part', () => {
   });
 
   it('stops with nothing live and starts again', async () => {
-    const harness = startPagePart(galleryPagePart, { parts: [keysPagePart] });
+    const harness = startPagePart(galleryPagePart, {
+      dependencies: [fakeKeys],
+    });
 
     await harness.stop();
-    expect(harness.counts()).toEqual({
-      registrations: 0,
-      timers: 0,
-      listeners: 0,
-      observers: 0,
-      frames: 0,
-    });
+    expect(harness.counts()).toEqual(noCounts);
 
     await harness.restart();
     await harness.stop();
   });
 
   it('stop disconnects every HScroller sample observer', async () => {
-    const harness = startPagePart(galleryPagePart, { parts: [keysPagePart] });
+    const harness = startPagePart(galleryPagePart, {
+      dependencies: [fakeKeys],
+    });
     // The harness stubs `ResizeObserver` as it starts, so this fake goes in after
     // it and watches the samples the new layouts draw.
     const observers: { observed: number; disconnected: number }[] = [];

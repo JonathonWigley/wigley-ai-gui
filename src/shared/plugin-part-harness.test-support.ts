@@ -52,7 +52,10 @@ import { qualify } from './plugin-manifests';
 import {
   abortableProcesses,
   trackedAlerts,
+  trackedEditor,
   trackedFiles,
+  trackedMarkdown,
+  trackedUserConfig,
 } from './plugin-service-views';
 import { scopedFiles } from './scoped-files';
 import { trackedTimers } from './tracked-timers';
@@ -72,7 +75,9 @@ export function fakeDependency<E, P extends ProcessName>(
 }
 
 // What the part under test holds live. `listeners`, `observers` and `frames`
-// are page globals, so a real provider part's count there too.
+// are page globals, so a real provider part's count there too. After `stop()`,
+// `registrations` and `timers` cannot fail, as the host disposes the store that
+// holds them: they are only meaningful mid-life.
 export interface PartCounts {
   registrations: number;
   timers: number;
@@ -81,16 +86,27 @@ export interface PartCounts {
   frames: number;
 }
 
+export const noCounts: Readonly<PartCounts> = {
+  registrations: 0,
+  timers: 0,
+  listeners: 0,
+  observers: 0,
+  frames: 0,
+};
+
 // `started` throws while the part is stopped. `restart` stops a started part and
 // starts it again on a new host with the same fakes and the same counts, so what
 // a leaky `dispose` left stays counted. `advance` runs the due timers in due
-// order, the clock reading each one's due time, and ends `ms` later.
+// order, the clock reading each one's due time, and ends `ms` later. `emitted`
+// holds what any started part emitted, in order, under its qualified name; it
+// outlives the stop, so a test reads there what a late read emitted.
 export interface PartHarness<Started> {
   started(): Started;
   counts(): PartCounts;
   advance(ms: number): void;
   emit(qualifiedEvent: string, data: unknown): void;
   readonly logs: readonly { source: string; message: string }[];
+  readonly emitted: readonly HarnessEvent[];
   stop(): Promise<void>;
   restart(): Promise<void>;
 }
@@ -122,9 +138,9 @@ export interface PagePartHarness<M extends PluginManifest> extends PartHarness<
 }
 
 // `services` replaces the named default services, and a replaced service counts
-// nothing. A replaced `files`, `processes` or `alerts` still runs through its
-// per-plugin view, as `createMainApi` does. `parts` holds real providers, started
-// before the part in listed order and stopped after it.
+// nothing. A replaced `files`, `processes`, `alerts` or `userConfig` still runs
+// through its per-plugin view, as `createMainApi` does. `parts` holds real
+// providers, started before the part in listed order and stopped after it.
 export interface MainPartHarnessOptions<M extends PluginManifest> {
   dependencies?: readonly FakeDependency<'main'>[];
   settings?: M['settings'];
@@ -134,33 +150,23 @@ export interface MainPartHarnessOptions<M extends PluginManifest> {
 }
 
 // `invoke` answers the `channel.invoke` of the part under test, which otherwise
-// never settles. `parts` is as on main.
+// never settles. A replaced `editor` or `markdown` still runs through its
+// per-plugin view, as `createPageApi` does. `firstModeTaken` holds the first mode
+// the app's own first part would add, so no mode the part adds shows as it is
+// added. `parts` is as on main.
 export interface PagePartHarnessOptions<M extends PluginManifest> {
   dependencies?: readonly FakeDependency<'page'>[];
   settings?: M['settings'];
   services?: Partial<Omit<PageServices, 'timers' | 'log'>>;
   invoke?(method: string, ...args: unknown[]): Promise<unknown>;
+  firstModeTaken?: boolean;
   parts?: readonly PagePart[];
 }
 
-// The fake APIs take a key alone, so `dependency` has no string overload.
-export type FakeMainApi<M extends PluginManifest> = Omit<
-  MainApi<M, any, any, any>,
-  'dependency'
-> & {
-  dependency<E, Id extends M['dependsOn']['main'][number]>(
-    key: DependencyKey<E, 'main', Id>,
-  ): E;
-};
-
-export type FakePageApi<M extends PluginManifest> = Omit<
-  PageApi<M, any, any, any>,
-  'dependency'
-> & {
-  dependency<E, Id extends M['dependsOn']['page'][number]>(
-    key: DependencyKey<E, 'page', Id>,
-  ): E;
-};
+export interface HarnessEvent {
+  event: string;
+  data: unknown;
+}
 
 interface HarnessLogLine {
   source: string;
@@ -172,6 +178,7 @@ interface HarnessWorld {
   scheduler: Scheduler;
   bus: EventBus;
   logs: HarnessLogLine[];
+  emitted: HarnessEvent[];
 }
 
 interface Scheduler {
@@ -220,7 +227,7 @@ interface CommonApi {
 }
 
 function zeroCounts(): PartCounts {
-  return { registrations: 0, timers: 0, listeners: 0, observers: 0, frames: 0 };
+  return { ...noCounts };
 }
 
 // Counts `handle` until its first `dispose`, from whichever caller.
@@ -299,7 +306,12 @@ function countingTimers(scheduler: Scheduler, counts: PartCounts): Timers {
 }
 
 function createWorld(): HarnessWorld {
-  return { scheduler: createScheduler(), bus: createEventBus(), logs: [] };
+  return {
+    scheduler: createScheduler(),
+    bus: createEventBus(),
+    logs: [],
+    emitted: [],
+  };
 }
 
 function commonApi(
@@ -315,8 +327,15 @@ function commonApi(
   const coreLog = (source: string, message: string) => {
     world.logs.push({ source, message });
   };
+  const recordingBus: EventBus = {
+    on: world.bus.on,
+    emit(qualifiedEvent, data) {
+      world.emitted.push({ event: qualifiedEvent, data });
+      world.bus.emit(qualifiedEvent, data);
+    },
+  };
   const events = pluginEvents<UntypedEvents, UntypedEvents>(
-    world.bus,
+    recordingBus,
     manifest.id,
     coreLog,
   );
@@ -502,6 +521,7 @@ function baseHarness<Started>(
     advance: world.scheduler.advance,
     emit: world.bus.emit,
     logs: world.logs,
+    emitted: world.emitted,
     stop: lifecycle.stop,
     restart: lifecycle.restart,
   };
@@ -513,10 +533,11 @@ interface MainRecord {
   counts: PartCounts;
   handlers: Map<string, (...args: never[]) => unknown>;
   sent: { message: string; data: unknown }[];
+  layoutsRegistered: boolean;
 }
 
 function newMainRecord(counts: PartCounts = zeroCounts()): MainRecord {
-  return { counts, handlers: new Map(), sent: [] };
+  return { counts, handlers: new Map(), sent: [], layoutsRegistered: false };
 }
 
 // What every main part of one harness shares.
@@ -535,11 +556,24 @@ const DEV_APP: AppInstance = {
   isDev: true,
 };
 
+// Each member calls `files`' own at call time, so a spy a test sets after the
+// part starts sees the part's calls.
 function countingWatches(files: Files, counts: PartCounts): Files {
   return {
-    ...files,
-    watch: (folder, onChange, options) =>
-      countedHandle(files.watch(folder, onChange, options), counts),
+    read: (...args) => files.read(...args),
+    modified: (...args) => files.modified(...args),
+    readStart: (...args) => files.readStart(...args),
+    write: (...args) => files.write(...args),
+    writeBytes: (...args) => files.writeBytes(...args),
+    append: (...args) => files.append(...args),
+    readBytes: (...args) => files.readBytes(...args),
+    list: (...args) => files.list(...args),
+    stat: (...args) => files.stat(...args),
+    realPath: (...args) => files.realPath(...args),
+    makeFolder: (...args) => files.makeFolder(...args),
+    rename: (...args) => files.rename(...args),
+    trash: (...args) => files.trash(...args),
+    watch: (...args) => countedHandle(files.watch(...args), counts),
   };
 }
 
@@ -577,15 +611,31 @@ function countedDrive(
   return { add: (name, action) => register(host.add(name, action)) };
 }
 
+function fakeLayoutsRegister(
+  manifest: PluginManifest,
+  record: MainRecord,
+  register: CommonApi['register'],
+): Disposable {
+  if (record.layoutsRegistered) {
+    throw new Error(`layouts of ${manifest.id} already registered`);
+  }
+  record.layoutsRegistered = true;
+  return register({
+    dispose() {
+      record.layoutsRegistered = false;
+    },
+  });
+}
+
 function fakeMainApi(
   manifest: PluginManifest,
   context: PartContext,
   world: MainWorld,
   record: MainRecord,
   settings: object,
-): FakeMainApi<PluginManifest> {
+): MainApi<PluginManifest, any, any, any> {
   const common = commonApi(manifest, context, world, record.counts, settings);
-  const { register, liveHandle } = common;
+  const { register } = common;
   const { handlers, sent, counts } = record;
   const { replaced } = world;
   const defaultFiles = countingWatches(world.files, counts);
@@ -593,6 +643,11 @@ function fakeMainApi(
   return {
     channel: {
       handle(method, handler) {
+        if (handlers.has(method)) {
+          throw new Error(
+            `Plugin "${manifest.id}" registered a main handler for "${method}" twice`,
+          );
+        }
         handlers.set(method, handler);
         return register({
           dispose() {
@@ -609,10 +664,18 @@ function fakeMainApi(
     events: common.events,
     settings: common.settings,
     onSettingsChanged: common.onSettingsChanged,
-    dependency: common.dependency as FakeMainApi<PluginManifest>['dependency'],
+    dependency: common.dependency as MainApi<
+      PluginManifest,
+      any,
+      any,
+      any
+    >['dependency'],
     data: scopedFiles(partFiles, `/data/${manifest.id}`, posixPaths),
     drive: countedDrive(world.drive?.host, register),
-    layouts: { register: liveHandle, names: () => ['default'] },
+    layouts: {
+      register: () => fakeLayoutsRegister(manifest, record, register),
+      names: () => ['default'],
+    },
     services: {
       clock: common.clock,
       randomHex: world.randomHex,
@@ -633,13 +696,16 @@ function fakeMainApi(
       openExternal: async () => {},
       agentHarnesses: [],
       git: notFaked<Git>('git'),
-      userConfig: notFaked<UserConfig>('userConfig'),
       images: notFaked<ImageEncoder>('images'),
       ...replaced,
       files:
         replaced.files === undefined
           ? partFiles
           : trackedFiles(replaced.files, context.registrations),
+      userConfig:
+        replaced.userConfig === undefined
+          ? notFaked<UserConfig>('userConfig')
+          : trackedUserConfig(replaced.userConfig, context.registrations),
       processes: abortableProcesses(
         replaced.processes ?? world.processes,
         context.registrations,
@@ -743,7 +809,10 @@ interface PageWorld extends HarnessWorld {
   fences: FenceContribution[];
 }
 
-function createPageWorld(replaced: PageWorld['replaced']): PageWorld {
+function createPageWorld(
+  replaced: PageWorld['replaced'],
+  firstModeTaken: boolean,
+): PageWorld {
   return {
     ...createWorld(),
     replaced,
@@ -758,7 +827,7 @@ function createPageWorld(replaced: PageWorld['replaced']): PageWorld {
     },
     scope: 'idle',
     transparency: null,
-    liveModes: [],
+    liveModes: firstModeTaken ? ['part-harness.first-mode'] : [],
     fences: [],
   };
 }
@@ -791,6 +860,9 @@ function fakeModes(
   return {
     add(mode) {
       const id = qualify(manifest.id, mode.id);
+      if (liveModes.includes(id)) {
+        throw new Error(`Mode "${id}" is added twice`);
+      }
       const isFirst = liveModes.length === 0;
       liveModes.push(id);
       const handle: ModeHandle = common.register({
@@ -819,17 +891,28 @@ function fakeModes(
   };
 }
 
-function fakeMarkdown(world: PageWorld, common: CommonApi): MarkdownRenderer {
-  return notFaked<MarkdownRenderer>('markdown', {
+function fakeMarkdown(
+  world: PageWorld,
+  counts: PartCounts,
+  registrations: Registrations,
+): MarkdownRenderer {
+  const fences = notFaked<MarkdownRenderer>('markdown', {
     addFence(fence) {
       world.fences.push(fence);
-      return common.register({
-        dispose() {
-          world.fences.splice(world.fences.indexOf(fence), 1);
+      return countedHandle(
+        {
+          dispose() {
+            world.fences.splice(world.fences.indexOf(fence), 1);
+          },
         },
-      });
+        counts,
+      );
     },
   });
+  return notFaked<MarkdownRenderer>(
+    'markdown',
+    trackedMarkdown(fences, registrations),
+  );
 }
 
 function fakeLayoutShow<L>(
@@ -875,9 +958,10 @@ function fakePageApi(
   world: PageWorld,
   record: PageRecord,
   settings: object,
-): FakePageApi<PluginManifest> {
+): PageApi<PluginManifest, any, any, any> {
   const common = commonApi(manifest, context, world, record.counts, settings);
   const { register, liveHandle } = common;
+  const { replaced } = world;
   const area = {
     contribute: liveHandle,
   };
@@ -900,7 +984,7 @@ function fakePageApi(
           : record.invoke(method, ...args),
       on: (message: string, listener: (data: never) => void) =>
         fakePageChannelOn(record, message, listener, register),
-    } as FakePageApi<PluginManifest>['channel'],
+    } as PageApi<PluginManifest, any, any, any>['channel'],
     events: common.events,
     keys: {
       setScope(scope) {
@@ -938,15 +1022,18 @@ function fakePageApi(
     onSettingsChanged: common.onSettingsChanged,
     platform: 'macos',
     commands: { run() {} },
-    dependency: common.dependency as FakePageApi<PluginManifest>['dependency'],
+    dependency: common.dependency as PageApi<
+      PluginManifest,
+      any,
+      any,
+      any
+    >['dependency'],
     dataUrl: (path, revision) => dataUrl(manifest.id, revision, path),
     layouts: {
       show: (options) =>
         fakeLayoutShow(record.shows, options.setLayouts, register),
     },
     services: {
-      editor: notFaked<EditorHost>('editor'),
-      markdown: fakeMarkdown(world, common),
       markup: notFaked<MarkupEditor>('markup'),
       visualFrames: notFaked<VisualFrames>('visualFrames'),
       toast(text, tone) {
@@ -968,7 +1055,15 @@ function fakePageApi(
           }
         },
       },
-      ...world.replaced,
+      ...replaced,
+      editor:
+        replaced.editor === undefined
+          ? notFaked<EditorHost>('editor')
+          : trackedEditor(replaced.editor, context.registrations),
+      markdown:
+        replaced.markdown === undefined
+          ? fakeMarkdown(world, record.counts, context.registrations)
+          : trackedMarkdown(replaced.markdown, context.registrations),
       log: common.log,
       timers: common.timers,
     },
@@ -1076,7 +1171,9 @@ function countingFrames(counts: PartCounts) {
   };
 }
 
-// A copy, so `vi.unstubAllGlobals` restores the existing `document` untouched.
+// A copy, so `vi.unstubAllGlobals` restores the existing `document` untouched. A
+// test reads `document` after `startPagePart`, never the object
+// `installFocusFakeDom` returned.
 function copyOfDocument(): object {
   const existing = (globalThis as { document?: object }).document;
   return existing === undefined
@@ -1115,7 +1212,10 @@ export function startPagePart<M extends PluginManifest>(
   const realParts = options.parts ?? [];
   requireFakesListed(part.manifest, 'page', dependencies);
   requireNoFakeIsReal(dependencies, realParts);
-  const world = createPageWorld(options.services ?? {});
+  const world = createPageWorld(
+    options.services ?? {},
+    options.firstModeTaken === true,
+  );
   const record = newPageRecord(zeroCounts(), options.invoke);
   const fireWindowListeners = stubPageGlobals(record.counts);
   const beginOn = (
@@ -1159,5 +1259,65 @@ export function startPagePart<M extends PluginManifest>(
       world.keymap = keymap;
       world.keymapListeners.tell(keymap);
     },
+  };
+}
+
+// The data of each event `harness` holds as emitted under `qualifiedEvent`.
+export function dataEmitted(
+  harness: Pick<PartHarness<unknown>, 'emitted'>,
+  qualifiedEvent: string,
+): unknown[] {
+  return harness.emitted
+    .filter(({ event }) => event === qualifiedEvent)
+    .map(({ data }) => data);
+}
+
+export function deferred<T>() {
+  let resolve: (value: T) => void = () => undefined;
+  let reject: (error: Error) => void = () => undefined;
+  const promise = new Promise<T>((settled, failed) => {
+    resolve = settled;
+    reject = failed;
+  });
+  return { promise, resolve, reject };
+}
+
+// An editor host that counts the editors it holds live and every one it made;
+// `type` edits the last one made.
+export function countingEditors() {
+  let live = 0;
+  let made = 0;
+  let type: (text: string) => void = () => undefined;
+  const host: EditorHost = {
+    create(_parent, doc, events) {
+      live += 1;
+      made += 1;
+      type = (text) => events.changed(text);
+      return {
+        text: () => doc,
+        setText() {},
+        insert() {},
+        charBeforeCursor: () => '',
+        focus() {},
+        blur() {},
+        destroy() {
+          live -= 1;
+        },
+      };
+    },
+    createDocument() {
+      throw new Error('part harness: countingEditors makes no document editor');
+    },
+    contains: () => false,
+    typeInto() {},
+    onPendingKeys: () => ({ dispose() {} }),
+    cancelPendingKeys() {},
+    setKeymap() {},
+  };
+  return {
+    host,
+    live: () => live,
+    made: () => made,
+    type: (text: string) => type(text),
   };
 }

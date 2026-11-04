@@ -3,6 +3,7 @@ import { MAIN_AGENT_ID, type AgentEvent } from '../../../contracts/agent';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import {
   fakeDependency,
+  noCounts,
   startMainPart,
 } from '../../../shared/plugin-part-harness.test-support';
 import { CHAT_PREVIEW_HOST_ID } from '../../chat/contract';
@@ -404,13 +405,7 @@ describe('agentsMainPart lifecycle', () => {
 
       await harness.stop();
 
-      expect(harness.counts()).toEqual({
-        registrations: 0,
-        timers: 0,
-        listeners: 0,
-        observers: 0,
-        frames: 0,
-      });
+      expect(harness.counts()).toEqual(noCounts);
       expect(harness.sent.slice(sentBefore).map(({ data }) => data)).toEqual(
         sent,
       );

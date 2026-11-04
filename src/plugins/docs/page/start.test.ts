@@ -1,63 +1,36 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Registrations } from '../../../contracts/disposable';
-import type { PagePart, PluginManifest } from '../../../contracts/plugin';
 import { installFakeDom } from '../../../shared/page/test-dom';
 import {
   fakeDependency,
+  noCounts,
   startPagePart,
 } from '../../../shared/plugin-part-harness.test-support';
 import { createRegistrations } from '../../../shared/registrations';
 import { type KeysPageExports, keysPageKey } from '../../keys/contract';
-import type { SessionTabHandle, SessionTabView } from '../../sessions/contract';
+import {
+  type SessionsPageExports,
+  sessionsPageKey,
+  type SessionTabHandle,
+  type SessionTabView,
+} from '../../sessions/contract';
 import type { DocsPageExports } from '../contract';
 import { docsPagePart } from './start';
 
-const NOTHING_LIVE = {
-  registrations: 0,
-  timers: 0,
-  listeners: 0,
-  observers: 0,
-  frames: 0,
-};
-
-const SESSIONS_MANIFEST: PluginManifest = {
-  id: 'sessions',
-  dependsOn: { main: [], page: [] },
-  commands: {},
-  scopes: {},
-  settings: {},
-  settingInfo: {},
-  themeTokens: {},
-};
-
-// A stand-in for sessions' part, which starts ahead of docs and adds the first
-// mode, so Docs mode is not shown as it is added. `tabs` holds each tab's
-// title; its handle files under the dependent.
-function sessionsStandIn(tabs: string[]): PagePart {
-  return {
-    manifest: SESSIONS_MANIFEST,
-    start(api) {
-      api.modes.add({
-        id: 'stand-in',
-        title: 'Stand-in',
-        icon: 'book',
-        element: {} as HTMLElement,
-        shown: () => undefined,
-        hidden: () => undefined,
-      });
-      return {
-        commands: {},
-        exports: (consumer: Registrations) => ({
-          addTab(_sessionId: string, tab: SessionTabView) {
-            tabs.push(tab.title);
-            return consumer.track({
-              dispose: () => undefined,
-            } as SessionTabHandle);
-          },
-        }),
-      };
-    },
-  } as PagePart;
+// `tabs` holds each tab's title; its handle files under the dependent.
+function fakeSessions(tabs: string[]) {
+  return fakeDependency(
+    sessionsPageKey,
+    (consumer) =>
+      ({
+        addTab(_sessionId: string, tab: SessionTabView) {
+          tabs.push(tab.title);
+          return consumer.track({
+            dispose: () => undefined,
+          } as SessionTabHandle);
+        },
+      }) as unknown as SessionsPageExports,
+  );
 }
 
 function startDocsPage() {
@@ -69,8 +42,8 @@ function startDocsPage() {
     anchor: () => consumer.track({ dispose: () => undefined }),
   }));
   const harness = startPagePart(docsPagePart, {
-    dependencies: [keys],
-    parts: [sessionsStandIn(tabs)],
+    dependencies: [keys, fakeSessions(tabs)],
+    firstModeTaken: true,
   });
   const exportsTo = (consumer: Registrations) =>
     harness.started().exports?.(consumer) as DocsPageExports;
@@ -99,7 +72,7 @@ describe('docs page part lifecycle', () => {
       await harness.stop();
 
       expect(tabs).toHaveLength(tabCount);
-      expect(harness.counts()).toEqual(NOTHING_LIVE);
+      expect(harness.counts()).toEqual(noCounts);
     },
   );
 

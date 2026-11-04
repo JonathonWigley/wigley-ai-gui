@@ -7,8 +7,9 @@ import {
 } from '../../../shared/page/test-dom';
 import { PLACEMENT_CHECK_EVENT } from '../../../shared/placement-check';
 import {
-  type PagePartHarness,
+  noCounts,
   startPagePart,
+  type PagePartHarness,
 } from '../../../shared/plugin-part-harness.test-support';
 import { createRegistrations } from '../../../shared/registrations';
 import type { KeysPageExports } from '../contract';
@@ -39,13 +40,7 @@ describe('keys page part', () => {
     const harness = startPagePart(keysPagePart);
 
     await harness.stop();
-    expect(harness.counts()).toEqual({
-      registrations: 0,
-      timers: 0,
-      listeners: 0,
-      observers: 0,
-      frames: 0,
-    });
+    expect(harness.counts()).toEqual(noCounts);
 
     await harness.restart();
     await harness.stop();

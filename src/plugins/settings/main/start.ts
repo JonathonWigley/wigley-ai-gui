@@ -25,15 +25,12 @@ export const settingsMainPart: MainPart<typeof settingsManifest> = {
       userConfig.writeKeymap(layer, expectedText),
     );
     api.layouts.register({ layoutTypes });
-    const changed = userConfig.onChanged(() => channel.send('changed', null));
+    userConfig.onChanged(() => channel.send('changed', null));
     const show = () => {
       services.window.show();
       channel.send('show', null);
     };
     services.selfTest?.run(settingsSelfTestScript({ userConfig, show }));
-    return {
-      commands: { show },
-      dispose: () => changed.dispose(),
-    };
+    return { commands: { show } };
   },
 };

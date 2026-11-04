@@ -2,12 +2,10 @@
 // `@ts-expect-error` must fail to compile.
 import { assertType, describe, it } from 'vitest';
 import type { Disposable } from '../contracts/disposable';
-import type { DependencyKey } from '../contracts/plugin';
+import type { DependencyKey, MainApi, PageApi } from '../contracts/plugin';
 import { definePlugin } from './define-plugin';
 import {
   fakeDependency,
-  type FakeMainApi,
-  type FakePageApi,
   type MainPartHarnessOptions,
 } from './plugin-part-harness.test-support';
 
@@ -49,16 +47,20 @@ describe('plugin part harness types', () => {
     fakeDependency(depMainKey, () => ({ add: 1 }));
   });
 
-  it('takes only a key in the fake API dependency', () => {
-    assertType<(api: FakeMainApi<typeof manifest>) => void>((api) => {
-      api.dependency(depMainKey);
-      // @ts-expect-error -- a string id is not a key
-      api.dependency('dep');
-    });
-    assertType<(api: FakePageApi<typeof manifest>) => void>((api) => {
-      api.dependency(depPageKey);
-      // @ts-expect-error -- a string id is not a key
-      api.dependency('dep');
-    });
+  it('takes only a key in the API dependency', () => {
+    assertType<(api: MainApi<typeof manifest, any, any, any>) => void>(
+      (api) => {
+        api.dependency(depMainKey);
+        // @ts-expect-error -- a string id is not a key
+        api.dependency('dep');
+      },
+    );
+    assertType<(api: PageApi<typeof manifest, any, any, any>) => void>(
+      (api) => {
+        api.dependency(depPageKey);
+        // @ts-expect-error -- a string id is not a key
+        api.dependency('dep');
+      },
+    );
   });
 });

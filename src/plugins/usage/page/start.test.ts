@@ -7,6 +7,7 @@ import {
 } from '../../../shared/page/test-dom';
 import {
   fakeDependency,
+  noCounts,
   startPagePart,
 } from '../../../shared/plugin-part-harness.test-support';
 import { createRegistrations } from '../../../shared/registrations';
@@ -84,13 +85,7 @@ describe('usagePagePart', () => {
 
     await harness.stop();
 
-    expect(harness.counts()).toEqual({
-      registrations: 0,
-      timers: 0,
-      listeners: 0,
-      observers: 0,
-      frames: 0,
-    });
+    expect(harness.counts()).toEqual(noCounts);
   });
 
   it('stop_LeavesNoLiveRegistration: snapshot reply after the stop', async () => {
@@ -105,13 +100,7 @@ describe('usagePagePart', () => {
     await reply;
     await Promise.resolve();
 
-    expect(harness.counts()).toEqual({
-      registrations: 0,
-      timers: 0,
-      listeners: 0,
-      observers: 0,
-      frames: 0,
-    });
+    expect(harness.counts()).toEqual(noCounts);
     expect(harness.logs.map((line) => line.message)).not.toContainEqual(
       expect.stringContaining('status line'),
     );

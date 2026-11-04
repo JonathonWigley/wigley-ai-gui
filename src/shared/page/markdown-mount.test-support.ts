@@ -7,6 +7,14 @@ export const NO_FENCES: Pick<MarkdownRenderer, 'addFence' | 'fence'> = {
   fence: () => undefined,
 };
 
+// A renderer that hands every text back as it is and registers no fence.
+export const PLAIN_MARKDOWN: MarkdownRenderer = {
+  block: (text) => text,
+  inline: (text) => text,
+  document: async (text) => text,
+  ...NO_FENCES,
+};
+
 // The placeholder `block` emits for a contributed fence. `source` is written
 // unescaped: give it no `<`, `>` or `&`.
 export function fencePlaceholder(

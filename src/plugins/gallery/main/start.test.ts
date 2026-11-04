@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { startMainPart } from '../../../shared/plugin-part-harness.test-support';
+import {
+  noCounts,
+  startMainPart,
+} from '../../../shared/plugin-part-harness.test-support';
 import { galleryMainPart } from './start';
 
 describe('gallery main part', () => {
@@ -7,13 +10,7 @@ describe('gallery main part', () => {
     const harness = startMainPart(galleryMainPart);
 
     await harness.stop();
-    expect(harness.counts()).toEqual({
-      registrations: 0,
-      timers: 0,
-      listeners: 0,
-      observers: 0,
-      frames: 0,
-    });
+    expect(harness.counts()).toEqual(noCounts);
 
     await harness.restart();
     expect(harness.counts().registrations).toBeGreaterThan(0);

@@ -8,6 +8,7 @@ import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import {
   fakeDependency,
+  noCounts,
   startMainPart,
 } from '../../../shared/plugin-part-harness.test-support';
 import { createRegistrations } from '../../../shared/registrations';
@@ -423,14 +424,6 @@ describe('docs main part', () => {
 });
 
 const NOTES = '/notes.md';
-const NOTHING_LIVE = {
-  registrations: 0,
-  timers: 0,
-  listeners: 0,
-  observers: 0,
-  frames: 0,
-};
-
 // Docs' main part on the harness, live over an empty root, so it writes no
 // fixture, running `/script.py`.
 function startDocsOnHarness() {
@@ -460,7 +453,7 @@ describe('docs main part lifecycle', () => {
 
     await harness.stop();
 
-    expect(harness.counts()).toEqual(NOTHING_LIVE);
+    expect(harness.counts()).toEqual(noCounts);
   });
 
   it('stop_EndsEachSessionConnectSessionOpened', async () => {

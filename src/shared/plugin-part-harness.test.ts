@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Disposable } from '../contracts/disposable';
+import type { EditorEvents } from '../contracts/editor';
 import type { Keymap } from '../contracts/keymap';
+import type { MarkdownRenderer } from '../contracts/markdown';
 import type {
   DependencyKey,
   LayoutShow,
@@ -9,7 +11,9 @@ import type {
 } from '../contracts/plugin';
 import { definePlugin } from './define-plugin';
 import {
+  countingEditors,
   fakeDependency,
+  noCounts,
   startMainPart,
   startPagePart,
 } from './plugin-part-harness.test-support';
@@ -21,13 +25,6 @@ const depMainKey: DependencyKey<{ add(): Disposable }, 'main', 'dep'> = {
 const otherKey: DependencyKey<{ ping(): string }, 'main', 'other'> = {
   id: 'other',
   process: 'main',
-};
-const noCounts = {
-  registrations: 0,
-  timers: 0,
-  listeners: 0,
-  observers: 0,
-  frames: 0,
 };
 
 const mainManifest = definePlugin({
@@ -44,6 +41,16 @@ const pageManifest = definePlugin({
   id: 'sample',
   dependsOn: { main: [], page: [] },
   commands: { run: { label: 'Run', group: 'Sample', runsIn: 'page' } },
+  scopes: {},
+  settings: {},
+  settingInfo: {},
+  themeTokens: {},
+});
+
+const depManifest = definePlugin({
+  id: 'dep',
+  dependsOn: { main: [], page: [] },
+  commands: {},
   scopes: {},
   settings: {},
   settingInfo: {},
@@ -97,6 +104,14 @@ function pageSample(kind: 'tidy' | 'leaky'): PagePart<typeof pageManifest> {
       };
     },
   };
+}
+
+type MainSampleApi = Parameters<MainPart<typeof mainManifest>['start']>[0];
+
+function mainPart(
+  start: MainPart<typeof mainManifest>['start'],
+): MainPart<typeof mainManifest> {
+  return { manifest: mainManifest, start };
 }
 
 function pagePart(
@@ -185,15 +200,7 @@ describe('plugin part harness', () => {
   it('starts a real provider part before the part and stops it after', async () => {
     const stopped: string[] = [];
     const provider: MainPart = {
-      manifest: definePlugin({
-        id: 'dep',
-        dependsOn: { main: [], page: [] },
-        commands: {},
-        scopes: {},
-        settings: {},
-        settingInfo: {},
-        themeTokens: {},
-      }),
+      manifest: depManifest,
       start: () => ({
         commands: {},
         exports: (consumer) => ({
@@ -412,5 +419,216 @@ describe('plugin part harness', () => {
     expect(() => startMainPart(part)).toThrow(
       'part harness: services.git.topLevel is not faked; pass it in options.services',
     );
+  });
+
+  it.each<{
+    member: string;
+    registerTwice(api: MainSampleApi): void;
+    message: string;
+  }>([
+    {
+      member: 'channel.handle',
+      registerTwice(api) {
+        api.channel.handle('ping', () => 'first');
+        api.channel.handle('ping', () => 'second');
+      },
+      message: 'Plugin "sample" registered a main handler for "ping" twice',
+    },
+    {
+      member: 'layouts.register',
+      registerTwice(api) {
+        api.layouts.register({ layoutTypes: '' });
+        api.layouts.register({ layoutTypes: '' });
+      },
+      message: 'layouts of sample already registered',
+    },
+  ])(
+    'throws as $member does on a second registration',
+    ({ registerTwice, message }) => {
+      const part = mainPart((api) => {
+        registerTwice(api);
+        return { commands: { run() {} } };
+      });
+
+      expect(() => startMainPart(part)).toThrow(message);
+    },
+  );
+
+  it('throws as modes.add does on an id still live, and takes it again once disposed', async () => {
+    const mode = {
+      id: 'browse',
+      title: 'Browse',
+      icon: 'book',
+      element,
+      shown() {},
+      hidden() {},
+    };
+
+    expect(() =>
+      startPagePart(
+        pagePart((api) => {
+          api.modes.add(mode);
+          api.modes.add(mode);
+          return { commands: { run() {} } };
+        }),
+      ),
+    ).toThrow('Mode "sample.browse" is added twice');
+
+    const harness = startPagePart(
+      pagePart((api) => {
+        api.modes.add(mode);
+        return { commands: { run() {} } };
+      }),
+    );
+    await expect(harness.restart()).resolves.toBeUndefined();
+  });
+
+  it.each([
+    { firstModeTaken: false, shownCalls: 1 },
+    { firstModeTaken: true, shownCalls: 0 },
+  ])(
+    'calls a first added mode $shownCalls times when firstModeTaken is $firstModeTaken',
+    ({ firstModeTaken, shownCalls }) => {
+      const shown = vi.fn();
+      startPagePart(
+        pagePart((api) => {
+          api.modes.add({
+            id: 'browse',
+            title: 'Browse',
+            icon: 'book',
+            element,
+            shown,
+            hidden() {},
+          });
+          return { commands: { run() {} } };
+        }),
+        { firstModeTaken },
+      );
+
+      expect(shown).toHaveBeenCalledTimes(shownCalls);
+    },
+  );
+
+  it('ends what a part left of a replaced editor and markdown at its stop', async () => {
+    const editors = countingEditors();
+    const fenceDisposed = vi.fn();
+    const part = pagePart((api) => {
+      api.services.editor.create(element, 'text', {} as EditorEvents);
+      api.services.markdown.addFence({
+        language: 'sample',
+        live: false,
+        mount: () => ({ element, dispose() {} }),
+      });
+      return { commands: { run() {} } };
+    });
+    const harness = startPagePart(part, {
+      services: {
+        editor: editors.host,
+        markdown: {
+          addFence: () => ({ dispose: fenceDisposed }),
+        } as unknown as MarkdownRenderer,
+      },
+    });
+    expect(editors.live()).toBe(1);
+    expect(fenceDisposed).not.toHaveBeenCalled();
+
+    await harness.stop();
+
+    expect(editors.live()).toBe(0);
+    expect(fenceDisposed).toHaveBeenCalledTimes(1);
+  });
+
+  it('throws from invoke once the part stopped', async () => {
+    const harness = startMainPart(mainSample, { dependencies: [depFake] });
+    expect(harness.invoke('ping')).toBe('pong');
+
+    await harness.stop();
+
+    expect(() => harness.invoke('ping')).toThrow(
+      'part harness: no handler for ping',
+    );
+  });
+
+  it('tells a channel listener a send only while the part is live', async () => {
+    const listener = vi.fn();
+    const harness = startPagePart(
+      pagePart((api) => {
+        api.channel.on('changed', listener);
+        return { commands: { run() {} } };
+      }),
+    );
+
+    harness.send('changed', 1);
+    expect(listener.mock.calls).toEqual([[1]]);
+
+    await harness.stop();
+    harness.send('changed', 2);
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('tells a listener an emit only while live, and keeps what the part emitted past its stop', async () => {
+    const listener = vi.fn();
+    let emitSaved: (data: number) => void = () => undefined;
+    const harness = startMainPart(
+      mainPart((api) => {
+        api.events.on('dep.changed', listener);
+        emitSaved = (data) => api.events.emit('saved', data);
+        return { commands: { run() {} } };
+      }),
+    );
+
+    harness.emit('dep.changed', 1);
+    expect(listener.mock.calls).toEqual([[1]]);
+    emitSaved(2);
+
+    await harness.stop();
+    harness.emit('dep.changed', 3);
+    emitSaved(4);
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(harness.emitted).toEqual([
+      { event: 'sample.saved', data: 2 },
+      { event: 'sample.saved', data: 4 },
+    ]);
+  });
+
+  it("keeps a real provider's own handles out of the counts", () => {
+    const provider: MainPart = {
+      manifest: depManifest,
+      start(api) {
+        api.channel.handle('own', () => undefined);
+        api.services.files.watch('/home/own', () => {});
+        api.services.timers.set(() => {}, 1000);
+        return { commands: {} };
+      },
+    };
+
+    const harness = startMainPart(
+      mainPart(() => ({ commands: { run() {} } })),
+      { parts: [provider] },
+    );
+
+    // The part's command alone.
+    expect(harness.counts()).toEqual({ ...noCounts, registrations: 1 });
+  });
+
+  it('shows a spy set on the files after the start what the part calls', async () => {
+    const harness = startMainPart(
+      mainPart((api) => {
+        api.channel.handle('save', async () => {
+          await api.services.files.write('/home/a.txt', 'a');
+          await api.data.write('b.txt', 'b');
+        });
+        return { commands: { run() {} } };
+      }),
+    );
+    const write = vi.spyOn(harness.files, 'write');
+
+    await harness.invoke('save');
+
+    expect(write.mock.calls).toEqual([
+      ['/home/a.txt', 'a'],
+      ['/data/sample/b.txt', 'b'],
+    ]);
   });
 });

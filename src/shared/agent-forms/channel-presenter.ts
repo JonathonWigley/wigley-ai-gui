@@ -18,8 +18,10 @@ interface OpenForm<Form, Body> {
 
 // The presenter that announces each form and counts it open, and `quiet`,
 // a view onto the same open forms whose own forms do neither.
-export interface AgentFormChannelPresenter<Form, Body>
-  extends AgentFormPresenter<Form, Body> {
+export interface AgentFormChannelPresenter<
+  Form,
+  Body,
+> extends AgentFormPresenter<Form, Body> {
   quiet: AgentFormPresenter<Form, Body>;
 }
 

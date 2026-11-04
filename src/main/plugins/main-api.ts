@@ -16,6 +16,7 @@ import {
   abortableProcesses,
   trackedAlerts,
   trackedFiles,
+  trackedUserConfig,
 } from '../../shared/plugin-service-views';
 import { scopedFiles } from '../../shared/scoped-files';
 import { trackedTimers } from '../../shared/tracked-timers';
@@ -102,11 +103,7 @@ export function createMainApi(
       processes: abortableProcesses(deps.services.processes, registrations),
       alerts: trackedAlerts(deps.services.alerts, registrations),
       timers: trackedTimers(deps.services.timers, registrations),
-      userConfig: {
-        ...deps.services.userConfig,
-        onChanged: (listener) =>
-          registrations.track(deps.services.userConfig.onChanged(listener)),
-      },
+      userConfig: trackedUserConfig(deps.services.userConfig, registrations),
       selfTest: deps.selfTestFor(manifest.id),
     },
     dependency: <E>(key: DependencyKey<E, 'main'>) =>

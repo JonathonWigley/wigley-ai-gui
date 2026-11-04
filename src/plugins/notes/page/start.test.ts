@@ -6,8 +6,9 @@ import type {
 } from '../../../contracts/plugin';
 import {
   fakeDependency,
-  type PartCounts,
+  noCounts,
   startPagePart,
+  type PartCounts,
 } from '../../../shared/plugin-part-harness.test-support';
 import { installFakeDom } from '../../../shared/page/test-dom';
 import { type KeysPageExports, keysPageKey } from '../../keys/contract';
@@ -18,13 +19,7 @@ import {
 import { emptyDraft } from '../draft';
 import { notesPagePart } from './start';
 
-const NONE_LIVE: PartCounts = {
-  registrations: 0,
-  timers: 0,
-  listeners: 0,
-  observers: 0,
-  frames: 0,
-};
+const NONE_LIVE: PartCounts = noCounts;
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 

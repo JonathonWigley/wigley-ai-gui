@@ -2,9 +2,7 @@ import type { Bridge } from '../../contracts/bridge';
 import type { CommandId } from '../../contracts/commands';
 import type { Disposable, Registrations } from '../../contracts/disposable';
 import type { PageDrops } from '../../contracts/drops';
-import type { EditorHost } from '../../contracts/editor';
 import type { Log } from '../../contracts/log';
-import type { MarkdownRenderer } from '../../contracts/markdown';
 import type {
   FocusTarget,
   OuterPanes,
@@ -34,7 +32,10 @@ import { type EventBus, pluginEvents } from '../../shared/event-bus';
 import type { PageLayouts } from '../../shared/page/layout-host/show-layouts';
 import { pluginLog } from '../../shared/plugin-log';
 import { qualify } from '../../shared/plugin-manifests';
-import { createRegistrations } from '../../shared/registrations';
+import {
+  trackedEditor,
+  trackedMarkdown,
+} from '../../shared/plugin-service-views';
 import { trackedTimers } from '../../shared/tracked-timers';
 import type { ScopeStack } from '../key-scope';
 import type { LiveConfig } from '../live-config';
@@ -212,39 +213,6 @@ function trackedPushedScope(
     dispose: () => pushed.dispose(),
   };
   return registrations.track(view);
-}
-
-// The live editors are one store entry, so a destroyed editor's view is not
-// held. An editor made after the store's `dispose` is destroyed at once, and an
-// editor's `destroy` runs its own once.
-function trackedEditor(
-  editor: EditorHost,
-  registrations: Registrations,
-): EditorHost {
-  const live = registrations.track(createRegistrations());
-  const recorded = <E extends { destroy(): void }>(created: E): E => {
-    const ownDestroy = created.destroy;
-    const entry = live.track({ dispose: () => ownDestroy.call(created) });
-    created.destroy = () => entry.dispose();
-    return created;
-  };
-  return {
-    ...editor,
-    create: (...args) => recorded(editor.create(...args)),
-    createDocument: (...args) => recorded(editor.createDocument(...args)),
-    onPendingKeys: (listener) =>
-      registrations.track(editor.onPendingKeys(listener)),
-  };
-}
-
-function trackedMarkdown(
-  markdown: MarkdownRenderer,
-  registrations: Registrations,
-): MarkdownRenderer {
-  return {
-    ...markdown,
-    addFence: (fence) => registrations.track(markdown.addFence(fence)),
-  };
 }
 
 // Keeps the last value this plugin handed each slot, and releases the non-null

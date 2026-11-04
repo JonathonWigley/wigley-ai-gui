@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   fakeDependency,
+  noCounts,
   startMainPart,
 } from '../../../shared/plugin-part-harness.test-support';
 import { type ChatMainExports, chatMainKey } from '../../chat/contract';
@@ -40,13 +41,7 @@ describe('visualMainPart', () => {
 
     await harness.stop();
 
-    expect(harness.counts()).toEqual({
-      registrations: 0,
-      timers: 0,
-      listeners: 0,
-      observers: 0,
-      frames: 0,
-    });
+    expect(harness.counts()).toEqual(noCounts);
     expect([...notes]).toEqual([]);
   });
 

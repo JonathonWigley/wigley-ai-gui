@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { startPagePart } from '../../../shared/plugin-part-harness.test-support';
+import {
+  noCounts,
+  startPagePart,
+} from '../../../shared/plugin-part-harness.test-support';
 import { createRegistrations } from '../../../shared/registrations';
 import type { AgentsPageExports } from '../contract';
 import { agentsPagePart } from './start';
@@ -15,13 +18,7 @@ describe('agentsPagePart', () => {
 
     await harness.stop();
 
-    expect(harness.counts()).toEqual({
-      registrations: 0,
-      timers: 0,
-      listeners: 0,
-      observers: 0,
-      frames: 0,
-    });
+    expect(harness.counts()).toEqual(noCounts);
   });
 
   it('stopThenStart_StartsAgain', async () => {

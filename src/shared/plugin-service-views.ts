@@ -1,7 +1,10 @@
 import type { Alerts } from '../contracts/alerts';
 import type { Registrations } from '../contracts/disposable';
+import type { EditorHost } from '../contracts/editor';
 import type { Files } from '../contracts/files';
+import type { MarkdownRenderer } from '../contracts/markdown';
 import type { ProcessRunner } from '../contracts/processes';
+import type { UserConfig } from '../contracts/user-config';
 import { createRegistrations } from './registrations';
 
 // One plugin's view of `files`: `registrations` disposing it disposes the
@@ -67,5 +70,53 @@ export function trackedAlerts(
         alerts.setOpenCount(source, count);
       }
     },
+  };
+}
+
+// One plugin's view of `userConfig`: `registrations` disposing it drops every
+// `onChanged` listener the plugin added.
+export function trackedUserConfig(
+  userConfig: UserConfig,
+  registrations: Registrations,
+): UserConfig {
+  return {
+    ...userConfig,
+    onChanged: (listener) =>
+      registrations.track(userConfig.onChanged(listener)),
+  };
+}
+
+// The live editors are one store entry, so a destroyed editor's view is not
+// held. An editor made after the store's `dispose` is destroyed at once, and an
+// editor's `destroy` runs its own once.
+export function trackedEditor(
+  editor: EditorHost,
+  registrations: Registrations,
+): EditorHost {
+  const live = registrations.track(createRegistrations());
+  const recorded = <E extends { destroy(): void }>(created: E): E => {
+    const ownDestroy = created.destroy;
+    const entry = live.track({ dispose: () => ownDestroy.call(created) });
+    created.destroy = () => entry.dispose();
+    return created;
+  };
+  return {
+    ...editor,
+    create: (...args) => recorded(editor.create(...args)),
+    createDocument: (...args) => recorded(editor.createDocument(...args)),
+    onPendingKeys: (listener) =>
+      registrations.track(editor.onPendingKeys(listener)),
+  };
+}
+
+// One plugin's view of `markdown`: `registrations` disposing it removes every
+// fence the plugin added.
+export function trackedMarkdown(
+  markdown: MarkdownRenderer,
+  registrations: Registrations,
+): MarkdownRenderer {
+  return {
+    ...markdown,
+    addFence: (fence) => registrations.track(markdown.addFence(fence)),
   };
 }

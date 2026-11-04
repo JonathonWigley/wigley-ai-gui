@@ -3,8 +3,9 @@ import type { Registrations } from '../../../contracts/disposable';
 import { createRegistrations } from '../../../shared/registrations';
 import {
   fakeDependency,
-  type PartCounts,
+  noCounts,
   startPagePart,
+  type PartCounts,
 } from '../../../shared/plugin-part-harness.test-support';
 import { installFakeDom } from '../../../shared/page/test-dom';
 import { type ChatPageExports, chatPageKey } from '../../chat/contract';
@@ -17,13 +18,7 @@ import {
 import type { PageStage, WorkflowPageExports } from '../contract';
 import { workflowPagePart } from './start';
 
-const NONE_LIVE: PartCounts = {
-  registrations: 0,
-  timers: 0,
-  listeners: 0,
-  observers: 0,
-  frames: 0,
-};
+const NONE_LIVE: PartCounts = noCounts;
 
 const EXTRA_STAGE = {
   id: 'extra',

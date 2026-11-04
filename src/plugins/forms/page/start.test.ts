@@ -1,10 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { EditorHost } from '../../../contracts/editor';
-import type { MarkdownRenderer } from '../../../contracts/markdown';
-import type { PageCommandContext, PagePart } from '../../../contracts/plugin';
-import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
+import type { PageCommandContext } from '../../../contracts/plugin';
+import { PLAIN_MARKDOWN } from '../../../shared/page/markdown-mount.test-support';
 import { installFakeDom } from '../../../shared/page/test-dom';
-import { startPagePart } from '../../../shared/plugin-part-harness.test-support';
+import {
+  countingEditors,
+  dataEmitted,
+  deferred,
+  noCounts,
+  startPagePart,
+} from '../../../shared/plugin-part-harness.test-support';
 import { createRegistrations } from '../../../shared/registrations';
 import { keysPagePart } from '../../keys/page/start';
 import { sessionsPagePart } from '../../sessions/page/start';
@@ -14,63 +18,6 @@ import { presentedRound, question } from './test-rounds';
 
 // Lets a settled read's `then` run.
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
-
-function deferred<T>() {
-  let resolve: (value: T) => void = () => undefined;
-  let reject: (error: Error) => void = () => undefined;
-  const promise = new Promise<T>((settled, failed) => {
-    resolve = settled;
-    reject = failed;
-  });
-  return { promise, resolve, reject };
-}
-
-const MARKDOWN: MarkdownRenderer = {
-  block: (text) => text,
-  inline: (text) => text,
-  document: async (text) => text,
-  ...NO_FENCES,
-};
-
-// An editor host that counts the editors it holds live and every one it made;
-// `type` edits the last one made.
-function countingEditors() {
-  let live = 0;
-  let made = 0;
-  let type: (text: string) => void = () => undefined;
-  const host: EditorHost = {
-    create(_parent, doc, events) {
-      live += 1;
-      made += 1;
-      type = (text) => events.changed(text);
-      return {
-        text: () => doc,
-        setText() {},
-        insert() {},
-        charBeforeCursor: () => '',
-        focus() {},
-        blur() {},
-        destroy() {
-          live -= 1;
-        },
-      };
-    },
-    createDocument() {
-      throw new Error('not used by forms');
-    },
-    contains: () => false,
-    typeInto() {},
-    onPendingKeys: () => ({ dispose() {} }),
-    cancelPendingKeys() {},
-    setKeymap() {},
-  };
-  return {
-    host,
-    live: () => live,
-    made: () => made,
-    type: (text: string) => type(text),
-  };
-}
 
 // Round r1 as main presents it, with a question whose notes box holds an editor.
 function openForm() {
@@ -82,33 +29,6 @@ function openForm() {
     form: round.round,
     draft: round.draft,
   };
-}
-
-// A part started first, so stopped last, which hears `forms.roundShown`. Its
-// `dispose` holds its stop until `release`, so its listener outlives the forms
-// part's stop, where a late read would emit.
-function roundShownProbe() {
-  const heard: unknown[] = [];
-  const held = deferred<void>();
-  const part: PagePart = {
-    manifest: {
-      id: 'probe',
-      dependsOn: { main: [], page: [] },
-      commands: {},
-      scopes: {},
-      settings: {},
-      settingInfo: {},
-      themeTokens: {},
-    },
-    start(api) {
-      (api.events as unknown as { on: typeof api.events.on }).on(
-        'forms.roundShown' as never,
-        (data: unknown) => heard.push(data),
-      );
-      return { commands: {}, dispose: () => held.promise };
-    },
-  };
-  return { part, heard, release: () => held.resolve() };
 }
 
 const PROBE_ID = 'probe';
@@ -125,19 +45,13 @@ describe('forms page part', () => {
     const editors = countingEditors();
     const harness = startPagePart(formsPagePart, {
       parts: [sessionsPagePart, keysPagePart],
-      services: { editor: editors.host, markdown: MARKDOWN },
+      services: { editor: editors.host, markdown: PLAIN_MARKDOWN },
     });
     harness.send('formShown', openForm());
     expect(editors.live()).toBeGreaterThan(0);
 
     await harness.stop();
-    expect(harness.counts()).toEqual({
-      registrations: 0,
-      timers: 0,
-      listeners: 0,
-      observers: 0,
-      frames: 0,
-    });
+    expect(harness.counts()).toEqual(noCounts);
     expect(editors.live()).toBe(0);
 
     await harness.restart();
@@ -146,38 +60,32 @@ describe('forms page part', () => {
 
   it('an open-rounds read that lands after stop shows nothing', async () => {
     const read = deferred<ReturnType<typeof openForm>[]>();
-    const probe = roundShownProbe();
     const editors = countingEditors();
     const harness = startPagePart(formsPagePart, {
-      parts: [probe.part, sessionsPagePart, keysPagePart],
+      parts: [sessionsPagePart, keysPagePart],
       invoke: () => read.promise,
-      services: { editor: editors.host, markdown: MARKDOWN },
+      services: { editor: editors.host, markdown: PLAIN_MARKDOWN },
     });
 
-    const stopping = harness.stop();
-    await settle();
+    await harness.stop();
     read.resolve([openForm()]);
     await settle();
 
-    expect(probe.heard).toEqual([]);
+    expect(dataEmitted(harness, 'forms.roundShown')).toEqual([]);
     expect(editors.live()).toBe(0);
-    probe.release();
-    await stopping;
   });
 
   it('an open-rounds read that lands before stop shows its round', async () => {
-    const probe = roundShownProbe();
-    probe.release();
     const editors = countingEditors();
     const harness = startPagePart(formsPagePart, {
-      parts: [probe.part, sessionsPagePart, keysPagePart],
+      parts: [sessionsPagePart, keysPagePart],
       invoke: async () => [openForm()],
-      services: { editor: editors.host, markdown: MARKDOWN },
+      services: { editor: editors.host, markdown: PLAIN_MARKDOWN },
     });
 
     await settle();
 
-    expect(probe.heard).toHaveLength(1);
+    expect(dataEmitted(harness, 'forms.roundShown')).toHaveLength(1);
     expect(editors.live()).toBeGreaterThan(0);
     await harness.stop();
   });
@@ -195,7 +103,7 @@ describe('forms page part', () => {
         }
         return new Promise(() => undefined);
       },
-      services: { editor: editors.host, markdown: MARKDOWN },
+      services: { editor: editors.host, markdown: PLAIN_MARKDOWN },
     });
     harness.send('formShown', openForm());
     editors.type('typed');
@@ -220,7 +128,7 @@ describe('forms page part', () => {
       parts: [sessionsPagePart, keysPagePart],
       invoke: (method) =>
         method === 'finish' ? finishing.promise : new Promise(() => undefined),
-      services: { editor: editors.host, markdown: MARKDOWN },
+      services: { editor: editors.host, markdown: PLAIN_MARKDOWN },
     });
     harness.send('formShown', openForm());
     harness.emit('sessions.activeChanged', { sessionId: openForm().sessionId });

@@ -5,13 +5,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { createInterface } from 'node:readline';
 import { describe, expect, it, vi } from 'vitest';
-import type {
-  MainPart,
-  PluginEvents,
-  QualifiedEvents,
-} from '../../../contracts/plugin';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
-import { startMainPart } from '../../../shared/plugin-part-harness.test-support';
+import {
+  dataEmitted,
+  noCounts,
+  startMainPart,
+} from '../../../shared/plugin-part-harness.test-support';
 import { createRegistrations } from '../../../shared/registrations';
 import {
   type ConnectedSession,
@@ -19,7 +18,6 @@ import {
   RELAY_PROTOCOL,
   type RelayHello,
   type SessionInfo,
-  type SessionsMainEvents,
   type SessionsMainExports,
   type ToolResult,
   type ToolSession,
@@ -243,32 +241,16 @@ const RELAY_HELLO: RelayHello = {
   harness: 'claude',
 };
 
-// A part started before sessions, so stopped after it, which keeps the id of
-// each session that connected and ended.
-function sessionEventsProbe() {
-  const connected: string[] = [];
-  const ended: string[] = [];
-  const part: MainPart = {
-    manifest: {
-      id: 'probe',
-      dependsOn: { main: [], page: [] },
-      commands: {},
-      scopes: {},
-      settings: {},
-      settingInfo: {},
-      themeTokens: {},
-    },
-    start(api) {
-      const events = api.events as unknown as PluginEvents<
-        Record<never, never>,
-        QualifiedEvents<'sessions', SessionsMainEvents>
-      >;
-      events.on('sessions.connected', ({ id }) => connected.push(id));
-      events.on('sessions.ended', ({ sessionId }) => ended.push(sessionId));
-      return { commands: {} };
-    },
+// The ids of the sessions `harness` saw connect and end.
+function sessionEvents(harness: Parameters<typeof dataEmitted>[0]) {
+  return {
+    connected: (
+      dataEmitted(harness, 'sessions.connected') as { id: string }[]
+    ).map(({ id }) => id),
+    ended: (
+      dataEmitted(harness, 'sessions.ended') as { sessionId: string }[]
+    ).map(({ sessionId }) => sessionId),
   };
-  return { part, connected, ended };
 }
 
 describe('sessions main part', () => {
@@ -363,21 +345,14 @@ describe('sessions main part', () => {
     const harness = startMainPart(sessionsMainPart);
 
     await harness.stop();
-    expect(harness.counts()).toEqual({
-      registrations: 0,
-      timers: 0,
-      listeners: 0,
-      observers: 0,
-      frames: 0,
-    });
+    expect(harness.counts()).toEqual(noCounts);
 
     await harness.restart();
     await harness.stop();
   });
 
   it('stop ends a session connected before it', async () => {
-    const probe = sessionEventsProbe();
-    const harness = startMainPart(sessionsMainPart, { parts: [probe.part] });
+    const harness = startMainPart(sessionsMainPart);
     const view = harness
       .started()
       .exports?.(createRegistrations()) as SessionsMainExports;
@@ -385,7 +360,7 @@ describe('sessions main part', () => {
 
     await harness.stop();
 
-    expect(probe.ended).toEqual([connected.session.id]);
+    expect(sessionEvents(harness).ended).toEqual([connected.session.id]);
   });
 
   it('stop_ToolSessionEndThrows_ClosesTheRelayAndThrows', async () => {
@@ -423,9 +398,7 @@ describe('sessions main part', () => {
   it('stop_ConnectedThroughRelay_EndsOnce', async () => {
     // macOS caps a socket path near 104 bytes, so the folder name stays short.
     const homeDir = mkdtempSync(path.join(os.tmpdir(), 'wr-'));
-    const probe = sessionEventsProbe();
     const harness = startMainPart(sessionsMainPart, {
-      parts: [probe.part],
       services: { runMode: 'live', homeDir },
     });
     const socket = connectSocket(
@@ -444,8 +417,9 @@ describe('sessions main part', () => {
 
       await harness.stop();
 
-      expect(probe.connected).toHaveLength(1);
-      expect(probe.ended).toEqual(probe.connected);
+      const { connected, ended } = sessionEvents(harness);
+      expect(connected).toHaveLength(1);
+      expect(ended).toEqual(connected);
       expect(
         existsSync(
           path.join(homeDir, '.agents', HARNESS_APP_ID, 'endpoint.json'),

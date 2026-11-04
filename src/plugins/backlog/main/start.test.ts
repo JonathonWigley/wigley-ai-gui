@@ -9,6 +9,7 @@ import { createMemoryFiles } from '../../../shared/memory-files';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import {
   fakeDependency,
+  noCounts,
   startMainPart,
 } from '../../../shared/plugin-part-harness.test-support';
 import { createRegistrations } from '../../../shared/registrations';
@@ -731,13 +732,7 @@ describe('backlog main part', () => {
     await harness.stop();
 
     expect(watched).toEqual([]);
-    expect(harness.counts()).toEqual({
-      registrations: 0,
-      timers: 0,
-      listeners: 0,
-      observers: 0,
-      frames: 0,
-    });
+    expect(harness.counts()).toEqual(noCounts);
   });
 
   it('stopThenStart_StartsAgain', async () => {

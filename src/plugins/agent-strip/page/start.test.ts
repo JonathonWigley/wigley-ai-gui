@@ -6,6 +6,7 @@ import {
 } from '../../../shared/page/test-dom';
 import {
   fakeDependency,
+  noCounts,
   startPagePart,
 } from '../../../shared/plugin-part-harness.test-support';
 import { agentsPageKey, type Roster } from '../../agents/contract';
@@ -77,13 +78,7 @@ describe('agentStripPagePart', () => {
 
     await harness.stop();
 
-    expect(harness.counts()).toEqual({
-      registrations: 0,
-      timers: 0,
-      listeners: 0,
-      observers: 0,
-      frames: 0,
-    });
+    expect(harness.counts()).toEqual(noCounts);
   });
 
   it('stopThenStart_StartsAgain', async () => {

@@ -447,25 +447,18 @@ describe('createMainApi', () => {
     expect(names).toEqual(['default', 'mine']);
   });
 
-  it.each([{ name: 'a key', arg: { id: 'a', process: 'main' } as const }])(
-    'dependency asks the host for the plugin $name names',
-    ({ arg }) => {
-      const asked: string[] = [];
-      const { api } = apiOver(
-        liveSettings({ p: {} }),
-        undefined,
-        (pluginId) => {
-          asked.push(pluginId);
-          return { n: 1 };
-        },
-      );
+  it('dependency asks the host for the plugin a key names', () => {
+    const asked: string[] = [];
+    const { api } = apiOver(liveSettings({ p: {} }), undefined, (pluginId) => {
+      asked.push(pluginId);
+      return { n: 1 };
+    });
 
-      const received = api.dependency(arg);
+    const received = api.dependency({ id: 'a', process: 'main' } as const);
 
-      expect(received).toEqual({ n: 1 });
-      expect(asked).toEqual(['a']);
-    },
-  );
+    expect(received).toEqual({ n: 1 });
+    expect(asked).toEqual(['a']);
+  });
 
   it("services.log logs a one-argument line under the plugin's id", () => {
     const logged: string[][] = [];

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { SelfTestScript } from '../../../contracts/plugin';
-import { startMainPart } from '../../../shared/plugin-part-harness.test-support';
+import {
+  noCounts,
+  startMainPart,
+} from '../../../shared/plugin-part-harness.test-support';
 import layoutTypes from '../layouts/layout.d.ts?raw';
 import { agentLinesMainPart } from './start';
 
@@ -36,13 +39,7 @@ describe('agentLinesMainPart', () => {
 
     await harness.stop();
 
-    expect(harness.counts()).toEqual({
-      registrations: 0,
-      timers: 0,
-      listeners: 0,
-      observers: 0,
-      frames: 0,
-    });
+    expect(harness.counts()).toEqual(noCounts);
   });
 
   it('stopThenStart_StartsAgain', async () => {
