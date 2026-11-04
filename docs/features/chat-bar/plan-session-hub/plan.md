@@ -170,7 +170,7 @@ Boundary rules:
 - [x] [Session section](07-session-section.md) — after 01, 04
 
 ### Wave 4
-- [ ] [Doc re-read](08-doc-re-read.md) — after 01–07
+- [x] [Doc re-read](08-doc-re-read.md) — after 01–07
 
 ### Wave 5
 - [ ] [Final verification](09-final-verification.md) — after 08
@@ -187,6 +187,7 @@ Review base: ad87d46f110e63f41f0a1d404e1c3db1d19d82fa
 - 04 · e063716c · diff read: every Produces present; worker: 226 tests in the touched files pass, lint clean but for 05's file; typecheck names only 05's in-flight Roster.skills · concerns: a throwing onDockChanged listener stops the dock's tick until the next set, and the only listener cannot realistically throw; a failed default working draw shows nothing at hub width until the next composer draw; self-test and composerOf wiring rest on task 09; agent-strip.css:5-6 still says beside the activity dock, for the review
 - 05 · 4c790705 · diff read: every Produces present and check-layers holds only agent-skills entries; worker: typecheck and lint clean, 154 tests in the touched folders pass · concerns: the self-test has not run, and the fit check may need another selector at minimum width; a very long subagent name on a flex-none tag could scroll the section sideways; the log fires from a draw, so a never-opened tab logs late
 - 07 · 6b720a24 · diff read: every Produces present; typecheck and lint clean over the whole tree at the commit; worker: 171 tests in the touched files pass · concerns: the subgrid label column and value ellipsis are unseen until task 09; facts listeners fire on every status line draw, box focus included, patching about five rows, unmeasured; session-part.ts and chat-view.ts import each other, type-only at one end
+- 08 · 336c30c7 · every listed doc checked and all 54 grep hits read; lines changed: AGENTS.md:262-263, usage design.md:163-164, followups.md:226-233; keymap.ts and docs/keymap.md agree on Leader v s; oxfmt clean · concerns: the followups short-tab entry is unverified at the new layout and says to recheck first
 ### Contract changes
 - WorkflowView.sidePart: ContributedPart wrapped in start.ts → ChatSidePart literal with title and order from 01 · why: the side pane plan landed it as ChatSidePart · consumers: 06 · group 01
 - createSideSections: members left open → SideSections { openTab, toggleHidden }, SideTab { sync, rebuild, close } · why: lead's per-tab handle ruling · consumers: none directly; 04 and 07 add parts through the store · group 01
@@ -215,5 +216,6 @@ Review base: ad87d46f110e63f41f0a1d404e1c3db1d19d82fa
 - The self-test's scrollsItself also lists the sibling Chat scripts' selectors, because the fit check reads the whole page — lets a little more clip than needed if wrong · group 05 · group 05
 - drawStatusLine notifies once after the fallback, so both GIVENs hold from one line; a throw from the fallback's drawComposer skips it, as before · group 07 · group 07
 - Session rows take text-12 and gap space-1 space-2 to match the section heads — one CSS line if wrong · group 07 · group 07
+- The short-tab follow-up is rewritten rather than deleted, keeping its reverted-CSS history — a wrong keep costs one stale follow-up · group 08 · group 08
 ### Review rounds
 ### Test gate

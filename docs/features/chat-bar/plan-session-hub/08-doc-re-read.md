@@ -1,6 +1,6 @@
 # 08 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 01, 02, 03, 04, 05, 06, 07
 Plan: [plan.md](plan.md)
@@ -18,3 +18,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 336c30c7 · proof: every listed doc checked and all 54 grep hits read; lines changed: AGENTS.md:262-263, usage design.md:163-164, followups.md:226-233; keymap.ts and docs/keymap.md agree on Leader v s; oxfmt clean · concerns: the followups short-tab entry is unverified at the new layout and says to recheck first
