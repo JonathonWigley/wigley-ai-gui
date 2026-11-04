@@ -351,8 +351,8 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   tree, the Primer tab's tasks and items columns), the pane without focus marks itself `is-pane-inactive` and its selected
   row takes `list-inactive-selection-background` instead, so the pane the keys act on reads at a glance.
   Sessions mode's rows are compact cards, `card-background` under a `card-border` hairline with `radius-md`,
-  `space-1_5` apart: the title and activity's dot on the first line, and a second line holding the status then other
-  plugins' row parts on one line, the run time and the cache mark at its end, gone while empty. Hover
+  `space-1` apart within a group: the title and activity's dot on the first line, and a second line holding the status then other
+  plugins' row parts on one line that never wraps, the run time and the cache mark at its end, gone while empty. Hover
   strengthens the border to `border-strong`, and the selected card takes `list-active-background` with an
   `accent-tint-strong` border.
 - **Right bar:** L1 dense glass beside the content sheet in every mode, opening at `rightbar-width` and then the

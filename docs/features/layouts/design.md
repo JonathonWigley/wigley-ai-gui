@@ -119,7 +119,7 @@ stays in themes.
 | --- | --- | --- |
 | `shell` | `shell.layout` | the title bar's context, dev tag and config problems; each mode's activity bar item; the five chrome frames take the layout's CSS |
 | `forms` | `forms.layout` | question, finding and notice cards; head, rail and review panes |
-| `chat` | `chat.layout` | chat entries; the activity line (a run of the agent's steps, drawn only under a layout that sets `activityInTranscript`); the activity dock (the running turn, then its finished line); the composer and its status line, the attachments, the picker rows (start prompt and pickers), the sign-in, deny-reason and end-session dialogs, the image viewer |
+| `chat` | `chat.layout` | chat entries; the activity line (a run of the agent's steps, drawn only under a layout that sets `activityInTranscript`); the activity dock (the running turn, then its finished line); the composer and its status line, the attachments, the picker rows (start prompt and pickers), the sign-in, deny-reason and end-session dialogs, the image viewer, each session's run time on its side-bar row (`rowClock`) |
 | `primer` | `primer.layout` | feature, task and item cards; tasks, items and review panes |
 | `docs` | `docs.layout` | the tree and its rows, the rendered doc, its header, disk banner and editor frame, the box and confirm dialogs, the create dialog's completion and picker rows |
 | `backlog` | `backlog.layout` | the repo and home side bar, the follow-up list and its rows, the detail and editor panes, plans and features, the picker rows and the confirm body |
@@ -129,7 +129,7 @@ stays in themes.
 | `agent-lines` | `agent-lines.layout` | the working line under each session row while it runs a subagent or task |
 | `agent-strip` | `agent-strip.layout` | the agent strip above the Chat composer's box: subagent and task boxes, a box opened in place |
 | `gallery` | `gallery.layout` | each primitive's sample block |
-| `usage` | `usage.layout` | the status-bar line (plan rows), each session's context meter under its row, each session's usage line (context bar, cache countdown, spend), drawn in the Chat status line and, through the optional `usage-tab-line` plugin, in each tab bar; the right-bar details |
+| `usage` | `usage.layout` | the status-bar line (plan rows), each session's context meter and cache mark on its row, each session's usage line (context bar, cache countdown, spend), drawn in the Chat status line and, through the optional `usage-tab-line` plugin, in each tab bar; the right-bar details |
 | `keys` | `keys.layout` | the help overlay, the which-key panel, the title bar's Keys button |
 | `workflow` | `workflow.layout` | the stage chip under each session row, the strip above the Chat composer (stepper and actions), the Flow tab (stepper, plan checklist by wave, actions) |
 | `visual` | `visual.layout` | the "drawing visual…" card of an open html block, each closed block's visual around its frame with its expand control, and the full-size overlay |

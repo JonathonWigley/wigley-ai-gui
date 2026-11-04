@@ -47,7 +47,7 @@ import type { BaseKit, DotStatus } from '../../../shared/page/layout-host/kit';
 // message cut to the title length), null for none; `label` is the session's folder label (`gamma 2`); `harness` is
 // the harness's name, '' for none; `marked` is true while a round waits unopened; `activity` is what the session is
 // doing, its word and the tone of its dot, null for none; `default` draws the dot alone, and no separate `marked` dot
-// while it is set; `status` is the second line, null for none; `onScreen` is true while the session shows in a pane other than
+// while it is set; `status` starts the row's second line, null for none, and the contributed parts follow it on that line, which `default` never wraps; `onScreen` is true while the session shows in a pane other than
 // the focused one.
 export interface SessionRowInput {
   sessionId: string;

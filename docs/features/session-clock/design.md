@@ -15,7 +15,7 @@ cold.
 
 ## Status
 
-Planned: `plan-row-clock/` beside this file.
+Built.
 
 ## Active time
 
@@ -46,7 +46,7 @@ The row's second line holds the status chip, the context meter and its used toke
 mark at the line's end:
 
 - `chat.rowClock`, chat's row part, draws the run time through chat's `rowClock` layout part, again once a second
-  while the clock runs.
+  while the clock runs. It draws nothing for a session chat does not hold and for a clock paused at 0.
 - `usage.rowCache`, usage's row part, draws the cache mark through usage's `rowCache` layout part: a cache icon,
   `status-error` once the cache is cold, its tooltip the minutes left.
 - Each plugin orders its own row part's wrapper (`sessions.css`: a part may set its own wrapper's `order`):
