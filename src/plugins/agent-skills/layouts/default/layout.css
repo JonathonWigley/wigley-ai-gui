@@ -1,5 +1,5 @@
 /* The default layout's Skills section: one row per skill, its name in mono before its owners' tags, which wrap under a
-   name too long to share the line. */
+   name too long to share the line and ellipsize at the row's width. */
 
 [data-layout-owner='agent-skills'][data-layout='default'].agent-skills-list {
   display: flex;
@@ -39,4 +39,8 @@
   .agent-skills-row
   .ui-tag {
   flex: none;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

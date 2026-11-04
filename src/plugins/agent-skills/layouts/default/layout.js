@@ -1,7 +1,8 @@
 // @ts-check
 
 // The built-in agent-skills look: one row per skill, its name in mono before a
-// tag per agent name that started it, counted when several agents share the name.
+// tag per agent name that started it, counted when several agents share the name,
+// each holding its full text as its tooltip.
 
 /**
  * @param {import('../layout').SkillListInput['skills']} skills
@@ -36,7 +37,7 @@ const layout = {
       const tags = kit.el(row, 'div', 'agent-skills-owners');
       for (const { ownerName, isMain, count } of owners) {
         const text = count > 1 ? `${ownerName} ×${count}` : ownerName;
-        kit.tag(tags, text, isMain ? 'neutral' : 'accent');
+        kit.tag(tags, text, isMain ? 'neutral' : 'accent').title = text;
       }
     }
     return { element };

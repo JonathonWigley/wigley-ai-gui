@@ -128,6 +128,10 @@ describe('skill list', () => {
       findAll(row, 'ui-tag').map((tag) => tag.textContent);
     expect(namesIn(parent)).toEqual(['foo', 'baz']);
     expect(rows.map(tagTexts)).toEqual([['main', 'reviewer ×2'], ['reviewer']]);
+    expect(findAll(rows[0], 'ui-tag').map((tag) => tag.title)).toEqual([
+      'main',
+      'reviewer ×2',
+    ]);
     expect(summaries.at(-1)).toBe('2');
   });
 
