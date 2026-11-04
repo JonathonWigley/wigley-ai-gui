@@ -1,6 +1,6 @@
 # 03 — DragReorder primitive
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -62,3 +62,5 @@ Done when: compiles; the test gate runs the tests above; the gallery entry is ch
 Commit:    one commit for the group
 
 ## Proof
+
+Commit d856cde9 · proof: diff read; every Produces present in drag-reorder.ts; the dropIndex GIVENs traced by hand; compile clean for the group's files (task 02 was mid-edit elsewhere); the worker's lint clean · concerns: test-dom.ts edited outside the task's files, so fire takes a target; started runs inside dragstart and Chromium can cancel a drag whose dragstart changes layout (handed to task 06); is-dragging may tint the drag image; no real drag has run

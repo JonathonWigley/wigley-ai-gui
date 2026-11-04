@@ -130,7 +130,7 @@ function and imports no `Git`; only `main/start.ts` names `api.services.git`.
 
 ### Wave 1
 - [x] [Git origin repo name](01-git-origin-repo-name.md)
-- [ ] [DragReorder primitive](03-drag-reorder-primitive.md)
+- [x] [DragReorder primitive](03-drag-reorder-primitive.md)
 - [x] [Side bar order, recency and favorites modules](04-order-modules.md)
 - [x] [Section and group layout parts](05-layout-parts.md)
 
@@ -154,6 +154,7 @@ Review base: 693cb8d04eb48c87e6cba0406a0e2d850f90db54
 - 01 · 7dfb580e · diff read; Produces originRepoName present on the contract; compile clean for the group's files · concerns: AGENTS.md line 155's adapter list omits the origin repo name (goes to task 07); the empty-name branch and the cannot-start rejection have no test row, per the task's row list
 - 04 · 2b0be629 · diff read; every Produces signature present in the three modules; the place, move and toggle GIVENs traced by hand against the code; compile clean · concerns: keepOnly with an empty or partial list wipes saved recency, so task 06 must prune only on a real row list; AGENTS.md's sessions page tree line may want the three modules (goes to task 07); the layer check was not run by the worker
 - 05 · b21962a4 · diff read; every Produces present in layout.d.ts, sessions-parts.ts and sessions-view-fakes.ts; compile clean; the worker's lint clean · concerns: CSS unseen on screen until task 08's captures: the sm star may set a taller header than text-12, and no grab cursor is set; contract prose describes sections while the view still fills rows until task 06
+- 03 · d856cde9 · diff read; every Produces present in drag-reorder.ts; the dropIndex GIVENs traced by hand; compile clean for the group's files (task 02 was mid-edit elsewhere); the worker's lint clean · concerns: test-dom.ts edited outside the task's files, so fire takes a target; started runs inside dragstart and Chromium can cancel a drag whose dragstart changes layout (handed to task 06); is-dragging may tint the drag image; no real drag has run
 ### Contract changes
 ### Rulings
 - The user takes every review recommendation in this run, so no triage round is sent — the user's word this run — a recommendation the user would have overridden lands anyway and shows in the wrap-up · lead
@@ -164,5 +165,9 @@ Review base: 693cb8d04eb48c87e6cba0406a0e2d850f90db54
 - SessionsParts.section sets is-empty from input.isEmpty on whichever layout's element draws — the contract says the app keeps it — if 06 also sets it the second set is harmless · group 05 · group 05
 - An empty section's groups box lies over the whole section under is-reordering — task 06 registers groups as the drop zone and an empty box has no height — the rule goes if the zone moves · group 05 · group 05
 - The count sits right after the name rather than at the header's end — DESIGN.md's quieter choice — one CSS line if the mockup wants it at the end · group 05 · group 05
+- An ordered zone with no other item carries is-drop-target and reports index 0 — a drag into an empty Favorites would otherwise show nothing — one condition and one test row · group 03 · group 03
+- dragstart acts only when event.target is the source — a text selection or link starts its own text/plain drag — dragging selected text in a header does not reorder · group 03 · group 03
+- clear also removes the classes and sets draggable false, and runs ended last — a full undo, and a view whose ended flushes a held redraw keeps what it registers — an element kept across clear without re-registering stops dragging · group 03 · group 03
+- An item's position is its registration order, not a measured top — the primitive states drawn order in its comment — a view must register top to bottom · group 03 · group 03
 ### Review rounds
 ### Test gate

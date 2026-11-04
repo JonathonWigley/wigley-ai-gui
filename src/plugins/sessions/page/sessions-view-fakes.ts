@@ -13,6 +13,7 @@ export function sessionRow(sessionId: string): SessionRow {
   return {
     sessionId,
     label: `label ${sessionId}`,
+    project: 'project',
     harness: 'claude',
     marked: false,
     projectDir: null,

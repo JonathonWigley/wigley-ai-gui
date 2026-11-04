@@ -212,6 +212,10 @@ export interface SessionsMainEvents extends EventShape {
 export interface SessionRow {
   sessionId: string;
   label: string;
+  // The session's project: the origin repo name of its folder, else the
+  // folder's name, else the no-folder label. Set to the fallback at connect and
+  // changed once when the lookup lands.
+  project: string;
   harness: Harness | null;
   marked: boolean;
   projectDir: string | null;
