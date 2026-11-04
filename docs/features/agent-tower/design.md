@@ -105,7 +105,7 @@ would emit the same events into `chat.agentEvent`'s payload shape.
   `sessionEnded`. Foreground Bash calls of a subagent get a task too (`is_backgrounded: false`) and show the same way.
 - **`agentReplied`** is sent on a subagent's reply, on its launch receipt's `resolvedModel`, and on a `result` whose
   `modelUsage` changes a running subagent's model's window; on a foreground completion receipt it comes before
-  `agentFinished`. The roster takes the reply's model and spend.
+  `agentFinished`. The roster takes the reply's model, spend, context tokens and window.
 - **`agentLaunched`** is sent on a background Agent call's launch receipt (`isAsync`); the roster marks that subagent
   as running in the background.
 - **Page** draws nothing. It keeps every session's roster and exports `roster(sessionId)` and

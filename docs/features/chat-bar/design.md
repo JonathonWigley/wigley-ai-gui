@@ -157,7 +157,9 @@ Only the Claude adapter knows Claude's shapes, so it alone fills these into agen
   shell apart at a glance, and to watch each agent's context fill and spend (design A, 2026-11-03).
 - **Subagent context is its latest reply's prompt tokens over its model's window.** Input, cache write and cache
   read of that reply; Claude names a model's window only in a turn result's `modelUsage`, so the adapter learns it
-  there and sends it on the subagent's next `agentReplied`, or at once to every running subagent on that model.
+  there and sends it on the subagent's next `agentReplied`, or on that `result` to every subagent still running whose model's
+  window it changed. A foreground subagent of the main agent is failed at the `result` first, so it gets the window
+  only from an earlier result.
 - **Subagent cost is estimated in dollars from tokens.** Claude reports cost only per process.
 - **The status line replaces the composer bar.** One line; model and effort share one chip.
 - **The tab-bar usage line and the sidebar's working line start switched off**, one setting away.

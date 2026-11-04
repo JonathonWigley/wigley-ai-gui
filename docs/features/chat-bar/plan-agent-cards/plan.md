@@ -124,7 +124,7 @@ No new files. Shared names across tasks:
 - [x] [Roster: running items only, kind, context, owner name](02-roster.md) — after 01
 
 ### Wave 3
-- [ ] [Strip draws design A](03-strip-cards.md) — after 02
+- [x] [Strip draws design A](03-strip-cards.md) — after 02
 
 ### Wave 4
 - [ ] [Doc re-read](04-doc-re-read.md) — after 03
@@ -137,6 +137,7 @@ Review base: 693cb8d04eb48c87e6cba0406a0e2d850f90db54
 ### Groups
 - 01 · f678086a · diff read: both Produces members present in src/contracts/agent.ts; typecheck and lint pass; worker ran the task's vitest paths plus src/plugins/agents (616 tests pass) · concerns: a foreground subagent of the main agent is failed before a result's re-emission, so it holds a window only from an earlier result; subagent contextTokens leaves out output_tokens while the main agent's usage counts them; launched agents re-emit in receipt order; a late reply after an agent's end re-creates an unread store entry
 - 02 · ef990e82 · diff read: RosterAgent and RosterTask shapes present in contract.ts; lint passes; worker ran vitest on agents and agent-lines (77 tests pass); typecheck has 10 errors, all agent-strip, proved at 03 as the task allows · concerns: a duplicate agentSpawned or taskStarted for an ended id lists it again, for failed items too (no adapter code read to rule it out); agent-strip selftest prose left for 03; agent-tower design line 108 left for 04
+- 03 · 55242ea1 · diff read: AgentKind, AgentBoxInput, TaskBoxInput and AgentBoxPart present in layout.d.ts; typecheck (clears 02's errors) and lint pass; worker ran vitest on agent-strip (73 pass) and the agent-strip self-test (passes) · concerns: closed box clips by about a border at 900x700, and agent-strip.css's 80% composer cap comment is slightly untrue there; mono runtime versus DESIGN.md's mono rule; 999,500-999,999 tokens read 1000k; contextWindow 0 gives a NaN percent; spend under half a cent shows $0.00; the tick is seen only in task 05's capture
 ### Rulings
 - Worktree run on branch agent-cards, from the local main tip; the test gate, self-test and drive checks stay in the worktree — this repo has no Unity editor, and AGENTS.md puts drive runs beside a peer's in a worktree, which has its own .vite — merging the branch back stays the user's call · lead
 - User's word for this run: every review recommendation is taken, so no triage round is sent and each finding takes its recommended pick, reported in the wrap-up — the user said so mid-run — a pick the user would have changed lands without a look until the wrap-up · lead
@@ -145,4 +146,7 @@ Review base: 693cb8d04eb48c87e6cba0406a0e2d850f90db54
 - Several [...] keys for one model: the first learned wins; the plan names no rule — the card shows the other suffix's window if wrong · group 01 · group 01
 - start.test.ts's message row is a cleared host's userMessage sending only [runningA]: the first row already proves a same-host one sends nothing; the fold ignores userMessage, so restoring the fan-out would not turn it red · group 02 · group 02
 - ownerName is written once at taskStarted: a task starting before its owner's agentSpawned keeps subagent for good · group 02 · group 02
+- Each selection logs box <i> of <n> in <name> shows: <textContent> so the self-test can check tag and runtime: every h/l/j writes tool summaries to the page log; removal is one log line, two alsoExpect rows and one assertion · group 03 · group 03
+- DESIGN.md's agent strip paragraph rewritten though outside the task's Files, because the edit outdated it · group 03 · group 03
+- Context bar track border-default, height space-1, fill status-success, matching ui-meter · group 03 · group 03
 

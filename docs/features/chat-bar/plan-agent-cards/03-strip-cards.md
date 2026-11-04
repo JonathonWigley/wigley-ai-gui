@@ -1,6 +1,6 @@
 # 03 — Strip draws design A
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -80,3 +80,5 @@ Done when: `npm run typecheck`, `npm run lint`, `npx vitest run src/plugins/agen
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 55242ea1 · proof: diff read: AgentKind, AgentBoxInput, TaskBoxInput and AgentBoxPart present in layout.d.ts; typecheck (clears 02's errors) and lint pass; worker ran vitest on agent-strip (73 pass) and the agent-strip self-test (passes) · concerns: closed box clips by about a border at 900x700, and agent-strip.css's 80% composer cap comment is slightly untrue there; mono runtime versus DESIGN.md's mono rule; 999,500-999,999 tokens read 1000k; contextWindow 0 gives a NaN percent; spend under half a cent shows $0.00; the tick is seen only in task 05's capture
