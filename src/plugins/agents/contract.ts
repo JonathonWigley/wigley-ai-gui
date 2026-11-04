@@ -58,7 +58,9 @@ export interface RosterSkill {
 }
 
 // A session's three lists, each in start order: its running subagents, its running tasks, and the skills its agents
-// started, which stay through a compaction, an agent's end and a process's end until the session's row ends.
+// started, which stay through a compaction, an agent's end and a process's end until the session's row ends or the app
+// restarts: rosters live in memory and a relaunch replays only the attached process's log, so skills of earlier
+// processes do not return.
 export interface Roster {
   agents: RosterAgent[];
   tasks: RosterTask[];
@@ -66,8 +68,8 @@ export interface Roster {
 }
 
 // What agents' page part exports to the views that draw the rosters. `roster` is a session's latest roster, all three
-// lists empty for a session with none, its skills staying until the row ends; `onRosterChanged` calls `listener` with a session's id each time its roster changes,
-// the first `rosters` read included. A removed session's roster is dropped without a call: views hear
+// lists empty for a session with none; `onRosterChanged` calls `listener` with a session's id each time its roster
+// changes, the first `rosters` read included. A removed session's roster is dropped without a call: views hear
 // `sessions.sessionRemoved`.
 export interface AgentsPageExports {
   roster(sessionId: string): Roster;

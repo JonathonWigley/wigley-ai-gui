@@ -2,9 +2,9 @@
    the app's scroller, then the app's column of rows. */
 
 /* The composer's cap rises from half the tab while the strip shows a card or a
-   row, so the composer parts have room for one closed card beside the activity
-   dock, the message box and a wrapped status line in a 900x700 tab. The parts
-   hold no floor: in a shorter tab they still give up height first and scroll. */
+   row, so the composer parts have room for one closed card, the activity line,
+   the message box and a wrapped status line in a 900x700 tab. The parts hold no
+   floor: in a shorter tab they still give up height first and scroll. */
 .ui-floating.chat-composer:has(.agent-strip-scroller),
 .ui-floating.chat-composer:has(.agent-strip-rows) {
   max-height: 82%;
