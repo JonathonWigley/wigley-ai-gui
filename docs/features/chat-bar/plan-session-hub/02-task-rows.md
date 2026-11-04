@@ -1,6 +1,6 @@
 # 02 — Task rows
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -41,3 +41,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit fe66c847 · proof: diff read: both Produces present; typecheck names nothing in agent-strip; worker: lint clean, agent-strip tests 92 pass, seven mutations each caught · concerns: self-test regex assumes the row head fits the logged 80 characters; a key prompt may make a selected row taller than the max-height calc assumes; both for task 09

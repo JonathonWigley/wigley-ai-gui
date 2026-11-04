@@ -1,6 +1,6 @@
 # 03 — Context line
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -35,3 +35,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 13367469 · proof: diff read: every Produces present; typecheck clean at the commit; worker: lint clean, usage tests 201 pass · concerns: start.ts wiring and the new self-test lines are unproved until task 09 and the filtered self-test; the context line has no vertical spacing of its own; AGENTS.md:262 and usage design.md:163 stale, left for 08

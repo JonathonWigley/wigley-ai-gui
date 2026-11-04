@@ -1,6 +1,6 @@
 # 01 — Hub frame
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -15,11 +15,11 @@ Produces:  in `src/plugins/chat/contract.ts`: `ChatSideSection` and `ChatSidePar
            in `src/plugins/chat/page/side-sections.ts`: `export function createSideSections(deps): SideSections`
            `chat.toggleSideParts` command in `src/plugins/chat/manifest.ts`
 Decisions:
-- `ChatSidePart` stops extending `ContributedPart`. `side-sections.ts` adapts each part to a `ContributedPart` for `placeContributedParts`. The adapter's `build(wrapper, sessionId)` draws the frame into the wrapper, then calls the part's `build` with the body and a `ChatSideSection`.
-- `PartStore` and `createPartStore` in `contributed-parts.ts` loosen their constraint to `P extends { id: string }`, because `ChatSidePart` no longer fits `ContributedPart`. `placeContributedParts` stays on `ContributedPart[]`, because the adapter produces those. Add `sideSection` to `PART_SET` in `read-chat-layout.ts`.
-- Chat sorts the parts by `order` before it places them. Equal orders keep add order. `order` is required, so a part cannot leave it out.
+- `ChatSidePart` stops extending `ContributedPart`. `side-sections.ts` adapts each part to a `ContributedPart` for `placeContributedPart`, the one-part form `buildSidePart` in `chat-view.ts` calls. The adapter's `build(wrapper, sessionId)` draws the frame into the wrapper, then calls the part's `build` with the body and a `ChatSideSection`.
+- `PartStore` and `createPartStore` in `contributed-parts.ts` loosen their constraint to `P extends { id: string }`, because `ChatSidePart` no longer fits `ContributedPart`. `placeContributedPart` stays on `ContributedPart`, because the adapter produces those. Add `sideSection` to `PART_SET` in `read-chat-layout.ts`.
+- Chat sorts the parts by `order` before it places them. Equal orders keep add order. `order` is required, so a part cannot leave it out. `syncSideParts` in `chat-view.ts` appends a new part's wrapper at the end of the holder and leaves built parts in place, so a part added late must go to its sorted position.
 - Keep every `addSidePart` rule from the side pane plan: it throws on an id already added, a part draws in every Chat tab, and it takes no stop and no key scope.
-- A chat layout change rebuilds every tab's side parts, at the `deps.layouts.onChange` handler in `mountChatView`. The frame is drawn through a layout, so it must redraw on a hot reload. A status line draw still does not rebuild a part.
+- A chat layout change rebuilds every tab's side parts, at the `deps.layouts.onChange` handler in `mountChatView`. `syncSideParts` leaves a built part alone, so the handler calls `disposeSideParts(tab)`, then `syncSideParts(tab, deps)`. The frame is drawn through a layout, so it must redraw on a hot reload. A status line draw still does not rebuild a part.
 - Place a tab's side parts after the tab is in the map `mountChatView` holds, so a chat part can find its tab by session id (04, 07).
 - Default `sideSection` draws `section.chat-side-section`. Its children are `kit.head`, then `kit.body`. The head holds a chevron codicon (`chevron-down`, or `chevron-right` while collapsed), `span.chat-side-section-title` and `span.chat-side-section-summary`. `update` changes the chevron, summary text and `is-collapsed` in place.
 - `kit.head` makes a `button.chat-side-section-head` that toggles the section on click. It takes no key and no focus: `tabIndex = -1`, and `mousedown` calls `preventDefault`, so a click leaves the focus in place.

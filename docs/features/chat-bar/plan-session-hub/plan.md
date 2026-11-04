@@ -35,7 +35,7 @@ Systems touched:
 
 ## Preconditions
 
-This plan runs after `docs/features/workflow/plan-chat-side-pane/` lands on `main`. That run is in progress on branch `chat-side-pane` and merges on the user's word, so the first two rows fail now. `wigley:make` stops at preflight until they pass.
+This plan runs after the side pane plan lands on `main` and closes. Both have happened, and the close deleted that plan's folder, `docs/features/workflow/plan-chat-side-pane/`. The first two rows now pass. `wigley:make` stops at preflight when a row fails.
 
 | Claim | Command that checks it | At plan time |
 |---|---|---|
@@ -100,7 +100,7 @@ createActivityDock (one per tab, in the composer surface)
 Decisions:
 
 - A section is a side part with a frame. Chat draws the frame through a new `sideSection` layout part. The part draws the frame's body.
-- `ChatSidePart` stops extending `ContributedPart`, because its `build` takes a third parameter. Chat adapts it to a `ContributedPart` for `placeContributedParts`.
+- `ChatSidePart` stops extending `ContributedPart`, because its `build` takes a third parameter. Chat adapts it to a `ContributedPart` for `placeContributedPart`.
 - CSS alone chooses between the dock and the one line. No code measures the Chat tab.
 - The surface moves one element, the dock slot, into the Main agent section. So a composer draw still redraws the dock on a layout change, and the part holds no draw of its own.
 - `Space v s` and section collapse apply to every session and survive a relaunch, through `uiState`.
@@ -158,8 +158,8 @@ Boundary rules:
 
 ### Wave 1
 - [ ] [Hub frame](01-hub-frame.md)
-- [ ] [Task rows](02-task-rows.md)
-- [ ] [Context line](03-context-line.md)
+- [x] [Task rows](02-task-rows.md)
+- [x] [Context line](03-context-line.md)
 
 ### Wave 2
 - [ ] [Activity move](04-activity-move.md) — after 01, 02, 03
@@ -177,10 +177,23 @@ Boundary rules:
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: ad87d46f110e63f41f0a1d404e1c3db1d19d82fa
 
 ### Groups
+- 03 · 13367469 · diff read: every Produces present; typecheck clean at the commit; worker: lint clean, usage tests 201 pass · concerns: start.ts wiring and the new self-test lines are unproved until task 09 and the filtered self-test; the context line has no vertical spacing of its own; AGENTS.md:262 and usage design.md:163 stale, left for 08
+- 02 · fe66c847 · diff read: both Produces present; typecheck names nothing in agent-strip; worker: lint clean, agent-strip tests 92 pass, seven mutations each caught · concerns: self-test regex assumes the row head fits the logged 80 characters; a key prompt may make a selected row taller than the max-height calc assumes; both for task 09
 ### Contract changes
+- WorkflowView.sidePart: ContributedPart wrapped in start.ts → ChatSidePart literal with title and order from 01 · why: the side pane plan landed it as ChatSidePart · consumers: 06 · group 01
+- createSideSections: members left open → SideSections { openTab, toggleHidden }, SideTab { sync, rebuild, close } · why: lead's per-tab handle ruling · consumers: none directly; 04 and 07 add parts through the store · group 01
+- ChatViewDeps: sideParts narrowed to onChanged, sideSections added · why: placement moved to side-sections.ts · consumers: 04, 07 · group 01
 ### Rulings
+- Task 01 does not wrap the workflow part in start.ts: it adds title and order to the sidePart literal in workflow-view.ts and start.ts passes view.sidePart, because the side pane plan landed sidePart as ChatSidePart, so the wrap alone cannot compile; 06 keeps the summary and CSS — if wrong, one literal moves · lead
+- ChatSidePart already landed standalone, so 01's stops-extending line is met; 01 only adds title, order and the section parameter — no cost if wrong · lead
+- Two usage comments name every host, not only the tab bar, because they describe every usage line — a comment rewording if wrong · group 03 · group 03
+- SessionLineInput extends ContextLineInput and SpendLineInput, and sessionLineText reuses contextLineText — restore the flat copy if wrong · group 03 · group 03
+- start.ts builds all five line parts through a local linePart helper, rewriting the row parts' wiring beyond the task's two — expand it back if wrong · group 03 · group 03
+- .agent-strip-rows CSS sits in page/agent-strip.css because the app makes that element and it has no data-layout — only the rule moves if wrong · group 02 · group 02
+- .agent-strip-command loses its padding and background so a row fits the plan's max-height calc, with flex none on rows and a space-1 margin under the cards — task 09's look check settles it · group 02 · group 02
+- trackOf keeps its signature and finds the box's kind in holder.boxes; draw uses heldTrack and heldRows because its boxes are not pushed until drawn — a small signature change if wrong · group 02 · group 02
 ### Review rounds
 ### Test gate
