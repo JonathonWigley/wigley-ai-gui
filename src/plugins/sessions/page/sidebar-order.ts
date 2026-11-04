@@ -20,14 +20,16 @@ export interface SidebarSections<R extends OrderedRow> {
 const NO_STAMP = -Infinity;
 
 // `rows` grouped by project. Favorites holds the favorited projects that have
-// rows, in `favorites` order; Recent every other group, most recent first by
-// its newest row. Rows run newest first inside every group, a row with no stamp
-// older than every stamped row. Tied rows keep the order of `rows`, and tied
-// groups the order their first row appears in it.
+// rows, in `favorites` order; Recent every other group, most recent first by its
+// project's stamp, a project with no stamp older than every stamped one. Rows run
+// newest first inside every group, a row with no stamp older than every stamped
+// row. Tied rows keep the order of `rows`, and tied groups the order their first
+// row appears in it.
 export function sidebarSections<R extends OrderedRow>(
   rows: readonly R[],
   favorites: readonly string[],
   stamps: ReadonlyMap<string, number>,
+  projectStamps: ReadonlyMap<string, number>,
 ): SidebarSections<R> {
   const stampOf = (row: R) => stamps.get(row.sessionId) ?? NO_STAMP;
   const rowsByProject = new Map<string, R[]>();
@@ -56,8 +58,10 @@ export function sidebarSections<R extends OrderedRow>(
       recentGroups.push({ project, isFavorite: false, rows: projectRows });
     }
   }
+  const projectStampOf = (group: SidebarGroup<R>) =>
+    projectStamps.get(group.project) ?? NO_STAMP;
   recentGroups.sort((left, right) =>
-    newestFirst(stampOf(left.rows[0]), stampOf(right.rows[0])),
+    newestFirst(projectStampOf(left), projectStampOf(right)),
   );
   return { favorites: favoriteGroups, recent: recentGroups };
 }

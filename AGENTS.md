@@ -78,11 +78,12 @@ modes, the command and key engine, settings, themes, the Bridge and services; ev
 reaches the app only through the plugin API, so a new tool has the same reach as anything already built.
 
 ```
-src/contracts/   interfaces and records crossing a seam, the plugin API among them; imports nothing
+src/contracts/   interfaces and records crossing a seam, the plugin API among them (`active-time.ts`: the `ActiveTime`
+                 record of a clock that counts only while something runs); imports nothing
 src/config/      core commands and scopes, default settings, the core token registry and the built-in
                  themes  → read only by main
 src/shared/      implementation both processes use (CommandRegistry, the plugin host, manifest merging, the event bus,
-                 theme variables, `errorText`, `formatTokens` (`182k`), the fake agent harness)
+                 theme variables, `errorText`, `formatTokens` (`182k`), the fake agent harness, `active-time.ts`: the functions over an `ActiveTime`)
   layouts/       the layout registry behind the core LayoutService (main side)
   layout-url.ts  the `wigley-layout:` URLs that serve layout files to the page
   visual-url.ts  the `wigley-visual:` URLs that serve a visual's document by its source hash
@@ -239,7 +240,9 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  and the built-in `default` chat layout); `image-rules.ts` at the root holds the attach rules both
                  parts share; main exports `launch` (a background session with a first message), `profileNames` and
                  `profileOf` to notes, `send` and `profileOf` to forms and the primer (the form wake), `addInstructions` (text every session chat starts carries to its harness)
-                 to visual, and `addSendGate` and `addIdleCompactThreshold` to auto-compact; page exports `focusedEntry` (the focused entry's element) to visual
+                 to visual, and `addSendGate` and `addIdleCompactThreshold` to auto-compact; page exports `focusedEntry` (the focused entry's element) to visual and `activeTime` (a session's clock)
+                 with the `activeTimeChanged` event; its page also draws each session's run time under its row, through
+                 sessions' `addRowPart` and a `rowClock` layout part; main keeps each session's clock, `docs/features/session-clock/design.md`
   keys/          manifest.ts, contract.ts, main/ (registers the layouts only), page/ (which-key, the help overlay,
                  the title bar's Keys button, and the hint anchors and keys-for-command lookup it exports), layouts/
                  (the keys Layout contract and the built-in `default` layout)
@@ -256,7 +259,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  layout)
   usage/         manifest.ts, contract.ts, main/ (polls each chat profile's plan usage through the Claude harness, folds
                  `chat.planUsage` and `chat.agentEvent`), page/ (the status-bar plan line, each session's line in
-                 the Chat status line through chat's `addStatusPart`, its context meter under each session row, and the right-bar details),
+                 the Chat status line through chat's `addStatusPart`, its context meter and cache mark under each session row, and the right-bar details),
                  layouts/ (the usage Layout contract and the built-in `default` layout),
                  `docs/features/usage/design.md`
   usage-tab-line/ page/ only (each session's usage line in its tab bar through sessions' `addBarPart`, drawn by
@@ -368,7 +371,7 @@ round; primer: an open primer), since main, not the page, decides.
 - **A session part** (`SessionPart`) is what a plugin draws for every session on a sessions surface: sessions hands
   it a wrapper and the session id, and the part draws through its own plugin's layout. It has the same shape as forms'
   `addCardPart`. A **row part** draws under every session row in the side bar, through the `sessions` page export
-  `addRowPart`; the agent-lines plugin's working line and usage's context meter are two. A **bar part** draws in every session's tab
+  `addRowPart`; the agent-lines plugin's working line, workflow's stage chip, chat's run time and usage's context meter and cache mark are five. A **bar part** draws in every session's tab
   bar, which moves with its session between panes, through `addBarPart`; the usage-tab-line plugin's per-session line
   is one.
   Information about one session goes in a session part, not on a shared bar.

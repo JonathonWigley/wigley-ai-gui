@@ -4,10 +4,11 @@
 // sections, Favorites then Recent, each a label beside a hairline and a drop
 // hint over its groups, each group a project's header (name, count, star and
 // grip) over its rows,
-// each row a card: its title (the folder label for a row with no title; no
-// harness name), its activity's dot or, with no activity, its attention dot,
-// and its on-screen mark, over a footer holding its status then other plugins'
-// row parts (`contributedParts`),
+// each row a compact card of two lines: its title (the folder label for a row
+// with no title; no harness name) with its activity's dot or, with no
+// activity, its attention dot, and its on-screen mark, over a footer line that
+// never wraps, holding its status then other plugins' row parts
+// (`contributedParts`),
 // each chat pane's frame and focus edges, the tab bar's prompts around its
 // strip, other plugins' bar parts (`contributedParts`) after them, then its
 // close prompt and pane controls, each tab's icon with no label, and the

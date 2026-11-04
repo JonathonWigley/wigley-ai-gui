@@ -1079,6 +1079,7 @@ const SURFACE_PARTS: Record<SurfacePart, true> = {
   reasonBox: true,
   closeConfirm: true,
   imageViewer: true,
+  rowClock: true,
 };
 
 // Draws `input` with the default layout's `name` part into a fresh parent,
@@ -1134,6 +1135,27 @@ describe('default chat layout surfaces', () => {
     modelEffort: { model, effort },
     controls: [{ id: 'mode', label: 'Mode', value: 'Auto', enabled: true }],
   };
+
+  it('rowClock_Default_UpdateChangesTextAndRunningInPlace', () => {
+    const { kit } = fakeSurfaceKit();
+
+    const view = drawSurface(
+      'rowClock',
+      { text: '1m 05s', isRunning: false },
+      kit,
+    );
+    const clock = asFake(view.element);
+
+    expect(clock.tagName).toBe('SPAN');
+    expect(clock.textContent).toBe('1m 05s');
+    expect(clock.classList.contains('is-running')).toBe(false);
+
+    view.update?.({ text: '1m 06s', isRunning: true });
+
+    expect(asFake(view.element)).toBe(clock);
+    expect(clock.textContent).toBe('1m 06s');
+    expect(clock.classList.contains('is-running')).toBe(true);
+  });
 
   it('composer_Default_PlacesEachSlotOnce', () => {
     const { kit } = fakeSurfaceKit();

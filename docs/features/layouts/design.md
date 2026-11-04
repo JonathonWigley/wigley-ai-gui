@@ -119,7 +119,7 @@ stays in themes.
 | --- | --- | --- |
 | `shell` | `shell.layout` | the title bar's context, dev tag and config problems; each mode's activity bar item; the five chrome frames take the layout's CSS |
 | `forms` | `forms.layout` | question, finding and notice cards; head, rail and review panes |
-| `chat` | `chat.layout` | chat entries; the activity line (a run of the agent's steps, drawn only under a layout that sets `activityInTranscript`); the activity dock (the running turn, then its finished line) and its one-line `workingLine`; the session hub's section frame and its Session rows; the composer and its status line, the attachments, the picker rows (start prompt and pickers), the sign-in, deny-reason and end-session dialogs, the image viewer |
+| `chat` | `chat.layout` | chat entries; the activity line (a run of the agent's steps, drawn only under a layout that sets `activityInTranscript`); the activity dock (the running turn, then its finished line) and its one-line `workingLine`; the session hub's section frame and its Session rows; the composer and its status line, the attachments, the picker rows (start prompt and pickers), the sign-in, deny-reason and end-session dialogs, the image viewer, each session's run time on its side-bar row (`rowClock`) |
 | `primer` | `primer.layout` | feature, task and item cards; tasks, items and review panes |
 | `docs` | `docs.layout` | the tree and its rows, the rendered doc, its header, disk banner and editor frame, the box and confirm dialogs, the create dialog's completion and picker rows |
 | `backlog` | `backlog.layout` | the repo and home side bar, the follow-up list and its rows, the detail and editor panes, plans and features, the picker rows and the confirm body |
@@ -130,7 +130,7 @@ stays in themes.
 | `agent-strip` | `agent-strip.layout` | the agent strip above the Chat composer's box: subagent cards and task rows, a box opened in place |
 | `agent-skills` | `agent-skills.layout` | the session hub's Skills section: one row per skill and agent |
 | `gallery` | `gallery.layout` | each primitive's sample block |
-| `usage` | `usage.layout` | the status-bar line (plan rows), each session's context meter under its row, each session's context line (context bar, cache countdown) above the Chat box and its spend in the Chat status line; its whole usage line in each tab bar, through the optional `usage-tab-line` plugin; the right-bar details |
+| `usage` | `usage.layout` | the status-bar line (plan rows), each session's context meter and cache mark on its row, each session's context line (context bar, cache countdown) above the Chat box and its spend in the Chat status line; its whole usage line in each tab bar, through the optional `usage-tab-line` plugin; the right-bar details |
 | `keys` | `keys.layout` | the help overlay, the which-key panel, the title bar's Keys button |
 | `workflow` | `workflow.layout` | the status chip under each session row, the strip above the Chat composer (status and main action), the side pane beside the transcript (stepper, plan checklist by wave, actions) |
 | `visual` | `visual.layout` | the "drawing visual…" card of an open html block, each closed block's visual around its frame with its expand control, and the full-size overlay |
@@ -146,7 +146,7 @@ can be iterated in place. The sample sends nothing and raises no notification or
 | --- | --- |
 | `Space z l o` | forms: the preview round, then each saved real round |
 | `Space z l p` | primer: a sample primer holding every field and need |
-| `Space z l c` | chat: a session of every entry kind, idle after a finished turn, so the activity dock shows that turn's finished line (the preview holds a `result` entry); its steps, grouped into finished activity lines, and its result entry show in the transcript only under a layout that sets `activityInTranscript`; and the agent strip above the composer |
+| `Space z l c` | chat: a session of every entry kind, idle after a finished turn, so the activity dock shows that turn's finished line (the preview holds a `result` entry); its steps, grouped into finished activity lines, and its result entry show in the transcript only under a layout that sets `activityInTranscript`; the agent strip above the composer; and a paused run time on its row |
 | `Space z l s` | sessions: rows in every state |
 | `Space z l a` | agents: a sample session with two running subagents and two tasks; with the default `plugins.disabled` the row opens with no working line, and `agent-lines` on draws it |
 | `Space z l w` | workflow: a sample session in every stage, the plan-ready countdown included |

@@ -323,7 +323,7 @@ interview on 2026-10-23; this file is the record of both.
   and first-message titles; a file without them reads as untitled), its last process's
   id, the controls and resume flag that process launched with, the controls the row holds and the ids of those the user
   picked, the entry ids of the messages that process dropped which already went back to the box, and its unsent queued
-  messages and the returned messages the page has not placed, with their images (a file without any of these reads as none), in row order, with the selected
+  messages and the returned messages the page has not placed, with their images (a file without any of these reads as none), its `activeMs` (`docs/features/session-clock/design.md`; a file without it reads as 0), in row order, with the selected
   row (null when it names no row chat still holds), whether a message was ever sent, and whether a turn was running. A
   new, resumed or launched session is saved only after its process starts, so a start that fails leaves no record. Only
   the user closing its row removes a record; quit, `install-app`, a process exit and a chat plugin reload keep it.
@@ -398,7 +398,7 @@ interview on 2026-10-23; this file is the record of both.
   and written messages not yet taken in, then queued messages, are pulled back into the box, as on an exit; no exit notice shows for the old process and no
   turn-finished alert fires. The old process's later events are no longer live: none reaches the chat, but its
   `agentEvent`s that do emit keep the old host id, and its `sessionEnded` still emits; the agents roster folds each host
-  id apart, so that `sessionEnded` drops only the old process's subagents. The row's entries become one info notice,
+  id apart, so that `sessionEnded` drops only the old process's subagents. The row's active time returns to 0 (`docs/features/session-clock/design.md`). The row's entries become one info notice,
   `Conversation cleared`, followed by whatever the fresh process reports at start (its start step draws under the notice
   as a finished run, such as `1 step · 0s`), and chat logs `conversation cleared in <folder name>`. The row's host id
   moves through the sessions plugin's `OwnedSession.setHostSessionId(newId)`, which keeps the app session id and its
@@ -458,6 +458,9 @@ interview on 2026-10-23; this file is the record of both.
   goes first, and the first to return `true` ends the row; a row no draw takes shows the name alone. Chat adds its own
   draw through the same export: the description in a dim column cut to one line, while the `completionDescriptions`
   setting is on (default on), else `false`.
+- **Active time**: chat's page exports `activeTime(sessionId)`, a session's clock as an `ActiveTime` (null for a session the
+  page does not hold), and fires `activeTimeChanged` when a session arrives and when main sends a clock; chat's `rowClock` layout part draws it on the
+  side-bar row (`docs/features/session-clock/design.md`).
 - **Resume and archive**: after the folder and profile, the start prompt offers a new session or one of the folder's
   saved sessions (terminal and app alike, newest first, labelled by first message and time; one open in the app
   through the relay is left out, and picking one that has a chat row selects that row instead of opening a second),

@@ -1,16 +1,17 @@
-// The usage layout contract: the parts a usage layout draws for the status-bar plan line, each session's line and the
-// right-bar details, and the kit each part gets. The app keeps the status-bar slot (always on, at the bar's end), the
-// right-bar slot (there only while the details are open), each session's line slot (in its Chat status line, and in
-// its tab bar while the usage-tab-line plugin is on), each session's row line slot (under its side-bar row), the open
-// state, the shown session and every redraw: on each
-// snapshot, each change of the shown session, each layouts set and once a minute.
+// The usage layout contract: the parts a usage layout draws for the status-bar plan line, each session's line, its
+// side-bar row's line and cache mark and the right-bar details, and the kit each part gets. The app keeps the
+// status-bar slot (always on, at the bar's end), the right-bar slot (there only while the details are open), each
+// session's line slot (in its Chat status line, and in its tab bar while the usage-tab-line plugin is on), each
+// session's row line slot and row cache slot (under its side-bar row), the open state, the shown session and every
+// redraw: on each snapshot, each change of the shown session, each layouts set and once a minute.
 //
 // Every input is already worded for the screen: counts, percents, money and times arrive as text, and each meter's
 // fill and tone beside its text. The one number that is no reading is `compactingElapsedMs`, for timing an animation.
 import type { BaseKit, MeterTone } from '../../../shared/page/layout-host/kit';
 
 export type UsageTone = MeterTone;
-// `text` is what the meter reads (`42%`, or `180k/300k` for context); `percent` is 0–100.
+// `text` is what the meter reads (`42%`, `180k/300k` for a session's context, `180k` on its row line); `percent` is
+// 0–100.
 export interface MeterInput {
   label: string;
   text: string;
@@ -29,9 +30,16 @@ export interface SessionLineInput {
   compacting: string | null;
   compactingElapsedMs: number | null;
 }
-// One session's line under its side-bar row: its context meter.
+// One session's line under its side-bar row: its context meter, whose text is the used tokens alone (`180k`), the zero
+// line (`0k`) while the session has no usage.
 export interface RowLineInput {
   context: MeterInput;
+}
+// One session's cache mark on its side-bar row: `isCold` once the cache has expired, and `tooltip` worded for the
+// screen (`cache warm · 2m left`, `cache cold`).
+export interface RowCacheInput {
+  isCold: boolean;
+  tooltip: string;
 }
 // One plan as the status bar shows it. `note` (`plan loading`, `plan unavailable`, `no plan rows`, `no profiles`)
 // stands in place of `plans` when set. `extraUsage` reads as in `DetailsProfileInput`. `stale` is true while the
@@ -94,7 +102,8 @@ export interface UsageKit extends BaseKit {}
 // `sessionLine` one session's line into the slot its host gives it, a Chat status line or a tab bar while
 // usage-tab-line is on (a zero line, context `0k` and no cache or spend, while that session has no usage; while
 // `compacting` is set, the default layout draws the chip first and pulses the meter), `rowLine` one session's line
-// under its side-bar row (its context `0k` while that session has no usage), and `details` the right-bar details.
+// under its side-bar row (its context `0k` while that session has no usage), `rowCache` one session's cache mark on
+// that row (not drawn while the session has no cache expiry), and `details` the right-bar details.
 export interface Layout {
   statusLine?(
     parent: HTMLElement,
@@ -109,6 +118,11 @@ export interface Layout {
   rowLine?(
     parent: HTMLElement,
     input: RowLineInput,
+    kit: UsageKit,
+  ): HTMLElement;
+  rowCache?(
+    parent: HTMLElement,
+    input: RowCacheInput,
     kit: UsageKit,
   ): HTMLElement;
   details?(

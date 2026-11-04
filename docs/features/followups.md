@@ -248,6 +248,17 @@ Defects seen in a drive run, a transcript or the user's own use.
   reply lists the subagent again, or its box waits for the shells it owns. Source session: Claude Code
   2294388c-6fcc-4d43-a794-070e11683453 in /Users/jonathonwigley/Documents/ai-dev
 
+- **A quit can lose a session's open run time** — *needs a feature plan*: chat's final save at quit is not waited for
+  (`detachAll`, `chat-sessions.ts`), and `src/main/main.ts` lets the user's quit exit without waiting, so a cut write
+  leaves the last saved total, which can lack the whole span of a long turn. Deciding means choosing between a bounded
+  hold on the quit path and a synchronous write. `docs/features/session-clock/design.md` § Across relaunch states the
+  current behaviour.
+- **`/clear` then relaunch loses the row's selection** — *agent-ready*: select a row, `/clear` it (running or idle),
+  and restart; no row is selected and the main pane says `Pick a session in the side bar`, though
+  `open-sessions.json`'s `selectedHostSessionId` holds the row's new host id. A selected row with no `/clear` stays
+  selected. Seen on the fake harness through a drive `restart`; the cause isn't traced, and it may be fixture-only,
+  since the fake has no saved history for the new id.
+
 ## Harness seams
 
 What a second harness — Codex, wigley-harness — and the agent settings and plugin features need.
@@ -501,6 +512,10 @@ User-facing features, those other work builds on first.
   guidance (Apache-2.0; keep notices) into wigley skills that read a project's `DESIGN.md`, dropping the detector
   CLI. Plan it in that repo.
 
+- **Usage's cache mark has no preview route** — *needs a feature plan*: `rowCache` draws nothing without a cache expiry,
+  and no `Space z l` sample holds usage, so a usage layout author cannot see the mark in the app. Decide between a usage
+  preview and seeding chat's preview session (`AGENTS.md`: a view needing agent data has a preview sample).
+
 ## Code cleanup
 
 Duplication and drift with no user-visible defect.
@@ -581,6 +596,11 @@ Duplication and drift with no user-visible defect.
   copying `isBundledPick` in `src/shared/page/layout-host/draw-part.ts`. Have `drawPart` report whether the bundled
   default object drew (e.g. `drewBundled` on `DrawnPart`) and use it in chat, so the rule lives in one place.
   Source session: Claude Code eb4e38a7-3b4f-4519-a0f6-31da367ff30f in /Users/jonathonwigley/Documents/ai-dev.
+
+- **One shared tick and one shared `fakeTimers`** — *agent-ready*: the block "one pending one-shot, set while needed,
+  clear when not" has four copies (`grep pendingTick`: `chat/page/row-clock.ts`, `agent-strip/page/agent-strip.ts`,
+  `workflow/page/workflow-view.ts`, `agent-lines/page/working-lines.ts`). The `fakeTimers` test helper has eight
+  (`grep 'fakeTimers ='`). Give each one home in `src/shared`.
 
 ## Latent defects and tests
 
@@ -732,3 +752,6 @@ because the earlier items rewrite many of these tests anyway.
   `src/plugins/sessions/page/preview.ts` holds `working` and `waiting for permission`, though chat no longer sends a
   status and a row's second line now shows only a form's or primer's. Source session: Claude Code
   e8ba2d1d-78ea-49b9-9c2e-b2a0b2382d85 in wigley-ai-gui.
+- **The session clock counts a machine's sleep** — *needs a feature plan*: spans are wall-clock (`src/shared/active-time.ts`),
+  so a lid closed during a turn or background work adds the whole sleep to the row's run time. Fixing it needs a power
+  signal in chat main, or a cap on a span's gap.

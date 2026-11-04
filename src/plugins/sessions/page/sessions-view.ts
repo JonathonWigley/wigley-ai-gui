@@ -204,7 +204,12 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
 
   const realSections = () => {
     const rows = state?.rows ?? [];
-    return sidebarSections(rows, favorites.list(), recency.stampsOf(rows));
+    return sidebarSections(
+      rows,
+      favorites.list(),
+      recency.stampsOf(rows),
+      recency.projectStamps(),
+    );
   };
 
   const drawSidebar = () => {

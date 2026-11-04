@@ -5,16 +5,18 @@ import type { SessionRow } from '../contract';
 import { rowChanges } from './tabs';
 
 const RECENCY_KEY = 'recency';
+const PROJECT_RECENCY_KEY = 'projectRecency';
 
 // A stamp whose session never comes back stays until this many newer ones push
 // it out.
 const MAX_SAVED_STAMPS = 200;
 
-// When each session arrived. A stamp sits under its row's host session id, else
-// its app session id, so it outlasts a relaunch, which gives every row a new app
-// id.
+// When each session and each project's group arrived. A session's stamp sits
+// under its row's host session id, else its app session id, so it outlasts a
+// relaunch, which gives every row a new app id.
 //
-// `stampsOf` reads the stamps of `rows` by app session id.
+// `stampsOf` reads the stamps of `rows` by app session id. `projectStamps` reads
+// the stamps by project.
 // `rowsChanged` takes each state main sends, `before` null for the first one: a
 // row in `after` with no stamp is stamped, all of them with one time so they tie
 // and keep main's order; a row whose host id changed takes its stamp along; a
@@ -22,17 +24,22 @@ const MAX_SAVED_STAMPS = 200;
 // can share a host id, so a row leaving or moving off a key leaves the stamp
 // there while a row in `after` holds that key. A row merely absent keeps its
 // stamp, since a relaunch's first state lacks the rows main has yet to resume.
+// A project with no stamp takes its newest row's. A later row leaves it alone, so
+// the group holds its place, and it goes when a state ends the project's last
+// row, so the project stamps again if it comes back.
 // A change saves the whole record; a call that alters nothing saves nothing.
 export interface SessionRecency {
   stampsOf(rows: readonly SessionRow[]): ReadonlyMap<string, number>;
+  projectStamps(): ReadonlyMap<string, number>;
   rowsChanged(
     before: readonly SessionRow[] | null,
     after: readonly SessionRow[],
   ): void;
 }
 
-// The record read once from `uiState`'s `recency` entry; any other saved value,
-// one bad entry included, reads as empty and stays until the first change.
+// The records read once from `uiState`'s `recency` and `projectRecency` entries;
+// any other saved value, one bad entry included, reads as empty and stays until
+// the first change.
 export function createSessionRecency(
   clock: Clock,
   uiState: UiState,
@@ -41,9 +48,15 @@ export function createSessionRecency(
   const stamps = new Map(
     isSavedRecency(saved) ? Object.entries(saved.stamps) : [],
   );
+  const savedProjects = uiState.get(PROJECT_RECENCY_KEY);
+  const projectStamps = new Map(
+    isStampRecord(savedProjects) ? Object.entries(savedProjects) : [],
+  );
   const save = () => {
     dropOldestStamps(stamps);
+    dropOldestStamps(projectStamps);
     uiState.set(RECENCY_KEY, { stamps: Object.fromEntries(stamps) });
+    uiState.set(PROJECT_RECENCY_KEY, Object.fromEntries(projectStamps));
   };
   return {
     stampsOf(rows) {
@@ -56,6 +69,7 @@ export function createSessionRecency(
       }
       return found;
     },
+    projectStamps: () => projectStamps,
     rowsChanged(before, after) {
       const beforeRows = before ?? [];
       const { added, removed, changed } = rowChanges(beforeRows, after);
@@ -66,6 +80,8 @@ export function createSessionRecency(
         moveStamps(changed, rowsBefore, heldKeys, stamps),
         dropRows(removed, rowsBefore, heldKeys, stamps),
         stampRows(added, stamps, clock),
+        dropProjects(beforeRows, after, projectStamps),
+        stampProjects(after, stamps, projectStamps),
       ].includes(true);
       if (altered) {
         save();
@@ -137,6 +153,39 @@ function stampRows(
   return true;
 }
 
+function dropProjects(
+  before: readonly SessionRow[],
+  after: readonly SessionRow[],
+  projectStamps: Map<string, number>,
+): boolean {
+  const heldProjects = new Set(after.map((row) => row.project));
+  let altered = false;
+  for (const { project } of before) {
+    const stampGone =
+      !heldProjects.has(project) && projectStamps.delete(project);
+    altered = altered || stampGone;
+  }
+  return altered;
+}
+
+function stampProjects(
+  rows: readonly SessionRow[],
+  stamps: ReadonlyMap<string, number>,
+  projectStamps: Map<string, number>,
+): boolean {
+  const unstamped = rows.filter((row) => !projectStamps.has(row.project));
+  let altered = false;
+  for (const row of unstamped) {
+    const stamp = stamps.get(stampKey(row));
+    if (stamp !== undefined) {
+      const held = projectStamps.get(row.project) ?? stamp;
+      projectStamps.set(row.project, Math.max(held, stamp));
+      altered = true;
+    }
+  }
+  return altered;
+}
+
 function dropOldestStamps(stamps: Map<string, number>): void {
   const excess = stamps.size - MAX_SAVED_STAMPS;
   if (excess <= 0) {
@@ -151,9 +200,12 @@ function dropOldestStamps(stamps: Map<string, number>): void {
 function isSavedRecency(
   value: unknown,
 ): value is { stamps: Record<string, number> } {
+  return isJsonObject(value) && isStampRecord(value.stamps);
+}
+
+function isStampRecord(value: unknown): value is Record<string, number> {
   return (
     isJsonObject(value) &&
-    isJsonObject(value.stamps) &&
-    Object.values(value.stamps).every((stamp) => typeof stamp === 'number')
+    Object.values(value).every((stamp) => typeof stamp === 'number')
   );
 }

@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ActiveTime } from '../../../contracts/active-time';
 import type { TextEditor } from '../../../contracts/editor';
 import type { ChatEntry } from '../../../contracts/agent';
+import { NO_ACTIVE_TIME } from '../../../shared/active-time';
 import {
   asFake,
   type FakeElement,
@@ -32,6 +34,7 @@ function stateOf(
     controls: [],
     activity: 'idle',
     background: 0,
+    activeTime: NO_ACTIVE_TIME,
     commands: [],
     running: false,
     queued: [],
@@ -59,7 +62,12 @@ const returnedTwo: ReturnedMessage = {
 // mounts, `tab` its element, `tabElements` each session's tab element, and
 // `invoked` holds each other call to main. `sideParts` is the view's side part
 // store, and `removeSession` closes a session's tab as the sessions plugin does.
-function mounted() {
+function mounted(
+  firstActiveTimeListener: (
+    sessionId: string,
+    activeTime: ActiveTime,
+  ) => void = () => undefined,
+) {
   const listeners = new Map<string, (data: unknown) => void>();
   const invoked: unknown[][] = [];
   const logs: string[] = [];
@@ -67,7 +75,6 @@ function mounted() {
   const tab = { element: null as FakeElement | null };
   const tabElements = new Map<string, FakeElement>();
   const sideParts = createPartStore<ChatSidePart>();
-  let removeSession: (sessionId: string) => void = () => undefined;
   let answerSessions: (states: ChatSessionState[]) => void = () => undefined;
   const channel = {
     on(message: string, listener: (data: unknown) => void) {
@@ -86,11 +93,16 @@ function mounted() {
   };
   const log = (_source: string, line: string) => logs.push(line);
   const noEvent = () => undefined;
-  mountChatView({
+  const activeTimeCalls: [string, ActiveTime][] = [];
+  // What `activeTime` read while `addTab` ran, as a row drawn then reads it.
+  const readDuringAddTab: (ActiveTime | null)[] = [];
+  let removeSession: (sessionId: string) => void = noEvent;
+  const view = mountChatView({
     channel,
     paths: { base: () => 'app' },
     sessions: {
       addTab: (sessionId: string, added: { element: HTMLElement }) => {
+        readDuringAddTab.push(view.activeTime(sessionId));
         tab.element = asFake(added.element);
         tabElements.set(sessionId, tab.element);
         return {
@@ -112,6 +124,12 @@ function mounted() {
     onActiveChanged: noEvent,
     onSessionHostChanged: noEvent,
     onScopeChanged: noEvent,
+    activeTimeListeners: [
+      firstActiveTimeListener,
+      (sessionId: string, activeTime: ActiveTime) => {
+        activeTimeCalls.push([sessionId, activeTime]);
+      },
+    ],
     editor: {
       create(): TextEditor {
         box.text = '';
@@ -139,13 +157,16 @@ function mounted() {
     drops: { addTarget: () => ({ dispose: noEvent }) },
   } as unknown as ChatViewDeps);
   return {
+    view,
+    activeTimeCalls,
+    readDuringAddTab,
+    removeSession: (sessionId: string) => removeSession(sessionId),
     box,
     tab,
     tabElements,
     sideParts,
     invoked,
     logs,
-    removeSession: (sessionId: string) => removeSession(sessionId),
     emit: <K extends keyof ChatChannel['messages']>(
       message: K,
       data: ChatChannel['messages'][K],
@@ -256,6 +277,99 @@ describe('mountChatView side parts', () => {
     addedAgain.dispose();
 
     expect(disposed).toEqual(['row-1', 'row-2']);
+  });
+});
+
+describe('mountChatView active time', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const STARTED: ActiveTime = { totalMs: 65_000, since: null };
+  const RUNNING: ActiveTime = { totalMs: 65_000, since: 4000 };
+
+  it('activeTime_SessionStarted_ReadableDuringAddTabAndAtItsOneCall', () => {
+    const readAtCall: (ActiveTime | null)[] = [];
+    const mount = mounted((sessionId) => {
+      readAtCall.push(mount.view.activeTime(sessionId));
+    });
+
+    mount.emit('sessionStarted', { ...stateOf([]), activeTime: STARTED });
+    mount.emit('sessionStarted', { ...stateOf([]), activeTime: STARTED });
+
+    expect(mount.readDuringAddTab).toEqual([STARTED]);
+    expect(readAtCall).toEqual([STARTED]);
+    expect(mount.activeTimeCalls).toEqual([['row-1', STARTED]]);
+  });
+
+  it('activeTime_Message_KeepsTheRecordAndCallsOnce', () => {
+    const mount = mounted();
+    mount.emit('sessionStarted', stateOf([]));
+    mount.activeTimeCalls.length = 0;
+
+    mount.emit('activeTime', { sessionId: 'row-1', activeTime: RUNNING });
+
+    expect(mount.view.activeTime('row-1')).toEqual(RUNNING);
+    expect(mount.view.activeTime('row-2')).toBeNull();
+    expect(mount.activeTimeCalls).toEqual([['row-1', RUNNING]]);
+  });
+
+  it('activeTime_AListenerThrowsOnAMessage_TheNextStillRuns', () => {
+    let isFailing = false;
+    const mount = mounted(() => {
+      if (isFailing) {
+        throw new Error('listener failed');
+      }
+    });
+    mount.emit('sessionStarted', stateOf([]));
+    mount.activeTimeCalls.length = 0;
+    isFailing = true;
+
+    expect(() =>
+      mount.emit('activeTime', { sessionId: 'row-1', activeTime: RUNNING }),
+    ).toThrow('listener failed');
+
+    expect(mount.activeTimeCalls).toEqual([['row-1', RUNNING]]);
+    expect(mount.view.activeTime('row-1')).toEqual(RUNNING);
+  });
+
+  it('activeTime_AListenerThrowsOnArrival_EverySessionStillArrives', async () => {
+    const mount = mounted(() => {
+      throw new Error('listener failed');
+    });
+
+    await mount.answerSessions([
+      { ...stateOf([]), sessionId: 'row-1', activeTime: STARTED },
+      { ...stateOf([]), sessionId: 'row-2', activeTime: RUNNING },
+    ]);
+
+    expect(mount.activeTimeCalls).toEqual([
+      ['row-1', STARTED],
+      ['row-2', RUNNING],
+    ]);
+    expect(mount.view.activeTime('row-2')).toEqual(RUNNING);
+    expect(mount.logs).toEqual([
+      'chat session arrival failed: listener failed',
+    ]);
+  });
+
+  it('activeTime_MessageForAnUnheldSession_IgnoredWithNoCall', () => {
+    const mount = mounted();
+
+    mount.emit('activeTime', { sessionId: 'row-1', activeTime: RUNNING });
+
+    expect(mount.view.activeTime('row-1')).toBeNull();
+    expect(mount.activeTimeCalls).toEqual([]);
+  });
+
+  it('activeTime_SessionRemoved_DropsTheRecord', () => {
+    const mount = mounted();
+    mount.emit('sessionStarted', stateOf([]));
+
+    mount.removeSession('row-1');
+
+    expect(mount.view.activeTime('row-1')).toBeNull();
   });
 });
 

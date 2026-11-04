@@ -15,6 +15,7 @@ import type {
 import type {
   ChatChannel,
   ChatComposerPart,
+  ChatPageEvents,
   ChatPageExports,
   ChatSidePart,
   ChatStatusPart,
@@ -36,6 +37,7 @@ import { mountChatView } from './chat-view';
 import { createImageViewer } from './image-viewer';
 import { createPicker } from './picker';
 import { readChatLayout } from './read-chat-layout';
+import { createRowClock } from './row-clock';
 import { createSignInDialog } from './sign-in-dialog';
 import { createSlashCommands } from './slash-commands';
 import { createStartPrompt } from './start-prompt';
@@ -43,7 +45,7 @@ import { createStartPrompt } from './start-prompt';
 type ChatApi = PageApi<
   typeof chatManifest,
   ChatChannel,
-  Record<never, never>,
+  ChatPageEvents,
   QualifiedEvents<'sessions', SessionsPageEvents>
 >;
 
@@ -70,6 +72,8 @@ type ChatApi = PageApi<
 // control picker and the image viewer, and leaves the sign-in dialog and the
 // start prompt open. A resting session's Chat tab keys as a running one's
 // does; its control chips are disabled until a message starts its process.
+// Each session's row shows its run time, and the exports and `activeTimeChanged`
+// offer its clock to other plugins.
 export const chatPagePart: PagePart<typeof chatManifest> = {
   manifest: chatManifest,
   start(api: ChatApi) {
@@ -149,6 +153,14 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
     const composerParts = createPartStore<ChatComposerPart>();
     const statusParts = createPartStore<ChatStatusPart>();
     const sideParts = createPartStore<ChatSidePart>();
+    const rowClock = createRowClock({
+      layouts,
+      kit: partDeps,
+      clock: services.clock,
+      timers: services.timers,
+      log: services.log,
+      activeTime: (sessionId) => view.activeTime(sessionId),
+    });
     const view = mountChatView({
       channel: api.channel,
       paths: services.paths,
@@ -166,6 +178,11 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
           listener(sessionId),
         ),
       onScopeChanged: (listener) => api.keys.onScopeChanged(() => listener()),
+      activeTimeListeners: [
+        (sessionId, activeTime) =>
+          api.events.emit('activeTimeChanged', { sessionId, activeTime }),
+        (sessionId) => rowClock.changed(sessionId),
+      ],
       editor: services.editor,
       markdown: services.markdown,
       keys,
@@ -192,6 +209,8 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       clock: services.clock,
       drops: api.drops,
     });
+    // The page part lives for the page load, so the row part is never removed.
+    sessions.addRowPart(rowClock.part);
     api.layouts.show<ChatLayout>({
       defaultLayout,
       defaultStylesheet,
@@ -218,6 +237,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       addStatusPart: (part) => statusParts.add(part),
       addSidePart: (part) => sideParts.add(part),
       focusedEntry: () => view.focusedEntry(),
+      activeTime: (sessionId) => view.activeTime(sessionId),
     };
     return {
       commands: {

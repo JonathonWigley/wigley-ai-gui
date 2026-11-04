@@ -104,6 +104,20 @@ describe('sessions view side bar', () => {
       saved: ['gamma'],
     },
     {
+      case: 'a new session enters on top of its group, which holds its place',
+      rows: [rowIn('a1', 'alpha'), rowIn('b1', 'beta'), rowIn('a2', 'alpha')],
+      favorites: [],
+      order: ['b1', 'a2', 'a1'],
+      saved: [],
+    },
+    {
+      case: 'a session in a new project enters on top',
+      rows: [rowIn('a1', 'alpha'), rowIn('b1', 'beta'), rowIn('g1', 'gamma')],
+      favorites: [],
+      order: ['g1', 'b1', 'a1'],
+      saved: [],
+    },
+    {
       case: 'needs you moves no row',
       rows: [rowIn('a1', 'alpha'), rowIn('b1', 'beta')],
       favorites: [],

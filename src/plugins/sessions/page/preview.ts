@@ -97,7 +97,7 @@ const PREVIEW_FAVORITES: readonly string[] = ['wigley-ai-gui'];
 export function previewSections(
   preview: SessionsState,
 ): SidebarSections<SessionRow> {
-  return sidebarSections(preview.rows, PREVIEW_FAVORITES, new Map());
+  return sidebarSections(preview.rows, PREVIEW_FAVORITES, new Map(), new Map());
 }
 
 // Each sample row's second line, null for none.

@@ -262,3 +262,9 @@
 .ui-scrim.chat-image-viewer[hidden] {
   display: none;
 }
+
+/* The run time at the row line's end, before usage's cache mark. */
+.session-row-part[data-part='chat.rowClock'] {
+  margin-left: auto;
+  order: 3;
+}

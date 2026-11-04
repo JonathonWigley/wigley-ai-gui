@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import type { ActiveTime } from '../../../contracts/active-time';
+import { NO_ACTIVE_TIME } from '../../../shared/active-time';
 import {
   type AgentEvent,
   type AgentProcessEvents,
@@ -145,6 +147,7 @@ function record(
     controls: [],
     userSetControls: [],
     returnedDrops: [],
+    activeMs: 0,
     ...fields,
   };
 }
@@ -185,7 +188,8 @@ function setUp(
     sessionHost?: ChatSessionsDeps['sessionHost'];
   } = {},
 ) {
-  const clock = { now: () => options.clockNow ?? 1000 };
+  let clockNow = options.clockNow ?? 1000;
+  const clock = { now: () => clockNow };
   const harness = createFakeAgentHarness(
     clock,
     createMemoryFiles(),
@@ -319,6 +323,9 @@ function setUp(
     setRowTitles: (sessionId: string, next: SessionTitles) =>
       titles.set(sessionId, next),
     uuidCalls: () => uuidCalls,
+    setNow: (now: number) => {
+      clockNow = now;
+    },
     hostIdChanges,
     ownedEnds: () => ownedEnds,
     windowShows: () => windowShows,
@@ -516,6 +523,7 @@ describe('createChatSessions', () => {
         controls: [],
         activity: 'idle',
         background: 0,
+        activeTime: { totalMs: 0, since: null },
         commands: [],
         running: false,
         queued: [],
@@ -2812,6 +2820,7 @@ describe('createChatSessions saved sessions', () => {
         controls: test.chat.sessions()[0].controls,
         userSetControls: [],
         returnedDrops: [],
+        activeMs: 0,
       },
     ]);
   });
@@ -2905,10 +2914,10 @@ describe('createChatSessions saved sessions', () => {
     const { events } = test.harness.processes[0];
     events.activity('working');
     await test.chat.send(ROW_ID, { text: 'a', images: [] });
-    const savesBefore = test.saved.saves();
     const messagesBefore = test.messages.length;
 
     test.chat.detachAll();
+    const savesBefore = test.saved.saves();
     events.activity('idle');
     events.ended({ code: 0, error: null });
     await flush();
@@ -3584,6 +3593,7 @@ describe('createChatSessions clear', () => {
           controls: test.chat.sessions()[0].controls,
           userSetControls: ['model'],
           returnedDrops: [],
+          activeMs: 0,
         },
       ],
       selectedHostSessionId: 'uuid-2',
@@ -3624,6 +3634,26 @@ describe('createChatSessions clear', () => {
         : [],
     );
     expect(sessionEndedHostIds).toEqual(['uuid-1']);
+  });
+
+  it('clear_RowWithRunTime_ResetsTheClockAndSavesZero', async () => {
+    const test = setUp();
+    test.chat.restore(
+      {
+        sessions: [record('host-a', { activeMs: 30000 })],
+        selectedHostSessionId: null,
+      },
+      [],
+    );
+
+    test.chat.clear(ROW_ID);
+    await flush();
+
+    expect(test.sent('activeTime').at(-1)).toEqual({
+      sessionId: ROW_ID,
+      activeTime: { totalMs: 0, since: null },
+    });
+    expect(test.saved.last()?.sessions[0].activeMs).toBe(0);
   });
 
   it('clear_RestingRow_StartsFreshProcess', async () => {
@@ -3795,6 +3825,443 @@ describe('createChatSessions clear', () => {
 
     expect(test.announced).toEqual([]);
     expect(test.marked).toEqual([]);
+  });
+});
+
+// A change to a session's work at `at`: the activity its harness reports, its
+// one permission call asked or answered, or its one background task starting (1)
+// or finishing (0).
+type ClockStep =
+  | { at: number; activity: ProcessActivity }
+  | { at: number; permission: 'asked' | 'answered' }
+  | { at: number; background: 0 | 1 };
+
+function backgroundEvent(at: number, background: 0 | 1): AgentEvent {
+  return background === 1
+    ? {
+        type: 'taskStarted',
+        at,
+        taskId: 'task-1',
+        agentId: MAIN_AGENT_ID,
+        description: 'server',
+        command: null,
+      }
+    : { type: 'taskFinished', at, taskId: 'task-1', outcome: 'done' };
+}
+
+function runClockSteps(
+  test: Awaited<ReturnType<typeof started>>,
+  steps: readonly ClockStep[],
+) {
+  for (const step of steps) {
+    test.setNow(step.at);
+    if ('activity' in step) {
+      test.activity(step.activity);
+    } else if ('background' in step) {
+      test.process.events.agentEvent(backgroundEvent(step.at, step.background));
+    } else if (step.permission === 'asked') {
+      void test.chat
+        .permissionToolSession(test.agentSession)
+        .call('permission_prompt', BASH_ARGS, {
+          toolUseId: 'tu-1',
+          signal: signal().signal,
+        });
+    } else {
+      test.chat.answerPermission(ROW_ID, 'permission-1', {
+        allowed: true,
+        reason: null,
+      });
+    }
+  }
+}
+
+describe('createChatSessions active time', () => {
+  it.each<{ given: string; steps: ClockStep[]; expected: ActiveTime[] }>([
+    {
+      given: 'working, then idle',
+      steps: [
+        { at: 1000, activity: 'working' },
+        { at: 4000, activity: 'idle' },
+      ],
+      expected: [
+        { totalMs: 0, since: 1000 },
+        { totalMs: 3000, since: null },
+      ],
+    },
+    {
+      given: 'working, a permission asked, then answered',
+      steps: [
+        { at: 1000, activity: 'working' },
+        { at: 4000, permission: 'asked' },
+        { at: 9000, permission: 'answered' },
+      ],
+      expected: [
+        { totalMs: 0, since: 1000 },
+        { totalMs: 3000, since: null },
+        { totalMs: 3000, since: 9000 },
+      ],
+    },
+    {
+      given: 'working with background running through a permission wait',
+      steps: [
+        { at: 1000, activity: 'working' },
+        { at: 2000, background: 1 },
+        { at: 4000, permission: 'asked' },
+        { at: 9000, permission: 'answered' },
+      ],
+      expected: [{ totalMs: 0, since: 1000 }],
+    },
+    {
+      given: 'working, idle with background running, then background over',
+      steps: [
+        { at: 1000, activity: 'working' },
+        { at: 2000, background: 1 },
+        { at: 5000, activity: 'idle' },
+        { at: 9000, background: 0 },
+      ],
+      expected: [
+        { totalMs: 0, since: 1000 },
+        { totalMs: 8000, since: null },
+      ],
+    },
+    {
+      given: 'a permission waiting, background starting then over',
+      steps: [
+        { at: 500, activity: 'working' },
+        { at: 1000, permission: 'asked' },
+        { at: 2000, background: 1 },
+        { at: 6000, background: 0 },
+      ],
+      expected: [
+        { totalMs: 0, since: 500 },
+        { totalMs: 500, since: null },
+        { totalMs: 500, since: 2000 },
+        { totalMs: 4500, since: null },
+      ],
+    },
+  ])(
+    'activeTime_WorkSteps_SendsEachStartAndStop: $given',
+    async ({ steps, expected }) => {
+      const test = await started();
+
+      runClockSteps(test, steps);
+
+      expect(test.sent('activeTime').map((sent) => sent.activeTime)).toEqual(
+        expected,
+      );
+      expect(test.chat.sessions()[0].activeTime).toEqual(expected.at(-1));
+    },
+  );
+
+  it('activeTime_ClockStopsWithNoOtherSave_SnapshotCarriesTheStoppedTotal', async () => {
+    const test = await started();
+    test.chat.restore(NOTHING_SAVED, []);
+
+    runClockSteps(test, [
+      { at: 1000, activity: 'working' },
+      { at: 2000, background: 1 },
+      { at: 5000, activity: 'idle' },
+      { at: 9000, background: 0 },
+    ]);
+
+    expect(test.saved.last()?.sessions[0].activeMs).toBe(8000);
+  });
+
+  const CLOCK_RUNNING: { given: string; steps: ClockStep[] }[] = [
+    { given: 'working', steps: [{ at: 1000, activity: 'working' }] },
+    { given: 'with background only', steps: [{ at: 1000, background: 1 }] },
+    {
+      given: 'working with background',
+      steps: [
+        { at: 1000, activity: 'working' },
+        { at: 2000, background: 1 },
+      ],
+    },
+  ];
+
+  it('restore_SavedActiveMs_SessionStartedCarriesThePausedTotal', () => {
+    const test = setUp();
+
+    test.chat.restore(
+      {
+        sessions: [record('host-a', { activeMs: 42000 })],
+        selectedHostSessionId: null,
+      },
+      [],
+    );
+
+    expect(test.sent('sessionStarted')[0].activeTime).toEqual({
+      totalMs: 42000,
+      since: null,
+    });
+  });
+
+  it('detachAll_ClockRunning_SavesTheOpenSpanUpToNow', async () => {
+    const test = await started();
+    test.chat.restore(NOTHING_SAVED, []);
+    runClockSteps(test, [{ at: 1000, activity: 'working' }]);
+    test.setNow(2500);
+
+    test.chat.detachAll();
+
+    expect(test.saved.last()?.sessions[0].activeMs).toBe(1500);
+  });
+
+  it('detachAll_SaveInFlight_ItsPromiseHoldsForTheWrite', async () => {
+    const test = await started();
+    test.chat.restore(NOTHING_SAVED, []);
+    let finishWrite = () => {};
+    test.saved.store.save = () =>
+      new Promise((resolve) => {
+        finishWrite = resolve;
+      });
+    let isHeld = true;
+
+    const detached = test.chat.detachAll().then(() => {
+      isHeld = false;
+    });
+    await flush();
+    const heldBeforeTheWrite = isHeld;
+    finishWrite();
+    await detached;
+
+    expect(heldBeforeTheWrite).toBe(true);
+    expect(isHeld).toBe(false);
+  });
+
+  it('detachAll_WriteFails_ResolvesAndLogs', async () => {
+    const test = await started();
+    test.chat.restore(NOTHING_SAVED, []);
+    test.saved.store.save = () => Promise.reject(new Error('disk full'));
+
+    await test.chat.detachAll();
+
+    expect(test.logged).toContain('[chat] open sessions not saved: disk full');
+  });
+
+  // Restores `host-a` with 42 s saved, its attach replaying `replay` at 7000.
+  async function restoredAfterReplay(
+    replay: (events: AgentProcessEvents) => void,
+  ) {
+    const test = setUp();
+    test.harness.scriptAttach('p1', { outcome: 'process', replay });
+    test.setNow(7000);
+    restoreOne(test, hostedRecord({ activeMs: 42000 }), [hostedP1()]);
+    const savesAfterRestore = test.saved.saves();
+    await flush();
+    return { test, savesAfterRestore };
+  }
+
+  const pastTask = (events: AgentProcessEvents, taskId: string) => {
+    events.agentEvent({
+      type: 'taskStarted',
+      at: 100,
+      taskId,
+      agentId: MAIN_AGENT_ID,
+      description: 'server',
+      command: null,
+    });
+    events.agentEvent({
+      type: 'taskFinished',
+      at: 200,
+      taskId,
+      outcome: 'done',
+    });
+  };
+
+  it.each<{ given: string; replay: (events: AgentProcessEvents) => void }>([
+    { given: 'working', replay: (events) => events.activity('working') },
+    {
+      given: 'a task still running',
+      replay: (events) => {
+        pastTask(events, 'task-past');
+        events.agentEvent(backgroundEvent(100, 1));
+      },
+    },
+  ])(
+    'replay_EndingWithWorkRunning_OpensTheClockOnceAtItsEnd: $given',
+    async ({ replay }) => {
+      const { test } = await restoredAfterReplay(replay);
+
+      const running = { totalMs: 42000, since: 7000 };
+      expect(test.sent('activeTime').map((sent) => sent.activeTime)).toEqual([
+        running,
+      ]);
+      expect(test.chat.sessions()[0].activeTime).toEqual(running);
+    },
+  );
+
+  it.each<{ given: string; replay: (events: AgentProcessEvents) => void }>([
+    { given: 'nothing', replay: () => {} },
+    {
+      given: 'past tasks that finished',
+      replay: (events) => {
+        pastTask(events, 'task-1');
+        pastTask(events, 'task-2');
+      },
+    },
+    {
+      given: 'a past turn that ended',
+      replay: (events) => {
+        events.activity('working');
+        events.activity('idle');
+      },
+    },
+  ])(
+    'replay_EndingIdle_LeavesTheClockAtTheSavedTotal: $given',
+    async ({ replay }) => {
+      const { test } = await restoredAfterReplay(replay);
+
+      expect(test.sent('activeTime')).toEqual([]);
+      expect(test.chat.sessions()[0].activeTime).toEqual({
+        totalMs: 42000,
+        since: null,
+      });
+      expect(test.saved.last()?.sessions[0].activeMs).toBe(42000);
+    },
+  );
+
+  it('replay_PastTasks_SavesNothing', async () => {
+    const { test, savesAfterRestore } = await restoredAfterReplay((events) => {
+      pastTask(events, 'task-1');
+      pastTask(events, 'task-2');
+    });
+
+    expect(test.saved.saves()).toBe(savesAfterRestore);
+  });
+
+  it.each([
+    { outcome: 'null' as const, message: '', background: false },
+    { outcome: 'reject' as const, message: 'no attach', background: false },
+    { outcome: 'null' as const, message: '', background: true },
+    { outcome: 'reject' as const, message: 'no attach', background: true },
+  ])(
+    'attach_FailsAfterReplayingWorking_ClockStaysPaused: $outcome, background $background',
+    async ({ outcome, message, background }) => {
+      const test = setUp();
+      const replay = (events: AgentProcessEvents) => {
+        events.activity('working');
+        if (background) {
+          events.agentEvent(backgroundEvent(100, 1));
+        }
+      };
+      test.harness.scriptAttach(
+        'p1',
+        outcome === 'null' ? { outcome, replay } : { outcome, message, replay },
+      );
+
+      restoreOne(test, hostedRecord({ activeMs: 42000 }), [hostedP1()]);
+      test.setNow(7000);
+      await flush();
+
+      expect(test.chat.sessions()[0].running).toBe(false);
+      expect(test.sent('activeTime')).toEqual([]);
+      expect(test.chat.sessions()[0].activeTime).toEqual({
+        totalMs: 42000,
+        since: null,
+      });
+      expect(test.saved.last()?.sessions[0].activeMs).toBe(42000);
+    },
+  );
+
+  it.each(CLOCK_RUNNING)(
+    'ended_MidSpan_ClosesTheTotal: $given',
+    async ({ steps }) => {
+      const test = await started();
+      test.chat.restore(NOTHING_SAVED, []);
+      runClockSteps(test, steps);
+      test.setNow(5000);
+
+      test.process.events.ended({ code: 0, error: null });
+
+      const closed = { totalMs: 4000, since: null };
+      expect(test.chat.sessions()[0].activeTime).toEqual(closed);
+      expect(test.sent('activeTime').at(-1)?.activeTime).toEqual(closed);
+      expect(test.saved.last()?.sessions[0].activeMs).toBe(4000);
+    },
+  );
+
+  it.each(CLOCK_RUNNING)(
+    'clear_ClockRunning_StaysAtZero: $given',
+    async ({ steps }) => {
+      const test = await started();
+      test.chat.restore(NOTHING_SAVED, []);
+      runClockSteps(test, steps);
+      test.setNow(5000);
+
+      test.chat.clear(ROW_ID);
+      await flush();
+      test.setNow(8000);
+      test.process.events.agentEvent(backgroundEvent(8000, 0));
+      test.process.events.ended({ code: 0, error: null });
+      await flush();
+
+      expect(test.sent('activeTime').at(-1)?.activeTime).toEqual(
+        NO_ACTIVE_TIME,
+      );
+      expect(test.chat.sessions()[0].activeTime).toEqual(NO_ACTIVE_TIME);
+      expect(test.saved.last()?.sessions[0].activeMs).toBe(0);
+    },
+  );
+
+  it.each([
+    { given: 'the start succeeding', startFails: false },
+    { given: 'the start throwing', startFails: true },
+  ])(
+    'restore_SkippedRecord_ANewHeldRowTakesOverItsTotal given $given',
+    async ({ startFails }) => {
+      const test = setUp();
+      const hostId = PAST_ONE.sessionId;
+      test.chat.sessionConnected(connected('row-relay', hostId));
+      test.chat.restore(
+        {
+          sessions: [
+            record(hostId, {
+              activeMs: 42000,
+              queued: [{ text: 'saved', images: [] }],
+            }),
+          ],
+          selectedHostSessionId: null,
+        },
+        [],
+      );
+      test.chat.sessionEnded('row-relay');
+      if (startFails) {
+        test.harness.failNextStart('no start');
+      }
+
+      const resuming = test.chat.resume({
+        projectDir: '/w/app',
+        profile: 'work',
+        hostSessionId: hostId,
+        title: PAST_ONE.title,
+      });
+      await (startFails ? expect(resuming).rejects.toThrow() : resuming);
+
+      expect(test.saved.last()?.sessions[0].activeMs).toBe(42000);
+      expect(test.sent('activeTime')[0].activeTime).toEqual({
+        totalMs: 42000,
+        since: null,
+      });
+    },
+  );
+
+  it('restore_RecordOfAHeldRow_AddsItsTotalToARunningClock', async () => {
+    const test = await started();
+    runClockSteps(test, [{ at: 1000, activity: 'working' }]);
+    test.setNow(3000);
+
+    restoreOne(test, record('uuid-1', { activeMs: 42000 }), []);
+
+    expect(test.chat.sessions()[0].activeTime).toEqual({
+      totalMs: 42000,
+      since: 1000,
+    });
+    expect(test.sent('activeTime').at(-1)?.activeTime).toEqual({
+      totalMs: 42000,
+      since: 1000,
+    });
+    expect(test.saved.last()?.sessions[0].activeMs).toBe(44000);
   });
 });
 

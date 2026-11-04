@@ -38,13 +38,15 @@ over its rows. The default layout draws the section labels only while a favorite
 group is dragged; otherwise the groups sit directly under the Sessions header.
 
 - **Favorites** are in the user's own order, set by drag and by `<Leader>pk` / `<Leader>pj`.
-- **Recent** groups sort by recency, most recent first, and the rows inside every group, favorites included, do
-  too. A session's recency is the time its row arrived; a group's is its most recent row's. A new session enters at
-  the top of its group and lifts its Recent group to the top. Only a new session or a user's favorites move changes
-  the order: picking a row, sending a message and any activity, needs you included, leave every row in place, so the
-  list holds still while the user reads it and steps through it. Ties keep main's row order.
-- The stamps sit in the sessions page's `uiState`
-  (`recency`), each under its row's host session id, else its app session id, so a page reload and a relaunch both
+- **Recent** groups sort by the time each project's group arrived, most recent first, and the rows inside every group,
+  favorites included, sort by the time each row arrived. A new session enters at the top of its group, and its group
+  holds its place; a session in a project with no open group enters in a new group at the top of Recent. Picking a
+  row, sending a message and any activity, needs you included, leave every row in place, so the list holds still
+  while the user reads it and steps through it. Ties keep main's row order.
+- A group's stamp sits in the sessions page's `uiState` (`projectRecency`). A project with no stamp takes its newest
+  row's, and the stamp goes when a state ends the project's last row, so the project comes back at the top.
+- A row's stamp sits in `uiState` too
+  (`recency`), under its row's host session id, else its app session id, so a page reload and a relaunch both
   keep the order. A stamp follows its row's host id change and goes when the row leaves. A row merely absent keeps
   its stamp, since main resumes rows one at a time after a relaunch; a stamp whose session never comes back goes
   once 200 newer ones push it out.
@@ -81,7 +83,8 @@ DragReorder primitive (`DESIGN.md` § Primitives).
   is the one name every clone shares, and the features home rule and the docs index already name a repo by it.
 - **Projects favorited, not sessions**: a session lasts one agent run; a project comes back daily.
 - **Recency from arrival only**: a row moving on the user's pick would move under the step keys, and one moving on
-  its activity would shift the list while the user reads it.
+  its activity would shift the list while the user reads it. A group has its own stamp for the same reason: a group
+  following its newest row would move every time a session opened in it.
 - **Hand order only in Favorites**: one rule — favorites are what the user orders, the rest orders itself — over
   pinned groups that silently stop following recency.
 

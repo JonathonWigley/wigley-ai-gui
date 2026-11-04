@@ -17,6 +17,7 @@ describe('sidebarSections', () => {
     rows: [sessionId: string, project: string][];
     favorites: string[];
     stamps: Record<string, number>;
+    projectStamps?: Record<string, number>;
     expectedFavorites: string[];
     expectedRecent: string[];
     expectedDrawn: string[];
@@ -31,6 +32,7 @@ describe('sidebarSections', () => {
       ],
       favorites: ['gamma'],
       stamps: { a1: 1, b1: 4, a2: 3, c1: 2 },
+      projectStamps: { alpha: 3, beta: 4, gamma: 2 },
       expectedFavorites: ['gamma*: c1'],
       expectedRecent: ['beta: b1', 'alpha: a2 a1'],
       expectedDrawn: ['c1', 'b1', 'a2', 'a1'],
@@ -92,12 +94,13 @@ describe('sidebarSections', () => {
       ],
       favorites: [],
       stamps: { x1: 6, y1: 6 },
+      projectStamps: { xray: 6, yank: 6 },
       expectedFavorites: [],
       expectedRecent: ['xray: x1', 'yank: y1'],
       expectedDrawn: ['x1', 'y1'],
     },
     {
-      case: 'a group sorts by its newest row, not its first',
+      case: 'a group sorts by its project stamp, not its newest row',
       rows: [
         ['a1', 'alpha'],
         ['b1', 'beta'],
@@ -105,9 +108,10 @@ describe('sidebarSections', () => {
       ],
       favorites: [],
       stamps: { a1: 1, b1: 3, a2: 5 },
+      projectStamps: { alpha: 1, beta: 3 },
       expectedFavorites: [],
-      expectedRecent: ['alpha: a2 a1', 'beta: b1'],
-      expectedDrawn: ['a2', 'a1', 'b1'],
+      expectedRecent: ['beta: b1', 'alpha: a2 a1'],
+      expectedDrawn: ['b1', 'a2', 'a1'],
     },
     {
       case: 'an unstamped group sorts after a stamped one',
@@ -117,6 +121,7 @@ describe('sidebarSections', () => {
       ],
       favorites: [],
       stamps: { s1: 1 },
+      projectStamps: { stamped: 1 },
       expectedFavorites: [],
       expectedRecent: ['stamped: s1', 'unstamped: u1'],
       expectedDrawn: ['s1', 'u1'],
@@ -139,6 +144,7 @@ describe('sidebarSections', () => {
       rows,
       favorites,
       stamps,
+      projectStamps = {},
       expectedFavorites,
       expectedRecent,
       expectedDrawn,
@@ -147,6 +153,7 @@ describe('sidebarSections', () => {
         rows.map(([sessionId, project]) => ({ sessionId, project })),
         favorites,
         new Map(Object.entries(stamps)),
+        new Map(Object.entries(projectStamps)),
       );
       expect(sections.favorites.map(drawnGroup)).toEqual(expectedFavorites);
       expect(sections.recent.map(drawnGroup)).toEqual(expectedRecent);

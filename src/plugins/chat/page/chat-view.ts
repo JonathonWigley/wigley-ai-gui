@@ -1,3 +1,4 @@
+import type { ActiveTime } from '../../../contracts/active-time';
 import type { Clock, Timers } from '../../../contracts/ambient';
 import type { ChatEntry, SessionControl } from '../../../contracts/agent';
 import type { CommandId } from '../../../contracts/commands';
@@ -8,6 +9,7 @@ import type { ChatEntryKind } from '../../../contracts/agent';
 import type { Log } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import type { PageChannel, ToastTone } from '../../../contracts/plugin';
+import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import {
   type ContributedPartsPlace,
@@ -75,6 +77,9 @@ export interface ChatView {
   // Chat tab, no focused stop, or while a composer part's stop holds the
   // cursor.
   focusedEntry(): HTMLElement | null;
+  // The session's clock as main last sent it, from the moment its tab starts
+  // being added; null for a session the view does not hold.
+  activeTime(sessionId: string): ActiveTime | null;
 }
 
 // A session as a log line and a call to main name it.
@@ -134,7 +139,9 @@ export type ChatTabScope = 'chat';
 // `onActiveChanged` the focused pane's session change and
 // `onSessionHostChanged` a row's host id change, `onScopeChanged` each change of
 // the scope keys fire in; `sessions` also takes each
-// row's activity and names the focused pane's session. `run` runs
+// row's activity and names the focused pane's session. `activeTimeListeners` run
+// when a session arrives and on each `activeTime` message for a held session, a
+// throw skipping none of them. `run` runs
 // a command, as the composer's chips and send button do; `keys` also anchors
 // the composer's key hints; `layouts` holds the chat layouts the entries and
 // the composer draw with; `paths` names each tab by its project folder.
@@ -158,6 +165,10 @@ export interface ChatViewDeps extends SurfaceKitDeps {
   onActiveChanged(listener: (sessionId: string | null) => void): void;
   onSessionHostChanged(listener: (sessionId: string) => void): void;
   onScopeChanged(listener: () => void): void;
+  activeTimeListeners: readonly ((
+    sessionId: string,
+    activeTime: ActiveTime,
+  ) => void)[];
   editor: EditorHost;
   run(command: CommandId): void;
   layouts: ChatLayouts;
@@ -231,6 +242,9 @@ const SIDE_PARTS: ContributedPartsPlace = {
 export function mountChatView(deps: ChatViewDeps): ChatTabs {
   const { log } = deps;
   const tabs = new Map<string, HeldTab>();
+  // Apart from `tabs`: `addTab` draws the side bar's rows, whose clocks read
+  // this, before the tab is in `tabs`.
+  const activeTimes = new Map<string, ActiveTime>();
   // The kinds whose failed draw has toasted since the layouts were shown.
   const toastedKinds = new Set<ChatEntryKind>();
   deps.layouts.onChange(() => {
@@ -268,10 +282,16 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     focusIfRevealed(tab);
   };
 
+  const announceActiveTime = (sessionId: string, activeTime: ActiveTime) =>
+    callEach(deps.activeTimeListeners, (listener) =>
+      listener(sessionId, activeTime),
+    );
+
   const add = (state: ChatSessionState) => {
     if (tabs.has(state.sessionId)) {
       return;
     }
+    activeTimes.set(state.sessionId, state.activeTime);
     const tab = createTab(state, toastedKinds, deps, {
       isHeld: (heldTab) => tabs.get(heldTab.sessionId) === heldTab,
       // Chat keys act only on the visible Chat tab's session. Every Chat tab
@@ -304,6 +324,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     if (pendingReveal === tab.sessionId) {
       showRevealed(tab);
     }
+    announceActiveTime(state.sessionId, state.activeTime);
   };
 
   const heldFor = (message: string, sessionId: string) => {
@@ -365,6 +386,14 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       tab.state = { ...tab.state, background };
       log('chat', `${tab.name} has ${background} running in the background`);
       drawActivity(tab, deps);
+    }
+  });
+  channel.on('activeTime', ({ sessionId, activeTime }) => {
+    const tab = heldFor('activeTime', sessionId);
+    if (tab !== undefined) {
+      tab.state = { ...tab.state, activeTime };
+      activeTimes.set(sessionId, activeTime);
+      announceActiveTime(sessionId, activeTime);
     }
   });
   channel.on('branch', ({ sessionId, repo, branch }) => {
@@ -456,6 +485,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       return;
     }
     tabs.delete(sessionId);
+    activeTimes.delete(sessionId);
     tab.stop.leave();
     tab.dropTarget?.dispose();
     tab.box?.destroy();
@@ -486,16 +516,17 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       tab.stop.scopeChanged(tab.handle?.isVisible() === true);
     }
   });
-  void channel
-    .invoke('sessions')
-    .then((states) => {
-      for (const state of states) {
-        add(state);
+  void channel.invoke('sessions').then(
+    (states) => {
+      try {
+        callEach(states, add);
+      } catch (error) {
+        log('chat', `chat session arrival failed: ${errorText(error)}`);
       }
-    })
-    .catch((error: unknown) =>
+    },
+    (error: unknown) =>
       log('chat', `chat sessions not read: ${errorText(error)}`),
-    );
+  );
 
   const visibleTab = () =>
     [...tabs.values()].find((tab) => tab.handle?.isVisible() === true);
@@ -519,6 +550,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
         ? null
         : tab.entries.focusedElement();
     },
+    activeTime: (sessionId) => activeTimes.get(sessionId) ?? null,
     session: (sessionId) => asSession(tabs.get(sessionId)),
     sessionOfEditor: (editor) =>
       asSession([...tabs.values()].find((tab) => tab.box === editor)),

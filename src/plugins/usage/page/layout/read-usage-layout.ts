@@ -6,6 +6,7 @@ const LAYOUT_PARTS: Record<keyof Layout, true> = {
   statusLine: true,
   sessionLine: true,
   rowLine: true,
+  rowCache: true,
   details: true,
 };
 
