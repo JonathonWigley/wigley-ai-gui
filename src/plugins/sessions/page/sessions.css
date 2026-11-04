@@ -69,15 +69,15 @@
   font-weight: var(--wg-weight-regular);
 }
 
-/* Other plugins' row parts share the footer's line after the status,
-   wrapping when it is full; each part styles its own content and may set its
+/* Other plugins' row parts share the footer's line after the status and stay
+   on it; each part styles its own content and may set its
    own wrapper's `order`. */
 .session-row-parts {
   display: flex;
   flex: 1 1 auto;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  column-gap: var(--wg-space-3);
+  column-gap: var(--wg-space-1_5);
   min-width: 0;
 }
 
