@@ -32,7 +32,7 @@ Built, in `src/plugins/workflow/`, on the clear, the agent events and the row pa
 - **Stage** — one step of the workflow, one stage module (§ Stage modules). Chat's **step** (a tool, thinking or raw
   entry) and the tower's **plan step** are different things.
 - **Signal** — one input the flow folds: an agent event, a clear, or a plan folder change (§ Signals).
-- **Main action** — the one action of a stage that `ww` and the row chip's button run.
+- **Main action** — the one action of a stage that `ww` runs, first in the stage's buttons on the strip and the Flow tab.
 
 ## Stages
 
@@ -116,8 +116,9 @@ turn that ended while the app was closed, folds as usual. A flow saved without t
 
 Everything draws through the `workflow` layout, its built-in `default`, and the preview on `Space z l w`.
 
-- **Row chip** — a row part (sessions' `addRowPart`): the stage, the progress and the main action's button. Idle draws
-  nothing.
+- **Row chip** — a row part (sessions' `addRowPart`): the built-in layout draws the stage as an accent tag and the
+  countdown. A user layout can also draw the progress and the main action's button, which the chip's input carries.
+  Idle draws nothing.
 - **Composer strip** — a part above the Chat composer (chat's `addComposerPart`): the stepper, with the current stage
   lit, and the stage's buttons. Primer and feature share one step: the one the session is in, otherwise feature. Idle draws nothing.
 - **Flow tab** — a session tab (`addTab`) added when the session first leaves idle, kept from then on: the stepper,
