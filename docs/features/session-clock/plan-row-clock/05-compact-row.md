@@ -1,6 +1,6 @@
 # 05 — Compact session row
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 04, and the peer plan `session-groups` task 05 (the lead checks this; see plan.md § Preconditions)
 Plan: [plan.md](plan.md)
@@ -47,9 +47,4 @@ Commit:    one commit for the group
 
 ## Proof
 
-
-Before capture (side bar 240px, three sessions, each with a status): `/private/tmp/claude-502/-Users-jonathonwigley-Documents-ai-dev/b0a392a1-28c1-4b90-a35c-e74802e74682/scratchpad/row-before-240.png`
-
-Card height before the change: 89.98px per row (`.session-row` computed height, all three rows; the title line, then the footer band).
-
-Fixture limits: `usage.seed` puts usage on one session only, so one row shows 180k and the other two show 0k; the status on every row is `Layout preview 0/5` from `forms.openRound`; the first row also shows a run time (`8s`) and the cache mark. The side bar was set to 240px by dragging its handle (`--shell-side-bar-width` set by hand did not move it).
+Commit 78c67d8d · proof: Before capture (side bar 240px, three sessions, each with a status): /private/tmp/claude-502/-Users-jonathonwigley-Documents-ai-dev/b0a392a1-28c1-4b90-a35c-e74802e74682/scratchpad/row-before-240.png. Card height before: 89.98px per row. Fixture limits: usage.seed fills one session only (180k on one row, 0k on two); 240px comes from dragging .shell-side-bar-handle. Lint and typecheck pass. · concerns: .session-sidebar no longer holds rows, so the card gap went on .session-group-rows; .session-sidebar keeps space-1_5.
