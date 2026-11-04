@@ -45,10 +45,10 @@ Core seams that most items below assume.
   disposable registrations landed (plan-foundation-sweeps).
 - **Quit does not hold for a plugin's suspending dispose** — *agent-ready*: quit runs `stopAll` on the main parts
   (`src/main/main.ts`), but a live quit does not wait for it, so a `dispose` that really suspends (forms' on an
-  unfinished layout write, sessions' `relay.close`) is cut off and the parts after it never stop. Hold the quit until `stopAll` settles, and prove it
-  in a live quit, which a drive run cannot show because it holds the quit itself. Two gaps ride on the same path:
-  `stop` and `stopAll` have no guard against running together, and on Windows zeroing the alert counts at quit may
-  call `setOverlayIcon` on a destroyed window, so `stopAll` would reject.
+  unfinished layout write, sessions' `relay.close`) is cut off and the parts after it never stop. Chat stops after
+  forms, so a forms `dispose` that suspends can keep chat's `killAll` from running. Hold the quit until `stopAll`
+  settles, and prove it in a live quit, which a drive run cannot show because it holds the quit itself. The hold
+  changes quit latency, which is why it waits here.
 - **Runtime command API** — *agent-ready*: commands at runtime and around other plugins:
   `commands.register(id, decl, handler)`, `keys.bind(bind)`, `commands.intercept(id, (next, ctx) => …)`,
   `commands.onDidRun`, all disposable, and `MainApi.commands.run`. Commands take a count or argument, so
@@ -558,18 +558,37 @@ because the earlier items rewrite many of these tests anyway.
   mid-replay sends the rest to the old box, a replayed `:` does not open the vim command prompt, and Shift is lost on
   named keys.
 - **Sends and draws after a plugin stops** — *agent-ready*: the host disposes a registration made after the stop, but
-  a late send or draw is not a registration. Known sites: workflow main's `ready.then(sendFlows)` can send after a
-  stop; a late reply can draw into a disposed docs or backlog view; notes' `open()` in flight at a stop shows a dialog
-  with no overlay and its close then calls the throwing `pop`; late continuations in settings and sessions run against
-  detached elements. Decide one rule (a stopped flag each continuation checks, or a signal the part awaits against),
-  apply it at these sites, and look for others.
-- **Disposed services still start work** — *agent-ready*: after `dispose`, the agent form service's `startSession` and
-  the layout preview's `show` can still start a session or open a preview, because neither checks that it was disposed. Make a disposed service refuse, as `track` does for a registration made after the stop.
-- **A throwing teardown step skips the rest** — *agent-ready*: a tool-session end in the live tool list
-  (`withdrawContribution`, `src/plugins/sessions/main/session-list.ts`) skips the remaining ends and the `list_changed`
-  notice; chat's throwing `kill` skips the remaining kills, `cancelRunning` and resolving the end-waits; a throwing `tearDownTab` step skips the rest; and
-  `EditorBoxes.dispose` stops at an editor whose `destroy` throws. Run the remaining steps and rethrow the first
-  error, the way `Registrations.dispose` does.
+  a late send or draw is not a registration. Known sites:
+  - workflow main's queued `ready.then` work and `chat.launch` reach its store after a stop
+  - the `startFormsEvents` and `startPrimerEvents` subscriptions, and a late `sendFailed`
+  - a late reply can draw into a disposed backlog view
+  - late continuations in settings and sessions run against detached elements
+
+  Decide one rule (a stopped flag each continuation checks, or a signal the part awaits against), apply it at these
+  sites, and grep every async path in one pass: the docs view's guards landed one site at a time, across three rounds.
+- **A page's invoke after its plugin's main part stopped** — *agent-ready*: `plugin:invoke` rejects with `no main
+  handler` once main's part has stopped, and the page side only logs it (chat view, doc view). A self-test logs these
+  errors after `all passed`: `watchDoc`, `pluginStatus`, `loadIndex`, `loadHistory`. Decide whether a live `stop(id)`
+  stops the page part first, and quiet the lines a quit produces.
+- **Withdrawn tools reach live hosts late** — *agent-ready*: at a stop, withdrawn tools and shrinking tool lists need
+  to reach live hosts before `relay.close`, and the relay's second notice arrives only on the host's next `tools/call`.
+- **A stop drops unsaved text** — notes' popup and a forms draft lose what the user typed when their part stops. The
+  page-stop path has no production caller yet, so this bites when a plugin can be switched off live.
+- **A pushed scope after its host is disposed** — `PushedScope.pop` throws after host disposal (notes popup, rename
+  dialog, settings view), and `keys.setScope` leaves its base behind. Same trigger as the item above.
+- **A disposed layout preview still opens** — after `dispose`, the layout preview's `show` can open a preview, because
+  it does not check. Make a disposed service refuse, as `track` does for a registration made after the stop.
+- **A throwing teardown step skips the rest** — *agent-ready*: these remain plain sequences: chat's `killAll` (a
+  throwing `kill` cannot happen today), `disposeAnchors`, `dispose` in the docs view, and the sessions tabs view's
+  `drop`, `disposeText` and `disposeTabs`, where a throw leaves a half-disposed frame in the map. Run the remaining steps
+  through `callEach`, the way `Registrations.dispose` does. Grep every plain teardown sequence in one pass: the fixes so
+  far patched sites as each review found them.
+- **A sessions view's dispose leaves the side bar** — `SessionsView.dispose` covers the pane tree and tabs and does not
+  dispose the side bar or its rows. Check every view's `dispose` against what it drew in one pass, for the same reason.
+- **The part harness's fakes drift from their contracts** — *agent-ready*: three review rounds each found a fake that
+  dropped a throw its contract states; the fake markdown's fence list still lacks the renderer's built-in `diff`. A
+  contract row suite run against both fake and real, as `files-contract.test-support.ts` does, would end the site-by-site
+  patching.
 - **A viewport-sized wide visual ends one scrollbar tall after it grows** — a visual whose root follows the viewport
   (`min-height: 100vh`) and is wider than the column settles one horizontal scrollbar (15 px) taller than it needs
   once its content grows after load (the known limit in `docs/features/visuals/design.md` and
