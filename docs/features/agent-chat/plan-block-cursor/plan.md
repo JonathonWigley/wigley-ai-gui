@@ -196,3 +196,4 @@ Review base: e976884ea34536afc67f149b90cdf9797c672647
 - List items draw the bar and tint on a ::before and p uses margin plus padding — a list marker follows the item's box edge — a little more CSS if wrong · group 06
 ### Review rounds
 ### Test gate
+- markdown-it-renderer, entry-focus, entry-list, activity-runs, chat-commands, composer-kit, visual-commands, fake-agent-harness and vim-keys test files, each changed or owning a changed rule; keymap.test.ts if present; filtered self-test chat,agent-strip since the cursor's key sequences run there; whole self-test not run, per AGENTS.md only on the user's ask, so the placement check stayed skipped · 488 unit tests pass, self-test all passed, lint and typecheck clean
