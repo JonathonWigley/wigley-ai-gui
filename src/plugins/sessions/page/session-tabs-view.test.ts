@@ -42,6 +42,25 @@ const TWO_PANES = {
   focusedId: 'pane-1',
 };
 
+// A view with session `a` in pane-2 and the focused pane-1 empty, showing its
+// focus edge and its text, which holds the pick hint.
+function viewWithFramedAndEmptyPane() {
+  const { view, area, anchors } = sessionsViewSetup();
+  view.tabs.add('a', tabView('a'));
+  view.render(stateOf(['a'], 'a'));
+  view.panes.restore(TWO_PANES, new Map([['pane-2', 'a']]));
+  const pickHint = findAll(area, 'sessions-pick-hint')[0]!;
+  expect(pickHint.parentNode).not.toBeNull();
+  const liveFocusEdges = () =>
+    anchors.filter(
+      (anchor) =>
+        anchor.command.endsWith(PANE_FOCUS_COMMANDS.right) &&
+        !anchor.isDisposed,
+    );
+  expect(liveFocusEdges()).toHaveLength(1);
+  return { view, area, pickHint, liveFocusEdges };
+}
+
 let moves: { element: unknown; to: unknown }[];
 
 beforeEach(() => {
@@ -137,21 +156,28 @@ describe('session tabs view', () => {
   });
 
   it('a disposed view leaves no pane part or empty text live', () => {
-    const { view, area, anchors } = sessionsViewSetup();
-    view.tabs.add('a', tabView('a'));
-    view.render(stateOf(['a'], 'a'));
-    view.panes.restore(TWO_PANES, new Map([['pane-2', 'a']]));
-    const pickHint = findAll(area, 'sessions-pick-hint')[0]!;
-    expect(pickHint.parentNode).not.toBeNull();
-    const liveFocusEdges = () =>
-      anchors.filter(
-        (anchor) =>
-          anchor.command.endsWith(PANE_FOCUS_COMMANDS.right) &&
-          !anchor.isDisposed,
-      );
-    expect(liveFocusEdges()).toHaveLength(1);
+    const { view, pickHint, liveFocusEdges } = viewWithFramedAndEmptyPane();
 
     view.dispose();
+
+    expect(liveFocusEdges()).toEqual([]);
+    expect(pickHint.parentNode).toBeNull();
+  });
+
+  it.each([
+    { case: "a frame's throw still drops the panes", throwing: 'session-area' },
+    {
+      case: "a pane text's throw still disposes that pane's part",
+      throwing: 'sessions-empty',
+    },
+  ])('a disposed view drops what follows a throw ($case)', ({ throwing }) => {
+    const { view, area, pickHint, liveFocusEdges } =
+      viewWithFramedAndEmptyPane();
+    vi.spyOn(findAll(area, throwing)[0]!, 'remove').mockImplementation(() => {
+      throw new Error(`${throwing} refused`);
+    });
+
+    expect(() => view.dispose()).toThrow(`${throwing} refused`);
 
     expect(liveFocusEdges()).toEqual([]);
     expect(pickHint.parentNode).toBeNull();

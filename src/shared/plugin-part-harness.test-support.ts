@@ -41,6 +41,7 @@ import type { VisualFrames } from '../contracts/visual-frames';
 import { CommandRegistry } from './command-registry';
 import { dataUrl } from './data-url';
 import { createEventBus, type EventBus, pluginEvents } from './event-bus';
+import { gateExternalLinks } from './external-links';
 import { FakeProcesses } from './fake-processes';
 import { fakeDriveHost } from './fake-drive-host';
 import { createListeners, type Listeners } from './listeners';
@@ -693,14 +694,7 @@ function fakeMainApi(
         capture: () =>
           Promise.reject(new Error('part harness: no window to capture')),
       },
-      async openExternal(url) {
-        const scheme = URL.parse(url)?.protocol;
-        if (scheme !== 'http:' && scheme !== 'https:') {
-          throw new Error(
-            `Refused to open ${url}: only http and https links open outside the app`,
-          );
-        }
-      },
+      openExternal: gateExternalLinks(async () => undefined),
       agentHarnesses: [],
       git: notFaked<Git>('git'),
       images: notFaked<ImageEncoder>('images'),

@@ -53,6 +53,7 @@ import { appEndpointDir } from '../shared/app-endpoint-dir';
 import { CommandRegistry } from '../shared/command-registry';
 import { errorText } from '../shared/error-text';
 import { createEventBus } from '../shared/event-bus';
+import { gateExternalLinks } from '../shared/external-links';
 import { createFakeAgentHarness } from '../shared/fake-agent-harness';
 import { type PluginHost, startPlugins } from '../shared/plugin-host';
 import {
@@ -83,7 +84,6 @@ import {
 } from './data-protocol/data-protocol';
 import { type DriveRun, startDriveRun } from './drive/drive-run';
 import { electronDrivenWindow } from './electron-driven-window';
-import { gateExternalLinks } from './external-links';
 import { createNodeFiles } from './files/node-files';
 import { createProcessGit } from './git/process-git';
 import {
