@@ -4,6 +4,7 @@ import {
   type PaneDirection,
 } from '../../../../contracts/panes';
 import type { ShownLayouts } from '../../../../contracts/plugin';
+import { errorText } from '../../../../shared/error-text';
 import {
   type ContributedPartsPlace,
   type PartStore,
@@ -36,7 +37,6 @@ import type {
   Layout,
   PaneInput,
   PaneKit,
-  PanePart,
   RenameDialogInput,
   RenameDialogKit,
   RowKit,
@@ -76,6 +76,14 @@ export interface DrawnGroup extends GroupPane {
   favoriteToggle: HTMLElement | null;
 }
 
+// A drawn pane: its root and body, and `update`, which applies a new input in
+// place, false when the layout has no `update` or it threw.
+export interface DrawnPanePart {
+  element: HTMLElement;
+  body: HTMLElement;
+  update(input: PaneInput): boolean;
+}
+
 // A drawn tab bar and the prompts its kit placed, each null when the layout
 // placed none: the tab and close prompts, and the key inside each pane
 // control.
@@ -98,7 +106,7 @@ export interface SessionsParts {
   section(parent: HTMLElement, input: SectionInput): DrawnPart<SectionPane>;
   group(parent: HTMLElement, input: GroupInput): DrawnPart<DrawnGroup>;
   row(parent: HTMLElement, input: SessionRowInput): DrawnPart<SessionsPart>;
-  pane(parent: HTMLElement, input: PaneInput): DrawnPart<PanePart>;
+  pane(parent: HTMLElement, input: PaneInput): DrawnPart<DrawnPanePart>;
   // `sessionId` is the session whose frame the bar tops.
   tabBar(parent: HTMLElement, sessionId: string): DrawnPart<DrawnTabBar>;
   tab(parent: HTMLElement, input: SessionTabInput): DrawnPart<SessionsPart>;
@@ -251,7 +259,25 @@ export function createSessionsParts(deps: SessionsPartsDeps): SessionsParts {
         };
         const pane = builder(into, input, kit);
         requireElementIn(pane.element, pane.body, 'pane body');
-        return { element: pane.element, body: pane.body };
+        return {
+          element: pane.element,
+          body: pane.body,
+          update(next) {
+            if (pane.update === undefined) {
+              return false;
+            }
+            try {
+              pane.update(next);
+              return true;
+            } catch (error) {
+              deps.log(
+                sessionsManifest.id,
+                `pane update failed: ${errorText(error)}`,
+              );
+              return false;
+            }
+          },
+        };
       }),
     tabBar: (parent, sessionId) =>
       parts.draw('tabBar', parent, (builder, into, rollback) => {

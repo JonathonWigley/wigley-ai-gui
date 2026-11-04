@@ -13,11 +13,14 @@ import type {
 import type {
   EmptyTextInput,
   PaneInput,
-  PanePart,
   SessionsPart,
 } from '../layouts/layout';
 import { sessionsManifest } from '../manifest';
-import type { DrawnTabBar, SessionsParts } from './layout/sessions-parts';
+import type {
+  DrawnPanePart,
+  DrawnTabBar,
+  SessionsParts,
+} from './layout/sessions-parts';
 import { scrollLeftShowing } from './strip-scroll';
 import {
   hasOtherTab,
@@ -70,7 +73,7 @@ interface DrawnPane {
   slot: HTMLElement;
   sessionId: string | null;
   input: PaneInput | null;
-  part: DrawnPart<PanePart> | null;
+  part: DrawnPart<DrawnPanePart> | null;
   empty: HTMLElement;
   text: DrawnPart<SessionsPart> | null;
 }
@@ -92,7 +95,7 @@ export interface SessionTabsView {
   // document.
   holder: HTMLElement;
   render(state: SessionsState): void;
-  // Draws each pane's `pane` part into its slot, again when its input
+  // Draws each pane's `pane` part into its slot, updates it when its input
   // changed, and moves each session's frame into the body of the pane that
   // shows it, the rest into the holder. `edges` are the focused pane's.
   place(
@@ -134,7 +137,7 @@ export interface SessionTabsView {
 // prompts hide while the session has no other tab, and every tab bar's prompts
 // and pane control keys hide outside the focused pane, whose keys they are. A
 // tab's element fills its frame's sheet, and a frame moves between panes, the
-// holder and a redrawn pane part as the same element, by a connected move that
+// holder and a pane part drawn again as the same element, by a connected move that
 // keeps a visual in it loaded; a closing pane's frame moves to the holder
 // (`vacate`) before its slot leaves the document. A frame no pane shows, a
 // session's with no row yet included, waits in the hidden holder.
@@ -287,17 +290,20 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
     }
   };
 
-  // Draws `pane`'s part again when `input` differs from the one it drew with,
-  // or when it was marked for a redraw. The new part draws beside the old one,
-  // takes the old body's content by a connected move, then the old part
-  // leaves, so a visual in the content stays loaded.
+  // Updates `pane`'s part in place when `input` differs from the one it drew
+  // with, so the elements under a press that focused the pane stay in the
+  // document for its click. Draws the part again when it has no working
+  // `update`, or when it was marked for a redraw: the new part draws beside the
+  // old one, takes the old body's content by a connected move, then the old
+  // part leaves, so a visual in the content stays loaded.
   const drawPanePart = (pane: DrawnPane, input: PaneInput) => {
-    if (
-      pane.part !== null &&
-      pane.input !== null &&
-      isSameInput(pane.input, input)
-    ) {
-      return pane.part.built.body;
+    if (pane.part !== null && pane.input !== null) {
+      const isCurrent =
+        isSameInput(pane.input, input) || pane.part.built.update(input);
+      if (isCurrent) {
+        pane.input = input;
+        return pane.part.built.body;
+      }
     }
     const old = pane.part;
     pane.part = parts.pane(pane.slot, input);

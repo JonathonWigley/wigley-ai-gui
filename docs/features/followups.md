@@ -169,9 +169,6 @@ Defects seen in a drive run, a transcript or the user's own use.
   `usage-tab-line` in its tab line) does not fit at the minimum width. Find what grew it (check recent commits
   touching the sessions tab bar or the usage tab line, such as 4c8a2b0b and 4b7f175a) and make the bar fit or
   scroll. Source session: Claude Code 76f5a6f5-89a8-4d05-a525-af23402d29ad in wigley-ai-gui.
-- **Esc in the split's session picker** — *agent-ready*: while the split's "Show session" picker is open, focus stays
-  in the chat editor, so Esc reaches the editor (`<Esc> has no bind in sessions.picker`) and the picker stays open;
-  the picker should take focus when it opens (`openSplitPicker`, `src/plugins/sessions/page/start.ts`).
 - **Window adapter misses page load 1** — *agent-ready*: the window adapter numbers page loads from 1 only because both
   `electronDrivenWindow` calls (`src/main/main.ts` `createWindow`, `src/main/selftest.ts` `startSelfTest`) run in the
   same synchronous pass that starts the first load (`src/main/window.ts` `loadURL`); an `await` added between them

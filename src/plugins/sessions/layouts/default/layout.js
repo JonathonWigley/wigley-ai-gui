@@ -92,12 +92,25 @@ const layout = {
 
   pane(parent, input, kit) {
     const element = kit.el(parent, 'div', 'session-pane');
-    element.classList.toggle('is-focused', input.isFocused);
     const body = kit.el(element, 'div', 'session-pane-body');
-    for (const direction of input.edges) {
-      kit.focusEdge(element, direction);
-    }
-    return { element, body };
+    /** @type {Map<import('../layout').PaneInput['edges'][number], HTMLElement>} */
+    const edges = new Map();
+    /** @param {import('../layout').PaneInput} next */
+    const update = (next) => {
+      element.classList.toggle('is-focused', next.isFocused);
+      for (const [direction, edge] of edges) {
+        if (!next.edges.includes(direction)) {
+          edge.remove();
+        }
+      }
+      for (const direction of next.edges) {
+        const edge = edges.get(direction) ?? kit.focusEdge(element, direction);
+        edges.set(direction, edge);
+        element.append(edge);
+      }
+    };
+    update(input);
+    return { element, body, update };
   },
 
   tabBar(parent, kit) {

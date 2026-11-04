@@ -6,6 +6,7 @@ import {
   createPartStore,
   type PartStore,
 } from '../../../shared/page/contributed-parts';
+import { blurFocusedElement } from '../../../shared/page/dom';
 import { createListPicker } from '../../../shared/page/list-picker';
 import {
   leafIds,
@@ -363,6 +364,17 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
           tellMain(sessionId);
         }
       },
+      // The keys follow a press into its pane: the old pane's box lets go, and
+      // the new pane's takes them when its visible tab is a Chat tab.
+      panePressed() {
+        blurFocusedElement();
+        const canFocusBox =
+          view.panes.focusedSessionId() !== null &&
+          api.keys.command('chat.focusBox') !== undefined;
+        if (canFocusBox) {
+          api.commands.run('chat.focusBox');
+        }
+      },
       markdown: api.services.markdown,
       platform: api.platform,
       commands: {
@@ -696,6 +708,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         choices.push({ kind: 'new' });
       }
       const isPaneLive = () => leafIds(view.panes.tree()).includes(paneId);
+      blurFocusedElement();
       picker.open<PickerChoice>({
         title: 'Show session',
         items: choices,

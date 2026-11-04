@@ -369,7 +369,8 @@ function moveNewWrappersIntoOrder(
   });
 }
 
-// Takes no key and no focus, so a click leaves the focus where it was.
+// Takes no key and no focus, so a click in the focused pane leaves the focus
+// where it was; a click in another pane moves it there by that pane's focus.
 function sectionHead(toggle: () => void): HTMLButtonElement {
   const head = element('button', 'chat-side-section-head');
   head.type = 'button';

@@ -766,7 +766,7 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'session hub',
-    why: 'Space v s hides the session hub in every Chat tab, and again shows it.',
+    why: 'Space v s hides the session hub in every Chat tab, and again shows it. A split from a focused box hands the keys to its Show session picker, whose Enter chooses rather than reaching the box.',
     steps: [
       {
         keys: ['Escape', ' ', 'v', 's'],
@@ -775,6 +775,21 @@ const GROUPS: SelfTestGroup[] = [
       {
         keys: ['Escape', ' ', 'v', 's'],
         expect: '[chat] session hub shown',
+      },
+      {
+        keys: ['i', '<A-;>'],
+        expect: '[sessions] pane split right',
+        alsoExpect: [/^\[chat\] focused the box in /],
+        width: 1800,
+      },
+      {
+        keys: ['Enter'],
+        expect: '[page] Enter ran sessions.pickerChoose',
+      },
+      {
+        keys: ['<A-w>'],
+        expect: '[sessions] pane closed',
+        width: 'start',
       },
     ],
   },

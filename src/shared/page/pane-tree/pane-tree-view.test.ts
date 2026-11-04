@@ -131,17 +131,19 @@ afterEach(() => {
 function viewOf(tree: PaneTree) {
   const changed: PaneTree[] = [];
   const focused: string[] = [];
+  const pressFocused: string[] = [];
   const view = createPaneTreeView({
     initialId: tree.focusedId,
     anchor: () => ({ dispose: () => undefined }),
     timers,
     changed: (next) => changed.push(next),
     focused: (id) => focused.push(id),
+    pressFocused: (id) => pressFocused.push(id),
     leaving: () => undefined,
   });
   view.restore(tree);
   asFake(view.element).isPageRoot = true;
-  return { view, changed, focused };
+  return { view, changed, focused, pressFocused };
 }
 
 function asPane(node: HTMLElement): PaneFakeElement {
@@ -437,5 +439,43 @@ describe('createPaneTreeView focused', () => {
     act(view);
 
     expect(focused).toEqual(expected);
+  });
+
+  it.each([
+    {
+      name: 'a press on another pane',
+      act: (view: PaneTreeView) =>
+        asPane(view.element).dispatch('pointerdown', {
+          target: view.slot('b'),
+        }),
+      expected: ['b'],
+    },
+    {
+      name: 'a press on the focused pane',
+      act: (view: PaneTreeView) =>
+        asPane(view.element).dispatch('pointerdown', {
+          target: view.slot('a'),
+        }),
+      expected: [],
+    },
+    {
+      name: 'focus on another pane by call',
+      act: (view: PaneTreeView) => view.focus('b'),
+      expected: [],
+    },
+    {
+      name: 'a focus move',
+      act: (view: PaneTreeView) => view.outer.focus.move('right'),
+      expected: [],
+    },
+  ])('reports a press only when it moved focus: $name', ({ act, expected }) => {
+    const { view, pressFocused } = viewOf({
+      root: row(0.5, leaf('a'), leaf('b')),
+      focusedId: 'a',
+    });
+
+    act(view);
+
+    expect(pressFocused).toEqual(expected);
   });
 });

@@ -94,6 +94,7 @@ export function sessionsViewSetup(
     timers,
     panesChanged: () => undefined,
     paneFocused: () => undefined,
+    panePressed: () => undefined,
     rowParts,
     barParts,
     titleMaxLength,

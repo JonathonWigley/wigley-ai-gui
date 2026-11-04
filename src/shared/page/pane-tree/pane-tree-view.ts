@@ -36,7 +36,8 @@ const NUDGE_STEP = 24;
 // nested split boxes with a drag handle between each split's two sides.
 // `split`, `close`, `focus`, `swap`, a handle's drag and the outer panes'
 // focus and resize each call `changed` once when they change the tree, and a
-// focus change also calls `focused`; `restore` calls neither. Each split is
+// focus change also calls `focused`; `restore` calls neither. A press that
+// moves focus then calls `pressFocused`. Each split is
 // drawn at its ratio clamped to the least pane sizes in the tree's box, drawn
 // again as the box resizes, while the tree keeps the ratio it was given.
 export interface PaneTreeView {
@@ -74,6 +75,9 @@ export interface PaneTreeViewOptions {
   timers: Timers;
   changed(tree: PaneTree): void;
   focused(id: string): void;
+  // Runs after a press on a slot moved focus to its pane, once `focused` ran,
+  // inside the press's capture so the press's own events still follow.
+  pressFocused(id: string): void;
   // Runs with the ids of the leaves a close or `restore` drops while their
   // slots are still in the document, before they leave it.
   leaving(ids: readonly string[]): void;
@@ -327,7 +331,11 @@ export function createPaneTreeView(options: PaneTreeViewOptions): PaneTreeView {
   const focusOnPress = (event: PointerEvent) => {
     for (const [id, slot] of slots) {
       if (slot.contains(event.target as Node)) {
+        const isOtherPane = id !== current.focusedId;
         focus(id);
+        if (isOtherPane) {
+          options.pressFocused(id);
+        }
         return;
       }
     }

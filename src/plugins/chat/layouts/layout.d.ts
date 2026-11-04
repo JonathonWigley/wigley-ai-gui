@@ -450,7 +450,8 @@ export interface ImageViewerInput {
   count: number;
 }
 export interface SideSectionKit extends BaseKit {
-  // `button.chat-side-section-head`, which toggles the section on click and takes no key and no focus.
+  // `button.chat-side-section-head`, which toggles the section on click and takes no key and no focus: a click in the
+  // focused pane leaves the focus where it was, and one in another pane moves it to that pane's box.
   head(parent: HTMLElement): HTMLButtonElement;
   // `div.chat-side-section-body`, the part's content inside; the same element on every draw. Mounts once per draw;
   // left out, it ends the part's element.

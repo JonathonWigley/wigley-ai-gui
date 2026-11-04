@@ -46,7 +46,8 @@ import { rowChanges, rowStatus, stepSession } from './tabs';
 // selection or their statuses; `keys` draws the session, tab and pane
 // prompts; `timers` runs a pane divider's prompt linger; `panesChanged` runs
 // after the pane tree or a pane's session changed, and `paneFocused` after
-// focus moved to another pane, a pane tree press or outer pane key included;
+// focus moved to another pane, a pane tree press or outer pane key included,
+// and `panePressed` after `paneFocused` when a press moved it;
 // `rowParts` are the parts each row draws, and adding or removing one draws
 // the rows again; `barParts` are the parts each tab bar draws, and adding or
 // removing one draws the tab bars again; `titleMaxLength` reads the setting
@@ -63,6 +64,7 @@ export interface SessionsViewDeps extends Omit<
   timers: Timers;
   panesChanged(): void;
   paneFocused(paneId: string): void;
+  panePressed(): void;
   rowParts: PartStore<SessionPart>;
   barParts: PartStore<SessionPart>;
   titleMaxLength(): number;
@@ -274,6 +276,7 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
       deps.panesChanged();
     },
     focused: (paneId) => deps.paneFocused(paneId),
+    pressFocused: () => deps.panePressed(),
     leaving: (paneIds) => tabs.vacate(paneIds),
   });
   assigned.set('pane-1', null);
