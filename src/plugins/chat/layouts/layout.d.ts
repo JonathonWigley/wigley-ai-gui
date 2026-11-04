@@ -202,6 +202,17 @@ export interface SideSectionInput {
   collapsed: boolean;
 }
 
+// One row of the session hub's Session section.
+export interface SessionFactInput {
+  label: string;
+  value: string;
+}
+
+// The Session section's rows, in the order they show; a fact with nothing to show is left out.
+export interface SessionFactsInput {
+  facts: readonly SessionFactInput[];
+}
+
 export interface EntryView<K extends EntryKind = EntryKind> {
   element: HTMLElement;
   // Runs with each later version of the entry (same id) while it shows. A view with no update is built again and its element replaced.
@@ -552,6 +563,13 @@ export interface ChatLayout {
     input: SideSectionInput,
     kit: SideSectionKit,
   ): PartView<SideSectionInput>;
+  // The session hub's Session section body. The app sends the input again after each status line change; a part with
+  // no `update` draws again.
+  sessionFacts?(
+    parent: HTMLElement,
+    input: SessionFactsInput,
+    kit: BaseKit,
+  ): PartView<SessionFactsInput>;
 }
 
 // The built-in layout: a builder for every entry kind and every part.

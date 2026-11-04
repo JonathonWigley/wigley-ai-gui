@@ -40,6 +40,12 @@ export function composerInputOf(tab: {
   };
 }
 
+// The pair as one line of text: `<model> · <effort>`, or the model alone with no
+// effort control.
+export function modelEffortText({ model, effort }: ModelEffortInput): string {
+  return effort === null ? model.value : `${model.value} · ${effort.value}`;
+}
+
 // The controls the model and effort pick keys reach, as one pair, and every
 // other control in order; with no model control there is no pair, and an
 // effort control stays with the others.

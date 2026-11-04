@@ -47,7 +47,7 @@ import {
   type SurfaceKitDeps,
   surfaceBaseKit,
 } from './chat-layouts';
-import { chipKeyCommands } from './composer-input';
+import { chipKeyCommands, modelEffortText } from './composer-input';
 import { controlCommand } from './control-commands';
 
 // `run` runs a command, as the chips and Send do; `composerParts` holds the
@@ -503,11 +503,12 @@ function statusLineKit(
       parts.typeHint.classList.toggle('is-box-focused', input.isBoxFocused);
       return appended(parent, parts.typeHint);
     },
-    modelEffortChip(parent, { model, effort }) {
-      const value =
-        effort === null ? model.value : `${model.value} · ${effort.value}`;
-      const modelEffortChip = chip(model.label, value, () =>
-        run(chatCommand('pickModel')),
+    modelEffortChip(parent, modelEffort) {
+      const { model, effort } = modelEffort;
+      const modelEffortChip = chip(
+        model.label,
+        modelEffortText(modelEffort),
+        () => run(chatCommand('pickModel')),
       ) as HTMLButtonElement;
       modelEffortChip.disabled = !model.enabled;
       holdKeys(modelEffortChip, 'pickModel');

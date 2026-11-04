@@ -36,6 +36,7 @@ import {
 } from './attachments';
 import { placeReturned, pullBackQueued } from './chat-commands';
 import type { CloseConfirm } from './chat-dialogs';
+import type { SessionFactsInput } from '../layouts/layout';
 import type { ChatLayouts, SurfaceKitDeps } from './chat-layouts';
 import {
   applyEntry,
@@ -58,6 +59,7 @@ import {
 } from './composer-stop-holder';
 import { createEntryList, type EntryList } from './entry-list';
 import type { ImageViewer } from './image-viewer';
+import { sessionFactsOf } from './session-part';
 import type { SideSections, SideTab } from './side-sections';
 import { completionWords } from './slash-commands';
 import { compactionLabel } from './working-turn';
@@ -114,11 +116,17 @@ export interface ChatSession extends SessionRef {
 // and a held session by id. `markSent` clears the done or error the
 // session's row shows, as a message sent there does. `composerOf` is a held
 // session's composer surface, for the part that places its activity dock.
+// `sessionFactsSource` is a held session's facts for the hub's Session section,
+// read live: `onChanged` fires after each status line change.
 export interface ChatTabs extends ChatView {
   session(sessionId: string): ChatSession | undefined;
   sessionOfEditor(editor: TextEditor): ChatSession | undefined;
   markSent(sessionId: string): void;
   composerOf(sessionId: string): ComposerSurface | null;
+  sessionFactsSource(sessionId: string): {
+    input(): SessionFactsInput;
+    onChanged(listener: () => void): Disposable;
+  } | null;
 }
 
 // `allow` answers a permission entry allowed; `deny` asks for the reason
@@ -143,7 +151,8 @@ export type ChatTabScope = 'chat';
 // throw skipping none of them. `run` runs
 // a command, as the composer's chips and send button do; `keys` also anchors
 // the composer's key hints; `layouts` holds the chat layouts the entries and
-// the composer draw with; `paths` names each tab by its project folder.
+// the composer draw with; `paths` names each tab by its project folder, and with
+// `homeDir` shows that folder in the hub's Session section.
 // `slashCommandNames` reads the app slash commands registered now, which the
 // `/` completion offers ahead of the agent's. `viewer` opens a sent message's
 // images full size. `timers` and `clock` tick a live activity line's time and
@@ -157,6 +166,7 @@ export type ChatTabScope = 'chat';
 export interface ChatViewDeps extends SurfaceKitDeps {
   channel: PageChannel<ChatChannel>;
   paths: Paths;
+  homeDir: string;
   sessions: Pick<
     SessionsPageExports,
     'addTab' | 'activate' | 'closeSession' | 'setActivity' | 'selectedSessionId'
@@ -196,7 +206,7 @@ export interface ChatViewDeps extends SurfaceKitDeps {
 // held. `unseen` is the finished turn the row still shows, and `activity` the
 // activity last set on the row. `stop` holds the composer part holding the
 // tab's entry cursor. `main` holds the entries and the composer; `side` is the
-// tab's session hub.
+// tab's session hub. `factsListeners` hear each status line change.
 interface HeldTab {
   sessionId: string;
   name: string;
@@ -216,6 +226,7 @@ interface HeldTab {
   composerSize: ResizeObserver;
   dropTarget: Disposable | null;
   stop: ComposerStopHolder;
+  factsListeners: Set<() => void>;
 }
 
 // One Chat tab per chat session main holds, each with its entries, its
@@ -551,6 +562,10 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       asSession([...tabs.values()].find((tab) => tab.box === editor)),
     markSent: clearUnseen,
     composerOf: (sessionId) => tabs.get(sessionId)?.composer ?? null,
+    sessionFactsSource: (sessionId) => {
+      const tab = tabs.get(sessionId);
+      return tab === undefined ? null : sessionFactsSourceOf(tab, deps);
+    },
   };
   return view;
 }
@@ -581,11 +596,30 @@ function drawTurn(tab: HeldTab) {
   );
 }
 
-// Draws the status line, or the whole composer again when its update threw.
+// Draws the status line, or the whole composer again when its update threw, then
+// tells the session's facts source. A listener that throws stops no other, and
+// the first throw reaches the caller.
 function drawStatusLine(tab: HeldTab) {
   if (!tab.composer.drawStatusLine(composerInputOf(tab))) {
     drawComposer(tab);
   }
+  callEach([...tab.factsListeners], (listener) => listener());
+}
+
+function sessionFactsSourceOf(
+  tab: HeldTab,
+  deps: Pick<ChatViewDeps, 'homeDir' | 'paths'>,
+): NonNullable<ReturnType<ChatTabs['sessionFactsSource']>> {
+  return {
+    input: () =>
+      sessionFactsOf(composerInputOf(tab), tab.state.projectDir, deps),
+    onChanged(listener) {
+      // A wrapper per subscription, so each handle removes only its own.
+      const wrapped = () => listener();
+      tab.factsListeners.add(wrapped);
+      return { dispose: () => tab.factsListeners.delete(wrapped) };
+    },
+  };
 }
 
 // Chat's scope in force again and the cursor on the stop `G` focuses.
@@ -731,6 +765,7 @@ function createTab(
       changed: (holding) => root.classList.toggle('is-at-stop', holding),
       log: deps.log,
     }),
+    factsListeners: new Set(),
   };
   entries.rebuild(state.entries);
   entries.setQueued(state.queued);

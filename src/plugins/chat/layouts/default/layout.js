@@ -424,6 +424,44 @@ function showSideSection(chevron, summary, section, input, kit) {
   summary.textContent = input.summary ?? '';
 }
 
+/**
+ * @param {string} label
+ */
+function sessionFactRow(label) {
+  const element = el('div', 'chat-session-fact');
+  const value = el('span', 'chat-session-fact-value');
+  element.append(el('span', 'chat-session-fact-label', label), value);
+  return { element, value };
+}
+
+/**
+ * Patches `rows`, by label, to `input`'s facts in their order: an unchanged row
+ * keeps its elements.
+ *
+ * @param {HTMLElement} holder
+ * @param {Map<string, { element: HTMLElement, value: HTMLElement }>} rows
+ * @param {import('../layout').SessionFactsInput} input
+ */
+function showSessionFacts(holder, rows, input) {
+  const labels = new Set(input.facts.map((fact) => fact.label));
+  for (const [label, row] of rows) {
+    if (!labels.has(label)) {
+      row.element.remove();
+      rows.delete(label);
+    }
+  }
+  input.facts.forEach((fact, index) => {
+    const row = rows.get(fact.label) ?? sessionFactRow(fact.label);
+    rows.set(fact.label, row);
+    row.value.textContent = fact.value;
+    row.value.title = fact.value;
+    const placed = holder.children[index] ?? null;
+    if (placed !== row.element) {
+      holder.insertBefore(row.element, placed);
+    }
+  });
+}
+
 const WAITING_TEXT = 'Waiting for the sign-in link…';
 
 /** @param {string | null} link */
@@ -702,6 +740,19 @@ const layout = {
       element: section,
       update(next) {
         showSideSection(chevron, summary, section, next, kit);
+      },
+    };
+  },
+  // The session hub's Session section: a label and a value per fact.
+  sessionFacts(parent, input) {
+    const facts = el('div', 'chat-session-facts');
+    parent.append(facts);
+    const rows = new Map();
+    showSessionFacts(facts, rows, input);
+    return {
+      element: facts,
+      update(next) {
+        showSessionFacts(facts, rows, next);
       },
     };
   },

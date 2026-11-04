@@ -60,6 +60,7 @@ const PART_SET: Record<ChatPartName, true> = {
   imageViewer: true,
   rowClock: true,
   sideSection: true,
+  sessionFacts: true,
 };
 
 // The chat layout a user's `layout.js` module exports as its default. Every

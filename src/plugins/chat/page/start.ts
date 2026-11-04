@@ -39,6 +39,7 @@ import { createMainAgentPart } from './main-agent-part';
 import { createPicker } from './picker';
 import { readChatLayout } from './read-chat-layout';
 import { createRowClock } from './row-clock';
+import { createSessionPart } from './session-part';
 import { createSideSections } from './side-sections';
 import { createSignInDialog } from './sign-in-dialog';
 import { createSlashCommands } from './slash-commands';
@@ -65,7 +66,8 @@ type ChatApi = PageApi<
 // in the page in place of sending it; the exports register more, fill a
 // session's box, and add parts above every composer and sections to every tab's
 // session hub, which `toggleSideParts` hides or shows in every tab; chat's own
-// Main agent section holds the activity dock. Images
+// Main agent section holds the activity dock, and its Session section the
+// session's facts. Images
 // pasted or dropped into a Chat tab attach to its next message, other files go
 // into the box as file chips, and a sent message's images open full size in
 // the image viewer. The picker, the deny
@@ -174,6 +176,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
     const view = mountChatView({
       channel: api.channel,
       paths: services.paths,
+      homeDir: services.homeDir,
       sessions,
       onSessionRemoved: (listener) =>
         api.events.on('sessions.sessionRemoved', ({ sessionId }) =>
@@ -225,6 +228,12 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
     sideParts.add(
       createMainAgentPart({
         surfaceOf: (sessionId) => view.composerOf(sessionId),
+      }),
+    );
+    sideParts.add(
+      createSessionPart({
+        ...partDeps,
+        sourceOf: (sessionId) => view.sessionFactsSource(sessionId),
       }),
     );
     api.layouts.show<ChatLayout>({

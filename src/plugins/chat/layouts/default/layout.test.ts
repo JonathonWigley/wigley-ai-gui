@@ -31,6 +31,7 @@ class FakeElement {
   tagName: string;
   className = '';
   textContent = '';
+  title = '';
   hidden = false;
   src = '';
   alt = '';
@@ -66,6 +67,17 @@ class FakeElement {
       node.parentNode = this;
       this.children.push(node);
     }
+  }
+
+  insertBefore(node: FakeElement, reference: FakeElement | null) {
+    node.remove();
+    node.parentNode = this;
+    const at =
+      reference === null
+        ? this.children.length
+        : this.children.indexOf(reference);
+    this.children.splice(at, 0, node);
+    return node;
   }
 
   replaceChildren(...nodes: FakeElement[]) {
@@ -1140,6 +1152,7 @@ const SURFACE_PARTS: Record<SurfacePart, true> = {
   imageViewer: true,
   rowClock: true,
   sideSection: true,
+  sessionFacts: true,
 };
 
 // Draws `input` with the default layout's `name` part into a fresh parent,
@@ -1322,6 +1335,54 @@ describe('default chat layout surfaces', () => {
       'span.chat-sign-in-link:https://example.com/a',
       'copy',
     ]);
+  });
+
+  it('sessionFacts_Default_DrawsARowPerFactWithTheWholeValueAsTitle', () => {
+    const { kit } = fakeSurfaceKit();
+
+    const view = drawSurface(
+      'sessionFacts',
+      {
+        facts: [
+          { label: 'Project', value: 'app' },
+          { label: 'Folder', value: '~/dev/app' },
+        ],
+      },
+      kit,
+    );
+
+    const rows = asFake(view.element).children.map(
+      ({ children: [label, value] }) => [
+        label.textContent,
+        value.textContent,
+        value.title,
+      ],
+    );
+    expect(rows).toEqual([
+      ['Project', 'app', 'app'],
+      ['Folder', '~/dev/app', '~/dev/app'],
+    ]);
+  });
+
+  it('sessionFacts_Default_UpdatePatchesRowsByLabel', () => {
+    const { kit } = fakeSurfaceKit();
+    const project = { label: 'Project', value: 'app' };
+    const branch = { label: 'Branch', value: 'main' };
+    const folder = { label: 'Folder', value: '~/dev/app' };
+    const view = drawSurface('sessionFacts', { facts: [project, folder] }, kit);
+    const holder = asFake(view.element);
+    const [projectRow, folderRow] = holder.children;
+
+    view.update?.({ facts: [project, branch, folder] });
+    const branchRow = holder.children[1];
+
+    expect(holder.children).toEqual([projectRow, branchRow, folderRow]);
+    expect(branchRow.children[1].textContent).toBe('main');
+
+    view.update?.({ facts: [project, folder] });
+
+    expect(holder.children).toEqual([projectRow, folderRow]);
+    expect(branchRow.parentNode).toBeNull();
   });
 
   it('imageViewer_Default_UpdateMovesCounterAndHidesItForOne', () => {

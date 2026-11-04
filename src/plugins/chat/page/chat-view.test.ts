@@ -10,6 +10,9 @@ import {
   installFakeDom,
 } from '../../../shared/page/test-dom';
 import { createPartStore } from '../../../shared/page/contributed-parts';
+import { posixPaths } from '../../../shared/paths/posix-paths';
+import defaultLayout from '../layouts/default/layout.js';
+import type { ChatLayout } from '../layouts/layout';
 import type {
   ChatChannel,
   ChatComposerPart,
@@ -111,7 +114,8 @@ function mounted(
   let removeSession: (sessionId: string) => void = noEvent;
   const view = mountChatView({
     channel,
-    paths: { base: () => 'app' },
+    paths: posixPaths,
+    homeDir: '/w',
     sessions: {
       addTab: (sessionId: string, added: { element: HTMLElement }) => {
         readDuringAddTab.push(view.activeTime(sessionId));
@@ -400,6 +404,80 @@ describe('mountChatView side parts', () => {
     view.layouts.set(view.layouts.shown());
 
     expect({ builds, disposes }).toEqual({ builds: 2, disposes: 1 });
+  });
+});
+
+describe('mountChatView session facts source', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const COMPOSER_UPDATE_THROWS: ChatLayout = {
+    composer(parent, input, kit) {
+      const { element } = defaultLayout.composer(parent, input, kit);
+      return {
+        element,
+        update() {
+          throw new Error('composer update failed');
+        },
+      };
+    },
+  };
+
+  it.each<{ case: string; user: ChatLayout; composerRedrawn: boolean }>([
+    { case: 'StatusLineDraws', user: {}, composerRedrawn: false },
+    {
+      case: 'ComposerUpdateThrows',
+      user: COMPOSER_UPDATE_THROWS,
+      composerRedrawn: true,
+    },
+  ])('branchMessage_$case_ListenerRunsOnce', ({ user, composerRedrawn }) => {
+    const mount = mounted();
+    mount.layouts.set({
+      user: 'mine',
+      layouts: new Map([
+        ['mine', user],
+        ['default', defaultLayout],
+      ]),
+    });
+    mount.emit('sessionStarted', stateOf([]));
+    const source = mount.view.sessionFactsSource('row-1');
+    const branchesHeard: (string | undefined)[] = [];
+    source?.onChanged(() =>
+      branchesHeard.push(
+        source.input().facts.find((fact) => fact.label === 'Branch')?.value,
+      ),
+    );
+
+    mount.emit('branch', {
+      sessionId: 'row-1',
+      repo: 'app',
+      branch: 'feature',
+    });
+
+    expect(branchesHeard).toEqual(['feature']);
+    expect(
+      mount.logs.some((line) => line.includes('composer update failed')),
+    ).toBe(composerRedrawn);
+  });
+
+  it('source_SubscriptionDisposedOrSessionUnheld_HearsNothingAndIsNull', () => {
+    const mount = mounted();
+    mount.emit('sessionStarted', stateOf([]));
+    const source = mount.view.sessionFactsSource('row-1');
+    let heard = 0;
+    source
+      ?.onChanged(() => {
+        heard += 1;
+      })
+      .dispose();
+
+    mount.emit('branch', { sessionId: 'row-1', repo: 'app', branch: 'b' });
+    mount.removeSession('row-1');
+
+    expect(heard).toBe(0);
+    expect(mount.view.sessionFactsSource('row-1')).toBeNull();
   });
 });
 

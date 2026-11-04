@@ -1,8 +1,8 @@
 /* The default Chat layout's look: entry text, the compaction divider, activity
    lines, the activity dock and its one line, queued messages, permission heads,
    the composer and its status line, the dialog and image viewer parts, the run
-   time under a session's row, the session hub's section heads, and the width
-   below which a Chat tab drops its hub for the one line. */
+   time under a session's row, the session hub's section heads and Session rows,
+   and the width below which a Chat tab drops its hub for the one line. */
 .chat-assistant {
   color: var(--wg-fg);
 }
@@ -366,6 +366,31 @@
   font-size: var(--wg-text-12);
   font-variant-numeric: tabular-nums;
   margin-left: auto;
+}
+
+/* The hub's Session rows: the labels share one column, each value ellipsized. */
+.chat-session-facts {
+  display: grid;
+  font-size: var(--wg-text-12);
+  gap: var(--wg-space-1) var(--wg-space-2);
+  grid-template-columns: max-content minmax(0, 1fr);
+}
+
+.chat-session-fact {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
+
+.chat-session-fact-label {
+  color: var(--wg-fg-tertiary);
+}
+
+.chat-session-fact-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* A tab too narrow for its entries beside its hub shows the entries, and the
