@@ -31,7 +31,7 @@ import type { BaseKit, DotStatus } from '../../../shared/page/layout-host/kit';
 //   keys act on the focused pane only;
 // - whether the empty text shows: `emptyText` draws only while the tab area shows no tab;
 // - the click on the star `favoriteToggle` places, which favorites or unfavorites the group's project;
-// - the drag on each group's `header`, the whole header being the drag source;
+// - the `title` tooltip (`project`) on each group's `header` and the drag on it, the whole header being the drag source;
 // - `is-empty` on the element of a `section` with no groups;
 // - `has-favorites` on the side bar's `rows` while Favorites holds a group, and `is-reordering` there while a group is
 //   dragged.

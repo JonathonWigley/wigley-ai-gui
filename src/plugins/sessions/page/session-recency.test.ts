@@ -70,6 +70,74 @@ describe('createSessionRecency', () => {
     expect(relaunched.stampsOf([secondRun]).get('new')).toBe(2);
   });
 
+  it.each<{
+    case: string;
+    stamps: Record<string, number>;
+    before: SessionRow[];
+    after: SessionRow[];
+    saved: Record<string, number>;
+  }>([
+    {
+      case: 'the old row leaving a shared key keeps it for the survivor',
+      stamps: { h: 5 },
+      before: [rowUnderHost('old', 'h'), rowUnderHost('new', 'h')],
+      after: [rowUnderHost('new', 'h')],
+      saved: { h: 5 },
+    },
+    {
+      case: 'the last row leaving a key drops it',
+      stamps: { h: 5, i: 7 },
+      before: [rowUnderHost('new', 'h'), rowUnderHost('other', 'i')],
+      after: [rowUnderHost('other', 'i')],
+      saved: { i: 7 },
+    },
+    {
+      case: 'a row moving off a shared key leaves it for the survivor',
+      stamps: { h: 5 },
+      before: [rowUnderHost('a', 'h'), rowUnderHost('b', 'h')],
+      after: [rowUnderHost('a', 'i'), rowUnderHost('b', 'h')],
+      saved: { h: 5, i: 5 },
+    },
+    {
+      case: 'the only row on a key moving off it empties it',
+      stamps: { h: 5 },
+      before: [rowUnderHost('a', 'h')],
+      after: [rowUnderHost('a', 'i')],
+      saved: { i: 5 },
+    },
+    {
+      case: 'both rows on a shared key moving off it each take the stamp',
+      stamps: { h: 5 },
+      before: [rowUnderHost('a', 'h'), rowUnderHost('b', 'h')],
+      after: [rowUnderHost('a', 'i'), rowUnderHost('b', 'j')],
+      saved: { i: 5, j: 5 },
+    },
+    {
+      case: 'one row leaving as the other moves off their shared key',
+      stamps: { h: 5 },
+      before: [rowUnderHost('a', 'h'), rowUnderHost('b', 'h')],
+      after: [rowUnderHost('b', 'i')],
+      saved: { i: 5 },
+    },
+    {
+      case: 'a row moving onto the key another row moves off',
+      stamps: { h: 5, i: 7 },
+      before: [rowUnderHost('a', 'h'), rowUnderHost('b', 'i')],
+      after: [rowUnderHost('a', 'i'), rowUnderHost('b', 'j')],
+      saved: { i: 5, j: 7 },
+    },
+  ])(
+    'recency_AKeyARowHoldsKeepsItsStamp: $case',
+    ({ stamps, before, after, saved }) => {
+      const state = fakeUiState([['recency', { stamps, needsYou: [] }]]);
+      const recency = createSessionRecency({ now: () => 100 }, state);
+
+      recency.rowsChanged(before, after);
+
+      expect(state.get('recency')).toEqual({ stamps: saved, needsYou: [] });
+    },
+  );
+
   it('recency_DropsTheOldestStampsPastTheCap', () => {
     const saved = Object.fromEntries(
       Array.from({ length: 200 }, (_, index) => [`h${index}`, index]),

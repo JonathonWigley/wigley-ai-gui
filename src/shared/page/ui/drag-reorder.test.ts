@@ -101,11 +101,8 @@ function fixture(transfer: FakeTransfer = fakeTransfer()) {
     transfer,
     fire,
     start: (node: FakeElement) => fire(node, 'dragstart'),
-    press() {
-      for (const listener of pressListeners) {
-        listener();
-      }
-    },
+    press: () => fireOnWindow('pointerdown'),
+    keyPress: () => fireOnWindow('keydown'),
     over: (zone: FakeElement, clientY: number) =>
       fire(zone, 'dragover', { clientY }),
     drop: (zone: FakeElement, clientY: number) =>
@@ -142,23 +139,30 @@ const STARTED_TRAFFIC = {
   dropEffect: '',
 };
 
-// The capture-phase `pointerdown` listeners on `window`, each held once and
-// removed only by its own phase, as a browser does.
-let pressListeners: Set<() => void>;
+// The capture-phase listeners on `window` for each event that ends a lost drag,
+// each held once and removed only by its own phase, as a browser does.
+let windowListeners: Record<'pointerdown' | 'keydown', Set<() => void>>;
+
+function capturedSet(type: string, capture?: boolean) {
+  const isEndEvent = type === 'pointerdown' || type === 'keydown';
+  return isEndEvent && capture === true ? windowListeners[type] : null;
+}
+
+function fireOnWindow(type: 'pointerdown' | 'keydown') {
+  for (const listener of windowListeners[type]) {
+    listener();
+  }
+}
 
 beforeEach(() => {
   installFakeDom(vi.stubGlobal);
-  pressListeners = new Set();
+  windowListeners = { pointerdown: new Set(), keydown: new Set() };
   vi.stubGlobal('window', {
     addEventListener(type: string, listener: () => void, capture?: boolean) {
-      if (type === 'pointerdown' && capture === true) {
-        pressListeners.add(listener);
-      }
+      capturedSet(type, capture)?.add(listener);
     },
     removeEventListener(type: string, listener: () => void, capture?: boolean) {
-      if (type === 'pointerdown' && capture === true) {
-        pressListeners.delete(listener);
-      }
+      capturedSet(type, capture)?.delete(listener);
     },
   });
 });
@@ -409,6 +413,21 @@ describe('createDragReorder', () => {
       traffic: OWN_TRAFFIC,
     },
     {
+      name: 'a key press in the window ends a drag whose dragend never came',
+      steps(fx) {
+        fx.start(fx.a);
+        fx.over(fx.list, 40);
+        fx.keyPress();
+      },
+      marks: [],
+      drops: [],
+      started: 1,
+      ended: 1,
+      isDragging: false,
+      isPrevented: true,
+      traffic: OWN_TRAFFIC,
+    },
+    {
       name: 'a second dragstart after no dragend ends the first and runs',
       steps(fx) {
         fx.fire(fx.a, 'dragstart', { dataTransfer: fakeTransfer() });
@@ -535,7 +554,8 @@ describe('createDragReorder', () => {
     expect(fx.counts.started).toBe(row.started);
     expect(fx.counts.ended).toBe(row.ended);
     expect(fx.reorder.isDragging()).toBe(row.isDragging);
-    expect(pressListeners.size > 0).toBe(row.isDragging);
+    expect(windowListeners.pointerdown.size > 0).toBe(row.isDragging);
+    expect(windowListeners.keydown.size > 0).toBe(row.isDragging);
     expect(fx.counts.prevented > 0).toBe(row.isPrevented);
     expect({
       types: fx.transfer.types,

@@ -4,6 +4,10 @@ import './drag-reorder.css';
 // inserts nothing.
 const REORDER_TYPE = 'application/x-wigley-reorder';
 
+// What ends a drag whose `dragend` never came. A native drag fires neither, and
+// its own press came before `dragstart`.
+const LOST_DRAG_END_EVENTS = ['pointerdown', 'keydown'] as const;
+
 // A finished drop: the dragged item's key, the zone it landed on, and where it
 // lands among that zone's items other than the dragged one; 0 in an unordered
 // zone.
@@ -29,9 +33,9 @@ export interface DragReorderEvents {
 // registered in drawn order, top to bottom; zones do not nest. `clear` undoes
 // every registration and ends a running drag, so a view calls it before it
 // redraws; `dispose` does the same when the view drops the primitive. A drag
-// whose `dragend` never comes ends at the next press in the window, listened
-// for only while a drag runs, or at the next `dragstart`, which is cancelled
-// when `ended` redrew its item away.
+// whose `dragend` never comes ends at the next press or key press in the window,
+// listened for only while a drag runs and left to reach its own handlers, or at
+// the next `dragstart`, which is cancelled when `ended` redrew its item away.
 export interface DragReorder {
   zone(
     element: HTMLElement,
@@ -157,7 +161,9 @@ export function createDragReorder(events: DragReorderEvents): DragReorder {
     if (dragged === null) {
       return;
     }
-    window.removeEventListener('pointerdown', endDrag, true);
+    for (const type of LOST_DRAG_END_EVENTS) {
+      window.removeEventListener(type, endDrag, true);
+    }
     dragged.element.classList.remove('is-dragging');
     dragged = null;
     showMark(null);
@@ -179,9 +185,9 @@ export function createDragReorder(events: DragReorderEvents): DragReorder {
     transfer.effectAllowed = 'move';
     item.element.classList.add('is-dragging');
     dragged = item;
-    // A native drag fires no `pointerdown`, and its own press came before
-    // `dragstart`.
-    window.addEventListener('pointerdown', endDrag, true);
+    for (const type of LOST_DRAG_END_EVENTS) {
+      window.addEventListener(type, endDrag, true);
+    }
     events.started();
   };
 

@@ -401,7 +401,10 @@ describe('sessions view side bar', () => {
       expect(setup.view.orderedRows().map((row) => row.sessionId)).toEqual(
         order,
       );
-      expect(uiState.get('recency')).toMatchObject({ stamps: stampsAfter });
+      expect(uiState.get('recency')).toEqual({
+        stamps: stampsAfter,
+        needsYou: expect.any(Array),
+      });
     },
   );
 
@@ -444,6 +447,15 @@ describe('sessions view side bar', () => {
       stamps: { a1: 2 },
       needsYou: [],
     });
+  });
+
+  it('sidebarGroup_HeaderTooltipIsItsProject', () => {
+    const setup = sessionsViewSetup();
+
+    setup.view.render(stateWith([rowIn('a1', 'alpha'), rowIn('b1', 'beta')]));
+
+    expect(headerOf(setup, 'alpha').title).toBe('alpha');
+    expect(headerOf(setup, 'beta').title).toBe('beta');
   });
 
   it('sidebarDrag_HoldsRedrawsAndMarksReorderingOnTheNextTick', () => {

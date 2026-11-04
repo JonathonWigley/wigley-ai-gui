@@ -19,7 +19,8 @@ const MAX_SAVED_STAMPS = 200;
 // and is the only call that moves or drops a stamp: a row in `after` with no
 // stamp is stamped, all of them with one time so they tie and keep main's order;
 // a row whose host id changed takes its stamp along; a row that left loses its
-// stamp, so it stamps again if it comes back. A row merely absent keeps its
+// stamp, so it stamps again if it comes back. A key a row in `after` holds keeps
+// its stamp, since two rows can share a host id. A row merely absent keeps its
 // stamp, since a relaunch's first state lacks the rows main has yet to resume.
 // `noteNeedsYou` stamps `row` unless its session is still marked from an earlier
 // call, so a source re-sending needs you after a page reload stamps nothing.
@@ -68,10 +69,12 @@ export function createSessionRecency(
       const beforeRows = before ?? [];
       const { added, removed, changed } = rowChanges(beforeRows, after);
       const rowsBefore = new Map(beforeRows.map((row) => [row.sessionId, row]));
+      const heldKeys = new Set(after.map((row) => stampKey(row)));
+      // Moves come first: a row can move off a key a leaving row also held.
       const altered = [
         before === null && keepNeedsYouOf(after, needsYou),
-        dropRows(removed, rowsBefore, stamps, needsYou),
-        moveStamps(changed, rowsBefore, stamps),
+        moveStamps(changed, rowsBefore, heldKeys, stamps),
+        dropRows(removed, rowsBefore, heldKeys, stamps, needsYou),
         stampRows(added, stamps, clock),
       ].includes(true);
       if (altered) {
@@ -115,34 +118,44 @@ function keepNeedsYouOf(
 function dropRows(
   removed: readonly string[],
   rowsBefore: ReadonlyMap<string, SessionRow>,
+  heldKeys: ReadonlySet<string>,
   stamps: Map<string, number>,
   needsYou: Set<string>,
 ): boolean {
   let altered = false;
   for (const sessionId of removed) {
-    const stampGone = stamps.delete(stampKey(rowsBefore.get(sessionId)!));
+    const key = stampKey(rowsBefore.get(sessionId)!);
+    const stampGone = !heldKeys.has(key) && stamps.delete(key);
     const markGone = needsYou.delete(sessionId);
     altered = altered || stampGone || markGone;
   }
   return altered;
 }
 
+// Every stamp is read before any is written, so rows that share a key, or that
+// move onto each other's keys in one state, each take their own.
 function moveStamps(
   changed: readonly SessionRow[],
   rowsBefore: ReadonlyMap<string, SessionRow>,
+  heldKeys: ReadonlySet<string>,
   stamps: Map<string, number>,
 ): boolean {
-  let altered = false;
-  for (const row of changed) {
+  const moves = changed.flatMap((row) => {
     const oldKey = stampKey(rowsBefore.get(row.sessionId)!);
     const stamp = stamps.get(oldKey);
-    if (stamp !== undefined) {
+    return stamp === undefined
+      ? []
+      : [{ oldKey, newKey: stampKey(row), stamp }];
+  });
+  for (const { oldKey } of moves) {
+    if (!heldKeys.has(oldKey)) {
       stamps.delete(oldKey);
-      stamps.set(stampKey(row), stamp);
-      altered = true;
     }
   }
-  return altered;
+  for (const { newKey, stamp } of moves) {
+    stamps.set(newKey, stamp);
+  }
+  return moves.length > 0;
 }
 
 function stampRows(

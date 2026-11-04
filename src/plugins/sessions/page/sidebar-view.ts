@@ -79,7 +79,7 @@ const SECTION_TEXT: Record<SectionKind, { label: string; dropHint: string }> = {
 // `row`s. The rows box carries `has-favorites` while Favorites holds a group,
 // and `is-reordering` while a group header drags. The view keeps each row's
 // click, which activates its session, its tooltip, the selected row's mark,
-// each star's click and each header's drag.
+// each star's click and each header's tooltip and drag.
 export function mountSidebarView(
   events: SidebarEvents,
   parts: SessionsParts,
@@ -149,6 +149,7 @@ export function mountSidebarView(
       isFavorite,
     });
     groups.push(drawn);
+    drawn.built.header.title = project;
     drawn.built.favoriteToggle?.addEventListener('click', () =>
       events.toggleFavorite(project),
     );
