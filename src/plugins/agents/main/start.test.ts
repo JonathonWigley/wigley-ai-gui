@@ -384,7 +384,8 @@ describe('agentsMainPart', () => {
     first.s1.skills.pop();
     first[PREVIEW_ROW].agents.pop();
     first[PREVIEW_ROW].tasks.pop();
-    first[PREVIEW_ROW].skills.pop();
+    // The sample lists no skills, so only an added one can reach the live list.
+    first[PREVIEW_ROW].skills.push(fooByMain);
     const second = agents.invoke('rosters') as Record<string, Roster>;
 
     expect(Object.keys(second)).toEqual(['s1', PREVIEW_ROW]);
@@ -395,8 +396,6 @@ describe('agentsMainPart', () => {
     expect(second[PREVIEW_ROW].tasks).toHaveLength(
       first[PREVIEW_ROW].tasks.length + 1,
     );
-    expect(second[PREVIEW_ROW].skills).toHaveLength(
-      first[PREVIEW_ROW].skills.length + 1,
-    );
+    expect(second[PREVIEW_ROW].skills).not.toContainEqual(fooByMain);
   });
 });
