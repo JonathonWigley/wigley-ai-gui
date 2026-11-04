@@ -1,6 +1,6 @@
 # 09 — Final verification
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 5 · Depends on: 08
 Plan: [plan.md](plan.md)
@@ -37,3 +37,4 @@ Commit:    one commit when a check forced a fix; none otherwise
 
 ## Proof
 
+Commit 914024cd · proof: lint, typecheck, npm test and the filtered self-test as the test gate says; live checks 1-14 with results and shots in /tmp/claude-session-hub/reports/09-live-1.md, 09-live-2.md; check 13 on the real harness: row returned after restart; first click and keys per fix-release-1.md, fix-keys-1.md · concerns: tabs still lose their first click (follow-up); older selection in the pressed pane (follow-up); real hardware scrollbar release and pointercancel not driven; user's checks: wheel in the Plan list, real mouse first click in split panes, hub look

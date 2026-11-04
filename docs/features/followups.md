@@ -257,6 +257,28 @@ Defects seen in a drive run, a transcript or the user's own use.
   while `activeElement` stays in the old pane's box (seen: active in slot 1, focused slot 0). A click already moves it
   (`panePressed`, `src/plugins/sessions/page/start.ts`); give the keys the same treatment. Source session: Claude Code
   368f2c4b-5d54-47bf-8285-14fec015fc6b in wigley-ai-gui.
+- **A press on an older selection in an unfocused pane leaves the keys nowhere** — *agent-ready*: `pressedFocusAction`
+  (`src/plugins/sessions/page/pane-sessions.ts`) reads the selection at the release, so it cannot tell one this press
+  began from an older one left in that pane. A press on the selected text keeps nothing (Chromium collapses it at
+  `mouseup`, from memory, not measured) and focus stays at the body; a press on a `preventDefault` target keeps the
+  selection and the box takes no keys. Each costs one extra key; typing never reaches the wrong pane. Read, not driven.
+  Record at the press whether a selection already existed. Source session: Claude Code
+  368f2c4b-5d54-47bf-8285-14fec015fc6b in wigley-ai-gui.
+- **A re-attach on the real harness reports `Earlier conversation not read: ENOENT`** — *agent-ready*: after a drive
+  `restart` with `--harness claude`, the first transcript entry read that, for
+  `~/.claude/projects/-tmp-claude-session-hub-p3/<id>.jsonl`; later entries stayed. The text comes from
+  `src/plugins/chat/main/chat-sessions.ts`. Cause not traced: one lead is a Claude config folder other than `~/.claude`,
+  which this machine's profile uses. Source session: Claude Code 368f2c4b-5d54-47bf-8285-14fec015fc6b in wigley-ai-gui.
+- **The `chat: visuals` self-test step failed once** — *agent-ready*: `v -> [visual] visual overlay showing 2 of 2`
+  (`src/plugins/chat/main/selftest-script.ts`) failed in 1 of 4 filtered runs at 914024cd, with no page reload in the
+  log, then passed twice under `--plugin chat` and once under the same wider filter. The cause isn't traced; a late
+  rest position on the reply's last block is one lead, as the chat cursor had changed that morning. Source session:
+  Claude Code 368f2c4b-5d54-47bf-8285-14fec015fc6b in wigley-ai-gui.
+- **Skills lists a slash the CLI did not recognise** — *agent-ready*: on the real harness, `/tiny` drew a Skills row
+  `tiny main` while the agent replied that `/tiny` isn't a command in this session. The skill's file was written after
+  the session started, so a loaded skill was not seen doing this. The event source is not traced; start at
+  `foldAgentEvent` (`src/plugins/agents/roster.ts`). Source session: Claude Code 368f2c4b-5d54-47bf-8285-14fec015fc6b in
+  wigley-ai-gui.
 - **The message box's vim mode label contradicts `DESIGN.md`** — `DESIGN.md` § Surfaces (the composer) says the box has no
   mode label because the cursor's shape shows the vim mode, yet `src/renderer/codemirror-vim/codemirror-vim-host.ts`
   runs `vim({ status: true })`, and a live run shows `--INSERT--`, which stays after focus leaves the box. The doc or

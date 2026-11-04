@@ -173,7 +173,7 @@ Boundary rules:
 - [x] [Doc re-read](08-doc-re-read.md) — after 01–07
 
 ### Wave 5
-- [ ] [Final verification](09-final-verification.md) — after 08
+- [x] [Final verification](09-final-verification.md) — after 08
 
 ## Run log
 
@@ -188,6 +188,7 @@ Review base: ad87d46f110e63f41f0a1d404e1c3db1d19d82fa
 - 05 · 4c790705 · diff read: every Produces present and check-layers holds only agent-skills entries; worker: typecheck and lint clean, 154 tests in the touched folders pass · concerns: the self-test has not run, and the fit check may need another selector at minimum width; a very long subagent name on a flex-none tag could scroll the section sideways; the log fires from a draw, so a never-opened tab logs late
 - 07 · 6b720a24 · diff read: every Produces present; typecheck and lint clean over the whole tree at the commit; worker: 171 tests in the touched files pass · concerns: the subgrid label column and value ellipsis are unseen until task 09; facts listeners fire on every status line draw, box focus included, patching about five rows, unmeasured; session-part.ts and chat-view.ts import each other, type-only at one end
 - 08 · 336c30c7 · every listed doc checked and all 54 grep hits read; lines changed: AGENTS.md:262-263, usage design.md:163-164, followups.md:226-233; keymap.ts and docs/keymap.md agree on Leader v s; oxfmt clean · concerns: the followups short-tab entry is unverified at the new layout and says to recheck first
+- 09 · 914024cd · lint, typecheck, npm test and the filtered self-test as the test gate says; live checks 1-14 with results and shots in /tmp/claude-session-hub/reports/09-live-1.md, 09-live-2.md; check 13 on the real harness: row returned after restart; first click and keys per fix-release-1.md, fix-keys-1.md · concerns: tabs still lose their first click (follow-up); older selection in the pressed pane (follow-up); real hardware scrollbar release and pointercancel not driven; user's checks: wheel in the Plan list, real mouse first click in split panes, hub look
 ### Contract changes
 - WorkflowView.sidePart: ContributedPart wrapped in start.ts → ChatSidePart literal with title and order from 01 · why: the side pane plan landed it as ChatSidePart · consumers: 06 · group 01
 - createSideSections: members left open → SideSections { openTab, toggleHidden }, SideTab { sync, rebuild, close } · why: lead's per-tab handle ruling · consumers: none directly; 04 and 07 add parts through the store · group 01
@@ -218,10 +219,15 @@ Review base: ad87d46f110e63f41f0a1d404e1c3db1d19d82fa
 - Session rows take text-12 and gap space-1 space-2 to match the section heads — one CSS line if wrong · group 07 · group 07
 - The short-tab follow-up is rewritten rather than deleted, keeping its reverted-CSS history — a wrong keep costs one stale follow-up · group 08 · group 08
 - The context line's meter has min-width 0 rather than the plan's floor, because the composer's least width does not hold the floor — the meter shrinks to nothing past about 32 px more text · lead
+- check 10 revised: Skills shows in the chat preview, per the user's round; 09's zla text is superseded by Space z l c · group 09
 ### Review rounds
 - 1 · pin f2748613, commits 13367469 fe66c847 11ecd75f 9abd4356 e063716c 4c790705 6b720a24 336c30c7 c4bcaf4a · correctness x4, plan-and-design x3 · Verdict: NEEDS FIXES · 31 findings, report /tmp/claude-session-hub/review-f2748613.md · determined fixes 0d5afc70 84f97d47 4940c1a8 24ef24ec 118fd0a3 · AGENTS.md:705-709 dismissed: written ahead for the unmerged foundation-sweeps branch · redundant usage fit check dropped · user took every recommendation by the round's note, standing for this session
 - re-review of the fix commits at 4d10d621: NEEDS FIXES. Important, repeat: first click lost in a vertical split, confirmed live (18 px sheet move). Minor: press on non-focusable content; list floor on short lists. Settled under the user's standing note: pane focus moves when the press ends; dispatched as fix cycle 2
+- second re-review at c6f9c8b5: NEEDS FIXES. Important, repeat: a press's release blurs the text box it focused, on non-Chat tabs. Minor: older selection in the pressed pane left, echo before the first state left, unpinned rules pinned in the fix, comment lead-applied. Fix cycles spent; the user's standing note settles the rest: fix, proved by drive and gate, no third re-review
+- no third re-review: 914024cd, the fix after the second re-review, is proved by its drive table and the gate only
 ### Test gate
 - npm test, whole suite, because task 09 names it and vitest takes 16 s: every changed plugin's tests plus its neighbours · 416 files, 7467 tests pass, typecheck and lint clean
 - filtered self-test (chat, agent-strip, usage, workflow, agent-lines, agent-skills), named by task 09 · first run one failure: compacting-narrow, context line 342 px in 326 px; fixed in c4bcaf4a; usage self-test re-run passes, 20 PASS, usage tests 201 pass
 - after the first review's fixes, at 7bb2a5e4: typecheck and lint clean; npm test 7634 pass; npm run selftest filtered to chat, sessions, usage, agent-strip, agent-skills, agent-lines, workflow: all passed, no page reload in the log. An earlier gate at 4d10d621 failed one test (fixed in 7bb2a5e4), 6 fit checks and 23 sessions steps; the sessions steps coincided with a peer's page reload mid-run, the fit checks named the type hint a peer's a4f91d8e grew and 9767eb09 fixed; neither was proved by a comparison run, both passed at 7bb2a5e4
+- after the release fix, at c6f9c8b5: typecheck and lint clean; npm test 7662 pass; selftest filtered to chat, sessions, usage, agent-strip, agent-skills, agent-lines, workflow: all passed, no page reload
+- after the keys fix, at 914024cd: typecheck and lint clean; npm test 7681 pass; selftest filtered to chat, sessions, usage, agent-strip, agent-skills, agent-lines, workflow, forms, primer, docs: 1 failed (v -> visual overlay showing 2 of 2), no page reload; cause not traced, passed on the same filter's rerun and twice under --plugin chat; recorded as a follow-up
