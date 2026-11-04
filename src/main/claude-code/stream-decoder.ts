@@ -16,9 +16,10 @@ import {
   numberOrNull,
   parsed,
 } from './json-fields';
-import { replySpendUsd } from './model-prices';
+import { CONTEXT_SUFFIX, replySpendUsd } from './model-prices';
 import { rateLimitRows } from './plan-usage';
 import {
+  replyInputTokens,
   type ReplyUsage,
   replyUsageOf,
   type TurnUsage,
@@ -121,8 +122,6 @@ const WRITE_TOOL_PATHS: Readonly<Record<string, string>> = {
   MultiEdit: 'file_path',
   NotebookEdit: 'notebook_path',
 };
-// The context-size tag a `modelUsage` key can end in: `claude-opus-5-5[1m]`.
-const MODEL_KEY_SUFFIX = /\[[^\]]*\]$/;
 
 // What the decoder last knows of a subagent. `sentWindow` is the context window
 // its last `agentReplied` carried.
@@ -170,15 +169,6 @@ function commandNames(init: Json): string[] {
 // The string items of a list field; [] when the field is no list.
 function stringItems(value: unknown): string[] {
   return asArray(value).filter((item) => typeof item === 'string');
-}
-
-// The context a reply's `usage` shows: its input side, a missing field counting 0.
-function replyContextTokens(usage: Json): number {
-  return (
-    (numberOrNull(usage.input_tokens) ?? 0) +
-    (numberOrNull(usage.cache_creation_input_tokens) ?? 0) +
-    (numberOrNull(usage.cache_read_input_tokens) ?? 0)
-  );
 }
 
 // The agent whose line `event` is: a subagent's lines carry its Agent call's id.
@@ -411,7 +401,7 @@ export function createStreamDecoder(
         continue;
       }
       modelWindows.set(key, window);
-      const plainKey = key.replace(MODEL_KEY_SUFFIX, '');
+      const plainKey = key.replace(CONTEXT_SUFFIX, '');
       if (!Object.hasOwn(modelUsage, plainKey)) {
         modelWindows.delete(plainKey);
       }
@@ -426,7 +416,7 @@ export function createStreamDecoder(
       return exact;
     }
     for (const [key, window] of modelWindows) {
-      if (key.replace(MODEL_KEY_SUFFIX, '') === model) {
+      if (key.replace(CONTEXT_SUFFIX, '') === model) {
         return window;
       }
     }
@@ -475,7 +465,7 @@ export function createStreamDecoder(
     replySpends.set(agentId, spends);
     const usage = asJson(message.usage);
     spends.set(asString(message.id), replySpendUsd(model, usage));
-    reportSubagentFacts(agentId, model, replyContextTokens(usage), out);
+    reportSubagentFacts(agentId, model, replyInputTokens(usage), out);
   }
 
   function keepWritePath(id: string, name: string, input: Json) {

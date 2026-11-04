@@ -1850,6 +1850,28 @@ describe('createStreamDecoder', () => {
       ],
     },
     {
+      case: 'result names a plain key beside a suffixed key already learned',
+      lines: [
+        agentCall('b1'),
+        launchReceipt('b1'),
+        subagentReply('b1', 'm1', 'claude-mythos-5-1', { input_tokens: 70 }),
+        resultNaming({ 'claude-mythos-5-1[1m]': 1000000 }),
+        resultNaming({
+          'claude-mythos-5-1': 200000,
+          'claude-mythos-5-1[1m]': 1000000,
+        }),
+      ],
+      expected: [
+        spawned('b1'),
+        launched('b1'),
+        replied('b1', 'claude-mythos-5-1', null, 70, null),
+        replied('b1', 'claude-mythos-5-1', null, 70, 1000000),
+        TURN_ENDED,
+        replied('b1', 'claude-mythos-5-1', null, 70, 200000),
+        TURN_ENDED,
+      ],
+    },
+    {
       case: 'result names no window for a subagent, and keeps what it learned',
       lines: [
         agentCall('b1'),
