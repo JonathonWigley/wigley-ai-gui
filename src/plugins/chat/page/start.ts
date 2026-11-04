@@ -175,10 +175,11 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
           listener(sessionId),
         ),
       onScopeChanged: (listener) => api.keys.onScopeChanged(() => listener()),
-      onActiveTime: (sessionId, activeTime) => {
-        api.events.emit('activeTimeChanged', { sessionId, activeTime });
-        rowClock.changed(sessionId);
-      },
+      activeTimeListeners: [
+        (sessionId, activeTime) =>
+          api.events.emit('activeTimeChanged', { sessionId, activeTime }),
+        (sessionId) => rowClock.changed(sessionId),
+      ],
       editor: services.editor,
       markdown: services.markdown,
       keys,

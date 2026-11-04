@@ -48,7 +48,12 @@ const returnedTwo: ReturnedMessage = {
 // A mounted view whose `sessions` call waits for `answerSessions`; `emit` sends
 // it a message from main, `box` is the one tab's box text, null before a tab
 // mounts, and `invoked` holds each other call to main.
-function mounted() {
+function mounted(
+  firstActiveTimeListener: (
+    sessionId: string,
+    activeTime: ActiveTime,
+  ) => void = () => undefined,
+) {
   const listeners = new Map<string, (data: unknown) => void>();
   const invoked: unknown[][] = [];
   const logs: string[] = [];
@@ -100,9 +105,12 @@ function mounted() {
     onActiveChanged: noEvent,
     onSessionHostChanged: noEvent,
     onScopeChanged: noEvent,
-    onActiveTime: (sessionId: string, activeTime: ActiveTime) => {
-      activeTimeCalls.push([sessionId, activeTime]);
-    },
+    activeTimeListeners: [
+      firstActiveTimeListener,
+      (sessionId: string, activeTime: ActiveTime) => {
+        activeTimeCalls.push([sessionId, activeTime]);
+      },
+    ],
     editor: {
       create(): TextEditor {
         box.text = '';
@@ -207,25 +215,66 @@ describe('mountChatView active time', () => {
   const STARTED: ActiveTime = { totalMs: 65_000, since: null };
   const RUNNING: ActiveTime = { totalMs: 65_000, since: 4000 };
 
-  it('activeTime_SessionStarted_KeptBeforeItsTabIsAddedWithNoCall', () => {
-    const mount = mounted();
+  it('activeTime_SessionStarted_ReadableDuringAddTabAndAtItsOneCall', () => {
+    const readAtCall: (ActiveTime | null)[] = [];
+    const mount = mounted((sessionId) => {
+      readAtCall.push(mount.view.activeTime(sessionId));
+    });
 
+    mount.emit('sessionStarted', { ...stateOf([]), activeTime: STARTED });
     mount.emit('sessionStarted', { ...stateOf([]), activeTime: STARTED });
 
     expect(mount.readDuringAddTab).toEqual([STARTED]);
-    expect(mount.view.activeTime('row-1')).toEqual(STARTED);
-    expect(mount.activeTimeCalls).toEqual([]);
+    expect(readAtCall).toEqual([STARTED]);
+    expect(mount.activeTimeCalls).toEqual([['row-1', STARTED]]);
   });
 
   it('activeTime_Message_KeepsTheRecordAndCallsOnce', () => {
     const mount = mounted();
     mount.emit('sessionStarted', stateOf([]));
+    mount.activeTimeCalls.length = 0;
 
     mount.emit('activeTime', { sessionId: 'row-1', activeTime: RUNNING });
 
     expect(mount.view.activeTime('row-1')).toEqual(RUNNING);
     expect(mount.view.activeTime('row-2')).toBeNull();
     expect(mount.activeTimeCalls).toEqual([['row-1', RUNNING]]);
+  });
+
+  it('activeTime_AListenerThrowsOnAMessage_TheNextStillRuns', () => {
+    let isFailing = false;
+    const mount = mounted(() => {
+      if (isFailing) {
+        throw new Error('listener failed');
+      }
+    });
+    mount.emit('sessionStarted', stateOf([]));
+    mount.activeTimeCalls.length = 0;
+    isFailing = true;
+
+    expect(() =>
+      mount.emit('activeTime', { sessionId: 'row-1', activeTime: RUNNING }),
+    ).toThrow('listener failed');
+
+    expect(mount.activeTimeCalls).toEqual([['row-1', RUNNING]]);
+    expect(mount.view.activeTime('row-1')).toEqual(RUNNING);
+  });
+
+  it('activeTime_AListenerThrowsOnArrival_EverySessionStillArrives', async () => {
+    const mount = mounted(() => {
+      throw new Error('listener failed');
+    });
+
+    await mount.answerSessions([
+      { ...stateOf([]), sessionId: 'row-1', activeTime: STARTED },
+      { ...stateOf([]), sessionId: 'row-2', activeTime: RUNNING },
+    ]);
+
+    expect(mount.activeTimeCalls).toEqual([
+      ['row-1', STARTED],
+      ['row-2', RUNNING],
+    ]);
+    expect(mount.view.activeTime('row-2')).toEqual(RUNNING);
   });
 
   it('activeTime_MessageForAnUnheldSession_IgnoredWithNoCall', () => {

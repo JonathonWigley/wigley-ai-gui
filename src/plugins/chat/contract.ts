@@ -393,9 +393,9 @@ export interface ChatPageExports {
   activeTime(sessionId: string): ActiveTime | null;
 }
 
-// `activeTimeChanged` fires when main sends a session's clock: at each start
-// and stop and at a `/clear` reset. It does not fire for a session arriving
-// with its total, whose starting value `ChatPageExports.activeTime` reads.
+// `activeTimeChanged` fires when a session arrives on the page with its total,
+// and when main sends a session's clock: at each start and stop and at a
+// `/clear` reset.
 export interface ChatPageEvents extends EventShape {
   activeTimeChanged: { sessionId: string; activeTime: ActiveTime };
 }

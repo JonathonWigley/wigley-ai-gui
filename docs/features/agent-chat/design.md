@@ -458,7 +458,7 @@ interview on 2026-10-23; this file is the record of both.
   draw through the same export: the description in a dim column cut to one line, while the `completionDescriptions`
   setting is on (default on), else `false`.
 - **Active time**: chat's page exports `activeTime(sessionId)`, a session's clock as an `ActiveTime` (null for a session the
-  page does not hold), and fires `activeTimeChanged` when main sends a clock; chat's `rowClock` layout part draws it on the
+  page does not hold), and fires `activeTimeChanged` when a session arrives and when main sends a clock; chat's `rowClock` layout part draws it on the
   side-bar row (`docs/features/session-clock/design.md`).
 - **Resume and archive**: after the folder and profile, the start prompt offers a new session or one of the folder's
   saved sessions (terminal and app alike, newest first, labelled by first message and time; one open in the app

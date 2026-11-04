@@ -28,6 +28,7 @@ import {
 } from '../../../shared/active-time';
 import { errorText } from '../../../shared/error-text';
 import { refusalOf } from '../image-rules';
+import { isWorkRunning } from '../session-work';
 import {
   type AgentSession,
   type OpenOptions,
@@ -117,7 +118,8 @@ export interface ChatSessions {
   // still run, so it adds no quit-during-turn notice. A record already open in
   // the app is skipped, and stays saved while it holds queued or returned
   // messages, until a row chat holds opens under its host id and takes them over
-  // behind its own.
+  // behind its own, adding the record's active time to its clock. A record of a
+  // row chat already holds adds its messages and active time to that row.
   // Saving starts here: nothing is saved before it runs.
   restore(
     saved: SavedSessions,
@@ -234,10 +236,12 @@ export interface ChatSessions {
   // Detaches every held process, which keeps running on the session host, and
   // kills every other process not yet exited, a closed or cleared session's
   // still ending, for an app quit or a chat plugin reload. A closed row's attach
-  // resolving after it is killed too; a held row's is detached. It saves once
-  // first, so a running clock keeps its span up to now; nothing is saved or
-  // started after it, and every later process event is ignored.
-  detachAll(): void;
+  // resolving after it is killed too; a held row's is detached. It tries one
+  // last save first, a running clock's span up to now included, and returns that
+  // write's promise, which never rejects: a write that fails or is cut short
+  // leaves the last saved total. Nothing is saved or started after it, and every
+  // later process event is ignored.
+  detachAll(): Promise<void>;
   // The sessions plugin's `connected` event: records the session's host id
   // as open in the app.
   sessionConnected(session: AgentSession): void;
@@ -330,6 +334,8 @@ interface HeldSession {
   // The running attach; resolves after its result is applied, to the
   // rejection's error text, or null when it did not reject. Never rejects.
   attaching: Promise<string | null> | null;
+  // The latest attach's replay, over once its attach settles.
+  replay: { isReplaying: boolean };
   // `stopAll` killed the running process, so its `ended` says so.
   isStopRequested: boolean;
   // A process the host may still run for this row while chat holds no process
@@ -468,11 +474,6 @@ function shownActivity(held: HeldSession): ProcessActivity {
   return held.pending.size > 0 ? 'waiting' : held.harnessActivity;
 }
 
-// The same rule `rowActivity` draws the row's `working` by.
-function isSessionActive(session: HeldSession): boolean {
-  return session.state.activity === 'working' || session.state.background > 0;
-}
-
 function savedSessionOf(
   session: HeldSession,
   titles: SessionTitles,
@@ -551,15 +552,19 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     };
   }
 
-  function save() {
+  function writeSaved(): Promise<void> {
     if (!isRestored || isDetached) {
-      return;
+      return Promise.resolve();
     }
-    deps.saved
+    return deps.saved
       .save(snapshot())
       .catch((error: unknown) =>
         log('chat', `open sessions not saved: ${errorText(error)}`),
       );
+  }
+
+  function save() {
+    void writeSaved();
   }
 
   // Held, and `processStart` is its running process, until `detachAll`.
@@ -675,11 +680,15 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   }
 
   // Starts or stops the session's clock after a change to its activity or
-  // background count; sends and saves only when the clock changed.
+  // background count; sends and saves only when the clock changed. A replay
+  // moves neither: its end settles the clock once.
   function updateActiveTime(session: HeldSession) {
+    if (session.replay.isReplaying) {
+      return;
+    }
     const now = deps.clock.now();
     const current = session.state.activeTime;
-    const next = isSessionActive(session)
+    const next = isWorkRunning(session.state)
       ? startActiveTime(current, now)
       : stopActiveTime(current, now);
     if (next === current) {
@@ -1163,6 +1172,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       returnedDrops: new Set(opening.returnedDrops),
       historyBefore: null,
       attaching: null,
+      replay: { isReplaying: false },
       isStopRequested: false,
       unheldProcessId: null,
       unheldSettling: null,
@@ -1183,7 +1193,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   }
 
   // The row's own record replaces any skipped one for its host id, and the row
-  // takes over the messages that record held.
+  // takes over the active time and messages that record held.
   function takeOverSkipped(session: HeldSession) {
     const { hostId } = session;
     const records = skippedRecords.filter(
@@ -1192,7 +1202,25 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     skippedRecords = skippedRecords.filter(
       (record) => record.hostSessionId !== hostId,
     );
+    takeSavedActiveTime(session, records);
     takeSavedMessages(session, records);
+  }
+
+  // Adds the active time `records` saved to the session's clock.
+  function takeSavedActiveTime(
+    session: HeldSession,
+    records: readonly SavedSession[],
+  ) {
+    const savedMs = records.reduce((sum, record) => sum + record.activeMs, 0);
+    if (savedMs === 0) {
+      return;
+    }
+    const { activeTime } = session.state;
+    session.state.activeTime = {
+      ...activeTime,
+      totalMs: activeTime.totalMs + savedMs,
+    };
+    sendActiveTime(session);
   }
 
   // Queues what `records` saved, behind any row the session holds, and returns
@@ -1341,6 +1369,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     send('sessionRunning', { sessionId });
     const started: { process: AgentProcess | null } = { process: null };
     const replay = { isReplaying: true };
+    session.replay = replay;
     const profileDir = profileDirOf(profile);
     const attaching = harness
       .attach(
@@ -1424,6 +1453,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       'chat',
       `session ${sessionId} re-attached to process ${session.processId}`,
     );
+    updateActiveTime(session);
     if (session.harnessActivity === 'idle') {
       writeNextQueued(session);
     }
@@ -1938,6 +1968,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     const holder = holding(hostSessionId);
     if (holder !== undefined) {
       log('chat', `session ${hostSessionId} already open; not restored`);
+      takeSavedActiveTime(holder, [record]);
       takeSavedMessages(holder, [record]);
       return;
     }
@@ -2635,7 +2666,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       log('chat', `stopped ${stopped} session process(es)`);
     },
     detachAll() {
-      save();
+      const lastSave = writeSaved();
       isDetached = true;
       const heldProcesses = new Set<AgentProcess>();
       for (const session of held.values()) {
@@ -2649,6 +2680,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           process.kill();
         }
       }
+      return lastSave;
     },
     sessionConnected(session) {
       if (session.info.sessionId !== null) {

@@ -527,6 +527,37 @@ describe('chat main part', () => {
     expect(saveAttempts()).toBe(before + 1);
   });
 
+  it('dispose_SaveInFlight_HoldsForTheWrite', async () => {
+    const memory = createMemoryFiles();
+    let writesWaitOn = Promise.resolve();
+    const chat = startChatPart({
+      data: {
+        ...memory,
+        write: async (name: string, text: string) => {
+          await writesWaitOn;
+          await memory.write(name, text);
+        },
+      } as Files,
+    });
+    await settle();
+    let finishWrite = () => undefined as void;
+    writesWaitOn = new Promise((resolve) => {
+      finishWrite = resolve;
+    });
+    let isHeld = true;
+
+    const disposed = Promise.resolve(chat.part.dispose?.()).then(() => {
+      isHeld = false;
+    });
+    await settle();
+    const heldBeforeTheWrite = isHeld;
+    finishWrite();
+    await disposed;
+
+    expect(heldBeforeTheWrite).toBe(true);
+    expect(isHeld).toBe(false);
+  });
+
   it('dispose_SignInRunning_CancelsIt', async () => {
     const chat = startChatPart();
     chat.invoke('logIn', 1, 'work');
