@@ -142,15 +142,6 @@ Defects seen in a drive run, a transcript or the user's own use.
   kept; check that the form service, which reads it once per session in `startSession`
   (`src/shared/agent-forms/form-service.ts`), starts after the join. Add a row to the session-list join tests: GIVEN
   an owned row opened with a null deadline WHEN a relay joins with 300 THEN the session's info reads 300.
-- **One rule for the chat cursor, scroll and keys** — *needs a feature plan*: the chat entry cursor has gathered too
-  many rules (follow the latest, hold an open activity line, land on the newest pending row, fall back to the latest
-  stop when the focused row leaves, scroll-to-bottom following), and they disagree at the edges. Settle exactly how
-  the cursor, scrolling and keyboard input interact. Known case: a cursor following the bottom on an open last run's
-  last step moves up to the run line on any redraw (tool result, new step, turn end, queued change), so Enter
-  collapses the run and `j` restarts at its first step (`src/plugins/chat/page/entry-focus.ts` `focusAfterChange`,
-  `entry-focus.test.ts` row pinning `onLine`). The one-line fix kept in reserve:
-  `focusLatest(isListed ? ids.at(-1) ?? null : lastStopId)`. Source session: Claude Code
-  b8ee3503-3c04-48fc-bd7d-bc4f2ec56c17 in wigley-ai-gui.
 - **A restored chat's first step header reads hundreds of thousands of hours** — *agent-ready*: after an app restart
   restored a session (seen live, and in a drive run after `restart`), an entry header read `1 step · 498246h 44m`
   (about 56.8 years), a run whose `startedAt` is 0. Cause: `transcriptEntries`
@@ -467,7 +458,7 @@ User-facing features, those other work builds on first.
   `src/plugins/chat/page/entry-list.ts`), but nothing shows that new entries arrived below. Open for the plan: what
   counts as new (an entry, an assistant message only, or streaming growth too), whether the bubble shows a count,
   its key binding, and its draw through the chat layout contract (`src/plugins/chat/layouts/layout.d.ts`). Settle it
-  with **One rule for the chat cursor, scroll and keys** (Bugs seen in use), which covers the same following rule.
+  with `focusAfterChange` in `src/plugins/chat/page/entry-focus.ts`, which holds the following rule.
 - **Command palette and fuzzy finders** — *needs a feature plan*: a command palette, and `Space f f` (find a file) and
   `Space f s` (search text), all ranked by the `FuzzyMatcher` page service (Foundations; `docs/keymap.md` reserves
   the keys). Builds on the runtime command API (command labels) and the core picker service. Deferred from the docs

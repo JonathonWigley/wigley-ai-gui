@@ -39,7 +39,7 @@ hjkl is the direction in every layer; the modifier picks the verb.
 - **Raw key** acts on the focused scope: `j`/`k` move, `Enter` acts (on a docs tree row it opens
   the doc and focuses it), `Esc` backs out or closes (in a box's normal mode it leaves the box, on a
   doc it focuses the docs tree, and in the doc editor it closes the editor as `:q` does), `/` filters, `gg`/`G` first and last,
-  `y`/`n` confirm, `i`/`a` enter the box. Letters are mnemonic verbs.
+  `y`/`n` confirm (in chat `y` copies when no permission waits), `i`/`a` enter the box. Letters are mnemonic verbs.
 - **Shift or uppercase** is a variant or a bigger step of the lowercase key: `G` beside `gg`, `A`
   create by path beside `a`, `R` rescan.
 - **Ctrl+hjkl** moves inside the content. `Ctrl+j`/`Ctrl+k` are the app's scroll keys, and every

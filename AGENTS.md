@@ -240,7 +240,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  and the built-in `default` chat layout); `image-rules.ts` at the root holds the attach rules both
                  parts share; main exports `launch` (a background session with a first message), `profileNames` and
                  `profileOf` to notes, `send` and `profileOf` to forms and the primer (the form wake), `addInstructions` (text every session chat starts carries to its harness)
-                 to visual, and `addSendGate` and `addIdleCompactThreshold` to auto-compact; page exports `focusedEntry` (the focused entry's element) to visual and `activeTime` (a session's clock)
+                 to visual, and `addSendGate` and `addIdleCompactThreshold` to auto-compact; page exports `focusedEntry` (the focused entry's element) and `focusedBlock` (the cursor's block element) to visual and `activeTime` (a session's clock)
                  with the `activeTimeChanged` event; its page also draws each session's run time under its row, through
                  sessions' `addRowPart` and a `rowClock` layout part; main keeps each session's clock, `docs/features/session-clock/design.md`
   keys/          manifest.ts, contract.ts, main/ (registers the layouts only), page/ (which-key, the help overlay,
@@ -276,7 +276,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  registration), page/ (`html-fence.ts`, the `html` fence contribution: the "drawing visual…" card for
                  an open block, a visual frame for a closed one; `visual-registry.ts` the source of each closed
                  visual on the page; `visual-overlay.ts` and `visual-commands.ts` the full-size overlay and its `v` key on chat's
-                 focused entry, `h`/`l` between visuals and `Esc` to close),
+                 focused entry, opening at the first visual in the cursor's block, `h`/`l` between visuals and `Esc` to close),
                  layouts/ (the visual Layout contract and the built-in `default` layout);
                  `docs/features/visuals/design.md`
 ```
@@ -383,7 +383,7 @@ round; primer: an open primer), since main, not the page, decides.
 - **A composer part** is what a plugin draws above the Chat composer's box, through the `chat` page export
   `addComposerPart`, the same shape as a session part: chat hands each part a wrapper and the session id. The workflow
   plugin's strip and the agent strip are two. A part may offer a **stop**: `j` on the entry cursor's last stop (the
-  newest pending row, else the last entry or an open last run's last step) hands the cursor to it, and the part holds
+  newest pending row, else the last block of the last entry or an open last run's last step) hands the cursor to it, and the part holds
   its own key scope until it hands the cursor back.
 - **A side part** is what a plugin draws in the session hub beside the Chat tab's transcript, through the `chat` page
   export `addSidePart`: a composer part's shape plus a `title` and an `order`, and `build` also gets a handle that sets
