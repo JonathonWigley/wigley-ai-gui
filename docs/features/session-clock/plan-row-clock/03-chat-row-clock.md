@@ -1,6 +1,6 @@
 # 03 — Chat page exports and the row clock part
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -90,3 +90,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 017d5cb4 · proof: diff read; every Produces present; typecheck clean; layer check refuses contract.ts importing src/shared, fixed by the contract change landing next · concerns: layouts design Adopters and AGENTS chat prose lag (task 06); preview rows show no run time; empty wrapper keeps margin-left auto and gap, unchecked on screen; row part and layouts.onChange Disposables dropped, chat keeps no registrations

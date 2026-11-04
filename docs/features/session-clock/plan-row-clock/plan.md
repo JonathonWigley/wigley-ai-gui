@@ -142,7 +142,7 @@ usage reach sessions only through `SessionsPageExports.addRowPart`.
 - [x] [Chat main owns and saves the clock](02-chat-main-clock.md) — after 01
 
 ### Wave 3
-- [ ] [Chat page exports and the row clock part](03-chat-row-clock.md) — after 02
+- [x] [Chat page exports and the row clock part](03-chat-row-clock.md) — after 02
 - [ ] [Compact session row](05-compact-row.md) — after 04, and after the peer plan's task 05 (Preconditions)
 
 ### Wave 4
@@ -159,10 +159,14 @@ Review base: 693cb8d04eb48c87e6cba0406a0e2d850f90db54
 - 01 · 6640b41c · diff read; all Produces present; typecheck clean for the module; its table passes 7 rows · concerns: AGENTS.md src/shared listing omits active-time.ts (task 06 fixes); stop computes through activeMsAt
 - 04 · 10d1cf30 · diff read; every Produces signature present; typecheck clean for usage · concerns: layouts design Adopters table omits the cache mark (task 06); rowCacheText and the default part title and is-cold have no test, live check 3 covers them; doubled log prefix row cache session line in, same shape as rowLine
 - 02 · 371a1a15 · diff read; every Produces present; typecheck clean; the worker ran the chat main tests · concerns: replay drives the clock at wall time, so a kept run working across a quit is uncounted between quit and relaunch; turn start and stop saves twice, harmless; a background-only clock has no stop record before /clear resets it
+- 03 · 017d5cb4 · diff read; every Produces present; typecheck clean; layer check refuses contract.ts importing src/shared, fixed by the contract change landing next · concerns: layouts design Adopters and AGENTS chat prose lag (task 06); preview rows show no run time; empty wrapper keeps margin-left auto and gap, unchecked on screen; row part and layouts.onChange Disposables dropped, chat keeps no registrations
 ### Contract changes
+- ActiveTime: export interface in src/shared/active-time.ts → export interface in src/contracts/active-time.ts · why: scripts/check-layers.mts refuses src/plugins/chat/contract.ts importing src/shared, and AGENTS.md puts records crossing a seam in src/contracts; src/shared/active-time.ts now imports that type, so it no longer imports nothing · consumers: 02, 03 · group 03 fix
 ### Rulings
 - Task 02 final save goes in detachAll, before isDetached = true, in place of the plan's killAll and isKilled — the session host plan replaced them after this plan was written, and detachAll is the quit path (chat/main/start.ts:475) — if wrong, a quit mid-turn loses the open span back to the last save · lead
 - usage-row-cache centres on --wg-row-tree line height like usage-row-line — so the mark lines up with the meter — a look change in layout.css if wrong · group 04 · group 04
 - /clear saves through its existing finally save, not a second call at the reset — a save at the reset would write the old host id with the new total — a crash in the same tick keeps the stopped total · group 02 · group 02
+- the view keeps activeTimes in its own Map set before createTab — addTab draws side-bar rows before the tab is held — one redundant field if wrong · group 03 · group 03
+- onActiveTime runs only for a held session — matches the background handler — a listener misses a message arriving before the tab · group 03 · group 03
 ### Review rounds
 ### Test gate
