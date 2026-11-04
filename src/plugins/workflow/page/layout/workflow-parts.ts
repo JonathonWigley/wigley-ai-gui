@@ -1,3 +1,4 @@
+import type { Clock } from '../../../../contracts/ambient';
 import type { Log } from '../../../../contracts/log';
 import type { ShownLayouts } from '../../../../contracts/plugin';
 import type { OwnerKitServices } from '../../../../shared/page/layout-host/base-kit';
@@ -37,6 +38,7 @@ export interface WorkflowParts {
 export function createWorkflowParts(deps: {
   kit: OwnerKitServices;
   log: Log;
+  clock: Clock;
 }): WorkflowParts {
   const layoutParts = createLayoutParts<Layout, CompleteLayout>({
     owner: workflowManifest.id,
@@ -62,19 +64,31 @@ export function createWorkflowParts(deps: {
     chip: (parent, input, run) =>
       toDrawn(
         layoutParts.draw('chip', parent, (chip, slot, rollback) =>
-          chip(slot, input, createWorkflowKit(deps.kit, rollback, run)),
+          chip(
+            slot,
+            input,
+            createWorkflowKit(deps.kit, rollback, run, deps.clock),
+          ),
         ),
       ),
     strip: (parent, input, run) =>
       toDrawn(
         layoutParts.draw('strip', parent, (strip, slot, rollback) =>
-          strip(slot, input, createWorkflowKit(deps.kit, rollback, run)),
+          strip(
+            slot,
+            input,
+            createWorkflowKit(deps.kit, rollback, run, deps.clock),
+          ),
         ),
       ),
     sidePane: (parent, input, run) =>
       toDrawn(
         layoutParts.draw('sidePane', parent, (sidePane, slot, rollback) =>
-          sidePane(slot, input, createWorkflowKit(deps.kit, rollback, run)),
+          sidePane(
+            slot,
+            input,
+            createWorkflowKit(deps.kit, rollback, run, deps.clock),
+          ),
         ),
       ),
     setLayouts: (shown) => layoutParts.setLayouts(shown),

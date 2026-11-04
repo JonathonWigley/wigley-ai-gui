@@ -1,17 +1,8 @@
-import {
-  busyStatus,
-  detailLine,
-  isBusy,
-  type PageStage,
-  statusText,
-} from '../../contract';
-
-const label = 'Make';
-const status = busyStatus;
+import { busyStatus, detailLine, isBusy, type PageStage } from '../../contract';
 
 export const makePageStage: PageStage = {
   id: 'make',
-  label,
+  label: 'Make',
   inStepper: true,
   stepSlot: 'make',
   runsTasks: true,
@@ -47,12 +38,9 @@ export const makePageStage: PageStage = {
       progress.title,
     );
   },
-  status,
-  statusLine(flow) {
-    const line = statusText(label, status(flow));
+  status: busyStatus,
+  statusProgress(flow) {
     const progress = flow.progress;
-    return progress === null
-      ? line
-      : `${line} ${progress.checked}/${progress.total}`;
+    return progress === null ? '' : ` ${progress.checked}/${progress.total}`;
   },
 };

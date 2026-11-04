@@ -1,15 +1,11 @@
-import { IDLE_STAGE, type PageStage, statusText } from '../../contract';
-
-const label = 'Idle';
-const status: PageStage['status'] = () => null;
+import { IDLE_STAGE, type PageStage } from '../../contract';
 
 export const idlePageStage: PageStage = {
   id: IDLE_STAGE,
-  label,
+  label: 'Idle',
   inStepper: false,
   order: 0,
   actions: [],
   detail: () => '',
-  status,
-  statusLine: (flow) => statusText(label, status(flow)),
+  status: () => null,
 };

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { busyStatus, type PageStage, type SessionFlow } from '../contract';
+import {
+  busyStatus,
+  type PageStage,
+  type SessionFlow,
+  statusLine,
+} from '../contract';
 import { newFlow } from '../flow';
 import type { PlanProgress } from '../plan-reader';
 import {
@@ -367,9 +372,9 @@ describe('BUILT_IN_PAGE_STAGES', () => {
     },
   ])(
     "each stage's status and status line follow its flow: $name",
-    ({ stage, flow, status, statusLine }) => {
+    ({ stage, flow, status, statusLine: line }) => {
       expect(pageStage(stage).status(flow)).toBe(status);
-      expect(pageStage(stage).statusLine(flow)).toBe(statusLine);
+      expect(statusLine(pageStage(stage), flow)).toBe(line);
     },
   );
 

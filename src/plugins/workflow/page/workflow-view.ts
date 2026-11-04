@@ -14,6 +14,7 @@ import {
   type SessionFlow,
   type StageActionSpec,
   type StageStatus,
+  statusLine,
   statusText,
   type WorkflowActionRequest,
 } from '../contract';
@@ -68,13 +69,15 @@ export interface WorkflowViewDeps {
 // above its Chat composer, and `sidePart` its side pane beside its transcript.
 // Every held part draws again on `setFlow` for its session, on `setLayouts` and
 // on `redraw`, and each second while it shows a countdown, the side pane aside.
-// `setFlow` also logs the session's stage, progress and countdown when each
-// changes; `forget` drops what it logged for a session that left and its
-// finished waves' fold. `setSidePaneHidden` shows or hides the side pane in
-// every session, and `toggleFinishedWaves` opens or folds one session's
-// finished waves. `mainAction` is the spec the main action runs, and `runFor`
-// the one path that runs a workflow command for a session; only
-// `toggleFinishedWaves` runs in the preview.
+// The side pane's list keeps its scroll across those draws, and while the pane
+// has no layout box. `setFlow` also logs the session's stage, progress and
+// countdown when each changes; `forget` drops what it logged for a session that
+// left and its finished waves' fold. `setSidePaneHidden` shows or hides the side
+// pane in every session, and `toggleFinishedWaves` opens or folds one session's
+// finished waves, logging and changing nothing while the pane would draw no
+// fold. `mainAction` is the spec the main action runs, and `runFor` the one path
+// that runs a workflow command for a session; only `toggleFinishedWaves` runs in
+// the preview.
 export interface WorkflowView {
   chipPart: SessionPart;
   stripPart: ChatComposerPart;
@@ -91,13 +94,17 @@ export interface WorkflowView {
 
 type PartKind = 'chip' | 'strip' | 'sidePane';
 
-// One wrapper a part was built into, and what it drew there last.
+// One wrapper a part was built into, and what it drew there last. A side pane
+// also holds its list's last scroll read with a layout box, and the observer
+// that hands it back when the wrapper gets a box again.
 interface HeldPart {
   kind: PartKind;
   sessionId: string;
   wrapper: HTMLElement;
   drawn: Drawn | null;
   showsCountdown: boolean;
+  listScroll: number;
+  paneBox: ResizeObserver | null;
 }
 
 // The boxes of one wave of the plan, or of its `Tasks` group.
@@ -119,7 +126,7 @@ const PENDING: MarkState = 'pending';
 export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
   const { log: writeLog, clock, timers } = deps;
   const log = (line: string) => writeLog('workflow', line);
-  const parts = createWorkflowParts({ kit: deps.kit, log: writeLog });
+  const parts = createWorkflowParts({ kit: deps.kit, log: writeLog, clock });
   const held = new Set<HeldPart>();
   const loggedStages = new Map<string, string>();
   const loggedProgress = new Map<string, string>();
@@ -199,7 +206,7 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
       label: stage.label,
       status,
       statusText: statusText(stage.label, status),
-      statusLine: stage.statusLine(flow),
+      statusLine: statusLine(stage, flow),
       detail: stage.detail(flow),
       countdown: countdown(flow),
       steps: steps(stage, status),
@@ -208,11 +215,14 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
     };
   };
 
-  const sidePaneInput = (
-    flow: SessionFlow,
-    progress: PlanProgress,
-  ): SidePaneInput => {
+  // What the side pane draws for `flow`; null while it draws nothing: idle, no
+  // plan read, or hidden.
+  const sidePaneInput = (flow: SessionFlow): SidePaneInput | null => {
     const stage = pageStageOf(flow);
+    const progress = flow.progress;
+    if (stage.id === IDLE_STAGE || progress === null || isSidePaneHidden) {
+      return null;
+    }
     const openTaskState = stage.runsTasks
       ? (stage.status(flow) ?? PENDING)
       : PENDING;
@@ -254,16 +264,11 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
         return input.countdown !== null;
       }
       case 'sidePane': {
-        const progress = flow.progress;
-        const isIdle = pageStageOf(flow).id === IDLE_STAGE;
-        if (isIdle || progress === null || isSidePaneHidden) {
+        const input = sidePaneInput(flow);
+        if (input === null) {
           return false;
         }
-        part.drawn = parts.sidePane(
-          part.wrapper,
-          sidePaneInput(flow, progress),
-          run,
-        );
+        part.drawn = parts.sidePane(part.wrapper, input, run);
         // The default pane draws no countdown, so the tick leaves it.
         return false;
       }
@@ -271,7 +276,7 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
   };
 
   const draw = (part: HeldPart) => {
-    const listScroll = sideListOf(part)?.scrollTop ?? 0;
+    rememberListScroll(part);
     const last = part.drawn;
     part.drawn = null;
     part.showsCountdown = false;
@@ -283,7 +288,8 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
     part.showsCountdown = drawPart(part);
     const newList = sideListOf(part);
     if (newList !== null) {
-      newList.scrollTop = listScroll;
+      newList.scrollTop = part.listScroll;
+      newList.addEventListener('scroll', () => rememberListScroll(part));
     }
   };
 
@@ -322,6 +328,7 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
   // Stops drawing `part` and disposes what it drew last.
   const release = (part: HeldPart) => {
     held.delete(part);
+    part.paneBox?.disconnect();
     const last = part.drawn;
     part.drawn = null;
     part.showsCountdown = false;
@@ -346,6 +353,8 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
       wrapper,
       drawn: null,
       showsCountdown: false,
+      listScroll: 0,
+      paneBox: null,
     };
     held.add(part);
     try {
@@ -357,6 +366,10 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
         wrapper.replaceChildren();
       }
       throw error;
+    }
+    if (kind === 'sidePane') {
+      part.paneBox = new ResizeObserver(() => reapplyListScroll(part));
+      part.paneBox.observe(wrapper);
     }
     return { dispose: () => release(part) };
   };
@@ -441,9 +454,18 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
       drawEach([...held].filter((part) => part.kind === 'sidePane'));
     },
     toggleFinishedWaves(sessionId) {
-      if (!finishedOpen.delete(sessionId)) {
+      const name = deps.nameOf(sessionId);
+      const input = sidePaneInput(deps.flowOf(sessionId));
+      const isFoldDrawn = input !== null && input.finishedWaves.length > 0;
+      if (!isFoldDrawn) {
+        log(`nothing to run for ${TOGGLE_FINISHED_WAVES} in ${name}`);
+        return;
+      }
+      const isOpen = !finishedOpen.delete(sessionId);
+      if (isOpen) {
         finishedOpen.add(sessionId);
       }
+      log(`finished waves ${isOpen ? 'open' : 'folded'} in ${name}`);
       drawSession(sessionId);
     },
     mainAction,
@@ -518,6 +540,27 @@ function sideListOf(part: HeldPart): HTMLElement | null {
   return part.kind === 'sidePane'
     ? part.wrapper.querySelector<HTMLElement>(`.${SIDE_LIST_CLASS}`)
     : null;
+}
+
+// A list with no layout box reads `scrollTop` 0 and drops a write to it.
+function hasLayoutBox(list: HTMLElement): boolean {
+  return list.getClientRects().length > 0;
+}
+
+// Keeps the scroll of `part`'s list while the list has a layout box.
+function rememberListScroll(part: HeldPart): void {
+  const list = sideListOf(part);
+  if (list !== null && hasLayoutBox(list)) {
+    part.listScroll = list.scrollTop;
+  }
+}
+
+// Puts the kept scroll back on `part`'s list while it has a layout box.
+function reapplyListScroll(part: HeldPart): void {
+  const list = sideListOf(part);
+  if (list !== null && hasLayoutBox(list)) {
+    list.scrollTop = part.listScroll;
+  }
 }
 
 // `<checked>/<total>`, then ` wave <n>` while a wave is open and

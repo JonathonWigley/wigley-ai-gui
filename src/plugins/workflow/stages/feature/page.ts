@@ -1,11 +1,8 @@
-import { busyStatus, type PageStage, statusText } from '../../contract';
-
-const label = 'Feature';
-const status = busyStatus;
+import { busyStatus, type PageStage } from '../../contract';
 
 export const featurePageStage: PageStage = {
   id: 'feature',
-  label,
+  label: 'Feature',
   inStepper: true,
   stepSlot: 'start',
   order: 20,
@@ -19,6 +16,5 @@ export const featurePageStage: PageStage = {
     },
   ],
   detail: (flow) => (flow.progress === null ? '' : flow.progress.title),
-  status,
-  statusLine: (flow) => statusText(label, status(flow)),
+  status: busyStatus,
 };

@@ -113,8 +113,7 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
       openDoc: (path) => docs.openDoc(path),
       runAction: (request) => api.channel.invoke('runAction', request),
     });
-    let isSidePaneHidden = services.uiState.get(SIDE_PANE_HIDDEN_KEY) === true;
-    view.setSidePaneHidden(isSidePaneHidden);
+    view.setSidePaneHidden(services.uiState.get(SIDE_PANE_HIDDEN_KEY) === true);
 
     const preview = createPreview({
       openChatPreview: () => api.commands.run('chat.openPreview'),
@@ -229,10 +228,10 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
       void view.runFor(sessionId, command);
     };
     const toggleSidePane = () => {
-      isSidePaneHidden = !isSidePaneHidden;
-      services.uiState.set(SIDE_PANE_HIDDEN_KEY, isSidePaneHidden);
-      view.setSidePaneHidden(isSidePaneHidden);
-      log(`side pane ${isSidePaneHidden ? 'hidden' : 'shown'}`);
+      const isHidden = services.uiState.get(SIDE_PANE_HIDDEN_KEY) !== true;
+      services.uiState.set(SIDE_PANE_HIDDEN_KEY, isHidden);
+      view.setSidePaneHidden(isHidden);
+      log(`side pane ${isHidden ? 'hidden' : 'shown'}`);
     };
 
     const exports: WorkflowPageExports = { addStage };

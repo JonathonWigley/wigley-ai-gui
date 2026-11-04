@@ -1,17 +1,8 @@
-import {
-  busyStatus,
-  detailLine,
-  isBusy,
-  type PageStage,
-  statusText,
-} from '../../contract';
-
-const label = 'Review';
-const status = busyStatus;
+import { busyStatus, detailLine, isBusy, type PageStage } from '../../contract';
 
 export const reviewPageStage: PageStage = {
   id: 'review',
-  label,
+  label: 'Review',
   inStepper: true,
   order: 50,
   actions: [
@@ -46,12 +37,9 @@ export const reviewPageStage: PageStage = {
       progress.title,
     );
   },
-  status,
-  statusLine(flow) {
+  status: busyStatus,
+  statusProgress(flow) {
     const rounds = flow.progress?.reviewRounds ?? 0;
-    return detailLine(
-      statusText(label, status(flow)),
-      rounds === 0 ? '' : `round ${rounds}`,
-    );
+    return rounds === 0 ? '' : ` · round ${rounds}`;
   },
 };

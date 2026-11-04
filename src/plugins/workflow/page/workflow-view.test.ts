@@ -199,8 +199,73 @@ function stepTexts(input: { steps: StripInput['steps'] }): string[] {
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+// Whether every BoxedElement has a layout box.
+let hasBox = true;
+
+// An element scrolled as a browser scrolls it: with no layout box it reports no
+// client rect, reads `scrollTop` 0 and drops a write.
+class BoxedElement extends FakeElement {
+  private scrolled = 0;
+
+  constructor(tagName: string) {
+    super(tagName);
+    Object.defineProperty(this, 'scrollTop', {
+      get: () => (hasBox ? this.scrolled : 0),
+      set: (value: number) => {
+        if (hasBox) {
+          this.scrolled = value;
+        }
+      },
+    });
+  }
+
+  getClientRects() {
+    return hasBox ? [this.getBoundingClientRect()] : [];
+  }
+}
+
+// What a scroll row does to a side pane whose list scrolled to 120, read by no
+// draw and no `scroll` event yet. `resize` runs the observers still observing,
+// and `loseBox` and `regainBox` run them too, as a box coming or going reports.
+interface ScrollScene {
+  view: WorkflowView;
+  list: FakeElement;
+  scrolled(): void;
+  push(): void;
+  resize(): void;
+  loseBox(): void;
+  regainBox(): void;
+}
+
+// Each ResizeObserver the code builds from here on: its callback and the
+// elements it observes now.
+function stubResizeObservers() {
+  const observers: { callback: () => void; observed: Set<unknown> }[] = [];
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      private record;
+      constructor(callback: () => void) {
+        this.record = { callback, observed: new Set<unknown>() };
+        observers.push(this.record);
+      }
+      observe(target: unknown) {
+        this.record.observed.add(target);
+      }
+      disconnect() {
+        this.record.observed.clear();
+      }
+    },
+  );
+  return observers;
+}
+
 beforeEach(() => {
   installFakeDom(vi.stubGlobal);
+  hasBox = true;
+  vi.stubGlobal('document', {
+    createElement: (tag: string) => new BoxedElement(tag),
+  });
 });
 
 afterEach(() => {
@@ -318,8 +383,16 @@ describe('workflow view', () => {
       invoked: [],
       line: '[workflow] nothing to run for mainAction in proj',
     },
-  ])('runFor_$case', async ({ flow, command, invoked, line }) => {
-    const run = setUp();
+    {
+      case: 'PreviewMainAction_RunsNothing',
+      flow: flowIn('planReady'),
+      previews: ['a'],
+      command: 'mainAction',
+      invoked: [],
+      line: '[workflow] preview runs nothing for mainAction',
+    },
+  ])('runFor_$case', async ({ flow, previews, command, invoked, line }) => {
+    const run = setUp(previews);
     run.put(flow);
 
     await run.view.runFor('a', command);
@@ -489,7 +562,6 @@ describe('workflow view', () => {
       actions: [],
       detail: () => '',
       status: () => 'running',
-      statusLine: () => 'Aside',
     });
 
     put(flowIn('aside'));
@@ -530,8 +602,8 @@ describe('workflow view', () => {
     { state: 'ready', icon: 'codicon-play-circle' },
     { state: 'paused', icon: 'codicon-debug-pause' },
     { state: 'done', icon: 'codicon-pass-filled' },
-  ])('statusMark_$state_DrawsItsCodicon', ({ state, icon }) => {
-    const { view, put } = setUp();
+  ])('statusMark_$state_DrawsItsCodiconAtTheClock', ({ state, icon }) => {
+    const { view, put, advance } = setUp();
     const wrapper = new FakeElement('div');
     const drawsMark: Layout = {
       strip(parent, _input, kit) {
@@ -542,12 +614,14 @@ describe('workflow view', () => {
     };
     view.setLayouts(withUser<Layout>(defaultLayout, drawsMark));
     view.stripPart.build(asHtml(wrapper), 'a');
+    advance(2500);
 
     put(flowIn('make'));
 
     const mark = findAll(wrapper, 'workflow-mark')[0];
     expect(mark.dataset.state).toBe(state);
     expect(findAll(mark, icon)).toHaveLength(1);
+    expect(mark.style['--workflow-mark-clock']).toBe('1002500ms');
   });
 
   it.each([
@@ -754,67 +828,198 @@ describe('workflow view', () => {
     expect([first, whileHidden, paneCount()]).toEqual([1, 0, 1]);
   });
 
-  it('sidePane_FlowPushed_KeepsTheListsScroll', () => {
+  it.each<{
+    name: string;
+    act(scene: ScrollScene): void;
+    scroll: number;
+  }>([
+    {
+      name: 'a flow pushed while it has a box',
+      act: ({ push }) => push(),
+      scroll: 120,
+    },
+    {
+      name: 'flows pushed with no box, then the box back',
+      act: ({ scrolled, push, loseBox, regainBox }) => {
+        scrolled();
+        loseBox();
+        push();
+        push();
+        regainBox();
+      },
+      scroll: 120,
+    },
+    {
+      name: 'hidden then shown',
+      act: ({ view }) => {
+        view.setSidePaneHidden(true);
+        view.setSidePaneHidden(false);
+      },
+      scroll: 120,
+    },
+    {
+      name: 'hidden, a flow pushed with no box, shown, then the box back',
+      act: ({ view, push, loseBox, regainBox }) => {
+        view.setSidePaneHidden(true);
+        loseBox();
+        push();
+        view.setSidePaneHidden(false);
+        regainBox();
+      },
+      scroll: 120,
+    },
+    {
+      name: 'a resize after a scroll no draw read',
+      act: ({ list, scrolled, resize }) => {
+        list.scrollTop = 300;
+        scrolled();
+        resize();
+      },
+      scroll: 300,
+    },
+  ])('sidePane_ListKeepsItsScroll: $name', ({ act, scroll }) => {
     const { view, put } = setUp();
+    const observers = stubResizeObservers();
     const wrapper = new FakeElement('div');
     put(flowIn('make'));
     view.sidePart.build(asHtml(wrapper), 'a');
-    const before = findAll(wrapper, 'workflow-side-list')[0];
-    before.scrollTop = 120;
+    const sideList = () => findAll(wrapper, 'workflow-side-list')[0];
+    const list = sideList();
+    list.scrollTop = 120;
+    const resize = () => {
+      for (const observer of observers) {
+        if (observer.observed.size > 0) {
+          observer.callback();
+        }
+      }
+    };
+    let checked = 1;
 
-    put(flowIn('make', { progress: progressOf(1, [3, 3, 1]) }));
+    act({
+      view,
+      list,
+      scrolled: () => sideList().fire('scroll'),
+      push: () => {
+        checked += 1;
+        put(flowIn('make', { progress: progressOf(checked, [3, 3, 1]) }));
+      },
+      resize,
+      loseBox: () => {
+        hasBox = false;
+        resize();
+      },
+      regainBox: () => {
+        hasBox = true;
+        resize();
+      },
+    });
 
-    const after = findAll(wrapper, 'workflow-side-list')[0];
-    expect(after).not.toBe(before);
-    expect(after.scrollTop).toBe(120);
+    expect(sideList().scrollTop).toBe(scroll);
   });
 
-  it.each([
+  it('sidePane_Disposed_StopsObservingItsWrapper', () => {
+    const { view, put } = setUp();
+    const observers = stubResizeObservers();
+    const wrapper = new FakeElement('div');
+    put(flowIn('make'));
+    const built = view.sidePart.build(asHtml(wrapper), 'a');
+    const whileHeld = observers.flatMap((each) => [...each.observed]);
+
+    built.dispose?.();
+
+    expect(whileHeld).toEqual([wrapper]);
+    expect(observers.flatMap((each) => [...each.observed])).toEqual([]);
+  });
+
+  it.each<{
+    name: string;
+    previews?: string[];
+    flow?: SessionFlow;
+    hidden?: boolean;
+    act(view: WorkflowView): void | Promise<void>;
+    open: { a: boolean; b: boolean };
+    line: string;
+  }>([
     {
       name: 'a toggle opens only its session',
-      previews: [],
-      act: async (view: WorkflowView) => view.toggleFinishedWaves('a'),
+      act: (view) => view.toggleFinishedWaves('a'),
       open: { a: true, b: false },
+      line: '[workflow] finished waves open in proj',
     },
     {
       name: 'a second toggle folds it',
-      previews: [],
-      act: async (view: WorkflowView) => {
+      act: (view) => {
         view.toggleFinishedWaves('a');
         view.toggleFinishedWaves('a');
       },
       open: { a: false, b: false },
+      line: '[workflow] finished waves folded in proj',
     },
     {
       name: 'forget drops it',
-      previews: [],
-      act: async (view: WorkflowView) => {
+      act: (view) => {
         view.toggleFinishedWaves('a');
         view.forget('a');
         view.redraw();
       },
       open: { a: false, b: false },
+      line: '[workflow] finished waves open in proj',
     },
     {
       name: 'a preview session flips it through runFor',
       previews: ['a'],
-      act: (view: WorkflowView) => view.runFor('a', 'toggleFinishedWaves'),
+      act: (view) => view.runFor('a', 'toggleFinishedWaves'),
       open: { a: true, b: false },
+      line: '[workflow] finished waves open in proj',
     },
-  ])('the fold is kept per session: $name', async ({ previews, act, open }) => {
-    const { view, put } = setUp(previews);
+    {
+      name: 'no finished waves leaves it',
+      flow: flowIn('make', { progress: progressOf(0, [1, 1]) }),
+      act: (view) => view.toggleFinishedWaves('a'),
+      open: { a: false, b: false },
+      line: '[workflow] nothing to run for toggleFinishedWaves in proj',
+    },
+    {
+      name: 'a hidden pane leaves it',
+      hidden: true,
+      act: (view) => view.toggleFinishedWaves('a'),
+      open: { a: false, b: false },
+      line: '[workflow] nothing to run for toggleFinishedWaves in proj',
+    },
+    {
+      name: 'no plan read leaves it',
+      flow: flowIn('make', { progress: null }),
+      act: (view) => view.toggleFinishedWaves('a'),
+      open: { a: false, b: false },
+      line: '[workflow] nothing to run for toggleFinishedWaves in proj',
+    },
+    {
+      name: 'idle leaves it',
+      flow: flowIn('idle', { progress: progressOf(1, [1, 1]) }),
+      act: (view) => view.toggleFinishedWaves('a'),
+      open: { a: false, b: false },
+      line: '[workflow] nothing to run for toggleFinishedWaves in proj',
+    },
+  ])('the fold is kept per session: $name', async (row) => {
+    const { view, put, logged } = setUp(row.previews);
     const recording = recordingLayout();
     view.setLayouts(withUser<Layout>(defaultLayout, recording.layout));
     const planTitled = (title: string) => ({
       progress: { ...progressOf(1, [1, 1]), title },
     });
-    put(flowIn('make', planTitled('a'), 'a'));
+    put(row.flow ?? flowIn('make', planTitled('a'), 'a'));
     put(flowIn('make', planTitled('b'), 'b'));
     view.sidePart.build(asHtml(new FakeElement('div')), 'a');
     view.sidePart.build(asHtml(new FakeElement('div')), 'b');
+    view.setSidePaneHidden(row.hidden ?? false);
 
-    await act(view);
+    await row.act(view);
+    const line = logged.at(-1);
+    view.setSidePaneHidden(false);
+    put(flowIn('make', planTitled('a'), 'a'));
 
+    expect(line).toBe(row.line);
+    const { open } = row;
     const lastOpen = (title: string) =>
       recording.sidePanes.filter((input) => input.planTitle === title).at(-1)!
         .finishedOpen;
@@ -856,7 +1061,6 @@ describe('workflow view', () => {
       actions: [],
       detail: () => '',
       status: () => null,
-      statusLine: () => 'Checking',
     };
 
     stages.add(checking);

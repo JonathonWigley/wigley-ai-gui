@@ -112,6 +112,12 @@ export function statusText(label: string, status: StageStatus | null): string {
   return detailLine(label, status ?? '');
 }
 
+// A stage's status text, then what its stage adds: 'Make · running 3/9'.
+export function statusLine(stage: PageStage, flow: SessionFlow): string {
+  const text = statusText(stage.label, stage.status(flow));
+  return text + (stage.statusProgress?.(flow) ?? '');
+}
+
 export interface StageActionSpec {
   // The workflow command id it runs, without the 'workflow.' prefix:
   // 'clearAndMake'.
@@ -151,8 +157,9 @@ export interface PageStage {
   detail(flow: SessionFlow): string;
   // What the stage is doing for this flow; null for a stage with no status.
   status(flow: SessionFlow): StageStatus | null;
-  // The label and status with this stage's progress: 'Make · running 3/9'.
-  statusLine(flow: SessionFlow): string;
+  // What follows the status text in the status line, its separator included:
+  // ' 3/9', ' · round 2', ' · 9/9'. Left out, nothing follows.
+  statusProgress?(flow: SessionFlow): string;
   // True when the current wave's open tasks draw the stage's status; left out,
   // they draw `pending`.
   runsTasks?: boolean;

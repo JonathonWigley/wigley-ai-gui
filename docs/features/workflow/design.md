@@ -69,8 +69,8 @@ plan, since `wigley:feature` drafts the plan in a subagent. Any other skill or w
 
 - `main.ts` — the stage's entry rule, a pure function of the flow and a signal, and its main-side actions (a send, a
   clear, a launch)
-- `page.ts` — its label, its status, its status line, what the strip and the side pane show, and its page-side actions
-  (fill the composer, open the plan)
+- `page.ts` — its label, its status, what follows the status in its status line, what the strip and the side pane
+  show, and its page-side actions (fill the composer, open the plan)
 
 Each half registers through the workflow plugin's `addStage` export in its process; the built-in stages register the
 same way a user plugin would. Each action names a command; `stages/index.ts` lists the commands (`WORKFLOW_COMMANDS`)
@@ -136,7 +136,7 @@ Everything draws through the `workflow` layout, its built-in `default`, and the 
   `<Leader>ws` shows or hides the pane in every session, and the choice survives a relaunch. The pane also hides with
   the hub: while the Chat tab is narrower than 640 px, set in the chat layout's CSS, so the transcript keeps a readable
   width in a split, and on `<Leader>vs`. The pane takes no keyboard focus, so `Alt+h/j/k/l` still moves between chat panes, and its list scrolls with
-  the mouse.
+  the mouse and keeps its scroll while the pane is out of view or hidden.
 
 Primer and feature share one step: the one the session is in, otherwise feature. Plan ready and make share the Make
 step. Each step reads its label, then its status or `pending`, and draws one mark per status.
@@ -161,7 +161,7 @@ The `<Leader>w` group (which-key: workflow), each action's key anchored on its b
 | `<Leader>wt` | Retro |
 | `<Leader>wd` | Dismiss |
 | `<Leader>ws` | Show or hide the side pane, in every session |
-| `<Leader>wf` | Open or fold the selected session's finished waves |
+| `<Leader>wf` | Open or fold the selected session's finished waves; with no fold to draw, log `nothing to run` and leave it |
 
 The layout preview opens on `<Leader>zlw`.
 

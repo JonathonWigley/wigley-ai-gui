@@ -1,11 +1,8 @@
-import { detailLine, isBusy, type PageStage, statusText } from '../../contract';
-
-const label = 'Make';
-const status: PageStage['status'] = () => 'ready';
+import { detailLine, isBusy, type PageStage } from '../../contract';
 
 export const planReadyPageStage: PageStage = {
   id: 'planReady',
-  label,
+  label: 'Make',
   inStepper: true,
   stepSlot: 'make',
   order: 30,
@@ -43,6 +40,5 @@ export const planReadyPageStage: PageStage = {
     flow.progress === null
       ? ''
       : detailLine(flow.progress.title, `${flow.progress.total} tasks`),
-  status,
-  statusLine: (flow) => statusText(label, status(flow)),
+  status: () => 'ready',
 };

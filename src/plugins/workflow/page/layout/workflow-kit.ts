@@ -1,3 +1,4 @@
+import type { Clock } from '../../../../contracts/ambient';
 import {
   createBaseKit,
   type OwnerKitServices,
@@ -27,13 +28,15 @@ const MARK_ICONS: Record<MarkState, string> = {
 
 // The kit one part draw builds with: the base kit with no key scope, naming
 // workflow's own commands by their short names, plus the action button, the
-// stepper, the countdown, the status mark, the finished waves' fold and the side pane's list. `run` runs a workflow command for the
-// session the part draws; the main action's button runs `mainAction`, as
-// `<Leader>ww` does. Each anchor it names is recorded in `rollback`.
+// stepper, the countdown, the status mark, the finished waves' fold and the
+// side pane's list. `run` runs a workflow command for the session the part draws; the main action's button runs `mainAction`, as
+// `<Leader>ww` does. Each anchor it names is recorded in `rollback`. Each status
+// mark carries `clock`'s time, which places its pulse.
 export function createWorkflowKit(
   services: OwnerKitServices,
   rollback: RollbackDeps,
   run: (command: string) => void,
+  clock: Clock,
 ): WorkflowKit {
   const base = createBaseKit(
     ownerBaseKitDeps(workflowManifest, services, null, rollback),
@@ -71,6 +74,7 @@ export function createWorkflowKit(
     statusMark(parent, state) {
       const mark = appended(parent, element('span', 'workflow-mark'));
       mark.dataset.state = state;
+      mark.style.setProperty('--workflow-mark-clock', `${clock.now()}ms`);
       base.icon(mark, MARK_ICONS[state]);
       return mark;
     },

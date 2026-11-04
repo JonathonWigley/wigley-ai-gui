@@ -129,7 +129,8 @@ export interface WorkflowKit extends BaseKit {
   stepper(parent: HTMLElement, steps: readonly StepInput[]): HTMLElement;
   // `span.workflow-countdown` reading `text`, in tabular numerals.
   countdown(parent: HTMLElement, text: string): HTMLElement;
-  // `span.workflow-mark`, carrying `data-state`: one codicon per state, in that state's colour. A running mark pulses.
+  // `span.workflow-mark`, carrying `data-state`: one codicon per state, in that state's colour. A running mark pulses,
+  // and a redraw never jumps the pulse.
   statusMark(parent: HTMLElement, state: MarkState): HTMLElement;
   // `button.workflow-finished-fold` reading `▸ <text>`, or `▾ <text>` while `open`, with `aria-expanded` and the key of
   // `workflow.toggleFinishedWaves`. A click opens or folds the finished waves of the session the part draws.
@@ -139,7 +140,7 @@ export interface WorkflowKit extends BaseKit {
     open: boolean,
   ): HTMLButtonElement;
   // `div.workflow-side-list`: the side pane's scrolling list, which takes the height the pane leaves it. The app keeps
-  // its scroll across each draw.
+  // its scroll across each draw, and while the pane has no layout box.
   sideList(parent: HTMLElement): HTMLElement;
 }
 
