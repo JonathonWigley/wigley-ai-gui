@@ -3,6 +3,7 @@ import type { SessionCompaction } from '../contract';
 import type {
   DoneWorkingInput,
   LiveWorkingInput,
+  WorkingInput,
   WorkingState,
 } from '../layouts/layout';
 import { isStep, type StepEntry } from './activity-runs';
@@ -81,6 +82,22 @@ export function doneInput(
     stopReason: lastResult.stopReason,
     costUsd: costOf(results),
   };
+}
+
+// The Main agent section's summary: a live dock's time as `m:ss`, `h:mm:ss` from
+// one hour, a negative span reading `0:00`; null for a finished turn or no turn.
+export function dockSummary(input: WorkingInput | null): string | null {
+  if (input === null || input.state === 'done') {
+    return null;
+  }
+  const total = Math.floor(Math.max(0, input.now - input.startedAt) / 1000);
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = String(total % 60).padStart(2, '0');
+  if (hours === 0) {
+    return `${minutes}:${seconds}`;
+  }
+  return `${hours}:${String(minutes).padStart(2, '0')}:${seconds}`;
 }
 
 function turnStart(entries: readonly ChatEntry[]): number {

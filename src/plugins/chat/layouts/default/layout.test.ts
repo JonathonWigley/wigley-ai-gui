@@ -867,6 +867,64 @@ describe('default chat layout working', () => {
     expect(workingLines(drawWorking(input))).toEqual(lines);
   });
 
+  it.each([
+    {
+      name: 'Thinking',
+      input: workingTurn('thinking', [toolStep('Read', 'a.ts')], 65000),
+      lines: [
+        'chat-working-line',
+        'span.chat-working-time:1:05 span.chat-working-state:Thinking…',
+      ],
+    },
+    {
+      name: 'CompactingWithATrigger',
+      input: {
+        state: 'compacting',
+        steps: [toolStep('Read', 'a.ts')],
+        startedAt: 0,
+        now: 6000,
+        compaction: '/compact',
+      } satisfies WorkingInput,
+      lines: [
+        'chat-working-line',
+        'span.chat-working-time:0:06 span.chat-working-state:Compacting… span.chat-working-trigger:/compact',
+      ],
+    },
+    {
+      name: 'Done',
+      input: doneTurn('end_turn', [toolStep('Bash', 'ls')], 0, 5000, 0.57),
+      lines: [
+        'chat-working-line is-done',
+        'div.chat-working-done:Done · 5s · $0.57 · Bash 1',
+      ],
+    },
+  ])('workingLine_draws ($name)', ({ input, lines }) => {
+    const parent = new FakeElement('div');
+
+    const view = layout.workingLine(asHtml(parent), input, fakeKit().kit);
+
+    expect(parent.children).toEqual([asFake(view.element)]);
+    expect(workingLines(view)).toEqual(lines);
+  });
+
+  it('workingLine_update_LiveToDone_KeepsTheRootAndDrawsTheLine', () => {
+    const parent = new FakeElement('div');
+    const view = layout.workingLine(
+      asHtml(parent),
+      workingTurn('thinking', [], 3000),
+      fakeKit().kit,
+    );
+    const line = view.element;
+
+    view.update?.(doneTurn('end_turn', [], 0, 5000, null));
+
+    expect(view.element).toBe(line);
+    expect(workingLines(view)).toEqual([
+      'chat-working-line is-done',
+      'div.chat-working-done:Done · 5s',
+    ]);
+  });
+
   it('working_update_RedrawsTheTime', () => {
     const view = drawWorking(workingTurn('thinking', [], 0));
     const block = view.element;
@@ -1070,6 +1128,7 @@ type SurfacePart = Exclude<
 const SURFACE_PARTS: Record<SurfacePart, true> = {
   activity: true,
   working: true,
+  workingLine: true,
   queuedMessage: true,
   composer: true,
   statusLine: true,

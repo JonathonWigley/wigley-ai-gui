@@ -141,12 +141,13 @@ export function usageSelfTestScript(deps: UsageSelfTestDeps): SelfTestScript {
     pageBinds: [],
     settings: {},
     // The tab bar's parts and the session line clip in their own box, and the
-    // activity dock's tool calls and done line end in an ellipsis inside
-    // theirs.
+    // activity dock's tool calls, one line and done line end in an ellipsis
+    // inside theirs.
     scrollsItself: [
       '.session-bar-parts',
       '.usage-session-line',
       '.chat-working-action',
+      '.chat-working-line',
       '.chat-working-done',
     ],
     open() {

@@ -6,7 +6,7 @@ import {
 } from '../../../contracts/agent';
 import type { SessionCompaction } from '../contract';
 import type { WorkingState } from '../layouts/layout';
-import { doneInput, workingInput } from './working-turn';
+import { dockSummary, doneInput, workingInput } from './working-turn';
 
 const SUBAGENT_ID = 'agent-1';
 
@@ -276,6 +276,38 @@ describe('workingInput', () => {
       }).toEqual({ state, compaction: label, startedAt });
     },
   );
+});
+
+describe('dockSummary', () => {
+  const live = (startedAt: number, now: number) => ({
+    state: 'working' as const,
+    steps: [],
+    startedAt,
+    now,
+    compaction: null,
+  });
+
+  it.each([
+    { name: 'AtTheStart', input: live(9000, 9000), summary: '0:00' },
+    { name: 'UnderAnHour', input: live(9000, 74000), summary: '1:05' },
+    { name: 'FromAnHour', input: live(9000, 3734000), summary: '1:02:05' },
+    { name: 'NowBeforeTheStart', input: live(9000, 4000), summary: '0:00' },
+    {
+      name: 'Done',
+      input: {
+        state: 'done' as const,
+        steps: [],
+        startedAt: 9000,
+        endedAt: 74000,
+        stopReason: 'end_turn',
+        costUsd: null,
+      },
+      summary: null,
+    },
+    { name: 'NoInput', input: null, summary: null },
+  ])('dockSummary_reads ($name)', ({ input, summary }) => {
+    expect(dockSummary(input)).toBe(summary);
+  });
 });
 
 describe('doneInput', () => {

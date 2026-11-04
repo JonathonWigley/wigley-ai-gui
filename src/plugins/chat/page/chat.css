@@ -211,7 +211,7 @@
   display: none;
 }
 
-/* The activity dock and the attachments keep their height in a short pane. */
+/* The activity line and the attachments keep their height in a short pane. */
 .chat-working-slot,
 .chat-attachments-slot {
   flex-shrink: 0;

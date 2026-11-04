@@ -3,6 +3,7 @@ import type { Clock, Timers } from '../../../contracts/ambient';
 import type { CommandId } from '../../../contracts/commands';
 import type { Disposable } from '../../../contracts/disposable';
 import type { Log } from '../../../contracts/log';
+import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import {
   type ContributedPartsPlace,
@@ -72,19 +73,28 @@ export interface ComposerPieces {
   removeImage(index: number): void;
 }
 
-// One Chat tab's composer, drawn through the chat layout. The box, the
-// working, attachments and status line slots, the status parts' slot and the
-// status line's key-holding parts are built once and placed again by each draw;
-// other plugins' composer parts and status parts are built again by each
-// composer draw, not by a status line draw. The working slot holds the
-// activity dock: the `working` part, drawn with what the tab's activity dock
-// shows and hidden while it shows nothing or while the default `working` draw
-// has failed since the last composer draw.
+// One Chat tab's composer, drawn through the chat layout, and its activity
+// dock. The box, the working, attachments and status line slots, the status
+// parts' slot and the status line's key-holding parts are built once and placed
+// again by each draw; other plugins' composer parts and status parts are built
+// again by each composer draw, not by a status line draw. The tab's activity
+// dock draws two parts with one input: `working` in `dockSlot`, which the
+// surface makes and the session hub's Main agent section places, and
+// `workingLine` in the composer's working slot. Each slot hides while the dock
+// shows nothing or while its part's default draw has failed since the last
+// composer draw.
 export interface ComposerSurface {
+  // `div.chat-dock-slot`, the same element for the surface's life.
+  dockSlot: HTMLElement;
+  // What the activity dock shows now; null while it shows nothing.
+  dockInput(): WorkingInput | null;
+  // Hears what the activity dock shows, after both of its parts have drawn it. A
+  // listener that throws stops no other, and the first throw reaches the caller.
+  onDockChanged(listener: (input: WorkingInput | null) => void): Disposable;
   // Draws the composer into `parent` in place of its last draw, then the
-  // status line with `input`, the last attached images and the activity dock
-  // afresh, retrying a failed default `working` draw; returns the composer's
-  // root.
+  // status line with `input`, the last attached images and both of the activity
+  // dock's parts afresh, retrying a failed default draw of either; returns the
+  // composer's root.
   drawComposer(parent: HTMLElement, input: ComposerInput): HTMLElement;
   // Runs the composer's update with `input`, then draws the status line with
   // it in place of its last draw. Returns false, drawing no status line, when
@@ -102,14 +112,25 @@ export interface ComposerSurface {
     working: boolean,
     compaction: SessionCompaction | null,
   ): void;
-  // Disposes every draw, the activity dock's tick and the status line's
-  // anchors.
+  // Disposes every draw, the activity dock's tick and listeners and the status
+  // line's anchors.
   dispose(): void;
 }
 
 interface BuiltPart<I> {
   element: HTMLElement;
   view: PartView<I>;
+}
+
+// One part the activity dock draws, in a slot of its own.
+interface DockPart {
+  slot: HTMLElement;
+  // Runs the drawn part's update with `input`; a part with no update, or whose
+  // update threw, is drawn again.
+  show(input: WorkingInput | null): void;
+  // Draws the part afresh with `input`, retrying a failed default draw.
+  redraw(input: WorkingInput | null): void;
+  dispose(): void;
 }
 
 // The status line's parts holding keys, each anchored once in `chat.chat`:
@@ -135,8 +156,6 @@ export function createComposerSurface(
   deps: ComposerSurfaceDeps,
   pieces: ComposerPieces,
 ): ComposerSurface {
-  const workingSlot = element('div', 'chat-working-slot');
-  workingSlot.hidden = true;
   const attachmentsSlot = element('div', 'chat-attachments-slot');
   attachmentsSlot.hidden = true;
   const statusLineSlot = element('div', 'chat-status-line-slot');
@@ -145,58 +164,33 @@ export function createComposerSurface(
   const composerDraws = chatPartDraws(deps.layouts, 'composer', deps.log);
   const statusLineDraws = chatPartDraws(deps.layouts, 'statusLine', deps.log);
   const attachmentsDraws = chatPartDraws(deps.layouts, 'attachments', deps.log);
-  const workingDraws = chatPartDraws(deps.layouts, 'working', deps.log);
   let composer: DrawnPart<BuiltPart<ComposerInput>> | null = null;
   let statusLine: DrawnPart<BuiltPart<ComposerInput>> | null = null;
   let attachments: DrawnPart<BuiltPart<AttachmentsInput>> | null = null;
-  let workingPart: DrawnPart<BuiltPart<WorkingInput>> | null = null;
   let images: readonly ChatImage[] = [];
-  let isWorkingFailed = false;
 
-  const clearWorking = () => {
-    workingPart?.dispose();
-    workingPart = null;
-    workingSlot.replaceChildren();
-    workingSlot.hidden = true;
-  };
-  // Draws the `working` part afresh with `input`, or leaves the slot hidden
-  // for null; a default that fails is logged once and leaves it hidden until
-  // the next composer draw.
-  const drawWorking = (input: WorkingInput | null) => {
-    clearWorking();
-    if (input === null || isWorkingFailed) {
-      return;
-    }
-    workingSlot.hidden = false;
-    try {
-      workingPart = workingDraws.draw(workingSlot, (builder, at, rollback) => {
-        const view = builder(at, input, surfaceBaseKit(deps, 'chat', rollback));
-        return { element: view.element, view };
-      });
-    } catch (error) {
-      deps.log('chat', `default layout working failed: ${errorText(error)}`);
-      isWorkingFailed = true;
-      clearWorking();
-    }
-  };
-  // Runs the drawn part's update with `input`; a part with no update, or
-  // whose update threw, is drawn again.
-  const showWorking = (input: WorkingInput | null) => {
-    const isUpdated =
-      input !== null &&
-      workingPart !== null &&
-      workingDraws.update(workingPart, input) === 'ran';
-    if (!isUpdated) {
-      drawWorking(input);
-    }
-  };
+  const dockPart = createDockPart(deps, 'working', 'chat-dock-slot');
+  const linePart = createDockPart(deps, 'workingLine', 'chat-working-slot');
+  const workingSlot = linePart.slot;
+  const dockListeners = new Set<(input: WorkingInput | null) => void>();
   const dock = createActivityDock({
     clock: deps.clock,
     timers: deps.timers,
-    changed: showWorking,
+    changed: (input) =>
+      callEach([dockPart.show, linePart.show, ...dockListeners], (show) =>
+        show(input),
+      ),
   });
 
   const surface: ComposerSurface = {
+    dockSlot: dockPart.slot,
+    dockInput: () => dock.input(),
+    onDockChanged(listener) {
+      // A wrapper per subscription, so each handle removes only its own.
+      const wrapped = (input: WorkingInput | null) => listener(input);
+      dockListeners.add(wrapped);
+      return { dispose: () => dockListeners.delete(wrapped) };
+    },
     drawComposer(parent, input) {
       composer?.dispose();
       composer?.built.element.remove();
@@ -257,8 +251,8 @@ export function createComposerSurface(
       });
       drawStatusLinePart(input);
       surface.drawAttachments(images);
-      isWorkingFailed = false;
-      drawWorking(dock.input());
+      dockPart.redraw(dock.input());
+      linePart.redraw(dock.input());
       return composer.built.element;
     },
     drawStatusLine(input) {
@@ -311,7 +305,9 @@ export function createComposerSurface(
       composer?.dispose();
       statusLine?.dispose();
       attachments?.dispose();
-      workingPart?.dispose();
+      dockPart.dispose();
+      linePart.dispose();
+      dockListeners.clear();
       disposeAnchors(parts.anchors);
     },
   };
@@ -338,6 +334,60 @@ export function createComposerSurface(
   };
 
   return surface;
+}
+
+// `key`'s part in a new hidden `div.<slotClass>`, which shows while the part has
+// an input to draw; a default that fails is logged once and leaves the slot hidden
+// until the next `redraw`.
+function createDockPart(
+  deps: ComposerSurfaceDeps,
+  key: 'working' | 'workingLine',
+  slotClass: string,
+): DockPart {
+  const slot = element('div', slotClass);
+  slot.hidden = true;
+  const draws = chatPartDraws(deps.layouts, key, deps.log);
+  let part: DrawnPart<BuiltPart<WorkingInput>> | null = null;
+  let isFailed = false;
+
+  const clear = () => {
+    part?.dispose();
+    part = null;
+    slot.replaceChildren();
+    slot.hidden = true;
+  };
+  const draw = (input: WorkingInput | null) => {
+    clear();
+    if (input === null || isFailed) {
+      return;
+    }
+    slot.hidden = false;
+    try {
+      part = draws.draw(slot, (builder, at, rollback) => {
+        const view = builder(at, input, surfaceBaseKit(deps, 'chat', rollback));
+        return { element: view.element, view };
+      });
+    } catch (error) {
+      deps.log('chat', `default layout ${key} failed: ${errorText(error)}`);
+      isFailed = true;
+      clear();
+    }
+  };
+  return {
+    slot,
+    show(input) {
+      const isUpdated =
+        input !== null && part !== null && draws.update(part, input) === 'ran';
+      if (!isUpdated) {
+        draw(input);
+      }
+    },
+    redraw(input) {
+      isFailed = false;
+      draw(input);
+    },
+    dispose: () => part?.dispose(),
+  };
 }
 
 const COMPOSER_PARTS: ContributedPartsPlace = {

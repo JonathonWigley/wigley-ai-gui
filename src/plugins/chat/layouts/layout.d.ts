@@ -137,7 +137,8 @@ export type WorkingState =
   | 'waiting'
   | 'compacting';
 
-// The running turn or compaction, drawn in the composer's activity dock. Times are epoch ms.
+// The running turn or compaction, drawn in the session hub's activity dock and the composer's activity line. Times are
+// epoch ms.
 export interface LiveWorkingInput {
   // What the turn is doing now.
   state: WorkingState;
@@ -154,8 +155,8 @@ export interface LiveWorkingInput {
   compaction: string | null;
 }
 
-// The finished turn: every entry from the user's last message on; the dock shows it while the session is idle,
-// until the user sends the next message. Times are epoch ms.
+// The finished turn: every entry from the user's last message on; the dock and the activity line show it while the
+// session is idle, until the user sends the next message. Times are epoch ms.
 export interface DoneWorkingInput {
   state: 'done';
   // The turn's steps in entry order, each the step's entry input, leaving out subagents' tool calls (a tool whose
@@ -309,8 +310,8 @@ export interface ComposerKit extends BaseKit {
   floatingPanel(parent: HTMLElement): HTMLElement;
   // The message box frame, its editor inside.
   box(parent: HTMLElement): HTMLElement;
-  // The slot the `working` part draws into: the activity dock. The app hides it while there is nothing to show. A
-  // composer that leaves it out gets it just above the box.
+  // The slot the `workingLine` part draws into: the activity line. The app hides it while there is nothing to show, and
+  // the default stylesheet while the session hub is visible. A composer that leaves it out gets it just above the box.
   working(parent: HTMLElement): HTMLElement;
   // The slot the `attachments` part draws into; the app hides it while no image is attached.
   attachments(parent: HTMLElement): HTMLElement;
@@ -466,12 +467,20 @@ export interface ChatLayout {
     input: ActivityInput,
     kit: BaseKit,
   ): PartView<ActivityInput>;
-  // The activity dock, drawn into the composer's working slot (`ComposerKit.working`): a `LiveWorkingInput` while the
-  // turn or a compaction runs, a `DoneWorkingInput` while the session is idle after a finished turn, until the user
-  // sends the next message; a user part receives both and branches on `input.state`. The app sends the input again on
-  // each change and once a second with a new `now` while the dock is live. The slot hides while there is nothing to
-  // show; it is not a cursor stop.
+  // The activity dock, drawn into the session hub's Main agent section: a `LiveWorkingInput` while the turn or a
+  // compaction runs, a `DoneWorkingInput` while the session is idle after a finished turn, until the user sends the next
+  // message; a user part receives both and branches on `input.state`. The app sends the input again on each change and
+  // once a second with a new `now` while the dock is live. The slot hides while there is nothing to show, and the
+  // section with it; it is not a cursor stop.
   working?(
+    parent: HTMLElement,
+    input: WorkingInput,
+    kit: BaseKit,
+  ): PartView<WorkingInput>;
+  // The dock's one line, drawn into the composer's working slot (`ComposerKit.working`) with the same input at the same
+  // times as `working`, for when the hub is not visible. The slot hides while there is nothing to show; it is not a
+  // cursor stop.
+  workingLine?(
     parent: HTMLElement,
     input: WorkingInput,
     kit: BaseKit,

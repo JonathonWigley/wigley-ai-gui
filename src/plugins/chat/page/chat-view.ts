@@ -112,11 +112,13 @@ export interface ChatSession extends SessionRef {
 
 // The Chat view with what the commands read: the session a box belongs to,
 // and a held session by id. `markSent` clears the done or error the
-// session's row shows, as a message sent there does.
+// session's row shows, as a message sent there does. `composerOf` is a held
+// session's composer surface, for the part that places its activity dock.
 export interface ChatTabs extends ChatView {
   session(sessionId: string): ChatSession | undefined;
   sessionOfEditor(editor: TextEditor): ChatSession | undefined;
   markSent(sessionId: string): void;
+  composerOf(sessionId: string): ComposerSurface | null;
 }
 
 // `allow` answers a permission entry allowed; `deny` asks for the reason
@@ -217,7 +219,7 @@ interface HeldTab {
 }
 
 // One Chat tab per chat session main holds, each with its entries, its
-// pending rows and its composer (the activity dock, attached images, message
+// pending rows and its composer (the activity line, attached images, message
 // box, and the status line: repo, branch, type hint, control chips, status
 // parts, running indicator, send) in its `.chat-main`, and the session hub
 // beside that, kept up to date from chat main's messages. Each tab is
@@ -548,6 +550,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     sessionOfEditor: (editor) =>
       asSession([...tabs.values()].find((tab) => tab.box === editor)),
     markSent: clearUnseen,
+    composerOf: (sessionId) => tabs.get(sessionId)?.composer ?? null,
   };
   return view;
 }
@@ -568,8 +571,8 @@ function drawComposer(tab: HeldTab) {
   }
 }
 
-// Hands the composer's activity dock the tab's entries, whether its session's
-// turn is under way, and the compaction running in it.
+// Hands the composer surface's activity dock the tab's entries, whether its
+// session's turn is under way, and the compaction running in it.
 function drawTurn(tab: HeldTab) {
   tab.composer.setTurn(
     tab.state.entries,
@@ -629,7 +632,7 @@ function sessionOf(
 // The tab element (`div.chat-tab`: `div.chat-main`, then the session hub's
 // holder, which the caller fills through `side.sync` once it holds the tab;
 // `.chat-main` holds the entries, then the floating composer holding
-// other plugins' parts, the activity dock, the attached images' strip, the box
+// other plugins' parts, the activity line, the attached images' strip, the box
 // and its status line) added to its session, with the box's editor mounted
 // once the element is attached; it is marked `is-at-stop` while a composer part's stop
 // holds the entry cursor, and the box taking focus leaves that part. The

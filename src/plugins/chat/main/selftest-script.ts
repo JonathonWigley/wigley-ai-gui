@@ -706,7 +706,7 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'activity dock',
-    why: "A held steps turn draws the live activity dock in the composer (the time and state word, the main agent's 3 latest tool calls, the counts) with the box focused; Ctrl+C ends it with the fake's notice and no result, so the dock hides; Esc shows the focused entry's left bar; k focuses the user entry and G follows the latest again.",
+    why: "A held steps turn draws the live activity dock in the session hub (the time and state word, the main agent's 3 latest tool calls, the counts) with the box focused; Ctrl+C ends it with the fake's notice and no result, so the dock hides; Esc shows the focused entry's left bar; k focuses the user entry and G follows the latest again.",
     steps: ACTIVITY_DOCK_STEPS,
   },
   {
@@ -788,8 +788,8 @@ const GROUPS: SelfTestGroup[] = [
 ];
 
 // Raw JSON and tool output scroll in their own box, as code and tables do, a
-// row's status and the activity dock's tool calls and done line end in an
-// ellipsis, and the tab bar's parts clip in their own box.
+// row's status and the activity dock's tool calls, its one line and done line
+// end in an ellipsis, and the tab bar's parts clip in their own box.
 const SCROLLS_ITSELF = [
   '.chat-json',
   '.chat-tool-result',
@@ -797,6 +797,7 @@ const SCROLLS_ITSELF = [
   '.md table',
   '.session-row-status',
   '.chat-working-action',
+  '.chat-working-line',
   '.chat-working-done',
   '.session-bar-parts',
 ];

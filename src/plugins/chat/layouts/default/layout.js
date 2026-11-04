@@ -1,8 +1,8 @@
 // @ts-check
 
 // The built-in chat look: the entries, the activity lines (each one summary
-// line, live or finished), the activity dock, the pending messages' rows, the
-// composer, the list rows, the dialogs' bodies, the image viewer and the run
+// line, live or finished), the activity dock and its one line, the pending
+// messages' rows, the composer, the list rows, the dialogs' bodies, the image viewer and the run
 // time under a session's row. Every
 // collapsible row's body is built on its first open and kept, so an update
 // refills it in place whether it is open or closed.
@@ -292,9 +292,24 @@ function doneLine(input, kit) {
   return parts.join(' · ');
 }
 
-// A finished turn's one line; a compaction's header (time, state, trigger) over
-// its bar; a running turn's header (time, state), then, once the turn has a
-// tool call, the box and the tool counts.
+// The running turn's or compaction's header: its time, its state, and what
+// started a compaction.
+/** @param {import('../layout').LiveWorkingInput} input */
+function workingHead(input) {
+  const head = el('div', 'chat-working-head');
+  head.append(
+    el('span', 'chat-working-time', turnTime(input.now - input.startedAt)),
+    el('span', 'chat-working-state', WORKING_STATE_WORDS[input.state]),
+  );
+  if (input.compaction !== null) {
+    head.append(el('span', 'chat-working-trigger', input.compaction));
+  }
+  return head;
+}
+
+// A finished turn's one line; a compaction's header over its bar; a running
+// turn's header, then, once the turn has a tool call, the box and the tool
+// counts.
 /**
  * @param {HTMLElement} block
  * @param {import('../layout').WorkingInput} input
@@ -307,14 +322,8 @@ function fillWorking(block, input, kit) {
     block.append(el('div', 'chat-working-done', doneLine(input, kit)));
     return;
   }
-  const head = el('div', 'chat-working-head');
-  head.append(
-    el('span', 'chat-working-time', turnTime(input.now - input.startedAt)),
-    el('span', 'chat-working-state', WORKING_STATE_WORDS[input.state]),
-  );
-  block.append(head);
+  block.append(workingHead(input));
   if (input.compaction !== null) {
-    head.append(el('span', 'chat-working-trigger', input.compaction));
     block.append(el('div', 'chat-working-bar'));
     return;
   }
@@ -337,6 +346,22 @@ function fillWorking(block, input, kit) {
         .map(([name, count]) => `${name} ${count}`)
         .join(' '),
     ),
+  );
+}
+
+// A finished turn's one line, else the running turn's or compaction's header.
+/**
+ * @param {HTMLElement} line
+ * @param {import('../layout').WorkingInput} input
+ * @param {import('../layout').BaseKit} kit
+ */
+function fillWorkingLine(line, input, kit) {
+  line.replaceChildren();
+  line.classList.toggle('is-done', input.state === 'done');
+  line.append(
+    input.state === 'done'
+      ? el('div', 'chat-working-done', doneLine(input, kit))
+      : workingHead(input),
   );
 }
 
@@ -616,6 +641,17 @@ const layout = {
       element: block,
       update(next) {
         fillWorking(block, next, kit);
+      },
+    };
+  },
+  // The dock's one line in the composer; every update draws it afresh.
+  workingLine(parent, input, kit) {
+    const line = root(parent, 'chat-working-line');
+    fillWorkingLine(line, input, kit);
+    return {
+      element: line,
+      update(next) {
+        fillWorkingLine(line, next, kit);
       },
     };
   },

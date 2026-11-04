@@ -48,6 +48,7 @@ void [
 const PART_SET: Record<ChatPartName, true> = {
   activity: true,
   working: true,
+  workingLine: true,
   queuedMessage: true,
   composer: true,
   statusLine: true,
