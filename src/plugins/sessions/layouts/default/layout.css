@@ -226,8 +226,8 @@
   box-shadow: inset 0 0 0 1px var(--wg-border-strong);
 }
 
-/* A row's first line never wraps: the title (the folder label for a row with
-   no title), then the trailing cell at the line's end, holding the activity's
+/* A row's first line never wraps: the title (`New Chat` for a row with no
+   title), then the trailing cell at the line's end, holding the activity's
    dot or the attention dot. The trailing cell keeps its full width and never
    shrinks. The title ellipsizes in the rest and never goes under one character
    and its ellipsis. The footer takes the whole second line. Each part has its

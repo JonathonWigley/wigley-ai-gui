@@ -4,8 +4,8 @@
 // sections, Favorites then Recent, each a label beside a hairline and a drop
 // hint over its groups, each group a project's header (name, count, star and
 // grip) over its rows,
-// each row a compact card of two lines: its title (the folder label for a row
-// with no title; no harness name) with its activity's dot or, with no
+// each row a compact card of two lines: its title (`New Chat` for a row with no
+// title; no harness name) with its activity's dot or, with no
 // activity, its attention dot, and its on-screen mark, over a footer line that
 // never wraps, holding its status then other plugins' row parts
 // (`contributedParts`),
@@ -14,6 +14,8 @@
 // close prompt and pane controls, each tab's icon with no label, and the
 // rename dialog's title box over why a title was refused and the hint, in the
 // class names its `layout.css` styles.
+
+const UNTITLED_ROW_TEXT = 'New Chat';
 
 /** @type {import('../layout').CompleteLayout} */
 const layout = {
@@ -48,7 +50,7 @@ const layout = {
   row(parent, input, kit) {
     const element = kit.row(parent, {
       density: 'list',
-      label: input.title ?? input.label,
+      label: input.title ?? UNTITLED_ROW_TEXT,
     });
     element.classList.add('session-row');
     element.classList.toggle('is-on-screen', input.onScreen);

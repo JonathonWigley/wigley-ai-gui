@@ -230,7 +230,7 @@ describe('session rows', () => {
       agent: null,
       marked: false,
       activity: null,
-      label: 'label s1',
+      label: 'New Chat',
       dots: [],
     },
     {
@@ -238,7 +238,7 @@ describe('session rows', () => {
       agent: null,
       marked: false,
       activity: WORKING,
-      label: 'label s1',
+      label: 'New Chat',
       dots: ['running'],
     },
     {
@@ -246,7 +246,7 @@ describe('session rows', () => {
       agent: null,
       marked: true,
       activity: WORKING,
-      label: 'label s1',
+      label: 'New Chat',
       dots: ['running'],
     },
     {
@@ -254,11 +254,11 @@ describe('session rows', () => {
       agent: null,
       marked: true,
       activity: null,
-      label: 'label s1',
+      label: 'New Chat',
       dots: ['attention'],
     },
   ])(
-    'sessionsView_Row_DrawsTitleFolderAndActivityDot ($case)',
+    'sessionsView_Row_DrawsTitleOrNewChatAndActivityDot ($case)',
     ({ agent, marked, activity, label, dots }) => {
       const { view, sideBar } = sessionsViewSetup();
       view.render(titledState(agent, marked));

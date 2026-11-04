@@ -47,7 +47,8 @@ interface DrawnClock {
 const TICK_MS = 1000;
 
 // Each session's run time under its row, through chat's `rowClock` layout part.
-// A row shows nothing for a session chat does not hold or a clock paused at 0.
+// A row shows nothing for a session chat does not hold; a clock paused at 0 shows
+// its zero text.
 // While any kept row's clock runs, one tick a second updates each running row in
 // place, through its part's `update`, else by drawing the part again; once an
 // `update` throws, the part draws with `default` until the layouts change. A
@@ -73,12 +74,10 @@ export function createRowClock(deps: RowClockDeps): RowClock {
     if (time === null) {
       return null;
     }
-    const activeMs = activeMsAt(time, clock.now());
-    const isPaused = time.since === null;
-    if (isPaused && activeMs === 0) {
-      return null;
-    }
-    return { text: duration(activeMs), isRunning: !isPaused };
+    return {
+      text: duration(activeMsAt(time, clock.now())),
+      isRunning: time.since !== null,
+    };
   };
 
   const clear = (row: KeptRow) => {

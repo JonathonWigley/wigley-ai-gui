@@ -166,7 +166,8 @@ In `src/contracts/agent.ts`, beside `AgentHarness`:
     side-bar row: the session's context meter and its used tokens (`121k`, no limit), drawn by the `rowLine` layout
     part and redrawn like the session line.
   - each session's cache mark, a second sessions row part (`usage.rowCache`): a cache icon, `status-error` once the
-    cache is cold, its tooltip the minutes left; nothing while the session has no cache expiry. Drawn by the
+    cache is cold or while the session has no usage yet, its tooltip the minutes left; nothing for a session the
+    snapshot does not hold or usage with no cache expiry. Drawn by the
     `rowCache` layout part and redrawn like the session line, so it turns cold at the next minute tick.
   - the details bar in the right bar, toggled by `usage.toggleDetails` (`Space v u`), its open state kept in
     `uiState`: a card per profile, its rows with reset times (5h and Week always, any other row only while used),

@@ -127,8 +127,10 @@
 }
 
 /* When the row's parts outgrow its line the bar shrinks away first, the used
-   tokens staying whole. */
+   tokens staying whole. The stronger track keeps an empty bar visible on the
+   row's card. */
 [data-layout-owner='usage'][data-layout='default'].usage-row-line > .ui-meter {
+  background: var(--wg-border-strong);
   flex: 0 1 auto;
   min-width: 0;
 }

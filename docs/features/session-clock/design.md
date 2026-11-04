@@ -49,13 +49,13 @@ The row's second line holds the status chip, the context meter and its used toke
 mark at the line's end:
 
 - `chat.rowClock`, chat's row part, draws the run time through chat's `rowClock` layout part, again once a second
-  while the clock runs. It draws nothing for a session chat does not hold and for a clock paused at 0.
+  while the clock runs. It draws nothing for a session chat does not hold, and `0s` for a clock paused at 0.
 - `usage.rowCache`, usage's row part, draws the cache mark through usage's `rowCache` layout part: a cache icon,
-  `status-error` once the cache is cold, its tooltip the minutes left.
+  `status-error` once the cache is cold or while the session has no usage yet, its tooltip the minutes left.
 - Each plugin orders its own row part's wrapper (`sessions.css`: a part may set its own wrapper's `order`):
   `usage.rowLine` 2 and `usage.rowCache` 4 in `usage.css`, `chat.rowClock` 3 with `margin-left: auto` in `chat.css`.
   `usage.rowLine` also has `margin-right: auto`: the two auto margins share the free room between the meter and the
-  run time, and a row whose run time draws nothing (paused at 0) still has the cache mark at the line's end.
+  run time, and a row whose run time draws nothing (a session chat does not hold) keeps any cache mark at the line's end.
 
 ## Decisions
 

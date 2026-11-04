@@ -50,7 +50,7 @@ const DRIVE_PROJECT_FOLDER = path.join('dev', 'drive-project');
 
 // Every session chat starts carries it, so the agent names the session's row.
 const SESSION_TITLE_INSTRUCTION =
-  'This session shows as a row in the Auri app\'s side bar. At the end of your first turn, call the set_session_title tool with a title of 2 to 4 words, at most 30 characters, that names the topic of this session\'s work like a heading ("Agent Status Line", "Forms Crash on Resume"), not a sentence describing the request. Call it again only when the work\'s focus clearly changes.';
+  'This session shows as a row in the Auri app\'s side bar. As the first thing you do in your first turn, before any other work, call the set_session_title tool with a title of 2 to 4 words, at most 30 characters, that names the topic of the user\'s prompt like a heading ("Agent Status Line", "Forms Crash on Resume"), not a sentence describing the request. Call it again only when the work\'s focus clearly changes.';
 
 // Under the relay's hold on connects, so a relay hello never opens an unowned
 // row while chat waits on the host.
