@@ -494,7 +494,6 @@ function installBlockRules(md: Md, fences: Fences): void {
     (token) => escapeHtml(token.content),
     linesMarkOnPre(rules.fence!),
   );
-  rules.code_block = linesMarkOnPre(rules.code_block!);
 }
 
 // markdown-it's fence rule prints a token's attributes on `<code>`.

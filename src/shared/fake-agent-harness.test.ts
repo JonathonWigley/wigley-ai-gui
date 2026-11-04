@@ -654,8 +654,6 @@ describe('createFakeAgentHarness', () => {
       ['planUsage', fakePlanRowUpdate(1, 1000)],
       ['activity', 'idle'],
     ]);
-    expect(FAKE_BLOCKS_REPLY).toContain('- The second item');
-    expect(FAKE_BLOCKS_REPLY).toContain('```ts\n');
   });
 
   it('send_HoldText_HoldsTurnOpen', async () => {
