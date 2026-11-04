@@ -1,6 +1,6 @@
 # 04 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 03
 Plan: [plan.md](plan.md)
@@ -18,3 +18,5 @@ Done when: every line read matches the code; fixes committed
 Commit:    one commit for the group (none when nothing changed — say so in the Proof)
 
 ## Proof
+
+Commit 2c273285 · proof: diff read: two stale design lines fixed; worker reports each grep term run, remaining hits true or about other surfaces; lint passes · concerns: worker did not re-verify chat-bar's keys and scrolling lines against page code beyond the log lines; agent-strip.css's 80% composer cap comment left for the review

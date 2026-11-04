@@ -127,7 +127,7 @@ No new files. Shared names across tasks:
 - [x] [Strip draws design A](03-strip-cards.md) — after 02
 
 ### Wave 4
-- [ ] [Doc re-read](04-doc-re-read.md) — after 03
+- [x] [Doc re-read](04-doc-re-read.md) — after 03
 
 ### Wave 5
 - [ ] [Final verification](05-final-verification.md) — after 04
@@ -138,6 +138,7 @@ Review base: 693cb8d04eb48c87e6cba0406a0e2d850f90db54
 - 01 · f678086a · diff read: both Produces members present in src/contracts/agent.ts; typecheck and lint pass; worker ran the task's vitest paths plus src/plugins/agents (616 tests pass) · concerns: a foreground subagent of the main agent is failed before a result's re-emission, so it holds a window only from an earlier result; subagent contextTokens leaves out output_tokens while the main agent's usage counts them; launched agents re-emit in receipt order; a late reply after an agent's end re-creates an unread store entry
 - 02 · ef990e82 · diff read: RosterAgent and RosterTask shapes present in contract.ts; lint passes; worker ran vitest on agents and agent-lines (77 tests pass); typecheck has 10 errors, all agent-strip, proved at 03 as the task allows · concerns: a duplicate agentSpawned or taskStarted for an ended id lists it again, for failed items too (no adapter code read to rule it out); agent-strip selftest prose left for 03; agent-tower design line 108 left for 04
 - 03 · 55242ea1 · diff read: AgentKind, AgentBoxInput, TaskBoxInput and AgentBoxPart present in layout.d.ts; typecheck (clears 02's errors) and lint pass; worker ran vitest on agent-strip (73 pass) and the agent-strip self-test (passes) · concerns: closed box clips by about a border at 900x700, and agent-strip.css's 80% composer cap comment is slightly untrue there; mono runtime versus DESIGN.md's mono rule; 999,500-999,999 tokens read 1000k; contextWindow 0 gives a NaN percent; spend under half a cent shows $0.00; the tick is seen only in task 05's capture
+- 04 · 2c273285 · diff read: two stale design lines fixed; worker reports each grep term run, remaining hits true or about other surfaces; lint passes · concerns: worker did not re-verify chat-bar's keys and scrolling lines against page code beyond the log lines; agent-strip.css's 80% composer cap comment left for the review
 ### Rulings
 - Worktree run on branch agent-cards, from the local main tip; the test gate, self-test and drive checks stay in the worktree — this repo has no Unity editor, and AGENTS.md puts drive runs beside a peer's in a worktree, which has its own .vite — merging the branch back stays the user's call · lead
 - User's word for this run: every review recommendation is taken, so no triage round is sent and each finding takes its recommended pick, reported in the wrap-up — the user said so mid-run — a pick the user would have changed lands without a look until the wrap-up · lead
@@ -149,4 +150,6 @@ Review base: 693cb8d04eb48c87e6cba0406a0e2d850f90db54
 - Each selection logs box <i> of <n> in <name> shows: <textContent> so the self-test can check tag and runtime: every h/l/j writes tool summaries to the page log; removal is one log line, two alsoExpect rows and one assertion · group 03 · group 03
 - DESIGN.md's agent strip paragraph rewritten though outside the task's Files, because the edit outdated it · group 03 · group 03
 - Context bar track border-default, height space-1, fill status-success, matching ui-meter · group 03 · group 03
+### Test gate
+- Vitest picks from the range's diff: stream-decoder.test, fake-agent-harness.test, chat-preview.test (edited, and they assert the new events); src/plugins/agents, src/plugins/agent-lines, src/plugins/agent-strip (edited, and they assert the roster and box shapes) · 15 files, 351 tests pass, no type errors
 
