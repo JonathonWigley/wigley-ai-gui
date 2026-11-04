@@ -274,9 +274,8 @@ export function createSessionList(deps: SessionListDeps): SessionList {
   const everyGuardAllows = (sessionId: string) =>
     closeGuards.every((mayClose) => mayClose(sessionId));
 
-  // The user's pick of the row at `index`: reports `activated`, then selects
-  // it and clears its mark.
-  // Selects the row; true when that changed the state, which it sends.
+  // The user's pick of the row at `index`: reports `activated`, then selects it
+  // and clears its mark. True when that changed the state, which it sends.
   const activateRow = (sessionId: string, index: number) => {
     deps.activated(sessionId);
     reselectOnReturn = null;
