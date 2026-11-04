@@ -1,4 +1,4 @@
-/* The default Chat layout's look: entry text, the compaction divider, activity
+/* The default Chat layout's look: entry text, the turn and compaction dividers, activity
    lines, the activity dock and its one line, queued messages, permission heads,
    the composer and its status line, the dialog and image viewer parts, the run
    time under a session's row, the session hub's section heads and Session rows,
@@ -51,7 +51,8 @@
   color: var(--wg-status-error);
 }
 
-/* The compaction divider: one dim line between two rules. */
+/* The turn and compaction dividers: one dim line between two rules. */
+.chat-result,
 .chat-compaction {
   align-items: center;
   color: var(--wg-fg-tertiary);
@@ -61,11 +62,17 @@
   gap: var(--wg-space-2);
 }
 
+.chat-result::before,
+.chat-result::after,
 .chat-compaction::before,
 .chat-compaction::after {
   border-top: 1px solid var(--wg-border-default);
   content: '';
   flex: 1;
+}
+
+.chat-result {
+  padding-block: var(--wg-space-3);
 }
 
 /* Activity lines: one dim summary per run, live or finished (step count,

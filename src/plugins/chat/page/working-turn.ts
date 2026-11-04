@@ -84,6 +84,19 @@ export function doneInput(
   };
 }
 
+// How many steps the turn ending at result `resultId` took: the dock's steps from
+// that turn's start, the later of the last `user` entry and the previous result.
+export function resultStepCount(
+  entries: readonly ChatEntry[],
+  resultId: string,
+): number {
+  const before = entries.slice(
+    0,
+    entries.findIndex((entry) => entry.id === resultId),
+  );
+  return before.slice(turnStart(before)).filter(isDockStep).length;
+}
+
 // The Main agent section's summary: a live dock's time as `m:ss`, `h:mm:ss` from
 // one hour, a negative span reading `0:00`; null for a finished turn or no turn.
 export function dockSummary(input: WorkingInput | null): string | null {

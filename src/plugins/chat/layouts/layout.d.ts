@@ -64,6 +64,9 @@ export interface ResultInput {
   stopReason: string;
   costUsd: number | null;
   durationMs: number | null;
+  // The main agent's steps in the turn this result ends, from its start: the later of the last user message and the
+  // previous result.
+  stepCount: number;
   raw: unknown[];
 }
 export interface NoticeInput {
@@ -466,8 +469,8 @@ export type EntryBuilder<K extends EntryKind> = (
 // a part or entry kind left out draws with `default`. A dialog part draws into the dialog's body; the app keeps the
 // dialog's frame and title.
 export interface ChatLayout {
-  // Whether the entry list draws the agent's steps (activity lines and their step rows) and the `result` entries;
-  // `false` leaves them out of the list and the entry cursor. A user layout that wants the activity lines sets it
+  // Whether the entry list draws the agent's steps (activity lines and their step rows); `false` leaves them out of
+  // the list and the entry cursor. A user layout that wants the activity lines sets it
   // `true`. Left out, the layout takes `default`'s.
   activityInTranscript?: boolean;
   entries?: { [K in EntryKind]?: EntryBuilder<K> };

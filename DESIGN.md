@@ -398,8 +398,8 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   comment) or the feature card while the tasks column has focus, an item card (the item, its ToggleMark and its
   comment box) while the items column has focus. A review pane of every answer opens before it sends.
 - **Chat:** user turns are a `card-background` block, not a bubble. Assistant prose is markdown on
-  the sheet. The transcript shows the messages, permission prompts, notices and pending rows only: the agent's steps
-  (tool calls, thinking, raw events) and the turn results show in the **session hub**'s **activity dock**. The hub is
+  the sheet. The transcript shows the messages, permission prompts, notices, turn dividers and pending rows only: the agent's steps
+  (tool calls, thinking, raw events) show in the **session hub**'s **activity dock**. The hub is
   a `264px` column beside the transcript, on `block-background` with a left `border-default` line, hidden in a Chat tab
   under `640px` and by `Space v s`. It stacks titled sections: each a `text-12` semibold `fg-tertiary` title with a
   chevron and a tabular-numeral summary at its end, over its content; a click on the title collapses it, and a
@@ -417,7 +417,9 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   `autocompact`), over a thin indeterminate bar in `status-running`, and no tool card. A message held for a compaction is
   a pending row reading `sends after compaction · ⌃C skips`. A finished compaction leaves a divider in the
   transcript: a centred dim `text-12` line between two `border-default` rules, `Compacted 182k → 24k · auto · 9s`
-  (`Compacted 182k` until the after-size is known). A chat layout that sets `activityInTranscript`
+  (`Compacted 182k` until the after-size is known). A turn's result leaves the same divider with `space-3` above and
+  below, `Turn ended · 14m 22s · 31 steps`: the stop reason replaces the words unless the turn finished normally, and
+  the time and the steps show when known. A chat layout that sets `activityInTranscript`
   draws the steps in the transcript again, each run between two other entries as one **activity line**: one dim
   `fg-tertiary` line, live or finished: the step count and the tools used, such as
   `6 steps · Read 3 · Bash 2 · Edit · 42s`, with `· 1 failed` in `status-error` before the time when a step failed.

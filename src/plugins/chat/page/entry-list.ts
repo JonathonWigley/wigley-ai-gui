@@ -18,6 +18,7 @@ import type {
   ActivityInput,
   ChatLayout,
   EntryBuilder,
+  EntryInput,
   EntryKind,
   EntryView,
   PartView,
@@ -55,6 +56,7 @@ import {
   moveFocus,
   START_FOCUS,
 } from './entry-focus';
+import { resultStepCount } from './working-turn';
 
 // `layouts` are the ones every session's entries, activity lines and pending
 // rows are built with, and say whether runs, steps and results show at all;
@@ -89,9 +91,8 @@ export interface TranscriptScroll extends ContentScroll {
 // One session's entries, one slot per entry in the session's order, each run
 // of steps also drawn as one activity line slot right before its first step's
 // slot; a closed run's step slots are hidden. While the shown layouts leave
-// activity out of the transcript, steps and `result` entries get no slot, so
-// no run, step or result is drawn or stopped on; the flag is read when the
-// list is created and at each rebuild. The session's queued messages follow
+// activity out of the transcript, steps get no slot, so no run or step is drawn
+// or stopped on; the flag is read when the list is created and at each rebuild. The session's queued messages follow
 // the last entry as pending rows, oldest first. The cursor stops on each
 // entry and activity line, on each step of an open run, then on each pending
 // row; the focused stop's slot is marked `is-cursor`. A following focus moves
@@ -442,12 +443,12 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       const isNewSlot =
         slot === undefined && isInTranscript(entry, activityInTranscript);
       if (isNewSlot) {
-        const created = buildSlot(entry, deps);
+        const created = buildSlot(entry, entryInput(entry, next), deps);
         slots.set(entry.id, created);
         observeSlot(created.element);
         list.insertBefore(created.element, entryPlace());
       } else if (slot !== undefined) {
-        redrawSlot(slot, entry, deps);
+        redrawSlot(slot, entry, entryInput(entry, next), deps);
       }
       changed();
     },
@@ -467,7 +468,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       slotSizes.disconnect();
       list.replaceChildren();
       for (const entry of entries) {
-        const created = buildSlot(entry, deps);
+        const created = buildSlot(entry, entryInput(entry, next), deps);
         created.kit.expanders.restore(openStates.get(entry.id) ?? []);
         slots.set(entry.id, created);
         observeSlot(created.element);
@@ -577,13 +578,12 @@ function disposePartSlots(partSlots: Map<string, PartSlot<SlotPartName>>) {
   }
 }
 
-// Whether `entry` gets a slot: steps and `result` entries only while activity
-// shows in the transcript.
+// Whether `entry` gets a slot: steps only while activity shows in the transcript.
 function isInTranscript(
   entry: ChatEntry,
   activityInTranscript: boolean,
 ): boolean {
-  return activityInTranscript || !(isStep(entry) || entry.kind === 'result');
+  return activityInTranscript || !isStep(entry);
 }
 
 function transcriptEntries(
@@ -593,6 +593,17 @@ function transcriptEntries(
   return activityInTranscript
     ? entries
     : entries.filter((entry) => isInTranscript(entry, activityInTranscript));
+}
+
+// What a layout draws `entry` from: the entry, a result with its turn's step
+// count from the session's `entries`, steps out of the transcript included.
+function entryInput(
+  entry: ChatEntry,
+  entries: readonly ChatEntry[],
+): EntryInput<EntryKind> {
+  return entry.kind === 'result'
+    ? { ...entry, stepCount: resultStepCount(entries, entry.id) }
+    : entry;
 }
 
 function lastRowId(rows: readonly ListRow[]): string | null {
@@ -735,12 +746,16 @@ function drawSlotPart<K extends SlotPartName>(
   }
 }
 
-function buildSlot(entry: ChatEntry, deps: EntryListDeps): Slot {
+function buildSlot(
+  entry: ChatEntry,
+  input: EntryInput<EntryKind>,
+  deps: EntryListDeps,
+): Slot {
   const slot = element('li', 'chat-entry-slot');
   return {
     element: slot,
     entry,
-    ...drawEntry(slot, entry, deps, false),
+    ...drawEntry(slot, entry, input, deps, false),
     drawsWithDefault: false,
   };
 }
@@ -750,13 +765,18 @@ function buildSlot(entry: ChatEntry, deps: EntryListDeps): Slot {
 // An update that throws from a user layout or a live default is logged, and
 // the slot is drawn with the bundled default layout from then on; the bundled
 // default's is logged and the entry drawn again.
-function redrawSlot(slot: Slot, entry: ChatEntry, deps: EntryListDeps) {
+function redrawSlot(
+  slot: Slot,
+  entry: ChatEntry,
+  input: EntryInput<EntryKind>,
+  deps: EntryListDeps,
+) {
   slot.entry = entry;
   slot.kit.update(entry);
   const { view } = slot;
   if (view?.update !== undefined) {
     try {
-      view.update(entry);
+      view.update(input);
       return;
     } catch (error) {
       if (slot.isBundledView) {
@@ -777,7 +797,13 @@ function redrawSlot(slot: Slot, entry: ChatEntry, deps: EntryListDeps) {
   const openStates = slot.kit.expanders.openStates();
   slot.dispose();
   slot.element.replaceChildren();
-  const drawn = drawEntry(slot.element, entry, deps, slot.drawsWithDefault);
+  const drawn = drawEntry(
+    slot.element,
+    entry,
+    input,
+    deps,
+    slot.drawsWithDefault,
+  );
   drawn.kit.expanders.restore(openStates);
   slot.view = drawn.view;
   slot.kit = drawn.kit;
@@ -793,10 +819,11 @@ function redrawSlot(slot: Slot, entry: ChatEntry, deps: EntryListDeps) {
 function drawEntry(
   slot: HTMLElement,
   entry: ChatEntry,
+  input: EntryInput<EntryKind>,
   deps: EntryListDeps,
   drawsWithDefault: boolean,
 ): DrawnEntry {
-  const drawn = buildEntry(slot, entry, deps, drawsWithDefault);
+  const drawn = buildEntry(slot, entry, input, deps, drawsWithDefault);
   const { name } = pickEntry(deps.layouts.shown(), entry.kind);
   const isFallback = name !== DEFAULT_ENTRY_PICK.name && drawn.isDefaultView;
   if (drawn.isBareLine) {
@@ -822,6 +849,7 @@ function drawEntry(
 function buildEntry(
   slot: HTMLElement,
   entry: ChatEntry,
+  input: EntryInput<EntryKind>,
   deps: EntryListDeps,
   drawsWithDefault: boolean,
 ): DrawnEntry {
@@ -839,7 +867,7 @@ function buildEntry(
       build(builder, parent, rollback) {
         const kit = createEntryKit(entry, deps.kit);
         rollback.recordBox(() => kit.dispose());
-        const view = builder(parent, entry, kit.kit);
+        const view = builder(parent, input, kit.kit);
         return { element: view.element, view, kit };
       },
       log: deps.log,

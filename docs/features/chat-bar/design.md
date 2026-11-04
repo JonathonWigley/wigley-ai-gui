@@ -142,9 +142,9 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
   hub is not visible, the composer's activity line shows the same time and state (`1:05 Working…`), or the finished line
   once the turn ends. The two read one dock, so they cannot disagree. CSS alone picks which one shows, so no code
   measures the Chat tab.
-- **The transcript shows messages only:** the default chat layout sets `activityInTranscript` to `false`, so the
-  activity lines, their steps and the `result` entries leave the transcript and the entry cursor. A user layout that
-  sets it `true` brings them back. The rules for the dock's lines are in `agent-chat/design.md` § Activity dock.
+- **The transcript shows messages and turn dividers:** the default chat layout sets `activityInTranscript` to `false`,
+  so the activity lines and their steps leave the transcript and the entry cursor. A user layout that sets it `true`
+  brings them back. Each `result` entry stays as a dim turn divider, so a turn's end shows with no user message after it. The rules for the dock's lines are in `agent-chat/design.md` § Activity dock.
 
 ## The context line
 
@@ -197,7 +197,7 @@ Only the Claude adapter knows Claude's shapes, so it alone fills these into agen
 
 - **The strip shows subagents and tasks, not the main chat.** The main agent's work is the activity dock.
 - **The live activity sits in the hub, and the transcript shows messages.** The user reads the conversation in the
-  transcript and glances at the hub for what the agent does now; the steps and turn results stay one layout flag away
+  transcript and glances at the hub for what the agent does now; the steps stay one layout flag away
   (`activityInTranscript`). The dock moved from the composer to the hub on 2026-11-03, with the plan steps beside it.
 - **The hub is one column per Chat tab, not one right bar.** The user chose this over a right bar that follows the
   focused pane, so every split pane shows its own session's hub, at the cost of each pane's width.

@@ -175,9 +175,10 @@ interview on 2026-10-23; this file is the record of both.
   the vim mode (changed by ui-design plan C). Enter sends in insert and normal mode, Shift+Enter in insert mode adds a line, Cmd+Enter sends from any mode, and while a turn runs sends the pending messages with it (§ Pending messages, Send now). `i` /
   `a` focus the box, `j` / `k` move between entries, `Enter` opens or closes the focused entry or activity line and pulls
   back a focused pending message, `G` jumps to the latest, Ctrl+C interrupts and pulls back every unsent pending message
-  (§ Pending messages). The transcript shows the messages, permission prompts, notices and pending rows; the agent's
-  steps and the turn results show in the session hub's activity dock (§ Activity dock), and in the transcript as
-  activity lines and result entries only under a layout that sets `activityInTranscript` (§ Activity line). While the box
+  (§ Pending messages). The transcript shows the messages, permission prompts, notices, turn dividers and pending rows; the agent's
+  steps show in the session hub's activity dock (§ Activity dock), and in the transcript as
+  activity lines only under a layout that sets `activityInTranscript` (§ Activity line). Each `result` entry is a
+  turn divider and a cursor stop, its step count the main agent's steps since the last user message or result. While the box
   has focus no entry is marked and the box draws no focused frame; once it loses focus (Esc) the focused entry shows a
   thin left bar (DESIGN.md § Keys and focus). These keys act only on the Chat tab on screen and its session: on any other tab or mode they do
   nothing, and the control pickers and the chat's dialogs close when another session's Chat tab shows, or when the
@@ -186,9 +187,8 @@ interview on 2026-10-23; this file is the record of both.
   same `chat.chat` scope as a running one; interrupt and the control pickers log and do nothing until its process
   runs.
 - **Activity line**: under a chat layout that sets `activityInTranscript: true`, the entry list groups each run into
-  one slot, a cursor stop, drawn by the layout's `activity` part, and draws each `result` entry as its own row. The
-  default layout sets it `false`: the list then builds no slot and no cursor stop for a run, its steps or a `result`
-  entry, and the agent's work shows in the activity dock alone. A user layout that leaves the flag out takes
+  one slot, a cursor stop, drawn by the layout's `activity` part. The
+  default layout sets it `false`: the list then builds no slot and no cursor stop for a run or its steps, and the agent's work shows in the activity dock alone. A user layout that leaves the flag out takes
   `default`'s. Everything below holds while the flag is `true`.
   - **Time**: each line ends with how long its run took, from the entry before the run (the user message or mid-turn
     assistant text; a run that opens the list starts at its first step) to the entry after it, compact in tabular
@@ -503,8 +503,8 @@ interview on 2026-10-23; this file is the record of both.
   dialog actions). The composer's kit places the `working` slot the layout's `workingLine` part draws into; a composer that leaves
   it out gets it just above the box. The app keeps the composer's box and its draft, the dialogs' frames and titles,
   the keys and the focus; a part a user layout leaves out draws with `default`.
-- Beside its parts, a layout holds one flag, `activityInTranscript`: `true` draws the runs as activity lines and the
-  `result` entries in the transcript, `false` leaves them out of the list and the cursor. The flag is read through
+- Beside its parts, a layout holds one flag, `activityInTranscript`: `true` draws the runs as activity lines
+  in the transcript, `false` leaves them out of the list and the cursor. The flag is read through
   the same pick as a part: a user layout that leaves it out takes `default`'s, which is `false`.
 
 ## Plans

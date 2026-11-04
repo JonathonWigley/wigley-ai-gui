@@ -670,7 +670,7 @@ round; primer: an open primer), since main, not the page, decides.
   `queuedMessage` (one pending message's row, § Pending messages), `composer`, `statusLine`, `attachments`, `pickerRow`, `signIn`, `reasonBox`, `closeConfirm` and
   `imageViewer`, each with a kit that extends the base kit (`activity`, `working`, `queuedMessage` and `imageViewer`
   take the base kit itself). Beside the parts, the boolean `activityInTranscript` says whether the entry list draws
-  the activity lines, their steps and the `result` entries; a layout that leaves it out takes `default`'s, `false`.
+  the activity lines and their steps; a layout that leaves it out takes `default`'s, `false`.
   A user chat layout defines only the entry builders and the parts it changes: a kind or part it leaves out draws with
   `default`, with no toast. A user builder that throws draws with `default`; the entry toasts once per kind, naming what
   drew it: `default`, or a bare line when `default` throws too.

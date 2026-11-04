@@ -84,14 +84,26 @@ function toolStatus(input) {
   return input.result.isError ? 'error' : 'success';
 }
 
-/** @param {import('../layout').ResultInput} input */
-function resultLine(input) {
-  const parts = [input.stopReason];
-  if (input.costUsd !== null) {
-    parts.push(`$${input.costUsd.toFixed(2)}`);
-  }
+// Whether the turn stopped because the agent finished, not on a limit or error.
+/** @param {string} stopReason */
+function isFinishedStop(stopReason) {
+  return stopReason === 'end_turn' || stopReason === 'success';
+}
+
+// The turn break's line: how the turn stopped, then its time and steps when known.
+/**
+ * @param {import('../layout').ResultInput} input
+ * @param {import('../layout').ChatKit} kit
+ */
+function resultLine(input, kit) {
+  const parts = [
+    isFinishedStop(input.stopReason) ? 'Turn ended' : input.stopReason,
+  ];
   if (input.durationMs !== null) {
-    parts.push(`${(input.durationMs / 1000).toFixed(1)} s`);
+    parts.push(kit.duration(input.durationMs));
+  }
+  if (input.stepCount > 0) {
+    parts.push(stepCount(input.stepCount));
   }
   return parts.join(' · ');
 }
@@ -277,10 +289,8 @@ function workingBox(tools) {
  * @param {import('../layout').BaseKit} kit
  */
 function doneLine(input, kit) {
-  const isFinished =
-    input.stopReason === 'end_turn' || input.stopReason === 'success';
   const parts = [
-    isFinished ? 'Done' : input.stopReason,
+    isFinishedStop(input.stopReason) ? 'Done' : input.stopReason,
     kit.duration(input.endedAt - input.startedAt),
   ];
   if (input.costUsd !== null) {
@@ -593,16 +603,17 @@ const layout = {
       kit.permissionActions(prompt);
       return { element: entry };
     },
-    result(parent, input) {
+    // A turn break: one line between two rules.
+    result(parent, input, kit) {
       const entry = root(
         parent,
-        'chat-entry chat-result chat-muted',
-        resultLine(input),
+        'chat-entry chat-result',
+        resultLine(input, kit),
       );
       return {
         element: entry,
         update(next) {
-          entry.textContent = resultLine(next);
+          entry.textContent = resultLine(next, kit);
         },
       };
     },
