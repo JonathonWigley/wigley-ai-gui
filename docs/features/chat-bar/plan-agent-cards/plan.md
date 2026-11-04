@@ -118,7 +118,7 @@ No new files. Shared names across tasks:
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Agent events carry context and background launch](01-agent-events.md)
+- [x] [Agent events carry context and background launch](01-agent-events.md)
 
 ### Wave 2
 - [ ] [Roster: running items only, kind, context, owner name](02-roster.md) — after 01
@@ -134,7 +134,12 @@ No new files. Shared names across tasks:
 
 ## Run log
 Review base: 693cb8d04eb48c87e6cba0406a0e2d850f90db54
+### Groups
+- 01 · f678086a · diff read: both Produces members present in src/contracts/agent.ts; typecheck and lint pass; worker ran the task's vitest paths plus src/plugins/agents (616 tests pass) · concerns: a foreground subagent of the main agent is failed before a result's re-emission, so it holds a window only from an earlier result; subagent contextTokens leaves out output_tokens while the main agent's usage counts them; launched agents re-emit in receipt order; a late reply after an agent's end re-creates an unread store entry
 ### Rulings
 - Worktree run on branch agent-cards, from the local main tip; the test gate, self-test and drive checks stay in the worktree — this repo has no Unity editor, and AGENTS.md puts drive runs beside a peer's in a worktree, which has its own .vite — merging the branch back stays the user's call · lead
 - User's word for this run: every review recommendation is taken, so no triage round is sent and each finding takes its recommended pick, reported in the wrap-up — the user said so mid-run — a pick the user would have changed lands without a look until the wrap-up · lead
+- A [...] key in a result with no plain key beside it deletes the plain key's learned window: a map that only grows cannot pass the 200000-then-[1m] case, and replacing the map per result would lose every window on an empty modelUsage — a process alternating plain and suffixed keys sends the window back and forth · group 01 · group 01
+- A result naming both a plain and a [...] key keeps the plain window, per exact-first: if modelUsage is cumulative, a model moved to [1m] keeps showing the old window; task 05's live check can settle it · group 01 · group 01
+- Several [...] keys for one model: the first learned wins; the plan names no rule — the card shows the other suffix's window if wrong · group 01 · group 01
 

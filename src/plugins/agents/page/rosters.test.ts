@@ -13,8 +13,10 @@ function agent(agentId: string, startedAt: number): RosterAgent {
     model: null,
     effort: null,
     spendUsd: null,
+    isBackground: false,
+    contextTokens: null,
+    contextWindow: null,
     tools: [],
-    outcome: 'running',
   };
 }
 

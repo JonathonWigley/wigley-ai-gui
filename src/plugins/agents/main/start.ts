@@ -24,8 +24,8 @@ type AgentsApi = MainApi<
 
 const NONE: Roster = { agents: [], tasks: [] };
 
-// A row's roster as the page sees it: each host session id's subagents, and
-// each one's tasks, in the order each host id's roster began.
+// A row's roster as the page sees it: each host session id's running subagents,
+// and each one's running tasks, in the order each host id's roster began.
 function rowRoster(hosts: ReadonlyMap<string, Roster>): Roster {
   const rosters = [...hosts.values()];
   return {
@@ -36,13 +36,12 @@ function rowRoster(hosts: ReadonlyMap<string, Roster>): Roster {
 
 // Hears chat's agent events: logs each in plugin data (all but replayed events
 // and the chat layout preview's sample events) and folds it, replayed or not,
-// into the roster of its process's host session id, a `userMessage` into every
-// host id's roster of its row, sending the page each row's roster that changed:
-// every host id's subagents and tasks in the row, each list in fold order. A
-// host id's roster is dropped once its last item ends done or a message drops
-// its last failed one, and a row's rosters when it closes or ends. Holds agents' sample session,
-// whose roster `rosters` lists beside the live ones. Registers no layout and
-// hands the self-test no script: agent-lines and agent-strip draw the rosters.
+// into the roster of its process's host session id, sending the page each row's
+// roster that changed: every host id's subagents and tasks in the row, each list
+// in fold order. A host id's roster is dropped once its last item ends, and a
+// row's rosters when it closes or ends. Holds agents' sample session, whose
+// roster `rosters` lists beside the live ones. Registers no layout and hands the
+// self-test no script: agent-lines and agent-strip draw the rosters.
 export const agentsMainPart: MainPart<typeof agentsManifest> = {
   manifest: agentsManifest,
   start(api: AgentsApi) {
@@ -70,26 +69,15 @@ export const agentsMainPart: MainPart<typeof agentsManifest> = {
           void agentLog.append(hostSessionId, event);
         }
         const hosts = rosters.get(sessionId) ?? new Map<string, Roster>();
-        // A message drops every host's finished items: after a clear only the
-        // new process sends one, and the old one's must go too.
-        const foldedHosts =
-          event.type === 'userMessage' ? [...hosts.keys()] : [hostSessionId];
-        let changed = false;
-        for (const host of foldedHosts) {
-          const before = hosts.get(host) ?? NONE;
-          const after = foldAgentEvent(before, event);
-          if (after === before) {
-            continue;
-          }
-          changed = true;
-          if (after.agents.length === 0 && after.tasks.length === 0) {
-            hosts.delete(host);
-          } else {
-            hosts.set(host, after);
-          }
-        }
-        if (!changed) {
+        const before = hosts.get(hostSessionId) ?? NONE;
+        const after = foldAgentEvent(before, event);
+        if (after === before) {
           return;
+        }
+        if (after.agents.length === 0 && after.tasks.length === 0) {
+          hosts.delete(hostSessionId);
+        } else {
+          hosts.set(hostSessionId, after);
         }
         if (hosts.size === 0) {
           rosters.delete(sessionId);

@@ -10,15 +10,15 @@ export interface RunningWork {
 
 // The roster's running work, null while no subagent or task runs.
 export function runningWork(roster: Roster): RunningWork | null {
-  const agents = roster.agents.filter((agent) => agent.outcome === 'running');
-  const tasks = roster.tasks.filter((task) => task.outcome === 'running');
-  const startTimes = [...agents, ...tasks].map((item) => item.startedAt);
+  const startTimes = [...roster.agents, ...roster.tasks].map(
+    (item) => item.startedAt,
+  );
   if (startTimes.length === 0) {
     return null;
   }
   return {
     startedAt: Math.min(...startTimes),
-    agentCount: agents.length,
-    taskCount: tasks.length,
+    agentCount: roster.agents.length,
+    taskCount: roster.tasks.length,
   };
 }

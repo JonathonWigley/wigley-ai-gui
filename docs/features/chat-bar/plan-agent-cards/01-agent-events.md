@@ -1,6 +1,6 @@
 # 01 — Agent events carry context and background launch
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -58,3 +58,5 @@ Done when: `npm run typecheck`, `npm run lint` and `npx vitest run src/main/clau
 Commit:    one commit for the group
 
 ## Proof
+
+Commit f678086a · proof: diff read: both Produces members present in src/contracts/agent.ts; typecheck and lint pass; worker ran the task's vitest paths plus src/plugins/agents (616 tests pass) · concerns: a foreground subagent of the main agent is failed before a result's re-emission, so it holds a window only from an earlier result; subagent contextTokens leaves out output_tokens while the main agent's usage counts them; launched agents re-emit in receipt order; a late reply after an agent's end re-creates an unread store entry
