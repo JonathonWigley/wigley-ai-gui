@@ -160,15 +160,51 @@
   box-shadow: inset var(--wg-indicator-width) 0 0 var(--wg-focus-border);
 }
 
+/* A paragraph starts at its text, so its box reaches into the slot's gutter to
+   keep the bar off the first glyph; the text stays where it was. */
+.chat-entries p[data-md-lines] {
+  margin-inline-start: calc(var(--wg-space-2) * -1);
+  padding-inline-start: var(--wg-space-2);
+}
+
+/* A list item's marker sits outside its box and follows its edge, so the item
+   keeps its box, and a pseudo-element from the same gutter to that edge draws
+   the bar left of the marker and carries the tint behind it. */
+.chat-entries li[data-md-lines] {
+  --chat-item-gutter: calc(var(--wg-space-6) + var(--wg-space-2));
+
+  position: relative;
+}
+
+.chat-entries li[data-md-lines]:is(.is-cursor, .is-range)::before {
+  bottom: 0;
+  content: '';
+  left: calc(var(--chat-item-gutter) * -1);
+  position: absolute;
+  top: 0;
+  width: var(--chat-item-gutter);
+}
+
+.chat-entries li[data-md-lines].is-cursor {
+  box-shadow: none;
+}
+
+.chat-entries li[data-md-lines].is-cursor::before {
+  box-shadow: inset var(--wg-indicator-width) 0 0 var(--wg-focus-border);
+}
+
 .chat-tab.is-box-focused .chat-entry-slot.is-cursor,
 .chat-tab.is-box-focused [data-md-lines].is-cursor,
+.chat-tab.is-box-focused li[data-md-lines].is-cursor::before,
 .chat-tab.is-at-stop .chat-entry-slot.is-cursor,
-.chat-tab.is-at-stop [data-md-lines].is-cursor {
+.chat-tab.is-at-stop [data-md-lines].is-cursor,
+.chat-tab.is-at-stop li[data-md-lines].is-cursor::before {
   box-shadow: none;
 }
 
 .chat-entry-slot.is-range,
-[data-md-lines].is-range {
+[data-md-lines].is-range,
+.chat-entries li[data-md-lines].is-range::before {
   background: var(--wg-accent-tint);
 }
 

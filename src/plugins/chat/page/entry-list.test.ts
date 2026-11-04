@@ -761,7 +761,9 @@ describe('pending rows', () => {
     list.setQueued([queued('q1'), queued('q2')]);
     list.move(-1);
 
-    slotOf(list.element, 'chat-queued-slot', 1).click();
+    const row = slotOf(list.element, 'chat-queued-slot', 1);
+    row.click();
+    asFake(list.element).fire('click', { target: row });
 
     expect(pulled).toEqual(['q2']);
     expect(list.focused()).toEqual(pendingStop('q1'));
@@ -1685,7 +1687,43 @@ describe('block stops', () => {
       following: false,
     },
     {
-      case: 'a cursor that overlaps the band stays',
+      case: 'a sliver left at the top edge moves down',
+      cursor: 1,
+      from: 100,
+      to: 300,
+      boxes: [above, { top: -8, height: 10 }, inBand, inBand],
+      focused: 'a#2',
+      following: false,
+    },
+    {
+      case: 'a sliver left at the bottom edge moves up',
+      cursor: 2,
+      from: 300,
+      to: 100,
+      boxes: [inBand, inBand, { top: 78, height: 10 }, below],
+      focused: 'a#1',
+      following: false,
+    },
+    {
+      case: 'a stop clipped by under 1px at the top edge stays',
+      cursor: 1,
+      from: 100,
+      to: 300,
+      boxes: [above, { top: -0.5, height: 10 }, inBand, inBand],
+      focused: 'a#1',
+      following: false,
+    },
+    {
+      case: 'a stop clipped by under 1px at the bottom edge stays',
+      cursor: 1,
+      from: 300,
+      to: 100,
+      boxes: [inBand, { top: 70.5, height: 10 }, below, below],
+      focused: 'a#1',
+      following: false,
+    },
+    {
+      case: 'a stop taller than the band stays while it overlaps',
       cursor: 1,
       from: 100,
       to: 300,
@@ -1694,12 +1732,21 @@ describe('block stops', () => {
       following: false,
     },
     {
-      case: 'a block taller than the band stays',
+      case: 'a stop taller than the band covering it stays',
       cursor: 1,
       from: 100,
       to: 300,
       boxes: [above, { top: -200, height: 900 }, below, below],
       focused: 'a#1',
+      following: false,
+    },
+    {
+      case: 'a stop taller than the band past its edge moves',
+      cursor: 1,
+      from: 100,
+      to: 300,
+      boxes: [above, { top: -200, height: 190 }, inBand, inBand],
+      focused: 'a#2',
       following: false,
     },
     {
@@ -1843,16 +1890,6 @@ describe('block stops', () => {
     {
       case: 'the padding of a slot with blocks leaves it',
       target: (list) => asFake(list.element).children[0],
-      focused: 'p',
-    },
-    {
-      case: 'a pending row its own click removed leaves it',
-      target: (list) => {
-        list.setQueued([queued('q1')]);
-        const row = slotOf(list.element, 'chat-queued-slot');
-        list.setQueued([]);
-        return row;
-      },
       focused: 'p',
     },
     {

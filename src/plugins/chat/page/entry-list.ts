@@ -117,10 +117,11 @@ export interface TranscriptScroll extends ContentScroll {
 // shows. Any scroll of a shown list (wheel, trackpad, scrollbar or keys) that
 // comes to rest off the bottom stops following, and one that lands on the
 // bottom follows again; a cursor it leaves outside the visible band (the list's
-// box less its bottom scroll padding) moves to the nearest stop inside it. A
-// plain click moves the cursor to the block or slot under it without scrolling;
-// a click ending a text selection, on a link or control, or on what has no stop
-// leaves it.
+// box less its bottom scroll padding) moves to the nearest stop inside it, a
+// stop being inside once it lies wholly in the band, or overlaps a band it is
+// too tall to fit. A plain click moves the cursor to the block or slot under it
+// without scrolling; a click ending a text selection, on a link, control or
+// pending row, or on what has no stop leaves it.
 // While the session works on its turn, the live run's line time ticks once a
 // second.
 export interface EntryList {
@@ -279,7 +280,12 @@ const TICK_MS = 1000;
 const BLOCK_SELECTOR = '[data-md-lines]';
 
 // What a click acts on by itself, so it leaves the cursor.
-const CLICK_CONTROLS = 'a, button, summary, input, textarea, .md-fence';
+const CLICK_CONTROLS =
+  'a, button, summary, input, textarea, .md-fence, .chat-queued-slot';
+
+// How far past a band edge a stop may reach and still lie inside the band: rects
+// are fractional, so a `block: 'nearest'` scroll can leave a stop just past it.
+const BAND_EDGE_TOLERANCE_PX = 1;
 
 export function createEntryList(deps: EntryListDeps): EntryList {
   const list = element('ol', 'chat-entries');
@@ -534,7 +540,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     const band = visibleBand(list);
     return nearestVisibleStop(order, focus.stopId, direction, (stopId) => {
       const stop = stopElement(stopId);
-      return stop !== undefined && overlapsBand(stop, band);
+      return stop !== undefined && isInsideBand(stop, band);
     });
   };
 
@@ -854,9 +860,17 @@ function visibleBand(list: HTMLElement): Band {
   return { top: box.top, bottom: box.bottom - padding };
 }
 
-function overlapsBand(stop: HTMLElement, band: Band): boolean {
+// Whether `stop` shows: wholly in the band, or, too tall to fit, any of it.
+function isInsideBand(stop: HTMLElement, band: Band): boolean {
   const box = stop.getBoundingClientRect();
-  return box.bottom > band.top && box.top < band.bottom;
+  const isTallerThanBand = box.height > band.bottom - band.top;
+  if (isTallerThanBand) {
+    return box.bottom > band.top && box.top < band.bottom;
+  }
+  return (
+    box.top >= band.top - BAND_EDGE_TOLERANCE_PX &&
+    box.bottom <= band.bottom + BAND_EDGE_TOLERANCE_PX
+  );
 }
 
 // The text a copy reads from a stop: a message's or notice's, or a pending row's

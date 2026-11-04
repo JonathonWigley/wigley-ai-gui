@@ -218,8 +218,9 @@ The keyboard is first; the mouse works everywhere.
     cursor: the box draws no focused frame and no entry is marked. Once the box loses focus (Esc),
     the focused block shows a thin left bar (`indicator-width`, `focus-border`) in place of the
     ring, on the entry itself when it has no blocks. A range of blocks shows `accent-tint` behind each one.
-    The bar stays on screen: when the transcript scrolls away from it, it moves to the nearest visible
-    block.
+    The bar sits in a gutter left of the text and of a list item's marker, moving no text. It stays on
+    screen: when the transcript scrolls away from it, it moves to the nearest block wholly in view; a
+    block too tall for the view counts while any of it shows.
 - **Buttons never take focus**, so Enter and Space stay with the page keys; a click runs them.
 - **Key hints** draw through the Kbd primitive, which prints chords through `formatChord` for the
   platform. On macOS the modifiers and Return, Tab, Esc, Backspace, Delete and the arrows print
