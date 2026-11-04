@@ -30,7 +30,7 @@ const selectedLine = (index: number) =>
 const GROUPS: SelfTestGroup[] = [
   {
     name: 'strip keys',
-    why: 'j from the last entry enters the strip on its first running box, l and h move between boxes, Enter opens and closes a box, k hands the cursor back, an interrupt leaves the failed boxes dimmed and the next message drops them.',
+    why: 'j from the last entry enters the strip on its first box, each box shows its kind tag and runtime, l and h move between boxes, Enter opens and closes a box, k hands the cursor back, and an interrupt ends the items so their boxes leave.',
     steps: [
       {
         keys: sendKeys(FAKE_AGENTS_TEXT),
@@ -44,11 +44,37 @@ const GROUPS: SelfTestGroup[] = [
         expect: selectedLine(1),
         alsoExpect: [
           /^\[chat\] composer part agent-strip\.strip took the cursor in agent-strip-selftest$/,
+          /^\[agent-strip\] box 1 of 4 in agent-strip-selftest shows: map-decoderSubagent(\d+m )?\d+s/,
         ],
         screenshot: 'strip-selected',
-        why: 'G lands on the last entry, the last stop, and j from there hands the cursor to the strip.',
+        why: 'G lands on the last entry, the last stop, and j from there hands the cursor to the strip, whose first box shows its name, tag and runtime.',
       },
-      { keys: ['l'], expect: selectedLine(2) },
+      {
+        keys: ['l'],
+        expect: selectedLine(2),
+        alsoExpect: [
+          /^\[agent-strip\] box 2 of 4 in agent-strip-selftest shows: ExploreBackground agent(\d+m )?\d+s/,
+        ],
+        why: 'The launched subagent reads Background agent.',
+      },
+      {
+        keys: ['l'],
+        expect: selectedLine(3),
+        alsoExpect: [
+          /^\[agent-strip\] box 3 of 4 in agent-strip-selftest shows: mainShell(\d+m )?\d+s/,
+        ],
+        why: "The main agent's task reads Shell.",
+      },
+      {
+        keys: ['l'],
+        expect: selectedLine(4),
+        alsoExpect: [
+          /^\[agent-strip\] box 4 of 4 in agent-strip-selftest shows: map-decoderShell(\d+m )?\d+s/,
+        ],
+        why: "The subagent's task names that subagent as its owner.",
+      },
+      { keys: ['h'], expect: selectedLine(3) },
+      { keys: ['h'], expect: selectedLine(2) },
       { keys: ['h'], expect: selectedLine(1) },
       {
         keys: ['Enter'],
@@ -83,14 +109,9 @@ const GROUPS: SelfTestGroup[] = [
       },
       {
         keys: ['<C-c>'],
-        expect: boxesLine(4, 0),
-        screenshot: 'strip-finished',
-        why: 'Interrupt fails each running subagent and task: their boxes stay, dimmed, until the next message.',
-      },
-      {
-        keys: sendKeys('strip cleared'),
         expect: boxesLine(0, 0),
-        why: 'The next message drops every finished item, so the strip draws nothing.',
+        screenshot: 'strip-finished',
+        why: 'Interrupt ends each running subagent and task, so their boxes leave and the strip draws nothing.',
       },
     ],
   },
@@ -119,8 +140,8 @@ export function agentStripSelfTestScript(
   return {
     pageBinds: [],
     settings: {},
-    // A box's name, model line, description and tool lines end in an
-    // ellipsis inside their own boxes and an open box's tool list scrolls
+    // A box's name, description, model line, tool lines and closed command end
+    // in an ellipsis inside their own boxes and an open box's tool list scrolls
     // inside its box, as their CSS says. The activity dock's tool calls (the
     // Agent calls carry the subagents' prompts) and done line, and the session
     // row's status, end in an ellipsis inside their own boxes; the tab bar's
@@ -128,8 +149,9 @@ export function agentStripSelfTestScript(
     scrollsItself: [
       '.agent-strip-name',
       '.agent-strip-description',
-      '.agent-strip-meta',
+      '.agent-strip-model',
       '.agent-strip-tool',
+      '.agent-strip-command',
       '.agent-strip-toolList',
       '.chat-working-action',
       '.chat-working-done',

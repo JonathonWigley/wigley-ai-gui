@@ -6,7 +6,7 @@
    the message box and a wrapped status line in a 900x700 tab. The parts hold
    no floor: in a shorter tab they still give up height first and scroll. */
 .ui-floating.chat-composer:has(.agent-strip-scroller) {
-  max-height: 80%;
+  max-height: 82%;
 }
 
 /* An open box grows taller while the others keep the closed height. */

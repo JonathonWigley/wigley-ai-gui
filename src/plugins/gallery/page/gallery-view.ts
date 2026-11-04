@@ -12,6 +12,10 @@ import { type ButtonVariant, textButton } from '../../../shared/page/ui/button';
 import { card, createCollapsibleCard } from '../../../shared/page/ui/card';
 import { chip } from '../../../shared/page/ui/chip';
 import { createDialog } from '../../../shared/page/ui/dialog';
+import {
+  createDragReorder,
+  type DragReorder,
+} from '../../../shared/page/ui/drag-reorder';
 import { emptyState } from '../../../shared/page/ui/empty-state';
 import { floatingPanel } from '../../../shared/page/ui/floating-panel';
 import { createHScroller } from '../../../shared/page/ui/h-scroller';
@@ -68,6 +72,11 @@ interface KeptHScrollers {
   disposables: Disposable[];
 }
 
+// The drag the DragReorder sample made last; null until the first draw.
+interface KeptDragReorder {
+  reorder: DragReorder | null;
+}
+
 // `element` is the mode's root: the transparency status line (the layout's
 // `head`), a one-tab strip and `sheet`, the scrolling sheet holding a section
 // per primitive with each of its states. `showTransparency` draws the head
@@ -118,6 +127,7 @@ export function createGalleryView(
 
   const kept: KeptSplit = { split: null };
   const keptHScrollers: KeptHScrollers = { disposables: [] };
+  const keptDragReorder: KeptDragReorder = { reorder: null };
   const specs = sectionSpecs(
     deps.platform,
     {
@@ -127,6 +137,7 @@ export function createGalleryView(
     },
     kept,
     { log: deps.log, kept: keptHScrollers },
+    keptDragReorder,
   );
   let headInput: GalleryHeadInput = { transparency };
 
@@ -173,12 +184,14 @@ export function createGalleryView(
 
 // Every primitive's block, in the order the sheet shows them. `kept` holds the
 // split the split sample made last; `hScrollers` what the HScroller samples
-// log through and the scrollers they made last.
+// log through and the scrollers they made last; `keptDragReorder` the drag the
+// DragReorder sample made last.
 function sectionSpecs(
   platform: Platform,
   splitDeps: SplitSampleDeps,
   kept: KeptSplit,
   hScrollers: { log: Log; kept: KeptHScrollers },
+  keptDragReorder: KeptDragReorder,
 ): SectionSpec[] {
   return [
     section('Materials', materialsCells),
@@ -204,6 +217,7 @@ function sectionSpecs(
     framed('Dialog', dialogSample, true),
     section('EmptyState', () => emptyStateCells(platform)),
     section('SectionHeader', () => sectionHeaderCells(platform)),
+    section('DragReorder', () => dragReorderCells(keptDragReorder)),
   ];
 }
 
@@ -773,6 +787,67 @@ function sectionHeaderCells(platform: Platform): SampleCell[][] {
       cell(
         sectionHeader('Keys', kbd('Space ?', platform)),
         'With a trailing hint',
+        true,
+      ),
+    ],
+  ];
+}
+
+// Fresh DragReorder samples: it disposes the drag `kept` holds and keeps its
+// own there. A live ordered zone and a live unordered zone that reorder on
+// drop, then each state held still.
+function dragReorderCells(kept: KeptDragReorder): SampleCell[][] {
+  kept.reorder?.dispose();
+  const zones = [
+    { id: 'Ordered', isOrdered: true, keys: ['First', 'Second', 'Third'] },
+    { id: 'Unordered', isOrdered: false, keys: [] as string[] },
+  ].map((zone) => ({ ...zone, element: withClass(card(), 'gallery-stack') }));
+  const draw = () => {
+    reorder.clear();
+    for (const zone of zones) {
+      reorder.zone(zone.element, zone.id, { ordered: zone.isOrdered });
+      zone.element.replaceChildren(sectionHeader(zone.id));
+      for (const key of zone.keys) {
+        const item = row({ density: 'list', label: key });
+        zone.element.append(item);
+        reorder.item(item, item, key, zone.id);
+      }
+    }
+  };
+  const reorder = createDragReorder({
+    dropped({ key, zone: zoneId, index }) {
+      for (const zone of zones) {
+        zone.keys = zone.keys.filter((held) => held !== key);
+        if (zone.id === zoneId) {
+          zone.keys.splice(index, 0, key);
+        }
+      }
+      draw();
+    },
+    started: ignore,
+    ended: ignore,
+  });
+  kept.reorder = reorder;
+  draw();
+  const stateRow = (state: string) =>
+    withClass(
+      row({ density: 'list', label: 'Item' }),
+      'ui-drag-reorder-item',
+      state,
+    );
+  return [
+    zones.map((zone) => cell(zone.element, `${zone.id}, live`, true)),
+    [
+      cell(stateRow('is-dragging'), 'Dragging', true),
+      cell(stateRow('is-drop-before'), 'Drop before', true),
+      cell(stateRow('is-drop-after'), 'Drop after', true),
+      cell(
+        withClass(
+          withClass(card(), 'gallery-stack'),
+          'ui-drag-reorder-zone',
+          'is-drop-target',
+        ),
+        'Drop target',
         true,
       ),
     ],

@@ -295,6 +295,18 @@ describe('createBaseKit', () => {
     },
   );
 
+  it('meter_AppendsAMeterFilledToItsPercentInItsTone', () => {
+    const { kit } = kitOver(null);
+    const parent = new FakeElement('div');
+
+    const node = asFake(kit.meter(asHtml(parent), 42, 'warning'));
+
+    expect(parent.childNodes).toEqual([node]);
+    expect(node.className).toBe('ui-meter');
+    expect(node.dataset.tone).toBe('warning');
+    expect(node.attributes.get('aria-valuenow')).toBe('42');
+  });
+
   it('section_BlankText_DrawsNothing', () => {
     const { kit } = kitOver('docs.tree');
     const parent = new FakeElement('div');

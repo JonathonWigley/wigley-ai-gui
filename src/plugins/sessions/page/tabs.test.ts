@@ -31,6 +31,7 @@ function stateOf(
     rows: sessionIds.map((sessionId) => ({
       sessionId,
       label: sessionId,
+      project: 'project',
       harness: null,
       marked: false,
       projectDir: null,

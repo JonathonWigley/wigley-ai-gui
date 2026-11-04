@@ -7,10 +7,10 @@ import type {
   RosterTool,
 } from './contract';
 
-// Folds one agent event into one process's roster, each list kept in start order; an item never moves. Returns
-// `roster` itself when the event changes nothing. An agent or task that ends done leaves at once; one that fails stays,
-// its outcome set, until a `userMessage` drops it. A task outlives the subagent that started it. `sessionEnded` fails every running item, since a process that
-// exits mid-run sends no end for them.
+// Folds one agent event into one process's roster, which lists only running items, each list kept in start order; an
+// item never moves. Returns `roster` itself when the event changes nothing. An agent or task leaves when it ends, done
+// or failed. A task outlives the subagent that started it. `sessionEnded` empties the roster, since a process that
+// exits mid-run sends no end for its items.
 export function foldAgentEvent(roster: Roster, event: AgentEvent): Roster {
   switch (event.type) {
     case 'agentSpawned':
@@ -28,24 +28,38 @@ export function foldAgentEvent(roster: Roster, event: AgentEvent): Roster {
                 model: event.model,
                 effort: event.effort,
                 spendUsd: null,
+                isBackground: false,
+                contextTokens: null,
+                contextWindow: null,
                 tools: [],
-                outcome: 'running',
               },
             ],
           }
         : roster;
     case 'agentReplied':
       return updateAgent(roster, event.agentId, (agent) =>
-        agent.model === event.model && agent.spendUsd === event.spendUsd
+        agent.model === event.model &&
+        agent.spendUsd === event.spendUsd &&
+        agent.contextTokens === event.contextTokens &&
+        agent.contextWindow === event.contextWindow
           ? agent
-          : { ...agent, model: event.model, spendUsd: event.spendUsd },
+          : {
+              ...agent,
+              model: event.model,
+              spendUsd: event.spendUsd,
+              contextTokens: event.contextTokens,
+              contextWindow: event.contextWindow,
+            },
+      );
+    case 'agentLaunched':
+      return updateAgent(roster, event.agentId, (agent) =>
+        agent.isBackground ? agent : { ...agent, isBackground: true },
       );
     case 'toolStarted':
       if (event.agentId === MAIN_AGENT_ID) {
         return roster;
       }
       return updateAgent(roster, event.agentId, (agent) =>
-        agent.outcome !== 'running' ||
         indexOfTool(agent.tools, event.toolUseId) !== -1
           ? agent
           : {
@@ -67,25 +81,13 @@ export function foldAgentEvent(roster: Roster, event: AgentEvent): Roster {
       );
     case 'agentFinished': {
       const index = indexOfAgent(roster.agents, event.agentId);
-      const endsDone =
-        event.outcome === 'done' &&
-        index !== -1 &&
-        isRunning(roster.agents[index]);
-      if (endsDone) {
-        return {
-          ...roster,
-          agents: roster.agents.filter((_, i) => i !== index),
-        };
+      if (index === -1) {
+        return roster;
       }
-      return updateAgent(roster, event.agentId, (agent) =>
-        agent.outcome === 'running'
-          ? {
-              ...agent,
-              outcome: event.outcome,
-              tools: agent.tools.map(failIfRunning),
-            }
-          : agent,
-      );
+      return {
+        ...roster,
+        agents: roster.agents.filter((_, i) => i !== index),
+      };
     }
     case 'taskStarted':
       return indexOfTask(roster.tasks, event.taskId) === -1
@@ -96,33 +98,29 @@ export function foldAgentEvent(roster: Roster, event: AgentEvent): Roster {
               {
                 taskId: event.taskId,
                 agentId: event.agentId,
+                ownerName: nameOfOwner(roster.agents, event.agentId),
                 description: event.description,
                 command: event.command,
                 startedAt: event.at,
-                outcome: 'running',
               },
             ],
           }
         : roster;
     case 'taskFinished': {
       const index = indexOfTask(roster.tasks, event.taskId);
-      if (index === -1 || roster.tasks[index].outcome !== 'running') {
+      if (index === -1) {
         return roster;
       }
       return {
         ...roster,
-        tasks:
-          event.outcome === 'done'
-            ? roster.tasks.filter((_, i) => i !== index)
-            : roster.tasks.map((task, i) =>
-                i === index ? { ...task, outcome: event.outcome } : task,
-              ),
+        tasks: roster.tasks.filter((_, i) => i !== index),
       };
     }
-    case 'sessionEnded':
-      return failEveryRunningItem(roster);
+    case 'sessionEnded': {
+      const isEmpty = roster.agents.length === 0 && roster.tasks.length === 0;
+      return isEmpty ? roster : { agents: [], tasks: [] };
+    }
     case 'userMessage':
-      return dropFinishedItems(roster);
     case 'sessionStarted':
     case 'usage':
     case 'compactionStarted':
@@ -142,6 +140,14 @@ function indexOfAgent(agents: readonly RosterAgent[], agentId: string): number {
 
 function indexOfTask(tasks: readonly RosterTask[], taskId: string): number {
   return tasks.findIndex((task) => task.taskId === taskId);
+}
+
+// The name a task shows for the agent `agentId` that started it.
+function nameOfOwner(agents: readonly RosterAgent[], agentId: string): string {
+  if (agentId === MAIN_AGENT_ID) {
+    return 'main';
+  }
+  return agents.find((agent) => agent.agentId === agentId)?.name ?? 'subagent';
 }
 
 function indexOfTool(tools: readonly RosterTool[], toolUseId: string): number {
@@ -184,48 +190,5 @@ function finishTool(
     tools: agent.tools.map((tool, i) =>
       i === index ? { ...tool, outcome } : tool,
     ),
-  };
-}
-
-function isRunning(item: { outcome: RosterOutcome }): boolean {
-  return item.outcome === 'running';
-}
-
-function failIfRunning<Item extends { outcome: RosterOutcome }>(
-  item: Item,
-): Item {
-  return isRunning(item) ? { ...item, outcome: 'failed' } : item;
-}
-
-// Every running agent, tool and task failed; `roster` itself when nothing runs.
-function failEveryRunningItem(roster: Roster): Roster {
-  const anyRunning =
-    roster.tasks.some(isRunning) ||
-    roster.agents.some(
-      (agent) => isRunning(agent) || agent.tools.some(isRunning),
-    );
-  if (!anyRunning) {
-    return roster;
-  }
-  return {
-    agents: roster.agents.map((agent) => ({
-      ...failIfRunning(agent),
-      tools: agent.tools.map(failIfRunning),
-    })),
-    tasks: roster.tasks.map(failIfRunning),
-  };
-}
-
-// Only the running agents, each with all its tools, and the running tasks, whatever agent owns them; `roster` itself
-// when nothing has finished.
-function dropFinishedItems(roster: Roster): Roster {
-  const anyFinished =
-    !roster.agents.every(isRunning) || !roster.tasks.every(isRunning);
-  if (!anyFinished) {
-    return roster;
-  }
-  return {
-    agents: roster.agents.filter(isRunning),
-    tasks: roster.tasks.filter(isRunning),
   };
 }

@@ -311,9 +311,9 @@ The primitives, each a builder in `src/shared/page/ui/`:
 - **SectionHeader** (`sectionHeader`): a section's heading with a trailing slot.
 - **DragReorder** (`createDragReorder`): drag to reorder over one or more drop zones, each a list of keyed items
   (`ui-drag-reorder-item`, dragged by a source element inside it); the item where the drop would land carries
-  `is-drop-before` or `is-drop-after`, an unordered zone (`ui-drag-reorder-zone`) carries `is-drop-target`, and the
-  dragged item `is-dragging`. A drop reports the item's key, the zone and the index it lands at among the zone's
-  other items, so the view, not the primitive, changes the order. It acts only on drags it started, so file drops
+  `is-drop-before` or `is-drop-after`, an unordered zone (`ui-drag-reorder-zone`), or an ordered one holding no other
+  item, carries `is-drop-target`, and the dragged item `is-dragging`. A drop reports the item's key, the zone and the index it lands at among the zone's
+  other items (0 in an unordered zone), so the view, not the primitive, changes the order. It acts only on drags it started, so file drops
   pass by. A view that drops it calls its `dispose`.
 
 Icon stays the Codicon builder `icon`.
@@ -345,13 +345,13 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   narrow for it), and while a config file is broken an error-tone Tag badge naming it; in the dev
   app, a neutral Dev tag at the start. The OS window buttons stay native.
 - **Activity bar:** L1, icons only; the shown mode carries a 2px accent mark on its window-side edge.
-- **Side bar:** L1 dense glass. Rows are `row-tree` or `row-list`; hover fills with
+- **Side bar:** L1 dense glass. Sessions mode's rows sit in project groups under Favorites and Recent sections. Rows are `row-tree` or `row-list`; hover fills with
   `list-hover-background`; the selected row takes `list-active-background` and `fg`; the keyboard
   cursor adds the focus ring. In a split whose panes each keep a selection (Settings mode, the docs
   tree, the Primer tab's tasks and items columns), the pane without focus marks itself `is-pane-inactive` and its selected
   row takes `list-inactive-selection-background` instead, so the pane the keys act on reads at a glance.
   Sessions mode's rows are compact cards, `card-background` under a `card-border` hairline with `radius-md`,
-  `space-1` apart: the title and activity on the first line, and a second line holding the status then other
+  `space-1_5` apart: the title and activity's dot on the first line, and a second line holding the status then other
   plugins' row parts on one line, the run time and the cache mark at its end, gone while empty. Hover
   strengthens the border to `border-strong`, and the selected card takes `list-active-background` with an
   `accent-tint-strong` border.
@@ -423,11 +423,12 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   label: the cursor's shape shows the vim mode), and the status line, drawn in this order: repo and branch in `fg-secondary`, the `i`/`a`
   type hint, one model · effort chip, every other control's chip, the status parts other plugins add (usage: context,
   cache, spend), the running dot, then Send.
-  The **agent strip** is an HScroller of boxes, each a `card-background` Card with `radius-md`: a subagent box holds a
-  StatusDot, its name, `model · effort · $cost` in `fg-tertiary`, the description, and its latest three tool calls in
-  mono; a task box a terminal icon, the description, its owning agent and the elapsed time. A finished box dims to
-  `fg-tertiary` with a done or failed dot; the selected box takes the focus ring. A user turn shows its sent images as
-  thumbnails under its text.
+  The **agent strip** is an HScroller of boxes, each a `card-background` Card with `radius-md`, heading with a running
+  StatusDot, its name, a kind Tag and its elapsed time, then its description: a subagent box adds `model · effort` in
+  `fg-tertiary`, its latest three tool calls in mono on `block-background`, the older two fading, and a context Meter
+  (`status-warning` at 80% or more), `84k/200k` and its cost; a task box adds its command in mono on `block-background`.
+  A box leaves when its subagent or task ends; the selected box takes the focus ring. A user turn shows its sent images
+  as thumbnails under its text.
 - **Visuals:** an agent's html block in any markdown. While it streams it is a Card holding a running StatusDot and
   `drawing visual…` in `text-12` `fg-secondary`. Once closed it is the inline box: the frame as wide as its column in a
   `radius-md` box that clips it, over a bar holding the small expand icon button at its end, the button's `v` hint on

@@ -18,6 +18,7 @@ import {
 const ROWS: SessionRow[] = ['1', '2', '3', '4'].map((n) => ({
   sessionId: `s${n}`,
   label: `s${n}`,
+  project: 'project',
   harness: null,
   marked: false,
   projectDir: null,

@@ -1,7 +1,8 @@
 // The DOM surface the page builders and plugin views use, for tests that run
-// in `node`: `installFakeDom` stubs `document` and `HTMLElement` with it. A
-// string appended becomes a text node; `click` and `fire` run the listeners.
-// An element is connected while it or an ancestor has `isPageRoot` set.
+// in `node`: `installFakeDom` stubs `document`, `window` and `HTMLElement` with
+// it. A string appended becomes a text node; `click` and `fire` run the
+// listeners. An element is connected while it or an ancestor has `isPageRoot`
+// set.
 // `installFocusFakeDom` opts into focus, text selection and scroll resets.
 export class FakeElement {
   tagName: string;
@@ -195,12 +196,13 @@ export class FakeElement {
     this.fire('click');
   }
 
-  // Runs the `type` listeners with one event, carrying `fields` too, and
-  // returns it, so a test reads whether a listener called `preventDefault`.
+  // Runs the `type` listeners with one event, carrying `fields` too (a `target`
+  // among them stands for a bubbled event), and returns it, so a test reads
+  // whether a listener called `preventDefault`.
   fire(type: string, fields: Record<string, unknown> = {}): FakeEvent {
     const event: FakeEvent = {
-      ...fields,
       target: this,
+      ...fields,
       defaultPrevented: false,
       preventDefault() {
         event.defaultPrevented = true;
@@ -250,6 +252,7 @@ export function installFakeDom(
   stubGlobal: (name: string, value: unknown) => void,
 ) {
   stubGlobal('HTMLElement', FakeElement);
+  stubGlobal('window', new FakeElement('window'));
   stubGlobal('document', {
     createElement: (tag: string) => new FakeElement(tag),
   });

@@ -162,10 +162,15 @@ describe('sessions drive actions', () => {
 
 // Sessions' main part started over a fake `MainApi` with no relay, no drive
 // and no self-test script, its titles limited to `titleMaxLength`.
-function startSessionsPart(titleMaxLength: number): SessionsMainExports {
+function startSessionsPart(
+  titleMaxLength: number,
+  send: (message: string, payload: unknown) => void = () => undefined,
+  originRepoName: (projectDir: string) => Promise<string | null> = () =>
+    Promise.resolve(null),
+) {
   let hex = 0;
   const api = {
-    channel: { handle: () => undefined, send: () => undefined },
+    channel: { handle: () => undefined, send },
     events: { emit: () => undefined, on: () => undefined },
     settings: () => ({ layout: 'default', titleMaxLength }),
     services: {
@@ -176,16 +181,50 @@ function startSessionsPart(titleMaxLength: number): SessionsMainExports {
       homeDir: '/home',
       appInstance: { id: 'app', isDev: false },
       selfTest: null,
+      git: { originRepoName },
     },
     drive: null,
     layouts: { register: () => ({ dispose: () => undefined }) },
   } as unknown as Parameters<typeof sessionsMainPart.start>[0];
-  return sessionsMainPart.start(api).exports as SessionsMainExports;
+  const part = sessionsMainPart.start(api);
+  return { part, exports: part.exports as SessionsMainExports };
 }
 
 describe('sessions main part', () => {
+  it.each([
+    { case: 'running', disposed: false, messages: ['stateChanged'] },
+    { case: 'disposed', disposed: true, messages: [] },
+  ])(
+    'a project lookup landing while the part is $case sends $messages',
+    async ({ disposed, messages }) => {
+      const lookup = Promise.withResolvers<string | null>();
+      const sent: string[] = [];
+      const { part, exports } = startSessionsPart(
+        10,
+        (message) => sent.push(message),
+        () => lookup.promise,
+      );
+      const { session } = exports.connect({
+        sessionId: 'host-1',
+        projectDir: '/work/folder',
+        deadlineSeconds: null,
+        harness: 'claude',
+      });
+      exports.mark(session.id);
+      sent.length = 0;
+      if (disposed) {
+        part.dispose?.();
+      }
+
+      lookup.resolve('repo');
+      await new Promise((settle) => setImmediate(settle));
+
+      expect(sent).toEqual(messages);
+    },
+  );
+
   it('contributes set_session_title once, titling the calling session at the setting limit', async () => {
-    const exports = startSessionsPart(10);
+    const { exports } = startSessionsPart(10);
     const connected = exports.connect({
       sessionId: 'host-1',
       projectDir: null,

@@ -1,18 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { MAIN_AGENT_ID } from '../../../contracts/agent';
-import type {
-  Roster,
-  RosterAgent,
-  RosterOutcome,
-  RosterTask,
-} from '../../agents/contract';
+import type { Roster, RosterAgent, RosterTask } from '../../agents/contract';
 import { runningWork } from './running-work';
 
-function agent(
-  agentId: string,
-  startedAt: number,
-  outcome: RosterOutcome = 'running',
-): RosterAgent {
+function agent(agentId: string, startedAt: number): RosterAgent {
   return {
     agentId,
     agentType: 'Explore',
@@ -22,23 +13,21 @@ function agent(
     model: null,
     effort: null,
     spendUsd: null,
+    isBackground: false,
+    contextTokens: null,
+    contextWindow: null,
     tools: [],
-    outcome,
   };
 }
 
-function task(
-  taskId: string,
-  startedAt: number,
-  outcome: RosterOutcome = 'running',
-): RosterTask {
+function task(taskId: string, startedAt: number): RosterTask {
   return {
     taskId,
     agentId: MAIN_AGENT_ID,
+    ownerName: 'main',
     description: `${taskId}'s command`,
     command: null,
     startedAt,
-    outcome,
   };
 }
 
@@ -46,20 +35,12 @@ describe('runningWork', () => {
   it.each<{ name: string; roster: Roster; expected: unknown }>([
     { name: 'empty', roster: { agents: [], tasks: [] }, expected: null },
     {
-      name: 'only finished',
+      name: 'earliest task wins',
       roster: {
-        agents: [agent('a', 10, 'done')],
-        tasks: [task('t', 5, 'done')],
+        agents: [agent('a', 30), agent('b', 40)],
+        tasks: [task('t', 35), task('u', 25), task('v', 50)],
       },
-      expected: null,
-    },
-    {
-      name: 'earliest running task wins',
-      roster: {
-        agents: [agent('a', 30), agent('b', 20, 'done')],
-        tasks: [task('t', 25), task('u', 1, 'done')],
-      },
-      expected: { startedAt: 25, agentCount: 1, taskCount: 1 },
+      expected: { startedAt: 25, agentCount: 2, taskCount: 3 },
     },
     {
       name: 'agents only',

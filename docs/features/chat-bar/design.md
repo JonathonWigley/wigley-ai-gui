@@ -73,9 +73,9 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
 - **Lifetime:** a box leaves the strip the moment its subagent or task ends, done or failed, and every box leaves
   when the session's process exits. Nothing stays to be closed, so the strip has no close control.
 - **Scrolling:** the strip scrolls sideways; `‹` and `›` buttons at its ends scroll it by one box and hide when there
-  is nothing further that way. The trackpad scrolls it too.
+  is nothing further that way. The trackpad scrolls it too. An open box's tool list keeps its scroll as the box redraws while the strip shows; a redraw in a hidden tab, or a rebuilt composer, starts the list at the top.
 - **Keys:** the strip is a stop in the chat's entry cursor. `j` on the entry cursor's last stop (the newest pending
-  row, else the last entry or an open last run's last step) selects the strip's first box; the strip then holds its own key scope: `h`/`l` move between boxes, `k` returns to the last entry, `i` and `a` focus the chat box, Enter opens the selected box in place to list every tool call of that
+  row, else the last entry or an open last run's last step) selects the strip's first box; the strip then holds its own key scope: `h`/`l` move between boxes, `k` or Esc returns to the last stop, `i` and `a` focus the chat box, Enter opens the selected box in place to list every tool call of that
   subagent (a task shows its command), and Enter again closes it. `G` and a following cursor stay on the last entry,
   so new output never moves the cursor into the strip. The selected box takes the focus ring.
 
@@ -151,13 +151,17 @@ Only the Claude adapter knows Claude's shapes, so it alone fills these into agen
 - **The strip joins the entry cursor through a general stop.** Any composer part may offer one, so chat names no
   plugin.
 - **Every box leaves when its process ends, failed ones included.** The user wants the strip to show only live work
-  and to close nothing by hand; a failure still shows in the transcript. Chosen on 2026-11-03, replacing the earlier
-  rule that kept failed boxes until the next message.
+  and to close nothing by hand. Under the default layout a failed Agent call shows only as a failed line in the activity
+  dock while it is among the latest 3, and a failed background shell has no surface of its own: either reaches the
+  transcript only when the main agent says so. Chosen on 2026-11-03, replacing the earlier rule that kept failed boxes
+  until the next message.
 - **A box shows its kind, runtime, context and cost.** The user wants to tell a subagent, a background agent and a
   shell apart at a glance, and to watch each agent's context fill and spend (design A, 2026-11-03).
 - **Subagent context is its latest reply's prompt tokens over its model's window.** Input, cache write and cache
-  read of that reply; Claude names a model's window only in a turn result's `modelUsage`, so the adapter learns it
-  there and sends it on the subagent's next `agentReplied`, or at once to every running subagent on that model.
+  read of that reply; Claude names a subagent's model's window only in a turn result's `modelUsage`, so the adapter learns it
+  there and sends it on the subagent's next `agentReplied`, or on that `result` to every subagent still running whose model's
+  window it changed. A foreground subagent of the main agent is failed at the `result` first, so it gets the window
+  only from an earlier result.
 - **Subagent cost is estimated in dollars from tokens.** Claude reports cost only per process.
 - **The status line replaces the composer bar.** One line; model and effort share one chip.
 - **The tab-bar usage line and the sidebar's working line start switched off**, one setting away.

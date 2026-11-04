@@ -6,23 +6,42 @@ import {
   type SessionsState,
 } from '../contract';
 
-// The project dirs of the three fixture sessions, in row order; each row's
-// label is its dir's name.
+// The project dirs of the three fixture sessions, in main's row order; each
+// row's label is its dir's name.
 const PROJECT_DIRS = ['panes-a', 'panes-b', 'panes-c'] as const;
 
 // A content width wide enough that a pane in a two-column split still splits
 // side by side.
 const WIDE_WIDTH = 1800;
 
-// `Alt+;` splits panes-a's pane, and the picker's first row, panes-b, loads
-// into the new pane on the right.
+// `Alt+Shift+o` to `label`'s row, however the rows draw, with one pane showing
+// them. A press logs its command's line and the activation's in one task.
+function stepNextTo(label: string): SelfTestStep {
+  return {
+    keys: ['<A-S-o>'],
+    expect: '[page] <A-S-o> ran sessions.nextSession',
+    repeat: {
+      until: `[sessions] activated ${label}`,
+      max: PROJECT_DIRS.length - 1,
+    },
+  };
+}
+
+// The fixture's rows arrive in separate states and can tie on their millisecond
+// stamps, so Recent's order among them is unknown here. Favoriting panes-b lists
+// it above panes-c. `Alt+;` then splits panes-a's pane, and the picker's first
+// row, panes-b, loads into the new pane on the right and is unfavorited again.
 const SPLIT_AND_PICK_STEPS: SelfTestStep[] = [
+  stepNextTo('panes-b'),
+  { keys: [' ', 'p', 'f'], expect: '[sessions] favorited panes-b' },
+  stepNextTo('panes-a'),
   { keys: ['<A-;>'], expect: '[sessions] pane split right' },
   {
     keys: ['Enter'],
     expect: '[sessions] pane loaded panes-b',
     screenshot: 'panes-side-by-side',
   },
+  { keys: [' ', 'p', 'f'], expect: '[sessions] unfavorited panes-b' },
 ];
 
 // `Alt+h` leaves panes-b's pane for panes-a's, and `Ctrl+Alt+l` swaps
@@ -32,9 +51,9 @@ const FOCUS_AND_SWAP_STEPS: SelfTestStep[] = [
   { keys: ['<C-A-l>'], expect: '[sessions] panes swapped' },
 ];
 
-// `Alt+'` splits panes-a's pane with panes-c below it, `Alt+Shift+j` moves the
-// divider between them, and `Alt+k` focuses panes-a again, whose pane then
-// draws its lower focus edge.
+// `Alt+'` splits panes-a's pane with panes-c, the one row no pane shows, below
+// it, `Alt+Shift+j` moves the divider between them, and `Alt+k` focuses panes-a
+// again, whose pane then draws its lower focus edge.
 const STACKED_RESIZE_STEPS: SelfTestStep[] = [
   { keys: ["<A-'>"], expect: '[sessions] pane split down' },
   { keys: ['Enter'], expect: '[sessions] pane loaded panes-c' },
@@ -72,6 +91,26 @@ const RENAME_STEPS: SelfTestStep[] = [
   },
 ];
 
+// With panes-a focused over panes-c since the stacked resize, `Space p f`
+// favorites panes-a, alone at both edges; `Alt+j` focuses panes-c, whose project
+// joins the favorites and moves above panes-a. Both are then unfavorited, so the
+// script ends with no favorites and panes-a focused.
+const PROJECTS_STEPS: SelfTestStep[] = [
+  { keys: [' ', 'p', 'f'], expect: '[sessions] favorited panes-a' },
+  { keys: [' ', 'p', 'k'], expect: '[sessions] panes-a cannot move up' },
+  { keys: [' ', 'p', 'j'], expect: '[sessions] panes-a cannot move down' },
+  { keys: ['<A-j>'], expect: '[sessions] pane focused panes-c' },
+  { keys: [' ', 'p', 'f'], expect: '[sessions] favorited panes-c' },
+  {
+    keys: [' ', 'p', 'k'],
+    expect: '[sessions] moved panes-c up',
+    screenshot: 'project-groups',
+  },
+  { keys: [' ', 'p', 'f'], expect: '[sessions] unfavorited panes-c' },
+  { keys: ['<A-k>'], expect: '[sessions] pane focused panes-a' },
+  { keys: [' ', 'p', 'f'], expect: '[sessions] unfavorited panes-a' },
+];
+
 // `Alt+;` splits panes-a's pane and Esc closes the new pane again; `Alt+w`
 // then closes panes-a's pane, its session staying a row.
 const CANCEL_AND_CLOSE_STEPS: SelfTestStep[] = [
@@ -82,6 +121,27 @@ const CANCEL_AND_CLOSE_STEPS: SelfTestStep[] = [
   },
   { keys: ['Escape'], expect: '[sessions] split cancelled' },
   { keys: ['<A-w>'], expect: '[sessions] pane closed' },
+];
+
+// After the close, panes-b's pane sits left of panes-c's, the focused one, and
+// panes-a is in no pane. Favoriting panes-c then panes-b and closing panes-b's
+// pane draws panes-c, panes-b, panes-a, whatever the stamps, the reverse of
+// main's panes-a, panes-b, panes-c, so each `Alt+Shift+o` lands where main's
+// order would not. With panes-c unfavorited and shown, the split picker lists
+// panes-b, the one favorite, above panes-a, main's first. Unfavoriting panes-b
+// leaves the script with no favorites.
+const DRAWN_ORDER_STEPS: SelfTestStep[] = [
+  { keys: [' ', 'p', 'f'], expect: '[sessions] favorited panes-c' },
+  { keys: ['<A-h>'], expect: '[sessions] pane focused panes-b' },
+  { keys: [' ', 'p', 'f'], expect: '[sessions] favorited panes-b' },
+  { keys: ['<A-w>'], expect: '[sessions] pane closed' },
+  { keys: ['<A-S-o>'], expect: '[sessions] activated panes-b' },
+  { keys: ['<A-S-o>'], expect: '[sessions] activated panes-a' },
+  { keys: ['<A-S-o>'], expect: '[sessions] activated panes-c' },
+  { keys: [' ', 'p', 'f'], expect: '[sessions] unfavorited panes-c' },
+  { keys: ['<A-;>'], expect: '[sessions] pane split right' },
+  { keys: ['Enter'], expect: '[sessions] pane loaded panes-b' },
+  { keys: [' ', 'p', 'f'], expect: '[sessions] unfavorited panes-b' },
 ];
 
 // Each run ends the sessions the run before opened and opens three in project
@@ -145,9 +205,19 @@ export function sessionsSelfTestScript(
         steps: RENAME_STEPS,
       },
       {
+        name: 'projects',
+        why: 'Favorites toggle and reorder by key, and the side bar draws sections.',
+        steps: PROJECTS_STEPS,
+      },
+      {
         name: 'cancel and close',
         why: 'Esc undoes a split and Alt+w closes only the pane.',
         steps: CANCEL_AND_CLOSE_STEPS,
+      },
+      {
+        name: 'drawn order',
+        why: "The session step keys and the split picker follow the drawn order, not main's.",
+        steps: DRAWN_ORDER_STEPS,
       },
     ],
     problems: () => {

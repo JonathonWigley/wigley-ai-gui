@@ -718,6 +718,8 @@ message. The request is
 **Other usage fields.** The `result` line's `modelUsage.<model>` carries `contextWindow` (`1000000`),
 `maxOutputTokens`, `costUSD` and `costBasis` (`"list"`: API list rates, not money billed). An `assistant` message's
 `usage.cache_creation` splits `ephemeral_1h_input_tokens` from `ephemeral_5m_input_tokens`, the prompt cache's two TTLs.
+A result names a subagent's model too, while that subagent still runs: on 2026-11-03 a haiku background subagent under
+an Opus main received the window `1000000` at main's `result`, a value not checked against haiku's published window.
 
 ## Queued messages
 
@@ -930,7 +932,10 @@ description "read notes" …)`; Explore spawned on the first attempt):
   below), the call's id in `tool_use_id`, `usage` and, on a normal end, `handback_report.text` (the subagent's final
   message, here from its `SubagentHandback` tool call; a subagent that ends in plain text was not measured). No
   `<task-notification>` user message appeared. `task_notification` comes 0 ms after the subagent's last line (its last
-  `user` tool result). `status` `failed` was not observed.
+  `user` tool result). `status` `failed` was not observed. It is not always the subagent's last word: on 2026-11-03 a
+  background subagent waiting on its own background shell finished about 80 s before its shell ended, then replied and
+  handed back. The adapter's log shows the finish and the late replies; the raw line was not captured, and the adapter
+  has no other route that finishes a launched subagent.
 - **After the end, the harness runs a turn on the main agent** when the main turn is already over (below):
   `system/init`, `system/status requesting`, an `assistant`, and a `result` whose `origin` is
   `{"kind":"peer","from":"a5d2bf79d0e109653","senderTaskId":"a5d2…","name":"general-purpose","body":"[Subagent hand-back] …","handback":true,"handbackReportText":"spike"}`;

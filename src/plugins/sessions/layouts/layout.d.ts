@@ -8,10 +8,11 @@ import type { BaseKit, DotStatus } from '../../../shared/page/layout-host/kit';
 // its own parts.
 //
 // Panes. `sideBar` draws once per layout set, and `tabBar` once per session per layout set and again whenever another
-// plugin adds or removes a bar part. The app fills the side bar's `rows` with one `row` per session and each tab bar's
+// plugin adds or removes a bar part. The app fills the side bar's `rows` with the two `section`s, Favorites then Recent,
+// a `section`'s `groups` with one `group` per project, a `group`'s `rows` with that project's `row`s, and each tab bar's
 // `strip` with one `tab` per tab of its session, replacing their children on each draw. A `row` places other plugins'
-// row parts and a `tabBar` their bar parts, each through its kit's `contributedParts`. A pane whose `rows` or `strip`
-// is not a child of its `element` is drawn by `default` instead.
+// row parts and a `tabBar` their bar parts, each through its kit's `contributedParts`. A part whose `rows`, `groups`,
+// `header` or `strip` is not a child of its `element` is drawn by `default` instead.
 //
 // Chat panes. Sessions mode splits into panes, each showing one session. `pane` draws each pane's frame, again
 // whenever its input changes; the app fills its `body` with the session's tab bar over its tabs, or with the empty
@@ -28,7 +29,12 @@ import type { BaseKit, DotStatus } from '../../../shared/page/layout-host/kit';
 //   each while it has nothing to act on, and on the key inside each of `splitRightHint`, `splitDownHint` and
 //   `closePaneHint`; every tab bar's prompts and those keys take `is-no-target` outside the focused pane, since the
 //   keys act on the focused pane only;
-// - whether the empty text shows: `emptyText` draws only while the tab area shows no tab.
+// - whether the empty text shows: `emptyText` draws only while the tab area shows no tab;
+// - the click on the star `favoriteToggle` places, which favorites or unfavorites the group's project;
+// - the `title` tooltip (`project`) on each group's `header` and the drag on it, the whole header being the drag source;
+// - `is-empty` on the element of a `section` with no groups;
+// - `has-favorites` on the side bar's `rows` while Favorites holds a group, and `is-reordering` there while a group is
+//   dragged.
 // The tab bodies, the sheet that holds them and the tab elements other plugins add stay the app's.
 // Every key prompt here has no scope, so it shows in every scope; a layout that leaves a kit prompt out leaves that
 // key unprompted.
@@ -40,8 +46,8 @@ import type { BaseKit, DotStatus } from '../../../shared/page/layout-host/kit';
 // One session row. `title` is the session's title as the row shows it (the user's, else the agent's, else the first
 // message cut to the title length), null for none; `label` is the session's folder label (`gamma 2`); `harness` is
 // the harness's name, '' for none; `marked` is true while a round waits unopened; `activity` is what the session is
-// doing, its word and the tone of its dot, null for none, and `default` draws no separate `marked` dot while it is
-// set; `status` is the second line, null for none; `onScreen` is true while the session shows in a pane other than
+// doing, its word and the tone of its dot, null for none; `default` draws the dot alone, and no separate `marked` dot
+// while it is set; `status` is the second line, null for none; `onScreen` is true while the session shows in a pane other than
 // the focused one.
 export interface SessionRowInput {
   sessionId: string;
@@ -52,6 +58,24 @@ export interface SessionRowInput {
   activity: { word: string; tone: DotStatus } | null;
   status: string | null;
   onScreen: boolean;
+}
+
+// One side bar section. Both sections always draw. `label` is its name (`Favorites`, `Recent`); `dropHint` says what
+// dropping a group into it does, shown while it is empty and a group is dragged; `isEmpty` is true while it holds no
+// groups.
+export interface SectionInput {
+  kind: 'favorites' | 'recent';
+  label: string;
+  dropHint: string;
+  isEmpty: boolean;
+}
+
+// One project's group. `project` is its name; `count` is how many rows it holds; `isFavorite` is true for a favorite
+// project.
+export interface GroupInput {
+  project: string;
+  count: number;
+  isFavorite: boolean;
 }
 
 // A way out of a pane, as the core's pane keys name it.
@@ -89,8 +113,21 @@ export interface SessionsPart {
   element: HTMLElement;
 }
 
-// `rows` is the list the app fills with the session rows; a child of `element`.
+// `rows` is the box the app fills with the two `section`s, Favorites then Recent; a child of `element`.
 export interface SideBarPane extends SessionsPart {
+  rows: HTMLElement;
+}
+
+// `groups` is the box the app fills with one `group` per project, and a drop zone while a group is dragged; a child of
+// `element`.
+export interface SectionPane extends SessionsPart {
+  groups: HTMLElement;
+}
+
+// `header` is the group's drag source; `rows` is the box the app fills with the project's `row`s. Each a child of
+// `element`.
+export interface GroupPane extends SessionsPart {
+  header: HTMLElement;
   rows: HTMLElement;
 }
 
@@ -124,6 +161,16 @@ export interface RowKit extends SessionsKit {
 export interface SideBarKit extends SessionsKit {
   // `⌥⇧I ▲ ▼ ⌥⇧O`: the previous and next session prompts, each chevron on its inner side.
   sessionEdge(parent: HTMLElement): HTMLElement;
+}
+
+export interface GroupKit extends SessionsKit {
+  // `button.session-group-star`: the star, `star-full` labelled `Unfavorite` with `is-active` on a favorite, else
+  // `star-empty` labelled `Favorite`. A group that leaves it out has no star to click. A second call throws
+  // `favoriteToggle placed twice`, so the group draws with `default`.
+  favoriteToggle(parent: HTMLElement): HTMLElement;
+  // `span.session-group-grip` holding the `gripper` icon, a visual cue: the drag belongs to the `header`. A second
+  // call throws `dragHandle placed twice`, so the group draws with `default`.
+  dragHandle(parent: HTMLElement): HTMLElement;
 }
 
 export interface TabBarKit extends SessionsKit {
@@ -160,8 +207,16 @@ export interface RenameDialogKit extends SessionsKit {
 }
 
 export interface Layout {
-  // The side bar: a header over the session rows.
+  // The side bar: a header over the sections.
   sideBar?(parent: HTMLElement, kit: SideBarKit): SideBarPane;
+  // One section: its label and drop hint over the box of its groups.
+  section?(
+    parent: HTMLElement,
+    input: SectionInput,
+    kit: SessionsKit,
+  ): SectionPane;
+  // One project's group: its header over the box of its rows.
+  group?(parent: HTMLElement, input: GroupInput, kit: GroupKit): GroupPane;
   row?(parent: HTMLElement, input: SessionRowInput, kit: RowKit): SessionsPart;
   // One chat pane's frame around its body.
   pane?(parent: HTMLElement, input: PaneInput, kit: PaneKit): PanePart;

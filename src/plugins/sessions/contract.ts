@@ -212,6 +212,10 @@ export interface SessionsMainEvents extends EventShape {
 export interface SessionRow {
   sessionId: string;
   label: string;
+  // The session's project: the origin repo name of its folder, else the
+  // folder's name, else the no-folder label. Set to the fallback at connect and
+  // changed once when the lookup lands.
+  project: string;
   harness: Harness | null;
   marked: boolean;
   projectDir: string | null;
@@ -297,9 +301,9 @@ export type ActivityTone =
   | 'attention'
   | 'error';
 
-// What a session is doing, as one plugin sees it: the word its row shows
-// beside a dot in `tone`. Of a session's activities its row shows the one of
-// highest `rank`.
+// What a session is doing, as one plugin sees it: the word its row's tooltip
+// shows and the `tone` of its dot. Of a session's activities its row shows the
+// one of highest `rank`.
 export interface RowActivity {
   word: string;
   tone: ActivityTone;

@@ -59,7 +59,7 @@ const MODEL_PRICES: Readonly<Record<string, readonly PriceRow[]>> = {
 };
 
 // A context-size suffix such as `[1m]`, and a dated snapshot's `-YYYYMMDD`.
-const CONTEXT_SUFFIX = /\[[^\]]*\]$/;
+export const CONTEXT_SUFFIX = /\[[^\]]*\]$/;
 const SNAPSHOT_DATE = /-\d{8}$/;
 
 function numberOrZero(value: unknown): number {
