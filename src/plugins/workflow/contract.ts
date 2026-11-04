@@ -87,6 +87,14 @@ export function isBusy(flow: SessionFlow): boolean {
   return flow.turnRunning || flow.runningSubagents.length > 0;
 }
 
+// What a stage is doing now. A step not reached has no status: it is pending.
+export type StageStatus = 'running' | 'paused' | 'ready' | 'done';
+
+// The status of a stage that runs while its flow is busy.
+export function busyStatus(flow: SessionFlow): StageStatus {
+  return isBusy(flow) ? 'running' : 'paused';
+}
+
 // True when `signal` starts `skill` (`plugin:name`), named in full or by the
 // bare `name` Claude Code also accepts for a typed command.
 export function startsSkill(signal: WorkflowSignal, skill: string): boolean {
@@ -100,6 +108,11 @@ export function startsSkill(signal: WorkflowSignal, skill: string): boolean {
 // A stage's detail from its parts, joined by ` · `, each empty part left out.
 export function detailLine(...parts: string[]): string {
   return parts.filter((part) => part !== '').join(' · ');
+}
+
+// A label and its status, joined by ` · `; the label alone for a null status.
+export function statusText(label: string, status: StageStatus | null): string {
+  return detailLine(label, status ?? '');
 }
 
 export interface StageActionSpec {
@@ -121,12 +134,13 @@ export interface StageActionSpec {
 
 export interface PageStage {
   id: StageId;
-  // The stepper's and the chip's word: 'Plan'.
+  // The step's word: 'Make'.
   label: string;
   // Idle is false.
   inStepper: boolean;
   // Stages sharing a slot take one place in the stepper: the one the flow is
-  // in, otherwise the slot's last by order ('start': primer, feature).
+  // in, otherwise the slot's last by order ('start': primer, feature; 'make':
+  // planReady, make).
   stepSlot?: string;
   // Equal to the main half's order (page-stages.test.ts pins it); the stepper
   // sorts on it.
@@ -135,9 +149,16 @@ export interface PageStage {
   // the first available one; when that one is disabled, they run nothing and
   // log `nothing to run`.
   actions: readonly StageActionSpec[];
-  // The chip's, the strip's and the Flow tab's detail text:
-  // '3/7 · wave 2 · Claim grants'; '' for none. The chip ellipsizes it.
+  // The side pane's detail line: '3/7 · wave 2 · Claim grants'; '' for none.
+  // The chip's input and the strip's input still carry it for a user layout.
   detail(flow: SessionFlow): string;
+  // What the stage is doing for this flow; null for a stage with no status.
+  status(flow: SessionFlow): StageStatus | null;
+  // The label and status with this stage's progress: 'Make · running 3/9'.
+  statusLine(flow: SessionFlow): string;
+  // True when the current wave's open tasks draw the stage's status; left out,
+  // they draw `pending`.
+  runsTasks?: boolean;
 }
 
 export interface WorkflowMainExports {

@@ -1,8 +1,11 @@
-import { detailLine, isBusy, type PageStage } from '../../contract';
+import { detailLine, isBusy, type PageStage, statusText } from '../../contract';
+
+const label = 'Close';
+const status: PageStage['status'] = () => 'done';
 
 export const closedPageStage: PageStage = {
   id: 'closed',
-  label: 'Closed',
+  label,
   inStepper: true,
   order: 60,
   actions: [
@@ -23,4 +26,12 @@ export const closedPageStage: PageStage = {
   ],
   detail: (flow) =>
     flow.progress === null ? '' : detailLine(flow.progress.title, 'done'),
+  status,
+  statusLine(flow) {
+    const progress = flow.progress;
+    return detailLine(
+      statusText(label, status(flow)),
+      progress === null ? '' : `${progress.checked}/${progress.total}`,
+    );
+  },
 };

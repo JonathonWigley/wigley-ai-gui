@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { PageStage, SessionFlow } from '../contract';
+import { busyStatus, type PageStage, type SessionFlow } from '../contract';
 import { newFlow } from '../flow';
 import type { PlanProgress } from '../plan-reader';
 import {
@@ -267,6 +267,138 @@ describe('BUILT_IN_PAGE_STAGES', () => {
       available.map((action) => [action.command, action.enabled(flow)]),
     ).toEqual(actions);
   });
+
+  const threeOfNine = progress({ checked: 3, total: 9 });
+  const nineOfNine = progress({ checked: 9, total: 9 });
+
+  it.each<{
+    name: string;
+    stage: string;
+    flow: SessionFlow;
+    status: string | null;
+    statusLine: string;
+  }>([
+    {
+      name: 'primer busy',
+      stage: 'primer',
+      flow: turnRunning,
+      status: 'running',
+      statusLine: 'Primer · running',
+    },
+    {
+      name: 'feature not busy',
+      stage: 'feature',
+      flow: flowWith({}),
+      status: 'paused',
+      statusLine: 'Feature · paused',
+    },
+    {
+      name: 'planReady busy',
+      stage: 'planReady',
+      flow: turnRunning,
+      status: 'ready',
+      statusLine: 'Make · ready',
+    },
+    {
+      name: 'make busy 3/9',
+      stage: 'make',
+      flow: flowWith({ turnRunning: true, progress: threeOfNine }),
+      status: 'running',
+      statusLine: 'Make · running 3/9',
+    },
+    {
+      name: 'make not busy 3/9',
+      stage: 'make',
+      flow: flowWith({ progress: threeOfNine }),
+      status: 'paused',
+      statusLine: 'Make · paused 3/9',
+    },
+    {
+      name: 'make with null progress',
+      stage: 'make',
+      flow: unread,
+      status: 'paused',
+      statusLine: 'Make · paused',
+    },
+    {
+      name: 'review busy with 2 rounds',
+      stage: 'review',
+      flow: flowWith({
+        turnRunning: true,
+        progress: progress({ reviewRounds: 2 }),
+      }),
+      status: 'running',
+      statusLine: 'Review · running · round 2',
+    },
+    {
+      name: 'review not busy with 0 rounds',
+      stage: 'review',
+      flow: flowWith({ progress: progress({ reviewRounds: 0 }) }),
+      status: 'paused',
+      statusLine: 'Review · paused',
+    },
+    {
+      name: 'review with null progress',
+      stage: 'review',
+      flow: unread,
+      status: 'paused',
+      statusLine: 'Review · paused',
+    },
+    {
+      name: 'closed 9/9',
+      stage: 'closed',
+      flow: flowWith({ progress: nineOfNine }),
+      status: 'done',
+      statusLine: 'Close · done · 9/9',
+    },
+    {
+      name: 'closed with null progress',
+      stage: 'closed',
+      flow: unread,
+      status: 'done',
+      statusLine: 'Close · done',
+    },
+    {
+      name: 'idle',
+      stage: 'idle',
+      flow: flowWith({}),
+      status: null,
+      statusLine: 'Idle',
+    },
+  ])(
+    "each stage's status and status line follow its flow: $name",
+    ({ stage, flow, status, statusLine }) => {
+      expect(pageStage(stage).status(flow)).toBe(status);
+      expect(pageStage(stage).statusLine(flow)).toBe(statusLine);
+    },
+  );
+
+  it.each<{ stage: string; label: string; stepSlot: string | undefined }>([
+    { stage: 'idle', label: 'Idle', stepSlot: undefined },
+    { stage: 'primer', label: 'Primer', stepSlot: 'start' },
+    { stage: 'feature', label: 'Feature', stepSlot: 'start' },
+    { stage: 'planReady', label: 'Make', stepSlot: 'make' },
+    { stage: 'make', label: 'Make', stepSlot: 'make' },
+    { stage: 'review', label: 'Review', stepSlot: undefined },
+    { stage: 'closed', label: 'Close', stepSlot: undefined },
+  ])(
+    "each stage's label and step slot: $stage",
+    ({ stage, label, stepSlot }) => {
+      expect(pageStage(stage).label).toBe(label);
+      expect(pageStage(stage).stepSlot).toBe(stepSlot);
+    },
+  );
+
+  it.each<{ name: string; flow: SessionFlow; status: string }>([
+    { name: 'a turn only', flow: turnRunning, status: 'running' },
+    { name: 'a subagent only', flow: subagentRunning, status: 'running' },
+    { name: 'neither', flow: flowWith({}), status: 'paused' },
+  ])(
+    'busy means a turn or a main-agent subagent: $name',
+    ({ flow, status }) => {
+      expect(busyStatus(flow)).toBe(status);
+    },
+  );
 
   it('pairs each page half with its main half and runs only declared commands', () => {
     const pageHalves = BUILT_IN_PAGE_STAGES.map((stage) => [
