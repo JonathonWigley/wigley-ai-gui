@@ -131,6 +131,55 @@ describe('createSessionRecency', () => {
     },
   );
 
+  it('recency_ProjectStampHoldsThroughNewRowsAndGoesWithItsLastRow', () => {
+    const clock = { time: 1, now: () => clock.time };
+    const state = fakeUiState();
+    const recency = createSessionRecency(clock, state);
+    const inProject = (sessionId: string, project: string): SessionRow => ({
+      ...sessionRow(sessionId),
+      project,
+    });
+    const a1 = inProject('a1', 'alpha');
+    const a2 = inProject('a2', 'alpha');
+    const b1 = inProject('b1', 'beta');
+    const savedProjects = () =>
+      Object.fromEntries(createSessionRecency(clock, state).projectStamps());
+
+    recency.rowsChanged(null, [a1]);
+    expect(savedProjects()).toEqual({ alpha: 1 });
+
+    clock.time = 2;
+    recency.rowsChanged([a1], [a1, b1]);
+    clock.time = 3;
+    recency.rowsChanged([a1, b1], [a1, b1, a2]);
+    expect(savedProjects()).toEqual({ alpha: 1, beta: 2 });
+
+    recency.rowsChanged([a1, b1, a2], [a2, b1]);
+    expect(savedProjects()).toEqual({ alpha: 1, beta: 2 });
+
+    createSessionRecency(clock, state).rowsChanged(null, [b1]);
+    expect(savedProjects()).toEqual({ alpha: 1, beta: 2 });
+
+    recency.rowsChanged([a2, b1], [b1]);
+    expect(savedProjects()).toEqual({ beta: 2 });
+
+    clock.time = 4;
+    recency.rowsChanged([b1], [b1, a1]);
+    expect(savedProjects()).toEqual({ alpha: 4, beta: 2 });
+  });
+
+  it('recency_ProjectWithSavedRowsTakesItsNewestRowsStamp', () => {
+    const state = fakeUiState([['recency', { stamps: { a1: 3, a2: 7 } }]]);
+    const recency = createSessionRecency({ now: () => 100 }, state);
+
+    recency.rowsChanged(null, [
+      { ...sessionRow('a1'), project: 'alpha' },
+      { ...sessionRow('a2'), project: 'alpha' },
+    ]);
+
+    expect(Object.fromEntries(recency.projectStamps())).toEqual({ alpha: 7 });
+  });
+
   it('recency_DropsTheOldestStampsPastTheCap', () => {
     const saved = Object.fromEntries(
       Array.from({ length: 200 }, (_, index) => [`h${index}`, index]),
