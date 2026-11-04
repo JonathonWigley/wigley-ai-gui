@@ -39,9 +39,22 @@ describe('parseDriveArgs', () => {
       packaged: true,
       harness: 'claude',
       userConfig: false,
+      namesFlags: true,
       run: 'x',
     });
   });
+
+  it.each([
+    { argv: ['start', '--run', 'x'], namesFlags: false },
+    { argv: ['start', '--packaged'], namesFlags: true },
+    { argv: ['start', '--harness', 'fake'], namesFlags: true },
+    { argv: ['start', '--user-config'], namesFlags: true },
+  ])(
+    'GIVEN argv $argv WHEN parsed THEN namesFlags is $namesFlags',
+    ({ argv, namesFlags }) => {
+      expect(parseDriveArgs(argv)).toMatchObject({ kind: 'start', namesFlags });
+    },
+  );
 
   it("GIVEN argv ['start', '--bogus'] WHEN parsed THEN it throws naming --bogus", () => {
     expect(() => parseDriveArgs(['start', '--bogus'])).toThrow('--bogus');

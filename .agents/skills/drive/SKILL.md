@@ -60,8 +60,11 @@ or touches their data, so start one whenever a check needs it.
    run's `home/` and `user-data/`, so its test repos leave the machine's docs index: `screenshots/`,
    `videos/` and `app.log` stay for reading back. `quit --keep-sessions` instead keeps the run's
    Claude sessions running on the session host, and its `home/` and `user-data/`, so `start --run
-   <id>` with the run's own flags brings it back and re-attaches them. Every `start` deletes each other run folder untouched for over a day whose app is
-   not running, a kept run's included. `.drive/` is git-ignored.
+   <id>` brings it back and re-attaches them. That start takes the flags in the run's `start.json`
+   when its command line names none, and copies no user config over the kept home. While the host
+   still answers, a plain `quit` of the stopped run refuses and deletes nothing: end it with `start
+   --run <id>`, then `quit`. Every `start` deletes each other run folder untouched for over a day
+   whose app is not running, a kept run's included. `.drive/` is git-ignored.
 
 A page edit hot reloads into a running run. A main-process edit needs `restart`, which keeps the
 temp home and the start flags and does not copy the user config again, so a check that something
@@ -94,10 +97,14 @@ build; the self-test also releases when its child closes, and a packaged drive s
 lock. A start waits while a live pid holds it, printing `Waiting for another dev start (pid
 <pid>) to finish`, clears a dead holder's lock, and after 120 s fails naming the lock's absolute
 path to delete when no start is running. `restart` and `quit` end a stuck run: `quit` runs beside the stuck command, and the CLI waits up to 60 s for
-the app to exit (time for a recording's encode), then terminates it; the app takes that SIGTERM as
-a second quit and exits without waiting further. Terminating skips any recorded pid whose process
-no longer carries the run's `WIGLEY_DRIVE_DIR` (a pid reused after a crash); on Windows it cannot
-check and terminates every live recorded pid.
+the app to exit (time for a recording's encode), then terminates it; an app still holding its quit
+takes that SIGTERM as a second quit and exits without waiting further. An app whose main loop a
+native modal holds, such as Electron's uncaught-exception dialog, takes no SIGTERM: the CLI fails
+naming its pids, and only `kill -9` ends it. Terminating skips any recorded pid whose process no
+longer carries the run's `WIGLEY_DRIVE_DIR` (a pid reused after a crash); on Windows it cannot
+check and terminates every live recorded pid. `start` refuses while a recorded app pid of the run
+is alive, so one home never holds two apps, even when that app has closed its drive server and
+answers nothing.
 
 A run folder holds `home/` (the app's home: config, plugin data, ui-state), `user-data/`
 (Chromium's profile), `screenshots/`, `videos/`, `app.log`, and `start.json` and `drive.json`

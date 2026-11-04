@@ -220,6 +220,8 @@ function startWorkflowPart(
     openS1,
     lastFlow,
     changeSettings,
+    runAction: (command: string) =>
+      handlers.get('runAction')?.({ sessionId: 's1', command }),
   };
 }
 
@@ -381,6 +383,7 @@ describe('workflowMainPart', () => {
   it.each<{
     name: string;
     saved: Partial<SessionFlow>;
+    actionFirst?: string;
     replay: AgentEvent[];
     expected: Partial<SessionFlow>;
   }>([
@@ -447,6 +450,13 @@ describe('workflowMainPart', () => {
       expected: { stage: 'planReady', turnRunning: true },
     },
     {
+      name: 'a countdown the user cancelled before the replay, a newer make',
+      saved: { stage: 'feature', planDir: PLAN_DIR },
+      actionFirst: 'cancelCountdown',
+      replay: [{ ...skill('wigley:make', PLAN_DIR), at: AFTER_SAVE }],
+      expected: { stage: 'make', planDir: PLAN_DIR },
+    },
+    {
       name: 'a make whose plan moved on, the read not hiding a later review',
       saved: {
         stage: 'make',
@@ -458,7 +468,7 @@ describe('workflowMainPart', () => {
     },
   ])(
     'replayOverASavedFlow_FoldsOnlyPastItsSave_StartsNoCountdown ($name)',
-    async ({ saved, replay, expected }) => {
+    async ({ saved, actionFirst, replay, expected }) => {
       const data = await savedFlowData(saved);
       const workflow = startWorkflowPart(
         { ...SETTINGS, autoClearAndMake: true },
@@ -467,6 +477,9 @@ describe('workflowMainPart', () => {
       await workflow.project.write(PLAN_FILE, PLAN);
       await workflow.openS1();
       await settled();
+      if (actionFirst !== undefined) {
+        await workflow.runAction(actionFirst);
+      }
 
       await workflow.replayBurst(replay);
       await settled();

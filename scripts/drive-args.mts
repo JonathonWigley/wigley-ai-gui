@@ -10,6 +10,8 @@ export type DriveInvocation =
       packaged: boolean;
       harness: DriveHarness;
       userConfig: boolean;
+      // Whether the command line named a flag beyond `--run`.
+      namesFlags: boolean;
       run: string | null;
     }
   | { kind: 'restart'; run: string | null }
@@ -221,6 +223,7 @@ export function parseDriveArgs(argv: string[]): DriveInvocation {
       packaged: flags.packaged,
       harness: harnessOf(flags.harness),
       userConfig: flags.userConfig,
+      namesFlags: flags.packaged || flags.harness !== null || flags.userConfig,
       run,
     };
   }

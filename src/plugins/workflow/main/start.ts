@@ -29,10 +29,15 @@ import { createFlowStore } from './flow-store';
 import { createPlanWatch } from './plan-watch';
 import { workflowSelfTestScript } from './selftest-script';
 
-// Where a fold's signal came from. Only 'live' stamps the flow's save time: the
-// time a replayed event is compared against says how far the flow has heard the
-// log, and neither a replay nor a read of the plan file adds to that.
+// Where a fold's signal came from. 'live' is a live event or a stage action
+// (Make in new session, Dismiss); only it stamps the flow's save time, which a
+// replayed event is compared against, so a replay of what it decided stays out
+// of the flow. Neither a replay nor a read of the plan file adds to that.
 type SignalOrigin = 'live' | 'replay' | 'planRead';
+
+// Where a change to a flow came from: a fold, or a countdown's Cancel or firing,
+// which says nothing of how far the flow has heard the log and stamps no time.
+type FlowChangeOrigin = SignalOrigin | 'countdown';
 
 type WorkflowApi = MainApi<
   typeof workflowManifest,
@@ -86,8 +91,9 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       { hostSessionId: string; projectDir: string }
     >();
     const turnEndedListeners = new Set<(sessionId: string) => void>();
-    // Sessions whose last turn end was replayed, until a live turn starts: the
-    // plan read such a turn causes settles after its replay, as a plain signal.
+    // Sessions whose last turn end was replayed, until a live turn starts or
+    // ends: the plan read such a turn causes settles after its replay, as a plain
+    // signal.
     const replayedTurnEnds = new Set<string>();
 
     const sendFlows = () => channel.send('flows', store.all());
@@ -130,7 +136,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
         : next;
     };
 
-    const putFlow = (next: SessionFlow, origin: SignalOrigin = 'live') => {
+    const putFlow = (next: SessionFlow, origin: FlowChangeOrigin) => {
       if (origin === 'live') {
         store.put(next);
       } else {
@@ -207,7 +213,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     function cancelCountdown(sessionId: string): void {
       const flow = store.get(sessionId);
       if (flow !== null && flow.countdownEndsAt !== null) {
-        putFlow({ ...flow, countdownEndsAt: null });
+        putFlow({ ...flow, countdownEndsAt: null }, 'countdown');
       }
     }
 
@@ -216,7 +222,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       if (flow === null || flow.countdownEndsAt === null) {
         return;
       }
-      putFlow({ ...flow, countdownEndsAt: null });
+      putFlow({ ...flow, countdownEndsAt: null }, 'countdown');
       const command = stageOf(flow)?.autoCommand;
       if (command === undefined) {
         return;

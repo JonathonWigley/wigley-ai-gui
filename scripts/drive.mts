@@ -21,14 +21,18 @@ import path from 'node:path';
 import { setTimeout as wait } from 'node:timers/promises';
 import {
   CLI_FORMS,
-  type DriveHarness,
   type DriveInvocation,
   parseDriveArgs,
 } from './drive-args.mts';
 import {
+  hostMayBeRunning,
   idleRunIds,
   QUIT_REMOVED_ENTRIES,
+  quitRefusal,
   type RunFolder,
+  type StartOptions,
+  startPlanOf,
+  startRefusal,
 } from './drive-runs.mts';
 import { isAlive, mayReleaseStartLock, takeStartLock } from './start-lock.mts';
 
@@ -51,12 +55,6 @@ interface DriveFile {
   pid: number;
 }
 
-interface StartOptions {
-  packaged: boolean;
-  harness: DriveHarness;
-  userConfig: boolean;
-}
-
 interface StartFile extends StartOptions {
   pid: number;
 }
@@ -71,15 +69,13 @@ type Reply =
 
 async function main(invocation: DriveInvocation): Promise<void> {
   if (invocation.kind === 'start') {
-    await start(invocation.run ?? newRunId(), invocation, true);
+    const runId = invocation.run ?? newRunId();
+    const plan = startPlanOf(invocation, keptStartOptions(runId));
+    await start(runId, plan.options, plan.copiesUserConfig);
   } else if (invocation.kind === 'restart') {
     await restart(currentRun(invocation.run));
   } else if (invocation.kind === 'quit') {
-    const runId = currentRun(invocation.run);
-    await stop(runId, { keepSessions: invocation.keepSessions });
-    if (!invocation.keepSessions) {
-      removeQuitEntries(runId);
-    }
+    await quit(currentRun(invocation.run), invocation.keepSessions);
   } else if (invocation.kind === 'help') {
     await printHelp(invocation.run);
   } else {
@@ -94,7 +90,8 @@ async function main(invocation: DriveInvocation): Promise<void> {
 // Starts the app into `.drive/<runId>/`, reusing its home when the folder
 // still holds one, and returns once the page is ready for keys. It first
 // deletes every other run folder gone idle (`idleRunIds`). `copyUserConfig` false
-// keeps the home's config as the run left it, on a restart. A dev start holds
+// keeps the home's config as the run left it, on a restart or a kept run's
+// start. Throws when an app the run recorded is still alive. A dev start holds
 // `.drive/start.lock` from spawn until `ready` reports the page load after the
 // dev server's startup reload, since every `electron-forge start` rewrites the
 // shared `.vite/build` and that reload reads its preload from there; a page
@@ -118,6 +115,10 @@ async function start(
   }
   if (running !== 'not running') {
     throw new Error(`Run ${runId} is already running`);
+  }
+  const refusal = startRefusal(runId, liveAppPids(runDir));
+  if (refusal !== null) {
+    throw new Error(refusal);
   }
   removeIdleRuns(runId);
   const userConfig =
@@ -389,6 +390,40 @@ async function sendAndPrint(
   console.log(JSON.stringify(reply.result, null, 2));
 }
 
+// What the run recorded at its start, when its folder still holds its home;
+// null otherwise.
+function keptStartOptions(runId: string): StartOptions | null {
+  const runDir = runDirOf(runId);
+  const isKept =
+    existsSync(path.join(runDir, 'home')) &&
+    existsSync(path.join(runDir, 'start.json'));
+  if (!isKept) {
+    return null;
+  }
+  const { packaged, harness, userConfig } = readStartFile(runId);
+  return { packaged, harness, userConfig };
+}
+
+// Stops the run's app and, unless `keepSessions`, deletes its scratch folders;
+// a plain quit of a run with no app and a live session host refuses instead,
+// deleting nothing.
+async function quit(runId: string, keepSessions: boolean): Promise<void> {
+  if (!keepSessions) {
+    const runDir = runDirOf(runId);
+    const refusal = quitRefusal(runId, {
+      liveAppPids: liveAppPids(runDir),
+      hostMayBeRunning: await hostMayBeRunning(runDir),
+    });
+    if (refusal !== null) {
+      throw new Error(refusal);
+    }
+  }
+  await stop(runId, { keepSessions });
+  if (!keepSessions) {
+    removeQuitEntries(runId);
+  }
+}
+
 // Stops the run's app, its hosted processes left running, then starts it again
 // into the same run folder with the flags its start recorded.
 async function restart(runId: string): Promise<void> {
@@ -400,10 +435,11 @@ async function restart(runId: string): Promise<void> {
 // Asks the run's app to quit and waits for it and the process `start` spawned
 // to exit; when they do not exit in time, as when the app's main process is
 // itself stuck, its processes are terminated instead (an app still holding
-// its quit takes that SIGTERM as a second quit and exits). A recorded pid
-// that is alive but no longer the run's, as after a crash left the files
-// behind and the pid was reused, is skipped and named. `quitArgs` are the `quit`
-// command's.
+// its quit takes that SIGTERM as a second quit and exits). An app whose main
+// loop a native modal holds takes no signal, so this throws naming its pids. A
+// recorded pid that is alive but no longer the run's, as after a crash left the
+// files behind and the pid was reused, is skipped and named. `quitArgs` are the
+// `quit` command's.
 async function stop(
   runId: string,
   quitArgs: { keepSessions?: boolean },
@@ -431,7 +467,7 @@ async function stop(
     }
     if (!(await waitForExit(pids))) {
       throw new Error(
-        `Run ${runId} is still running after SIGTERM: pids ${pids.filter(isAlive).join(', ')}`,
+        `Run ${runId} is still running after SIGTERM, as when a native dialog holds its main loop: kill -9 ${pids.filter(isAlive).join(' ')}`,
       );
     }
   }
@@ -469,8 +505,12 @@ function runFolderOf(runId: string): RunFolder {
     (entry) => statSync(path.join(runDir, entry)).mtimeMs,
   );
   const lastUsedMs = Math.max(statSync(runDir).mtimeMs, ...entryTimes);
-  const isLive = recordedPids(runDir).some((pid) => isRunProcess(pid, runDir));
-  return { id: runId, lastUsedMs, isLive };
+  return { id: runId, lastUsedMs, isLive: liveAppPids(runDir).length > 0 };
+}
+
+function liveAppPids(runDir: string): number[] {
+  const pids = new Set(recordedPids(runDir));
+  return [...pids].filter((pid) => isRunProcess(pid, runDir));
 }
 
 // The pids the run's `start.json` and `drive.json` record; none for a file

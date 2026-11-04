@@ -107,7 +107,8 @@ its stage: Clear & make's own clear must not reset plan ready. `sessions.ended` 
 the session's flow.
 
 A re-attach replays its process's whole log, each event flagged `replayed`, over the saved flow. `flows.json` holds each
-flow's save time, stamped by a change from a live event or an action, not by a plan read or a replay. A replayed event
+flow's save time, stamped by a change from a live event or from Make in new session or Dismiss, not by a plan read, a
+replay or a countdown's Cancel or firing. A replayed event
 at or before that time is already in the flow, so it updates only the running turn and subagents; a later one, from a
 turn that ended while the app was closed, folds as usual. A flow saved without the time counts as saved when it loaded.
 
