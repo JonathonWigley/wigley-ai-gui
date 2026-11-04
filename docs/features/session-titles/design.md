@@ -79,25 +79,26 @@ dialog open with the problem shown.
 
 ## Row status
 
-A row's **activity** is the short state drawn at its trailing end, on the title's line: a status
-dot. Its word appears only in the row's tooltip, after the folder label and before the status. Any
+A row's **activity** is the short state drawn at its trailing end, on the title's line: a label
+holding its word, capitalized. A state the user should act on takes a Tag; any other is plain text.
+The word also appears in the row's tooltip, after the folder label and before the status. Any
 page plugin sets one per session under its own source id through the `sessions` page
 export `setActivity(sessionId, sourceId, activity | null)`; the row shows the highest `rank` of the
 session's activities, the last set winning a tie, and nothing when it has none. A new state is a
 new registration in the plugin that knows it, with no edit to sessions.
 
-| Activity | Set by | Rank | Dot tone | Shows while |
+| Activity | Set by | Rank | Label | Shows while |
 |---|---|---|---|---|
-| needs you | chat (a permission prompt waits); forms and primer (a form is open) | 40 | `attention` | the wait lasts |
-| error | chat | 30 | `error` | the process stopped while a turn ran or with an error, until the user views the session or sends a message |
-| working | chat | 20 | `running`, pulsing | a turn runs |
-| done | chat | 10 | `success` | the turn ended while the session was not the focused pane's, until the user views it or sends a message |
+| needs you | chat (a permission prompt waits); forms and primer (a form is open) | 40 | `attention` Tag | the wait lasts |
+| error | chat | 30 | `error` Tag | the process stopped while a turn ran or with an error, until the user views the session or sends a message |
+| working | chat | 20 | `status-running` text, pulsing | a turn runs |
+| done | chat | 10 | `fg-tertiary` text | the turn ended while the session was not the focused pane's, until the user views it or sends a message |
 
 Idle draws nothing. "Views the session" is the session becoming the focused pane's session. Clearing the
 session's conversation, sending a message and the next turn starting also clear a done or error. A turn
-that ends while its session is the focused pane's skips done. While a row shows an activity, the
-default layout leaves out the row's separate attention dot (`marked`), which the needs you dot
-covers. Other tabs' status lines (a form's or primer's name and count) still draw on the row's
+that ends while its session is the focused pane's skips done. A `marked` row with no activity draws
+the needs you label; while a row shows an activity, the default layout draws that activity's label alone.
+Other tabs' status lines (a form's or primer's name and count) still draw on the row's
 second line; chat no longer sends one.
 
 Activities live in the page and start blank on a page load.

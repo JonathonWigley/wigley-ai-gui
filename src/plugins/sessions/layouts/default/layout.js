@@ -5,10 +5,10 @@
 // hint over its groups, each group a project's header (name, count, star and
 // grip) over its rows,
 // each row a compact card of two lines: its title (`New Chat` for a row with no
-// title; no harness name) with its activity's dot or, with no
-// activity, its attention dot, and its on-screen mark, over a footer line that
-// never wraps, holding its status then other plugins' row parts
-// (`contributedParts`),
+// title; no harness name) with its activity's label or, with no
+// activity, a needs you label for its `marked` round, and its on-screen mark,
+// over a footer line that never wraps, holding its status then other plugins'
+// row parts (`contributedParts`),
 // each chat pane's frame and focus edges, the tab bar's prompts around its
 // strip, other plugins' bar parts (`contributedParts`) after them, then its
 // close prompt and pane controls, each tab's icon with no label, and the
@@ -16,6 +16,29 @@
 // class names its `layout.css` styles.
 
 const UNTITLED_ROW_TEXT = 'New Chat';
+
+/** @type {NonNullable<import('../layout').SessionRowInput['activity']>} */
+const MARKED_ROW_ACTIVITY = { word: 'needs you', tone: 'attention' };
+
+// A state the user should act on takes a Tag; any other is plain text.
+/**
+ * @param {HTMLElement} parent
+ * @param {NonNullable<import('../layout').SessionRowInput['activity']>} activity
+ * @param {Parameters<import('../layout').CompleteLayout['row']>[2]} kit
+ */
+function drawActivityLabel(parent, { word, tone }, kit) {
+  const text = word.charAt(0).toUpperCase() + word.slice(1);
+  if (tone === 'attention' || tone === 'warning' || tone === 'error') {
+    kit.tag(parent, text, tone);
+    return;
+  }
+  kit.el(
+    parent,
+    'span',
+    `session-row-activity session-row-activity--${tone}`,
+    text,
+  );
+}
 
 /** @type {import('../layout').CompleteLayout} */
 const layout = {
@@ -54,10 +77,10 @@ const layout = {
     });
     element.classList.add('session-row');
     element.classList.toggle('is-on-screen', input.onScreen);
-    if (input.activity !== null) {
-      kit.statusDot(kit.rowTrailing(element), input.activity.tone);
-    } else if (input.marked) {
-      kit.statusDot(kit.rowTrailing(element), 'attention');
+    const activity =
+      input.activity ?? (input.marked ? MARKED_ROW_ACTIVITY : null);
+    if (activity !== null) {
+      drawActivityLabel(kit.rowTrailing(element), activity, kit);
     }
     const foot = kit.el(element, 'div', 'session-row-foot');
     if (input.status !== null) {

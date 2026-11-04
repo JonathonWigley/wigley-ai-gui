@@ -43,9 +43,23 @@ function cellText(row: FakeElement, className: string): string | null {
   return findAll(row, className)[0]?.textContent ?? null;
 }
 
-// The status of each dot one row draws.
-function dotStatuses(row: FakeElement): (string | undefined)[] {
-  return findAll(row, 'ui-dot').map((dot) => dot.dataset.status);
+// The class of the activity label one row draws and its text, null for none.
+function activityLabel(row: FakeElement): {
+  className: string;
+  text: string;
+} | null {
+  for (const className of [
+    'ui-tag--attention',
+    'ui-tag--error',
+    'session-row-activity--running',
+    'session-row-activity--success',
+  ]) {
+    const text = cellText(row, className);
+    if (text !== null) {
+      return { className, text };
+    }
+  }
+  return null;
 }
 
 beforeEach(() => {
@@ -215,7 +229,7 @@ describe('session rows', () => {
     marked: boolean;
     activity: RowActivity | null;
     label: string;
-    dots: string[];
+    expected: { className: string; text: string } | null;
   }>([
     {
       case: 'agent title',
@@ -223,7 +237,7 @@ describe('session rows', () => {
       marked: false,
       activity: null,
       label: 'Fix the build',
-      dots: [],
+      expected: null,
     },
     {
       case: 'no title',
@@ -231,7 +245,7 @@ describe('session rows', () => {
       marked: false,
       activity: null,
       label: 'New Chat',
-      dots: [],
+      expected: null,
     },
     {
       case: 'working',
@@ -239,7 +253,26 @@ describe('session rows', () => {
       marked: false,
       activity: WORKING,
       label: 'New Chat',
-      dots: ['running'],
+      expected: {
+        className: 'session-row-activity--running',
+        text: 'Working',
+      },
+    },
+    {
+      case: 'done',
+      agent: null,
+      marked: false,
+      activity: { word: 'done', tone: 'success', rank: 10 },
+      label: 'New Chat',
+      expected: { className: 'session-row-activity--success', text: 'Done' },
+    },
+    {
+      case: 'error',
+      agent: null,
+      marked: false,
+      activity: { word: 'error', tone: 'error', rank: 30 },
+      label: 'New Chat',
+      expected: { className: 'ui-tag--error', text: 'Error' },
     },
     {
       case: 'marked with an activity',
@@ -247,7 +280,10 @@ describe('session rows', () => {
       marked: true,
       activity: WORKING,
       label: 'New Chat',
-      dots: ['running'],
+      expected: {
+        className: 'session-row-activity--running',
+        text: 'Working',
+      },
     },
     {
       case: 'marked alone',
@@ -255,11 +291,11 @@ describe('session rows', () => {
       marked: true,
       activity: null,
       label: 'New Chat',
-      dots: ['attention'],
+      expected: { className: 'ui-tag--attention', text: 'Needs you' },
     },
   ])(
-    'sessionsView_Row_DrawsTitleOrNewChatAndActivityDot ($case)',
-    ({ agent, marked, activity, label, dots }) => {
+    'sessionsView_Row_DrawsTitleOrNewChatAndActivityLabel ($case)',
+    ({ agent, marked, activity, label, expected }) => {
       const { view, sideBar } = sessionsViewSetup();
       view.render(titledState(agent, marked));
 
@@ -267,7 +303,7 @@ describe('session rows', () => {
 
       const [row] = drawnRows(sideBar);
       expect(cellText(row, 'ui-row-label')).toBe(label);
-      expect(dotStatuses(row)).toEqual(dots);
+      expect(activityLabel(row)).toEqual(expected);
     },
   );
 
@@ -351,7 +387,10 @@ describe('session rows', () => {
     view.setActivity('s1', 'chat', WORKING);
     view.render(stateOf(['s1'], 's1'));
 
-    expect(dotStatuses(drawnRows(sideBar)[0])).toEqual(['running']);
+    expect(activityLabel(drawnRows(sideBar)[0])).toEqual({
+      className: 'session-row-activity--running',
+      text: 'Working',
+    });
   });
 
   it('sessionsView_RowRemoved_DropsItsActivities', () => {
@@ -362,6 +401,6 @@ describe('session rows', () => {
     view.render(stateOf([], null));
     view.render(stateOf(['s1'], 's1'));
 
-    expect(dotStatuses(drawnRows(sideBar)[0])).toEqual([]);
+    expect(activityLabel(drawnRows(sideBar)[0])).toBeNull();
   });
 });

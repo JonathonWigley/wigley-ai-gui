@@ -46,7 +46,7 @@ so the same hands work in both tools.
   session from `Space k n` loads into the focused pane.
 - A click inside a pane focuses it.
 - A round for a session in an unfocused pane takes over that pane and leaves focus where it is.
-  The row keeps its attention dot until the user focuses that pane. Focus moving on its own would
+  The row keeps its Needs you label until the user focuses that pane. Focus moving on its own would
   send the user's typing to the wrong session.
 
 ## Splitting, the picker and closing

@@ -46,8 +46,8 @@ import type { BaseKit, DotStatus } from '../../../shared/page/layout-host/kit';
 // One session row. `title` is the session's title as the row shows it (the user's, else the agent's, else the first
 // message cut to the title length), null for none, which `default` draws as `New Chat`; `label` is the session's folder label (`gamma 2`); `harness` is
 // the harness's name, '' for none; `marked` is true while a round waits unopened; `activity` is what the session is
-// doing, its word and the tone of its dot, null for none; `default` draws the dot alone, and no separate `marked` dot
-// while it is set; `status` starts the row's second line, null for none, and the contributed parts follow it on that line, which `default` never wraps; `onScreen` is true while the session shows in a pane other than
+// doing, its word and its tone, null for none; `default` draws the word as a label, a Tag for attention, warning and
+// error, and draws a needs you label for `marked` only while no activity is set; `status` starts the row's second line, null for none, and the contributed parts follow it on that line, which `default` never wraps; `onScreen` is true while the session shows in a pane other than
 // the focused one.
 export interface SessionRowInput {
   sessionId: string;

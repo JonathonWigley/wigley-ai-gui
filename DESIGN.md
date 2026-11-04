@@ -188,14 +188,14 @@ means something.
 
 - **Durations:** `duration-fast` (hover, press), `duration-base` (small things opening and
   closing), `duration-slow` (panels, sheets, the composer), `duration-pulse` (one cycle of a looping
-  agent-state pulse, such as a session row's running dot; slow enough to read as breathing, not flashing).
+  agent-state pulse, such as a session row's Working label; slow enough to read as breathing, not flashing).
 - **Easing:** `ease-out` entering, `ease-in` leaving. No bounce and no overshoot.
 - **What moves:** motion answers a user action or reports agent state (the streaming indicator, a
-  session row's pulsing running dot, a tool step settling from running to done). Content does not animate in, and nothing moves on its
+  session row's pulsing Working label, a tool step settling from running to done). Content does not animate in, and nothing moves on its
   own.
 - **Reduced motion:** under `prefers-reduced-motion` `duration-fast`, `duration-base` and
   `duration-slow` all take `duration-instant` (`1ms` in Mocha) and the streaming indicator and the
-  pulsing dot are static.
+  pulsing Working label are static.
 - **A floating panel fades in on open** (`openFloatingPanel`) over `duration-base`; showing a page
   or mode that holds an open panel does not fade it again, and closing is instant.
 
@@ -352,7 +352,7 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   tree, the Primer tab's tasks and items columns), the pane without focus marks itself `is-pane-inactive` and its selected
   row takes `list-inactive-selection-background` instead, so the pane the keys act on reads at a glance.
   Sessions mode's rows are compact cards, `card-background` under a `card-border` hairline with `radius-md`,
-  `space-1` apart within a group: the title and activity's dot on the first line, and a second line holding the status then other
+  `space-1` apart within a group: the title and activity's label on the first line (a Tag for Needs you and Error, `status-running` text for Working, `fg-tertiary` text for Done), and a second line holding the status then other
   plugins' row parts on one line that never wraps, the run time and the cache mark at its end, gone while empty. Hover
   strengthens the border to `border-strong`, and the selected card takes `list-active-background` with an
   `accent-tint-strong` border.

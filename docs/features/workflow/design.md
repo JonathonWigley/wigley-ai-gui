@@ -47,7 +47,7 @@ Built, in `src/plugins/workflow/`, on the clear, the agent events and the row pa
 | review | `wigley:review` starts in make, or the plan's Run log gains a review round logged after make started (Resume make from review stays in make until the next round) | Review, running or paused | `Review · running · round 2` | Resume make, Open plan |
 | closed | in make or review, a plan folder that was read goes missing (`wigley:make` naming a folder not written yet waits in make for its `plan.md`) | Close, done | `Close · done · 9/9` | Retro, Dismiss |
 
-Running means the flow is busy: a turn or a main-agent subagent runs. Paused means it is not. A crash and an agent waiting on an answer both read as paused, and the row's attention dot marks a waiting round.
+Running means the flow is busy: a turn or a main-agent subagent runs. Paused means it is not. A crash and an agent waiting on an answer both read as paused, and the row's Needs you label marks a waiting round.
 
 - **Clear & make** clears the session (the row and its tabs stay, a new conversation starts) and sends
   `/wigley:make <plan folder>`. It is disabled while the session is busy: a turn or a main-agent subagent runs.

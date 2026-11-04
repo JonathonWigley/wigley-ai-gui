@@ -375,8 +375,8 @@ round; primer: an open primer), since main, not the page, decides.
   bar, which moves with its session between panes, through `addBarPart`; the usage-tab-line plugin's per-session line
   is one.
   Information about one session goes in a session part, not on a shared bar.
-- **A row activity** is the short state a session's row shows beside its title — a status dot, with its word (working,
-  needs you, done, error) in the row's tooltip. A page plugin sets one per session under its own source id through the
+- **A row activity** is the short state a session's row shows beside its title — a label holding its word (working,
+  needs you, done, error), also in the row's tooltip. A page plugin sets one per session under its own source id through the
   `sessions` page export `setActivity`, and the row shows the highest rank, so a new state is a registration in the
   plugin that knows it, never an edit to sessions. A **session title** has three sources (user, agent, first message) kept on the row;
   the agent sets its own through the `set_session_title` tool (`docs/features/session-titles/design.md`).

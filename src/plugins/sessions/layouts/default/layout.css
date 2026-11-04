@@ -170,7 +170,7 @@
 
 /* Each row is a compact card, so its title, status and parts read as one
    session: `card-background` under a `card-border` hairline with `radius-md`,
-   the title and activity's dot on the first line and the status and parts on
+   the title and activity's label on the first line and the status and parts on
    a second line under them, `space-1` above and below and `space-1_5` at the
    sides. Hover strengthens the border; the selected card keeps the row
    primitive's accent fill, and the keyboard cursor its focus ring. */
@@ -228,7 +228,7 @@
 
 /* A row's first line never wraps: the title (`New Chat` for a row with no
    title), then the trailing cell at the line's end, holding the activity's
-   dot or the attention dot. The trailing cell keeps its full width and never
+   label. The trailing cell keeps its full width and never
    shrinks. The title ellipsizes in the rest and never goes under one character
    and its ellipsis. The footer takes the whole second line. Each part has its
    own column, so a row missing its trailing cell keeps the title in place. The
@@ -255,26 +255,39 @@
   margin-left: var(--wg-space-2);
 }
 
-/* A running activity's dot pulses: it reports the agent at work. Its cycle is
-   `duration-pulse`, not the transition durations, which pulse fast enough to
-   read as flashing. Under reduced motion it is static. */
-@keyframes session-dot-pulse {
+/* An activity with no action for the user: quiet text sized to match the Tag
+   the others take. */
+.session-row-activity {
+  color: var(--wg-fg-tertiary);
+  font-size: var(--wg-text-11);
+  font-weight: var(--wg-weight-medium);
+  line-height: var(--wg-leading-tight);
+  white-space: nowrap;
+}
+
+/* A running activity's label takes the running colour and pulses: it reports
+   the agent at work. Its cycle is `duration-pulse`, not the transition
+   durations, which pulse fast enough to read as flashing. Under reduced motion
+   it is static. */
+@keyframes session-activity-pulse {
   0%,
   100% {
     opacity: 1;
   }
 
   50% {
-    opacity: 0.35;
+    opacity: 0.6;
   }
 }
 
-.session-row .ui-dot[data-status='running'] {
-  animation: session-dot-pulse var(--wg-duration-pulse) ease-in-out infinite;
+.session-row-activity--running {
+  color: var(--wg-status-running);
+  animation: session-activity-pulse var(--wg-duration-pulse) ease-in-out
+    infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .session-row .ui-dot[data-status='running'] {
+  .session-row-activity--running {
     animation: none;
   }
 }
