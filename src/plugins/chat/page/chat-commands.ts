@@ -89,6 +89,7 @@ export interface ChatCommandDeps {
   signIn: SignInDialog;
   slashCommands: Pick<SlashCommands, 'match'>;
   viewer: ImageViewer;
+  writeClipboard(text: string): Promise<void>;
   toast(text: string, tone: ToastTone): void;
   log: Log;
 }
@@ -176,6 +177,20 @@ export function chatCommandHandlers(
       moveEntry(session, 1, log);
     }),
     prevEntry: inSession((session) => moveEntry(session, -1, log)),
+    nextMessage: inSession((session) => moveMessage(session, 1, log)),
+    prevMessage: inSession((session) => moveMessage(session, -1, log)),
+    toggleRange: inSession((session) => {
+      session.entries.toggleRange();
+      log('chat', 'toggled the range');
+    }),
+    cancelRange: inSession((session) => {
+      log(
+        'chat',
+        session.entries.cancelRange()
+          ? 'cancelled the range'
+          : `no range to cancel in ${session.name}`,
+      );
+    }),
     latestEntry: inSession((session) => {
       session.entries.latest();
       log('chat', 'following the latest entry');
@@ -230,10 +245,10 @@ export function chatCommandHandlers(
           : `${result} ${kind} entry`,
       );
     }),
-    allowPermission: inSession((session) => {
+    allowOrCopy: inSession((session) => {
       const pending = oldestPendingPermission(session.state.entries);
       if (pending === null) {
-        log('chat', `no pending permission in ${session.name}`);
+        copySelection(deps, session);
         return;
       }
       deps.permissions.allow(session, pending);
@@ -587,6 +602,11 @@ function moveEntry(session: ChatSession, step: 1 | -1, log: Log) {
   log('chat', focusedLine(focused, session.name));
 }
 
+function moveMessage(session: ChatSession, step: 1 | -1, log: Log) {
+  const focused = session.entries.moveToMessage(step);
+  log('chat', focusedLine(focused, session.name));
+}
+
 function focusedLine(stop: EntryListStop | null, sessionName: string): string {
   if (stop === null) {
     return `no entries in ${sessionName}`;
@@ -597,6 +617,30 @@ function focusedLine(stop: EntryListStop | null, sessionName: string): string {
   return stop.kind === 'activity'
     ? 'focused activity line'
     : `focused ${stop.entry.kind} entry`;
+}
+
+// Writes the range's source, else the cursor's, to the clipboard. A write that
+// lands ends the range; one that fails leaves it.
+function copySelection(deps: ChatCommandDeps, session: ChatSession) {
+  const { log } = deps;
+  const selected = session.entries.selectedSource();
+  if (selected === null) {
+    log('chat', 'nothing to copy');
+    return;
+  }
+  const { text, blockCount } = selected;
+  const blocks = blockCount === 1 ? '1 block' : `${blockCount} blocks`;
+  void deps.writeClipboard(text).then(
+    () => {
+      session.entries.cancelRange();
+      log('chat', `copied ${blocks} in ${session.name}`);
+      deps.toast(`Copied ${blocks}`, 'success');
+    },
+    (error: unknown) => {
+      log('chat', `copy failed: ${errorText(error)}`);
+      deps.toast('Copy failed', 'error');
+    },
+  );
 }
 
 // Logs e.g. `scrolled the transcript up a line; not following`.

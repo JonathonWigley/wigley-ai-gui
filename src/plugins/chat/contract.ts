@@ -479,6 +479,8 @@ export interface ChatSidePart {
 // `focusedEntry` is the visible Chat tab's focused stop's slot element (an
 // entry, an activity line or a pending row); null with no visible Chat tab, no
 // focused stop, or while a composer part's stop holds the cursor.
+// `focusedBlock` is the visible Chat tab's cursor block element, inside that
+// slot; null in the same cases and on a stop with no blocks.
 // `activeTime` is the session's clock as main last sent it, null for a session
 // the page does not hold; read the total at a moment with `activeMsAt`.
 export interface ChatPageExports {
@@ -488,6 +490,7 @@ export interface ChatPageExports {
   addStatusPart(part: ChatStatusPart): Disposable;
   addSidePart(part: ChatSidePart): Disposable;
   focusedEntry(): HTMLElement | null;
+  focusedBlock(): HTMLElement | null;
   activeTime(sessionId: string): ActiveTime | null;
 }
 

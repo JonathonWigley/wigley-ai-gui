@@ -263,6 +263,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       addStatusPart: (part) => statusParts.add(part),
       addSidePart: (part) => sideParts.add(part),
       focusedEntry: () => view.focusedEntry(),
+      focusedBlock: () => view.focusedBlock(),
       activeTime: (sessionId) => view.activeTime(sessionId),
     };
     return {
@@ -277,6 +278,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
           signIn,
           slashCommands,
           viewer,
+          writeClipboard: (text) => navigator.clipboard.writeText(text),
           toast: services.toast,
           log: services.log,
         }),

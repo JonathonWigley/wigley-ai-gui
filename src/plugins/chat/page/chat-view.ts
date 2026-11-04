@@ -75,6 +75,10 @@ export interface ChatView {
   // Chat tab, no focused stop, or while a composer part's stop holds the
   // cursor.
   focusedEntry(): HTMLElement | null;
+  // The visible Chat tab's cursor block element; null with no visible Chat
+  // tab, on a stop with no blocks, or while a composer part's stop holds the
+  // cursor.
+  focusedBlock(): HTMLElement | null;
   // The session's clock as main last sent it, from the moment its tab starts
   // being added; null for a session the view does not hold.
   activeTime(sessionId: string): ActiveTime | null;
@@ -101,9 +105,13 @@ export interface ChatSession extends SessionRef {
   entries: Pick<
     EntryList,
     | 'move'
+    | 'moveToMessage'
     | 'isAtLastStop'
     | 'latest'
     | 'first'
+    | 'toggleRange'
+    | 'cancelRange'
+    | 'selectedSource'
     | 'focused'
     | 'toggleFocused'
     | 'scrollBy'
@@ -551,6 +559,12 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       return tab === undefined || tab.stop.holding() !== null
         ? null
         : tab.entries.focusedElement();
+    },
+    focusedBlock: () => {
+      const tab = visibleTab();
+      return tab === undefined || tab.stop.holding() !== null
+        ? null
+        : tab.entries.focusedBlock();
     },
     activeTime: (sessionId) => activeTimes.get(sessionId) ?? null,
     session: (sessionId) => asSession(tabs.get(sessionId)),

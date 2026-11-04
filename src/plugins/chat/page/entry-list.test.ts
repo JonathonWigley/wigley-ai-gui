@@ -69,7 +69,7 @@ function fancyLayout(
 
 // Names a key hint and draws a card through the kit, then throws.
 const anchorsThenThrows: AnyBuilder = (parent, _input, kit) => {
-  kit.keyHint(parent, 'allowPermission');
+  kit.keyHint(parent, 'allowOrCopy');
   kit.card(parent);
   throw new Error('boom');
 };
@@ -164,10 +164,7 @@ const rows: Row[] = [
     ],
     logs: ['[chat] layout fancy tool entry failed: boom'],
     toasts: ['Chat layout fancy: tool entries drawn with default'],
-    disposedAnchors: [
-      chatCommand('allowPermission'),
-      chatCommand('allowPermission'),
-    ],
+    disposedAnchors: [chatCommand('allowOrCopy'), chatCommand('allowOrCopy')],
   },
   {
     name: 'default throws while default is shown',
@@ -194,7 +191,7 @@ const rows: Row[] = [
       '[chat] default layout notice entry failed: broken default',
     ],
     toasts: ['Chat layout fancy: notice entries drawn as bare lines'],
-    disposedAnchors: [chatCommand('allowPermission')],
+    disposedAnchors: [chatCommand('allowOrCopy')],
   },
   {
     name: 'update throws under the shown layout',

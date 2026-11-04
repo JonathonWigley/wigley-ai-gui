@@ -134,7 +134,8 @@ interface DockPart {
 }
 
 // The status line's parts holding keys, each anchored once in `chat.chat`:
-// the type hint (`i` and `a`), the running indicator (dot and interrupt
+// the type hint (`i` and `a`, then the page keys that read the entries: `J`,
+// `K`, `V` and `y`), the running indicator (dot and interrupt
 // keys), Send, and a key span per pick command, which the first chip running
 // it holds.
 interface StatusLineParts {
@@ -439,7 +440,18 @@ function createStatusLineParts(
   const typeKey = element('span', 'chat-type-key');
   const appendKey = element('span', 'chat-type-key');
   const typeHint = element('span', 'chat-type-hint');
-  typeHint.append(typeKey, appendKey);
+  const nextMessageKey = element('span', 'chat-type-key');
+  const prevMessageKey = element('span', 'chat-type-key');
+  const rangeKey = element('span', 'chat-type-key');
+  const copyKey = element('span', 'chat-type-key');
+  typeHint.append(
+    typeKey,
+    appendKey,
+    nextMessageKey,
+    prevMessageKey,
+    rangeKey,
+    copyKey,
+  );
   const interruptKey = element('span', 'chat-running-key');
   const sendNowKey = element('span', 'chat-running-key');
   const running = element('span', 'chat-running');
@@ -467,6 +479,22 @@ function createStatusLineParts(
     deps.keys.anchor(appendKey, chatCommand('appendBox'), {
       ...scope,
       label: 'to append',
+    }),
+    deps.keys.anchor(nextMessageKey, chatCommand('nextMessage'), {
+      ...scope,
+      label: true,
+    }),
+    deps.keys.anchor(prevMessageKey, chatCommand('prevMessage'), {
+      ...scope,
+      label: true,
+    }),
+    deps.keys.anchor(rangeKey, chatCommand('toggleRange'), {
+      ...scope,
+      label: 'range',
+    }),
+    deps.keys.anchor(copyKey, chatCommand('allowOrCopy'), {
+      ...scope,
+      label: 'to copy or allow',
     }),
     deps.keys.anchor(sendKey, chatCommand('send'), scope),
   ];
