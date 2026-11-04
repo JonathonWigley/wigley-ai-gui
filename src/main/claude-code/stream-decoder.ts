@@ -121,6 +121,16 @@ const WRITE_TOOL_PATHS: Readonly<Record<string, string>> = {
   MultiEdit: 'file_path',
   NotebookEdit: 'notebook_path',
 };
+// The context-size tag a `modelUsage` key can end in: `claude-opus-5-5[1m]`.
+const MODEL_KEY_SUFFIX = /\[[^\]]*\]$/;
+
+// What the decoder last knows of a running subagent. `sentWindow` is the
+// context window its last `agentReplied` carried.
+interface SubagentFacts {
+  model: string;
+  contextTokens: number | null;
+  sentWindow: number | null;
+}
 
 function emptyLine(): DecodedLine {
   return {
@@ -160,6 +170,15 @@ function commandNames(init: Json): string[] {
 // The string items of a list field; [] when the field is no list.
 function stringItems(value: unknown): string[] {
   return asArray(value).filter((item) => typeof item === 'string');
+}
+
+// The context a reply's `usage` shows: its input side, a missing field counting 0.
+function replyContextTokens(usage: Json): number {
+  return (
+    (numberOrNull(usage.input_tokens) ?? 0) +
+    (numberOrNull(usage.cache_creation_input_tokens) ?? 0) +
+    (numberOrNull(usage.cache_read_input_tokens) ?? 0)
+  );
 }
 
 // The agent whose line `event` is: a subagent's lines carry its Agent call's id.
@@ -250,6 +269,10 @@ export function createStreamDecoder(
   // Each subagent's reply spends by message id, by its Agent call id: null for
   // a reply whose model has no list price.
   const replySpends = new Map<string, Map<string, number | null>>();
+  // Each subagent with a known model, by its Agent call id, until it ends.
+  const subagentFacts = new Map<string, SubagentFacts>();
+  // The context windows results have named, by `modelUsage` key.
+  const modelWindows = new Map<string, number>();
   let rawCount = 0;
   let turnCount = 0;
   // The events entry gathered events join: the first gathered event opens the
@@ -376,9 +399,64 @@ export function createStreamDecoder(
     return total;
   }
 
+  // Every window a result's `modelUsage` names. A `[…]` key with no plain key
+  // beside it replaces the plain key's window: the model's window has changed.
+  function learnWindows(modelUsage: Json) {
+    for (const [key, usage] of Object.entries(modelUsage)) {
+      const window = asJson(usage).contextWindow;
+      if (typeof window !== 'number') {
+        continue;
+      }
+      modelWindows.set(key, window);
+      const plainKey = key.replace(MODEL_KEY_SUFFIX, '');
+      if (!Object.hasOwn(modelUsage, plainKey)) {
+        modelWindows.delete(plainKey);
+      }
+    }
+  }
+
+  // The window of the entry keyed `model`, else of the entry keyed `model` with
+  // a `[…]` suffix; null when no result named either.
+  function windowFor(model: string): number | null {
+    const exact = modelWindows.get(model);
+    if (exact !== undefined) {
+      return exact;
+    }
+    for (const [key, window] of modelWindows) {
+      if (key.replace(MODEL_KEY_SUFFIX, '') === model) {
+        return window;
+      }
+    }
+    return null;
+  }
+
+  // Keeps a subagent's latest model and context and reports them with its spend
+  // so far and its model's window.
+  function reportSubagentFacts(
+    agentId: string,
+    model: string,
+    contextTokens: number | null,
+    out: DecodedLine,
+  ) {
+    const contextWindow = windowFor(model);
+    subagentFacts.set(agentId, {
+      model,
+      contextTokens,
+      sentWindow: contextWindow,
+    });
+    out.agentEvents.push({
+      type: 'agentReplied',
+      agentId,
+      model,
+      spendUsd: spendOf(agentId),
+      contextTokens,
+      contextWindow,
+    });
+  }
+
   // A subagent's model reply records its spend under its message id (Claude
   // sends one line per content block, each with the message's usage) and
-  // reports the agent's model and spend so far.
+  // reports the agent's model, spend so far and context.
   function reportSubagentReply(event: Json, message: Json, out: DecodedLine) {
     const agentId = event.parent_tool_use_id;
     const model = message.model;
@@ -392,16 +470,9 @@ export function createStreamDecoder(
     }
     const spends = replySpends.get(agentId) ?? new Map<string, number | null>();
     replySpends.set(agentId, spends);
-    spends.set(
-      asString(message.id),
-      replySpendUsd(model, asJson(message.usage)),
-    );
-    out.agentEvents.push({
-      type: 'agentReplied',
-      agentId,
-      model,
-      spendUsd: spendOf(agentId),
-    });
+    const usage = asJson(message.usage);
+    spends.set(asString(message.id), replySpendUsd(model, usage));
+    reportSubagentFacts(agentId, model, replyContextTokens(usage), out);
   }
 
   function keepWritePath(id: string, name: string, input: Json) {
@@ -418,13 +489,14 @@ export function createStreamDecoder(
   // on it: the agent finishes first, then its calls breadth-first, each level
   // in its parents' order and then in spawn order under each parent. A launched
   // background call waits for its own end event. Each ending agent's open tool
-  // calls fail just ahead of its `agentFinished`.
+  // calls fail just ahead of its `agentFinished`, and its kept facts go.
   function finishAgent(agentId: string, isOk: boolean, out: DecodedLine) {
     const ending = [agentId];
     for (let index = 0; index < ending.length; index += 1) {
       const endingId = ending[index];
       pendingAgents.delete(endingId);
       launchedAgents.delete(endingId);
+      subagentFacts.delete(endingId);
       failOpenTools(endingId, out);
       out.agentEvents.push({
         type: 'agentFinished',
@@ -457,9 +529,9 @@ export function createStreamDecoder(
   }
 
   // A pending Agent call's `tool_result` is its subagent's end, except a
-  // background call's launch receipt, which leaves it running until its end
-  // event. Any other paired result finishes its tool call, and an ok result of
-  // a write call reports its file written. The receipt check
+  // background call's launch receipt, which reports it launched and leaves it
+  // running until its end event. Any other paired result finishes its tool
+  // call, and an ok result of a write call reports its file written. The receipt check
   // reads the line's `tool_use_result`, which describes the whole line: it
   // assumes a user line carries one `tool_result`, as every measured one did.
   function finishAgentOrTool(block: Json, event: Json, out: DecodedLine) {
@@ -472,6 +544,7 @@ export function createStreamDecoder(
       if (isLaunchReceipt) {
         pendingAgents.delete(id);
         launchedAgents.add(id);
+        out.agentEvents.push({ type: 'agentLaunched', agentId: id });
         return;
       }
       finishAgent(id, isOk, out);
@@ -501,12 +574,21 @@ export function createStreamDecoder(
     if (model === '') {
       return;
     }
-    out.agentEvents.push({
-      type: 'agentReplied',
-      agentId,
-      model,
-      spendUsd: spendOf(agentId),
-    });
+    const contextTokens = subagentFacts.get(agentId)?.contextTokens ?? null;
+    reportSubagentFacts(agentId, model, contextTokens, out);
+  }
+
+  // Each running subagent whose model's window has changed since its last
+  // `agentReplied` gets one with the new window.
+  function reportChangedWindows(out: DecodedLine) {
+    for (const agentId of [...pendingAgents.keys(), ...launchedAgents]) {
+      const facts = subagentFacts.get(agentId);
+      const hasNewWindow =
+        facts !== undefined && windowFor(facts.model) !== facts.sentWindow;
+      if (hasNewWindow) {
+        reportSubagentFacts(agentId, facts.model, facts.contextTokens, out);
+      }
+    }
   }
 
   // A subagent's end event; it also comes for other background tasks, whose
@@ -828,10 +910,12 @@ export function createStreamDecoder(
   // the last one has no turn share, so its cost is null. A result ends the
   // turn's open blocks, and its events entry takes events until the next init.
   // Every result ends a turn of the main conversation, an unrequested one
-  // included.
+  // included, and teaches the windows its `modelUsage` names.
   function decodeResult(event: Json, out: DecodedLine) {
     closeOpenBlocks(out);
     failPendingAgents(out);
+    learnWindows(asJson(event.modelUsage));
+    reportChangedWindows(out);
     out.agentEvents.push({ type: 'turnEnded' });
     const isError = event.is_error === true;
     out.turnEnded = true;

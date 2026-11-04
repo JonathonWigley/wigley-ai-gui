@@ -123,6 +123,7 @@ export function foldAgentEvent(roster: Roster, event: AgentEvent): Roster {
       return failEveryRunningItem(roster);
     case 'userMessage':
       return dropFinishedItems(roster);
+    case 'agentLaunched':
     case 'sessionStarted':
     case 'usage':
     case 'compacted':

@@ -1,6 +1,6 @@
 # 01 — Agent events carry context and background launch
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)

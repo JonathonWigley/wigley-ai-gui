@@ -5,9 +5,10 @@ const CHECKER = 'preview-agent-check';
 
 // The agent events of the sample session, in event order, dated before `at`:
 // a running subagent with three tool calls (two done, one running) and a
-// reply's model and spend; a subagent that finished done; and a running task
-// of the main agent's with a command. Whatever draws a session's subagents and
-// tasks from agent events draws these in the sample's Chat tab.
+// reply's model, spend and near-full context; a subagent that finished done
+// with no reply; and a running task of the main agent's with a command.
+// Whatever draws a session's subagents and tasks from agent events draws these
+// in the sample's Chat tab.
 export function previewAgentEvents(at: number): AgentEvent[] {
   return [
     {
@@ -27,6 +28,8 @@ export function previewAgentEvents(at: number): AgentEvent[] {
       agentId: MAPPER,
       model: 'claude-sonnet-5-5',
       spendUsd: 0.4213,
+      contextTokens: 166_000,
+      contextWindow: 200_000,
     },
     ...previewTool(
       MAPPER,

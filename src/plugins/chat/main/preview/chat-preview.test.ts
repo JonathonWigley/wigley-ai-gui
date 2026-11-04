@@ -145,6 +145,7 @@ describe('chat preview', () => {
     expect({
       agentSpawned: count('agentSpawned'),
       agentReplied: count('agentReplied'),
+      agentLaunched: count('agentLaunched'),
       agentFinished: events.flatMap((event) =>
         event.type === 'agentFinished' ? [event.outcome] : [],
       ),
@@ -154,6 +155,7 @@ describe('chat preview', () => {
     }).toEqual({
       agentSpawned: 2,
       agentReplied: 1,
+      agentLaunched: 0,
       agentFinished: ['done'],
       tasksWithCommand: 1,
     });

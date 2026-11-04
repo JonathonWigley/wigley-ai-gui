@@ -775,7 +775,13 @@ describe('createFakeAgentHarness', () => {
       n: number,
       tool: string,
       summary: string,
-      reply: { model: string; spendUsd: number },
+      reply: {
+        model: string;
+        spendUsd: number;
+        contextTokens: number;
+        contextWindow: number;
+      },
+      isLaunched: boolean,
     ) => [
       {
         type: 'agentReplied',
@@ -783,6 +789,9 @@ describe('createFakeAgentHarness', () => {
         agentId: `fake-agent-1-${n}`,
         ...reply,
       },
+      ...(isLaunched
+        ? [{ type: 'agentLaunched', at: 1000, agentId: `fake-agent-1-${n}` }]
+        : []),
       {
         type: 'toolStarted',
         at: 1000,
@@ -824,14 +833,30 @@ describe('createFakeAgentHarness', () => {
         model: null,
         effort: null,
       },
-      ...subagentTool(1, 'Read', 'src/main/claude-code/stream-decoder.ts', {
-        model: 'claude-sonnet-5-5',
-        spendUsd: 0.0421,
-      }),
-      ...subagentTool(2, 'Grep', 'append', {
-        model: 'claude-haiku-5-5',
-        spendUsd: 0.0019,
-      }),
+      ...subagentTool(
+        1,
+        'Read',
+        'src/main/claude-code/stream-decoder.ts',
+        {
+          model: 'claude-sonnet-5-5',
+          spendUsd: 0.0421,
+          contextTokens: 84_000,
+          contextWindow: 200_000,
+        },
+        false,
+      ),
+      ...subagentTool(
+        2,
+        'Grep',
+        'append',
+        {
+          model: 'claude-haiku-5-5',
+          spendUsd: 0.0019,
+          contextTokens: 166_000,
+          contextWindow: 200_000,
+        },
+        true,
+      ),
       {
         type: 'taskStarted',
         at: 1000,
@@ -956,6 +981,7 @@ describe('createFakeAgentHarness', () => {
         'tool agent-2-1-tool fake',
         'toolFinished fake-agent-2-1',
         'agentReplied fake-agent-2-2',
+        'agentLaunched fake-agent-2-2',
         'tool agent-2-2-tool',
         'toolStarted fake-agent-2-2',
         'tool agent-2-2-tool fake',

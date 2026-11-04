@@ -133,3 +133,8 @@ No new files. Shared names across tasks:
 - [ ] [Final verification](05-final-verification.md) — after 04
 
 ## Run log
+Review base: 693cb8d04eb48c87e6cba0406a0e2d850f90db54
+### Rulings
+- Worktree run on branch agent-cards, from the local main tip; the test gate, self-test and drive checks stay in the worktree — this repo has no Unity editor, and AGENTS.md puts drive runs beside a peer's in a worktree, which has its own .vite — merging the branch back stays the user's call · lead
+- User's word for this run: every review recommendation is taken, so no triage round is sent and each finding takes its recommended pick, reported in the wrap-up — the user said so mid-run — a pick the user would have changed lands without a look until the wrap-up · lead
+

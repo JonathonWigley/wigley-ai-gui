@@ -95,7 +95,15 @@ function replied(
   model: string,
   spendUsd: number | null,
 ): AgentEvent {
-  return { type: 'agentReplied', at: 3500, agentId, model, spendUsd };
+  return {
+    type: 'agentReplied',
+    at: 3500,
+    agentId,
+    model,
+    spendUsd,
+    contextTokens: null,
+    contextWindow: null,
+  };
 }
 
 function toolStarted(agentId: string): AgentEvent {

@@ -214,16 +214,22 @@ export type AgentEvent =
       agentId: string;
       outcome: 'done' | 'failed';
     }
-  // A subagent's model and spend so far, on each of its replies and on its launch receipt. `model` is the model id
-  // Claude used (the reply's, or the receipt's resolved model); `spendUsd` is the agent's estimated spend so far
-  // (cumulative, not the reply's share), null before its first reply or when any reply's model has no list price.
+  // A subagent's model, spend and context, on each of its replies, on its launch receipt, and when a turn's end changes
+  // its model's context window. `model` is the model id Claude used (the reply's, or the receipt's resolved model);
+  // `spendUsd` is the agent's estimated spend so far (cumulative, not the reply's share), null before its first reply or
+  // when any reply's model has no list price; `contextTokens` is the input side of its latest reply, null before its
+  // first reply; `contextWindow` is its model's context window, null until the harness reports it.
   | {
       type: 'agentReplied';
       at: number;
       agentId: string;
       model: string;
       spendUsd: number | null;
+      contextTokens: number | null;
+      contextWindow: number | null;
     }
+  // A subagent now runs in the background: its Agent call returned at launch, and it runs on until its `agentFinished`.
+  | { type: 'agentLaunched'; at: number; agentId: string }
   // A process an agent started that runs apart from its turn (a background command). `agentId` is the agent that
   // started it, MAIN_AGENT_ID or a subagent's id. A task outlives its turn and its agent: it ends only on its own
   // `taskFinished` or `sessionEnded`. `command` is the shell command the task runs, the whole text; null when the
