@@ -254,7 +254,8 @@ export function addDriveActions(
 // request, leaves them running on quit, tells the host how long to keep idle
 // ones, asks every session it starts to name its row, lists and archives
 // the saved ones, answers their permission prompts through the
-// `permission_prompt` tool, keeps the recent project folders and serves them
+// `permission_prompt` tool, starts a session for any agent that calls the
+// `start_session` tool, keeps the recent project folders and serves them
 // merged with the harness's, signs profiles in and out (cancelling a running
 // sign-in when the page loads again or the part is disposed), registers its
 // chat layouts, opens the layout preview's sample session (held apart from
@@ -440,8 +441,8 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
         launch: (request) => chat.launch(request),
         profileOf,
         profileNames,
-        isAbsolute: (path) => services.paths.isAbsolute(path),
-        stat: (path) => services.files.stat(path),
+        isAbsolute: (folder) => services.paths.isAbsolute(folder),
+        stat: (folder) => services.files.stat(folder),
       }),
     );
     const restored = Promise.all([
