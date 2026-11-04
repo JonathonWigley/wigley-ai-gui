@@ -869,6 +869,50 @@ describe('createChatSessions', () => {
     },
   );
 
+  it.each([
+    {
+      given: 'its process running here',
+      list: [HOSTED_PAST_ONE],
+      attaches: [HOSTED_PAST_ONE.id],
+      starts: 0,
+    },
+    { given: 'no process running', list: [], attaches: [], starts: 1 },
+  ])(
+    'resume_TwiceDuringTheListsWait_OpensOneRow given $given',
+    async ({ list, attaches, starts }) => {
+      let releaseList = () => {};
+      const listed = new Promise<HostedProcessInfo[]>((resolve) => {
+        releaseList = () => resolve(list);
+      });
+      const test = setUp({ sessionHost: { list: () => listed } });
+      test.harness.scriptAttach(HOSTED_PAST_ONE.id, {
+        outcome: 'process',
+        turns: 0,
+        replay() {},
+      });
+      const request = {
+        projectDir: '/w/app',
+        profile: 'work',
+        hostSessionId: PAST_ONE.sessionId,
+        title: PAST_ONE.title,
+      };
+
+      const resuming = [test.chat.resume(request), test.chat.resume(request)];
+      releaseList();
+
+      await expect(Promise.all(resuming)).resolves.toEqual([ROW_ID, ROW_ID]);
+      await flush();
+      expect(test.opened).toHaveLength(1);
+      expect(test.activated).toEqual([ROW_ID]);
+      expect(
+        test.harness.attachCalls.map((attach) => attach.processId),
+      ).toEqual(attaches);
+      expect(
+        test.harness.processes.filter((process) => !process.attached),
+      ).toHaveLength(starts);
+    },
+  );
+
   it('resume_ProcessRunningHere_ReadsHistoryUpToItsStart', async () => {
     const test = setUp({
       sessionHost: { list: () => Promise.resolve([HOSTED_PAST_ONE]) },
@@ -2218,6 +2262,45 @@ describe('createChatSessions', () => {
       answer: { allowed: false, reason: CANCELLED_REASON },
     });
   });
+
+  it.each([
+    { given: 'its turn running', harnessActivity: 'working' as const },
+    { given: 'a card left after its turn', harnessActivity: 'idle' as const },
+  ])(
+    'permission_abortAfterDetachAll_AnswersTheCallAndChangesNothing given $given',
+    async ({ harnessActivity }) => {
+      const test = setUp();
+      test.chat.restore(NOTHING_SAVED, []);
+      test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+      await flush();
+      test.setFocused(false);
+      const { events } = test.harness.processes[0];
+      events.activity('working');
+      const controller = signal();
+      const call = test.chat
+        .permissionToolSession(test.agentSession)
+        .call('permission_prompt', BASH_ARGS, {
+          toolUseId: 'tu-1',
+          signal: controller.signal,
+        });
+      await flush();
+      events.activity(harnessActivity);
+      test.chat.detachAll();
+      const savesBefore = test.saved.saves();
+      const messagesBefore = test.messages.length;
+
+      controller.abort();
+
+      expect(replyText(await settled(call))).toBe(
+        JSON.stringify({ behavior: 'deny', message: CANCELLED_REASON }),
+      );
+      expect(test.saved.saves()).toBe(savesBefore);
+      expect(test.saved.last()?.sessions[0].busy).toBe(true);
+      expect(test.messages).toHaveLength(messagesBefore);
+      expect(test.announced).toEqual([]);
+      expect(test.marked).toEqual([]);
+    },
+  );
 
   it('permission_sessionEnds_answersCancelledAndShowsIt', async () => {
     const test = await started();
@@ -4583,15 +4666,17 @@ describe('createChatSessions attaching', () => {
       given: 'a null',
       script: { outcome: 'null' as const },
       logged: `[chat] session ${ROW_ID} not re-attached: process p1 is not running`,
+      notices: [QUIT_NOTICE],
     },
     {
-      given: 'a rejection',
+      given: 'a rejection, whose turn may still run',
       script: { outcome: 'reject' as const, message: 'host gone' },
       logged: `[chat] session ${ROW_ID} not re-attached: host gone`,
+      notices: [],
     },
   ])(
-    'attach_NullOrRejects_RestsWithQuitNotice given $given',
-    async ({ script, logged }) => {
+    'attach_NullOrRejects_RestsWithQuitNoticeOnlyOnNull given $given',
+    async ({ script, logged, notices }) => {
       const test = setUp();
       test.harness.scriptAttach('p1', script);
       const attach = test.harness.attach.bind(test.harness);
@@ -4619,9 +4704,7 @@ describe('createChatSessions attaching', () => {
       expect(test.sent('sessionRested')).toEqual([
         { sessionId: ROW_ID, error: null },
       ]);
-      expect(noticesOf(test).map((notice) => notice.text)).toEqual([
-        QUIT_NOTICE,
-      ]);
+      expect(noticesOf(test).map((notice) => notice.text)).toEqual(notices);
       expect(test.logged).toContain(logged);
       expect(test.harness.lastUsageCalls).toEqual(['host-a']);
       test.sessionHost.setList([]);

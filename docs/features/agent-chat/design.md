@@ -319,8 +319,7 @@ interview on 2026-10-23; this file is the record of both.
     message.
 - **Saved sessions**: every session chat runs — started, resumed, or launched by another plugin — is saved in
   `open-sessions.json` in chat's plugin data: its host session id, folder and profile, its `titles` (the user, agent
-  and first-message titles; a file without them reads as untitled), its active time in ms (`activeMs`, the session
-  clock's total at the save, `docs/features/session-clock/design.md`; a file without it reads as 0), its last process's
+  and first-message titles; a file without them reads as untitled), its last process's
   id, the controls and resume flag that process launched with, the controls the row holds and the ids of those the user
   picked, the entry ids of the messages that process dropped which already went back to the box, and its unsent queued
   messages and the returned messages the page has not placed, with their images (a file without any of these reads as none), in row order, with the selected
@@ -461,7 +460,10 @@ interview on 2026-10-23; this file is the record of both.
 - **Resume and archive**: after the folder and profile, the start prompt offers a new session or one of the folder's
   saved sessions (terminal and app alike, newest first, labelled by first message and time; one open in the app
   through the relay is left out, and picking one that has a chat row selects that row instead of opening a second),
-  resumed with its earlier conversation read from the transcript. `x` archives the entry under the
+  resumed with its earlier conversation read from the transcript. A resume lists the session host first, so a session
+  never runs two processes: a process of the session running in the current host has the row open and attach to it,
+  its history pending, as a restored row does; a process running in another app version refuses, and a host that
+  cannot be listed rejects, each opening nothing. `x` archives the entry under the
   cursor or restores an archived one; `.` shows or hides archived entries. When the transcript cannot be read, the
   chat shows one notice and the session still resumes. Archived ids live in chat's plugin data; Claude's
   transcript files stay as Claude keeps them.

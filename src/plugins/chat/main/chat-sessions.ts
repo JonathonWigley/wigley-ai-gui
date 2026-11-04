@@ -139,7 +139,8 @@ export interface ChatSessions {
   // entries and the request's title as its first-message title, and resumes
   // its process; resolves to the row's sessionId. A
   // session chat holds a row for has that row activated instead; one open in
-  // the app on any other row rejects, as does any after `detachAll`. It lists
+  // the app on any other row rejects, as does any after `detachAll`; both hold
+  // after each wait as well, so two resumes of one id open one row. It lists
   // the host first, so a session never runs two processes: a process of the
   // session running in the current host has the row open and attach to it, as a
   // restored row does, its history pending; one running in another app version,
@@ -875,6 +876,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     );
   }
 
+  // Answers the waiting call. After `detachAll`, as when quit closes the relay,
+  // only the call hears it: the saved row stands, so a relaunch asks again.
   function settlePermission(
     session: HeldSession,
     pending: PendingPermission,
@@ -882,12 +885,15 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   ) {
     pending.signal.removeEventListener('abort', pending.onAbort);
     session.pending.delete(pending.entry.id);
+    pending.resolve(permissionReplyText(answer, pending.entry.input));
+    if (isDetached) {
+      return;
+    }
     const entry: PermissionEntry = {
       ...pending.entry,
       answer: { allowed: answer.allowed, reason: answer.reason },
     };
     sendEntry(session, entry);
-    pending.resolve(permissionReplyText(answer, pending.entry.input));
     updateActivity(session);
   }
 
@@ -1332,11 +1338,12 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           replay.isReplaying = false;
           session.attaching = null;
           const reason = errorText(error);
-          // The host may still run the process, whatever the row does next.
+          // The host may still run the process, whatever the row does next, so
+          // the turn may still run and no quit notice is added.
           if (!isDetached && session.exit === null) {
             session.unheldProcessId = hosted.id;
           }
-          restAfterFailedAttach(session, profile, reason, busy);
+          restAfterFailedAttach(session, profile, reason, false);
           return reason;
         },
       );
@@ -1508,8 +1515,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   }
 
   // Opens the row for `hostId` and starts its process; a start that throws
-  // drops the session, keeping any queued messages it took over saved, then ends
-  // the owned session. After `detachAll` it throws and opens nothing.
+  // drops the session, keeping any queued or returned messages it took over
+  // saved, then ends the owned session. After `detachAll` it throws and opens
+  // nothing.
   function openAndStart(
     harness: AgentHarness,
     profile: ChatProfile,
@@ -1848,6 +1856,20 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     );
   }
 
+  // The row holding `hostSessionId`, activated, or null when chat holds none;
+  // throws when the session is open on a row chat does not hold.
+  function activateRowOf(hostSessionId: string): string | null {
+    const existing = holding(hostSessionId);
+    if (existing !== undefined) {
+      sessions.activate(existing.state.sessionId);
+      return existing.state.sessionId;
+    }
+    if (isOpenOnOtherRow(hostSessionId)) {
+      throw new Error(`session ${hostSessionId} is already open in the app`);
+    }
+    return null;
+  }
+
   // A skipped record holding queued or returned messages stays saved, so they
   // are not lost.
   function keepSkipped(record: SavedSession) {
@@ -2174,13 +2196,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     const profile = profileNamed(request.profile);
     const harness = requireHarness();
     const { hostSessionId, projectDir } = request;
-    const existing = holding(hostSessionId);
-    if (existing !== undefined) {
-      sessions.activate(existing.state.sessionId);
-      return existing.state.sessionId;
-    }
-    if (isOpenOnOtherRow(hostSessionId)) {
-      throw new Error(`session ${hostSessionId} is already open in the app`);
+    const rowAtStart = activateRowOf(hostSessionId);
+    if (rowAtStart !== null) {
+      return rowAtStart;
     }
     const titles = {
       ...NO_TITLES,
@@ -2189,6 +2207,10 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     const runningOfSession = (await listHost()).filter(
       (hosted) => hosted.running && hosted.id.startsWith(`${hostSessionId}-`),
     );
+    const rowAfterList = activateRowOf(hostSessionId);
+    if (rowAfterList !== null) {
+      return rowAfterList;
+    }
     const runningHere = runningOfSession.find((hosted) => hosted.current);
     if (runningHere !== undefined) {
       const attached = openAndAttach(harness, profile, projectDir, {
@@ -2206,6 +2228,10 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       readHistory(harness, hostSessionId, projectDir, profileDir, null),
       readSavedUsage(harness, hostSessionId, projectDir, profileDir),
     ]);
+    const rowAfterRead = activateRowOf(hostSessionId);
+    if (rowAfterRead !== null) {
+      return rowAfterRead;
+    }
     const session = openAndStart(
       harness,
       profile,

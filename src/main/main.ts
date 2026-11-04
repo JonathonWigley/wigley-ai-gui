@@ -601,6 +601,12 @@ function livePage(window: BrowserWindow): WebContents | null {
   return isGone ? null : window.webContents;
 }
 
+// The app's window, or null before it is made and once it is destroyed, as on
+// quit, when another start or an activate may still ask for it.
+function liveMainWindow(): BrowserWindow | null {
+  return mainWindow?.isDestroyed() === false ? mainWindow : null;
+}
+
 // Serves the ui-state file at `filePath` to the page. It loads on the page's
 // first read, when the page already hears the log, and is kept, so a reload
 // reads main's copy, the newest. On quit a pending change is written as a
@@ -758,6 +764,9 @@ function createWindow(
   window.webContents.on('did-finish-load', pageLog.pageLoaded);
   window.webContents.on('did-stop-loading', pageLog.pageLoaded);
   const recolour = () => {
+    if (window.isDestroyed()) {
+      return;
+    }
     const config = store.current();
     const isReduced = isTransparencyReduced(config);
     window.setBackgroundColor(windowBackgroundOf(config.theme, isReduced));
@@ -1002,7 +1011,7 @@ function startApp() {
   }
   // A second start (a relay starting the app) shows the window without
   // taking the user's focus.
-  app.on('second-instance', () => mainWindow?.showInactive());
+  app.on('second-instance', () => liveMainWindow()?.showInactive());
   app.on('before-quit', () => {
     isQuitting = true;
   });
@@ -1046,7 +1055,7 @@ function startApp() {
       createWindow(inputs, store, userConfig, sessionHost);
       // After createWindow's quit tasks, so the parts dispose before it.
       onQuit(() => store.dispose());
-      app.on('activate', () => mainWindow?.show());
+      app.on('activate', () => liveMainWindow()?.show());
     })
     .catch(failStart);
   app.on('will-quit', runQuitTasks);
