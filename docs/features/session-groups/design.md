@@ -15,7 +15,9 @@ user keeps several clones of `new-games-prototypes`, one per Unity editor — re
 
 ## Status
 
-Planned: `plan-session-groups/` beside this file.
+Built, in `src/plugins/sessions/` (the project name in `main/`; the order, recency and favorites modules, the side
+bar view and the layout parts in `page/`; the layout contract in `layouts/`), `src/main/git/` and
+`src/contracts/git.ts` (`originRepoName`), `src/shared/page/ui/drag-reorder.ts` and `src/plugins/keymap.ts`.
 
 ## Projects
 
@@ -32,8 +34,8 @@ the Unity editors apart, and other plugins and log lines use it.
 ## Order
 
 The side bar holds two sections, **Favorites** then **Recent**, each a list of project groups, each group a header
-over its rows. The section labels draw only while a favorite project has an open session; otherwise the groups
-sit directly under the Sessions header.
+over its rows. The default layout draws the section labels only while a favorite project has an open session or a
+group is dragged; otherwise the groups sit directly under the Sessions header.
 
 - **Favorites** are in the user's own order, set by drag and by `<Leader>pk` / `<Leader>pj`.
 - **Recent** groups sort by recency, most recent first, and the rows inside every group, favorites included, do
@@ -56,13 +58,14 @@ project names), so they last across restarts.
 - Dragging a group header reorders the favorites; dropping a Recent group into Favorites favorites it at the drop
   point, and dropping a favorite into Recent unfavorites it. Recent has no hand order, so a drop there marks the
   whole section. While a drag runs, an empty section shows as a drop box, so the first favorite can come from a
-  drag, and the side bar holds its redraws until the drag ends. The layout preview (`Space z l s`) draws with its
-  own sample favorites and never changes the user's.
+  drag, and the side bar holds its redraws until the drag ends.
+- The layout preview (`Space z l s`) draws with its own sample favorites. While it shows, the star and drops do
+  nothing; the `<Leader>p` keys still act on the real focused session's project and change the user's favorites.
 
 ## Drawing
 
 The sessions layout gains two parts: `section` (a Favorites or Recent label over the box the app fills with
-groups, both always drawn, an empty one hidden outside a drag) and `group` (a project header over the box the app
+groups, both always drawn; the default layout hides an empty one outside a drag) and `group` (a project header over the box the app
 fills with rows), with a `GroupKit` that draws the star (`favoriteToggle`) and the grip (`dragHandle`, a visual
 cue: the whole header drags). The app keeps the star's click and the drag on each header, through the
 DragReorder primitive (`DESIGN.md` § Primitives).

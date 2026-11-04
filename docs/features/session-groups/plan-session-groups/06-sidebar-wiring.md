@@ -1,6 +1,6 @@
 # 06 — Grouped side bar wiring, commands and keys
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 02, 03, 04, 05
 Plan: [plan.md](plan.md)
@@ -79,3 +79,5 @@ Done when: compiles; lint passes; the test gate runs the tests above; `npm run s
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 9126f731 · proof: diff read; the three commands and orderedRows present; compile clean; the worker's lint clean, sessions self-test 6 of 6 with its project-groups capture read · concerns: no real mouse drag has run; a plugin re-setting needs you after a reload re-stamps that row, so a reload may reorder it; rows added in one state can straddle a millisecond; a lost dragend freezes the side bar until the next drag

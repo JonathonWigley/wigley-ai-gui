@@ -153,7 +153,7 @@ src/main/        core main process; main.ts is its composition root
                  answers, drains an older protocol's host, and hands out hosted processes;
                  `docs/features/session-host/design.md`
   git/           git adapter behind Git, over ProcessRunner: a clone's top folder, changed and unpushed paths,
-                 upstream and its blobs, fetch and last fetch, a file's text at HEAD, and a commit of named paths
+                 upstream and its blobs, fetch and last fetch, a file's text at HEAD, a clone's origin repo name, and a commit of named paths
                  only → the only place the app runs `git`, except the Backlog self-test's fixture repo (its `init`,
                  `config`, `add` and first commit, and its `git log` check, run through `services.processes`)
   layouts/       the core LayoutService: one registry per owner over the user config folder's `layouts/`, which writes
@@ -186,13 +186,15 @@ src/renderer/    core page; renderer.ts is its composition root
 src/plugins/     every plugin, one folder each; manifests.ts lists every built-in manifest, keymap.ts holds
                  every built-in default key, main.ts and page.ts the parts each root starts
   sessions/      manifest.ts, contract.ts, session-title.ts (the title rules main and page share), main/ (the
-                 session list — rows, their titles, the selected session, tool routing — the `set_session_title`
-                 tool, relay, endpoint files, MCP adapter → the only @modelcontextprotocol import), page/ (Sessions
-                 mode: the sidebar, the pane tree of whole sessions with its split, swap and close commands and the
+                 session list — rows, their titles and origin-repo project names, the selected session, tool routing — the
+                 `set_session_title` tool, relay, endpoint files, MCP adapter → the only @modelcontextprotocol import),
+                 page/ (Sessions mode: the sidebar, whose rows sit in project groups under Favorites and Recent sections —
+                 recency order in session-recency.ts, favorite projects in project-favorites.ts, the order in
+                 sidebar-order.ts, the drawing in sidebar-view.ts — the pane tree of whole sessions with its split, swap and close commands and the
                  shared list picker's `picker` scope, each session's tabs, the row and bar parts other plugins add,
                  each row's activities, the rename dialog, and the layout preview rows),
                  layouts/ (the sessions Layout contract and the built-in `default` layout);
-                 `docs/features/session-titles/design.md`
+                 `docs/features/session-titles/design.md`, `docs/features/session-groups/design.md`
   agents/        manifest.ts, contract.ts, roster.ts (the pure reducer folding agent events into a session's roster),
                  main/ (hears `chat.agentEvent`, keeps each session's roster, appends each event to
                  `logs/<host session id>.jsonl` in its plugin data, the layout preview); draws nothing: its page

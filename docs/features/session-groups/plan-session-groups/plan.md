@@ -138,7 +138,7 @@ function and imports no `Git`; only `main/start.ts` names `api.services.git`.
 - [x] [Project on session rows](02-project-on-rows.md) — after 01
 
 ### Wave 3
-- [ ] [Grouped side bar wiring, commands and keys](06-sidebar-wiring.md) — after 02, 03, 04, 05
+- [x] [Grouped side bar wiring, commands and keys](06-sidebar-wiring.md) — after 02, 03, 04, 05
 
 ### Wave 4
 - [ ] [Doc re-read](07-doc-re-read.md)
@@ -156,7 +156,10 @@ Review base: 693cb8d04eb48c87e6cba0406a0e2d850f90db54
 - 05 · b21962a4 · diff read; every Produces present in layout.d.ts, sessions-parts.ts and sessions-view-fakes.ts; compile clean; the worker's lint clean · concerns: CSS unseen on screen until task 08's captures: the sm star may set a taller header than text-12, and no grab cursor is set; contract prose describes sections while the view still fills rows until task 06
 - 03 · d856cde9 · diff read; every Produces present in drag-reorder.ts; the dropIndex GIVENs traced by hand; compile clean for the group's files (task 02 was mid-edit elsewhere); the worker's lint clean · concerns: test-dom.ts edited outside the task's files, so fire takes a target; started runs inside dragstart and Chromium can cancel a drag whose dragstart changes layout (handed to task 06); is-dragging may tint the drag image; no real drag has run
 - 02 · b4886fba · diff read; every Produces present; compile clean · concerns: two sessions in one folder send two states when the shared lookup lands; a landing after the plugin stopped reaches stateChanged with no stop check; AGENTS.md's sessions line omits projects (goes to task 07); src/plugins/agent-form-drive.test.ts also gained projectName, as a second createSessionList caller
+- 06 · 9126f731 · diff read; the three commands and orderedRows present; compile clean; the worker's lint clean, sessions self-test 6 of 6 with its project-groups capture read · concerns: no real mouse drag has run; a plugin re-setting needs you after a reload re-stamps that row, so a reload may reorder it; rows added in one state can straddle a millisecond; a lost dragend freezes the side bar until the next drag
 ### Contract changes
+- SessionsView: orderedRows() → orderedRows() plus toggleFavorite(project) and moveFavorite(project, by) · why: the star and favoriteProject log and redraw through one home, and move needs the view's shown favorites · consumers: 06 · group 06
+- mountSidebarView(activate, parts) → mountSidebarView(events, parts, timers), and render gains sections · why: the star, the drop and the next-tick timer · consumers: 06 · group 06
 ### Rulings
 - The user takes every review recommendation in this run, so no triage round is sent — the user's word this run — a recommendation the user would have overridden lands anyway and shows in the wrap-up · lead
 - The test gate and drive checks run in the worktree rather than waiting for the main tree — this is no Unity project, so nothing needs an editor, and a worktree has its own .vite — none; merging back still waits for the user's word · lead
@@ -172,5 +175,11 @@ Review base: 693cb8d04eb48c87e6cba0406a0e2d850f90db54
 - An item's position is its registration order, not a measured top — the primitive states drawn order in its comment — a view must register top to bottom · group 03 · group 03
 - sessionRow and the page test literals all share project 'project' — fake rows then land in one group, so order tests keep main's row order by default — a test wanting several groups overrides the field · group 02 · group 02
 - A rejection still logs when the session ended before it landed — the failed read is true either way — one extra log line · group 02 · group 02
+- is-reordering is set on the next tick through timers, cancelled and cleared in ended — lead ruling: Chromium can cancel a drag whose dragstart changes layout — labels and empty sections appear one tick late · lead · group 06
+- keepOnly and noteArrived run only in view.render, reached only from main's state — start.ts's empty seed never reaches the view — a first state omitting a held row would drop its stamp · group 06 · group 06
+- A drop's shownFavorites is the list last drawn, not the newest state — a held state must not shift what index counts — none visible, since place filters to current favorites · group 06 · group 06
+- redrawPane ends a running drag and drops the held draw — the pane the drag ran in is going — costs that drag · group 06 · group 06
+- The project keys still act on the real focused session while the preview shows — the task limits only the star and drops, and renameSession does the same — a view.isPreviewShown check if the design's never-changes line covers keys · group 06 · group 06
+- The fake drawnRows reads each session-group-rows' children, not every session-row — user-layout rows carry no session-row class — the helper assumes the default group part · group 06 · group 06
 ### Review rounds
 ### Test gate

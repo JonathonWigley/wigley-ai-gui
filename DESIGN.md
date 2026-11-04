@@ -313,7 +313,7 @@ The primitives, each a builder in `src/shared/page/ui/`:
   (`ui-drag-reorder-item`, dragged by a source element inside it); the item where the drop would land carries
   `is-drop-before` or `is-drop-after`, an unordered zone (`ui-drag-reorder-zone`) carries `is-drop-target`, and the
   dragged item `is-dragging`. A drop reports the item's key, the zone and the index it lands at among the zone's
-  other items, so the view, not the primitive, changes the order. It acts only on drags it started, so file drops
+  other items (0 in an unordered zone), so the view, not the primitive, changes the order. It acts only on drags it started, so file drops
   pass by. A view that drops it calls its `dispose`.
 
 Icon stays the Codicon builder `icon`.
@@ -345,7 +345,7 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   narrow for it), and while a config file is broken an error-tone Tag badge naming it; in the dev
   app, a neutral Dev tag at the start. The OS window buttons stay native.
 - **Activity bar:** L1, icons only; the shown mode carries a 2px accent mark on its window-side edge.
-- **Side bar:** L1 dense glass. Rows are `row-tree` or `row-list`; hover fills with
+- **Side bar:** L1 dense glass. Sessions mode's rows sit in project groups under Favorites and Recent sections. Rows are `row-tree` or `row-list`; hover fills with
   `list-hover-background`; the selected row takes `list-active-background` and `fg`; the keyboard
   cursor adds the focus ring. In a split whose panes each keep a selection (Settings mode, the docs
   tree, the Primer tab's tasks and items columns), the pane without focus marks itself `is-pane-inactive` and its selected
