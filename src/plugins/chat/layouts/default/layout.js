@@ -385,6 +385,20 @@ function showRowClock(clock, input) {
   clock.classList.toggle('is-running', input.isRunning);
 }
 
+/**
+ * @param {HTMLElement} chevron
+ * @param {HTMLElement} summary
+ * @param {HTMLElement} section
+ * @param {import('../layout').SideSectionInput} input
+ * @param {import('../layout').SideSectionKit} kit
+ */
+function showSideSection(chevron, summary, section, input, kit) {
+  section.classList.toggle('is-collapsed', input.collapsed);
+  chevron.replaceChildren();
+  kit.icon(chevron, input.collapsed ? 'chevron-right' : 'chevron-down');
+  summary.textContent = input.summary ?? '';
+}
+
 const WAITING_TEXT = 'Waiting for the sign-in link…';
 
 /** @param {string | null} link */
@@ -631,6 +645,27 @@ const layout = {
       element: clock,
       update(next) {
         showRowClock(clock, next);
+      },
+    };
+  },
+  // A session hub section: the head (chevron, title, summary), then the body.
+  sideSection(parent, input, kit) {
+    const section = el('section', 'chat-side-section');
+    parent.append(section);
+    const head = kit.head(section);
+    const chevron = el('span', 'chat-side-section-chevron');
+    const summary = el('span', 'chat-side-section-summary');
+    head.append(
+      chevron,
+      el('span', 'chat-side-section-title', input.title),
+      summary,
+    );
+    kit.body(section);
+    showSideSection(chevron, summary, section, input, kit);
+    return {
+      element: section,
+      update(next) {
+        showSideSection(chevron, summary, section, next, kit);
       },
     };
   },

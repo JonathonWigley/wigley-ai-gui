@@ -193,6 +193,14 @@ export interface RowClockInput {
   isRunning: boolean;
 }
 
+// One session hub section's frame: `summary` is the text its part set, null for none; `collapsed` holds while its body
+// is hidden.
+export interface SideSectionInput {
+  title: string;
+  summary: string | null;
+  collapsed: boolean;
+}
+
 export interface EntryView<K extends EntryKind = EntryKind> {
   element: HTMLElement;
   // Runs with each later version of the entry (same id) while it shows. A view with no update is built again and its element replaced.
@@ -426,6 +434,13 @@ export interface ImageViewerInput {
   index: number;
   count: number;
 }
+export interface SideSectionKit extends BaseKit {
+  // `button.chat-side-section-head`, which toggles the section on click and takes no key and no focus.
+  head(parent: HTMLElement): HTMLButtonElement;
+  // `div.chat-side-section-body`, the part's content inside; the same element on every draw. Mounts once per draw;
+  // left out, it ends the part's element.
+  body(parent: HTMLElement): HTMLElement;
+}
 
 // Builds one entry into `parent` from the entry and a kit made for that entry: the builder appends its element to
 // `parent` and returns it in `element`.
@@ -521,6 +536,13 @@ export interface ChatLayout {
     input: RowClockInput,
     kit: BaseKit,
   ): PartView<RowClockInput>;
+  // One section's frame in the session hub, drawn into the side part's wrapper. The app sends the input again when the
+  // section collapses, expands or its summary changes; a part with no `update` draws again, and the body moves over.
+  sideSection?(
+    parent: HTMLElement,
+    input: SideSectionInput,
+    kit: SideSectionKit,
+  ): PartView<SideSectionInput>;
 }
 
 // The built-in layout: a builder for every entry kind and every part.

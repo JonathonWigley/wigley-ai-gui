@@ -1,7 +1,8 @@
 /* The default Chat layout's look: entry text, the compaction divider, activity
    lines, the activity dock, queued messages, permission heads, the composer
    and its status line, the dialog and image viewer parts, the run time under a
-   session's row, and the width below which a Chat tab drops its side parts. */
+   session's row, the session hub's section heads, and the width below which a
+   Chat tab drops its hub. */
 .chat-assistant {
   color: var(--wg-fg);
 }
@@ -333,7 +334,27 @@
   white-space: nowrap;
 }
 
-/* A tab too narrow for its entries beside its side parts shows the entries. */
+/* A session hub section's head: its chevron and title, its summary at the end. */
+.chat-side-section-chevron {
+  color: var(--wg-fg-tertiary);
+  display: inline-flex;
+  flex: none;
+}
+
+.chat-side-section-title {
+  color: var(--wg-fg-tertiary);
+  font-size: var(--wg-text-12);
+  font-weight: var(--wg-weight-semibold);
+}
+
+.chat-side-section-summary {
+  color: var(--wg-fg-tertiary);
+  font-size: var(--wg-text-12);
+  font-variant-numeric: tabular-nums;
+  margin-left: auto;
+}
+
+/* A tab too narrow for its entries beside its hub shows the entries. */
 @container chat-tab (width < 640px) {
   .chat-side-parts {
     display: none;

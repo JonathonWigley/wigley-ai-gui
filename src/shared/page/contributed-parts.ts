@@ -13,13 +13,13 @@ export interface ContributedPart {
 // The parts other plugins added to one surface, in add order. `add` throws on
 // an id already held, and its `Disposable` removes the part; `onChanged` hears
 // each add and each removal.
-export interface PartStore<P extends ContributedPart> {
+export interface PartStore<P extends { id: string }> {
   add(part: P): Disposable;
   parts(): P[];
   onChanged(listener: () => void): Disposable;
 }
 
-export function createPartStore<P extends ContributedPart>(): PartStore<P> {
+export function createPartStore<P extends { id: string }>(): PartStore<P> {
   const held: P[] = [];
   const listeners = new Set<() => void>();
   const notify = () => {

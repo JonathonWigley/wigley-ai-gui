@@ -28,6 +28,7 @@ import { BUILT_IN_PAGE_STAGES } from '../stages';
 import { createWorkflowView, type WorkflowView } from './workflow-view';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 
+const NO_SECTION = { setSummary: () => undefined };
 const NOW = 1_000_000;
 const PLAN_DIR = '/p/proj/docs/features/x/plan-x';
 
@@ -775,7 +776,7 @@ describe('workflow view', () => {
       const { view, put } = setUp();
       const recording = recordingLayout();
       view.setLayouts(withUser<Layout>(defaultLayout, recording.layout));
-      view.sidePart.build(asHtml(new FakeElement('div')), 'a');
+      view.sidePart.build(asHtml(new FakeElement('div')), 'a', NO_SECTION);
 
       put(flowIn(stage, { ...BUSY[busy], progress: plan }));
 
@@ -808,7 +809,7 @@ describe('workflow view', () => {
       view.setSidePaneHidden(hidden);
       put(flow);
 
-      view.sidePart.build(asHtml(wrapper), 'a');
+      view.sidePart.build(asHtml(wrapper), 'a', NO_SECTION);
 
       expect(wrapper.children).toHaveLength(0);
     },
@@ -818,7 +819,7 @@ describe('workflow view', () => {
     const { view, put } = setUp();
     const wrapper = new FakeElement('div');
     put(flowIn('make'));
-    view.sidePart.build(asHtml(wrapper), 'a');
+    view.sidePart.build(asHtml(wrapper), 'a', NO_SECTION);
     const paneCount = () => findAll(wrapper, 'workflow-side-pane').length;
     const first = paneCount();
 
@@ -902,7 +903,7 @@ describe('workflow view', () => {
     const observers = stubResizeObservers();
     const wrapper = new FakeElement('div');
     put(flowIn('make'));
-    view.sidePart.build(asHtml(wrapper), 'a');
+    view.sidePart.build(asHtml(wrapper), 'a', NO_SECTION);
     const sideList = () => findAll(wrapper, 'workflow-side-list')[0];
     const scrollTo = (value: number) => {
       sideList().scrollTop = value;
@@ -947,7 +948,7 @@ describe('workflow view', () => {
     const observers = stubResizeObservers();
     const wrapper = new FakeElement('div');
     put(flowIn('make'));
-    const built = view.sidePart.build(asHtml(wrapper), 'a');
+    const built = view.sidePart.build(asHtml(wrapper), 'a', NO_SECTION);
     const whileHeld = observers.flatMap((each) => [...each.observed]);
 
     built.dispose?.();
@@ -1034,8 +1035,8 @@ describe('workflow view', () => {
     });
     put(row.flow ?? flowIn('make', planTitled('a'), 'a'));
     put(flowIn('make', planTitled('b'), 'b'));
-    view.sidePart.build(asHtml(new FakeElement('div')), 'a');
-    view.sidePart.build(asHtml(new FakeElement('div')), 'b');
+    view.sidePart.build(asHtml(new FakeElement('div')), 'a', NO_SECTION);
+    view.sidePart.build(asHtml(new FakeElement('div')), 'b', NO_SECTION);
     view.setSidePaneHidden(row.hidden ?? false);
 
     await row.act(view);
@@ -1055,7 +1056,7 @@ describe('workflow view', () => {
     const { view, put } = setUp();
     const wrapper = new FakeElement('div');
     put(flowIn('make', { progress: progressOf(1, [1, 1]) }));
-    view.sidePart.build(asHtml(wrapper), 'a');
+    view.sidePart.build(asHtml(wrapper), 'a', NO_SECTION);
     const fold = () => findAll(wrapper, 'workflow-finished-fold')[0];
     const closed = {
       text: fold().textContent,
@@ -1125,7 +1126,9 @@ describe('workflow view', () => {
     put(flowIn('planReady'));
     breakFlowOf(true);
 
-    expect(() => view.sidePart.build(asHtml(body), 'a')).toThrow('no flow');
+    expect(() => view.sidePart.build(asHtml(body), 'a', NO_SECTION)).toThrow(
+      'no flow',
+    );
     breakFlowOf(false);
     put(flowIn('make', { progress: progressOf(1, [3]) }));
 

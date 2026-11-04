@@ -1,5 +1,5 @@
-/* A session's Chat tab fills its session's sheet: a row of `.chat-main` and
-   other plugins' side parts, as a container for width rules. In `.chat-main`
+/* A session's Chat tab fills its session's sheet: a row of `.chat-main` and the
+   session hub, as a container for width rules. In `.chat-main`
    the entries scroll under the floating composer, which `chat-view.ts` measures
    into `--chat-composer-height` (unitless pixels) on the tab so the last entry
    stops above it. */
@@ -17,26 +17,77 @@
   position: relative;
 }
 
-/* The side parts' holder keeps the tab's height; a holder with no content in
-   any wrapper and a wrapper with no content each take no space. */
+/* The session hub keeps the tab's height. Each section takes its content's
+   height, and shrinks and scrolls in its own body when the column is too short.
+   A section whose part draws nothing takes no space, and the hub with none left
+   takes none either. */
 .chat-side-parts {
   align-self: stretch;
+  background: var(--wg-block-background);
+  border-left: 1px solid var(--wg-border-default);
   display: flex;
   flex: none;
   flex-direction: column;
   min-height: 0;
+  width: calc(var(--wg-space-6) * 11);
 }
 
-.chat-side-parts:not(:has(.chat-side-part:not(:empty))) {
+.is-side-hidden .chat-side-parts {
   display: none;
 }
 
 .chat-side-part {
-  flex: 1;
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.chat-side-part:not(:has(.chat-side-section-body > :not([hidden]))) {
+  display: none;
+}
+
+.chat-side-parts:not(:has(.chat-side-section-body > :not([hidden]))) {
+  display: none;
+}
+
+.chat-side-part:has(.chat-side-section-body > :not([hidden]))
+  ~ .chat-side-part {
+  border-top: 1px solid var(--wg-border-subtle);
+}
+
+.chat-side-section {
+  display: flex;
+  flex-direction: column;
   min-height: 0;
 }
 
-.chat-side-part:empty {
+.chat-side-section-head {
+  align-items: center;
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  flex: none;
+  font: inherit;
+  gap: var(--wg-space-1);
+  padding: var(--wg-space-1) var(--wg-space-3);
+  text-align: left;
+  width: 100%;
+}
+
+.chat-side-section-body {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--wg-space-2) var(--wg-space-3);
+}
+
+.chat-side-section.is-collapsed .chat-side-section-body {
   display: none;
 }
 

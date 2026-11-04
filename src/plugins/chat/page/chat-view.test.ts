@@ -18,8 +18,9 @@ import type {
   ReturnedMessage,
   SessionCompaction,
 } from '../contract';
-import { createChatLayouts } from './chat-layouts';
+import { createChatLayouts, type SurfaceKitDeps } from './chat-layouts';
 import { type ChatViewDeps, mountChatView } from './chat-view';
+import { createSideSections } from './side-sections';
 
 const NO_ENTRIES: ChatEntry[] = [];
 
@@ -62,8 +63,8 @@ const returnedTwo: ReturnedMessage = {
 // it a message from main, `box` is the one tab's box text, null before a tab
 // mounts, `tab` its element, `tabElements` each session's tab element, and
 // `invoked` holds each other call to main. `sideParts` and `composerParts` are
-// the view's part stores, and `removeSession` closes a session's tab as the
-// sessions plugin does.
+// the view's part stores, `layouts` its chat layouts, and `removeSession` closes
+// a session's tab as the sessions plugin does.
 function mounted(
   firstActiveTimeListener: (
     sessionId: string,
@@ -96,6 +97,14 @@ function mounted(
   };
   const log = (_source: string, line: string) => logs.push(line);
   const noEvent = () => undefined;
+  const layouts = createChatLayouts(log);
+  const kit = {
+    markdown: {},
+    keys: { anchor: () => ({ dispose: noEvent }), keysFor: () => null },
+    commands: { exists: () => true, run: noEvent },
+    platform: 'macos',
+    log,
+  } as unknown as SurfaceKitDeps;
   const activeTimeCalls: [string, ActiveTime][] = [];
   // What `activeTime` read while `addTab` ran, as a row drawn then reads it.
   const readDuringAddTab: (ActiveTime | null)[] = [];
@@ -145,16 +154,19 @@ function mounted(
         } as unknown as TextEditor;
       },
     },
-    layouts: createChatLayouts(log),
+    layouts,
     composerParts,
     statusParts: createPartStore(),
     sideParts,
-    markdown: {},
-    keys: { anchor: () => ({ dispose: noEvent }), keysFor: () => null },
-    commands: { exists: () => true, run: noEvent },
-    platform: 'macos',
+    sideSections: createSideSections({
+      layouts,
+      kit,
+      parts: sideParts,
+      uiState: { get: () => undefined, set: noEvent },
+      log,
+    }),
+    ...kit,
     run: noEvent,
-    log,
     clock: { now: () => 5000 },
     timers: { set: () => 0, clear: noEvent },
     drops: { addTarget: () => ({ dispose: noEvent }) },
@@ -167,6 +179,7 @@ function mounted(
     box,
     tab,
     tabElements,
+    layouts,
     sideParts,
     composerParts,
     invoked,
@@ -246,6 +259,8 @@ describe('mountChatView side parts', () => {
     const disposed: string[] = [];
     const partOf = (id: string): ChatSidePart => ({
       id,
+      title: id,
+      order: 10,
       build(parent, sessionId) {
         built.push(`${id} ${sessionId}`);
         parent.textContent = `${id} ${sessionId}`;
@@ -256,7 +271,9 @@ describe('mountChatView side parts', () => {
       (view.tabElements.get(sessionId) as FakeElement).children;
     const wrappers = (sessionId: string) => tabChildren(sessionId)[1].children;
     const wrapperTexts = (sessionId: string) =>
-      wrappers(sessionId).map((wrapper) => wrapper.textContent);
+      wrappers(sessionId).map(
+        (wrapper) => findAll(wrapper, 'chat-side-section-body')[0].textContent,
+      );
 
     const first = view.sideParts.add(partOf('first'));
     view.emit('sessionStarted', stateOf([], { sessionId: 'row-2' }));
@@ -330,6 +347,8 @@ describe('mountChatView side parts', () => {
     let attempts = 0;
     const failing: ChatSidePart = {
       id: 'failing',
+      title: 'Failing',
+      order: 10,
       build() {
         attempts += 1;
         throw new Error('build failed');
@@ -341,6 +360,8 @@ describe('mountChatView side parts', () => {
     const added = view.sideParts.add(failing);
     const other = view.sideParts.add({
       id: 'other',
+      title: 'Other',
+      order: 20,
       build: () => ({}),
     });
 
@@ -355,6 +376,30 @@ describe('mountChatView side parts', () => {
     expect(attempts).toBe(2);
     other.dispose();
     expect(attempts).toBe(2);
+  });
+
+  it('a chat layout change disposes a side part once and builds it again', async () => {
+    const view = mounted();
+    await view.answerSessions([stateOf([])]);
+    let builds = 0;
+    let disposes = 0;
+    view.sideParts.add({
+      id: 'part',
+      title: 'Part',
+      order: 10,
+      build() {
+        builds += 1;
+        return {
+          dispose: () => {
+            disposes += 1;
+          },
+        };
+      },
+    });
+
+    view.layouts.set(view.layouts.shown());
+
+    expect({ builds, disposes }).toEqual({ builds: 2, disposes: 1 });
   });
 });
 

@@ -203,6 +203,7 @@ export const defaultKeymap = {
       command: 'backlog.toggleAgentReadyOnly',
     },
     { keys: '<Leader>vu', scope: 'any', command: 'usage.toggleDetails' },
+    { keys: '<Leader>vs', scope: 'any', command: 'chat.toggleSideParts' },
 
     // ── Tabs and sessions ──────────────────────────────────────────────────
     { keys: '<A-S-o>', scope: 'any', command: 'sessions.nextSession' },

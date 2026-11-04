@@ -11,11 +11,7 @@ import type { Paths } from '../../../contracts/paths';
 import type { PageChannel, ToastTone } from '../../../contracts/plugin';
 import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
-import {
-  type ContributedPartsPlace,
-  type PartStore,
-  placeContributedPart,
-} from '../../../shared/page/contributed-parts';
+import type { PartStore } from '../../../shared/page/contributed-parts';
 import { blurFocusedElement, element } from '../../../shared/page/dom';
 import { canvasEncoder } from '../../../shared/page/file-drop/canvas-encoder';
 import { inputFrame } from '../../../shared/page/ui/input-frame';
@@ -62,6 +58,7 @@ import {
 } from './composer-stop-holder';
 import { createEntryList, type EntryList } from './entry-list';
 import type { ImageViewer } from './image-viewer';
+import type { SideSections, SideTab } from './side-sections';
 import { completionWords } from './slash-commands';
 import { compactionLabel } from './working-turn';
 
@@ -149,8 +146,9 @@ export type ChatTabScope = 'chat';
 // `/` completion offers ahead of the agent's. `viewer` opens a sent message's
 // images full size. `timers` and `clock` tick a live activity line's time and
 // the activity dock's. `composerParts` holds the parts other plugins draw
-// above every composer, `statusParts` those they draw in every status line,
-// `sideParts` those they draw beside every `.chat-main`.
+// above every composer, `statusParts` those they draw in every status line;
+// `sideParts` tells when a part beside every `.chat-main` comes or goes, and
+// `sideSections` draws those parts as each tab's session hub.
 // `drops` registers each Chat tab as the target of the
 // files dropped or pasted on it, and saves a pasted file that is not an
 // image.
@@ -174,7 +172,8 @@ export interface ChatViewDeps extends SurfaceKitDeps {
   layouts: ChatLayouts;
   composerParts: Pick<PartStore<ChatComposerPart>, 'parts' | 'onChanged'>;
   statusParts: Pick<PartStore<ChatStatusPart>, 'parts' | 'onChanged'>;
-  sideParts: Pick<PartStore<ChatSidePart>, 'parts' | 'onChanged'>;
+  sideParts: Pick<PartStore<ChatSidePart>, 'onChanged'>;
+  sideSections: Pick<SideSections, 'openTab'>;
   permissions: PermissionActions;
   confirm: CloseConfirm;
   viewer: Pick<ImageViewer, 'open'>;
@@ -194,9 +193,8 @@ export interface ChatViewDeps extends SurfaceKitDeps {
 // `composerSize` follows the drawn composer's height for as long as the tab is
 // held. `unseen` is the finished turn the row still shows, and `activity` the
 // activity last set on the row. `stop` holds the composer part holding the
-// tab's entry cursor. `main` holds the entries and the composer; `sideHolder`
-// holds the side parts' wrappers, and `sideBuilds` maps each side part the tab
-// has built, by id, to what disposes it and removes its wrapper.
+// tab's entry cursor. `main` holds the entries and the composer; `side` is the
+// tab's session hub.
 interface HeldTab {
   sessionId: string;
   name: string;
@@ -209,8 +207,7 @@ interface HeldTab {
   isBoxFocused: boolean;
   root: HTMLElement;
   main: HTMLElement;
-  sideHolder: HTMLElement;
-  sideBuilds: Map<string, () => void>;
+  side: SideTab;
   entries: EntryList;
   attachments: Attachments;
   composer: ComposerSurface;
@@ -219,23 +216,17 @@ interface HeldTab {
   stop: ComposerStopHolder;
 }
 
-const SIDE_PARTS: ContributedPartsPlace = {
-  owner: 'chat',
-  noun: 'side part',
-  holderClass: 'chat-side-parts',
-  wrapperClass: 'chat-side-part',
-};
-
 // One Chat tab per chat session main holds, each with its entries, its
 // pending rows and its composer (the activity dock, attached images, message
 // box, and the status line: repo, branch, type hint, control chips, status
-// parts, running indicator, send) in its `.chat-main`, and other plugins' side
-// parts beside that, kept up to date from chat main's messages. Each tab is
+// parts, running indicator, send) in its `.chat-main`, and the session hub
+// beside that, kept up to date from chat main's messages. Each tab is
 // selected in its session when added. A layout change draws every tab's
-// entries, pending rows and composer again, and a composer or status part
-// added or removed draws every tab's composer again, each box keeping its
-// text, vim mode and focus. A side part added or removed builds or removes that
-// part alone in every tab, and no composer draw touches one. Each session's row
+// entries, pending rows and composer again and builds its side parts again, and
+// a composer or status part added or removed draws every tab's composer again,
+// each box keeping its text, vim mode and focus. A side part added or removed
+// builds or removes that part alone in every tab, and no composer draw touches
+// one. Each session's row
 // shows what its process does (needs you, working) and, once idle, a turn the
 // user has not seen end (done, error). Messages main returned go into their
 // session's box: as they arrive, and those main still holds when a tab mounts.
@@ -252,6 +243,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     for (const tab of tabs.values()) {
       tab.entries.rebuild(tab.state.entries);
       drawComposer(tab);
+      tab.side.rebuild();
     }
   });
   const drawEveryComposer = () => {
@@ -263,7 +255,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
   deps.statusParts.onChanged(drawEveryComposer);
   deps.sideParts.onChanged(() => {
     for (const tab of tabs.values()) {
-      syncSideParts(tab, deps);
+      tab.side.sync();
     }
   });
   let pendingReveal: string | null = null;
@@ -316,6 +308,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       beforeClose: (closing) => mayClose(closing, deps),
     });
     tabs.set(state.sessionId, tab);
+    tab.side.sync();
     placeReturned(
       { tabs: view, channel, log },
       state.sessionId,
@@ -491,7 +484,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     tab.box?.destroy();
     tab.composerSize.disconnect();
     tab.composer.dispose();
-    disposeSideParts(tab);
+    tab.side.close();
     tab.entries.dispose();
     if (pendingReveal === sessionId) {
       pendingReveal = null;
@@ -575,55 +568,6 @@ function drawComposer(tab: HeldTab) {
   }
 }
 
-// Removes the tab's side parts no longer held and builds those it has not built,
-// leaving the rest as they are. A store adds at its end, so appending a new
-// part's wrapper keeps the holder in add order.
-function syncSideParts(
-  tab: HeldTab,
-  deps: Pick<ChatViewDeps, 'sideParts' | 'log'>,
-) {
-  const parts = deps.sideParts.parts();
-  const heldIds = new Set(parts.map((part) => part.id));
-  for (const [id, remove] of tab.sideBuilds) {
-    if (!heldIds.has(id)) {
-      tab.sideBuilds.delete(id);
-      remove();
-    }
-  }
-  for (const part of parts) {
-    if (!tab.sideBuilds.has(part.id)) {
-      tab.sideBuilds.set(part.id, buildSidePart(tab, part, deps.log));
-    }
-  }
-}
-
-// Builds one part into a wrapper at the end of the tab's holder, and returns
-// what disposes it and removes that wrapper.
-function buildSidePart(tab: HeldTab, part: ChatSidePart, log: Log): () => void {
-  const disposes: (() => void)[] = [];
-  const wrapper = placeContributedPart(
-    tab.sideHolder,
-    tab.sessionId,
-    part,
-    SIDE_PARTS,
-    log,
-    { recordBox: (dispose) => disposes.push(dispose) },
-  );
-  return () => {
-    for (const dispose of disposes) {
-      dispose();
-    }
-    wrapper?.remove();
-  };
-}
-
-function disposeSideParts(tab: HeldTab) {
-  for (const remove of tab.sideBuilds.values()) {
-    remove();
-  }
-  tab.sideBuilds.clear();
-}
-
 // Hands the composer's activity dock the tab's entries, whether its session's
 // turn is under way, and the compaction running in it.
 function drawTurn(tab: HeldTab) {
@@ -682,8 +626,9 @@ function sessionOf(
   };
 }
 
-// The tab element (`div.chat-tab`: `div.chat-main`, then the side parts'
-// holder; `.chat-main` holds the entries, then the floating composer holding
+// The tab element (`div.chat-tab`: `div.chat-main`, then the session hub's
+// holder, which the caller fills through `side.sync` once it holds the tab;
+// `.chat-main` holds the entries, then the floating composer holding
 // other plugins' parts, the activity dock, the attached images' strip, the box
 // and its status line) added to its session, with the box's editor mounted
 // once the element is attached; it is marked `is-at-stop` while a composer part's stop
@@ -750,8 +695,7 @@ function createTab(
   const root = element('div', 'chat-tab');
   const main = element('div', 'chat-main');
   main.append(entries.element);
-  const sideHolder = element('div', SIDE_PARTS.holderClass);
-  root.append(main, sideHolder);
+  root.append(main);
   const tab: HeldTab = {
     sessionId: state.sessionId,
     name,
@@ -764,8 +708,7 @@ function createTab(
     isBoxFocused: false,
     root,
     main,
-    sideHolder,
-    sideBuilds: new Map(),
+    side: deps.sideSections.openTab(root, state.sessionId),
     entries,
     attachments,
     composer,
@@ -790,7 +733,6 @@ function createTab(
   entries.setQueued(state.queued);
   entries.setWorking(isWorking(state));
   drawComposer(tab);
-  syncSideParts(tab, deps);
   drawTurn(tab);
   tab.handle = deps.sessions.addTab(state.sessionId, {
     id: 'chat',

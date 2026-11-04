@@ -140,6 +140,11 @@ export const chatManifest = definePlugin({
       group: 'picker',
       runsIn: 'page',
     },
+    toggleSideParts: {
+      label: 'Hide or show the session hub',
+      group: 'view',
+      runsIn: 'page',
+    },
     openPreview: {
       label: 'open the chat layout preview',
       group: 'debug',

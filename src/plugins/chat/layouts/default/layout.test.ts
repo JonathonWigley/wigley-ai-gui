@@ -1080,6 +1080,7 @@ const SURFACE_PARTS: Record<SurfacePart, true> = {
   closeConfirm: true,
   imageViewer: true,
   rowClock: true,
+  sideSection: true,
 };
 
 // Draws `input` with the default layout's `name` part into a fresh parent,

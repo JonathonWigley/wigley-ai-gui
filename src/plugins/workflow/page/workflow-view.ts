@@ -433,6 +433,8 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
     },
     sidePart: {
       id: 'workflow.sidePane',
+      title: 'Plan',
+      order: 20,
       build: (wrapper, sessionId) => hold('sidePane', wrapper, sessionId),
     },
     setFlow(flow) {

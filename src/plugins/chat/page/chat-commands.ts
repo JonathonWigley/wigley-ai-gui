@@ -96,14 +96,15 @@ export interface ChatCommandDeps {
 type Handler = (context: PageCommandContext) => void;
 
 // Every chat command's handler but the start prompt's (`newSession`,
-// `toggleArchive`, `showArchived`), by short id. A command acting on a
+// `toggleArchive`, `showArchived`) and the session hub's (`toggleSideParts`), by
+// short id. A command acting on a
 // session acts only on the session whose Chat tab is the visible tab, and
 // does nothing while no Chat tab is visible.
 export function chatCommandHandlers(
   deps: ChatCommandDeps,
 ): Omit<
   PageStart<typeof chatManifest>['commands'],
-  'newSession' | 'toggleArchive' | 'showArchived'
+  'newSession' | 'toggleArchive' | 'showArchived' | 'toggleSideParts'
 > {
   const { tabs, channel, picker, log } = deps;
   const inSession =

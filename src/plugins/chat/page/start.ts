@@ -38,6 +38,7 @@ import { createImageViewer } from './image-viewer';
 import { createPicker } from './picker';
 import { readChatLayout } from './read-chat-layout';
 import { createRowClock } from './row-clock';
+import { createSideSections } from './side-sections';
 import { createSignInDialog } from './sign-in-dialog';
 import { createSlashCommands } from './slash-commands';
 import { createStartPrompt } from './start-prompt';
@@ -61,8 +62,8 @@ type ChatApi = PageApi<
 // the box.
 // Sending `/login`, `/logout`, `/status` or another app slash command runs it
 // in the page in place of sending it; the exports register more, fill a
-// session's box, and add parts above every composer and beside every tab's
-// entries. Images
+// session's box, and add parts above every composer and sections to every tab's
+// session hub, which `toggleSideParts` hides or shows in every tab. Images
 // pasted or dropped into a Chat tab attach to its next message, other files go
 // into the box as file chips, and a sent message's images open full size in
 // the image viewer. The picker, the deny
@@ -153,6 +154,13 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
     const composerParts = createPartStore<ChatComposerPart>();
     const statusParts = createPartStore<ChatStatusPart>();
     const sideParts = createPartStore<ChatSidePart>();
+    const sideSections = createSideSections({
+      layouts,
+      kit: partDeps,
+      parts: sideParts,
+      uiState: services.uiState,
+      log: services.log,
+    });
     const rowClock = createRowClock({
       layouts,
       kit: partDeps,
@@ -193,6 +201,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       composerParts,
       statusParts,
       sideParts,
+      sideSections,
       permissions,
       confirm,
       viewer,
@@ -257,6 +266,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
         newSession: () => startPrompt.open(),
         toggleArchive: () => startPrompt.toggleArchive(),
         showArchived: () => startPrompt.showArchived(),
+        toggleSideParts: () => sideSections.toggleHidden(),
       },
       exports,
     };

@@ -765,6 +765,20 @@ const GROUPS: SelfTestGroup[] = [
     steps: LAYOUT_PREVIEW_STEPS,
   },
   {
+    name: 'session hub',
+    why: 'Space v s hides the session hub in every Chat tab, and again shows it.',
+    steps: [
+      {
+        keys: ['Escape', ' ', 'v', 's'],
+        expect: '[chat] session hub hidden',
+      },
+      {
+        keys: ['Escape', ' ', 'v', 's'],
+        expect: '[chat] session hub shown',
+      },
+    ],
+  },
+  {
     name: 'stop all',
     why: 'Space : stops every session process; the rows stay, resting.',
     steps: [

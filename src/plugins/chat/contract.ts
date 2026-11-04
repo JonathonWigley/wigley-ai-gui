@@ -427,11 +427,29 @@ export interface ChatStatusPart {
   build(parent: HTMLElement, sessionId: string): { dispose?(): void };
 }
 
-// What a plugin draws beside every Chat tab's entries and composer: chat hands
-// it a wrapper and the tab's session id. It takes no stop and no key scope.
+// A side part's handle on its section's frame in one Chat tab. `setSummary` sets
+// the text at the frame's end, null for none; after the build's dispose it does
+// nothing.
+export interface ChatSideSection {
+  setSummary(text: string | null): void;
+}
+
+// What a plugin draws in the session hub beside every Chat tab's entries and
+// composer, as one section: chat draws the frame with `title` and hands `build`
+// the frame's body, the tab's session id and the section. Chat sorts the sections
+// by `order`, equal orders keeping add order. The body adds its own padding, so
+// the part adds none. A part that draws nothing, by drawing no child in `parent`
+// or by setting `hidden` on each, hides its section. It takes no stop and no key
+// scope.
 export interface ChatSidePart {
   id: string;
-  build(parent: HTMLElement, sessionId: string): { dispose?(): void };
+  title: string;
+  order: number;
+  build(
+    parent: HTMLElement,
+    sessionId: string,
+    section: ChatSideSection,
+  ): { dispose?(): void };
 }
 
 // The page part's exports. `addSlashCommand` registers an app slash command
@@ -450,12 +468,14 @@ export interface ChatSidePart {
 // redraws into its wrapper itself when its content changes; it draws in every
 // Chat tab, the preview's included.
 // `addSidePart` throws on an id already added; a side part draws in every Chat
-// tab, the preview's included, in the order the parts were added. It is built
-// once per tab, when it is added or its tab is built, and disposed when it is
-// removed or its tab closes. Adding or removing another side part and a composer
-// draw each leave it and its wrapper as they are, so a part whose content changes
-// redraws into its wrapper itself. A part whose build throws is logged and stays
-// unbuilt in that tab until it is added again.
+// tab, the preview's included, as a section of the session hub at its place by
+// `order`. It is built once per tab, when it is added or its tab is built, and
+// disposed when it is removed or its tab closes; a chat layout change disposes
+// and builds it again. Adding or removing another side part, a composer draw and
+// a change to its frame (a collapse, a summary) each leave it and its parent as
+// they are, so a part whose content changes redraws into its parent itself. A
+// part whose build throws is logged and stays unbuilt in that tab until it is
+// added again or the chat layout changes.
 // `focusedEntry` is the visible Chat tab's focused stop's slot element (an
 // entry, an activity line or a pending row); null with no visible Chat tab, no
 // focused stop, or while a composer part's stop holds the cursor.
