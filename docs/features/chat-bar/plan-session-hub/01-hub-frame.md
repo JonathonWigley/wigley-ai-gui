@@ -1,6 +1,6 @@
 # 01 — Hub frame
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -59,3 +59,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 11ecd75f · proof: diff read: every Produces present; typecheck clean at the commit; worker: lint clean, 224 tests in the touched files pass · concerns: self-test row and hub look unseen until task 09; Plan section looks wrong until 06; command label capitalised while its neighbours are lowercase, for the review; one chatPartDraws serves all sections, so one update throw moves all to default until layouts change

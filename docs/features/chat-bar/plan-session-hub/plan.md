@@ -157,7 +157,7 @@ Boundary rules:
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Hub frame](01-hub-frame.md)
+- [x] [Hub frame](01-hub-frame.md)
 - [x] [Task rows](02-task-rows.md)
 - [x] [Context line](03-context-line.md)
 
@@ -182,8 +182,11 @@ Review base: ad87d46f110e63f41f0a1d404e1c3db1d19d82fa
 ### Groups
 - 03 · 13367469 · diff read: every Produces present; typecheck clean at the commit; worker: lint clean, usage tests 201 pass · concerns: start.ts wiring and the new self-test lines are unproved until task 09 and the filtered self-test; the context line has no vertical spacing of its own; AGENTS.md:262 and usage design.md:163 stale, left for 08
 - 02 · fe66c847 · diff read: both Produces present; typecheck names nothing in agent-strip; worker: lint clean, agent-strip tests 92 pass, seven mutations each caught · concerns: self-test regex assumes the row head fits the logged 80 characters; a key prompt may make a selected row taller than the max-height calc assumes; both for task 09
+- 01 · 11ecd75f · diff read: every Produces present; typecheck clean at the commit; worker: lint clean, 224 tests in the touched files pass · concerns: self-test row and hub look unseen until task 09; Plan section looks wrong until 06; command label capitalised while its neighbours are lowercase, for the review; one chatPartDraws serves all sections, so one update throw moves all to default until layouts change
 ### Contract changes
 - WorkflowView.sidePart: ContributedPart wrapped in start.ts → ChatSidePart literal with title and order from 01 · why: the side pane plan landed it as ChatSidePart · consumers: 06 · group 01
+- createSideSections: members left open → SideSections { openTab, toggleHidden }, SideTab { sync, rebuild, close } · why: lead's per-tab handle ruling · consumers: none directly; 04 and 07 add parts through the store · group 01
+- ChatViewDeps: sideParts narrowed to onChanged, sideSections added · why: placement moved to side-sections.ts · consumers: 04, 07 · group 01
 - createSideSections: members left open → SideSections { openTab, toggleHidden }, SideTab { sync, rebuild, close } · why: lead's per-tab handle ruling · consumers: none directly; 04 and 07 add parts through the store · group 01
 - ChatViewDeps: sideParts narrowed to onChanged, sideSections added · why: placement moved to side-sections.ts · consumers: 04, 07 · group 01
 ### Rulings
@@ -195,5 +198,9 @@ Review base: ad87d46f110e63f41f0a1d404e1c3db1d19d82fa
 - .agent-strip-rows CSS sits in page/agent-strip.css because the app makes that element and it has no data-layout — only the rule moves if wrong · group 02 · group 02
 - .agent-strip-command loses its padding and background so a row fits the plan's max-height calc, with flex none on rows and a space-1 margin under the cards — task 09's look check settles it · group 02 · group 02
 - trackOf keeps its signature and finds the box's kind in holder.boxes; draw uses heldTrack and heldRows because its boxes are not pushed until drawn — a small signature change if wrong · group 02 · group 02
+- A per-tab SideTab handle (sync, rebuild, close) in side-sections.ts replaces syncSideParts and disposeSideParts; the layout handler calls rebuild, which disposes once and builds again — three functions move back if wrong · lead · group 01
+- Tests use installFakeDom, the repo's convention, not jsdom, so the :has hide rules are unseen by tests; task 09 sees them — none if wrong · lead · group 01
+- Only a newly built wrapper moves to its sorted place, so a built section keeps its scroll; it moves after its part builds — a part reading its wrapper's position during build sees the holder's end · group 01 · group 01
+- The layout-change GIVEN lives in chat-view.test.ts since the handler stays in mountChatView; rebuild runs after drawComposer in that loop — two lines swap if wrong · group 01 · group 01
 ### Review rounds
 ### Test gate
