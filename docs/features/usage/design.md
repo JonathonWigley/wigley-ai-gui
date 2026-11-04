@@ -160,8 +160,8 @@ In `src/contracts/agent.ts`, beside `AgentHarness`:
     (`docs/features/auto-compact/design.md`). Every session draws a line:
     one with no usage event yet (a new chat, a restored row before its saved usage is read, a session usage does not
     track) draws a zero line, its context `0k` with no cache or spend. The line redraws on each snapshot, each `sessions.activeChanged`, each layouts set and the
-    minute tick. Each surface logs `session line in <name>: <text>` under its own plugin when a session's text
-    changes, `<name>` the session's side-bar label (its id while none is known).
+    minute tick. Each surface logs `<label> in <name>: <text>` under its own plugin when a session's text
+    changes (`context line` for the composer's line, `spend` for the status part, `session line` for the tab-bar line and the row parts), `<name>` the session's side-bar label (its id while none is known).
   - each session's row line, a sessions row part (`usage.rowLine`, added through `sessions.addRowPart`) under its
     side-bar row: the session's context meter and its used tokens (`121k`, no limit), drawn by the `rowLine` layout
     part and redrawn like the session line.

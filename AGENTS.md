@@ -258,8 +258,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  `docs/features/notes/design.md`), layouts/ (the notes Layout contract and the built-in `default`
                  layout)
   usage/         manifest.ts, contract.ts, main/ (polls each chat profile's plan usage through the Claude harness, folds
-                 `chat.planUsage` and `chat.agentEvent`), page/ (the status-bar plan line, each session's line in
-                 the Chat status line through chat's `addStatusPart`, its context meter and cache mark under each session row, and the right-bar details),
+                 `chat.planUsage` and `chat.agentEvent`), page/ (the status-bar plan line, each session's context line
+                 above the Chat box through chat's `addComposerPart` and its spend in the Chat status line through `addStatusPart`, its context meter and cache mark under each session row, and the right-bar details),
                  layouts/ (the usage Layout contract and the built-in `default` layout),
                  `docs/features/usage/design.md`
   usage-tab-line/ page/ only (each session's usage line in its tab bar through sessions' `addBarPart`, drawn by
