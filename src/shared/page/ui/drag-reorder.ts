@@ -13,9 +13,11 @@ export interface ReorderDrop {
   index: number;
 }
 
-// `dropped` may call `clear` to redraw. `ended` runs once per drag, after
-// `dropped` and after `clear` has removed every registration, so it may
-// register again.
+// `started` runs inside `dragstart`, where a layout change can cancel the drag
+// in Chromium, so a view defers one. `dropped` may call `clear` to redraw.
+// `ended` runs once per drag, after `dropped`. A drag `clear` ended has no
+// registrations left by then; after a drop or `dragend` they stand, so `ended`
+// calls `clear` before it registers again.
 export interface DragReorderEvents {
   dropped(drop: ReorderDrop): void;
   started(): void;

@@ -60,7 +60,7 @@ function sampleRow(
 // agent: a selected row, marked and unmarked rows, each harness and none, a
 // label long enough to end in an ellipsis, user, agent and first-message
 // titles and rows with none, an activity of each tone the rows use, and three
-// projects, one holding two rows from different folders.
+// projects, two of them holding two rows from different folders.
 export const PREVIEW_STATE: SessionsState = {
   rows: [
     sampleRow('preview-1', 'wigley-ai-gui', 'wigley-ai-gui', 'claude', false),

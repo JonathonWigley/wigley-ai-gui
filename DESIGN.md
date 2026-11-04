@@ -311,8 +311,8 @@ The primitives, each a builder in `src/shared/page/ui/`:
 - **SectionHeader** (`sectionHeader`): a section's heading with a trailing slot.
 - **DragReorder** (`createDragReorder`): drag to reorder over one or more drop zones, each a list of keyed items
   (`ui-drag-reorder-item`, dragged by a source element inside it); the item where the drop would land carries
-  `is-drop-before` or `is-drop-after`, an unordered zone (`ui-drag-reorder-zone`) carries `is-drop-target`, and the
-  dragged item `is-dragging`. A drop reports the item's key, the zone and the index it lands at among the zone's
+  `is-drop-before` or `is-drop-after`, an unordered zone (`ui-drag-reorder-zone`), or an ordered one holding no other
+  item, carries `is-drop-target`, and the dragged item `is-dragging`. A drop reports the item's key, the zone and the index it lands at among the zone's
   other items (0 in an unordered zone), so the view, not the primitive, changes the order. It acts only on drags it started, so file drops
   pass by. A view that drops it calls its `dispose`.
 
@@ -351,7 +351,7 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   tree, the Primer tab's tasks and items columns), the pane without focus marks itself `is-pane-inactive` and its selected
   row takes `list-inactive-selection-background` instead, so the pane the keys act on reads at a glance.
   Sessions mode's rows are compact cards, `card-background` under a `card-border` hairline with `radius-md`,
-  `space-1` apart: the title and activity on the first line, and a second line holding the status then other
+  `space-1_5` apart: the title and activity on the first line, and a second line holding the status then other
   plugins' row parts on one line, the run time and the cache mark at its end, gone while empty. Hover
   strengthens the border to `border-strong`, and the selected card takes `list-active-background` with an
   `accent-tint-strong` border.
