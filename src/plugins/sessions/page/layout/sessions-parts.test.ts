@@ -374,7 +374,7 @@ describe('sessions parts', () => {
 
   const DEFAULT_GROUP_FAVORITE: DrawnShape = {
     drawnBy: 'default',
-    holds: ['gripper', 'star-full', 'gamma', '2'],
+    holds: ['gamma', '2', 'star-full', 'gripper'],
     boxesInside: true,
     star: { icon: 'star-full', label: 'Unfavorite', isActive: true },
   };
@@ -405,7 +405,7 @@ describe('sessions parts', () => {
       draw: (parts) => groupShape(parts, NON_FAVORITE),
       expected: {
         drawnBy: 'default',
-        holds: ['gripper', 'star-empty', 'delta', '3'],
+        holds: ['delta', '3', 'star-empty', 'gripper'],
         boxesInside: true,
         star: { icon: 'star-empty', label: 'Favorite', isActive: false },
       },
@@ -539,6 +539,34 @@ describe('sessions parts', () => {
     expect(rowNamed(rows, 'first').classList.contains('is-selected')).toBe(
       false,
     );
+  });
+
+  it('sessionsParts_SectionAndGroupDrawnByUserLayout_KeepsRowsAndStar', () => {
+    const { view, sideBar, activated } = sessionsViewSetup();
+    view.setLayouts(
+      withUser<Layout>(defaultLayout, {
+        ...userGroup((kit, header) => {
+          kit.favoriteToggle(header);
+        }),
+        section: (parent, _input, kit) => {
+          const element = kit.el(parent, 'div', 'mine-section');
+          return { element, groups: kit.el(element, 'div', 'mine-groups') };
+        },
+      }),
+    );
+    const projectsBySection = () =>
+      findAll(sideBar, 'mine-groups').map((box) =>
+        findAll(box, 'mine-name').map((name) => name.textContent),
+      );
+
+    view.render(stateOf(['first', 'second'], 'first'));
+    const recentProjects = projectsBySection();
+    rowNamed(findAll(sideBar, 'mine-rows')[0].children, 'second').click();
+    findAll(sideBar, 'session-group-star')[0].click();
+
+    expect(recentProjects).toEqual([[], ['project']]);
+    expect(activated).toEqual(['second']);
+    expect(projectsBySection()).toEqual([['project'], []]);
   });
 
   it('sessionsParts_Redraw_LeavesOneAnchorPerHint', () => {

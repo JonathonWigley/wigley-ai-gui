@@ -2,12 +2,12 @@
 
 // The built-in Sessions look: the side bar's "Sessions" header over its two
 // sections, Favorites then Recent, each a label beside a hairline and a drop
-// hint over its groups, each group a project's header (grip, star, name and
-// count) over its rows,
+// hint over its groups, each group a project's header (name, count, star and
+// grip) over its rows,
 // each row a card: its title (the folder label for a row with no title; no
-// harness name), its activity's dot and word or, with no activity, its
-// attention dot, and its on-screen mark, over a footer holding its status then
-// other plugins' row parts (`contributedParts`),
+// harness name), its activity's dot or, with no activity, its attention dot,
+// and its on-screen mark, over a footer holding its status then other plugins'
+// row parts (`contributedParts`),
 // each chat pane's frame and focus edges, the tab bar's prompts around its
 // strip, other plugins' bar parts (`contributedParts`) after them, then its
 // close prompt and pane controls, each tab's icon with no label, and the
@@ -36,10 +36,10 @@ const layout = {
   group(parent, input, kit) {
     const element = kit.el(parent, 'div', 'session-group');
     const header = kit.el(element, 'div', 'session-group-header');
-    kit.dragHandle(header);
-    kit.favoriteToggle(header);
     kit.el(header, 'span', 'session-group-name', input.project);
     kit.el(header, 'span', 'session-group-count', String(input.count));
+    kit.favoriteToggle(header);
+    kit.dragHandle(header);
     const rows = kit.el(element, 'div', 'session-group-rows');
     return { element, header, rows };
   },
@@ -52,9 +52,7 @@ const layout = {
     element.classList.add('session-row');
     element.classList.toggle('is-on-screen', input.onScreen);
     if (input.activity !== null) {
-      const trailing = kit.rowTrailing(element);
-      kit.statusDot(trailing, input.activity.tone);
-      kit.el(trailing, 'span', 'session-row-activity', input.activity.word);
+      kit.statusDot(kit.rowTrailing(element), input.activity.tone);
     } else if (input.marked) {
       kit.statusDot(kit.rowTrailing(element), 'attention');
     }

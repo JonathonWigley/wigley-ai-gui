@@ -28,6 +28,7 @@
 .session-side {
   display: flex;
   flex-direction: column;
+  gap: var(--wg-space-1_5);
   min-height: 0;
 }
 
@@ -111,16 +112,21 @@
   display: block;
 }
 
-/* A project's header: the grip and star, the name, then the count. The grip
-   and a non-favorite's star keep their space until the header is hovered, so
-   the name never shifts and a hidden star takes no click. */
+/* A project's header: the name and count from the section label's inset, then
+   the star and grip at the line's end. The grip and a non-favorite's star keep
+   their space until the header is hovered, so a hidden star takes no click. */
 .session-group-header {
   display: flex;
   align-items: center;
   gap: var(--wg-space-1);
   min-width: 0;
+  padding: 0 var(--wg-space-2);
   color: var(--wg-fg-secondary);
   font-size: var(--wg-text-12);
+}
+
+.session-group-star {
+  margin-left: auto;
 }
 
 .session-group-grip {
@@ -138,13 +144,9 @@
   visibility: visible;
 }
 
-.ui-icon-button.session-group-star.is-active {
+/* A favorite's star has no fill at rest; hover and press keep the button's. */
+.ui-icon-button.session-group-star.is-active:not(:hover, :active) {
   background: transparent;
-  color: var(--wg-status-warning);
-}
-
-.ui-icon-button.session-group-star.is-active:hover {
-  background: var(--wg-button-ghost-hover);
 }
 
 .session-group-name {
@@ -163,7 +165,7 @@
 
 /* Each row is a card, so its title, status and parts read as one session:
    `card-background` under a `card-border` hairline with `radius-md`, the
-   title and activity on top and a footer under them. Hover strengthens the
+   title and activity's dot on top and a footer under them. Hover strengthens the
    border; the selected card keeps the row primitive's accent fill, and the
    keyboard cursor its focus ring. */
 .ui-row.session-row {
@@ -221,63 +223,33 @@
   box-shadow: inset 0 0 0 1px var(--wg-border-strong);
 }
 
-/* A row's first line never wraps: the title, then the folder label (the
-   folder label alone for a row with no title), then the trailing cell at the
-   line's end, holding the activity's dot then its word, or the attention dot.
-   The trailing cell keeps its full width and never shrinks. The title and the
-   folder label share the rest evenly, each ellipsizing past its share, and
-   neither goes under `--session-row-least`, one character and its ellipsis.
-   Under 170px of list, where the two at that least and the trailing cell's
-   longest word no longer fit one line, the folder label drops and the title
-   takes the line. The footer takes the whole second line. Each part has its
-   own column, so a row missing its folder label or trailing cell keeps the
-   others in place. The trailing column's least width is the trailing cell's
-   own, so the footer, which spans every column, ellipsizes or wraps inside
-   the row rather than widens it. Two classes, so the grid beats
-   the row primitive's flex line whichever sheet loads last. */
-.session-sidebar {
-  container: session-rows / inline-size;
-}
-
+/* A row's first line never wraps: the title (the folder label for a row with
+   no title), then the trailing cell at the line's end, holding the activity's
+   dot or the attention dot. The trailing cell keeps its full width and never
+   shrinks. The title ellipsizes in the rest and never goes under one character
+   and its ellipsis. The footer takes the whole second line. Each part has its
+   own column, so a row missing its trailing cell keeps the title in place. The
+   trailing column's least width is the trailing cell's own, so the footer,
+   which spans every column, ellipsizes or wraps inside the row rather than
+   widens it. Two classes, so the grid beats the row primitive's flex line
+   whichever sheet loads last. */
 .ui-row.session-row {
-  --session-row-least: var(--wg-space-6);
-
   display: grid;
-  grid-template-columns:
-    minmax(auto, max-content) minmax(auto, max-content)
-    minmax(auto, 1fr);
+  grid-template-columns: minmax(auto, max-content) minmax(auto, 1fr);
   column-gap: 0;
 }
 
 .session-row > .ui-row-label {
   grid-column: 1;
-  min-width: var(--session-row-least);
-}
-
-.session-row > .ui-row-detail {
-  grid-column: 2;
-  min-width: var(--session-row-least);
-  margin-left: var(--wg-space-2);
-}
-
-@container session-rows (width < 170px) {
-  .session-row > .ui-row-detail {
-    display: none;
-  }
+  min-width: var(--wg-space-6);
 }
 
 .session-row > .ui-row-trailing {
   display: flex;
   align-items: center;
-  gap: var(--wg-space-1);
-  grid-column: 3;
+  grid-column: 2;
   justify-self: end;
   margin-left: var(--wg-space-2);
-}
-
-.session-row-activity {
-  font-size: var(--wg-text-12);
-  white-space: nowrap;
 }
 
 /* A running activity's dot pulses: it reports the agent at work. Its cycle is
