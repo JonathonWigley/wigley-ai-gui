@@ -12,6 +12,22 @@ function mainErrorText(error: unknown): string {
   return errorText(error).replace(REMOTE_ERROR_PREFIX, '');
 }
 
+const pluginMessageListeners = new Map<
+  string,
+  Map<string, Array<(data: unknown) => void>>
+>();
+
+ipcRenderer.on(
+  BRIDGE_CHANNELS.pluginMessage,
+  (_event, toPlugin: string, sent: string, data: unknown) => {
+    // A listener added during this delivery waits for the next message.
+    const listeners = pluginMessageListeners.get(toPlugin)?.get(sent) ?? [];
+    for (const listener of Array.from(listeners)) {
+      listener(data);
+    }
+  },
+);
+
 const bridge: Bridge = {
   config: () => ipcRenderer.invoke(BRIDGE_CHANNELS.config),
   onConfig: (listener) => {
@@ -51,14 +67,11 @@ const bridge: Bridge = {
     }
   },
   onMessage: (pluginId, message, listener) => {
-    ipcRenderer.on(
-      BRIDGE_CHANNELS.pluginMessage,
-      (_event, toPlugin: string, sent: string, data: unknown) => {
-        if (toPlugin === pluginId && sent === message) {
-          listener(data);
-        }
-      },
-    );
+    const forPlugin = pluginMessageListeners.get(pluginId) ?? new Map();
+    pluginMessageListeners.set(pluginId, forPlugin);
+    const forMessage = forPlugin.get(message) ?? [];
+    forPlugin.set(message, forMessage);
+    forMessage.push(listener);
   },
   pathForFile: (file) => webUtils.getPathForFile(file),
   savePasted: async (bytes, mediaType) => {
