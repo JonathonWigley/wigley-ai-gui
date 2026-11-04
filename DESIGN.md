@@ -374,8 +374,8 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   limit), its cache countdown and its spend. In a narrow bar the line drops whole items from its end (spend, then cache,
   then the context text), never part of a number, keeping its context bar and a `space-2` gap before `⌘W`. A session
   with no usage yet draws a zero line, its context `0k`. While the session compacts, the line opens with a
-  `compacting` chip (`compacting · auto`) in `accent-tint`, and its context bar pulses at `duration-pulse`, static under
-  reduced motion. A meter takes the existing status colours by the server's severity (`normal`,
+  `compacting` chip (`compacting · auto`) in `accent-tint`, which ellipsizes when too narrow to fit beside the context
+  bar, and its context bar pulses at `duration-pulse`, static under reduced motion. A meter takes the existing status colours by the server's severity (`normal`,
   `warning`, `critical`); the context bar by its share of the limit
   (`warning` from 70 %, `critical` from 90 %). The context bar carries no label; a stale profile's rows and a note
   (`plan loading`, `plan unavailable`) draw in `fg-tertiary`. The details bar

@@ -1,6 +1,6 @@
 # 08 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 6 · Depends on: 01, 02, 03, 04, 05, 06, 07
 Plan: [plan.md](plan.md)
@@ -33,3 +33,5 @@ stale mention.
 Commit:    one commit for the doc fixes, naming each doc changed; no commit when no line changed (record that in Proof)
 
 ## Proof
+
+Commit 14bd0fb5 · proof: Doc diff read; worker read each listed doc against the code; no autoCompact.minTokens exists; the compacted grep finds no stale mention outside the plan folder; DESIGN.md, usage/design.md and claude-stream.md needed no change · concerns: none

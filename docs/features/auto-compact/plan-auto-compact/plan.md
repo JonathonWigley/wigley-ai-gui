@@ -241,7 +241,7 @@ read as `api.settings().minTokens` at each ask; the user writes `"auto-compact":
 - [x] [Auto-compact plugin](07-auto-compact-plugin.md) — after 04, 05
 
 ### Wave 6
-- [ ] [Doc re-read](08-doc-re-read.md)
+- [x] [Doc re-read](08-doc-re-read.md)
 
 ### Wave 7
 - [ ] [Final verification](09-final-verification.md)
@@ -258,6 +258,7 @@ Review base: 693cb8d04eb48c87e6cba0406a0e2d850f90db54
 - 05 · 763eeea0 · Diff read against Produces: addSendGate, addIdleCompactThreshold, SendGate types, SessionCompaction, holdReason, compaction channel event, holdCompactions and releaseCompactions drive actions, ChatDriveDeps.harnesses; typecheck errors left only in task 06's page files; chat vitest green per worker · concerns: Refused /compact draws its reason twice; pull-back window between compact() and compactionStarted; Turn finished alert can fire for a compaction whose row was pulled back; start.ts compactions wiring has no unit test
 - 07 · 6522eec6 · Diff read: manifest, send-gate fold and verdict, start wiring, layer rules, plugin lists; lead reran auto-compact tests, 30 pass; app start with the plugin is proven at the lead's self-test after wave 5 · concerns: A compaction's result line may refill the dropped usage with pre-compaction tokens; lastUsage re-emitted at restore may predate a compaction; each costs one needless compaction
 - 06 · 23e805df · Diff read against Produces: dock compacting state, bar, held row label with skip key, divider entry, ChatKit.tokens, compactionLabel, composerInputOf, preview entry; lead reran whole-tree typecheck, clean; worker ran 919 chat tests and lint, clean · concerns: chat-view compaction handler and the divider cursor stop have no unit test; a long gate reason may overflow the dock head; bar look is unseen until task 09
+- 08 · 14bd0fb5 · Doc diff read; worker read each listed doc against the code; no autoCompact.minTokens exists; the compacted grep finds no stale mention outside the plan folder; DESIGN.md, usage/design.md and claude-stream.md needed no change · concerns: none
 ### Contract changes
 - Compaction state and events: claude-code-harness.ts handleLine → session-fold.ts SessionFoldState.compaction, with new exports foldProcessClosed and nextFoldDeadline, plus compact() writing under appCommandUuid so a replay reads it as the app's · why: at the tip the line logic lives in the fold the session host extracted, and an attach replays it · consumers: none outside the adapter · group 02
 ### Rulings

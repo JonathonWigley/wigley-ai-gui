@@ -58,7 +58,8 @@
 /* A session's line in its Chat status line or tab bar: one row held to one
    line's height, so an item that does not fit wraps onto the hidden row below
    and shows whole or not at all, spend first, then cache, then the context
-   text. It shrinks below its content so the drop can happen. */
+   text; the meter and the compacting chip stay. It shrinks below its content
+   so the drop can happen. */
 [data-layout-owner='usage'][data-layout='default'].usage-session-line {
   --usage-session-line-height: calc(var(--wg-text-12) * var(--wg-leading-ui));
   align-items: center;
@@ -72,6 +73,18 @@
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
+}
+
+/* The compacting chip always leaves room for the meter beside it, and
+   ellipsizes in what remains: flex wrapping measures the clamped width, so the
+   meter stays on the visible row. The room assumes the meter's width
+   (`src/shared/page/ui/meter.css`) and the line's gap. */
+[data-layout-owner='usage'][data-layout='default'].usage-session-line
+  > .ui-tag {
+  max-width: calc(100% - var(--wg-space-8) * 1.5 - var(--wg-space-1_5));
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 [data-layout-owner='usage'][data-layout='default'].usage-row-line {
