@@ -114,6 +114,10 @@
 
 .chat-working-trigger {
   color: var(--wg-fg-secondary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* A compaction has no progress to report, so a segment slides across the

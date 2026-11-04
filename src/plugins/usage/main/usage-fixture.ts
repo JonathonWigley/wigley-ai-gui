@@ -104,7 +104,7 @@ function sessionUsage(sessionId: string, now: number): SessionUsage {
       contextTokens: 180_000,
       contextWindow: 1_000_000,
       autocompact: { configured: 300_000, reported: 967_000 },
-      cacheExpiresAt: now + 2_550_000,
+      cacheExpiresAt: now + 2_579_000,
       spendUsd: 1.234,
     },
     compaction: null,

@@ -65,18 +65,22 @@ export function sessionLineInput(
 ): SessionLineInput {
   const session = findSession(snapshot, sessionId);
   const compaction = session?.compaction ?? null;
-  const compacting =
-    compaction === null ? null : COMPACTING_CHIPS[compaction.trigger];
+  const compacting = {
+    compacting:
+      compaction === null ? null : COMPACTING_CHIPS[compaction.trigger],
+    compactingElapsedMs:
+      compaction === null ? null : now - compaction.startedAt,
+  };
   const usage = session?.usage ?? null;
   if (usage === null) {
     return {
       context: zeroContextMeter(),
       cache: null,
       spend: null,
-      compacting,
+      ...compacting,
     };
   }
-  return { ...sessionLine(usage, now), compacting };
+  return { ...sessionLine(usage, now), ...compacting };
 }
 
 // `sessionId`'s side-bar row line: its context, `0k` while the snapshot holds
@@ -189,7 +193,7 @@ function planNote(plan: ProfilePlan | null): string | null {
 function sessionLine(
   usage: UsageAgentEvent,
   now: number,
-): Omit<SessionLineInput, 'compacting'> {
+): Omit<SessionLineInput, 'compacting' | 'compactingElapsedMs'> {
   return {
     context: contextMeter(usage),
     cache: lineCache(usage.cacheExpiresAt, now),

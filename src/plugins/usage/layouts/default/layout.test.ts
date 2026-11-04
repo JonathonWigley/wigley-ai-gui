@@ -7,6 +7,12 @@ import layout from './layout.js';
 class FakeElement {
   className = '';
   children: FakeElement[] = [];
+  styleProperties = new Map<string, string>();
+  style = {
+    setProperty: (name: string, value: string) => {
+      this.styleProperties.set(name, value);
+    },
+  };
 
   constructor(readonly part: string) {}
 
@@ -46,7 +52,10 @@ const fakeKit = {
     part(parent, `meter:${percent}:${tone}`),
 } as unknown as UsageKit;
 
-function lineInput(compacting: string | null): SessionLineInput {
+function lineInput(
+  compacting: string | null,
+  compactingElapsedMs: number | null,
+): SessionLineInput {
   return {
     context: {
       label: 'Context',
@@ -57,35 +66,46 @@ function lineInput(compacting: string | null): SessionLineInput {
     cache: 'cache 42m',
     spend: '$1.23',
     compacting,
+    compactingElapsedMs,
   };
 }
 
 describe('default usage layout', () => {
   it.each([
     {
-      case: 'Compacting_DrawsChipFirst',
+      case: 'Compacting_DrawsChipFirstAndSetsItsElapsedTime',
       compacting: 'compacting · auto',
+      elapsedMs: 7250,
       isCompacting: true,
       firstParts: ['tag:compacting · auto:accent', 'meter:60:normal'],
+      elapsedProperty: '7250ms',
     },
     {
       case: 'NotCompacting_DrawsNoChip',
       compacting: null,
+      elapsedMs: null,
       isCompacting: false,
       firstParts: ['meter:60:normal', 'span:180k/300k'],
+      elapsedProperty: undefined,
     },
-  ])('sessionLine_$case', ({ compacting, isCompacting, firstParts }) => {
-    const parent = new FakeElement('parent') as unknown as HTMLElement;
+  ])(
+    'sessionLine_$case',
+    ({ compacting, elapsedMs, isCompacting, firstParts, elapsedProperty }) => {
+      const parent = new FakeElement('parent') as unknown as HTMLElement;
 
-    const line = asFake(
-      layout.sessionLine(parent, lineInput(compacting), fakeKit),
-    );
+      const line = asFake(
+        layout.sessionLine(parent, lineInput(compacting, elapsedMs), fakeKit),
+      );
 
-    expect(line.className.split(' ').includes('is-compacting')).toBe(
-      isCompacting,
-    );
-    expect(line.children.slice(0, 2).map((child) => child.part)).toEqual(
-      firstParts,
-    );
-  });
+      expect(line.className.split(' ').includes('is-compacting')).toBe(
+        isCompacting,
+      );
+      expect(line.children.slice(0, 2).map((child) => child.part)).toEqual(
+        firstParts,
+      );
+      expect(line.styleProperties.get('--usage-compacting-elapsed')).toBe(
+        elapsedProperty,
+      );
+    },
+  );
 });

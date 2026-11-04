@@ -61,13 +61,14 @@
    text; the meter and the compacting chip stay. It shrinks below its content
    so the drop can happen. */
 [data-layout-owner='usage'][data-layout='default'].usage-session-line {
+  --usage-session-line-gap: var(--wg-space-1_5);
   --usage-session-line-height: calc(var(--wg-text-12) * var(--wg-leading-ui));
   align-items: center;
   display: flex;
   flex-wrap: wrap;
   font-size: var(--wg-text-12);
   font-variant-numeric: tabular-nums;
-  gap: 0 var(--wg-space-1_5);
+  gap: 0 var(--usage-session-line-gap);
   height: var(--usage-session-line-height);
   line-height: var(--wg-leading-ui);
   min-width: 0;
@@ -78,10 +79,13 @@
 /* The compacting chip always leaves room for the meter beside it, and
    ellipsizes in what remains: flex wrapping measures the clamped width, so the
    meter stays on the visible row. The room assumes the meter's width
-   (`src/shared/page/ui/meter.css`) and the line's gap. */
+   (`src/shared/page/ui/meter.css`); the tab bar's slot keeps the line wide
+   enough for both (`usage.css`). */
 [data-layout-owner='usage'][data-layout='default'].usage-session-line
   > .ui-tag {
-  max-width: calc(100% - var(--wg-space-8) * 1.5 - var(--wg-space-1_5));
+  max-width: calc(
+    100% - var(--wg-space-8) * 1.5 - var(--usage-session-line-gap)
+  );
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -110,7 +114,9 @@
 
 /* The context meter reports the agent compacting, so it loops at
    `duration-pulse`, not the transition durations, which pulse fast enough to
-   read as flashing. Under reduced motion it is static. */
+   read as flashing. Each draw builds a new meter, so the layout's elapsed time
+   starts its animation where the compaction has it, and a redraw never jumps
+   the pulse. Under reduced motion it is static. */
 @keyframes usage-meter-pulse {
   0%,
   100% {
@@ -125,6 +131,7 @@
 [data-layout-owner='usage'][data-layout='default'].usage-session-line.is-compacting
   > .ui-meter {
   animation: usage-meter-pulse var(--wg-duration-pulse) ease-in-out infinite;
+  animation-delay: calc(var(--usage-compacting-elapsed) * -1);
 }
 
 @media (prefers-reduced-motion: reduce) {

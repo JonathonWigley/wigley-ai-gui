@@ -21,10 +21,10 @@ export interface ActivityDockDeps {
 // way (working, or waiting on a permission answer), the dock is live (`workingInput`), sent again only when its steps
 // (by identity), state, start or compaction change, and once a second with a new `now`; a live dock is held as shown
 // while the turn holds no entries and no compaction starts or ends, so a turn's last result leaves it running until the
-// session goes idle. While a compaction runs the dock is live whether or not a turn is under way: an app compaction
-// starts while the session's activity reads idle. Once idle, the dock shows the turn's finished line (`doneInput`)
-// whenever any of its fields change, or hides (null) when no result follows the user's last message. Done and hidden
-// never tick.
+// session goes idle. While a compaction runs the dock is live whether or not a turn is under way: a harness's own
+// compaction opens no turn, and an interrupt's grace can end the turn before its compaction, so activity can read idle
+// under it. Once idle, the dock shows the turn's finished line (`doneInput`) whenever any of its fields change, or hides
+// (null) when no result follows the user's last message. Done and hidden never tick.
 export interface ActivityDock {
   // The session's entries after a change, whether the session's turn is under way (working, or waiting on a permission
   // answer), and the compaction running in the session.

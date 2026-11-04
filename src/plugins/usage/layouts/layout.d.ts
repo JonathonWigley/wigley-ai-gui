@@ -6,7 +6,7 @@
 // snapshot, each change of the shown session, each layouts set and once a minute.
 //
 // Every input is already worded for the screen: counts, percents, money and times arrive as text, and each meter's
-// fill and tone beside its text.
+// fill and tone beside its text. The one number that is no reading is `compactingElapsedMs`, for timing an animation.
 import type { BaseKit } from '../../../shared/page/layout-host/kit';
 
 export type UsageTone = 'normal' | 'warning' | 'critical';
@@ -19,12 +19,15 @@ export interface MeterInput {
 }
 // One session's line: its context meter, its cache countdown (`cache 42m`, `cache cold`) and its spend (`$1.23`);
 // null cache or spend while the session has reported none. `compacting` is the chip naming the trigger while the
-// session compacts (`compacting · auto`, `compacting`, `compacting · autocompact`), null otherwise.
+// session compacts (`compacting · auto`, `compacting`, `compacting · autocompact`), null otherwise;
+// `compactingElapsedMs` is how long it has compacted at this draw, null with it, so an animation a redraw builds again
+// can start where the last one was.
 export interface SessionLineInput {
   context: MeterInput;
   cache: string | null;
   spend: string | null;
   compacting: string | null;
+  compactingElapsedMs: number | null;
 }
 // One session's line under its side-bar row: its context meter.
 export interface RowLineInput {

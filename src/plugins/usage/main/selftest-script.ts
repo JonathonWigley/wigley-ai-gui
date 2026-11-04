@@ -45,6 +45,9 @@ const DETAILS_HIDDEN = '[usage] details hidden';
 const FRESH_LINE = `session line in ${SELFTEST_PROJECT_NAME}: context 180k/300k, cache 42m, spend $1.23`;
 // The same line while the fake's own compaction runs.
 const COMPACTING_LINE = `session line in ${SELFTEST_PROJECT_NAME}: compacting · autocompact, context 180k/300k, cache 42m, spend $1.23`;
+const SEND_FAKE_COMPACT = ['i', ...FAKE_COMPACT_TEXT, 'Escape', 'Enter'];
+const COMPACTING_TAB_LINE =
+  /^\[usage-tab-line\] session line in usage-selftest: compacting · autocompact, context 180k\/300k, cache 42m, spend \$1\.23$/;
 
 const GROUPS: SelfTestGroup[] = [
   {
@@ -85,17 +88,23 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'compacting',
-    why: "A compaction draws the trigger's chip at the start of the session line and drops it when the compaction ends.",
+    why: "A compaction draws the trigger's chip at the start of the session line, beside its meter at the window's least width too, and drops it when the compaction ends.",
     steps: [
       {
         width: 'start',
-        keys: ['i', ...FAKE_COMPACT_TEXT, 'Escape', 'Enter'],
+        keys: SEND_FAKE_COMPACT,
         expect: `[usage] ${COMPACTING_LINE}`,
-        alsoExpect: [
-          /^\[usage-tab-line\] session line in usage-selftest: compacting · autocompact, context 180k\/300k, cache 42m, spend \$1\.23$/,
-        ],
+        alsoExpect: [COMPACTING_TAB_LINE],
         screenshot: 'compacting',
         checksFit: true,
+      },
+      { keys: ['<C-c>'], expect: `[usage] ${FRESH_LINE}` },
+      {
+        width: 420,
+        keys: SEND_FAKE_COMPACT,
+        expect: `[usage] ${COMPACTING_LINE}`,
+        alsoExpect: [COMPACTING_TAB_LINE],
+        screenshot: 'compacting-narrow',
       },
       { keys: ['<C-c>'], expect: `[usage] ${FRESH_LINE}` },
     ],

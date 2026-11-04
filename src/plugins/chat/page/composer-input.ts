@@ -10,8 +10,8 @@ import { valueLabel } from './chat-state';
 import { controlCommand } from './control-commands';
 
 // The composer's input for a Chat tab: a turn or a compaction is in progress
-// while the process runs and is not idle or compacts, and the chips are enabled
-// only while it runs.
+// while the process runs and is not idle, or runs a compaction, and the chips
+// are enabled only while it runs.
 export function composerInputOf(tab: {
   name: string;
   state: Pick<

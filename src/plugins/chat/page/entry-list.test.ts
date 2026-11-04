@@ -265,6 +265,16 @@ const result = (id: string): ChatEntry => ({
   durationMs: null,
   raw: [],
 });
+const compaction = (id: string): ChatEntry => ({
+  kind: 'compaction',
+  id,
+  at: 2000,
+  trigger: 'manual',
+  beforeTokens: 180_000,
+  afterTokens: 24_000,
+  durationMs: 9000,
+  raw: [],
+});
 
 const queued = (id: string): QueuedMessage => ({
   id,
@@ -888,6 +898,7 @@ describe('activity hidden', () => {
     assistant('done'),
     permission('p1'),
     result('r1'),
+    compaction('c1'),
     notice('n1'),
   ];
   const putAllThenRebuild = ({ list, put, entries }: ListSetUp) => {
@@ -920,10 +931,17 @@ describe('activity hidden', () => {
         'chat-entry-slot',
         'chat-entry-slot',
         'chat-entry-slot',
+        'chat-entry-slot',
         'chat-entry-slot is-cursor',
       ],
-      kinds: ['chat-user', 'chat-assistant', 'chat-permission', 'chat-notice'],
-      stops: ['u1', 'a1', 'p1', 'n1'],
+      kinds: [
+        'chat-user',
+        'chat-assistant',
+        'chat-permission',
+        'chat-compaction',
+        'chat-notice',
+      ],
+      stops: ['u1', 'a1', 'p1', 'c1', 'n1'],
       focused: 'n1',
     },
     {
@@ -938,6 +956,7 @@ describe('activity hidden', () => {
         'chat-entry-slot',
         'chat-entry-slot',
         'chat-entry-slot',
+        'chat-entry-slot',
         'chat-entry-slot is-cursor',
       ],
       kinds: [
@@ -948,9 +967,10 @@ describe('activity hidden', () => {
         'chat-assistant',
         'chat-permission',
         'chat-result',
+        'chat-compaction',
         'chat-notice',
       ],
-      stops: ['u1', 'activity:t1', 'a1', 'p1', 'r1', 'n1'],
+      stops: ['u1', 'activity:t1', 'a1', 'p1', 'r1', 'c1', 'n1'],
       focused: 'n1',
     },
     {
@@ -967,10 +987,17 @@ describe('activity hidden', () => {
         'chat-entry-slot',
         'chat-entry-slot',
         'chat-entry-slot',
+        'chat-entry-slot',
         'chat-entry-slot is-cursor',
       ],
-      kinds: ['chat-user', 'chat-assistant', 'chat-permission', 'chat-notice'],
-      stops: ['u1', 'a1', 'p1', 'n1'],
+      kinds: [
+        'chat-user',
+        'chat-assistant',
+        'chat-permission',
+        'chat-compaction',
+        'chat-notice',
+      ],
+      stops: ['u1', 'a1', 'p1', 'c1', 'n1'],
       focused: 'n1',
     },
     {
@@ -989,6 +1016,7 @@ describe('activity hidden', () => {
         'chat-entry-slot',
         'chat-entry-slot',
         'chat-entry-slot',
+        'chat-entry-slot',
         'chat-entry-slot is-cursor',
       ],
       kinds: [
@@ -999,9 +1027,10 @@ describe('activity hidden', () => {
         'chat-assistant',
         'chat-permission',
         'chat-result',
+        'chat-compaction',
         'chat-notice',
       ],
-      stops: ['u1', 'activity:t1', 'a1', 'p1', 'r1', 'n1'],
+      stops: ['u1', 'activity:t1', 'a1', 'p1', 'r1', 'c1', 'n1'],
       focused: 'n1',
     },
     {

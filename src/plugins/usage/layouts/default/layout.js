@@ -73,6 +73,10 @@ const layout = {
     line.classList.toggle('is-compacting', input.compacting !== null);
     if (input.compacting !== null) {
       kit.tag(line, input.compacting, 'accent');
+      line.style.setProperty(
+        '--usage-compacting-elapsed',
+        `${input.compactingElapsedMs}ms`,
+      );
     }
     kit.meter(line, input.context.percent, input.context.tone);
     kit.el(line, 'span', 'usage-text', input.context.text);

@@ -337,6 +337,7 @@ describe('sessionLineInput', () => {
       cache: null,
       spend: null,
       compacting: null,
+      compactingElapsedMs: null,
     });
   });
 
@@ -344,7 +345,7 @@ describe('sessionLineInput', () => {
     const snapshot: UsageSnapshot = {
       plans: [plan()],
       sessions: [
-        session('s1', WORK_DIR, null, { trigger: 'app', startedAt: NOW }),
+        session('s1', WORK_DIR, null, { trigger: 'app', startedAt: NOW - 900 }),
       ],
     };
 
@@ -353,6 +354,7 @@ describe('sessionLineInput', () => {
       cache: null,
       spend: null,
       compacting: 'compacting · auto',
+      compactingElapsedMs: 900,
     });
   });
 
@@ -360,34 +362,47 @@ describe('sessionLineInput', () => {
     case: string;
     compaction: SessionUsage['compaction'];
     expected: string | null;
+    expectedElapsedMs: number | null;
   }>([
     {
       case: 'App',
-      compaction: { trigger: 'app', startedAt: NOW },
+      compaction: { trigger: 'app', startedAt: NOW - 7250 },
       expected: 'compacting · auto',
+      expectedElapsedMs: 7250,
     },
     {
       case: 'Manual',
       compaction: { trigger: 'manual', startedAt: NOW },
       expected: 'compacting',
+      expectedElapsedMs: 0,
     },
     {
       case: 'Harness',
-      compaction: { trigger: 'harness', startedAt: NOW },
+      compaction: { trigger: 'harness', startedAt: NOW - 1 },
       expected: 'compacting · autocompact',
+      expectedElapsedMs: 1,
     },
-    { case: 'None', compaction: null, expected: null },
-  ])('sessionLineInput_Compacting_$case', ({ compaction, expected }) => {
-    const snapshot: UsageSnapshot = {
-      plans: [plan()],
-      sessions: [session('s1', WORK_DIR, usageEvent(), compaction)],
-    };
+    {
+      case: 'None',
+      compaction: null,
+      expected: null,
+      expectedElapsedMs: null,
+    },
+  ])(
+    'sessionLineInput_Compacting_$case',
+    ({ compaction, expected, expectedElapsedMs }) => {
+      const snapshot: UsageSnapshot = {
+        plans: [plan()],
+        sessions: [session('s1', WORK_DIR, usageEvent(), compaction)],
+      };
 
-    expect(sessionLineInput(snapshot, 's1', NOW)).toMatchObject({
-      context: meter('180k/300k', 60, 'normal'),
-      compacting: expected,
-    });
-  });
+      expect(sessionLineInput(snapshot, 's1', NOW)).toMatchObject({
+        context: meter('180k/300k', 60, 'normal'),
+        compacting: expected,
+        compactingElapsedMs: expectedElapsedMs,
+      });
+    },
+  );
 });
 
 describe('rowLineInput', () => {
@@ -660,6 +675,7 @@ describe('log text', () => {
         cache: 'cache 42m',
         spend: '$1.23',
         compacting: null,
+        compactingElapsedMs: null,
       },
       expected: 'context 180k/300k, cache 42m, spend $1.23',
     },
@@ -670,6 +686,7 @@ describe('log text', () => {
         cache: 'cache 42m',
         spend: '$1.23',
         compacting: 'compacting · auto',
+        compactingElapsedMs: 900,
       },
       expected: 'compacting · auto, context 180k/300k, cache 42m, spend $1.23',
     },
@@ -680,6 +697,7 @@ describe('log text', () => {
         cache: null,
         spend: '$1.23',
         compacting: null,
+        compactingElapsedMs: null,
       },
       expected: 'context 180k/300k, spend $1.23',
     },
@@ -690,6 +708,7 @@ describe('log text', () => {
         cache: 'cache cold',
         spend: null,
         compacting: null,
+        compactingElapsedMs: null,
       },
       expected: 'context 180k, cache cold',
     },
