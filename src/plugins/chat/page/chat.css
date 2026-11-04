@@ -124,21 +124,30 @@
   );
 }
 
-/* The chat's focus exception: the focused entry draws a left bar, not the
-   ring, and while the box has focus no entry and no box frame is marked; while
-   a composer part's stop holds the cursor no entry is marked either. */
+/* The chat's focus exception: the focused block, or the focused entry when it
+   has no blocks, draws a left bar, not the ring, and while the box has focus no
+   entry and no box frame is marked; while a composer part's stop holds the
+   cursor no entry is marked either. A range tints each of its stops. */
 .chat-entry-slot {
   margin: var(--wg-space-1) 0;
   padding: var(--wg-space-1) var(--wg-space-2);
 }
 
-.chat-entry-slot.is-cursor {
+.chat-entry-slot.is-cursor,
+[data-md-lines].is-cursor {
   box-shadow: inset var(--wg-indicator-width) 0 0 var(--wg-focus-border);
 }
 
 .chat-tab.is-box-focused .chat-entry-slot.is-cursor,
-.chat-tab.is-at-stop .chat-entry-slot.is-cursor {
+.chat-tab.is-box-focused [data-md-lines].is-cursor,
+.chat-tab.is-at-stop .chat-entry-slot.is-cursor,
+.chat-tab.is-at-stop [data-md-lines].is-cursor {
   box-shadow: none;
+}
+
+.chat-entry-slot.is-range,
+[data-md-lines].is-range {
+  background: var(--wg-accent-tint);
 }
 
 @media (max-width: 800px) {

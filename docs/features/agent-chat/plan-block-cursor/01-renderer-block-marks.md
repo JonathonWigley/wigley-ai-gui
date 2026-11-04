@@ -1,6 +1,6 @@
 # 01 — Renderer block marks
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -42,3 +42,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 20e52afa · proof: diff read, Produces present, 68 filtered tests pass, typecheck clean in its files · concerns: stock code_block attribute placement not read from node_modules, the indented row proves the mark lands on <pre>; about 25 exact-output rows now carry literal marks

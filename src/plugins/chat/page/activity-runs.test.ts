@@ -214,7 +214,34 @@ describe('activity runs', () => {
       open: [runIdOf('k')],
       expected: ['u', 'activity:t1', 'a', 'activity:k', 'k', 't2'],
     },
-  ])('cursorStops of $given → $expected', ({ rows, open, expected }) => {
-    expect(cursorStops(rows, new Set(open))).toEqual(expected);
-  });
+    {
+      given: 'blocks on messages, a divider and a notice between',
+      rows: listRows(
+        entries('user:u', 'assistant:a', 'result:r', 'notice:n', 'assistant:b'),
+        false,
+      ),
+      open: [],
+      blocks: [
+        ['u', 1],
+        ['a', 3],
+        ['r', 2],
+        ['b', 0],
+      ] as const,
+      expected: ['u#0', 'a#0', 'a#1', 'a#2', 'n', 'b'],
+    },
+    {
+      given: 'an open run with an entry of blocks after it',
+      rows: listRows(entries('tool:t1', 'assistant:a'), false),
+      open: [runIdOf('t1')],
+      blocks: [['a', 2]] as const,
+      expected: ['activity:t1', 't1', 'a#0', 'a#1'],
+    },
+  ])(
+    'cursorStops of $given → $expected',
+    ({ rows, open, blocks, expected }) => {
+      expect(cursorStops(rows, new Set(open), new Map(blocks))).toEqual(
+        expected,
+      );
+    },
+  );
 });

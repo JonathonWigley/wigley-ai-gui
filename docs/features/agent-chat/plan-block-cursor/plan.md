@@ -151,8 +151,8 @@ Shared names:
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Renderer block marks](01-renderer-block-marks.md)
-- [ ] [Cursor model](02-cursor-model.md)
+- [x] [Renderer block marks](01-renderer-block-marks.md)
+- [x] [Cursor model](02-cursor-model.md)
 
 ### Wave 2
 - [ ] [Entry list block stops](03-entry-list-block-stops.md) — after 01, 02
@@ -168,10 +168,16 @@ Shared names:
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: e976884ea34536afc67f149b90cdf9797c672647
 
 ### Groups
+- 01 · 20e52afa · diff read, Produces present, 68 filtered tests pass, typecheck clean in its files · concerns: stock code_block attribute placement not read from node_modules, the indented row proves the mark lands on <pre>; about 25 exact-output rows now carry literal marks
+- 02 · 8a95529d · diff read, all Produces present, 85 filtered tests pass, typecheck clean in its files; entry-list errors expected until 03 · concerns: an open anchor clears when its entry's block count changes, during streaming too; docs/features/followups.md near line 150 names the old onLine row, for task 05
 ### Contract changes
 ### Rulings
+- An ordered-list row and an indented-code case added beyond the five GIVEN rows — the Decisions name both and no row caught a break — one extra row if unwanted · group 01 · group 01
+- entryIdOfStop removes a trailing #<digits> only, per Decisions over the Produces line — the Decisions line is explicit — an id like tool#x stays whole · group 02 · group 02
+- focusStop sets following to exactly stopId === last id, clearing it on an earlier stop — a kept flag would pull the cursor back on the next redraw — a click from a following focus stops following · group 02 · group 02
+- moveToMessage keeps anchorId — matches G and gg keeping an open range — one line to clear it on J and K · group 02 · group 02
 ### Review rounds
 ### Test gate

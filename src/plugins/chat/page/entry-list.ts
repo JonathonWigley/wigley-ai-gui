@@ -33,7 +33,7 @@ import {
   type ListRow,
   type ListStop,
   listRows,
-  rowId,
+  rowStops,
 } from './activity-runs';
 import { createEntryKit, type EntryKit, type KitDeps } from './chat-kit';
 import {
@@ -46,16 +46,24 @@ import {
   surfaceBaseKit,
 } from './chat-layouts';
 import {
+  blockStopId,
+  clearAnchor,
   type EntryFocus,
+  entryIdOfStop,
   focusAfterChange,
   focusAfterClose,
   focusAfterScroll,
   focusAfterScrollEvent,
   focusFirst,
   focusLatest,
+  focusStop,
   isAtLastStop,
   moveFocus,
+  moveToMessage,
+  nearestVisibleStop,
+  rangeStops,
   START_FOCUS,
+  toggleAnchor,
 } from './entry-focus';
 import { resultStepCount } from './working-turn';
 
@@ -78,8 +86,8 @@ export interface EntryListDeps {
 
 export type ToggleResult = 'expanded' | 'collapsed' | 'nothing';
 
-// One place the entry cursor can stop: an entry, a run's activity line, or a
-// pending row.
+// What the entry cursor is on: an entry (for a block stop, the entry holding the
+// block), a run's activity line, or a pending row.
 export type EntryListStop =
   | ListStop
   | { kind: 'queued'; message: QueuedMessage };
@@ -95,17 +103,24 @@ export interface TranscriptScroll extends ContentScroll {
 // activity out of the transcript, steps get no slot, so no run or step is drawn
 // or stopped on; the flag is read when the list is created and at each rebuild.
 // The session's queued messages follow the last entry as pending rows, oldest
-// first. The cursor stops on each entry but a turn or compaction divider, on
-// each activity line, on each step of an open run, then on each pending row; the
-// focused stop's slot is marked `is-cursor`. A following focus moves
-// to the latest stop as the list changes, except one on the last row's
-// activity line, which stays on it while the run is open and grows and no
+// first. The cursor stops on each block a user or assistant entry drew (its
+// `[data-md-lines]` elements, read as the slot builds and redraws), on any other
+// entry but a turn or compaction divider, on each activity line, on each step of
+// an open run, then on each pending row; the focused block, else the focused
+// stop's slot, is marked `is-cursor`. A range opens at an anchor and runs to the
+// cursor, each of its stops marked `is-range`, and can cross messages. A following
+// focus moves to the latest stop as the list changes, except one on the last
+// row's activity line, which stays on it while the run is open and grows and no
 // pending row follows it. After every change, and whenever the list's own box
 // or any slot's box resizes, a following focus scrolls the list to its bottom;
 // a hidden list does not scroll, so its tab calls `scrollToFocus` each time it
 // shows. Any scroll of a shown list (wheel, trackpad, scrollbar or keys) that
 // comes to rest off the bottom stops following, and one that lands on the
-// bottom follows again.
+// bottom follows again; a cursor it leaves outside the visible band (the list's
+// box less its bottom scroll padding) moves to the nearest stop inside it. A
+// plain click moves the cursor to the block or slot under it without scrolling;
+// a click ending a text selection, on a link or control, or on what has no stop
+// leaves it.
 // While the session works on its turn, the live run's line time ticks once a
 // second.
 export interface EntryList {
@@ -123,18 +138,33 @@ export interface EntryList {
   setQueued(queued: readonly QueuedMessage[]): void;
   // Whether the session works on its turn: only then is a last run live.
   setWorking(working: boolean): void;
-  // The focused stop after the move; null with no stops.
+  // Moves one stop, a block being a stop of its own; the focused stop after the
+  // move, null with no stops.
   move(step: 1 | -1): EntryListStop | null;
+  // Moves to the first stop of the next or previous user or assistant message;
+  // the focused stop after the move, unchanged at the first or last message,
+  // null with no stops.
+  moveToMessage(step: 1 | -1): EntryListStop | null;
   // Whether `move(1)` has no stop left to move to: no stops, or the focus on
   // the last stop in cursor order (the newest pending row, else the last row's
-  // last stop: an open last run's last step).
+  // last stop: an entry's last block, or an open last run's last step).
   isAtLastStop(): boolean;
-  // Follows the last row, the newest pending row, else an entry or a run's
-  // line whether the run is open or not, and scrolls to the bottom.
+  // Follows the last row, the newest pending row, else an entry's last block,
+  // an entry, or a run's line whether the run is open or not, and scrolls to
+  // the bottom. An open range stays open.
   latest(): void;
   // Focuses the first stop and scrolls to the top; the focused stop, null
-  // with no stops.
+  // with no stops. An open range stays open.
   first(): EntryListStop | null;
+  // Opens a range at the cursor, or closes the open one.
+  toggleRange(): void;
+  // Closes the open range; true when one was open.
+  cancelRange(): boolean;
+  // The source of the range, else of the cursor's stop: a block's own lines, a
+  // user, assistant or notice entry's text, a pending row's message, one blank
+  // line between parts; `blockCount` counts the parts. Null when no part remains,
+  // as on an activity line, a step or a permission card.
+  selectedSource(): { text: string; blockCount: number } | null;
   // Scrolls to the bottom while following, else leaves the scroll alone.
   followBottom(): void;
   // Scrolls to the bottom while following, else brings the focused stop
@@ -143,19 +173,23 @@ export interface EntryList {
   // Scrolls the list by `step`. Scrolling up off the bottom
   // stops following, so entries that arrive leave the scroll alone; scrolling
   // down onto the bottom (within 1px) follows the latest stop again. The
-  // focused stop stays either way.
+  // focused stop stays until the list's scroll event finds it out of view.
   scrollBy(step: ScrollStep, direction: 1 | -1): TranscriptScroll;
-  // The focused stop; null with no focused stop.
+  // The focused stop, the entry holding it for a block stop; null with no
+  // focused stop.
   focused(): EntryListStop | null;
-  // The focused stop's slot element; null with no focused stop.
+  // The focused stop's slot element, the slot of the entry holding it for a
+  // block stop; null with no focused stop.
   focusedElement(): HTMLElement | null;
+  // The cursor's block element; null on a stop with no blocks.
+  focusedBlock(): HTMLElement | null;
   // On an activity line, opens the run when it is closed, else closes it. On
   // an entry, opens every expander when any is closed, else closes them all.
   // Null with no focused stop, or on a pending row, which toggles nothing.
   toggleFocused(): { stop: ListStop; result: ToggleResult } | null;
-  // Stops following the list's size and the tick, disposes every entry's kit,
-  // every activity line and every pending row, and forgets the open runs; the
-  // list's owner calls it when it drops the list.
+  // Stops following the list's size, scrolls, clicks and the tick, disposes every
+  // entry's kit, every activity line and every pending row, and forgets the open
+  // runs; the list's owner calls it when it drops the list.
   dispose(): void;
 }
 
@@ -176,11 +210,13 @@ interface DrawnEntry {
 
 // One drawn entry and its slot. `drawsWithDefault` holds once an update of a
 // layout other than the bundled default has thrown, and the slot is drawn
-// with the bundled default layout from then on.
+// with the bundled default layout from then on. `blocks` are the cursor's block
+// elements as last read from the drawn entry.
 interface Slot extends DrawnEntry {
   element: HTMLLIElement;
   entry: ChatEntry;
   drawsWithDefault: boolean;
+  blocks: HTMLElement[];
 }
 
 // What a builder's draw returns to `drawPart`.
@@ -240,10 +276,17 @@ interface SlotPartDraws<K extends SlotPartName> {
 
 const TICK_MS = 1000;
 
+const BLOCK_SELECTOR = '[data-md-lines]';
+
+// What a click acts on by itself, so it leaves the cursor.
+const CLICK_CONTROLS = 'a, button, summary, input, textarea, .md-fence';
+
 export function createEntryList(deps: EntryListDeps): EntryList {
   const list = element('ol', 'chat-entries');
   const slots = new Map<string, Slot>();
   const runSlots = new Map<string, RunSlot>();
+  // Each slot's block count by entry id, as last read.
+  const blockCounts = new Map<string, number>();
   // Each pending row's slot by its stop id, oldest first.
   let queuedSlots = new Map<string, QueuedSlot>();
   const openRuns = new Set<string>();
@@ -265,27 +308,80 @@ export function createEntryList(deps: EntryListDeps): EntryList {
   let order: string[] = [];
   let focus: EntryFocus = START_FOCUS;
   let tick: number | null = null;
+  // The elements carrying `is-cursor` or `is-range`.
+  const markedElements: HTMLElement[] = [];
+  let lastScrollTop = list.scrollTop;
 
   const slotElement = (id: string) =>
     slots.get(id)?.element ??
     runSlots.get(id)?.element ??
     queuedSlots.get(id)?.element;
 
+  // The slot a stop belongs to: its own, or that of the entry holding its block.
+  const slotOfStop = (stopId: string) =>
+    slotElement(stopId) ?? slotElement(entryIdOfStop(stopId));
+
+  // The block element of `stopId`; undefined on a stop with no blocks.
+  const blockOfStop = (stopId: string) => {
+    const slot = slots.get(entryIdOfStop(stopId));
+    return slot?.blocks.find(
+      (_block, index) => blockStopId(slot.entry.id, index) === stopId,
+    );
+  };
+
+  // The element a stop draws on: its block, else its slot.
+  const stopElement = (stopId: string) =>
+    blockOfStop(stopId) ?? slotOfStop(stopId);
+
+  // Reads a built or redrawn slot's blocks.
+  const holdBlocks = (slot: Slot) => {
+    slot.blocks = readBlocks(slot.element, slot.entry);
+    blockCounts.set(slot.entry.id, slot.blocks.length);
+  };
+
   // Where a new entry slot goes: before the first pending row, else last.
   const entryPlace = () => [...queuedSlots.values()].at(0)?.element ?? null;
 
   // The stop the list ends on: the newest pending row, else the last row's.
-  const lastStopId = () => [...queuedSlots.keys()].at(-1) ?? lastRowId(rows);
+  const lastStopId = () =>
+    [...queuedSlots.keys()].at(-1) ?? lastRowId(rows, blockCounts);
 
-  const drawFocus = (scroll: 'follow' | 'slot' | 'bottom' | 'top') => {
-    for (const [id, slot] of [...slots, ...runSlots, ...queuedSlots]) {
-      slot.element.classList.toggle('is-cursor', id === focus.entryId);
+  const markStop = (stopId: string, mark: 'is-cursor' | 'is-range') => {
+    const marked = stopElement(stopId);
+    if (marked !== undefined) {
+      marked.classList.add(mark);
+      markedElements.push(marked);
+    }
+  };
+
+  const drawMarks = () => {
+    for (const marked of markedElements) {
+      marked.classList.remove('is-cursor', 'is-range');
+    }
+    markedElements.length = 0;
+    if (focus.anchorId !== null) {
+      for (const stopId of rangeStops(focus, order)) {
+        markStop(stopId, 'is-range');
+      }
+    }
+    if (focus.stopId !== null) {
+      markStop(focus.stopId, 'is-cursor');
+    }
+  };
+
+  // `marks` draws the marks alone and leaves the scroll.
+  const drawFocus = (
+    scroll: 'follow' | 'slot' | 'bottom' | 'top' | 'marks',
+  ) => {
+    drawMarks();
+    if (scroll === 'marks') {
+      return;
     }
     const isBottom = scroll === 'bottom' || focus.following;
     if (scroll === 'top') {
       list.scrollTop = 0;
-    } else if (scroll === 'slot' && focus.entryId !== null) {
-      slotElement(focus.entryId)?.scrollIntoView({ block: 'nearest' });
+    } else if (scroll === 'slot' && focus.stopId !== null) {
+      stopElement(focus.stopId)?.scrollIntoView({ block: 'nearest' });
     } else if (isBottom) {
       list.scrollTop = list.scrollHeight;
     }
@@ -319,7 +415,10 @@ export function createEntryList(deps: EntryListDeps): EntryList {
         putRun(row);
       }
     }
-    order = [...cursorStops(rows, openRuns), ...queuedSlots.keys()];
+    order = [
+      ...cursorStops(rows, openRuns, blockCounts),
+      ...queuedSlots.keys(),
+    ];
     focus = focusAfterChange(focus, order, lastStopId());
     drawFocus('follow');
     followWorking();
@@ -402,36 +501,91 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     return opens ? 'expanded' : 'collapsed';
   };
 
-  const focusedStop = (): EntryListStop | null => {
-    if (focus.entryId === null) {
-      return null;
-    }
-    const slot = slots.get(focus.entryId);
+  const stopAt = (stopId: string): EntryListStop | null => {
+    const slot = slots.get(stopId) ?? slots.get(entryIdOfStop(stopId));
     if (slot !== undefined) {
       return { kind: 'entry', entry: slot.entry };
     }
-    const run = runSlots.get(focus.entryId);
+    const run = runSlots.get(stopId);
     if (run !== undefined) {
       return { kind: 'activity', runId: run.row.runId, steps: run.row.steps };
     }
-    const queued = queuedSlots.get(focus.entryId);
+    const queued = queuedSlots.get(stopId);
     return queued === undefined
       ? null
       : { kind: 'queued', message: queued.message };
   };
+
+  const focusedStop = () =>
+    focus.stopId === null ? null : stopAt(focus.stopId);
 
   const followBottom = () => {
     if (focus.following) {
       list.scrollTop = list.scrollHeight;
     }
   };
-  const onListScroll = () => {
-    const isHidden = list.clientHeight === 0;
-    if (!isHidden) {
-      focus = focusAfterScrollEvent(focus, isScrolledToEnd(list, 1));
+
+  // The stop nearest the cursor inside the list's visible band; null when the
+  // cursor is inside it, or no stop is.
+  const nearestStopInBand = (direction: 1 | -1) => {
+    if (focus.stopId === null) {
+      return null;
     }
+    const band = visibleBand(list);
+    return nearestVisibleStop(order, focus.stopId, direction, (stopId) => {
+      const stop = stopElement(stopId);
+      return stop !== undefined && overlapsBand(stop, band);
+    });
+  };
+
+  const onListScroll = () => {
+    const { scrollTop } = list;
+    const isHidden = list.clientHeight === 0;
+    if (isHidden || scrollTop === lastScrollTop) {
+      return;
+    }
+    const direction = scrollTop > lastScrollTop ? 1 : -1;
+    lastScrollTop = scrollTop;
+    const nearest = nearestStopInBand(direction);
+    if (nearest !== null) {
+      focus = focusStop(focus, order, nearest);
+    }
+    focus = focusAfterScrollEvent(focus, isScrolledToEnd(list, 1));
+    drawFocus('marks');
   };
   list.addEventListener('scroll', onListScroll);
+
+  // The stop a click on `target` lands on: its block, else its slot; a slot with
+  // blocks has no stop of its own, so `order` refuses its padding.
+  const stopIdOfTarget = (target: Element) => {
+    const hit = target.closest('.chat-entry-slot');
+    const slotId = [...slots, ...runSlots, ...queuedSlots].find(
+      ([, slot]) => slot.element === hit,
+    )?.[0];
+    if (slotId === undefined) {
+      return null;
+    }
+    const block = target.closest<HTMLElement>(BLOCK_SELECTOR);
+    const blockIndex =
+      block === null ? -1 : (slots.get(slotId)?.blocks.indexOf(block) ?? -1);
+    return blockIndex < 0 ? slotId : blockStopId(slotId, blockIndex);
+  };
+
+  const onListClick = (event: MouseEvent) => {
+    const target = event.target as Element;
+    const isSelecting = window.getSelection()?.isCollapsed === false;
+    const isOnControl = target.closest(CLICK_CONTROLS) !== null;
+    if (isSelecting || isOnControl) {
+      return;
+    }
+    const stopId = stopIdOfTarget(target);
+    if (stopId !== null && order.includes(stopId)) {
+      focus = focusStop(focus, order, stopId);
+      drawFocus('marks');
+    }
+  };
+  list.addEventListener('click', onListClick);
+
   const listSize = followListSize(list, followBottom);
   const slotSizes = new ResizeObserver(followBottom);
   const observeSlot = (slot: HTMLElement) =>
@@ -446,11 +600,13 @@ export function createEntryList(deps: EntryListDeps): EntryList {
         slot === undefined && isInTranscript(entry, activityInTranscript);
       if (isNewSlot) {
         const created = buildSlot(entry, entryInput(entry, next), deps);
+        holdBlocks(created);
         slots.set(entry.id, created);
         observeSlot(created.element);
         list.insertBefore(created.element, entryPlace());
       } else if (slot !== undefined) {
         redrawSlot(slot, entry, entryInput(entry, next), deps);
+        holdBlocks(slot);
       }
       changed();
     },
@@ -463,6 +619,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       const queued = [...queuedSlots.values()].map((slot) => slot.message);
       disposeSlots(slots);
       slots.clear();
+      blockCounts.clear();
       disposePartSlots(runSlots);
       runSlots.clear();
       disposePartSlots(queuedSlots);
@@ -472,6 +629,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       for (const entry of entries) {
         const created = buildSlot(entry, entryInput(entry, next), deps);
         created.kit.expanders.restore(openStates.get(entry.id) ?? []);
+        holdBlocks(created);
         slots.set(entry.id, created);
         observeSlot(created.element);
         list.append(created.element);
@@ -492,15 +650,56 @@ export function createEntryList(deps: EntryListDeps): EntryList {
       drawFocus('slot');
       return focusedStop();
     },
+    moveToMessage(step) {
+      focus = moveToMessage(focus, order, messageIds(rows), step);
+      drawFocus('slot');
+      return focusedStop();
+    },
     isAtLastStop: () => isAtLastStop(focus, order),
     latest() {
-      focus = focusLatest(lastStopId());
+      focus = focusLatest(lastStopId(), focus.anchorId);
       drawFocus('bottom');
     },
     first() {
-      focus = focusFirst(order);
+      focus = focusFirst(order, focus.anchorId);
       drawFocus('top');
       return focusedStop();
+    },
+    toggleRange() {
+      focus = toggleAnchor(focus);
+      drawFocus('marks');
+    },
+    cancelRange() {
+      const wasOpen = focus.anchorId !== null;
+      focus = clearAnchor(focus);
+      drawFocus('marks');
+      return wasOpen;
+    },
+    selectedSource() {
+      const parts: string[] = [];
+      const wholeEntries = new Set<string>();
+      for (const stopId of rangeStops(focus, order)) {
+        const stop = stopAt(stopId);
+        const text = stop === null ? null : stopText(stop);
+        const block = blockOfStop(stopId);
+        const entryId = entryIdOfStop(stopId);
+        if (text === null) {
+          continue;
+        }
+        if (block === undefined) {
+          parts.push(text);
+        } else if (!isAnyBlockPastText(slots.get(entryId)!.blocks, text)) {
+          const [start, end] = linesOfBlock(block);
+          parts.push(sourceOfLines(text, start, end));
+        } else if (!wholeEntries.has(entryId)) {
+          wholeEntries.add(entryId);
+          parts.push(text);
+        }
+      }
+      const kept = parts.filter((part) => part.trim() !== '');
+      return kept.length === 0
+        ? null
+        : { text: kept.join('\n\n'), blockCount: kept.length };
     },
     followBottom,
     scrollToFocus() {
@@ -519,7 +718,9 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     },
     focused: focusedStop,
     focusedElement: () =>
-      focus.entryId === null ? null : (slotElement(focus.entryId) ?? null),
+      focus.stopId === null ? null : (slotOfStop(focus.stopId) ?? null),
+    focusedBlock: () =>
+      focus.stopId === null ? null : (blockOfStop(focus.stopId) ?? null),
     toggleFocused() {
       const stop = focusedStop();
       if (stop === null || stop.kind === 'queued') {
@@ -538,6 +739,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     },
     dispose() {
       list.removeEventListener('scroll', onListScroll);
+      list.removeEventListener('click', onListClick);
       listSize.disconnect();
       slotSizes.disconnect();
       if (tick !== null) {
@@ -608,10 +810,98 @@ function entryInput(
     : entry;
 }
 
-// The last row the cursor can stop on; a divider after it has no stop.
-function lastRowId(rows: readonly ListRow[]): string | null {
+// The last stop of the last row the cursor can stop on; a divider after it has
+// no stop.
+function lastRowId(
+  rows: readonly ListRow[],
+  blockCounts: ReadonlyMap<string, number>,
+): string | null {
   const last = rows.findLast(isCursorRow);
-  return last === undefined ? null : rowId(last);
+  return last === undefined
+    ? null
+    : (rowStops(last, blockCounts).at(-1) ?? null);
+}
+
+// The ids of the user and assistant entries of `rows`.
+function messageIds(rows: readonly ListRow[]): string[] {
+  return rows.flatMap((row) =>
+    row.kind === 'entry' && isMessage(row.entry) ? [row.entry.id] : [],
+  );
+}
+
+function isMessage(entry: ChatEntry): boolean {
+  return entry.kind === 'user' || entry.kind === 'assistant';
+}
+
+// The cursor's blocks of `entry` as drawn into `slot`, in document order; only a
+// message has any.
+function readBlocks(slot: HTMLElement, entry: ChatEntry): HTMLElement[] {
+  return isMessage(entry)
+    ? [...slot.querySelectorAll<HTMLElement>(BLOCK_SELECTOR)]
+    : [];
+}
+
+interface Band {
+  top: number;
+  bottom: number;
+}
+
+// The part of the list's box that shows entries: the composer floats over its
+// bottom scroll padding.
+function visibleBand(list: HTMLElement): Band {
+  const box = list.getBoundingClientRect();
+  const padding = parseFloat(getComputedStyle(list).scrollPaddingBottom) || 0;
+  return { top: box.top, bottom: box.bottom - padding };
+}
+
+function overlapsBand(stop: HTMLElement, band: Band): boolean {
+  const box = stop.getBoundingClientRect();
+  return box.bottom > band.top && box.top < band.bottom;
+}
+
+// The text a copy reads from a stop: a message's or notice's, or a pending row's
+// message; null on a stop that gives nothing.
+function stopText(stop: EntryListStop): string | null {
+  if (stop.kind === 'queued') {
+    return stop.message.text;
+  }
+  if (stop.kind === 'activity') {
+    return null;
+  }
+  const { entry } = stop;
+  return entry.kind === 'user' ||
+    entry.kind === 'assistant' ||
+    entry.kind === 'notice'
+    ? entry.text
+    : null;
+}
+
+// A block's source lines from its mark: zero-based, `end` exclusive.
+function linesOfBlock(block: HTMLElement): [start: number, end: number] {
+  const [start, end] = block.dataset.mdLines!.split(',').map(Number);
+  return [start, end];
+}
+
+// Whether a block's lines end past `text`: its layout drew other text.
+function isAnyBlockPastText(
+  blocks: readonly HTMLElement[],
+  text: string,
+): boolean {
+  const lineCount = text.split('\n').length;
+  return blocks.some((block) => linesOfBlock(block)[1] > lineCount);
+}
+
+// The lines `[start, end)` of `text`, less trailing blank lines.
+export function sourceOfLines(
+  text: string,
+  start: number,
+  end: number,
+): string {
+  const lines = text.split('\n').slice(start, end);
+  while (lines.length > 0 && lines[lines.length - 1].trim() === '') {
+    lines.pop();
+  }
+  return lines.join('\n');
 }
 
 function liveRunSlot(runSlots: Map<string, RunSlot>): RunSlot | undefined {
@@ -760,6 +1050,7 @@ function buildSlot(
     entry,
     ...drawEntry(slot, entry, input, deps, false),
     drawsWithDefault: false,
+    blocks: [],
   };
 }
 

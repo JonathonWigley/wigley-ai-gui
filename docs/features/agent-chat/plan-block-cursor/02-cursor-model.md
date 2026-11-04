@@ -1,6 +1,6 @@
 # 02 — Cursor model
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -57,3 +57,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 8a95529d · proof: diff read, all Produces present, 85 filtered tests pass, typecheck clean in its files; entry-list errors expected until 03 · concerns: an open anchor clears when its entry's block count changes, during streaming too; docs/features/followups.md near line 150 names the old onLine row, for task 05
