@@ -46,7 +46,9 @@ so the same hands work in both tools.
   session from `Space k n` loads into the focused pane.
 - A click inside a pane focuses it when the press ends, so nothing moves under a press: the focused pane's edge insets
   change its layout. A press and release in different panes focuses the pane the press began in; a cancelled press
-  focuses none.
+  focuses none. At the release the keys stay on a text box the press focused in that pane, or a selection it began
+  there; the Chat box takes them in insert mode at its caret. Any other focus lets go, and a visible Chat tab's box takes
+  them.
 - A round for a session in an unfocused pane takes over that pane and leaves focus where it is.
   The row keeps its Needs you label until the user focuses that pane. Focus moving on its own would
   send the user's typing to the wrong session.

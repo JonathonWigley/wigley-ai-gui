@@ -608,12 +608,18 @@ describe('createSessionList', () => {
     { name: 'an unknown session', target: 'ffffffff', sent: false },
     { name: 'the selected row', target: '00000002', sent: false },
     { name: 'another row', target: '00000001', sent: true },
+    {
+      name: 'a connected session with no row',
+      target: '00000003',
+      sent: true,
+    },
   ])(
     'activate says whether it sent the state, which the page holds its echo for: $name',
     ({ target, sent }) => {
       const { list, states } = setUp();
       connectWithRow(list, info('/work/x'));
       list.activate(connectWithRow(list, info('/work/y')).session.id);
+      list.connect(info('/work/z'));
       const sentBefore = states.length;
 
       const returned = list.activate(target);

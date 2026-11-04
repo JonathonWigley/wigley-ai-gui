@@ -63,6 +63,35 @@ export function button(
   return node;
 }
 
+// Input types that take no typed text, so focus in one leaves no field the
+// user is typing in.
+const NON_TEXT_INPUT_TYPES = new Set([
+  'button',
+  'checkbox',
+  'color',
+  'file',
+  'hidden',
+  'image',
+  'radio',
+  'range',
+  'reset',
+  'submit',
+]);
+
+// Whether `element` is a field the user types in: a text-taking input, a
+// textarea, or contenteditable content such as an editor.
+export function holdsTextEntry(element: Element | null): boolean {
+  const field = element as HTMLElement | null;
+  const isTextInput =
+    field?.tagName === 'INPUT' &&
+    !NON_TEXT_INPUT_TYPES.has((field as HTMLInputElement).type);
+  return (
+    isTextInput ||
+    field?.tagName === 'TEXTAREA' ||
+    field?.isContentEditable === true
+  );
+}
+
 // Takes focus off whatever holds it, a text box or a frame included, so page
 // keys fire: a frame through `focusOutOfFrame`, anything else by its `blur`.
 export function blurFocusedElement() {

@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest';
 import type { SessionRow } from '../contract';
 import {
   activationTarget,
+  echoesAfterReply,
   fillPlan,
   liveWaits,
   type PaneSessions,
   paneOf,
   panesToClose,
   pickerRows,
+  pressedFocusAction,
   restorePlan,
   savedPaneSessions,
   selectionAction,
@@ -348,5 +350,101 @@ describe('pane-sessions', () => {
       action,
       echoes: left,
     });
+  });
+
+  const held = { sessionId: 's2' };
+  const later = { sessionId: 's3' };
+
+  it.each([
+    {
+      name: 'a reply ahead of its state keeps the echo',
+      echo: held,
+      sentState: true,
+      left: [held, later],
+    },
+    {
+      name: 'a reply saying main sent none drops that echo alone',
+      echo: held,
+      sentState: false,
+      left: [later],
+    },
+    {
+      name: 'an activation that recorded no echo drops none',
+      echo: null,
+      sentState: false,
+      left: [held, later],
+    },
+  ])('echoesAfterReply: $name', ({ echo, sentState, left }) => {
+    expect(echoesAfterReply([held, later], echo, sentState)).toEqual(left);
+  });
+
+  const noFacts = {
+    hasSelectionInPane: false,
+    isFocusInPane: false,
+    doesFocusTakeText: false,
+    isChatTabShown: false,
+  };
+
+  it.each([
+    {
+      name: 'a text box the press focused on a Form, Primer or Docs tab',
+      facts: { isFocusInPane: true, doesFocusTakeText: true },
+      action: 'keep',
+    },
+    {
+      name: 'the Chat box the press focused enters insert mode',
+      facts: {
+        isFocusInPane: true,
+        doesFocusTakeText: true,
+        isChatTabShown: true,
+      },
+      action: 'toBox',
+    },
+    {
+      name: 'a non-text element in the pane lets go',
+      facts: { isFocusInPane: true },
+      action: 'toBox',
+    },
+    {
+      name: 'nothing focused falls to the box',
+      facts: { isChatTabShown: true },
+      action: 'toBox',
+    },
+    {
+      name: "the other pane's text box lets go",
+      facts: { doesFocusTakeText: true },
+      action: 'toBox',
+    },
+    {
+      name: "the other pane's Chat box lets go",
+      facts: { doesFocusTakeText: true, isChatTabShown: true },
+      action: 'toBox',
+    },
+    {
+      name: 'a selection in the Chat box stays, in its mode',
+      facts: {
+        hasSelectionInPane: true,
+        isFocusInPane: true,
+        doesFocusTakeText: true,
+        isChatTabShown: true,
+      },
+      action: 'keep',
+    },
+    {
+      name: 'a selection in a text box on another tab stays',
+      facts: {
+        hasSelectionInPane: true,
+        isFocusInPane: true,
+        doesFocusTakeText: true,
+      },
+      action: 'keep',
+    },
+    {
+      name: 'a selection in the transcript stays with nothing focused',
+      facts: { hasSelectionInPane: true, isChatTabShown: true },
+      action: 'keep',
+    },
+  ])('pressedFocusAction: $name', ({ facts, action }) => {
+    expect(pressedFocusAction({ ...noFacts, ...facts })).toBe(action);
   });
 });

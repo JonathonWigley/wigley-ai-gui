@@ -6,7 +6,7 @@ import {
   createPartStore,
   type PartStore,
 } from '../../../shared/page/contributed-parts';
-import { blurFocusedElement } from '../../../shared/page/dom';
+import { blurFocusedElement, holdsTextEntry } from '../../../shared/page/dom';
 import { createListPicker } from '../../../shared/page/list-picker';
 import {
   leafIds,
@@ -32,12 +32,14 @@ import { readSessionsLayout } from './layout/read-sessions-layout';
 import {
   type ActivationTarget,
   activationTarget,
+  echoesAfterReply,
   fillPlan,
   liveWaits,
   type PaneSessions,
   type PendingEcho,
   panesToClose,
   pickerRows,
+  pressedFocusAction,
   restorePlan,
   type SelectionTarget,
   savedPaneSessions,
@@ -279,9 +281,8 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       pendingEchoes.at(-1)?.sessionId ?? state.selectedSessionId;
 
     // Asks main to select `sessionId`, recording the echo its state will
-    // carry when that differs from the selection main will hold. The invoke's
-    // reply can reach the page ahead of that state, so only a reply saying main
-    // sent none (an unknown session) drops the echo.
+    // carry when that differs from the selection main will hold, until
+    // `echoesAfterReply` drops it.
     const tellMain = (sessionId: string) => {
       const echo = sessionId === mainSelection() ? null : { sessionId };
       if (echo !== null) {
@@ -290,9 +291,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       api.channel
         .invoke('activate', sessionId)
         .then((sentState) => {
-          if (!sentState) {
-            pendingEchoes = pendingEchoes.filter((pending) => pending !== echo);
-          }
+          pendingEchoes = echoesAfterReply(pendingEchoes, echo, sentState);
         })
         .catch((error) => {
           pendingEchoes = [];
@@ -366,21 +365,27 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
           tellMain(sessionId);
         }
       },
-      // The keys follow a release into its pane: the old pane's box lets go,
-      // and the new pane's takes them when its visible tab is a Chat tab. A
-      // selection begun in that pane stays, and so does the focus it came with.
+      // The keys follow a release into its pane, as `pressedFocusAction` says.
       panePressed(pane) {
         const selection = window.getSelection();
-        const hasSelectionInPane =
-          selection?.isCollapsed === false &&
-          pane.contains(selection.anchorNode);
-        if (hasSelectionInPane) {
+        const focused = document.activeElement;
+        const sessionId = view.panes.focusedSessionId();
+        const action = pressedFocusAction({
+          hasSelectionInPane:
+            selection?.isCollapsed === false &&
+            pane.contains(selection.anchorNode),
+          isFocusInPane: pane.contains(focused),
+          doesFocusTakeText: holdsTextEntry(focused),
+          isChatTabShown:
+            sessionId !== null &&
+            view.tabs.selectedTabOf(sessionId)?.id === 'chat',
+        });
+        if (action === 'keep') {
           return;
         }
         blurFocusedElement();
         const canFocusBox =
-          view.panes.focusedSessionId() !== null &&
-          api.keys.command('chat.focusBox') !== undefined;
+          sessionId !== null && api.keys.command('chat.focusBox') !== undefined;
         if (canFocusBox) {
           api.commands.run('chat.focusBox');
         }
