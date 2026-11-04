@@ -71,8 +71,9 @@ function session(
   sessionId: string,
   profileDir: string | null,
   usage: UsageAgentEvent | null,
+  compaction: SessionUsage['compaction'] = null,
 ): SessionUsage {
-  return { sessionId, profileDir, usage };
+  return { sessionId, profileDir, usage, compaction };
 }
 
 // `work` (the default) and `personal`, each with one row of its own, and the
@@ -335,6 +336,56 @@ describe('sessionLineInput', () => {
       context: { label: 'Context', text: '0k', percent: 0, tone: 'normal' },
       cache: null,
       spend: null,
+      compacting: null,
+    });
+  });
+
+  it('sessionLineInput_NoUsage_ZeroLine_Compacting', () => {
+    const snapshot: UsageSnapshot = {
+      plans: [plan()],
+      sessions: [
+        session('s1', WORK_DIR, null, { trigger: 'app', startedAt: NOW }),
+      ],
+    };
+
+    expect(sessionLineInput(snapshot, 's1', NOW)).toEqual({
+      context: { label: 'Context', text: '0k', percent: 0, tone: 'normal' },
+      cache: null,
+      spend: null,
+      compacting: 'compacting · auto',
+    });
+  });
+
+  it.each<{
+    case: string;
+    compaction: SessionUsage['compaction'];
+    expected: string | null;
+  }>([
+    {
+      case: 'App',
+      compaction: { trigger: 'app', startedAt: NOW },
+      expected: 'compacting · auto',
+    },
+    {
+      case: 'Manual',
+      compaction: { trigger: 'manual', startedAt: NOW },
+      expected: 'compacting',
+    },
+    {
+      case: 'Harness',
+      compaction: { trigger: 'harness', startedAt: NOW },
+      expected: 'compacting · autocompact',
+    },
+    { case: 'None', compaction: null, expected: null },
+  ])('sessionLineInput_Compacting_$case', ({ compaction, expected }) => {
+    const snapshot: UsageSnapshot = {
+      plans: [plan()],
+      sessions: [session('s1', WORK_DIR, usageEvent(), compaction)],
+    };
+
+    expect(sessionLineInput(snapshot, 's1', NOW)).toMatchObject({
+      context: meter('180k/300k', 60, 'normal'),
+      compacting: expected,
     });
   });
 });
@@ -608,8 +659,19 @@ describe('log text', () => {
         context: meter('180k/300k', 60, 'normal'),
         cache: 'cache 42m',
         spend: '$1.23',
+        compacting: null,
       },
       expected: 'context 180k/300k, cache 42m, spend $1.23',
+    },
+    {
+      case: 'Compacting',
+      input: {
+        context: meter('180k/300k', 60, 'normal'),
+        cache: 'cache 42m',
+        spend: '$1.23',
+        compacting: 'compacting · auto',
+      },
+      expected: 'compacting · auto, context 180k/300k, cache 42m, spend $1.23',
     },
     {
       case: 'NoCache',
@@ -617,6 +679,7 @@ describe('log text', () => {
         context: meter('180k/300k', 60, 'normal'),
         cache: null,
         spend: '$1.23',
+        compacting: null,
       },
       expected: 'context 180k/300k, spend $1.23',
     },
@@ -626,6 +689,7 @@ describe('log text', () => {
         context: meter('180k', 0, 'normal'),
         cache: 'cache cold',
         spend: null,
+        compacting: null,
       },
       expected: 'context 180k, cache cold',
     },

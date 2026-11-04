@@ -2,9 +2,10 @@
 
 // The built-in usage look: the status-bar line as every profile stacked, one
 // line each, its name before its meters, each meter in a column shared across
-// profiles; each session's line as one row (its context, cache and spend) in
-// its Chat status line or tab bar that drops whole items from its end when
-// narrow; each session's row line as its context meter and text; and the
+// profiles; each session's line as one row (its compacting chip while it
+// compacts, its context, cache and spend) in its Chat status line or tab bar
+// that drops whole items from its end when narrow, its meter pulsing while it
+// compacts; each session's row line as its context meter and text; and the
 // details as one card per profile, its freshness beside its name. In the status
 // line and the details, the 5h and Week rows always show; any other row (a
 // model-scoped limit) shows only while used, and extra usage, the status line's
@@ -69,6 +70,10 @@ const layout = {
   },
   sessionLine(parent, input, kit) {
     const line = kit.el(parent, 'span', 'usage-session-line');
+    line.classList.toggle('is-compacting', input.compacting !== null);
+    if (input.compacting !== null) {
+      kit.tag(line, input.compacting, 'accent');
+    }
     kit.meter(line, input.context.percent, input.context.tone);
     kit.el(line, 'span', 'usage-text', input.context.text);
     if (input.cache !== null) {

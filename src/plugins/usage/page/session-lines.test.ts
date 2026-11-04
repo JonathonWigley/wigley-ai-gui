@@ -41,7 +41,7 @@ function snapshotWith(usage?: UsageAgentEvent | null): UsageSnapshot {
     sessions:
       usage === undefined
         ? []
-        : [{ sessionId: SESSION, profileDir: null, usage }],
+        : [{ sessionId: SESSION, profileDir: null, usage, compaction: null }],
   };
 }
 

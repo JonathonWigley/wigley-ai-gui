@@ -107,6 +107,7 @@ function sessionUsage(sessionId: string, now: number): SessionUsage {
       cacheExpiresAt: now + 2_550_000,
       spendUsd: 1.234,
     },
+    compaction: null,
   };
 }
 

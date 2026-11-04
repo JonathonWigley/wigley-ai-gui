@@ -95,6 +95,32 @@
   );
 }
 
+/* The context meter reports the agent compacting, so it loops at
+   `duration-pulse`, not the transition durations, which pulse fast enough to
+   read as flashing. Under reduced motion it is static. */
+@keyframes usage-meter-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.35;
+  }
+}
+
+[data-layout-owner='usage'][data-layout='default'].usage-session-line.is-compacting
+  > .ui-meter {
+  animation: usage-meter-pulse var(--wg-duration-pulse) ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-layout-owner='usage'][data-layout='default'].usage-session-line.is-compacting
+    > .ui-meter {
+    animation: none;
+  }
+}
+
 [data-layout-owner='usage'][data-layout='default'] .usage-note,
 [data-layout-owner='usage'][data-layout='default'] .usage-group.is-stale {
   color: var(--wg-fg-tertiary);

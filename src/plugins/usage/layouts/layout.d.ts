@@ -18,11 +18,13 @@ export interface MeterInput {
   tone: UsageTone;
 }
 // One session's line: its context meter, its cache countdown (`cache 42m`, `cache cold`) and its spend (`$1.23`);
-// null cache or spend while the session has reported none.
+// null cache or spend while the session has reported none. `compacting` is the chip naming the trigger while the
+// session compacts (`compacting · auto`, `compacting`, `compacting · autocompact`), null otherwise.
 export interface SessionLineInput {
   context: MeterInput;
   cache: string | null;
   spend: string | null;
+  compacting: string | null;
 }
 // One session's line under its side-bar row: its context meter.
 export interface RowLineInput {
@@ -90,8 +92,9 @@ export interface UsageKit extends BaseKit {
 // throws, returns no element appended to `parent`, or appends other nodes beside it is drawn by `default` instead.
 // Every part appends one element to `parent` and returns it. `statusLine` draws the status-bar plan line,
 // `sessionLine` one session's line into the slot its host gives it, a Chat status line or a tab bar while
-// usage-tab-line is on (drawn only while that session has usage), `rowLine` one session's line under its side-bar row
-// (drawn only while that session has usage), and `details` the right-bar details.
+// usage-tab-line is on (a zero line, context `0k` and no cache or spend, while that session has no usage; while
+// `compacting` is set, the default layout draws the chip first and pulses the meter), `rowLine` one session's line
+// under its side-bar row (its context `0k` while that session has no usage), and `details` the right-bar details.
 export interface Layout {
   statusLine?(
     parent: HTMLElement,

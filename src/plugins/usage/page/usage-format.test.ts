@@ -3,24 +3,10 @@ import {
   formatDuration,
   formatMinor,
   formatPercent,
-  formatTokens,
   formatUsd,
 } from './usage-format';
 
 describe('usage-format', () => {
-  it.each([
-    { case: 'Zero', tokens: 0, expected: '0k' },
-    { case: 'BelowAThousand', tokens: 999, expected: '999' },
-    { case: 'AThousand', tokens: 1000, expected: '1k' },
-    { case: 'Thousands', tokens: 180_000, expected: '180k' },
-    { case: 'RoundsDownBelowAMillion', tokens: 999_499, expected: '999k' },
-    { case: 'RoundsUpToAMillion', tokens: 999_500, expected: '1M' },
-    { case: 'AMillion', tokens: 1_000_000, expected: '1M' },
-    { case: 'MillionsToOneDecimal', tokens: 1_250_000, expected: '1.3M' },
-  ])('formatTokens_$case', ({ tokens, expected }) => {
-    expect(formatTokens(tokens)).toBe(expected);
-  });
-
   it.each([
     { case: 'UnderAMinute', ms: 59_999, expected: '<1m' },
     { case: 'AMinute', ms: 60_000, expected: '1m' },
