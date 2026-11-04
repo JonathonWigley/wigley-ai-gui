@@ -1,6 +1,6 @@
 # 06 — Final verification
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 5 · Depends on: 05
 Plan: [plan.md](plan.md)
@@ -32,3 +32,4 @@ Commit:    one commit when a fixture or a self-test changed; else no commit
 
 ## Proof
 
+Commit eea9e6ef, 9767eb09, 4d9709f7 · proof: 10 live checks read; 5, 8 and 9 failed then fixed and re-driven, filtered self-test rerun at the gate · concerns: bar not seen on tables, quotes, details or headings; queuedSlots spread in stopIdOfTarget now unreachable; a self-test y in an empty session stays off the clipboard only because the session is empty; whole self-test placement check not run

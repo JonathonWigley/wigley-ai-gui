@@ -164,7 +164,7 @@ Shared names:
 - [x] [Doc re-read](05-doc-re-read.md) — after 04
 
 ### Wave 5
-- [ ] [Final verification](06-final-verification.md) — after 05
+- [x] [Final verification](06-final-verification.md) — after 05
 
 ## Run log
 
@@ -176,6 +176,7 @@ Review base: e976884ea34536afc67f149b90cdf9797c672647
 - 03 · 5788fdcf · diff read, all Produces present, 104 filtered tests pass, typecheck clean; chat.css staged by hunk past a peer's edits · concerns: pullBack is async, so a click on a pending row moves the cursor onto it and the row's removal then follows the latest stop, and pending_ClickRow_PullsBackWithoutMovingTheCursor only passes because the fake click does not bubble; rectTop lives in test-dom.ts not entry-list.test.ts; SourceLineFakeElement's selector now duplicates the base fake
 - 04 · a4f91d8e · diff read, Produces present, 187 filtered tests pass, typecheck and lint clean · concerns: docs stale for task 05 (design.md type hint, keymap.md y/n and the Shift layer); a session closed during the clipboard write gets cancelRange on a disposed list; status line width with four more prompts is for the live run
 - 05 · 341909ba · diff read; follow-up gone, no line outside the plan names it · concerns: none
+- 06 · eea9e6ef, 9767eb09, 4d9709f7 · 10 live checks read; 5, 8 and 9 failed then fixed and re-driven, filtered self-test rerun at the gate · concerns: bar not seen on tables, quotes, details or headings; queuedSlots spread in stopIdOfTarget now unreachable; a self-test y in an empty session stays off the clipboard only because the session is empty; whole self-test placement check not run
 ### Contract changes
 ### Rulings
 - An ordered-list row and an indented-code case added beyond the five GIVEN rows — the Decisions name both and no row caught a break — one extra row if unwanted · group 01 · group 01
@@ -190,5 +191,8 @@ Review base: e976884ea34536afc67f149b90cdf9797c672647
 - The y prompt reads to copy or allow — it shows during a permission too, where a plain to copy would misstate it — slightly longer copy · group 04
 - DESIGN.md needed no edit — each block cursor line matches chat.css and entry-focus.ts — one stale line stays if wrong · group 05
 - The status line's J, K, V and y prompts move into their own group that hides when the chat tab is too narrow for it — the type hint overflowed at minimum width, 17 fit failures in the filtered self-test — those keys show in help alone in a narrow tab · lead
+- A stop is visible only wholly in the band within 1px, or overlapping when taller than it — replaces the plan's overlap rule, which left a sliver with no bar against the user's rule that the cursor stays on screen — a cursor moves slightly sooner on scroll · group 06
+- A click on a pending row leaves the cursor — pullBack is async so the row is still a stop when the click bubbles, against the plan's rule — none, the row's own click still pulls back · group 06
+- List items draw the bar and tint on a ::before and p uses margin plus padding — a list marker follows the item's box edge — a little more CSS if wrong · group 06
 ### Review rounds
 ### Test gate
