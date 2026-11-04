@@ -513,7 +513,8 @@ export interface ChatLayout {
     input: ComposerInput,
     kit: ComposerKit,
   ): PartView<ComposerInput>;
-  // The status line under the box, drawn into the composer's status line slot again on each change.
+  // The status line under the box, drawn into the composer's status line slot again on each change other than
+  // `isBoxFocused`, which the app applies to the type hint in place.
   statusLine?(
     parent: HTMLElement,
     input: ComposerInput,
