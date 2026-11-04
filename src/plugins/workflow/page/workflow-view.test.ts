@@ -890,7 +890,7 @@ describe('workflow view', () => {
       scroll: 120,
     },
     {
-      name: 'a resize after a scroll no draw read',
+      name: 'a resize after a scroll',
       act: ({ scrollTo, resize }) => {
         scrollTo(300);
         resize();

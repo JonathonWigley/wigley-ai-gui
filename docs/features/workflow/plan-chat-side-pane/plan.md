@@ -173,6 +173,10 @@ Review base: 68948b9f7b94a2184562454202edd2584ea190ba
 - manifest keeps scopes: {} since definePlugin requires the key — no cost if wrong · group 04 · group 04
 - none needed beyond the lead rulings on the hub lines and DESIGN.md · group 05 · group 05
 - No commit for this task; the proof records the tip it ran on · lead · group 06
+- Review picks, per the repo's take-every-recommendation rule: scroll, survivors, status line, pulse, fold key and hidden state fixed; scroll and pulse repeats stepped back; pane width against 640 px left (settled); list shrinking to no overflow left at the cycle cap; side swap prompt and Esc on the Folder picker to follow-ups; hub docs lines stay for the later plan.
 ### Review rounds
+- 1 · c6cbf380 · NEEDS FIXES: 1 Important (list scroll lost with no box), 15 Minor, 3 pre-existing; lead applied 4bac4707; workers 5653ffee, 5a0a6014
+- 2 · 5a0a6014 · NEEDS FIXES: repeats on the scroll keep and the pulse; scroll stepped back in 2d31f3c0, scroll events its only writer; pulse accepted and comments limited in 8d6aa467
+- 3 · 2d31f3c0 · NEEDS FIXES at the 2-cycle cap: stale test row name lead-applied; a list shrinking to no overflow keeps its old value, picked Leave it
 ### Test gate
 - src/plugins/workflow (every edited and added test, and the stage, view, layout, preview and flow logic the diff changed) · src/plugins/keymap.test.ts (the binds changed) · src/plugins/chat/page/chat-view.test.ts (the tab shape and side parts) · src/shared/layouts/layout-contracts.test.ts (layout.d.ts changed) · 26 files, 366 tests pass

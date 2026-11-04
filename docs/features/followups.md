@@ -755,3 +755,11 @@ because the earlier items rewrite many of these tests anyway.
 - **The session clock counts a machine's sleep** — *needs a feature plan*: spans are wall-clock (`src/shared/active-time.ts`),
   so a lid closed during a turn or background work adds the whole sleep to the row's run time. Fixing it needs a power
   signal in chat main, or a cap on a span's gap.
+- **Side swap prompt draws over content** — *needs a decision*: `.session-pane-edge.is-left` and `.is-right` in
+  `src/plugins/sessions/page/sessions.css` sit at z-index 2 with no inset, while the up and down prompts reserve one.
+  In a split the prompt can cover a side pane row while hints show. The choices are an inset, which narrows the pane,
+  or moving the prompt. Source session: Claude Code 38d42f6d-8deb-450b-9655-d83e50e050c4 in wigley-ai-gui.
+- **Esc on a new split's Folder picker leaves an empty pane** — *agent-ready*: choosing New session then Esc on the
+  Folder picker leaves the split open and empty, while Esc on Show session cancels the split. Seen in a drive run;
+  whether it predates that run's work was not checked. Source session: Claude Code
+  38d42f6d-8deb-450b-9655-d83e50e050c4 in wigley-ai-gui.
