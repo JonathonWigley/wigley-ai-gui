@@ -118,8 +118,9 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
   ones fading), then a context bar with `84k/200k` (the warning colour at 80% or more; `84k` alone until the window is
   known) and the estimated cost. The tag reads Background agent once Claude's launch receipt says the call runs in the
   background, else Subagent.
-- **A task row:** one line: a running dot, the Shell tag, the command in mono (the description when the harness names no
-  command) and the elapsed time. A task has no context or cost. Rows stack under the cards and scroll past four rows.
+- **A task row:** one line: a running dot, the Shell tag, the command in mono (the Task tag and the description when the
+  harness names no command) and the elapsed time. A task has no context or cost. Rows stack under the cards and scroll
+  past four rows.
 - **Lifetime:** a box leaves the strip the moment its subagent or task ends, done or failed, and every box leaves
   when the session's process exits. Nothing stays to be closed, so the strip has no close control.
 - **Scrolling:** the cards scroll sideways; `‹` and `›` buttons at their ends scroll by one card and hide when there

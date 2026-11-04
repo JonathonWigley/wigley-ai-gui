@@ -440,7 +440,7 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   heading with a running StatusDot, its name, a kind Tag and its elapsed time, then its description, `model · effort` in
   `fg-tertiary`, its latest three tool calls in mono on `block-background`, the older two fading, and a context Meter
   (`status-warning` at 80% or more), `84k/200k` and its cost. Its tasks stack under the cards as rows, one `text-12` line
-  each: a running StatusDot, the Shell Tag, the command in mono, ellipsized (wrapped whole while open), and its elapsed
+  each: a running StatusDot, the Shell Tag (Task with no command), the command or else the description in mono, ellipsized (wrapped whole while open), and its elapsed
   time; past four rows they scroll. A box leaves when its subagent or task ends; the selected box takes the focus ring.
   A user turn shows its sent images
   as thumbnails under its text.

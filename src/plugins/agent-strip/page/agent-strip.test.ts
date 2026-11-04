@@ -560,7 +560,7 @@ describe('agent strip', () => {
     setRoster(EMPTY);
 
     expect(beforeTexts[0]).toContain('Subagent1m 30s');
-    expect(beforeTexts[2]).toBe('ShellRun t130s');
+    expect(beforeTexts[2]).toBe('TaskRun t130s');
     expect(afterTicks).toEqual({
       agentBoxesKept: [row.agentBoxesKept, row.agentBoxesKept],
       toolListKept: row.agentBoxesKept,
@@ -572,12 +572,12 @@ describe('agent strip', () => {
         [
           expect.stringContaining('1m 31s'),
           expect.stringContaining('1m 01s'),
-          'ShellRun t131s',
+          'TaskRun t131s',
         ],
         [
           expect.stringContaining('1m 32s'),
           expect.stringContaining('1m 02s'),
-          'ShellRun t132s',
+          'TaskRun t132s',
         ],
       ],
       refreshes: 2,

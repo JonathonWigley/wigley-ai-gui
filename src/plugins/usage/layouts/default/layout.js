@@ -5,8 +5,9 @@
 // profiles; each session's line as one row (its compacting chip while it
 // compacts, its context, cache and spend) in its tab bar that drops whole items
 // from its end when narrow, its meter pulsing while it compacts; each session's
-// context line as one row above its Chat box (the same chip, then a meter taking
-// the room its texts leave, its context and cache), pulsing the same; its spend
+// context line as one row above its Chat box (the same chip, ellipsized when
+// narrow, then a meter taking the room left, its context and cache), pulsing the
+// same; its spend
 // as one text in its Chat status line; each session's row line as its context
 // meter and used tokens; each session's row cache as a cache icon, its tooltip
 // the time left; and the details as one card per profile, its freshness beside

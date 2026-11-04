@@ -146,6 +146,7 @@ export function usageSelfTestScript(deps: UsageSelfTestDeps): SelfTestScript {
     scrollsItself: [
       '.session-bar-parts',
       '.usage-session-line',
+      '.usage-context-line > .ui-tag',
       '.chat-working-action',
       '.chat-working-line',
       '.chat-working-done',
