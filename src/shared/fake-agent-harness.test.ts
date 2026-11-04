@@ -16,6 +16,8 @@ import {
   type FakeAgentHarness,
   type FakeAttachScript,
   FAKE_AGENTS_TEXT,
+  FAKE_BLOCKS_REPLY,
+  FAKE_BLOCKS_TEXT,
   FAKE_COLD_TEXT,
   FAKE_COMPACT_TEXT,
   FAKE_END_TEXT,
@@ -617,6 +619,44 @@ describe('createFakeAgentHarness', () => {
       expect(entries.at(-1)?.[1]).toMatchObject(lastEntry);
     },
   );
+
+  it('send_BlocksText_RepliesWithEachBlockKindThenEndsTheTurn', async () => {
+    const { agent, heard } = await startedProcess();
+
+    agent.send({ text: FAKE_BLOCKS_TEXT, images: [] });
+    await flush();
+
+    expect(heard.slice(2)).toEqual([
+      [
+        'entry',
+        {
+          kind: 'assistant',
+          id: 'assistant-1',
+          at: 1000,
+          text: FAKE_BLOCKS_REPLY,
+          streaming: false,
+          raw: [{ fake: 'assistant', text: FAKE_BLOCKS_REPLY }],
+        },
+      ],
+      [
+        'entry',
+        {
+          kind: 'result',
+          id: 'result-1',
+          at: 1000,
+          stopReason: 'end_turn',
+          costUsd: null,
+          durationMs: null,
+          raw: [{ fake: 'result' }],
+        },
+      ],
+      ['agentEvent', fakeUsageEvent(1, 1000)],
+      ['planUsage', fakePlanRowUpdate(1, 1000)],
+      ['activity', 'idle'],
+    ]);
+    expect(FAKE_BLOCKS_REPLY).toContain('- The second item');
+    expect(FAKE_BLOCKS_REPLY).toContain('```ts\n');
+  });
 
   it('send_HoldText_HoldsTurnOpen', async () => {
     const { agent, heard } = await startedProcess();

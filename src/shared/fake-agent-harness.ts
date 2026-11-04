@@ -60,6 +60,9 @@ export const FAKE_TOOL_TEXT = 'fake: tool';
 // and a send, end or kill during it drops the rest of the reply.
 export const FAKE_VISUAL_TEXT = 'fake: visual';
 export const FAKE_VISUAL_HOLD_MS = 1500;
+// A send of this text replies with three paragraphs, a two-item list and a
+// `ts` code block, for the chat cursor's block stops, then ends the turn.
+export const FAKE_BLOCKS_TEXT = 'fake: blocks';
 // A send of this text runs six finished tools, one failed, and a thought, then
 // stays open as `FAKE_HOLD_TEXT`'s turn does.
 export const FAKE_STEPS_TEXT = 'fake: steps';
@@ -986,6 +989,32 @@ function emitEchoTurn(
   emitTurnEnd(events, emitEntry, emitTurnUsage, clock, turn);
 }
 
+// The reply of `FAKE_BLOCKS_TEXT`'s turn.
+export const FAKE_BLOCKS_REPLY = [
+  'The first paragraph.',
+  'The second paragraph.',
+  'The third paragraph.',
+  '- The first item\n- The second item',
+  '```ts\nconst answer = 42;\n```',
+].join('\n\n');
+
+function emitBlocksTurn(
+  events: AgentProcessEvents,
+  emitEntry: EmitEntry,
+  emitTurnUsage: EmitTurnUsage,
+  clock: Clock,
+  turn: number,
+) {
+  emitEntry({
+    kind: 'assistant',
+    id: `assistant-${turn}`,
+    text: FAKE_BLOCKS_REPLY,
+    streaming: false,
+    raw: [{ fake: 'assistant', text: FAKE_BLOCKS_REPLY }],
+  });
+  emitTurnEnd(events, emitEntry, emitTurnUsage, clock, turn);
+}
+
 // The images on a fake past session's user message: a red and a blue 16×16
 // PNG.
 export const FAKE_HISTORY_IMAGES: readonly ChatImage[] = [
@@ -1635,6 +1664,8 @@ export function createFakeAgentHarness(
             emitToolTurn(events, emitEntry, emitTurnUsage, clock, sentTurn);
           } else if (isVisual) {
             emitVisualTurn(sentTurn);
+          } else if (text === FAKE_BLOCKS_TEXT) {
+            emitBlocksTurn(events, emitEntry, emitTurnUsage, clock, sentTurn);
           } else if (isPermission) {
             void runPermissionTurn(sentTurn);
           } else {

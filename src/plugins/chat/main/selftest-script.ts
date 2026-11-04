@@ -9,6 +9,7 @@ import type {
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import {
+  FAKE_BLOCKS_TEXT,
   FAKE_COLD_TEXT,
   FAKE_END_TEXT,
   FAKE_HOLD_TEXT,
@@ -116,7 +117,7 @@ const TWO_SESSIONS_STEPS: SelfTestStep[] = [
   { keys: ['<A-S-i>'], expect: '[chat] Chat tab shown in chat-second' },
   {
     keys: ['y'],
-    expect: '[chat] no pending permission in chat-second',
+    expect: '[chat] nothing to copy',
     why: "The first session's pending permission stays pending.",
   },
   { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
@@ -281,12 +282,72 @@ const VISUAL_STEPS: SelfTestStep[] = [
     expect: '[chat] left the box',
     why: 'The result is no stop, so focus follows the reply holding both visuals.',
   },
-  { keys: ['v'], expect: '[visual] visual overlay showing 1 of 2' },
+  {
+    keys: ['K', 'J', 'v'],
+    expect: '[visual] visual overlay showing 1 of 2',
+    why: "Focus rests on the reply's last block, the second visual, where v would open on that one, so K J first moves the cursor to the reply's first block.",
+  },
   { keys: ['l'], expect: '[visual] visual overlay showing 2 of 2' },
   { keys: ['l'], expect: '[visual] no next visual' },
   { keys: ['h'], expect: '[visual] visual overlay showing 1 of 2' },
   { keys: ['h'], expect: '[visual] no previous visual' },
   { keys: ['Escape'], expect: '[visual] visual overlay closed' },
+  { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
+];
+
+// The fake's blocks reply in the second session, whose calls the run does not
+// check. Every move logs its stop's entry kind, so a step tells a block move
+// from a message move by the kind it lands on.
+const BLOCK_CURSOR_STEPS: SelfTestStep[] = [
+  { keys: ['<A-S-i>'], expect: '[chat] Chat tab shown in chat-second' },
+  {
+    keys: sendKeys(FAKE_BLOCKS_TEXT),
+    expect: '[chat] result entry added in chat-second',
+    checksFit: true,
+  },
+  { keys: ['Escape'], expect: '[chat] left the box' },
+  {
+    keys: ['K'],
+    expect: '[chat] focused user entry',
+    why: "From the reply's last block, K leaves the reply for the message before it.",
+  },
+  {
+    keys: ['J'],
+    expect: '[chat] focused assistant entry',
+    why: "J lands on the reply's first block.",
+  },
+  {
+    keys: ['j'],
+    expect: '[chat] focused assistant entry',
+    why: 'j moves to the second block of the same reply.',
+  },
+  {
+    keys: ['k'],
+    expect: '[chat] focused assistant entry',
+    why: 'k moves back to the first block, still in the reply.',
+  },
+  {
+    keys: ['k'],
+    expect: '[chat] focused user entry',
+    why: 'One more k leaves the first block, so j moved by one block and not to the next stop past the reply.',
+  },
+  { keys: ['J'], expect: '[chat] focused assistant entry' },
+  {
+    keys: ['V', 'j'],
+    expect: '[chat] focused assistant entry',
+    alsoExpect: [/^\[chat\] toggled the range$/],
+    why: 'V anchors a range on the first block and j extends it.',
+  },
+  {
+    keys: ['Escape'],
+    expect: '[chat] cancelled the range',
+    why: 'Esc on the page ends the open range.',
+  },
+  {
+    keys: ['Escape'],
+    expect: '[chat] no range to cancel in chat-second',
+    why: 'The range is gone, so Esc only says so.',
+  },
   { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
 ];
 
@@ -686,8 +747,13 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'visuals',
-    why: "fake: visual draws the settings mockup and the flowchart in chat-second's transcript as live visuals, the second block first showing as the drawing card while the fake holds it open; v on the reply opens the overlay on its first visual, l and h step through both and stop at either end, and Esc closes it.",
+    why: "fake: visual draws the settings mockup and the flowchart in chat-second's transcript as live visuals, the second block first showing as the drawing card while the fake holds it open; v on the reply's first block opens the overlay on its first visual, l and h step through both and stop at either end, and Esc closes it.",
     steps: VISUAL_STEPS,
+  },
+  {
+    name: 'block cursor',
+    why: "Over fake: blocks' reply of paragraphs, a list and code in chat-second: J and K jump between messages, j and k move by block inside one, V j opens a range that page Esc cancels, and page Esc with no range logs that there is none.",
+    steps: BLOCK_CURSOR_STEPS,
   },
   {
     name: 'sending',
