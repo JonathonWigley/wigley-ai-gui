@@ -143,9 +143,9 @@ export function withLiveRows(
 }
 
 // Replaces the session's entry, keeping its `compaction`, or appends one for a
-// new id with no compaction; `usage` null, or one whose `at` is older than the
-// kept usage's, records only the session's profile, keeping a known session's
-// usage. An equal `at` replaces.
+// new id with no compaction; `usage` null, a subagent's, or one whose `at` is
+// older than the kept usage's, records only the session's profile, keeping a known
+// session's usage. An equal `at` replaces.
 export function withSessionUsage(
   state: UsageState,
   sessionId: string,

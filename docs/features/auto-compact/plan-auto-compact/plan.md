@@ -277,5 +277,8 @@ Review base: 693cb8d04eb48c87e6cba0406a0e2d850f90db54
 - Composer overflow not fixed: same rule on main and it overflows with no chip under fake: steps · group 09
 - Probe F: no idle compaction in 65 minutes on 2.1.318 under stream-json, cause unsettled. Docs record it; AgentStart.idleCompactMinTokens stays since the user's round 3 decided it and it is harmless if the timer never runs; the review judges whether it earns its place. Lead edited these two doc lines inline, since a dispatch costs more than the edit.
 ### Review rounds
+- Round 1, head ca17855b, 7 lanes: NEEDS FIXES, 4 Important and 27 Minor findings; report /tmp/claude-autocompact/review-ca17855b.md. User's standing instruction takes every recommendation; no triage round.
+- Round 2, re-review of ca17855b..4e7e6534: every fix closed, no Critical or Important. Two Minor: self-test why overclaims, fixed lead-applied; the 420 px tab strip squeeze with usage-tab-line on, a repeat of finding 14, left on the lane's recommendation and named to the user. Verdict after fixes: PASS.
 ### Test gate
 - Whole Vitest suite, 404 files and 6995 tests pass, at 23e805df: task 09 asks for the whole tree once since typecheck broke across waves. Self-tests chat and usage pass. After the chip fix (64bf958e, CSS only): usage Vitest, 183 tests, and the usage self-test pass; the chat self-test did not rerun, since the fix touches no chat file.
+- After the fixes, at 4e7e6534: whole Vitest, 7035 tests, typecheck, lint, and the chat and usage self-tests pass.

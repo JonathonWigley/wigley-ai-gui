@@ -88,7 +88,7 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'compacting',
-    why: "A compaction draws the trigger's chip at the start of the session line, beside its meter at the window's least width too, and drops it when the compaction ends.",
+    why: "A compaction draws the trigger's chip at the start of the session line and drops it when the compaction ends; `compacting-narrow` is read by eye for the chip beside its meter at the window's least width.",
     steps: [
       {
         width: 'start',
