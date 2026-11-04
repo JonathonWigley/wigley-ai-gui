@@ -1,6 +1,6 @@
 import type { Clock } from '../../../contracts/ambient';
 import type { UiState } from '../../../contracts/ui-state';
-import { isJsonObject, isStringArray } from '../../../shared/json';
+import { isJsonObject } from '../../../shared/json';
 import type { SessionRow } from '../contract';
 import { rowChanges } from './tabs';
 
@@ -10,23 +10,18 @@ const RECENCY_KEY = 'recency';
 // it out.
 const MAX_SAVED_STAMPS = 200;
 
-// When each session last arrived or turned to needs you. A stamp sits under its
-// row's host session id, else its app session id, so it outlasts a relaunch,
-// which gives every row a new app id.
+// When each session arrived. A stamp sits under its row's host session id, else
+// its app session id, so it outlasts a relaunch, which gives every row a new app
+// id.
 //
 // `stampsOf` reads the stamps of `rows` by app session id.
-// `rowsChanged` takes each state main sends, `before` null for the first one,
-// and is the only call that moves or drops a stamp: a row in `after` with no
-// stamp is stamped, all of them with one time so they tie and keep main's order;
-// a row whose host id changed takes its stamp along; a row that left loses its
-// stamp, so it stamps again if it comes back. Two rows can share a host id, so a
-// row leaving or moving off a key leaves the stamp there while a row in `after`
-// holds that key. A row merely absent keeps its stamp, since a relaunch's first
-// state lacks the rows main has yet to resume.
-// `noteNeedsYou` stamps `row` unless its session is still marked from an earlier
-// call, so a source re-sending needs you after a page reload stamps nothing.
-// `needsYouEnded` clears that mark. A mark goes too when its row leaves, or when
-// the first state lacks its app session id, as after a relaunch.
+// `rowsChanged` takes each state main sends, `before` null for the first one: a
+// row in `after` with no stamp is stamped, all of them with one time so they tie
+// and keep main's order; a row whose host id changed takes its stamp along; a
+// row that left loses its stamp, so it stamps again if it comes back. Two rows
+// can share a host id, so a row leaving or moving off a key leaves the stamp
+// there while a row in `after` holds that key. A row merely absent keeps its
+// stamp, since a relaunch's first state lacks the rows main has yet to resume.
 // A change saves the whole record; a call that alters nothing saves nothing.
 export interface SessionRecency {
   stampsOf(rows: readonly SessionRow[]): ReadonlyMap<string, number>;
@@ -34,8 +29,6 @@ export interface SessionRecency {
     before: readonly SessionRow[] | null,
     after: readonly SessionRow[],
   ): void;
-  noteNeedsYou(row: SessionRow): void;
-  needsYouEnded(sessionId: string): void;
 }
 
 // The record read once from `uiState`'s `recency` entry; any other saved value,
@@ -45,15 +38,12 @@ export function createSessionRecency(
   uiState: UiState,
 ): SessionRecency {
   const saved = uiState.get(RECENCY_KEY);
-  const isValid = isSavedRecency(saved);
-  const stamps = new Map(isValid ? Object.entries(saved.stamps) : []);
-  const needsYou = new Set(isValid ? saved.needsYou : []);
+  const stamps = new Map(
+    isSavedRecency(saved) ? Object.entries(saved.stamps) : [],
+  );
   const save = () => {
     dropOldestStamps(stamps);
-    uiState.set(RECENCY_KEY, {
-      stamps: Object.fromEntries(stamps),
-      needsYou: [...needsYou],
-    });
+    uiState.set(RECENCY_KEY, { stamps: Object.fromEntries(stamps) });
   };
   return {
     stampsOf(rows) {
@@ -73,25 +63,11 @@ export function createSessionRecency(
       const heldKeys = new Set(after.map((row) => stampKey(row)));
       // Moves come first: a row can move off a key a leaving row also held.
       const altered = [
-        before === null && keepNeedsYouOf(after, needsYou),
         moveStamps(changed, rowsBefore, heldKeys, stamps),
-        dropRows(removed, rowsBefore, heldKeys, stamps, needsYou),
+        dropRows(removed, rowsBefore, heldKeys, stamps),
         stampRows(added, stamps, clock),
       ].includes(true);
       if (altered) {
-        save();
-      }
-    },
-    noteNeedsYou(row) {
-      if (needsYou.has(row.sessionId)) {
-        return;
-      }
-      needsYou.add(row.sessionId);
-      stamps.set(stampKey(row), clock.now());
-      save();
-    },
-    needsYouEnded(sessionId) {
-      if (needsYou.delete(sessionId)) {
         save();
       }
     },
@@ -104,31 +80,17 @@ function stampKey(row: SessionRow): string {
 
 // Each of these returns whether it changed anything.
 
-function keepNeedsYouOf(
-  rows: readonly SessionRow[],
-  needsYou: Set<string>,
-): boolean {
-  const held = new Set(rows.map((row) => row.sessionId));
-  const gone = [...needsYou].filter((sessionId) => !held.has(sessionId));
-  for (const sessionId of gone) {
-    needsYou.delete(sessionId);
-  }
-  return gone.length > 0;
-}
-
 function dropRows(
   removed: readonly string[],
   rowsBefore: ReadonlyMap<string, SessionRow>,
   heldKeys: ReadonlySet<string>,
   stamps: Map<string, number>,
-  needsYou: Set<string>,
 ): boolean {
   let altered = false;
   for (const sessionId of removed) {
     const key = stampKey(rowsBefore.get(sessionId)!);
     const stampGone = !heldKeys.has(key) && stamps.delete(key);
-    const markGone = needsYou.delete(sessionId);
-    altered = altered || stampGone || markGone;
+    altered = altered || stampGone;
   }
   return altered;
 }
@@ -188,11 +150,10 @@ function dropOldestStamps(stamps: Map<string, number>): void {
 
 function isSavedRecency(
   value: unknown,
-): value is { stamps: Record<string, number>; needsYou: string[] } {
+): value is { stamps: Record<string, number> } {
   return (
     isJsonObject(value) &&
     isJsonObject(value.stamps) &&
-    Object.values(value.stamps).every((stamp) => typeof stamp === 'number') &&
-    isStringArray(value.needsYou)
+    Object.values(value.stamps).every((stamp) => typeof stamp === 'number')
   );
 }

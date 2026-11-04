@@ -16,7 +16,6 @@ import {
 import { createPaneTreeView } from '../../../shared/page/pane-tree/pane-tree-view';
 import type { KeysPageExports } from '../../keys/contract';
 import {
-  NEEDS_YOU_ACTIVITY,
   type RowActivity,
   type SessionPart,
   type SessionRow,
@@ -106,8 +105,7 @@ export interface SessionPanes {
 // click or `stepPreview` moves without activating anything; `false` draws the
 // real rows again. `setActivity` sets a source's activity for a session, as
 // `SessionsPageExports.setActivity` says, drawing the side bar again only when
-// the row's shown activity changed, and telling recency when its top activity
-// turned to or away from needs you; `render` drops the activities of the rows
+// the row's shown activity changed; `render` drops the activities of the rows
 // that left and hands the rows' changes to recency. `redrawRows` draws the side
 // bar's rows again, for a changed title length. `orderedRows` lists main's rows
 // in the order the side bar draws them, the preview's sample never among them.
@@ -371,16 +369,7 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
       }
     },
     setActivity(sessionId, sourceId, activity) {
-      const wasNeedsYou = isNeedsYou(activities.top(sessionId));
       if (activities.set(sessionId, sourceId, activity)) {
-        if (isNeedsYou(activities.top(sessionId))) {
-          const row = state?.rows.find((held) => held.sessionId === sessionId);
-          if (row !== undefined) {
-            recency.noteNeedsYou(row);
-          }
-        } else if (wasNeedsYou) {
-          recency.needsYouEnded(sessionId);
-        }
         drawSidebar();
       }
     },
@@ -409,11 +398,4 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
       logLine(`moved ${project} ${direction}`);
     },
   };
-}
-
-function isNeedsYou(activity: RowActivity | null): boolean {
-  return (
-    activity?.word === NEEDS_YOU_ACTIVITY.word &&
-    activity.tone === NEEDS_YOU_ACTIVITY.tone
-  );
 }
