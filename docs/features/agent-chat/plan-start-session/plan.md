@@ -100,7 +100,7 @@ Boundary rules:
 - [x] [Doc re-read](02-doc-re-read.md) — after 01
 
 ### Wave 3
-- [ ] [Final verification](03-final-verification.md) — after 02
+- [x] [Final verification](03-final-verification.md) — after 02
 
 ## Run log
 
@@ -109,6 +109,7 @@ Review base: 4de544d7
 ### Groups
 - 01 · 87fd8df5 · diff read: all three Produces present, profileOf hoisted, contribution beside PERMISSION_TOOLS, no start order moved; worker: typecheck and lint clean, 63 tests in the two touched files pass · concerns: third private textResult copy (title-tool.ts:35, chat-sessions.ts:407); a launch throw reaches the caller but no log line unless startNew logs it; check order between prompt, profile and folder is pinned only through stat not called; non-object args other than null have no row
 - 02 · none · both written-ahead lines read against 87fd8df5: the design.md bullet and the AGENTS.md chat/ line hold; launch passes select false in chat-sessions.ts; no line changed · concerns: none
+- 03 · none · drive run start-session-check with real Claude, spending about 0.59 dollars: agent called the tool through the relay with only a prompt; second row in the same folder under the same profile; first row stayed selected; prompt arrived as the first message; start_session listed in tools.json · concerns: the started session runs the full agent setup, so a one-word prompt cost 0.27 dollars and about 50k of context; before and after selection queries were not timed against the launch; MaxListenersExceededWarning for plugin:message listeners, not checked against main
 ### Contract changes
 ### Rulings
 - The preflight line requiring plan-session-hub closed is met by isolation, not by that run closing: the user asked for a worktree while the hub run was still open, so the shared start.ts is reconciled at the merge — a merge conflict in start.ts if wrong · lead

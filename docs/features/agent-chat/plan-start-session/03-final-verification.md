@@ -1,6 +1,6 @@
 # 03 — Final verification
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -24,3 +24,4 @@ Commit:    none, unless a check finds a fix
 
 ## Proof
 
+Commit none · proof: drive run start-session-check with real Claude, spending about 0.59 dollars: agent called the tool through the relay with only a prompt; second row in the same folder under the same profile; first row stayed selected; prompt arrived as the first message; start_session listed in tools.json · concerns: the started session runs the full agent setup, so a one-word prompt cost 0.27 dollars and about 50k of context; before and after selection queries were not timed against the launch; MaxListenersExceededWarning for plugin:message listeners, not checked against main
