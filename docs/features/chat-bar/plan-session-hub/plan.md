@@ -1,0 +1,186 @@
+# Session hub — plan
+
+Feature: chat-bar · Implements: none · Ticket: none
+Target: main · Written: 2026-11-03
+
+REQUIRED SUB-SKILL: Use wigley:make to implement this plan
+
+**Contents**
+
+- **Goal** — what the user gets.
+- **Architecture** — the systems this plan touches.
+- **Preconditions** — the state this plan needs, with the commands that check it.
+- **Docs written ahead** — the commit that holds them.
+- **Mandatory Reads** — what each implementer reads first.
+- **Design Overview** — the after-state, the decisions and what stays out.
+- **File Structure** — new files, modified files, shared names and boundary rules.
+- **Tasks** — the wave checklist.
+- **Run log** — written by `wigley:make`.
+
+## Goal
+
+Every Chat tab gets a session hub: a column beside the transcript with four titled sections. Main agent shows the live activity dock. Plan shows the workflow side pane. Skills shows each skill an agent started. Session shows the session's facts. The composer gets smaller: shell tasks become one-line rows, the context bar moves above the box, and the dock leaves only one line, which shows only while the hub is not visible.
+
+## Architecture
+
+Systems touched:
+
+- `chat` page plugin: the hub's section frame, its hide state, the Main agent and Session sections, the dock's move.
+- `workflow` plugin: its side part becomes the Plan section.
+- `agents` plugin: `Roster` gains `skills`.
+- `agent-skills`: a new plugin that draws the Skills section.
+- `agent-strip` plugin: task boxes become rows under the cards.
+- `usage` plugin: its Chat status part splits into a composer part and a status part.
+- `keymap`: one new bind.
+
+## Preconditions
+
+This plan runs after `docs/features/workflow/plan-chat-side-pane/` lands on `main`. That run is in progress on branch `chat-side-pane` and merges on the user's word, so the first two rows fail now. `wigley:make` stops at preflight until they pass.
+
+| Claim | Command that checks it | At plan time |
+|---|---|---|
+| The side pane plan landed | `grep -n 'addSidePart' src/plugins/chat/contract.ts` prints a line | prints nothing |
+| The side pane plan closed | `test ! -e docs/features/workflow/plan-chat-side-pane/plan.md` exits 0, or every box in it is ticked | 0 boxes ticked |
+| `row-clock` merged | `git merge-base --is-ancestor row-clock main` exits 0 | exits 0 |
+| `Space v s` is free | `grep -n '<Leader>vs' src/plugins/keymap.ts` prints nothing | prints nothing |
+| No user layout overrides a changed part | `find ~/.config/wigley-ai-gui/layouts -maxdepth 3 -name layout.js` prints nothing | prints nothing |
+| The doc commit is in the tree | `git merge-base --is-ancestor 68948b9f HEAD` exits 0 | exits 0 |
+
+When the side pane plan lands with a name other than the names this plan quotes from it, the landed name wins. Report it as a contract change in the Run log.
+
+## Docs written ahead
+
+Commit `68948b9f` and the commit that adds this plan folder hold:
+
+- `docs/features/chat-bar/design.md`
+- `DESIGN.md`
+- `AGENTS.md`
+- `docs/features/agent-chat/design.md`
+- `docs/features/layouts/design.md`
+- `docs/features/usage/design.md`
+- `docs/features/workflow/design.md`
+- `docs/features/agent-tower/design.md`
+- `docs/keymap.md`
+
+These docs are hypotheses until task 08 re-reads them against the landed code.
+
+## Mandatory Reads
+
+- `AGENTS.md`: § Architecture for the plugin rules, layouts and parts; § Running and testing for the commands.
+- `DESIGN.md`: the Chat bullet.
+- `docs/features/chat-bar/design.md`: the whole file. It is the spec of this plan.
+
+The repo has no `CLAUDE*.md`, `.claude/rules/` or `AGENTS.local.md` that touches this code.
+
+## Design Overview
+
+```
+.chat-tab  (flex row, inline-size container named chat-tab)
+├── .chat-main
+│    ├── entries
+│    └── composer
+│         ├── workflow strip        composer part
+│         ├── agent strip           composer part: cards, then task rows
+│         ├── usage context line    composer part
+│         ├── .chat-working-slot    workingLine; CSS hides it while the hub is visible
+│         ├── attachments, box
+│         └── status line           usage spend is its status part
+└── .chat-side-parts  264 px; hidden under 640 px and on Space v s
+     ├── Main agent   order 10   chat: .chat-dock-slot, the `working` part
+     ├── Plan         order 20   workflow: its side pane
+     ├── Skills       order 30   agent-skills: its list
+     └── Session      order 40   chat: the `sessionFacts` part
+
+createActivityDock (one per tab, in the composer surface)
+  ├─► `working` draw in the dock slot
+  ├─► `workingLine` draw in the working slot
+  └─► onDockChanged listeners ─► Main agent's section summary
+```
+
+Decisions:
+
+- A section is a side part with a frame. Chat draws the frame through a new `sideSection` layout part. The part draws the frame's body.
+- `ChatSidePart` stops extending `ContributedPart`, because its `build` takes a third parameter. Chat adapts it to a `ContributedPart` for `placeContributedParts`.
+- CSS alone chooses between the dock and the one line. No code measures the Chat tab.
+- The surface moves one element, the dock slot, into the Main agent section. So a composer draw still redraws the dock on a layout change, and the part holds no draw of its own.
+- `Space v s` and section collapse apply to every session and survive a relaunch, through `uiState`.
+- A task row shows no owner until it is opened.
+
+Out of scope:
+
+- Live thinking text or a thinking token count.
+- The 5h and Week limits in the hub. They stay in the usage details.
+- Spend in the Session section. It stays in the status line.
+- Keys or focus for the hub.
+- What counts as a skill. A typed message that starts with `/` and is no control command already emits `skillStarted` (`typedSkill`). The list shows what the fold emits.
+- Saving the skills across a resume.
+
+## File Structure
+
+New files:
+
+- `src/plugins/chat/page/side-sections.ts`: the frame, order, collapse and hub hide state. The tests have a seam here that `chat-view.ts` does not give.
+- `src/plugins/chat/page/main-agent-part.ts`: the Main agent side part.
+- `src/plugins/chat/page/session-part.ts`: the Session side part and its pure input.
+- `src/plugins/agent-skills/`: the new plugin, in the shape of `src/plugins/agent-lines/`. Skills is a view over a data plugin, and it can be disabled.
+
+Shared names (more than one task uses each):
+
+```ts
+// src/plugins/chat/contract.ts ← 01
+export interface ChatSideSection { setSummary(text: string | null): void; }
+export interface ChatSidePart {
+  id: string;
+  title: string;
+  order: number;
+  build(parent: HTMLElement, sessionId: string, section: ChatSideSection): { dispose?(): void };
+}
+
+// src/plugins/agents/contract.ts ← 05
+export interface RosterSkill { skill: string; agentId: string; ownerName: string; }
+// Roster gains `skills: RosterSkill[]`
+```
+
+Section orders and titles: `chat.mainAgent` `Main agent` 10 · `workflow.sidePane` `Plan` 20 · `agent-skills.list` `Skills` 30 · `chat.session` `Session` 40.
+
+CSS class names more than one task uses: `.is-side-hidden` on `.chat-tab` (01, read by 04) · `.chat-side-section-body` (01, read by 04 and 06).
+
+Boundary rules:
+
+- Chat names no workflow, agents or usage type. A section's plugin depends on chat.
+- A plugin's own layout draws its section's body. Chat's layout draws only the frame.
+- Layouts import no app code. The dock's time is formatted once in the layout for its own text and once in the page for the summary, because the summary is a string the part hands to chat.
+
+## Tasks
+
+> `wigley:make` ticks a box once its group is committed and proved, and sets `Status: done` in the
+> task document in the same change. The run is done when every box is ticked.
+
+### Wave 1
+- [ ] [Hub frame](01-hub-frame.md)
+- [ ] [Task rows](02-task-rows.md)
+- [ ] [Context line](03-context-line.md)
+
+### Wave 2
+- [ ] [Activity move](04-activity-move.md) — after 01, 02, 03
+- [ ] [Skills section](05-skills-section.md) — after 01, 02
+- [ ] [Plan section](06-plan-section.md) — after 01
+
+### Wave 3
+- [ ] [Session section](07-session-section.md) — after 01, 04
+
+### Wave 4
+- [ ] [Doc re-read](08-doc-re-read.md) — after 01–07
+
+### Wave 5
+- [ ] [Final verification](09-final-verification.md) — after 08
+
+## Run log
+
+Review base: <sha, written by wigley:make at preflight>
+
+### Groups
+### Contract changes
+### Rulings
+### Review rounds
+### Test gate

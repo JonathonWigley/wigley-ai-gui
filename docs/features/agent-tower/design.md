@@ -5,7 +5,8 @@
 - **Status** — what is built now and what waits.
 - **Vocabulary** — agent event, agent id, roster, plan step.
 - **Agent events** — the record every view reads, who emits it, and where it is logged.
-- **The agents plugin** — the roster, the event log and the views that draw it (`agent-lines`, `agent-strip`).
+- **The agents plugin** — the roster, the event log and the views that draw it (`agent-lines`, `agent-strip`,
+  `agent-skills`).
 - **The tower** — the game view the seams are built for: constraints, inputs and phases.
 
 A gamified view of a session's agents: each plan step is a floor of a tower, and chibi characters fight their way up
@@ -40,11 +41,12 @@ harness and read by the workflow plugin (`docs/features/workflow/design.md`).
 - **Task** — a process an agent started that runs apart from its turn, such as a background shell command (Claude: a
   `task_started` whose `task_type` is not `local_agent`; a subagent is a task too in Claude's stream, but the app
   calls it a subagent and never a task).
-- **Roster** — a session's agents and tasks as the agents plugin tracks them from its events: each subagent with its
+- **Roster** — a session's agents, tasks and skills as the agents plugin tracks them from its events: each subagent with its
   type, name, description, start time, whether it runs in the background, model, effort, spend, context tokens and
   window, and every tool call (name, summary, outcome), and each task with its owning agent's id and name,
-  description, command and start time. Every listed item is running: an item leaves the moment it ends, done or
-  failed, and `sessionEnded` empties the roster.
+  description, command and start time, and each skill an agent started with that agent's id and name. Every listed
+  agent and task is running: it leaves the moment it ends, done or failed, and `sessionEnded` empties both lists. The
+  skills stay until the session's row ends.
 - **Plan step** — one step of the session's task plan, one floor of the tower. Chat's **step** (a tool, thinking or
   raw entry, `agent-chat/design.md` § Vocabulary) is a different thing; the tower always says plan step.
 
