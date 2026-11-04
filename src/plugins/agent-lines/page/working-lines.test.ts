@@ -30,8 +30,10 @@ function runningAgent(agentId: string, ageMs: number): RosterAgent {
     model: null,
     effort: null,
     spendUsd: null,
+    isBackground: false,
+    contextTokens: null,
+    contextWindow: null,
     tools: [],
-    outcome: 'running',
   };
 }
 
@@ -40,10 +42,10 @@ function runningTask(taskId: string, ageMs: number): RosterTask {
   return {
     taskId,
     agentId: MAIN_AGENT_ID,
+    ownerName: 'main',
     description: 'npm run build',
     command: null,
     startedAt: NOW - ageMs,
-    outcome: 'running',
   };
 }
 
@@ -120,13 +122,10 @@ describe('working lines', () => {
   });
 
   // A row built before any `setRoster` named its session draws the roster
-  // `deps.roster` holds: a done subagent counts for nothing.
+  // `deps.roster` holds.
   it('build_NothingSet_DrawsTheDepsRoster', () => {
     const { lines, wrapper, logged } = setUp({
-      agents: [
-        runningAgent('agent-1', 42_000),
-        { ...runningAgent('agent-2', 9_000), outcome: 'done' },
-      ],
+      agents: [runningAgent('agent-1', 42_000)],
       tasks: [],
     });
 

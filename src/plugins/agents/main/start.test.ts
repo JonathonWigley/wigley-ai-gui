@@ -49,8 +49,10 @@ const runningA: RosterAgent = {
   model: null,
   effort: null,
   spendUsd: null,
+  isBackground: false,
+  contextTokens: null,
+  contextWindow: null,
   tools: [],
-  outcome: 'running',
 };
 const runningB: RosterAgent = {
   agentId: 'toolu_b',
@@ -61,10 +63,11 @@ const runningB: RosterAgent = {
   model: null,
   effort: null,
   spendUsd: null,
+  isBackground: false,
+  contextTokens: null,
+  contextWindow: null,
   tools: [],
-  outcome: 'running',
 };
-const failedA: RosterAgent = { ...runningA, outcome: 'failed' };
 
 const taskStartedA: AgentEvent = {
   type: 'taskStarted',
@@ -85,19 +88,22 @@ const taskStartedMain: AgentEvent = {
 const runningTaskA: RosterTask = {
   taskId: 'task_a',
   agentId: 'toolu_a',
+  ownerName: 'subagent',
   description: 'npm test --watch',
   command: null,
   startedAt: 1_500,
-  outcome: 'running',
 };
 const runningTaskMain: RosterTask = {
   taskId: 'task_main',
   agentId: MAIN_AGENT_ID,
+  ownerName: 'main',
   description: 'npm run build',
   command: null,
   startedAt: 6_000,
-  outcome: 'running',
 };
+
+// `task_a` when its owner `toolu_a` is listed as it starts.
+const taskOfListedA: RosterTask = { ...runningTaskA, ownerName: 'Explore' };
 
 // A roster holding these agents and tasks.
 function roster(agents: RosterAgent[], tasks: RosterTask[] = []): Roster {
@@ -199,11 +205,10 @@ describe('agentsMainPart', () => {
       rosters: {},
     },
     {
-      name: 'a failed agent stays listed until the next message',
-      steps: [spawned, failed, userMessage],
+      name: 'a failed agent leaves the roster at once',
+      steps: [spawned, failed],
       sent: [
         { sessionId: 's1', roster: roster([runningA]) },
-        { sessionId: 's1', roster: roster([failedA]) },
         { sessionId: 's1', roster: roster([]) },
       ],
       rosters: {},
@@ -230,30 +235,14 @@ describe('agentsMainPart', () => {
       rosters: { s1: roster([runningA]) },
     },
     {
-      name: "a message drops a cleared host's finished items",
-      steps: [
-        spawned,
-        { host: CLEARED_HOST, event: spawnedB },
-        sessionEnded,
-        { host: CLEARED_HOST, event: userMessage },
-      ],
-      sent: [
-        { sessionId: 's1', roster: roster([runningA]) },
-        { sessionId: 's1', roster: roster([runningA, runningB]) },
-        { sessionId: 's1', roster: roster([failedA, runningB]) },
-        { sessionId: 's1', roster: roster([runningB]) },
-      ],
-      rosters: { s1: roster([runningB]) },
-    },
-    {
-      name: "a row's old process ending fails only its own subagents",
+      name: "a row's old process ending removes only its own subagents",
       steps: [spawned, { host: CLEARED_HOST, event: spawnedB }, sessionEnded],
       sent: [
         { sessionId: 's1', roster: roster([runningA]) },
         { sessionId: 's1', roster: roster([runningA, runningB]) },
-        { sessionId: 's1', roster: roster([failedA, runningB]) },
+        { sessionId: 's1', roster: roster([runningB]) },
       ],
-      rosters: { s1: roster([failedA, runningB]) },
+      rosters: { s1: roster([runningB]) },
     },
     {
       name: 'a started task sends a roster listing it',
@@ -278,10 +267,10 @@ describe('agentsMainPart', () => {
       steps: [spawned, taskStartedA, finished],
       sent: [
         { sessionId: 's1', roster: roster([runningA]) },
-        { sessionId: 's1', roster: roster([runningA], [runningTaskA]) },
-        { sessionId: 's1', roster: roster([], [runningTaskA]) },
+        { sessionId: 's1', roster: roster([runningA], [taskOfListedA]) },
+        { sessionId: 's1', roster: roster([], [taskOfListedA]) },
       ],
-      rosters: { s1: roster([], [runningTaskA]) },
+      rosters: { s1: roster([], [taskOfListedA]) },
     },
   ])('$name', ({ steps, sent, rosters }) => {
     const agents = startAgentsPart();
@@ -349,7 +338,7 @@ describe('agentsMainPart', () => {
     const second = agents.invoke('rosters') as Record<string, Roster>;
 
     expect(Object.keys(second)).toEqual(['s1', PREVIEW_ROW]);
-    expect(second.s1).toEqual(roster([runningA], [runningTaskA]));
+    expect(second.s1).toEqual(roster([runningA], [taskOfListedA]));
     expect(second[PREVIEW_ROW].agents).toHaveLength(
       first[PREVIEW_ROW].agents.length + 1,
     );

@@ -68,7 +68,11 @@ export const FAKE_STEPS_TEXT = 'fake: steps';
 // open turn, this one or a later one, ends them (failed); the process's end
 // sends no `taskFinished`, since `sessionEnded` ends a roster's running items.
 // Real Claude may keep a background Bash past an interrupt; the fake ends it to
-// keep the self-test row's count exact.
+// keep the self-test row's count exact. Real Claude also keeps a launched
+// subagent running past an interrupt or a send, and fills its Agent entry's
+// result at the receipt; the fake's launched subagent ends with the other and
+// its entry keeps `result: null`, so a self-test here does not prove a background
+// box survives an interrupt.
 export const FAKE_AGENTS_TEXT = 'fake: agents';
 // A send of this text ends the process on its own, as a CLI that exits.
 export const FAKE_END_TEXT = 'fake: end';
@@ -609,8 +613,9 @@ function emitStepsTurn(
 }
 
 // The subagents `FAKE_AGENTS_TEXT`'s turn spawns, in order, each with the one
-// tool it runs and the model and spend its reply reports. `name` is the Agent
-// call's `name` input, null when the call names none.
+// tool it runs and the model, spend and context its reply reports. `name` is
+// the Agent call's `name` input, null when the call names none; `isLaunched`
+// marks a subagent that runs in the background.
 const FAKE_SUBAGENTS = [
   {
     agentType: 'wigley:sonnet-medium',
@@ -618,7 +623,13 @@ const FAKE_SUBAGENTS = [
     name: 'map-decoder',
     model: 'sonnet',
     effort: 'medium',
-    reply: { model: 'claude-sonnet-5-5', spendUsd: 0.0421 },
+    isLaunched: false,
+    reply: {
+      model: 'claude-sonnet-5-5',
+      spendUsd: 0.0421,
+      contextTokens: 84_000,
+      contextWindow: 200_000,
+    },
     tool: {
       name: 'Read',
       input: { file_path: 'src/main/claude-code/stream-decoder.ts' },
@@ -631,7 +642,13 @@ const FAKE_SUBAGENTS = [
     name: null,
     model: null,
     effort: null,
-    reply: { model: 'claude-haiku-5-5', spendUsd: 0.0019 },
+    isLaunched: true,
+    reply: {
+      model: 'claude-haiku-5-5',
+      spendUsd: 0.0019,
+      contextTokens: 166_000,
+      contextWindow: 200_000,
+    },
     tool: {
       name: 'Grep',
       input: { pattern: 'append' },
@@ -644,8 +661,9 @@ const FAKE_SUBAGENTS = [
 type SubagentEntry = ToolCall;
 
 // Spawns turn `turn`'s subagents, ids `fake-agent-<turn>-<n>`, and runs each
-// one's tool after its `agentReplied`; returns their Agent entries in spawn
-// order. The turn stays open.
+// one's tool after its `agentReplied` and, for a launched one, its
+// `agentLaunched`; returns their Agent entries in spawn order. The turn stays
+// open.
 function emitAgentsTurn(
   events: AgentProcessEvents,
   emitEntry: EmitEntry,
@@ -681,15 +699,17 @@ function emitAgentsTurn(
     });
     return entry;
   });
-  FAKE_SUBAGENTS.forEach(({ tool, reply }, index) => {
+  FAKE_SUBAGENTS.forEach(({ tool, reply, isLaunched }, index) => {
     const agentId = spawned[index].toolUseId;
     events.agentEvent({
       type: 'agentReplied',
       at: clock.now(),
       agentId,
-      model: reply.model,
-      spendUsd: reply.spendUsd,
+      ...reply,
     });
+    if (isLaunched) {
+      events.agentEvent({ type: 'agentLaunched', at: clock.now(), agentId });
+    }
     const toolCall: ToolCall = {
       kind: 'tool',
       id: `${spawned[index].id}-tool`,
