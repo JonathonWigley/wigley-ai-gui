@@ -1,6 +1,6 @@
 # 05 — Doc re-read
 
-Status: not started
+Status: done
 Type: Task
 Wave: 4 · Depends on: 04
 Plan: [plan.md](plan.md)
@@ -21,3 +21,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 341909ba · proof: diff read; follow-up gone, no line outside the plan names it · concerns: none

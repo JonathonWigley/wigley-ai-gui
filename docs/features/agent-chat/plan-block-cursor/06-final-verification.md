@@ -1,6 +1,6 @@
 # 06 — Final verification
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 5 · Depends on: 05
 Plan: [plan.md](plan.md)

@@ -155,13 +155,13 @@ Shared names:
 - [x] [Cursor model](02-cursor-model.md)
 
 ### Wave 2
-- [ ] [Entry list block stops](03-entry-list-block-stops.md) — after 01, 02
+- [x] [Entry list block stops](03-entry-list-block-stops.md) — after 01, 02
 
 ### Wave 3
-- [ ] [Commands and keys](04-commands-and-keys.md) — after 03
+- [x] [Commands and keys](04-commands-and-keys.md) — after 03
 
 ### Wave 4
-- [ ] [Doc re-read](05-doc-re-read.md) — after 04
+- [x] [Doc re-read](05-doc-re-read.md) — after 04
 
 ### Wave 5
 - [ ] [Final verification](06-final-verification.md) — after 05
@@ -173,11 +173,21 @@ Review base: e976884ea34536afc67f149b90cdf9797c672647
 ### Groups
 - 01 · 20e52afa · diff read, Produces present, 68 filtered tests pass, typecheck clean in its files · concerns: stock code_block attribute placement not read from node_modules, the indented row proves the mark lands on <pre>; about 25 exact-output rows now carry literal marks
 - 02 · 8a95529d · diff read, all Produces present, 85 filtered tests pass, typecheck clean in its files; entry-list errors expected until 03 · concerns: an open anchor clears when its entry's block count changes, during streaming too; docs/features/followups.md near line 150 names the old onLine row, for task 05
+- 03 · 5788fdcf · diff read, all Produces present, 104 filtered tests pass, typecheck clean; chat.css staged by hunk past a peer's edits · concerns: pullBack is async, so a click on a pending row moves the cursor onto it and the row's removal then follows the latest stop, and pending_ClickRow_PullsBackWithoutMovingTheCursor only passes because the fake click does not bubble; rectTop lives in test-dom.ts not entry-list.test.ts; SourceLineFakeElement's selector now duplicates the base fake
+- 04 · a4f91d8e · diff read, Produces present, 187 filtered tests pass, typecheck and lint clean · concerns: docs stale for task 05 (design.md type hint, keymap.md y/n and the Shift layer); a session closed during the clipboard write gets cancelRange on a disposed list; status line width with four more prompts is for the live run
+- 05 · 341909ba · diff read; follow-up gone, no line outside the plan names it · concerns: none
 ### Contract changes
 ### Rulings
 - An ordered-list row and an indented-code case added beyond the five GIVEN rows — the Decisions name both and no row caught a break — one extra row if unwanted · group 01 · group 01
 - entryIdOfStop removes a trailing #<digits> only, per Decisions over the Produces line — the Decisions line is explicit — an id like tool#x stays whole · group 02 · group 02
 - focusStop sets following to exactly stopId === last id, clearing it on an earlier stop — a kept flag would pull the cursor back on the next redraw — a click from a following focus stops following · group 02 · group 02
 - moveToMessage keeps anchorId — matches G and gg keeping an open range — one line to clear it on J and K · group 02 · group 02
+- When any block of an entry ends past its line count, every stop of that entry in the range gives the whole text once — a mixed slice plus whole text would duplicate — only under a layout that draws other text · group 03
+- A whitespace-only part is dropped and not counted — the reading of no part remains — a whitespace-only pending message does not copy · group 03
+- Unchanged scrollTop returns early, following included — the reading of leaves the focus alone — a same-position event no longer refreshes following · group 03
+- J, K and V get on-screen anchors, a gap the plan left: they are not in VIM_KEYS and the self-test's placement check fails an unplaced bind — the project rule is that a new key ships with its place on screen — the placement is a look the user can override · lead
+- J, K, V and y prompts sit in the status line's type hint, hidden with it while the box has focus — the existing place for page keys the box takes over, no new part or CSS — moving them touches only composer-kit.ts · group 04
+- The y prompt reads to copy or allow — it shows during a permission too, where a plain to copy would misstate it — slightly longer copy · group 04
+- DESIGN.md needed no edit — each block cursor line matches chat.css and entry-focus.ts — one stale line stays if wrong · group 05
 ### Review rounds
 ### Test gate

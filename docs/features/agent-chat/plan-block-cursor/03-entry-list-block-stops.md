@@ -1,6 +1,6 @@
 # 03 — Entry list block stops
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01, 02
 Plan: [plan.md](plan.md)
@@ -84,3 +84,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 5788fdcf · proof: diff read, all Produces present, 104 filtered tests pass, typecheck clean; chat.css staged by hunk past a peer's edits · concerns: pullBack is async, so a click on a pending row moves the cursor onto it and the row's removal then follows the latest stop, and pending_ClickRow_PullsBackWithoutMovingTheCursor only passes because the fake click does not bubble; rectTop lives in test-dom.ts not entry-list.test.ts; SourceLineFakeElement's selector now duplicates the base fake

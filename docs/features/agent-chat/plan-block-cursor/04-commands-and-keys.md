@@ -1,6 +1,6 @@
 # 04 — Commands and keys
 
-Status: not started
+Status: done
 Type: Task
 Wave: 3 · Depends on: 03
 Plan: [plan.md](plan.md)
@@ -57,3 +57,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit a4f91d8e · proof: diff read, Produces present, 187 filtered tests pass, typecheck and lint clean · concerns: docs stale for task 05 (design.md type hint, keymap.md y/n and the Shift layer); a session closed during the clipboard write gets cancelRange on a disposed list; status line width with four more prompts is for the live run
