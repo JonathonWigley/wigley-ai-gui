@@ -47,6 +47,8 @@ export interface SessionList extends Omit<SessionsMainExports, 'holdConnects'> {
     title: string | null,
     maxLength: number,
   ): void;
+  // The plugin's stop: a project lookup landing after it changes nothing.
+  stop(): void;
 }
 
 interface Contribution {
@@ -190,7 +192,8 @@ function routeCall(
 // selection other than the last sent emits `selected` after it. Each session's
 // titles live on its entry, copied onto its row while it has one, and last
 // while the session does; so does its project, which starts as the group and
-// sends the state when its lookup changes the project of a session with a row.
+// sends the state when its lookup changes the project of a session with a row,
+// until `stop`.
 export function createSessionList(deps: SessionListDeps): SessionList {
   const contributions: Contribution[] = [];
   const closeGuards: ((sessionId: string) => boolean)[] = [];
@@ -204,6 +207,7 @@ export function createSessionList(deps: SessionListDeps): SessionList {
   // mark that selects another session from none; a release of another
   // selected row replaces it.
   let reselectOnReturn: { sessionId: string; releasedAt: number } | null = null;
+  let isStopped = false;
 
   const state = (): SessionsState => ({
     rows: rows.map((row) => ({ ...row, titles: { ...row.titles } })),
@@ -285,14 +289,16 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     deps.emit('closed', { sessionId });
   };
 
-  // Asks for the project of the entry's folder; a null or a rejection keeps
-  // the fallback.
+  // Asks for the project of the entry's folder; a null, a rejection or a landing
+  // after `stop` keeps the fallback.
   const lookUpProject = (entry: SessionEntry, projectDir: string) => {
     const appId = entry.session.id;
     deps.projectName(projectDir).then(
       (name) => {
-        const isNewProject =
-          name !== null && name !== entry.project && entries.has(appId);
+        if (isStopped) {
+          return;
+        }
+        const isNewProject = name !== null && name !== entry.project;
         if (!isNewProject) {
           return;
         }
@@ -640,5 +646,8 @@ export function createSessionList(deps: SessionListDeps): SessionList {
     },
     tools: () => contributions.flatMap((contribution) => contribution.tools),
     state,
+    stop() {
+      isStopped = true;
+    },
   };
 }

@@ -1522,7 +1522,11 @@ describe('createSessionList', () => {
   it.each<{
     name: string;
     sessions: SessionInfo[];
-    rowStage: 'at connect' | 'after landing' | 'ended before landing';
+    rowStage:
+      | 'at connect'
+      | 'after landing'
+      | 'ended before landing'
+      | 'stopped before landing';
     landings: Record<string, string | null | Error>;
     projectsBeforeLanding: string[];
     sent: string[][];
@@ -1622,6 +1626,17 @@ describe('createSessionList', () => {
       logged: [],
     },
     {
+      name: 'a lookup landing after the stop sends nothing and keeps the fallback',
+      sessions: [info('/work/clone-2')],
+      rowStage: 'stopped before landing',
+      landings: { '/work/clone-2': 'repo' },
+      projectsBeforeLanding: ['clone-2'],
+      sent: [],
+      projects: ['clone-2'],
+      finalLabels: ['clone-2'],
+      logged: [],
+    },
+    {
       name: 'a session with no row sends nothing, and its later row carries it',
       sessions: [info('/work/clone-2')],
       rowStage: 'after landing',
@@ -1657,6 +1672,9 @@ describe('createSessionList', () => {
       expect(rowProjects(list.state())).toEqual(projectsBeforeLanding);
       if (rowStage === 'ended before landing') {
         connected.forEach((session) => session.end());
+      }
+      if (rowStage === 'stopped before landing') {
+        list.stop();
       }
       expect([...lookups.keys()]).toEqual(Object.keys(landings));
       const statesBeforeLanding = states.length;

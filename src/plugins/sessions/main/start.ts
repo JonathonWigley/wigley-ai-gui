@@ -295,6 +295,7 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
         layouts.dispose();
         driveActions?.dispose();
         opened?.relay.close();
+        list.stop();
       },
     };
   },

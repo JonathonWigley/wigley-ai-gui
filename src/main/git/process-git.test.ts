@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { Git } from '../../contracts/git';
 import type { ProcessResult } from '../../contracts/processes';
 import { FakeProcesses } from '../../shared/fake-processes';
 import { createMemoryFiles } from '../../shared/memory-files';
@@ -87,11 +88,38 @@ describe('createProcessGit', () => {
       result: exited(2, '', 'error: No such remote'),
       name: null,
     },
+    {
+      case: 'empty result',
+      result: exited(0, '/\n'),
+      name: null,
+    },
   ])('originRepoName_$case', async ({ result, name }) => {
     const test = setUp();
     test.processes.script('git', git('remote', 'get-url', 'origin'), result);
 
     expect(await test.git.originRepoName(ROOT)).toBe(name);
+  });
+
+  // Each of these answers null or false on a failed run, not on a git that
+  // cannot start: nothing is scripted, so the run rejects.
+  it.each([
+    { method: 'topLevel', call: (adapter: Git) => adapter.topLevel(ROOT) },
+    {
+      method: 'originRepoName',
+      call: (adapter: Git) => adapter.originRepoName(ROOT),
+    },
+    {
+      method: 'currentBranch',
+      call: (adapter: Git) => adapter.currentBranch(ROOT),
+    },
+    {
+      method: 'hasUpstream',
+      call: (adapter: Git) => adapter.hasUpstream(ROOT),
+    },
+  ])('gitCannotStart_Rejects_$method', async ({ call }) => {
+    const test = setUp();
+
+    await expect(call(test.git)).rejects.toThrow();
   });
 
   it.each([
