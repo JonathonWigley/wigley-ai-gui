@@ -1,6 +1,6 @@
 # 04 — Usage row cache mark and short token text
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -66,3 +66,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 10d1cf30 · proof: diff read; every Produces signature present; typecheck clean for usage · concerns: layouts design Adopters table omits the cache mark (task 06); rowCacheText and the default part title and is-cold have no test, live check 3 covers them; doubled log prefix row cache session line in, same shape as rowLine

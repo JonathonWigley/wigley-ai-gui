@@ -135,11 +135,11 @@ usage reach sessions only through `SessionsPageExports.addRowPart`.
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [ActiveTime module](01-active-time-module.md)
-- [ ] [Usage row cache mark and short token text](04-usage-row-cache.md)
+- [x] [ActiveTime module](01-active-time-module.md)
+- [x] [Usage row cache mark and short token text](04-usage-row-cache.md)
 
 ### Wave 2
-- [ ] [Chat main owns and saves the clock](02-chat-main-clock.md) — after 01
+- [x] [Chat main owns and saves the clock](02-chat-main-clock.md) — after 01
 
 ### Wave 3
 - [ ] [Chat page exports and the row clock part](03-chat-row-clock.md) — after 02
@@ -153,10 +153,16 @@ usage reach sessions only through `SessionsPageExports.addRowPart`.
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 693cb8d04eb48c87e6cba0406a0e2d850f90db54
 
 ### Groups
+- 01 · 6640b41c · diff read; all Produces present; typecheck clean for the module; its table passes 7 rows · concerns: AGENTS.md src/shared listing omits active-time.ts (task 06 fixes); stop computes through activeMsAt
+- 04 · 10d1cf30 · diff read; every Produces signature present; typecheck clean for usage · concerns: layouts design Adopters table omits the cache mark (task 06); rowCacheText and the default part title and is-cold have no test, live check 3 covers them; doubled log prefix row cache session line in, same shape as rowLine
+- 02 · 371a1a15 · diff read; every Produces present; typecheck clean; the worker ran the chat main tests · concerns: replay drives the clock at wall time, so a kept run working across a quit is uncounted between quit and relaunch; turn start and stop saves twice, harmless; a background-only clock has no stop record before /clear resets it
 ### Contract changes
 ### Rulings
+- Task 02 final save goes in detachAll, before isDetached = true, in place of the plan's killAll and isKilled — the session host plan replaced them after this plan was written, and detachAll is the quit path (chat/main/start.ts:475) — if wrong, a quit mid-turn loses the open span back to the last save · lead
+- usage-row-cache centres on --wg-row-tree line height like usage-row-line — so the mark lines up with the meter — a look change in layout.css if wrong · group 04 · group 04
+- /clear saves through its existing finally save, not a second call at the reset — a save at the reset would write the old host id with the new total — a crash in the same tick keeps the stopped total · group 02 · group 02
 ### Review rounds
 ### Test gate

@@ -1,6 +1,6 @@
 # 02 — Chat main owns and saves the clock
 
-Status: not started
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -72,3 +72,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 371a1a15 · proof: diff read; every Produces present; typecheck clean; the worker ran the chat main tests · concerns: replay drives the clock at wall time, so a kept run working across a quit is uncounted between quit and relaunch; turn start and stop saves twice, harmless; a background-only clock has no stop record before /clear resets it

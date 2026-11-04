@@ -1,6 +1,6 @@
 # 01 — ActiveTime module
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -37,3 +37,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 6640b41c · proof: diff read; all Produces present; typecheck clean for the module; its table passes 7 rows · concerns: AGENTS.md src/shared listing omits active-time.ts (task 06 fixes); stop computes through activeMsAt

@@ -1,6 +1,6 @@
 # 03 — Chat page exports and the row clock part
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 3 · Depends on: 02
 Plan: [plan.md](plan.md)
