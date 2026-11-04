@@ -96,7 +96,7 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
   a plan until Dismiss or a new plan, so the section hides at every other time.
 - **Skills:** the skills each agent started in this row's session, by a Skill call or a typed slash command (the
   `skillStarted` agent event): one row per skill and agent, in start order, tagged `main` or the subagent's name. A row
-  stays through a compaction, the agent's end and the process's exit. After an app relaunch a re-attached process's
+  stays through a compaction, the agent's end and a `/clear`, until the session's row ends. After an app relaunch a re-attached process's
   log brings its skills back, and a resumed session's list starts empty, because the roster is not saved. It does not say the skill's text is still in the agent's context.
 - **Session:** the repo name, the branch (left out when none), the session folder with the home folder as `~`, the
   harness id and the model · effort. These read chat's own state, so chat names no other plugin. The spend stays in the
