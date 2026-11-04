@@ -85,6 +85,20 @@
   white-space: nowrap;
 }
 
+/* When the row's parts outgrow its line the bar shrinks away first, the used
+   tokens staying whole. */
+[data-layout-owner='usage'][data-layout='default'].usage-row-line > .ui-meter {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+/* The row's text is short, so it keeps no `100%` floor. */
+[data-layout-owner='usage'][data-layout='default'].usage-row-line
+  .ui-meter
+  + .usage-text::after {
+  content: none;
+}
+
 [data-layout-owner='usage'][data-layout='default'].usage-row-cache {
   align-items: center;
   color: var(--wg-fg-secondary);

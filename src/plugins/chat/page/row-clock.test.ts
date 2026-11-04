@@ -70,10 +70,10 @@ function setUp() {
     log,
     activeTime: (sessionId) => records.get(sessionId) ?? null,
   });
-  // The row part drawn into a fresh wrapper, for `SESSION`.
-  const drawRow = () => {
+  // The row part drawn into a fresh wrapper, for `sessionId`.
+  const drawRow = (sessionId = SESSION) => {
     const wrapper = new FakeElement('div');
-    const drawn = rowClock.part.build(asHtml(wrapper), SESSION);
+    const drawn = rowClock.part.build(asHtml(wrapper), sessionId);
     return { wrapper, dispose: () => drawn.dispose?.() };
   };
   const { duration } = surfaceBaseKit(kit, 'chat', {
@@ -171,6 +171,24 @@ describe('createRowClock', () => {
 
     expect(wrapper.textContent).toBe(duration(90_000));
     expect(armed.size).toBe(0);
+  });
+
+  it('changed_TwoRunningRowsOneStops_OtherStillAdvancesAndOneTickStays', () => {
+    const { rowClock, records, drawRow, duration, armed, passSecond } = setUp();
+    records.set('a', { totalMs: 0, since: NOW });
+    records.set('b', { totalMs: 0, since: NOW });
+    const rowA = drawRow('a');
+    const rowB = drawRow('b');
+
+    records.set('a', { totalMs: 5000, since: null });
+    rowClock.changed('a');
+    const armedAfterStop = armed.size;
+    passSecond();
+
+    expect(armedAfterStop).toBe(1);
+    expect(rowA.wrapper.textContent).toBe(duration(5000));
+    expect(rowB.wrapper.textContent).toBe(duration(1000));
+    expect(armed.size).toBe(1);
   });
 
   it('changed_ClockResetToZero_ClearsTheWrapper', () => {

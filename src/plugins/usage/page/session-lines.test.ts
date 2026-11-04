@@ -241,12 +241,13 @@ describe('session lines', () => {
     ]);
   });
 
-  it('rowCacheKind_NoExpiryThenWarmThenNoExpiry_DrawsOneMarkOrNone', () => {
+  it('rowCacheKind_NoExpiryThenWarmThenColdThenNoExpiry_DrawsTheMarkAndLogsEachState', () => {
     let shown = snapshotWith(usageEvent({ cacheExpiresAt: null }));
+    const logged: string[] = [];
     const lines = createSessionLines({
       id: 'usage.rowCache',
       line: rowCacheKind(defaultParts()),
-      log: () => undefined,
+      log: (line) => logged.push(line),
       nameOf: (sessionId) => sessionId,
       latest: () => ({ snapshot: shown, now: NOW }),
     });
@@ -256,12 +257,32 @@ describe('session lines', () => {
     const childrenWithNoExpiry = [...wrapper.children];
     shown = snapshotWith(usageEvent());
     lines.redraw();
-    const childrenWhileWarm = findAll(wrapper, 'usage-row-cache');
+    const warm = findAll(wrapper, 'usage-row-cache');
+    const warmMark = {
+      title: warm[0]?.title,
+      isCold: warm[0]?.classList.contains('is-cold'),
+    };
+    shown = snapshotWith(usageEvent({ cacheExpiresAt: NOW - MINUTE }));
+    lines.redraw();
+    const cold = findAll(wrapper, 'usage-row-cache');
+    const coldMark = {
+      title: cold[0]?.title,
+      isCold: cold[0]?.classList.contains('is-cold'),
+    };
     shown = snapshotWith(usageEvent({ cacheExpiresAt: null }));
     lines.redraw();
 
     expect(childrenWithNoExpiry).toEqual([]);
-    expect(childrenWhileWarm).toHaveLength(1);
+    expect(warm).toHaveLength(1);
+    expect(warmMark).toEqual({ title: 'cache warm · 42m left', isCold: false });
+    expect(cold).toHaveLength(1);
+    expect(coldMark).toEqual({ title: 'cache cold', isCold: true });
     expect(wrapper.children).toEqual([]);
+    expect(logged).toEqual([
+      `session line in ${SESSION}: cache none`,
+      `session line in ${SESSION}: cache warm`,
+      `session line in ${SESSION}: cache cold`,
+      `session line in ${SESSION}: cache none`,
+    ]);
   });
 });
