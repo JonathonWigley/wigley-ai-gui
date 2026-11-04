@@ -130,7 +130,7 @@ No new files. Shared names across tasks:
 - [x] [Doc re-read](04-doc-re-read.md) — after 03
 
 ### Wave 5
-- [ ] [Final verification](05-final-verification.md) — after 04
+- [x] [Final verification](05-final-verification.md) — after 04
 
 ## Run log
 Review base: 693cb8d04eb48c87e6cba0406a0e2d850f90db54
@@ -139,6 +139,7 @@ Review base: 693cb8d04eb48c87e6cba0406a0e2d850f90db54
 - 02 · ef990e82 · diff read: RosterAgent and RosterTask shapes present in contract.ts; lint passes; worker ran vitest on agents and agent-lines (77 tests pass); typecheck has 10 errors, all agent-strip, proved at 03 as the task allows · concerns: a duplicate agentSpawned or taskStarted for an ended id lists it again, for failed items too (no adapter code read to rule it out); agent-strip selftest prose left for 03; agent-tower design line 108 left for 04
 - 03 · 55242ea1 · diff read: AgentKind, AgentBoxInput, TaskBoxInput and AgentBoxPart present in layout.d.ts; typecheck (clears 02's errors) and lint pass; worker ran vitest on agent-strip (73 pass) and the agent-strip self-test (passes) · concerns: closed box clips by about a border at 900x700, and agent-strip.css's 80% composer cap comment is slightly untrue there; mono runtime versus DESIGN.md's mono rule; 999,500-999,999 tokens read 1000k; contextWindow 0 gives a NaN percent; spend under half a cent shows $0.00; the tick is seen only in task 05's capture
 - 04 · 2c273285 · diff read: two stale design lines fixed; worker reports each grep term run, remaining hits true or about other surfaces; lint passes · concerns: worker did not re-verify chat-bar's keys and scrolling lines against page code beyond the log lines; agent-strip.css's 80% composer cap comment left for the review
+- 05 · 5089f410 · Self-test agent-strip + agent-lines passes with all four boxes asserted. Chat preview capture read: Subagent 166k/200k in warning colour, Shell mono command, whole boxes, no parts scrollbar. Real Claude drive run: 4 boxes at peak, each left as it ended, 0 at the end. · concerns: Agents preview has no composer, so it cannot show the strip; task doc corrected. A background subagent waiting on its own background shell is reported done by Claude's task_notification and its box leaves while it still runs: observed 80 s early. That subagent's text shows in the main transcript; the branch left those paths unchanged.
 ### Rulings
 - Worktree run on branch agent-cards, from the local main tip; the test gate, self-test and drive checks stay in the worktree — this repo has no Unity editor, and AGENTS.md puts drive runs beside a peer's in a worktree, which has its own .vite — merging the branch back stays the user's call · lead
 - User's word for this run: every review recommendation is taken, so no triage round is sent and each finding takes its recommended pick, reported in the wrap-up — the user said so mid-run — a pick the user would have changed lands without a look until the wrap-up · lead
@@ -150,6 +151,13 @@ Review base: 693cb8d04eb48c87e6cba0406a0e2d850f90db54
 - Each selection logs box <i> of <n> in <name> shows: <textContent> so the self-test can check tag and runtime: every h/l/j writes tool summaries to the page log; removal is one log line, two alsoExpect rows and one assertion · group 03 · group 03
 - DESIGN.md's agent strip paragraph rewritten though outside the task's Files, because the edit outdated it · group 03 · group 03
 - Context bar track border-default, height space-1, fill status-success, matching ui-meter · group 03 · group 03
+- Compaction rows in agent-tower/design.md stay: they are auto-compact's doc written ahead, its plan unstarted; the correctness lane's finding is dropped — wrong if that plan was abandoned · lead
+- Task 05's real-session check is run by the agent, not left to the user, per AGENTS.md § Checks for the user: it spends a little of the user's Claude usage, named in the report · lead
+- Task 01's low-confidence claim settled true by a real session on Opus with a haiku background subagent still running at main's result: the subagent's agentReplied went from window null to 1000000 at that result. The 1000000 is the value the decoder read for haiku; it was not checked against haiku's published window. Event log kept at /tmp/claude-agent-cards/real-session-events.jsonl for this session only.
+### Review rounds
+- 1 · ea2e4726 · NEEDS FIXES: 18 findings dispatched, 11 prose fixes lead-applied, 5 items left per recommendation; report /tmp/claude-agent-cards/review-ea2e4726.md
+- Round 2 (re-review at cec1c442, correctness only, fixes 096cff12 e249a655 cec1c442): 1 Important, 2 Minor, all lead-applied; no third cycle. Repeat, round 1's 4 and 18: an open list's scroll is lost on a redraw while hidden or on a composer rebuild; stacked fix read-before-detach and write-after-append; choice taken by the user's standing word: narrow the promise and name the limit. Repeat, round 1's 15: self-test why outran its asserts; stacked fix box 3; box 4 added.
 ### Test gate
 - Vitest picks from the range's diff: stream-decoder.test, fake-agent-harness.test, chat-preview.test (edited, and they assert the new events); src/plugins/agents, src/plugins/agent-lines, src/plugins/agent-strip (edited, and they assert the roster and box shapes) · 15 files, 351 tests pass, no type errors
+- After review fixes: vitest over agent-strip, agents, usage, layout-host, stream-decoder, session-usage, model-prices: 31 files, 613 tests pass; typecheck and lint clean; self-test agent-strip + agent-lines passes.
 
