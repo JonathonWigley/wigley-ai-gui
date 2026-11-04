@@ -4,7 +4,8 @@
 // line each, its name before its meters, each meter in a column shared across
 // profiles; each session's line as one row (its context, cache and spend) in
 // its Chat status line or tab bar that drops whole items from its end when
-// narrow; each session's row line as its context meter and text; and the
+// narrow; each session's row line as its context meter and used tokens; each
+// session's row cache as a cache icon, its tooltip the time left; and the
 // details as one card per profile, its freshness beside its name. In the status
 // line and the details, the 5h and Week rows always show; any other row (a
 // model-scoped limit) shows only while used, and extra usage, the status line's
@@ -84,6 +85,13 @@ const layout = {
     kit.meter(line, input.context.percent, input.context.tone);
     kit.el(line, 'span', 'usage-text', input.context.text);
     return line;
+  },
+  rowCache(parent, input, kit) {
+    const mark = kit.el(parent, 'span', 'usage-row-cache');
+    kit.icon(mark, 'database');
+    mark.title = input.tooltip;
+    mark.classList.toggle('is-cold', input.isCold);
+    return mark;
   },
   details(parent, input, kit) {
     const root = kit.el(parent, 'div', 'usage-details');

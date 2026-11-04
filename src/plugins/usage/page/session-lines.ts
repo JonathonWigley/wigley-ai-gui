@@ -1,8 +1,14 @@
 import { callEach } from '../../../shared/call-each';
 import type { UsageLinePart, UsageSnapshot } from '../contract';
-import type { RowLineInput, SessionLineInput } from '../layouts/layout';
+import type {
+  RowCacheInput,
+  RowLineInput,
+  SessionLineInput,
+} from '../layouts/layout';
 import type { Drawn, UsageParts } from './layout/usage-parts';
 import {
+  rowCacheInput,
+  rowCacheText,
   rowLineInput,
   rowLineText,
   sessionLineInput,
@@ -10,8 +16,8 @@ import {
 } from './usage-view-model';
 
 // Which usage line a host's part draws: `input` reads a session's input from a
-// snapshot, the zero line while it has no usage; `text` is the input as the
-// page log writes it; `draw` draws it through usage's layout.
+// snapshot, whatever that line draws while the session has no usage; `text` is
+// the input as the page log writes it; `draw` draws it through usage's layout.
 export interface SessionLineKind<I> {
   input(snapshot: UsageSnapshot, sessionId: string, now: number): I;
   text(input: I): string;
@@ -29,7 +35,8 @@ export function sessionLineKind(
   };
 }
 
-// The side-bar row's line: context alone.
+// The side-bar row's line: context alone, the zero line while the session has
+// no usage.
 export function rowLineKind(
   parts: Pick<UsageParts, 'rowLine'>,
 ): SessionLineKind<RowLineInput> {
@@ -37,6 +44,21 @@ export function rowLineKind(
     input: rowLineInput,
     text: rowLineText,
     draw: (parent, input) => parts.rowLine(parent, input),
+  };
+}
+
+// The side-bar row's cache mark: nothing while the session has no cache expiry,
+// so a null input draws a stand-in holding no element of its own.
+export function rowCacheKind(
+  parts: Pick<UsageParts, 'rowCache'>,
+): SessionLineKind<RowCacheInput | null> {
+  return {
+    input: rowCacheInput,
+    text: rowCacheText,
+    draw: (parent, input) =>
+      input === null
+        ? { element: parent, dispose() {} }
+        : parts.rowCache(parent, input),
   };
 }
 
@@ -53,8 +75,7 @@ export interface SessionLinesDeps<I> {
 }
 
 // `part` draws a session's usage line into the wrapper its host hands it (a
-// Chat status line, a tab bar or a side-bar row), the zero line while the
-// session has no usage.
+// Chat status line, a tab bar or a side-bar row).
 // `redraw` draws every held session's line again from `latest`, nothing before
 // the first snapshot; `forget` drops a session that left.
 export interface SessionLines {

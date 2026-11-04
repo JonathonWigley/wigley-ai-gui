@@ -85,6 +85,17 @@
   white-space: nowrap;
 }
 
+[data-layout-owner='usage'][data-layout='default'].usage-row-cache {
+  align-items: center;
+  color: var(--wg-fg-secondary);
+  display: flex;
+  min-height: var(--wg-row-tree);
+}
+
+[data-layout-owner='usage'][data-layout='default'].usage-row-cache.is-cold {
+  color: var(--wg-status-error);
+}
+
 /* The meter's row is a full line tall, so a wrapped text starts below it. The
    margin assumes the meter is `space-1` tall (`src/shared/page/ui/meter.css`);
    a shorter meter lets the wrapped text show through. */

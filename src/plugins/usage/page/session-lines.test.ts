@@ -10,7 +10,11 @@ import {
 import type { UsageSnapshot } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import { createUsageParts } from './layout/usage-parts';
-import { createSessionLines, sessionLineKind } from './session-lines';
+import {
+  createSessionLines,
+  rowCacheKind,
+  sessionLineKind,
+} from './session-lines';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 
 const NOW = 50_000_000;
@@ -45,15 +49,9 @@ function snapshotWith(usage?: UsageAgentEvent | null): UsageSnapshot {
   };
 }
 
-// Lines over the default layout whose `latest` is `shown` at NOW until `show`
-// replaces it, naming `s1` `gamma 2` while `names` holds it.
-function setUp(
-  initial: UsageSnapshot | null,
-  names: ReadonlyMap<string, string> = new Map([[SESSION, NAME]]),
-) {
-  const logged: string[] = [];
-  let shown = initial;
-  const parts = createUsageParts({
+// The parts over the default layout.
+function defaultParts() {
+  return createUsageParts({
     defaultLayout,
     kit: {
       markdown: {
@@ -68,9 +66,19 @@ function setUp(
     },
     log: () => undefined,
   });
+}
+
+// Lines over the default layout whose `latest` is `shown` at NOW until `show`
+// replaces it, naming `s1` `gamma 2` while `names` holds it.
+function setUp(
+  initial: UsageSnapshot | null,
+  names: ReadonlyMap<string, string> = new Map([[SESSION, NAME]]),
+) {
+  const logged: string[] = [];
+  let shown = initial;
   const lines = createSessionLines({
     id: 'usage.sessionLine',
-    line: sessionLineKind(parts),
+    line: sessionLineKind(defaultParts()),
     log: (line) => logged.push(line),
     nameOf: (sessionId) => names.get(sessionId) ?? sessionId,
     latest: () => (shown === null ? null : { snapshot: shown, now: NOW }),
@@ -231,5 +239,29 @@ describe('session lines', () => {
       'session line in gamma 2: context 180k/300k, cache 42m, spend $1.23',
       'session line in gamma 2: context 180k/300k, cache 42m, spend $1.23',
     ]);
+  });
+
+  it('rowCacheKind_NoExpiryThenWarmThenNoExpiry_DrawsOneMarkOrNone', () => {
+    let shown = snapshotWith(usageEvent({ cacheExpiresAt: null }));
+    const lines = createSessionLines({
+      id: 'usage.rowCache',
+      line: rowCacheKind(defaultParts()),
+      log: () => undefined,
+      nameOf: (sessionId) => sessionId,
+      latest: () => ({ snapshot: shown, now: NOW }),
+    });
+    const wrapper = new FakeElement('div');
+
+    lines.part.build(asHtml(wrapper), SESSION);
+    const childrenWithNoExpiry = [...wrapper.children];
+    shown = snapshotWith(usageEvent());
+    lines.redraw();
+    const childrenWhileWarm = findAll(wrapper, 'usage-row-cache');
+    shown = snapshotWith(usageEvent({ cacheExpiresAt: null }));
+    lines.redraw();
+
+    expect(childrenWithNoExpiry).toEqual([]);
+    expect(childrenWhileWarm).toHaveLength(1);
+    expect(wrapper.children).toEqual([]);
   });
 });

@@ -28,6 +28,7 @@ import { createUsageParts, type Drawn } from './layout/usage-parts';
 import { createSessionLineParts } from './session-line-parts';
 import {
   createSessionLines,
+  rowCacheKind,
   rowLineKind,
   sessionLineKind,
 } from './session-lines';
@@ -51,7 +52,7 @@ const REDRAW_MS = 60_000;
 
 // Draws the usage status-bar line at the status bar's end for the page's
 // life, each session's line in its Chat status line (a chat status part), its
-// context under its side-bar row (a sessions row part), and
+// context and its cache mark under its side-bar row (two sessions row parts), and
 // the usage details in the right bar while they are open (`toggleDetails`,
 // kept in `uiState`), all through the `usage.layout` layout. Exports
 // `sessionLinePart`, the same line as a part for another surface; every part
@@ -128,6 +129,16 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
     });
     lineParts.add(rowLines);
     sessions.addRowPart(rowLines.part);
+    const rowCaches = createSessionLines({
+      id: 'usage.rowCache',
+      line: rowCacheKind(parts),
+      log: (line) => log(`row cache ${line}`),
+      nameOf: (sessionId) => names.get(sessionId) ?? sessionId,
+      latest: () =>
+        snapshot === null ? null : { snapshot, now: services.clock.now() },
+    });
+    lineParts.add(rowCaches);
+    sessions.addRowPart(rowCaches.part);
 
     // Draws the line again, the last draw disposed first.
     const drawStatusLine = (current: UsageSnapshot) => {
