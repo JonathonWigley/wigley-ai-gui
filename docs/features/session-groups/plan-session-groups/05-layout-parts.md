@@ -1,6 +1,6 @@
 # 05 — Section and group layout parts
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -67,3 +67,5 @@ Done when: compiles; the test gate runs the tests above
 Commit:    one commit for the group
 
 ## Proof
+
+Commit b21962a4 · proof: diff read; every Produces present in layout.d.ts, sessions-parts.ts and sessions-view-fakes.ts; compile clean; the worker's lint clean · concerns: CSS unseen on screen until task 08's captures: the sm star may set a taller header than text-12, and no grab cursor is set; contract prose describes sections while the view still fills rows until task 06

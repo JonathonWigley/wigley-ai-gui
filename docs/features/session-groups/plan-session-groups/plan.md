@@ -132,7 +132,7 @@ function and imports no `Git`; only `main/start.ts` names `api.services.git`.
 - [x] [Git origin repo name](01-git-origin-repo-name.md)
 - [ ] [DragReorder primitive](03-drag-reorder-primitive.md)
 - [x] [Side bar order, recency and favorites modules](04-order-modules.md)
-- [ ] [Section and group layout parts](05-layout-parts.md)
+- [x] [Section and group layout parts](05-layout-parts.md)
 
 ### Wave 2
 - [ ] [Project on session rows](02-project-on-rows.md) — after 01
@@ -153,6 +153,7 @@ Review base: 693cb8d04eb48c87e6cba0406a0e2d850f90db54
 ### Groups
 - 01 · 7dfb580e · diff read; Produces originRepoName present on the contract; compile clean for the group's files · concerns: AGENTS.md line 155's adapter list omits the origin repo name (goes to task 07); the empty-name branch and the cannot-start rejection have no test row, per the task's row list
 - 04 · 2b0be629 · diff read; every Produces signature present in the three modules; the place, move and toggle GIVENs traced by hand against the code; compile clean · concerns: keepOnly with an empty or partial list wipes saved recency, so task 06 must prune only on a real row list; AGENTS.md's sessions page tree line may want the three modules (goes to task 07); the layer check was not run by the worker
+- 05 · b21962a4 · diff read; every Produces present in layout.d.ts, sessions-parts.ts and sessions-view-fakes.ts; compile clean; the worker's lint clean · concerns: CSS unseen on screen until task 08's captures: the sm star may set a taller header than text-12, and no grab cursor is set; contract prose describes sections while the view still fills rows until task 06
 ### Contract changes
 ### Rulings
 - The user takes every review recommendation in this run, so no triage round is sent — the user's word this run — a recommendation the user would have overridden lands anyway and shows in the wrap-up · lead
@@ -160,5 +161,8 @@ Review base: 693cb8d04eb48c87e6cba0406a0e2d850f90db54
 - Both stores read uiState once at creation, as createStarredDocs does — matches the nearest sibling — a page-side writer of these keys would go unseen; nothing writes them today · group 04 · group 04
 - A name in shown that is no longer a favorite counts as absent in move and place; move of a favorite not in shown returns false — a drag holds redraws, so shown can go stale — a drop on a stale list can land off by the stale names before it · group 04 · group 04
 - keepOnly and remove write nothing when nothing changes; place always writes — keepOnly runs on row updates — one redundant write per no-op drop · group 04 · group 04
+- SessionsParts.section sets is-empty from input.isEmpty on whichever layout's element draws — the contract says the app keeps it — if 06 also sets it the second set is harmless · group 05 · group 05
+- An empty section's groups box lies over the whole section under is-reordering — task 06 registers groups as the drop zone and an empty box has no height — the rule goes if the zone moves · group 05 · group 05
+- The count sits right after the name rather than at the header's end — DESIGN.md's quieter choice — one CSS line if the mockup wants it at the end · group 05 · group 05
 ### Review rounds
 ### Test gate
