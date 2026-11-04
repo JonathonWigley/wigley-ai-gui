@@ -702,14 +702,13 @@ round; primer: an open primer), since main, not the page, decides.
     `kit.contributedParts`, else at the card's end) and `addReviewColumn` (one `span.review-cell` per review row). The
     page emits `roundShown`, `answerChanged`, `roundFinished` and `viewChanged` (`FormsPageEvents`, from
     `page/forms-events.ts`), each logged as `[forms] event <name> …`.
-- `npm run lint` runs `scripts/check-layers.mts`, which fails on an import crossing a boundary its rules do not
-  allow. A plugin's rules are derived from the folder convention and its manifest's per-process `dependsOn`: its
-  `main/` may import the `contract.ts` of each plugin in `dependsOn.main`, and its `page/` those in
-  `dependsOn.page`. A plugin needing more, such as a `node:` package or an extra sublayer, gets an entry in the
-  script's `PLUGIN_EXTRAS` table. The script also fails when `src/plugins/main.ts`, `page.ts` or `manifests.ts`
-  misses a plugin folder's part or manifest, or lists one twice. A new core layer or adapter gets a `LAYERS` entry,
-  and the composition root's entry lists it.
-  Every plugin's `page/` layer and `src/shared/page` may import `src/shared/page/ui`.
+- `npm run lint` runs `scripts/check-layers.mts`, which fails on an import crossing a boundary its hand-kept
+  `LAYERS` table does not allow. A file belongs to the entry with the longest matching path, and an import is
+  allowed only when the imported file's own entry is listed exactly. A new plugin gets one entry per part — its root,
+  `layouts/`, `main/` and `page/` — listing the core layers, its own parts and each other plugin's `contract.ts` it
+  imports; a `node:` package or other package goes in the entry's `packages`. A new core layer or adapter gets an
+  entry too, and the composition root's entry lists it. The script checks imports only: it does not check that a plugin
+  is registered in `src/plugins/main.ts`, `page.ts` and `manifests.ts`.
 - It also runs `scripts/check-styles.mts`, which fails on a raw colour, length, duration or font stack in CSS or an
   inline style under `src/`, and on `backdrop-filter` outside `src/shared/page/ui/materials.css`. It judges every file under
   `src/` and takes no argument.
