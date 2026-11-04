@@ -141,10 +141,10 @@ function and imports no `Git`; only `main/start.ts` names `api.services.git`.
 - [x] [Grouped side bar wiring, commands and keys](06-sidebar-wiring.md) — after 02, 03, 04, 05
 
 ### Wave 4
-- [ ] [Doc re-read](07-doc-re-read.md)
+- [x] [Doc re-read](07-doc-re-read.md)
 
 ### Wave 5
-- [ ] [Final verification](08-final-verification.md)
+- [x] [Final verification](08-final-verification.md)
 
 ## Run log
 
@@ -157,6 +157,8 @@ Review base: 693cb8d04eb48c87e6cba0406a0e2d850f90db54
 - 03 · d856cde9 · diff read; every Produces present in drag-reorder.ts; the dropIndex GIVENs traced by hand; compile clean for the group's files (task 02 was mid-edit elsewhere); the worker's lint clean · concerns: test-dom.ts edited outside the task's files, so fire takes a target; started runs inside dragstart and Chromium can cancel a drag whose dragstart changes layout (handed to task 06); is-dragging may tint the drag image; no real drag has run
 - 02 · b4886fba · diff read; every Produces present; compile clean · concerns: two sessions in one folder send two states when the shared lookup lands; a landing after the plugin stopped reaches stateChanged with no stop check; AGENTS.md's sessions line omits projects (goes to task 07); src/plugins/agent-form-drive.test.ts also gained projectName, as a second createSessionList caller
 - 06 · 9126f731 · diff read; the three commands and orderedRows present; compile clean; the worker's lint clean, sessions self-test 6 of 6 with its project-groups capture read · concerns: no real mouse drag has run; a plugin re-setting needs you after a reload re-stamps that row, so a reload may reorder it; rows added in one state can straddle a millisecond; a lost dragend freezes the side bar until the next drag
+- 07 · 91310da5 · doc diff read against the code; every doc line named matches · concerns: none open; the worker's is-empty concern is dismissed, since SessionsParts is the app that layout.d.ts says keeps it
+- 08 · none · typecheck, lint, tests and sessions self-test green; drive run sg08: checks 1-6 pass with captures read; check 7 not settled, the offscreen drive starts a native drag but delivers no dragover or drop · concerns: real mouse drops stay the user's; is-reordering sometimes outlived release under the drive; name indent, tight top and a truncated row title are visual doubts for the review
 ### Contract changes
 - SessionsView: orderedRows() → orderedRows() plus toggleFavorite(project) and moveFavorite(project, by) · why: the star and favoriteProject log and redraw through one home, and move needs the view's shown favorites · consumers: 06 · group 06
 - mountSidebarView(activate, parts) → mountSidebarView(events, parts, timers), and render gains sections · why: the star, the drop and the next-tick timer · consumers: 06 · group 06
@@ -181,5 +183,7 @@ Review base: 693cb8d04eb48c87e6cba0406a0e2d850f90db54
 - redrawPane ends a running drag and drops the held draw — the pane the drag ran in is going — costs that drag · group 06 · group 06
 - The project keys still act on the real focused session while the preview shows — the task limits only the star and drops, and renameSession does the same — a view.isPreviewShown check if the design's never-changes line covers keys · group 06 · group 06
 - The fake drawnRows reads each session-group-rows' children, not every session-row — user-layout rows carry no session-row class — the helper assumes the default group part · group 06 · group 06
+- AGENTS.md added to the task's files — workers found its adapter and sessions lines stale — none · lead · group 07
 ### Review rounds
 ### Test gate
+- Every test the plan's tasks name plus the sessions plugin's and keymap's (the changed code), widened to the whole suite since the shared test-dom.ts changed; sessions self-test · 406 files, 6886 tests passed; self-test all passed

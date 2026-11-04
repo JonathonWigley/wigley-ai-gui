@@ -1,6 +1,6 @@
 # 08 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 5 · Depends on: 07
 Plan: [plan.md](plan.md)
@@ -47,3 +47,5 @@ Done when: every check above passed with its capture read, or its failure is rep
 Commit:    none
 
 ## Proof
+
+Commit none · proof: typecheck, lint, tests and sessions self-test green; drive run sg08: checks 1-6 pass with captures read; check 7 not settled, the offscreen drive starts a native drag but delivers no dragover or drop · concerns: real mouse drops stay the user's; is-reordering sometimes outlived release under the drive; name indent, tight top and a truncated row title are visual doubts for the review

@@ -1,6 +1,6 @@
 # 07 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 01, 02, 03, 04, 05, 06
 Plan: [plan.md](plan.md)
@@ -24,3 +24,5 @@ Done when: every line of the three docs matches the code; the fixes are committe
 Commit:    one commit for the group
 
 ## Proof
+
+Commit 91310da5 · proof: doc diff read against the code; every doc line named matches · concerns: none open; the worker's is-empty concern is dismissed, since SessionsParts is the app that layout.d.ts says keeps it
