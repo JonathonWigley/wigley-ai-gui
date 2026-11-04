@@ -124,9 +124,9 @@ harness ─▶ adapter ─▶ compactionStarted{trigger} ──────┤�
   The app passes `minTokens` to it as `CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS` at each process start, through
   `AgentStart.idleCompactMinTokens`. A `minTokens` of 0 passes nothing, so Claude's own default stays on: 200k by the
   binary's code, which also floors the value at 100k. The app's gate still covers what Claude's misses: a session whose
-  process ended, and a 5-minute-cache session. Measured on 2.1.318, one idle process under stream-json did not compact
-  in 65 minutes (`docs/features/agent-chat/claude-stream.md` § Idle compaction), the cause unsettled, so the gate may be
-  all that compacts a cold session; the threshold is passed in case Claude's runs.
+  process ended, and a 5-minute-cache session. Measured on 2.1.318, two idle processes under stream-json did not compact
+  in 65 minutes, one with the user's settings excluded (`docs/features/agent-chat/claude-stream.md` § Idle compaction),
+  the cause unsettled, so the gate may be all that compacts a cold session; the threshold is passed in case Claude's runs.
 
 ## Rejected
 
