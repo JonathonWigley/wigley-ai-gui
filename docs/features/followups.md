@@ -262,6 +262,25 @@ Defects seen in a drive run, a transcript or the user's own use.
   runs `vim({ status: true })`, and a live run shows `--INSERT--`, which stays after focus leaves the box. The doc or
   the panel is wrong, and the user decides which: drop the panel and keep the doc, or write the label into the doc.
   Source session: Claude Code cb0838dd-b8e5-430b-8c21-30e66b9a80ac in wigley-ai-gui.
+- **A clamped key on a too-tall last block stops following** — *agent-ready*: with the cursor following at the bottom on
+  a last stop taller than the band, `j`, `J` or `k` takes `scrollIntoView({ block: 'nearest' })`, which pulls the list up
+  a few pixels and ends following, so a streaming reply is left behind until `G`. Read from `entry-list.ts`
+  (`scrollsToStop`, `drawFocus`), not yet seen live: force a tall last block, press `G`, `j`, then read `scrollTop` and
+  add an entry. Fix: `scrollsToStop` also requires `!isScrolledToEnd(list, 1)`, with a test row. Source session: Claude Code cb0838dd-b8e5-430b-8c21-30e66b9a80ac in wigley-ai-gui.
+- **A turn ending in a hidden tab can leave the chat cursor off screen** — *agent-ready*: `latest` skips its band move on a
+  hidden list, and `scrollToFocus` on show fires no scroll when the list is already at the bottom, so over an overflowing
+  open run the bar stays off screen until the next scroll. The window is narrow: a turn ending with no new height. Fix:
+  settle in `scrollToFocus`'s following path. Source session: Claude Code cb0838dd-b8e5-430b-8c21-30e66b9a80ac in wigley-ai-gui.
+- **`G` from an open run's last step can move the cursor up**: `G`, or a turn end, from the last step of an overflowing
+  open run walks forward from the run's line and lands on the first step in view, while `design.md` says "the nearest step
+  in view". To decide: settle from the last stop in `latest` (recommended, the cursor stays at the end) or keep the
+  documented rule. Source session: Claude Code cb0838dd-b8e5-430b-8c21-30e66b9a80ac in wigley-ai-gui.
+- **One rule for the chat cursor's scroll exceptions** — *needs a feature plan*: the on-screen rule in `entry-list.ts` was
+  patched in four steps of one run: wholly in the band with a 1px tolerance, a fallback to the nearest overlapping stop,
+  a band move in `latest` for a list that fires no scroll, and a too-tall exception on scrolling a following focus to the
+  bottom; the three items above are the same mechanism again. Each patch was kept rather than stepped back from, because
+  the run's two fix cycles ran out. To decide: whether one settle step run after every programmatic scroll and redraw,
+  owning the band and following together, replaces the scroll event path and these exceptions. Source session: Claude Code cb0838dd-b8e5-430b-8c21-30e66b9a80ac in wigley-ai-gui.
 
 ## Harness seams
 
