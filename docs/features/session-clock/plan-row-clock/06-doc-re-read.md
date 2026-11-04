@@ -1,6 +1,6 @@
 # 06 — Doc re-read
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 01, 02, 03, 04, 05
 Plan: [plan.md](plan.md)
@@ -25,3 +25,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 465533a3 · proof: Every line in scope checked against the landed code; lint passes. · concerns: None from the doc read. layout.css sets .session-group-rows gap in two rules, the second overriding the first: for review.
