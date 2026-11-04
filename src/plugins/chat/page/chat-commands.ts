@@ -626,12 +626,16 @@ function focusedLine(stop: EntryListStop | null, sessionName: string): string {
 }
 
 // Writes the range's source, else the cursor's, to the clipboard. A write that
-// lands ends the range; one that fails leaves it.
+// lands ends the range; one that fails leaves it. An open range with nothing to
+// copy stays open and says so; a stop with nothing to copy only logs.
 function copySelection(deps: ChatCommandDeps, session: ChatSession) {
   const { log } = deps;
   const selected = session.entries.selectedSource();
   if (selected === null) {
     log('chat', 'nothing to copy');
+    if (session.entries.isRangeOpen()) {
+      deps.toast('Nothing to copy', 'info');
+    }
     return;
   }
   const { text, blockCount } = selected;

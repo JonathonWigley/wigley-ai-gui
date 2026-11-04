@@ -217,7 +217,7 @@ The keyboard is first; the mouse works everywhere.
   - **Chat is the one exception.** While the chat's message box has focus, the caret is the
     cursor: the box draws no focused frame and no entry is marked. Once the box loses focus (Esc),
     the focused block shows a thin left bar (`indicator-width`, `focus-border`) in place of the
-    ring, on the entry itself when it has no blocks. A range of blocks shows `accent-tint` behind each one.
+    ring, on the entry itself when it has no blocks. A range of blocks shows `accent-tint` across each one.
     The bar sits in a gutter left of the text and of a list item's marker, moving no text. It stays on
     screen: when the transcript scrolls away from it, it moves to the nearest block wholly in view; a
     block too tall for the view counts while any of it shows, and with no block wholly in view it moves to the nearest that shows.

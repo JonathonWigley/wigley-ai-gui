@@ -484,7 +484,10 @@ describe('entry list', () => {
 });
 
 describe('activity lines', () => {
-  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  beforeEach(() => {
+    installFakeDom((name, value) => vi.stubGlobal(name, value));
+    vi.stubGlobal('getComputedStyle', () => ({ scrollPaddingBottom: '0px' }));
+  });
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
@@ -696,7 +699,10 @@ describe('activity lines', () => {
 });
 
 describe('pending rows', () => {
-  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  beforeEach(() => {
+    installFakeDom((name, value) => vi.stubGlobal(name, value));
+    vi.stubGlobal('getComputedStyle', () => ({ scrollPaddingBottom: '0px' }));
+  });
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
@@ -891,7 +897,10 @@ describe('pending rows', () => {
 });
 
 describe('activity hidden', () => {
-  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  beforeEach(() => {
+    installFakeDom((name, value) => vi.stubGlobal(name, value));
+    vi.stubGlobal('getComputedStyle', () => ({ scrollPaddingBottom: '0px' }));
+  });
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
@@ -1492,17 +1501,80 @@ describe('block stops', () => {
     expect(list.focusedElement()).toBe(asFake(list.element).children[1]);
   });
 
-  it('move_OntoTheLastStop_ScrollsToTheBottomAndFollows', () => {
+  it.each([
+    {
+      case: 'a stop that fits scrolls to the bottom and follows',
+      startsOnLastStop: false,
+      lastStop: { top: 30, height: 10 },
+      scrollsToStop: false,
+      scrollTop: 900,
+      afterPut: 'n',
+    },
+    {
+      case: 'a stop too tall shows itself and does not follow',
+      startsOnLastStop: false,
+      lastStop: { top: 30, height: 150 },
+      scrollsToStop: true,
+      scrollTop: 100,
+      afterPut: 'a#1',
+    },
+    {
+      case: 'a clamped move while reading a stop too tall stays put',
+      startsOnLastStop: true,
+      lastStop: { top: -20, height: 150 },
+      scrollsToStop: true,
+      scrollTop: 100,
+      afterPut: 'a#1',
+    },
+  ])(
+    'move_OntoTheLastStop ($case)',
+    ({ startsOnLastStop, lastStop, scrollsToStop, scrollTop, afterPut }) => {
+      const { list, put } = setUpList(blocksShown());
+      const scroller = asFake(list.element) as FocusFakeElement & {
+        scrollHeight: number;
+        clientHeight: number;
+      };
+      scroller.rectHeight = 100;
+      scroller.clientHeight = 100;
+      scroller.scrollHeight = 900;
+      put(assistantText('a', 'one\n\ntwo'));
+      const first = blockAt(list, 0, 0);
+      const last = blockAt(list, 0, 1);
+      first.rectTop = 30;
+      first.rectHeight = 10;
+      last.rectTop = lastStop.top;
+      last.rectHeight = lastStop.height;
+      if (!startsOnLastStop) {
+        list.move(-1);
+      }
+      scroller.scrollTop = 100;
+      scroller.fire('scroll');
+      const scrolled = vi.spyOn(FakeElement.prototype, 'scrollIntoView');
+
+      list.move(1);
+
+      expect(scrolled.mock.contexts).toEqual(scrollsToStop ? [last] : []);
+      expect(scroller.scrollTop).toBe(scrollTop);
+      expect(cursorLabel(list)).toBe('a#1');
+      scroller.fire('scroll');
+      put(notice('n'));
+      expect(cursorLabel(list)).toBe(afterPut);
+    },
+  );
+
+  it('scrollToFocus_FollowingOnAStopTooTall_ScrollsToTheBottom', () => {
     const { list, put } = setUpList(blocksShown());
-    put(assistantText('a', 'one\n\ntwo'));
-    list.move(-1);
-    const scrolled = vi.spyOn(FakeElement.prototype, 'scrollIntoView');
     const scroller = asFake(list.element) as FocusFakeElement & {
       scrollHeight: number;
     };
+    scroller.rectHeight = 100;
     scroller.scrollHeight = 900;
+    put(assistantText('a', 'one\n\ntwo'));
+    blockAt(list, 0, 1).rectHeight = 150;
+    const scrolled = vi.spyOn(FakeElement.prototype, 'scrollIntoView');
+    scroller.scrollTop = 0;
 
-    list.move(1);
+    list.scrollToFocus();
 
     expect(scrolled).not.toHaveBeenCalled();
     expect(scroller.scrollTop).toBe(900);
@@ -1901,6 +1973,67 @@ describe('block stops', () => {
     put(tool('t3'));
     expect(list.focused()).toEqual({ kind: 'entry', entry: tool('t3') });
   });
+
+  it.each([
+    {
+      case: 'moves the cursor into the band and follows',
+      clientHeight: 100,
+      focused: { kind: 'entry', entry: tool('t2') },
+      afterPut: { kind: 'entry', entry: tool('t3') },
+    },
+    {
+      case: 'on a hidden list stays on the line',
+      clientHeight: 0,
+      focused: {
+        kind: 'activity',
+        runId: 'activity:t1',
+        steps: [tool('t1'), tool('t2')],
+      },
+      afterPut: {
+        kind: 'activity',
+        runId: 'activity:t1',
+        steps: [tool('t1'), tool('t2'), tool('t3')],
+      },
+    },
+  ])(
+    'latest_AtTheBottomOverAnOverflowingOpenRun ($case)',
+    ({ clientHeight, focused, afterPut }) => {
+      const { list, put } = setUpList(activityShown());
+      const scroller = asFake(list.element) as FocusFakeElement & {
+        scrollHeight: number;
+        clientHeight: number;
+      };
+      scroller.rectHeight = 100;
+      scroller.clientHeight = 100;
+      [user('u1'), tool('t1'), tool('t2')].forEach(put);
+      list.toggleFocused();
+      const [line, firstStep, lastStep] = [
+        slotOf(list.element, 'chat-activity-slot'),
+        slotOf(list.element, 'chat-step-slot'),
+        slotOf(list.element, 'chat-step-slot', 1),
+      ] as FocusFakeElement[];
+      for (const offScreen of [line, firstStep]) {
+        offScreen.rectTop = above.top;
+        offScreen.rectHeight = above.height;
+      }
+      lastStep.rectTop = inBand.top;
+      lastStep.rectHeight = inBand.height;
+      scroller.scrollHeight = 400;
+      scroller.scrollTop = 400;
+      scroller.fire('scroll');
+      scroller.clientHeight = clientHeight;
+
+      list.latest();
+
+      expect(list.focused()).toEqual(focused);
+      expect(scroller.scrollTop).toBe(400);
+      scroller.scrollTop = 399;
+      scroller.fire('scroll');
+      expect(list.focused()).toEqual(focused);
+      put(tool('t3'));
+      expect(list.focused()).toEqual(afterPut);
+    },
+  );
 
   it.each<{
     case: string;

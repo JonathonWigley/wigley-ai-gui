@@ -121,7 +121,8 @@ export interface TranscriptScroll extends ContentScroll {
 // box less its bottom scroll padding) moves to the nearest stop inside it, a
 // stop being inside once it lies wholly in the band, or overlaps a band it is
 // too tall to fit, and with no such stop to the nearest that overlaps the band.
-// So a run that overflows moves a following cursor off its line. A plain click
+// So a run that overflows moves a following cursor off its line. `latest` makes
+// the same move, since a list already at its bottom fires no scroll. A plain click
 // moves the cursor to the block or slot under it without scrolling; a click
 // ending a text selection, on a link, control or pending row, or on what has no
 // stop leaves it.
@@ -143,7 +144,9 @@ export interface EntryList {
   // Whether the session works on its turn: only then is a last run live.
   setWorking(working: boolean): void;
   // Moves one stop, a block being a stop of its own; the focused stop after the
-  // move, null with no stops.
+  // move, null with no stops. A move onto the last stop scrolls to the bottom and
+  // follows, unless the stop is too tall for the visible band: then it scrolls
+  // to its nearest edge and follows only if that rests on the bottom.
   move(step: 1 | -1): EntryListStop | null;
   // Moves to the first stop of the next or previous user or assistant message;
   // the focused stop after the move, unchanged at the first or last message,
@@ -155,8 +158,8 @@ export interface EntryList {
   isAtLastStop(): boolean;
   // Follows the last row, the newest pending row, else an entry's last block,
   // an entry, or a run's line whether the run is open or not, and scrolls to
-  // the bottom; a scroll that leaves that line off screen moves the cursor as
-  // any scroll does. An open range stays open.
+  // the bottom; a cursor that leaves off screen moves into the visible band as
+  // after any scroll, whether or not the scroll moved. An open range stays open.
   latest(): void;
   // Focuses the first stop and scrolls to the top; the focused stop, null
   // with no stops. An open range stays open.
@@ -381,6 +384,11 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     }
   };
 
+  // Whether a `slot` scroll shows the stop itself, rather than the list's bottom.
+  const scrollsToStop = (stop: HTMLElement) =>
+    !focus.following ||
+    isTallerThanBand(stop.getBoundingClientRect(), visibleBand(list));
+
   // `marks` draws the marks alone and leaves the scroll.
   const drawFocus = (
     scroll: 'follow' | 'slot' | 'bottom' | 'top' | 'marks',
@@ -389,13 +397,18 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     if (scroll === 'marks') {
       return;
     }
-    const isBottom = scroll === 'bottom' || focus.following;
+    const stop = focus.stopId === null ? undefined : stopElement(focus.stopId);
     if (scroll === 'top') {
       list.scrollTop = 0;
-    } else if (isBottom) {
+    } else if (scroll === 'slot' && stop !== undefined && scrollsToStop(stop)) {
+      stop.scrollIntoView({ block: 'nearest' });
+      // `nearest` leaves a stop filling the view where it is, and fires no scroll.
+      focus = focusAfterScrollEvent(
+        focus,
+        focus.following && isScrolledToEnd(list, 1),
+      );
+    } else if (scroll === 'bottom' || focus.following) {
       list.scrollTop = list.scrollHeight;
-    } else if (scroll === 'slot' && focus.stopId !== null) {
-      stopElement(focus.stopId)?.scrollIntoView({ block: 'nearest' });
     }
   };
 
@@ -559,20 +572,27 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     );
   };
 
-  const onListScroll = () => {
-    const { scrollTop } = list;
-    const isHidden = list.clientHeight === 0;
-    if (isHidden || scrollTop === lastScrollTop) {
-      return;
-    }
-    const direction = scrollTop > lastScrollTop ? 1 : -1;
-    lastScrollTop = scrollTop;
+  const isListHidden = () => list.clientHeight === 0;
+
+  // Moves a cursor outside the visible band into it, and follows only at the
+  // bottom. A cursor already inside stays, so running it twice moves nothing.
+  const settleInBand = (direction: 1 | -1, isAtBottom: boolean) => {
     const nearest = nearestStopInBand(direction);
     if (nearest !== null) {
       focus = focusStop(focus, order, nearest);
     }
-    focus = focusAfterScrollEvent(focus, isScrolledToEnd(list, 1));
+    focus = focusAfterScrollEvent(focus, isAtBottom);
     drawFocus('marks');
+  };
+
+  const onListScroll = () => {
+    const { scrollTop } = list;
+    if (isListHidden() || scrollTop === lastScrollTop) {
+      return;
+    }
+    const direction = scrollTop > lastScrollTop ? 1 : -1;
+    lastScrollTop = scrollTop;
+    settleInBand(direction, isScrolledToEnd(list, 1));
   };
   list.addEventListener('scroll', onListScroll);
 
@@ -680,6 +700,9 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     latest() {
       focus = focusLatest(lastStopId(), focus.anchorId);
       drawFocus('bottom');
+      if (!isListHidden()) {
+        settleInBand(1, true);
+      }
     },
     first() {
       focus = focusFirst(order, focus.anchorId);
@@ -881,10 +904,13 @@ function overlapsBand(box: DOMRect, band: Band): boolean {
   return box.bottom > band.top && box.top < band.bottom;
 }
 
+function isTallerThanBand(box: DOMRect, band: Band): boolean {
+  return box.height > band.bottom - band.top;
+}
+
 // Whether a stop shows: wholly in the band, or, too tall to fit, any of it.
 function isInsideBand(box: DOMRect, band: Band): boolean {
-  const isTallerThanBand = box.height > band.bottom - band.top;
-  if (isTallerThanBand) {
+  if (isTallerThanBand(box, band)) {
     return overlapsBand(box, band);
   }
   return (

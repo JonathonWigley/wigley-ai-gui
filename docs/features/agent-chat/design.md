@@ -174,10 +174,10 @@ interview on 2026-10-23; this file is the record of both.
   control's chip, the status parts other plugins add (usage: spend), the running dot, Send. The box's cursor shape shows
   the vim mode (changed by ui-design plan C). Enter sends in insert and normal mode, Shift+Enter in insert mode adds a line, Cmd+Enter sends from any mode, and while a turn runs sends the pending messages with it (§ Pending messages, Send now). `i` /
   `a` focus the box, `j` / `k` move between blocks, `J` / `K` jump between messages, `V` starts or ends a range, `y`
-  copies the range as markdown source while one is open, else allows a waiting permission, else copies the block, page `Esc` cancels the range, and a
+  copies the range as markdown source while one is open (a range with nothing to copy, on an activity line or a permission card, toasts that and stays open), else allows a waiting permission, else copies the block, page `Esc` cancels the range, and a
   plain click moves the cursor to the block under it. A block is a paragraph, heading, top-level list item, code block,
   table or quote of a user or assistant message; any other row is one stop, and the turn and compaction dividers are
-  none. When the transcript scrolls away from the cursor, it moves to the nearest block wholly in view; a block too tall for the view counts while any of it shows; with no such block, it moves to the nearest that shows. A layout gets block stops when it draws the text with `kit.markdown`; an entry with no marked block has one stop; a body drawn later is not read until the next redraw; copy reads source lines by position, so copy per block needs the layout to draw `input.text` itself. `Enter` opens or closes
+  none. When the transcript scrolls away from the cursor, it moves to the nearest block wholly in view; a block too tall for the view counts while any of it shows; with no such block, it moves to the nearest that shows. `j` or `J` onto the last stop scrolls to the bottom and follows, unless the stop is too tall for the view: then its start shows, and it follows only once a scroll lands on the bottom. A layout gets block stops when it draws the text with `kit.markdown`; an entry with no marked block has one stop; a body drawn later is not read until the next redraw; copy reads source lines by position, so copy per block needs the layout to draw `input.text` itself. `Enter` opens or closes
   the entry holding the cursor or the focused activity line and pulls back a focused pending message, `G` jumps to the latest, Ctrl+C interrupts and pulls back every unsent pending message
   (§ Pending messages). The transcript shows the messages, permission prompts, notices, turn dividers and pending rows; the agent's
   steps show in the session hub's activity dock (§ Activity dock), and in the transcript as
@@ -209,7 +209,7 @@ interview on 2026-10-23; this file is the record of both.
     builder; each step row is a cursor stop, `j` / `k` walk into them, and Enter on a step row opens its input and
     result in place. Closing the line makes it one stop again; a cursor on one of its steps moves to the line. A cursor
     following the last activity line stays on it as steps arrive, and `G` lands on that line, until the open run
-    overflows: the scroll to the bottom moves the cursor to the nearest step in view, and it follows the last step from there. A line stays open or
+    overflows: at the bottom, whether or not the list had to scroll there, the cursor moves to the nearest step in view, and it follows the last step from there. A line stays open or
     closed by itself across a layout reload, a history read and the live run finishing.
   - Permission prompts, notices and the turn result stay entries of their own, and each ends the run before it.
   - The key log lines are `focused activity line`, `expanded activity line` and `collapsed activity line`; a step row

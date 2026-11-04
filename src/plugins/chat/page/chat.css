@@ -168,9 +168,10 @@
 
 /* A pseudo-element draws the bar and tint of a stop whose own box cannot show
    them. A list item's marker sits outside its box and follows its edge, so the
-   pseudo-element runs from the same gutter to that edge, left of the marker and
-   behind it. A contributed fence's child and a changes list's items paint over
-   their box, so it lies over the whole box, above those children. */
+   pseudo-element runs from the same gutter to that edge, painting over the
+   marker: a range's tint lies across it. A contributed fence's child and a
+   changes list's items paint over their box, so it lies over the whole box,
+   above those children. */
 .chat-entries :where(li, .md-fence, .md-changes)[data-md-lines] {
   isolation: isolate;
   position: relative;
