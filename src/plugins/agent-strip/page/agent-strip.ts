@@ -75,23 +75,20 @@ export interface AgentStrip {
 }
 
 // A wrapper chat handed `part.build`, the HScroller it holds while the
-// session lists any box, the parts drawn into it last, each box's root in box
-// order, and its boxes the tick updates, all of them.
+// session lists any box, the parts drawn into it last, and its boxes in box
+// order.
 interface HeldWrapper {
   wrapper: HTMLElement;
   scroller: HScroller | null;
   parts: DrawnPart<AgentStripPart>[];
-  boxElements: HTMLElement[];
-  tickingBoxes: TickingBox[];
+  boxes: TickingBox[];
 }
 
-// A box as drawn last: its key, its index in box order, its part, the input it
-// was drawn or updated with, and when its subagent or task started. An agent
-// box also holds its subagent's tool calls and, while open, the tool list drawn
-// into it from them.
+// A box as drawn last: its key, its part, the input it was drawn or updated
+// with, and when its subagent or task started. An agent box also holds its
+// subagent's tool calls and, while open, the tool list drawn into it from them.
 type TickingBox = {
   key: string;
-  index: number;
   startedAt: number;
 } & (
   | {
@@ -119,6 +116,7 @@ interface Selection {
 
 const TICK_MS = 1000;
 const RECENT_TOOLS = 3;
+const SELECTION_LOG_CHARS = 80;
 const TOOL_STATUS: Record<RosterTool['outcome'], BoxStatus> = {
   running: 'running',
   done: 'success',
@@ -133,7 +131,8 @@ const TOOL_STATUS: Record<RosterTool['outcome'], BoxStatus> = {
 // part again until the layouts change. After each draw it logs `boxes in
 // <name>: <count> (<running> running)`, every box running, when that text
 // differs from the last one logged for the session, which starts as the empty
-// strip's. Each selection first logs the text the selected box shows.
+// strip's. Each selection first logs the head of the text the selected box
+// shows. Drawing an open box again keeps its tool list's scroll.
 export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
   const { clock, timers, agents } = deps;
   const layoutParts = createLayoutParts<Layout, CompleteLayout>({
@@ -167,8 +166,7 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
   const disposeParts = (holder: HeldWrapper) => {
     const parts = holder.parts;
     holder.parts = [];
-    holder.boxElements = [];
-    holder.tickingBoxes = [];
+    holder.boxes = [];
     callEach(parts, (part) => part.dispose());
   };
 
@@ -214,6 +212,17 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
       toolList(slot, { tools: tools.map(toolLineInput) }, kitFor(rollback)),
     );
 
+  // Draws an open box's tool list into its element, scrolled to `scrollTop`.
+  const drawOpenToolList = (
+    boxElement: HTMLElement,
+    tools: readonly RosterTool[],
+    scrollTop: number,
+  ) => {
+    const drawn = drawToolList(boxElement, tools);
+    drawn.built.element.scrollTop = scrollTop;
+    return drawn;
+  };
+
   const emptyBoxesText = (sessionId: string) =>
     `boxes in ${deps.nameOf(sessionId)}: 0 (0 running)`;
 
@@ -230,6 +239,9 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
   // Draws the session's boxes into its HScroller's track, making the
   // HScroller on the first draw with a box and dropping it on a draw with none.
   const draw = (sessionId: string, holder: HeldWrapper) => {
+    const listScrollTops = new Map(
+      holder.boxes.map((box) => [box.key, listScrollTop(box)]),
+    );
     disposeParts(holder);
     const boxes = boxesOf(sessionId);
     if (boxes.length === 0) {
@@ -248,7 +260,7 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
     const selectedKey =
       selection?.sessionId === sessionId ? selection.key : null;
     const openKey = openKeys.get(sessionId);
-    for (const [index, box] of boxes.entries()) {
+    for (const box of boxes) {
       const state = {
         isSelected: box.key === selectedKey,
         isOpen: box.key === openKey,
@@ -262,15 +274,14 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
         holder.parts.push(drawn);
         element = drawn.built.element;
         const toolList = state.isOpen
-          ? drawToolList(element, agent.tools)
+          ? drawOpenToolList(element, agent.tools, listScrollTops.get(key) ?? 0)
           : null;
         if (toolList !== null) {
           holder.parts.push(toolList);
         }
-        holder.tickingBoxes.push({
+        holder.boxes.push({
           kind: 'agent',
           key,
-          index,
           startedAt: agent.startedAt,
           drawn,
           input,
@@ -283,16 +294,14 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
         const drawn = drawTaskBox(track, input);
         holder.parts.push(drawn);
         element = drawn.built.element;
-        holder.tickingBoxes.push({
+        holder.boxes.push({
           kind: 'task',
           key,
-          index,
           startedAt: task.startedAt,
           drawn,
           input,
         });
       }
-      holder.boxElements.push(element);
       listenForClick(element, sessionId, key);
     }
     holder.scroller.refresh();
@@ -317,19 +326,19 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
   const swapBoxPart = (
     sessionId: string,
     holder: HeldWrapper,
-    box: TickingBox,
+    key: string,
     old: DrawnPart<AgentStripPart>,
     next: DrawnPart<AgentStripPart>,
   ) => {
     const { element } = next.built;
     old.built.element.replaceWith(element);
     holder.parts[holder.parts.indexOf(old)] = next;
-    holder.boxElements[box.index] = element;
-    listenForClick(element, sessionId, box.key);
+    listenForClick(element, sessionId, key);
   };
 
   // Draws the agent box again with its input, and its tool list into the new
-  // element while it is open; the new parts replace the old ones.
+  // element, at the old list's scroll, while it is open; the new parts replace
+  // the old ones.
   const replaceAgentBox = (
     sessionId: string,
     holder: HeldWrapper,
@@ -337,11 +346,16 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
   ) => {
     const old = box.drawn;
     const oldList = box.toolList;
+    const scrollTop = listScrollTop(box);
     const next = drawAgentBox(trackOf(holder, box.key), box.input);
-    swapBoxPart(sessionId, holder, box, old, next);
+    swapBoxPart(sessionId, holder, box.key, old, next);
     box.drawn = next;
     if (oldList !== null) {
-      const nextList = drawToolList(next.built.element, box.tools);
+      const nextList = drawOpenToolList(
+        next.built.element,
+        box.tools,
+        scrollTop,
+      );
       holder.parts[holder.parts.indexOf(oldList)] = nextList;
       box.toolList = nextList;
     }
@@ -358,7 +372,7 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
   ) => {
     const old = box.drawn;
     const next = drawTaskBox(trackOf(holder, box.key), box.input);
-    swapBoxPart(sessionId, holder, box, old, next);
+    swapBoxPart(sessionId, holder, box.key, old, next);
     box.drawn = next;
     old.dispose();
   };
@@ -388,6 +402,22 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
     }
   };
 
+  // Sets the box's input to `elapsedMs` and runs its `update`, else `drawAgain`.
+  const tickPart = <I extends { elapsedMs: number }>(
+    box: {
+      kind: TickingBox['kind'];
+      drawn: DrawnPart<{ update?(input: I): void }>;
+      input: I;
+    },
+    elapsedMs: number,
+    drawAgain: () => void,
+  ) => {
+    box.input = { ...box.input, elapsedMs };
+    if (!updateBox(box.kind, box.drawn, box.input)) {
+      drawAgain();
+    }
+  };
+
   // Sets the box's elapsed time to now, through its `update`, else by drawing
   // it again.
   const tickBox = (
@@ -398,35 +428,27 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
   ) => {
     const elapsedMs = now - box.startedAt;
     if (box.kind === 'agent') {
-      box.input = { ...box.input, elapsedMs };
-      if (!updateBox(box.kind, box.drawn, box.input)) {
-        replaceAgentBox(sessionId, holder, box);
-      }
+      tickPart(box, elapsedMs, () => replaceAgentBox(sessionId, holder, box));
     } else {
-      box.input = { ...box.input, elapsedMs };
-      if (!updateBox(box.kind, box.drawn, box.input)) {
-        replaceTaskBox(sessionId, holder, box);
-      }
+      tickPart(box, elapsedMs, () => replaceTaskBox(sessionId, holder, box));
     }
   };
 
   // Ticks each of the strip's boxes, then refreshes its HScroller.
   const tickStrip = (sessionId: string, holder: HeldWrapper) => {
-    if (holder.tickingBoxes.length === 0) {
+    if (holder.boxes.length === 0) {
       return;
     }
     const now = clock.now();
     try {
-      callEach(holder.tickingBoxes, (box) =>
-        tickBox(sessionId, holder, box, now),
-      );
+      callEach(holder.boxes, (box) => tickBox(sessionId, holder, box, now));
     } finally {
       holder.scroller?.refresh();
     }
   };
 
   const isBoxShown = () =>
-    [...held.values()].some((holder) => holder.tickingBoxes.length > 0);
+    [...held.values()].some((holder) => holder.boxes.length > 0);
 
   // Sets the tick while a box shows and none is pending; clears a pending one
   // once none shows.
@@ -476,7 +498,7 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
       return;
     }
     const holder = held.get(selection.sessionId);
-    const element = holder?.boxElements[selection.index];
+    const element = holder?.boxes[selection.index]?.drawn.built.element;
     const scroller = holder?.scroller ?? null;
     if (scroller !== null && element !== undefined) {
       scroller.reveal(element);
@@ -488,8 +510,10 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
   const logSelected = (current: Selection, count: number) => {
     const name = deps.nameOf(current.sessionId);
     const position = `${current.index + 1} of ${count} in ${name}`;
-    const element = held.get(current.sessionId)?.boxElements[current.index];
-    log(`box ${position} shows: ${element?.textContent ?? ''}`);
+    const element = held.get(current.sessionId)?.boxes[current.index]?.drawn
+      .built.element;
+    const shown = element?.textContent ?? '';
+    log(`box ${position} shows: ${shown.slice(0, SELECTION_LOG_CHARS)}`);
     log(`selected box ${position}`);
   };
 
@@ -583,8 +607,7 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
           wrapper,
           scroller: null,
           parts: [],
-          boxElements: [],
-          tickingBoxes: [],
+          boxes: [],
         };
         held.set(sessionId, holder);
         try {
@@ -656,6 +679,13 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
       }
     },
   };
+}
+
+// Where the box's tool list is scrolled; 0 with none.
+function listScrollTop(box: TickingBox): number {
+  return box.kind === 'agent' && box.toolList !== null
+    ? box.toolList.built.element.scrollTop
+    : 0;
 }
 
 function agentBoxInput(

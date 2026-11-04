@@ -10,12 +10,6 @@ class FakeElement {
   ownText = '';
   dataset: Record<string, string> = {};
   children: FakeElement[] = [];
-  properties: Record<string, string> = {};
-  style = {
-    setProperty: (name: string, value: string) => {
-      this.properties[name] = value;
-    },
-  };
 
   constructor(tagName: string) {
     this.tagName = tagName.toUpperCase();
@@ -65,8 +59,8 @@ function asFake(element: HTMLElement): FakeElement {
   return element as unknown as FakeElement;
 }
 
-// A kit whose parts append fake elements; `hints` records each `keyHint`'s
-// command.
+// A kit whose parts append fake elements, a meter's percent and tone on its
+// `dataset`; `hints` records each `keyHint`'s command.
 function fakeKit() {
   const hints: string[] = [];
   const el = (
@@ -89,6 +83,12 @@ function fakeKit() {
     tag: (parent, text, tone) =>
       el(parent, 'span', `ui-tag ui-tag--${tone}`, text),
     duration: (ms) => `${Math.floor(ms / 1000)}s`,
+    meter(parent, percent, tone) {
+      const node = el(parent, 'span', 'ui-meter');
+      node.dataset.percent = String(percent);
+      node.dataset.tone = tone;
+      return node;
+    },
     keyHint(parent, command) {
       hints.push(command);
       return el(parent, 'span', 'hint');
@@ -205,7 +205,7 @@ describe('default agent-strip layout', () => {
       context: '84k/200k',
       cost: '$0.42',
       percent: '42',
-      tone: undefined,
+      tone: 'normal',
     },
     {
       case: 'past the warning share',
@@ -229,7 +229,7 @@ describe('default agent-strip layout', () => {
       context: '160k/200k',
       cost: '$0.04',
       percent: '80',
-      tone: undefined,
+      tone: 'normal',
     },
     {
       case: 'over the window holds at full',
@@ -245,7 +245,23 @@ describe('default agent-strip layout', () => {
       context: '1.2M/2.0M',
       cost: '$0.04',
       percent: '62',
-      tone: undefined,
+      tone: 'normal',
+    },
+    {
+      case: 'where the thousands would read 1000k reads in M',
+      input: { contextTokens: 999_500, contextWindow: 2_000_000 },
+      context: '1.0M/2.0M',
+      cost: '$0.04',
+      percent: '50',
+      tone: 'normal',
+    },
+    {
+      case: 'just under that still reads in k',
+      input: { contextTokens: 999_499, contextWindow: 2_000_000 },
+      context: '999k/2.0M',
+      cost: '$0.04',
+      percent: '50',
+      tone: 'normal',
     },
     {
       case: 'no window: no bar',
@@ -269,20 +285,17 @@ describe('default agent-strip layout', () => {
       context: '84k/200k',
       cost: null,
       percent: '42',
-      tone: undefined,
+      tone: 'normal',
     },
   ])('footer_$case', ({ input, context, cost, percent, tone }) => {
     const { root } = drawAgent(input);
 
-    const bar = root.find('agent-strip-bar');
+    const meter = root.find('ui-meter');
     expect({
       context: root.find('agent-strip-context')?.textContent ?? null,
       cost: root.find('agent-strip-cost')?.textContent ?? null,
-      percent:
-        root.find('agent-strip-bar-fill')?.properties[
-          '--agent-strip-percent'
-        ] ?? null,
-      tone: bar?.dataset.tone,
+      percent: meter?.dataset.percent ?? null,
+      tone: meter?.dataset.tone,
     }).toEqual({ context, cost, percent, tone });
   });
 

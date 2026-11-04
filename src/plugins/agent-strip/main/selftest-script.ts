@@ -57,6 +57,15 @@ const GROUPS: SelfTestGroup[] = [
         ],
         why: 'The launched subagent reads Background agent.',
       },
+      {
+        keys: ['l'],
+        expect: selectedLine(3),
+        alsoExpect: [
+          /^\[agent-strip\] box 3 of 4 in agent-strip-selftest shows: mainShell(\d+m )?\d+s/,
+        ],
+        why: "The main agent's task reads Shell.",
+      },
+      { keys: ['h'], expect: selectedLine(2) },
       { keys: ['h'], expect: selectedLine(1) },
       {
         keys: ['Enter'],
@@ -122,8 +131,8 @@ export function agentStripSelfTestScript(
   return {
     pageBinds: [],
     settings: {},
-    // A box's name, description, tool lines and closed command end in an
-    // ellipsis inside their own boxes and an open box's tool list scrolls
+    // A box's name, description, model line, tool lines and closed command end
+    // in an ellipsis inside their own boxes and an open box's tool list scrolls
     // inside its box, as their CSS says. The activity dock's tool calls (the
     // Agent calls carry the subagents' prompts) and done line, and the session
     // row's status, end in an ellipsis inside their own boxes; the tab bar's
@@ -131,6 +140,7 @@ export function agentStripSelfTestScript(
     scrollsItself: [
       '.agent-strip-name',
       '.agent-strip-description',
+      '.agent-strip-model',
       '.agent-strip-tool',
       '.agent-strip-command',
       '.agent-strip-toolList',

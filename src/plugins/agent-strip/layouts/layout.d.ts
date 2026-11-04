@@ -15,7 +15,8 @@
 // - the scrolling track and its chevrons, and revealing the selected box;
 // - a box's click, and no focus: a box takes none;
 // - the elapsed time once a second on every agent and task box: the app runs the box's `update` with the new
-//   `elapsedMs`, or draws a box with no `update` again and replaces its element, an open agent box's `toolList` with it.
+//   `elapsedMs`, or draws a box with no `update` again and replaces its element, an open agent box's `toolList` with it;
+// - an open `toolList`'s `scrollTop` across every draw of its box.
 // `kit.duration` formats the elapsed time as chat's activity line does: `42s`, `3m 05s` or `1h 02m`.
 import type { BaseKit } from '../../../shared/page/layout-host/kit';
 

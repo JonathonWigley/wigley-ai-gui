@@ -73,7 +73,7 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
 - **Lifetime:** a box leaves the strip the moment its subagent or task ends, done or failed, and every box leaves
   when the session's process exits. Nothing stays to be closed, so the strip has no close control.
 - **Scrolling:** the strip scrolls sideways; `‹` and `›` buttons at its ends scroll it by one box and hide when there
-  is nothing further that way. The trackpad scrolls it too.
+  is nothing further that way. The trackpad scrolls it too. An open box's tool list keeps its scroll as the box redraws.
 - **Keys:** the strip is a stop in the chat's entry cursor. `j` on the entry cursor's last stop (the newest pending
   row, else the last entry or an open last run's last step) selects the strip's first box; the strip then holds its own key scope: `h`/`l` move between boxes, `k` or Esc returns to the last stop, `i` and `a` focus the chat box, Enter opens the selected box in place to list every tool call of that
   subagent (a task shows its command), and Enter again closes it. `G` and a following cursor stay on the last entry,

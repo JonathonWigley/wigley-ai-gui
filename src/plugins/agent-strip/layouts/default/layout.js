@@ -148,28 +148,27 @@ function agentFooter(element, input, kit) {
 }
 
 /**
- * A bar filled to `ratio`, held to full, in the warning colour once `ratio`
+ * A meter filled to `ratio`, held to full, in the warning tone once `ratio`
  * reaches the warning share.
  * @param {HTMLElement} footer
  * @param {number} ratio
  * @param {AgentStripKit} kit
  */
 function contextBar(footer, ratio, kit) {
-  const bar = kit.el(footer, 'span', 'agent-strip-bar');
-  if (ratio >= CONTEXT_WARNING_RATIO) {
-    bar.dataset.tone = 'warning';
-  }
-  const fill = kit.el(bar, 'span', 'agent-strip-bar-fill');
   const percent = Math.min(100, Math.round(ratio * 100));
-  fill.style.setProperty('--agent-strip-percent', String(percent));
+  kit.meter(
+    footer,
+    percent,
+    ratio >= CONTEXT_WARNING_RATIO ? 'warning' : 'normal',
+  );
 }
 
 /**
- * `84k`, or `1.2M` from a million on.
+ * `84k`, or `1.2M` from where the thousands would round to `1000k`.
  * @param {number} tokens
  */
 function tokenCount(tokens) {
-  return tokens >= 1_000_000
+  return tokens >= 999_500
     ? `${(tokens / 1_000_000).toFixed(1)}M`
     : `${Math.round(tokens / 1000)}k`;
 }

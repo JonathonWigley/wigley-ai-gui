@@ -7,11 +7,11 @@
   width: calc(var(--wg-space-6) * 10);
   /* Every closed box takes the height of the fullest one — a subagent's head,
      description, model line, three recent tool lines, footer and the cursor
-     prompt: eight lines (`text-12` at the inherited `leading-ui`) and seven
-     gaps, inside the padding and the Card's hairline border. The tool lines
-     share one block, so its gaps' share pays for that block's padding. */
+     prompt: eight lines (`text-12` at the inherited `leading-ui`), then five
+     gaps plus the tool block's padding, six `space-1` in all, inside the
+     padding and the Card's hairline border. */
   min-height: calc(
-    8 * var(--wg-text-12) * var(--wg-leading-ui) + 7 * var(--wg-space-1) + 2 *
+    8 * var(--wg-text-12) * var(--wg-leading-ui) + 6 * var(--wg-space-1) + 2 *
       var(--wg-space-2) + 2 * 1px
   );
   padding: var(--wg-space-2);
@@ -51,7 +51,6 @@
 [data-layout-owner='agent-strip'][data-layout='default'] .agent-strip-runtime {
   flex: none;
   margin-left: auto;
-  font-family: var(--wg-font-mono);
   font-variant-numeric: tabular-nums;
   color: var(--wg-fg-tertiary);
 }
@@ -141,27 +140,11 @@
   color: var(--wg-fg-tertiary);
 }
 
-[data-layout-owner='agent-strip'][data-layout='default'] .agent-strip-bar {
+[data-layout-owner='agent-strip'][data-layout='default']
+  .agent-strip-footer
+  > .ui-meter {
   flex: 1;
   min-width: 0;
-  height: var(--wg-space-1);
-  overflow: hidden;
-  border-radius: var(--wg-radius-sm);
-  background: var(--wg-border-default);
-}
-
-[data-layout-owner='agent-strip'][data-layout='default'] .agent-strip-bar-fill {
-  display: block;
-  width: calc(var(--agent-strip-percent) * 1%);
-  height: 100%;
-  border-radius: var(--wg-radius-sm);
-  background: var(--wg-status-success);
-}
-
-[data-layout-owner='agent-strip'][data-layout='default']
-  .agent-strip-bar[data-tone='warning']
-  > .agent-strip-bar-fill {
-  background: var(--wg-status-warning);
 }
 
 [data-layout-owner='agent-strip'][data-layout='default'] .agent-strip-context,

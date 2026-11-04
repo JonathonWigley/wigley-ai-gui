@@ -10,7 +10,8 @@ import {
   asHtml,
   FakeElement,
   findAll,
-  installFakeDom,
+  installFocusFakeDom,
+  ScrollerFakeElement,
 } from '../../../shared/page/test-dom';
 import type { HScroller } from '../../../shared/page/ui/h-scroller';
 import type { Roster, RosterAgent, RosterTask } from '../../agents/contract';
@@ -120,7 +121,8 @@ function boxesWith(wrapper: FakeElement, className: string): number[] {
 
 // A strip over agents whose rosters `setRoster` changes, announcing each
 // change; timers record each `set` and `clear`; `exits` records each exit
-// called; every session is named `proj`; `onSetScope` runs on each scope set.
+// called; `anchorDisposals` holds each key anchor's dispose count in naming
+// order; every session is named `proj`; `onSetScope` runs on each scope set.
 // `OTHER_SESSION` lists `initial` too and never changes.
 function setUp(initial: Roster = EMPTY, onSetScope: () => void = () => {}) {
   let now = NOW;
@@ -133,6 +135,7 @@ function setUp(initial: Roster = EMPTY, onSetScope: () => void = () => {}) {
   const clears: number[] = [];
   const logged: string[] = [];
   const exitCalls: string[] = [];
+  const anchorDisposals: number[] = [];
   let scopeSets = 0;
   const scrollers = fakeScrollers();
   const strip = createAgentStrip({
@@ -143,7 +146,17 @@ function setUp(initial: Roster = EMPTY, onSetScope: () => void = () => {}) {
         document: async (text) => text,
         ...NO_FENCES,
       },
-      keys: recordingAnchors().keys,
+      keys: {
+        ...recordingAnchors().keys,
+        anchor() {
+          const index = anchorDisposals.push(0) - 1;
+          return {
+            dispose() {
+              anchorDisposals[index] += 1;
+            },
+          };
+        },
+      },
       commands: { exists: () => true, run: () => undefined },
       platform: 'macos',
     },
@@ -194,6 +207,7 @@ function setUp(initial: Roster = EMPTY, onSetScope: () => void = () => {}) {
     clears,
     logged,
     exitCalls,
+    anchorDisposals,
     scopeSets: () => scopeSets,
     scrollers,
     setRoster,
@@ -235,7 +249,7 @@ function userBox(
 }
 
 beforeEach(() => {
-  installFakeDom(vi.stubGlobal);
+  installFocusFakeDom(vi.stubGlobal, ScrollerFakeElement);
 });
 
 afterEach(() => {
@@ -502,6 +516,7 @@ describe('agent strip', () => {
     const before = boxes();
     const beforeTexts = before.map((box) => box.textContent);
     const toolList = findAll(before[1], 'agent-strip-toolList')[0];
+    toolList.scrollTop = 40;
     const refreshesBefore = scrollers.refreshes();
 
     const texts: (string | null)[][] = [];
@@ -516,6 +531,7 @@ describe('agent strip', () => {
       toolListKept: findAll(after[1], 'agent-strip-toolList')[0] === toolList,
       toolLists: findAll(wrapper, 'agent-strip-toolList').length,
       openToolLists: findAll(after[1], 'agent-strip-toolList').length,
+      toolListScrollTop: findAll(after[1], 'agent-strip-toolList')[0].scrollTop,
       taskBoxKept: after[2] === before[2],
       texts,
       refreshes: scrollers.refreshes() - refreshesBefore,
@@ -531,6 +547,7 @@ describe('agent strip', () => {
       toolListKept: row.agentBoxesKept,
       toolLists: 1,
       openToolLists: 1,
+      toolListScrollTop: 40,
       taskBoxKept: row.taskBoxKept,
       texts: [
         [
@@ -550,6 +567,71 @@ describe('agent strip', () => {
     });
     expect(clears).toEqual([sets[2].handle]);
     expect(sets).toHaveLength(3);
+  });
+
+  // Box 1 is selected and open under a layout whose part has no `update`, so a
+  // tick replaces it: the new element takes clicks and the reveal, its old
+  // parts' anchors are disposed once, and a later redraw disposes the new ones.
+  it.each<{ part: 'agentBox' | 'taskBox'; roster: Roster }>([
+    { part: 'agentBox', roster: MIXED },
+    {
+      part: 'taskBox',
+      roster: {
+        agents: [agent('a1', 90_000), agent('a2', 10_000)],
+        tasks: [task('t1', 30_000)],
+      },
+    },
+  ])('tick_ReplacedBox_KeepsItsBookkeeping ($part)', ({ part, roster }) => {
+    const {
+      strip,
+      build,
+      enter,
+      boxes,
+      opened,
+      sets,
+      advance,
+      scrollers,
+      anchorDisposals,
+    } = setUp(roster);
+    strip.setLayouts(
+      withUser<Layout>(defaultLayout, {
+        ...userBox(part, 'none'),
+        toolList(parent, input, kit) {
+          const list = defaultLayout.toolList(parent, input, kit);
+          kit.keyHint(list.element, 'focusBox');
+          return list;
+        },
+      }),
+    );
+    build();
+    enter();
+    strip.nextBox();
+    strip.toggleBox();
+    const before = boxes()[1];
+    const anchorsBeforeTick = anchorDisposals.length;
+
+    advance(1000);
+    sets[0].run();
+    const replaced = boxes()[1];
+    const afterTick = [...anchorDisposals];
+    const anchorsBeforeClick = anchorDisposals.length;
+    replaced.click();
+    const afterClick = { opened: opened(), anchors: [...anchorDisposals] };
+    strip.nextBox();
+    strip.prevBox();
+
+    expect(replaced).not.toBe(before);
+    expect(afterTick).toEqual(
+      afterTick.map((_, index) => (index < anchorsBeforeTick ? 1 : 0)),
+    );
+    expect(afterTick.length).toBeGreaterThan(anchorsBeforeTick);
+    expect(afterClick).toEqual({
+      opened: [],
+      anchors: afterClick.anchors.map((_, index) =>
+        index < anchorsBeforeClick ? 1 : 0,
+      ),
+    });
+    expect(scrollers.reveals.at(-1)).toBe(asHtml(boxes()[1]));
   });
 
   it('tick_AgentBoxUpdate_RunsWithElapsedOneSecondLarger', () => {
@@ -632,15 +714,60 @@ describe('agent strip', () => {
     expect(boxes()[0].textContent).toContain(`name-a1${shows}1m 00s`);
   });
 
-  it('draw_TaskBox_NamedForItsOwner', () => {
+  it('draw_AgentBox_ShowsEachRosterField', () => {
     const { build, boxes } = setUp({
-      agents: [],
-      tasks: [task('t1', 5_000, { ownerName: 'kind-fixer' })],
+      agents: [
+        agent('a1', 60_000, 1, {
+          model: 'opus',
+          effort: 'high',
+          spendUsd: 1.5,
+          contextTokens: 84_000,
+          contextWindow: 200_000,
+        }),
+      ],
+      tasks: [],
     });
 
     build();
 
-    expect(boxes()[0].textContent).toContain('kind-fixerShell5s');
+    expect(boxes()[0].textContent).toContain(
+      'Task of a1opus · highRead file-1.ts84k/200k$1.50',
+    );
+  });
+
+  it('draw_FailedTool_ShowsErrorStatus', () => {
+    const { build, boxes } = setUp({
+      agents: [
+        agent('a1', 60_000, 0, {
+          tools: [
+            {
+              toolUseId: 'a1-tool-1',
+              tool: 'Bash',
+              summary: 'npm test',
+              outcome: 'failed',
+            },
+          ],
+        }),
+      ],
+      tasks: [],
+    });
+
+    build();
+
+    expect(findAll(boxes()[0], 'agent-strip-tool')[0].dataset.status).toBe(
+      'error',
+    );
+  });
+
+  it('draw_TaskBox_NamedForItsOwnerWithItsCommand', () => {
+    const { build, boxes } = setUp({
+      agents: [],
+      tasks: [task('t1', 5_000, { ownerName: 'kind-fixer', command: 'npm t' })],
+    });
+
+    build();
+
+    expect(boxes()[0].textContent).toContain('kind-fixerShell5sRun t1npm t');
   });
 
   it.each<{ part: keyof Layout }>([
@@ -670,6 +797,24 @@ describe('agent strip', () => {
         (list) => list.dataset.layout,
       ),
     ).toEqual(['default']);
+  });
+
+  it('enter_LongBox_LogsOnlyItsHead', () => {
+    const { build, enter, logged } = setUp({
+      agents: [
+        agent('a1', 60_000, 1, {
+          description: `${'long '.repeat(40)}past-the-head`,
+        }),
+      ],
+      tasks: [],
+    });
+    build();
+
+    enter();
+
+    const shows = logged.find((line) => line.includes('shows:'));
+    expect(shows).toContain('name-a1Subagent1m 00s');
+    expect(shows).not.toContain('past-the-head');
   });
 
   it('prevBox_AtFirst_LogsNothing', () => {
@@ -762,6 +907,23 @@ describe('agent strip', () => {
     expect(emptied).toEqual({ shown: [], disposed: true });
     expect(scrollers.made).toHaveLength(2);
     expect(wrapper.children).toEqual([scrollers.made[1].scroller.element]);
+  });
+
+  // Box 2 of MIXED is open and scrolled; another box opening starts at the top.
+  it('redraw_KeepsOpenListScrollByBox', () => {
+    const { build, boxes, setRoster } = setUp(MIXED);
+    build();
+    boxes()[1].click();
+    const listOf = (index: number) =>
+      findAll(boxes()[index], 'agent-strip-toolList')[0];
+    listOf(1).scrollTop = 40;
+
+    setRoster({ ...MIXED, agents: [...MIXED.agents, agent('a3', 10_000)] });
+    const afterRoster = listOf(1).scrollTop;
+    boxes()[0].click();
+
+    expect(afterRoster).toBe(40);
+    expect(listOf(0).scrollTop).toBe(0);
   });
 
   it.each<{ case: string; rosters: Roster[]; lines: string[] }>([

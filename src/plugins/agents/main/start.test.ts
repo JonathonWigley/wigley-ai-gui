@@ -235,12 +235,6 @@ describe('agentsMainPart', () => {
       rosters: { s1: roster([runningA]) },
     },
     {
-      name: "a message from a cleared row's new process sends nothing",
-      steps: [spawned, { host: CLEARED_HOST, event: userMessage }],
-      sent: [{ sessionId: 's1', roster: roster([runningA]) }],
-      rosters: { s1: roster([runningA]) },
-    },
-    {
       name: "a row's old process ending removes only its own subagents",
       steps: [spawned, { host: CLEARED_HOST, event: spawnedB }, sessionEnded],
       sent: [

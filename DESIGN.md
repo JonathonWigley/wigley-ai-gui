@@ -424,7 +424,7 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   cache, spend), the running dot, then Send.
   The **agent strip** is an HScroller of boxes, each a `card-background` Card with `radius-md`, heading with a running
   StatusDot, its name, a kind Tag and its elapsed time, then its description: a subagent box adds `model · effort` in
-  `fg-tertiary`, its latest three tool calls in mono on `block-background`, the older two fading, and a context bar
+  `fg-tertiary`, its latest three tool calls in mono on `block-background`, the older two fading, and a context Meter
   (`status-warning` at 80% or more), `84k/200k` and its cost; a task box adds its command in mono on `block-background`.
   A box leaves when its subagent or task ends; the selected box takes the focus ring. A user turn shows its sent images
   as thumbnails under its text.
