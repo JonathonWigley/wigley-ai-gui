@@ -88,8 +88,16 @@
   list-style: none;
 }
 
+/* The buttons stay in view while the list above them gives up height, over the
+   section body's block padding. A body shorter than the buttons pins their top. */
 .workflow-side-actions {
+  background: var(--wg-block-background);
+  bottom: 0;
   display: flex;
   flex-wrap: wrap;
   gap: var(--wg-space-2);
+  margin-bottom: calc(-1 * var(--wg-space-2));
+  padding-bottom: var(--wg-space-2);
+  position: sticky;
+  top: 0;
 }

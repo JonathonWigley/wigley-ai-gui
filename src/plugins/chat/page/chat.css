@@ -17,13 +17,19 @@
   position: relative;
 }
 
-/* The session hub keeps the tab's height. Each section takes its content's
-   height, and shrinks and scrolls in its own body when the column is too short.
+/* The session hub keeps the tab's height. Main agent keeps its own height, which
+   the dock bounds. Each other section takes its content's height, and when the
+   column is too short gives up height by its content's share, scrolling in its
+   own body and keeping its whole head.
    A section whose part draws nothing takes no space, and the hub with none left
    takes none either. Its width is the user's (`--chat-side-width`), and always
    leaves `.chat-main` its least width (`--chat-side-end-min`), both unitless
    pixels. */
 .chat-side-parts {
+  --chat-side-head-height: calc(
+    var(--wg-text-12) * var(--wg-leading-ui) + 2 * var(--wg-space-1)
+  );
+
   align-self: stretch;
   background: var(--wg-block-background);
   border-left: 1px solid var(--wg-border-default);
@@ -56,11 +62,16 @@
 }
 
 .chat-side-part {
+  box-sizing: content-box;
   display: flex;
   flex: 0 1 auto;
   flex-direction: column;
-  min-height: 0;
+  min-height: var(--chat-side-head-height);
   overflow: hidden;
+}
+
+.chat-side-part[data-part='chat.mainAgent'] {
+  flex: none;
 }
 
 .chat-side-part:not(:has(.chat-side-section-body > :not([hidden]))) {
@@ -92,6 +103,7 @@
   flex: none;
   font: inherit;
   gap: var(--wg-space-1);
+  min-height: var(--chat-side-head-height);
   padding: var(--wg-space-1) var(--wg-space-3);
   text-align: left;
   width: 100%;
@@ -103,7 +115,15 @@
   flex-direction: column;
   min-height: 0;
   overflow-y: auto;
-  padding: var(--wg-space-2) var(--wg-space-3);
+  padding: 0 var(--wg-space-3);
+}
+
+/* The body's block padding, in flow so the body can shrink to nothing. */
+.chat-side-section-body::before,
+.chat-side-section-body::after {
+  content: '';
+  flex: none;
+  height: var(--wg-space-2);
 }
 
 .chat-side-section.is-collapsed .chat-side-section-body {

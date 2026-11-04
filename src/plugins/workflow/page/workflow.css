@@ -87,7 +87,7 @@
 
 .workflow-side-list {
   flex: 1;
-  min-height: 0;
+  min-height: calc(var(--wg-row-list) * 2);
   overflow-y: auto;
 }
 
