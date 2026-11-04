@@ -129,7 +129,7 @@ function and imports no `Git`; only `main/start.ts` names `api.services.git`.
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Git origin repo name](01-git-origin-repo-name.md)
+- [x] [Git origin repo name](01-git-origin-repo-name.md)
 - [ ] [DragReorder primitive](03-drag-reorder-primitive.md)
 - [ ] [Side bar order, recency and favorites modules](04-order-modules.md)
 - [ ] [Section and group layout parts](05-layout-parts.md)
@@ -151,7 +151,10 @@ function and imports no `Git`; only `main/start.ts` names `api.services.git`.
 Review base: 693cb8d04eb48c87e6cba0406a0e2d850f90db54
 
 ### Groups
+- 01 · 7dfb580e · diff read; Produces originRepoName present on the contract; compile clean for the group's files · concerns: AGENTS.md line 155's adapter list omits the origin repo name (goes to task 07); the empty-name branch and the cannot-start rejection have no test row, per the task's row list
 ### Contract changes
 ### Rulings
+- The user takes every review recommendation in this run, so no triage round is sent — the user's word this run — a recommendation the user would have overridden lands anyway and shows in the wrap-up · lead
+- The test gate and drive checks run in the worktree rather than waiting for the main tree — this is no Unity project, so nothing needs an editor, and a worktree has its own .vite — none; merging back still waits for the user's word · lead
 ### Review rounds
 ### Test gate
