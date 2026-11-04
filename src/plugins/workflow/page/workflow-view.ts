@@ -95,8 +95,8 @@ export interface WorkflowView {
 type PartKind = 'chip' | 'strip' | 'sidePane';
 
 // One wrapper a part was built into, and what it drew there last. A side pane
-// also holds its list's last scroll read with a layout box, and the observer
-// that hands it back when the wrapper gets a box again.
+// also holds the scroll its list last reported in a `scroll` event with a layout
+// box, and the observer that hands it back when the wrapper gets a box again.
 interface HeldPart {
   kind: PartKind;
   sessionId: string;
@@ -276,7 +276,6 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
   };
 
   const draw = (part: HeldPart) => {
-    rememberListScroll(part);
     const last = part.drawn;
     part.drawn = null;
     part.showsCountdown = false;
@@ -289,7 +288,12 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
     const newList = sideListOf(part);
     if (newList !== null) {
       newList.scrollTop = part.listScroll;
-      newList.addEventListener('scroll', () => rememberListScroll(part));
+      // A scroll in the same frame as a draw loses that frame's delta.
+      newList.addEventListener('scroll', () => {
+        if (hasLayoutBox(newList)) {
+          part.listScroll = newList.scrollTop;
+        }
+      });
     }
   };
 
@@ -545,14 +549,6 @@ function sideListOf(part: HeldPart): HTMLElement | null {
 // A list with no layout box reads `scrollTop` 0 and drops a write to it.
 function hasLayoutBox(list: HTMLElement): boolean {
   return list.getClientRects().length > 0;
-}
-
-// Keeps the scroll of `part`'s list while the list has a layout box.
-function rememberListScroll(part: HeldPart): void {
-  const list = sideListOf(part);
-  if (list !== null && hasLayoutBox(list)) {
-    part.listScroll = list.scrollTop;
-  }
 }
 
 // Puts the kept scroll back on `part`'s list while it has a layout box.

@@ -224,17 +224,18 @@ class BoxedElement extends FakeElement {
   }
 }
 
-// What a scroll row does to a side pane whose list scrolled to 120, read by no
-// draw and no `scroll` event yet. `resize` runs the observers still observing,
-// and `loseBox` and `regainBox` run them too, as a box coming or going reports.
+// What a scroll row does to a side pane whose list scrolled to 120. `scrollTo`
+// sets the list's value and fires its `scroll` event. `resize` runs the observers
+// still observing, and `loseBox` and `regainBox` run them too, as a box coming or
+// going reports; `boxBackUnreported` gives the box back before they report.
 interface ScrollScene {
   view: WorkflowView;
-  list: FakeElement;
-  scrolled(): void;
+  scrollTo(value: number): void;
   push(): void;
   resize(): void;
   loseBox(): void;
   regainBox(): void;
+  boxBackUnreported(): void;
 }
 
 // Each ResizeObserver the code builds from here on: its callback and the
@@ -840,10 +841,30 @@ describe('workflow view', () => {
     },
     {
       name: 'flows pushed with no box, then the box back',
-      act: ({ scrolled, push, loseBox, regainBox }) => {
-        scrolled();
+      act: ({ push, loseBox, regainBox }) => {
         loseBox();
         push();
+        push();
+        regainBox();
+      },
+      scroll: 120,
+    },
+    {
+      name: 'a flow pushed with the box back before the observer reports',
+      act: ({ push, resize, loseBox, boxBackUnreported }) => {
+        loseBox();
+        push();
+        boxBackUnreported();
+        push();
+        resize();
+      },
+      scroll: 120,
+    },
+    {
+      name: 'a scroll event with no box',
+      act: ({ scrollTo, push, loseBox, regainBox }) => {
+        loseBox();
+        scrollTo(50);
         push();
         regainBox();
       },
@@ -870,9 +891,8 @@ describe('workflow view', () => {
     },
     {
       name: 'a resize after a scroll no draw read',
-      act: ({ list, scrolled, resize }) => {
-        list.scrollTop = 300;
-        scrolled();
+      act: ({ scrollTo, resize }) => {
+        scrollTo(300);
         resize();
       },
       scroll: 300,
@@ -884,8 +904,11 @@ describe('workflow view', () => {
     put(flowIn('make'));
     view.sidePart.build(asHtml(wrapper), 'a');
     const sideList = () => findAll(wrapper, 'workflow-side-list')[0];
-    const list = sideList();
-    list.scrollTop = 120;
+    const scrollTo = (value: number) => {
+      sideList().scrollTop = value;
+      sideList().fire('scroll');
+    };
+    scrollTo(120);
     const resize = () => {
       for (const observer of observers) {
         if (observer.observed.size > 0) {
@@ -897,8 +920,7 @@ describe('workflow view', () => {
 
     act({
       view,
-      list,
-      scrolled: () => sideList().fire('scroll'),
+      scrollTo,
       push: () => {
         checked += 1;
         put(flowIn('make', { progress: progressOf(checked, [3, 3, 1]) }));
@@ -911,6 +933,9 @@ describe('workflow view', () => {
       regainBox: () => {
         hasBox = true;
         resize();
+      },
+      boxBackUnreported: () => {
+        hasBox = true;
       },
     });
 
