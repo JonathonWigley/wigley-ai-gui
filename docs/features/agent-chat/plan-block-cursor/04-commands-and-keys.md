@@ -5,7 +5,7 @@ Type: Task
 Wave: 3 · Depends on: 03
 Plan: [plan.md](plan.md)
 
-Files:     modify `src/plugins/keymap.ts` · modify `src/plugins/chat/manifest.ts` · modify `src/plugins/chat/page/chat-commands.ts` · modify `src/plugins/chat/page/chat-kit.ts` · modify `src/plugins/chat/page/chat-view.ts` · modify `src/plugins/chat/contract.ts` · modify `src/plugins/visual/page/visual-commands.ts` · test `src/plugins/chat/page/chat-commands.test.ts` · test `src/plugins/chat/page/entry-list.test.ts` · test `src/plugins/visual/page/visual-commands.test.ts`
+Files:     modify `src/plugins/keymap.ts` · modify `src/plugins/chat/manifest.ts` · modify `src/plugins/chat/page/chat-commands.ts` · modify `src/plugins/chat/page/chat-kit.ts` · modify `src/plugins/chat/page/chat-view.ts` · modify `src/plugins/chat/page/start.ts` · modify `src/plugins/chat/contract.ts` · modify `src/plugins/visual/page/visual-commands.ts` · test `src/plugins/chat/page/chat-commands.test.ts` · test `src/plugins/chat/page/entry-list.test.ts` · test `src/plugins/visual/page/visual-commands.test.ts`
 Consumes:  `moveToMessage`, `toggleRange`, `cancelRange`, `selectedSource`, `focusedBlock` ← 03
 Produces:
 
@@ -14,7 +14,7 @@ Produces:
 
 Decisions:
 
-Pinned binds, in `chatEntryPageBinds` and scope `chat.chat`:
+Pinned binds, in scope `chat.chat`. `J`, `K`, `V` and `<Esc>` join `chatEntryPageBinds`. `y` stays where it is, beside `n`, and takes the new command name in place, so one `y` bind exists:
 
 | Keys | Command | Label |
 |---|---|---|
@@ -25,18 +25,20 @@ Pinned binds, in `chatEntryPageBinds` and scope `chat.chat`:
 | `y` | `chat.allowOrCopy` | `allow the tool once, or copy` |
 
 - The group of the first four is `entries`. The group of `chat.allowOrCopy` is `permissions`.
+- The labels of `chat.nextEntry` and `chat.prevEntry` become `next block` and `previous block`. The command names stay.
 - `<Esc>` is `where: 'page'`. In the box, `<Esc>` stays `chat.leaveBox`.
 - `chat.allowPermission` goes away. Rename it at each reference: `keymap.ts`, `manifest.ts`, `chat-commands.ts`, `chat-kit.ts` and `entry-list.test.ts`. This app has one user, so no alias stays.
 - `allowOrCopy`: with a pending permission, allow it as `allowPermission` does today. With none, copy.
 - The Allow button in `chat-kit.ts` allows only. It runs its own answer callback, and keeps its key hint through `allowOrCopy`.
-- Copy: read `session.entries.selectedSource()`. With null, log `nothing to copy` and show no toast. Otherwise call the injected clipboard write, end the range with `cancelRange`, and show the toast `Copied 1 block` or `Copied <n> blocks` in tone `success`.
-- A failed clipboard write logs the error and shows the toast `Copy failed` in tone `error`. The range stays.
-- Add `writeClipboard(text: string): Promise<void>` to the deps of `chat-commands.ts`. The live adapter calls `navigator.clipboard.writeText`, as `sign-in-dialog.ts` does.
+- Copy: read `session.entries.selectedSource()` once. With null, log `nothing to copy` and show no toast. Otherwise call the injected clipboard write.
+- When the write resolves, call `cancelRange` and show the toast `Copied 1 block` or `Copied <n> blocks` in tone `success`.
+- When the write rejects, log the error and show the toast `Copy failed` in tone `error`. The range stays.
+- Add `writeClipboard(text: string): Promise<void>` to the deps of `chat-commands.ts`. `start.ts` passes the live adapter, which calls `navigator.clipboard.writeText`, as `sign-in-dialog.ts` does.
 - `cancelRange` with no open range logs and does nothing else.
 - `nextMessage` and `prevMessage` log through `focusedLine`, as `moveEntry` does.
 - `chat.nextEntry` keeps its `isAtLastStop` and `enterStop` behaviour. `chat.nextMessage` does not enter a composer stop.
-- `focusedBlock` in `chat-view.ts` mirrors `focusedEntry`: null while `tab.stop.holding()` is not null.
-- `visual.openVisuals`: read `sourcesIn(entry)` as today. When `focusedBlock()` is not null and `sourcesIn(block)` is not empty, open at the index of that block's first source in the entry's list. Otherwise open at 0.
+- `focusedBlock` in `chat-view.ts` mirrors `focusedEntry`: null while `tab.stop.holding()` is not null. `start.ts` adds it to the page exports.
+- `visual.openVisuals`: read `sourcesIn(entry)` as today. When `focusedBlock()` is not null and `sourcesIn(block)` is not empty, open at `sources.indexOf(sourcesIn(block)[0])`. Two visuals with identical source open at the first match. Otherwise open at 0.
 
 GIVEN a pending permission WHEN `y` runs THEN the permission is allowed and the clipboard is not written
 GIVEN no pending permission and a cursor block WHEN `y` runs THEN the clipboard holds the block's source and the toast says `Copied 1 block`
@@ -46,8 +48,10 @@ GIVEN a stop with nothing to copy WHEN `y` runs THEN the clipboard is not writte
 GIVEN an open range WHEN page `<Esc>` runs THEN the range ends and the cursor stays
 GIVEN an entry with two visuals and a cursor on the second WHEN `v` runs THEN the overlay opens at index 1
 GIVEN a cursor on a paragraph in that entry WHEN `v` runs THEN the overlay opens at index 0
+GIVEN no open range WHEN page `<Esc>` runs THEN it logs and shows no toast
+GIVEN a list WHEN `J` runs THEN `moveToMessage(1)` is called, and WHEN `K` runs THEN `moveToMessage(-1)` is called
 
-Tests:     add `it.each` rows for the `y` cases in `chat-commands.test.ts`, with a fake clipboard and toast; add the `<Esc>` case there; add the two `v` rows to `visual-commands.test.ts`; rename the `allowPermission` references in `entry-list.test.ts`.
+Tests:     add `it.each` rows for the `y` cases in `chat-commands.test.ts`, with a fake clipboard and toast; add the two `<Esc>` cases and the `J` and `K` rows there; make the failing clipboard fake a rejected promise; add the two `v` rows to `visual-commands.test.ts`; rename the `allowPermission` references in `entry-list.test.ts`.
 Done when: compiles; `npm run lint` passes; the test gate runs the tests above.
 Commit:    one commit for the group
 

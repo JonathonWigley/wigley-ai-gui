@@ -47,6 +47,7 @@ Each command ran at plan time. `wigley:make` runs them again before the first di
 | `y` binds only `chat.allowPermission` in `chat.chat` | `grep -n "keys: 'y', scope: 'chat.chat'" src/plugins/keymap.ts` | one match |
 | `chat.chat` has no page-level `<Esc>` bind | `sed -n 125,135p src/plugins/keymap.ts` | `<Esc>` is `chat.leaveBox`, box only |
 | The turn divider is on the target | `git log --oneline --grep="Mark each turn's end" -1` | `818013f8` |
+| Dividers already have no cursor stop | `grep -n "isCursorRow" src/plugins/chat/page/activity-runs.ts` | present, from `5d6800f2` |
 
 ## Docs written ahead
 
@@ -102,8 +103,8 @@ entry list draws is-cursor and is-range on the block or the slot
 - Permission cards, notices, pending rows and activity lines keep one stop each.
 - `Enter` toggles the entry that holds the cursor. `v` opens the visual under the cursor, else the first
   visual of the entry.
-- `V` starts or ends a range. `y` copies and ends the range. `<Esc>` cancels the range. A range can cross
-  messages. The copy puts one blank line between blocks.
+- `V` starts or ends a range. `y` copies and ends the range. `<Esc>` cancels the range. `G` and `gg` keep an
+  open range, as in vim. A range can cross messages. The copy puts one blank line between blocks.
 - A layout gets block stops when it draws user or assistant text with `kit.markdown`. An entry with no
   marked block has one stop.
 - A cursor on the last step of an open run stays there through a redraw.
@@ -125,7 +126,9 @@ Modified:
 - `src/plugins/chat/page/chat.css` — cursor and range marks on a block
 - `src/plugins/chat/page/chat-commands.ts`, `src/plugins/chat/manifest.ts`, `src/plugins/keymap.ts` — keys
 - `src/plugins/chat/page/chat-kit.ts` — the Allow button's command name
-- `src/plugins/chat/page/chat-view.ts`, `src/plugins/chat/contract.ts` — `focusedBlock`
+- `src/plugins/chat/page/chat-view.ts`, `src/plugins/chat/contract.ts`, `src/plugins/chat/page/start.ts` — `focusedBlock`, the clipboard adapter
+- `src/shared/page/test-dom.ts` — the fake DOM the entry list tests need
+- `src/shared/fake-agent-harness.ts` — a multi-block reply for the drive check
 - `src/plugins/visual/page/visual-commands.ts` — `v` reads the focused block
 
 New: none. Each change has a module that owns its rule today.
