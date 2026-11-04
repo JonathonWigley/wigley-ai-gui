@@ -1,6 +1,6 @@
 # 01 — Probe Claude's compaction lines
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -217,4 +217,4 @@ These override any earlier line of this task that they contradict.
 
 ## Proof
 
-<written by wigley:make: commit sha, proof result, concerns; empty until the group lands>
+Commit 30dee62d · proof: diff read: five subsections and Idle compaction setup present, version lines and Not measured updated; doc only; probe F still running detached · concerns: settings.json env sets the autocompact override past the app's strip; idle compaction may be silent under -p; an automatic attempt can fail at once with too_few_groups

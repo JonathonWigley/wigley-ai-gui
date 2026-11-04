@@ -1,6 +1,6 @@
 # 03 — Fake harness compaction
 
-Status: not started
+Status: done
 Type: Task
 Wave: 3 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -192,3 +192,4 @@ These override any earlier line of this task that they contradict.
 
 ## Proof
 
+Commit 7fdb2af9 · proof: diff read, every Produces found by search; typecheck has no fake-agent-harness errors; worker's file 108/108 · concerns: compact() does not refuse during a fake workflow turn, which never sets isTurnOpen, so the fake is looser than the contract there; a late-permission guard was added beyond the plan

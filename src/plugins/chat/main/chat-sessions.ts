@@ -44,6 +44,8 @@ import {
   type QueuedMessage,
   type ResumeRequest,
   type ReturnedMessage,
+  type SendGate,
+  type SessionCompaction,
   type StartRequest,
 } from '../contract';
 import type { ArchivedSessions } from './archived-sessions';
@@ -155,26 +157,33 @@ export interface ChatSessions {
   // first: it rejects while that process runs in another app version or the
   // host cannot be listed, and re-attaches when the process runs in the current
   // host, so a session never runs two processes. While the harness reports
-  // its turn running the message is queued instead, and each `idle` the
-  // harness reports writes the oldest queued message not sent now until none
-  // is left; a permission call left waiting after the turn ended queues
-  // nothing. A send at idle in a row holding unsent queued messages queues
-  // behind them and writes the oldest. A written message is held until its
-  // entry arrives, and returned when the harness reports it dropped. The first
-  // message written in a row with no first-message title sets it.
+  // its turn running, a compaction runs or a hold is up, the message is queued
+  // instead, and each `idle` the harness reports writes the oldest queued
+  // message not sent now until none is left; a permission call left waiting
+  // after the turn ended queues nothing. An idle send asks the send gates once
+  // the process runs: a verdict queues the message as the held row and compacts,
+  // and the row is written when the compaction ends, whatever its outcome; a
+  // `compact` that throws writes the message at once. A send at idle in a row
+  // holding unsent queued messages queues behind them and writes the oldest. A
+  // written message is held until its entry arrives, and returned when the
+  // harness reports it dropped. The first message written in a row with no
+  // first-message title sets it.
   send(sessionId: string, message: UserMessage): Promise<void>;
   // Adds an app notice to the session's entries and sends it as harness
   // entries travel, so `sessions()` keeps it.
   notice(sessionId: string, text: string, tone: 'info' | 'error'): void;
   // Returns every queued message not sent now, then interrupts the process;
-  // messages sent now stay queued. During an attach it waits for the attach
-  // to settle, then does this when the row holds a process.
+  // messages sent now stay queued. While a hold is up it interrupts and returns
+  // nothing, so the compaction ends and the rows go out in order. During an
+  // attach it waits for the attach to settle, then does this when the row holds
+  // a process.
   interrupt(sessionId: string): void;
   // Ends the session's process, interrupting a running turn first, and starts a
   // fresh one at once under a new host session id with the row's held mode and
   // the model and effort the user picked that a report confirmed. Waiting
-  // permission calls are cancelled, and messages written but not taken in
-  // and every queued message returned in the order written; the old
+  // permission calls are cancelled, the running compaction is forgotten, and
+  // messages written but not taken in and every queued message, the held row
+  // included, returned in the order written; the old
   // process raises no exit notice and no turn-finished alert. The entries
   // become one `Conversation cleared` notice. A resting session just starts its
   // fresh process. Throws before changing anything when the profile or harness
@@ -185,7 +194,8 @@ export interface ChatSessions {
   // `detachAll`.
   clear(sessionId: string): void;
   // Takes the queued message out of the queue and returns it; logs and sends
-  // nothing for one no longer queued or already sent now.
+  // nothing for one no longer queued or already sent now. On the held row the
+  // compaction goes on, and the rows behind wait for its end.
   pullBack(sessionId: string, queuedId: string): void;
   // The page put these returned messages into the session's box: the row holds
   // and saves them no longer.
@@ -193,11 +203,14 @@ export interface ChatSessions {
   // Writes the queued message at once and keeps its row, marked with the
   // entry id the write returned, until that entry arrives; logs and sends
   // nothing for one no longer queued or already sent now, and a write that
-  // throws leaves the row unsent.
+  // throws leaves the row unsent. On the held row it interrupts as `interrupt`
+  // does and writes nothing now.
   sendNow(sessionId: string, queuedId: string): void;
   // While the harness reports the turn running, writes every queued message
   // not sent now, oldest first, then `message` as a new last row, each as
-  // `sendNow` does, stopping at a write that throws. Otherwise sends
+  // `sendNow` does, stopping at a write that throws; the same while a compaction
+  // runs with no hold up. While a hold is up, queues `message` behind the held row
+  // and interrupts as `interrupt` does, writing nothing now. Otherwise sends
   // `message` as `send` does, and a null `message` does nothing.
   sendAllNow(sessionId: string, message: UserMessage | null): Promise<void>;
   // Throws for a session chat no longer holds, that has no running process or
@@ -242,6 +255,16 @@ export interface ChatSessions {
   // order; a running process keeps what it started with. Disposing the
   // registration drops it from later starts; a second dispose does nothing.
   addInstructions(text: string): Disposable;
+  // Adds `gate` at the end of the gates an idle send asks, in order: the first
+  // non-null verdict holds the send and no later gate is asked, and a gate that
+  // throws is logged and counts as null. Each call is its own registration, and
+  // the returned function removes only it; a second call does nothing.
+  addSendGate(gate: SendGate): () => void;
+  // Registers `read`; each process start from now on asks the newest reader
+  // still registered for its `idleCompactMinTokens`, null with none or when it
+  // throws, which is logged. The returned function removes only this
+  // registration; a second call does nothing.
+  addIdleCompactThreshold(read: () => number | null): () => void;
 }
 
 type PermissionEntry = Extract<ChatEntry, { kind: 'permission' }>;
@@ -302,6 +325,12 @@ interface HeldSession {
   // Control id → the value the user picked that the running process has not
   // reported yet.
   pendingPicks: Map<string, string>;
+  // The profile folder the row's last process started or attached under; null
+  // until the first.
+  profileDir: string | null;
+  // The reason of the hold whose compaction is starting or running, until that
+  // compaction ends.
+  compactionReason: string | null;
   // How the process exited, once its `ended` arrives; a user close logs it.
   exit: { code: number | null; error: string | null } | null;
   // Branch reads started in this row, numbering them; only the latest applies.
@@ -449,6 +478,14 @@ function isUnsent(queued: QueuedMessage): boolean {
   return queued.sentEntryId === null;
 }
 
+function isHeldRow(queued: QueuedMessage): boolean {
+  return queued.holdReason !== null;
+}
+
+function isHoldUp(session: HeldSession): boolean {
+  return session.state.queued.some(isHeldRow);
+}
+
 function sameNames(held: readonly string[], names: readonly string[]): boolean {
   return (
     held.length === names.length &&
@@ -493,7 +530,8 @@ function firstMessageTitleOf(text: string): string {
 
 // Chat's owned sessions: each one's agent process while it runs, its chat
 // entries, controls and commands, the activity it shows, the permission
-// calls waiting on the user, the messages queued behind its running turn, and
+// calls waiting on the user, the messages queued behind its running turn or its
+// compaction, the compaction running and the send gates that start one, and
 // the messages written to the agent it has not taken in yet;
 // the folder's saved sessions it can resume; and
 // the open sessions it saves across a relaunch, re-attaching to each process
@@ -517,6 +555,10 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   let skippedRecords: SavedSession[] = [];
   // One object per `addInstructions` call, in registration order.
   const instructionRegistrations = new Set<{ text: string }>();
+  // One object per `addSendGate` call, in registration order.
+  const sendGateRegistrations = new Set<{ gate: SendGate }>();
+  // One object per `addIdleCompactThreshold` call, in registration order.
+  const idleCompactRegistrations = new Set<{ read: () => number | null }>();
 
   function snapshot(): SavedSessions {
     const records = [...held.values()].map((session) =>
@@ -555,9 +597,18 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     );
   }
 
-  // The harness reports the turn running, so a message sent now waits.
+  // The harness reports the turn running.
   function isTurnRunning(session: HeldSession): boolean {
     return session.state.running && session.harnessActivity !== 'idle';
+  }
+
+  // A message sent now queues rather than being written.
+  function waits(session: HeldSession): boolean {
+    return (
+      isTurnRunning(session) ||
+      session.state.compaction !== null ||
+      isHoldUp(session)
+    );
   }
 
   // The session's held state while its process runs, or null after logging
@@ -777,8 +828,12 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   }
 
   // Writes the oldest queued message not sent now to the agent; false when
-  // none is queued or the write throws, which puts it back at its place.
+  // none is queued, a hold is up, a compaction runs, or the write throws, which
+  // puts it back at its place.
   function writeNextQueued(session: HeldSession): boolean {
+    if (isHoldUp(session) || session.state.compaction !== null) {
+      return false;
+    }
     const index = session.state.queued.findIndex(isUnsent);
     if (index === -1) {
       return false;
@@ -815,6 +870,82 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       queued === row ? sentRow : queued,
     );
     return true;
+  }
+
+  function setCompaction(
+    session: HeldSession,
+    compaction: SessionCompaction | null,
+  ) {
+    session.state.compaction = compaction;
+    send('compaction', { sessionId: session.state.sessionId, compaction });
+  }
+
+  // Forgets the session's compaction and any hold's reason; sends `compaction`
+  // only when one ran.
+  function clearCompaction(session: HeldSession) {
+    session.compactionReason = null;
+    if (session.state.compaction !== null) {
+      setCompaction(session, null);
+    }
+  }
+
+  // Makes the held row an ordinary unsent row at its place; returns its id, or
+  // null with no hold up.
+  function releaseHeldRow(session: HeldSession): string | null {
+    const row = session.state.queued.find(isHeldRow);
+    if (row === undefined) {
+      return null;
+    }
+    const released = { ...row, holdReason: null };
+    session.rowOrders.set(released, rowOrderOf(session, row));
+    session.state.queued = session.state.queued.map((queued) =>
+      queued === row ? released : queued,
+    );
+    sendQueued(session);
+    return row.id;
+  }
+
+  function compactionStarted(
+    session: HeldSession,
+    event: Extract<AgentEvent, { type: 'compactionStarted' }>,
+  ) {
+    setCompaction(session, {
+      trigger: event.trigger,
+      reason: event.trigger === 'app' ? session.compactionReason : null,
+      startedAt: event.at,
+    });
+  }
+
+  // A replayed end acts on nothing that already happened: the attach's end
+  // drains the queue. A stopped process takes no more.
+  function compactionEnded(
+    session: HeldSession,
+    outcome: Extract<AgentEvent, { type: 'compactionEnded' }>['outcome'],
+    isReplaying: boolean,
+  ) {
+    const { sessionId } = session.state;
+    clearCompaction(session);
+    const releasedId = releaseHeldRow(session);
+    if (releasedId !== null) {
+      log(
+        'chat',
+        `held message ${releasedId} released in ${sessionId} (${outcome})`,
+      );
+    }
+    const writesNext =
+      !isReplaying &&
+      !session.isStopRequested &&
+      session.harnessActivity === 'idle';
+    if (writesNext) {
+      writeNextQueued(session);
+    }
+  }
+
+  // Interrupts the process so the running compaction ends and the held row and
+  // those behind it go out.
+  function skipCompaction(session: HeldSession) {
+    session.process?.interrupt();
+    log('chat', `skipping the compaction in ${session.state.sessionId}`);
   }
 
   // The agent took in the message written under `entryId`: a sent row for it
@@ -980,6 +1111,12 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         if (endsALiveTurn && !replay.isReplaying) {
           readBranch(session);
         }
+        if (isLiveEvent && event.type === 'compactionStarted') {
+          compactionStarted(session, event);
+        }
+        if (isLiveEvent && event.type === 'compactionEnded') {
+          compactionEnded(session, event.outcome, replay.isReplaying);
+        }
       },
       // Returns a written message the agent let go without taking it in.
       messageDropped(entryId, message) {
@@ -1006,6 +1143,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         // The row and its state stay, resting, until the user closes the row.
         session.state.running = false;
         session.process = null;
+        clearCompaction(session);
         showPendingCancelled(session);
         cancelPending(session);
         // During a replay the queue holds only saved messages, which stay saved.
@@ -1089,6 +1227,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         commands: [],
         running: false,
         queued: [],
+        compaction: null,
         returned: [],
         repo: path.basename(projectDir),
         branch: null,
@@ -1112,6 +1251,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       processStarts: 0,
       userSetControls: new Set(opening.userSetControls),
       pendingPicks: new Map(),
+      profileDir: null,
+      compactionReason: null,
       exit: null,
       branchReads: 0,
       processId: opening.processId,
@@ -1236,6 +1377,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     beginProcess(session);
     const started: { process: AgentProcess | null } = { process: null };
     const profileDir = profileDirOf(profile);
+    session.profileDir = profileDir;
     session.processId = `${session.hostId}-${session.processStarts}-${deps.clock.now()}`;
     session.launchControls = controlValuesOf(
       session.state.controls,
@@ -1252,6 +1394,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         profileDir,
         controls: session.launchControls,
         instructions: currentInstructions(),
+        idleCompactMinTokens: currentIdleCompactMinTokens(sessionId),
       },
       processEvents(session, session.processStarts, started, profileDir, {
         isReplaying: false,
@@ -1277,6 +1420,23 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     );
   }
 
+  // The newest reader's value, or null with no reader or after logging its throw.
+  function currentIdleCompactMinTokens(sessionId: string): number | null {
+    const newest = [...idleCompactRegistrations].at(-1);
+    if (newest === undefined) {
+      return null;
+    }
+    try {
+      return newest.read();
+    } catch (error) {
+      log(
+        'chat',
+        `idle compaction threshold failed in ${sessionId}: ${errorText(error)}`,
+      );
+      return null;
+    }
+  }
+
   // Attaches the row to the process the host lists as `hosted`, replaying what
   // it has done so far. The returned promise, also held as `attaching` until it
   // settles, never rejects: it resolves once the result is applied, to a
@@ -1299,6 +1459,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     const started: { process: AgentProcess | null } = { process: null };
     const replay = { isReplaying: true };
     const profileDir = profileDirOf(profile);
+    session.profileDir = profileDir;
     const attaching = harness
       .attach(
         {
@@ -1309,6 +1470,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           profileDir,
           controls: session.launchControls,
           instructions: currentInstructions(),
+          idleCompactMinTokens: null,
         },
         processEvents(
           session,
@@ -1405,6 +1567,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     session.state.running = false;
     session.process = null;
     session.historyBefore = null;
+    clearCompaction(session);
     clearBackground(session);
     showRestingIdle(session);
     send('sessionRested', { sessionId, error: null });
@@ -1648,17 +1811,18 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       log('chat', `send for unknown session ${sessionId} ignored`);
       return;
     }
-    if (isTurnRunning(session)) {
+    if (waits(session)) {
       queue(session, message);
       return;
     }
     await writeAtIdle(session, message, () => sendMessage(sessionId, message));
   }
 
-  // Writes `message` to a session whose harness runs no turn, starting a
-  // resting session's process first; saved queued messages go first. An unheld
-  // row runs the guard first, then `sendAgain`, since the guard may have attached
-  // a process.
+  // Writes `message` to a session that waits on nothing, starting a resting
+  // session's process first; saved queued messages go first. The send gates are
+  // asked once the process runs, and a verdict holds the message instead. A send
+  // that came to wait during the history read queues. An unheld row runs the
+  // guard first, then `sendAgain`, since the guard may have attached a process.
   async function writeAtIdle(
     session: HeldSession,
     message: UserMessage,
@@ -1710,12 +1874,82 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         save();
       }
     }
+    if (waits(session)) {
+      queue(session, message);
+      return;
+    }
+    const holdReason = askSendGates(session, message);
+    if (
+      holdReason !== null &&
+      holdForCompaction(session, message, holdReason)
+    ) {
+      return;
+    }
     if (session.state.queued.some(isUnsent)) {
       queue(session, message);
       writeNextQueued(session);
       return;
     }
     deliverWritten(session, message);
+  }
+
+  // The first verdict's reason, in registration order; null with no running
+  // process to compact or no verdict.
+  function askSendGates(
+    session: HeldSession,
+    message: UserMessage,
+  ): string | null {
+    const { sessionId } = session.state;
+    const { process, profileDir } = session;
+    if (process === null || profileDir === null) {
+      return null;
+    }
+    for (const { gate } of sendGateRegistrations) {
+      try {
+        const verdict = gate({
+          sessionId,
+          hostSessionId: session.hostId,
+          profileDir,
+          text: message.text,
+          now: deps.clock.now(),
+        });
+        if (verdict !== null) {
+          return verdict.reason;
+        }
+      } catch (error) {
+        log('chat', `send gate failed in ${sessionId}: ${errorText(error)}`);
+      }
+    }
+    return null;
+  }
+
+  // Queues `message` as the held row and starts the compaction; false when
+  // `compact` throws, which takes the row back out.
+  function holdForCompaction(
+    session: HeldSession,
+    message: UserMessage,
+    reason: string,
+  ): boolean {
+    const { sessionId } = session.state;
+    const row = appendQueued(session, message, reason);
+    sendQueued(session);
+    log('chat', `send held in ${sessionId}: ${reason}`);
+    session.compactionReason = reason;
+    try {
+      session.process?.compact();
+    } catch (error) {
+      session.compactionReason = null;
+      log(
+        'chat',
+        `compaction not started in ${sessionId}: ${errorText(error)}`,
+      );
+      session.state.queued = session.state.queued.filter(
+        (queued) => queued !== row,
+      );
+      sendQueued(session);
+      return false;
+    }
+    return true;
   }
 
   async function sendAllNow(sessionId: string, message: UserMessage | null) {
@@ -1733,7 +1967,15 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       log('chat', `sendAllNow for unknown session ${sessionId} ignored`);
       return;
     }
-    if (!isTurnRunning(session)) {
+    if (isHoldUp(session)) {
+      if (message !== null) {
+        appendQueued(session, message);
+        sendQueued(session);
+      }
+      skipCompaction(session);
+      return;
+    }
+    if (!waits(session)) {
       if (message !== null) {
         await writeAtIdle(session, message, () =>
           sendAllNow(sessionId, message),
@@ -1767,15 +2009,21 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     log('chat', `queued a message in session ${session.state.sessionId}`);
   }
 
-  function appendQueued(session: HeldSession, message: UserMessage) {
+  function appendQueued(
+    session: HeldSession,
+    message: UserMessage,
+    holdReason: string | null = null,
+  ): QueuedMessage {
     session.queuedCount += 1;
     const row = {
       ...message,
       id: `queued-${session.queuedCount}`,
       sentEntryId: null,
+      holdReason,
     };
     session.rowOrders.set(row, nextHeldOrder(session));
     session.state.queued = [...session.state.queued, row];
+    return row;
   }
 
   function nextHeldOrder(session: HeldSession): number {
@@ -2366,6 +2614,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       session.unheldProcessId = null;
     }
     endForClear(session);
+    clearCompaction(session);
     cancelPending(session);
     returnAllHeld(session);
     const oldHostId = session.hostId;
@@ -2426,6 +2675,10 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   // A resting session's queue holds only saved messages, which `liveFor`
   // skipping it leaves as pending rows.
   function interruptNow(session: HeldSession) {
+    if (isHoldUp(session)) {
+      skipCompaction(session);
+      return;
+    }
     returnUnsent(session);
     session.process?.interrupt();
   }
@@ -2530,6 +2783,10 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         log('chat', `queued message ${queuedId} already sent`);
         return;
       }
+      if (isHeldRow(row)) {
+        skipCompaction(session);
+        return;
+      }
       if (writeRowNow(session, row)) {
         sendQueued(session);
       }
@@ -2615,6 +2872,20 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         dispose() {
           instructionRegistrations.delete(registration);
         },
+      };
+    },
+    addSendGate(gate) {
+      const registration = { gate };
+      sendGateRegistrations.add(registration);
+      return () => {
+        sendGateRegistrations.delete(registration);
+      };
+    },
+    addIdleCompactThreshold(read) {
+      const registration = { read };
+      idleCompactRegistrations.add(registration);
+      return () => {
+        idleCompactRegistrations.delete(registration);
       };
     },
     // The chat state is looked up on every call: sessions builds the tool

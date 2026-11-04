@@ -270,6 +270,7 @@ const queued = (id: string): QueuedMessage => ({
   text: `text of ${id}`,
   images: [],
   sentEntryId: null,
+  holdReason: null,
 });
 const pendingStop = (id: string) => ({ kind: 'queued', message: queued(id) });
 

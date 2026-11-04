@@ -67,10 +67,12 @@ const jpeg: ChatImage = { mediaType: 'image/jpeg', data: 'anBn' };
 const gif: ChatImage = { mediaType: 'image/gif', data: 'Z2lm' };
 
 // `scrollBy` records each step and direction in `scrolls` and answers with
-// `scroll`; `latest` counts each call in `latest`.
+// `scroll`; `latest` counts each call in `latest`. `stateFields` replace the
+// session state's.
 function session(
   running: boolean,
   scroll: TranscriptScroll = { moved: true, atEnd: false, following: false },
+  stateFields: Partial<ChatSessionState> = {},
 ) {
   const counts = {
     scrolls: [] as [ScrollStep, 1 | -1][],
@@ -87,9 +89,11 @@ function session(
     commands: [],
     running,
     queued: [],
+    compaction: null,
     returned: [],
     repo: 'app',
     branch: 'main',
+    ...stateFields,
   };
   const entries = {
     scrollBy(step: ScrollStep, direction: 1 | -1) {
@@ -280,13 +284,61 @@ describe('chat commands', () => {
     expect(run.toastTones).toEqual(['error']);
   });
 
-  it('interrupt_runningWorkingSession_interruptsIt', () => {
-    const run = setUp(session(true));
+  it.each([
+    {
+      given: 'idle with nothing up',
+      fields: { activity: 'idle' },
+      invoked: [],
+      logs: ['[chat] nothing to interrupt in app'],
+    },
+    {
+      given: 'idle with a compaction up',
+      fields: {
+        activity: 'idle',
+        compaction: { trigger: 'app', reason: 'a', startedAt: 1 },
+      },
+      invoked: [['interrupt', 'row-1']],
+      logs: ['[chat] interrupted app'],
+    },
+    {
+      given: 'idle with a held row',
+      fields: {
+        activity: 'idle',
+        queued: [
+          {
+            id: 'q-1',
+            text: 'held',
+            images: [],
+            sentEntryId: null,
+            holdReason: 'a',
+          },
+        ],
+      },
+      invoked: [['interrupt', 'row-1']],
+      logs: ['[chat] interrupted app'],
+    },
+    {
+      given: 'working',
+      fields: { activity: 'working' },
+      invoked: [['interrupt', 'row-1']],
+      logs: ['[chat] interrupted app'],
+    },
+  ] satisfies {
+    given: string;
+    fields: Partial<ChatSessionState>;
+    invoked: string[][];
+    logs: string[];
+  }[])(
+    'interrupt_IdleActivity_InterruptsOnlyWithAHoldOrCompaction: $given',
+    ({ fields, invoked, logs }) => {
+      const run = setUp(session(true, undefined, fields));
 
-    run.handlers.interrupt({});
+      run.handlers.interrupt({});
 
-    expect(run.invoked).toEqual([['interrupt', 'row-1']]);
-  });
+      expect(run.invoked).toEqual(invoked);
+      expect(run.logs).toEqual(logs);
+    },
+  );
 
   it('pickMode_runningSession_sessionBoundPickerSetsTheChoice', () => {
     const run = setUp(session(true));
@@ -374,7 +426,13 @@ describe('chat commands', () => {
   it('toggleEntry_pendingRow_pullsItBack', () => {
     const entries = focusedOnStop({
       kind: 'queued',
-      message: { id: 'q-2', text: 'later', images: [], sentEntryId: null },
+      message: {
+        id: 'q-2',
+        text: 'later',
+        images: [],
+        sentEntryId: null,
+        holdReason: null,
+      },
     });
     const shown = Object.assign(session(true), { entries });
     const run = setUp(shown);
@@ -438,7 +496,13 @@ describe('chat commands', () => {
 
   const pendingStop: EntryListStop = {
     kind: 'queued',
-    message: { id: 'q-2', text: 'later', images: [], sentEntryId: null },
+    message: {
+      id: 'q-2',
+      text: 'later',
+      images: [],
+      sentEntryId: null,
+      holdReason: null,
+    },
   };
 
   const unsentRow = { ...pendingStop.message };

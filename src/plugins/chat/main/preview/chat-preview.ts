@@ -88,6 +88,7 @@ export function createChatPreview(deps: ChatPreviewDeps): ChatPreview {
         commands: [],
         running: true,
         queued: [],
+        compaction: null,
         returned: [],
         repo: PREVIEW_PROJECT_DIR,
         branch: 'main',

@@ -224,16 +224,16 @@ read as `api.settings().minTokens` at each ask; the user writes `"auto-compact":
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Probe Claude's compaction lines](01-probe-claude-compaction.md)
+- [x] [Probe Claude's compaction lines](01-probe-claude-compaction.md)
 
 ### Wave 2
-- [ ] [Compaction contract and Claude adapter](02-compaction-contract-and-claude-adapter.md) — after 01
+- [x] [Compaction contract and Claude adapter](02-compaction-contract-and-claude-adapter.md) — after 01
 
 ### Wave 3
-- [ ] [Fake harness compaction](03-fake-harness-compaction.md) — after 02
+- [x] [Fake harness compaction](03-fake-harness-compaction.md) — after 02
 
 ### Wave 4
-- [ ] [Usage line compacting chip](04-usage-compacting-chip.md) — after 02, 03
+- [x] [Usage line compacting chip](04-usage-compacting-chip.md) — after 02, 03
 - [ ] [Chat send gate and hold](05-chat-send-gate-and-hold.md) — after 02, 03
 
 ### Wave 5
@@ -248,10 +248,22 @@ read as `api.settings().minTokens` at each ask; the user writes `"auto-compact":
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 693cb8d04eb48c87e6cba0406a0e2d850f90db54
 
 ### Groups
+- 01 · 30dee62d · diff read: five subsections and Idle compaction setup present, version lines and Not measured updated; doc only; probe F still running detached · concerns: settings.json env sets the autocompact override past the app's strip; idle compaction may be silent under -p; an automatic attempt can fail at once with too_few_groups
+- 02 · ae15b8b7 · diff read, every Produces found by search; typecheck errors only in tasks 03, 05, 06's files plus activity-runs.test.ts and working-turn.test.ts, given to 06; worker's Vitest and lint green · concerns: refused /compact draws its reason twice; interrupted compact() draws Interrupted and Compaction canceled on a skip; a queued typed /compact behind an interrupted turn gets a false interrupted end; settings.json env may override the idle threshold; interim undefined env until 05
+- 03 · 7fdb2af9 · diff read, every Produces found by search; typecheck has no fake-agent-harness errors; worker's file 108/108 · concerns: compact() does not refuse during a fake workflow turn, which never sets isTurnOpen, so the fake is looser than the contract there; a late-permission guard was added beyond the plan
+- 04 · 0a250f53 · diff read, every Produces found by search; typecheck clean in usage and format-tokens; worker's 191 usage tests green; self-test and capture deferred to the lead's run after 05 · concerns: the compacting step pins cache 42m, so a run reaching it 30 s after the seed reads 41m; start.ts compactions wiring has no unit test and the self-test settles it; box focus after the narrow group is assumed
 ### Contract changes
+- Compaction state and events: claude-code-harness.ts handleLine → session-fold.ts SessionFoldState.compaction, with new exports foldProcessClosed and nextFoldDeadline, plus compact() writing under appCommandUuid so a replay reads it as the app's · why: at the tip the line logic lives in the fold the session host extracted, and an attach replays it · consumers: none outside the adapter · group 02
 ### Rulings
+- Worktree run on branch auto-compact from main 693cb8d0, at the user's word, driven by absolute paths since EnterWorktree needs a consent dialog this session cannot show; node_modules is a symlink to the main clone's, as foundation-sweeps does; the Unity boundary in worktree-runs.md does not apply, so typecheck, Vitest and the drive run here — wrong only if a test needs the main tree · lead
+- Probes measure the installed Claude 2.1.318, not the plan's 2.1.317: the auto-updater moved it, the app launches what is installed, and every lever the plan names is in the 2.1.318 binary — a 2.1.317-only behaviour would go unmeasured · lead
+- Wave 2 does not wait for probe F's 65 minutes: task 02 ships the env pass-through and reads idle compaction as trigger harness whatever F shows, so F's result rewords docs only and lands when it ends — task 02 would need a change if F shows a line shape A did not · lead
+- Decoder drops the Compaction failed notice for compact_error API Error: Request was aborted. (the plan's row for a distinct interrupt text) and for too_few_groups (probe A: a routine automatic attempt that fails at once while the turn goes on), since an error notice there reports nothing wrong — other errors keep it · lead · group 01
+- Task 01 no-compaction branch stays as a guard though probe E shows a refused /compact prints compacting then a failed status: that path is what the table names, and the terminal-frame path still covers a command that never compacts — dead code if Claude never does this · lead
+- Missed consumers activity-runs.test.ts and working-turn.test.ts go to task 06 with the other page entry-kind tables — the same switch, and 06 owns that folder — none if 06 misses them, since task 09's whole typecheck names them · lead
+- A compact(); interrupt() in one tick still emits compactionStarted, paired with the interrupter's end, since the row requires exactly one of each · group 03 · group 03
 ### Review rounds
 ### Test gate

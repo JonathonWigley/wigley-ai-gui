@@ -1,6 +1,6 @@
 # 04 — Usage line compacting chip
 
-Status: not started
+Status: done
 Type: Task
 Wave: 4 · Depends on: 02, 03
 Plan: [plan.md](plan.md)
@@ -191,3 +191,4 @@ These override any earlier line of this task that they contradict.
 
 ## Proof
 
+Commit 0a250f53 · proof: diff read, every Produces found by search; typecheck clean in usage and format-tokens; worker's 191 usage tests green; self-test and capture deferred to the lead's run after 05 · concerns: the compacting step pins cache 42m, so a run reaching it 30 s after the seed reads 41m; start.ts compactions wiring has no unit test and the self-test settles it; box focus after the narrow group is assumed

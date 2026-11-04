@@ -1,6 +1,6 @@
 # 02 — Compaction contract and Claude adapter
 
-Status: not started
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -397,4 +397,4 @@ These override any earlier line of this task that they contradict.
 
 ## Proof
 
-<written by wigley:make: commit sha, proof result, concerns; empty until the group lands>
+Commit ae15b8b7 · proof: diff read, every Produces found by search; typecheck errors only in tasks 03, 05, 06's files plus activity-runs.test.ts and working-turn.test.ts, given to 06; worker's Vitest and lint green · concerns: refused /compact draws its reason twice; interrupted compact() draws Interrupted and Compaction canceled on a skip; a queued typed /compact behind an interrupted turn gets a false interrupted end; settings.json env may override the idle threshold; interim undefined env until 05
