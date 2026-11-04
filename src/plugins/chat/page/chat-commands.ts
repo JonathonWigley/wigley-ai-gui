@@ -21,6 +21,7 @@ import type {
 } from '../contract';
 import type { chatManifest } from '../manifest';
 import type { CloseConfirm, ReasonBox } from './chat-dialogs';
+import type { WriteClipboard } from './clipboard';
 import type { EntryListStop } from './entry-list';
 import { controlText, oldestPendingPermission } from './chat-state';
 import type {
@@ -89,7 +90,7 @@ export interface ChatCommandDeps {
   signIn: SignInDialog;
   slashCommands: Pick<SlashCommands, 'match'>;
   viewer: ImageViewer;
-  writeClipboard(text: string): Promise<void>;
+  writeClipboard: WriteClipboard;
   toast(text: string, tone: ToastTone): void;
   log: Log;
 }
@@ -180,8 +181,12 @@ export function chatCommandHandlers(
     nextMessage: inSession((session) => moveMessage(session, 1, log)),
     prevMessage: inSession((session) => moveMessage(session, -1, log)),
     toggleRange: inSession((session) => {
-      session.entries.toggleRange();
-      log('chat', 'toggled the range');
+      log(
+        'chat',
+        session.entries.toggleRange()
+          ? 'toggled the range'
+          : `no entries in ${session.name}`,
+      );
     }),
     cancelRange: inSession((session) => {
       log(
@@ -245,9 +250,10 @@ export function chatCommandHandlers(
           : `${result} ${kind} entry`,
       );
     }),
+    // An open range is intent to copy, so a permission landing on it waits.
     allowOrCopy: inSession((session) => {
       const pending = oldestPendingPermission(session.state.entries);
-      if (pending === null) {
+      if (pending === null || session.entries.isRangeOpen()) {
         copySelection(deps, session);
         return;
       }

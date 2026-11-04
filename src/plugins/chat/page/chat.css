@@ -1,7 +1,6 @@
 /* A session's Chat tab fills its session's sheet: a row of `.chat-main` and the
-   session hub, each of the tab and `.chat-main` a container for width rules. In
-   `.chat-main` the entries scroll under the floating composer, which
-   `chat-view.ts` measures into `--chat-composer-height` (unitless pixels) on the
+   session hub, the tab a container for width rules. In `.chat-main` the entries
+   scroll under the floating composer, which `chat-view.ts` measures into `--chat-composer-height` (unitless pixels) on the
    tab so the last entry stops above it. */
 .chat-tab {
   container-name: chat-tab;
@@ -11,8 +10,6 @@
 }
 
 .chat-main {
-  container-name: chat-main;
-  container-type: inline-size;
   flex: 1;
   height: 100%;
   min-width: 0;
@@ -151,8 +148,10 @@
    entry and no box frame is marked; while a composer part's stop holds the
    cursor no entry is marked either. A range tints each of its stops. */
 .chat-entry-slot {
+  --chat-slot-gutter: var(--wg-space-2);
+
   margin: var(--wg-space-1) 0;
-  padding: var(--wg-space-1) var(--wg-space-2);
+  padding: var(--wg-space-1) var(--chat-slot-gutter);
 }
 
 .chat-entry-slot.is-cursor,
@@ -163,49 +162,83 @@
 /* A paragraph starts at its text, so its box reaches into the slot's gutter to
    keep the bar off the first glyph; the text stays where it was. */
 .chat-entries p[data-md-lines] {
-  margin-inline-start: calc(var(--wg-space-2) * -1);
-  padding-inline-start: var(--wg-space-2);
+  margin-inline-start: calc(var(--chat-slot-gutter) * -1);
+  padding-inline-start: var(--chat-slot-gutter);
 }
 
-/* A list item's marker sits outside its box and follows its edge, so the item
-   keeps its box, and a pseudo-element from the same gutter to that edge draws
-   the bar left of the marker and carries the tint behind it. */
-.chat-entries li[data-md-lines] {
-  --chat-item-gutter: calc(var(--wg-space-6) + var(--wg-space-2));
-
+/* A pseudo-element draws the bar and tint of a stop whose own box cannot show
+   them. A list item's marker sits outside its box and follows its edge, so the
+   pseudo-element runs from the same gutter to that edge, left of the marker and
+   behind it. A contributed fence's child and a changes list's items paint over
+   their box, so it lies over the whole box, above those children. */
+.chat-entries :where(li, .md-fence, .md-changes)[data-md-lines] {
+  isolation: isolate;
   position: relative;
 }
 
-.chat-entries li[data-md-lines]:is(.is-cursor, .is-range)::before {
-  bottom: 0;
-  content: '';
-  left: calc(var(--chat-item-gutter) * -1);
-  position: absolute;
-  top: 0;
-  width: var(--chat-item-gutter);
+.chat-entries li[data-md-lines] {
+  --chat-mark-left: calc(
+    (var(--md-list-indent) + var(--chat-slot-gutter)) * -1
+  );
+  --chat-mark-right: 100%;
 }
 
-.chat-entries li[data-md-lines].is-cursor {
+.chat-entries :where(.md-fence, .md-changes)[data-md-lines] {
+  --chat-mark-left: 0;
+  --chat-mark-right: 0;
+}
+
+.chat-entries
+  :where(li, .md-fence, .md-changes)[data-md-lines]:is(
+    .is-cursor,
+    .is-range
+  )::before {
+  bottom: 0;
+  content: '';
+  left: var(--chat-mark-left);
+  pointer-events: none;
+  position: absolute;
+  right: var(--chat-mark-right);
+  top: 0;
+  z-index: 1;
+}
+
+.chat-entries :where(li, .md-fence, .md-changes)[data-md-lines].is-cursor {
   box-shadow: none;
 }
 
-.chat-entries li[data-md-lines].is-cursor::before {
+.chat-entries
+  :where(li, .md-fence, .md-changes)[data-md-lines].is-cursor::before {
   box-shadow: inset var(--wg-indicator-width) 0 0 var(--wg-focus-border);
 }
 
 .chat-tab.is-box-focused .chat-entry-slot.is-cursor,
 .chat-tab.is-box-focused [data-md-lines].is-cursor,
-.chat-tab.is-box-focused li[data-md-lines].is-cursor::before,
+.chat-tab.is-box-focused [data-md-lines].is-cursor::before,
 .chat-tab.is-at-stop .chat-entry-slot.is-cursor,
 .chat-tab.is-at-stop [data-md-lines].is-cursor,
-.chat-tab.is-at-stop li[data-md-lines].is-cursor::before {
+.chat-tab.is-at-stop [data-md-lines].is-cursor::before {
   box-shadow: none;
 }
 
 .chat-entry-slot.is-range,
 [data-md-lines].is-range,
-.chat-entries li[data-md-lines].is-range::before {
+.chat-entries
+  :where(li, .md-fence, .md-changes)[data-md-lines].is-range::before {
   background: var(--wg-accent-tint);
+}
+
+.chat-entries :where(.md-fence, .md-changes)[data-md-lines].is-range {
+  background: none;
+}
+
+/* A rule has no box to mark, so it takes the mark's colour itself. */
+.chat-entries hr[data-md-lines].is-range {
+  border-top-color: var(--wg-accent-tint);
+}
+
+.chat-tab:not(.is-box-focused, .is-at-stop) hr[data-md-lines].is-cursor {
+  border-top-color: var(--wg-focus-border);
 }
 
 @media (max-width: 800px) {
@@ -351,14 +384,6 @@
 
 .chat-type-hint.is-box-focused {
   visibility: hidden;
-}
-
-/* The hint keeps `i` and `a` when `.chat-main` is too narrow for the cursor's
-   keys. */
-@container chat-main (width < 680px) {
-  .chat-cursor-keys {
-    display: none;
-  }
 }
 
 /* The running indicator sits at the line's end before send, and keeps its

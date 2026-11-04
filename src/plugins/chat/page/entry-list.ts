@@ -110,18 +110,21 @@ export interface TranscriptScroll extends ContentScroll {
 // stop's slot, is marked `is-cursor`. A range opens at an anchor and runs to the
 // cursor, each of its stops marked `is-range`, and can cross messages. A following
 // focus moves to the latest stop as the list changes, except one on the last
-// row's activity line, which stays on it while the run is open and grows and no
-// pending row follows it. After every change, and whenever the list's own box
-// or any slot's box resizes, a following focus scrolls the list to its bottom;
+// row's activity line, which stays on it while the run is open and grows, no
+// pending row follows it and the line stays on screen. After every change, and
+// whenever the list's own box or any slot's box resizes, a following focus
+// scrolls the list to its bottom;
 // a hidden list does not scroll, so its tab calls `scrollToFocus` each time it
 // shows. Any scroll of a shown list (wheel, trackpad, scrollbar or keys) that
 // comes to rest off the bottom stops following, and one that lands on the
 // bottom follows again; a cursor it leaves outside the visible band (the list's
 // box less its bottom scroll padding) moves to the nearest stop inside it, a
 // stop being inside once it lies wholly in the band, or overlaps a band it is
-// too tall to fit. A plain click moves the cursor to the block or slot under it
-// without scrolling; a click ending a text selection, on a link, control or
-// pending row, or on what has no stop leaves it.
+// too tall to fit, and with no such stop to the nearest that overlaps the band.
+// So a run that overflows moves a following cursor off its line. A plain click
+// moves the cursor to the block or slot under it without scrolling; a click
+// ending a text selection, on a link, control or pending row, or on what has no
+// stop leaves it.
 // While the session works on its turn, the live run's line time ticks once a
 // second.
 export interface EntryList {
@@ -152,13 +155,16 @@ export interface EntryList {
   isAtLastStop(): boolean;
   // Follows the last row, the newest pending row, else an entry's last block,
   // an entry, or a run's line whether the run is open or not, and scrolls to
-  // the bottom. An open range stays open.
+  // the bottom; a scroll that leaves that line off screen moves the cursor as
+  // any scroll does. An open range stays open.
   latest(): void;
   // Focuses the first stop and scrolls to the top; the focused stop, null
   // with no stops. An open range stays open.
   first(): EntryListStop | null;
-  // Opens a range at the cursor, or closes the open one.
-  toggleRange(): void;
+  // Opens a range at the cursor, or closes the open one; false with no cursor,
+  // which changes nothing.
+  toggleRange(): boolean;
+  isRangeOpen(): boolean;
   // Closes the open range; true when one was open.
   cancelRange(): boolean;
   // The source of the range, else of the cursor's stop: a block's own lines, a
@@ -386,10 +392,10 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     const isBottom = scroll === 'bottom' || focus.following;
     if (scroll === 'top') {
       list.scrollTop = 0;
-    } else if (scroll === 'slot' && focus.stopId !== null) {
-      stopElement(focus.stopId)?.scrollIntoView({ block: 'nearest' });
     } else if (isBottom) {
       list.scrollTop = list.scrollHeight;
+    } else if (scroll === 'slot' && focus.stopId !== null) {
+      stopElement(focus.stopId)?.scrollIntoView({ block: 'nearest' });
     }
   };
 
@@ -531,17 +537,26 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     }
   };
 
-  // The stop nearest the cursor inside the list's visible band; null when the
-  // cursor is inside it, or no stop is.
+  // The stop nearest the cursor inside the list's visible band, else, with no
+  // stop inside, nearest it overlapping the band; null when the cursor needs no
+  // move, or no stop shows.
   const nearestStopInBand = (direction: 1 | -1) => {
-    if (focus.stopId === null) {
+    const { stopId } = focus;
+    if (stopId === null) {
       return null;
     }
     const band = visibleBand(list);
-    return nearestVisibleStop(order, focus.stopId, direction, (stopId) => {
-      const stop = stopElement(stopId);
-      return stop !== undefined && isInsideBand(stop, band);
-    });
+    const stopsWhere =
+      (isInBand: (box: DOMRect, band: Band) => boolean) => (id: string) => {
+        const stop = stopElement(id);
+        return (
+          stop !== undefined && isInBand(stop.getBoundingClientRect(), band)
+        );
+      };
+    return (
+      nearestVisibleStop(order, stopId, direction, stopsWhere(isInsideBand)) ??
+      nearestVisibleStop(order, stopId, direction, stopsWhere(overlapsBand))
+    );
   };
 
   const onListScroll = () => {
@@ -565,7 +580,7 @@ export function createEntryList(deps: EntryListDeps): EntryList {
   // blocks has no stop of its own, so `order` refuses its padding.
   const stopIdOfTarget = (target: Element) => {
     const hit = target.closest('.chat-entry-slot');
-    const slotId = [...slots, ...runSlots, ...queuedSlots].find(
+    const slotId = [...slots, ...runSlots].find(
       ([, slot]) => slot.element === hit,
     )?.[0];
     if (slotId === undefined) {
@@ -674,7 +689,9 @@ export function createEntryList(deps: EntryListDeps): EntryList {
     toggleRange() {
       focus = toggleAnchor(focus);
       drawFocus('marks');
+      return focus.stopId !== null;
     },
+    isRangeOpen: () => focus.anchorId !== null,
     cancelRange() {
       const wasOpen = focus.anchorId !== null;
       focus = clearAnchor(focus);
@@ -860,12 +877,15 @@ function visibleBand(list: HTMLElement): Band {
   return { top: box.top, bottom: box.bottom - padding };
 }
 
-// Whether `stop` shows: wholly in the band, or, too tall to fit, any of it.
-function isInsideBand(stop: HTMLElement, band: Band): boolean {
-  const box = stop.getBoundingClientRect();
+function overlapsBand(box: DOMRect, band: Band): boolean {
+  return box.bottom > band.top && box.top < band.bottom;
+}
+
+// Whether a stop shows: wholly in the band, or, too tall to fit, any of it.
+function isInsideBand(box: DOMRect, band: Band): boolean {
   const isTallerThanBand = box.height > band.bottom - band.top;
   if (isTallerThanBand) {
-    return box.bottom > band.top && box.top < band.bottom;
+    return overlapsBand(box, band);
   }
   return (
     box.top >= band.top - BAND_EDGE_TOLERANCE_PX &&
@@ -896,7 +916,7 @@ function linesOfBlock(block: HTMLElement): [start: number, end: number] {
   return [start, end];
 }
 
-// Whether a block's lines end past `text`: its layout drew other text.
+// Whether a block's lines end past `text`, as when a layout drew a longer text.
 function isAnyBlockPastText(
   blocks: readonly HTMLElement[],
   text: string,

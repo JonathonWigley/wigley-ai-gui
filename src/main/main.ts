@@ -577,6 +577,7 @@ async function configStoreDeps(homeDir: string): Promise<ConfigStoreDeps> {
     platform,
     homeDir: await files.realPath(homeDir),
     appInstance,
+    runMode,
     log: pageLog.log,
   };
 }

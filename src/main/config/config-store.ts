@@ -4,6 +4,7 @@ import type { Files, FileWatch } from '../../contracts/files';
 import type { Keymap } from '../../contracts/keymap';
 import type { Log } from '../../contracts/log';
 import type { Platform } from '../../contracts/platform';
+import type { RunMode } from '../../contracts/plugin';
 import type { AppConfig, ConfigProblem } from '../../contracts/settings';
 import type { Theme } from '../../contracts/theme';
 import { errorText } from '../../shared/error-text';
@@ -44,6 +45,7 @@ export interface ConfigStoreDeps extends ConfigCheckDeps {
   platform: Platform;
   homeDir: string;
   appInstance: AppInstance;
+  runMode: RunMode;
   log: Log;
 }
 
@@ -182,6 +184,7 @@ export async function loadConfigStore(
       platform: deps.platform,
       homeDir: deps.homeDir,
       appInstance: deps.appInstance,
+      runMode: deps.runMode,
       problems: [
         ...(watchProblem === null ? [] : [watchProblem]),
         ...inServedOrder(problems),

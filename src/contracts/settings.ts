@@ -2,7 +2,7 @@ import type { AppInstance } from './app-instance';
 import type { CommandId } from './commands';
 import type { Keymap } from './keymap';
 import type { Platform } from './platform';
-import type { CommandInfo, ScopeInfo } from './plugin';
+import type { CommandInfo, RunMode, ScopeInfo } from './plugin';
 import type { Theme } from './theme';
 
 // `system` follows the OS's reduce-transparency preference.
@@ -67,6 +67,7 @@ export interface AppConfig {
   homeDir: string;
   // Which app runs, the stable or the dev one.
   appInstance: AppInstance;
+  runMode: RunMode;
   // Every config file that could not be applied; empty when none.
   problems: ConfigProblem[];
 }

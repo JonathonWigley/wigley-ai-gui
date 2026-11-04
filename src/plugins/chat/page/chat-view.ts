@@ -110,6 +110,7 @@ export interface ChatSession extends SessionRef {
     | 'latest'
     | 'first'
     | 'toggleRange'
+    | 'isRangeOpen'
     | 'cancelRange'
     | 'selectedSource'
     | 'focused'

@@ -135,6 +135,7 @@ describe('applySelfTestConfig', () => {
         displayName: 'Auri Dev',
         isDev: true,
       },
+      runMode: 'live',
       problems: [],
     };
 

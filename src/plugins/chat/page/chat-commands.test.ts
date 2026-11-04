@@ -716,42 +716,57 @@ describe('chat commands', () => {
     {
       command: 'nextMessage',
       calls: ['moveToMessage 1'],
+      hasStop: true,
       logs: ['[chat] focused activity line'],
     },
     {
       command: 'prevMessage',
       calls: ['moveToMessage -1'],
+      hasStop: true,
       logs: ['[chat] focused activity line'],
     },
     {
       command: 'toggleRange',
       calls: ['toggleRange'],
+      hasStop: true,
       logs: ['[chat] toggled the range'],
     },
-  ] as const)('$command calls the list', ({ command, calls, logs }) => {
-    const called: string[] = [];
-    const entries = {
-      isAtLastStop: () => true,
-      moveToMessage(step: 1 | -1) {
-        called.push(`moveToMessage ${step}`);
-        return activityStop;
-      },
-      toggleRange: () => called.push('toggleRange'),
-    } as Partial<ChatSession['entries']> as ChatSession['entries'];
-    const shown = Object.assign(session(true), {
-      entries,
-      enterStop() {
-        called.push('enterStop');
-        return 'agent-strip.strip';
-      },
-    });
-    const run = setUp(shown);
+    {
+      command: 'toggleRange',
+      calls: ['toggleRange'],
+      hasStop: false,
+      logs: ['[chat] no entries in app'],
+    },
+  ] as const)(
+    '$command calls the list',
+    ({ command, calls, hasStop, logs }) => {
+      const called: string[] = [];
+      const entries = {
+        isAtLastStop: () => true,
+        moveToMessage(step: 1 | -1) {
+          called.push(`moveToMessage ${step}`);
+          return activityStop;
+        },
+        toggleRange() {
+          called.push('toggleRange');
+          return hasStop;
+        },
+      } as Partial<ChatSession['entries']> as ChatSession['entries'];
+      const shown = Object.assign(session(true), {
+        entries,
+        enterStop() {
+          called.push('enterStop');
+          return 'agent-strip.strip';
+        },
+      });
+      const run = setUp(shown);
 
-    run.handlers[command]({});
+      run.handlers[command]({});
 
-    expect(called).toEqual(calls);
-    expect(run.logs).toEqual(logs);
-  });
+      expect(called).toEqual(calls);
+      expect(run.logs).toEqual(logs);
+    },
+  );
 
   it.each([
     {
@@ -785,6 +800,7 @@ describe('chat commands', () => {
     {
       given: 'a pending permission',
       stateEntries: [pendingPermission],
+      isRangeOpen: false,
       selected: { text: 'kept', blockCount: 1 },
       failure: undefined,
       allowed: ['permission-1'],
@@ -795,8 +811,22 @@ describe('chat commands', () => {
       logs: [],
     },
     {
+      given: 'a pending permission and an open range',
+      stateEntries: [pendingPermission],
+      isRangeOpen: true,
+      selected: { text: 'a\n\nb', blockCount: 2 },
+      failure: undefined,
+      allowed: [],
+      clipboard: ['a\n\nb'],
+      toasts: ['Copied 2 blocks'],
+      tones: ['success'],
+      cancels: 1,
+      logs: ['[chat] copied 2 blocks in app'],
+    },
+    {
       given: 'no pending permission and a cursor block',
       stateEntries: [],
+      isRangeOpen: false,
       selected: { text: 'one block', blockCount: 1 },
       failure: undefined,
       allowed: [],
@@ -809,6 +839,7 @@ describe('chat commands', () => {
     {
       given: 'an open range of three blocks',
       stateEntries: [],
+      isRangeOpen: true,
       selected: { text: 'a\n\nb\n\nc', blockCount: 3 },
       failure: undefined,
       allowed: [],
@@ -821,6 +852,7 @@ describe('chat commands', () => {
     {
       given: 'an open range and a clipboard write that fails',
       stateEntries: [],
+      isRangeOpen: true,
       selected: { text: 'a\n\nb', blockCount: 2 },
       failure: new Error('denied'),
       allowed: [],
@@ -833,6 +865,7 @@ describe('chat commands', () => {
     {
       given: 'a stop with nothing to copy',
       stateEntries: [],
+      isRangeOpen: false,
       selected: null,
       failure: undefined,
       allowed: [],
@@ -846,6 +879,7 @@ describe('chat commands', () => {
     'allowOrCopy_$given',
     async ({
       stateEntries,
+      isRangeOpen,
       selected,
       failure,
       allowed,
@@ -857,6 +891,7 @@ describe('chat commands', () => {
     }) => {
       let cancelled = 0;
       const entries = {
+        isRangeOpen: () => isRangeOpen,
         selectedSource: () => selected,
         cancelRange() {
           cancelled++;

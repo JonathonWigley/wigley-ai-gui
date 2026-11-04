@@ -283,6 +283,12 @@ const VISUAL_STEPS: SelfTestStep[] = [
     why: 'The result is no stop, so focus follows the reply holding both visuals.',
   },
   {
+    keys: ['v'],
+    expect: '[visual] visual overlay showing 2 of 2',
+    why: "From the rest position, the reply's last block, v opens on the second visual.",
+  },
+  { keys: ['Escape'], expect: '[visual] visual overlay closed' },
+  {
     keys: ['K', 'J', 'v'],
     expect: '[visual] visual overlay showing 1 of 2',
     why: "Focus rests on the reply's last block, the second visual, where v would open on that one, so K J first moves the cursor to the reply's first block.",
@@ -347,6 +353,22 @@ const BLOCK_CURSOR_STEPS: SelfTestStep[] = [
     keys: ['Escape'],
     expect: '[chat] no range to cancel in chat-second',
     why: 'The range is gone, so Esc only says so.',
+  },
+  { keys: ['V'], expect: '[chat] toggled the range' },
+  {
+    keys: ['V'],
+    expect: '[chat] toggled the range',
+    why: 'A second V ends the range the first opened.',
+  },
+  {
+    keys: ['Escape'],
+    expect: '[chat] no range to cancel in chat-second',
+    why: 'Esc finds no range, so the second V ended it.',
+  },
+  {
+    keys: ['V', 'j', 'y'],
+    expect: '[chat] copied 2 blocks in chat-second',
+    why: "y copies the range's two blocks, through the self-test's clipboard, which leaves the system clipboard alone.",
   },
   { keys: ['<A-S-o>'], expect: '[chat] Chat tab shown in chat-selftest' },
 ];
@@ -747,12 +769,12 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'visuals',
-    why: "fake: visual draws the settings mockup and the flowchart in chat-second's transcript as live visuals, the second block first showing as the drawing card while the fake holds it open; v on the reply's first block opens the overlay on its first visual, l and h step through both and stop at either end, and Esc closes it.",
+    why: "fake: visual draws the settings mockup and the flowchart in chat-second's transcript as live visuals, the second block first showing as the drawing card while the fake holds it open; v from the rest position opens the overlay on the second visual, and on the reply's first block on its first visual, l and h step through both and stop at either end, and Esc closes it.",
     steps: VISUAL_STEPS,
   },
   {
     name: 'block cursor',
-    why: "Over fake: blocks' reply of paragraphs, a list and code in chat-second: J and K jump between messages, j and k move by block inside one, V j opens a range that page Esc cancels, and page Esc with no range logs that there is none.",
+    why: "Over fake: blocks' reply of paragraphs, a list and code in chat-second: J and K jump between messages, j and k move by block inside one, V j opens a range that page Esc cancels, page Esc with no range logs that there is none, a second V ends a range, and V j y copies two blocks.",
     steps: BLOCK_CURSOR_STEPS,
   },
   {

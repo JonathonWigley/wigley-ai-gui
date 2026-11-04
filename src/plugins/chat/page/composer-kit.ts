@@ -137,7 +137,7 @@ interface DockPart {
 
 // The status line's parts holding keys, each anchored once in `chat.chat`:
 // the type hint (`i` and `a`, then `.chat-cursor-keys`, the page keys that read
-// the entries: `J`, `K`, `V` and `y`, hidden in a narrow `.chat-main`), the
+// the entries: `J`, `K`, `V` and `y`, with no labels), the
 // running indicator (dot and interrupt keys), Send, and a key span per pick
 // command, which the first chip running it holds.
 interface StatusLineParts {
@@ -497,22 +497,10 @@ function createStatusLineParts(
       ...scope,
       label: 'to append',
     }),
-    deps.keys.anchor(nextMessageKey, chatCommand('nextMessage'), {
-      ...scope,
-      label: true,
-    }),
-    deps.keys.anchor(prevMessageKey, chatCommand('prevMessage'), {
-      ...scope,
-      label: true,
-    }),
-    deps.keys.anchor(rangeKey, chatCommand('toggleRange'), {
-      ...scope,
-      label: 'range',
-    }),
-    deps.keys.anchor(copyKey, chatCommand('allowOrCopy'), {
-      ...scope,
-      label: 'to copy or allow',
-    }),
+    deps.keys.anchor(nextMessageKey, chatCommand('nextMessage'), scope),
+    deps.keys.anchor(prevMessageKey, chatCommand('prevMessage'), scope),
+    deps.keys.anchor(rangeKey, chatCommand('toggleRange'), scope),
+    deps.keys.anchor(copyKey, chatCommand('allowOrCopy'), scope),
     deps.keys.anchor(sendKey, chatCommand('send'), scope),
   ];
   const chipKeys = new Map<ChatCommandName, HTMLElement>();

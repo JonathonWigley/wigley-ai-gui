@@ -33,6 +33,7 @@ import {
 import { createCloseConfirm, createReasonBox } from './chat-dialogs';
 import { createChatLayouts } from './chat-layouts';
 import { addClearCommands } from './clear-commands';
+import { clipboardWriter } from './clipboard';
 import { mountChatView } from './chat-view';
 import { createImageViewer } from './image-viewer';
 import { createMainAgentPart } from './main-agent-part';
@@ -117,6 +118,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       run,
       pushScope: () => api.keys.pushScope('confirm'),
     });
+    const writeClipboard = clipboardWriter(services.runMode);
     const signIn = createSignInDialog({
       ...partDeps,
       overlay: api.areas.overlay,
@@ -124,6 +126,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       run,
       pushScope: () => api.keys.pushScope('signIn'),
       channel: api.channel,
+      writeClipboard,
       toast: services.toast,
     });
     const slashCommands = createSlashCommands();
@@ -278,7 +281,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
           signIn,
           slashCommands,
           viewer,
-          writeClipboard: (text) => navigator.clipboard.writeText(text),
+          writeClipboard,
           toast: services.toast,
           log: services.log,
         }),

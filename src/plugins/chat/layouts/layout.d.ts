@@ -340,8 +340,8 @@ export interface ComposerKit extends BaseKit {
 }
 // The status line's pieces. Each piece holding keys places the same element on every draw.
 export interface StatusLineKit extends BaseKit {
-  // The `i` and `a` prompts, then `J`, `K`, `V` and `y`, which hide in a narrow tab; hidden, keeping its space, while the
-  // box has focus.
+  // The `i` and `a` prompts, then `J`, `K`, `V` and `y` with no labels; hidden, keeping its space, while the box has
+  // focus.
   typeHint(parent: HTMLElement): HTMLElement;
   // One chip for the model and effort: the model control's label, then `<model> · <effort>` (the model alone while
   // `effort` is null). It opens the model picker and holds the model and effort pick keys (the model's alone while
@@ -460,7 +460,10 @@ export interface SideSectionKit extends BaseKit {
 }
 
 // Builds one entry into `parent` from the entry and a kit made for that entry: the builder appends its element to
-// `parent` and returns it in `element`.
+// `parent` and returns it in `element`. A `user` or `assistant` builder gets one cursor stop per block when it draws
+// the text with `kit.markdown`; an entry with no marked block has one stop, and a body drawn later is not read until
+// the next redraw. Copy reads the entry's source lines by a block's position, so copy per block needs the layout to
+// draw `input.text` itself.
 export type EntryBuilder<K extends EntryKind> = (
   parent: HTMLElement,
   input: EntryInput<K>,

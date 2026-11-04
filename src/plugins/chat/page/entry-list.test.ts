@@ -1492,6 +1492,22 @@ describe('block stops', () => {
     expect(list.focusedElement()).toBe(asFake(list.element).children[1]);
   });
 
+  it('move_OntoTheLastStop_ScrollsToTheBottomAndFollows', () => {
+    const { list, put } = setUpList(blocksShown());
+    put(assistantText('a', 'one\n\ntwo'));
+    list.move(-1);
+    const scrolled = vi.spyOn(FakeElement.prototype, 'scrollIntoView');
+    const scroller = asFake(list.element) as FocusFakeElement & {
+      scrollHeight: number;
+    };
+    scroller.scrollHeight = 900;
+
+    list.move(1);
+
+    expect(scrolled).not.toHaveBeenCalled();
+    expect(scroller.scrollTop).toBe(900);
+  });
+
   it('marks_CursorAndRange_DrawnOnTheStopsAndClearedAfter', () => {
     const { list, put } = setUpList(blocksShown());
     put(assistantText('a', fourBlocks));
@@ -1528,12 +1544,21 @@ describe('block stops', () => {
     const { list, put } = setUpList(blocksShown());
     put(assistantText('a', fourBlocks));
 
-    list.toggleRange();
+    expect(list.toggleRange()).toBe(true);
+    expect(list.isRangeOpen()).toBe(true);
     list.toggleRange();
     list.move(-1);
 
+    expect(list.isRangeOpen()).toBe(false);
     expect(marksOf(list, 'is-range')).toEqual([]);
     expect(list.cancelRange()).toBe(false);
+  });
+
+  it('toggleRange_NoStops_FalseAndNoRange', () => {
+    const { list } = setUpList(blocksShown());
+
+    expect(list.toggleRange()).toBe(false);
+    expect(list.isRangeOpen()).toBe(false);
   });
 
   it.each<{
@@ -1759,6 +1784,15 @@ describe('block stops', () => {
       following: false,
     },
     {
+      case: 'every stop straddling an edge takes the nearest that overlaps',
+      cursor: 0,
+      from: 100,
+      to: 300,
+      boxes: [above, { top: -30, height: 90 }, { top: 60, height: 90 }, below],
+      focused: 'a#1',
+      following: false,
+    },
+    {
       case: 'nothing in the band leaves the cursor',
       cursor: 0,
       from: 100,
@@ -1830,6 +1864,42 @@ describe('block stops', () => {
     scroller.scrollHeight = 2000;
     list.followBottom();
     expect(scroller.scrollTop === 2000).toBe(row.following);
+  });
+
+  it('scroll_OverflowingOpenLastRun_MovesAFollowingCursorOffItsLineAndFollows', () => {
+    const { list, put } = setUpList(activityShown());
+    const scroller = asFake(list.element) as FocusFakeElement & {
+      scrollHeight: number;
+      clientHeight: number;
+    };
+    scroller.rectHeight = 100;
+    scroller.clientHeight = 100;
+    [user('u1'), tool('t1'), tool('t2')].forEach(put);
+    list.toggleFocused();
+    const line = slotOf(list.element, 'chat-activity-slot') as FocusFakeElement;
+    const firstStep = slotOf(
+      list.element,
+      'chat-step-slot',
+    ) as FocusFakeElement;
+    const lastStep = slotOf(
+      list.element,
+      'chat-step-slot',
+      1,
+    ) as FocusFakeElement;
+    for (const offScreen of [line, firstStep]) {
+      offScreen.rectTop = above.top;
+      offScreen.rectHeight = above.height;
+    }
+    lastStep.rectTop = inBand.top;
+    lastStep.rectHeight = inBand.height;
+    scroller.scrollHeight = 400;
+
+    scroller.scrollTop = 300;
+    scroller.fire('scroll');
+
+    expect(list.focused()).toEqual({ kind: 'entry', entry: tool('t2') });
+    put(tool('t3'));
+    expect(list.focused()).toEqual({ kind: 'entry', entry: tool('t3') });
   });
 
   it.each<{

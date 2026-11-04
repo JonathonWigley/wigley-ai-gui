@@ -229,6 +229,7 @@ async function start() {
     clock,
     paths,
     homeDir: config.homeDir,
+    runMode: config.runMode,
   };
   // Filled once the page keys are installed; no key reaches the engine before.
   let pageKeys: ReturnType<typeof installPageKeys> | null = null;

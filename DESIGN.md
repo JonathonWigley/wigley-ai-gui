@@ -220,7 +220,7 @@ The keyboard is first; the mouse works everywhere.
     ring, on the entry itself when it has no blocks. A range of blocks shows `accent-tint` behind each one.
     The bar sits in a gutter left of the text and of a list item's marker, moving no text. It stays on
     screen: when the transcript scrolls away from it, it moves to the nearest block wholly in view; a
-    block too tall for the view counts while any of it shows.
+    block too tall for the view counts while any of it shows, and with no block wholly in view it moves to the nearest that shows.
 - **Buttons never take focus**, so Enter and Space stay with the page keys; a click runs them.
 - **Key hints** draw through the Kbd primitive, which prints chords through `formatChord` for the
   platform. On macOS the modifiers and Return, Tab, Esc, Backspace, Delete and the arrows print
@@ -241,7 +241,8 @@ The keyboard is first; the mouse works everywhere.
   - **Control hint:** the key inside the button, toggle or box label it presses (Accept ↩,
     Not applicable x, Notes a).
   - **Box hint:** a key that acts on a box or a pane, on the focused box's frame (`⌃P ⌃N`) or in
-    the pane's header (`/ filter`, `a new`).
+    the pane's header (`/ filter`, `a new`). The chat composer's status line holds the transcript's
+    keys as box hints with no labels (`J K V y`), after the box's labelled `i` and `a`.
 - **Hints show for the scope in force:** a hint whose scope is not the one keys fire in hides and
   keeps its space, so moving between panes never shifts the layout; a hint for a bind in every
   scope (tabs, sessions) always shows. In a chat pane's tab bar a key with no target takes no
@@ -434,7 +435,7 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   `radius-xl`, inset `space-3`) with the transcript scrolling beneath it, and holds, top to bottom: other plugins'
   composer parts (the workflow strip, the agent strip, the context line), `space-2` apart, the activity line, the strip of attached images' thumbnails, the box (no mode
   label: the cursor's shape shows the vim mode), and the status line, drawn in this order: repo and branch in `fg-secondary`, the `i`/`a`
-  type hint (with `J`/`K`, `V` and `y` when the composer has room), one model · effort chip, every other control's chip, the status parts other plugins add (usage: spend),
+  type hint (then `J`, `K`, `V` and `y` with no labels), one model · effort chip, every other control's chip, the status parts other plugins add (usage: spend),
   then the running dot and Send as one group that ends the line, on whichever row it wraps to. The **context line** is a Meter that fills the composer's width, then `58k/300k` and
   `cache 59m` in `text-12` tabular numerals.
   The **agent strip** holds its subagents as an HScroller of cards, each a `card-background` Card with `radius-md`,

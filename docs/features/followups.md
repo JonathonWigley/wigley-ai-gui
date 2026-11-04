@@ -258,6 +258,11 @@ Defects seen in a drive run, a transcript or the user's own use.
   while `activeElement` stays in the old pane's box (seen: active in slot 1, focused slot 0). A click already moves it
   (`panePressed`, `src/plugins/sessions/page/start.ts`); give the keys the same treatment. Source session: Claude Code
   368f2c4b-5d54-47bf-8285-14fec015fc6b in wigley-ai-gui.
+- **The message box's vim mode label contradicts `DESIGN.md`** — `DESIGN.md` § Surfaces (the composer) says the box has no
+  mode label because the cursor's shape shows the vim mode, yet `src/renderer/codemirror-vim/codemirror-vim-host.ts`
+  runs `vim({ status: true })`, and a live run shows `--INSERT--`, which stays after focus leaves the box. The doc or
+  the panel is wrong, and the user decides which: drop the panel and keep the doc, or write the label into the doc.
+  Source session: Claude Code cb0838dd-b8e5-430b-8c21-30e66b9a80ac in wigley-ai-gui.
 
 ## Harness seams
 
