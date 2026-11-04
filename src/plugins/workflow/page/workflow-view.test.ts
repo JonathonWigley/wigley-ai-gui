@@ -29,6 +29,16 @@ import { createWorkflowView, type WorkflowView } from './workflow-view';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 
 const NO_SECTION = { setSummary: () => undefined };
+
+// A section that records each summary set on it.
+function recordingSection() {
+  const summaries: (string | null)[] = [];
+  return {
+    summaries,
+    setSummary: (text: string | null) => void summaries.push(text),
+  };
+}
+
 const NOW = 1_000_000;
 const PLAN_DIR = '/p/proj/docs/features/x/plan-x';
 
@@ -791,35 +801,69 @@ describe('workflow view', () => {
 
   it.each([
     {
+      name: 'a plan at 5 of 7',
+      flow: flowIn('make', { progress: progressOf(5, [3, 3, 1]) }),
+      hidden: false,
+      panes: 1,
+      summaries: ['5/7'],
+    },
+    {
+      name: 'a plan with no box ticked',
+      flow: flowIn('make', { progress: progressOf(0, [3, 3, 1]) }),
+      hidden: false,
+      panes: 1,
+      summaries: ['0/7'],
+    },
+    {
+      name: 'a plan with no boxes',
+      flow: flowIn('make', { progress: progressOf(0, []) }),
+      hidden: false,
+      panes: 1,
+      summaries: [null],
+    },
+    {
       name: 'idle',
       flow: flowIn('idle', { progress: progressOf(1, [3]) }),
       hidden: false,
+      panes: 0,
+      summaries: [null],
     },
     {
       name: 'no plan read',
       flow: flowIn('make', { progress: null }),
       hidden: false,
+      panes: 0,
+      summaries: [null],
     },
-    { name: 'hidden', flow: flowIn('make'), hidden: true },
+    {
+      name: 'hidden',
+      flow: flowIn('make'),
+      hidden: true,
+      panes: 0,
+      summaries: [null],
+    },
   ])(
-    'side pane draws only with a plan and while shown: $name',
-    ({ flow, hidden }) => {
+    'side pane draws and sets its summary only with a plan and while shown: $name',
+    ({ flow, hidden, panes, summaries }) => {
       const { view, put } = setUp();
       const wrapper = new FakeElement('div');
+      const section = recordingSection();
       view.setSidePaneHidden(hidden);
       put(flow);
 
-      view.sidePart.build(asHtml(wrapper), 'a', NO_SECTION);
+      view.sidePart.build(asHtml(wrapper), 'a', section);
 
-      expect(wrapper.children).toHaveLength(0);
+      expect(wrapper.children).toHaveLength(panes);
+      expect(section.summaries).toEqual(summaries);
     },
   );
 
   it('setSidePaneHidden_HiddenThenShown_RemovesAndDrawsThePane', () => {
     const { view, put } = setUp();
     const wrapper = new FakeElement('div');
-    put(flowIn('make'));
-    view.sidePart.build(asHtml(wrapper), 'a', NO_SECTION);
+    const section = recordingSection();
+    put(flowIn('make', { progress: progressOf(5, [3, 3, 1]) }));
+    view.sidePart.build(asHtml(wrapper), 'a', section);
     const paneCount = () => findAll(wrapper, 'workflow-side-pane').length;
     const first = paneCount();
 
@@ -828,6 +872,7 @@ describe('workflow view', () => {
     view.setSidePaneHidden(false);
 
     expect([first, whileHidden, paneCount()]).toEqual([1, 0, 1]);
+    expect(section.summaries).toEqual(['5/7', null, '5/7']);
   });
 
   it.each<{

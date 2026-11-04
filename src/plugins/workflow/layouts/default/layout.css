@@ -26,13 +26,10 @@
 
 .workflow-side-pane {
   display: flex;
+  flex: 0 1 auto;
   flex-direction: column;
   gap: var(--wg-space-2);
-  width: calc(var(--wg-space-6) * 11);
-  height: 100%;
-  padding: var(--wg-space-2);
-  border-left: 1px solid var(--wg-border-default);
-  background: var(--wg-card-background);
+  min-height: 0;
   font-size: var(--wg-text-12);
 }
 

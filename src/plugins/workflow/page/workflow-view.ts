@@ -6,7 +6,11 @@ import type { ShownLayouts, ToastTone } from '../../../contracts/plugin';
 import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import type { OwnerKitServices } from '../../../shared/page/layout-host/base-kit';
-import type { ChatComposerPart, ChatSidePart } from '../../chat/contract';
+import type {
+  ChatComposerPart,
+  ChatSidePart,
+  ChatSideSection,
+} from '../../chat/contract';
 import type { SessionPart } from '../../sessions/contract';
 import {
   IDLE_STAGE,
@@ -65,19 +69,21 @@ export interface WorkflowViewDeps {
   runAction(request: WorkflowActionRequest): Promise<void>;
 }
 
-// `chipPart` draws a session's chip under its row, `stripPart` its strip
-// above its Chat composer, and `sidePart` its side pane beside its transcript.
-// Every held part draws again on `setFlow` for its session, on `setLayouts` and
-// on `redraw`, and each second while it shows a countdown, the side pane aside.
-// The side pane's list keeps its scroll across those draws, and while the pane
-// has no layout box. `setFlow` also logs the session's stage, progress and
-// countdown when each changes; `forget` drops what it logged for a session that
-// left and its finished waves' fold. `setSidePaneHidden` shows or hides the side
-// pane in every session, and `toggleFinishedWaves` opens or folds one session's
-// finished waves, logging `nothing to run` and changing nothing while the pane
-// would draw no fold. `mainAction` is the spec the main action runs, and `runFor` the one path
-// that runs a workflow command for a session; only `toggleFinishedWaves` runs in
-// the preview.
+// `chipPart` draws a session's chip under its row, `stripPart` its strip above
+// its Chat composer, and `sidePart` its side pane in the session hub's Plan
+// section. Every held part draws again on `setFlow` for its session, on
+// `setLayouts` and on `redraw`, and each second while it shows a countdown, the
+// side pane aside. Each side pane draw sets the section's summary:
+// `<checked>/<total>` while it draws a plan with boxes, else null. The side
+// pane's list keeps its scroll across those draws, and while the pane has no
+// layout box. `setFlow` also logs the session's stage, progress and countdown
+// when each changes; `forget` drops what it logged for a session that left and
+// its finished waves' fold. `setSidePaneHidden` shows or hides the side pane in
+// every session, and `toggleFinishedWaves` opens or folds one session's finished
+// waves, logging `nothing to run` and changing nothing while the pane would draw
+// no fold. `mainAction` is the spec the main action runs, and `runFor` the one
+// path that runs a workflow command for a session; only `toggleFinishedWaves`
+// runs in the preview.
 export interface WorkflowView {
   chipPart: SessionPart;
   stripPart: ChatComposerPart;
@@ -95,12 +101,14 @@ export interface WorkflowView {
 type PartKind = 'chip' | 'strip' | 'sidePane';
 
 // One wrapper a part was built into, and what it drew there last. A side pane
-// also holds the scroll its list last reported in a `scroll` event with a layout
-// box, and the observer that hands it back when the wrapper gets a box again.
+// also holds its section, the scroll its list last reported in a `scroll` event
+// with a layout box, and the observer that hands it back when the wrapper gets a
+// box again.
 interface HeldPart {
   kind: PartKind;
   sessionId: string;
   wrapper: HTMLElement;
+  section: ChatSideSection | null;
   drawn: Drawn | null;
   showsCountdown: boolean;
   listScroll: number;
@@ -265,6 +273,7 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
       }
       case 'sidePane': {
         const input = sidePaneInput(flow);
+        part.section?.setSummary(sidePaneSummary(input));
         if (input === null) {
           return false;
         }
@@ -350,11 +359,13 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
     kind: PartKind,
     wrapper: HTMLElement,
     sessionId: string,
+    section: ChatSideSection | null,
   ): Disposable => {
     const part: HeldPart = {
       kind,
       sessionId,
       wrapper,
+      section,
       drawn: null,
       showsCountdown: false,
       listScroll: 0,
@@ -425,17 +436,18 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
   const view: WorkflowView = {
     chipPart: {
       id: 'workflow.chip',
-      build: (wrapper, sessionId) => hold('chip', wrapper, sessionId),
+      build: (wrapper, sessionId) => hold('chip', wrapper, sessionId, null),
     },
     stripPart: {
       id: 'workflow.strip',
-      build: (wrapper, sessionId) => hold('strip', wrapper, sessionId),
+      build: (wrapper, sessionId) => hold('strip', wrapper, sessionId, null),
     },
     sidePart: {
       id: 'workflow.sidePane',
       title: 'Plan',
       order: 20,
-      build: (wrapper, sessionId) => hold('sidePane', wrapper, sessionId),
+      build: (wrapper, sessionId, section) =>
+        hold('sidePane', wrapper, sessionId, section),
     },
     setFlow(flow) {
       try {
@@ -559,6 +571,14 @@ function reapplyListScroll(part: HeldPart): void {
   if (list !== null && hasLayoutBox(list)) {
     list.scrollTop = part.listScroll;
   }
+}
+
+// The Plan section's summary for what the pane draws: null while it draws nothing
+// or a plan with no boxes.
+function sidePaneSummary(input: SidePaneInput | null): string | null {
+  return input !== null && input.total > 0
+    ? `${input.checked}/${input.total}`
+    : null;
 }
 
 // `<checked>/<total>`, then ` wave <n>` while a wave is open and
