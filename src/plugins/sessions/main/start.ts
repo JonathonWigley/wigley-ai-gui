@@ -36,6 +36,7 @@ import {
   launchCommand,
   writeEndpointFiles,
 } from './relay/endpoint';
+import { createProjectNames } from './project-names';
 import { type ConnectHold, createConnectHold } from './relay/connect-hold';
 import { startRelayServer } from './relay/relay-server';
 import { sessionsSelfTestScript } from './selftest-script';
@@ -57,6 +58,7 @@ function createList(api: SessionsApi): SessionList {
     emit: (event, data) => api.events.emit(event, data),
     stateChanged: (state) => api.channel.send('stateChanged', state),
     activated: (sessionId) => api.channel.send('activated', { sessionId }),
+    projectName: createProjectNames(api.services.git),
   });
   api.channel.handle('state', () => list.state());
   api.channel.handle('activate', (sessionId) => list.activate(sessionId));
@@ -293,6 +295,7 @@ export const sessionsMainPart: MainPart<typeof sessionsManifest> = {
         layouts.dispose();
         driveActions?.dispose();
         opened?.relay.close();
+        list.stop();
       },
     };
   },

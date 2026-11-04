@@ -124,6 +124,7 @@ function missingFile(path: string): Error {
 function fakeGit() {
   return {
     topLevel: vi.fn<Git['topLevel']>(async () => CLONE),
+    originRepoName: vi.fn<Git['originRepoName']>(async () => null),
     currentBranch: vi.fn<Git['currentBranch']>(async () => 'main'),
     isLinkedWorktree: vi.fn<Git['isLinkedWorktree']>(async () => false),
     hasUpstream: vi.fn<Git['hasUpstream']>(async () => true),

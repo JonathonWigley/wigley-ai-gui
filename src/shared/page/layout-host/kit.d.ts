@@ -16,6 +16,9 @@ export interface KitButtonOptions {
   keys?: string | null;
 }
 
+// The tones a meter takes.
+export type MeterTone = 'normal' | 'warning' | 'critical';
+
 // The states a status dot shows.
 export type DotStatus =
   | 'idle'
@@ -120,6 +123,8 @@ export interface BaseKit {
   statusDot(parent: HTMLElement, status: DotStatus): HTMLElement;
   // Shows `status` on a dot `statusDot` drew; appends nothing.
   setDotStatus(dot: HTMLElement, status: DotStatus): void;
+  // `span.ui-meter`: a small bar filled to `percent` (0–100) in `tone`.
+  meter(parent: HTMLElement, percent: number, tone: MeterTone): HTMLElement;
   // `.ui-row`: a list or tree row. The app sets `is-selected` and `is-cursor` on the rows it keeps the cursor on.
   row(parent: HTMLElement, options: KitRowOptions): HTMLElement;
   // `p.ui-empty`: one line saying what to do, then `hint`, the key or action that does it.

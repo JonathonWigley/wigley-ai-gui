@@ -7,9 +7,9 @@
 //
 // Every input is already worded for the screen: counts, percents, money and times arrive as text, and each meter's
 // fill and tone beside its text.
-import type { BaseKit } from '../../../shared/page/layout-host/kit';
+import type { BaseKit, MeterTone } from '../../../shared/page/layout-host/kit';
 
-export type UsageTone = 'normal' | 'warning' | 'critical';
+export type UsageTone = MeterTone;
 // `text` is what the meter reads (`42%`, `180k/300k` for a session's context, `180k` on its row line); `percent` is
 // 0–100.
 export interface MeterInput {
@@ -89,10 +89,7 @@ export interface DetailsInput {
 }
 
 // The kit every usage part gets.
-export interface UsageKit extends BaseKit {
-  // A Meter primitive filled to `percent` in `tone`, appended to `parent`.
-  meter(parent: HTMLElement, percent: number, tone: UsageTone): HTMLElement;
-}
+export interface UsageKit extends BaseKit {}
 
 // Each part comes from the first layout that defines it among the `usage.layout` setting and `default`; a part that
 // throws, returns no element appended to `parent`, or appends other nodes beside it is drawn by `default` instead.

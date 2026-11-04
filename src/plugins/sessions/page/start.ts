@@ -45,7 +45,9 @@ import {
   shownElsewhere,
 } from './pane-sessions';
 import { previewToggle } from './preview';
+import { createProjectFavorites } from './project-favorites';
 import { createRenameDialog } from './rename-dialog';
+import { createSessionRecency } from './session-recency';
 import { mountSessionsView, type SessionsView } from './sessions-view';
 import {
   isRoundToast,
@@ -157,7 +159,10 @@ function createExports(
 // swaps the side bar's rows for a sample of every row state and back,
 // page-only: it sends nothing to main. `renameSession` opens the rename dialog
 // over the focused pane's session; the rows draw titles cut to the
-// `titleMaxLength` setting, drawn again when it changes.
+// `titleMaxLength` setting, drawn again when it changes. The rows group by
+// project under Favorites and Recent, from the favorites and recency stamps in
+// uiState; the session step keys follow that drawn order, and the project keys
+// change the focused pane's session's project's favorite.
 export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
   manifest: sessionsManifest,
   start(api: SessionsApi) {
@@ -368,6 +373,8 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       rowParts,
       barParts,
       titleMaxLength: () => api.settings().titleMaxLength,
+      recency: createSessionRecency(api.services.clock, uiState),
+      favorites: createProjectFavorites(uiState),
     });
     // The page part lives for the page load, so the subscription is never
     // disposed.
@@ -568,7 +575,8 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       mode.toggleSideBar();
     };
 
-    // Steps the focused pane over the sessions no other pane shows.
+    // Steps the focused pane, in drawn order, over the sessions no other pane
+    // shows.
     const stepToSession = (by: 1 | -1) => {
       mode.show();
       if (view.isPreviewShown()) {
@@ -577,7 +585,11 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       }
       const { panes } = view;
       const sessionId = stepSession(
-        { ...state, selectedSessionId: panes.focusedSessionId() },
+        {
+          ...state,
+          rows: view.orderedRows(),
+          selectedSessionId: panes.focusedSessionId(),
+        },
         by,
         shownElsewhere(panes.sessions(), panes.focusedPaneId()),
       );
@@ -656,12 +668,28 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       renameDialog.open(row);
     };
 
+    // Runs a project key on the focused pane's session's project, as
+    // `renameSession` acts on its session.
+    const projectKey = (run: (project: string) => void) => () => {
+      if (!mode.isShown()) {
+        log('sessions', 'projects ignored: Sessions mode is hidden');
+        return;
+      }
+      const sessionId = view.panes.focusedSessionId();
+      const row = sessionId === null ? undefined : rowOf(sessionId);
+      if (row === undefined) {
+        log('sessions', 'no session for projects');
+        return;
+      }
+      run(row.project);
+    };
+
     // Asks which session the new pane `paneId` shows: the sessions no pane
-    // shows, then a new one when chat can start one. A cancel while the pane
-    // still shows nothing closes it.
+    // shows, in drawn order, then a new one when chat can start one. A cancel
+    // while the pane still shows nothing closes it.
     const openSplitPicker = (paneId: string) => {
       const choices: PickerChoice[] = pickerRows(
-        state.rows,
+        view.orderedRows(),
         view.panes.sessions(),
       ).map((row) => ({ kind: 'row', row }));
       if (api.keys.command('chat.newSession') !== undefined) {
@@ -784,6 +812,9 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
         renameSession,
         renameAccept: () => renameDialog.accept(),
         renameCancel: () => renameDialog.cancel(),
+        favoriteProject: projectKey((project) => view.toggleFavorite(project)),
+        moveProjectUp: projectKey((project) => view.moveFavorite(project, -1)),
+        moveProjectDown: projectKey((project) => view.moveFavorite(project, 1)),
       },
       exports,
     };

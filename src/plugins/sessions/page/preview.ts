@@ -7,6 +7,7 @@ import {
   type SessionTitles,
 } from '../contract';
 import { shownTitle } from '../session-title';
+import { type SidebarSections, sidebarSections } from './sidebar-order';
 import type { RowState } from './sidebar-view';
 
 const NO_TITLES: SessionTitles = {
@@ -39,12 +40,14 @@ export const PREVIEW_ACTIVITIES: Readonly<Record<string, RowActivity | null>> =
 function sampleRow(
   sessionId: string,
   label: string,
+  project: string,
   harness: SessionRow['harness'],
   marked: boolean,
 ): SessionRow {
   return {
     sessionId,
     label,
+    project,
     harness,
     marked,
     projectDir: null,
@@ -56,22 +59,46 @@ function sampleRow(
 // The side bar rows `Space z l s` shows in place of the real ones, with no
 // agent: a selected row, marked and unmarked rows, each harness and none, a
 // label long enough to end in an ellipsis, user, agent and first-message
-// titles and rows with none, and an activity of each tone the rows use.
+// titles and rows with none, an activity of each tone the rows use, and three
+// projects, two of them holding two rows from different folders.
 export const PREVIEW_STATE: SessionsState = {
   rows: [
-    sampleRow('preview-1', 'wigley-ai-gui', 'claude', false),
-    sampleRow('preview-2', 'wigley-ai-marketplace', 'codex', true),
-    sampleRow('preview-3', 'new-games-prototypes', 'claude', true),
-    sampleRow('preview-4', 'scratch', null, false),
+    sampleRow('preview-1', 'wigley-ai-gui', 'wigley-ai-gui', 'claude', false),
+    sampleRow(
+      'preview-2',
+      'wigley-ai-marketplace',
+      'wigley-ai-gui',
+      'codex',
+      true,
+    ),
+    sampleRow(
+      'preview-3',
+      'new-games-prototypes',
+      'new-games-prototypes',
+      'claude',
+      true,
+    ),
+    sampleRow('preview-4', 'scratch', 'wigley-agents', null, false),
     sampleRow(
       'preview-5',
       'a-session-label-long-enough-to-end-in-an-ellipsis-in-the-side-bar',
+      'wigley-agents',
       'claude',
       false,
     ),
   ],
   selectedSessionId: 'preview-1',
 };
+
+// The sample's own favorites, never the user's.
+const PREVIEW_FAVORITES: readonly string[] = ['wigley-ai-gui'];
+
+// The sample rows in the order the side bar draws them.
+export function previewSections(
+  preview: SessionsState,
+): SidebarSections<SessionRow> {
+  return sidebarSections(preview.rows, PREVIEW_FAVORITES, new Map());
+}
 
 // Each sample row's second line, null for none.
 export const PREVIEW_STATUSES: Readonly<Record<string, string | null>> = {

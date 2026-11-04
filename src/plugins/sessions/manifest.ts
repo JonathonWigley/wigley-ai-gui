@@ -33,6 +33,21 @@ export const sessionsManifest = definePlugin({
       group: 'sessions',
       runsIn: 'page',
     },
+    favoriteProject: {
+      label: 'favorite or unfavorite the project',
+      group: 'projects',
+      runsIn: 'page',
+    },
+    moveProjectUp: {
+      label: 'move the project up',
+      group: 'projects',
+      runsIn: 'page',
+    },
+    moveProjectDown: {
+      label: 'move the project down',
+      group: 'projects',
+      runsIn: 'page',
+    },
     splitDown: {
       label: 'split the pane, new pane below',
       group: 'panes',

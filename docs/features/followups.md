@@ -231,6 +231,17 @@ Defects seen in a drive run, a transcript or the user's own use.
   on sub-pixel shares. A dock that measures its room in script (composer-kit hands the default `working` draw a line
   budget once the composer parts reach 0) would give a strict order; the `ComposerKit.working` contract
   (`src/plugins/chat/layouts/layout.d.ts`) would then say a user draw gets that budget.
+- **Background subagent misattributed and dropped early** — *needs a feature plan*: two faults a real session showed
+  on 2026-11-03, a haiku background subagent under an Opus main told to run `sleep 90`. Take the first one first; it
+  misattributes who said what. (1) The subagent's replies show in the main transcript as the main agent's: the
+  decoder's text entries read no `parent_tool_use_id` (`decodeTextBlock`, `src/main/claude-code/stream-decoder.ts`).
+  Only a background subagent was seen doing this; check a foreground one. To decide: where a subagent's text belongs,
+  such as its strip box or nowhere. (2) A subagent waiting on its own background shell lost its strip box about 80 s
+  before it really ended, then replied and handed back with no box. The box follows `agentFinished`, which for a
+  launched subagent comes from `task_notification` (`finishByNotification`; `docs/features/agent-chat/claude-stream.md`
+  § its end event notes the measurement). The raw line was not captured, so capture it first. To decide: whether a late
+  reply lists the subagent again, or its box waits for the shells it owns. Source session: Claude Code
+  2294388c-6fcc-4d43-a794-070e11683453 in /Users/jonathonwigley/Documents/ai-dev
 
 ## Harness seams
 
@@ -690,3 +701,24 @@ because the earlier items rewrite many of these tests anyway.
   and record, and the newer one renames the older's log and sweeps its pipe logs. A lock around listening and acting
   only on a record still its own are the likely shape. Stated as a limit in `docs/features/session-host/design.md`.
   Source session: Claude Code 4c0ab18e-9221-4838-ba7b-ecfa6e43c345 in wigley-ai-gui.
+- **Docs tab's first show has no test** — *agent-ready*: `handle.shown` runs `showFirstTime`
+  (`src/plugins/docs/page/start.ts`), which runs `loadIndex` (`docs-view.ts`). The forms self-test used to pin it live
+  through its `y` step, and now presses `R`, because rows draw in no fixed order and an earlier step can pass the Codex
+  row first. No test creates `createDocsView` (about 20 deps) and `page/start.ts` has no test, so a pin needs a small
+  seam first. Source session: Claude Code e8ba2d1d-78ea-49b9-9c2e-b2a0b2382d85 in wigley-ai-gui.
+- **Chat self-test steps by single presses** — *agent-ready*: rows draw most recent first and rows opened in one
+  millisecond tie, so the chat script's single `<A-S-o>` and `<A-S-i>` steps between its two rows may land elsewhere.
+  It passes today and was not audited for ties or rows left open. Forms' `stepToRow` and sessions' `stepNextTo` hold
+  the shape, and could become one shared helper. Source session: Claude Code e8ba2d1d-78ea-49b9-9c2e-b2a0b2382d85 in
+  wigley-ai-gui.
+- **`MaxListenersExceededWarning` on `plugin:message`** — *agent-ready*: a drive run's console showed 11 listeners. No
+  link to a cause is known; `Bridge.onMessage` adding a fresh `ipcRenderer` listener per call (see Disposable
+  registrations) is the first place to read. Source session: Claude Code e8ba2d1d-78ea-49b9-9c2e-b2a0b2382d85 in
+  wigley-ai-gui.
+- **Sessions header wraps at the side bar's least width** — *agent-ready*: `Sessions` draws as `Session` / `s` at
+  160 px in the default layout. Its markup predates the session groups work. Source session: Claude Code
+  e8ba2d1d-78ea-49b9-9c2e-b2a0b2382d85 in wigley-ai-gui.
+- **Preview's sample statuses read as chat's** — *agent-ready*: `PREVIEW_STATUSES` in
+  `src/plugins/sessions/page/preview.ts` holds `working` and `waiting for permission`, though chat no longer sends a
+  status and a row's second line now shows only a form's or primer's. Source session: Claude Code
+  e8ba2d1d-78ea-49b9-9c2e-b2a0b2382d85 in wigley-ai-gui.

@@ -15,7 +15,9 @@ user keeps several clones of `new-games-prototypes`, one per Unity editor — re
 
 ## Status
 
-Planned: `plan-session-groups/` beside this file.
+Built, in `src/plugins/sessions/` (the project name in `main/`; the order, recency and favorites modules, the side
+bar view and the layout parts in `page/`; the layout contract in `layouts/`), `src/main/git/` and
+`src/contracts/git.ts` (`originRepoName`), `src/shared/page/ui/drag-reorder.ts` and `src/plugins/keymap.ts`.
 
 ## Projects
 
@@ -32,8 +34,8 @@ the Unity editors apart, and other plugins and log lines use it.
 ## Order
 
 The side bar holds two sections, **Favorites** then **Recent**, each a list of project groups, each group a header
-over its rows. The section labels draw only while a favorite project has an open session; otherwise the groups
-sit directly under the Sessions header.
+over its rows. The default layout draws the section labels only while a favorite project has an open session or a
+group is dragged; otherwise the groups sit directly under the Sessions header.
 
 - **Favorites** are in the user's own order, set by drag and by `<Leader>pk` / `<Leader>pj`.
 - **Recent** groups sort by recency, most recent first, and the rows inside every group, favorites included, do
@@ -41,7 +43,13 @@ sit directly under the Sessions header.
   (`NEEDS_YOU_ACTIVITY`); a group's is its most recent row's. Picking a row never reorders, so the list holds
   still while the user steps through it. Ties keep main's row order.
 - Recency is page-side, since needs you is a page-side activity; the stamps sit in the sessions page's `uiState`
-  (`recency`, by app session id, pruned to the rows main holds), so a page reload keeps the order.
+  (`recency`), each under its row's host session id, else its app session id, so a page reload and a relaunch both
+  keep the order. A stamp follows its row's host id change and goes when the row leaves. A row merely absent keeps
+  its stamp, since main resumes rows one at a time after a relaunch; a stamp whose session never comes back goes
+  once 200 newer ones push it out.
+- `recency` also saves the app session ids whose needs you is already stamped, so a source re-sending it after a page
+  reload moves no row. An id goes when the row's top activity turns away from needs you, when the row leaves, or when
+  the first state lacks it, as after a relaunch, which gives every row a new id.
 - The previous and next session keys, and the side bar's edge prompts, step through rows in drawn order.
 
 ## Favorites
@@ -56,13 +64,15 @@ project names), so they last across restarts.
 - Dragging a group header reorders the favorites; dropping a Recent group into Favorites favorites it at the drop
   point, and dropping a favorite into Recent unfavorites it. Recent has no hand order, so a drop there marks the
   whole section. While a drag runs, an empty section shows as a drop box, so the first favorite can come from a
-  drag, and the side bar holds its redraws until the drag ends. The layout preview (`Space z l s`) draws with its
-  own sample favorites and never changes the user's.
+  drag, and the side bar holds its redraws until the drag ends.
+- The layout preview (`Space z l s`) draws with its own sample favorites and never changes the user's favorites, by
+  star, drop or key: while it shows, the star and drops do nothing, and the `<Leader>p` keys log that the preview
+  shows and do nothing.
 
 ## Drawing
 
 The sessions layout gains two parts: `section` (a Favorites or Recent label over the box the app fills with
-groups, both always drawn, an empty one hidden outside a drag) and `group` (a project header over the box the app
+groups, both always drawn; the default layout hides an empty one outside a drag) and `group` (a project header over the box the app
 fills with rows), with a `GroupKit` that draws the star (`favoriteToggle`) and the grip (`dragHandle`, a visual
 cue: the whole header drags). The app keeps the star's click and the drag on each header, through the
 DragReorder primitive (`DESIGN.md` § Primitives).

@@ -32,8 +32,8 @@ A session holds up to three titles, one per source (`TitleSource`, `src/plugins/
 
 The row shows `user`, else `agent`, else `firstMessage` cut to the limit with `…`, else no title.
 A user title therefore locks out the agent's renames until the user clears it, and the agent's
-later titles are still kept underneath. A row with a title shows it as the main text and its folder
-label (`gamma 2`) as dim detail after it; the tooltip carries both.
+later titles are still kept underneath. A row with a title shows it as the main text in place of
+its folder label (`gamma 2`); the tooltip carries both.
 
 The limit is the `sessions.titleMaxLength` setting (default 30), counted in code points after
 whitespace runs collapse to one space. A `user` or `agent` title past it is refused, never cut; a
@@ -79,8 +79,9 @@ dialog open with the problem shown.
 
 ## Row status
 
-A row's **activity** is the short state drawn at its trailing end, on the title's line: a status dot
-and a word. Any page plugin sets one per session under its own source id through the `sessions` page
+A row's **activity** is the short state drawn at its trailing end, on the title's line: a status
+dot. Its word appears only in the row's tooltip, after the folder label and before the status. Any
+page plugin sets one per session under its own source id through the `sessions` page
 export `setActivity(sessionId, sourceId, activity | null)`; the row shows the highest `rank` of the
 session's activities, the last set winning a tie, and nothing when it has none. A new state is a
 new registration in the plugin that knows it, with no edit to sessions.
@@ -96,7 +97,7 @@ Idle draws nothing. "Views the session" is the session becoming the focused pane
 session's conversation, sending a message and the next turn starting also clear a done or error. A turn
 that ends while its session is the focused pane's skips done. While a row shows an activity, the
 default layout leaves out the row's separate attention dot (`marked`), which the needs you dot
-covers. Other tabs' status lines (workflow's stage, a form's progress) still draw on the row's
+covers. Other tabs' status lines (a form's or primer's name and count) still draw on the row's
 second line; chat no longer sends one.
 
 Activities live in the page and start blank on a page load.

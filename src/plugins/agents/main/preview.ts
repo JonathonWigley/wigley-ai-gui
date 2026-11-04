@@ -40,12 +40,10 @@ interface OpenPreview {
 }
 
 // The sample session's two running subagents, spawned 42 s and 185 s before
-// `now`, and two running tasks, started 95 s and 60 s before `now`: one the
-// main agent's, one the 185 s subagent's, drawn nested under it. The second
+// `now`, the second in the background, and two running tasks, started 95 s and
+// 60 s before `now`: one the main agent's, one the 185 s subagent's. The second
 // subagent's and the second task's descriptions are long enough to end in an
-// ellipsis. The second subagent is the widest line the agents self-test fits
-// at the side bar's least width, so its elapsed time stays past a minute and
-// its count of `tools` past 9: eleven done and the twelfth running.
+// ellipsis.
 function sampleRoster(now: number): Roster {
   const agents: RosterAgent[] = [
     {
@@ -57,6 +55,9 @@ function sampleRoster(now: number): Roster {
       model: 'claude-sonnet-5-5',
       effort: 'medium',
       spendUsd: 0.0421,
+      isBackground: false,
+      contextTokens: 84_000,
+      contextWindow: 200_000,
       tools: [
         {
           toolUseId: 'preview-agent-1-tool-1',
@@ -65,7 +66,6 @@ function sampleRoster(now: number): Roster {
           outcome: 'running',
         },
       ],
-      outcome: 'running',
     },
     {
       agentId: 'preview-agent-2',
@@ -77,6 +77,9 @@ function sampleRoster(now: number): Roster {
       model: 'claude-haiku-5-5',
       effort: null,
       spendUsd: 0.0187,
+      isBackground: true,
+      contextTokens: 166_000,
+      contextWindow: 200_000,
       tools: Array.from({ length: 12 }, (_, i) => {
         const n = i + 1;
         return {
@@ -87,27 +90,26 @@ function sampleRoster(now: number): Roster {
           outcome: n === 12 ? 'running' : 'done',
         };
       }),
-      outcome: 'running',
     },
   ];
   const tasks: RosterTask[] = [
     {
       taskId: 'preview-task-1',
       agentId: MAIN_AGENT_ID,
+      ownerName: 'main',
       description: 'npm run selftest',
       command: 'npm run selftest',
       startedAt: now - 95_000,
-      outcome: 'running',
     },
     {
       taskId: 'preview-task-2',
       agentId: 'preview-agent-2',
+      ownerName: 'Explore',
       description:
         'Watch the stream decoder tests and report each failure as it lands',
       command:
         'npm run test -- --watch src/main/claude-code/stream-decoder.test.ts',
       startedAt: now - 60_000,
-      outcome: 'running',
     },
   ];
   return { agents, tasks };

@@ -186,6 +186,7 @@ export const defaultKeymap = {
     '<Leader>n': 'notes',
     '<Leader>w': 'workflow',
     '<Leader>r': 'rename',
+    '<Leader>p': 'projects',
   },
   binds: [
     // ── Windows and modes ──────────────────────────────────────────────────
@@ -212,6 +213,9 @@ export const defaultKeymap = {
     { keys: '<Leader>;', scope: 'any', command: 'sessions.closeSession' },
     { keys: '<Leader>:', scope: 'any', command: 'chat.stopAll' },
     { keys: '<Leader>rr', scope: 'any', command: 'sessions.renameSession' },
+    { keys: '<Leader>pf', scope: 'any', command: 'sessions.favoriteProject' },
+    { keys: '<Leader>pk', scope: 'any', command: 'sessions.moveProjectUp' },
+    { keys: '<Leader>pj', scope: 'any', command: 'sessions.moveProjectDown' },
 
     // ── Workflow ───────────────────────────────────────────────────────────
     { keys: '<Leader>ww', scope: 'any', command: 'workflow.mainAction' },
