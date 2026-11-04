@@ -96,8 +96,8 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
   a plan until Dismiss or a new plan, so the section hides at every other time.
 - **Skills:** the skills each agent started in this row's session, by a Skill call or a typed slash command (the
   `skillStarted` agent event): one row per skill and agent, in start order, tagged `main` or the subagent's name. A row
-  stays through a compaction, the agent's end and the process's exit. After an app relaunch the list starts empty,
-  because the roster is not saved. It does not say the skill's text is still in the agent's context.
+  stays through a compaction, the agent's end and the process's exit. After an app relaunch a re-attached process's
+  log brings its skills back, and a resumed session's list starts empty, because the roster is not saved. It does not say the skill's text is still in the agent's context.
 - **Session:** the repo name, the branch (left out when none), the session folder with the home folder as `~`, the
   harness id and the model · effort. These read chat's own state, so chat names no other plugin. The spend stays in the
   status line.
@@ -121,7 +121,7 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
   is nothing further that way. The trackpad scrolls it too. An open box's tool list keeps its scroll as the box redraws while the strip shows; a redraw in a hidden tab, or a rebuilt composer, starts the list at the top.
 - **Keys:** the strip is a stop in the chat's entry cursor. `j` on the entry cursor's last stop (the newest pending
   row, else the last entry or an open last run's last step) selects the strip's first box; the strip then holds its own key scope: `h`/`l` move through the cards and then the rows, `k` or Esc returns to the last stop, `i` and `a` focus the chat box, Enter opens the selected box in place to list every tool call of that
-  subagent (a task row wraps its whole command), and Enter again closes it. `G` and a following cursor stay on the last entry,
+  subagent (a task row wraps its whole command over its owner and description), and Enter again closes it. `G` and a following cursor stay on the last entry,
   so new output never moves the cursor into the strip. The selected box takes the focus ring.
 
 ## The activity dock
