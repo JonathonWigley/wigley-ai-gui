@@ -4,8 +4,14 @@
   display: flex;
   flex-direction: column;
   gap: var(--wg-space-1);
+  font-size: var(--wg-text-12);
+  color: var(--wg-fg-secondary);
+  cursor: pointer;
+}
+
+[data-layout-owner='agent-strip'][data-layout='default'].agent-strip-box.agent-strip-agent {
   width: calc(var(--wg-space-6) * 10);
-  /* Every closed box takes the height of the fullest one — a subagent's head,
+  /* Every closed card takes the height of the fullest one — a subagent's head,
      description, model line, three recent tool lines, footer and the cursor
      prompt: eight lines (`text-12` at the inherited `leading-ui`), then five
      gaps plus the tool block's padding, six `space-1` in all, inside the
@@ -15,20 +21,28 @@
       var(--wg-space-2) + 2 * 1px
   );
   padding: var(--wg-space-2);
-  font-size: var(--wg-text-12);
-  color: var(--wg-fg-secondary);
-  cursor: pointer;
+}
+
+[data-layout-owner='agent-strip'][data-layout='default'].agent-strip-box.agent-strip-task {
+  padding: var(--wg-space-1) var(--wg-space-2);
 }
 
 [data-layout-owner='agent-strip'][data-layout='default'].agent-strip-box.is-selected {
   border-color: var(--wg-focus-border);
 }
 
-[data-layout-owner='agent-strip'][data-layout='default'] .agent-strip-head {
+[data-layout-owner='agent-strip'][data-layout='default'] .agent-strip-head,
+[data-layout-owner='agent-strip'][data-layout='default'] .agent-strip-row-line {
   display: flex;
   align-items: center;
   gap: var(--wg-space-1_5);
   min-width: 0;
+}
+
+/* An open row's command wraps; the rest of its line stays at the top. */
+[data-layout-owner='agent-strip'][data-layout='default'].agent-strip-box.is-open
+  .agent-strip-row-line {
+  align-items: flex-start;
 }
 
 [data-layout-owner='agent-strip'][data-layout='default']
@@ -36,7 +50,16 @@
   > .ui-dot,
 [data-layout-owner='agent-strip'][data-layout='default']
   .agent-strip-head
-  > .ui-tag {
+  > .ui-tag,
+[data-layout-owner='agent-strip'][data-layout='default']
+  .agent-strip-row-line
+  > .ui-dot,
+[data-layout-owner='agent-strip'][data-layout='default']
+  .agent-strip-row-line
+  > .ui-tag,
+[data-layout-owner='agent-strip'][data-layout='default']
+  .agent-strip-row-line
+  > .agent-strip-prompt {
   flex: none;
 }
 
@@ -67,8 +90,7 @@
   color: var(--wg-fg-tertiary);
 }
 
-[data-layout-owner='agent-strip'][data-layout='default'] .agent-strip-recent,
-[data-layout-owner='agent-strip'][data-layout='default'] .agent-strip-command {
+[data-layout-owner='agent-strip'][data-layout='default'] .agent-strip-recent {
   padding: var(--wg-space-0_5) var(--wg-space-1);
   border-radius: var(--wg-radius-sm);
   background: var(--wg-block-background);
@@ -115,7 +137,12 @@
   color: var(--wg-status-error);
 }
 
-/* A closed box's command keeps to one line. */
+[data-layout-owner='agent-strip'][data-layout='default'] .agent-strip-command {
+  flex: 1;
+  min-width: 0;
+}
+
+/* A closed row's command keeps to one line. */
 [data-layout-owner='agent-strip'][data-layout='default'].agent-strip-box:not(
     .is-open
   )
@@ -125,10 +152,19 @@
   white-space: nowrap;
 }
 
-/* An open box's command wraps whole inside its box. */
+/* An open row's command wraps whole inside its row. */
 [data-layout-owner='agent-strip'][data-layout='default'].agent-strip-box.is-open
   .agent-strip-command {
   overflow-wrap: anywhere;
+}
+
+[data-layout-owner='agent-strip'][data-layout='default']
+  .agent-strip-row-owner {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--wg-text-12);
+  color: var(--wg-fg-tertiary);
 }
 
 [data-layout-owner='agent-strip'][data-layout='default'] .agent-strip-footer {

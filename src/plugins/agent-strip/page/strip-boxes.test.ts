@@ -43,17 +43,25 @@ const keysOf = (boxes: readonly StripBox[]) => boxes.map((box) => box.key);
 describe('orderStripBoxes', () => {
   it.each<{ name: string; roster: Roster; keys: string[] }>([
     {
-      name: 'start order across kinds',
+      name: 'the agent, then the tasks in start order',
       roster: {
-        agents: [agent('a1', 300), agent('a2', 100)],
-        tasks: [task('t1', 200), task('t2', 50)],
+        agents: [agent('a1', 300)],
+        tasks: [task('t200', 200), task('t100', 100)],
       },
-      keys: ['t2', 'a2', 't1', 'a1'],
+      keys: ['a1', 't100', 't200'],
     },
     {
-      name: 'equal start keeps the agent first',
-      roster: { agents: [agent('a1', 100)], tasks: [task('t1', 100)] },
-      keys: ['a1', 't1'],
+      name: 'equal starts keep roster order',
+      roster: { agents: [], tasks: [task('t1', 100), task('t2', 100)] },
+      keys: ['t1', 't2'],
+    },
+    {
+      name: 'an agent that started after a task sorts first',
+      roster: {
+        agents: [agent('a1', 300), agent('a2', 50)],
+        tasks: [task('t1', 100)],
+      },
+      keys: ['a2', 'a1', 't1'],
     },
     { name: 'empty roster', roster: { agents: [], tasks: [] }, keys: [] },
   ])('$name', ({ roster, keys }) => {

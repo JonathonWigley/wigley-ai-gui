@@ -1,15 +1,17 @@
 // @ts-check
 
-// The built-in agent-strip look: each box a card of fixed width. Every box
-// heads with its running dot, name, kind tag and runtime, then its description
-// cut to one line. A subagent box adds its model and effort, its latest tool
-// calls in mono, which an open box drops, and a footer of its context bar and
-// cost. A task box adds its command in mono, one line until open. The selected
+// The built-in agent-strip look. A subagent box is a card of fixed width: its
+// running dot, name, kind tag and runtime, then its description cut to one line,
+// its model and effort, its latest tool calls in mono, which an open box drops,
+// and a footer of its context bar and cost. The app draws an open subagent box's
+// list of every call after all of these. A task box is a row the composer's
+// width: its running dot, Shell tag, command in mono and runtime on one line.
+// An open row wraps the command and adds its owner under the line. The selected
 // box takes the focus ring and the prompt of the keys that type in the chat box.
-// The app draws an open subagent box's list of every call after all of these.
 
 /** @typedef {import('../layout').AgentStripKit} AgentStripKit */
 /** @typedef {import('../layout').AgentBoxInput} AgentBoxInput */
+/** @typedef {import('../layout').TaskBoxInput} TaskBoxInput */
 /** @typedef {import('../layout').ToolLineInput} ToolLineInput */
 
 // The share of its context window at which a subagent's bar turns the warning colour.
@@ -52,15 +54,26 @@ const layout = {
   },
   taskBox(parent, input, kit) {
     const element = kit.card(parent, boxClass('agent-strip-task', input));
-    const runtime = boxTop(element, input, 'Shell', 'accent', kit);
+    const line = kit.el(element, 'div', 'agent-strip-row-line');
+    kit.statusDot(line, 'running');
+    kit.tag(line, 'Shell', 'accent');
     kit.el(
-      element,
+      line,
       'div',
       'agent-strip-command',
-      input.command ?? 'no command',
+      input.command ?? input.description,
     );
     if (input.isSelected) {
-      cursorPrompt(element, kit);
+      cursorPrompt(line, kit);
+    }
+    const runtime = kit.el(
+      line,
+      'span',
+      'agent-strip-runtime',
+      kit.duration(input.elapsedMs),
+    );
+    if (input.isOpen) {
+      kit.el(element, 'div', 'agent-strip-row-owner', rowOwner(input));
     }
     return {
       element,
@@ -94,7 +107,18 @@ function boxClass(kindClass, input) {
 }
 
 /**
- * Every box's head row and description; returns the runtime `update` rewrites.
+ * What an open row says under its line: its owner, and its description unless
+ * the command line already shows it.
+ * @param {TaskBoxInput} input
+ */
+function rowOwner(input) {
+  return input.command === null
+    ? input.name
+    : `${input.name} · ${input.description}`;
+}
+
+/**
+ * An agent box's head row and description; returns the runtime `update` rewrites.
  * @param {HTMLElement} element
  * @param {{ name: string; description: string; elapsedMs: number }} input
  * @param {string} tagText
@@ -191,11 +215,11 @@ function toolLine(parent, tool, kit) {
 
 /**
  * The selected box's cursor prompt: the keys that leave it for the chat box.
- * @param {HTMLElement} element
+ * @param {HTMLElement} parent
  * @param {AgentStripKit} kit
  */
-function cursorPrompt(element, kit) {
-  const line = kit.el(element, 'div', 'agent-strip-prompt');
+function cursorPrompt(parent, kit) {
+  const line = kit.el(parent, 'div', 'agent-strip-prompt');
   kit.keyHint(line, 'focusBox', { label: 'to type' });
   kit.keyHint(line, 'appendBox', { label: 'to append' });
 }

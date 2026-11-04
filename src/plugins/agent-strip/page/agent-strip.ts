@@ -3,6 +3,7 @@ import type { Log } from '../../../contracts/log';
 import type { ShownLayouts } from '../../../contracts/plugin';
 import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
+import { element } from '../../../shared/page/dom';
 import {
   createBaseKit,
   type OwnerKitServices,
@@ -45,7 +46,8 @@ import {
 
 // `agents` is the only way the strip reads a roster. `setScope` sets the
 // strip's key scope, `agent-strip.strip`; `nameOf` is a session's name in the
-// page log; `createScroller` makes the HScroller a strip draws its boxes into.
+// page log; `createScroller` makes the HScroller a strip draws its agent boxes
+// into.
 export interface AgentStripDeps {
   kit: OwnerKitServices;
   log: Log;
@@ -75,11 +77,12 @@ export interface AgentStrip {
 }
 
 // A wrapper chat handed `part.build`, the HScroller it holds while the
-// session lists any box, the parts drawn into it last, and its boxes in box
-// order.
+// session lists an agent box, the rows element it holds while the session lists
+// a task box, the parts drawn into them last, and its boxes in box order.
 interface HeldWrapper {
   wrapper: HTMLElement;
   scroller: HScroller | null;
+  rows: HTMLElement | null;
   parts: DrawnPart<AgentStripPart>[];
   boxes: TickingBox[];
 }
@@ -123,9 +126,10 @@ const TOOL_STATUS: Record<RosterTool['outcome'], BoxStatus> = {
   failed: 'error',
 };
 
-// The strip of each session's subagent and task boxes. A session's HScroller
-// lives as long as it lists a box, so the user's scroll position and the
-// chevrons survive each redraw. While any held strip shows a box, one tick a
+// The strip of each session's subagent cards and, under them, its task rows. A
+// session's HScroller lives as long as it lists a subagent and its rows element
+// as long as it lists a task, so the user's scroll positions and the chevrons
+// survive each redraw. While any held strip shows a box, one tick a
 // second updates each box's elapsed time, through its part's `update`, else by
 // drawing that box again. Once an `update` throws, the tick draws boxes of that
 // part again until the layouts change. After each draw it logs `boxes in
@@ -181,12 +185,37 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
     scroller.dispose();
   };
 
+  const disposeRows = (holder: HeldWrapper) => {
+    holder.rows?.remove();
+    holder.rows = null;
+  };
+
   const disposeHolder = (holder: HeldWrapper) => {
     try {
       disposeParts(holder);
     } finally {
+      disposeRows(holder);
       disposeScroller(holder);
     }
+  };
+
+  // The HScroller's track, making the HScroller above any rows.
+  const heldTrack = (holder: HeldWrapper): HTMLElement => {
+    if (holder.scroller === null) {
+      holder.scroller = deps.createScroller();
+      holder.scroller.element.classList.add('agent-strip-scroller');
+      holder.wrapper.insertBefore(holder.scroller.element, holder.rows);
+    }
+    return holder.scroller.track;
+  };
+
+  // The rows element, making it after any HScroller.
+  const heldRows = (holder: HeldWrapper): HTMLElement => {
+    if (holder.rows === null) {
+      holder.rows = element('div', 'agent-strip-rows');
+      holder.wrapper.append(holder.rows);
+    }
+    return holder.rows;
   };
 
   const drawAgentBox = (
@@ -237,26 +266,24 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
     log(text);
   };
 
-  // Draws the session's boxes into its HScroller's track, making the
-  // HScroller on the first draw with a box and dropping it on a draw with none.
+  // Draws the session's agent boxes into its HScroller's track and its task
+  // boxes into its rows element, making each on the first draw with such a box
+  // and dropping it on a draw with none. The rows keep their scroll.
   const draw = (sessionId: string, holder: HeldWrapper) => {
     const listScrollTops = new Map(
       holder.boxes.map((box) => [box.key, listScrollTop(box)]),
     );
+    const rowsScrollTop = holder.rows?.scrollTop ?? 0;
     disposeParts(holder);
     const boxes = boxesOf(sessionId);
-    if (boxes.length === 0) {
+    if (!boxes.some((box) => box.kind === 'task')) {
+      disposeRows(holder);
+    }
+    if (!boxes.some((box) => box.kind === 'agent')) {
       disposeScroller(holder);
-      logBoxes(sessionId, boxes);
-      return;
     }
-    if (holder.scroller === null) {
-      holder.scroller = deps.createScroller();
-      holder.scroller.element.classList.add('agent-strip-scroller');
-      holder.wrapper.append(holder.scroller.element);
-    }
-    const { track } = holder.scroller;
-    track.replaceChildren();
+    holder.scroller?.track.replaceChildren();
+    holder.rows?.replaceChildren();
     const now = clock.now();
     const selectedKey =
       selection?.sessionId === sessionId ? selection.key : null;
@@ -267,15 +294,19 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
         isOpen: box.key === openKey,
       };
       const { key } = box;
-      let element: HTMLElement;
+      let boxElement: HTMLElement;
       if (box.kind === 'agent') {
         const { agent } = box;
         const input = agentBoxInput(agent, state, now);
-        const drawn = drawAgentBox(track, input);
+        const drawn = drawAgentBox(heldTrack(holder), input);
         holder.parts.push(drawn);
-        element = drawn.built.element;
+        boxElement = drawn.built.element;
         const toolList = state.isOpen
-          ? drawOpenToolList(element, agent.tools, listScrollTops.get(key) ?? 0)
+          ? drawOpenToolList(
+              boxElement,
+              agent.tools,
+              listScrollTops.get(key) ?? 0,
+            )
           : null;
         if (toolList !== null) {
           holder.parts.push(toolList);
@@ -292,9 +323,9 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
       } else {
         const { task } = box;
         const input = taskBoxInput(task, state, now);
-        const drawn = drawTaskBox(track, input);
+        const drawn = drawTaskBox(heldRows(holder), input);
         holder.parts.push(drawn);
-        element = drawn.built.element;
+        boxElement = drawn.built.element;
         holder.boxes.push({
           kind: 'task',
           key,
@@ -303,23 +334,30 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
           input,
         });
       }
-      listenForClick(element, sessionId, key);
+      listenForClick(boxElement, sessionId, key);
     }
-    holder.scroller.refresh();
+    holder.scroller?.refresh();
+    if (holder.rows !== null) {
+      holder.rows.scrollTop = rowsScrollTop;
+    }
     logBoxes(sessionId, boxes);
   };
 
   const listenForClick = (
-    element: HTMLElement,
+    boxElement: HTMLElement,
     sessionId: string,
     key: string,
-  ) => element.addEventListener('click', () => toggleOpen(sessionId, key));
+  ) => boxElement.addEventListener('click', () => toggleOpen(sessionId, key));
 
+  // The element the box draws into: the track for an agent box, the rows
+  // element for a task box.
   const trackOf = (holder: HeldWrapper, key: string): HTMLElement => {
-    if (holder.scroller === null) {
+    const box = holder.boxes.find((held) => held.key === key);
+    const track = box?.kind === 'task' ? holder.rows : holder.scroller?.track;
+    if (track === null || track === undefined) {
       throw new Error(`box ${key} has no strip to draw into`);
     }
-    return holder.scroller.track;
+    return track;
   };
 
   // Puts `next`, the box drawn again, in `old`'s place on the page and in the
@@ -331,10 +369,10 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
     old: DrawnPart<AgentStripPart>,
     next: DrawnPart<AgentStripPart>,
   ) => {
-    const { element } = next.built;
-    old.built.element.replaceWith(element);
+    const boxElement = next.built.element;
+    old.built.element.replaceWith(boxElement);
     holder.parts[holder.parts.indexOf(old)] = next;
-    listenForClick(element, sessionId, key);
+    listenForClick(boxElement, sessionId, key);
   };
 
   // Draws the agent box again with its input, and its tool list into the new
@@ -435,7 +473,7 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
     }
   };
 
-  // Ticks each of the strip's boxes, then refreshes its HScroller.
+  // Ticks each of the strip's boxes, then refreshes any HScroller.
   const tickStrip = (sessionId: string, holder: HeldWrapper) => {
     if (holder.boxes.length === 0) {
       return;
@@ -499,21 +537,25 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
       return;
     }
     const holder = held.get(selection.sessionId);
-    const element = holder?.boxes[selection.index]?.drawn.built.element;
-    const scroller = holder?.scroller ?? null;
-    if (scroller !== null && element !== undefined) {
-      scroller.reveal(element);
-      // Chat's composer parts scroll in a pane too short for them all.
-      element.scrollIntoView({ block: 'nearest' });
+    const box = holder?.boxes[selection.index];
+    if (box === undefined) {
+      return;
     }
+    const boxElement = box.drawn.built.element;
+    if (box.kind === 'agent') {
+      holder?.scroller?.reveal(boxElement);
+    }
+    // Chat's composer parts scroll in a pane too short for them all, and the
+    // rows scroll past four.
+    boxElement.scrollIntoView({ block: 'nearest' });
   };
 
   const logSelected = (current: Selection, count: number) => {
     const name = deps.nameOf(current.sessionId);
     const position = `${current.index + 1} of ${count} in ${name}`;
-    const element = held.get(current.sessionId)?.boxes[current.index]?.drawn
+    const boxElement = held.get(current.sessionId)?.boxes[current.index]?.drawn
       .built.element;
-    const shown = element?.textContent ?? '';
+    const shown = boxElement?.textContent ?? '';
     log(`box ${position} shows: ${shown.slice(0, SELECTION_LOG_CHARS)}`);
     log(`selected box ${position}`);
   };
@@ -607,6 +649,7 @@ export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
         const holder: HeldWrapper = {
           wrapper,
           scroller: null,
+          rows: null,
           parts: [],
           boxes: [],
         };

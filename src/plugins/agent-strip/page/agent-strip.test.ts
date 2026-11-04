@@ -12,6 +12,7 @@ import {
   findAll,
   installFocusFakeDom,
   ScrollerFakeElement,
+  ShrinkingScrollerFakeElement,
 } from '../../../shared/page/test-dom';
 import type { HScroller } from '../../../shared/page/ui/h-scroller';
 import type { Roster, RosterAgent, RosterTask } from '../../agents/contract';
@@ -68,6 +69,9 @@ function task(
     ...fields,
   };
 }
+
+// One running task, 30 s old, and no subagent.
+const ONE_TASK: Roster = { agents: [], tasks: [task('t1', 30_000)] };
 
 // Two subagents, then a task 30 s old.
 const MIXED: Roster = {
@@ -541,7 +545,7 @@ describe('agent strip', () => {
     setRoster(EMPTY);
 
     expect(beforeTexts[0]).toContain('Subagent1m 30s');
-    expect(beforeTexts[2]).toContain('Shell30s');
+    expect(beforeTexts[2]).toBe('ShellRun t130s');
     expect(afterTicks).toEqual({
       agentBoxesKept: [row.agentBoxesKept, row.agentBoxesKept],
       toolListKept: row.agentBoxesKept,
@@ -553,12 +557,12 @@ describe('agent strip', () => {
         [
           expect.stringContaining('1m 31s'),
           expect.stringContaining('1m 01s'),
-          expect.stringContaining('Shell31s'),
+          'ShellRun t131s',
         ],
         [
           expect.stringContaining('1m 32s'),
           expect.stringContaining('1m 02s'),
-          expect.stringContaining('Shell32s'),
+          'ShellRun t132s',
         ],
       ],
       refreshes: 2,
@@ -569,17 +573,15 @@ describe('agent strip', () => {
     expect(sets).toHaveLength(3);
   });
 
-  // Box 1 is selected and open under a layout whose part has no `update`, so a
+  // Box 1, the part's box in its roster, is selected and open under a layout
+  // whose part has no `update`, so a
   // tick replaces it: the new element takes clicks, its old parts' anchors are
   // disposed once, and a later redraw disposes the new ones.
   it.each<{ part: 'agentBox' | 'taskBox'; roster: Roster }>([
     { part: 'agentBox', roster: MIXED },
     {
       part: 'taskBox',
-      roster: {
-        agents: [agent('a1', 90_000), agent('a2', 10_000)],
-        tasks: [task('t1', 30_000)],
-      },
+      roster: { agents: [agent('a1', 90_000)], tasks: [task('t1', 30_000)] },
     },
   ])('tick_ReplacedBox_KeepsItsBookkeeping ($part)', ({ part, roster }) => {
     const {
@@ -755,7 +757,7 @@ describe('agent strip', () => {
     );
   });
 
-  it('draw_TaskBox_NamedForItsOwnerWithItsCommand', () => {
+  it('draw_TaskBox_ShowsItsCommandAndNoOwner', () => {
     const { build, boxes } = setUp({
       agents: [],
       tasks: [task('t1', 5_000, { ownerName: 'kind-fixer', command: 'npm t' })],
@@ -763,7 +765,121 @@ describe('agent strip', () => {
 
     build();
 
-    expect(boxes()[0].textContent).toContain('kind-fixerShell5sRun t1npm t');
+    expect(boxes()[0].textContent).toBe('Shellnpm t5s');
+  });
+
+  it('draw_OneTaskNoAgent_HasRowsAndNoScroller', () => {
+    const { build, boxes, scrollers, wrapper } = setUp(ONE_TASK);
+
+    build();
+
+    expect(scrollers.made).toEqual([]);
+    expect(wrapper.children).toEqual(findAll(wrapper, 'agent-strip-rows'));
+    expect(findAll(wrapper, 'agent-strip-rows')[0].children).toEqual(boxes());
+    expect(boxes()).toHaveLength(1);
+  });
+
+  it('rosterChanged_AgentLeaves_DropsScrollerAndKeepsRow', () => {
+    const roster: Roster = { ...ONE_TASK, agents: [agent('a1', 60_000)] };
+    const { build, setRoster, boxes, scrollers, wrapper } = setUp(roster);
+    build();
+
+    setRoster(ONE_TASK);
+
+    expect(scrollers.made[0].disposed).toBe(true);
+    expect(wrapper.children).toEqual(findAll(wrapper, 'agent-strip-rows'));
+    expect(boxes()).toHaveLength(1);
+    expect(boxes()[0].parentNode).toBe(wrapper.children[0]);
+  });
+
+  it('rosterChanged_AgentStartsAfterTask_PutsScrollerAboveRows', () => {
+    const { build, setRoster, scrollers, wrapper } = setUp(ONE_TASK);
+    build();
+    const rows = wrapper.children[0];
+
+    setRoster({ ...ONE_TASK, agents: [agent('a1', 10_000)] });
+
+    expect(wrapper.children).toEqual([
+      scrollers.made[0].scroller.element,
+      rows,
+    ]);
+  });
+
+  it('rosterChanged_TaskEnds_LeavesWrapperEmpty', () => {
+    const { build, setRoster, wrapper } = setUp(ONE_TASK);
+    build();
+
+    setRoster(EMPTY);
+
+    expect(wrapper.children).toEqual([]);
+  });
+
+  it('nextBox_ThroughCardsToRow_RevealsOnlyTheCard', () => {
+    const { strip, build, enter, boxes, selected, scrollers } = setUp(MIXED);
+    build();
+    enter();
+    const revealsBefore = scrollers.reveals.length;
+
+    strip.nextBox();
+    const secondCard = boxes()[1];
+    strip.nextBox();
+
+    expect(selected()).toEqual([2]);
+    expect(boxes()[2].classList.contains('agent-strip-task')).toBe(true);
+    expect(scrollers.reveals.slice(revealsBefore)).toEqual([secondCard]);
+  });
+
+  it('nextBox_ToRow_ScrollsTheRowIntoView', () => {
+    const scrolled = vi.spyOn(FakeElement.prototype, 'scrollIntoView');
+    const { strip, build, enter, boxes } = setUp(MIXED);
+    build();
+    enter();
+    strip.nextBox();
+    scrolled.mockClear();
+
+    strip.nextBox();
+
+    expect(scrolled.mock.contexts).toEqual([boxes()[2]]);
+    scrolled.mockRestore();
+  });
+
+  // Emptying the rows clamps their scroll, as a browser does.
+  it('redraw_KeepsRowsScrollTop', () => {
+    installFocusFakeDom(vi.stubGlobal, ShrinkingScrollerFakeElement);
+    const { build, setRoster, wrapper } = setUp(ONE_TASK);
+    build();
+    const rows = wrapper.children[0];
+    rows.scrollTop = 40;
+
+    setRoster({ ...ONE_TASK, tasks: [...ONE_TASK.tasks, task('t2', 10_000)] });
+
+    expect(wrapper.children[0]).toBe(rows);
+    expect(rows.scrollTop).toBe(40);
+  });
+
+  // A row stays in the rows element whether the tick updates it or draws it
+  // again, as a layout with no `update` makes it do.
+  it.each<{ case: string; layout: Layout | null; kept: boolean }>([
+    { case: 'default updates in place', layout: null, kept: true },
+    {
+      case: 'no update draws it again',
+      layout: userBox('taskBox', 'none'),
+      kept: false,
+    },
+  ])('tick_TaskRow_StaysInRows ($case)', ({ layout, kept }) => {
+    const { strip, build, boxes, sets, advance, wrapper } = setUp(ONE_TASK);
+    if (layout !== null) {
+      strip.setLayouts(withUser<Layout>(defaultLayout, layout));
+    }
+    build();
+    const before = boxes()[0];
+
+    advance(1000);
+    sets[0].run();
+
+    expect(boxes()[0] === before).toBe(kept);
+    expect(boxes()[0].parentNode).toBe(wrapper.children[0]);
+    expect(boxes()[0].textContent).toContain('31s');
   });
 
   it.each<{ part: keyof Layout }>([
@@ -897,12 +1013,12 @@ describe('agent strip', () => {
 
     expect(kept).toEqual({
       made: 1,
-      shown: [first.element],
+      shown: [first.element, expect.anything()],
       scrollLeft: 120,
     });
     expect(emptied).toEqual({ shown: [], disposed: true });
     expect(scrollers.made).toHaveLength(2);
-    expect(wrapper.children).toEqual([scrollers.made[1].scroller.element]);
+    expect(wrapper.children[0]).toBe(scrollers.made[1].scroller.element);
   });
 
   // Box 2 of MIXED is open and scrolled; another box opening starts at the top.

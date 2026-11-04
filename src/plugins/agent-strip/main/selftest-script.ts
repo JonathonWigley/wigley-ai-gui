@@ -30,7 +30,7 @@ const selectedLine = (index: number) =>
 const GROUPS: SelfTestGroup[] = [
   {
     name: 'strip keys',
-    why: 'j from the last entry enters the strip on its first box, each box shows its kind tag and runtime, l and h move between boxes, Enter opens and closes a box, k hands the cursor back, and an interrupt ends the items so their boxes leave.',
+    why: 'j from the last entry enters the strip on its first box, each card shows its name, kind tag and runtime, each row its Shell tag, command and runtime, l and h move through the cards and then the rows, Enter opens and closes a box, k hands the cursor back, and an interrupt ends the items so their boxes leave.',
     steps: [
       {
         keys: sendKeys(FAKE_AGENTS_TEXT),
@@ -61,17 +61,17 @@ const GROUPS: SelfTestGroup[] = [
         keys: ['l'],
         expect: selectedLine(3),
         alsoExpect: [
-          /^\[agent-strip\] box 3 of 4 in agent-strip-selftest shows: mainShell(\d+m )?\d+s/,
+          /^\[agent-strip\] box 3 of 4 in agent-strip-selftest shows: Shellnpm run selftest.*(\d+m )?\d+s/,
         ],
-        why: "The main agent's task reads Shell.",
+        why: 'After the cards, the first row reads Shell and its command.',
       },
       {
         keys: ['l'],
         expect: selectedLine(4),
         alsoExpect: [
-          /^\[agent-strip\] box 4 of 4 in agent-strip-selftest shows: map-decoderShell(\d+m )?\d+s/,
+          /^\[agent-strip\] box 4 of 4 in agent-strip-selftest shows: Shellnpm run build -- --watch.*(\d+m )?\d+s/,
         ],
-        why: "The subagent's task names that subagent as its owner.",
+        why: "A subagent's task is a row like the main agent's: a closed row names no owner.",
       },
       { keys: ['h'], expect: selectedLine(3) },
       { keys: ['h'], expect: selectedLine(2) },
@@ -140,9 +140,10 @@ export function agentStripSelfTestScript(
   return {
     pageBinds: [],
     settings: {},
-    // A box's name, description, model line, tool lines and closed command end
-    // in an ellipsis inside their own boxes and an open box's tool list scrolls
-    // inside its box, as their CSS says. The activity dock's tool calls (the
+    // A box's name, description, model line, tool lines, closed command and open
+    // row's owner line end in an ellipsis inside their own boxes, an open box's
+    // tool list scrolls inside its box and the rows scroll in their column, as
+    // their CSS says. The activity dock's tool calls (the
     // Agent calls carry the subagents' prompts) and done line, and the session
     // row's status, end in an ellipsis inside their own boxes; the tab bar's
     // parts clip in their own box.
@@ -152,7 +153,9 @@ export function agentStripSelfTestScript(
       '.agent-strip-model',
       '.agent-strip-tool',
       '.agent-strip-command',
+      '.agent-strip-row-owner',
       '.agent-strip-toolList',
+      '.agent-strip-rows',
       '.chat-working-action',
       '.chat-working-done',
       '.session-row-status',

@@ -148,7 +148,7 @@ describe('default agent-strip layout', () => {
   it.each<{
     case: string;
     box: () => ReturnType<typeof drawn>;
-    name: string;
+    name: string | null;
     tag: string;
   }>([
     {
@@ -163,13 +163,13 @@ describe('default agent-strip layout', () => {
       name: 'map-decoder',
       tag: 'Background agent',
     },
-    { case: 'task', box: () => drawTask(), name: 'kind-fixer', tag: 'Shell' },
+    { case: 'task', box: () => drawTask(), name: null, tag: 'Shell' },
   ])('head_$case', ({ box, name, tag }) => {
     const { root } = box();
 
     expect({
       dot: root.find('ui-dot')?.classList.contains('running'),
-      name: root.find('agent-strip-name')?.textContent,
+      name: root.find('agent-strip-name')?.textContent ?? null,
       tag: root.find('ui-tag')?.textContent,
       runtime: root.find('agent-strip-runtime')?.textContent,
     }).toEqual({ dot: true, name, tag, runtime: '42s' });
@@ -335,30 +335,42 @@ describe('default agent-strip layout', () => {
     case: string;
     input: Partial<TaskBoxInput>;
     command: string;
+    owner: string | null;
     isOpen: boolean;
   }>([
     {
       case: 'closed',
       input: {},
       command: 'npm run selftest',
+      owner: null,
       isOpen: false,
     },
     {
       case: 'open',
       input: { isOpen: true },
       command: 'npm run selftest',
+      owner: 'kind-fixer · Run the self-test',
       isOpen: true,
     },
     {
       case: 'no command',
       input: { command: null },
-      command: 'no command',
+      command: 'Run the self-test',
+      owner: null,
       isOpen: false,
     },
-  ])('taskCommand_$case', ({ input, command, isOpen }) => {
+    {
+      case: 'open with no command',
+      input: { command: null, isOpen: true },
+      command: 'Run the self-test',
+      owner: 'kind-fixer',
+      isOpen: true,
+    },
+  ])('taskCommand_$case', ({ input, command, owner, isOpen }) => {
     const { root } = drawTask(input);
 
     expect(root.find('agent-strip-command')?.textContent).toBe(command);
+    expect(root.find('agent-strip-row-owner')?.textContent ?? null).toBe(owner);
     expect(root.classList.contains('is-open')).toBe(isOpen);
   });
 

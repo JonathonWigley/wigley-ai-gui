@@ -1,23 +1,24 @@
 // The agent-strip layout contract: what a layout in `layouts/agent-strip/<name>/layout.js` draws the strip above a Chat
-// tab's composer box with. The app draws one `agentBox` per running subagent of the session and one `taskBox` per running
-// task, in start order, into the strip's scrolling track; a box leaves the moment its subagent or task ends, so every
-// box shows running work and none shows failed or dimmed. Into the open agent box's own root, after `agentBox` returns
-// it, it draws a `toolList` of every tool call that subagent made; a task box draws its full `command` while `isOpen`.
+// tab's composer box with. The app draws one `agentBox` per running subagent of the session, in start order, into the
+// strip's scrolling track, and one `taskBox` per running task, in start order, as a row in the column under it; a box
+// leaves the moment its subagent or task ends, so every box shows running work and none shows failed or dimmed. Into
+// the open agent box's own root, after `agentBox` returns it, it draws a `toolList` of every tool call that subagent
+// made; a task row draws its full command, its owner and its description while `isOpen`.
 // The app sets `data-layout-owner="agent-strip"` and `data-layout="<name>"` on the element each part returns, `<name>`
 // being the layout that drew it, so `[data-layout-owner="agent-strip"][data-layout="<name>"] …` in a layout's CSS selects
 // only its own boxes.
 //
 // The app keeps:
-// - the selection, which the entry cursor's `j` hands the strip, and `h`/`l` move: the selected box draws with
-//   `isSelected`, its focus ring and its key prompts the layout's own;
+// - the selection, which the entry cursor's `j` hands the strip, and `h`/`l` move through the cards and then the rows:
+//   the selected box draws with `isSelected`, its focus ring and its key prompts the layout's own;
 // - the open box, one per session, which Enter on the selected box or a click on any box opens and closes;
 // - the key scope `agent-strip.strip` the kit's key hints name;
-// - the scrolling track and its chevrons, and revealing the selected box;
+// - the scrolling track and its chevrons, the rows' column, and revealing the selected box;
 // - a box's click, and no focus: a box takes none;
 // - the elapsed time once a second on every agent and task box: the app runs the box's `update` with the new
 //   `elapsedMs`, or draws a box with no `update` again and replaces its element, an open agent box's `toolList` with it;
-// - an open `toolList`'s `scrollTop` across every draw of its box while the strip shows; a draw in a hidden tab, or a
-//   rebuilt composer, starts the list at the top.
+// - an open `toolList`'s `scrollTop` across every draw of its box, and the rows column's across every draw, while the
+//   strip shows; a draw in a hidden tab, or a rebuilt composer, starts them at the top.
 // `kit.duration` formats the elapsed time as chat's activity line does: `42s`, `3m 05s` or `1h 02m`.
 import type { BaseKit } from '../../../shared/page/layout-host/kit';
 
@@ -52,9 +53,9 @@ export interface AgentBoxInput {
   isOpen: boolean;
 }
 
-// One task (a background shell or another long-running job): the agent that started it (`main`, a subagent's name, or
-// `subagent` for one never listed), what it runs, its shell command, null when the harness named none, and how long it
-// has run in milliseconds.
+// One task row (a background shell or another long-running job): the agent that started it (`main`, a subagent's name,
+// or `subagent` for one never listed), what it runs, its shell command, null when the harness named none, and how long
+// it has run in milliseconds. The default row shows `name` only while open.
 export interface TaskBoxInput {
   name: string;
   description: string;

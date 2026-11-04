@@ -6,22 +6,21 @@ export type StripBox =
   | { kind: 'agent'; key: string; agent: RosterAgent }
   | { kind: 'task'; key: string; task: RosterTask };
 
-// Every subagent, then every task, stable-sorted by start time: equal times
-// keep the subagent first.
+type StartedAt = { startedAt: number };
+
+// Every subagent by start time, then every task by start time: equal times
+// keep roster order.
 export function orderStripBoxes(roster: Roster): StripBox[] {
-  const boxes: { startedAt: number; box: StripBox }[] = [
-    ...roster.agents.map((agent) => ({
-      startedAt: agent.startedAt,
-      box: { kind: 'agent', key: agent.agentId, agent } as const,
-    })),
-    ...roster.tasks.map((task) => ({
-      startedAt: task.startedAt,
-      box: { kind: 'task', key: task.taskId, task } as const,
-    })),
+  const byStart = (first: StartedAt, second: StartedAt) =>
+    first.startedAt - second.startedAt;
+  return [
+    ...roster.agents
+      .toSorted(byStart)
+      .map((agent) => ({ kind: 'agent', key: agent.agentId, agent }) as const),
+    ...roster.tasks
+      .toSorted(byStart)
+      .map((task) => ({ kind: 'task', key: task.taskId, task }) as const),
   ];
-  return boxes
-    .sort((first, second) => first.startedAt - second.startedAt)
-    .map(({ box }) => box);
 }
 
 // The box `j` selects on entering the strip: the first; null for no box.

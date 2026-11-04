@@ -1,15 +1,43 @@
 /* The agent strip above the Chat composer's box: the composer's cap for it,
-   then the app's scroller. */
+   the app's scroller, then the app's column of rows. */
 
-/* The composer's cap rises from half the tab while the strip shows boxes, so
-   the composer parts have room for one closed box beside the activity dock,
-   the message box and a wrapped status line in a 900x700 tab. The parts hold
-   no floor: in a shorter tab they still give up height first and scroll. */
-.ui-floating.chat-composer:has(.agent-strip-scroller) {
+/* The composer's cap rises from half the tab while the strip shows a card or a
+   row, so the composer parts have room for one closed card beside the activity
+   dock, the message box and a wrapped status line in a 900x700 tab. The parts
+   hold no floor: in a shorter tab they still give up height first and scroll. */
+.ui-floating.chat-composer:has(.agent-strip-scroller),
+.ui-floating.chat-composer:has(.agent-strip-rows) {
   max-height: 82%;
 }
 
 /* An open box grows taller while the others keep the closed height. */
 .agent-strip-scroller > .ui-h-scroller-track {
   align-items: flex-start;
+}
+
+/* Four closed rows tall: each a `text-12` line at `leading-ui` inside its
+   padding and the Card's hairline border, with the three gaps between them. An
+   open row can exceed a row's height, and the column scrolls. */
+.agent-strip-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-1);
+  max-height: calc(
+    4 *
+      (
+        var(--wg-text-12) * var(--wg-leading-ui) + 2 * var(--wg-space-1) + 2 *
+          1px
+      ) +
+      3 * var(--wg-space-1)
+  );
+  overflow-y: auto;
+}
+
+/* Rows keep their height, so the column scrolls rather than squeezes. */
+.agent-strip-rows > * {
+  flex: none;
+}
+
+.agent-strip-scroller + .agent-strip-rows {
+  margin-top: var(--wg-space-1);
 }
