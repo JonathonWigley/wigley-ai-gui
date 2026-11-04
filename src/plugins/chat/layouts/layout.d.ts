@@ -11,7 +11,11 @@ export type EntryKind =
   | 'permission'
   | 'result'
   | 'notice'
-  | 'raw';
+  | 'raw'
+  | 'compaction';
+
+// What started a compaction: `app`, the app itself; `manual`, the user's `/compact`; `harness`, the harness on its own.
+export type CompactionTrigger = 'app' | 'manual' | 'harness';
 
 // `images` are the message's attached images, base64 with no `data:` prefix.
 export interface UserInput {
@@ -74,6 +78,18 @@ export interface RawInput {
   id: string;
   raw: unknown[];
 }
+// A finished compaction. `at` is epoch ms. `beforeTokens` is null when the harness does not report it, `durationMs`
+// likewise. `afterTokens` is null until the next main reply's context is known; the entry then arrives again with it set.
+export interface CompactionInput {
+  kind: 'compaction';
+  id: string;
+  at: number;
+  trigger: CompactionTrigger;
+  beforeTokens: number | null;
+  afterTokens: number | null;
+  durationMs: number | null;
+  raw: unknown[];
+}
 
 export interface EntryInputs {
   user: UserInput;
@@ -84,6 +100,7 @@ export interface EntryInputs {
   result: ResultInput;
   notice: NoticeInput;
   raw: RawInput;
+  compaction: CompactionInput;
 }
 export type EntryInput<K extends EntryKind> = EntryInputs[K];
 
@@ -110,11 +127,17 @@ export interface ActivityInput {
   now: number;
 }
 
-// What the running turn is doing, the first that holds: `waiting` on an unanswered permission, `working` on a tool
-// with no result, `writing` while the last entry is streaming assistant text, else `thinking`.
-export type WorkingState = 'thinking' | 'writing' | 'working' | 'waiting';
+// What the running turn is doing, the first that holds: `compacting` while a compaction runs, whatever the turn does,
+// `waiting` on an unanswered permission, `working` on a tool with no result, `writing` while the last entry is
+// streaming assistant text, else `thinking`.
+export type WorkingState =
+  | 'thinking'
+  | 'writing'
+  | 'working'
+  | 'waiting'
+  | 'compacting';
 
-// The running turn, drawn in the composer's activity dock. Times are epoch ms.
+// The running turn or compaction, drawn in the composer's activity dock. Times are epoch ms.
 export interface LiveWorkingInput {
   // What the turn is doing now.
   state: WorkingState;
@@ -123,10 +146,12 @@ export interface LiveWorkingInput {
   steps: StepInput[];
   // When the turn began: its first entry, the later of the user's last message and the first entry after the last
   // result. While the turn holds no entries, the dock keeps the start it shows; a dock that was hidden or done starts
-  // at `now`.
+  // at `now`. While `state` is `compacting`, when the compaction began.
   startedAt: number;
   // The time of this draw or update; the turn's time is `now - startedAt`.
   now: number;
+  // What started the compaction, as the dock reads it, while `state` is `compacting`; else null.
+  compaction: string | null;
 }
 
 // The finished turn: every entry from the user's last message on; the dock shows it while the session is idle,
@@ -150,11 +175,15 @@ export interface DoneWorkingInput {
 export type WorkingInput = LiveWorkingInput | DoneWorkingInput;
 
 // One pending message: its text as typed, how many images it carries, and whether the user sent it into the running
-// turn, so it waits only for the agent to take it in.
+// turn, so it waits only for the agent to take it in. `holdReason` is the send gate's reason while the message waits
+// on a compaction it asked for, else null. `skipKey` is the keys that skip that compaction, formatted for the
+// platform; empty when the interrupt command is unbound.
 export interface QueuedMessageInput {
   text: string;
   imageCount: number;
   sent: boolean;
+  holdReason: string | null;
+  skipKey: string;
 }
 
 export interface EntryView<K extends EntryKind = EntryKind> {
@@ -214,6 +243,8 @@ export interface ChatKit extends BaseKit {
   // Enter on a focused user entry with images opens the viewer at its first image, in place of toggling its expanders.
   // Call it again in `update` for the entry's later images.
   images(parent: HTMLElement): HTMLElement;
+  // `count` tokens as the usage line reads them: `842`, `182k`, `1.3M`, `0k` for none. Appends nothing.
+  tokens(count: number): string;
 }
 
 // What a part other than an entry returns: its root, appended to `parent`, and an optional `update` the app runs with
@@ -247,7 +278,7 @@ export interface ComposerInput {
   isBoxFocused: boolean;
   // The session's process runs.
   running: boolean;
-  // Running, and a turn is in progress.
+  // Running, and a turn or a compaction is in progress.
   working: boolean;
   // The model and effort controls; null when the session declares no model control, and an effort control then stays
   // in `controls`.
@@ -414,17 +445,17 @@ export interface ChatLayout {
     kit: BaseKit,
   ): PartView<ActivityInput>;
   // The activity dock, drawn into the composer's working slot (`ComposerKit.working`): a `LiveWorkingInput` while the
-  // turn runs, a `DoneWorkingInput` while the session is idle after a finished turn, until the user sends the next
-  // message; a user part receives both and branches on `input.state`. The app sends the input again on each change
-  // and once a second with a new `now` while the turn is live. The slot hides while there is nothing to show; it is
-  // not a cursor stop.
+  // turn or a compaction runs, a `DoneWorkingInput` while the session is idle after a finished turn, until the user
+  // sends the next message; a user part receives both and branches on `input.state`. The app sends the input again on
+  // each change and once a second with a new `now` while the dock is live. The slot hides while there is nothing to
+  // show; it is not a cursor stop.
   working?(
     parent: HTMLElement,
     input: WorkingInput,
     kit: BaseKit,
   ): PartView<WorkingInput>;
   // One pending message's row, appended to the entry list after the last entry; the app marks the focused row and
-  // handles its click, and sends the input again when the row turns sent.
+  // handles its click, and sends the input again when the row turns sent or its hold ends.
   queuedMessage?(
     parent: HTMLElement,
     input: QueuedMessageInput,

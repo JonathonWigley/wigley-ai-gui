@@ -1,6 +1,6 @@
 # 07 — Auto-compact plugin
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 5 · Depends on: 04, 05
 Plan: [plan.md](plan.md)
@@ -189,3 +189,4 @@ These override any earlier line of this task that they contradict.
 
 ## Proof
 
+Commit 6522eec6 · proof: Diff read: manifest, send-gate fold and verdict, start wiring, layer rules, plugin lists; lead reran auto-compact tests, 30 pass; app start with the plugin is proven at the lead's self-test after wave 5 · concerns: A compaction's result line may refill the dropped usage with pre-compaction tokens; lastUsage re-emitted at restore may predate a compaction; each costs one needless compaction

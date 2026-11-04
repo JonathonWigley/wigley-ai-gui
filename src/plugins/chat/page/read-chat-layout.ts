@@ -17,6 +17,7 @@ const KIND_SET: Record<ChatEntryKind, true> = {
   result: true,
   notice: true,
   raw: true,
+  compaction: true,
 };
 
 // Compile-time checks: each chat entry variant is assignable to its layout

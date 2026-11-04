@@ -4,6 +4,7 @@ import type {
   ChatKit,
   ChatLayout,
   CollapsibleCardOptions,
+  CompactionInput,
   ComposerInput,
   ComposerKit,
   EntryInput,
@@ -141,6 +142,7 @@ function fakeKit() {
     permissionActions: (parent) => part(parent, 'div', 'permissionActions'),
     images: (parent) => part(parent, 'div', 'images'),
     duration: (ms) => `${Math.floor(ms / 1000)}s`,
+    tokens: (count) => `${Math.round(count / 1000)}k`,
   };
   return { kit: parts as ChatKit, calls };
 }
@@ -395,7 +397,73 @@ describe('default chat layout', () => {
       `json:${JSON.stringify([{ type: 'x' }])}`,
     ]);
   });
+
+  it.each([
+    {
+      trigger: 'app',
+      beforeTokens: 182000,
+      afterTokens: 24000,
+      durationMs: 9000,
+      line: 'Compacted 182k → 24k · auto · 9s',
+    },
+    {
+      trigger: 'manual',
+      beforeTokens: 182000,
+      afterTokens: null,
+      durationMs: 9000,
+      line: 'Compacted 182k · manual · 9s',
+    },
+    {
+      trigger: 'harness',
+      beforeTokens: 182000,
+      afterTokens: 24000,
+      durationMs: null,
+      line: 'Compacted 182k → 24k · autocompact',
+    },
+    {
+      trigger: 'app',
+      beforeTokens: null,
+      afterTokens: null,
+      durationMs: null,
+      line: 'Compacted · auto',
+    },
+  ] satisfies (CompactionFields & { line: string })[])(
+    'compaction_lineFormats ($line)',
+    ({ line, ...fields }) => {
+      const view = draw(compactionEntry(fields), fakeKit().kit);
+
+      expect(asFake(view.element).className).toBe('chat-entry chat-compaction');
+      expect(asFake(view.element).textContent).toBe(line);
+    },
+  );
+
+  it('compaction_update_FillsTheAfterSizeInPlace', () => {
+    const fields: CompactionFields = {
+      trigger: 'app',
+      beforeTokens: 182000,
+      afterTokens: null,
+      durationMs: 9000,
+    };
+    const view = draw(compactionEntry(fields), fakeKit().kit);
+    const divider = view.element;
+
+    view.update?.(compactionEntry({ ...fields, afterTokens: 24000 }));
+
+    expect(view.element).toBe(divider);
+    expect(asFake(divider).textContent).toBe(
+      'Compacted 182k → 24k · auto · 9s',
+    );
+  });
 });
+
+type CompactionFields = Pick<
+  CompactionInput,
+  'trigger' | 'beforeTokens' | 'afterTokens' | 'durationMs'
+>;
+
+function compactionEntry(fields: CompactionFields): CompactionInput {
+  return { kind: 'compaction', id: 'c1', at: 1000, raw: [], ...fields };
+}
 
 // A tool step named `name`, its result failed when `isError`; null leaves it
 // running.
@@ -598,7 +666,7 @@ function workingTurn(
   now: number,
   startedAt = 0,
 ): WorkingInput {
-  return { state, steps, startedAt, now };
+  return { state, steps, startedAt, now, compaction: null };
 }
 
 // A finished turn of `steps` from `startedAt` to `endedAt`.
@@ -765,6 +833,36 @@ describe('default chat layout working', () => {
         'div.chat-working-done:Done · 2s · $0.10',
       ],
     },
+    {
+      name: 'CompactingWithATool',
+      input: {
+        state: 'compacting',
+        steps: [toolStep('Read', 'a.ts')],
+        startedAt: 0,
+        now: 6000,
+        compaction: 'auto · cache cold · 182k',
+      } satisfies WorkingInput,
+      lines: [
+        'chat-working',
+        'span.chat-working-time:0:06 span.chat-working-state:Compacting… span.chat-working-trigger:auto · cache cold · 182k',
+        'div.chat-working-bar:',
+      ],
+    },
+    {
+      name: 'CompactingManual',
+      input: {
+        state: 'compacting',
+        steps: [],
+        startedAt: 0,
+        now: 6000,
+        compaction: '/compact',
+      } satisfies WorkingInput,
+      lines: [
+        'chat-working',
+        'span.chat-working-time:0:06 span.chat-working-state:Compacting… span.chat-working-trigger:/compact',
+        'div.chat-working-bar:',
+      ],
+    },
   ])('working_draws ($name)', ({ input, lines }) => {
     expect(workingLines(drawWorking(input))).toEqual(lines);
   });
@@ -818,15 +916,79 @@ describe('default chat layout queuedMessage', () => {
   });
 
   it.each([
-    { imageCount: 0, sent: false, label: 'pending' },
-    { imageCount: 1, sent: false, label: 'pending · 1 image' },
-    { imageCount: 3, sent: false, label: 'pending · 3 images' },
-    { imageCount: 0, sent: true, label: 'sending' },
-    { imageCount: 2, sent: true, label: 'sending · 2 images' },
+    {
+      imageCount: 0,
+      sent: false,
+      holdReason: null,
+      skipKey: '⌃C',
+      label: 'pending',
+    },
+    {
+      imageCount: 1,
+      sent: false,
+      holdReason: null,
+      skipKey: '⌃C',
+      label: 'pending · 1 image',
+    },
+    {
+      imageCount: 3,
+      sent: false,
+      holdReason: null,
+      skipKey: '⌃C',
+      label: 'pending · 3 images',
+    },
+    {
+      imageCount: 0,
+      sent: true,
+      holdReason: null,
+      skipKey: '⌃C',
+      label: 'sending',
+    },
+    {
+      imageCount: 2,
+      sent: true,
+      holdReason: null,
+      skipKey: '⌃C',
+      label: 'sending · 2 images',
+    },
+    {
+      imageCount: 0,
+      sent: false,
+      holdReason: 'auto · cache cold · 182k',
+      skipKey: '⌃C',
+      label: 'sends after compaction · ⌃C skips',
+    },
+    {
+      imageCount: 1,
+      sent: false,
+      holdReason: 'auto · cache cold · 182k',
+      skipKey: '⌃C',
+      label: 'sends after compaction · ⌃C skips · 1 image',
+    },
+    {
+      imageCount: 0,
+      sent: false,
+      holdReason: 'auto · cache cold · 182k',
+      skipKey: '',
+      label: 'sends after compaction',
+    },
+    {
+      imageCount: 0,
+      sent: true,
+      holdReason: 'auto · cache cold · 182k',
+      skipKey: '⌃C',
+      label: 'sending',
+    },
   ])(
-    'queuedMessage_Default_Label ($imageCount, sent $sent → $label)',
-    ({ imageCount, sent, label }) => {
-      const view = drawQueued({ text: 'fix the tests', imageCount, sent });
+    'queuedMessage_Default_Label ($imageCount, sent $sent, hold $holdReason, key $skipKey → $label)',
+    ({ imageCount, sent, holdReason, skipKey, label }) => {
+      const view = drawQueued({
+        text: 'fix the tests',
+        imageCount,
+        sent,
+        holdReason,
+        skipKey,
+      });
 
       expect(describeChildren(asFake(view.element))).toEqual([
         `div.chat-queued-label:${label}`,
@@ -840,10 +1002,18 @@ describe('default chat layout queuedMessage', () => {
       text: 'fix the tests',
       imageCount: 0,
       sent: false,
+      holdReason: null,
+      skipKey: '⌃C',
     });
     const row = view.element;
 
-    view.update?.({ text: 'and the lint', imageCount: 2, sent: false });
+    view.update?.({
+      text: 'and the lint',
+      imageCount: 2,
+      sent: false,
+      holdReason: null,
+      skipKey: '⌃C',
+    });
 
     expect(view.element).toBe(row);
     expect(describeChildren(asFake(row))).toEqual([

@@ -23,7 +23,11 @@ import { floatingPanel } from '../../../shared/page/ui/floating-panel';
 import { iconButton } from '../../../shared/page/ui/icon-button';
 import { disposeAnchors } from '../../../shared/page/ui/key-anchors';
 import { statusDot } from '../../../shared/page/ui/status-dot';
-import type { ChatComposerPart, ChatStatusPart } from '../contract';
+import type {
+  ChatComposerPart,
+  ChatStatusPart,
+  SessionCompaction,
+} from '../contract';
 import { type ChatCommandName, chatCommand, chatScope } from '../ids';
 import type {
   AttachmentsInput,
@@ -90,10 +94,14 @@ export interface ComposerSurface {
   // Draws the attachments in place of their last draw; the slot hides while
   // `images` is empty.
   drawAttachments(images: readonly ChatImage[]): void;
-  // Hands the activity dock the session's entries after a change and whether
-  // the session's turn is under way: working, or waiting on a permission
-  // answer.
-  setTurn(entries: readonly ChatEntry[], working: boolean): void;
+  // Hands the activity dock the session's entries after a change, whether the
+  // session's turn is under way (working, or waiting on a permission answer),
+  // and the compaction running in the session.
+  setTurn(
+    entries: readonly ChatEntry[],
+    working: boolean,
+    compaction: SessionCompaction | null,
+  ): void;
   // Disposes every draw, the activity dock's tick and the status line's
   // anchors.
   dispose(): void;
@@ -295,8 +303,8 @@ export function createComposerSurface(
         },
       );
     },
-    setTurn(entries, working) {
-      dock.set(entries, working);
+    setTurn(entries, working, compaction) {
+      dock.set(entries, working, compaction);
     },
     dispose() {
       dock.dispose();

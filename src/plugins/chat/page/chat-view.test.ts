@@ -28,6 +28,7 @@ function stateOf(returned: ReturnedMessage[]): ChatSessionState {
     returned,
     repo: 'app',
     branch: 'main',
+    compaction: null,
   };
 }
 
@@ -103,7 +104,7 @@ function mounted() {
     composerParts: createPartStore(),
     statusParts: createPartStore(),
     markdown: {},
-    keys: { anchor: () => ({ dispose: noEvent }) },
+    keys: { anchor: () => ({ dispose: noEvent }), keysFor: () => null },
     commands: { exists: () => true, run: noEvent },
     platform: 'macos',
     run: noEvent,

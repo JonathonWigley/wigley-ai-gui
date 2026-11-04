@@ -697,11 +697,11 @@ describe('composer surface activity dock', () => {
         null,
     });
 
-    surface.setTurn(asked, true);
+    surface.setTurn(asked, true, null);
     const live = read();
-    surface.setTurn(answered, false);
+    surface.setTurn(answered, false, null);
     const done = read();
-    surface.setTurn([...answered, userEntry('u2', 70000)], false);
+    surface.setTurn([...answered, userEntry('u2', 70000)], false, null);
     const hidden = read();
 
     expect([live, done, hidden]).toEqual([
@@ -720,7 +720,11 @@ describe('composer surface activity dock', () => {
       working: userWorking(true),
     });
 
-    surface.setTurn([userEntry('u1', 1000), readEntry('t1', 2000, true)], true);
+    surface.setTurn(
+      [userEntry('u1', 1000), readEntry('t1', 2000, true)],
+      true,
+      null,
+    );
     const firstLayout = slot.children[0]?.dataset.layout;
     surface.setTurn(
       [
@@ -729,6 +733,7 @@ describe('composer surface activity dock', () => {
         readEntry('t2', 3000, true),
       ],
       true,
+      null,
     );
 
     expect(firstLayout).toBe(USER_LAYOUT);
@@ -742,7 +747,11 @@ describe('composer surface activity dock', () => {
 
   it('working_LayoutChange_RedrawsFreshWithTheNewLayout', () => {
     const { deps, surface, slot, drawComposer } = setUpSurface(null);
-    surface.setTurn([userEntry('u1', 1000), readEntry('t1', 2000, true)], true);
+    surface.setTurn(
+      [userEntry('u1', 1000), readEntry('t1', 2000, true)],
+      true,
+      null,
+    );
     const firstLayout = slot.children[0]?.dataset.layout;
 
     deps.layouts.set(
@@ -766,7 +775,11 @@ describe('composer surface activity dock', () => {
         (line) => line === 'default layout working failed: broken default',
       ).length;
 
-    surface.setTurn([userEntry('u1', 1000), readEntry('t1', 2000, true)], true);
+    surface.setTurn(
+      [userEntry('u1', 1000), readEntry('t1', 2000, true)],
+      true,
+      null,
+    );
     [...armed.values()].forEach((run) => run());
     const failuresBeforeComposerDraw = failures();
     drawComposer();
@@ -780,7 +793,11 @@ describe('composer surface activity dock', () => {
     const { surface, armed, anchors } = setUpSurface({
       working: userWorking(),
     });
-    surface.setTurn([userEntry('u1', 1000), readEntry('t1', 2000, true)], true);
+    surface.setTurn(
+      [userEntry('u1', 1000), readEntry('t1', 2000, true)],
+      true,
+      null,
+    );
     const armedWhileLive = armed.size;
     const partAnchor = () =>
       anchors.find((anchor) => anchor.command === chatCommand('newSession'));

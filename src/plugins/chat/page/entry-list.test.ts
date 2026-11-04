@@ -39,6 +39,7 @@ const KINDS: EntryKind[] = [
   'result',
   'notice',
   'raw',
+  'compaction',
 ];
 
 // Draws `div.fancy` for every kind, with the builders in `overrides` in
@@ -346,7 +347,8 @@ function setUpList(shown: ShownLayouts<ChatLayout>) {
         anchor: (_node, command) => ({
           dispose: () => disposed.push(command),
         }),
-        keysFor: () => null,
+        keysFor: (command) =>
+          command === chatCommand('interrupt') ? '⌃C' : null,
       },
       commands: { exists: () => true, run: () => undefined },
       platform: 'macos',
@@ -821,6 +823,52 @@ describe('pending rows', () => {
     expect(calls).toEqual([
       { how: 'draw', sent: false },
       { how: 'update', sent: true },
+    ]);
+  });
+
+  it('pending_HeldRow_PartGetsHoldReasonAndSkipKey', () => {
+    const calls: {
+      how: 'draw' | 'update';
+      holdReason: string | null;
+      skipKey: string;
+    }[] = [];
+    const shown = withUser<ChatLayout>(
+      defaultLayout,
+      {
+        queuedMessage(parent, input, kit) {
+          calls.push({
+            how: 'draw',
+            holdReason: input.holdReason,
+            skipKey: input.skipKey,
+          });
+          return {
+            element: kit.el(parent, 'div', 'fancy-queued'),
+            update: (next) =>
+              calls.push({
+                how: 'update',
+                holdReason: next.holdReason,
+                skipKey: next.skipKey,
+              }),
+          };
+        },
+      },
+      'fancy',
+    );
+    const { list, put } = setUpList(shown);
+    put(user('u1'));
+
+    list.setQueued([
+      { ...queued('q1'), holdReason: 'auto · cache cold · 182k' },
+    ]);
+    list.setQueued([{ ...queued('q1'), holdReason: null }]);
+
+    expect(calls).toEqual([
+      {
+        how: 'draw',
+        holdReason: 'auto · cache cold · 182k',
+        skipKey: '⌃C',
+      },
+      { how: 'update', holdReason: null, skipKey: '⌃C' },
     ]);
   });
 });

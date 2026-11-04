@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Timers } from '../../../contracts/ambient';
 import { type ChatEntry, MAIN_AGENT_ID } from '../../../contracts/agent';
+import type { SessionCompaction } from '../contract';
 import type { StepInput, WorkingInput } from '../layouts/layout';
 import { createActivityDock } from './activity-dock';
 
@@ -93,6 +94,23 @@ const live = (
   steps: steps as StepInput[],
   startedAt,
   now: NOW,
+  compaction: null,
+});
+
+const APP_REASON = 'auto · cache cold · 182k';
+
+const app: SessionCompaction = {
+  trigger: 'app',
+  reason: APP_REASON,
+  startedAt: 700,
+};
+
+const compacting = (steps: ChatEntry[], now = NOW): WorkingInput => ({
+  state: 'compacting',
+  steps: steps as StepInput[],
+  startedAt: 700,
+  now,
+  compaction: APP_REASON,
 });
 
 const done = (
@@ -110,7 +128,11 @@ const done = (
   costUsd,
 });
 
-type SetCall = [entries: ChatEntry[], working: boolean];
+type SetCall = [
+  entries: ChatEntry[],
+  working: boolean,
+  compaction: SessionCompaction | null,
+];
 
 const u = user('u', 100);
 const running = tool('t', 110, { running: true });
@@ -128,51 +150,51 @@ describe('activity dock', () => {
   it.each<{ case: string; calls: SetCall[]; sent: (WorkingInput | null)[] }>([
     {
       case: 'working with a running main tool',
-      calls: [[[u, running], true]],
+      calls: [[[u, running], true, null]],
       sent: [live('working', [running], 100)],
     },
     {
       case: 'a result lands while still working',
       calls: [
-        [[u, running], true],
-        [[u, finished, r900], true],
+        [[u, running], true, null],
+        [[u, finished, r900], true, null],
       ],
       sent: [live('working', [running], 100)],
     },
     {
       case: 'working again after a done line, the turn still empty',
       calls: [
-        [[u, finished, r900], false],
-        [[u, finished, r900], true],
+        [[u, finished, r900], false, null],
+        [[u, finished, r900], true, null],
       ],
       sent: [done([finished], 100, 900, 0.25), live('thinking', [], NOW)],
     },
     {
       case: 'idle with two results, the later one cost null',
-      calls: [[[u, finished, r900, r1500], false]],
+      calls: [[[u, finished, r900, r1500], false, null]],
       sent: [done([finished], 100, 1500, 0.25, 'success')],
     },
     {
       case: 'idle with no result after the last user entry',
       calls: [
-        [[u, running], true],
-        [[u, finished], false],
+        [[u, running], true, null],
+        [[u, finished], false, null],
       ],
       sent: [live('working', [running], 100), null],
     },
     {
       case: 'live, then a result lands and the session goes idle',
       calls: [
-        [[u, running], true],
-        [[u, finished, r900], false],
+        [[u, running], true, null],
+        [[u, finished, r900], false, null],
       ],
       sent: [live('working', [running], 100), done([finished], 100, 900, 0.25)],
     },
     {
       case: 'done, then the user sends',
       calls: [
-        [[u, finished, r900], false],
-        [[u, finished, r900, u2], false],
+        [[u, finished, r900], false, null],
+        [[u, finished, r900, u2], false, null],
       ],
       sent: [done([finished], 100, 900, 0.25), null],
     },
@@ -181,8 +203,8 @@ describe('activity dock', () => {
       calls: (() => {
         const list = [u, finished, r900];
         return [
-          [list, false],
-          [list, false],
+          [list, false, null],
+          [list, false, null],
         ] satisfies SetCall[];
       })(),
       sent: [done([finished], 100, 900, 0.25)],
@@ -190,8 +212,8 @@ describe('activity dock', () => {
     {
       case: 'live with one more main tool step',
       calls: [
-        [[u, running], true],
-        [[u, running, second], true],
+        [[u, running], true, null],
+        [[u, running, second], true, null],
       ],
       sent: [
         live('working', [running], 100),
@@ -201,16 +223,16 @@ describe('activity dock', () => {
     {
       case: 'live with a new array of the same steps',
       calls: [
-        [[u, running], true],
-        [[u, running], true],
+        [[u, running], true, null],
+        [[u, running], true, null],
       ],
       sent: [live('working', [running], 100)],
     },
     {
       case: 'a later result while still idle',
       calls: [
-        [[u, finished, r900], false],
-        [[u, finished, r900, r1500], false],
+        [[u, finished, r900], false, null],
+        [[u, finished, r900, r1500], false, null],
       ],
       sent: [
         done([finished], 100, 900, 0.25),
@@ -220,8 +242,8 @@ describe('activity dock', () => {
     {
       case: 'a live turn after a result, then done from the user entry',
       calls: [
-        [[u, r900, late], true],
-        [[u, r900, lateDone, r1500], false],
+        [[u, r900, late], true, null],
+        [[u, r900, lateDone, r1500], false, null],
       ],
       sent: [
         live('working', [late], 1000),
@@ -230,14 +252,51 @@ describe('activity dock', () => {
     },
     {
       case: "an answered Agent call and its subagent's running tool",
-      calls: [[[u, agentCall, subagentTool], true]],
+      calls: [[[u, agentCall, subagentTool], true, null]],
       sent: [live('thinking', [agentCall], 100)],
+    },
+    {
+      case: 'compacting while idle after a done turn',
+      calls: [[[u, finished, r900], false, app]],
+      sent: [compacting([])],
+    },
+    {
+      case: 'compaction ends while idle',
+      calls: [
+        [[u, finished, r900], false, app],
+        [[u, finished, r900], false, null],
+      ],
+      sent: [compacting([]), done([finished], 100, 900, 0.25)],
+    },
+    {
+      case: 'compaction starts during an empty live turn',
+      calls: [
+        [[u, finished, r900], true, null],
+        [[u, finished, r900], true, app],
+      ],
+      sent: [live('thinking', [], NOW), compacting([])],
+    },
+    {
+      case: 'compaction ends during an empty live turn',
+      calls: [
+        [[u, finished, r900], true, app],
+        [[u, finished, r900], true, null],
+      ],
+      sent: [compacting([]), live('thinking', [], NOW)],
+    },
+    {
+      case: 'the same compaction again',
+      calls: [
+        [[u, running], true, app],
+        [[u, running], true, app],
+      ],
+      sent: [compacting([running])],
     },
   ])('dock_Set ($case)', ({ calls, sent }) => {
     const setUp = setUpDock();
 
-    for (const [entries, working] of calls) {
-      setUp.dock.set(entries, working);
+    for (const [entries, working, compaction] of calls) {
+      setUp.dock.set(entries, working, compaction);
     }
 
     expect(setUp.sent).toEqual(sent);
@@ -247,7 +306,7 @@ describe('activity dock', () => {
   it('dock_Tick_LiveSendsNowEachSecondAndStopsWhenIdle', () => {
     const { dock, sent, armed, fireAll, clock } = setUpDock();
     clock.time = 1000;
-    dock.set([u, running], true);
+    dock.set([u, running], true, null);
 
     clock.time = 2000;
     fireAll();
@@ -259,12 +318,22 @@ describe('activity dock', () => {
     ).toEqual([1000, 2000, 3000]);
     expect(dock.input()).toEqual(sent.at(-1));
 
-    dock.set([u, finished, r900], false);
+    dock.set([u, finished, r900], false, null);
     expect(armed.size).toBe(0);
 
-    dock.set([u, running], true);
+    dock.set([u, running], true, null);
     expect(armed.size).toBe(1);
     dock.dispose();
     expect(armed.size).toBe(0);
+  });
+
+  it('dock_Tick_CompactingWhileIdle_SendsNowEachSecond', () => {
+    const { dock, sent, fireAll, clock } = setUpDock();
+    dock.set([u, finished, r900], false, app);
+
+    clock.time = NOW + 1000;
+    fireAll();
+
+    expect(sent).toEqual([compacting([]), compacting([], NOW + 1000)]);
   });
 });

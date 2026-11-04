@@ -506,7 +506,8 @@ const INTERRUPT_AND_CLOSE_STEPS: SelfTestStep[] = [
   {
     keys: sendKeys('after cold'),
     expect: '[chat] 1 pending message(s) in chat-selftest',
-    why: 'The fixture gate holds the send after fake: cold; the held row waits while the fake holds the app compaction.',
+    alsoExpect: [/^\[chat\] chat-selftest compacting: selftest · cache cold$/],
+    why: "The fixture gate holds the send after fake: cold; the held row waits while the fake holds the app compaction, and the page logs the compaction's label as it starts.",
   },
   {
     keys: sendKeys('behind hold'),
@@ -516,7 +517,10 @@ const INTERRUPT_AND_CLOSE_STEPS: SelfTestStep[] = [
   {
     keys: ['<C-c>'],
     expect: '[chat] 0 pending message(s) in chat-selftest',
-    alsoExpect: [/^\[chat\] interrupted chat-selftest$/],
+    alsoExpect: [
+      /^\[chat\] interrupted chat-selftest$/,
+      /^\[chat\] chat-selftest compaction ended$/,
+    ],
     why: 'Ctrl+C skips the held compaction; the held row is written when the compaction ends, then the row behind it at the next idle.',
   },
   {

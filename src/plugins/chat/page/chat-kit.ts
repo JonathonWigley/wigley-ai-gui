@@ -1,5 +1,6 @@
 import type { ChatEntry, ChatImage } from '../../../contracts/agent';
 import type { Disposable } from '../../../contracts/disposable';
+import { formatTokens } from '../../../shared/format-tokens';
 import { appended, element } from '../../../shared/page/dom';
 import { type ButtonVariant, textButton } from '../../../shared/page/ui/button';
 import {
@@ -95,6 +96,7 @@ export function createEntryKit(entry: ChatEntry, deps: KitDeps): EntryKit {
       }
       return appended(parent, imageThumbnails(current.images, deps));
     },
+    tokens: (count) => formatTokens(count),
   };
   return {
     kit,

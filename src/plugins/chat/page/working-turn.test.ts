@@ -4,6 +4,8 @@ import {
   type ChatEntryKind,
   MAIN_AGENT_ID,
 } from '../../../contracts/agent';
+import type { SessionCompaction } from '../contract';
+import type { WorkingState } from '../layouts/layout';
 import { doneInput, workingInput } from './working-turn';
 
 const SUBAGENT_ID = 'agent-1';
@@ -52,6 +54,17 @@ function entry(kind: ChatEntryKind, id: string, at: number): ChatEntry {
       return { kind, id, at, text: 'note', tone: 'info', raw: [] };
     case 'raw':
       return { kind, id, at, raw: [] };
+    case 'compaction':
+      return {
+        kind,
+        id,
+        at,
+        trigger: 'app',
+        beforeTokens: null,
+        afterTokens: null,
+        durationMs: null,
+        raw: [],
+      };
   }
 }
 
@@ -137,7 +150,7 @@ describe('workingInput', () => {
       expected: 'thinking',
     },
   ])('workingInput state with $given → $expected', ({ list, expected }) => {
-    expect(workingInput(list, 900).state).toBe(expected);
+    expect(workingInput(list, 900, null).state).toBe(expected);
   });
 
   it.each([
@@ -192,12 +205,75 @@ describe('workingInput', () => {
   ])(
     'workingInput bounds with $given → $expected',
     ({ list, now, expected }) => {
-      const input = workingInput(list, now);
+      const input = workingInput(list, now, null);
       expect({
         startedAt: input.startedAt,
         steps: input.steps.map((step) => step.id),
         now: input.now,
       }).toEqual(expected);
+    },
+  );
+
+  it.each<{
+    given: string;
+    compaction: SessionCompaction | null;
+    state: WorkingState;
+    label: string | null;
+    startedAt: number;
+  }>([
+    {
+      given: 'app',
+      compaction: {
+        trigger: 'app',
+        reason: 'auto · cache cold · 182k',
+        startedAt: 700,
+      },
+      state: 'compacting',
+      label: 'auto · cache cold · 182k',
+      startedAt: 700,
+    },
+    {
+      given: 'app, no reason',
+      compaction: { trigger: 'app', reason: null, startedAt: 700 },
+      state: 'compacting',
+      label: 'auto',
+      startedAt: 700,
+    },
+    {
+      given: 'manual',
+      compaction: { trigger: 'manual', reason: null, startedAt: 700 },
+      state: 'compacting',
+      label: '/compact',
+      startedAt: 700,
+    },
+    {
+      given: 'harness',
+      compaction: { trigger: 'harness', reason: null, startedAt: 700 },
+      state: 'compacting',
+      label: 'autocompact',
+      startedAt: 700,
+    },
+    {
+      given: 'none',
+      compaction: null,
+      state: 'working',
+      label: null,
+      startedAt: 100,
+    },
+  ])(
+    'workingInput_Compaction ($given → $state, $label)',
+    ({ compaction, state, label, startedAt }) => {
+      const input = workingInput(
+        entries('user:u@100', 'tool!:t@110'),
+        900,
+        compaction,
+      );
+
+      expect({
+        state: input.state,
+        compaction: input.compaction,
+        startedAt: input.startedAt,
+      }).toEqual({ state, compaction: label, startedAt });
     },
   );
 });

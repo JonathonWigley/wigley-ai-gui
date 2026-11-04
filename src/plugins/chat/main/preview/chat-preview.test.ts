@@ -88,6 +88,7 @@ describe('chat preview', () => {
         'result',
         'notice',
         'raw',
+        'compaction',
       ]),
     );
     const controlIds = state.controls.map((control) => control.id);
