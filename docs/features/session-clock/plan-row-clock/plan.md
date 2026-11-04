@@ -173,5 +173,7 @@ Review base: 693cb8d04eb48c87e6cba0406a0e2d850f90db54
 - onActiveTime runs only for a held session — matches the background handler — a listener misses a message arriving before the tab · group 03 · group 03
 - Lead: precondition met. session-groups merged to local main at 5b06f4e7, plan folder closed, reported by its run. main merged into row-clock; the UsageTone conflict kept both sides.
 ### Review rounds
+- Round 1 at acd9c03d: 20 findings, no critical. Lead-applied 402ba9fc. Fix commits follow; every recommendation taken per the user and AGENTS.md § Review.
 ### Test gate
 - Picks: active-time (added), row-clock (added), chat-sessions and open-sessions (clock and save), chat-view, chat-commands, read-chat-layout, chat default layout (edited for the part), session-lines and usage-view-model (row text and cache). Sessions CSS earns no pick: styling, checked live.
+- Round 1 fix picks: chat-sessions, chat main start, open-sessions, chat-view, chat-state, row-clock, chat-commands, fake-agent-harness (edited), session-lines, usage-view-model.
