@@ -276,7 +276,7 @@ describe('mountChatView active time', () => {
     ]);
     expect(mount.view.activeTime('row-2')).toEqual(RUNNING);
     expect(mount.logs).toEqual([
-      'chat sessions not all added: listener failed',
+      'chat session arrival failed: listener failed',
     ]);
   });
 

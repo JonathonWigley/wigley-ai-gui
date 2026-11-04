@@ -681,7 +681,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
 
   // Starts or stops the session's clock after a change to its activity or
   // background count; sends and saves only when the clock changed. A replay
-  // moves neither: its end settles the clock once.
+  // moves neither: a held attach's end settles the clock once, and a failed
+  // attach leaves it paused.
   function updateActiveTime(session: HeldSession) {
     if (session.replay.isReplaying) {
       return;

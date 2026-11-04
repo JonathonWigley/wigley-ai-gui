@@ -299,9 +299,7 @@ round; primer: an open primer), since main, not the page, decides.
   and the plugins it depends on (a built-in plugin's default keys sit in `src/plugins/keymap.ts`); `main/`
   and `page/` each export a part, the manifest with a start function that receives that process's plugin API and
   returns the handlers for the manifest's commands that run in that process, plus `exports` and `dispose`.
-  `exports(consumer)` gives each dependent its own view of the plugin's exports, and every registration a
-  dependent makes through it is filed with `consumer.track`, so the host undoes it when that dependent stops.
-  `dispose` undoes only what the plugin API cannot see (A registration, below). The compiler checks every command that runs in a process has a handler there and
+  `exports` is a plain value its dependents read. `dispose` undoes only what the plugin API cannot see (A registration, below). The compiler checks every command that runs in a process has a handler there and
   every key names a declared command running in the key's process (page and editor keys a page command; app,
   global and intercept keys a main one). A built-in plugin's manifest joins `src/plugins/manifests.ts`, which main
   builds the served keymap, labels and settings from, and its parts join `src/plugins/main.ts` and

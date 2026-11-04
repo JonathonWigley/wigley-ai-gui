@@ -479,7 +479,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       try {
         callEach(states, add);
       } catch (error) {
-        log('chat', `chat sessions not all added: ${errorText(error)}`);
+        log('chat', `chat session arrival failed: ${errorText(error)}`);
       }
     },
     (error: unknown) =>

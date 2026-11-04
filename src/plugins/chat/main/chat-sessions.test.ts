@@ -4070,7 +4070,6 @@ describe('createChatSessions active time', () => {
         since: null,
       });
       expect(test.saved.last()?.sessions[0].activeMs).toBe(42000);
-      expect(test.sent('activeTime')).toEqual([]);
     },
   );
 
@@ -4108,6 +4107,7 @@ describe('createChatSessions active time', () => {
       await flush();
 
       expect(test.chat.sessions()[0].running).toBe(false);
+      expect(test.sent('activeTime')).toEqual([]);
       expect(test.chat.sessions()[0].activeTime).toEqual({
         totalMs: 42000,
         since: null,
