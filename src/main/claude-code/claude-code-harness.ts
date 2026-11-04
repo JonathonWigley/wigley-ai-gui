@@ -47,13 +47,16 @@ import {
 import { readPlanUsage } from './plan-usage';
 import {
   advanceFold,
+  APP_COMPACT_TEXT,
   appCommandUuid,
   createSessionFoldState,
   type FoldEffect,
   type FoldStep,
   foldPipeLine,
+  foldProcessClosed,
   foldUsageInput,
   heldUserMessage,
+  nextFoldDeadline,
   replayPipeLog,
   type SessionFoldState,
 } from './session-fold';
@@ -208,7 +211,7 @@ interface ClaudeSession {
   pipeEvents: HostedProcessEvents;
   // What a new process emits first, then its first context request.
   open(): void;
-  // Arms the live grace timer for `state.graceDeadline`.
+  // Arms the live grace timer for `nextFoldDeadline(state)`.
   syncGraceTimer(): void;
   // Writes what a replay shows the process is owed, unless it has closed: a
   // refusal for each unanswered host request, then the context request.
@@ -230,8 +233,9 @@ interface ClaudeSession {
 // silently, unless a replay left it held: the caller never wrote that one, so it
 // gets `messageDropped` before `ended`. Once the process has closed or detached,
 // nothing more is emitted or written; a detached process keeps running on the
-// host. The caller delivers
-// `pipe`'s events to `pipeEvents`.
+// host. `compact` writes `/compact` under an app command uuid, as a control pick
+// does, so a replay also reads it as the app's; the fold owns the compaction's
+// events. The caller delivers `pipe`'s events to `pipeEvents`.
 function createClaudeSession(
   deps: ClaudeCodeHarnessDeps,
   request: AgentStart,
@@ -246,7 +250,7 @@ function createClaudeSession(
   let endPromise: Promise<void> | null = null;
   const closeWaiters: (() => void)[] = [];
   const timers: ReturnType<typeof setTimeout>[] = [];
-  // Armed for `armedGraceDeadline`, which follows `state.graceDeadline`.
+  // Armed for `armedGraceDeadline`, which follows `nextFoldDeadline(state)`.
   let graceTimer: ReturnType<typeof setTimeout> | null = null;
   let armedGraceDeadline: number | null = null;
 
@@ -277,14 +281,14 @@ function createClaudeSession(
   const runGraceDeadline = (deadline: number) => {
     graceTimer = null;
     armedGraceDeadline = null;
-    if (hasClosed || state.graceDeadline !== deadline) {
+    if (hasClosed || nextFoldDeadline(state) !== deadline) {
       return;
     }
     runStep(advanceFold(state, deadline));
   };
 
   const syncGraceTimer = () => {
-    const deadline = state.graceDeadline;
+    const deadline = nextFoldDeadline(state);
     if (deadline === armedGraceDeadline) {
       return;
     }
@@ -434,6 +438,7 @@ function createClaudeSession(
         ? null
         : exitError(exit.code, exit.signal, state.lastStderr);
       const end = { code: exit.code, error: exit.error ?? exitFailure };
+      runStep(foldProcessClosed(state, deps.clock.now()));
       emitAgentEvent({ type: 'sessionEnded', at: deps.clock.now() });
       emit(() => events.ended(end));
       markClosed();
@@ -542,6 +547,18 @@ function createClaudeSession(
       }
       writeMessage(
         controlMessage(control.id, value, appCommandUuid(deps.randomUuid())),
+      );
+    },
+    compact() {
+      requireRunning();
+      if (state.activity !== 'idle') {
+        throw new Error('Claude is working; compact when the turn ends');
+      }
+      writeMessage(
+        userMessage(
+          { text: APP_COMPACT_TEXT, images: [] },
+          appCommandUuid(deps.randomUuid()),
+        ),
       );
     },
     end() {

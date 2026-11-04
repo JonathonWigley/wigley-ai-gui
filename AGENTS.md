@@ -83,7 +83,7 @@ src/contracts/   interfaces and records crossing a seam, the plugin API among th
 src/config/      core commands and scopes, default settings, the core token registry and the built-in
                  themes  → read only by main
 src/shared/      implementation both processes use (CommandRegistry, the plugin host, manifest merging, the event bus,
-                 theme variables, `errorText`, the fake agent harness, `active-time.ts`: the functions over an `ActiveTime`)
+                 theme variables, `errorText`, `formatTokens` (`182k`), the fake agent harness, `active-time.ts`: the functions over an `ActiveTime`)
   layouts/       the layout registry behind the core LayoutService (main side)
   layout-url.ts  the `wigley-layout:` URLs that serve layout files to the page
   visual-url.ts  the `wigley-visual:` URLs that serve a visual's document by its source hash
@@ -206,6 +206,13 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
   agent-strip/   main/ (registers its layouts, hands its self-test script), page/ (the strip of subagent and task boxes above the Chat composer's box, through chat's
                  `addComposerPart`, with a stop on chat's entry cursor), layouts/ (its Layout contract and `default`
                  layout); `docs/features/chat-bar/design.md`
+  agent-skills/  main/ (registers its layouts, hands its self-test script), page/ (the session hub's Skills section,
+                 through chat's `addSidePart`), layouts/ (its Layout contract and `default` layout);
+                 `docs/features/chat-bar/design.md`
+  auto-compact/  manifest.ts and main/ only (folds `chat.agentEvent` into each host session's last main usage,
+                 registers the send gate that compacts a cold-cache session before a message when its context is above
+                 the `minTokens` setting, and gives chat the same threshold for the harness's idle compaction);
+                 `docs/features/auto-compact/design.md`
   forms/         manifest.ts, contract.ts, main/ (the round form type, its MCP tools, the preview
                  round), page/ (the Form tab), layouts/ (the Layout contract and the built-in `default` layout)
   primer/        manifest.ts, contract.ts, main/ (the feature primer form type, its MCP tools, fixtures,
@@ -232,8 +239,8 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  the start prompt with its folder, profile, sign-in and session steps), layouts/ (the chat Layout contract
                  and the built-in `default` chat layout); `image-rules.ts` at the root holds the attach rules both
                  parts share; main exports `launch` (a background session with a first message), `profileNames` and
-                 `profileOf` to notes, `send` and `profileOf` to forms and the primer (the form wake), and `addInstructions` (text every session chat starts carries to its harness)
-                 to visual; page exports `focusedEntry` (the focused entry's element) to visual and `activeTime` (a session's clock)
+                 `profileOf` to notes, `send` and `profileOf` to forms and the primer (the form wake), `addInstructions` (text every session chat starts carries to its harness)
+                 to visual, and `addSendGate` and `addIdleCompactThreshold` to auto-compact; page exports `focusedEntry` (the focused entry's element) to visual and `activeTime` (a session's clock)
                  with the `activeTimeChanged` event; its page also draws each session's run time under its row, through
                  sessions' `addRowPart` and a `rowClock` layout part; main keeps each session's clock, `docs/features/session-clock/design.md`
   keys/          manifest.ts, contract.ts, main/ (registers the layouts only), page/ (which-key, the help overlay,
@@ -263,7 +270,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  each: main.ts its entry rule and main actions, page.ts its look and page actions, registered through
                  `addStage`), main/ (hears `chat.agentEvent` and the sessions events, keeps each session's flow in its
                  plugin data, watches plan folders, runs Clear & make), page/ (the row chip, the composer strip, the
-                 Flow tab, the preview), layouts/ (the workflow Layout contract and the built-in `default` layout);
+                 side pane, the preview), layouts/ (the workflow Layout contract and the built-in `default` layout);
                  `docs/features/workflow/design.md`
   visual/        manifest.ts, contract.ts, main/ (the session note it hands chat's `addInstructions`, the layout
                  registration), page/ (`html-fence.ts`, the `html` fence contribution: the "drawing visual…" card for
@@ -378,11 +385,15 @@ round; primer: an open primer), since main, not the page, decides.
   plugin's strip and the agent strip are two. A part may offer a **stop**: `j` on the entry cursor's last stop (the
   newest pending row, else the last entry or an open last run's last step) hands the cursor to it, and the part holds
   its own key scope until it hands the cursor back.
+- **A side part** is what a plugin draws in the session hub beside the Chat tab's transcript, through the `chat` page
+  export `addSidePart`: a composer part's shape plus a `title` and an `order`, and `build` also gets a handle that sets
+  the section's summary. Chat draws each part's section frame and keeps its collapse. The workflow plugin's side pane and
+  the agent-skills plugin's list are two. A side part takes no key scope and no stop.
 - **A status part** is what a plugin draws in the Chat status line under the box, through the `chat` page export
-  `addStatusPart`, the same shape; the usage plugin's context, cache and spend are one.
+  `addStatusPart`, the same shape; the usage plugin's spend is one. Usage's context line is a composer part.
 - **A send gate** is a rule a plugin runs before chat main writes a message to an idle session, through the `chat`
-  main export `addSendGate`. A gate answers a hold (`{ action: 'compact', reason }`) or nothing; chat does the
-  holding, so a new pre-send rule is a gate in its own plugin. The `auto-compact` plugin's is the first
+  main export `addSendGate`. A gate answers a hold (`{ action: 'compact', reason }`) or nothing, and the first hold
+  wins; chat does the holding, so a new pre-send rule is a gate in its own plugin. The `auto-compact` plugin's is the first
   (`docs/features/auto-compact/design.md`).
 - **A chat pane** is one pane of Sessions mode's pane tree (`src/shared/page/pane-tree/`, the sessions plugin its
   owner): it shows one whole session, tab bar included, and a session shows in at most one pane. The side bar drives
@@ -654,8 +665,8 @@ round; primer: an open primer), since main, not the page, decides.
   `permissionActions` (Allow once / Deny with their keys), and `images` (a user entry's thumbnails, which open the
   image viewer). Every part takes its parent first. Beside the entries, the layout draws the other Chat tab surfaces
   through parts that take `(parent, input, kit)` and return a `PartView`: `activity` (one run of the agent's steps,
-  `docs/features/agent-chat/design.md` § Activity line), `working` (the activity dock in the composer's `working`
-  slot: the running turn, then its finished line, § Activity dock),
+  `docs/features/agent-chat/design.md` § Activity line), `working` (the activity dock in the session hub's Main agent
+  section: the running turn, then its finished line, § Activity dock), `workingLine` (its one line in the composer's `working` slot), `sideSection` and `sessionFacts` (the hub's section frame and Session rows),
   `queuedMessage` (one pending message's row, § Pending messages), `composer`, `statusLine`, `attachments`, `pickerRow`, `signIn`, `reasonBox`, `closeConfirm` and
   `imageViewer`, each with a kit that extends the base kit (`activity`, `working`, `queuedMessage` and `imageViewer`
   take the base kit itself). Beside the parts, the boolean `activityInTranscript` says whether the entry list draws

@@ -3,6 +3,7 @@ import type {
   AccountStatus,
   AgentEvent,
   ChatEntry,
+  CompactionTrigger,
   PlanRowUpdate,
   ProcessActivity,
   SessionControl,
@@ -61,10 +62,43 @@ export interface ResumeRequest {
 // turn ends or the user sends it now; `id` is unique within its session.
 // `sentEntryId` is null while it waits, and once sent now the id of the user
 // entry the agent adds when it takes the message in, which drops the row.
+// `holdReason` is non-null on a held row, a send gate's reason: the row waits
+// for its session's compaction and is written when the compaction ends. A
+// session has at most one held row.
 export interface QueuedMessage extends UserMessage {
   id: string;
   sentEntryId: string | null;
+  holdReason: string | null;
 }
+
+// A compaction running in a session. `reason` is the send gate's reason for a
+// compaction a hold started; null for any other.
+export interface SessionCompaction {
+  trigger: CompactionTrigger;
+  reason: string | null;
+  startedAt: number;
+}
+
+// What a send gate reads about a send to an idle session. `sessionId` is the
+// row's id, `hostSessionId` the id its `agentEvent`s carry now, and `text` the
+// message as the user wrote it.
+export interface SendGateInput {
+  sessionId: string;
+  hostSessionId: string;
+  text: string;
+  now: number;
+}
+
+// `action: 'compact'` compacts the session before the send is written, and
+// `reason` names why on the held row and the dock.
+export interface SendGateVerdict {
+  action: 'compact';
+  reason: string;
+}
+
+// A rule run before chat main writes a message to an idle session; null lets
+// the write go on.
+export type SendGate = (input: SendGateInput) => SendGateVerdict | null;
 
 // A message on its way back into its session's box; `id` is unique within the
 // session.
@@ -97,9 +131,13 @@ export interface ChatSessionState {
   // True while the session's process runs; false while it rests, with no
   // process yet or its process exited.
   running: boolean;
-  // The messages waiting for the running turn to end, and those sent now not
-  // yet taken in, oldest first; [] while nothing waits.
+  // The messages waiting for the running turn to end, the held row waiting on
+  // its compaction and the rows behind it, and those sent now not yet taken in,
+  // oldest first; [] while nothing waits.
   queued: QueuedMessage[];
+  // The compaction running in the session, whatever started it; null while
+  // none runs.
+  compaction: SessionCompaction | null;
   // The messages returned to the box that the page has not placed yet, oldest
   // first; a page mounting the session's tab puts them in its box.
   returned: ReturnedMessage[];
@@ -147,8 +185,10 @@ export interface ChatChannel extends ChannelShape {
     // `entries`. While the agent reports the session's turn running the
     // message is queued, arriving as `queued`, and written to the agent when
     // the turns before it end, unless sent now first; a permission call left
-    // waiting after its turn ended queues nothing. A written message the agent
-    // never takes in arrives back as `returned`.
+    // waiting after its turn ended queues nothing. The same goes while a
+    // compaction runs or a hold is up. An idle send can be held by a send gate:
+    // it arrives in `queued` as the held row, and the session compacts first. A
+    // written message the agent never takes in arrives back as `returned`.
     send(sessionId: string, message: UserMessage): Promise<void>;
     // Reads a restored session's earlier conversation, arriving as `entries`.
     // While its profile is missing a call reads nothing and a later call
@@ -172,7 +212,9 @@ export interface ChatChannel extends ChannelShape {
     cancelLogIn(id: number): void;
     logOut(profile: string): Promise<void>;
     // Returns every queued message not sent now, arriving as `returned`, then
-    // interrupts the running turn; messages sent now stay queued.
+    // interrupts the running turn; messages sent now stay queued. While a hold
+    // is up it skips the compaction and returns nothing: the held row is written
+    // when the compaction ends, then the rows behind it.
     interrupt(sessionId: string): void;
     // Ends the session's process and starts a fresh one under a new host
     // session id; the entries become one `Conversation cleared` notice, sent
@@ -182,7 +224,8 @@ export interface ChatChannel extends ChannelShape {
     // leaving the row resting.
     clear(sessionId: string): void;
     // Takes the queued message out of the queue, arriving as `returned`; does
-    // nothing for one already written to the agent or sent now.
+    // nothing for one already written to the agent or sent now. On the held row
+    // the compaction goes on, and the rows behind wait for its end.
     pullBack(sessionId: string, queuedId: string): void;
     // The page put these messages from `returned` into the session's box, so
     // main holds them no longer.
@@ -190,12 +233,16 @@ export interface ChatChannel extends ChannelShape {
     // Writes the queued message to the agent at once, ahead of the rest of the
     // queue; its row stays, arriving in `queued` with `sentEntryId` set, until
     // the agent takes it in. Does nothing for one already written or sent now.
+    // On the held row it skips the compaction, as `interrupt` does, and the row
+    // is written when the compaction ends.
     sendNow(sessionId: string, queuedId: string): void;
     // While the agent reports the session's turn running, writes every queued
     // message not sent now, oldest first, then `message` as a new last row,
     // each as `sendNow` does; a write that throws leaves that row and every
-    // later one unsent. Otherwise sends `message` as `send` does, and a null
-    // `message` does nothing.
+    // later one unsent; the same while a compaction runs with no hold up. While
+    // a hold is up it queues `message` behind the held row and skips the
+    // compaction, as `interrupt` does, writing nothing now. Otherwise sends
+    // `message` as `send` does, and a null `message` does nothing.
     sendAllNow(sessionId: string, message: UserMessage | null): Promise<void>;
     setControl(sessionId: string, controlId: string, value: string): void;
     answerPermission(
@@ -227,6 +274,8 @@ export interface ChatChannel extends ChannelShape {
     sessionRested: { sessionId: string; error: string | null };
     // Replaces the session's whole queue.
     queued: { sessionId: string; queued: QueuedMessage[] };
+    // A compaction started in the session, or the running one ended.
+    compaction: { sessionId: string; compaction: SessionCompaction | null };
     // The session's repo or branch changed: read at its open and after each
     // turn ends.
     branch: { sessionId: string; repo: string; branch: string | null };
@@ -262,7 +311,9 @@ export interface ChatAgentEvent {
 
 // `agentEvent`: one agent event of a session chat owns, still sent after the
 // row closes for its process's `sessionEnded`; also a restored or resumed
-// row's saved usage, read from its transcript rather than sent by a process.
+// row's saved usage, read from its transcript rather than sent by a process,
+// and the `interrupted` `compactionEnded` chat makes for a compaction whose
+// process a clear or a failed attach let go.
 // `planUsage`: the plan rows one of those sessions saw. Both carry the
 // `profileDir` of the profile the row opened under: its `configDir` as the
 // `profiles` setting writes it, unexpanded; null is the harness default, which
@@ -289,7 +340,8 @@ export interface ChatMainExports {
   profiles(): readonly ChatProfile[];
   // The profile of a session chat owns; null for any other session id.
   profileOf(sessionId: string): string | null;
-  // Sends as the composer does: queued while the session's turn runs.
+  // Sends as the composer does: queued while the session's turn or compaction
+  // runs, and an idle send can be held by a send gate.
   // Rejects for a session chat does not hold, the layout preview included.
   send(sessionId: string, message: UserMessage): Promise<void>;
   // The `/clear` command's clear: resolves once the fresh process started;
@@ -305,6 +357,17 @@ export interface ChatMainExports {
   // the texts registered before it; a running session keeps what it started
   // with. Disposing it leaves later starts without it.
   addInstructions(text: string): Disposable;
+  // Gates are asked in registration order before a write to an idle session; the
+  // first non-null verdict holds the send, and no later gate is asked. A gate
+  // that throws is logged and counts as null. The returned function removes the
+  // gate; a second call does nothing.
+  addSendGate(gate: SendGate): () => void;
+  // At each process start chat asks the newest reader still registered for the
+  // context size above which the harness may compact the idle session on its
+  // own; with none, or when it throws (logged), the harness keeps its default. A
+  // running process keeps what it started with. The returned function removes
+  // the reader; a second call does nothing.
+  addIdleCompactThreshold(read: () => number | null): () => void;
 }
 
 // The session an app slash command was sent in: `args` is the trimmed text

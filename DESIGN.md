@@ -367,15 +367,16 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   describes: a form's saved state on its rail header, a config problem on the title bar.
 - **Usage:** the status-bar line is always on and aligned to the end, in `text-12`: every profile stacked, one
   line each, its name in semibold `fg-secondary` before its plan rows, each a label, a meter and its percent in the
-  server's order, each limit in a column shared across the profiles so its meters line up. A Chat session's context bar, cache
-  countdown and spend draw in its Chat status line, in the same items and order as the tab-bar line below. With the
+  server's order, each limit in a column shared across the profiles so its meters line up. A Chat session's context bar and cache
+  countdown draw in the context line above its box, and its spend in its Chat status line. With the
   optional `usage-tab-line` plugin on, each session's line also sits in its own tab bar,
   after the tabs and before the pane controls, in `text-12`: its context bar (`used/limit` against the autocompact
   limit), its cache countdown and its spend. In a narrow bar the line drops whole items from its end (spend, then cache,
   then the context text), never part of a number, keeping its context bar and a `space-2` gap before `⌘W`. A session
   with no usage yet draws a zero line, its context `0k`. While the session compacts, the line opens with a
-  `compacting` chip (`compacting · auto`) in `accent-tint`, and its context bar pulses at `duration-pulse`, static under
-  reduced motion. A meter takes the existing status colours by the server's severity (`normal`,
+  `compacting` chip (`compacting · auto`) in `accent-tint`, which ellipsizes when too narrow to fit beside the context
+  bar; in a tab bar the slot keeps room for the bar and a few of the chip's characters, and the strip scrolls instead.
+  Its context bar pulses at `duration-pulse`, unbroken across redraws, static under reduced motion. A meter takes the existing status colours by the server's severity (`normal`,
   `warning`, `critical`); the context bar by its share of the limit
   (`warning` from 70 %, `critical` from 90 %). The context bar carries no label; a stale profile's rows and a note
   (`plan loading`, `plan unavailable`) draw in `fg-tertiary`. The details bar
@@ -397,15 +398,22 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   comment box) while the items column has focus. A review pane of every answer opens before it sends.
 - **Chat:** user turns are a `card-background` block, not a bubble. Assistant prose is markdown on
   the sheet. The transcript shows the messages, permission prompts, notices and pending rows only: the agent's steps
-  (tool calls, thinking, raw events) and the turn results show in the composer's **activity dock**. While the session
+  (tool calls, thinking, raw events) and the turn results show in the **session hub**'s **activity dock**. The hub is
+  a `264px` column beside the transcript, on `block-background` with a left `border-default` line, hidden in a Chat tab
+  under `640px` and by `Space v s`. It stacks titled sections: each a `text-12` semibold `fg-tertiary` title with a
+  chevron and a tabular-numeral summary at its end, over its content; a click on the title collapses it, and a
+  `border-subtle` line parts the sections. Main agent holds the dock, Plan the workflow side pane, Skills one row per
+  skill and agent (the name in mono, a Tag for `main` or the subagent), and Session one row per fact (a dim label, its
+  value ellipsized). While the hub is not visible, the composer's **activity line** shows the dock's header on one line,
+  or its finished line. While the session
   works on a turn, the dock shows a header (the turn's time as `m:ss` in tabular numerals and a state word,
   `1:05 Working…`), a `radius-md` card listing the main agent's latest three tool calls in mono (the newest in `fg`,
   the older ones in `fg-tertiary`, a failed one in `status-error`), and the main agent's tool counts, dim
   (`Read 3 Bash 2 Edit 1`). When the turn ends, the dock shrinks to one dim `fg-tertiary` line, such as
   `Done · 1m 05s · $0.57 · Bash 6 · Read 2`, its time compact in tabular numerals, and keeps it until the user sends
   the next message; with no finished turn to show it takes no space. While the session compacts, the dock's header
-  reads `0:06 Compacting…` with the trigger after it in `fg-secondary` (`auto · cache cold · 182k`, `/compact`,
-  `autocompact`) over a thin indeterminate bar in `status-running`, and no tool card. A message held for a compaction is
+  reads `0:06 Compacting…` with the trigger after it in `fg-secondary`, ellipsized when narrow (`auto · cache cold · 182k`, `/compact`,
+  `autocompact`), over a thin indeterminate bar in `status-running`, and no tool card. A message held for a compaction is
   a pending row reading `sends after compaction · ⌃C skips`. A finished compaction leaves a divider in the
   transcript: a centred dim `text-12` line between two `border-default` rules, `Compacted 182k → 24k · auto · 9s`
   (`Compacted 182k` until the after-size is known). A chat layout that sets `activityInTranscript`
@@ -418,15 +426,18 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   with no card. Permission prompts are cards with a
   `status-attention` edge and plain verbs (Allow once, Deny). The composer floats (L3,
   `radius-xl`, inset `space-3`) with the transcript scrolling beneath it, and holds, top to bottom: other plugins'
-  composer parts (the workflow strip, the agent strip), the activity dock, the strip of attached images' thumbnails, the box (no mode
+  composer parts (the workflow strip, the agent strip, the context line), the activity line, the strip of attached images' thumbnails, the box (no mode
   label: the cursor's shape shows the vim mode), and the status line, drawn in this order: repo and branch in `fg-secondary`, the `i`/`a`
-  type hint, one model · effort chip, every other control's chip, the status parts other plugins add (usage: context,
-  cache, spend), the running dot, then Send.
-  The **agent strip** is an HScroller of boxes, each a `card-background` Card with `radius-md`, heading with a running
-  StatusDot, its name, a kind Tag and its elapsed time, then its description: a subagent box adds `model · effort` in
+  type hint, one model · effort chip, every other control's chip, the status parts other plugins add (usage: spend),
+  the running dot, then Send. The **context line** is a Meter that fills the composer's width, then `58k/300k` and
+  `cache 59m` in `text-12` tabular numerals.
+  The **agent strip** holds its subagents as an HScroller of cards, each a `card-background` Card with `radius-md`,
+  heading with a running StatusDot, its name, a kind Tag and its elapsed time, then its description, `model · effort` in
   `fg-tertiary`, its latest three tool calls in mono on `block-background`, the older two fading, and a context Meter
-  (`status-warning` at 80% or more), `84k/200k` and its cost; a task box adds its command in mono on `block-background`.
-  A box leaves when its subagent or task ends; the selected box takes the focus ring. A user turn shows its sent images
+  (`status-warning` at 80% or more), `84k/200k` and its cost. Its tasks stack under the cards as rows, one `text-12` line
+  each: a running StatusDot, the Shell Tag, the command in mono, ellipsized (wrapped whole while open), and its elapsed
+  time; past four rows they scroll. A box leaves when its subagent or task ends; the selected box takes the focus ring.
+  A user turn shows its sent images
   as thumbnails under its text.
 - **Visuals:** an agent's html block in any markdown. While it streams it is a Card holding a running StatusDot and
   `drawing visual…` in `text-12` `fg-secondary`. Once closed it is the inline box: the frame as wide as its column in a

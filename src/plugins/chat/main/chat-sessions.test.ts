@@ -5,6 +5,7 @@ import {
   type AgentEvent,
   type AgentProcessEvents,
   type ChatEntry,
+  type CompactionTrigger,
   MAIN_AGENT_ID,
   type ProcessActivity,
   type SessionControl,
@@ -13,6 +14,7 @@ import {
 import type { HostedProcessInfo } from '../../../contracts/session-host';
 import {
   createFakeAgentHarness,
+  FAKE_HOLD_TEXT,
   FAKE_MICROTASK_TIMERS,
   FAKE_PAST_SESSIONS,
   type FakeAgentHarness,
@@ -30,7 +32,13 @@ import type {
   TitleSource,
   ToolResult,
 } from '../../sessions/contract';
-import type { ChatChannel, ChatMainEvents, ChatProfile } from '../contract';
+import type {
+  ChatChannel,
+  ChatMainEvents,
+  ChatProfile,
+  SendGate,
+  SendGateInput,
+} from '../contract';
 import { DEFAULT_PROFILES } from '../manifest';
 import {
   ARCHIVED_SESSIONS_FILE,
@@ -100,6 +108,17 @@ function usageEmitted(
       ? [each.data]
       : [],
   );
+}
+
+// The `compactionEnded` `agentEvent`s chat emitted, as sent.
+function compactionEndsEmitted(emitted: readonly Emitted[]) {
+  return emitted.flatMap((each) => {
+    if (each.event !== 'agentEvent') {
+      return [];
+    }
+    const { event } = each.data;
+    return event.type === 'compactionEnded' ? [{ ...each.data, event }] : [];
+  });
 }
 
 const NOTHING_SAVED: SavedSessions = {
@@ -492,6 +511,7 @@ describe('createChatSessions', () => {
         profileDir: '~/.claude-personal',
         controls: {},
         instructions: [],
+        idleCompactMinTokens: null,
       },
     ]);
     expect(test.sent('sessionStarted')).toEqual([
@@ -507,6 +527,7 @@ describe('createChatSessions', () => {
         commands: [],
         running: false,
         queued: [],
+        compaction: null,
         returned: [],
         repo: 'app',
         branch: null,
@@ -703,6 +724,7 @@ describe('createChatSessions', () => {
       profileDir: '~/.claude',
       controls: {},
       instructions: [],
+      idleCompactMinTokens: null,
     });
     expect(test.uuidCalls()).toBe(0);
     expect(JSON.parse(await test.data.read(RECENT_FOLDERS_FILE))).toEqual([
@@ -1681,7 +1703,7 @@ describe('createChatSessions', () => {
     ]);
     expect(test.sent('queued').at(-1)).toEqual({
       sessionId: ROW_ID,
-      queued: [{ ...first, id: firstId, sentEntryId: null }],
+      queued: [{ ...first, id: firstId, sentEntryId: null, holdReason: null }],
     });
 
     test.activity('idle');
@@ -1746,8 +1768,13 @@ describe('createChatSessions', () => {
     test.chat.sendNow(ROW_ID, 'queued-2');
 
     const queued = [
-      { ...first, id: 'queued-1', sentEntryId: null },
-      { ...second, id: 'queued-2', sentEntryId: expect.any(String) },
+      { ...first, id: 'queued-1', sentEntryId: null, holdReason: null },
+      {
+        ...second,
+        id: 'queued-2',
+        sentEntryId: expect.any(String),
+        holdReason: null,
+      },
     ];
     expect(test.process.calls).toEqual([sendCall(second)]);
     expect(test.chat.sessions()[0].queued).toEqual(queued);
@@ -1818,7 +1845,9 @@ describe('createChatSessions', () => {
     expect(test.sent('queued').slice(queuedBefore)).toEqual([
       {
         sessionId: ROW_ID,
-        queued: [{ ...first, id: 'queued-1', sentEntryId: null }],
+        queued: [
+          { ...first, id: 'queued-1', sentEntryId: null, holdReason: null },
+        ],
       },
     ]);
     expect(test.sentReturned()).toEqual([]);
@@ -1838,7 +1867,14 @@ describe('createChatSessions', () => {
               message: 'queued',
               data: {
                 sessionId: ROW_ID,
-                queued: [{ ...first, id: 'queued-1', sentEntryId: null }],
+                queued: [
+                  {
+                    ...first,
+                    id: 'queued-1',
+                    sentEntryId: null,
+                    holdReason: null,
+                  },
+                ],
               },
             },
             {
@@ -1930,7 +1966,12 @@ describe('createChatSessions', () => {
       { sessionId: ROW_ID, messages: [second] },
     ]);
     expect(test.chat.sessions()[0].queued).toEqual([
-      { ...first, id: 'queued-1', sentEntryId: expect.any(String) },
+      {
+        ...first,
+        id: 'queued-1',
+        sentEntryId: expect.any(String),
+        holdReason: null,
+      },
     ]);
   });
 
@@ -1954,8 +1995,14 @@ describe('createChatSessions', () => {
         ...first,
         id: 'queued-1',
         sentEntryId: expect.any(String),
+        holdReason: null,
       };
-      const unsentRow = { ...second, id: 'queued-2', sentEntryId: null };
+      const unsentRow = {
+        ...second,
+        id: 'queued-2',
+        sentEntryId: null,
+        holdReason: null,
+      };
       expect(test.chat.sessions()[0].queued).toEqual(
         writeRow ? [sentRow] : [sentRow, unsentRow],
       );
@@ -2712,6 +2759,7 @@ describe('createChatSessions saved sessions', () => {
           profileDir: '~/.claude',
           controls: {},
           instructions: [],
+          idleCompactMinTokens: null,
         },
       ]);
       expect(test.sent('sessionRunning')).toEqual([{ sessionId: ROW_ID }]);
@@ -5571,4 +5619,862 @@ describe('createChatSessions stopAll', () => {
     expect(test.logged).toContain('[chat] stopped 1 session process(es)');
     expect(attachedOf(test)[0].calls).toEqual([]);
   });
+});
+
+const answerA: SendGate = () => ({ action: 'compact', reason: 'a' });
+const answerB: SendGate = () => ({ action: 'compact', reason: 'b' });
+const LATER: UserMessage = { text: 'later', images: [] };
+
+function compactionStartedEvent(
+  trigger: CompactionTrigger,
+  at = 2000,
+): AgentEvent {
+  return { type: 'compactionStarted', at, trigger };
+}
+
+function compactionEndedEvent(
+  outcome: 'done' | 'failed' | 'interrupted',
+  trigger: CompactionTrigger = 'app',
+): AgentEvent {
+  return {
+    type: 'compactionEnded',
+    at: 3000,
+    trigger,
+    outcome,
+    beforeTokens: null,
+    durationMs: null,
+  };
+}
+
+// A running session whose idle send of IDLE_SEND is held with reason `a`, row
+// `queued-1`, the fake keeping its compaction open.
+async function startedAndHeld(options?: Parameters<typeof setUp>[0]) {
+  const test = await started(options);
+  test.harness.holdCompactions();
+  test.chat.addSendGate(answerA);
+  await test.chat.send(ROW_ID, IDLE_SEND);
+  await flush();
+  return test;
+}
+
+describe('createChatSessions send gate and hold', () => {
+  it.each([
+    {
+      given: 'no gate',
+      gates: [] as SendGate[],
+      disposes: false,
+      calls: [sendCall(IDLE_SEND)],
+      reasons: [] as (string | null)[],
+      logged: [] as string[],
+    },
+    {
+      given: 'a null gate',
+      gates: [() => null],
+      disposes: false,
+      calls: [sendCall(IDLE_SEND)],
+      reasons: [],
+      logged: [],
+    },
+    {
+      given: 'a null gate then A',
+      gates: [() => null, answerA],
+      disposes: false,
+      calls: [{ method: 'compact' }],
+      reasons: ['a'],
+      logged: ['[chat] send held in row-1: a'],
+    },
+    {
+      given: 'A then B',
+      gates: [answerA, answerB],
+      disposes: false,
+      calls: [{ method: 'compact' }],
+      reasons: ['a'],
+      logged: ['[chat] send held in row-1: a'],
+    },
+    {
+      given: 'a gate that throws then A',
+      gates: [
+        () => {
+          throw new Error('boom');
+        },
+        answerA,
+      ],
+      disposes: false,
+      calls: [{ method: 'compact' }],
+      reasons: ['a'],
+      logged: [
+        '[chat] send gate failed in row-1: boom',
+        '[chat] send held in row-1: a',
+      ],
+    },
+    {
+      given: 'A disposed twice',
+      gates: [answerA],
+      disposes: true,
+      calls: [sendCall(IDLE_SEND)],
+      reasons: [],
+      logged: [],
+    },
+  ])(
+    'sendGate_IdleSend_FirstVerdictWinsInRegistrationOrder: $given',
+    async ({ gates, disposes, calls, reasons, logged }) => {
+      const test = await started();
+      test.harness.holdCompactions();
+      const disposers = gates.map((gate) => test.chat.addSendGate(gate));
+      if (disposes) {
+        disposers.forEach((dispose) => {
+          dispose();
+          dispose();
+        });
+      }
+
+      await test.chat.send(ROW_ID, IDLE_SEND);
+
+      expect(test.process.calls).toEqual(calls);
+      expect(
+        test.chat.sessions()[0].queued.map((row) => row.holdReason),
+      ).toEqual(reasons);
+      expect(test.logged).toEqual(expect.arrayContaining(logged));
+    },
+  );
+
+  it('sendGate_SameFunctionAddedTwice_DisposeRemovesOnlyItsRegistration', async () => {
+    const test = await started();
+    test.harness.holdCompactions();
+    const dispose = test.chat.addSendGate(answerA);
+    test.chat.addSendGate(answerA);
+
+    dispose();
+    await test.chat.send(ROW_ID, IDLE_SEND);
+
+    expect(test.process.calls).toEqual([{ method: 'compact' }]);
+  });
+
+  it('sendGate_LaterGateAfterAVerdict_NotAsked', async () => {
+    const test = await started();
+    test.harness.holdCompactions();
+    let laterCalls = 0;
+    test.chat.addSendGate(answerA);
+    test.chat.addSendGate(() => {
+      laterCalls += 1;
+      return null;
+    });
+
+    await test.chat.send(ROW_ID, IDLE_SEND);
+
+    expect(laterCalls).toBe(0);
+  });
+
+  it('sendGate_Input_RowHostTextAndNow', async () => {
+    const test = await started({ clockNow: 5000 });
+    const inputs: SendGateInput[] = [];
+    test.chat.addSendGate((input) => {
+      inputs.push(input);
+      return null;
+    });
+
+    await test.chat.send(ROW_ID, IDLE_SEND);
+
+    expect(inputs).toEqual([
+      {
+        sessionId: 'row-1',
+        hostSessionId: 'uuid-1',
+        text: IDLE_SEND.text,
+        now: 5000,
+      },
+    ]);
+  });
+
+  it.each<{
+    given: string;
+    act(test: Awaited<ReturnType<typeof started>>): unknown;
+    asked: number;
+  }>([
+    {
+      given: 'a send while a turn runs',
+      act: (test) => {
+        test.activity('working');
+        return test.chat.send(ROW_ID, IDLE_SEND);
+      },
+      asked: 0,
+    },
+    {
+      given: 'an idle that drains a queued row',
+      act: (test) => {
+        queueTwo(test);
+        test.activity('idle');
+      },
+      asked: 0,
+    },
+    {
+      given: 'sendNow on a queued row',
+      act: (test) => {
+        queueTwo(test);
+        test.chat.sendNow(ROW_ID, 'queued-1');
+      },
+      asked: 0,
+    },
+    {
+      given: 'a launch',
+      act: (test) =>
+        test.chat.launch({
+          projectDir: PROJECT_DIR,
+          profile: 'personal',
+          message: IDLE_SEND,
+        }),
+      asked: 0,
+    },
+    {
+      given: 'sendAllNow at idle with a message',
+      act: (test) => test.chat.sendAllNow(ROW_ID, IDLE_SEND),
+      asked: 1,
+    },
+  ])('sendGate_NotAskedOffTheIdleWrite: $given', async ({ act, asked }) => {
+    const test = await started();
+    let calls = 0;
+    test.chat.addSendGate(() => {
+      calls += 1;
+      return null;
+    });
+
+    await act(test);
+
+    expect(calls).toBe(asked);
+  });
+
+  it('send_RestingRowHeld_StartsProcessThenCompacts', async () => {
+    const test = setUp();
+    test.harness.holdCompactions();
+    test.chat.addSendGate(answerA);
+    test.chat.restore(
+      {
+        sessions: [record('host-a', { sent: true })],
+        selectedHostSessionId: null,
+      },
+      [],
+    );
+
+    await test.chat.send(ROW_ID, IDLE_SEND);
+
+    expect(test.harness.processes[0].calls).toEqual([{ method: 'compact' }]);
+    const startedAt = test.logged.indexOf(
+      '[chat] session row-1 process started (resume true)',
+    );
+    expect(startedAt).toBeGreaterThanOrEqual(0);
+    expect(test.logged.indexOf('[chat] send held in row-1: a')).toBeGreaterThan(
+      startedAt,
+    );
+  });
+
+  it('send_TwoSendsToARestingRow_OneVerdictAndTwoRows', async () => {
+    const test = setUp();
+    test.harness.holdCompactions();
+    let asked = 0;
+    test.chat.addSendGate(() => {
+      asked += 1;
+      return { action: 'compact', reason: 'a' };
+    });
+    test.chat.restore(
+      {
+        sessions: [record('host-a', { sent: true })],
+        selectedHostSessionId: null,
+      },
+      [],
+    );
+
+    await Promise.all([
+      test.chat.send(ROW_ID, IDLE_SEND),
+      test.chat.send(ROW_ID, LATER),
+    ]);
+
+    expect(asked).toBe(1);
+    expect(test.harness.processes[0].calls).toEqual([{ method: 'compact' }]);
+    expect(
+      test.chat.sessions()[0].queued.map((row) => [row.text, row.holdReason]),
+    ).toEqual([
+      [IDLE_SEND.text, 'a'],
+      [LATER.text, null],
+    ]);
+  });
+
+  it('send_SavedRowsBehindAHold_WriteNoneUntilTheCompactionEnds', async () => {
+    const test = setUp();
+    test.harness.holdCompactions();
+    test.chat.addSendGate(answerA);
+    test.chat.restore(
+      {
+        sessions: [record('host-a', { queued: [PENDING] })],
+        selectedHostSessionId: null,
+      },
+      [],
+    );
+
+    await test.chat.send(ROW_ID, IDLE_SEND);
+    const process = test.harness.processes[0];
+    process.events.activity('idle');
+
+    expect(process.calls).toEqual([{ method: 'compact' }]);
+    process.events.agentEvent(compactionEndedEvent('done'));
+    expect(process.calls.at(-1)).toEqual(sendCall(PENDING));
+  });
+
+  it.each(['done', 'failed', 'interrupted'] as const)(
+    'hold_LaterSendsQueueBehindAndReleaseInOrder: %s',
+    async (outcome) => {
+      const test = await startedAndHeld();
+      const third: UserMessage = { text: 'third', images: [] };
+      await test.chat.send(ROW_ID, LATER);
+      await test.chat.send(ROW_ID, third);
+      expect(test.chat.sessions()[0].queued.map((row) => row.text)).toEqual([
+        IDLE_SEND.text,
+        LATER.text,
+        third.text,
+      ]);
+
+      test.activity('idle');
+      expect(test.process.calls).toEqual([{ method: 'compact' }]);
+
+      test.process.events.agentEvent(compactionEndedEvent(outcome));
+      expect(test.process.calls.at(-1)).toEqual(sendCall(IDLE_SEND));
+      expect(test.logged).toContain(
+        `[chat] held message queued-1 released in row-1 (${outcome})`,
+      );
+      test.activity('idle');
+      expect(test.process.calls.at(-1)).toEqual(sendCall(LATER));
+      test.activity('idle');
+      expect(test.process.calls.at(-1)).toEqual(sendCall(third));
+    },
+  );
+
+  it('hold_CompactThrows_WritesAtOnce', async () => {
+    const test = await started();
+    let asked = 0;
+    test.chat.addSendGate(() => {
+      asked += 1;
+      return asked === 2 ? { action: 'compact', reason: 'a' } : null;
+    });
+
+    void test.chat.send(ROW_ID, { text: FAKE_HOLD_TEXT, images: [] });
+    await test.chat.send(ROW_ID, IDLE_SEND);
+
+    expect(test.process.calls.at(-1)).toEqual(sendCall(IDLE_SEND));
+    expect(test.logged).toContain(
+      '[chat] compaction not started in row-1: fake agent is running a turn',
+    );
+    expect(test.chat.sessions()[0].queued).toEqual([]);
+  });
+
+  it('hold_CompactAndThenSendThrow_SendRejectsWithNoRowLeft', async () => {
+    const test = await startedRefusing();
+    const refused: UserMessage = { text: REFUSED_TEXT, images: [] };
+    test.chat.addSendGate((input) =>
+      input.text === REFUSED_TEXT ? { action: 'compact', reason: 'a' } : null,
+    );
+
+    void test.chat.send(ROW_ID, { text: FAKE_HOLD_TEXT, images: [] });
+
+    await expect(test.chat.send(ROW_ID, refused)).rejects.toThrow(
+      'write refused',
+    );
+    expect(test.chat.sessions()[0].queued).toEqual([]);
+  });
+
+  it.each(['app', 'manual', 'harness'] as const)(
+    'compaction_StateFollowsStartedAndEnded: %s',
+    async (trigger) => {
+      const test = await started({ clockNow: 2000 });
+      expect(test.chat.sessions()[0].compaction).toBeNull();
+      expect(test.sent('sessionStarted')[0].compaction).toBeNull();
+      if (trigger === 'app') {
+        test.harness.holdCompactions();
+        test.chat.addSendGate(answerA);
+        await test.chat.send(ROW_ID, IDLE_SEND);
+        await flush();
+      } else {
+        test.process.events.agentEvent(compactionStartedEvent(trigger));
+      }
+      const running = {
+        trigger,
+        reason: trigger === 'app' ? 'a' : null,
+        startedAt: 2000,
+      };
+      expect(test.chat.sessions()[0].compaction).toEqual(running);
+
+      test.process.events.agentEvent(compactionEndedEvent('done', trigger));
+
+      expect(test.chat.sessions()[0].compaction).toBeNull();
+      expect(test.sent('compaction')).toEqual([
+        { sessionId: ROW_ID, compaction: running },
+        { sessionId: ROW_ID, compaction: null },
+      ]);
+    },
+  );
+
+  it('compaction_NoHold_QueuedRowsWaitForItsEnd', async () => {
+    const test = await started();
+    const [first] = queueTwo(test);
+    test.process.events.agentEvent(compactionStartedEvent('manual'));
+
+    test.activity('idle');
+    expect(test.process.calls).toEqual([]);
+
+    test.process.events.agentEvent(compactionEndedEvent('done', 'manual'));
+    expect(test.process.calls).toEqual([sendCall(first)]);
+  });
+
+  it('compaction_EndWithNoStart_SendsNoMessage', async () => {
+    const test = await started();
+
+    test.process.events.agentEvent(compactionEndedEvent('done'));
+
+    expect(test.sent('compaction')).toEqual([]);
+  });
+
+  it('compaction_Replayed_EndDrainsOnlyAtTheAttachSettling', async () => {
+    const test = setUp();
+    test.harness.scriptAttach('p1', {
+      outcome: 'process',
+      replay(events) {
+        events.agentEvent(compactionStartedEvent('harness'));
+        events.agentEvent(compactionEndedEvent('done', 'harness'));
+      },
+    });
+
+    restoreOne(test, hostedRecord({ queued: [PENDING] }), [hostedP1()]);
+    await flush();
+
+    expect(attachedOf(test)[0].calls).toEqual([sendCall(PENDING)]);
+    expect(test.logged).not.toContainEqual(expect.stringContaining('not sent'));
+  });
+
+  it('compaction_ReplayLeavesOneRunning_QueueWaitsForItsLiveEnd', async () => {
+    const test = setUp();
+    test.harness.scriptAttach('p1', {
+      outcome: 'process',
+      replay(events) {
+        events.agentEvent(compactionStartedEvent('harness'));
+      },
+    });
+
+    restoreOne(test, hostedRecord({ queued: [PENDING] }), [hostedP1()]);
+    await flush();
+
+    const attached = attachedOf(test)[0];
+    expect(attached.calls).toEqual([]);
+    attached.events.agentEvent(compactionEndedEvent('done', 'harness'));
+    expect(attached.calls).toEqual([sendCall(PENDING)]);
+  });
+
+  it.each<{
+    given: string;
+    end(test: Awaited<ReturnType<typeof started>>): void;
+  }>([
+    {
+      given: 'the process ends',
+      end: (test) => test.process.events.ended({ code: 0, error: null }),
+    },
+    {
+      given: 'a clear',
+      end: (test) => test.chat.clear(ROW_ID),
+    },
+  ])('hold_$given_ReturnsRowsAndClears', async ({ end }) => {
+    const test = await startedAndHeld();
+    await test.chat.send(ROW_ID, LATER);
+
+    end(test);
+
+    expect(test.sentReturned()).toEqual([
+      { sessionId: ROW_ID, messages: [IDLE_SEND, LATER] },
+    ]);
+    expect(test.chat.sessions()[0].compaction).toBeNull();
+    expect(test.sent('compaction').at(-1)?.compaction).toBeNull();
+  });
+
+  it.each<{
+    given: string;
+    arrange(): ReturnType<typeof started>;
+    end(test: Awaited<ReturnType<typeof started>>): void;
+    ends: { trigger: CompactionTrigger; outcome: string }[];
+  }>([
+    {
+      given: 'a clear, whose old process reports its end too late',
+      arrange: () => startedAndHeld(),
+      end: (test) => test.chat.clear(ROW_ID),
+      ends: [{ trigger: 'app', outcome: 'interrupted' }],
+    },
+    {
+      given: 'a clear with no compaction running',
+      arrange: () => started(),
+      end: (test) => test.chat.clear(ROW_ID),
+      ends: [],
+    },
+    {
+      given: 'an exit the harness ended it before',
+      arrange: () => startedAndHeld(),
+      end: (test) => {
+        const { events } = test.process;
+        events.agentEvent(compactionEndedEvent('failed'));
+        events.agentEvent({ type: 'sessionEnded', at: 3000 });
+        events.ended({ code: 0, error: null });
+      },
+      ends: [{ trigger: 'app', outcome: 'failed' }],
+    },
+  ])(
+    'compaction_ProcessLetGo_AgentEventCarriesOneEnd: $given',
+    async ({ arrange, end, ends }) => {
+      const test = await arrange();
+
+      end(test);
+      await flush();
+
+      expect(
+        compactionEndsEmitted(test.emitted).map(({ event }) => ({
+          trigger: event.trigger,
+          outcome: event.outcome,
+        })),
+      ).toEqual(ends);
+    },
+  );
+
+  it('compaction_Clear_EmittedEndCarriesTheOldHostAndNoSizes', async () => {
+    const test = await startedAndHeld({ clockNow: 2000 });
+
+    test.chat.clear(ROW_ID);
+
+    expect(compactionEndsEmitted(test.emitted)).toEqual([
+      {
+        sessionId: ROW_ID,
+        profileDir: '~/.claude-personal',
+        hostSessionId: 'uuid-1',
+        replayed: false,
+        event: {
+          type: 'compactionEnded',
+          at: 2000,
+          trigger: 'app',
+          outcome: 'interrupted',
+          beforeTokens: null,
+          durationMs: null,
+        },
+      },
+    ]);
+  });
+
+  it('compaction_FailedAttach_AgentEventCarriesItsEnd', async () => {
+    const fake = createFakeAgentHarness(
+      { now: () => 1000 },
+      createMemoryFiles(),
+      FAKE_MICROTASK_TIMERS,
+    );
+    const test = setUp({
+      harnesses: [
+        {
+          ...fake,
+          attach: (_request, events) => {
+            events.agentEvent(compactionStartedEvent('harness'));
+            return Promise.resolve(null);
+          },
+        },
+      ],
+    });
+
+    restoreOne(test, hostedRecord(), [hostedP1()]);
+    await flush();
+
+    expect(test.chat.sessions()[0].compaction).toBeNull();
+    expect(
+      compactionEndsEmitted(test.emitted).map(({ event, replayed }) => [
+        event.trigger,
+        event.outcome,
+        replayed,
+      ]),
+    ).toEqual([['harness', 'interrupted', false]]);
+  });
+
+  it.each<{
+    given: string;
+    skip(test: Awaited<ReturnType<typeof started>>): void;
+  }>([
+    {
+      given: 'interrupt',
+      skip: (test) => test.chat.interrupt(ROW_ID),
+    },
+    {
+      given: 'sendNow on the held row',
+      skip: (test) => test.chat.sendNow(ROW_ID, 'queued-1'),
+    },
+    {
+      given: 'sendAllNow with no message',
+      skip: (test) => void test.chat.sendAllNow(ROW_ID, null),
+    },
+  ])('hold_Skip_KeepsRowsAndWritesInOrder: $given', async ({ skip }) => {
+    const test = await startedAndHeld();
+    await test.chat.send(ROW_ID, LATER);
+
+    skip(test);
+
+    expect(test.process.calls).toEqual([
+      { method: 'compact' },
+      { method: 'interrupt' },
+    ]);
+    expect(test.sentReturned()).toEqual([]);
+    expect(
+      test.chat.sessions()[0].queued.map((row) => row.sentEntryId),
+    ).toEqual([null, null]);
+    expect(test.logged).toContain('[chat] skipping the compaction in row-1');
+
+    await flush();
+
+    expect(test.process.calls).toEqual([
+      { method: 'compact' },
+      { method: 'interrupt' },
+      sendCall(IDLE_SEND),
+      sendCall(LATER),
+    ]);
+  });
+
+  it('sendAllNow_HoldUp_QueuesTheBoxBehindAndSkips', async () => {
+    const test = await startedAndHeld();
+
+    const sending = test.chat.sendAllNow(ROW_ID, LATER);
+
+    expect(test.process.calls).toEqual([
+      { method: 'compact' },
+      { method: 'interrupt' },
+    ]);
+    expect(
+      test.chat
+        .sessions()[0]
+        .queued.map((row) => [row.text, row.sentEntryId, row.holdReason]),
+    ).toEqual([
+      [IDLE_SEND.text, null, 'a'],
+      [LATER.text, null, null],
+    ]);
+    await sending;
+  });
+
+  it('sendNow_UnsentRowBehindTheHeldRow_WritesIt', async () => {
+    const test = await startedAndHeld();
+    await test.chat.send(ROW_ID, LATER);
+
+    test.chat.sendNow(ROW_ID, 'queued-2');
+
+    expect(test.process.calls).toEqual([
+      { method: 'compact' },
+      sendCall(LATER),
+    ]);
+    expect(test.chat.sessions()[0].queued[0].holdReason).toBe('a');
+  });
+
+  it('sendAllNow_CompactionUpNoHold_WritesAllAndAsksNoGate', async () => {
+    const test = await started();
+    let asked = 0;
+    test.chat.addSendGate(() => {
+      asked += 1;
+      return null;
+    });
+    test.process.events.agentEvent(compactionStartedEvent('manual'));
+    await test.chat.send(ROW_ID, IDLE_SEND);
+
+    await test.chat.sendAllNow(ROW_ID, LATER);
+
+    expect(asked).toBe(0);
+    expect(test.process.calls).toEqual([sendCall(IDLE_SEND), sendCall(LATER)]);
+  });
+
+  it('pullBack_HeldRow_ReturnsItAndTheCompactionGoesOn', async () => {
+    const test = await startedAndHeld();
+    await test.chat.send(ROW_ID, LATER);
+
+    test.chat.pullBack(ROW_ID, 'queued-1');
+
+    expect(test.sentReturned()).toEqual([
+      { sessionId: ROW_ID, messages: [IDLE_SEND] },
+    ]);
+    expect(test.process.calls).toEqual([{ method: 'compact' }]);
+    expect(test.chat.sessions()[0].compaction).not.toBeNull();
+    test.activity('idle');
+    expect(test.process.calls).toEqual([{ method: 'compact' }]);
+
+    test.process.events.agentEvent(compactionEndedEvent('done'));
+
+    expect(test.process.calls.at(-1)).toEqual(sendCall(LATER));
+  });
+
+  it.each<{
+    given: string;
+    act(test: Awaited<ReturnType<typeof started>>): Promise<void>;
+    alerts: number;
+  }>([
+    {
+      given: 'a pulled-back compaction, its stretch held no turn',
+      act: async (test) => {
+        test.chat.pullBack(ROW_ID, 'queued-1');
+        test.harness.releaseCompactions();
+        await flush();
+      },
+      alerts: 0,
+    },
+    {
+      given: 'an idle before the compaction ends, in the skip grace order',
+      act: async (test) => {
+        test.chat.interrupt(ROW_ID);
+        test.activity('idle');
+        expect(test.announced).toEqual([]);
+        await flush();
+      },
+      alerts: 1,
+    },
+    {
+      given: 'the held row written at the end, its own turn',
+      act: async (test) => {
+        test.harness.releaseCompactions();
+        await flush();
+      },
+      alerts: 1,
+    },
+    {
+      given: 'a later stretch after a pulled-back compaction',
+      act: async (test) => {
+        test.chat.pullBack(ROW_ID, 'queued-1');
+        test.harness.releaseCompactions();
+        await flush();
+        test.activity('working');
+        test.activity('idle');
+      },
+      alerts: 1,
+    },
+    {
+      given: 'a stretch of the fresh process after a clear',
+      act: async (test) => {
+        test.chat.clear(ROW_ID);
+        await flush();
+        const fresh = test.harness.processes[1];
+        fresh.events.activity('working');
+        fresh.events.activity('idle');
+      },
+      alerts: 1,
+    },
+  ])('hold_TurnFinishedAlert: $given', async ({ act, alerts }) => {
+    const test = await startedAndHeld();
+    test.setFocused(false);
+
+    await act(test);
+
+    expect(test.announced).toHaveLength(alerts);
+  });
+
+  it('hold_IdleAfterARowBehindWasSentNow_NoAlertWhileTheHoldIsUp', async () => {
+    const test = await startedAndHeld();
+    test.setFocused(false);
+    await test.chat.send(ROW_ID, LATER);
+    test.chat.sendNow(ROW_ID, 'queued-2');
+
+    test.activity('idle');
+
+    expect(test.announced).toEqual([]);
+  });
+
+  it('hold_IdleWithNoCompaction_WritesTheRowAndALaterEndReleasesNothing', async () => {
+    const fake = createFakeAgentHarness(
+      { now: () => 1000 },
+      createMemoryFiles(),
+      FAKE_MICROTASK_TIMERS,
+    );
+    const test = setUp({
+      harnesses: [
+        {
+          ...fake,
+          start: (request, events) => ({
+            ...fake.start(request, events),
+            compact: () => undefined,
+          }),
+        },
+      ],
+    });
+    test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+    await flush();
+    const { calls, events } = fake.processes[0];
+    test.chat.addSendGate(answerA);
+    await test.chat.send(ROW_ID, IDLE_SEND);
+
+    events.activity('idle');
+    expect(calls).toEqual([]);
+    expect(test.chat.sessions()[0].queued).toHaveLength(1);
+
+    events.activity('working');
+    events.activity('idle');
+    expect(calls).toEqual([sendCall(IDLE_SEND)]);
+    expect(test.logged).toContain(
+      '[chat] held message queued-1 released in row-1: idle with no compaction',
+    );
+
+    events.agentEvent(compactionEndedEvent('failed'));
+    expect(calls).toEqual([sendCall(IDLE_SEND)]);
+    expect(test.logged).not.toContainEqual(expect.stringContaining('(failed)'));
+  });
+
+  it.each<{
+    given: string;
+    register(chat: ChatSessions): void;
+    tokens: number | null;
+    logged: string | null;
+  }>([
+    {
+      given: 'a reader of 150000',
+      register: (chat) => chat.addIdleCompactThreshold(() => 150_000),
+      tokens: 150_000,
+      logged: null,
+    },
+    {
+      given: 'no reader',
+      register: () => undefined,
+      tokens: null,
+      logged: null,
+    },
+    {
+      given: 'a removed reader',
+      register: (chat) => {
+        const remove = chat.addIdleCompactThreshold(() => 150_000);
+        remove();
+        remove();
+      },
+      tokens: null,
+      logged: null,
+    },
+    {
+      given: 'two readers',
+      register: (chat) => {
+        chat.addIdleCompactThreshold(() => 1);
+        chat.addIdleCompactThreshold(() => 2);
+      },
+      tokens: 2,
+      logged: null,
+    },
+    {
+      given: 'a newest reader that throws over an older one',
+      register: (chat) => {
+        chat.addIdleCompactThreshold(() => 1);
+        chat.addIdleCompactThreshold(() => {
+          throw new Error('boom');
+        });
+      },
+      tokens: null,
+      logged: '[chat] idle compaction threshold failed in row-1: boom',
+    },
+  ])(
+    'idleCompactThreshold_ProcessStart_CarriesTheNewestReader: $given',
+    ({ register, tokens, logged }) => {
+      const test = setUp();
+      register(test.chat);
+
+      test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+
+      expect(test.harness.processes[0].request.idleCompactMinTokens).toBe(
+        tokens,
+      );
+      if (logged !== null) {
+        expect(test.logged).toContain(logged);
+      }
+    },
+  );
 });

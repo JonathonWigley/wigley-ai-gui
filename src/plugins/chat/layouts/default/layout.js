@@ -26,6 +26,14 @@ const WORKING_STATE_WORDS = {
   writing: 'Writing…',
   working: 'Working…',
   waiting: 'Waiting…',
+  compacting: 'Compacting…',
+};
+
+// The divider's word for what started the compaction.
+const COMPACTION_TRIGGER_WORDS = {
+  app: 'auto',
+  manual: 'manual',
+  harness: 'autocompact',
 };
 
 /**
@@ -101,6 +109,26 @@ function fillUserTurn(turn, input, kit) {
   if (input.images.length > 0) {
     kit.images(turn);
   }
+}
+
+// The sizes known so far, the trigger word, then the time when known.
+/**
+ * @param {import('../layout').CompactionInput} input
+ * @param {import('../layout').ChatKit} kit
+ */
+function compactionLine(input, kit) {
+  const before =
+    input.beforeTokens === null ? '' : ` ${kit.tokens(input.beforeTokens)}`;
+  const after =
+    input.afterTokens === null ? '' : ` → ${kit.tokens(input.afterTokens)}`;
+  const parts = [
+    `Compacted${before}${after}`,
+    COMPACTION_TRIGGER_WORDS[input.trigger],
+  ];
+  if (input.durationMs !== null) {
+    parts.push(kit.duration(input.durationMs));
+  }
+  return parts.join(' · ');
 }
 
 /** @param {'info' | 'error'} tone */
@@ -264,8 +292,9 @@ function doneLine(input, kit) {
   return parts.join(' · ');
 }
 
-// A finished turn's one line; a running turn's header (time, state), then,
-// once the turn has a tool call, the box and the tool counts.
+// A finished turn's one line; a compaction's header (time, state, trigger) over
+// its bar; a running turn's header (time, state), then, once the turn has a
+// tool call, the box and the tool counts.
 /**
  * @param {HTMLElement} block
  * @param {import('../layout').WorkingInput} input
@@ -284,6 +313,11 @@ function fillWorking(block, input, kit) {
     el('span', 'chat-working-state', WORKING_STATE_WORDS[input.state]),
   );
   block.append(head);
+  if (input.compaction !== null) {
+    head.append(el('span', 'chat-working-trigger', input.compaction));
+    block.append(el('div', 'chat-working-bar'));
+    return;
+  }
   /** @type {import('../layout').ToolInput[]} */
   const tools = [];
   for (const step of input.steps) {
@@ -306,18 +340,30 @@ function fillWorking(block, input, kit) {
   );
 }
 
-// `pending`, or `sending` once the row is sent, then its image count:
-// `sending · 2 images`.
-/**
- * @param {number} imageCount
- * @param {boolean} sent
- */
-function queuedLabel(imageCount, sent) {
-  const state = sent ? 'sending' : 'pending';
-  if (imageCount === 0) {
+// What the row waits on: `sending` once it is sent, the compaction it asked
+// for while held, else `pending`.
+/** @param {import('../layout').QueuedMessageInput} input */
+function queuedState(input) {
+  if (input.sent) {
+    return 'sending';
+  }
+  if (input.holdReason === null) {
+    return 'pending';
+  }
+  return input.skipKey === ''
+    ? 'sends after compaction'
+    : `sends after compaction · ${input.skipKey} skips`;
+}
+
+// The row's state, then its image count: `sending · 2 images`.
+/** @param {import('../layout').QueuedMessageInput} input */
+function queuedLabel(input) {
+  const state = queuedState(input);
+  if (input.imageCount === 0) {
     return state;
   }
-  return `${state} · ${imageCount} ${imageCount === 1 ? 'image' : 'images'}`;
+  const noun = input.imageCount === 1 ? 'image' : 'images';
+  return `${state} · ${input.imageCount} ${noun}`;
 }
 
 /**
@@ -326,7 +372,7 @@ function queuedLabel(imageCount, sent) {
  * @param {import('../layout').QueuedMessageInput} input
  */
 function showQueued(label, text, input) {
-  label.textContent = queuedLabel(input.imageCount, input.sent);
+  label.textContent = queuedLabel(input);
   text.textContent = input.text;
 }
 
@@ -519,6 +565,20 @@ const layout = {
         },
       };
     },
+    // One line between two rules; the after-size arriving fills it in place.
+    compaction(parent, input, kit) {
+      const entry = root(
+        parent,
+        'chat-entry chat-compaction',
+        compactionLine(input, kit),
+      );
+      return {
+        element: entry,
+        update(next) {
+          entry.textContent = compactionLine(next, kit);
+        },
+      };
+    },
   },
   // The summary line, live or finished, open or closed. Every update draws
   // the line afresh, so a run turning finished or a tick moving `now` redraws
@@ -546,7 +606,8 @@ const layout = {
     };
   },
   // The dim label, with the image count when there are images, over the text
-  // as typed.
+  // as typed. A held row's label names the skip key, not the reason: the dock
+  // shows that.
   queuedMessage(parent, input) {
     const row = root(parent, 'chat-queued');
     const label = el('div', 'chat-queued-label');

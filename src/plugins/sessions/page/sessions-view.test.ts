@@ -104,11 +104,11 @@ describe('sessions view side bar', () => {
       saved: ['gamma'],
     },
     {
-      case: 'needs you moves a row up',
+      case: 'needs you moves no row',
       rows: [rowIn('a1', 'alpha'), rowIn('b1', 'beta')],
       favorites: [],
       act: ({ view }) => view.setActivity('a1', 'forms', NEEDS_YOU_ACTIVITY),
-      order: ['a1', 'b1'],
+      order: ['b1', 'a1'],
       saved: [],
     },
     {
@@ -129,11 +129,10 @@ describe('sessions view side bar', () => {
       rows: [rowIn('a1', 'alpha'), rowIn('b1', 'beta')],
       favorites: [],
       act: (setup) => {
-        setup.view.setActivity('a1', 'forms', NEEDS_YOU_ACTIVITY);
-        rowNamed(drawnRows(setup.sideBar), 'label b1').click();
-        setup.view.panes.load(setup.view.panes.focusedPaneId(), 'b1');
+        rowNamed(drawnRows(setup.sideBar), 'label a1').click();
+        setup.view.panes.load(setup.view.panes.focusedPaneId(), 'a1');
       },
-      order: ['a1', 'b1'],
+      order: ['b1', 'a1'],
       saved: [],
     },
     {
@@ -284,7 +283,6 @@ describe('sessions view side bar', () => {
   it.each<{
     case: string;
     stamps: Record<string, number>;
-    needsYou?: string[];
     // Each state main sends the fresh view, in turn.
     states: SessionRow[][];
     act?: (setup: Setup) => void;
@@ -308,44 +306,6 @@ describe('sessions view side bar', () => {
       },
       order: ['a1', 'b1'],
       stampsAfter: { a1: 9, b1: 5 },
-    },
-    {
-      case: 'needs you re-sent after a page reload moves no row',
-      stamps: { a1: 5, b1: 9 },
-      needsYou: ['a1'],
-      states: [[rowIn('a1', 'alpha'), rowIn('b1', 'beta')]],
-      act: ({ view }) => view.setActivity('a1', 'forms', NEEDS_YOU_ACTIVITY),
-      order: ['b1', 'a1'],
-      stampsAfter: { a1: 5, b1: 9 },
-    },
-    {
-      case: 'working re-sent ahead of needs you after a page reload moves no row',
-      stamps: { a1: 5, b1: 9 },
-      needsYou: ['a1'],
-      states: [[rowIn('a1', 'alpha'), rowIn('b1', 'beta')]],
-      act: ({ view }) => {
-        view.setActivity('a1', 'chat', {
-          word: 'working',
-          tone: 'running',
-          rank: 20,
-        });
-        view.setActivity('a1', 'forms', NEEDS_YOU_ACTIVITY);
-      },
-      order: ['b1', 'a1'],
-      stampsAfter: { a1: 5, b1: 9 },
-    },
-    {
-      case: 'needs you again after it ended moves the row',
-      stamps: { a1: 5, b1: 9 },
-      needsYou: ['a1'],
-      states: [[rowIn('a1', 'alpha'), rowIn('b1', 'beta')]],
-      act: ({ view }) => {
-        view.setActivity('a1', 'forms', NEEDS_YOU_ACTIVITY);
-        view.setActivity('a1', 'forms', null);
-        view.setActivity('a1', 'forms', NEEDS_YOU_ACTIVITY);
-      },
-      order: ['a1', 'b1'],
-      stampsAfter: { a1: 100, b1: 9 },
     },
     {
       case: 'a relaunch keeps stamps under the rows host ids',
@@ -386,8 +346,8 @@ describe('sessions view side bar', () => {
     },
   ])(
     'sessionsView_RecencyAcrossReloadAndRelaunch ($case)',
-    ({ stamps, needsYou = [], states, act, order, stampsAfter }) => {
-      const uiState = fakeUiState([['recency', { stamps, needsYou }]]);
+    ({ stamps, states, act, order, stampsAfter }) => {
+      const uiState = fakeUiState([['recency', { stamps }]]);
       const setup = sessionsViewSetup(undefined, undefined, undefined, {
         uiState,
         clock: { now: () => 100 },
@@ -401,10 +361,7 @@ describe('sessions view side bar', () => {
       expect(setup.view.orderedRows().map((row) => row.sessionId)).toEqual(
         order,
       );
-      expect(uiState.get('recency')).toEqual({
-        stamps: stampsAfter,
-        needsYou: expect.any(Array),
-      });
+      expect(uiState.get('recency')).toEqual({ stamps: stampsAfter });
     },
   );
 
@@ -427,26 +384,6 @@ describe('sessions view side bar', () => {
       'b1',
       'g1',
     ]);
-  });
-
-  it('sessionsView_NeedsYouBeforeItsRow_StampsOnArrivalOnly', () => {
-    const clock = { time: 1, now: () => clock.time };
-    const uiState = fakeUiState();
-    const { view } = sessionsViewSetup(undefined, undefined, undefined, {
-      uiState,
-      clock,
-    });
-    view.render(stateWith([]));
-
-    view.setActivity('a1', 'forms', NEEDS_YOU_ACTIVITY);
-    expect(uiState.get('recency')).toBeUndefined();
-
-    clock.time = 2;
-    view.render(stateWith([rowIn('a1', 'alpha')]));
-    expect(uiState.get('recency')).toEqual({
-      stamps: { a1: 2 },
-      needsYou: [],
-    });
   });
 
   it('sidebarGroup_HeaderTooltipIsItsProject', () => {

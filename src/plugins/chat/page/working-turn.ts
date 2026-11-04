@@ -1,4 +1,5 @@
 import { type ChatEntry, MAIN_AGENT_ID } from '../../../contracts/agent';
+import type { SessionCompaction } from '../contract';
 import type {
   DoneWorkingInput,
   LiveWorkingInput,
@@ -11,18 +12,44 @@ type ResultEntry = Extract<ChatEntry, { kind: 'result' }>;
 // The activity dock's input while the session works. The turn starts at the
 // later of the last `user` entry and the first entry after the last `result`
 // entry; with neither, it is every entry. A turn with no entries starts at
-// `now`. Steps leave out subagents' tool calls.
+// `now`. Steps leave out subagents' tool calls. While `compaction` is not null
+// the state is `compacting` and the time counts from the compaction's start,
+// whatever the turn does.
 export function workingInput(
   entries: readonly ChatEntry[],
   now: number,
+  compaction: SessionCompaction | null,
 ): LiveWorkingInput {
   const turn = entries.slice(turnStart(entries));
+  const steps = turn.filter(isDockStep);
+  if (compaction !== null) {
+    return {
+      state: 'compacting',
+      steps,
+      startedAt: compaction.startedAt,
+      now,
+      compaction: compactionLabel(compaction),
+    };
+  }
   return {
     state: turnState(turn),
-    steps: turn.filter(isDockStep),
+    steps,
     startedAt: turn.length > 0 ? turn[0].at : now,
     now,
+    compaction: null,
   };
+}
+
+// What started the compaction, as the dock reads it.
+export function compactionLabel(compaction: SessionCompaction): string {
+  switch (compaction.trigger) {
+    case 'app':
+      return compaction.reason ?? 'auto';
+    case 'manual':
+      return '/compact';
+    case 'harness':
+      return 'autocompact';
+  }
 }
 
 // Whether the running turn holds no entries: the last entry is a `result`,

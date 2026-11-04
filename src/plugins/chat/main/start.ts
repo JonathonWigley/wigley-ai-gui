@@ -1,4 +1,5 @@
 import path from 'node:path';
+import type { AgentHarness } from '../../../contracts/agent';
 import type { Disposable } from '../../../contracts/disposable';
 import type { Files } from '../../../contracts/files';
 import type {
@@ -15,6 +16,7 @@ import {
   requiredString,
 } from '../../../shared/drive-args';
 import { errorText } from '../../../shared/error-text';
+import { isFakeAgentHarness } from '../../../shared/fake-agent-harness';
 import type {
   SessionsMainEvents,
   SessionsMainExports,
@@ -105,20 +107,30 @@ interface ChatDriveDeps {
     | 'permissionToolSession'
   >;
   sessions: Pick<SessionsMainExports, 'activate'>;
+  harnesses: readonly AgentHarness[];
 }
 
 // Offers a drive run chat's fixtures: `chat.start` opens a chat session and
 // selects its row, `chat.askPermission` raises a permission card in one whose
-// process runs, and `chat.permissionAnswer` reads that card's reply.
+// process runs, `chat.permissionAnswer` reads that card's reply, and
+// `chat.holdCompactions` and `chat.releaseCompactions` hold a fake harness's
+// compactions open and end them.
 export function addDriveActions(
   drive: DriveHost,
   deps: ChatDriveDeps,
 ): Disposable[] {
-  const { services, profileNames, chat, sessions } = deps;
+  const { services, profileNames, chat, sessions, harnesses } = deps;
   const permissions = new Map<string, DrivePermission>();
+  const fakeHarness = () => {
+    const fake = harnesses.find(isFakeAgentHarness);
+    if (fake === undefined) {
+      throw new Error('chat runs on no fake harness');
+    }
+    return fake;
+  };
   const start = drive.add('start', {
     description:
-      'Starts a chat session in projectDir (default <home>/dev/drive-project, made if missing) under profile (default the first of chat\'s profiles) and selects its row. Under the fake harness a message of "fake: tool" runs a tool turn, "fake: hold" a turn that waits for an interrupt, "fake: steps" six tools and a thought in a turn that waits for an interrupt, "fake: agents" two subagents that run until an interrupt, the next message or the session\'s end, "fake: end" one that ends the session, "fake: workflow feature" a wigley:feature turn that writes a three-task plan, "fake: workflow step" the next make step of that plan, after /wigley:make <its folder>, "fake: visual" a reply holding a UI mockup and a flowchart whose second html block stays open for 1.5 s, and anything else an echo. Returns { sessionId, hostSessionId }: hostSessionId is the id forms.openRound and primer.openPrimer take to open a form in this session.',
+      'Starts a chat session in projectDir (default <home>/dev/drive-project, made if missing) under profile (default the first of chat\'s profiles) and selects its row. Under the fake harness a message of "fake: tool" runs a tool turn, "fake: hold" a turn that waits for an interrupt, "fake: steps" six tools and a thought in a turn that waits for an interrupt, "fake: agents" two subagents that run until an interrupt, the next message or the session\'s end, "fake: end" one that ends the session, "fake: workflow feature" a wigley:feature turn that writes a three-task plan, "fake: workflow step" the next make step of that plan, after /wigley:make <its folder>, "fake: visual" a reply holding a UI mockup and a flowchart whose second html block stays open for 1.5 s, "fake: cold" an echo whose usage reads 200k of context with the cache already cold, so with auto-compact on the next message is held for a compaction, "fake: compact" a turn that runs an autocompact, and anything else an echo. Returns { sessionId, hostSessionId }: hostSessionId is the id forms.openRound and primer.openPrimer take to open a form in this session.',
     args: '{ projectDir?: string; profile?: string }',
     async run(rawArgs) {
       const args = argsObject(rawArgs);
@@ -204,7 +216,31 @@ export function addDriveActions(
         : { pending: true };
     },
   });
-  return [start, askPermission, permissionAnswer];
+  const holdCompactions = drive.add('holdCompactions', {
+    description:
+      "Under the fake harness, holds every compaction that starts from now on until chat.releaseCompactions or an interrupt, so a held send's pending row and the dock's Compacting state stay up.",
+    args: '{}',
+    async run() {
+      fakeHarness().holdCompactions();
+      return {};
+    },
+  });
+  const releaseCompactions = drive.add('releaseCompactions', {
+    description:
+      'Ends the compactions chat.holdCompactions held, and holds no later one.',
+    args: '{}',
+    async run() {
+      fakeHarness().releaseCompactions();
+      return {};
+    },
+  });
+  return [
+    start,
+    askPermission,
+    permissionAnswer,
+    holdCompactions,
+    releaseCompactions,
+  ];
 }
 
 // Starts, resumes and runs the Claude Code sessions the page asks for, keeps
@@ -220,8 +256,9 @@ export function addDriveActions(
 // chat layouts, opens the layout preview's sample session (held apart from
 // chat's sessions, with no process), offers a drive run its fixtures, and
 // exports to other plugins a background launch, a send and clear on the
-// sessions it holds, a close of every session in a folder, and a registration
-// of instructions every later session start carries.
+// sessions it holds, a close of every session in a folder, a registration of
+// instructions every later session start carries, a registration of send gates,
+// and one of the idle compaction threshold a start passes.
 export const chatMainPart: MainPart<typeof chatManifest> = {
   manifest: chatManifest,
   start(api: ChatApi) {
@@ -426,6 +463,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
           profileNames,
           chat,
           sessions,
+          harnesses: services.agentHarnesses,
         }),
       );
     }
@@ -467,6 +505,8 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
         await Promise.all(ended);
       },
       addInstructions: (text) => chat.addInstructions(text),
+      addSendGate: (gate) => chat.addSendGate(gate),
+      addIdleCompactThreshold: (read) => chat.addIdleCompactThreshold(read),
     };
     return {
       commands: {},

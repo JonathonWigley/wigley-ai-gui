@@ -1,8 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { AgentStart } from '../../../contracts/agent';
+import type { AgentHarness, AgentStart } from '../../../contracts/agent';
 import type { Timers } from '../../../contracts/ambient';
 import type { Files } from '../../../contracts/files';
 import type { HostedProcessInfo } from '../../../contracts/session-host';
+import {
+  createFakeAgentHarness,
+  FAKE_MICROTASK_TIMERS,
+} from '../../../shared/fake-agent-harness';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
 import { createFakeSessionHost } from '../../../shared/fake-session-host';
 import { createMemoryFiles } from '../../../shared/memory-files';
@@ -45,6 +49,7 @@ function fakeChat(running = true) {
 function chatDriveActions(
   chat: ReturnType<typeof fakeChat>,
   activate: (sessionId: string) => void = () => undefined,
+  harnesses: readonly AgentHarness[] = [],
 ) {
   const drive = fakeDriveHost();
   addDriveActions(drive.host, {
@@ -57,6 +62,7 @@ function chatDriveActions(
     profileNames: () => ['default'],
     chat,
     sessions: { activate },
+    harnesses,
   });
   return drive;
 }
@@ -136,6 +142,35 @@ describe('chat drive actions', () => {
     ).rejects.toThrow('other');
     await expect(drive.run('permissionAnswer')).rejects.toThrow('toolUseId');
   });
+
+  it('holdCompactions and releaseCompactions reject with no fake harness', async () => {
+    const drive = chatDriveActions(fakeChat());
+
+    await expect(drive.run('holdCompactions')).rejects.toThrow(
+      'chat runs on no fake harness',
+    );
+    await expect(drive.run('releaseCompactions')).rejects.toThrow(
+      'chat runs on no fake harness',
+    );
+  });
+
+  it('holdCompactions and releaseCompactions reach the fake harness', async () => {
+    const fake = createFakeAgentHarness(
+      { now: () => 1000 },
+      createMemoryFiles(),
+      FAKE_MICROTASK_TIMERS,
+    );
+    const hold = vi.spyOn(fake, 'holdCompactions');
+    const release = vi.spyOn(fake, 'releaseCompactions');
+    const drive = chatDriveActions(fakeChat(), undefined, [fake]);
+
+    await drive.run('holdCompactions');
+    expect(hold).toHaveBeenCalledOnce();
+    expect(release).not.toHaveBeenCalled();
+
+    await drive.run('releaseCompactions');
+    expect(release).toHaveBeenCalledOnce();
+  });
 });
 
 // Chat's main part started on a harness whose sign-ins record their cancel
@@ -145,8 +180,9 @@ describe('chat drive actions', () => {
 // each row holds its titles as sessions would, starting with none.
 // `invoke` calls the page channel's handler for `name`; `sent` holds each
 // channel message, `logged` each log line, and `starts` counts the harness's
-// process starts and `startInstructions` each start's instructions, in start
-// order. `processEvents` holds each process's events, by start, and
+// process starts, `startInstructions` each start's instructions and
+// `startIdleCompactMinTokens` each start's threshold, in start order.
+// `processEvents` holds each process's events, by start, and
 // `holdProcessEnds` keeps every process's `end` pending until the function it
 // returns is called. Paths compare equal ignoring a trailing `/`.
 // `exports` is the part's main exports. `sessionHost` is a fake host whose `list`
@@ -170,6 +206,7 @@ function startChatPart(
   const logged: string[] = [];
   const starts = { count: 0 };
   const startInstructions: (readonly string[])[] = [];
+  const startIdleCompactMinTokens: (number | null)[] = [];
   const processEvents: {
     ended: (exit: { code: number; error: string | null }) => void;
   }[] = [];
@@ -192,11 +229,13 @@ function startChatPart(
     start: (request: AgentStart, events: (typeof processEvents)[number]) => {
       starts.count += 1;
       startInstructions.push(request.instructions);
+      startIdleCompactMinTokens.push(request.idleCompactMinTokens);
       processEvents.push(events);
       return {
         send: processSends,
         end: () => processEnd,
         interrupt: () => undefined,
+        compact: () => undefined,
         detach: processDetach,
         kill: processKill,
       };
@@ -317,6 +356,7 @@ function startChatPart(
     logged,
     starts,
     startInstructions,
+    startIdleCompactMinTokens,
     processEvents,
     holdProcessEnds,
     ended,
@@ -464,6 +504,34 @@ describe('chat main part', () => {
     await chat.exports.send('row-1', message);
 
     expect(chat.processSends).toHaveBeenCalledExactlyOnceWith(message);
+  });
+
+  it('exports_AddSendGate_HoldsAnExportedSend', async () => {
+    const chat = startChatPart();
+    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+    const message = { text: 'hi', images: [] };
+    const removeGate = chat.exports.addSendGate(() => ({
+      action: 'compact',
+      reason: 'r',
+    }));
+
+    await chat.exports.send('row-1', message);
+    expect(chat.processSends).not.toHaveBeenCalled();
+    chat.invoke('pullBack', 'row-1', 'queued-1');
+
+    removeGate();
+    await chat.exports.send('row-1', message);
+
+    expect(chat.processSends).toHaveBeenCalledExactlyOnceWith(message);
+  });
+
+  it('exports_AddIdleCompactThreshold_ReachesTheNextStart', () => {
+    const chat = startChatPart();
+    chat.exports.addIdleCompactThreshold(() => 150_000);
+
+    chat.invoke('start', { projectDir: '/p', profile: 'work' });
+
+    expect(chat.startIdleCompactMinTokens).toEqual([150_000]);
   });
 
   it('exports_AddInstructions_ReachTheNextStart_AfterTheTitleInstruction', () => {

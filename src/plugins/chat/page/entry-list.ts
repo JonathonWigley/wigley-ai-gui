@@ -12,6 +12,7 @@ import {
 import { textLineHeightPx } from '../../../shared/page/text-line';
 import { isScrolledToEnd, scrollContent } from '../../../shared/content-scroll';
 import type { QueuedMessage } from '../contract';
+import { chatCommand, chatScope } from '../ids';
 import defaultLayout from '../layouts/default/layout.js';
 import type {
   ActivityInput,
@@ -324,9 +325,11 @@ export function createEntryList(deps: EntryListDeps): EntryList {
   // Draws `messages` as the pending rows, in order, after the entries.
   const putQueued = (messages: readonly QueuedMessage[]) => {
     const next = new Map<string, QueuedSlot>();
+    const skipKey =
+      deps.kit.keys.keysFor(chatCommand('interrupt'), chatScope('chat')) ?? '';
     for (const message of messages) {
       const id = queuedStopId(message.id);
-      const input = queuedInput(message);
+      const input = queuedInput(message, skipKey);
       const held = queuedSlots.get(id);
       if (held === undefined) {
         const created = buildQueuedSlot(message, input, queuedPart);
@@ -648,11 +651,16 @@ function queuedStopId(queuedId: string): string {
   return `queued:${queuedId}`;
 }
 
-function queuedInput(message: QueuedMessage): QueuedMessageInput {
+function queuedInput(
+  message: QueuedMessage,
+  skipKey: string,
+): QueuedMessageInput {
   return {
     text: message.text,
     imageCount: message.images.length,
     sent: message.sentEntryId !== null,
+    holdReason: message.holdReason,
+    skipKey,
   };
 }
 
@@ -663,7 +671,9 @@ function isQueuedChanged(
   return (
     last.text !== next.text ||
     last.imageCount !== next.imageCount ||
-    last.sent !== next.sent
+    last.sent !== next.sent ||
+    last.holdReason !== next.holdReason ||
+    last.skipKey !== next.skipKey
   );
 }
 

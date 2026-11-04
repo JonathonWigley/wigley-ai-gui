@@ -16,6 +16,7 @@ import {
   withoutSession,
   withPollResult,
   withProfiles,
+  withSessionCompaction,
   withSessionUsage,
 } from './usage-store';
 
@@ -543,6 +544,16 @@ describe('session usage', () => {
     (sessionId: string): Step =>
     (state) =>
       withoutSession(state, sessionId);
+  const compacting =
+    (
+      sessionId: string,
+      profileDir: string,
+      compaction: SessionUsage['compaction'],
+    ): Step =>
+    (state) =>
+      withSessionCompaction(state, sessionId, profileDir, compaction);
+  const APP_COMPACTION = { trigger: 'app', startedAt: 1_000 } as const;
+  const HARNESS_COMPACTION = { trigger: 'harness', startedAt: 1_000 } as const;
 
   it.each<{ case: string; steps: Step[]; expected: SessionUsage[] }>([
     {
@@ -552,8 +563,18 @@ describe('session usage', () => {
         event('s2', '~/.claude-personal', SECOND),
       ],
       expected: [
-        { sessionId: 's1', profileDir: '~/.claude-work', usage: FIRST },
-        { sessionId: 's2', profileDir: '~/.claude-personal', usage: SECOND },
+        {
+          sessionId: 's1',
+          profileDir: '~/.claude-work',
+          usage: FIRST,
+          compaction: null,
+        },
+        {
+          sessionId: 's2',
+          profileDir: '~/.claude-personal',
+          usage: SECOND,
+          compaction: null,
+        },
       ],
     },
     {
@@ -564,8 +585,18 @@ describe('session usage', () => {
         event('s1', '~/.claude-personal', FIRST),
       ],
       expected: [
-        { sessionId: 's1', profileDir: '~/.claude-personal', usage: FIRST },
-        { sessionId: 's2', profileDir: '~/.claude-work', usage: null },
+        {
+          sessionId: 's1',
+          profileDir: '~/.claude-personal',
+          usage: FIRST,
+          compaction: null,
+        },
+        {
+          sessionId: 's2',
+          profileDir: '~/.claude-work',
+          usage: null,
+          compaction: null,
+        },
       ],
     },
     {
@@ -575,8 +606,18 @@ describe('session usage', () => {
         event('s2', '~/.claude-work', FIRST),
       ],
       expected: [
-        { sessionId: 's1', profileDir: '~/.claude-personal', usage: null },
-        { sessionId: 's2', profileDir: '~/.claude-work', usage: FIRST },
+        {
+          sessionId: 's1',
+          profileDir: '~/.claude-personal',
+          usage: null,
+          compaction: null,
+        },
+        {
+          sessionId: 's2',
+          profileDir: '~/.claude-work',
+          usage: FIRST,
+          compaction: null,
+        },
       ],
     },
     {
@@ -587,8 +628,18 @@ describe('session usage', () => {
         event('s1', '~/.claude-work', SECOND),
       ],
       expected: [
-        { sessionId: 's1', profileDir: '~/.claude-work', usage: SECOND },
-        { sessionId: 's2', profileDir: '~/.claude-personal', usage: FIRST },
+        {
+          sessionId: 's1',
+          profileDir: '~/.claude-work',
+          usage: SECOND,
+          compaction: null,
+        },
+        {
+          sessionId: 's2',
+          profileDir: '~/.claude-personal',
+          usage: FIRST,
+          compaction: null,
+        },
       ],
     },
     {
@@ -598,7 +649,12 @@ describe('session usage', () => {
         opened('s1', '~/.claude-personal'),
       ],
       expected: [
-        { sessionId: 's1', profileDir: '~/.claude-personal', usage: FIRST },
+        {
+          sessionId: 's1',
+          profileDir: '~/.claude-personal',
+          usage: FIRST,
+          compaction: null,
+        },
       ],
     },
     {
@@ -608,7 +664,12 @@ describe('session usage', () => {
         event('s1', '~/.claude-work', AT_1000),
       ],
       expected: [
-        { sessionId: 's1', profileDir: '~/.claude-work', usage: AT_2000 },
+        {
+          sessionId: 's1',
+          profileDir: '~/.claude-work',
+          usage: AT_2000,
+          compaction: null,
+        },
       ],
     },
     {
@@ -618,7 +679,12 @@ describe('session usage', () => {
         event('s1', '~/.claude-personal', AT_1000),
       ],
       expected: [
-        { sessionId: 's1', profileDir: '~/.claude-personal', usage: AT_2000 },
+        {
+          sessionId: 's1',
+          profileDir: '~/.claude-personal',
+          usage: AT_2000,
+          compaction: null,
+        },
       ],
     },
     {
@@ -628,7 +694,12 @@ describe('session usage', () => {
         event('s1', '~/.claude-work', AT_2000),
       ],
       expected: [
-        { sessionId: 's1', profileDir: '~/.claude-work', usage: AT_2000 },
+        {
+          sessionId: 's1',
+          profileDir: '~/.claude-work',
+          usage: AT_2000,
+          compaction: null,
+        },
       ],
     },
     {
@@ -638,7 +709,12 @@ describe('session usage', () => {
         event('s1', '~/.claude-work', ALSO_AT_2000),
       ],
       expected: [
-        { sessionId: 's1', profileDir: '~/.claude-work', usage: ALSO_AT_2000 },
+        {
+          sessionId: 's1',
+          profileDir: '~/.claude-work',
+          usage: ALSO_AT_2000,
+          compaction: null,
+        },
       ],
     },
     {
@@ -649,8 +725,96 @@ describe('session usage', () => {
         ended('s1'),
       ],
       expected: [
-        { sessionId: 's2', profileDir: '~/.claude-personal', usage: SECOND },
+        {
+          sessionId: 's2',
+          profileDir: '~/.claude-personal',
+          usage: SECOND,
+          compaction: null,
+        },
       ],
+    },
+    {
+      case: 'CompactionStartKeepsUsage',
+      steps: [
+        event('s1', '~/.claude-work', FIRST),
+        compacting('s1', '~/.claude-work', APP_COMPACTION),
+      ],
+      expected: [
+        {
+          sessionId: 's1',
+          profileDir: '~/.claude-work',
+          usage: FIRST,
+          compaction: { trigger: 'app', startedAt: 1_000 },
+        },
+      ],
+    },
+    {
+      case: 'CompactionEndClears',
+      steps: [
+        event('s1', '~/.claude-work', FIRST),
+        compacting('s1', '~/.claude-work', APP_COMPACTION),
+        compacting('s1', '~/.claude-work', null),
+      ],
+      expected: [
+        {
+          sessionId: 's1',
+          profileDir: '~/.claude-work',
+          usage: FIRST,
+          compaction: null,
+        },
+      ],
+    },
+    {
+      case: 'UsageDuringCompactionKeepsIt',
+      steps: [
+        event('s1', '~/.claude-work', FIRST),
+        compacting('s1', '~/.claude-work', APP_COMPACTION),
+        event('s1', '~/.claude-work', SECOND),
+      ],
+      expected: [
+        {
+          sessionId: 's1',
+          profileDir: '~/.claude-work',
+          usage: SECOND,
+          compaction: { trigger: 'app', startedAt: 1_000 },
+        },
+      ],
+    },
+    {
+      case: 'CompactionTakesTheProfile',
+      steps: [
+        event('s1', '~/.claude-work', FIRST),
+        compacting('s1', '~/.claude-personal', APP_COMPACTION),
+      ],
+      expected: [
+        {
+          sessionId: 's1',
+          profileDir: '~/.claude-personal',
+          usage: FIRST,
+          compaction: { trigger: 'app', startedAt: 1_000 },
+        },
+      ],
+    },
+    {
+      case: 'StartOnUnknownSessionAppends',
+      steps: [compacting('s9', '~/.claude-work', HARNESS_COMPACTION)],
+      expected: [
+        {
+          sessionId: 's9',
+          profileDir: '~/.claude-work',
+          usage: null,
+          compaction: { trigger: 'harness', startedAt: 1_000 },
+        },
+      ],
+    },
+    {
+      case: 'EndedDropsCompactingSession',
+      steps: [
+        event('s1', '~/.claude-work', FIRST),
+        compacting('s1', '~/.claude-work', APP_COMPACTION),
+        ended('s1'),
+      ],
+      expected: [],
     },
   ])('sessionUsage_$case', ({ steps, expected }) => {
     const state = steps.reduce(
@@ -672,4 +836,29 @@ describe('session usage', () => {
 
     expect(event('s1', '~/.claude-work', AT_1000)(state)).toBe(state);
   });
+
+  it.each<{ case: string; given: Step; change: Step }>([
+    {
+      case: 'EndOnUnknownSession',
+      given: event('s1', '~/.claude-work', FIRST),
+      change: compacting('s9', '~/.claude-work', null),
+    },
+    {
+      case: 'EndOnSessionWithNoCompaction',
+      given: event('s1', '~/.claude-work', FIRST),
+      change: compacting('s1', '~/.claude-work', null),
+    },
+    {
+      case: 'SameStartAgain',
+      given: compacting('s1', '~/.claude-work', APP_COMPACTION),
+      change: compacting('s1', '~/.claude-work', { ...APP_COMPACTION }),
+    },
+  ])(
+    'sessionCompaction_UnchangedOrUnknownEnd_ReturnsSameState_$case',
+    ({ given, change }) => {
+      const state = given(EMPTY_USAGE_STATE);
+
+      expect(change(state)).toBe(state);
+    },
+  );
 });

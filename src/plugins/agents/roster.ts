@@ -123,7 +123,8 @@ export function foldAgentEvent(roster: Roster, event: AgentEvent): Roster {
     case 'userMessage':
     case 'sessionStarted':
     case 'usage':
-    case 'compacted':
+    case 'compactionStarted':
+    case 'compactionEnded':
     case 'skillStarted':
     case 'fileWritten':
     case 'turnStarted':

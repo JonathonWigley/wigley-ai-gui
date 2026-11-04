@@ -9,6 +9,7 @@ import type {
 } from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import {
+  FAKE_COLD_TEXT,
   FAKE_END_TEXT,
   FAKE_HOLD_TEXT,
   FAKE_PAST_SESSIONS,
@@ -20,6 +21,7 @@ import {
   type FakeAgentCall,
   type FakeAgentProcessRecord,
   type FakePermissionAsk,
+  isFakeAgentHarness,
   markRun,
   type RunMark,
 } from '../../../shared/fake-agent-harness';
@@ -51,7 +53,12 @@ export interface ChatSelfTestDeps {
   files: Pick<Files, 'makeFolder' | 'realPath'>;
   chat: Pick<
     ChatSessions,
-    'start' | 'closed' | 'permissionToolSession' | 'sessions' | 'setArchived'
+    | 'start'
+    | 'closed'
+    | 'permissionToolSession'
+    | 'sessions'
+    | 'setArchived'
+    | 'addSendGate'
   >;
   sessions: Pick<SessionsMainExports, 'activate' | 'connect'>;
   harnesses: readonly AgentHarness[];
@@ -493,6 +500,30 @@ const INTERRUPT_AND_CLOSE_STEPS: SelfTestStep[] = [
   },
   { keys: ['Escape'], expect: '[chat] picker closed: Folder' },
   {
+    keys: sendKeys(FAKE_COLD_TEXT),
+    expect: '[chat] assistant entry added in chat-selftest',
+  },
+  {
+    keys: sendKeys('after cold'),
+    expect: '[chat] 1 pending message(s) in chat-selftest',
+    alsoExpect: [/^\[chat\] chat-selftest compacting: selftest · cache cold$/],
+    why: "The fixture gate holds the send after fake: cold; the held row waits while the fake holds the app compaction, and the page logs the compaction's label as it starts.",
+  },
+  {
+    keys: sendKeys('behind hold'),
+    expect: '[chat] 2 pending message(s) in chat-selftest',
+    why: 'A send during the hold queues behind the held row.',
+  },
+  {
+    keys: ['<C-c>'],
+    expect: '[chat] 0 pending message(s) in chat-selftest',
+    alsoExpect: [
+      /^\[chat\] interrupted chat-selftest$/,
+      /^\[chat\] chat-selftest compaction ended$/,
+    ],
+    why: 'Ctrl+C skips the held compaction; the held row is written when the compaction ends, then the row behind it at the next idle.',
+  },
+  {
     keys: sendKeys(FAKE_HOLD_TEXT),
     expect: '[chat] chat-selftest is working',
   },
@@ -690,7 +721,7 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'interrupt and close',
-    why: "Ctrl+c in the box ends a held turn with the fake's notice; messages sent during a held turn wait as pending rows; Cmd+Enter on a focused row writes that row into the turn, and Cmd+Enter in the box writes every pending row then the box; Enter on one and Ctrl+c pull them back into the box, the oldest on top, and none reaches the process; Cmd+W on a working session asks before y ends it.",
+    why: "Ctrl+c in the box ends a held turn with the fake's notice; messages sent during a held turn wait as pending rows; Cmd+Enter on a focused row writes that row into the turn, and Cmd+Enter in the box writes every pending row then the box; Enter on one and Ctrl+c pull them back into the box, the oldest on top, and none reaches the process; a send after fake: cold is held as a pending row for an app compaction, a later send queues behind it, and Ctrl+C skips the compaction and writes both in order; Cmd+W on a working session asks before y ends it.",
     steps: INTERRUPT_AND_CLOSE_STEPS,
   },
   {
@@ -778,9 +809,16 @@ const EXPECTED_CALLS: FakeAgentCall[] = [
   { method: 'send', text: FAKE_HOLD_TEXT, imageCount: 0 },
   { method: 'interrupt' },
   { method: 'send', text: 'pending one\npending two', imageCount: 0 },
+  { method: 'send', text: FAKE_COLD_TEXT, imageCount: 0 },
+  { method: 'compact' },
+  { method: 'interrupt' },
+  { method: 'send', text: 'after cold', imageCount: 0 },
+  { method: 'send', text: 'behind hold', imageCount: 0 },
   { method: 'send', text: FAKE_HOLD_TEXT, imageCount: 0 },
   { method: 'end' },
 ];
+
+const FIXTURE_HOLD_REASON = 'selftest · cache cold';
 
 // The saved session the steps resume, the first of the fake's.
 const RESUMED_SESSION_ID = '00000000-0000-4000-8000-000000000001';
@@ -960,7 +998,10 @@ interface SelfTestProjects {
 // folder; problems reads the fake processes, whose records the steps keep
 // changing in place, when it runs, reading only the records this run added.
 // Each fake harness asks a `fake: permission` turn's permission through
-// chat's tool too. The run waits on the session's Chat tab being shown.
+// chat's tool too. The run waits on the session's Chat tab being shown. A
+// fixture send gate, registered here once for every run, holds a send to the
+// self-test's session that follows `fake: cold`, with the fake holding the
+// compaction until problems reads the run; it needs no auto-compact plugin.
 export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
   const { chat, sessions, harnesses, files } = deps;
   // Cleared when making them fails, so a later run tries again.
@@ -968,6 +1009,30 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
   let previousRelay: ConnectedSession | null = null;
   let archiveResetFailures: string[] = [];
   let marks: RunMark[] = [];
+  let selftestProject: string | null = null;
+
+  chat.addSendGate((input) => {
+    const isSelftestSession = chat
+      .sessions()
+      .some(
+        (state) =>
+          state.sessionId === input.sessionId &&
+          state.projectDir === selftestProject,
+      );
+    if (!isSelftestSession || selftestProject === null) {
+      return null;
+    }
+    const lastCall = selftestProcess(marks, selftestProject, false)?.calls.at(
+      -1,
+    );
+    const followsCold =
+      lastCall?.method === 'send' && lastCall.text === FAKE_COLD_TEXT;
+    if (!followsCold) {
+      return null;
+    }
+    harnesses.find(isFakeAgentHarness)?.holdCompactions();
+    return { action: 'compact', reason: FIXTURE_HOLD_REASON };
+  });
 
   async function makeProjects(): Promise<SelfTestProjects> {
     const home = await files.realPath(deps.homeDir);
@@ -977,6 +1042,7 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
     };
     await files.makeFolder(madeProjects.selftest);
     await files.makeFolder(madeProjects.second);
+    selftestProject = madeProjects.selftest;
     return madeProjects;
   }
 
@@ -1066,9 +1132,12 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
       };
     },
     groups: GROUPS,
-    problems: (result) => [
-      ...archiveResetFailures,
-      ...runProblems(result as ChatSelfTestResult),
-    ],
+    problems: (result) => {
+      harnesses.find(isFakeAgentHarness)?.releaseCompactions();
+      return [
+        ...archiveResetFailures,
+        ...runProblems(result as ChatSelfTestResult),
+      ];
+    },
   };
 }

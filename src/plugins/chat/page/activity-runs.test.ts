@@ -50,6 +50,17 @@ function entry(kind: ChatEntryKind, id: string, at = 1000): ChatEntry {
       return { kind, id, at, text: 'note', tone: 'info', raw: [] };
     case 'raw':
       return { kind, id, at, raw: [] };
+    case 'compaction':
+      return {
+        kind,
+        id,
+        at,
+        trigger: 'app',
+        beforeTokens: null,
+        afterTokens: null,
+        durationMs: null,
+        raw: [],
+      };
   }
 }
 

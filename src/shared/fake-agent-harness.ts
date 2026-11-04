@@ -8,6 +8,7 @@ import {
   type AgentStart,
   type ChatEntry,
   type ChatImage,
+  type CompactionTrigger,
   type LogInEvents,
   type LogInProcess,
   type PastSession,
@@ -31,15 +32,18 @@ import { typedSkill } from './typed-skill';
 // Every emission runs in a microtask the causing call queues, never inside the
 // call, so a caller's state is in place before its events arrive. Each emitted
 // entry carries the clock's time when its id first arrived; `history` entries
-// carry fixed times one second apart. Every finished turn reports a `usage`
-// agent event and a plan row update after its result, and `planUsage` answers
-// every profile with `fakePlanUsage`. The process emits the agent events Claude
-// would for what it simulates, each at the clock's time: `sessionStarted` first,
-// `userMessage` after each user entry, then `skillStarted` for a typed
+// carry fixed times one second apart. Every turn that ends with a result reports
+// a `usage` agent event and a plan row update after that result, except that no
+// `usage` goes out between a done compaction and the next main reply, and
+// `planUsage` answers every profile with `fakePlanUsage`. The process emits the agent events
+// Claude would for what it simulates, each at the clock's time: `sessionStarted`
+// first, `userMessage` after each user entry, then `skillStarted` for a typed
 // `/<skill>` message and `turnStarted` for every send that runs a turn, tool
 // and subagent events (`agentReplied` included) beside their entries,
 // `taskStarted` and `taskFinished`
-// for background tasks, `turnEnded` when a turn closes or is interrupted, and
+// for background tasks, `compactionStarted` and one `compactionEnded` for each
+// compaction (`compact()`, `/compact`, `FAKE_COMPACT_TEXT`), `turnEnded` when a
+// turn or a compaction closes or is interrupted, and
 // `sessionEnded` just before each `ended`. A process `attach` resolves opens with
 // none of `start`'s emissions: the test's replay stands for them. Once a process
 // has detached, it emits nothing. The workflow
@@ -76,6 +80,17 @@ export const FAKE_STEPS_TEXT = 'fake: steps';
 export const FAKE_AGENTS_TEXT = 'fake: agents';
 // A send of this text ends the process on its own, as a CLI that exits.
 export const FAKE_END_TEXT = 'fake: end';
+// A send of this text runs a `harness` compaction, then a reply and a normal turn
+// end. The `usage` event after a done compaction, whatever started it, reads
+// `FAKE_COMPACTED_CONTEXT_TOKENS`, and the compaction entry comes again with that
+// size as its `afterTokens` just before that event.
+export const FAKE_COMPACT_TEXT = 'fake: compact';
+export const FAKE_COMPACTED_CONTEXT_TOKENS = 24_000;
+// A send of this text runs the echo turn, with a `usage` event whose cache has
+// already expired and whose context reads `FAKE_COLD_CONTEXT_TOKENS`, even right
+// after a compaction.
+export const FAKE_COLD_TEXT = 'fake: cold';
+const FAKE_COLD_CONTEXT_TOKENS = 200_000;
 // A send of this text starts one Bash tool, asks its permission through the
 // harness's `askPermissionsWith` ask, then finishes the tool, allowed or
 // refused, and replies. The turn stays open while the ask waits.
@@ -119,6 +134,7 @@ export type FakeAgentCall =
   | { method: 'send'; text: string; imageCount: number }
   | { method: 'interrupt' }
   | { method: 'setControl'; id: string; value: string }
+  | { method: 'compact' }
   | { method: 'end' }
   | { method: 'kill' }
   | { method: 'detach' };
@@ -188,7 +204,12 @@ export interface FakePastSessionCall {
 // and `releaseEnd`, a first `end` marks its process ended and leaves that
 // promise pending; `releaseEnd` emits `ended` for each held process in call
 // order and resolves them, and a `detach` resolves its own process's with no
-// `ended`. A `FAKE_END_TEXT` exit is never held.
+// `ended`. A `FAKE_END_TEXT` exit is never held. Between `holdCompactions` and
+// `releaseCompactions`, a compaction stops after `compactionStarted` with its
+// process busy; `releaseCompactions` finishes each one still running as done, in
+// start order across processes. An interrupt (`interrupted`), an end, kill or
+// `FAKE_END_TEXT` send (`failed`), or any other send (done, before the send's own
+// emissions) ends a held one sooner, and a release then skips it.
 // `pastSessionCalls` lists every `listSessions` and `history` call in call
 // order, failed ones included; `history` returns the entries timed before its
 // `before`, all for null; `failNextHistory` makes the next `history` reject
@@ -219,6 +240,8 @@ export interface FakeAgentHarness extends AgentHarness {
   holdNextLastUsage(): () => void;
   holdEnd(): void;
   releaseEnd(): void;
+  holdCompactions(): void;
+  releaseCompactions(): void;
   askPermissionsWith(ask: FakePermissionAsk): void;
 }
 
@@ -361,7 +384,8 @@ export function fakePlanUsage(at: number): PlanUsage {
   };
 }
 
-// The `usage` event turn `turn` ends with; its two autocompact limits differ.
+// The `usage` event turn `turn` ends with, unless a compaction just ran or the
+// turn is `FAKE_COLD_TEXT`'s; its two autocompact limits differ.
 export function fakeUsageEvent(turn: number, at: number): UsageAgentEvent {
   return {
     type: 'usage',
@@ -452,12 +476,40 @@ function untilDetached(record: FakeAgentProcessRecord): AgentProcessEvents {
 // Emits one entry, stamped with its `at`.
 type EmitEntry = (draft: EntryDraft) => void;
 
+// Emits the main `usage` event that closes turn `turn`.
+type EmitTurnUsage = (turn: number) => void;
+
 type ToolEntryDraft = Extract<EntryDraft, { kind: 'tool' }>;
 
 // A tool entry without its result and raw events.
 type ToolCall = Omit<ToolEntryDraft, 'result' | 'raw'>;
 
 type ToolResult = { text: string; isError: boolean };
+
+type CompactionEntryDraft = Extract<EntryDraft, { kind: 'compaction' }>;
+
+// One compaction, from its start call to its end. `n` counts the process's
+// compactions from 1; `turn` is the turn a `harness` compaction replies in.
+interface FakeCompaction {
+  n: number;
+  trigger: CompactionTrigger;
+  turn: number;
+  startedAt: number;
+}
+
+const compactionEndedEvent = (
+  clock: Clock,
+  compaction: FakeCompaction,
+  outcome: 'done' | 'failed' | 'interrupted',
+  beforeTokens: number | null,
+): AgentEvent => ({
+  type: 'compactionEnded',
+  at: clock.now(),
+  trigger: compaction.trigger,
+  outcome,
+  beforeTokens,
+  durationMs: clock.now() - compaction.startedAt,
+});
 
 const toolStartedEvent = (clock: Clock, call: ToolCall): AgentEvent => ({
   type: 'toolStarted',
@@ -515,6 +567,7 @@ function finishFakeTool(
 function emitTurnEnd(
   events: AgentProcessEvents,
   emitEntry: EmitEntry,
+  emitTurnUsage: EmitTurnUsage,
   clock: Clock,
   turn: number,
 ) {
@@ -526,7 +579,7 @@ function emitTurnEnd(
     durationMs: null,
     raw: [{ fake: 'result' }],
   });
-  events.agentEvent(fakeUsageEvent(turn, clock.now()));
+  emitTurnUsage(turn);
   events.planUsage(fakePlanRowUpdate(turn, clock.now()));
   events.agentEvent({ type: 'turnEnded', at: clock.now() });
   events.activity('idle');
@@ -535,6 +588,7 @@ function emitTurnEnd(
 function emitToolTurn(
   events: AgentProcessEvents,
   emitEntry: EmitEntry,
+  emitTurnUsage: EmitTurnUsage,
   clock: Clock,
   turn: number,
 ) {
@@ -560,7 +614,7 @@ function emitToolTurn(
     streaming: false,
     raw: [{ fake: 'assistant', text: reply }],
   });
-  emitTurnEnd(events, emitEntry, clock, turn);
+  emitTurnEnd(events, emitEntry, emitTurnUsage, clock, turn);
 }
 
 // The tools `FAKE_STEPS_TEXT`'s turn runs, in order, each with its result.
@@ -908,6 +962,7 @@ function permissionToolCall(turn: number): ToolCall {
 function emitEchoTurn(
   events: AgentProcessEvents,
   emitEntry: EmitEntry,
+  emitTurnUsage: EmitTurnUsage,
   clock: Clock,
   turn: number,
   text: string,
@@ -928,7 +983,7 @@ function emitEchoTurn(
     streaming: false,
     raw: [first, { fake: 'assistant', text }],
   });
-  emitTurnEnd(events, emitEntry, clock, turn);
+  emitTurnEnd(events, emitEntry, emitTurnUsage, clock, turn);
 }
 
 // The images on a fake past session's user message: a red and a blue 16×16
@@ -986,6 +1041,9 @@ export function createFakeAgentHarness(
   let isEndHeld = false;
   // In call order.
   const heldEnds = new Map<FakeAgentProcessRecord, () => void>();
+  let isCompactionHeld = false;
+  // Each held compaction's done finish, in start order.
+  const heldCompactions = new Map<FakeCompaction, () => void>();
   // Profiles `logOut` signed out and no sign-in has signed in since.
   const signedOutProfiles = new Set<string | null>();
   // Each profile's started folders, by the count of `start` calls when each
@@ -1054,6 +1112,8 @@ export function createFakeAgentHarness(
     let controls = startingControls(record.request.controls);
     let turn = turns;
     let isTurnOpen = false;
+    // Sends may overlap, so workflow turns are counted; `interrupt` leaves them run.
+    let workflowTurnsRunning = 0;
     // The Agent entries of the subagents still running, in spawn order.
     let runningSubagents: SubagentEntry[] = [];
     // The ids of the tasks still running, in start order.
@@ -1062,6 +1122,12 @@ export function createFakeAgentHarness(
     let makeFolder: string | null = null;
     let endPromise: Promise<void> | null = null;
     let visualHold: number | null = null;
+    let compactionCount = 0;
+    let openCompaction: FakeCompaction | null = null;
+    // The newest done compaction's entry, until the next main `usage` gives its
+    // after-size.
+    let entryAwaitingAfterSize: CompactionEntryDraft | null = null;
+    let lastMainContextTokens: number | null = null;
     const stamp = createEntryStamp(clock);
     const emitEntry: EmitEntry = (draft) => {
       events.entry(stamp(draft));
@@ -1082,6 +1148,128 @@ export function createFakeAgentHarness(
         timers.clear(visualHold);
         visualHold = null;
       }
+    };
+
+    // Every main `usage` event goes through here.
+    const emitMainUsage = (usage: UsageAgentEvent) => {
+      if (entryAwaitingAfterSize !== null) {
+        emitEntry({
+          ...entryAwaitingAfterSize,
+          afterTokens: usage.contextTokens,
+          raw: [...entryAwaitingAfterSize.raw, { fake: 'compaction-after' }],
+        });
+        entryAwaitingAfterSize = null;
+      }
+      lastMainContextTokens = usage.contextTokens;
+      events.agentEvent(usage);
+    };
+    const emitTurnUsage: EmitTurnUsage = (usageTurn) => {
+      const usage = fakeUsageEvent(usageTurn, clock.now());
+      emitMainUsage(
+        entryAwaitingAfterSize === null
+          ? usage
+          : { ...usage, contextTokens: FAKE_COMPACTED_CONTEXT_TOKENS },
+      );
+    };
+    const emitColdTurnUsage: EmitTurnUsage = (usageTurn) => {
+      const at = clock.now();
+      emitMainUsage({
+        ...fakeUsageEvent(usageTurn, at),
+        contextTokens: FAKE_COLD_CONTEXT_TOKENS,
+        cacheExpiresAt: at,
+      });
+    };
+
+    const openNewCompaction = (
+      trigger: CompactionTrigger,
+      compactionTurn: number,
+    ): FakeCompaction => {
+      compactionCount += 1;
+      const compaction: FakeCompaction = {
+        n: compactionCount,
+        trigger,
+        turn: compactionTurn,
+        startedAt: clock.now(),
+      };
+      openCompaction = compaction;
+      return compaction;
+    };
+    // Ends the open compaction's claim on the process at call time, so that its
+    // queued emissions and a later release leave its end to the caller.
+    const takeOpenCompaction = (): FakeCompaction | null => {
+      const compaction = openCompaction;
+      openCompaction = null;
+      if (compaction !== null) {
+        heldCompactions.delete(compaction);
+      }
+      return compaction;
+    };
+    const emitCompactionDone = (compaction: FakeCompaction) => {
+      const { trigger } = compaction;
+      const beforeTokens = lastMainContextTokens;
+      const entry: CompactionEntryDraft = {
+        kind: 'compaction',
+        id: `compaction-${compaction.n}`,
+        trigger,
+        beforeTokens,
+        afterTokens: null,
+        durationMs: clock.now() - compaction.startedAt,
+        raw: [{ fake: 'compaction' }],
+      };
+      emitEntry(entry);
+      entryAwaitingAfterSize = entry;
+      events.agentEvent(
+        compactionEndedEvent(clock, compaction, 'done', beforeTokens),
+      );
+      if (trigger !== 'harness') {
+        events.agentEvent({ type: 'turnEnded', at: clock.now() });
+        events.activity('idle');
+        return;
+      }
+      const reply = 'fake agent compacted';
+      emitEntry({
+        kind: 'assistant',
+        id: `assistant-${compaction.turn}`,
+        text: reply,
+        streaming: false,
+        raw: [{ fake: 'assistant', text: reply }],
+      });
+      emitTurnEnd(events, emitEntry, emitTurnUsage, clock, compaction.turn);
+    };
+    const emitCompactionFailed = (compaction: FakeCompaction | null) => {
+      if (compaction !== null) {
+        events.agentEvent(
+          compactionEndedEvent(clock, compaction, 'failed', null),
+        );
+      }
+    };
+    const finishCompactionIfOpen = (compaction: FakeCompaction) => {
+      if (openCompaction !== compaction) {
+        return;
+      }
+      openCompaction = null;
+      isTurnOpen = false;
+      emitCompactionDone(compaction);
+    };
+    // Emits `compactionStarted` even for a compaction already ended in this tick:
+    // its ender emits the one `compactionEnded` that pairs with it.
+    const emitCompactionStarted = (compaction: FakeCompaction) => {
+      compaction.startedAt = clock.now();
+      events.agentEvent({
+        type: 'compactionStarted',
+        at: compaction.startedAt,
+        trigger: compaction.trigger,
+      });
+      if (openCompaction !== compaction) {
+        return;
+      }
+      if (isCompactionHeld) {
+        heldCompactions.set(compaction, () =>
+          finishCompactionIfOpen(compaction),
+        );
+        return;
+      }
+      finishCompactionIfOpen(compaction);
     };
 
     // The reply with its second visual's block open, then, after the hold, the
@@ -1111,7 +1299,7 @@ export function createFakeAgentHarness(
             },
           ],
         });
-        emitTurnEnd(events, emitEntry, clock, turn);
+        emitTurnEnd(events, emitEntry, emitTurnUsage, clock, turn);
       }, FAKE_VISUAL_HOLD_MS);
     };
 
@@ -1137,7 +1325,11 @@ export function createFakeAgentHarness(
       } catch (error) {
         result = { text: errorText(error), isError: true };
       }
-      const isStillTheTurn = !record.ended && isTurnOpen && turn === askedTurn;
+      const isStillTheTurn =
+        !record.ended &&
+        isTurnOpen &&
+        turn === askedTurn &&
+        openCompaction === null;
       if (!isStillTheTurn) {
         return;
       }
@@ -1153,7 +1345,7 @@ export function createFakeAgentHarness(
         streaming: false,
         raw: [{ fake: 'assistant', text: reply }],
       });
-      emitTurnEnd(events, emitEntry, clock, askedTurn);
+      emitTurnEnd(events, emitEntry, emitTurnUsage, clock, askedTurn);
     };
 
     // Runs `change` between workflow tool `n`'s call and its result; a
@@ -1246,7 +1438,24 @@ export function createFakeAgentHarness(
           raw: [{ fake: 'assistant', text: reply }],
         });
       }
-      emitTurnEnd(events, emitEntry, clock, turn);
+      const isInCompactionGap =
+        change === 'failed' && entryAwaitingAfterSize !== null;
+      emitTurnEnd(
+        events,
+        emitEntry,
+        isInCompactionGap ? () => undefined : emitTurnUsage,
+        clock,
+        turn,
+      );
+    };
+
+    const countWorkflowTurn = async (run: () => Promise<void>) => {
+      workflowTurnsRunning += 1;
+      try {
+        await run();
+      } finally {
+        workflowTurnsRunning -= 1;
+      }
     };
 
     const runWorkflowFeature = async (turn: number, runsSkill: boolean) => {
@@ -1346,12 +1555,14 @@ export function createFakeAgentHarness(
           }
           events.activity('working');
         };
+        const cutShort = takeOpenCompaction();
         if (text === FAKE_END_TEXT) {
           record.ended = true;
           isTurnOpen = false;
           endPromise = new Promise<void>((resolve) => {
             queueMicrotask(() => {
               emitUserEntry(false);
+              emitCompactionFailed(cutShort);
               emitSessionEnded();
               events.ended({ code: 0, error: null });
               resolve();
@@ -1364,8 +1575,23 @@ export function createFakeAgentHarness(
         const isAgents = text === FAKE_AGENTS_TEXT;
         const isVisual = text === FAKE_VISUAL_TEXT;
         const isPermission = text === FAKE_PERMISSION_TEXT;
-        isTurnOpen = isHold || isSteps || isAgents || isVisual || isPermission;
+        const isTypedCompact = typedSkill(text)?.skill === 'compact';
+        const isHarnessCompact = text === FAKE_COMPACT_TEXT;
+        const startedCompaction =
+          isTypedCompact || isHarnessCompact
+            ? openNewCompaction(isTypedCompact ? 'manual' : 'harness', sentTurn)
+            : null;
+        isTurnOpen =
+          isHold ||
+          isSteps ||
+          isAgents ||
+          isVisual ||
+          isPermission ||
+          startedCompaction !== null;
         queueMicrotask(() => {
+          if (cutShort !== null) {
+            emitCompactionDone(cutShort);
+          }
           finishSubagents(events, emitEntry, clock, runningSubagents, {
             text: 'fake subagent done',
             isError: false,
@@ -1375,15 +1601,23 @@ export function createFakeAgentHarness(
           if (isHold) {
             return;
           }
+          if (startedCompaction !== null) {
+            emitCompactionStarted(startedCompaction);
+            return;
+          }
           const workflowTurn = workflowTurnOf(text, makeFolder, workflowPlans);
           if (workflowTurn?.kind === 'feature') {
-            void runWorkflowFeature(sentTurn, workflowTurn.runsSkill);
+            void countWorkflowTurn(() =>
+              runWorkflowFeature(sentTurn, workflowTurn.runsSkill),
+            );
           } else if (workflowTurn?.kind === 'make') {
             makeFolder = workflowTurn.folder;
-            void runWorkflowMakeStep(
-              sentTurn,
-              workflowTurn.folder,
-              workflowTurn.plan,
+            void countWorkflowTurn(() =>
+              runWorkflowMakeStep(
+                sentTurn,
+                workflowTurn.folder,
+                workflowTurn.plan,
+              ),
             );
           } else if (isAgents) {
             runningSubagents = emitAgentsTurn(
@@ -1398,13 +1632,20 @@ export function createFakeAgentHarness(
           } else if (isSteps) {
             emitStepsTurn(events, emitEntry, clock, sentTurn);
           } else if (text === FAKE_TOOL_TEXT) {
-            emitToolTurn(events, emitEntry, clock, sentTurn);
+            emitToolTurn(events, emitEntry, emitTurnUsage, clock, sentTurn);
           } else if (isVisual) {
             emitVisualTurn(sentTurn);
           } else if (isPermission) {
             void runPermissionTurn(sentTurn);
           } else {
-            emitEchoTurn(events, emitEntry, clock, sentTurn, text);
+            emitEchoTurn(
+              events,
+              emitEntry,
+              text === FAKE_COLD_TEXT ? emitColdTurnUsage : emitTurnUsage,
+              clock,
+              sentTurn,
+              text,
+            );
           }
         });
         return `user-${sentTurn}`;
@@ -1418,6 +1659,7 @@ export function createFakeAgentHarness(
         clearVisualHold();
         isTurnOpen = false;
         const interruptedTurn = turn;
+        const interrupted = takeOpenCompaction();
         queueMicrotask(() => {
           for (const taskId of runningTasks) {
             events.agentEvent({
@@ -1433,10 +1675,22 @@ export function createFakeAgentHarness(
             isError: true,
           });
           runningSubagents = [];
+          if (interrupted !== null) {
+            events.agentEvent(
+              compactionEndedEvent(clock, interrupted, 'interrupted', null),
+            );
+          }
+          // A `/compact`'s or `compact()`'s own line says it was canceled; a
+          // harness compaction runs inside a model turn, whose interrupt prints none.
+          const isCommandCanceled =
+            interrupted !== null && interrupted.trigger !== 'harness';
           emitEntry({
             kind: 'notice',
-            id: `notice-${interruptedTurn}`,
-            text: 'Interrupted',
+            id:
+              interrupted === null
+                ? `notice-${interruptedTurn}`
+                : `notice-compaction-${interrupted.n}`,
+            text: isCommandCanceled ? 'Compaction canceled.' : 'Interrupted',
             tone: 'info',
             raw: [{ fake: 'interrupt' }],
           });
@@ -1460,6 +1714,20 @@ export function createFakeAgentHarness(
         const reported = controls;
         queueMicrotask(() => events.controls(reported));
       },
+      compact() {
+        calls.push({ method: 'compact' });
+        requireRunning();
+        if (isTurnOpen || openCompaction !== null || workflowTurnsRunning > 0) {
+          throw new Error('fake agent is running a turn');
+        }
+        isTurnOpen = true;
+        const compaction = openNewCompaction('app', turn);
+        queueMicrotask(() => {
+          events.agentEvent({ type: 'turnStarted', at: clock.now() });
+          events.activity('working');
+          emitCompactionStarted(compaction);
+        });
+      },
       end() {
         calls.push({ method: 'end' });
         clearVisualHold();
@@ -1471,9 +1739,11 @@ export function createFakeAgentHarness(
         }
         record.ended = true;
         isTurnOpen = false;
+        const cutShort = takeOpenCompaction();
         const isHeld = isEndHeld;
         endPromise = new Promise<void>((resolve) => {
           const exit = () => {
+            emitCompactionFailed(cutShort);
             emitSessionEnded();
             events.ended({ code: 0, error: null });
             resolve();
@@ -1494,8 +1764,10 @@ export function createFakeAgentHarness(
         }
         record.ended = true;
         isTurnOpen = false;
+        const cutShort = takeOpenCompaction();
         endPromise = new Promise<void>((resolve) => {
           queueMicrotask(() => {
+            emitCompactionFailed(cutShort);
             emitSessionEnded();
             events.ended({ code: null, error: null });
             resolve();
@@ -1661,6 +1933,19 @@ export function createFakeAgentHarness(
     },
     holdEnd() {
       isEndHeld = true;
+    },
+    holdCompactions() {
+      isCompactionHeld = true;
+    },
+    releaseCompactions() {
+      isCompactionHeld = false;
+      const released = [...heldCompactions.values()];
+      heldCompactions.clear();
+      queueMicrotask(() => {
+        for (const finish of released) {
+          finish();
+        }
+      });
     },
     askPermissionsWith(ask) {
       permissionAsk = ask;

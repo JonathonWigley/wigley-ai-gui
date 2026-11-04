@@ -39,6 +39,7 @@ const KINDS: EntryKind[] = [
   'result',
   'notice',
   'raw',
+  'compaction',
 ];
 
 // Draws `div.fancy` for every kind, with the builders in `overrides` in
@@ -264,12 +265,23 @@ const result = (id: string): ChatEntry => ({
   durationMs: null,
   raw: [],
 });
+const compaction = (id: string): ChatEntry => ({
+  kind: 'compaction',
+  id,
+  at: 2000,
+  trigger: 'manual',
+  beforeTokens: 180_000,
+  afterTokens: 24_000,
+  durationMs: 9000,
+  raw: [],
+});
 
 const queued = (id: string): QueuedMessage => ({
   id,
   text: `text of ${id}`,
   images: [],
   sentEntryId: null,
+  holdReason: null,
 });
 const pendingStop = (id: string) => ({ kind: 'queued', message: queued(id) });
 
@@ -345,7 +357,8 @@ function setUpList(shown: ShownLayouts<ChatLayout>) {
         anchor: (_node, command) => ({
           dispose: () => disposed.push(command),
         }),
-        keysFor: () => null,
+        keysFor: (command) =>
+          command === chatCommand('interrupt') ? '⌃C' : null,
       },
       commands: { exists: () => true, run: () => undefined },
       platform: 'macos',
@@ -822,6 +835,52 @@ describe('pending rows', () => {
       { how: 'update', sent: true },
     ]);
   });
+
+  it('pending_HeldRow_PartGetsHoldReasonAndSkipKey', () => {
+    const calls: {
+      how: 'draw' | 'update';
+      holdReason: string | null;
+      skipKey: string;
+    }[] = [];
+    const shown = withUser<ChatLayout>(
+      defaultLayout,
+      {
+        queuedMessage(parent, input, kit) {
+          calls.push({
+            how: 'draw',
+            holdReason: input.holdReason,
+            skipKey: input.skipKey,
+          });
+          return {
+            element: kit.el(parent, 'div', 'fancy-queued'),
+            update: (next) =>
+              calls.push({
+                how: 'update',
+                holdReason: next.holdReason,
+                skipKey: next.skipKey,
+              }),
+          };
+        },
+      },
+      'fancy',
+    );
+    const { list, put } = setUpList(shown);
+    put(user('u1'));
+
+    list.setQueued([
+      { ...queued('q1'), holdReason: 'auto · cache cold · 182k' },
+    ]);
+    list.setQueued([{ ...queued('q1'), holdReason: null }]);
+
+    expect(calls).toEqual([
+      {
+        how: 'draw',
+        holdReason: 'auto · cache cold · 182k',
+        skipKey: '⌃C',
+      },
+      { how: 'update', holdReason: null, skipKey: '⌃C' },
+    ]);
+  });
 });
 
 describe('activity hidden', () => {
@@ -839,6 +898,7 @@ describe('activity hidden', () => {
     assistant('done'),
     permission('p1'),
     result('r1'),
+    compaction('c1'),
     notice('n1'),
   ];
   const putAllThenRebuild = ({ list, put, entries }: ListSetUp) => {
@@ -871,10 +931,17 @@ describe('activity hidden', () => {
         'chat-entry-slot',
         'chat-entry-slot',
         'chat-entry-slot',
+        'chat-entry-slot',
         'chat-entry-slot is-cursor',
       ],
-      kinds: ['chat-user', 'chat-assistant', 'chat-permission', 'chat-notice'],
-      stops: ['u1', 'a1', 'p1', 'n1'],
+      kinds: [
+        'chat-user',
+        'chat-assistant',
+        'chat-permission',
+        'chat-compaction',
+        'chat-notice',
+      ],
+      stops: ['u1', 'a1', 'p1', 'c1', 'n1'],
       focused: 'n1',
     },
     {
@@ -889,6 +956,7 @@ describe('activity hidden', () => {
         'chat-entry-slot',
         'chat-entry-slot',
         'chat-entry-slot',
+        'chat-entry-slot',
         'chat-entry-slot is-cursor',
       ],
       kinds: [
@@ -899,9 +967,10 @@ describe('activity hidden', () => {
         'chat-assistant',
         'chat-permission',
         'chat-result',
+        'chat-compaction',
         'chat-notice',
       ],
-      stops: ['u1', 'activity:t1', 'a1', 'p1', 'r1', 'n1'],
+      stops: ['u1', 'activity:t1', 'a1', 'p1', 'r1', 'c1', 'n1'],
       focused: 'n1',
     },
     {
@@ -918,10 +987,17 @@ describe('activity hidden', () => {
         'chat-entry-slot',
         'chat-entry-slot',
         'chat-entry-slot',
+        'chat-entry-slot',
         'chat-entry-slot is-cursor',
       ],
-      kinds: ['chat-user', 'chat-assistant', 'chat-permission', 'chat-notice'],
-      stops: ['u1', 'a1', 'p1', 'n1'],
+      kinds: [
+        'chat-user',
+        'chat-assistant',
+        'chat-permission',
+        'chat-compaction',
+        'chat-notice',
+      ],
+      stops: ['u1', 'a1', 'p1', 'c1', 'n1'],
       focused: 'n1',
     },
     {
@@ -940,6 +1016,7 @@ describe('activity hidden', () => {
         'chat-entry-slot',
         'chat-entry-slot',
         'chat-entry-slot',
+        'chat-entry-slot',
         'chat-entry-slot is-cursor',
       ],
       kinds: [
@@ -950,9 +1027,10 @@ describe('activity hidden', () => {
         'chat-assistant',
         'chat-permission',
         'chat-result',
+        'chat-compaction',
         'chat-notice',
       ],
-      stops: ['u1', 'activity:t1', 'a1', 'p1', 'r1', 'n1'],
+      stops: ['u1', 'activity:t1', 'a1', 'p1', 'r1', 'c1', 'n1'],
       focused: 'n1',
     },
     {

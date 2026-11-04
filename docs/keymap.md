@@ -47,7 +47,7 @@ hjkl is the direction in every layer; the modifier picks the verb.
   (its prose's line height, the editor's own line in the editor), key repeat supplying the
   speed, and `Ctrl+Shift+j`/`Ctrl+Shift+k` scroll half a page, Shift being the bigger step. The
   views are the doc, its editor too while editing, the chat transcript, the form and its review,
-  the primer card and its review, the Backlog list and detail, the gallery, and the Flow tab; the docs
+  the primer card and its review, the Backlog list and detail, and the gallery; the docs
   tree takes both pairs and scrolls the doc beside it.
   In the editor the line scroll keeps the cursor unless it would leave the view, as vim's
   `Ctrl+e`/`Ctrl+y` do, and the half page moves it with the scroll in visual mode, as vim's
@@ -110,8 +110,8 @@ is the group's main action, `n`/`p` are next and previous, and uppercase is a va
 | `k`                | windows                              | `ks` Sessions, `kd` Docs, `kb` Backlog, `kn` new session, `k,` Settings                                                                                                                                         |
 | `n`                | notes                                | `nn` open or close the note popup; in the popup `nf` new follow-up, `na` append to a follow-up, `ns` new session, `nc` capture the window, `nd` discard                                                         |
 | `f`                | none: find                           | reserved: `ff` file, `fs` text, `fa` command palette                                                                                                                                                            |
-| `v`                | view                                 | `vt` hide or show the docs tree, `vd` show or hide done follow-ups, `va` show only agent-ready follow-ups (Backlog), `vu` hide or show usage details                                                            |
-| `w`                | workflow                             | `ww` the session's next workflow step (Clear & make when a plan is ready, Cancel during its countdown), `wn` make in a new session, `wr` resume make, `wo` open the plan, `wt` retro, `wd` dismiss a closed run |
+| `v`                | view                                 | `vt` hide or show the docs tree, `vd` show or hide done follow-ups, `va` show only agent-ready follow-ups (Backlog), `vu` hide or show usage details, `vs` hide or show the session hub                         |
+| `w`                | workflow                             | `ww` the session's next workflow step (Clear & make when a plan is ready, Cancel during its countdown), `wn` make in a new session, `wr` resume make, `wo` open the plan, `wt` retro, `wd` dismiss a closed run, `ws` show or hide the side pane, `wf` open or fold finished waves |
 | `r`                | rename                               | `rr` rename the focused session                                                                                                                                                                                 |
 | `p`                | projects                             | `pf` favorite or unfavorite the focused session's project, `pk` / `pj` move it up or down among the favorites                                                                                                   |
 | `c`                | chat controls                        | in a box only: `cm` mode, `ce` effort, `co` model, `cc` every control, `cx` remove the last attached image, `cp` pull back the newest unsent pending message, `cy` copy the sign-in link (sign-in dialog)       |

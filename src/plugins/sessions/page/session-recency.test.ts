@@ -10,7 +10,7 @@ function rowUnderHost(sessionId: string, hostSessionId: string): SessionRow {
 }
 
 describe('createSessionRecency', () => {
-  it('recency_stampsArrivalOnceAndNeedsYouUntilItEnds', () => {
+  it('recency_StampsArrivalOnceAndAgainAfterLeaving', () => {
     const clock = { time: 5, now: () => clock.time };
     const state = fakeUiState();
     const recency = createSessionRecency(clock, state);
@@ -28,21 +28,11 @@ describe('createSessionRecency', () => {
     expect(stampsAfterReload([s])).toEqual({ s: 5 });
 
     clock.time = 9;
-    recency.noteNeedsYou(s);
     recency.rowsChanged([s], [s, t]);
     expect(Object.fromEntries(recency.stampsOf([s, t]))).toEqual({
-      s: 9,
+      s: 5,
       t: 9,
     });
-
-    clock.time = 10;
-    recency.noteNeedsYou(s);
-    createSessionRecency(clock, state).noteNeedsYou(s);
-    expect(stampsAfterReload([s, t])).toEqual({ s: 9, t: 9 });
-
-    recency.needsYouEnded(s.sessionId);
-    recency.noteNeedsYou(s);
-    expect(stampsAfterReload([s, t])).toEqual({ s: 10, t: 9 });
 
     recency.rowsChanged([s, t], [t]);
     expect(stampsAfterReload([s, t])).toEqual({ t: 9 });
@@ -52,22 +42,18 @@ describe('createSessionRecency', () => {
     expect(stampsAfterReload([s, t])).toEqual({ s: 11, t: 9 });
   });
 
-  it('recency_RelaunchDropsNeedsYouMarksButNotStamps', () => {
+  it('recency_RelaunchKeepsStamps', () => {
     const clock = { time: 1, now: () => clock.time };
     const state = fakeUiState();
     const firstRun = rowUnderHost('old', 'h');
     const recency = createSessionRecency(clock, state);
     recency.rowsChanged(null, [firstRun]);
-    recency.noteNeedsYou(firstRun);
 
     clock.time = 2;
     const relaunched = createSessionRecency(clock, state);
     const secondRun = rowUnderHost('new', 'h');
     relaunched.rowsChanged(null, [secondRun]);
     expect(relaunched.stampsOf([secondRun]).get('new')).toBe(1);
-
-    relaunched.noteNeedsYou(secondRun);
-    expect(relaunched.stampsOf([secondRun]).get('new')).toBe(2);
   });
 
   it.each<{
@@ -136,12 +122,12 @@ describe('createSessionRecency', () => {
   ])(
     'recency_LeavingAKeyARowHoldsLeavesItsStamp: $case',
     ({ stamps, before, after, saved }) => {
-      const state = fakeUiState([['recency', { stamps, needsYou: [] }]]);
+      const state = fakeUiState([['recency', { stamps }]]);
       const recency = createSessionRecency({ now: () => 100 }, state);
 
       recency.rowsChanged(before, after);
 
-      expect(state.get('recency')).toEqual({ stamps: saved, needsYou: [] });
+      expect(state.get('recency')).toEqual({ stamps: saved });
     },
   );
 
@@ -149,7 +135,7 @@ describe('createSessionRecency', () => {
     const saved = Object.fromEntries(
       Array.from({ length: 200 }, (_, index) => [`h${index}`, index]),
     );
-    const state = fakeUiState([['recency', { stamps: saved, needsYou: [] }]]);
+    const state = fakeUiState([['recency', { stamps: saved }]]);
     const recency = createSessionRecency({ now: () => 1000 }, state);
     const newest = sessionRow('newest');
 
@@ -196,29 +182,22 @@ describe('saved values', () => {
     },
     {
       key: 'recency',
-      case: 'a record with no needs you list',
-      saved: { stamps: { a: 1 } },
+      case: 'a record with no stamps',
+      saved: {},
       read: readRecency,
       expected: [],
     },
     {
       key: 'recency',
       case: 'one bad stamp drops the whole record',
-      saved: { stamps: { a: 1, b: 'x' }, needsYou: [] },
-      read: readRecency,
-      expected: [],
-    },
-    {
-      key: 'recency',
-      case: 'one bad needs you entry drops the whole record',
-      saved: { stamps: { a: 1 }, needsYou: [1] },
+      saved: { stamps: { a: 1, b: 'x' } },
       read: readRecency,
       expected: [],
     },
     {
       key: 'recency',
       case: 'a good record',
-      saved: { stamps: { a: 1 }, needsYou: ['a'] },
+      saved: { stamps: { a: 1 } },
       read: readRecency,
       expected: ['a'],
     },

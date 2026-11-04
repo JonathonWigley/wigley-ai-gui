@@ -153,7 +153,9 @@ export function chatCommandHandlers(
     send: inSession((session) => send(deps, session)),
     sendNow: inSession((session) => sendNow(deps, session)),
     interrupt: inRunningSession((session) => {
-      if (session.state.activity === 'idle') {
+      const { activity, compaction, queued } = session.state;
+      const isHoldUp = queued.some((row) => row.holdReason !== null);
+      if (activity === 'idle' && compaction === null && !isHoldUp) {
         log('chat', `nothing to interrupt in ${session.name}`);
         return;
       }
@@ -360,7 +362,8 @@ function send(deps: ChatCommandDeps, session: ChatSession) {
 // Cmd+Enter: with the box unfocused and a pending row focused, sends that row
 // now (see `sendQueuedNow`), leaving the box alone. Otherwise asks main to
 // send the box and every pending row now: into the running turn, or as `send`
-// does when none runs. The box is read, cleared and put back on a refusal as
+// does when none runs; while a hold is up main queues the box instead and skips
+// the compaction. The box is read, cleared and put back on a refusal as
 // `send` does, and an app slash command runs as there. An empty box sends the
 // unsent pending rows alone, leaving the box and entries as they are, and
 // with no unsent row sends nothing.
@@ -542,7 +545,7 @@ export function pullBackQueued(
 
 // Asks main to write the queued message into the running turn now; its row
 // stays, drawn as sending, until the agent takes it in. Main refuses a row
-// already sent.
+// already sent, and on the held row skips the compaction instead.
 export function sendQueuedNow(
   deps: { channel: ChatInvoke; log: Log },
   session: SessionRef,

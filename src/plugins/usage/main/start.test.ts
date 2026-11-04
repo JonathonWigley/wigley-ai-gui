@@ -195,6 +195,7 @@ describe('usageMainPart', () => {
             sessionId: 's1',
             profileDir: '~/.claude-personal',
             usage: usageEvent('main'),
+            compaction: null,
           },
         ],
       },
@@ -213,7 +214,14 @@ describe('usageMainPart', () => {
       profileDir: '~/.claude-personal',
     });
     expect(usage.sent.map((snapshot) => snapshot.sessions)).toEqual([
-      [{ sessionId: 's1', profileDir: '~/.claude-personal', usage: null }],
+      [
+        {
+          sessionId: 's1',
+          profileDir: '~/.claude-personal',
+          usage: null,
+          compaction: null,
+        },
+      ],
     ]);
     usage.emit('chat.agentEvent', {
       sessionId: 's1',
@@ -228,6 +236,51 @@ describe('usageMainPart', () => {
         sessionId: 's1',
         profileDir: '~/.claude-personal',
         usage: usageEvent('main'),
+        compaction: null,
+      },
+    ]);
+  });
+
+  it('usageMainPart_CompactionEvents_FoldIntoTheSession', () => {
+    const usage = startUsagePart([]);
+    const heard = {
+      sessionId: 's1',
+      profileDir: '~/.claude-personal',
+      hostSessionId: 'h1',
+      replayed: false,
+    };
+    usage.emit('chat.agentEvent', { ...heard, event: usageEvent('main') });
+
+    usage.emit('chat.agentEvent', {
+      ...heard,
+      event: { type: 'compactionStarted', at: 2_000, trigger: 'harness' },
+    });
+    expect(usage.sent.at(-1)?.sessions).toEqual([
+      {
+        sessionId: 's1',
+        profileDir: '~/.claude-personal',
+        usage: usageEvent('main'),
+        compaction: { trigger: 'harness', startedAt: 2_000 },
+      },
+    ]);
+
+    usage.emit('chat.agentEvent', {
+      ...heard,
+      event: {
+        type: 'compactionEnded',
+        at: 3_000,
+        trigger: 'harness',
+        outcome: 'done',
+        beforeTokens: 42_000,
+        durationMs: 1_000,
+      },
+    });
+    expect(usage.sent.at(-1)?.sessions).toEqual([
+      {
+        sessionId: 's1',
+        profileDir: '~/.claude-personal',
+        usage: usageEvent('main'),
+        compaction: null,
       },
     ]);
   });
@@ -264,6 +317,7 @@ describe('usageMainPart', () => {
           sessionId: 's1',
           profileDir: '~/.claude-personal',
           usage: usageEvent('main'),
+          compaction: null,
         },
       ],
     });

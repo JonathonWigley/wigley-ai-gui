@@ -1,6 +1,10 @@
 // The usage plugin's records and its channel between its main and page parts.
 
-import type { PlanUsage, UsageAgentEvent } from '../../contracts/agent';
+import type {
+  CompactionTrigger,
+  PlanUsage,
+  UsageAgentEvent,
+} from '../../contracts/agent';
 import type { ChannelShape } from '../../contracts/plugin';
 
 // One chat profile's plan usage. `profileDir` is the profile's `configDir` as
@@ -19,12 +23,14 @@ export interface ProfilePlan {
   stale: boolean;
 }
 
-// One session's profile and its last main-agent `usage` event; `usage` is
-// null until its first one.
+// One session's profile, its last main-agent `usage` event and the compaction
+// it is running; `usage` is null until its first one, `compaction` null while
+// none runs, its `startedAt` the `compactionStarted` event's `at`.
 export interface SessionUsage {
   sessionId: string;
   profileDir: string | null;
   usage: UsageAgentEvent | null;
+  compaction: { trigger: CompactionTrigger; startedAt: number } | null;
 }
 
 // `plans` in chat's profile order; `sessions` in the order each was first

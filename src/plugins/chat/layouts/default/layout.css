@@ -1,6 +1,7 @@
-/* The default Chat layout's look: entry text, activity lines, the activity
-   dock, queued messages, permission heads, the composer and its status line,
-   the dialog and image viewer parts, and the run time under a session's row. */
+/* The default Chat layout's look: entry text, the compaction divider, activity
+   lines, the activity dock, queued messages, permission heads, the composer
+   and its status line, the dialog and image viewer parts, and the run time
+   under a session's row. */
 .chat-assistant {
   color: var(--wg-fg);
 }
@@ -49,6 +50,23 @@
   color: var(--wg-status-error);
 }
 
+/* The compaction divider: one dim line between two rules. */
+.chat-compaction {
+  align-items: center;
+  color: var(--wg-fg-tertiary);
+  display: flex;
+  font-size: var(--wg-text-12);
+  font-variant-numeric: tabular-nums;
+  gap: var(--wg-space-2);
+}
+
+.chat-compaction::before,
+.chat-compaction::after {
+  border-top: 1px solid var(--wg-border-default);
+  content: '';
+  flex: 1;
+}
+
 /* Activity lines: one dim summary per run, live or finished (step count,
    tools, failed count, time). Opened, the step rows sit indented under the
    line as its list. */
@@ -74,8 +92,9 @@
 }
 
 /* The activity dock: while the turn runs, its time and state, a card of its
-   latest tool calls (the newest in fg), then its tool counts, dim; once it
-   ends, one dim line. */
+   latest tool calls (the newest in fg), then its tool counts, dim; while a
+   compaction runs, its time, state and trigger over a sliding bar; once the
+   turn ends, one dim line. */
 .chat-working {
   display: flex;
   flex-direction: column;
@@ -92,6 +111,50 @@
 
 .chat-working-time {
   font-variant-numeric: tabular-nums;
+}
+
+.chat-working-trigger {
+  color: var(--wg-fg-secondary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A compaction has no progress to report, so a segment slides across the
+   track. Its cycle is `duration-pulse`, as a running dot's is. Under reduced
+   motion it is static and fills the track. */
+.chat-working-bar {
+  height: var(--wg-indicator-width);
+  overflow: hidden;
+  position: relative;
+}
+
+.chat-working-bar::after {
+  animation: chat-working-bar-slide var(--wg-duration-pulse) ease-in-out
+    infinite;
+  background: var(--wg-status-running);
+  content: '';
+  inset: 0 auto 0 0;
+  position: absolute;
+  width: 40%;
+}
+
+@keyframes chat-working-bar-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(250%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-working-bar::after {
+    animation: none;
+    width: 100%;
+  }
 }
 
 .chat-working-box {

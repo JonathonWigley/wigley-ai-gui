@@ -323,6 +323,19 @@ const LAYERS: Record<string, LayerRule> = {
     ],
     packages: [],
   },
+  'src/plugins/auto-compact': {
+    layers: ['src/contracts', 'src/shared'],
+    packages: [],
+  },
+  'src/plugins/auto-compact/main': {
+    layers: [
+      'src/contracts',
+      'src/shared',
+      'src/plugins/auto-compact',
+      'src/plugins/chat/contract.ts',
+    ],
+    packages: [],
+  },
   'src/plugins/chat': {
     layers: [
       'src/contracts',
@@ -912,6 +925,8 @@ const LAYERS: Record<string, LayerRule> = {
       'src/plugins/agent-strip/main',
       'src/plugins/agents',
       'src/plugins/agents/main',
+      'src/plugins/auto-compact',
+      'src/plugins/auto-compact/main',
       'src/plugins/backlog',
       'src/plugins/backlog/main',
       'src/plugins/chat',
@@ -948,6 +963,7 @@ const LAYERS: Record<string, LayerRule> = {
       'src/plugins/agent-lines',
       'src/plugins/agent-strip',
       'src/plugins/agents',
+      'src/plugins/auto-compact',
       'src/plugins/backlog',
       'src/plugins/chat',
       'src/plugins/docs',

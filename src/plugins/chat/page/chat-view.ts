@@ -58,6 +58,7 @@ import {
 import { createEntryList, type EntryList } from './entry-list';
 import type { ImageViewer } from './image-viewer';
 import { completionWords } from './slash-commands';
+import { compactionLabel } from './working-turn';
 
 export interface ChatView {
   // Shows the session's Chat tab: activates the session (Sessions mode shows),
@@ -406,6 +407,20 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       log('chat', `${queued.length} pending message(s) in ${tab.name}`);
     }
   });
+  channel.on('compaction', ({ sessionId, compaction }) => {
+    const tab = heldFor('compaction', sessionId);
+    if (tab !== undefined) {
+      tab.state = { ...tab.state, compaction };
+      drawTurn(tab);
+      drawStatusLine(tab);
+      log(
+        'chat',
+        compaction === null
+          ? `${tab.name} compaction ended`
+          : `${tab.name} compacting: ${compactionLabel(compaction)}`,
+      );
+    }
+  });
   channel.on('sessionRunning', ({ sessionId }) => {
     const tab = heldFor('sessionRunning', sessionId);
     if (tab !== undefined) {
@@ -533,10 +548,14 @@ function drawComposer(tab: HeldTab) {
   }
 }
 
-// Hands the composer's activity dock the tab's entries and whether its
-// session's turn is under way.
+// Hands the composer's activity dock the tab's entries, whether its session's
+// turn is under way, and the compaction running in it.
 function drawTurn(tab: HeldTab) {
-  tab.composer.setTurn(tab.state.entries, isTurnUnderway(tab.state));
+  tab.composer.setTurn(
+    tab.state.entries,
+    isTurnUnderway(tab.state),
+    tab.state.compaction,
+  );
 }
 
 // Draws the status line, or the whole composer again when its update threw.

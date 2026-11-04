@@ -16,6 +16,7 @@ describe('claudeLaunch', () => {
         profileDir: '/p',
         controls: {},
         instructions: [],
+        idleCompactMinTokens: null,
       },
       TOOL,
       { HOME: '/h', CLAUDE_CONFIG_DIR: '/x' },
@@ -54,6 +55,7 @@ describe('claudeLaunch', () => {
         profileDir: null,
         controls: {},
         instructions: [],
+        idleCompactMinTokens: null,
       },
       TOOL,
       env,
@@ -116,6 +118,7 @@ describe('claudeLaunch', () => {
           profileDir: null,
           controls,
           instructions: [],
+          idleCompactMinTokens: null,
         },
         TOOL,
         {},
@@ -155,6 +158,7 @@ describe('claudeLaunch', () => {
           profileDir: null,
           controls: {},
           instructions,
+          idleCompactMinTokens: null,
         },
         TOOL,
         {},
@@ -183,6 +187,7 @@ describe('claudeLaunch', () => {
         profileDir: '/p',
         controls: {},
         instructions: [],
+        idleCompactMinTokens: null,
       },
       TOOL,
       {
@@ -202,6 +207,37 @@ describe('claudeLaunch', () => {
     });
   });
 
+  it.each<{ name: string; minTokens: number | null; expected?: string }>([
+    {
+      name: 'a setting replaces the inherited value',
+      minTokens: 150000,
+      expected: '150000',
+    },
+    { name: 'no setting drops the inherited value', minTokens: null },
+  ])(
+    'claudeLaunch_IdleCompactMinTokens_ComesFromTheRequest ($name)',
+    ({ minTokens, expected }) => {
+      const launch = claudeLaunch(
+        {
+          processId: 'p-1',
+          sessionId: 's-1',
+          resume: false,
+          projectDir: '/proj',
+          profileDir: null,
+          controls: {},
+          instructions: [],
+          idleCompactMinTokens: minTokens,
+        },
+        TOOL,
+        { CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS: '300000' },
+        '/h',
+        posixPaths,
+      );
+
+      expect(launch.env.CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS).toBe(expected);
+    },
+  );
+
   it("expands a profile folder against the adapter's home", () => {
     const launch = claudeLaunch(
       {
@@ -212,6 +248,7 @@ describe('claudeLaunch', () => {
         profileDir: '~/.claude-personal',
         controls: {},
         instructions: [],
+        idleCompactMinTokens: null,
       },
       TOOL,
       { HOME: '/elsewhere' },
@@ -232,6 +269,7 @@ describe('claudeLaunch', () => {
         profileDir: '~/.claude-work',
         controls: {},
         instructions: [],
+        idleCompactMinTokens: null,
       },
       TOOL,
       {},

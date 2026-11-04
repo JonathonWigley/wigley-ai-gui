@@ -3,19 +3,28 @@ import type { ActiveTime } from '../../../contracts/active-time';
 import type { TextEditor } from '../../../contracts/editor';
 import type { ChatEntry } from '../../../contracts/agent';
 import { NO_ACTIVE_TIME } from '../../../shared/active-time';
-import { installFakeDom } from '../../../shared/page/test-dom';
+import {
+  asFake,
+  type FakeElement,
+  findAll,
+  installFakeDom,
+} from '../../../shared/page/test-dom';
 import { createPartStore } from '../../../shared/page/contributed-parts';
 import type {
   ChatChannel,
   ChatSessionState,
   ReturnedMessage,
+  SessionCompaction,
 } from '../contract';
 import { createChatLayouts } from './chat-layouts';
 import { type ChatViewDeps, mountChatView } from './chat-view';
 
 const NO_ENTRIES: ChatEntry[] = [];
 
-function stateOf(returned: ReturnedMessage[]): ChatSessionState {
+function stateOf(
+  returned: ReturnedMessage[],
+  overrides: Partial<ChatSessionState> = {},
+): ChatSessionState {
   return {
     sessionId: 'row-1',
     projectDir: '/w/app',
@@ -31,6 +40,8 @@ function stateOf(returned: ReturnedMessage[]): ChatSessionState {
     returned,
     repo: 'app',
     branch: 'main',
+    compaction: null,
+    ...overrides,
   };
 }
 
@@ -47,7 +58,7 @@ const returnedTwo: ReturnedMessage = {
 
 // A mounted view whose `sessions` call waits for `answerSessions`; `emit` sends
 // it a message from main, `box` is the one tab's box text, null before a tab
-// mounts, and `invoked` holds each other call to main.
+// mounts, `tab` its element, and `invoked` holds each other call to main.
 function mounted(
   firstActiveTimeListener: (
     sessionId: string,
@@ -58,6 +69,7 @@ function mounted(
   const invoked: unknown[][] = [];
   const logs: string[] = [];
   const box = { text: null as string | null };
+  const tab = { element: null as FakeElement | null };
   let answerSessions: (states: ChatSessionState[]) => void = () => undefined;
   const channel = {
     on(message: string, listener: (data: unknown) => void) {
@@ -84,8 +96,9 @@ function mounted(
     channel,
     paths: { base: () => 'app' },
     sessions: {
-      addTab: (sessionId: string) => {
+      addTab: (sessionId: string, added: { element: HTMLElement }) => {
         readDuringAddTab.push(view.activeTime(sessionId));
+        tab.element = asFake(added.element);
         return {
           setStatus: noEvent,
           select: noEvent,
@@ -127,13 +140,13 @@ function mounted(
     composerParts: createPartStore(),
     statusParts: createPartStore(),
     markdown: {},
-    keys: { anchor: () => ({ dispose: noEvent }) },
+    keys: { anchor: () => ({ dispose: noEvent }), keysFor: () => null },
     commands: { exists: () => true, run: noEvent },
     platform: 'macos',
     run: noEvent,
     log,
     clock: { now: () => 5000 },
-    timers: { setTimeout: () => 0, clearTimeout: noEvent },
+    timers: { set: () => 0, clear: noEvent },
     drops: { addTarget: () => ({ dispose: noEvent }) },
   } as unknown as ChatViewDeps);
   return {
@@ -142,6 +155,7 @@ function mounted(
     readDuringAddTab,
     removeSession: (sessionId: string) => removeSession(sessionId),
     box,
+    tab,
     invoked,
     logs,
     emit: <K extends keyof ChatChannel['messages']>(
@@ -297,4 +311,80 @@ describe('mountChatView active time', () => {
 
     expect(mount.view.activeTime('row-1')).toBeNull();
   });
+});
+
+describe('mountChatView compaction', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const COMPACTION: SessionCompaction = {
+    trigger: 'manual',
+    reason: null,
+    startedAt: 4000,
+  };
+
+  it.each<{
+    case: string;
+    mountedWith: SessionCompaction | null;
+    message?: SessionCompaction | null;
+    dockState: string | null;
+    dockTrigger: string | null;
+    isIndicatorIdle: boolean;
+  }>([
+    {
+      case: 'MountedWithOne_ShowsTheDock',
+      mountedWith: COMPACTION,
+      dockState: 'Compacting…',
+      dockTrigger: '/compact',
+      isIndicatorIdle: false,
+    },
+    {
+      case: 'Message_ShowsTheDock',
+      mountedWith: null,
+      message: COMPACTION,
+      dockState: 'Compacting…',
+      dockTrigger: '/compact',
+      isIndicatorIdle: false,
+    },
+    {
+      case: 'NullMessage_ClearsToIdle',
+      mountedWith: COMPACTION,
+      message: null,
+      dockState: null,
+      dockTrigger: null,
+      isIndicatorIdle: true,
+    },
+  ])(
+    'compaction_$case',
+    async ({
+      mountedWith,
+      message,
+      dockState,
+      dockTrigger,
+      isIndicatorIdle,
+    }) => {
+      const view = mounted();
+      await view.answerSessions([
+        stateOf([], { running: true, compaction: mountedWith }),
+      ]);
+
+      if (message !== undefined) {
+        view.emit('compaction', { sessionId: 'row-1', compaction: message });
+      }
+
+      const root = view.tab.element as FakeElement;
+      const textOf = (className: string) =>
+        findAll(root, className)[0]?.textContent ?? null;
+      expect(findAll(root, 'chat-working-slot')[0].hidden).toBe(
+        dockState === null,
+      );
+      expect(textOf('chat-working-state')).toBe(dockState);
+      expect(textOf('chat-working-trigger')).toBe(dockTrigger);
+      expect(
+        findAll(root, 'chat-running')[0].classList.contains('is-idle'),
+      ).toBe(isIndicatorIdle);
+    },
+  );
 });

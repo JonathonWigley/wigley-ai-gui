@@ -22,14 +22,16 @@ function plan(name: string, isRead: boolean): ProfilePlan {
 
 // The usage script over fake chat and sessions whose `launch` gives launch n
 // the id `s-<n>`, and a usage store holding `before` until a seed replaces it;
-// `seedOverride` replaces what the store keeps on a seed. `calls` records each
-// dep call in order; `sessionUsage` waits until `releaseUsage` runs, or
-// resolves at once while `usageHeld`.
+// `seedOverride` replaces what the store keeps on a seed; `launch` rejects
+// with `launchError` when set. `calls` records each dep call in order;
+// `sessionUsage` waits until `releaseUsage` runs, or resolves at once while
+// `usageHeld`.
 function setUp(
   before: UsageSnapshot,
   options: {
     usageHeld?: boolean;
     seedOverride?: (snapshot: UsageSnapshot) => UsageSnapshot;
+    launchError?: Error;
   } = {},
 ) {
   const calls: string[] = [];
@@ -53,6 +55,9 @@ function setUp(
       launch: async (request) => {
         launches.push(request);
         calls.push(`launch ${request.projectDir}`);
+        if (options.launchError !== undefined) {
+          throw options.launchError;
+        }
         return `s-${launches.length}`;
       },
     },
@@ -72,6 +77,10 @@ function setUp(
       return new Promise<void>((resolve) => {
         releaseUsage = resolve;
       });
+    },
+    compactions: {
+      hold: () => calls.push('hold compactions'),
+      release: () => calls.push('release compactions'),
     },
   });
   return {
@@ -101,6 +110,7 @@ describe('usageSelfTestScript', () => {
       '[usage] session line in usage-selftest: context 180k/300k, cache 42m, spend $1.23',
     );
     expect(callsBeforeUsage).toEqual([
+      'hold compactions',
       `makeFolder ${PROJECT}`,
       `closeSessionsIn ${PROJECT}`,
       `launch ${PROJECT}`,
@@ -151,5 +161,27 @@ describe('usageSelfTestScript', () => {
     const { result } = script.open(1);
 
     expect(script.problems(await result)).toEqual(expected);
+  });
+
+  it('problems_ReleasesTheCompactionHold', async () => {
+    const before = { plans: [plan('work', true)], sessions: [] };
+    const { script, calls } = setUp(before);
+    const { result } = script.open(1);
+    const opened = await result;
+    expect(calls).not.toContain('release compactions');
+
+    script.problems(opened);
+
+    expect(calls).toContain('release compactions');
+  });
+
+  it('open_LaunchFails_ReleasesTheCompactionHold', async () => {
+    const before = { plans: [plan('work', true)], sessions: [] };
+    const launchError = new Error('no such profile');
+    const { script, calls } = setUp(before, { launchError });
+
+    await expect(script.open(1).result).rejects.toBe(launchError);
+
+    expect(calls.at(-1)).toBe('release compactions');
   });
 });

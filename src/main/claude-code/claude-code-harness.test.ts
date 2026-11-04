@@ -5,6 +5,7 @@ import { PassThrough, type Readable } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type {
   AgentEvent,
+  AgentProcess,
   AgentProcessEvents,
   AgentStart,
   ChatEntry,
@@ -33,7 +34,11 @@ import {
   PLAN_USAGE_TIMEOUT_MS,
 } from './claude-code-harness';
 import { controlMessage, userMessage } from './claude-controls';
-import { createSessionFoldState, replayPipeLog } from './session-fold';
+import {
+  appCommandUuid,
+  createSessionFoldState,
+  replayPipeLog,
+} from './session-fold';
 
 const request: AgentStart = {
   processId: 'p-1',
@@ -43,6 +48,7 @@ const request: AgentStart = {
   profileDir: null,
   controls: {},
   instructions: [],
+  idleCompactMinTokens: null,
 };
 
 // A child with `PassThrough` stdio that records its signals and stdin lines.
@@ -1664,6 +1670,20 @@ describe('createClaudeCodeHarness', () => {
       text: '/effort high',
       expected: [{ type: 'userMessage', at: 1000 }],
     },
+    {
+      case: 'compact command',
+      text: '/compact',
+      expected: [
+        { type: 'userMessage', at: 1000 },
+        {
+          type: 'skillStarted',
+          at: 1000,
+          agentId: 'main',
+          skill: 'compact',
+          args: '',
+        },
+      ],
+    },
   ])('send_SlashText_EmitsSkillStarted ($case)', async ({ text, expected }) => {
     const run = started();
     writeLine(run.stdout, plainInit);
@@ -1688,6 +1708,763 @@ describe('createClaudeCodeHarness', () => {
     expect(() => run.agent.send({ text: 'hi', images: [] })).toThrow(
       'Claude Code process has ended',
     );
+    expect(() => run.agent.compact()).toThrow('Claude Code process has ended');
+  });
+
+  describe('compaction', () => {
+    const compactingStatus = {
+      type: 'system',
+      subtype: 'status',
+      status: 'compacting',
+    };
+    const compactBoundary = {
+      type: 'system',
+      subtype: 'compact_boundary',
+      compact_metadata: {
+        trigger: 'manual',
+        pre_tokens: 37559,
+        post_tokens: 9023,
+        duration_ms: 8303,
+      },
+    };
+    const compactFailed = {
+      type: 'system',
+      subtype: 'status',
+      status: null,
+      compact_result: 'failed',
+      compact_error: 'Not enough messages to compact.',
+    };
+    // The first app command's uuid: `randomUuid`'s `uuid-1` as `appCommandUuid`
+    // writes it.
+    const APP_UUID = appCommandUuid('uuid-1');
+    const TYPED_UUID = 'uuid-1';
+    const mainReply = (id: string) => ({
+      type: 'assistant',
+      parent_tool_use_id: null,
+      message: {
+        model: 'claude-opus-5-5',
+        id,
+        type: 'message',
+        role: 'assistant',
+        content: [],
+        usage: {
+          input_tokens: 2,
+          cache_creation_input_tokens: 909,
+          cache_read_input_tokens: 38019,
+          output_tokens: 5,
+        },
+      },
+    });
+    const STARTED = (trigger: string, at = 1000) => ({
+      type: 'compactionStarted',
+      at,
+      trigger,
+    });
+    const DONE = (trigger: string, at = 1000) => ({
+      type: 'compactionEnded',
+      at,
+      trigger,
+      outcome: 'done',
+      beforeTokens: 37559,
+      durationMs: 8303,
+    });
+    const NEVER_RAN = (trigger: string, outcome: string, at = 1000) => ({
+      type: 'compactionEnded',
+      at,
+      trigger,
+      outcome,
+      beforeTokens: null,
+      durationMs: null,
+    });
+    const compactionEvents = (events: AgentEvent[]) =>
+      events.filter((event) => event.type.startsWith('compaction'));
+    const compactionEntries = (heard: [string, unknown][]) =>
+      heard.flatMap(([name, payload]) =>
+        name === 'entry' && (payload as ChatEntry).kind === 'compaction'
+          ? [payload as ChatEntry]
+          : [],
+      );
+    const writeLines = async (
+      run: { stdout: PassThrough },
+      lines: readonly object[],
+    ) => {
+      for (const line of lines) {
+        writeLine(run.stdout, line);
+      }
+      await settle();
+    };
+
+    it('compact_WritesTheCommandWithNoUserEntry', async () => {
+      const run = await startedQuiet();
+
+      run.agent.compact();
+      await writeLines(run, [lifecycle(APP_UUID, 'started')]);
+
+      expect(run.written.at(-1)).toEqual(
+        userMessage({ text: '/compact', images: [] }, APP_UUID),
+      );
+      expect(
+        run.heard.filter(
+          ([name, payload]) =>
+            name === 'entry' && (payload as ChatEntry).kind === 'user',
+        ),
+      ).toEqual([]);
+      expect(
+        run.agentEvents.filter(
+          (event) =>
+            event.type === 'userMessage' || event.type === 'skillStarted',
+        ),
+      ).toEqual([]);
+      expect(lastActivity(run.heard)).toBe('working');
+    });
+
+    it('compact_WhileATurnRuns_Throws', async () => {
+      const run = await startedQuiet();
+
+      run.agent.send({ text: 'hi', images: [] });
+
+      expect(() => run.agent.compact()).toThrow(
+        'Claude is working; compact when the turn ends',
+      );
+    });
+
+    it.each<{
+      name: string;
+      act: (agent: AgentProcess) => void;
+      lines: object[];
+      expected: string;
+    }>([
+      {
+        name: 'app',
+        act: (agent) => agent.compact(),
+        lines: [lifecycle(APP_UUID, 'started'), compactingStatus],
+        expected: 'app',
+      },
+      {
+        name: 'typed',
+        act: (agent) => agent.send({ text: '/compact', images: [] }),
+        lines: [lifecycle(TYPED_UUID, 'started'), compactingStatus],
+        expected: 'manual',
+      },
+      {
+        name: 'typed with instructions',
+        act: (agent) =>
+          agent.send({ text: '/compact keep the plan', images: [] }),
+        lines: [lifecycle(TYPED_UUID, 'started'), compactingStatus],
+        expected: 'manual',
+      },
+      {
+        name: 'a model turn',
+        act: (agent) => agent.send({ text: 'hi', images: [] }),
+        lines: [
+          lifecycle(TYPED_UUID, 'started'),
+          lifecycleInit,
+          compactingStatus,
+        ],
+        expected: 'harness',
+      },
+      {
+        name: 'a longer command name',
+        act: (agent) => agent.send({ text: '/compactor', images: [] }),
+        lines: [lifecycle(TYPED_UUID, 'started'), compactingStatus],
+        expected: 'harness',
+      },
+      {
+        name: 'fallback, the oldest armed command',
+        act: (agent) => {
+          agent.send({ text: '/compact', images: [] });
+          agent.send({ text: '/compact again', images: [] });
+        },
+        lines: [plainInit, compactingStatus],
+        expected: 'manual',
+      },
+    ])(
+      'compaction_Trigger_FromWhatStartedIt ($name)',
+      async ({ act, lines, expected }) => {
+        const run = await startedQuiet();
+
+        act(run.agent);
+        await writeLines(run, [...lines, compactBoundary]);
+
+        expect(compactionEvents(run.agentEvents)).toEqual([
+          STARTED(expected),
+          DONE(expected),
+        ]);
+      },
+    );
+
+    it.each<{
+      name: string;
+      lines: object[];
+      expected: object[];
+    }>([
+      {
+        name: 'repeated statuses',
+        lines: [compactingStatus, compactingStatus, compactBoundary],
+        expected: [DONE('app', 4000)],
+      },
+      {
+        name: 'failed status',
+        lines: [compactFailed],
+        expected: [
+          {
+            type: 'compactionEnded',
+            at: 4000,
+            trigger: 'app',
+            outcome: 'failed',
+            beforeTokens: null,
+            durationMs: 3000,
+          },
+        ],
+      },
+      {
+        name: "the command's result",
+        lines: [{ ...errorResult, user_message_uuid: APP_UUID }],
+        expected: [
+          {
+            type: 'compactionEnded',
+            at: 4000,
+            trigger: 'app',
+            outcome: 'failed',
+            beforeTokens: null,
+            durationMs: 3000,
+          },
+        ],
+      },
+      {
+        name: 'the end by a terminal lifecycle frame',
+        lines: [lifecycle(APP_UUID, 'cancelled')],
+        expected: [
+          {
+            type: 'compactionEnded',
+            at: 4000,
+            trigger: 'app',
+            outcome: 'failed',
+            beforeTokens: null,
+            durationMs: 3000,
+          },
+        ],
+      },
+    ])('compaction_EndsOncePerStart ($name)', async ({ lines, expected }) => {
+      let at = 1000;
+      const run = started(fakeChild(), createMemoryFiles(), {
+        now: () => at,
+      });
+      await settle();
+      run.agent.compact();
+      await writeLines(run, [lifecycle(APP_UUID, 'started'), compactingStatus]);
+      at = 4000;
+
+      await writeLines(run, [
+        ...lines,
+        successResult('', [APP_UUID]),
+        lifecycle(APP_UUID, 'completed'),
+      ]);
+
+      expect(compactionEvents(run.agentEvents)).toEqual([
+        STARTED('app'),
+        ...expected,
+      ]);
+    });
+
+    it('compaction_ProcessCloses_EndsBeforeSessionEnded', async () => {
+      let at = 1000;
+      const run = started(fakeChild(), createMemoryFiles(), { now: () => at });
+      await settle();
+      run.agent.compact();
+      await writeLines(run, [lifecycle(APP_UUID, 'started'), compactingStatus]);
+      at = 4000;
+
+      run.emitter.emit('close', 0, null);
+      await settle();
+
+      const endings = run.agentEvents.slice(-2);
+      expect(endings).toEqual([
+        {
+          type: 'compactionEnded',
+          at: 4000,
+          trigger: 'app',
+          outcome: 'failed',
+          beforeTokens: null,
+          durationMs: 3000,
+        },
+        { type: 'sessionEnded', at: 4000 },
+      ]);
+    });
+
+    it.each<{
+      name: string;
+      isInterrupted: boolean;
+      outcome: string;
+    }>([
+      {
+        name: 'a command that never ran',
+        isInterrupted: false,
+        outcome: 'failed',
+      },
+      {
+        name: 'a command an interrupt caught',
+        isInterrupted: true,
+        outcome: 'interrupted',
+      },
+    ])(
+      'compaction_ProcessClosesBeforeAnyStatus_StillPairs ($name)',
+      async ({ isInterrupted, outcome }) => {
+        const run = await startedQuiet();
+        run.agent.compact();
+        if (isInterrupted) {
+          run.agent.interrupt();
+        }
+
+        run.emitter.emit('close', 0, null);
+        await settle();
+
+        expect(compactionEvents(run.agentEvents)).toEqual([
+          STARTED('app'),
+          NEVER_RAN('app', outcome),
+        ]);
+      },
+    );
+
+    it('compaction_AppCommandBehindAnAbandonedTurn_StillPairs', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const run = await startedQuiet();
+      run.agent.compact();
+      await writeLines(run, [lifecycleInit]);
+
+      run.agent.interrupt();
+      vi.advanceTimersByTime(5000);
+      await settle();
+
+      expect(compactionEvents(run.agentEvents)).toEqual([
+        STARTED('app', 6000),
+        NEVER_RAN('app', 'failed', 6000),
+      ]);
+    });
+
+    it.each<{ name: string; act?: 'hi'; lines: object[]; expected: object[] }>([
+      {
+        name: 'a boundary with no start',
+        act: 'hi',
+        lines: [lifecycleInit, compactBoundary],
+        expected: [STARTED('harness'), DONE('harness')],
+      },
+      {
+        name: 'a harness end on a bare result',
+        act: 'hi',
+        lines: [lifecycleInit, compactingStatus, successResult('ok')],
+        expected: [
+          STARTED('harness'),
+          {
+            type: 'compactionEnded',
+            at: 1000,
+            trigger: 'harness',
+            outcome: 'failed',
+            beforeTokens: null,
+            durationMs: 0,
+          },
+        ],
+      },
+      {
+        name: 'a harness end on an unrequested result',
+        lines: [lifecycleInit, compactingStatus, ownTurnResult],
+        expected: [
+          STARTED('harness'),
+          {
+            type: 'compactionEnded',
+            at: 1000,
+            trigger: 'harness',
+            outcome: 'failed',
+            beforeTokens: null,
+            durationMs: 0,
+          },
+        ],
+      },
+      {
+        name: 'a failed attempt, then a new compaction in one turn',
+        act: 'hi',
+        lines: [
+          lifecycleInit,
+          compactingStatus,
+          {
+            type: 'system',
+            subtype: 'status',
+            status: null,
+            compact_result: 'failed',
+            compact_error: 'too_few_groups',
+          },
+          mainReply('m1'),
+          compactingStatus,
+          compactBoundary,
+        ],
+        expected: [
+          STARTED('harness'),
+          {
+            type: 'compactionEnded',
+            at: 1000,
+            trigger: 'harness',
+            outcome: 'failed',
+            beforeTokens: null,
+            durationMs: 0,
+          },
+          STARTED('harness'),
+          DONE('harness'),
+        ],
+      },
+    ])(
+      'compaction_InAHarnessTurn ($name)',
+      async ({ act, lines, expected }) => {
+        const run = await startedQuiet();
+        if (act !== undefined) {
+          run.agent.send({ text: act, images: [] });
+        }
+
+        await writeLines(run, lines);
+
+        expect(compactionEvents(run.agentEvents)).toEqual(expected);
+      },
+    );
+
+    it.each<{
+      name: string;
+      act: (agent: AgentProcess) => void;
+      lines: object[];
+      expected: object[];
+    }>([
+      {
+        name: 'app',
+        act: (agent) => agent.compact(),
+        lines: [
+          lifecycle(APP_UUID, 'started'),
+          { ...errorResult, user_message_uuid: APP_UUID },
+          lifecycle(APP_UUID, 'completed'),
+        ],
+        expected: [STARTED('app'), NEVER_RAN('app', 'failed')],
+      },
+      {
+        name: 'typed, refused with no compaction line',
+        act: (agent) => agent.send({ text: '/compact', images: [] }),
+        lines: [
+          lifecycle(TYPED_UUID, 'started'),
+          successResult('Not enough', [TYPED_UUID]),
+          lifecycle(TYPED_UUID, 'completed'),
+        ],
+        expected: [STARTED('manual'), NEVER_RAN('manual', 'failed')],
+      },
+      {
+        name: 'fallback, on a result',
+        act: (agent) => agent.compact(),
+        lines: [plainInit, successResult('Not enough')],
+        expected: [STARTED('app'), NEVER_RAN('app', 'failed')],
+      },
+    ])(
+      'compaction_CommandEndsWithoutCompacting_StartsAndFails ($name)',
+      async ({ act, lines, expected }) => {
+        const run = await startedQuiet();
+
+        act(run.agent);
+        await writeLines(run, lines);
+
+        expect(compactionEvents(run.agentEvents)).toEqual(expected);
+      },
+    );
+
+    it('compaction_RefusedAsMeasured_OneStartOneFailedEnd', async () => {
+      const run = await startedQuiet();
+
+      run.agent.send({ text: '/compact', images: [] });
+      await writeLines(run, [
+        lifecycle(TYPED_UUID, 'started'),
+        compactingStatus,
+        compactFailed,
+        lifecycleInit,
+        successResult('Not enough messages to compact.', [TYPED_UUID]),
+        lifecycle(TYPED_UUID, 'completed'),
+      ]);
+
+      expect(compactionEvents(run.agentEvents)).toEqual([
+        STARTED('manual'),
+        {
+          type: 'compactionEnded',
+          at: 1000,
+          trigger: 'manual',
+          outcome: 'failed',
+          beforeTokens: null,
+          durationMs: 0,
+        },
+      ]);
+    });
+
+    it('compaction_FallbackAnyResult_EndsTheCompaction', async () => {
+      const run = await startedQuiet();
+
+      run.agent.compact();
+      await writeLines(run, [plainInit, compactingStatus, successResult('ok')]);
+
+      expect(compactionEvents(run.agentEvents)).toEqual([
+        STARTED('app'),
+        {
+          type: 'compactionEnded',
+          at: 1000,
+          trigger: 'app',
+          outcome: 'failed',
+          beforeTokens: null,
+          durationMs: 0,
+        },
+      ]);
+    });
+
+    it('compaction_Boundary_EmitsEntryThenItsAfterSize', async () => {
+      let at = 1000;
+      const run = started(fakeChild(), createMemoryFiles(), { now: () => at });
+      await settle();
+
+      run.agent.compact();
+      await writeLines(run, [
+        lifecycle(APP_UUID, 'started'),
+        compactingStatus,
+        compactBoundary,
+      ]);
+      const entry = {
+        kind: 'compaction',
+        id: 'compaction-1',
+        at: 1000,
+        trigger: 'app',
+        beforeTokens: 37559,
+        afterTokens: null,
+        durationMs: 8303,
+        raw: [compactBoundary],
+      };
+      expect(compactionEntries(run.heard)).toEqual([entry]);
+
+      at = 2000;
+      await writeLines(run, [mainReply('m1'), mainReply('m2')]);
+
+      expect(compactionEntries(run.heard)).toEqual([
+        entry,
+        { ...entry, afterTokens: 38935 },
+      ]);
+    });
+
+    it.each<{
+      name: string;
+      act: (agent: AgentProcess) => void;
+      uuid: string;
+      results: number;
+    }>([
+      {
+        name: 'app',
+        act: (agent) => agent.compact(),
+        uuid: APP_UUID,
+        results: 0,
+      },
+      {
+        name: 'typed',
+        act: (agent) => agent.send({ text: '/compact', images: [] }),
+        uuid: TYPED_UUID,
+        results: 1,
+      },
+    ])(
+      'compaction_AppResult_ShowsNoResultEntry ($name)',
+      async ({ act, uuid, results }) => {
+        const run = await startedQuiet();
+
+        act(run.agent);
+        await writeLines(run, [
+          lifecycleInit,
+          lifecycle(uuid, 'started'),
+          compactingStatus,
+          compactBoundary,
+          { ...successResult('', [uuid]), local_command: 'compact' },
+          lifecycle(uuid, 'completed'),
+        ]);
+
+        expect(resultEntries(run.heard)).toHaveLength(results);
+      },
+    );
+
+    const INTERRUPTED = {
+      type: 'compactionEnded',
+      trigger: 'app',
+      outcome: 'interrupted',
+    };
+
+    it.each<{
+      name: string;
+      steps: (object | number)[];
+      ended: object[];
+      entries?: number;
+    }>([
+      {
+        name: 'no line within the grace',
+        steps: [5000],
+        ended: [INTERRUPTED],
+      },
+      { name: 'just before the grace', steps: [4999], ended: [] },
+      {
+        name: 'the reply idles the session',
+        steps: [
+          {
+            type: 'control_response',
+            response: {
+              subtype: 'success',
+              request_id: 'wigley-2',
+              response: { still_queued: [] },
+            },
+          },
+          5000,
+        ],
+        ended: [INTERRUPTED],
+      },
+      {
+        name: 'the boundary within the grace',
+        steps: [compactBoundary, 5000],
+        ended: [{ type: 'compactionEnded', outcome: 'done' }],
+        entries: 1,
+      },
+      {
+        name: 'the boundary after the grace',
+        steps: [5000, compactBoundary],
+        ended: [INTERRUPTED],
+        entries: 1,
+      },
+      {
+        name: "the command's result within the grace",
+        steps: [{ ...errorResult, user_message_uuid: APP_UUID }, 5000],
+        ended: [INTERRUPTED],
+      },
+      {
+        name: 'a failed status within the grace',
+        steps: [compactFailed, 5000],
+        ended: [INTERRUPTED],
+      },
+      {
+        name: 'the plain interrupt as measured',
+        steps: [
+          {
+            type: 'system',
+            subtype: 'status',
+            status: null,
+            compact_result: 'failed',
+            compact_error: 'API Error: Request was aborted.',
+          },
+          lifecycleInit,
+          { ...successResult('', [APP_UUID]), local_command: 'compact' },
+          lifecycle(APP_UUID, 'cancelled'),
+          5000,
+        ],
+        ended: [INTERRUPTED],
+      },
+    ])(
+      'compaction_Interrupted_EndsOnceWithinTheGrace ($name)',
+      async ({ steps, ended, entries = 0 }) => {
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+        const run = await startedQuiet();
+        run.agent.compact();
+        await writeLines(run, [
+          lifecycle(APP_UUID, 'started'),
+          compactingStatus,
+        ]);
+        run.agent.interrupt();
+
+        for (const step of steps) {
+          if (typeof step === 'number') {
+            vi.advanceTimersByTime(step);
+            await settle();
+          } else {
+            await writeLines(run, [step]);
+          }
+        }
+
+        expect(
+          run.agentEvents.filter((event) => event.type === 'compactionEnded'),
+        ).toEqual(ended.map((end) => expect.objectContaining(end)));
+        expect(compactionEntries(run.heard)).toHaveLength(entries);
+      },
+    );
+
+    it('compaction_InterruptBeforeTheFirstStatus_EndsAtTheGrace', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const run = await startedQuiet();
+
+      run.agent.compact();
+      run.agent.interrupt();
+      vi.advanceTimersByTime(5000);
+      await settle();
+
+      expect(compactionEvents(run.agentEvents)).toEqual([
+        STARTED('app', 6000),
+        NEVER_RAN('app', 'interrupted', 6000),
+      ]);
+    });
+
+    it('compaction_InterruptBeforeTheFirstStatus_ItsStatusStillTakesTheCommand', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const run = await startedQuiet();
+
+      run.agent.compact();
+      run.agent.interrupt();
+      await writeLines(run, [
+        {
+          type: 'control_response',
+          response: {
+            subtype: 'success',
+            request_id: 'wigley-2',
+            response: { still_queued: [] },
+          },
+        },
+        compactingStatus,
+        compactFailed,
+      ]);
+      vi.advanceTimersByTime(5000);
+      await settle();
+
+      expect(compactionEvents(run.agentEvents)).toEqual([
+        STARTED('app'),
+        {
+          type: 'compactionEnded',
+          at: 1000,
+          trigger: 'app',
+          outcome: 'interrupted',
+          beforeTokens: null,
+          durationMs: 0,
+        },
+      ]);
+    });
+
+    it('compaction_StaleArmedUuidAfterAbandon_NextStatusIsHarness', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const run = await startedQuiet();
+
+      run.agent.send({ text: '/compact', images: [] });
+      run.agent.send({ text: '/compact again', images: [] });
+      run.agent.interrupt();
+      vi.advanceTimersByTime(5000);
+      await settle();
+      await writeLines(run, [compactingStatus]);
+
+      expect(compactionEvents(run.agentEvents)).toEqual([
+        STARTED('manual', 6000),
+        NEVER_RAN('manual', 'interrupted', 6000),
+        STARTED('harness'),
+      ]);
+    });
+
+    it('compaction_StatusAfterAGraceEndedCompaction_StartsANewOne', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const run = await startedQuiet();
+
+      run.agent.compact();
+      await writeLines(run, [lifecycle(APP_UUID, 'started'), compactingStatus]);
+      run.agent.interrupt();
+      vi.advanceTimersByTime(5000);
+      await settle();
+      await writeLines(run, [compactingStatus]);
+
+      expect(
+        run.agentEvents.filter((event) => event.type === 'compactionStarted'),
+      ).toEqual([STARTED('app'), STARTED('harness')]);
+    });
   });
 });
 

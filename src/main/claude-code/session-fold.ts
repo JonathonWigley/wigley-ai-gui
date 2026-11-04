@@ -2,6 +2,7 @@ import {
   type AgentEvent,
   type AgentStart,
   type ChatEntry,
+  type CompactionTrigger,
   MAIN_AGENT_ID,
   type PlanRowUpdate,
   type ProcessActivity,
@@ -35,6 +36,7 @@ import {
 } from './session-usage';
 import {
   type AgentEventDraft,
+  type CompactionLine,
   createStreamDecoder,
   type DecodedLine,
   type StreamDecoder,
@@ -68,6 +70,10 @@ import {
 //   read idle, until the next `init`;
 // - what a replay leaves out: the refusal of a host request; `owedHostRequests`
 //   holds the requests no refusal answered.
+//
+// In fallback mode a model turn's `result` ends a `/compact` queued behind it as
+// `failed`, and that command's real run reads `harness`: no measured field tells
+// the two `result`s apart there.
 
 // How long an interrupt waits for the turn to end before the session shows
 // idle.
@@ -77,6 +83,11 @@ export const INTERRUPT_GRACE_MS = 5000;
 export const APP_COMMAND_UUID_PREFIX = '00000000-';
 
 const REQUEST_ID = /^wigley-(\d+)$/;
+
+// What `AgentProcess.compact` writes, under an app command uuid.
+export const APP_COMPACT_TEXT = '/compact';
+const COMPACT_COMMAND = /^\/compact(\s|$)/;
+const COMPACT_CONTROL_COMMAND: ControlCommand = { id: 'compact', value: '' };
 
 // `uuid` with its first group replaced by `APP_COMMAND_UUID_PREFIX`.
 export function appCommandUuid(uuid: string): string {
@@ -98,6 +109,44 @@ export type PendingRequest =
   | { kind: 'mode'; value: string }
   | { kind: 'interrupt' }
   | { kind: 'contextUsage' };
+
+// A `/compact` written and not yet taken by a compaction or ended.
+interface ArmedCompact {
+  uuid: string;
+  trigger: Exclude<CompactionTrigger, 'harness'>;
+  hasStarted: boolean;
+}
+
+// The compaction kept from its start to its closing line. `uuid` is the armed
+// command it took, null for one the harness started. `hasEnded` means its
+// `compactionEnded` went out while it waits for a boundary that may still come.
+interface OpenCompaction {
+  uuid: string | null;
+  trigger: CompactionTrigger;
+  startedAt: number;
+  isInterruptWritten: boolean;
+  hasEnded: boolean;
+}
+
+// The fold owns the compaction's start and end, because a call, a timer and the
+// process's close end one as well as a line.
+export interface CompactionFoldState {
+  // In write order.
+  armed: ArmedCompact[];
+  // The command an interrupt caught before any compaction took it. It outlives
+  // the tracker closing its uuid, since its compaction may still start, and the
+  // caller is owed an end either way.
+  interrupted: ArmedCompact | null;
+  open: OpenCompaction | null;
+  // The compaction interrupt grace's end, epoch ms; null when none is pending.
+  // Apart from `graceDeadline`, which an interrupt reply can clear by idling the
+  // session while `/compact` still runs.
+  graceDeadline: number | null;
+  // The newest compaction entry, until the next main reply gives its after-size.
+  // No `usage` event goes out while it is set.
+  awaitingAfterSize: Extract<EntryDraft, { kind: 'compaction' }> | null;
+  entryCount: number;
+}
 
 export interface SessionFoldState {
   readonly decoder: StreamDecoder;
@@ -127,6 +176,7 @@ export interface SessionFoldState {
   // Subtype by request id, from a host request's `out` line until the `in` line
   // answering it.
   owedHostRequests: Map<string, string>;
+  compaction: CompactionFoldState;
 }
 
 export type FoldEffect =
@@ -178,6 +228,14 @@ export function createSessionFoldState(request: AgentStart): SessionFoldState {
     graceDeadline: null,
     isContextRequestOwed: false,
     owedHostRequests: new Map(),
+    compaction: {
+      armed: [],
+      interrupted: null,
+      open: null,
+      graceDeadline: null,
+      awaitingAfterSize: null,
+      entryCount: 0,
+    },
   };
   return state;
 }
@@ -243,12 +301,16 @@ function pushUserMessage(
 }
 
 // Gives the usage event when it differs from the last one in any field but
-// `at`.
+// `at`. From a boundary to the next main reply the state still holds the size and
+// the cache expiry from before the compaction, so nothing goes out.
 function pushUsage(
   state: SessionFoldState,
   at: number,
   effects: FoldEffect[],
 ): void {
+  if (state.compaction.awaitingAfterSize !== null) {
+    return;
+  }
   const event = usageEvent(state.usage, at);
   const last = state.lastUsageEvent;
   const isRepeat =
@@ -319,6 +381,342 @@ function controlCommandOf(text: string): ControlCommand | null {
     : { id: typed[1] as ControlCommand['id'], value: typed[2] };
 }
 
+function pushCompactionEnded(
+  trigger: CompactionTrigger,
+  outcome: 'done' | 'failed' | 'interrupted',
+  sizes: { beforeTokens: number | null; durationMs: number | null },
+  at: number,
+  effects: FoldEffect[],
+): void {
+  pushAgentEvent(
+    { type: 'compactionEnded', trigger, outcome, ...sizes },
+    at,
+    effects,
+  );
+}
+
+// An end clears the grace, unless that grace still waits on an interrupted
+// command.
+function markOpenCompactionEnded(
+  fold: CompactionFoldState,
+  open: OpenCompaction,
+): void {
+  open.hasEnded = true;
+  if (fold.interrupted === null) {
+    fold.graceDeadline = null;
+  }
+}
+
+// The armed command a new compaction belongs to, taken out of the armed list:
+// one an interrupt caught, the one whose `started` frame came last (the CLI starts
+// messages in write order), or in fallback mode, which has no frames, the oldest.
+function takeCompactCommand(state: SessionFoldState): ArmedCompact | null {
+  const fold = state.compaction;
+  const taken =
+    fold.interrupted ??
+    fold.armed.findLast((command) => command.hasStarted) ??
+    (state.tracker.mode() === 'fallback' ? fold.armed.at(0) : undefined) ??
+    null;
+  fold.armed = fold.armed.filter((command) => command !== taken);
+  return taken;
+}
+
+function startCompaction(
+  state: SessionFoldState,
+  at: number,
+  effects: FoldEffect[],
+): OpenCompaction {
+  const fold = state.compaction;
+  const taken = takeCompactCommand(state);
+  const open: OpenCompaction = {
+    uuid: taken?.uuid ?? null,
+    trigger: taken?.trigger ?? 'harness',
+    startedAt: at,
+    isInterruptWritten: taken !== null && taken === fold.interrupted,
+    hasEnded: false,
+  };
+  if (open.isInterruptWritten) {
+    fold.interrupted = null;
+  }
+  fold.open = open;
+  pushAgentEvent(
+    { type: 'compactionStarted', trigger: open.trigger },
+    at,
+    effects,
+  );
+  return open;
+}
+
+// The compaction entry goes out even when the grace already sent the end: the
+// compaction happened, and history shows it.
+function finishCompaction(
+  state: SessionFoldState,
+  line: Extract<CompactionLine, { phase: 'done' }>,
+  at: number,
+  effects: FoldEffect[],
+): void {
+  const fold = state.compaction;
+  const open = fold.open ?? startCompaction(state, at, effects);
+  const durationMs = line.durationMs ?? at - open.startedAt;
+  const { beforeTokens } = line;
+  fold.entryCount += 1;
+  const entry: CompactionFoldState['awaitingAfterSize'] = {
+    kind: 'compaction',
+    id: `compaction-${fold.entryCount}`,
+    trigger: open.trigger,
+    beforeTokens,
+    afterTokens: null,
+    durationMs,
+    raw: [line.boundary],
+  };
+  fold.awaitingAfterSize = entry;
+  pushEntry(state, entry, at, effects);
+  if (!open.hasEnded) {
+    markOpenCompactionEnded(fold, open);
+    pushCompactionEnded(
+      open.trigger,
+      'done',
+      { beforeTokens, durationMs },
+      at,
+      effects,
+    );
+  }
+  fold.open = null;
+}
+
+// A line closed the kept compaction with no boundary.
+function closeOpenCompaction(
+  fold: CompactionFoldState,
+  at: number,
+  effects: FoldEffect[],
+): void {
+  const { open } = fold;
+  if (open === null) {
+    return;
+  }
+  if (!open.hasEnded) {
+    markOpenCompactionEnded(fold, open);
+    pushCompactionEnded(
+      open.trigger,
+      open.isInterruptWritten ? 'interrupted' : 'failed',
+      { beforeTokens: null, durationMs: at - open.startedAt },
+      at,
+      effects,
+    );
+  }
+  fold.open = null;
+}
+
+// A command that ended with no compaction still reports one, so a caller
+// waiting on `compactionEnded` is released.
+function pushCompactionThatNeverRan(
+  { trigger }: ArmedCompact,
+  outcome: 'failed' | 'interrupted',
+  at: number,
+  effects: FoldEffect[],
+): void {
+  pushAgentEvent({ type: 'compactionStarted', trigger }, at, effects);
+  pushCompactionEnded(
+    trigger,
+    outcome,
+    { beforeTokens: null, durationMs: null },
+    at,
+    effects,
+  );
+}
+
+function endInterruptedCommand(
+  fold: CompactionFoldState,
+  command: ArmedCompact,
+  at: number,
+  effects: FoldEffect[],
+): void {
+  fold.interrupted = null;
+  if (fold.open === null || fold.open.hasEnded) {
+    fold.graceDeadline = null;
+  }
+  pushCompactionThatNeverRan(command, 'interrupted', at, effects);
+}
+
+function endCompactionOnTerminalFrame(
+  fold: CompactionFoldState,
+  uuid: string,
+  at: number,
+  effects: FoldEffect[],
+): void {
+  if (fold.open?.uuid === uuid) {
+    closeOpenCompaction(fold, at, effects);
+    return;
+  }
+  if (fold.interrupted?.uuid === uuid) {
+    endInterruptedCommand(fold, fold.interrupted, at, effects);
+    return;
+  }
+  const command = fold.armed.find((armed) => armed.uuid === uuid);
+  if (command !== undefined) {
+    fold.armed = fold.armed.filter((armed) => armed !== command);
+    pushCompactionThatNeverRan(command, 'failed', at, effects);
+  }
+}
+
+// Turns are serial, so any `result` closes the turn a harness compaction began
+// in; a stuck compaction is worse than an early `failed`. In fallback mode a
+// `result` also closes every message, the armed ones included.
+function endCompactionOnTurnEnd(
+  state: SessionFoldState,
+  turnOpener: string | null,
+  at: number,
+  effects: FoldEffect[],
+): void {
+  const fold = state.compaction;
+  const isFallback = state.tracker.mode() === 'fallback';
+  const { open, interrupted } = fold;
+  const isOpenEnded =
+    open !== null &&
+    (isFallback || open.uuid === null || open.uuid === turnOpener);
+  if (isOpenEnded) {
+    closeOpenCompaction(fold, at, effects);
+  }
+  if (!isFallback) {
+    return;
+  }
+  const oldest = fold.armed.at(0);
+  fold.armed = [];
+  if (interrupted !== null) {
+    if (isOpenEnded) {
+      fold.interrupted = null;
+      fold.graceDeadline = null;
+    } else {
+      endInterruptedCommand(fold, interrupted, at, effects);
+    }
+  } else if (oldest !== undefined && !isOpenEnded) {
+    pushCompactionThatNeverRan(oldest, 'failed', at, effects);
+  }
+}
+
+function foldCompactionPhase(
+  state: SessionFoldState,
+  line: CompactionLine,
+  at: number,
+  effects: FoldEffect[],
+): void {
+  const fold = state.compaction;
+  if (line.phase === 'done') {
+    finishCompaction(state, line, at, effects);
+  } else if (line.phase === 'failed') {
+    closeOpenCompaction(fold, at, effects);
+  } else if (fold.open === null || fold.open.hasEnded) {
+    // One whose end was sent waits only for its boundary and blocks no new start.
+    startCompaction(state, at, effects);
+  }
+}
+
+// What a line says about the compaction. Each end is sent once per start, whatever
+// closes it: this line, a grace (`endCompactionGrace`) or the process's close
+// (`foldProcessClosed`).
+function foldCompactionLine(
+  state: SessionFoldState,
+  decoded: DecodedLine,
+  at: number,
+  effects: FoldEffect[],
+): void {
+  const fold = state.compaction;
+  const { lifecycle, compaction, replyUsage } = decoded;
+  if (lifecycle?.state === 'started') {
+    for (const command of fold.armed) {
+      command.hasStarted ||= command.uuid === lifecycle.uuid;
+    }
+  }
+  if (compaction !== null) {
+    foldCompactionPhase(state, compaction, at, effects);
+  }
+  if (replyUsage !== null && fold.awaitingAfterSize !== null) {
+    // `post_tokens` counts the conversation messages only, not the system prompt and tools `pre_tokens` holds, so
+    // the after-size is the next main reply's context (claude-stream.md § Compaction).
+    const entry = {
+      ...fold.awaitingAfterSize,
+      afterTokens: replyUsage.contextTokens,
+    };
+    fold.awaitingAfterSize = null;
+    pushEntry(state, entry, at, effects);
+  }
+  if (decoded.turnEnded) {
+    endCompactionOnTurnEnd(state, decoded.turnOpener, at, effects);
+  }
+  if (lifecycle !== null && TERMINAL_STATES.has(lifecycle.state)) {
+    endCompactionOnTerminalFrame(fold, lifecycle.uuid, at, effects);
+  }
+}
+
+// Probe B measured a plain interrupt stopping `/compact`: a `failed` status ends
+// the compaction `interrupted` well before this grace. The grace is the guard for
+// an interrupt that does not stop it (a later boundary then sends only its entry),
+// and for one that comes before the command's first status. A command queued
+// behind a running turn is out of its reach: it still runs.
+function armCompactionGrace(state: SessionFoldState, at: number): void {
+  const fold = state.compaction;
+  const { open } = fold;
+  if (open !== null && !open.hasEnded) {
+    open.isInterruptWritten = true;
+  } else if (fold.interrupted === null) {
+    const running = runningCompactCommand(state);
+    if (running === undefined) {
+      return;
+    }
+    fold.armed = fold.armed.filter((command) => command !== running);
+    fold.interrupted = running;
+  }
+  fold.graceDeadline ??= at + INTERRUPT_GRACE_MS;
+}
+
+// The armed command that is the message running: started, or next up with no turn
+// open.
+function runningCompactCommand(
+  state: SessionFoldState,
+): ArmedCompact | undefined {
+  const { armed } = state.compaction;
+  const nextUp = state.tracker.isTurnOpen() ? null : state.tracker.oldestOpen();
+  return (
+    armed.findLast((command) => command.hasStarted) ??
+    armed.find((command) => command.uuid === nextUp)
+  );
+}
+
+// A `/compact` past its first status prints its own synthetic
+// `Compaction canceled.` line when interrupted. A model turn's interrupt prints
+// none, and neither does one before the status.
+function isInterruptShownByCompaction({
+  compaction: { open },
+  tracker,
+}: SessionFoldState): boolean {
+  const isCommandCompacting =
+    open !== null && !open.hasEnded && open.uuid !== null;
+  return isCommandCompacting && !tracker.isTurnOpen();
+}
+
+// Nothing will end the armed commands, so the app's gets its end here: its caller
+// waits on it.
+function endOwedAppCommands(
+  fold: CompactionFoldState,
+  at: number,
+  effects: FoldEffect[],
+): void {
+  for (const command of fold.armed) {
+    if (command.trigger === 'app') {
+      pushCompactionThatNeverRan(command, 'failed', at, effects);
+    }
+  }
+  fold.armed = [];
+}
+
+// The tracker closed its uuids, and a compaction whose end went out has nothing
+// left to wait for.
+function forgetEndedCompaction(fold: CompactionFoldState): void {
+  if (fold.open?.hasEnded === true) {
+    fold.open = null;
+  }
+}
+
 function foldUserLine(
   state: SessionFoldState,
   message: Json,
@@ -328,8 +726,17 @@ function foldUserLine(
 ): void {
   const { text, images } = sentMessage(asJson(message.message).content);
   const command = controlCommandOf(text);
-  if (uuid.startsWith(APP_COMMAND_UUID_PREFIX)) {
-    state.tracker.written(uuid, command);
+  const isCompact = COMPACT_COMMAND.test(text);
+  const isAppCommand = uuid.startsWith(APP_COMMAND_UUID_PREFIX);
+  if (isCompact) {
+    state.compaction.armed.push({
+      uuid,
+      trigger: isAppCommand ? 'app' : 'manual',
+      hasStarted: false,
+    });
+  }
+  if (isAppCommand) {
+    state.tracker.written(uuid, isCompact ? COMPACT_CONTROL_COMMAND : command);
     return;
   }
   state.sendCount += 1;
@@ -372,11 +779,14 @@ function foldRequestLine(
   } else if (request.subtype === 'interrupt') {
     state.pendingRequests.set(requestId, { kind: 'interrupt' });
     state.graceDeadline = at + INTERRUPT_GRACE_MS;
-    pushNotice(
-      state,
-      { text: 'Interrupted', tone: 'info', raw: message, at },
-      effects,
-    );
+    armCompactionGrace(state, at);
+    if (!isInterruptShownByCompaction(state)) {
+      pushNotice(
+        state,
+        { text: 'Interrupted', tone: 'info', raw: message, at },
+        effects,
+      );
+    }
   } else if (request.subtype === 'set_permission_mode') {
     state.pendingRequests.set(requestId, {
       kind: 'mode',
@@ -444,7 +854,7 @@ function releaseAllHeldMessages(
 
 // A control command's success sets the control, since the turn's init still
 // reports the value from before. A value that is not among the control's
-// choices leaves the control unknown.
+// choices leaves the control unknown. The app's `/compact` sets no control.
 function foldControlValues(
   state: SessionFoldState,
   decoded: DecodedLine,
@@ -458,7 +868,7 @@ function foldControlValues(
       setControlValue(state, controlId, controlValue(controlId, value)) ||
       hasChanged;
   }
-  if (command !== null && !decoded.turnFailed) {
+  if (command !== null && command.id !== 'compact' && !decoded.turnFailed) {
     const value = controlValue(command.id, command.value);
     const known = isChoice(command.id, value) ? value : null;
     hasChanged = setControlValue(state, command.id, known) || hasChanged;
@@ -529,6 +939,9 @@ function answerControlResponse(
       );
     }
     state.tracker.interruptAnswered();
+    if (state.tracker.activity() === 'idle') {
+      forgetEndedCompaction(state.compaction);
+    }
     return;
   }
   if (response.error !== null) {
@@ -588,6 +1001,7 @@ function foldOutLine(
   for (const draft of decoded.agentEvents) {
     pushAgentEvent(draft, at, effects);
   }
+  foldCompactionLine(state, decoded, at, effects);
   foldControlValues(state, decoded, command, effects);
   if (decoded.commands !== null) {
     effects.push({ kind: 'commands', commands: decoded.commands });
@@ -627,19 +1041,40 @@ export function foldPipeLine(
   return { state, effects };
 }
 
-// Ends the interrupt grace once `at` reaches its deadline. Its notice is stamped
-// at the deadline, however late the call.
+// The earliest deadline `advanceFold` waits on, null when none is pending.
+export function nextFoldDeadline(state: SessionFoldState): number | null {
+  const deadlines = [
+    state.graceDeadline,
+    state.compaction.graceDeadline,
+  ].filter((deadline) => deadline !== null);
+  return deadlines.length === 0 ? null : Math.min(...deadlines);
+}
+
+// Ends every grace `at` has reached. What it sends is stamped at the deadline,
+// however late the call.
 export function advanceFold(state: SessionFoldState, at: number): FoldStep {
   const effects: FoldEffect[] = [];
+  endInterruptGrace(state, at, effects);
+  endCompactionGrace(state.compaction, at, effects);
+  return { state, effects };
+}
+
+function endInterruptGrace(
+  state: SessionFoldState,
+  at: number,
+  effects: FoldEffect[],
+): void {
   const deadline = state.graceDeadline;
   if (deadline === null || at < deadline) {
-    return { state, effects };
+    return;
   }
   state.graceDeadline = null;
   if (state.activity !== 'working') {
-    return { state, effects };
+    return;
   }
   state.tracker.abandon();
+  endOwedAppCommands(state.compaction, deadline, effects);
+  forgetEndedCompaction(state.compaction);
   const grace = `${INTERRUPT_GRACE_MS / 1000} s`;
   pushNotice(
     state,
@@ -656,6 +1091,59 @@ export function advanceFold(state: SessionFoldState, at: number): FoldStep {
     text: `interrupt unanswered after ${grace}; dropping turn state`,
   });
   syncActivity(state, effects);
+}
+
+// The compaction stays kept after this end: its boundary may still come.
+function endCompactionGrace(
+  fold: CompactionFoldState,
+  at: number,
+  effects: FoldEffect[],
+): void {
+  const deadline = fold.graceDeadline;
+  if (deadline === null || at < deadline) {
+    return;
+  }
+  fold.graceDeadline = null;
+  if (fold.interrupted !== null) {
+    endInterruptedCommand(fold, fold.interrupted, deadline, effects);
+  }
+  const { open } = fold;
+  if (open?.isInterruptWritten === true && !open.hasEnded) {
+    markOpenCompactionEnded(fold, open);
+    pushCompactionEnded(
+      open.trigger,
+      'interrupted',
+      { beforeTokens: null, durationMs: deadline - open.startedAt },
+      deadline,
+      effects,
+    );
+  }
+}
+
+// The process closed: a compaction still running ends here, before `sessionEnded`,
+// and so does a command that never got to run.
+export function foldProcessClosed(
+  state: SessionFoldState,
+  at: number,
+): FoldStep {
+  const effects: FoldEffect[] = [];
+  const fold = state.compaction;
+  const { open } = fold;
+  if (open !== null && !open.hasEnded) {
+    pushCompactionEnded(
+      open.trigger,
+      'failed',
+      { beforeTokens: null, durationMs: at - open.startedAt },
+      at,
+      effects,
+    );
+  }
+  if (fold.interrupted !== null) {
+    endInterruptedCommand(fold, fold.interrupted, at, effects);
+  }
+  endOwedAppCommands(fold, at, effects);
+  fold.open = null;
+  fold.graceDeadline = null;
   return { state, effects };
 }
 

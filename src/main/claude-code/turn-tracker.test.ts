@@ -222,6 +222,13 @@ describe('createTurnTracker', () => {
       expected: EFFORT_HIGH,
     },
     {
+      name: 'lifecycle, opener with a compact command',
+      init: lifecycleInit,
+      writes: [['c', { id: 'compact', value: '' }]],
+      end: result('c', ['c']),
+      expected: { id: 'compact', value: '' },
+    },
+    {
       name: 'lifecycle, opener with no command',
       init: lifecycleInit,
       writes: [

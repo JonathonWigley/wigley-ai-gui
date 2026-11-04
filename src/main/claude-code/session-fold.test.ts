@@ -5,7 +5,9 @@ import { controlMessage, userMessage } from './claude-controls';
 import {
   advanceFold,
   createSessionFoldState,
+  type FoldEffect,
   foldPipeLine,
+  foldUsageInput,
   replayPipeLog,
   type SessionFoldState,
 } from './session-fold';
@@ -18,6 +20,7 @@ const request: AgentStart = {
   profileDir: null,
   controls: {},
   instructions: [],
+  idleCompactMinTokens: null,
 };
 
 const GRACE_NOTICE =
@@ -134,6 +137,26 @@ function snapshot(state: SessionFoldState) {
 
 const SEND_U1 = inLine(send('hi', 'u1'), 500);
 
+const COMPACTING = { type: 'system', subtype: 'status', status: 'compacting' };
+const BOUNDARY = {
+  type: 'system',
+  subtype: 'compact_boundary',
+  compact_metadata: { pre_tokens: 37559, duration_ms: 8303 },
+};
+
+const usageEvents = (effects: readonly FoldEffect[]) =>
+  effects.flatMap((effect) =>
+    effect.kind === 'agentEvent' && effect.event.type === 'usage'
+      ? [effect.event]
+      : [],
+  );
+const compactionEvents = (effects: readonly FoldEffect[]) =>
+  effects.flatMap((effect) =>
+    effect.kind === 'agentEvent' && effect.event.type.startsWith('compaction')
+      ? [effect.event]
+      : [],
+  );
+
 describe('session-fold', () => {
   it.each<{
     case: string;
@@ -242,6 +265,52 @@ describe('session-fold', () => {
             at: 1000,
             text: 'Interrupted',
           }),
+        },
+      ],
+    },
+    {
+      case: 'interrupt of a /compact past its first status',
+      setup: [
+        inLine(send('/compact', 'u1'), 500),
+        outLine(lifecycle('u1', 'started'), 600),
+        outLine(COMPACTING, 700),
+      ],
+      line: inLine(interruptRequest('wigley-2'), 1000),
+      state: {
+        pending: { 'wigley-2': { kind: 'interrupt' } },
+        graceDeadline: 6000,
+        noticeCount: 0,
+      },
+    },
+    {
+      case: 'interrupt of a /compact before its first status',
+      setup: [
+        inLine(send('/compact', 'u1'), 500),
+        outLine(lifecycle('u1', 'started'), 600),
+      ],
+      line: inLine(interruptRequest('wigley-2'), 1000),
+      state: { noticeCount: 1 },
+      effects: [
+        {
+          kind: 'entry',
+          entry: expect.objectContaining({ text: 'Interrupted' }),
+        },
+      ],
+    },
+    {
+      case: 'interrupt of a model turn during its own compaction',
+      setup: [
+        SEND_U1,
+        outLine(lifecycle('u1', 'started'), 600),
+        outLine(lifecycleInit, 650),
+        outLine(COMPACTING, 700),
+      ],
+      line: inLine(interruptRequest('wigley-2'), 1000),
+      state: { noticeCount: 1 },
+      effects: [
+        {
+          kind: 'entry',
+          entry: expect.objectContaining({ text: 'Interrupted' }),
         },
       ],
     },
@@ -661,4 +730,274 @@ describe('session-fold', () => {
       );
     },
   );
+
+  it.each<{
+    case: string;
+    between: (state: SessionFoldState) => FoldEffect[];
+    spendUsd: number | null;
+  }>([
+    {
+      case: "the /compact's own result",
+      between: (state) =>
+        foldPipeLine(
+          state,
+          outLine(
+            {
+              ...successResult('', ['u1']),
+              total_cost_usd: 0.5,
+              local_command: 'compact',
+            },
+            3000,
+          ),
+        ).effects,
+      spendUsd: 0.5,
+    },
+    {
+      case: 'a context usage reply',
+      between: (state) => {
+        foldPipeLine(state, inLine(contextUsageRequest('wigley-2'), 3000));
+        return foldPipeLine(
+          state,
+          outLine(
+            {
+              type: 'control_response',
+              response: {
+                subtype: 'success',
+                request_id: 'wigley-2',
+                response: { maxTokens: 1000, autoCompactThreshold: 900 },
+              },
+            },
+            3100,
+          ),
+        ).effects;
+      },
+      spendUsd: null,
+    },
+    {
+      case: 'a settings read',
+      between: (state) =>
+        foldUsageInput(state, (usage) => ({ ...usage, reported: 900 }), 3000)
+          .effects,
+      spendUsd: null,
+    },
+  ])(
+    'foldPipeLine_AfterABoundary_UsageWaitsForTheNextReply ($case)',
+    ({ between, spendUsd }) => {
+      const state = foldedState([
+        inLine(send('/compact', 'u1'), 500),
+        outLine(REPLY_LINE, 600),
+        outLine(lifecycle('u1', 'started'), 700),
+        outLine(COMPACTING, 800),
+      ]);
+
+      const boundary = foldPipeLine(state, outLine(BOUNDARY, 2000));
+      const gap = between(state);
+      const reply = foldPipeLine(state, outLine(CACHE_READ_LINE, 5000));
+
+      expect(usageEvents([...boundary.effects, ...gap])).toEqual([]);
+      expect(usageEvents(reply.effects)).toEqual([
+        expect.objectContaining({
+          at: 5000,
+          contextTokens: 40123,
+          spendUsd,
+        }),
+      ]);
+    },
+  );
+
+  it.each<{ case: string; beforeResult: object[]; afterResult: object[] }>([
+    {
+      case: 'the interrupt answered before the result',
+      beforeResult: [interruptReply('wigley-2')],
+      afterResult: [],
+    },
+    {
+      case: 'the interrupt answered in the gap after the result',
+      beforeResult: [],
+      afterResult: [interruptReply('wigley-2')],
+    },
+  ])(
+    'foldPipeLine_CompactQueuedBehindAnInterruptedTurn_StillRuns ($case)',
+    ({ beforeResult, afterResult }) => {
+      const state = foldedState([
+        SEND_U1,
+        outLine(lifecycle('u1', 'started'), 600),
+        outLine(lifecycleInit, 650),
+        inLine(send('/compact', 'u2'), 700),
+        inLine(interruptRequest('wigley-2'), 1000),
+        ...beforeResult.map((line) => outLine(line, 1100)),
+        outLine(
+          {
+            type: 'result',
+            subtype: 'error_during_execution',
+            is_error: true,
+            user_message_uuid: 'u1',
+            user_message_uuids: ['u1'],
+          },
+          1200,
+        ),
+        ...afterResult.map((line) => outLine(line, 1300)),
+      ]);
+
+      const lines = [
+        outLine(lifecycle('u2', 'started'), 8000),
+        outLine(COMPACTING, 8100),
+        outLine(BOUNDARY, 8200),
+      ];
+
+      expect(
+        compactionEvents(
+          lines.flatMap((line) => foldPipeLine(state, line).effects),
+        ),
+      ).toEqual([
+        { type: 'compactionStarted', at: 8100, trigger: 'manual' },
+        {
+          type: 'compactionEnded',
+          at: 8200,
+          trigger: 'manual',
+          outcome: 'done',
+          beforeTokens: 37559,
+          durationMs: 8303,
+        },
+      ]);
+    },
+  );
+
+  it('foldPipeLine_InterruptInTheStartedToInitGap_LeavesAQueuedCompact', () => {
+    const state = foldedState([
+      SEND_U1,
+      outLine(lifecycle('u1', 'started'), 600),
+      inLine(send('/compact', 'u2'), 700),
+    ]);
+
+    foldPipeLine(state, inLine(interruptRequest('wigley-2'), 1000));
+
+    expect(state.compaction.interrupted).toBeNull();
+    expect(state.compaction.armed.map((command) => command.uuid)).toEqual([
+      'u2',
+    ]);
+  });
+
+  it.each<{
+    case: string;
+    log: PipeLine[];
+    later: PipeLine[];
+    replayedLastAt: number;
+    events: object[];
+  }>([
+    {
+      case: 'interrupted, and `now` past the grace',
+      log: [inLine(interruptRequest('wigley-2'), 1000)],
+      later: [],
+      replayedLastAt: 6000,
+      events: [
+        {
+          type: 'compactionEnded',
+          at: 6000,
+          trigger: 'app',
+          outcome: 'interrupted',
+          beforeTokens: null,
+          durationMs: 5880,
+        },
+      ],
+    },
+    {
+      case: 'mid-compaction, ended by a later live boundary',
+      log: [],
+      later: [outLine(BOUNDARY, 61000)],
+      replayedLastAt: 120,
+      events: [
+        {
+          type: 'compactionEnded',
+          at: 61000,
+          trigger: 'app',
+          outcome: 'done',
+          beforeTokens: 37559,
+          durationMs: 8303,
+        },
+      ],
+    },
+  ])(
+    'replayPipeLog_CompactionAcrossTheEnd ($case)',
+    ({ log, later, replayedLastAt, events }) => {
+      const state = createSessionFoldState(request);
+
+      const replayed = replayPipeLog(
+        state,
+        [
+          inLine(send('/compact', '00000000-1'), 100),
+          outLine(lifecycle('00000000-1', 'started'), 110),
+          outLine(COMPACTING, 120),
+          ...log,
+        ],
+        60000,
+        null,
+      );
+      const emitted = [
+        ...replayed,
+        ...later.flatMap((line) => foldPipeLine(state, line).effects),
+      ];
+
+      expect(compactionEvents(emitted)).toEqual([
+        { type: 'compactionStarted', at: 120, trigger: 'app' },
+        ...events,
+      ]);
+      expect(compactionEvents(replayed).at(-1)?.at).toBe(replayedLastAt);
+    },
+  );
+
+  it('replayPipeLog_AppCompact_KeepsItsTriggerAndEntry', () => {
+    const boundary = BOUNDARY;
+    const state = createSessionFoldState(request);
+
+    const effects = replayPipeLog(
+      state,
+      [
+        inLine(send('/compact', '00000000-1'), 100),
+        outLine(lifecycle('00000000-1', 'started'), 110),
+        outLine(COMPACTING, 120),
+        outLine(boundary, 130),
+        outLine(CACHE_READ_LINE, 140),
+      ],
+      150,
+      null,
+    );
+
+    expect(
+      effects.flatMap((effect) =>
+        effect.kind === 'agentEvent' &&
+        effect.event.type.startsWith('compaction')
+          ? [effect.event]
+          : [],
+      ),
+    ).toEqual([
+      { type: 'compactionStarted', at: 120, trigger: 'app' },
+      {
+        type: 'compactionEnded',
+        at: 130,
+        trigger: 'app',
+        outcome: 'done',
+        beforeTokens: 37559,
+        durationMs: 8303,
+      },
+    ]);
+    expect(
+      effects.flatMap((effect) =>
+        effect.kind === 'entry' && effect.entry.kind === 'compaction'
+          ? [effect.entry]
+          : [],
+      ),
+    ).toEqual([
+      {
+        kind: 'compaction',
+        id: 'compaction-1',
+        at: 130,
+        trigger: 'app',
+        beforeTokens: 37559,
+        afterTokens: 40123,
+        durationMs: 8303,
+        raw: [boundary],
+      },
+    ]);
+  });
 });

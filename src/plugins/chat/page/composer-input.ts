@@ -9,17 +9,18 @@ import type {
 import { valueLabel } from './chat-state';
 import { controlCommand } from './control-commands';
 
-// The composer's input for a Chat tab: a turn is in progress while the
-// process runs and is not idle, and the chips are enabled only while it runs.
+// The composer's input for a Chat tab: a turn or a compaction is in progress
+// while the process runs and is not idle, or runs a compaction, and the chips
+// are enabled only while it runs.
 export function composerInputOf(tab: {
   name: string;
   state: Pick<
     ChatSessionState,
-    'running' | 'activity' | 'controls' | 'repo' | 'branch'
+    'running' | 'activity' | 'controls' | 'repo' | 'branch' | 'compaction'
   >;
   isBoxFocused: boolean;
 }): ComposerInput {
-  const { running, activity } = tab.state;
+  const { running, activity, compaction } = tab.state;
   const controls = tab.state.controls.map((control) => ({
     id: control.id,
     label: control.label,
@@ -33,7 +34,7 @@ export function composerInputOf(tab: {
     branch: tab.state.branch,
     isBoxFocused: tab.isBoxFocused,
     running,
-    working: running && activity !== 'idle',
+    working: running && (activity !== 'idle' || compaction !== null),
     modelEffort,
     controls: others,
   };

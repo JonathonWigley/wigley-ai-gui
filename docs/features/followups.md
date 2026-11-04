@@ -231,6 +231,11 @@ Defects seen in a drive run, a transcript or the user's own use.
   on sub-pixel shares. A dock that measures its room in script (composer-kit hands the default `working` draw a line
   budget once the composer parts reach 0) would give a strict order; the `ComposerKit.working` contract
   (`src/plugins/chat/layouts/layout.d.ts`) would then say a user draw gets that budget.
+- **Composer spills past its cap in a short pane** — *needs a feature plan*: `.ui-floating.chat-composer` caps at
+  `max-height: 50%` (`src/plugins/chat/layouts/default/layout.css`) with nothing under it able to scroll enough, so its
+  status line and Send run out of the panel's bottom edge: at 720x600 under `fake: steps`, and at 420x600 under
+  `fake: hold`. To decide: raise the cap, let the dock scroll, or lower the box's floor. Source session: Claude Code
+  c2cde885-2f45-42e7-ad71-cd59618615db in wigley-ai-gui.
 - **Background subagent misattributed and dropped early** — *needs a feature plan*: two faults a real session showed
   on 2026-11-03, a haiku background subagent under an Opus main told to run `sleep 90`. Take the first one first; it
   misattributes who said what. (1) The subagent's replies show in the main transcript as the main agent's: the
@@ -721,6 +726,11 @@ because the earlier items rewrite many of these tests anyway.
   and record, and the newer one renames the older's log and sweeps its pipe logs. A lock around listening and acting
   only on a record still its own are the likely shape. Stated as a limit in `docs/features/session-host/design.md`.
   Source session: Claude Code 4c0ab18e-9221-4838-ba7b-ecfa6e43c345 in wigley-ai-gui.
+- **An idle harness compaction cannot be interrupted** — *needs a feature plan*: it opens no turn, so `interrupt()` does
+  nothing while the chip shows compacting and `compact()` would queue a second (`src/main/claude-code/claude-code-harness.ts`).
+  It cannot happen until an idle compaction is seen under the app's flags (`docs/features/agent-chat/claude-stream.md`
+  § Idle compaction); measure that shape, then treat an unended compaction as busy in both calls. Source session: Claude
+  Code c2cde885-2f45-42e7-ad71-cd59618615db in wigley-ai-gui.
 - **Docs tab's first show has no test** — *agent-ready*: `handle.shown` runs `showFirstTime`
   (`src/plugins/docs/page/start.ts`), which runs `loadIndex` (`docs-view.ts`). The forms self-test used to pin it live
   through its `y` step, and now presses `R`, because rows draw in no fixed order and an earlier step can pass the Codex

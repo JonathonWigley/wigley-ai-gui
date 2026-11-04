@@ -39,17 +39,15 @@ group is dragged; otherwise the groups sit directly under the Sessions header.
 
 - **Favorites** are in the user's own order, set by drag and by `<Leader>pk` / `<Leader>pj`.
 - **Recent** groups sort by recency, most recent first, and the rows inside every group, favorites included, do
-  too. A session's recency is the last time its row arrived or its row's activity turned to needs you
-  (`NEEDS_YOU_ACTIVITY`); a group's is its most recent row's. Picking a row never reorders, so the list holds
-  still while the user steps through it. Ties keep main's row order.
-- Recency is page-side, since needs you is a page-side activity; the stamps sit in the sessions page's `uiState`
+  too. A session's recency is the time its row arrived; a group's is its most recent row's. A new session enters at
+  the top of its group and lifts its Recent group to the top. Only a new session or a user's favorites move changes
+  the order: picking a row, sending a message and any activity, needs you included, leave every row in place, so the
+  list holds still while the user reads it and steps through it. Ties keep main's row order.
+- The stamps sit in the sessions page's `uiState`
   (`recency`), each under its row's host session id, else its app session id, so a page reload and a relaunch both
   keep the order. A stamp follows its row's host id change and goes when the row leaves. A row merely absent keeps
   its stamp, since main resumes rows one at a time after a relaunch; a stamp whose session never comes back goes
   once 200 newer ones push it out.
-- `recency` also saves the app session ids whose needs you is already stamped, so a source re-sending it after a page
-  reload moves no row. An id goes when the row's top activity turns away from needs you, when the row leaves, or when
-  the first state lacks it, as after a relaunch, which gives every row a new id.
 - The previous and next session keys, and the side bar's edge prompts, step through rows in drawn order.
 
 ## Favorites
@@ -82,7 +80,8 @@ DragReorder primitive (`DESIGN.md` § Primitives).
 - **Origin name over folder name**: the clones' folders are named by hand (`new-games-prototypes-2`); the origin
   is the one name every clone shares, and the features home rule and the docs index already name a repo by it.
 - **Projects favorited, not sessions**: a session lasts one agent run; a project comes back daily.
-- **Recency from arrival and needs you only**: a row moving on the user's pick would move under the step keys.
+- **Recency from arrival only**: a row moving on the user's pick would move under the step keys, and one moving on
+  its activity would shift the list while the user reads it.
 - **Hand order only in Favorites**: one rule — favorites are what the user orders, the rest orders itself — over
   pinned groups that silently stop following recency.
 

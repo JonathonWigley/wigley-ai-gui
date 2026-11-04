@@ -3,11 +3,11 @@
 **Contents**
 
 - **Status** — what is built now and what it waits on.
-- **Vocabulary** — flow, stage, signal, main action.
+- **Vocabulary** — flow, stage, status, signal, main action.
 - **Stages** — each stage: when a session enters it, what it shows, and its actions.
 - **Stage modules** — one folder per stage, registered through `addStage`, and how to change the workflow.
 - **Signals** — the agent events and session events the flow folds.
-- **Where it draws** — the row chip, the composer strip and the Flow tab.
+- **Where it draws** — the row chip, the composer strip and the side pane.
 - **Auto-start** — the setting that starts Clear & make by itself, and its countdown.
 - **Keys** — the `<Leader>w` group.
 - **Decisions** — choices a future change would otherwise reopen.
@@ -31,20 +31,23 @@ Built, in `src/plugins/workflow/`, on the clear, the agent events and the row pa
   holds one flow per session and keeps it in the plugin data.
 - **Stage** — one step of the workflow, one stage module (§ Stage modules). Chat's **step** (a tool, thinking or raw
   entry) and the tower's **plan step** are different things.
+- **Status** — what a stage is doing now: running, paused, ready or done. A step not reached is pending.
 - **Signal** — one input the flow folds: an agent event, a clear, or a plan folder change (§ Signals).
-- **Main action** — the one action of a stage that `ww` runs, first in the stage's buttons on the strip and the Flow tab.
+- **Main action** — the one action of a stage that `ww` runs, first in the stage's buttons on the strip and the side pane.
 
 ## Stages
 
-| Stage | A session enters it when | Shows | Actions (main action first) |
-|---|---|---|---|
-| idle | it starts; Dismiss on closed; Make in new session hands its plan away | nothing on the row or the strip | none: a feature starts from its skill call |
-| primer | `wigley:feature-primer` starts | the stage | none |
-| feature | `wigley:feature` starts | the stage, and the plan's name once one is written | Open plan, once a plan is written |
-| plan ready | in feature, a turn ends or the plan changes while the session's `plan-*/plan.md` holds a box under Tasks and no turn or subagent runs | the plan's name and task count | Clear & make (Cancel during the countdown), Make in new session, Open plan |
-| make | `wigley:make` starts | ticked over total, the current wave | Resume make, Open plan |
-| review | `wigley:review` starts in make, or the plan's Run log gains a review round logged after make started (Resume make from review stays in make until the next round) | the review round, ticked over total | Resume make, Open plan |
-| closed | in make or review, a plan folder that was read goes missing (`wigley:make` naming a folder not written yet waits in make for its `plan.md`) | the plan's name, done | Retro, Dismiss |
+| Stage | A session enters it when | Label and status | Status line | Actions (main action first) |
+|---|---|---|---|---|
+| idle | it starts; Dismiss on closed; Make in new session hands its plan away | none: nothing draws | none | none: a feature starts from its skill call |
+| primer | `wigley:feature-primer` starts | Primer, running or paused | `Primer · running` | none |
+| feature | `wigley:feature` starts | Feature, running or paused | `Feature · paused` | Open plan, once a plan is written |
+| plan ready | in feature, a turn ends or the plan changes while the session's `plan-*/plan.md` holds a box under Tasks and no turn or subagent runs | Make, ready | `Make · ready` | Clear & make (Cancel during the countdown), Make in new session, Open plan |
+| make | `wigley:make` starts | Make, running or paused | `Make · running 3/9` | Resume make, Open plan |
+| review | `wigley:review` starts in make, or the plan's Run log gains a review round logged after make started (Resume make from review stays in make until the next round) | Review, running or paused | `Review · running · round 2` | Resume make, Open plan |
+| closed | in make or review, a plan folder that was read goes missing (`wigley:make` naming a folder not written yet waits in make for its `plan.md`) | Close, done | `Close · done · 9/9` | Retro, Dismiss |
+
+Running means the flow is busy: a turn or a main-agent subagent runs. Paused means it is not. A crash and an agent waiting on an answer both read as paused, and the row's attention dot marks a waiting round.
 
 - **Clear & make** clears the session (the row and its tabs stay, a new conversation starts) and sends
   `/wigley:make <plan folder>`. It is disabled while the session is busy: a turn or a main-agent subagent runs.
@@ -66,8 +69,8 @@ plan, since `wigley:feature` drafts the plan in a subagent. Any other skill or w
 
 - `main.ts` — the stage's entry rule, a pure function of the flow and a signal, and its main-side actions (a send, a
   clear, a launch)
-- `page.ts` — its label, what the row chip and the strip show, and its page-side actions (fill the composer, open the
-  plan)
+- `page.ts` — its label, its status, its status line, what the strip and the side pane show, and its page-side actions
+  (fill the composer, open the plan)
 
 Each half registers through the workflow plugin's `addStage` export in its process; the built-in stages register the
 same way a user plugin would. Each action names a command; `stages/index.ts` lists the commands (`WORKFLOW_COMMANDS`)
@@ -116,14 +119,26 @@ turn that ended while the app was closed, folds as usual. A flow saved without t
 
 Everything draws through the `workflow` layout, its built-in `default`, and the preview on `Space z l w`.
 
-- **Row chip** — a row part (sessions' `addRowPart`): the built-in layout draws the stage as an accent tag and the
-  countdown. A user layout can also draw the progress and the main action's button, which the chip's input carries.
-  Idle draws nothing.
-- **Composer strip** — a part above the Chat composer (chat's `addComposerPart`): the stepper, with the current stage
-  lit, and the stage's buttons. Primer and feature share one step: the one the session is in, otherwise feature. Idle draws nothing.
-- **Flow tab** — a session tab (`addTab`) added when the session first leaves idle, kept from then on: the stepper,
-  the plan's checklist by wave, and every action of the stage. It sets no status line: the row chip already shows the
-  stage.
+- **Row chip** — a row part (sessions' `addRowPart`): the built-in layout draws the label and status as one accent tag
+  (`Make · running`) and the countdown. A user layout can also draw the progress and the main action's button, which
+  the chip's input carries. Idle draws nothing.
+- **Composer strip** — a part above the Chat composer (chat's `addComposerPart`): the status mark, the status line, the
+  countdown and the main action. It draws the stepper only until the session has a plan. After that the side pane holds
+  the stepper, the detail and the other actions, so a hidden pane leaves the status line, the main action and the
+  `Space w` keys. Idle draws nothing.
+- **Side pane** — a part beside the Chat tab's transcript (chat's `addSidePart`), from the first read of a plan until
+  Dismiss or a new plan: the status line, the plan's title and detail, the stepper, a progress bar, the checklist and
+  every action of the stage. The checklist folds finished waves into one row, shows the current wave in full, and shows
+  each later wave as one line. The current wave's open tasks show running or paused only in make, because the plan file
+  does not say which task an agent works on.
+
+  `<Leader>ws` shows or hides the pane in every session, and the choice survives a relaunch. The pane also hides while
+  the Chat tab is narrower than 640 px, set in the chat layout's CSS, so the transcript keeps a readable width in a
+  split. The pane takes no keyboard focus, so `Alt+h/j/k/l` still moves between chat panes, and its list scrolls with
+  the mouse.
+
+Primer and feature share one step: the one the session is in, otherwise feature. Plan ready and make share the Make
+step. Each step reads its label, then its status or `pending`, and draws one mark per status.
 
 ## Auto-start
 
@@ -134,7 +149,7 @@ read a replayed turn end causes, until a live turn starts or ends.
 
 ## Keys
 
-The `<Leader>w` group (which-key: workflow), each anchored on the strip and the Flow tab:
+The `<Leader>w` group (which-key: workflow), each action's key anchored on its button:
 
 | Keys | Command |
 |---|---|
@@ -144,9 +159,10 @@ The `<Leader>w` group (which-key: workflow), each anchored on the strip and the 
 | `<Leader>wo` | Open plan |
 | `<Leader>wt` | Retro |
 | `<Leader>wd` | Dismiss |
+| `<Leader>ws` | Show or hide the side pane, in every session |
+| `<Leader>wf` | Open or fold the selected session's finished waves |
 
-In the Flow tab (scope `workflow.flow`), `<C-j>` and `<C-k>` scroll a line, and `<C-S-j>` and `<C-S-k>` scroll half a
-page. The layout preview opens on `<Leader>zlw`.
+The layout preview opens on `<Leader>zlw`.
 
 ## Decisions
 
@@ -158,6 +174,10 @@ page. The layout preview opens on `<Leader>zlw`.
   the chat box.
 - **Agent events, not chat entries.** Detection reads `AgentEvent` so a Codex or wigley-harness adapter drives the
   flow unchanged; `toolStarted` carries only the tool's name, no input, so skills and writes get members of their own.
+- **One checklist.** The side pane replaced a Flow tab that drew the same stepper, checklist and actions; a second copy
+  added upkeep and showed nothing new. Open plan shows the whole plan.
+- **Review rounds stay a count.** The Run log gives the number of logged rounds, so the status line names the round and
+  the checklist draws no row per round.
 - **A plan reader of its own.** Backlog reads only plan titles, and the docs index's counts carry no waves or Run log.
 
 ## Out of scope
