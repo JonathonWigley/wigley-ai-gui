@@ -17,8 +17,8 @@
   position: relative;
 }
 
-/* The side parts' holder keeps the tab's height, and a holder with no content
-   in any wrapper takes no space. */
+/* The side parts' holder keeps the tab's height; a holder with no content in
+   any wrapper and a wrapper with no content each take no space. */
 .chat-side-parts {
   align-self: stretch;
   display: flex;
@@ -34,6 +34,10 @@
 .chat-side-part {
   flex: 1;
   min-height: 0;
+}
+
+.chat-side-part:empty {
+  display: none;
 }
 
 .chat-entries {

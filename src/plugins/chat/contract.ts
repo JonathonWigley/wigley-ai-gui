@@ -450,10 +450,12 @@ export interface ChatSidePart {
 // redraws into its wrapper itself when its content changes; it draws in every
 // Chat tab, the preview's included.
 // `addSidePart` throws on an id already added; a side part draws in every Chat
-// tab, the preview's included. It is built when its tab is built and again in
-// every tab when a side part is added or removed, not at a composer draw, and
-// a closed tab disposes it; a part whose content changes redraws into its
-// wrapper itself.
+// tab, the preview's included, in the order the parts were added. It is built
+// once per tab, when it is added or its tab is built, and disposed when it is
+// removed or its tab closes. Adding or removing another side part and a composer
+// draw each leave it and its wrapper as they are, so a part whose content changes
+// redraws into its wrapper itself. A part whose build throws is logged and stays
+// unbuilt in that tab until it is added again.
 // `focusedEntry` is the visible Chat tab's focused stop's slot element (an
 // entry, an activity line or a pending row); null with no visible Chat tab, no
 // focused stop, or while a composer part's stop holds the cursor.

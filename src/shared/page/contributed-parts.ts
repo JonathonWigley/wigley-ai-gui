@@ -70,12 +70,9 @@ export interface ContributedPartsPlace {
   wrapperClass: string;
 }
 
-// A `div` of `place.holderClass` at the end of `parent`, holding one `div` of
-// `place.wrapperClass` (`data-part="<id>"`) per part, in add order, each built
-// into its wrapper for `sessionId`. Each built part's dispose is recorded on
-// `rollback`, so it runs before the surface draws again; a dispose that throws
-// is logged and the rest still run. A part whose build throws is logged and
-// its wrapper removed; the rest still draw.
+// A `div` of `place.holderClass` at the end of `parent`, holding one wrapper per
+// part from `placeContributedPart`, in add order; a part whose build throws
+// leaves none, and the rest still draw.
 export function placeContributedParts(
   parent: HTMLElement,
   sessionId: string,
@@ -87,25 +84,43 @@ export function placeContributedParts(
   const holder = element('div', place.holderClass);
   parent.append(holder);
   for (const part of parts) {
-    const wrapper = element('div', place.wrapperClass);
-    wrapper.dataset.part = part.id;
-    holder.append(wrapper);
-    try {
-      const built = part.build(wrapper, sessionId);
-      rollback.recordBox(() => {
-        try {
-          built.dispose?.();
-        } catch (error) {
-          log(
-            place.owner,
-            `${place.noun} ${part.id} dispose failed: ${errorText(error)}`,
-          );
-        }
-      });
-    } catch (error) {
-      wrapper.remove();
-      log(place.owner, `${place.noun} ${part.id} failed: ${errorText(error)}`);
-    }
+    placeContributedPart(holder, sessionId, part, place, log, rollback);
   }
   return holder;
+}
+
+// A `div` of `place.wrapperClass` (`data-part="<id>"`) at the end of `parent`,
+// with `part` built into it for `sessionId`. The part's dispose is recorded on
+// `rollback`, so it runs before the surface draws again; a dispose that throws
+// is logged and the rest still run. A part whose build throws is logged and its
+// wrapper removed, and the result is null.
+export function placeContributedPart(
+  parent: HTMLElement,
+  sessionId: string,
+  part: ContributedPart,
+  place: ContributedPartsPlace,
+  log: Log,
+  rollback: PartRollback,
+): HTMLElement | null {
+  const wrapper = element('div', place.wrapperClass);
+  wrapper.dataset.part = part.id;
+  parent.append(wrapper);
+  try {
+    const built = part.build(wrapper, sessionId);
+    rollback.recordBox(() => {
+      try {
+        built.dispose?.();
+      } catch (error) {
+        log(
+          place.owner,
+          `${place.noun} ${part.id} dispose failed: ${errorText(error)}`,
+        );
+      }
+    });
+    return wrapper;
+  } catch (error) {
+    wrapper.remove();
+    log(place.owner, `${place.noun} ${part.id} failed: ${errorText(error)}`);
+    return null;
+  }
 }

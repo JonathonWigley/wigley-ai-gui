@@ -12,6 +12,7 @@ import {
 import { createPartStore } from '../../../shared/page/contributed-parts';
 import type {
   ChatChannel,
+  ChatComposerPart,
   ChatSessionState,
   ChatSidePart,
   ReturnedMessage,
@@ -60,8 +61,9 @@ const returnedTwo: ReturnedMessage = {
 // A mounted view whose `sessions` call waits for `answerSessions`; `emit` sends
 // it a message from main, `box` is the one tab's box text, null before a tab
 // mounts, `tab` its element, `tabElements` each session's tab element, and
-// `invoked` holds each other call to main. `sideParts` is the view's side part
-// store, and `removeSession` closes a session's tab as the sessions plugin does.
+// `invoked` holds each other call to main. `sideParts` and `composerParts` are
+// the view's part stores, and `removeSession` closes a session's tab as the
+// sessions plugin does.
 function mounted(
   firstActiveTimeListener: (
     sessionId: string,
@@ -75,6 +77,7 @@ function mounted(
   const tab = { element: null as FakeElement | null };
   const tabElements = new Map<string, FakeElement>();
   const sideParts = createPartStore<ChatSidePart>();
+  const composerParts = createPartStore<ChatComposerPart>();
   let answerSessions: (states: ChatSessionState[]) => void = () => undefined;
   const channel = {
     on(message: string, listener: (data: unknown) => void) {
@@ -143,7 +146,7 @@ function mounted(
       },
     },
     layouts: createChatLayouts(log),
-    composerParts: createPartStore(),
+    composerParts,
     statusParts: createPartStore(),
     sideParts,
     markdown: {},
@@ -165,6 +168,7 @@ function mounted(
     tab,
     tabElements,
     sideParts,
+    composerParts,
     invoked,
     logs,
     emit: <K extends keyof ChatChannel['messages']>(
@@ -240,43 +244,117 @@ describe('mountChatView side parts', () => {
     await view.answerSessions([stateOf([], { sessionId: 'row-1' })]);
     const built: string[] = [];
     const disposed: string[] = [];
-    const part: ChatSidePart = {
-      id: 'side',
+    const partOf = (id: string): ChatSidePart => ({
+      id,
       build(parent, sessionId) {
-        built.push(sessionId);
-        parent.textContent = sessionId;
-        return { dispose: () => disposed.push(sessionId) };
+        built.push(`${id} ${sessionId}`);
+        parent.textContent = `${id} ${sessionId}`;
+        return { dispose: () => disposed.push(`${id} ${sessionId}`) };
       },
-    };
+    });
+    const tabChildren = (sessionId: string) =>
+      (view.tabElements.get(sessionId) as FakeElement).children;
+    const wrappers = (sessionId: string) => tabChildren(sessionId)[1].children;
     const wrapperTexts = (sessionId: string) =>
-      findAll(
-        view.tabElements.get(sessionId) as FakeElement,
-        'chat-side-part',
-      ).map((wrapper) => wrapper.textContent);
+      wrappers(sessionId).map((wrapper) => wrapper.textContent);
 
-    const added = view.sideParts.add(part);
+    const first = view.sideParts.add(partOf('first'));
     view.emit('sessionStarted', stateOf([], { sessionId: 'row-2' }));
 
-    expect(built).toEqual(['row-1', 'row-2']);
-    expect(wrapperTexts('row-1')).toEqual(['row-1']);
-    expect(wrapperTexts('row-2')).toEqual(['row-2']);
+    expect(tabChildren('row-1').map((child) => child.className)).toEqual([
+      'chat-main',
+      'chat-side-parts',
+    ]);
+    expect(findAll(tabChildren('row-1')[0], 'chat-working-slot')).toHaveLength(
+      1,
+    );
+    expect(built).toEqual(['first row-1', 'first row-2']);
+    expect(wrapperTexts('row-1')).toEqual(['first row-1']);
+    expect(wrapperTexts('row-2')).toEqual(['first row-2']);
     expect(disposed).toEqual([]);
+    const firstWrapper = wrappers('row-1')[0];
 
-    added.dispose();
+    const composerPart = view.composerParts.add({
+      id: 'above-the-box',
+      build: () => ({}),
+    });
 
-    expect(disposed).toEqual(['row-1', 'row-2']);
-    expect(wrapperTexts('row-1')).toEqual([]);
-    expect(wrapperTexts('row-2')).toEqual([]);
+    expect(findAll(tabChildren('row-1')[0], 'chat-composer-part')).toHaveLength(
+      1,
+    );
+    expect(built).toEqual(['first row-1', 'first row-2']);
+    expect(disposed).toEqual([]);
+    composerPart.dispose();
+
+    const second = view.sideParts.add(partOf('second'));
+
+    expect(built).toEqual([
+      'first row-1',
+      'first row-2',
+      'second row-1',
+      'second row-2',
+    ]);
+    expect(disposed).toEqual([]);
+    expect(wrapperTexts('row-1')).toEqual(['first row-1', 'second row-1']);
+    expect(wrappers('row-1')[0]).toBe(firstWrapper);
+
+    built.length = 0;
+    first.dispose();
+
+    expect(built).toEqual([]);
+    expect(disposed).toEqual(['first row-1', 'first row-2']);
+    expect(wrapperTexts('row-1')).toEqual(['second row-1']);
+    expect(wrapperTexts('row-2')).toEqual(['second row-2']);
 
     disposed.length = 0;
-    const addedAgain = view.sideParts.add(part);
+    const firstAgain = view.sideParts.add(partOf('first'));
+
+    expect(disposed).toEqual([]);
+    expect(wrapperTexts('row-2')).toEqual(['second row-2', 'first row-2']);
+
     view.removeSession('row-1');
 
-    expect(disposed).toEqual(['row-1']);
+    expect(disposed).toEqual(['second row-1', 'first row-1']);
 
-    addedAgain.dispose();
+    disposed.length = 0;
+    second.dispose();
+    firstAgain.dispose();
 
-    expect(disposed).toEqual(['row-1', 'row-2']);
+    expect(disposed).toEqual(['second row-2', 'first row-2']);
+    expect(wrapperTexts('row-2')).toEqual([]);
+  });
+
+  it('a side part whose build throws stays unbuilt in its tab until it is added again', async () => {
+    const view = mounted();
+    await view.answerSessions([stateOf([], { sessionId: 'row-1' })]);
+    let attempts = 0;
+    const failing: ChatSidePart = {
+      id: 'failing',
+      build() {
+        attempts += 1;
+        throw new Error('build failed');
+      },
+    };
+    const holder = () =>
+      (view.tabElements.get('row-1') as FakeElement).children[1];
+
+    const added = view.sideParts.add(failing);
+    const other = view.sideParts.add({
+      id: 'other',
+      build: () => ({}),
+    });
+
+    expect(attempts).toBe(1);
+    expect(holder().children.map((wrapper) => wrapper.dataset.part)).toEqual([
+      'other',
+    ]);
+
+    added.dispose();
+    view.sideParts.add(failing);
+
+    expect(attempts).toBe(2);
+    other.dispose();
+    expect(attempts).toBe(2);
   });
 });
 
