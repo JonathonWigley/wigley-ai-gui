@@ -59,10 +59,18 @@ function fixture(transfer: FakeTransfer = fakeTransfer()) {
   const named = { list, bin, empty, a, b, c, x };
   const drops: ReorderDrop[] = [];
   const counts = { started: 0, ended: 0, prevented: 0 };
+  // What a row's view does inside an event, after the fixture has counted it.
+  const hooks: { dropped?: () => void; ended?: () => void } = {};
   const reorder = createDragReorder({
-    dropped: (drop) => drops.push(drop),
+    dropped(drop) {
+      drops.push(drop);
+      hooks.dropped?.();
+    },
     started: () => counts.started++,
-    ended: () => counts.ended++,
+    ended() {
+      counts.ended++;
+      hooks.ended?.();
+    },
   });
   reorder.zone(asHtml(list), 'list', { ordered: true });
   reorder.zone(asHtml(bin), 'bin', { ordered: false });
@@ -89,9 +97,15 @@ function fixture(transfer: FakeTransfer = fakeTransfer()) {
     reorder,
     drops,
     counts,
+    hooks,
     transfer,
     fire,
     start: (node: FakeElement) => fire(node, 'dragstart'),
+    press() {
+      for (const listener of pressListeners) {
+        listener();
+      }
+    },
     over: (zone: FakeElement, clientY: number) =>
       fire(zone, 'dragover', { clientY }),
     drop: (zone: FakeElement, clientY: number) =>
@@ -108,14 +122,45 @@ function fixture(transfer: FakeTransfer = fakeTransfer()) {
 
 type Fixture = ReturnType<typeof fixture>;
 
+// A view's redraw: `clear`, then register what it drew, here `list` holding a.
+function redrawList(fx: Fixture) {
+  fx.reorder.clear();
+  fx.reorder.zone(asHtml(fx.list), 'list', { ordered: true });
+  fx.reorder.item(asHtml(fx.a), asHtml(fx.a), 'a', 'list');
+}
+
 const OWN_TRAFFIC = {
   types: ['application/x-wigley-reorder'],
   effectAllowed: 'move',
   dropEffect: 'move',
 };
 
+// The drag's own transfer once it has started, with nothing yet hovered.
+const STARTED_TRAFFIC = {
+  types: ['application/x-wigley-reorder'],
+  effectAllowed: 'move',
+  dropEffect: '',
+};
+
+// The capture-phase `pointerdown` listeners on `window`, each held once and
+// removed only by its own phase, as a browser does.
+let pressListeners: Set<() => void>;
+
 beforeEach(() => {
   installFakeDom(vi.stubGlobal);
+  pressListeners = new Set();
+  vi.stubGlobal('window', {
+    addEventListener(type: string, listener: () => void, capture?: boolean) {
+      if (type === 'pointerdown' && capture === true) {
+        pressListeners.add(listener);
+      }
+    },
+    removeEventListener(type: string, listener: () => void, capture?: boolean) {
+      if (type === 'pointerdown' && capture === true) {
+        pressListeners.delete(listener);
+      }
+    },
+  });
 });
 
 afterEach(() => {
@@ -349,6 +394,84 @@ describe('createDragReorder', () => {
       traffic: OWN_TRAFFIC,
     },
     {
+      name: 'a press in the window ends a drag whose dragend never came',
+      steps(fx) {
+        fx.start(fx.a);
+        fx.over(fx.list, 40);
+        fx.press();
+      },
+      marks: [],
+      drops: [],
+      started: 1,
+      ended: 1,
+      isDragging: false,
+      isPrevented: true,
+      traffic: OWN_TRAFFIC,
+    },
+    {
+      name: 'a second dragstart after no dragend ends the first and runs',
+      steps(fx) {
+        fx.fire(fx.a, 'dragstart', { dataTransfer: fakeTransfer() });
+        fx.start(fx.b);
+      },
+      marks: ['b is-dragging'],
+      drops: [],
+      started: 2,
+      ended: 1,
+      isDragging: true,
+      isPrevented: false,
+      traffic: STARTED_TRAFFIC,
+    },
+    {
+      name: 'a second dragstart is cancelled when ending the first redrew its item away',
+      steps(fx) {
+        fx.hooks.ended = () => redrawList(fx);
+        fx.fire(fx.a, 'dragstart', { dataTransfer: fakeTransfer() });
+        fx.start(fx.b);
+      },
+      marks: [],
+      drops: [],
+      started: 1,
+      ended: 1,
+      isDragging: false,
+      isPrevented: true,
+      traffic: { types: [], effectAllowed: '', dropEffect: '' },
+    },
+    {
+      name: 'dropped may redraw: the drop stands and ended runs once',
+      steps(fx) {
+        fx.hooks.dropped = () => redrawList(fx);
+        fx.start(fx.a);
+        fx.over(fx.list, 40);
+        fx.drop(fx.list, 40);
+        fx.fire(fx.a, 'dragend');
+      },
+      marks: [],
+      drops: [{ key: 'a', zone: 'list', index: 1 }],
+      started: 1,
+      ended: 1,
+      isDragging: false,
+      isPrevented: true,
+      traffic: OWN_TRAFFIC,
+    },
+    {
+      name: 'ended may clear and register: what it drew takes the next drag',
+      steps(fx) {
+        fx.hooks.ended = () => redrawList(fx);
+        fx.fire(fx.a, 'dragstart', { dataTransfer: fakeTransfer() });
+        fx.fire(fx.a, 'dragend');
+        fx.start(fx.a);
+        fx.over(fx.list, 5);
+      },
+      marks: ['a is-dragging', 'list is-drop-target'],
+      drops: [],
+      started: 2,
+      ended: 1,
+      isDragging: true,
+      isPrevented: true,
+      traffic: OWN_TRAFFIC,
+    },
+    {
       name: 'clear ends the drag, and a drop on a zone drawn again reports nothing',
       steps(fx) {
         fx.start(fx.a);
@@ -371,6 +494,8 @@ describe('createDragReorder', () => {
         fx.start(fx.a);
         fx.reorder.clear();
         expect(asHtml(fx.a).draggable).toBe(false);
+        expect(fx.a.classList.contains('ui-drag-reorder-item')).toBe(false);
+        expect(fx.list.classList.contains('ui-drag-reorder-zone')).toBe(false);
         fx.start(fx.a);
       },
       marks: [],
@@ -379,11 +504,7 @@ describe('createDragReorder', () => {
       ended: 1,
       isDragging: false,
       isPrevented: false,
-      traffic: {
-        types: ['application/x-wigley-reorder'],
-        effectAllowed: 'move',
-        dropEffect: '',
-      },
+      traffic: STARTED_TRAFFIC,
     },
     {
       name: 'dispose ends the drag as clear does',
@@ -401,9 +522,11 @@ describe('createDragReorder', () => {
       isPrevented: true,
       traffic: OWN_TRAFFIC,
     },
-  ])('dragReorder_actsOnOwnDragsOnly: $name', (row) => {
+  ])('dragReorder_followsItsDrag: $name', (row) => {
     const fx = fixture(row.transfer?.());
     expect(asHtml(fx.a).draggable).toBe(true);
+    expect(fx.a.classList.contains('ui-drag-reorder-item')).toBe(true);
+    expect(fx.list.classList.contains('ui-drag-reorder-zone')).toBe(true);
 
     row.steps(fx);
 
@@ -412,6 +535,7 @@ describe('createDragReorder', () => {
     expect(fx.counts.started).toBe(row.started);
     expect(fx.counts.ended).toBe(row.ended);
     expect(fx.reorder.isDragging()).toBe(row.isDragging);
+    expect(pressListeners.size > 0).toBe(row.isDragging);
     expect(fx.counts.prevented > 0).toBe(row.isPrevented);
     expect({
       types: fx.transfer.types,

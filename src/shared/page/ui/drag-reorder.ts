@@ -15,9 +15,9 @@ export interface ReorderDrop {
 
 // `started` runs inside `dragstart`, where a layout change can cancel the drag
 // in Chromium, so a view defers one. `dropped` may call `clear` to redraw.
-// `ended` runs once per drag, after `dropped`. A drag `clear` ended has no
-// registrations left by then; after a drop or `dragend` they stand, so `ended`
-// calls `clear` before it registers again.
+// `ended` runs once per drag, after `dropped`, or inside it when `dropped` calls
+// `clear`. A drag `clear` ended has no registrations left by then; after any
+// other end they stand, so `ended` calls `clear` before it registers again.
 export interface DragReorderEvents {
   dropped(drop: ReorderDrop): void;
   started(): void;
@@ -28,7 +28,10 @@ export interface DragReorderEvents {
 // view's to change. Each item lies inside its zone's element and items are
 // registered in drawn order, top to bottom; zones do not nest. `clear` undoes
 // every registration and ends a running drag, so a view calls it before it
-// redraws; `dispose` does the same when the view drops the primitive.
+// redraws; `dispose` does the same when the view drops the primitive. A drag
+// whose `dragend` never comes ends at the next press in the window, listened
+// for only while a drag runs, or at the next `dragstart`, which is cancelled
+// when `ended` redrew its item away.
 export interface DragReorder {
   zone(
     element: HTMLElement,
@@ -154,6 +157,7 @@ export function createDragReorder(events: DragReorderEvents): DragReorder {
     if (dragged === null) {
       return;
     }
+    window.removeEventListener('pointerdown', endDrag, true);
     dragged.element.classList.remove('is-dragging');
     dragged = null;
     showMark(null);
@@ -166,11 +170,18 @@ export function createDragReorder(events: DragReorderEvents): DragReorder {
       return;
     }
     endDrag();
+    if (!items.includes(item)) {
+      event.preventDefault();
+      return;
+    }
     const transfer = event.dataTransfer!;
     transfer.setData(REORDER_TYPE, item.key);
     transfer.effectAllowed = 'move';
     item.element.classList.add('is-dragging');
     dragged = item;
+    // A native drag fires no `pointerdown`, and its own press came before
+    // `dragstart`.
+    window.addEventListener('pointerdown', endDrag, true);
     events.started();
   };
 
