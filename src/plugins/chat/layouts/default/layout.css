@@ -1,6 +1,7 @@
 /* The default Chat layout's look: entry text, the compaction divider, activity
    lines, the activity dock, queued messages, permission heads, the composer
-   and its status line, and the dialog and image viewer parts. */
+   and its status line, the dialog and image viewer parts, and the width below
+   which a Chat tab drops its side parts. */
 .chat-assistant {
   color: var(--wg-fg);
 }
@@ -322,4 +323,11 @@
 
 .chat-image-viewer-count[hidden] {
   display: none;
+}
+
+/* A tab too narrow for its entries beside its side parts shows the entries. */
+@container chat-tab (width < 640px) {
+  .chat-side-parts {
+    display: none;
+  }
 }

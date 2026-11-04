@@ -418,6 +418,13 @@ export interface ChatStatusPart {
   build(parent: HTMLElement, sessionId: string): { dispose?(): void };
 }
 
+// What a plugin draws beside every Chat tab's entries and composer: chat hands
+// it a wrapper and the tab's session id. It takes no stop and no key scope.
+export interface ChatSidePart {
+  id: string;
+  build(parent: HTMLElement, sessionId: string): { dispose?(): void };
+}
+
 // The page part's exports. `addSlashCommand` registers an app slash command
 // until its `dispose`, and throws when the name is already registered.
 // `fillComposer` replaces the session's draft, leaving its attached images,
@@ -433,6 +440,11 @@ export interface ChatStatusPart {
 // Chat tab's composer again; a status part is built at each composer draw and
 // redraws into its wrapper itself when its content changes; it draws in every
 // Chat tab, the preview's included.
+// `addSidePart` throws on an id already added; a side part draws in every Chat
+// tab, the preview's included. It is built when its tab is built and again in
+// every tab when a side part is added or removed, not at a composer draw, and
+// a closed tab disposes it; a part whose content changes redraws into its
+// wrapper itself.
 // `focusedEntry` is the visible Chat tab's focused stop's slot element (an
 // entry, an activity line or a pending row); null with no visible Chat tab, no
 // focused stop, or while a composer part's stop holds the cursor.
@@ -441,5 +453,6 @@ export interface ChatPageExports {
   fillComposer(sessionId: string, text: string): void;
   addComposerPart(part: ChatComposerPart): Disposable;
   addStatusPart(part: ChatStatusPart): Disposable;
+  addSidePart(part: ChatSidePart): Disposable;
   focusedEntry(): HTMLElement | null;
 }

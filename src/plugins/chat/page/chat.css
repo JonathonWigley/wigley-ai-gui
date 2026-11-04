@@ -1,10 +1,39 @@
-/* A session's Chat tab fills its session's sheet: the entries scroll under
-   the floating composer, which `chat-view.ts` measures into
-   `--chat-composer-height` (unitless pixels) so the last entry stops above
-   it. */
+/* A session's Chat tab fills its session's sheet: a row of `.chat-main` and
+   other plugins' side parts, as a container for width rules. In `.chat-main`
+   the entries scroll under the floating composer, which `chat-view.ts` measures
+   into `--chat-composer-height` (unitless pixels) on the tab so the last entry
+   stops above it. */
 .chat-tab {
+  container-name: chat-tab;
+  container-type: inline-size;
+  display: flex;
   height: 100%;
+}
+
+.chat-main {
+  flex: 1;
+  height: 100%;
+  min-width: 0;
   position: relative;
+}
+
+/* The side parts' holder keeps the tab's height, and a holder with no content
+   in any wrapper takes no space. */
+.chat-side-parts {
+  align-self: stretch;
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.chat-side-parts:not(:has(.chat-side-part:not(:empty))) {
+  display: none;
+}
+
+.chat-side-part {
+  flex: 1;
+  min-height: 0;
 }
 
 .chat-entries {

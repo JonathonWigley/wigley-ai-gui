@@ -11,6 +11,7 @@ import { createPartStore } from '../../../shared/page/contributed-parts';
 import type {
   ChatChannel,
   ChatSessionState,
+  ChatSidePart,
   ReturnedMessage,
   SessionCompaction,
 } from '../contract';
@@ -55,13 +56,18 @@ const returnedTwo: ReturnedMessage = {
 
 // A mounted view whose `sessions` call waits for `answerSessions`; `emit` sends
 // it a message from main, `box` is the one tab's box text, null before a tab
-// mounts, `tab` its element, and `invoked` holds each other call to main.
+// mounts, `tab` its element, `tabElements` each session's tab element, and
+// `invoked` holds each other call to main. `sideParts` is the view's side part
+// store, and `removeSession` closes a session's tab as the sessions plugin does.
 function mounted() {
   const listeners = new Map<string, (data: unknown) => void>();
   const invoked: unknown[][] = [];
   const logs: string[] = [];
   const box = { text: null as string | null };
   const tab = { element: null as FakeElement | null };
+  const tabElements = new Map<string, FakeElement>();
+  const sideParts = createPartStore<ChatSidePart>();
+  let removeSession: (sessionId: string) => void = () => undefined;
   let answerSessions: (states: ChatSessionState[]) => void = () => undefined;
   const channel = {
     on(message: string, listener: (data: unknown) => void) {
@@ -84,8 +90,9 @@ function mounted() {
     channel,
     paths: { base: () => 'app' },
     sessions: {
-      addTab: (_sessionId: string, added: { element: HTMLElement }) => {
+      addTab: (sessionId: string, added: { element: HTMLElement }) => {
         tab.element = asFake(added.element);
+        tabElements.set(sessionId, tab.element);
         return {
           setStatus: noEvent,
           select: noEvent,
@@ -99,7 +106,9 @@ function mounted() {
       setActivity: noEvent,
       selectedSessionId: () => null,
     },
-    onSessionRemoved: noEvent,
+    onSessionRemoved: (listener: (sessionId: string) => void) => {
+      removeSession = listener;
+    },
     onActiveChanged: noEvent,
     onSessionHostChanged: noEvent,
     onScopeChanged: noEvent,
@@ -111,12 +120,14 @@ function mounted() {
           setText: (next: string) => {
             box.text = next;
           },
+          destroy: noEvent,
         } as unknown as TextEditor;
       },
     },
     layouts: createChatLayouts(log),
     composerParts: createPartStore(),
     statusParts: createPartStore(),
+    sideParts,
     markdown: {},
     keys: { anchor: () => ({ dispose: noEvent }), keysFor: () => null },
     commands: { exists: () => true, run: noEvent },
@@ -130,8 +141,11 @@ function mounted() {
   return {
     box,
     tab,
+    tabElements,
+    sideParts,
     invoked,
     logs,
+    removeSession: (sessionId: string) => removeSession(sessionId),
     emit: <K extends keyof ChatChannel['messages']>(
       message: K,
       data: ChatChannel['messages'][K],
@@ -191,6 +205,57 @@ describe('mountChatView returned messages', () => {
 
     expect(view.box.text).toBe('one\ntwo');
     expect(view.invoked).toEqual(PLACED_BOTH);
+  });
+});
+
+describe('mountChatView side parts', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('side parts build per tab, leave with their part, and dispose with their tab', async () => {
+    const view = mounted();
+    await view.answerSessions([stateOf([], { sessionId: 'row-1' })]);
+    const built: string[] = [];
+    const disposed: string[] = [];
+    const part: ChatSidePart = {
+      id: 'side',
+      build(parent, sessionId) {
+        built.push(sessionId);
+        parent.textContent = sessionId;
+        return { dispose: () => disposed.push(sessionId) };
+      },
+    };
+    const wrapperTexts = (sessionId: string) =>
+      findAll(
+        view.tabElements.get(sessionId) as FakeElement,
+        'chat-side-part',
+      ).map((wrapper) => wrapper.textContent);
+
+    const added = view.sideParts.add(part);
+    view.emit('sessionStarted', stateOf([], { sessionId: 'row-2' }));
+
+    expect(built).toEqual(['row-1', 'row-2']);
+    expect(wrapperTexts('row-1')).toEqual(['row-1']);
+    expect(wrapperTexts('row-2')).toEqual(['row-2']);
+    expect(disposed).toEqual([]);
+
+    added.dispose();
+
+    expect(disposed).toEqual(['row-1', 'row-2']);
+    expect(wrapperTexts('row-1')).toEqual([]);
+    expect(wrapperTexts('row-2')).toEqual([]);
+
+    disposed.length = 0;
+    const addedAgain = view.sideParts.add(part);
+    view.removeSession('row-1');
+
+    expect(disposed).toEqual(['row-1']);
+
+    addedAgain.dispose();
+
+    expect(disposed).toEqual(['row-1', 'row-2']);
   });
 });
 

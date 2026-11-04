@@ -16,6 +16,7 @@ import type {
   ChatChannel,
   ChatComposerPart,
   ChatPageExports,
+  ChatSidePart,
   ChatStatusPart,
 } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
@@ -58,7 +59,8 @@ type ChatApi = PageApi<
 // the box.
 // Sending `/login`, `/logout`, `/status` or another app slash command runs it
 // in the page in place of sending it; the exports register more, fill a
-// session's box, and add parts above every composer. Images
+// session's box, and add parts above every composer and beside every tab's
+// entries. Images
 // pasted or dropped into a Chat tab attach to its next message, other files go
 // into the box as file chips, and a sent message's images open full size in
 // the image viewer. The picker, the deny
@@ -146,6 +148,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
     };
     const composerParts = createPartStore<ChatComposerPart>();
     const statusParts = createPartStore<ChatStatusPart>();
+    const sideParts = createPartStore<ChatSidePart>();
     const view = mountChatView({
       channel: api.channel,
       paths: services.paths,
@@ -172,6 +175,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       layouts,
       composerParts,
       statusParts,
+      sideParts,
       permissions,
       confirm,
       viewer,
@@ -212,6 +216,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
         fillComposer({ tabs: view, log: services.log }, sessionId, text),
       addComposerPart: (part) => composerParts.add(part),
       addStatusPart: (part) => statusParts.add(part),
+      addSidePart: (part) => sideParts.add(part),
       focusedEntry: () => view.focusedEntry(),
     };
     return {
