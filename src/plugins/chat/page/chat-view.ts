@@ -36,7 +36,6 @@ import {
 } from './attachments';
 import { placeReturned, pullBackQueued } from './chat-commands';
 import type { CloseConfirm } from './chat-dialogs';
-import type { SessionFactsInput } from '../layouts/layout';
 import type { ChatLayouts, SurfaceKitDeps } from './chat-layouts';
 import {
   applyEntry,
@@ -59,7 +58,7 @@ import {
 } from './composer-stop-holder';
 import { createEntryList, type EntryList } from './entry-list';
 import type { ImageViewer } from './image-viewer';
-import { sessionFactsOf } from './session-part';
+import { sessionFactsOf, type SessionFactsSource } from './session-part';
 import type { SideSections, SideTab } from './side-sections';
 import { completionWords } from './slash-commands';
 import { compactionLabel } from './working-turn';
@@ -117,16 +116,13 @@ export interface ChatSession extends SessionRef {
 // session's row shows, as a message sent there does. `composerOf` is a held
 // session's composer surface, for the part that places its activity dock.
 // `sessionFactsSource` is a held session's facts for the hub's Session section,
-// read live: `onChanged` fires after each status line change.
+// read live: `onChanged` fires after each status line draw.
 export interface ChatTabs extends ChatView {
   session(sessionId: string): ChatSession | undefined;
   sessionOfEditor(editor: TextEditor): ChatSession | undefined;
   markSent(sessionId: string): void;
   composerOf(sessionId: string): ComposerSurface | null;
-  sessionFactsSource(sessionId: string): {
-    input(): SessionFactsInput;
-    onChanged(listener: () => void): Disposable;
-  } | null;
+  sessionFactsSource(sessionId: string): SessionFactsSource | null;
 }
 
 // `allow` answers a permission entry allowed; `deny` asks for the reason
@@ -206,7 +202,7 @@ export interface ChatViewDeps extends SurfaceKitDeps {
 // held. `unseen` is the finished turn the row still shows, and `activity` the
 // activity last set on the row. `stop` holds the composer part holding the
 // tab's entry cursor. `main` holds the entries and the composer; `side` is the
-// tab's session hub. `factsListeners` hear each status line change.
+// tab's session hub. `factsListeners` hear each status line draw.
 interface HeldTab {
   sessionId: string;
   name: string;
@@ -609,7 +605,7 @@ function drawStatusLine(tab: HeldTab) {
 function sessionFactsSourceOf(
   tab: HeldTab,
   deps: Pick<ChatViewDeps, 'homeDir' | 'paths'>,
-): NonNullable<ReturnType<ChatTabs['sessionFactsSource']>> {
+): SessionFactsSource {
   return {
     input: () =>
       sessionFactsOf(composerInputOf(tab), tab.state.projectDir, deps),

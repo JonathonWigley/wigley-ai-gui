@@ -1,3 +1,4 @@
+import type { Disposable } from '../../../contracts/disposable';
 import type { Log } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import type { DrawnPart } from '../../../shared/page/layout-host/draw-part';
@@ -14,9 +15,14 @@ import {
   surfaceBaseKit,
   type SurfaceKitDeps,
 } from './chat-layouts';
-import type { ChatTabs } from './chat-view';
 import { modelEffortText } from './composer-input';
 import { displayPath } from './start-prompt-items';
+
+// A session's facts for the Session section, read live.
+export interface SessionFactsSource {
+  input(): SessionFactsInput;
+  onChanged(listener: () => void): Disposable;
+}
 
 interface DrawnFacts {
   element: HTMLElement;
@@ -59,7 +65,7 @@ export function createSessionPart(
   deps: SurfaceKitDeps & {
     layouts: ChatLayouts;
     log: Log;
-    sourceOf(sessionId: string): ReturnType<ChatTabs['sessionFactsSource']>;
+    sourceOf(sessionId: string): SessionFactsSource | null;
   },
 ): ChatSidePart {
   const draws = chatPartDraws(deps.layouts, 'sessionFacts', deps.log);

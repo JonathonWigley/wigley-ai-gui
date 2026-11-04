@@ -141,7 +141,7 @@ export const chatManifest = definePlugin({
       runsIn: 'page',
     },
     toggleSideParts: {
-      label: 'Hide or show the session hub',
+      label: 'hide or show the session hub',
       group: 'view',
       runsIn: 'page',
     },

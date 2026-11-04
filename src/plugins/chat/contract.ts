@@ -438,9 +438,9 @@ export interface ChatSideSection {
 // composer, as one section: chat draws the frame with `title` and hands `build`
 // the frame's body, the tab's session id and the section. Chat sorts the sections
 // by `order`, equal orders keeping add order. The body adds its own padding, so
-// the part adds none. A part that draws nothing, by drawing no child in `parent`
-// or by setting `hidden` on each, hides its section. It takes no stop and no key
-// scope.
+// the part adds none. A part that draws nothing, by drawing no child element in
+// `parent` or by setting `hidden` on each, hides its section. It takes no stop
+// and no key scope.
 export interface ChatSidePart {
   id: string;
   title: string;
