@@ -814,3 +814,11 @@ because the earlier items rewrite many of these tests anyway.
   drive runs and the `sessionsView_FocusChange_KeepsPartWithUpdate` rows. Add a click step, then a step in chat's
   `session hub` group that clicks a head in an unfocused pane and expects its collapse log. Source session: Claude Code
   368f2c4b-5d54-47bf-8285-14fec015fc6b in wigley-ai-gui.
+- **A row's id changes across an app relaunch, so a re-attached session's `/clear` loses its pool claim** — *needs a
+  feature plan*: once the `unity-pool` plugin lands, the launcher sets `WIGLEY_SESSION_ROW` to the row's app id
+  (`AgentStart.rowId`). Chat reopens each saved row through `sessions.open`, which makes a new `randomHex()` id
+  (`src/plugins/sessions/main/session-list.ts`). A process the session host kept running and chat re-attached keeps
+  the old id in its environment. Its first `/clear` hands off under the old row id and starts the new process under
+  the new one. The pool then misses the handoff, and the claim falls back to the expiry rules
+  (`~/wigley-agents/tools/unity-pool/README.md` § Claims). The badge still finds the row by host session id. To
+  decide: keep a row's app id across relaunch, or have `/clear` pass the old row id to the new process.
