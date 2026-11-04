@@ -13,9 +13,9 @@ const FILE: FileStat = { isFolder: false, isLink: false };
 interface Row {
   name: string;
   args: unknown;
-  // The caller's folder, and its profile when chat owns it.
   callerFolder?: string | null;
-  callerProfile?: string | null;
+  // Chat's default profile for the caller.
+  defaultProfile?: string | null;
   profiles?: string[];
   // What `stat` answers, or the error it rejects with.
   stat?: FileStat | null | Error;
@@ -35,25 +35,26 @@ function message(text: string) {
 
 const ROWS: Row[] = [
   {
-    name: 'a prompt alone, from an owned caller, uses its folder and profile',
+    name: 'a prompt alone uses the caller’s folder and default profile',
     args: { prompt: '  review the diff  ' },
     launched: {
       projectDir: '/caller',
       profile: 'home',
       message: message('  review the diff  '),
     },
-    success: 'Started session row-7 in /caller under profile home.',
+    success:
+      'Launched session row-7 in /caller under profile home. A failure to start shows on its row.',
   },
   {
-    name: 'a prompt alone, from an unowned caller, uses the first profile',
+    name: 'a null folder and profile take the same defaults',
     args: { prompt: 'go', profile: null, folder: null },
-    callerProfile: null,
     launched: {
       projectDir: '/caller',
-      profile: 'work',
+      profile: 'home',
       message: message('go'),
     },
-    success: 'Started session row-7 in /caller under profile work.',
+    success:
+      'Launched session row-7 in /caller under profile home. A failure to start shows on its row.',
   },
   {
     name: 'a named folder and profile win over the caller’s',
@@ -63,7 +64,8 @@ const ROWS: Row[] = [
       profile: 'work',
       message: message('go'),
     },
-    success: 'Started session row-7 in /other under profile work.',
+    success:
+      'Launched session row-7 in /other under profile work. A failure to start shows on its row.',
   },
   {
     name: 'an unknown profile names the known ones',
@@ -168,8 +170,7 @@ const ROWS: Row[] = [
   {
     name: 'no profiles and none named',
     args: { prompt: 'go' },
-    callerProfile: null,
-    profiles: [],
+    defaultProfile: null,
     errors: ['profiles'],
     statCalled: false,
   },
@@ -191,9 +192,9 @@ function toolSession(row: Row) {
   const log = vi.fn<(line: string) => void>();
   const session = startSessionToolSession({
     launch,
-    profileOf: (sessionId) =>
-      sessionId === 'caller' && row.callerProfile !== null
-        ? (row.callerProfile ?? 'home')
+    defaultProfile: (sessionId) =>
+      sessionId === 'caller' && row.defaultProfile !== null
+        ? (row.defaultProfile ?? 'home')
         : null,
     profileNames: () => row.profiles ?? ['work', 'home'],
     isAbsolute: (path) => path.startsWith('/'),

@@ -340,6 +340,10 @@ export interface ChatMainExports {
   profiles(): readonly ChatProfile[];
   // The profile of a session chat owns; null for any other session id.
   profileOf(sessionId: string): string | null;
+  // The profile a launch takes when its caller names none: the profile of a
+  // session chat owns, else chat's first; null when chat has no profiles.
+  // `sessionId` is null when the launch comes from no session.
+  defaultProfile(sessionId: string | null): string | null;
   // Sends as the composer does: queued while the session's turn or compaction
   // runs, and an idle send can be held by a send gate.
   // Rejects for a session chat does not hold, the layout preview included.

@@ -478,7 +478,10 @@ interview on 2026-10-23; this file is the record of both.
   launch Notes and Workflow use, so the row appears without taking focus. The tool is the only route from outside
   the window. A command-line route was rejected because it returns nothing to the caller, needs its own check of who
   is calling, and has no caller that lacks the relay. The app adds no approval and no cap: the calling session's
-  permission mode gates the call, and the new row keeps every start visible.
+  permission mode gates the call, which has been checked on Claude only since a Codex caller's gate has had no live
+  run, and the new row keeps every start visible. The relay re-sends a pending call after a dropped channel, so an app
+  quit between the launch and the flushed answer can start a second session on return. This is accepted: the window is
+  milliseconds, the extra row is visible, and de-duplicating would need the call id saved across a restart.
 
 ## Layouts
 

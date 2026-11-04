@@ -435,11 +435,15 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     const profileOf = (sessionId: string) =>
       chat.sessions().find((held) => held.sessionId === sessionId)?.profile ??
       null;
+    const defaultProfile = (sessionId: string | null) =>
+      (sessionId === null ? null : profileOf(sessionId)) ??
+      profileNames().at(0) ??
+      null;
     sessions.contributeTools(
       [START_SESSION_TOOL],
       startSessionToolSession({
         launch: (request) => chat.launch(request),
-        profileOf,
+        defaultProfile,
         profileNames,
         isAbsolute: (folder) => services.paths.isAbsolute(folder),
         stat: (folder) => services.files.stat(folder),
@@ -497,6 +501,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       profileNames,
       profiles,
       profileOf,
+      defaultProfile,
       send: async (sessionId, message) => {
         requireHeld(sessionId);
         return chat.send(sessionId, message);

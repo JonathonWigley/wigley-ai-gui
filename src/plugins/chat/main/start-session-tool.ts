@@ -13,7 +13,7 @@ import type { LaunchRequest } from '../contract';
 export const START_SESSION_TOOL: ToolDefinition = {
   name: 'start_session',
   description:
-    "Start a new, independent chat session in the Auri app with `prompt` as its first message. It opens in the background as a new row in the side bar, without taking focus. It is a full agent session running the user's whole agent setup, not a lightweight subagent: even a one-word prompt spends tens of thousands of tokens of the user's plan, so start one only when the work needs its own session. It runs on its own: its output does not come back here, and this tool cannot message or end it. `folder` must be an absolute path to a folder that exists; it defaults to this session's folder when there is one. `profile` defaults to this session's when the app started this session, else to the app's first profile. Returns the new session's id.",
+    "Start a new, independent chat session in the Auri app with `prompt` as its first message. It opens in the background as a new row in the side bar, without taking focus. It is a full agent session running the user's whole agent setup, not a lightweight subagent: even a one-word prompt spends tens of thousands of tokens of the user's plan, so start one only when the work needs its own session. It always runs on Claude, whichever agent calls this tool. It runs on its own: its output does not come back here, and this tool cannot message or end it. `folder` must be an absolute path to a folder that exists; it defaults to this session's folder when there is one. `profile` defaults to this session's when the app started this session, else to the app's first profile. Returns the new session's id.",
   inputSchema: {
     type: 'object',
     properties: {
@@ -39,7 +39,7 @@ export const START_SESSION_TOOL: ToolDefinition = {
 
 export interface StartSessionToolDeps {
   launch(request: LaunchRequest): string;
-  profileOf(sessionId: string): string | null;
+  defaultProfile(sessionId: string | null): string | null;
   profileNames(): string[];
   isAbsolute(path: string): boolean;
   stat(path: string): Promise<FileStat | null>;
@@ -65,8 +65,8 @@ function chooseProfile(
   named: unknown,
 ): Choice {
   if (named === undefined || named === null) {
-    const profile = deps.profileOf(sessionId) ?? deps.profileNames().at(0);
-    return profile === undefined
+    const profile = deps.defaultProfile(sessionId);
+    return profile === null
       ? { problem: 'Chat has no profiles.' }
       : { value: profile };
   }
@@ -142,7 +142,7 @@ async function startSession(
     return errorResult(`Session not started: ${errorText(error)}`);
   }
   return textResult(
-    `Started session ${id} in ${folder.value} under profile ${profile.value}.`,
+    `Launched session ${id} in ${folder.value} under profile ${profile.value}. A failure to start shows on its row.`,
   );
 }
 

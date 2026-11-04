@@ -41,10 +41,9 @@ const READ: BacklogRead = {
   message: 'index stale',
 };
 
-const chat: Pick<ChatMainExports, 'launch' | 'profileNames' | 'profileOf'> = {
+const chat: Pick<ChatMainExports, 'launch' | 'defaultProfile'> = {
   launch: () => Promise.resolve('row-1'),
-  profileNames: () => ['default'],
-  profileOf: () => null,
+  defaultProfile: () => 'default',
 };
 
 // Notes' main part started over a fake `MainApi` whose window capture

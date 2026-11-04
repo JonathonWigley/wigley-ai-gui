@@ -181,6 +181,7 @@ describe('chat drive actions', () => {
 // a data folder that cannot be read; sessions open rows `row-1`, `row-2`, …,
 // and an owned session's end emits `sessions.ended`, recorded in `ended`;
 // each row holds its titles as sessions would, starting with none.
+// `options.profiles` replaces the profiles.
 // `invoke` calls the page channel's handler for `name`; `sent` holds each
 // channel message, `logged` each log line, and `starts` counts the harness's
 // process starts, `startInstructions` each start's instructions and
@@ -199,6 +200,7 @@ function startChatPart(
     list?: () => Promise<HostedProcessInfo[]>;
     data?: Files;
     harnessId?: string;
+    profiles?: { name: string; configDir: string }[];
   } = {},
 ) {
   const handlers = new Map<string, (...args: unknown[]) => unknown>();
@@ -321,7 +323,7 @@ function startChatPart(
       emit: () => undefined,
     },
     settings: () => ({
-      profiles: [{ name: 'work', configDir: '/work' }],
+      profiles: options.profiles ?? [{ name: 'work', configDir: '/work' }],
       keepIdleMinutes: 60,
     }),
     onSettingsChanged: (listener: (settings: unknown) => void) => {
@@ -523,6 +525,45 @@ describe('chat main part', () => {
 
     expect(chat.processSends).toHaveBeenCalledExactlyOnceWith(message);
   });
+
+  it.each([
+    {
+      given: 'a session chat holds',
+      profiles: ['first', 'second'],
+      sessionId: 'row-1',
+      expected: 'second',
+    },
+    {
+      given: 'a session chat does not hold',
+      profiles: ['first', 'second'],
+      sessionId: 'row-9',
+      expected: 'first',
+    },
+    {
+      given: 'no session',
+      profiles: ['first', 'second'],
+      sessionId: null,
+      expected: 'first',
+    },
+    {
+      given: 'no profiles',
+      profiles: [],
+      sessionId: null,
+      expected: null,
+    },
+  ])(
+    'exports_DefaultProfile_given $given',
+    ({ profiles, sessionId, expected }) => {
+      const chat = startChatPart({
+        profiles: profiles.map((name) => ({ name, configDir: `/${name}` })),
+      });
+      if (profiles.length > 0) {
+        chat.invoke('start', { projectDir: '/p', profile: 'second' });
+      }
+
+      expect(chat.exports.defaultProfile(sessionId)).toBe(expected);
+    },
+  );
 
   it('startSessionTool_UnownedCaller_StartsASessionWithThePromptFirst', async () => {
     const chat = startChatPart();
