@@ -44,14 +44,16 @@ describe('escaping and disabled syntax', () => {
 
   it('shows links, images, autolinks and bare URLs as text', () => {
     expect(block('[site](https://example.com)')).toBe(
-      '<p>[site](https://example.com)</p>\n',
+      '<p data-md-lines="0,1">[site](https://example.com)</p>\n',
     );
-    expect(block('![alt](pic.png)')).toBe('<p>![alt](pic.png)</p>\n');
+    expect(block('![alt](pic.png)')).toBe(
+      '<p data-md-lines="0,1">![alt](pic.png)</p>\n',
+    );
     expect(block('<https://example.com>')).toBe(
-      '<p>&lt;https://example.com&gt;</p>\n',
+      '<p data-md-lines="0,1">&lt;https://example.com&gt;</p>\n',
     );
     expect(block('see https://example.com now')).toBe(
-      '<p>see https://example.com now</p>\n',
+      '<p data-md-lines="0,1">see https://example.com now</p>\n',
     );
   });
 
@@ -79,17 +81,71 @@ describe('inline()', () => {
 describe('headings', () => {
   it('renders a heading as a classed paragraph, never a heading element', () => {
     const html = block('### A section\n\nBody text.');
-    expect(html).toContain('<p class="md-h md-h3">A section</p>');
+    expect(html).toContain(
+      '<p class="md-h md-h3" data-md-lines="0,1">A section</p>',
+    );
     expect(html).not.toMatch(/<h[1-6]/);
-    expect(html).toContain('<p>Body text.</p>');
+    expect(html).toContain('<p data-md-lines="2,3">Body text.</p>');
   });
 
   it('keeps every level as a class', () => {
     for (let level = 1; level <= 6; level++) {
       expect(block(`${'#'.repeat(level)} Title`)).toBe(
-        `<p class="md-h md-h${level}">Title</p>\n`,
+        `<p class="md-h md-h${level}" data-md-lines="0,1">Title</p>\n`,
       );
     }
+  });
+});
+
+describe('cursor block marks', () => {
+  const markedTags = (html: string) =>
+    html.match(/<[^>]*data-md-lines="[^"]*"[^>]*>/g) ?? [];
+
+  it.each([
+    {
+      name: 'a heading, paragraph, fence and top-level list items',
+      text: '# Title\n\nFirst para\nsecond line\n\n```ts\ncode\n```\n\n- one\n  - nested\n- two',
+      tags: [
+        '<p class="md-h md-h1" data-md-lines="0,1">',
+        '<p data-md-lines="2,4">',
+        '<pre data-md-lines="5,8">',
+        '<li data-md-lines="9,11">',
+        '<li data-md-lines="11,12">',
+      ],
+    },
+    {
+      name: 'an ordered list, by its items',
+      text: '1. one\n2. two',
+      tags: ['<li data-md-lines="0,1">', '<li data-md-lines="1,2">'],
+    },
+    {
+      name: 'a table and a quote of two paragraphs, once each',
+      text: '| a | b |\n| --- | --- |\n| c | d |\n\n> one\n>\n> two',
+      tags: ['<table data-md-lines="0,3">', '<blockquote data-md-lines="4,7">'],
+    },
+    {
+      name: 'a contributed fence on its placeholder',
+      text: '```diff\n+ a\n```',
+      tags: [
+        '<div class="md-fence" data-fence-language="diff" data-fence-closed="true" data-md-lines="0,3">',
+      ],
+    },
+    {
+      name: 'a plain fence and an indented code block on pre, never code',
+      text: '```ts\ncode\n```\n\n    indented',
+      tags: ['<pre data-md-lines="0,3">', '<pre data-md-lines="4,5">'],
+    },
+    {
+      name: 'wigley blocks once each, from opener to the line after the closer',
+      text: ':::details S\nbody\n\n- item\n:::\n\n:::changes\n+ a\n:::\n\n:::tree\nroot\n  child\n:::',
+      tags: [
+        '<details class="md-details" data-md-lines="0,5">',
+        '<ul class="md-changes" data-md-lines="6,9">',
+        '<ul class="md-tree" data-md-lines="10,14">',
+      ],
+    },
+  ])('block_marksCursorBlocks: $name', ({ text, tags }) => {
+    expect(markedTags(block(text))).toEqual(tags);
   });
 });
 
@@ -114,7 +170,7 @@ describe('tables', () => {
 describe('fences', () => {
   it('keeps markdown-it’s language class on other fences', () => {
     expect(block('```ts\nconst a = 1;\n```')).toBe(
-      '<pre><code class="language-ts">const a = 1;\n</code></pre>\n',
+      '<pre data-md-lines="0,3"><code class="language-ts">const a = 1;\n</code></pre>\n',
     );
   });
 
@@ -154,7 +210,7 @@ describe('fences', () => {
 
   it('keeps a block opener inside a fence as code', () => {
     expect(block('```\n:::changes\n```')).toBe(
-      '<pre><code>:::changes\n</code></pre>\n',
+      '<pre data-md-lines="0,3"><code>:::changes\n</code></pre>\n',
     );
   });
 });
@@ -162,6 +218,7 @@ describe('fences', () => {
 describe('fence contributions', () => {
   const withHtml = createMarkdownItRenderer(highlighter);
   withHtml.addFence(htmlFence);
+  const lines = (range: string) => ` data-md-lines="${range}"`;
   const placeholder = (closed: boolean, code: string, attrs = '') =>
     `<div class="md-fence" data-fence-language="html" data-fence-closed="${closed}"${attrs}>` +
     `<pre><code class="language-html">${code}</code></pre></div>\n`;
@@ -170,47 +227,47 @@ describe('fence contributions', () => {
     {
       name: 'a closed block',
       text: '```html\n<b>x</b>\n```',
-      html: placeholder(true, '&lt;b&gt;x&lt;/b&gt;\n'),
+      html: placeholder(true, '&lt;b&gt;x&lt;/b&gt;\n', lines('0,3')),
     },
     {
       name: 'a block with no closing fence',
       text: '```html\n<b>x</b>\n',
-      html: placeholder(false, '&lt;b&gt;x&lt;/b&gt;\n'),
+      html: placeholder(false, '&lt;b&gt;x&lt;/b&gt;\n', lines('0,2')),
     },
     {
       name: 'a block whose closer is indented four spaces',
       text: '```html\nx\n    ```\n',
-      html: placeholder(false, 'x\n    ```\n'),
+      html: placeholder(false, 'x\n    ```\n', lines('0,3')),
     },
     {
       name: 'a block in a blockquote',
       text: '> ```html\n> x\n> ```',
-      html: `<blockquote>\n${placeholder(true, 'x\n')}</blockquote>\n`,
+      html: `<blockquote${lines('0,3')}>\n${placeholder(true, 'x\n')}</blockquote>\n`,
     },
     {
       name: 'an opener alone',
       text: '```html',
-      html: placeholder(false, ''),
+      html: placeholder(false, '', lines('0,1')),
     },
     {
       name: 'an empty closed block',
       text: '```html\n```',
-      html: placeholder(true, ''),
+      html: placeholder(true, '', lines('0,2')),
     },
     {
       name: 'a tilde block',
       text: '~~~html\nx\n~~~',
-      html: placeholder(true, 'x\n'),
+      html: placeholder(true, 'x\n', lines('0,3')),
     },
     {
       name: 'a block whose closer is longer than its opener',
       text: '```html\nx\n`````',
-      html: placeholder(true, 'x\n'),
+      html: placeholder(true, 'x\n', lines('0,3')),
     },
     {
       name: 'an upper-case info string',
       text: '```HTML\nx\n```',
-      html: placeholder(true, 'x\n'),
+      html: placeholder(true, 'x\n', lines('0,3')),
     },
   ])('emits a placeholder for $name', ({ text, html }) => {
     expect(withHtml.block(text)).toBe(html);
@@ -240,7 +297,7 @@ describe('fence contributions', () => {
     first.dispose();
     expect(renderer.fence('html')).toBeUndefined();
     expect(renderer.block('```html\nx\n```')).toBe(
-      '<pre><code class="language-html">x\n</code></pre>\n',
+      '<pre data-md-lines="0,3"><code class="language-html">x\n</code></pre>\n',
     );
     const second = { ...htmlFence };
     renderer.addFence(second);
@@ -253,7 +310,7 @@ describe(':::changes', () => {
   it('renders one pill per marker and escapes markup', () => {
     const html = block(':::changes\n+ add <x>\n~ edit\nx drop\n:::');
     expect(html).toBe(
-      '<ul class="md-changes">' +
+      '<ul class="md-changes" data-md-lines="0,5">' +
         '<li class="md-change added"><span class="md-pill">added</span><span class="md-change-text">add &lt;x&gt;</span></li>' +
         '<li class="md-change changed"><span class="md-pill">changed</span><span class="md-change-text">edit</span></li>' +
         '<li class="md-change removed"><span class="md-pill">removed</span><span class="md-change-text">drop</span></li>' +
@@ -263,7 +320,7 @@ describe(':::changes', () => {
 
   it('draws a dash or star bullet as plain text', () => {
     expect(block(':::changes\n- a fact\n* another\n:::')).toBe(
-      '<ul class="md-changes">' +
+      '<ul class="md-changes" data-md-lines="0,4">' +
         '<li class="md-change"><span class="md-change-text">a fact</span></li>' +
         '<li class="md-change"><span class="md-change-text">another</span></li>' +
         '</ul>\n',
@@ -278,7 +335,7 @@ describe(':::changes', () => {
 
   it('skips blank lines and runs to the end when unclosed', () => {
     expect(block(':::changes\n+ a\n\n+ b')).toBe(
-      '<ul class="md-changes">' +
+      '<ul class="md-changes" data-md-lines="0,4">' +
         '<li class="md-change added"><span class="md-pill">added</span><span class="md-change-text">a</span></li>' +
         '<li class="md-change added"><span class="md-pill">added</span><span class="md-change-text">b</span></li>' +
         '</ul>\n',
@@ -287,19 +344,19 @@ describe(':::changes', () => {
 
   it('ends the paragraph before it', () => {
     expect(block('Intro\n:::changes\n+ a\n:::')).toContain(
-      '<p>Intro</p>\n<ul class="md-changes">',
+      '<p data-md-lines="0,1">Intro</p>\n<ul class="md-changes" data-md-lines="1,4">',
     );
   });
 
   it('leaves a bare closer with no open block as text', () => {
-    expect(block(':::')).toBe('<p>:::</p>\n');
+    expect(block(':::')).toBe('<p data-md-lines="0,1">:::</p>\n');
   });
 });
 
 describe(':::tree', () => {
   it('nests by two-space indent and returns to a shallower level', () => {
     expect(block(':::tree\nroot\n  child\n    leaf\n  other\nlast\n:::')).toBe(
-      '<ul class="md-tree">' +
+      '<ul class="md-tree" data-md-lines="0,7">' +
         '<li class="md-change"><span class="md-change-text">root</span>' +
         '<ul><li class="md-change"><span class="md-change-text">child</span>' +
         '<ul><li class="md-change"><span class="md-change-text">leaf</span></li></ul></li>' +
@@ -322,7 +379,7 @@ describe(':::tree', () => {
 
   it('measures levels from the first line’s indent', () => {
     expect(block(':::tree\n  ~ a\n  ~ b\n    ~ c\n:::')).toBe(
-      '<ul class="md-tree">' +
+      '<ul class="md-tree" data-md-lines="0,5">' +
         '<li class="md-change changed"><span class="md-pill">changed</span><span class="md-change-text">a</span></li>' +
         '<li class="md-change changed"><span class="md-pill">changed</span><span class="md-change-text">b</span>' +
         '<ul><li class="md-change changed"><span class="md-pill">changed</span><span class="md-change-text">c</span></li></ul></li>' +
@@ -344,7 +401,7 @@ describe(':::details', () => {
   it('renders its body as markdown and escapes once', () => {
     const html = block(':::details Sum\nbody **bold** a<b\n:::');
     expect(html).toContain(
-      '<details class="md-details"><summary>Sum</summary>',
+      '<details class="md-details" data-md-lines="0,3"><summary>Sum</summary>',
     );
     expect(html).toContain('<strong>bold</strong>');
     expect(html).toContain('a&lt;b');
@@ -353,7 +410,7 @@ describe(':::details', () => {
 
   it('defaults the summary to Details', () => {
     expect(block(':::details\nbody\n:::')).toBe(
-      '<details class="md-details"><summary>Details</summary>\n<p>body</p>\n</details>\n',
+      '<details class="md-details" data-md-lines="0,3"><summary>Details</summary>\n<p>body</p>\n</details>\n',
     );
   });
 
@@ -368,7 +425,7 @@ describe(':::details', () => {
 
   it('runs to the end when unclosed', () => {
     expect(block(':::details S\nbody')).toBe(
-      '<details class="md-details"><summary>S</summary>\n<p>body</p>\n</details>\n',
+      '<details class="md-details" data-md-lines="0,2"><summary>S</summary>\n<p>body</p>\n</details>\n',
     );
   });
 
@@ -376,16 +433,18 @@ describe(':::details', () => {
     expect(
       block(':::details Outer\n:::details Inner\nin\n:::\nmid\n:::\nout'),
     ).toBe(
-      '<details class="md-details"><summary>Outer</summary>\n' +
+      '<details class="md-details" data-md-lines="0,6"><summary>Outer</summary>\n' +
         '<details class="md-details"><summary>Inner</summary>\n<p>in</p>\n</details>\n' +
-        '<p>mid</p>\n</details>\n<p>out</p>\n',
+        '<p>mid</p>\n</details>\n<p data-md-lines="6,7">out</p>\n',
     );
   });
 
   it('keeps a change block inside the disclosure', () => {
     const html = block(':::details Full\n:::changes\n+ a\n:::\nmore text\n:::');
     expect(
-      html.startsWith('<details class="md-details"><summary>Full</summary>'),
+      html.startsWith(
+        '<details class="md-details" data-md-lines="0,6"><summary>Full</summary>',
+      ),
     ).toBe(true);
     expect(html).toContain('<ul class="md-changes">');
     expect(html.endsWith('<p>more text</p>\n</details>\n')).toBe(true);
@@ -396,7 +455,9 @@ describe(':::details', () => {
     const html = block(
       ':::details Full\n:::tree\nroot\n:::\nafter\n:::\noutside',
     );
-    expect(html).toContain('<p>after</p>\n</details>\n<p>outside</p>');
+    expect(html).toContain(
+      '<p>after</p>\n</details>\n<p data-md-lines="6,7">outside</p>',
+    );
     expect(html).not.toContain(':::');
   });
 
@@ -410,8 +471,8 @@ describe(':::details', () => {
         `:::details Full\n${fence}\n${line}\n${fence}\nafter\n:::\noutside`,
       ),
     ).toBe(
-      '<details class="md-details"><summary>Full</summary>\n' +
-        `<pre><code>${line}\n</code></pre>\n<p>after</p>\n</details>\n<p>outside</p>\n`,
+      '<details class="md-details" data-md-lines="0,6"><summary>Full</summary>\n' +
+        `<pre><code>${line}\n</code></pre>\n<p>after</p>\n</details>\n<p data-md-lines="6,7">outside</p>\n`,
     );
   });
 });
@@ -537,9 +598,16 @@ describe('document()', () => {
     expect(html).not.toContain('<script>');
   });
 
+  it('holds no cursor block mark', async () => {
+    const html = await render(
+      '# T\n\npara\n\n- a\n\n```ts\nx\n```\n\n:::details S\nbody\n:::',
+    );
+    expect(html).not.toContain('data-md-lines');
+  });
+
   it('marks blocks, list items and tables with their source line', async () => {
     const html = await render(
-      '# T\n\npara\n\n- a\n- b\n\n| a | b |\n| --- | --- |\n| one | two |',
+      '# T\n\npara\n\n- a\n- b\n\n| a | b |\n| --- | --- |\n| one | two |\n\n:::details S\nbody\n:::\n\n:::changes\n+ a\n:::\n\n:::tree\nroot\n:::',
     );
     for (const tag of [
       '<h1 data-anchor="t" data-source-line="1">',
@@ -548,6 +616,9 @@ describe('document()', () => {
       '<li data-source-line="5">',
       '<li data-source-line="6">',
       '<table data-source-line="8">',
+      '<details class="md-details" data-source-line="12">',
+      '<ul class="md-changes" data-source-line="16">',
+      '<ul class="md-tree" data-source-line="20">',
     ]) {
       expect(html).toContain(tag);
     }

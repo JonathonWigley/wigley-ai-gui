@@ -5,7 +5,9 @@ import type { Disposable } from './disposable';
 // heading anchors and highlighted fences, raw HTML still escaped. `block` and
 // `document` emit a placeholder for each fence whose language has a
 // contribution, `document` highlighting a live one's code inside it; the
-// markdown mount (`src/shared/page/markdown-mount.ts`) hydrates it.
+// markdown mount (`src/shared/page/markdown-mount.ts`) hydrates it. `block`
+// also marks each top-level block and top-level list item with
+// `data-md-lines="<start>,<end>"`: zero-based source lines, `end` exclusive.
 export interface MarkdownRenderer {
   block(text: string): string;
   inline(text: string): string;

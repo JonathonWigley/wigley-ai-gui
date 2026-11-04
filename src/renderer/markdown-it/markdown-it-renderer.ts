@@ -49,6 +49,7 @@ const DIFF_CLASSES: Record<string, string | undefined> = {
 const TEXT_ALIGN = 'text-align:';
 const DIFF_LANGUAGE = 'diff';
 const SOURCE_LINE = 'data-source-line';
+const MD_LINES = 'data-md-lines';
 const SLUG_DROPPED = /[^\p{L}\p{M}\p{N}\s_-]/gu;
 const WHITESPACE = /\s/g;
 // markdown-it's own `alt` list for its fence rule.
@@ -64,7 +65,7 @@ export function createMarkdownItRenderer(
   const documentMd = createWigleyMarkdown();
   installDocumentRules(documentMd, fences);
   const renderer: MarkdownRenderer = {
-    block: (text) => md.render(text),
+    block: (text) => renderBlock(md, text),
     inline: (text) => md.renderInline(text),
     document: (text) => renderDocument(documentMd, highlighter, fences, text),
     addFence: (fence) => addFence(fences, fence),
@@ -155,6 +156,32 @@ function closesAt(
   return !isIndentedCode && closesFence(markup, mark, text);
 }
 
+function renderBlock(md: Md, text: string): string {
+  const env = {};
+  const tokens = md.parse(text, env);
+  markCursorBlocks(tokens);
+  return md.renderer.render(tokens, md.options, env);
+}
+
+function markCursorBlocks(tokens: Token[]): void {
+  for (const token of tokens) {
+    if (token.map !== null && isCursorBlock(token)) {
+      token.attrSet(MD_LINES, `${token.map[0]},${token.map[1]}`);
+    }
+  }
+}
+
+// A top-level block, with a top-level list standing as its own items.
+function isCursorBlock(token: Token): boolean {
+  const opensOrStandsAlone = token.nesting !== -1;
+  const isListOpener =
+    token.type === 'bullet_list_open' || token.type === 'ordered_list_open';
+  const isTopLevelBlock =
+    token.level === 0 && opensOrStandsAlone && !isListOpener;
+  const isTopLevelItem = token.type === 'list_item_open' && token.level === 1;
+  return isTopLevelBlock || isTopLevelItem;
+}
+
 // markdown-it's `highlight` option is synchronous, so every fence is
 // highlighted between parse and render; a fence the highlighter rejects
 // renders plain. A contributed fence is highlighted too, inside its
@@ -237,12 +264,14 @@ function wigleyBlock(
   if (list) {
     if (!silent) {
       const closeLine = listCloseLine(state, startLine, endLine);
+      const nextLine = Math.min(closeLine + 1, endLine);
       pushChangeBlock(
         state,
         list[1],
         changeLines(state, startLine + 1, closeLine),
+        [startLine, nextLine],
       );
-      state.line = Math.min(closeLine + 1, endLine);
+      state.line = nextLine;
     }
     return true;
   }
@@ -250,8 +279,14 @@ function wigleyBlock(
   if (details) {
     if (!silent) {
       const closeLine = detailsCloseLine(state, startLine, endLine);
-      pushDetails(state, details[1] ?? 'Details', startLine, closeLine);
-      state.line = Math.min(closeLine + 1, endLine);
+      const nextLine = Math.min(closeLine + 1, endLine);
+      pushDetails(
+        state,
+        details[1] ?? 'Details',
+        [startLine, nextLine],
+        closeLine,
+      );
+      state.line = nextLine;
     }
     return true;
   }
@@ -347,12 +382,13 @@ function pushChangeBlock(
   state: StateBlock,
   form: string,
   lines: ChangeLine[],
+  map: [number, number],
 ): void {
   if (form === 'tree') {
-    state.push('md_tree_open', 'ul', 1);
+    state.push('md_tree_open', 'ul', 1).map = map;
     pushTreeItems(state, lines);
   } else {
-    state.push('md_changes_open', 'ul', 1);
+    state.push('md_changes_open', 'ul', 1).map = map;
     for (const line of lines) {
       pushChangeItem(state, line);
       state.push('md_change_close', 'li', -1);
@@ -401,17 +437,17 @@ function pushChangeItem(state: StateBlock, line: ChangeLine): void {
 function pushDetails(
   state: StateBlock,
   summary: string,
-  startLine: number,
+  map: [number, number],
   closeLine: number,
 ): void {
-  state.push('md_details_open', 'details', 1);
+  state.push('md_details_open', 'details', 1).map = map;
   state.push('md_summary_open', 'summary', 1);
   pushInline(state, summary);
   state.push('md_summary_close', 'summary', -1);
   const lineMax = state.lineMax;
   // Stops a paragraph or list in the body from running past the closer.
   state.lineMax = closeLine;
-  state.md.block.tokenize(state, startLine + 1, closeLine);
+  state.md.block.tokenize(state, map[0] + 1, closeLine);
   state.lineMax = lineMax;
   state.push('md_details_close', 'details', -1);
 }
@@ -426,32 +462,52 @@ function pushInline(state: StateBlock, content: string): void {
 function installSharedRules(rules: Md['renderer']['rules']): void {
   rules.th_open = alignedCell;
   rules.td_open = alignedCell;
-  rules.md_changes_open = () => '<ul class="md-changes">';
-  rules.md_tree_open = () => '<ul class="md-tree">';
+  rules.md_changes_open = openTagWithAttrs('<ul class="md-changes"');
+  rules.md_tree_open = openTagWithAttrs('<ul class="md-tree"');
   rules.md_list_close = () => '</ul>\n';
   rules.md_branch_open = () => '<ul>';
   rules.md_branch_close = () => '</ul>';
   rules.md_change_open = (tokens, idx) => changeItemOpen(tokens[idx].meta);
   rules.md_change_text_close = () => '</span>';
   rules.md_change_close = () => '</li>';
-  rules.md_details_open = () => '<details class="md-details">';
+  rules.md_details_open = openTagWithAttrs('<details class="md-details"');
   rules.md_summary_open = () => '<summary>';
   rules.md_summary_close = () => '</summary>\n';
   rules.md_details_close = () => '</details>\n';
 }
 
+// `tagStart` is the open tag up to its token's attributes and closing `>`.
+function openTagWithAttrs(tagStart: string): RenderRule {
+  return (tokens, idx, _options, _env, self) =>
+    `${tagStart}${self.renderAttrs(tokens[idx])}>`;
+}
+
 function installBlockRules(md: Md, fences: Fences): void {
   const rules = md.renderer.rules;
-  rules.heading_open = (tokens, idx) =>
-    `<p class="md-h md-${tokens[idx].tag}">`;
+  rules.heading_open = (tokens, idx, _options, _env, self) =>
+    `<p class="md-h md-${tokens[idx].tag}"${self.renderAttrs(tokens[idx])}>`;
   rules.heading_close = () => '</p>\n';
   const { escapeHtml } = md.utils;
   installFenceRule(
     md,
     fences,
     (token) => escapeHtml(token.content),
-    rules.fence!,
+    linesMarkOnPre(rules.fence!),
   );
+  rules.code_block = linesMarkOnPre(rules.code_block!);
+}
+
+// markdown-it's fence rule prints a token's attributes on `<code>`.
+function linesMarkOnPre(stock: RenderRule): RenderRule {
+  return (tokens, idx, options, env, self) => {
+    const token = tokens[idx];
+    const lines = token.attrGet(MD_LINES);
+    token.attrs = (token.attrs ?? []).filter(([name]) => name !== MD_LINES);
+    const html = stock(tokens, idx, options, env, self);
+    return lines === null
+      ? html
+      : html.replace('<pre', `<pre ${MD_LINES}="${lines}"`);
+  };
 }
 
 // A fence whose language has a contribution renders as the markdown mount's
