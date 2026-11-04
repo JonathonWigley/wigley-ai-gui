@@ -49,14 +49,24 @@ export interface RosterTask {
   startedAt: number;
 }
 
-// A session's running subagents and tasks, each list in start order.
+// A skill an agent started in a session, one row per `skill` and `agentId`. `agentId` is the agent that started it,
+// `main` or a subagent's id; `ownerName` names that agent as a task's does, so it outlives the subagent.
+export interface RosterSkill {
+  skill: string;
+  agentId: string;
+  ownerName: string;
+}
+
+// A session's three lists, each in start order: its running subagents, its running tasks, and the skills its agents
+// started, which stay through a compaction, an agent's end and a process's end until the session's row ends.
 export interface Roster {
   agents: RosterAgent[];
   tasks: RosterTask[];
+  skills: RosterSkill[];
 }
 
-// What agents' page part exports to the views that draw the rosters. `roster` is a session's latest roster, both lists
-// empty for a session with none; `onRosterChanged` calls `listener` with a session's id each time its roster changes,
+// What agents' page part exports to the views that draw the rosters. `roster` is a session's latest roster, all three
+// lists empty for a session with none, its skills staying until the row ends; `onRosterChanged` calls `listener` with a session's id each time its roster changes,
 // the first `rosters` read included. A removed session's roster is dropped without a call: views hear
 // `sessions.sessionRemoved`.
 export interface AgentsPageExports {
@@ -65,8 +75,8 @@ export interface AgentsPageExports {
 }
 
 // Rosters are keyed by the app's sessionId (the session row's id). `rosters` returns every session's roster that
-// lists any item; `rosterChanged` carries a session's whole roster after each change, both lists empty once its last
-// item ends or the row ends. `openPreview` opens agents' sample session, or ends it while it is open.
+// lists any item; `rosterChanged` carries a session's whole roster after each change, its agents and tasks empty once
+// each has ended, and all three lists empty once the row ends. `openPreview` opens agents' sample session, or ends it while it is open.
 export interface AgentsChannel extends ChannelShape {
   invoke: { rosters(): Record<string, Roster>; openPreview(): void };
   messages: { rosterChanged: { sessionId: string; roster: Roster } };

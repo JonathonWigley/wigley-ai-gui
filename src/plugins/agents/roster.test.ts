@@ -4,6 +4,7 @@ import type {
   Roster,
   RosterAgent,
   RosterOutcome,
+  RosterSkill,
   RosterTask,
   RosterTool,
 } from './contract';
@@ -63,6 +64,18 @@ const aTask: RosterTask = {
   startedAt: 3000,
 };
 
+// A skill the main agent started and one subagent `a` started, the same skill.
+const mainSkill: RosterSkill = {
+  skill: 'foo',
+  agentId: MAIN_AGENT_ID,
+  ownerName: 'main',
+};
+const aSkill: RosterSkill = {
+  skill: 'foo',
+  agentId: a.agentId,
+  ownerName: 'kind-fixer',
+};
+
 // The tool call every `toolStarted` / `toolFinished` here names, still running.
 const runningTool: RosterTool = {
   toolUseId: 'toolu_tool',
@@ -75,9 +88,13 @@ function toolWith(outcome: RosterOutcome): RosterTool {
   return { ...runningTool, outcome };
 }
 
-// A roster holding these agents and tasks.
-function roster(agents: RosterAgent[], tasks: RosterTask[] = []): Roster {
-  return { agents, tasks };
+// A roster holding these agents, tasks and skills.
+function roster(
+  agents: RosterAgent[],
+  tasks: RosterTask[] = [],
+  skills: RosterSkill[] = [],
+): Roster {
+  return { agents, tasks, skills };
 }
 
 function spawned(agent: RosterAgent): AgentEvent {
@@ -160,6 +177,16 @@ function taskFinished(
   outcome: 'done' | 'failed' = 'done',
 ): AgentEvent {
   return { type: 'taskFinished', at: 5500, taskId, outcome };
+}
+
+function skillStarted(agentId: string): AgentEvent {
+  return {
+    type: 'skillStarted',
+    at: 7000,
+    agentId,
+    skill: 'foo',
+    args: '/p/plan-x',
+  };
 }
 
 const sessionEnded: AgentEvent = { type: 'sessionEnded', at: 6000 };
@@ -337,6 +364,12 @@ describe('foldAgentEvent', () => {
       after: roster([b], [mainTask, aTask]),
     },
     {
+      case: 'FinishedKeepsItsSkillAndOwnerName',
+      before: roster([a, b], [], [aSkill]),
+      event: finished(a.agentId),
+      after: roster([b], [], [aSkill]),
+    },
+    {
       case: 'FinishedOnUnlistedId',
       before: roster([a, b]),
       event: finished('toolu_gone'),
@@ -388,10 +421,22 @@ describe('foldAgentEvent', () => {
       same: true,
     },
     {
-      case: 'SessionEndedEmptiesBothLists',
+      case: 'SessionEndedEmptiesAgentsAndTasks',
       before: roster([{ ...a, tools: [runningTool] }, b], [mainTask, aTask]),
       event: sessionEnded,
       after: roster([]),
+    },
+    {
+      case: 'SessionEndedKeepsSkills',
+      before: roster([a], [mainTask], [mainSkill, aSkill]),
+      event: sessionEnded,
+      after: roster([], [], [mainSkill, aSkill]),
+    },
+    {
+      case: 'SessionEndedWithOnlySkills',
+      before: roster([], [], [mainSkill]),
+      event: sessionEnded,
+      same: true,
     },
     {
       case: 'SessionEndedWhileEmpty',
@@ -422,13 +467,13 @@ describe('foldAgentEvent', () => {
     },
     {
       case: 'CompactionStarted',
-      before: roster([a]),
+      before: roster([a], [], [mainSkill]),
       event: { type: 'compactionStarted', at: 7000, trigger: 'app' },
       same: true,
     },
     {
       case: 'CompactionEnded',
-      before: roster([a]),
+      before: roster([a], [], [mainSkill]),
       event: {
         type: 'compactionEnded',
         at: 7000,
@@ -446,16 +491,32 @@ describe('foldAgentEvent', () => {
       same: true,
     },
     {
-      case: 'SkillStarted',
+      case: 'SkillStartedByMain',
       before: roster([a]),
-      event: {
-        type: 'skillStarted',
-        at: 7000,
-        agentId: a.agentId,
-        skill: 'wigley:make',
-        args: '/p/plan-x',
-      },
+      event: skillStarted(MAIN_AGENT_ID),
+      after: roster([a], [], [mainSkill]),
+    },
+    {
+      case: 'SkillStartedOfListedRow',
+      before: roster([a], [], [mainSkill]),
+      event: skillStarted(MAIN_AGENT_ID),
       same: true,
+    },
+    {
+      case: 'SkillStartedBySecondAgentAppendsItsRow',
+      before: roster([a], [], [mainSkill]),
+      event: skillStarted(a.agentId),
+      after: roster([a], [], [mainSkill, aSkill]),
+    },
+    {
+      case: 'SkillStartedOfUnlistedOwner',
+      before: roster([a]),
+      event: skillStarted('toolu_gone'),
+      after: roster(
+        [a],
+        [],
+        [{ skill: 'foo', agentId: 'toolu_gone', ownerName: 'subagent' }],
+      ),
     },
     {
       case: 'FileWritten',

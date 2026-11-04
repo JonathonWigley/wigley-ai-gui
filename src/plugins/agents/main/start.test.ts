@@ -3,7 +3,7 @@ import { MAIN_AGENT_ID, type AgentEvent } from '../../../contracts/agent';
 import { createMemoryFiles } from '../../../shared/memory-files';
 import { CHAT_PREVIEW_HOST_ID } from '../../chat/contract';
 import type { SessionsMainExports } from '../../sessions/contract';
-import type { Roster, RosterAgent, RosterTask } from '../contract';
+import type { Roster, RosterAgent, RosterSkill, RosterTask } from '../contract';
 import { agentsMainPart } from './start';
 
 const PREVIEW_ROW = 'preview-row';
@@ -105,9 +105,26 @@ const runningTaskMain: RosterTask = {
 // `task_a` when its owner `toolu_a` is listed as it starts.
 const taskOfListedA: RosterTask = { ...runningTaskA, ownerName: 'Explore' };
 
-// A roster holding these agents and tasks.
-function roster(agents: RosterAgent[], tasks: RosterTask[] = []): Roster {
-  return { agents, tasks };
+const skillStartedFoo: AgentEvent = {
+  type: 'skillStarted',
+  at: 7_000,
+  agentId: MAIN_AGENT_ID,
+  skill: 'foo',
+  args: '',
+};
+const fooByMain: RosterSkill = {
+  skill: 'foo',
+  agentId: MAIN_AGENT_ID,
+  ownerName: 'main',
+};
+
+// A roster holding these agents, tasks and skills.
+function roster(
+  agents: RosterAgent[],
+  tasks: RosterTask[] = [],
+  skills: RosterSkill[] = [],
+): Roster {
+  return { agents, tasks, skills };
 }
 
 // Row s1's process after a clear, beside its first process `h1`.
@@ -272,6 +289,36 @@ describe('agentsMainPart', () => {
       ],
       rosters: { s1: roster([], [taskOfListedA]) },
     },
+    {
+      name: 'two hosts of one row with the same skill by main show one row',
+      steps: [skillStartedFoo, { host: CLEARED_HOST, event: skillStartedFoo }],
+      sent: [
+        { sessionId: 's1', roster: roster([], [], [fooByMain]) },
+        { sessionId: 's1', roster: roster([], [], [fooByMain]) },
+      ],
+      rosters: { s1: roster([], [], [fooByMain]) },
+    },
+    {
+      name: 'a host with only skills left stays',
+      steps: [spawned, skillStartedFoo, finished, userMessage],
+      sent: [
+        { sessionId: 's1', roster: roster([runningA]) },
+        { sessionId: 's1', roster: roster([runningA], [], [fooByMain]) },
+        { sessionId: 's1', roster: roster([], [], [fooByMain]) },
+      ],
+      rosters: { s1: roster([], [], [fooByMain]) },
+    },
+    {
+      name: "a cleared host's skill stays through its end, until the row ends",
+      steps: [spawned, skillStartedFoo, sessionEnded, 'sessions.ended'],
+      sent: [
+        { sessionId: 's1', roster: roster([runningA]) },
+        { sessionId: 's1', roster: roster([runningA], [], [fooByMain]) },
+        { sessionId: 's1', roster: roster([], [], [fooByMain]) },
+        { sessionId: 's1', roster: roster([]) },
+      ],
+      rosters: {},
+    },
   ])('$name', ({ steps, sent, rosters }) => {
     const agents = startAgentsPart();
 
@@ -328,22 +375,28 @@ describe('agentsMainPart', () => {
     const agents = startAgentsPart();
     agents.agentEvent(spawned);
     agents.agentEvent(taskStartedA);
+    agents.agentEvent(skillStartedFoo);
     agents.invoke('openPreview');
 
     const first = agents.invoke('rosters') as Record<string, Roster>;
     first.s1.agents.pop();
     first.s1.tasks.pop();
+    first.s1.skills.pop();
     first[PREVIEW_ROW].agents.pop();
     first[PREVIEW_ROW].tasks.pop();
+    first[PREVIEW_ROW].skills.pop();
     const second = agents.invoke('rosters') as Record<string, Roster>;
 
     expect(Object.keys(second)).toEqual(['s1', PREVIEW_ROW]);
-    expect(second.s1).toEqual(roster([runningA], [taskOfListedA]));
+    expect(second.s1).toEqual(roster([runningA], [taskOfListedA], [fooByMain]));
     expect(second[PREVIEW_ROW].agents).toHaveLength(
       first[PREVIEW_ROW].agents.length + 1,
     );
     expect(second[PREVIEW_ROW].tasks).toHaveLength(
       first[PREVIEW_ROW].tasks.length + 1,
+    );
+    expect(second[PREVIEW_ROW].skills).toHaveLength(
+      first[PREVIEW_ROW].skills.length + 1,
     );
   });
 });

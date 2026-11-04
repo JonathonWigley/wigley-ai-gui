@@ -1,0 +1,32 @@
+/* The default layout's Skills section: one row per skill, its name in mono before the owner's tag. */
+
+[data-layout-owner='agent-skills'][data-layout='default'].agent-skills-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wg-space-1);
+  min-width: 0;
+}
+
+[data-layout-owner='agent-skills'][data-layout='default'] .agent-skills-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--wg-space-2);
+  min-width: 0;
+}
+
+[data-layout-owner='agent-skills'][data-layout='default'] .agent-skills-name {
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--wg-font-mono);
+  font-size: var(--wg-text-mono);
+  color: var(--wg-fg-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-layout-owner='agent-skills'][data-layout='default']
+  .agent-skills-row
+  .ui-tag {
+  flex: none;
+}

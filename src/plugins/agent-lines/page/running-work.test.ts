@@ -33,18 +33,27 @@ function task(taskId: string, startedAt: number): RosterTask {
 
 describe('runningWork', () => {
   it.each<{ name: string; roster: Roster; expected: unknown }>([
-    { name: 'empty', roster: { agents: [], tasks: [] }, expected: null },
+    {
+      name: 'empty',
+      roster: { agents: [], tasks: [], skills: [] },
+      expected: null,
+    },
     {
       name: 'earliest task wins',
       roster: {
         agents: [agent('a', 30), agent('b', 40)],
         tasks: [task('t', 35), task('u', 25), task('v', 50)],
+        skills: [],
       },
       expected: { startedAt: 25, agentCount: 2, taskCount: 3 },
     },
     {
       name: 'agents only',
-      roster: { agents: [agent('a', 30), agent('b', 40)], tasks: [] },
+      roster: {
+        agents: [agent('a', 30), agent('b', 40)],
+        tasks: [],
+        skills: [],
+      },
       expected: { startedAt: 30, agentCount: 2, taskCount: 0 },
     },
   ])(

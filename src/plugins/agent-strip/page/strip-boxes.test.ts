@@ -47,12 +47,17 @@ describe('orderStripBoxes', () => {
       roster: {
         agents: [agent('a1', 300)],
         tasks: [task('t200', 200), task('t100', 100)],
+        skills: [],
       },
       keys: ['a1', 't100', 't200'],
     },
     {
       name: 'equal starts keep roster order',
-      roster: { agents: [], tasks: [task('t1', 100), task('t2', 100)] },
+      roster: {
+        agents: [],
+        tasks: [task('t1', 100), task('t2', 100)],
+        skills: [],
+      },
       keys: ['t1', 't2'],
     },
     {
@@ -60,10 +65,15 @@ describe('orderStripBoxes', () => {
       roster: {
         agents: [agent('a1', 300), agent('a2', 50)],
         tasks: [task('t1', 100)],
+        skills: [],
       },
       keys: ['a2', 'a1', 't1'],
     },
-    { name: 'empty roster', roster: { agents: [], tasks: [] }, keys: [] },
+    {
+      name: 'empty roster',
+      roster: { agents: [], tasks: [], skills: [] },
+      keys: [],
+    },
   ])('$name', ({ roster, keys }) => {
     expect(keysOf(orderStripBoxes(roster))).toEqual(keys);
   });
@@ -76,10 +86,15 @@ describe('entryIndex', () => {
       roster: {
         agents: [agent('a1', 100), agent('a2', 200)],
         tasks: [task('t1', 300)],
+        skills: [],
       },
       index: 0,
     },
-    { name: 'no boxes', roster: { agents: [], tasks: [] }, index: null },
+    {
+      name: 'no boxes',
+      roster: { agents: [], tasks: [], skills: [] },
+      index: null,
+    },
   ])('$name', ({ roster, index }) => {
     expect(entryIndex(boxesOf(roster))).toBe(index);
   });
@@ -100,6 +115,7 @@ describe('reselect', () => {
   const three = boxesOf({
     agents: [agent('a1', 100), agent('a2', 200)],
     tasks: [task('t1', 300)],
+    skills: [],
   });
   it.each<{
     name: string;

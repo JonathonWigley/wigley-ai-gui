@@ -24,7 +24,7 @@ import { createAgentStrip } from './agent-strip';
 const NOW = 1_000_000;
 const SESSION = 'row-1';
 const OTHER_SESSION = 'row-2';
-const EMPTY: Roster = { agents: [], tasks: [] };
+const EMPTY: Roster = { agents: [], tasks: [], skills: [] };
 
 function agent(
   agentId: string,
@@ -71,18 +71,24 @@ function task(
 }
 
 // One running task, 30 s old, and no subagent.
-const ONE_TASK: Roster = { agents: [], tasks: [task('t1', 30_000)] };
+const ONE_TASK: Roster = {
+  agents: [],
+  tasks: [task('t1', 30_000)],
+  skills: [],
+};
 
 // Two subagents, then a task 30 s old.
 const MIXED: Roster = {
   agents: [agent('a1', 90_000), agent('a2', 60_000)],
   tasks: [task('t1', 30_000)],
+  skills: [],
 };
 
 // Three running subagents, oldest first.
 const THREE_AGENTS: Roster = {
   agents: [agent('a1', 90_000), agent('a2', 60_000), agent('a3', 30_000)],
   tasks: [],
+  skills: [],
 };
 
 // A scroller double whose track is a plain fake element: `reveals` holds each
@@ -419,6 +425,7 @@ describe('agent strip', () => {
     const { strip, build, enter, boxes, opened } = setUp({
       agents: [agent('a1', 60_000, 5)],
       tasks: [],
+      skills: [],
     });
     build();
     enter();
@@ -581,7 +588,11 @@ describe('agent strip', () => {
     { part: 'agentBox', roster: MIXED },
     {
       part: 'taskBox',
-      roster: { agents: [agent('a1', 90_000)], tasks: [task('t1', 30_000)] },
+      roster: {
+        agents: [agent('a1', 90_000)],
+        tasks: [task('t1', 30_000)],
+        skills: [],
+      },
     },
   ])('tick_ReplacedBox_KeepsItsBookkeeping ($part)', ({ part, roster }) => {
     const {
@@ -637,6 +648,7 @@ describe('agent strip', () => {
     const { strip, build, boxes, sets, advance } = setUp({
       agents: [agent('a1', 60_000)],
       tasks: [],
+      skills: [],
     });
     strip.setLayouts(
       withUser<Layout>(defaultLayout, {
@@ -666,6 +678,7 @@ describe('agent strip', () => {
     const { strip, build, sets, advance } = setUp({
       agents: [agent('a1', 60_000)],
       tasks: [],
+      skills: [],
     });
     const throwsOnce: Layout = {
       agentBox: (parent, input, kit) => ({
@@ -705,6 +718,7 @@ describe('agent strip', () => {
     const { build, boxes } = setUp({
       agents: [agent('a1', 60_000, 1, fields)],
       tasks: [],
+      skills: [],
     });
 
     build();
@@ -724,6 +738,7 @@ describe('agent strip', () => {
         }),
       ],
       tasks: [],
+      skills: [],
     });
 
     build();
@@ -748,6 +763,7 @@ describe('agent strip', () => {
         }),
       ],
       tasks: [],
+      skills: [],
     });
 
     build();
@@ -761,6 +777,7 @@ describe('agent strip', () => {
     const { build, boxes } = setUp({
       agents: [],
       tasks: [task('t1', 5_000, { ownerName: 'kind-fixer', command: 'npm t' })],
+      skills: [],
     });
 
     build();
@@ -919,6 +936,7 @@ describe('agent strip', () => {
         }),
       ],
       tasks: [],
+      skills: [],
     });
     build();
 
@@ -1043,7 +1061,7 @@ describe('agent strip', () => {
     {
       case: 'four then none logs the empty count',
       rosters: [
-        { agents: THREE_AGENTS.agents, tasks: [task('t1', 5_000)] },
+        { agents: THREE_AGENTS.agents, tasks: [task('t1', 5_000)], skills: [] },
         EMPTY,
       ],
       lines: [

@@ -10,7 +10,7 @@ import type {
 } from '../../sessions/contract';
 import type { AgentsChannel, Roster } from '../contract';
 import { agentsManifest } from '../manifest';
-import { foldAgentEvent } from '../roster';
+import { foldAgentEvent, isSameSkillRow } from '../roster';
 import { createAgentLog } from './agent-log';
 import { createAgentsPreview } from './preview';
 
@@ -22,26 +22,33 @@ type AgentsApi = MainApi<
     QualifiedEvents<'sessions', SessionsMainEvents>
 >;
 
-const NONE: Roster = { agents: [], tasks: [] };
+const NONE: Roster = { agents: [], tasks: [], skills: [] };
 
 // A row's roster as the page sees it: each host session id's running subagents,
-// and each one's running tasks, in the order each host id's roster began.
+// running tasks and skills, in the order each host id's roster began, a skill
+// row two hosts share kept once, at its first place.
 function rowRoster(hosts: ReadonlyMap<string, Roster>): Roster {
   const rosters = [...hosts.values()];
+  const skills = rosters.flatMap((roster) => roster.skills);
   return {
     agents: rosters.flatMap((roster) => roster.agents),
     tasks: rosters.flatMap((roster) => roster.tasks),
+    skills: skills.filter(
+      (row, index) =>
+        skills.findIndex((other) => isSameSkillRow(other, row)) === index,
+    ),
   };
 }
 
 // Hears chat's agent events: logs each in plugin data (all but replayed events
 // and the chat layout preview's sample events) and folds it, replayed or not,
 // into the roster of its process's host session id, sending the page each row's
-// roster that changed: every host id's subagents and tasks in the row, each list
-// in fold order. A host id's roster is dropped once its last item ends, and a
-// row's rosters when it closes or ends. Holds agents' sample session, whose
-// roster `rosters` lists beside the live ones. Registers no layout and hands the
-// self-test no script: agent-lines and agent-strip draw the rosters.
+// roster that changed: every host id's subagents, tasks and skills in the row,
+// each list in fold order. A host id's roster is dropped once it lists no agent,
+// task or skill, and a row's rosters when it closes or ends. Holds agents' sample
+// session, whose roster `rosters` lists beside the live ones. Registers no layout
+// and hands the self-test no script: agent-lines, agent-strip and agent-skills
+// draw the rosters.
 export const agentsMainPart: MainPart<typeof agentsManifest> = {
   manifest: agentsManifest,
   start(api: AgentsApi) {
@@ -58,7 +65,7 @@ export const agentsMainPart: MainPart<typeof agentsManifest> = {
     });
     // Row id → host session id → that process's roster. A clear leaves the
     // old process ending under the same row, so its `sessionEnded` must end
-    // only its own subagents and tasks.
+    // only its own subagents and tasks; its skills stay listed until the row ends.
     const rosters = new Map<string, Map<string, Roster>>();
 
     api.events.on(
@@ -74,7 +81,11 @@ export const agentsMainPart: MainPart<typeof agentsManifest> = {
         if (after === before) {
           return;
         }
-        if (after.agents.length === 0 && after.tasks.length === 0) {
+        const listsNothing =
+          after.agents.length === 0 &&
+          after.tasks.length === 0 &&
+          after.skills.length === 0;
+        if (listsNothing) {
           hosts.delete(hostSessionId);
         } else {
           hosts.set(hostSessionId, after);
@@ -95,7 +106,7 @@ export const agentsMainPart: MainPart<typeof agentsManifest> = {
       if (rosters.delete(sessionId)) {
         api.channel.send('rosterChanged', {
           sessionId,
-          roster: { agents: [], tasks: [] },
+          roster: { agents: [], tasks: [], skills: [] },
         });
       }
     };

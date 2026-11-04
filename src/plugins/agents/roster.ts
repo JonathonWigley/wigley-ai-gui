@@ -3,14 +3,15 @@ import type {
   Roster,
   RosterAgent,
   RosterOutcome,
+  RosterSkill,
   RosterTask,
   RosterTool,
 } from './contract';
 
-// Folds one agent event into one process's roster, which lists only running items, each list kept in start order; an
-// item never moves. Returns `roster` itself when the event changes nothing. An agent or task leaves when it ends, done
-// or failed. A task outlives the subagent that started it. `sessionEnded` empties the roster, since a process that
-// exits mid-run sends no end for its items.
+// Folds one agent event into one process's roster, each list kept in start order; an item never moves. Returns
+// `roster` itself when the event changes nothing. An agent or task leaves when it ends, done or failed. A task and a
+// skill outlive the subagent that started them. `sessionEnded` empties the agents and tasks, since a process that exits
+// mid-run sends no end for them, and keeps the skills, which only the row's end clears.
 export function foldAgentEvent(roster: Roster, event: AgentEvent): Roster {
   switch (event.type) {
     case 'agentSpawned':
@@ -118,20 +119,43 @@ export function foldAgentEvent(roster: Roster, event: AgentEvent): Roster {
     }
     case 'sessionEnded': {
       const isEmpty = roster.agents.length === 0 && roster.tasks.length === 0;
-      return isEmpty ? roster : { agents: [], tasks: [] };
+      return isEmpty
+        ? roster
+        : { agents: [], tasks: [], skills: roster.skills };
     }
+    case 'skillStarted':
+      return roster.skills.some((row) => isSameSkillRow(row, event))
+        ? roster
+        : {
+            ...roster,
+            skills: [
+              ...roster.skills,
+              {
+                skill: event.skill,
+                agentId: event.agentId,
+                ownerName: nameOfOwner(roster.agents, event.agentId),
+              },
+            ],
+          };
     case 'userMessage':
     case 'sessionStarted':
     case 'usage':
     case 'compactionStarted':
     case 'compactionEnded':
-    case 'skillStarted':
     case 'fileWritten':
     case 'turnStarted':
     case 'turnEnded':
       return roster;
   }
   return event satisfies never;
+}
+
+// Whether two skill starts share one row: the same skill by the same agent.
+export function isSameSkillRow(
+  a: Pick<RosterSkill, 'skill' | 'agentId'>,
+  b: Pick<RosterSkill, 'skill' | 'agentId'>,
+): boolean {
+  return a.skill === b.skill && a.agentId === b.agentId;
 }
 
 function indexOfAgent(agents: readonly RosterAgent[], agentId: string): number {
@@ -142,7 +166,7 @@ function indexOfTask(tasks: readonly RosterTask[], taskId: string): number {
   return tasks.findIndex((task) => task.taskId === taskId);
 }
 
-// The name a task shows for the agent `agentId` that started it.
+// The name a task or skill row shows for the agent `agentId` that started it.
 function nameOfOwner(agents: readonly RosterAgent[], agentId: string): string {
   if (agentId === MAIN_AGENT_ID) {
     return 'main';

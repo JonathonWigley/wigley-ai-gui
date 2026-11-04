@@ -39,7 +39,8 @@ export function createPageRosters(deps: {
   };
 
   return {
-    roster: (sessionId) => rosters.get(sessionId) ?? { agents: [], tasks: [] },
+    roster: (sessionId) =>
+      rosters.get(sessionId) ?? { agents: [], tasks: [], skills: [] },
     onRosterChanged: (heard): Disposable => {
       const listener = { heard };
       listeners.add(listener);

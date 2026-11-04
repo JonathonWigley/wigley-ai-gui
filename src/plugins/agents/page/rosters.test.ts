@@ -20,13 +20,14 @@ function agent(agentId: string, startedAt: number): RosterAgent {
   };
 }
 
-const EMPTY: Roster = { agents: [], tasks: [] };
+const EMPTY: Roster = { agents: [], tasks: [], skills: [] };
 // The `rosters` read's roster for s1, older than CHANGED.
-const READ: Roster = { agents: [agent('a1', 1_200)], tasks: [] };
+const READ: Roster = { agents: [agent('a1', 1_200)], tasks: [], skills: [] };
 // A `rosterChanged` roster for s1.
 const CHANGED: Roster = {
   agents: [agent('a1', 1_200), agent('a2', 3_400)],
   tasks: [],
+  skills: [],
 };
 
 // Page rosters with two listeners, `first` then `second`, each recording
