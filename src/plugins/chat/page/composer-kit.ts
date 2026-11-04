@@ -97,9 +97,11 @@ export interface ComposerSurface {
   // composer's root.
   drawComposer(parent: HTMLElement, input: ComposerInput): HTMLElement;
   // Runs the composer's update with `input`, then draws the status line with
-  // it in place of its last draw. Returns false, drawing no status line, when
-  // the update threw: the composer then draws with `default` until the
-  // layouts change, and the caller draws it again.
+  // it in place of its last draw. A change to `isBoxFocused` alone moves only the
+  // type hint, and an unchanged input draws nothing, so the elements under a
+  // press that focused the pane stay in the document for its click. Returns
+  // false, drawing no status line, when the update threw: the composer then
+  // draws with `default` until the layouts change, and the caller draws it again.
   drawStatusLine(input: ComposerInput): boolean;
   // Draws the attachments in place of their last draw; the slot hides while
   // `images` is empty.
@@ -167,6 +169,7 @@ export function createComposerSurface(
   const attachmentsDraws = chatPartDraws(deps.layouts, 'attachments', deps.log);
   let composer: DrawnPart<BuiltPart<ComposerInput>> | null = null;
   let statusLine: DrawnPart<BuiltPart<ComposerInput>> | null = null;
+  let statusLineDrawnFor: string | null = null;
   let attachments: DrawnPart<BuiltPart<AttachmentsInput>> | null = null;
   let images: readonly ChatImage[] = [];
 
@@ -262,6 +265,10 @@ export function createComposerSurface(
       if (isComposerStale) {
         return false;
       }
+      if (statusLineDrawnFor === statusLineFacts(input)) {
+        showBoxFocus(parts, input);
+        return true;
+      }
       drawStatusLinePart(input);
       return true;
     },
@@ -314,6 +321,7 @@ export function createComposerSurface(
   };
 
   const drawStatusLinePart = (input: ComposerInput) => {
+    statusLineDrawnFor = null;
     statusLine?.dispose();
     statusLineSlot.replaceChildren();
     statusLine = statusLineDraws.draw(
@@ -332,9 +340,23 @@ export function createComposerSurface(
         return { element: view.element, view };
       },
     );
+    statusLineDrawnFor = statusLineFacts(input);
   };
 
   return surface;
+}
+
+// What a status line draw depends on: all of `input` but `isBoxFocused`, which
+// `showBoxFocus` applies in place.
+function statusLineFacts(input: ComposerInput): string {
+  return JSON.stringify({ ...input, isBoxFocused: false });
+}
+
+function showBoxFocus(
+  parts: Pick<StatusLineParts, 'typeHint'>,
+  input: ComposerInput,
+) {
+  parts.typeHint.classList.toggle('is-box-focused', input.isBoxFocused);
 }
 
 // `key`'s part in a new hidden `div.<slotClass>`, which shows while the part has
@@ -528,7 +550,7 @@ function statusLineKit(
   return {
     ...base,
     typeHint(parent) {
-      parts.typeHint.classList.toggle('is-box-focused', input.isBoxFocused);
+      showBoxFocus(parts, input);
       return appended(parent, parts.typeHint);
     },
     modelEffortChip(parent, modelEffort) {
