@@ -1,6 +1,6 @@
 # 06 — Final verification
 
-Status: not started
+Status: done
 Type: Task
 Wave: 5 · Depends on: 05
 Plan: [plan.md](plan.md)
@@ -23,3 +23,4 @@ Commit:    no commit, unless a fix lands
 
 ## Proof
 
+Commit 5c929ff8 · proof: selftest --plugin workflow --plugin chat all passed; screenshots read; drive checks 1-9 pass: list scroll held through a push, composer right 918 <= pane left 930, picker and dialog centred at 600 of 1200, split tabs 438 wide hide the holder and 892 restores it, preview labels pinned, stored hide survives a restart, fold and keys, no focus taken · concerns: pulse restart on a flow push unobserved; 1200x500 clips the composer strip, split swap hint draws over the pane, origin not checked

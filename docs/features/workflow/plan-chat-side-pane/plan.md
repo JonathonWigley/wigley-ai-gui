@@ -134,16 +134,16 @@ export type MarkState = StageStatus | 'pending';
 - [x] [Stage status and labels](02-stage-status-and-labels.md)
 
 ### Wave 2
-- [ ] [Workflow side pane part](03-workflow-side-pane-part.md) — after 02
+- [x] [Workflow side pane part](03-workflow-side-pane-part.md) — after 02
 
 ### Wave 3
-- [ ] [Wire the pane and remove the Flow tab](04-wire-pane-remove-flow-tab.md) — after 01, 03
+- [x] [Wire the pane and remove the Flow tab](04-wire-pane-remove-flow-tab.md) — after 01, 03
 
 ### Wave 4
-- [ ] [Doc re-read](05-doc-re-read.md)
+- [x] [Doc re-read](05-doc-re-read.md)
 
 ### Wave 5
-- [ ] [Final verification](06-final-verification.md)
+- [x] [Final verification](06-final-verification.md)
 
 ## Run log
 
@@ -152,13 +152,27 @@ Review base: 68948b9f7b94a2184562454202edd2584ea190ba
 ### Groups
 - 02 · 72ec4d6b · diff read: every Produces present; typecheck: only the checking literal in workflow-view.test.ts, which task 03 owns · concerns: workflow-view.test.ts expects the old labels until task 03; runsTasks has no test until task 03 reads it
 - 01 · 8a78aef6 · diff read: every Produces present; typecheck: only the checking literal task 03 owns · concerns: width rule relies on layout.css loading after chat.css, and containment, composer placement and hidden holder are unproved until a live run; a rebuild drops a surviving part local state
+- 03 · 1f3ecac6 · diff read: every Produces present or logged as a contract change; typecheck clean · concerns: pulse restarts on each redraw, and the stepper and button wrapping at 264 px are unseen until a live run; DESIGN.md Workflow is stale; pane background differs from the hub docs
+- 04 · 4b3b2c08 · diff read: both commands and binds present; typecheck clean; done-when grep prints only flow-store.test.ts:98 under src/plugins/workflow, no workflow scroll bind left in keymap.ts · concerns: done-when grep also matches other plugins lineDown binds; scrollsItself may need the side list for the fit check; uiState start-up read proved only live; createWorkflowKit scope is now always null; a user layout defining flowTab would throw, none on this machine
+- 05 · 5c929ff8 · diff read: DESIGN.md, workflow design and keymap format match the code; Flow tab grep prints nothing; hub lines kept · concerns: mixed hub line kept in workflow design; the no-keyboard-focus line unverified, for the live run
+- 06 · 5c929ff8 · selftest --plugin workflow --plugin chat all passed; screenshots read; drive checks 1-9 pass: list scroll held through a push, composer right 918 <= pane left 930, picker and dialog centred at 600 of 1200, split tabs 438 wide hide the holder and 892 restores it, preview labels pinned, stored hide survives a restart, fold and keys, no focus taken · concerns: pulse restart on a flow push unobserved; 1200x500 clips the composer strip, split swap hint draws over the pane, origin not checked
 ### Contract changes
 - ChatSidePart: extends ContributedPart → standalone id and build, the same fields · why: scripts/check-layers.mts lets chat contract.ts import only src/contracts · consumers: 03, 04 (still assignable to ContributedPart) · group 01
+- WorkflowView.sidePart: ContributedPart → ChatSidePart · why: matches stripPart: ChatComposerPart and its chat contract, and ChatSidePart is what addSidePart takes · consumers: 04 · group 03
+- MarkState: StageStatus from contract.ts → layout.d.ts declares its own identical StageStatus · why: layout-contracts.test.ts rejects a relative import in layout.d.ts beside the kit, and a status added to contract.ts alone fails typecheck where the view assigns it · consumers: 04 · group 03
 ### Rulings
 - Task 05 checks only the lines this plan owns; the session hub lines from 68948b9f (hub sections, title and order on a side part, Space v s, agent-skills) stay as written, because they are docs ahead for a later plan — if wrong, a hub plan must still widen addSidePart · lead
 - The run is in worktree chat-side-pane on the user request, with node_modules symlinked as row-clock does; this project has no editor, so the test gate and self-test run in the worktree rather than waiting for the main tree — if wrong, re-run them after the merge · lead
 - docs/keymap.md failed oxfmt --check at the review base, before any of this work; task 05 formats it as a plain correctness fix, so task 04 reads that one lint failure as known — if wrong, one formatting commit · lead
 - statusText builds on detailLine, and each stage holds file-level label and status constants — the shared join and one status reference — a mechanical rewrite if wrong · group 02 · group 02
 - position: relative moved from .chat-tab to .chat-main, the composer being its only absolute child — that element would position against a further ancestor if wrong · group 01 · group 01
+- Pane width is calc(var(--wg-space-6) * 11), 264 px in the shipped theme, because check-styles rejects a raw length — the width scales with a theme that changes space-6 · group 03 · group 03
+- The progress bar is kit.meter and the statusMark table sits in workflow-view.test.ts — reuse of a base primitive, and layout.test.ts has only a fake kit — one table or one element to move if wrong · group 03 · group 03
+- Task 05 also checks DESIGN.md § Workflow, which still names three parts and the old strip, and its doc line on the plan title, which the pane shows through detail — no task owned that doc, and it would stay stale · lead
+- stepState keeps its current === -1 branch after the Flow tab goes: a stage added with inStepper false reaches it through the strip, so its test moves to such a stage rather than leaving with idle — one branch and one row if wrong · lead
+- manifest keeps scopes: {} since definePlugin requires the key — no cost if wrong · group 04 · group 04
+- none needed beyond the lead rulings on the hub lines and DESIGN.md · group 05 · group 05
+- No commit for this task; the proof records the tip it ran on · lead · group 06
 ### Review rounds
 ### Test gate
+- src/plugins/workflow (every edited and added test, and the stage, view, layout, preview and flow logic the diff changed) · src/plugins/keymap.test.ts (the binds changed) · src/plugins/chat/page/chat-view.test.ts (the tab shape and side parts) · src/shared/layouts/layout-contracts.test.ts (layout.d.ts changed) · 26 files, 366 tests pass

@@ -1,6 +1,6 @@
 # 04 — Wire the pane and remove the Flow tab
 
-Status: not started
+Status: done
 Type: Task
 Wave: 3 · Depends on: 01, 03
 Plan: [plan.md](plan.md)
@@ -41,3 +41,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 4b3b2c08 · proof: diff read: both commands and binds present; typecheck clean; done-when grep prints only flow-store.test.ts:98 under src/plugins/workflow, no workflow scroll bind left in keymap.ts · concerns: done-when grep also matches other plugins lineDown binds; scrollsItself may need the side list for the fit check; uiState start-up read proved only live; createWorkflowKit scope is now always null; a user layout defining flowTab would throw, none on this machine

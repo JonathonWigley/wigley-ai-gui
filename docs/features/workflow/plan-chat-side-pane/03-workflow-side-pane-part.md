@@ -1,6 +1,6 @@
 # 03 — Workflow side pane part
 
-Status: not started
+Status: done
 Type: Task
 Wave: 2 · Depends on: 02
 Plan: [plan.md](plan.md)
@@ -76,3 +76,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 1f3ecac6 · proof: diff read: every Produces present or logged as a contract change; typecheck clean · concerns: pulse restarts on each redraw, and the stepper and button wrapping at 264 px are unseen until a live run; DESIGN.md Workflow is stale; pane background differs from the hub docs

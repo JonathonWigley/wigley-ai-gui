@@ -1,6 +1,6 @@
 # 05 — Doc re-read
 
-Status: not started
+Status: done
 Type: Task
 Wave: 4 · Depends on: 01, 02, 03, 04
 Plan: [plan.md](plan.md)
@@ -14,3 +14,4 @@ Commit:    one commit for the group, when a line changed
 
 ## Proof
 
+Commit 5c929ff8 · proof: diff read: DESIGN.md, workflow design and keymap format match the code; Flow tab grep prints nothing; hub lines kept · concerns: mixed hub line kept in workflow design; the no-keyboard-focus line unverified, for the live run
