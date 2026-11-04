@@ -7,7 +7,7 @@
 - **Flow** — a session from start to end, with a form swapping in and back.
 - **Agent harness seam** — the contract, the Claude adapter, the fake, chat entries, controls, images, accounts.
 - **Sessions and tabs** — owned sessions, joining the relay, take over and give back, the attention mark.
-- **Chat plugin** — the Chat tab, activity lines, the activity dock, the start prompt, sign-in, app slash commands, images, permission cards, alerts, keys.
+- **Chat plugin** — the Chat tab, activity lines, the activity dock, the start prompt, sign-in, app slash commands, images, permission cards, alerts, keys, starting a session from an agent.
 - **Layouts** — chat layouts on the core layout service and the page host.
 - **Plans** — what plans A to F each land.
 - **Out of scope** — follow-ups.
@@ -474,6 +474,11 @@ interview on 2026-10-23; this file is the record of both.
 - **Self-test**: the self-test host takes one script per plugin and runs them in plugin start order, so chat's
   steps live in chat's own script over the fake adapter. The give-back rule is pinned by the tabs unit tests; the
   swap with a real round is a live check in the final verification.
+- **Starting a session from an agent**: the `start_session` MCP tool opens a chat session through the same background
+  launch Notes and Workflow use, so the row appears without taking focus. The tool is the only route from outside
+  the window. A command-line route was rejected because it returns nothing to the caller, needs its own check of who
+  is calling, and has no caller that lacks the relay. The app adds no approval and no cap: the calling session's
+  permission mode gates the call, and the new row keeps every start visible.
 
 ## Layouts
 

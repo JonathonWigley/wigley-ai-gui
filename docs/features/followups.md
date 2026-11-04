@@ -368,6 +368,11 @@ What Windows support and installers need.
 - **Packaging and installers** — *needs a feature plan*: installers for macOS and Windows (`forge.config.mts` has only
   `packagerConfig`, no makers). On the first signed build, check live that a notification click focuses its round:
   an unsigned dev build gets no macOS notification (the alerts adapter falls back to Dock bounce and badge).
+- **Stable signing identity on macOS** — *needs a feature plan*: an agent session lost all access to `~/Documents`
+  (`Operation not permitted`) right after the stable app relaunched, and regained it once the user changed the macOS
+  privacy setting. The likely cause, not yet confirmed, is that the app is ad hoc signed with no team ID, so macOS
+  ties the folder permission to one build and each `npm run install-app` can drop it for every running agent. Confirm
+  the cause, then decide which signing identity `install-app` uses.
 - **Native window vibrancy** — *needs a feature plan*: macOS `vibrancy` and Windows 11 mica behind a window adapter,
   in place of the CSS backdrop under L1 glass (`docs/features/ui-design/design.md`).
 - **Menu labels by label** — *agent-ready*: the app menu labels commands by `label`, not id

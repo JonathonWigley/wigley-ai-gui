@@ -233,7 +233,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  follow-up list with its editor, read-only plans and features, `docs/features/backlog/design.md`),
                  layouts/ (the backlog Layout contract and the built-in `default` layout)
   chat/          manifest.ts, contract.ts, main/ (owned sessions' agent processes and chat entries, the
-                 permission_prompt MCP tool, recent folders, archived sessions, resume, sign-in, preview/: the
+                 permission_prompt and start_session MCP tools, recent folders, archived sessions, resume, sign-in, preview/: the
                  layout preview's sample session, held with no process), page/ (the
                  Chat tab with its attached images and image viewer, app slash commands and the sign-in dialog,
                  the start prompt with its folder, profile, sign-in and session steps), layouts/ (the chat Layout contract
