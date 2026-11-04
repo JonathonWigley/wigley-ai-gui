@@ -1,6 +1,6 @@
 # 05 — Chat send gate and hold
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 4 · Depends on: 02, 03
 Plan: [plan.md](plan.md)
@@ -440,3 +440,5 @@ These override any earlier line of this task that they contradict.
 
 
 ## Proof
+
+Commit 763eeea0 · proof: Diff read against Produces: addSendGate, addIdleCompactThreshold, SendGate types, SessionCompaction, holdReason, compaction channel event, holdCompactions and releaseCompactions drive actions, ChatDriveDeps.harnesses; typecheck errors left only in task 06's page files; chat vitest green per worker · concerns: Refused /compact draws its reason twice; pull-back window between compact() and compactionStarted; Turn finished alert can fire for a compaction whose row was pulled back; start.ts compactions wiring has no unit test

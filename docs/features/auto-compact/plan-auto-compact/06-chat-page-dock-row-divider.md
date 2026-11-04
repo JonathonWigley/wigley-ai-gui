@@ -1,6 +1,6 @@
 # 06 — Chat page: dock, held row, divider
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 5 · Depends on: 04, 05
 Plan: [plan.md](plan.md)

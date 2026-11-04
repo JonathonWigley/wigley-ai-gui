@@ -234,7 +234,7 @@ read as `api.settings().minTokens` at each ask; the user writes `"auto-compact":
 
 ### Wave 4
 - [x] [Usage line compacting chip](04-usage-compacting-chip.md) — after 02, 03
-- [ ] [Chat send gate and hold](05-chat-send-gate-and-hold.md) — after 02, 03
+- [x] [Chat send gate and hold](05-chat-send-gate-and-hold.md) — after 02, 03
 
 ### Wave 5
 - [ ] [Chat page: dock, held row, divider](06-chat-page-dock-row-divider.md) — after 04, 05
@@ -255,6 +255,7 @@ Review base: 693cb8d04eb48c87e6cba0406a0e2d850f90db54
 - 02 · ae15b8b7 · diff read, every Produces found by search; typecheck errors only in tasks 03, 05, 06's files plus activity-runs.test.ts and working-turn.test.ts, given to 06; worker's Vitest and lint green · concerns: refused /compact draws its reason twice; interrupted compact() draws Interrupted and Compaction canceled on a skip; a queued typed /compact behind an interrupted turn gets a false interrupted end; settings.json env may override the idle threshold; interim undefined env until 05
 - 03 · 7fdb2af9 · diff read, every Produces found by search; typecheck has no fake-agent-harness errors; worker's file 108/108 · concerns: compact() does not refuse during a fake workflow turn, which never sets isTurnOpen, so the fake is looser than the contract there; a late-permission guard was added beyond the plan
 - 04 · 0a250f53 · diff read, every Produces found by search; typecheck clean in usage and format-tokens; worker's 191 usage tests green; self-test and capture deferred to the lead's run after 05 · concerns: the compacting step pins cache 42m, so a run reaching it 30 s after the seed reads 41m; start.ts compactions wiring has no unit test and the self-test settles it; box focus after the narrow group is assumed
+- 05 · 763eeea0 · Diff read against Produces: addSendGate, addIdleCompactThreshold, SendGate types, SessionCompaction, holdReason, compaction channel event, holdCompactions and releaseCompactions drive actions, ChatDriveDeps.harnesses; typecheck errors left only in task 06's page files; chat vitest green per worker · concerns: Refused /compact draws its reason twice; pull-back window between compact() and compactionStarted; Turn finished alert can fire for a compaction whose row was pulled back; start.ts compactions wiring has no unit test
 ### Contract changes
 - Compaction state and events: claude-code-harness.ts handleLine → session-fold.ts SessionFoldState.compaction, with new exports foldProcessClosed and nextFoldDeadline, plus compact() writing under appCommandUuid so a replay reads it as the app's · why: at the tip the line logic lives in the fold the session host extracted, and an attach replays it · consumers: none outside the adapter · group 02
 ### Rulings
@@ -265,5 +266,7 @@ Review base: 693cb8d04eb48c87e6cba0406a0e2d850f90db54
 - Task 01 no-compaction branch stays as a guard though probe E shows a refused /compact prints compacting then a failed status: that path is what the table names, and the terminal-frame path still covers a command that never compacts — dead code if Claude never does this · lead
 - Missed consumers activity-runs.test.ts and working-turn.test.ts go to task 06 with the other page entry-kind tables — the same switch, and 06 owns that folder — none if 06 misses them, since task 09's whole typecheck names them · lead
 - A compact(); interrupt() in one tick still emits compactionStarted, paired with the interrupter's end, since the row requires exactly one of each · group 03 · group 03
+- writeNextQueued refuses whenever any hold is up; gates are asked before the unsent-rows-first branch; replayed compaction events update state.compaction; profileDir also set in attachProcess; an attach carries idleCompactMinTokens null; restAfterFailedAttach clears compaction · group 05
+- Self-test runs by the lead only after wave 5: workers share .selftest/ and the page needs task 06's compaction kind first. chat-view.test.ts stateOf literal, activity-runs.test.ts and working-turn.test.ts go to task 06.
 ### Review rounds
 ### Test gate
