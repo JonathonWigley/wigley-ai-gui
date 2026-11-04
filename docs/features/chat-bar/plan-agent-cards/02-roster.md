@@ -1,6 +1,6 @@
 # 02 — Roster: running items only, kind, context, owner name
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -62,3 +62,5 @@ Done when: `npm run typecheck`, `npm run lint` and `npx vitest run src/plugins/a
 Commit:    one commit for the group
 
 ## Proof
+
+Commit ef990e82 · proof: diff read: RosterAgent and RosterTask shapes present in contract.ts; lint passes; worker ran vitest on agents and agent-lines (77 tests pass); typecheck has 10 errors, all agent-strip, proved at 03 as the task allows · concerns: a duplicate agentSpawned or taskStarted for an ended id lists it again, for failed items too (no adapter code read to rule it out); agent-strip selftest prose left for 03; agent-tower design line 108 left for 04

@@ -1,28 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { MAIN_AGENT_ID } from '../../../contracts/agent';
-import type {
-  Roster,
-  RosterAgent,
-  RosterOutcome,
-  RosterTask,
-} from '../../agents/contract';
+import type { Roster, RosterAgent, RosterTask } from '../../agents/contract';
 import {
-  agentMeta,
-  boxLook,
   entryIndex,
   orderStripBoxes,
   reselect,
   type StripBox,
   stepIndex,
-  taskOwner,
 } from './strip-boxes';
 
-function agent(
-  agentId: string,
-  startedAt: number,
-  outcome: RosterOutcome = 'running',
-  fields: Partial<RosterAgent> = {},
-): RosterAgent {
+function agent(agentId: string, startedAt: number): RosterAgent {
   return {
     agentId,
     agentType: 'Explore',
@@ -32,25 +19,21 @@ function agent(
     model: null,
     effort: null,
     spendUsd: null,
+    isBackground: false,
+    contextTokens: null,
+    contextWindow: null,
     tools: [],
-    outcome,
-    ...fields,
   };
 }
 
-function task(
-  taskId: string,
-  startedAt: number,
-  outcome: RosterOutcome = 'running',
-  agentId: string = MAIN_AGENT_ID,
-): RosterTask {
+function task(taskId: string, startedAt: number): RosterTask {
   return {
     taskId,
-    agentId,
+    agentId: MAIN_AGENT_ID,
+    ownerName: 'main',
     description: 'npm test',
     command: null,
     startedAt,
-    outcome,
   };
 }
 
@@ -81,18 +64,10 @@ describe('orderStripBoxes', () => {
 describe('entryIndex', () => {
   it.each<{ name: string; roster: Roster; index: number | null }>([
     {
-      name: 'first running in the middle',
+      name: 'the first of several',
       roster: {
-        agents: [agent('a1', 100, 'done'), agent('a2', 200)],
+        agents: [agent('a1', 100), agent('a2', 200)],
         tasks: [task('t1', 300)],
-      },
-      index: 1,
-    },
-    {
-      name: 'none running',
-      roster: {
-        agents: [agent('a1', 100, 'failed')],
-        tasks: [task('t1', 200, 'done')],
       },
       index: 0,
     },
@@ -149,44 +124,5 @@ describe('reselect', () => {
     { name: 'empty', key: 'a1', lastIndex: 0, boxes: [], index: null },
   ])('$name', ({ key, lastIndex, boxes, index }) => {
     expect(reselect(key, lastIndex, boxes)).toBe(index);
-  });
-});
-
-describe('boxLook', () => {
-  it.each<{ outcome: RosterOutcome; dot: string; isDimmed: boolean }>([
-    { outcome: 'running', dot: 'running', isDimmed: false },
-    { outcome: 'done', dot: 'success', isDimmed: true },
-    { outcome: 'failed', dot: 'error', isDimmed: true },
-  ])('$outcome', ({ outcome, dot, isDimmed }) => {
-    expect(boxLook(outcome)).toEqual({ dot, isDimmed });
-  });
-});
-
-describe('agentMeta', () => {
-  it.each<{ name: string; fields: Partial<RosterAgent>; meta: string }>([
-    {
-      name: 'all three',
-      fields: { model: 'claude-sonnet-4-5', effort: 'high', spendUsd: 0.4213 },
-      meta: 'claude-sonnet-4-5 · high · $0.42',
-    },
-    {
-      name: 'no effort',
-      fields: { model: 'claude-sonnet-4-5', spendUsd: 0.4213 },
-      meta: 'claude-sonnet-4-5 · $0.42',
-    },
-    { name: 'all null', fields: {}, meta: '' },
-  ])('$name', ({ fields, meta }) => {
-    expect(agentMeta(agent('a1', 100, 'running', fields))).toBe(meta);
-  });
-});
-
-describe('taskOwner', () => {
-  const agents = [agent('a1', 100), agent('a2', 200)];
-  it.each<{ name: string; agentId: string; owner: string }>([
-    { name: 'main', agentId: MAIN_AGENT_ID, owner: 'main' },
-    { name: 'a listed subagent', agentId: 'a2', owner: 'name-a2' },
-    { name: 'an unlisted id', agentId: 'gone', owner: 'subagent' },
-  ])('$name', ({ agentId, owner }) => {
-    expect(taskOwner(task('t1', 300, 'running', agentId), agents)).toBe(owner);
   });
 });

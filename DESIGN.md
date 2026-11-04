@@ -422,11 +422,12 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   label: the cursor's shape shows the vim mode), and the status line, drawn in this order: repo and branch in `fg-secondary`, the `i`/`a`
   type hint, one model · effort chip, every other control's chip, the status parts other plugins add (usage: context,
   cache, spend), the running dot, then Send.
-  The **agent strip** is an HScroller of boxes, each a `card-background` Card with `radius-md`: a subagent box holds a
-  StatusDot, its name, `model · effort · $cost` in `fg-tertiary`, the description, and its latest three tool calls in
-  mono; a task box a terminal icon, the description, its owning agent and the elapsed time. A finished box dims to
-  `fg-tertiary` with a done or failed dot; the selected box takes the focus ring. A user turn shows its sent images as
-  thumbnails under its text.
+  The **agent strip** is an HScroller of boxes, each a `card-background` Card with `radius-md`, heading with a running
+  StatusDot, its name, a kind Tag and its elapsed time, then its description: a subagent box adds `model · effort` in
+  `fg-tertiary`, its latest three tool calls in mono on `block-background`, the older two fading, and a context bar
+  (`status-warning` at 80% or more), `84k/200k` and its cost; a task box adds its command in mono on `block-background`.
+  A box leaves when its subagent or task ends; the selected box takes the focus ring. A user turn shows its sent images
+  as thumbnails under its text.
 - **Visuals:** an agent's html block in any markdown. While it streams it is a Card holding a running StatusDot and
   `drawing visual…` in `text-12` `fg-secondary`. Once closed it is the inline box: the frame as wide as its column in a
   `radius-md` box that clips it, over a bar holding the small expand icon button at its end, the button's `v` hint on

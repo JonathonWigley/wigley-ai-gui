@@ -121,7 +121,7 @@ No new files. Shared names across tasks:
 - [x] [Agent events carry context and background launch](01-agent-events.md)
 
 ### Wave 2
-- [ ] [Roster: running items only, kind, context, owner name](02-roster.md) — after 01
+- [x] [Roster: running items only, kind, context, owner name](02-roster.md) — after 01
 
 ### Wave 3
 - [ ] [Strip draws design A](03-strip-cards.md) — after 02
@@ -136,10 +136,13 @@ No new files. Shared names across tasks:
 Review base: 693cb8d04eb48c87e6cba0406a0e2d850f90db54
 ### Groups
 - 01 · f678086a · diff read: both Produces members present in src/contracts/agent.ts; typecheck and lint pass; worker ran the task's vitest paths plus src/plugins/agents (616 tests pass) · concerns: a foreground subagent of the main agent is failed before a result's re-emission, so it holds a window only from an earlier result; subagent contextTokens leaves out output_tokens while the main agent's usage counts them; launched agents re-emit in receipt order; a late reply after an agent's end re-creates an unread store entry
+- 02 · ef990e82 · diff read: RosterAgent and RosterTask shapes present in contract.ts; lint passes; worker ran vitest on agents and agent-lines (77 tests pass); typecheck has 10 errors, all agent-strip, proved at 03 as the task allows · concerns: a duplicate agentSpawned or taskStarted for an ended id lists it again, for failed items too (no adapter code read to rule it out); agent-strip selftest prose left for 03; agent-tower design line 108 left for 04
 ### Rulings
 - Worktree run on branch agent-cards, from the local main tip; the test gate, self-test and drive checks stay in the worktree — this repo has no Unity editor, and AGENTS.md puts drive runs beside a peer's in a worktree, which has its own .vite — merging the branch back stays the user's call · lead
 - User's word for this run: every review recommendation is taken, so no triage round is sent and each finding takes its recommended pick, reported in the wrap-up — the user said so mid-run — a pick the user would have changed lands without a look until the wrap-up · lead
 - A [...] key in a result with no plain key beside it deletes the plain key's learned window: a map that only grows cannot pass the 200000-then-[1m] case, and replacing the map per result would lose every window on an empty modelUsage — a process alternating plain and suffixed keys sends the window back and forth · group 01 · group 01
 - A result naming both a plain and a [...] key keeps the plain window, per exact-first: if modelUsage is cumulative, a model moved to [1m] keeps showing the old window; task 05's live check can settle it · group 01 · group 01
 - Several [...] keys for one model: the first learned wins; the plan names no rule — the card shows the other suffix's window if wrong · group 01 · group 01
+- start.test.ts's message row is a cleared host's userMessage sending only [runningA]: the first row already proves a same-host one sends nothing; the fold ignores userMessage, so restoring the fan-out would not turn it red · group 02 · group 02
+- ownerName is written once at taskStarted: a task starting before its owner's agentSpawned keeps subagent for good · group 02 · group 02
 

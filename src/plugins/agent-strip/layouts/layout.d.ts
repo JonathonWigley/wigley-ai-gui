@@ -1,10 +1,11 @@
 // The agent-strip layout contract: what a layout in `layouts/agent-strip/<name>/layout.js` draws the strip above a Chat
-// tab's composer box with. The app draws one `agentBox` per subagent of the session and one `taskBox` per task, failed
-// ones included until the user's next message, in start order, into the strip's scrolling track. Into the open agent
-// box's own root, after `agentBox` returns it, it draws a `toolList` of every tool call that subagent made; a task box
-// draws its own `command` while `isOpen`. The app sets `data-layout-owner="agent-strip"` and `data-layout="<name>"` on
-// the element each part returns, `<name>` being the layout that drew it, so
-// `[data-layout-owner="agent-strip"][data-layout="<name>"] …` in a layout's CSS selects only its own boxes.
+// tab's composer box with. The app draws one `agentBox` per running subagent of the session and one `taskBox` per running
+// task, in start order, into the strip's scrolling track; a box leaves the moment its subagent or task ends, so every
+// box shows running work and none shows failed or dimmed. Into the open agent box's own root, after `agentBox` returns
+// it, it draws a `toolList` of every tool call that subagent made; a task box draws its full `command` while `isOpen`.
+// The app sets `data-layout-owner="agent-strip"` and `data-layout="<name>"` on the element each part returns, `<name>`
+// being the layout that drew it, so `[data-layout-owner="agent-strip"][data-layout="<name>"] …` in a layout's CSS selects
+// only its own boxes.
 //
 // The app keeps:
 // - the selection, which the entry cursor's `j` hands the strip, and `h`/`l` move: the selected box draws with
@@ -13,13 +14,16 @@
 // - the key scope `agent-strip.strip` the kit's key hints name;
 // - the scrolling track and its chevrons, and revealing the selected box;
 // - a box's click, and no focus: a box takes none;
-// - the elapsed time once a second while a task box runs: the app runs that box's `update` with the new `elapsedMs`,
-//   or draws a box with no `update` again and replaces its element; every other box keeps its element.
+// - the elapsed time once a second on every agent and task box: the app runs the box's `update` with the new
+//   `elapsedMs`, or draws a box with no `update` again and replaces its element, an open agent box's `toolList` with it.
 // `kit.duration` formats the elapsed time as chat's activity line does: `42s`, `3m 05s` or `1h 02m`.
 import type { BaseKit } from '../../../shared/page/layout-host/kit';
 
-// A box's or a tool call's dot: running, or how it ended.
+// A tool call's dot: running, or how it ended.
 export type BoxStatus = 'running' | 'success' | 'error';
+
+// What an agent box is: a subagent, or one its launch receipt says runs in the background.
+export type AgentKind = 'subagent' | 'backgroundAgent';
 
 // One tool call a subagent made: the tool's name, what it acted on, and its status.
 export interface ToolLineInput {
@@ -28,30 +32,32 @@ export interface ToolLineInput {
   status: BoxStatus;
 }
 
-// One subagent: its name (the label it was given, else its type), its `model · effort · $cost` with the unknown ones
-// left out (`''` when none is known), the task it was given, and its latest three tool calls, oldest first. `isDimmed`
-// is set once it finished.
+// One subagent: its name (the label it was given, else its type), its kind, the task it was given, its model and
+// effort, its estimated spend in dollars, its latest reply's context tokens and its model's context window, each null
+// until known, how long it has run in milliseconds, and its latest three tool calls, oldest first.
 export interface AgentBoxInput {
   name: string;
-  meta: string;
+  kind: AgentKind;
   description: string;
+  model: string | null;
+  effort: string | null;
+  spendUsd: number | null;
+  contextTokens: number | null;
+  contextWindow: number | null;
+  elapsedMs: number;
   recentTools: readonly ToolLineInput[];
-  status: BoxStatus;
-  isDimmed: boolean;
   isSelected: boolean;
   isOpen: boolean;
 }
 
-// One task (a background shell or another long-running job): what it runs, the agent that started it (`main`, a
-// subagent's name, or `subagent` once that subagent left the roster), how long it has run in milliseconds (null once
-// it finished), and its shell command, null when the harness named none. `isDimmed` is set once it finished.
+// One task (a background shell or another long-running job): the agent that started it (`main`, a subagent's name, or
+// `subagent` for one never listed), what it runs, its shell command, null when the harness named none, and how long it
+// has run in milliseconds.
 export interface TaskBoxInput {
+  name: string;
   description: string;
-  owner: string;
-  elapsedMs: number | null;
   command: string | null;
-  status: BoxStatus;
-  isDimmed: boolean;
+  elapsedMs: number;
   isSelected: boolean;
   isOpen: boolean;
 }
@@ -69,9 +75,16 @@ export interface AgentStripPart {
   element: HTMLElement;
 }
 
-// What `taskBox` returns: its root, appended to `parent`, and an optional `update` the app runs once a second while
-// the task runs, with the input the box was drawn with and the new `elapsedMs`, in place of drawing the box again. Once
-// an `update` throws, the app logs it and draws its task boxes again instead until the layouts change.
+// What `agentBox` returns: its root, appended to `parent`, and an optional `update` the app runs once a second with the
+// input the box was drawn with and the new `elapsedMs`, in place of drawing the box again. Once an `update` throws, the
+// app logs it and draws its agent boxes again instead until the layouts change.
+export interface AgentBoxPart extends AgentStripPart {
+  update?(input: AgentBoxInput): void;
+}
+
+// What `taskBox` returns: its root, appended to `parent`, and an optional `update` the app runs once a second with the
+// input the box was drawn with and the new `elapsedMs`, in place of drawing the box again. Once an `update` throws, the
+// app logs it and draws its task boxes again instead until the layouts change.
 export interface TaskBoxPart extends AgentStripPart {
   update?(input: TaskBoxInput): void;
 }
@@ -83,7 +96,7 @@ export interface Layout {
     parent: HTMLElement,
     input: AgentBoxInput,
     kit: AgentStripKit,
-  ): AgentStripPart;
+  ): AgentBoxPart;
   taskBox?(
     parent: HTMLElement,
     input: TaskBoxInput,
