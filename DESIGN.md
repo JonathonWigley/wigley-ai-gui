@@ -454,16 +454,15 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   its check message under it in `status-error`. A file that fails its check shows an error Card at the section's
   top.
 - **Workflow:** three parts, each drawn by the workflow plugin's `default` layout (`docs/features/workflow/design.md`).
-  The chip is one line under a session row: the stage as an accent Tag, its detail in `fg-tertiary`, the countdown and
-  the main action as a ghost button; an idle session draws no chip. The strip sits above the Chat composer: the stepper
-  (steps ahead in `fg-tertiary`, the current one in `status-running`, done ones and a reached last step in
-  `status-success`), the detail, the countdown and every action as buttons; an idle session draws no strip.
-  The Flow tab holds the stage's label as its header, the stepper, the stage's detail (which
-  carries the plan's title from feature on, once a plan is read, after the progress in make and review so the chip's
-  ellipsis cuts the title first) with the countdown, the plan's tasks under a header per wave (the current wave
-  marked, a task's mark filled once it is done) and the stage's actions; with no plan read it shows the
-  empty state `No plan yet`, and a read plan with no boxes shows none. A disabled action
-  draws disabled.
+  The chip is one line under a session row: the stage and its status as an accent Tag and the countdown; an idle
+  session draws no chip. The strip sits above the Chat composer: the status mark and line, the stepper only until the
+  session has a plan (pending in `fg-tertiary`, running in `status-running`, ready in `accent`, paused in `status-warning`,
+  done in `status-success`), the countdown and the main action as a button; an idle session draws no strip. The side
+  pane sits beside the transcript from the first read of a plan: the status mark and line, the stage's detail, the
+  stepper, a progress meter, the checklist and every action as buttons. The checklist folds finished waves into one
+  toggle row, shows the current wave under its header with a mark per task (filled once done), and lists later waves
+  one row each under `Up next`. An idle session, a session with no plan read and a hidden pane draw no pane. A
+  disabled action draws disabled.
 - **Floating:** pickers, which-key, help and dialogs use the floating material with `row-list` rows
   and key hints right-aligned in `fg-tertiary`; dialogs, chat's full-size image viewer and the full-size visual
   overlay sit over the `scrim`.
@@ -492,7 +491,7 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   Docs (`docs-docs-*`) in both transparency settings, the docs kind picker, completion list and
   session Docs tab (`docs-kind-picker`, `docs-completion`, `docs-session-tab`), the shell layout
   swap (`forms-shell-layout-*`) and the layout previews (`forms-preview-*`, `primer-preview*`,
-  `chat-chat-preview`), chat's visuals (`chat-visuals`) and the workflow strip and Flow tab (`workflow-strip-*`, `workflow-flow-tab-plan-ready`). The
+  `chat-chat-preview`), chat's visuals (`chat-visuals`) and the workflow strip and side pane (`workflow-strip-*`, `workflow-side-pane-hidden`). The
   gallery's and the keys plugin's main parts hand no self-test script, so forms' script saves the gallery's pages and
   the shell swap, and no screenshot shows keys' overlays. The agent checks them against
   this file — density, the one accent, each surface on its layer

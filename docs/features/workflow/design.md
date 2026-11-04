@@ -33,7 +33,7 @@ Built, in `src/plugins/workflow/`, on the clear, the agent events and the row pa
   entry) and the tower's **plan step** are different things.
 - **Status** — what a stage is doing now: running, paused, ready or done. A step not reached is pending.
 - **Signal** — one input the flow folds: an agent event, a clear, or a plan folder change (§ Signals).
-- **Main action** — the one action of a stage that `ww` runs, first in the stage's buttons on the strip and the side pane.
+- **Main action** — the one action of a stage that `ww` runs, the strip's one button and the first of the side pane's buttons.
 
 ## Stages
 
@@ -128,7 +128,7 @@ Everything draws through the `workflow` layout, its built-in `default`, and the 
   `Space w` keys. Idle draws nothing.
 - **Side pane** — the Plan section of the session hub beside the Chat tab's transcript (chat's `addSidePart`,
   `docs/features/chat-bar/design.md` § The session hub), from the first read of a plan until
-  Dismiss or a new plan: the status line, the plan's title and detail, the stepper, a progress bar, the checklist and
+  Dismiss or a new plan: the status line, the detail, the stepper, a progress bar, the checklist and
   every action of the stage. The checklist folds finished waves into one row, shows the current wave in full, and shows
   each later wave as one line. The current wave's open tasks show running or paused only in make, because the plan file
   does not say which task an agent works on.
