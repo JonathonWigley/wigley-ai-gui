@@ -21,12 +21,15 @@ Decisions:
 - Each `div.chat-side-part` wrapper holds one part, with `data-part="<id>"`. The holder's `place` is owner `chat`, noun `side part`.
 - `chat.css` hides the holder while no wrapper has content, with the same `:not(:has(...))` shape as `.session-row-foot`: `.chat-side-parts:not(:has(.chat-side-part:not(:empty))) { display: none; }`.
 - `layouts/default/layout.css` holds the width rule: `@container chat-tab (width < 640px) { .chat-side-parts { display: none; } }`.
+- `ChatViewDeps` gains `sideParts: Pick<PartStore<ChatSidePart>, 'parts' | 'onChanged'>`. `start.ts` passes a `createPartStore<ChatSidePart>()`, and `addSidePart` calls its `add`.
+- `chat.css` gives the holder a bounded height: `.chat-side-parts { display: flex; flex-direction: column; align-self: stretch; min-height: 0; }` and `.chat-side-part { flex: 1; min-height: 0; }`.
 - A closed tab disposes its side parts, at the place that runs `tab.composer.dispose()`.
-- Add a doc comment for `addSidePart` to the `ChatPageExports` comment block.
+- Add a doc comment for `addSidePart` to the `ChatPageExports` comment block. Rewrite the `createTab`, `ChatViewDeps`, `mountChatView`, `followComposerHeight` and `chat.css` header comments for `.chat-main` and the side holder.
+- Before the CSS lands, read where chat's dialogs, pickers, image viewer and key hints mount. `container-type` makes `.chat-tab` the containing block for its fixed-position descendants. When one of them mounts inside `.chat-tab`, report it as a concern and stop this task.
 GIVEN a side part is added WHEN a Chat tab exists THEN the part builds into a `chat-side-part` wrapper with the tab's session id
 GIVEN a Chat tab holds a side part WHEN the tab closes THEN the part's dispose runs once
 GIVEN a side part's Disposable WHEN it is disposed THEN every tab disposes its build and the wrapper leaves the tab
-Tests:     in `chat-view.test.ts`, `side parts build per tab, leave with their part, and dispose with their tab` — one test holds the three cases above, asserts the session id passed to `build` and a dispose count of 1 per build
+Tests:     in `chat-view.test.ts`, `side parts build per tab, leave with their part, and dispose with their tab` — one test holds the three cases above, asserts the session id passed to `build` and a dispose count of 1 per build. The test mounts two tabs, adds a real `sideParts` store to the harness, and makes `onSessionRemoved` capture its listener so that the test can close a tab
 Done when: `npm run typecheck` passes; the test gate runs the test above
 Commit:    one commit for the group
 

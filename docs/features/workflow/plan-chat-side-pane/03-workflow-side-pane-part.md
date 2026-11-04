@@ -15,6 +15,7 @@ Produces:  in `src/plugins/workflow/layouts/layout.d.ts`:
            `Layout.sidePane?(parent: HTMLElement, input: SidePaneInput, kit: WorkflowKit): WorkflowPart`
            `WorkflowKit.statusMark(parent: HTMLElement, state: MarkState): HTMLElement`
            `WorkflowKit.finishedFold(parent: HTMLElement, text: string, open: boolean): HTMLButtonElement`
+           `WorkflowKit.sideList(parent: HTMLElement): HTMLElement`
            in `src/plugins/workflow/page/workflow-view.ts` on `WorkflowView`:
            `sidePart: ContributedPart` with id `workflow.sidePane`
            `setSidePaneHidden(hidden: boolean): void`
@@ -34,11 +35,15 @@ Decisions:
   - `input.detail`
   - the stepper, with `.workflow-side-pane .workflow-step-status { display: block; }` and each step as a column: mark, label, status
   - a progress bar, width `checked / total` (0 when `total` is 0)
-  - a scrolling list: the fold row when `finishedWaves` is not empty, the finished waves' tasks when `finishedOpen`, the current wave's title and tasks, then under an `Up next` header one line per later wave
+  - a scrolling list from `kit.sideList`: the fold row when `finishedWaves` is not empty; each finished wave's title and tasks when `finishedOpen`; the current wave's title and tasks when `currentWave` is not null; an `Up next` header and one line per later wave when `laterWaves` is not empty
   - a later wave's line reads its title, then its one task's text, or `<n> tasks` when it holds more than one
   - the actions row: every action through `kit.actionButton`; the row is left out when `actions` is empty
-- `.workflow-side-pane`: `width: 264px`, `height: 100%`, a left border in `--wg-border-default`, background `--wg-card-background`.
-- The fold row's text is `<n> waves · <m> done`, with `1 wave` for one. `<m>` counts the tasks in the finished waves. It starts with `▸`, or `▾` while open.
+- `.workflow-side-pane`: `width: 264px`, `height: 100%`, `display: flex`, `flex-direction: column`, a left border in `--wg-border-default`, background `--wg-card-background`.
+- `kit.sideList` draws `div.workflow-side-list`, with `flex: 1`, `min-height: 0` and `overflow-y: auto` in `workflow.css`.
+- The view keeps the list's scroll. In `draw`, for a `sidePane` part, it reads `scrollTop` of the wrapper's `.workflow-side-list` before it empties the wrapper, and sets the value on the new list after the draw. A make run pushes flows often, so a reset would move the list on each push.
+- The `sidePane` branch of `drawPart` returns false. The default pane draws no countdown, so the tick must not rebuild it. A user layout that draws the countdown there redraws on the next flow push.
+- The default layout passes the fold text `<n> waves · <m> done`, with `1 wave` for one. `<m>` counts the tasks in the finished waves. `kit.finishedFold` adds `▸ ` before the text, or `▾ ` while `open`, sets `aria-expanded`, and draws the key hint of `workflow.toggleFinishedWaves`.
+- With a plan and a hidden pane, the session shows no stepper, detail or secondary action button. The status line, the main action and the `Space w` keys stay. Remove `.workflow-strip-detail` from the default `layout.css`.
 - Wave grouping, in file order over the groups `waves()` builds today: a group with every task done is finished. The first other group is the current wave. The rest are later. A task under no wave heading sits in its `Tasks` group and follows the same rule.
 - Task state: a done task is `done`. An open task in the current wave takes the stage's `status` when the stage has `runsTasks`, else `pending`. Every other open task is `pending`.
 - The view draws no pane for idle, for `flow.progress === null`, or while hidden. A wrapper with no pane stays empty, so chat's CSS hides the holder.
@@ -56,11 +61,15 @@ GIVEN a done wave after an open wave WHEN the input builds THEN that wave is fin
 GIVEN boxes under no wave heading, some open WHEN the input builds THEN the `Tasks` group is the current wave
 GIVEN idle, or a null progress, or `setSidePaneHidden(true)` WHEN the part draws THEN nothing draws; GIVEN `setSidePaneHidden(false)` THEN the pane draws again
 GIVEN `toggleFinishedWaves('a')` WHEN session `a` draws THEN `finishedOpen` is true, and session `b` keeps false
-Tests:     in `workflow-view.test.ts`, change the existing stepper table to the new states (`Review:pending`, `Close:pending`, and so on), with rows for `planReady` → `Feature:done`, `Make:ready`; make busy → `Make:running`; make not busy → `Make:paused`; closed → `Close:done`.
+GIVEN session `a` is open WHEN `forget('a')` runs THEN a new draw of `a` has `finishedOpen` false
+GIVEN a preview session WHEN `runFor` runs `toggleFinishedWaves` THEN the fold flips
+GIVEN every wave is finished WHEN the input builds THEN `currentWave` is null and `laterWaves` is empty
+Tests:     in `workflow-view.test.ts`, change the existing stepper tests to the new labels, the new states (`Review:pending`, `Close:pending`, and so on) and 4 steps, with rows for `planReady` → `Feature:done`, `Make:ready`; make busy → `Make:running`; make not busy → `Make:paused`; closed → `Close:done`.
            Add one table `side pane groups the plan and states its tasks` with the wave and task rows above; assert the whole `finishedWaves`, `currentWave`, `laterWaves` values.
            Add `side pane draws only with a plan and while shown` for the idle, null-progress and hidden rows.
-           Add `the fold is kept per session` for the toggle.
-           In `layout/default/layout.test.ts`: the strip draws the stepper only with no plan, and draws one action; the chip's tag reads `Make · running`; a later wave's line reads its task text for one task and `2 tasks` for two.
+           In `registry_StageAddedOutOfOrder_SortsOnOrder`, give the `checking` stage `status: () => null` and `statusLine: () => 'Checking'`. Its flow is in make, so the row expects `['Feature', 'Checking', 'Make', 'Review', 'Close']`.
+           Add `the fold is kept per session` for the toggle, the `forget` row and the preview row.
+           In `src/plugins/workflow/layouts/default/layout.test.ts`: the strip draws the stepper only with no plan, and draws one action; the chip's tag reads `Make · running`; a later wave's line reads its task text for one task and `2 tasks` for two; the fold text reads `1 wave · 1 done` and `3 waves · 4 done`, and finished tasks draw only with `finishedOpen`; the bar's width is `33.3%`-style `checked / total` and 0 with `total` 0; the actions row is left out with no actions; `Up next` is left out with no later waves; `statusMark` draws the pinned codicon per state, as one table.
            In `read-workflow-layout.test.ts`: add `sidePane` to the existing accepted part row.
 Done when: `npm run typecheck` passes; the test gate runs the tests above
 Commit:    one commit for the group

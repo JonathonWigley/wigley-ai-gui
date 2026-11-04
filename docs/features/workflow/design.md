@@ -123,8 +123,9 @@ Everything draws through the `workflow` layout, its built-in `default`, and the 
   (`Make · running`) and the countdown. A user layout can also draw the progress and the main action's button, which
   the chip's input carries. Idle draws nothing.
 - **Composer strip** — a part above the Chat composer (chat's `addComposerPart`): the status mark, the status line, the
-  countdown and the main action. It draws the stepper only until the session has a plan, because the side pane holds
-  the stepper after that. Idle draws nothing.
+  countdown and the main action. It draws the stepper only until the session has a plan. After that the side pane holds
+  the stepper, the detail and the other actions, so a hidden pane leaves the status line, the main action and the
+  `Space w` keys. Idle draws nothing.
 - **Side pane** — a part beside the Chat tab's transcript (chat's `addSidePart`), from the first read of a plan until
   Dismiss or a new plan: the status line, the plan's title and detail, the stepper, a progress bar, the checklist and
   every action of the stage. The checklist folds finished waves into one row, shows the current wave in full, and shows

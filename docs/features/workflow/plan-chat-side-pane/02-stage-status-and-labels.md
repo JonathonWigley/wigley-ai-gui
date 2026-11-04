@@ -33,11 +33,13 @@ Decisions:
 - Review drops ` · round <n>` while `progress` is null or `reviewRounds` is 0.
 - Closed drops ` · <checked>/<total>` while `progress` is null.
 - `detail` stays as it is on every stage.
-- Rewrite the `label` and `detail` comments on `PageStage`: the label is now the step's word (`Make`), and `detail` no longer draws on the chip.
+- Each `statusLine` builds on `statusText(label, status(flow))`, so the two cannot differ.
+- Rewrite these comments on `PageStage`: `label` is the step's word (`Make`). `detail` is the side pane's detail line (`3/7 · wave 2 · Claim grants`); the chip's input and the strip's input still carry it for a user layout. `stepSlot` names the two slots: `start` holds primer and feature, `make` holds planReady and make.
 GIVEN each row below WHEN `status` and `statusLine` run THEN each returns the pinned value
 Tests:     in `page-stages.test.ts`, one table test `each stage's status and status line follow its flow`. Rows, each with a flow built in the test:
            primer busy → `running`, `Primer · running` · feature not busy → `paused`, `Feature · paused` · planReady busy → `ready`, `Make · ready` · make busy 3/9 → `running`, `Make · running 3/9` · make not busy 3/9 → `paused`, `Make · paused 3/9` · make with null progress → `paused`, `Make · paused` · review busy with 2 rounds → `running`, `Review · running · round 2` · review not busy with 0 rounds → `paused`, `Review · paused` · closed 9/9 → `done`, `Close · done · 9/9` · closed with null progress → `done`, `Close · done` · idle → `null`, `Idle`
            Add a second table `busy means a turn or a main-agent subagent`: rows with `turnRunning` only and `runningSubagents` only → `running`; neither → `paused`, through `busyStatus`.
+           Add a third table `each stage's label and step slot`, with the `label` and `stepSlot` columns of the pinned table as rows.
 Done when: `npm run typecheck` reports errors only for callers task 03 changes, or none; the test gate runs the tests above
 Commit:    one commit for the group
 
