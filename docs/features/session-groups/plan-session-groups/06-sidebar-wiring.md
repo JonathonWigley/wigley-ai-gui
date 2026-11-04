@@ -1,6 +1,6 @@
 # 06 — Grouped side bar wiring, commands and keys
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 3 · Depends on: 02, 03, 04, 05
 Plan: [plan.md](plan.md)

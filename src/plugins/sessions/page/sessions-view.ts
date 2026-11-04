@@ -15,7 +15,13 @@ import {
 } from '../../../shared/page/pane-tree/pane-tree';
 import { createPaneTreeView } from '../../../shared/page/pane-tree/pane-tree-view';
 import type { KeysPageExports } from '../../keys/contract';
-import type { RowActivity, SessionPart, SessionsState } from '../contract';
+import {
+  NEEDS_YOU_ACTIVITY,
+  type RowActivity,
+  type SessionPart,
+  type SessionRow,
+  type SessionsState,
+} from '../contract';
 import type { Layout } from '../layouts/layout';
 import { shownTitle, titleLimit } from '../session-title';
 import {
@@ -24,12 +30,15 @@ import {
   type SessionsPartsDeps,
 } from './layout/sessions-parts';
 import { type PaneSessions, shownElsewhere } from './pane-sessions';
-import { PREVIEW_STATE, previewRowState } from './preview';
+import { PREVIEW_STATE, previewRowState, previewSections } from './preview';
+import type { ProjectFavorites } from './project-favorites';
 import { createRowActivities } from './row-activities';
+import type { SessionRecency } from './session-recency';
 import {
   mountSessionTabsView,
   type SessionTabsView,
 } from './session-tabs-view';
+import { drawnRows, sidebarSections } from './sidebar-order';
 import { mountSidebarView } from './sidebar-view';
 import { rowChanges, rowStatus, stepSession } from './tabs';
 
@@ -42,8 +51,8 @@ import { rowChanges, rowStatus, stepSession } from './tabs';
 // `rowParts` are the parts each row draws, and adding or removing one draws
 // the rows again; `barParts` are the parts each tab bar draws, and adding or
 // removing one draws the tab bars again; `titleMaxLength` reads the setting
-// each row draw cuts a first-message title to; the rest is what the sessions
-// layout's kits read.
+// each row draw cuts a first-message title to; `recency` and `favorites` order
+// the side bar's rows; the rest is what the sessions layout's kits read.
 export interface SessionsViewDeps extends Omit<
   SessionsPartsDeps,
   'keys' | 'rowParts' | 'barParts'
@@ -58,6 +67,8 @@ export interface SessionsViewDeps extends Omit<
   rowParts: PartStore<SessionPart>;
   barParts: PartStore<SessionPart>;
   titleMaxLength(): number;
+  recency: SessionRecency;
+  favorites: ProjectFavorites;
 }
 
 // The chat panes and the session each shows. Each change draws the panes and
@@ -95,10 +106,15 @@ export interface SessionPanes {
 // click or `stepPreview` moves without activating anything; `false` draws the
 // real rows again. `setActivity` sets a source's activity for a session, as
 // `SessionsPageExports.setActivity` says, drawing the side bar again only when
-// the row's shown activity changed; `render` drops the activities of the rows
-// that left. `redrawRows` draws the side bar's rows again, for a changed
-// title length. `parts` draws through the sessions layout the view's
-// `setLayouts` sets, for the mode's dialogs.
+// the row's shown activity changed, and stamping the row's recency when it
+// turned to needs you; `render` drops the activities of the rows that left and
+// keeps recency to the rows main holds. `redrawRows` draws the side bar's rows
+// again, for a changed title length. `orderedRows` lists main's rows in the
+// order the side bar draws them, the preview's sample never among them.
+// `toggleFavorite` and `moveFavorite` change the user's favorites, draw the
+// side bar again and log the outcome; a star's click and a drop do the same,
+// and do nothing while the preview shows. `parts` draws through the sessions
+// layout the view's `setLayouts` sets, for the mode's dialogs.
 export interface SessionsView {
   element: HTMLElement;
   sideBar: HTMLElement;
@@ -116,6 +132,9 @@ export interface SessionsView {
     activity: RowActivity | null,
   ): void;
   redrawRows(): void;
+  orderedRows(): SessionRow[];
+  toggleFavorite(project: string): void;
+  moveFavorite(project: string, by: 1 | -1): void;
 }
 
 // Sessions mode's two parts: the side bar of session rows, which the shell
@@ -127,24 +146,62 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
   const parts = createSessionsParts(deps);
   // The preview sample while it shows, else null.
   let preview: SessionsState | null = null;
-  const sidebar = mountSidebarView((sessionId) => {
-    if (preview === null) {
-      deps.activate(sessionId);
-      return;
-    }
-    preview = { ...preview, selectedSessionId: sessionId };
+  const { favorites, recency } = deps;
+  const logLine = (message: string) => deps.log('sessions', message);
+
+  const toggleFavorite = (project: string) => {
+    const isFavorite = favorites.toggle(project);
     drawSidebar();
-  }, parts);
+    logLine(`${isFavorite ? 'favorited' : 'unfavorited'} ${project}`);
+  };
+
+  const sidebar = mountSidebarView(
+    {
+      activate(sessionId) {
+        if (preview === null) {
+          deps.activate(sessionId);
+          return;
+        }
+        preview = { ...preview, selectedSessionId: sessionId };
+        drawSidebar();
+      },
+      toggleFavorite(project) {
+        if (preview === null) {
+          toggleFavorite(project);
+        }
+      },
+      dropped({ key: project, zone, index }, shownFavorites) {
+        if (preview !== null) {
+          return;
+        }
+        if (zone === 'favorites') {
+          favorites.place(project, index, shownFavorites);
+          drawSidebar();
+          logLine(`moved ${project} to favorites ${index}`);
+        } else if (favorites.isFavorite(project)) {
+          favorites.remove(project);
+          drawSidebar();
+          logLine(`unfavorited ${project}`);
+        }
+      },
+    },
+    parts,
+    deps.timers,
+  );
   let state: SessionsState | null = null;
   const activities = createRowActivities();
   const assigned = new Map<string, string | null>();
   let paneCount = 1;
+
+  const realSections = () =>
+    sidebarSections(state?.rows ?? [], favorites.list(), recency.stamps());
 
   const drawSidebar = () => {
     const titleMax = titleLimit(deps.titleMaxLength());
     if (preview !== null) {
       sidebar.render(
         preview,
+        previewSections(preview),
         (row) => previewRowState(row, titleMax),
         new Set(),
       );
@@ -156,6 +213,7 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
       state === null
         ? null
         : { ...state, selectedSessionId: assigned.get(tree.focusedId) ?? null },
+      realSections(),
       (row) => ({
         title: shownTitle(row.titles, titleMax),
         activity: activities.top(row.sessionId),
@@ -265,10 +323,14 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
     tabs,
     panes,
     render(next) {
-      for (const sessionId of rowChanges(state?.rows ?? [], next.rows)
-        .removed) {
+      const { added, removed } = rowChanges(state?.rows ?? [], next.rows);
+      for (const sessionId of removed) {
         activities.forget(sessionId);
       }
+      for (const row of added) {
+        recency.noteArrived(row.sessionId);
+      }
+      recency.keepOnly(next.rows.map((row) => row.sessionId));
       state = next;
       drawSidebar();
       tabs.render(next);
@@ -288,7 +350,11 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
       if (preview === null) {
         return;
       }
-      const sessionId = stepSession(preview, by, new Set());
+      const sessionId = stepSession(
+        { ...preview, rows: drawnRows(previewSections(preview)) },
+        by,
+        new Set(),
+      );
       if (sessionId !== null) {
         preview = { ...preview, selectedSessionId: sessionId };
         drawSidebar();
@@ -296,9 +362,33 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
     },
     setActivity(sessionId, sourceId, activity) {
       if (activities.set(sessionId, sourceId, activity)) {
+        const top = activities.top(sessionId);
+        const turnedToNeedsYou =
+          top?.word === NEEDS_YOU_ACTIVITY.word &&
+          top.tone === NEEDS_YOU_ACTIVITY.tone;
+        const hasRow = state?.rows.some((row) => row.sessionId === sessionId);
+        if (turnedToNeedsYou && hasRow) {
+          recency.noteNeedsYou(sessionId);
+        }
         drawSidebar();
       }
     },
     redrawRows: () => drawSidebar(),
+    orderedRows: () => drawnRows(realSections()),
+    toggleFavorite,
+    moveFavorite(project, by) {
+      const direction = by === -1 ? 'up' : 'down';
+      if (!favorites.isFavorite(project)) {
+        logLine(`${project} is not a favorite`);
+        return;
+      }
+      const shown = realSections().favorites.map((group) => group.project);
+      if (!favorites.move(project, by, shown)) {
+        logLine(`${project} cannot move ${direction}`);
+        return;
+      }
+      drawSidebar();
+      logLine(`moved ${project} ${direction}`);
+    },
   };
 }

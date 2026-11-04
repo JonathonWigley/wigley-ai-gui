@@ -7,6 +7,7 @@ import {
   type SessionTitles,
 } from '../contract';
 import { shownTitle } from '../session-title';
+import { type SidebarSections, sidebarSections } from './sidebar-order';
 import type { RowState } from './sidebar-view';
 
 const NO_TITLES: SessionTitles = {
@@ -88,6 +89,16 @@ export const PREVIEW_STATE: SessionsState = {
   ],
   selectedSessionId: 'preview-1',
 };
+
+// The sample's own favorites, never the user's.
+const PREVIEW_FAVORITES: readonly string[] = ['wigley-ai-gui'];
+
+// The sample rows in the order the side bar draws them.
+export function previewSections(
+  preview: SessionsState,
+): SidebarSections<SessionRow> {
+  return sidebarSections(preview.rows, PREVIEW_FAVORITES, new Map());
+}
 
 // Each sample row's second line, null for none.
 export const PREVIEW_STATUSES: Readonly<Record<string, string | null>> = {

@@ -1,6 +1,6 @@
 # 02 — Project on session rows
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -47,3 +47,5 @@ Done when: compiles; the test gate runs the tests above
 Commit:    one commit for the group
 
 ## Proof
+
+Commit b4886fba · proof: diff read; every Produces present; compile clean · concerns: two sessions in one folder send two states when the shared lookup lands; a landing after the plugin stopped reaches stateChanged with no stop check; AGENTS.md's sessions line omits projects (goes to task 07); src/plugins/agent-form-drive.test.ts also gained projectName, as a second createSessionList caller

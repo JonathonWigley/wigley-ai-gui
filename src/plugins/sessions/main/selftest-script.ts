@@ -72,6 +72,26 @@ const RENAME_STEPS: SelfTestStep[] = [
   },
 ];
 
+// With panes-a focused over panes-c since the stacked resize, `Space p f`
+// favorites panes-a, alone at both edges; `Alt+j` focuses panes-c, whose project
+// joins the favorites and moves above panes-a. Both are then unfavorited, so the
+// script ends with no favorites and panes-a focused.
+const PROJECTS_STEPS: SelfTestStep[] = [
+  { keys: [' ', 'p', 'f'], expect: '[sessions] favorited panes-a' },
+  { keys: [' ', 'p', 'k'], expect: '[sessions] panes-a cannot move up' },
+  { keys: [' ', 'p', 'j'], expect: '[sessions] panes-a cannot move down' },
+  { keys: ['<A-j>'], expect: '[sessions] pane focused panes-c' },
+  { keys: [' ', 'p', 'f'], expect: '[sessions] favorited panes-c' },
+  {
+    keys: [' ', 'p', 'k'],
+    expect: '[sessions] moved panes-c up',
+    screenshot: 'project-groups',
+  },
+  { keys: [' ', 'p', 'f'], expect: '[sessions] unfavorited panes-c' },
+  { keys: ['<A-k>'], expect: '[sessions] pane focused panes-a' },
+  { keys: [' ', 'p', 'f'], expect: '[sessions] unfavorited panes-a' },
+];
+
 // `Alt+;` splits panes-a's pane and Esc closes the new pane again; `Alt+w`
 // then closes panes-a's pane, its session staying a row.
 const CANCEL_AND_CLOSE_STEPS: SelfTestStep[] = [
@@ -143,6 +163,11 @@ export function sessionsSelfTestScript(
         name: 'rename',
         why: '<Leader>rr renames the focused session and an empty name hands naming back.',
         steps: RENAME_STEPS,
+      },
+      {
+        name: 'projects',
+        why: 'Favorites toggle and reorder by key, and the side bar draws sections.',
+        steps: PROJECTS_STEPS,
       },
       {
         name: 'cancel and close',

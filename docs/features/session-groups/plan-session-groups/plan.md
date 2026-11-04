@@ -135,7 +135,7 @@ function and imports no `Git`; only `main/start.ts` names `api.services.git`.
 - [x] [Section and group layout parts](05-layout-parts.md)
 
 ### Wave 2
-- [ ] [Project on session rows](02-project-on-rows.md) — after 01
+- [x] [Project on session rows](02-project-on-rows.md) — after 01
 
 ### Wave 3
 - [ ] [Grouped side bar wiring, commands and keys](06-sidebar-wiring.md) — after 02, 03, 04, 05
@@ -155,6 +155,7 @@ Review base: 693cb8d04eb48c87e6cba0406a0e2d850f90db54
 - 04 · 2b0be629 · diff read; every Produces signature present in the three modules; the place, move and toggle GIVENs traced by hand against the code; compile clean · concerns: keepOnly with an empty or partial list wipes saved recency, so task 06 must prune only on a real row list; AGENTS.md's sessions page tree line may want the three modules (goes to task 07); the layer check was not run by the worker
 - 05 · b21962a4 · diff read; every Produces present in layout.d.ts, sessions-parts.ts and sessions-view-fakes.ts; compile clean; the worker's lint clean · concerns: CSS unseen on screen until task 08's captures: the sm star may set a taller header than text-12, and no grab cursor is set; contract prose describes sections while the view still fills rows until task 06
 - 03 · d856cde9 · diff read; every Produces present in drag-reorder.ts; the dropIndex GIVENs traced by hand; compile clean for the group's files (task 02 was mid-edit elsewhere); the worker's lint clean · concerns: test-dom.ts edited outside the task's files, so fire takes a target; started runs inside dragstart and Chromium can cancel a drag whose dragstart changes layout (handed to task 06); is-dragging may tint the drag image; no real drag has run
+- 02 · b4886fba · diff read; every Produces present; compile clean · concerns: two sessions in one folder send two states when the shared lookup lands; a landing after the plugin stopped reaches stateChanged with no stop check; AGENTS.md's sessions line omits projects (goes to task 07); src/plugins/agent-form-drive.test.ts also gained projectName, as a second createSessionList caller
 ### Contract changes
 ### Rulings
 - The user takes every review recommendation in this run, so no triage round is sent — the user's word this run — a recommendation the user would have overridden lands anyway and shows in the wrap-up · lead
@@ -169,5 +170,7 @@ Review base: 693cb8d04eb48c87e6cba0406a0e2d850f90db54
 - dragstart acts only when event.target is the source — a text selection or link starts its own text/plain drag — dragging selected text in a header does not reorder · group 03 · group 03
 - clear also removes the classes and sets draggable false, and runs ended last — a full undo, and a view whose ended flushes a held redraw keeps what it registers — an element kept across clear without re-registering stops dragging · group 03 · group 03
 - An item's position is its registration order, not a measured top — the primitive states drawn order in its comment — a view must register top to bottom · group 03 · group 03
+- sessionRow and the page test literals all share project 'project' — fake rows then land in one group, so order tests keep main's row order by default — a test wanting several groups overrides the field · group 02 · group 02
+- A rejection still logs when the session ended before it landed — the failed read is true either way — one extra log line · group 02 · group 02
 ### Review rounds
 ### Test gate

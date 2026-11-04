@@ -1595,7 +1595,9 @@ describe('createSessionList', () => {
       sent: [],
       projects: ['clone-2'],
       finalLabels: ['clone-2'],
-      logged: ['[sessions] project of /work/clone-2 not read: git cannot start'],
+      logged: [
+        '[sessions] project of /work/clone-2 not read: git cannot start',
+      ],
     },
     {
       name: 'no folder asks nothing and takes the no-folder label',
