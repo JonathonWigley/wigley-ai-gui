@@ -9,6 +9,7 @@ import {
   type UserMessage,
 } from '../../../contracts/agent';
 import type { HostedProcessInfo } from '../../../contracts/session-host';
+import type { ActiveTime } from '../../../shared/active-time';
 import {
   createFakeAgentHarness,
   FAKE_MICROTASK_TIMERS,
@@ -126,6 +127,7 @@ function record(
     controls: [],
     userSetControls: [],
     returnedDrops: [],
+    activeMs: 0,
     ...fields,
   };
 }
@@ -166,7 +168,8 @@ function setUp(
     sessionHost?: ChatSessionsDeps['sessionHost'];
   } = {},
 ) {
-  const clock = { now: () => options.clockNow ?? 1000 };
+  let clockNow = options.clockNow ?? 1000;
+  const clock = { now: () => clockNow };
   const harness = createFakeAgentHarness(
     clock,
     createMemoryFiles(),
@@ -300,6 +303,9 @@ function setUp(
     setRowTitles: (sessionId: string, next: SessionTitles) =>
       titles.set(sessionId, next),
     uuidCalls: () => uuidCalls,
+    setNow: (now: number) => {
+      clockNow = now;
+    },
     hostIdChanges,
     ownedEnds: () => ownedEnds,
     windowShows: () => windowShows,
@@ -496,6 +502,7 @@ describe('createChatSessions', () => {
         controls: [],
         activity: 'idle',
         background: 0,
+        activeTime: { totalMs: 0, since: null },
         commands: [],
         running: false,
         queued: [],
@@ -2764,6 +2771,7 @@ describe('createChatSessions saved sessions', () => {
         controls: test.chat.sessions()[0].controls,
         userSetControls: [],
         returnedDrops: [],
+        activeMs: 0,
       },
     ]);
   });
@@ -2857,10 +2865,10 @@ describe('createChatSessions saved sessions', () => {
     const { events } = test.harness.processes[0];
     events.activity('working');
     await test.chat.send(ROW_ID, { text: 'a', images: [] });
-    const savesBefore = test.saved.saves();
     const messagesBefore = test.messages.length;
 
     test.chat.detachAll();
+    const savesBefore = test.saved.saves();
     events.activity('idle');
     events.ended({ code: 0, error: null });
     await flush();
@@ -3536,6 +3544,7 @@ describe('createChatSessions clear', () => {
           controls: test.chat.sessions()[0].controls,
           userSetControls: ['model'],
           returnedDrops: [],
+          activeMs: 0,
         },
       ],
       selectedHostSessionId: 'uuid-2',
@@ -3576,6 +3585,26 @@ describe('createChatSessions clear', () => {
         : [],
     );
     expect(sessionEndedHostIds).toEqual(['uuid-1']);
+  });
+
+  it('clear_RowWithRunTime_ResetsTheClockAndSavesZero', async () => {
+    const test = setUp();
+    test.chat.restore(
+      {
+        sessions: [record('host-a', { activeMs: 30000 })],
+        selectedHostSessionId: null,
+      },
+      [],
+    );
+
+    test.chat.clear(ROW_ID);
+    await flush();
+
+    expect(test.sent('activeTime').at(-1)).toEqual({
+      sessionId: ROW_ID,
+      activeTime: { totalMs: 0, since: null },
+    });
+    expect(test.saved.last()?.sessions[0].activeMs).toBe(0);
   });
 
   it('clear_RestingRow_StartsFreshProcess', async () => {
@@ -3747,6 +3776,146 @@ describe('createChatSessions clear', () => {
 
     expect(test.announced).toEqual([]);
     expect(test.marked).toEqual([]);
+  });
+});
+
+// A change to a session's work at `at`: the activity its harness reports, or
+// its one background task starting (1) or finishing (0).
+type ClockStep =
+  | { at: number; activity: ProcessActivity }
+  | { at: number; background: 0 | 1 };
+
+function runClockSteps(
+  test: Awaited<ReturnType<typeof started>>,
+  steps: readonly ClockStep[],
+) {
+  for (const step of steps) {
+    test.setNow(step.at);
+    if ('activity' in step) {
+      test.activity(step.activity);
+    } else if (step.background === 1) {
+      test.process.events.agentEvent({
+        type: 'taskStarted',
+        at: step.at,
+        taskId: 'task-1',
+        agentId: MAIN_AGENT_ID,
+        description: 'server',
+        command: null,
+      });
+    } else {
+      test.process.events.agentEvent({
+        type: 'taskFinished',
+        at: step.at,
+        taskId: 'task-1',
+        outcome: 'done',
+      });
+    }
+  }
+}
+
+describe('createChatSessions active time', () => {
+  it.each<{ given: string; steps: ClockStep[]; expected: ActiveTime[] }>([
+    {
+      given: 'working, then idle',
+      steps: [
+        { at: 1000, activity: 'working' },
+        { at: 4000, activity: 'idle' },
+      ],
+      expected: [
+        { totalMs: 0, since: 1000 },
+        { totalMs: 3000, since: null },
+      ],
+    },
+    {
+      given: 'working, then waiting',
+      steps: [
+        { at: 1000, activity: 'working' },
+        { at: 4000, activity: 'waiting' },
+      ],
+      expected: [
+        { totalMs: 0, since: 1000 },
+        { totalMs: 3000, since: null },
+      ],
+    },
+    {
+      given: 'working, idle with background running, then background over',
+      steps: [
+        { at: 1000, activity: 'working' },
+        { at: 2000, background: 1 },
+        { at: 5000, activity: 'idle' },
+        { at: 9000, background: 0 },
+      ],
+      expected: [
+        { totalMs: 0, since: 1000 },
+        { totalMs: 8000, since: null },
+      ],
+    },
+    {
+      given: 'waiting with background running, then background over',
+      steps: [
+        { at: 1000, activity: 'waiting' },
+        { at: 2000, background: 1 },
+        { at: 6000, background: 0 },
+      ],
+      expected: [
+        { totalMs: 0, since: 2000 },
+        { totalMs: 4000, since: null },
+      ],
+    },
+  ])(
+    'activeTime_WorkSteps_SendsEachStartAndStop: $given',
+    async ({ steps, expected }) => {
+      const test = await started();
+
+      runClockSteps(test, steps);
+
+      expect(test.sent('activeTime').map((sent) => sent.activeTime)).toEqual(
+        expected,
+      );
+      expect(test.chat.sessions()[0].activeTime).toEqual(expected.at(-1));
+    },
+  );
+
+  it('activeTime_ClockStopsWithNoOtherSave_SnapshotCarriesTheStoppedTotal', async () => {
+    const test = await started();
+    test.chat.restore(NOTHING_SAVED, []);
+
+    runClockSteps(test, [
+      { at: 1000, activity: 'working' },
+      { at: 2000, background: 1 },
+      { at: 5000, activity: 'idle' },
+      { at: 9000, background: 0 },
+    ]);
+
+    expect(test.saved.last()?.sessions[0].activeMs).toBe(8000);
+  });
+
+  it('restore_SavedActiveMs_SessionStartedCarriesThePausedTotal', () => {
+    const test = setUp();
+
+    test.chat.restore(
+      {
+        sessions: [record('host-a', { activeMs: 42000 })],
+        selectedHostSessionId: null,
+      },
+      [],
+    );
+
+    expect(test.sent('sessionStarted')[0].activeTime).toEqual({
+      totalMs: 42000,
+      since: null,
+    });
+  });
+
+  it('detachAll_ClockRunning_SavesTheOpenSpanUpToNow', async () => {
+    const test = await started();
+    test.chat.restore(NOTHING_SAVED, []);
+    runClockSteps(test, [{ at: 1000, activity: 'working' }]);
+    test.setNow(2500);
+
+    test.chat.detachAll();
+
+    expect(test.saved.last()?.sessions[0].activeMs).toBe(1500);
   });
 });
 

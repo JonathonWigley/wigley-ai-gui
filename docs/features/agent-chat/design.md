@@ -322,7 +322,7 @@ interview on 2026-10-23; this file is the record of both.
   and first-message titles; a file without them reads as untitled), its last process's
   id, the controls and resume flag that process launched with, the controls the row holds and the ids of those the user
   picked, the entry ids of the messages that process dropped which already went back to the box, and its unsent queued
-  messages and the returned messages the page has not placed, with their images (a file without any of these reads as none), in row order, with the selected
+  messages and the returned messages the page has not placed, with their images (a file without any of these reads as none), its `activeMs` (`docs/features/session-clock/design.md`; a file without it reads as 0), in row order, with the selected
   row (null when it names no row chat still holds), whether a message was ever sent, and whether a turn was running. A
   new, resumed or launched session is saved only after its process starts, so a start that fails leaves no record. Only
   the user closing its row removes a record; quit, `install-app`, a process exit and a chat plugin reload keep it.

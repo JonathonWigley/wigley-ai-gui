@@ -9,6 +9,7 @@ import type {
 } from '../../contracts/agent';
 import type { Disposable } from '../../contracts/disposable';
 import type { ChannelShape, EventShape } from '../../contracts/plugin';
+import type { ActiveTime } from '../../shared/active-time';
 
 // The `id` of the agent harness chat runs its sessions on: chat's profiles are
 // that harness's config folders.
@@ -85,6 +86,11 @@ export interface ChatSessionState {
   // The subagents and background tasks still running in the session's
   // process; while any runs, a turn's end does not end the agent's work.
   background: number;
+  // How long the agent has worked: it runs while `activity` is `working` or
+  // `background` is above 0. A restored row starts paused at its saved total,
+  // any other row at 0, and `/clear` resets it to 0. `since` is epoch ms on the
+  // wall clock main and the page share, so the page reads it with `activeMsAt`.
+  activeTime: ActiveTime;
   // The session's slash commands and skills, as typed after `/`; [] until the
   // harness reports them.
   commands: string[];
@@ -170,9 +176,10 @@ export interface ChatChannel extends ChannelShape {
     interrupt(sessionId: string): void;
     // Ends the session's process and starts a fresh one under a new host
     // session id; the entries become one `Conversation cleared` notice, sent
-    // as `entries`, and every message written but not taken in, then every
-    // queued message, arrives as `returned`. Rejects when the fresh process
-    // cannot start, leaving the row resting.
+    // as `entries`, the active time returns to 0, sent as `activeTime`, and
+    // every message written but not taken in, then every queued message,
+    // arrives as `returned`. Rejects when the fresh process cannot start,
+    // leaving the row resting.
     clear(sessionId: string): void;
     // Takes the queued message out of the queue, arriving as `returned`; does
     // nothing for one already written to the agent or sent now.
@@ -208,6 +215,8 @@ export interface ChatChannel extends ChannelShape {
     controls: { sessionId: string; controls: SessionControl[] };
     activity: { sessionId: string; activity: ProcessActivity };
     background: { sessionId: string; background: number };
+    // The session's clock started, stopped or was reset.
+    activeTime: { sessionId: string; activeTime: ActiveTime };
     commands: { sessionId: string; names: string[] };
     // Replaces the session's whole entry list, as when restored history
     // arrives.

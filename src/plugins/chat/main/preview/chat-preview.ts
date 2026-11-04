@@ -2,6 +2,7 @@ import type { ChatEntry } from '../../../../contracts/agent';
 import type { Clock } from '../../../../contracts/ambient';
 import type { Log } from '../../../../contracts/log';
 import type { MainChannel } from '../../../../contracts/plugin';
+import { NO_ACTIVE_TIME } from '../../../../shared/active-time';
 import type {
   OwnedSession,
   SessionsMainExports,
@@ -85,6 +86,7 @@ export function createChatPreview(deps: ChatPreviewDeps): ChatPreview {
         controls: previewControls(),
         activity: 'idle',
         background: 0,
+        activeTime: NO_ACTIVE_TIME,
         commands: [],
         running: true,
         queued: [],

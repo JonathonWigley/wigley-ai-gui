@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TextEditor } from '../../../contracts/editor';
 import type { ChatEntry } from '../../../contracts/agent';
+import { NO_ACTIVE_TIME } from '../../../shared/active-time';
 import { installFakeDom } from '../../../shared/page/test-dom';
 import { createPartStore } from '../../../shared/page/contributed-parts';
 import type {
@@ -22,6 +23,7 @@ function stateOf(returned: ReturnedMessage[]): ChatSessionState {
     controls: [],
     activity: 'idle',
     background: 0,
+    activeTime: NO_ACTIVE_TIME,
     commands: [],
     running: false,
     queued: [],

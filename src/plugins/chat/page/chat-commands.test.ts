@@ -6,6 +6,7 @@ import {
   type SessionControl,
 } from '../../../contracts/agent';
 import type { ScrollStep, TextEditor } from '../../../contracts/editor';
+import { NO_ACTIVE_TIME } from '../../../shared/active-time';
 import type { ChatSessionState, SlashCommandContext } from '../contract';
 import { createAttachments } from './attachments';
 import type { CloseConfirm, ReasonBox } from './chat-dialogs';
@@ -84,6 +85,7 @@ function session(
     controls: [mode],
     activity: 'working',
     background: 0,
+    activeTime: NO_ACTIVE_TIME,
     commands: [],
     running,
     queued: [],
