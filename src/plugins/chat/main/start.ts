@@ -443,6 +443,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
         profileNames,
         isAbsolute: (folder) => services.paths.isAbsolute(folder),
         stat: (folder) => services.files.stat(folder),
+        log: (line) => services.log('chat', line),
       }),
     );
     const restored = Promise.all([

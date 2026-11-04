@@ -31,10 +31,12 @@ import { refusalOf } from '../image-rules';
 import { isWorkRunning } from '../session-work';
 import {
   type AgentSession,
+  errorResult,
   type OpenOptions,
   type OwnedSession,
   type SessionsMainExports,
   type SessionTitles,
+  textResult,
   TITLE_SOURCES,
   type ToolResult,
   type ToolSession,
@@ -402,14 +404,6 @@ function exitNoticeText(code: number | null, error: string | null): string {
   const exitCode = code === null ? 'unknown' : String(code);
   const reason = error === null ? '' : `: ${error}`;
   return `Claude stopped (exit code ${exitCode})${reason}. Your next message resumes this session.`;
-}
-
-function textResult(text: string): ToolResult {
-  return { content: [{ type: 'text', text }] };
-}
-
-function errorResult(text: string): ToolResult {
-  return { content: [{ type: 'text', text }], isError: true };
 }
 
 // `entries` with `entry` in the place of the one holding its id, else appended.

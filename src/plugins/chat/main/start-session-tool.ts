@@ -1,17 +1,19 @@
 import type { FileStat } from '../../../contracts/files';
 import { errorText } from '../../../shared/error-text';
-import type {
-  AgentSession,
-  ToolDefinition,
-  ToolResult,
-  ToolSession,
+import {
+  type AgentSession,
+  errorResult,
+  textResult,
+  type ToolDefinition,
+  type ToolResult,
+  type ToolSession,
 } from '../../sessions/contract';
 import type { LaunchRequest } from '../contract';
 
 export const START_SESSION_TOOL: ToolDefinition = {
   name: 'start_session',
   description:
-    "Start a new chat session in the Auri app with `prompt` as its first message. It opens in the background as a new row in the side bar, without taking focus, and it spends plan usage like any session. `folder` must be an absolute path to a folder that exists. `folder` and `profile` default to this session's. Returns the new session's id.",
+    "Start a new, independent chat session in the Auri app with `prompt` as its first message. It opens in the background as a new row in the side bar, without taking focus. It is a full agent session running the user's whole agent setup, not a lightweight subagent: even a one-word prompt spends tens of thousands of tokens of the user's plan, so start one only when the work needs its own session. It runs on its own: its output does not come back here, and this tool cannot message or end it. `folder` must be an absolute path to a folder that exists; it defaults to this session's folder when there is one. `profile` defaults to this session's when the app started this session, else to the app's first profile. Returns the new session's id.",
   inputSchema: {
     type: 'object',
     properties: {
@@ -22,12 +24,12 @@ export const START_SESSION_TOOL: ToolDefinition = {
       folder: {
         type: 'string',
         description:
-          "The absolute path of an existing folder to start in. Defaults to this session's folder.",
+          "The absolute path of an existing folder to start in. Defaults to this session's folder, when it has one.",
       },
       profile: {
         type: 'string',
         description:
-          "The name of the chat profile to start under. Defaults to this session's profile.",
+          "The name of the chat profile to start under. Defaults to this session's when the app started this session, else to the app's first profile.",
       },
     },
     required: ['prompt'],
@@ -41,6 +43,7 @@ export interface StartSessionToolDeps {
   profileNames(): string[];
   isAbsolute(path: string): boolean;
   stat(path: string): Promise<FileStat | null>;
+  log(line: string): void;
 }
 
 interface StartSessionArgs {
@@ -51,10 +54,6 @@ interface StartSessionArgs {
 
 // A value an argument settled on, or the problem that stops the call.
 type Choice = { value: string } | { problem: string };
-
-function textResult(text: string, isError: boolean): ToolResult {
-  return { content: [{ type: 'text', text }], isError };
-}
 
 function isNonBlankString(value: unknown): value is string {
   return typeof value === 'string' && value.trim() !== '';
@@ -102,6 +101,7 @@ async function chooseFolder(
   try {
     found = await deps.stat(folder);
   } catch (error) {
+    deps.log(`folder ${folder} not read: ${errorText(error)}`);
     return { problem: `Could not read ${folder}: ${errorText(error)}` };
   }
   if (found === null || !found.isFolder) {
@@ -111,7 +111,8 @@ async function chooseFolder(
 }
 
 // Starts a session from valid args; a bad argument or a failed launch is an
-// error result, and a bad argument starts nothing.
+// error result, and a bad argument starts nothing. A failed launch or a rejected
+// stat also writes a log line.
 async function startSession(
   deps: StartSessionToolDeps,
   session: AgentSession,
@@ -119,15 +120,15 @@ async function startSession(
 ): Promise<ToolResult> {
   const named = (args ?? {}) as StartSessionArgs;
   if (!isNonBlankString(named.prompt)) {
-    return textResult('prompt must be a non-empty string.', true);
+    return errorResult('prompt must be a non-empty string.');
   }
   const profile = chooseProfile(deps, session.id, named.profile);
   if ('problem' in profile) {
-    return textResult(profile.problem, true);
+    return errorResult(profile.problem);
   }
   const folder = await chooseFolder(deps, session, named.folder);
   if ('problem' in folder) {
-    return textResult(folder.problem, true);
+    return errorResult(folder.problem);
   }
   let id: string;
   try {
@@ -137,16 +138,17 @@ async function startSession(
       message: { text: named.prompt, images: [] },
     });
   } catch (error) {
-    return textResult(`Session not started: ${errorText(error)}`, true);
+    deps.log(`session not started: ${errorText(error)}`);
+    return errorResult(`Session not started: ${errorText(error)}`);
   }
   return textResult(
     `Started session ${id} in ${folder.value} under profile ${profile.value}.`,
-    false,
   );
 }
 
 // The `start` chat hands sessions' `contributeTools` with START_SESSION_TOOL:
-// each session's calls default to that session's folder and profile.
+// each session's calls default to that session's folder, and to its profile
+// when the app started it.
 export function startSessionToolSession(
   deps: StartSessionToolDeps,
 ): (session: AgentSession) => ToolSession {

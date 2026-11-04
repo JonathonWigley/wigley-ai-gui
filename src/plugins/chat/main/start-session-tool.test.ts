@@ -25,6 +25,8 @@ interface Row {
   // Fragments of the error text.
   errors?: string[];
   statCalled?: boolean;
+  // Fragments of the one log line the call writes.
+  logged?: string[];
 }
 
 function message(text: string) {
@@ -67,6 +69,13 @@ const ROWS: Row[] = [
     name: 'an unknown profile names the known ones',
     args: { prompt: 'go', profile: 'nope' },
     errors: ['nope', 'work, home'],
+    statCalled: false,
+  },
+  {
+    name: 'an unknown profile when chat has none says so',
+    args: { prompt: 'go', profile: 'x' },
+    profiles: [],
+    errors: ['none'],
     statCalled: false,
   },
   {
@@ -123,6 +132,7 @@ const ROWS: Row[] = [
     args: { prompt: 'go' },
     stat: new Error('disk gone'),
     errors: ['disk gone'],
+    logged: ['/caller', 'disk gone'],
   },
   {
     name: 'a missing prompt',
@@ -153,6 +163,7 @@ const ROWS: Row[] = [
     args: { prompt: 'go' },
     launchError: 'profile removed',
     errors: ['profile removed'],
+    logged: ['profile removed'],
   },
   {
     name: 'no profiles and none named',
@@ -177,6 +188,7 @@ function toolSession(row: Row) {
       ? Promise.reject(answer)
       : Promise.resolve(answer);
   });
+  const log = vi.fn<(line: string) => void>();
   const session = startSessionToolSession({
     launch,
     profileOf: (sessionId) =>
@@ -186,6 +198,7 @@ function toolSession(row: Row) {
     profileNames: () => row.profiles ?? ['work', 'home'],
     isAbsolute: (path) => path.startsWith('/'),
     stat,
+    log,
   })({
     id: 'caller',
     info: {
@@ -195,12 +208,12 @@ function toolSession(row: Row) {
       harness: 'claude',
     },
   });
-  return { launch, stat, session };
+  return { launch, stat, log, session };
 }
 
 describe('start_session', () => {
   it.each(ROWS)('$name', async (row) => {
-    const { launch, stat, session } = toolSession(row);
+    const { launch, stat, log, session } = toolSession(row);
 
     const result = await session.call(
       START_SESSION_TOOL.name,
@@ -210,7 +223,7 @@ describe('start_session', () => {
 
     const text = result.content[0]?.text;
     if (row.success !== undefined) {
-      expect(result.isError).toBe(false);
+      expect(result.isError ?? false).toBe(false);
       expect(text).toBe(row.success);
       expect(launch).toHaveBeenCalledExactlyOnceWith(row.launched);
       return;
@@ -224,6 +237,11 @@ describe('start_session', () => {
     }
     if (row.statCalled === false) {
       expect(stat).not.toHaveBeenCalled();
+    }
+    for (const fragment of row.logged ?? []) {
+      expect(log).toHaveBeenCalledExactlyOnceWith(
+        expect.stringContaining(fragment),
+      );
     }
   });
 

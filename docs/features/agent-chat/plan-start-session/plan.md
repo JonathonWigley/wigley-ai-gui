@@ -118,5 +118,6 @@ Review base: 4de544d7
 - errorText is a run-time import from src/shared/error-text, reading the boundary rule as covering plugin contracts and how chat and files are reached; the layer check passes — a one-line local copy if wrong · group 01 · group 01
 - A named profile when chat has no profiles gets the unknown-profile error reading Profiles: none. — wording only if wrong · group 01 · group 01
 ### Review rounds
+- 1 · 752a22b3 · NEEDS FIXES: 10 findings, 3 pre-existing; 2 lead-applied
 ### Test gate
 - start-session-tool.test.ts: the new handler's rules; start.test.ts: the contribution and the hoisted profileOf export; title-tool.test.ts: the sibling tool whose pattern the module follows · 3 files, 71 tests pass

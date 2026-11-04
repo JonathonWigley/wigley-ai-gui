@@ -78,6 +78,14 @@ export interface ToolResult {
   isError?: boolean;
 }
 
+export function textResult(text: string): ToolResult {
+  return { content: [{ type: 'text', text }] };
+}
+
+export function errorResult(text: string): ToolResult {
+  return { content: [{ type: 'text', text }], isError: true };
+}
+
 // `toolUseId` is the host's id for the calling tool use, when it sent one.
 export interface ToolCallContext {
   toolUseId: string | null;

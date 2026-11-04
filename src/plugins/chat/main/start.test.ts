@@ -546,7 +546,7 @@ describe('chat main part', () => {
         { toolUseId: null, signal: new AbortController().signal },
       );
 
-    expect(result?.isError).toBe(false);
+    expect(result?.isError ?? false).toBe(false);
     expect(chat.starts.count).toBe(1);
     expect(chat.processSends).toHaveBeenCalledExactlyOnceWith({
       text: 'hi',

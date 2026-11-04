@@ -1,16 +1,17 @@
 import type { Readable, Writable } from 'node:stream';
 import { Server } from '@modelcontextprotocol/server';
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
-import type { ToolDefinition, ToolResult, ToolSession } from '../../contract';
+import {
+  errorResult,
+  type ToolDefinition,
+  type ToolResult,
+  type ToolSession,
+} from '../../contract';
 
 // The `_meta` key Claude Code sends a tools/call's calling tool_use id under.
 const TOOL_USE_ID_META_KEY = 'claudecode/toolUseId';
 
 const SERVER_INFO = { name: 'wigley-forms', version: '1.0.0' };
-
-function errorResult(message: string): ToolResult {
-  return { content: [{ type: 'text', text: message }], isError: true };
-}
 
 function toolUseId(meta: Record<string, unknown> | undefined): string | null {
   const value = meta?.[TOOL_USE_ID_META_KEY];
