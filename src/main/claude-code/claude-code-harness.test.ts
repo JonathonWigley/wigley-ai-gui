@@ -49,6 +49,7 @@ const request: AgentStart = {
   controls: {},
   instructions: [],
   idleCompactMinTokens: null,
+  rowId: 'row-1',
 };
 
 // A child with `PassThrough` stdio that records its signals and stdin lines.
@@ -3075,7 +3076,7 @@ describe('createClaudeCodeHarness on the session host', () => {
         'tool',
       ],
       cwd: '/proj',
-      env: {},
+      env: { WIGLEY_SESSION_ROW: 'row-1' },
       idleRule: {
         key: 'type',
         value: 'result',
@@ -3116,7 +3117,10 @@ describe('createClaudeCodeHarness on the session host', () => {
 
     hostHarness(host, clock, { env }).start(request, recordingEvents().events);
 
-    expect(host.processes[0].request?.env).toEqual({ KEEP: 'a' });
+    expect(host.processes[0].request?.env).toEqual({
+      KEEP: 'a',
+      WIGLEY_SESSION_ROW: 'row-1',
+    });
   });
 
   it('start_HostSpawnFails_EndsWithHint', async () => {

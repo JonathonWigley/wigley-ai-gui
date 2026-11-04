@@ -136,6 +136,8 @@ export type ChatEntryKind = ChatEntry['kind'];
 // `processId` is the hosted process id chat chooses for this start.
 // `idleCompactMinTokens` is the context size above which the harness may compact an idle session on its own; null
 // leaves the harness's default.
+// `rowId` is the app's id for the session's row, which `/clear` keeps while `sessionId` changes; each adapter hands it
+// to its harness's environment for tools that track the row, such as `unity-pool`.
 export interface AgentStart {
   processId: string;
   sessionId: string;
@@ -145,6 +147,7 @@ export interface AgentStart {
   controls: Readonly<Record<string, string>>;
   instructions: readonly string[];
   idleCompactMinTokens: number | null;
+  rowId: string;
 }
 
 export type PlanSeverity = 'normal' | 'warning' | 'critical';
