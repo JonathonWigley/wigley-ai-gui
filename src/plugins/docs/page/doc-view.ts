@@ -15,6 +15,7 @@ import type {
   PushedScope,
   ToastTone,
 } from '../../../contracts/plugin';
+import { callEach } from '../../../shared/call-each';
 import { scrollContent, scrollText } from '../../../shared/content-scroll';
 import { errorText } from '../../../shared/error-text';
 import { fileStamp } from '../../../shared/file-stamp';
@@ -160,7 +161,8 @@ export interface DocView {
   // closes.
   redraw(): void;
   // Ends the prompt, destroys the editor and its drop target, stops the watch
-  // and disposes the pane's anchors, drawn parts and fence views.
+  // and disposes the pane's anchors, drawn parts and fence views, a throw not
+  // skipping the rest. Work in flight draws nothing once it answers.
   dispose(): void;
 }
 
@@ -639,7 +641,7 @@ export function createDocView(deps: DocViewDeps): DocView {
     }
     renderText(deps.markdown, doc.filePath, doc.text, deps.paths)
       .then((rendered) => {
-        if (shown === doc && editor === null) {
+        if (!isDisposed && shown === doc && editor === null) {
           doc.bodyStartLine = rendered.bodyStartLine;
           drawBody(rendered);
           pane.scrollTop = scrollTop;
@@ -712,7 +714,7 @@ export function createDocView(deps: DocViewDeps): DocView {
 
   const reread = async (doc: ShownDoc) => {
     const diskText = await deps.channel.invoke('readDoc', doc.filePath);
-    if (shown !== doc || diskText === writingText) {
+    if (isDisposed || shown !== doc || diskText === writingText) {
       return;
     }
     if (editor !== null) {
@@ -731,7 +733,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       diskText,
       deps.paths,
     );
-    if (shown !== doc || editor !== null) {
+    if (isDisposed || shown !== doc || editor !== null) {
       return;
     }
     const scrollTop = pane.scrollTop;
@@ -857,7 +859,7 @@ export function createDocView(deps: DocViewDeps): DocView {
   // Opens the file the detail finds in the editor, watched while it edits.
   const editDetail = async (doc: ShownDoc, detail: DocDetail) => {
     const file = await detail.editFile();
-    if (file === null || shown !== doc || editor !== null) {
+    if (isDisposed || file === null || shown !== doc || editor !== null) {
       return;
     }
     doc.filePath = file.path;
@@ -1117,14 +1119,8 @@ export function createDocView(deps: DocViewDeps): DocView {
     },
     dispose() {
       isDisposed = true;
-      endConflict(false);
-      editor?.destroy();
+      const destroying = editor;
       editor = null;
-      dropTarget?.dispose();
-      dropTarget = null;
-      watchFile(null, shown?.name ?? 'the doc');
-      disposeAnchors(anchors);
-      bodyMount.dispose();
       const drawn = [
         drawnPane,
         drawnEmpty,
@@ -1133,9 +1129,18 @@ export function createDocView(deps: DocViewDeps): DocView {
         drawnBody,
         drawnEditorFrame,
       ];
-      for (const part of drawn) {
-        part?.dispose();
-      }
+      callEach<() => void>(
+        [
+          () => endConflict(false),
+          () => destroying?.destroy(),
+          () => dropTarget?.dispose(),
+          () => watchFile(null, shown?.name ?? 'the doc'),
+          () => disposeAnchors(anchors),
+          () => bodyMount.dispose(),
+          ...drawn.map((part) => () => part?.dispose()),
+        ],
+        (step) => step(),
+      );
     },
   };
 

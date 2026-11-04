@@ -409,8 +409,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         hasUnsavedEdits: () => added.view.hasUnsavedEdits(),
         dispose() {
           addedViews.delete(viewId);
-          added.view.dispose();
-          split.dispose();
+          callEach([added.view, split], (part) => part.dispose());
         },
       };
       return { handle, view: added.view };
@@ -444,11 +443,7 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
     });
     // The tab goes first, so it never holds a disposed view.
     const disposeSessionDocs = (held: SessionDocs) => {
-      try {
-        held.tab?.dispose();
-      } finally {
-        held.view.dispose();
-      }
+      callEach([held.tab, held.view], (part) => part?.dispose());
     };
     api.events.on('sessions.sessionRemoved', ({ sessionId }) => {
       const held = sessionDocs.get(sessionId);
@@ -613,18 +608,20 @@ export const docsPagePart: PagePart<typeof docsManifest> = {
         openDoc: (path, line) => openDoc(path, line ?? null),
       }),
       dispose() {
-        window.removeEventListener('resize', onWindowResize);
-        if (pendingResizeFrame !== null) {
-          cancelAnimationFrame(pendingResizeFrame);
-        }
         const held = [...sessionDocs.values()];
         sessionDocs.clear();
         callEach<() => void>(
           [
+            () => window.removeEventListener('resize', onWindowResize),
+            () => {
+              if (pendingResizeFrame !== null) {
+                cancelAnimationFrame(pendingResizeFrame);
+              }
+            },
             ...held.map((each) => () => disposeSessionDocs(each)),
             () => machineView.dispose(),
           ],
-          (dispose) => dispose(),
+          (step) => step(),
         );
       },
     };

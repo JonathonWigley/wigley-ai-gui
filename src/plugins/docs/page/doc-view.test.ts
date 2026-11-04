@@ -18,6 +18,7 @@ import {
   createDocView,
   type DocDetail,
   type DocTarget,
+  type DocView,
   type DocViewDeps,
 } from './doc-view';
 import {
@@ -305,6 +306,8 @@ describe('createDocView', () => {
     { steps: ['openReadOnly', 'edit'], live: [] },
     { steps: ['open', 'edit', 'clear'], live: [] },
     { steps: ['open', 'edit', 'dispose'], live: [] },
+    { steps: ['open', 'edit', 'disposeAsDestroyThrows'], live: [] },
+    { steps: ['openDetail', 'edit', 'dispose', 'settle'], live: [] },
   ])('dropTarget_OnlyWhileEditing $steps', async ({ steps, live }) => {
     const { view, editors, targets } = docViewOver(() =>
       withUser(defaultLayout, paneLayout('pane')),
@@ -313,6 +316,9 @@ describe('createDocView', () => {
       switch (step) {
         case 'open':
           await view.open(target(null));
+          break;
+        case 'openDetail':
+          await view.open({ ...target(null), detail: hookDetail });
           break;
         case 'openReadOnly':
           await view.open({
@@ -332,6 +338,15 @@ describe('createDocView', () => {
         case 'dispose':
           view.dispose();
           break;
+        case 'disposeAsDestroyThrows':
+          editors[0].destroy.mockImplementationOnce(() => {
+            throw new Error('box gone');
+          });
+          expect(() => view.dispose()).toThrow('box gone');
+          break;
+        case 'settle':
+          await settled();
+          break;
       }
     }
 
@@ -343,6 +358,84 @@ describe('createDocView', () => {
           element === pane ? 'pane' : 'other',
         ),
     ).toEqual(live);
+  });
+
+  // Every render answers only after the dispose. `inFlight` runs before the
+  // dispose, which comes at once, or once the render began for `isRendering`;
+  // `late` runs after it.
+  it.each<{
+    name: string;
+    inFlight?: (shown: LateDocView) => void;
+    isRendering?: boolean;
+    late?: (shown: LateDocView) => void;
+  }>([
+    {
+      name: 'an open at its render',
+      inFlight: ({ view }) => {
+        void view.open(target(null, '/home/other.md'));
+      },
+      isRendering: true,
+    },
+    {
+      name: 'a disk change at its read',
+      inFlight: ({ view }) => view.diskChanged('/home/notes.md'),
+    },
+    {
+      name: 'a disk change at its render',
+      inFlight: ({ view }) => view.diskChanged('/home/notes.md'),
+      isRendering: true,
+    },
+    {
+      name: "a :q's render",
+      inFlight: ({ view, editors }) => {
+        view.edit(1);
+        editors[0].events.quit(false);
+      },
+    },
+    {
+      name: 'a move',
+      late: ({ view }) => view.retarget(target(null, '/home/moved.md')),
+    },
+    { name: 'a clear', late: ({ view }) => view.clear() },
+    { name: 'a chip refresh', late: ({ view }) => view.refreshChips() },
+    {
+      name: 'a layout change',
+      late: ({ view, changeLayouts }) => {
+        changeLayouts();
+        view.redraw();
+      },
+    },
+  ])('dispose_ThenWorkLandingLate_DrawsNothing $name', async (row) => {
+    let layouts = withUser(defaultLayout, paneLayout('pane-1'));
+    const { view, editors, deps } = docViewOver(() => layouts);
+    const changeLayouts = () => {
+      layouts = withUser(defaultLayout, paneLayout('pane-2'));
+    };
+    const shown = { view, editors, changeLayouts };
+    await view.open(target(null));
+    let answerRender: () => void = () => undefined;
+    deps.markdown.document = () =>
+      new Promise((resolve) => {
+        answerRender = () => resolve('# Doc');
+      });
+    row.inFlight?.(shown);
+    if (row.isRendering === true) {
+      await settled();
+    }
+
+    view.dispose();
+    const draw = vi.spyOn(deps.parts, 'draw');
+    const render = vi.spyOn(deps.markdown, 'document');
+    const openChanged = vi.spyOn(deps, 'openChanged');
+    row.late?.(shown);
+    answerRender();
+    await settled();
+
+    expect({
+      draws: draw.mock.calls.length,
+      renders: render.mock.calls.length,
+      openChanges: openChanged.mock.calls.length,
+    }).toEqual({ draws: 0, renders: 0, openChanges: 0 });
   });
 
   // `writeBytes`: 'written' answers at once; 'refused' rejects; 'afterQuit'
@@ -476,6 +569,13 @@ describe('createDocView', () => {
     });
   });
 });
+
+// What a row of the late-work table acts on.
+interface LateDocView {
+  view: DocView;
+  editors: { events: DocumentEditorEvents }[];
+  changeLayouts(): void;
+}
 
 // A file dropped from disk at `path`.
 function dropped(path: string, mediaType: string): DroppedFile {

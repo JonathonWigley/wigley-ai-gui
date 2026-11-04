@@ -17,8 +17,26 @@ import {
 import type { DocsPageExports } from '../contract';
 import { docsPagePart } from './start';
 
+// What throws the next time one is disposed, once.
+interface ThrowsNext {
+  anchor: boolean;
+  tab: boolean;
+}
+
+function disposeThrowingOn(
+  throwsNext: ThrowsNext,
+  part: keyof ThrowsNext,
+): () => void {
+  return () => {
+    if (throwsNext[part]) {
+      throwsNext[part] = false;
+      throw new Error(`${part} gone`);
+    }
+  };
+}
+
 // `tabs` holds each tab's title; its handle files under the dependent.
-function fakeSessions(tabs: string[]) {
+function fakeSessions(tabs: string[], throwsNext: ThrowsNext) {
   return fakeDependency(
     sessionsPageKey,
     (consumer) =>
@@ -26,7 +44,7 @@ function fakeSessions(tabs: string[]) {
         addTab(_sessionId: string, tab: SessionTabView) {
           tabs.push(tab.title);
           return consumer.track({
-            dispose: () => undefined,
+            dispose: disposeThrowingOn(throwsNext, 'tab'),
           } as SessionTabHandle);
         },
       }) as unknown as SessionsPageExports,
@@ -36,18 +54,20 @@ function fakeSessions(tabs: string[]) {
 function startDocsPage() {
   installFakeDom(vi.stubGlobal);
   const tabs: string[] = [];
+  const throwsNext: ThrowsNext = { anchor: false, tab: false };
   const keys = fakeDependency(keysPageKey, (consumer): KeysPageExports => ({
     keysFor: () => null,
     onChanged: () => consumer.track({ dispose: () => undefined }),
-    anchor: () => consumer.track({ dispose: () => undefined }),
+    anchor: () =>
+      consumer.track({ dispose: disposeThrowingOn(throwsNext, 'anchor') }),
   }));
   const harness = startPagePart(docsPagePart, {
-    dependencies: [keys, fakeSessions(tabs)],
+    dependencies: [keys, fakeSessions(tabs, throwsNext)],
     firstModeTaken: true,
   });
   const exportsTo = (consumer: Registrations) =>
     harness.started().exports?.(consumer) as DocsPageExports;
-  return { harness, exportsTo, tabs };
+  return { harness, exportsTo, tabs, throwsNext };
 }
 
 describe('docs page part lifecycle', () => {
@@ -72,6 +92,25 @@ describe('docs page part lifecycle', () => {
       await harness.stop();
 
       expect(tabs).toHaveLength(tabCount);
+      expect(harness.counts()).toEqual(noCounts);
+    },
+  );
+
+  it.each([
+    { part: 'anchor' as const, error: 'anchor gone' },
+    { part: 'tab' as const, error: 'tab gone' },
+  ])(
+    'stop_OneSessionsTeardownThrows_TearsDownEveryView ($part)',
+    async ({ part, error }) => {
+      const { harness, throwsNext } = startDocsPage();
+      for (const sessionId of ['s1', 's2']) {
+        harness.emit('sessions.sessionAdded', { sessionId, projectDir: '/p' });
+      }
+      expect(harness.counts().observers).toBeGreaterThan(0);
+      throwsNext[part] = true;
+
+      await expect(harness.stop()).rejects.toThrow(error);
+
       expect(harness.counts()).toEqual(noCounts);
     },
   );
