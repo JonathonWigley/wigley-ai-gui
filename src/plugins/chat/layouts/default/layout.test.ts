@@ -1257,8 +1257,7 @@ describe('default chat layout surfaces', () => {
         'modelEffort',
         'chip:mode',
         'statusParts',
-        'running',
-        'send',
+        'div.chat-status-end:',
       ],
     },
     {
@@ -1270,8 +1269,7 @@ describe('default chat layout surfaces', () => {
         'modelEffort',
         'chip:mode',
         'statusParts',
-        'running',
-        'send',
+        'div.chat-status-end:',
       ],
     },
     {
@@ -1283,8 +1281,7 @@ describe('default chat layout surfaces', () => {
         'typeHint',
         'chip:mode',
         'statusParts',
-        'running',
-        'send',
+        'div.chat-status-end:',
       ],
     },
   ])(
@@ -1294,7 +1291,12 @@ describe('default chat layout surfaces', () => {
 
       const view = drawSurface('statusLine', input, kit);
 
-      expect(describeChildren(asFake(view.element))).toEqual(line);
+      const root = asFake(view.element);
+      expect(describeChildren(root)).toEqual(line);
+      expect(describeChildren(root.children[line.length - 1])).toEqual([
+        'running',
+        'send',
+      ]);
     },
   );
 

@@ -770,7 +770,7 @@ const layout = {
   },
   // The repo and branch, the type hint, the model · effort chip, a chip per
   // other control, other plugins' status parts, then the running indicator
-  // and send at the end.
+  // and send as one group that ends the line, on whichever row it wraps to.
   statusLine(parent, input, kit) {
     const line = root(parent, 'chat-status-line');
     line.append(el('span', 'chat-status-repo', input.repo));
@@ -785,8 +785,10 @@ const layout = {
       kit.controlChip(line, control);
     }
     kit.statusParts(line);
-    kit.running(line);
-    kit.sendButton(line);
+    const end = el('div', 'chat-status-end');
+    line.append(end);
+    kit.running(end);
+    kit.sendButton(end);
     return { element: line };
   },
   attachments(parent, input, kit) {

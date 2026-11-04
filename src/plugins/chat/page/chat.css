@@ -203,11 +203,13 @@
 .chat-composer-parts {
   display: flex;
   flex-direction: column;
+  gap: var(--wg-space-2);
   min-height: 0;
   overflow-y: auto;
 }
 
-.chat-composer-parts:empty {
+.chat-composer-parts:empty,
+.chat-composer-part:empty {
   display: none;
 }
 

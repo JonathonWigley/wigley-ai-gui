@@ -42,14 +42,9 @@ export function createHScroller(): HScroller {
 
   let pendingReveal: HTMLElement | null = null;
 
-  const showOverflow = () => {
-    root.dataset.overflow = String(chevronStates(viewOf(track)).overflows);
-  };
-  // Back and forward are read after `data-overflow` has shown or hidden the
-  // chevrons, so they measure the track at its new width.
   const showChevronStates = () => {
-    showOverflow();
     const states = chevronStates(viewOf(track));
+    root.dataset.overflow = String(states.overflows);
     back.classList.toggle('is-no-target', !states.back);
     forward.classList.toggle('is-no-target', !states.forward);
   };
@@ -58,7 +53,6 @@ export function createHScroller(): HScroller {
       const item = pendingReveal;
       pendingReveal = null;
       if (item.parentElement === track) {
-        showOverflow();
         scrollTrack(
           track,
           revealTarget(spanOf(item), viewOf(track)),

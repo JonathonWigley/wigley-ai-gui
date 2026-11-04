@@ -300,8 +300,9 @@ The primitives, each a builder in `src/shared/page/ui/`:
   outer end pane's least width the sum of the inner two. Each handle draws the resize prompt
   `⌥⇧H ◂ ▸ ⌥⇧L`, centred on it and taking no space, while the pointer is over it, while a drag runs
   and for a moment after each keyboard resize. A view that drops a split calls its `dispose`.
-- **HScroller** (`createHScroller`): a row that scrolls sideways, with an IconButton chevron at each end that scrolls
-  by one item and hides while nothing lies further that way, and a `reveal(item)` that scrolls an item into view.
+- **HScroller** (`createHScroller`): a row that scrolls sideways, with a `sheet-background` IconButton chevron lying over
+  each end, taking no space so overflow moves no item, that scrolls by one item and hides while nothing lies further
+  that way, and a `reveal(item)` that scrolls an item into view.
 - **Card** (`card`, with an `attention` or `error` edge) and the collapsible card
   (`createCollapsibleCard`), whose `plain` variant is a one-line row with no card chrome that opens
   its body in place under it.
@@ -426,10 +427,10 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   with no card. Permission prompts are cards with a
   `status-attention` edge and plain verbs (Allow once, Deny). The composer floats (L3,
   `radius-xl`, inset `space-3`) with the transcript scrolling beneath it, and holds, top to bottom: other plugins'
-  composer parts (the workflow strip, the agent strip, the context line), the activity line, the strip of attached images' thumbnails, the box (no mode
+  composer parts (the workflow strip, the agent strip, the context line), `space-2` apart, the activity line, the strip of attached images' thumbnails, the box (no mode
   label: the cursor's shape shows the vim mode), and the status line, drawn in this order: repo and branch in `fg-secondary`, the `i`/`a`
   type hint, one model · effort chip, every other control's chip, the status parts other plugins add (usage: spend),
-  the running dot, then Send. The **context line** is a Meter that fills the composer's width, then `58k/300k` and
+  then the running dot and Send as one group that ends the line, on whichever row it wraps to. The **context line** is a Meter that fills the composer's width, then `58k/300k` and
   `cache 59m` in `text-12` tabular numerals.
   The **agent strip** holds its subagents as an HScroller of cards, each a `card-background` Card with `radius-md`,
   heading with a running StatusDot, its name, a kind Tag and its elapsed time, then its description, `model · effort` in
@@ -457,11 +458,12 @@ each owner's parts); a user layout redraws any part, and a part keeps these rule
   The chip is one line under a session row: the stage and its status as an accent Tag and the countdown; an idle
   session draws no chip. The strip sits above the Chat composer: the status mark and line, the stepper only until the
   session has a plan (pending in `fg-tertiary`, running in `status-running`, ready in `accent`, paused in `status-warning`,
-  done in `status-success`), the countdown and the main action as a button; an idle session draws no strip. The side
+  done in `status-success`), the countdown and the main action as a button; every stage's strip keeps the height of a line
+  holding the action and starts on the composer's left edge; an idle session draws no strip. The side
   pane sits beside the transcript from the first read of a plan: the status mark and line, the stage's detail, the
   stepper, a progress meter, the checklist and every action as buttons. The checklist folds finished waves into one
   toggle row, shows the current wave under its header with a mark per task (filled once done), and lists later waves
-  one row each under `Up next`. An idle session, a session with no plan read and a hidden pane draw no pane. A
+  one row each under `Up next`, all on the pane's left edge. An idle session, a session with no plan read and a hidden pane draw no pane. A
   disabled action draws disabled.
 - **Floating:** pickers, which-key, help and dialogs use the floating material with `row-list` rows
   and key hints right-aligned in `fg-tertiary`; dialogs, chat's full-size image viewer and the full-size visual

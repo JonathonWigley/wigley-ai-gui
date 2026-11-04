@@ -277,6 +277,14 @@
   gap: var(--wg-space-2);
 }
 
+.chat-status-end {
+  align-items: center;
+  display: flex;
+  flex: none;
+  gap: var(--wg-space-2);
+  margin-left: auto;
+}
+
 .chat-status-repo,
 .chat-status-branch {
   color: var(--wg-fg-secondary);

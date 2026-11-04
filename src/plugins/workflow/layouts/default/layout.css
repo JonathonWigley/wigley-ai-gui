@@ -15,9 +15,16 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--wg-space-2);
-  padding: var(--wg-space-1) var(--wg-space-2);
+  /* The height of a line holding the main action, so a stage with no action
+     moves nothing below it. */
+  min-height: calc(var(--wg-icon-button) + 2 * var(--wg-space-1) + 1px);
+  padding: var(--wg-space-1) 0;
   border-bottom: 1px solid var(--wg-border-subtle);
   font-size: var(--wg-text-12);
+}
+
+.workflow-strip .ui-button {
+  height: var(--wg-icon-button);
 }
 
 .workflow-status-line {
@@ -67,6 +74,12 @@
 .workflow-side-pane .ui-meter {
   display: block;
   width: 100%;
+}
+
+/* The checklist's rows share the pane's left edge. */
+.workflow-side-pane .ui-row {
+  padding-left: 0;
+  padding-right: 0;
 }
 
 .workflow-side-tasks {
