@@ -235,8 +235,8 @@ export interface ChatSessions {
   stopAll(): void;
   // Detaches every held process, which keeps running on the session host, and
   // kills every other process not yet exited, a closed or cleared session's
-  // still ending, for an app quit. A closed row's attach resolving after it is
-  // killed too; a held row's is detached. It tries one
+  // still ending, for an app quit or a chat plugin reload. A closed row's attach
+  // resolving after it is killed too; a held row's is detached. It tries one
   // last save first, a running clock's span up to now included, and returns that
   // write's promise, which never rejects: a write that fails or is cut short
   // leaves the last saved total. Nothing is saved or started after it, and every

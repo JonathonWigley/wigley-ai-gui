@@ -144,9 +144,8 @@ Settled in the 2026-11-03 interview for Wave 1 of `docs/features/intent-alignmen
   plugin, so a stop clears them with no plugin code. `ProcessRunner.run` takes an abort signal for this.
 - **Late registrations.** A registration made after its plugin stopped (a `then` that resolves late) is disposed at
   once rather than leaked.
-- **Quit disposes, reload later.** Quit starts every main part's `dispose` at once, in start order (`disposeParts`,
-  `src/main/main.ts`), so disposal has a real caller before Wave 4's reload. No `stop(id)` exists; reload and the live
-  enable switch stay in Wave 4.
+- **Stop now, reload later.** `stop(id)` lands in Wave 1, and quit uses it for main parts in reverse start order,
+  so disposal has a real caller before Wave 4's reload. Reload and the live enable switch stay in Wave 4.
 - **Typed keys per process.** `dependsOn` splits into `main` and `page` lists, so an edge only the page uses (workflow
   on docs) no longer orders or blocks the main part. A list still names a plugin whose events the process only
   hears, since start order is how a listener exists before the first emit.

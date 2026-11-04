@@ -325,7 +325,7 @@ interview on 2026-10-23; this file is the record of both.
   messages and the returned messages the page has not placed, with their images (a file without any of these reads as none), its `activeMs` (`docs/features/session-clock/design.md`; a file without it reads as 0), in row order, with the selected
   row (null when it names no row chat still holds), whether a message was ever sent, and whether a turn was running. A
   new, resumed or launched session is saved only after its process starts, so a start that fails leaves no record. Only
-  the user closing its row removes a record; quit, `install-app` and a process exit keep it.
+  the user closing its row removes a record; quit, `install-app`, a process exit and a chat plugin reload keep it.
   Plugin data is per app instance, so the stable and dev apps, drive runs and the self-test each keep their own list.
   Quit and `install-app` end no process: the session host keeps each one running, and quitting only disconnects the
   app from it (`docs/features/session-host/design.md`). `chat.stopAll` (`<Leader>:`) ends the process of every owned session chat holds
