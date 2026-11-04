@@ -76,6 +76,11 @@
   min-height: 0;
 }
 
+/* The cards of one group sit close: `space-1` apart. */
+.session-group-rows {
+  gap: var(--wg-space-1);
+}
+
 /* A section's label, then a hairline filling the line. */
 .session-section-label {
   display: none;
@@ -163,35 +168,33 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Each row is a card, so its title, status and parts read as one session:
-   `card-background` under a `card-border` hairline with `radius-md`, the
-   title and activity's dot on top and a footer under them. Hover strengthens the
-   border; the selected card keeps the row primitive's accent fill, and the
-   keyboard cursor its focus ring. */
+/* Each row is a compact card, so its title, status and parts read as one
+   session: `card-background` under a `card-border` hairline with `radius-md`,
+   the title and activity's dot on the first line and the status and parts on
+   a second line under them, `space-1` above and below and `space-1_5` at the
+   sides. Hover strengthens the border; the selected card keeps the row
+   primitive's accent fill, and the keyboard cursor its focus ring. */
 .ui-row.session-row {
   align-items: center;
-  padding-block: var(--wg-space-1_5);
+  padding-block: var(--wg-space-1);
+  padding-inline: var(--wg-space-1_5);
   border: 1px solid var(--wg-card-border);
   border-radius: var(--wg-radius-md);
   overflow: hidden;
 }
 
-/* The footer holds the status then other plugins' row parts on one line,
-   wrapping when full, on `block-background` under a `border-subtle`
-   hairline, bleeding to the card's edges. A footer with nothing in it
-   takes no space. */
+/* The footer is the card's second line: the status then other plugins' row
+   parts, on one line that never wraps. A footer with nothing in it takes no
+   space. */
 .session-row-foot {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  column-gap: var(--wg-space-2);
+  column-gap: var(--wg-space-1_5);
   grid-column: 1 / -1;
   min-width: 0;
-  margin: var(--wg-space-1_5) calc(-1 * var(--wg-space-2))
-    calc(-1 * var(--wg-space-1_5));
-  padding: var(--wg-space-1) var(--wg-space-2);
-  border-top: 1px solid var(--wg-border-subtle);
-  background: var(--wg-block-background);
+  margin-top: var(--wg-space-0_5);
+  padding: 0;
 }
 
 .session-row-foot:not(
@@ -230,7 +233,7 @@
    and its ellipsis. The footer takes the whole second line. Each part has its
    own column, so a row missing its trailing cell keeps the title in place. The
    trailing column's least width is the trailing cell's own, so the footer,
-   which spans every column, ellipsizes or wraps inside the row rather than
+   which spans every column, ellipsizes its status inside the row rather than
    widens it. Two classes, so the grid beats the row primitive's flex line
    whichever sheet loads last. */
 .ui-row.session-row {
@@ -276,8 +279,10 @@
   }
 }
 
+/* Shrinks far faster than the row's parts, so it ellipsizes before they give
+   up any width. */
 .session-row-status {
-  flex: 0 1 auto;
+  flex: 0 1000 auto;
   color: var(--wg-fg-secondary);
   font-size: var(--wg-text-12);
   min-width: 0;

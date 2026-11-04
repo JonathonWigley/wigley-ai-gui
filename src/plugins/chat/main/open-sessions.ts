@@ -31,6 +31,9 @@ export interface SavedSession {
   userSetControls: string[];
   // The entry ids of the messages the last process dropped that chat has already returned to the page.
   returnedDrops: string[];
+  // The row's active time at the snapshot, its open span included. A restored
+  // row's clock starts paused at it; a file written without it reads as 0.
+  activeMs: number;
 }
 
 // The titles of a session that has none.
@@ -51,7 +54,8 @@ type LaterSavedField =
   | 'launchResume'
   | 'controls'
   | 'userSetControls'
-  | 'returnedDrops';
+  | 'returnedDrops'
+  | 'activeMs';
 
 type StoredSession = Omit<SavedSession, LaterSavedField> &
   Partial<Pick<SavedSession, LaterSavedField>>;
@@ -147,6 +151,13 @@ function isOptionalStrings(value: unknown): boolean {
   );
 }
 
+function isOptionalActiveMs(value: unknown): boolean {
+  return (
+    value === undefined ||
+    (typeof value === 'number' && Number.isFinite(value) && value >= 0)
+  );
+}
+
 function isStoredSession(value: unknown): value is StoredSession {
   return (
     isJsonObject(value) &&
@@ -164,7 +175,8 @@ function isStoredSession(value: unknown): value is StoredSession {
       typeof value.launchResume === 'boolean') &&
     isOptionalControlList(value.controls) &&
     isOptionalStrings(value.userSetControls) &&
-    isOptionalStrings(value.returnedDrops)
+    isOptionalStrings(value.returnedDrops) &&
+    isOptionalActiveMs(value.activeMs)
   );
 }
 
@@ -201,6 +213,7 @@ function parseSavedSessions(text: string): SavedSessions {
       controls: stored.controls ?? [],
       userSetControls: stored.userSetControls ?? [],
       returnedDrops: stored.returnedDrops ?? [],
+      activeMs: stored.activeMs ?? 0,
     })),
     selectedHostSessionId,
   };

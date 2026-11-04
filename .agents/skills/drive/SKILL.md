@@ -54,6 +54,9 @@ or touches their data, so start one whenever a check needs it.
    the user. When focus cannot be emulated (another debugger, such as DevTools, holds the page),
    the command still runs, unfocused, and the run's log says why. The self-test emulates the same
    focus, so a focus-dependent check can be kept as a self-test step.
+   A `chat.start` row's composer opens in vim NORMAL mode, so a fixture presses `i` before `type`-ing a message;
+   otherwise the first keys are lost and `fake: hold` arrives as `ke: hold`. A session started or resumed through the
+   start prompt is already in insert mode, where `i` types a literal `i`.
 4. Capture and read: `screenshot` saves the window, or one element by selector, under the run
    folder; Read the PNG. `query` returns a selector's text, box and computed style.
 5. `npm run drive -- quit` when done; it waits for the ui-state write, part disposal and any
@@ -143,7 +146,9 @@ Conventions:
   the video starts with the window as captured at `record start` and holds the last frame until
   `record stop`, so a still page records too. It encodes with `ffmpeg` from the app's PATH.
 - `fit [width] [selector,…]` lists what the page cuts off at the minimum width, or at a given
-  width; a lone non-numeric argument is the list of selectors that scroll themselves.
+  width; a lone non-numeric argument is the list of selectors that scroll themselves. The width is the
+  window's content width, not a dragged side bar's: to check a row at a side-bar width, drag
+  `.shell-side-bar-handle` and measure with `query`.
 - `start --packaged` drives the packaged build; run `npm run package` first.
 
 ## Checking a screen

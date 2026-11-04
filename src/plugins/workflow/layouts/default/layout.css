@@ -6,7 +6,6 @@
   align-items: center;
   gap: var(--wg-space-2);
   min-height: var(--wg-row-tree);
-  min-width: 0;
   white-space: nowrap;
   font-size: var(--wg-text-12);
 }

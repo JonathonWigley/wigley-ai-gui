@@ -11,6 +11,7 @@ import type {
   DetailsRowInput,
   DetailsSessionInput,
   MeterInput,
+  RowCacheInput,
   RowLineInput,
   SessionLineInput,
   StatusLineInput,
@@ -83,21 +84,55 @@ export function sessionLineInput(
   return { ...sessionLine(usage, now), ...compacting };
 }
 
-// `sessionId`'s side-bar row line: its context, `0k` while the snapshot holds
-// no such session or it has no usage yet.
+// `sessionId`'s side-bar row line: its context meter with the used tokens alone
+// as its text, `0k` while the snapshot holds no such session or it has no usage
+// yet.
 export function rowLineInput(
   snapshot: UsageSnapshot,
   sessionId: string,
 ): RowLineInput {
   const usage = findSession(snapshot, sessionId)?.usage ?? null;
   return {
-    context: usage === null ? zeroContextMeter() : contextMeter(usage),
+    context:
+      usage === null
+        ? zeroContextMeter()
+        : { ...contextMeter(usage), text: formatTokens(usage.contextTokens) },
   };
 }
 
-// A row line as the page log writes it: `context 180k/300k`.
+// A row line as the page log writes it: `context 180k`.
 export function rowLineText(input: RowLineInput): string {
   return `context ${input.context.text}`;
+}
+
+// `sessionId`'s side-bar cache mark; null while the snapshot holds no such
+// session or it has no cache expiry.
+export function rowCacheInput(
+  snapshot: UsageSnapshot,
+  sessionId: string,
+  now: number,
+): RowCacheInput | null {
+  const cacheExpiresAt =
+    findSession(snapshot, sessionId)?.usage?.cacheExpiresAt ?? null;
+  if (cacheExpiresAt === null) {
+    return null;
+  }
+  const isCold = cacheExpiresAt <= now;
+  return {
+    isCold,
+    tooltip: isCold
+      ? 'cache cold'
+      : `cache warm · ${formatDuration(cacheExpiresAt - now)} left`,
+  };
+}
+
+// A cache mark as the page log writes it: `cache none`, `cache warm` or
+// `cache cold`.
+export function rowCacheText(input: RowCacheInput | null): string {
+  if (input === null) {
+    return 'cache none';
+  }
+  return input.isCold ? 'cache cold' : 'cache warm';
 }
 
 // The details bar: every profile's plan, and the shown session's usage.

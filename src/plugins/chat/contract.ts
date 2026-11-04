@@ -1,3 +1,4 @@
+import type { ActiveTime } from '../../contracts/active-time';
 import type {
   AccountStatus,
   AgentEvent,
@@ -119,6 +120,11 @@ export interface ChatSessionState {
   // The subagents and background tasks still running in the session's
   // process; while any runs, a turn's end does not end the agent's work.
   background: number;
+  // How long the agent has worked: it runs while `activity` is `working` or
+  // `background` is above 0. A restored row starts paused at its saved total,
+  // any other row at 0, and `/clear` resets it to 0. `since` is epoch ms on the
+  // wall clock main and the page share, so the page reads it with `activeMsAt`.
+  activeTime: ActiveTime;
   // The session's slash commands and skills, as typed after `/`; [] until the
   // harness reports them.
   commands: string[];
@@ -212,9 +218,10 @@ export interface ChatChannel extends ChannelShape {
     interrupt(sessionId: string): void;
     // Ends the session's process and starts a fresh one under a new host
     // session id; the entries become one `Conversation cleared` notice, sent
-    // as `entries`, and every message written but not taken in, then every
-    // queued message, arrives as `returned`. Rejects when the fresh process
-    // cannot start, leaving the row resting.
+    // as `entries`, the active time returns to 0, sent as `activeTime`, and
+    // every message written but not taken in, then every queued message,
+    // arrives as `returned`. Rejects when the fresh process cannot start,
+    // leaving the row resting.
     clear(sessionId: string): void;
     // Takes the queued message out of the queue, arriving as `returned`; does
     // nothing for one already written to the agent or sent now. On the held row
@@ -255,6 +262,8 @@ export interface ChatChannel extends ChannelShape {
     controls: { sessionId: string; controls: SessionControl[] };
     activity: { sessionId: string; activity: ProcessActivity };
     background: { sessionId: string; background: number };
+    // The session's clock started, stopped or was reset.
+    activeTime: { sessionId: string; activeTime: ActiveTime };
     commands: { sessionId: string; names: string[] };
     // Replaces the session's whole entry list, as when restored history
     // arrives.
@@ -436,10 +445,20 @@ export interface ChatStatusPart {
 // `focusedEntry` is the visible Chat tab's focused stop's slot element (an
 // entry, an activity line or a pending row); null with no visible Chat tab, no
 // focused stop, or while a composer part's stop holds the cursor.
+// `activeTime` is the session's clock as main last sent it, null for a session
+// the page does not hold; read the total at a moment with `activeMsAt`.
 export interface ChatPageExports {
   addSlashCommand(command: AppSlashCommand): Disposable;
   fillComposer(sessionId: string, text: string): void;
   addComposerPart(part: ChatComposerPart): Disposable;
   addStatusPart(part: ChatStatusPart): Disposable;
   focusedEntry(): HTMLElement | null;
+  activeTime(sessionId: string): ActiveTime | null;
+}
+
+// `activeTimeChanged` fires when a session arrives on the page with its total,
+// and when main sends a session's clock: at each start and stop and at a
+// `/clear` reset.
+export interface ChatPageEvents extends EventShape {
+  activeTimeChanged: { sessionId: string; activeTime: ActiveTime };
 }

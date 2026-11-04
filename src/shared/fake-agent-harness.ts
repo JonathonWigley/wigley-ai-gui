@@ -152,17 +152,21 @@ export interface FakeAgentProcessRecord {
   detached: boolean;
 }
 
-// The outcome of one `attach`. `process` fires `replay` before the promise
-// resolves and starts the process's turn counter at `turns` (0 when left out), so
-// its ids follow the ones the replay used.
+// The outcome of one `attach`. Each fires `replay`, when it has one, before the
+// promise settles. `process` starts the process's turn counter at `turns` (0 when
+// left out), so its ids follow the ones the replay used.
 export type FakeAttachScript =
   | {
       outcome: 'process';
       turns?: number;
       replay(events: AgentProcessEvents): void;
     }
-  | { outcome: 'null' }
-  | { outcome: 'reject'; message: string };
+  | { outcome: 'null'; replay?(events: AgentProcessEvents): void }
+  | {
+      outcome: 'reject';
+      message: string;
+      replay?(events: AgentProcessEvents): void;
+    };
 
 // The sessions `listSessions` returns for every folder and profile, newest
 // first; `history` answers for these ids alone.
@@ -1809,10 +1813,15 @@ export function createFakeAgentHarness(
       const script = attachScripts.get(request.processId);
       attachScripts.delete(request.processId);
       await Promise.resolve();
-      if (script === undefined || script.outcome === 'null') {
+      if (script === undefined) {
+        return null;
+      }
+      if (script.outcome === 'null') {
+        script.replay?.(events);
         return null;
       }
       if (script.outcome === 'reject') {
+        script.replay?.(events);
         throw new Error(script.message);
       }
       const record: FakeAgentProcessRecord = {

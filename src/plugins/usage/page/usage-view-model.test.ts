@@ -15,6 +15,7 @@ import type {
 import {
   detailsInput,
   detailsStatesText,
+  rowCacheInput,
   rowLineInput,
   sessionLineInput,
   sessionLineText,
@@ -410,7 +411,7 @@ describe('rowLineInput', () => {
     {
       case: 'SessionWithUsage',
       sessionId: 's1',
-      expected: meter('180k/300k', 60, 'normal'),
+      expected: meter('180k', 60, 'normal'),
     },
     {
       case: 'AbsentSession',
@@ -426,6 +427,31 @@ describe('rowLineInput', () => {
     expect(rowLineInput(snapshotWithoutUsage(), sessionId)).toEqual({
       context: expected,
     });
+  });
+});
+
+describe('rowCacheInput', () => {
+  it.each([
+    { case: 'NoExpiry', cacheExpiresAt: null, expected: null },
+    {
+      case: 'ExpiryAheadIsWarm',
+      cacheExpiresAt: NOW + 120_000,
+      expected: { isCold: false, tooltip: 'cache warm · 2m left' },
+    },
+    {
+      case: 'ExpiryAtNowIsCold',
+      cacheExpiresAt: NOW,
+      expected: { isCold: true, tooltip: 'cache cold' },
+    },
+    {
+      case: 'ExpiryPastIsCold',
+      cacheExpiresAt: NOW - MINUTE,
+      expected: { isCold: true, tooltip: 'cache cold' },
+    },
+  ])('rowCacheInput_$case', ({ cacheExpiresAt, expected }) => {
+    const snapshot = withSession(usageEvent({ cacheExpiresAt }));
+
+    expect(rowCacheInput(snapshot, 's1', NOW)).toEqual(expected);
   });
 });
 

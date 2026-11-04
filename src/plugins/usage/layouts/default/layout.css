@@ -102,6 +102,31 @@
   white-space: nowrap;
 }
 
+/* When the row's parts outgrow its line the bar shrinks away first, the used
+   tokens staying whole. */
+[data-layout-owner='usage'][data-layout='default'].usage-row-line > .ui-meter {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+/* The row's text is short, so it keeps no `100%` floor. */
+[data-layout-owner='usage'][data-layout='default'].usage-row-line
+  .ui-meter
+  + .usage-text::after {
+  content: none;
+}
+
+[data-layout-owner='usage'][data-layout='default'].usage-row-cache {
+  align-items: center;
+  color: var(--wg-fg-secondary);
+  display: flex;
+  min-height: var(--wg-row-tree);
+}
+
+[data-layout-owner='usage'][data-layout='default'].usage-row-cache.is-cold {
+  color: var(--wg-status-error);
+}
+
 /* The meter's row is a full line tall, so a wrapped text starts below it. The
    margin assumes the meter is `space-1` tall (`src/shared/page/ui/meter.css`);
    a shorter meter lets the wrapped text show through. */

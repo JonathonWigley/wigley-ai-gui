@@ -32,6 +32,7 @@ const TWO_SESSIONS: SavedSessions = {
       ],
       userSetControls: ['effort'],
       returnedDrops: [],
+      activeMs: 42000,
     },
     {
       hostSessionId: 's-beta',
@@ -48,6 +49,7 @@ const TWO_SESSIONS: SavedSessions = {
       controls: [],
       userSetControls: [],
       returnedDrops: [],
+      activeMs: 0,
     },
   ],
   selectedHostSessionId: 's-beta',
@@ -70,6 +72,7 @@ const ONE_SESSION: SavedSessions = {
       controls: [],
       userSetControls: [],
       returnedDrops: [],
+      activeMs: 1500,
     },
   ],
   selectedHostSessionId: null,
@@ -129,8 +132,19 @@ describe('createOpenSessions', () => {
             controls: [],
             userSetControls: [],
             returnedDrops: [],
+            activeMs: 0,
           },
         ],
+        selectedHostSessionId: null,
+      },
+    },
+    {
+      file: 'a session without activeMs',
+      text: withSessions([
+        { ...TWO_SESSIONS.sessions[0], activeMs: undefined },
+      ]),
+      expected: {
+        sessions: [{ ...TWO_SESSIONS.sessions[0], activeMs: 0 }],
         selectedHostSessionId: null,
       },
     },
@@ -236,6 +250,14 @@ describe('createOpenSessions', () => {
       text: withSessions([
         { ...TWO_SESSIONS.sessions[0], returnedDrops: 'user-1' },
       ]),
+    },
+    {
+      file: 'activeMs negative',
+      text: withSessions([{ ...TWO_SESSIONS.sessions[0], activeMs: -1 }]),
+    },
+    {
+      file: 'activeMs a string',
+      text: withSessions([{ ...TWO_SESSIONS.sessions[0], activeMs: '42000' }]),
     },
     {
       file: 'launchResume a string',

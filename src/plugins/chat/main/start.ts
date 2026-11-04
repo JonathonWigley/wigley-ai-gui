@@ -512,13 +512,14 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       commands: {},
       exports,
       dispose: () => {
-        chat.detachAll();
+        const lastSave = chat.detachAll();
         keepIdleListener.dispose();
         accounts.cancelRunning();
         for (const action of driveActions) {
           action.dispose();
         }
         layouts.dispose();
+        return lastSave;
       },
     };
   },

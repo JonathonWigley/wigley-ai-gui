@@ -57,6 +57,7 @@ const PART_SET: Record<ChatPartName, true> = {
   reasonBox: true,
   closeConfirm: true,
   imageViewer: true,
+  rowClock: true,
 };
 
 // The chat layout a user's `layout.js` module exports as its default. Every
