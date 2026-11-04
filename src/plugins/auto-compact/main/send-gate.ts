@@ -1,9 +1,6 @@
-import {
-  type AgentEvent,
-  MAIN_AGENT_ID,
-  type UsageAgentEvent,
-} from '../../../contracts/agent';
+import type { AgentEvent, UsageAgentEvent } from '../../../contracts/agent';
 import { formatTokens } from '../../../shared/format-tokens';
+import { replacesUsage } from '../../../shared/replaces-usage';
 import type { SendGateVerdict } from '../../chat/contract';
 
 // Each host session's last main-agent usage, by host session id: chat's `clear`
@@ -20,12 +17,9 @@ export function withAgentEvent(
   event: AgentEvent,
 ): LatestUsage {
   if (event.type === 'usage') {
-    const kept = latest.get(hostSessionId);
-    const isOlderThanKept = kept !== undefined && event.at < kept.at;
-    if (event.agentId !== MAIN_AGENT_ID || isOlderThanKept) {
-      return latest;
-    }
-    return new Map(latest).set(hostSessionId, event);
+    return replacesUsage(latest.get(hostSessionId) ?? null, event)
+      ? new Map(latest).set(hostSessionId, event)
+      : latest;
   }
   const compactionDone =
     event.type === 'compactionEnded' && event.outcome === 'done';

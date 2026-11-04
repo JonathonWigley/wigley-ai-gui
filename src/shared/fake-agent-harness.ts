@@ -33,8 +33,9 @@ import { typedSkill } from './typed-skill';
 // call, so a caller's state is in place before its events arrive. Each emitted
 // entry carries the clock's time when its id first arrived; `history` entries
 // carry fixed times one second apart. Every turn that ends with a result reports
-// a `usage` agent event and a plan row update after that result, and `planUsage`
-// answers every profile with `fakePlanUsage`. The process emits the agent events
+// a `usage` agent event and a plan row update after that result, except that no
+// `usage` goes out between a done compaction and the next main reply, and
+// `planUsage` answers every profile with `fakePlanUsage`. The process emits the agent events
 // Claude would for what it simulates, each at the clock's time: `sessionStarted`
 // first, `userMessage` after each user entry, then `skillStarted` for a typed
 // `/<skill>` message and `turnStarted` for every send that runs a turn, tool
@@ -1087,6 +1088,8 @@ export function createFakeAgentHarness(
     let controls = startingControls(record.request.controls);
     let turn = turns;
     let isTurnOpen = false;
+    // Sends may overlap, so workflow turns are counted; `interrupt` leaves them run.
+    let workflowTurnsRunning = 0;
     // The Agent entries of the subagents still running, in spawn order.
     let runningSubagents: SubagentEntry[] = [];
     // The ids of the tasks still running, in start order.
@@ -1411,7 +1414,24 @@ export function createFakeAgentHarness(
           raw: [{ fake: 'assistant', text: reply }],
         });
       }
-      emitTurnEnd(events, emitEntry, emitTurnUsage, clock, turn);
+      const isInCompactionGap =
+        change === 'failed' && entryAwaitingAfterSize !== null;
+      emitTurnEnd(
+        events,
+        emitEntry,
+        isInCompactionGap ? () => undefined : emitTurnUsage,
+        clock,
+        turn,
+      );
+    };
+
+    const countWorkflowTurn = async (run: () => Promise<void>) => {
+      workflowTurnsRunning += 1;
+      try {
+        await run();
+      } finally {
+        workflowTurnsRunning -= 1;
+      }
     };
 
     const runWorkflowFeature = async (turn: number, runsSkill: boolean) => {
@@ -1563,13 +1583,17 @@ export function createFakeAgentHarness(
           }
           const workflowTurn = workflowTurnOf(text, makeFolder, workflowPlans);
           if (workflowTurn?.kind === 'feature') {
-            void runWorkflowFeature(sentTurn, workflowTurn.runsSkill);
+            void countWorkflowTurn(() =>
+              runWorkflowFeature(sentTurn, workflowTurn.runsSkill),
+            );
           } else if (workflowTurn?.kind === 'make') {
             makeFolder = workflowTurn.folder;
-            void runWorkflowMakeStep(
-              sentTurn,
-              workflowTurn.folder,
-              workflowTurn.plan,
+            void countWorkflowTurn(() =>
+              runWorkflowMakeStep(
+                sentTurn,
+                workflowTurn.folder,
+                workflowTurn.plan,
+              ),
             );
           } else if (isAgents) {
             runningSubagents = emitAgentsTurn(
@@ -1632,13 +1656,17 @@ export function createFakeAgentHarness(
               compactionEndedEvent(clock, interrupted, 'interrupted', null),
             );
           }
+          // A `/compact`'s or `compact()`'s own line says it was canceled; a
+          // harness compaction runs inside a model turn, whose interrupt prints none.
+          const isCommandCanceled =
+            interrupted !== null && interrupted.trigger !== 'harness';
           emitEntry({
             kind: 'notice',
             id:
               interrupted === null
                 ? `notice-${interruptedTurn}`
                 : `notice-compaction-${interrupted.n}`,
-            text: 'Interrupted',
+            text: isCommandCanceled ? 'Compaction canceled.' : 'Interrupted',
             tone: 'info',
             raw: [{ fake: 'interrupt' }],
           });
@@ -1665,7 +1693,7 @@ export function createFakeAgentHarness(
       compact() {
         calls.push({ method: 'compact' });
         requireRunning();
-        if (isTurnOpen || openCompaction !== null) {
+        if (isTurnOpen || openCompaction !== null || workflowTurnsRunning > 0) {
           throw new Error('fake agent is running a turn');
         }
         isTurnOpen = true;

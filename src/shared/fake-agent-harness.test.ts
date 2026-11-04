@@ -2038,6 +2038,37 @@ describe('createFakeAgentHarness compaction', () => {
 
   it.each([
     {
+      case: 'app',
+      start: (agent: AgentProcess) => agent.compact(),
+      text: 'Compaction canceled.',
+    },
+    {
+      case: 'manual',
+      start: (agent: AgentProcess) => sendText(agent, '/compact'),
+      text: 'Compaction canceled.',
+    },
+    {
+      case: 'harness',
+      start: (agent: AgentProcess) => sendText(agent, FAKE_COMPACT_TEXT),
+      text: 'Interrupted',
+    },
+  ])('interrupt_HeldCompaction_NoticeText ($case)', async ({ start, text }) => {
+    const { harness, agent, heard } = await startedProcess();
+    harness.holdCompactions();
+    start(agent);
+    await flush();
+
+    agent.interrupt();
+    await flush();
+
+    expect(heard).toContainEqual([
+      'entry',
+      expect.objectContaining({ id: 'notice-compaction-1', text }),
+    ]);
+  });
+
+  it.each([
+    {
       case: 'afterEnd',
       arrange: async ({ agent }: HeldContext) => {
         await agent.end();
@@ -2064,8 +2095,19 @@ describe('createFakeAgentHarness compaction', () => {
         agent.compact();
       },
     },
-  ])('compact_Refused_ThrowsAndRecords ($case)', async ({ arrange }) => {
-    const { harness, agent, record } = await startedProcess();
+    {
+      case: 'workflowTurn',
+      files: {
+        write: () => new Promise<void>(() => undefined),
+        trash: () => Promise.resolve(),
+      },
+      arrange: async ({ agent }: HeldContext) => {
+        sendText(agent, FAKE_WORKFLOW_FEATURE_TEXT);
+        await flush();
+      },
+    },
+  ])('compact_Refused_ThrowsAndRecords ($case)', async ({ files, arrange }) => {
+    const { harness, agent, record } = await startedProcess(files);
     // Only an async row awaits: an await would flush `sameTick`'s microtask.
     const arranged = arrange({ agent, harness });
     if (arranged !== undefined) {
@@ -2467,6 +2509,38 @@ describe('createFakeAgentHarness workflow', () => {
       expect(workflowEvents(second.agentEvents)).toEqual(step.events);
       expect(await planText()).toBe(step.plan);
     }
+  });
+
+  it('doneCompaction_ReplylessTurn_NoUsageUntilTheNextMainReply', async () => {
+    const { agent, timeline } = await startedProcess({
+      write: () => Promise.reject(new Error('disk full')),
+      trash: () => Promise.resolve(),
+    });
+    agent.compact();
+    await settle();
+    const usageEvents = () =>
+      timeline.filter(
+        ([name, payload]) =>
+          name === 'agentEvent' && (payload as AgentEvent).type === 'usage',
+      );
+
+    agent.send({ text: FAKE_WORKFLOW_FEATURE_TEXT, images: [] });
+    await settle();
+    expect(usageEvents()).toEqual([]);
+
+    agent.send({ text: 'hello', images: [] });
+    await settle();
+    expect(usageEvents()).toHaveLength(1);
+  });
+
+  it('compact_AfterAWorkflowTurnEnds_Runs', async () => {
+    const { agent, record } = await startedProcess();
+    agent.send({ text: FAKE_WORKFLOW_FEATURE_TEXT, images: [] });
+    await settle();
+
+    agent.compact();
+
+    expect(record.calls.at(-1)).toEqual({ method: 'compact' });
   });
 
   it('workflowTypedFeature_RunsTheScriptWithOneSkillStarted', async () => {

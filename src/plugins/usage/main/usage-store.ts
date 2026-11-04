@@ -5,6 +5,7 @@ import type {
   PlanUsage,
   UsageAgentEvent,
 } from '../../../contracts/agent';
+import { replacesUsage } from '../../../shared/replaces-usage';
 import type { ChatProfile } from '../../chat/contract';
 import type { ProfilePlan, SessionUsage, UsageSnapshot } from '../contract';
 
@@ -160,12 +161,11 @@ export function withSessionUsage(
     ]);
   }
   const known = sessions[index];
-  const isOlderThanKept =
-    usage !== null && known.usage !== null && usage.at < known.usage.at;
   const entry: SessionUsage = {
     ...known,
     profileDir,
-    usage: usage === null || isOlderThanKept ? known.usage : usage,
+    usage:
+      usage !== null && replacesUsage(known.usage, usage) ? usage : known.usage,
   };
   if (known.profileDir === profileDir && known.usage === entry.usage) {
     return state;

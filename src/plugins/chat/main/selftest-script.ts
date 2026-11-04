@@ -1026,8 +1026,7 @@ export function chatSelfTestScript(deps: ChatSelfTestDeps): SelfTestScript {
       -1,
     );
     const followsCold =
-      JSON.stringify(lastCall) ===
-      JSON.stringify({ method: 'send', text: FAKE_COLD_TEXT, imageCount: 0 });
+      lastCall?.method === 'send' && lastCall.text === FAKE_COLD_TEXT;
     if (!followsCold) {
       return null;
     }

@@ -108,6 +108,17 @@ function usageEmitted(
   );
 }
 
+// The `compactionEnded` `agentEvent`s chat emitted, as sent.
+function compactionEndsEmitted(emitted: readonly Emitted[]) {
+  return emitted.flatMap((each) => {
+    if (each.event !== 'agentEvent') {
+      return [];
+    }
+    const { event } = each.data;
+    return event.type === 'compactionEnded' ? [{ ...each.data, event }] : [];
+  });
+}
+
 const NOTHING_SAVED: SavedSessions = {
   sessions: [],
   selectedHostSessionId: null,
@@ -5287,7 +5298,7 @@ describe('createChatSessions send gate and hold', () => {
     expect(laterCalls).toBe(0);
   });
 
-  it('sendGate_Input_RowHostProfileDirTextAndNow', async () => {
+  it('sendGate_Input_RowHostTextAndNow', async () => {
     const test = await started({ clockNow: 5000 });
     const inputs: SendGateInput[] = [];
     test.chat.addSendGate((input) => {
@@ -5301,7 +5312,6 @@ describe('createChatSessions send gate and hold', () => {
       {
         sessionId: 'row-1',
         hostSessionId: 'uuid-1',
-        profileDir: '~/.claude-personal',
         text: IDLE_SEND.text,
         now: 5000,
       },
@@ -5615,6 +5625,106 @@ describe('createChatSessions send gate and hold', () => {
 
   it.each<{
     given: string;
+    arrange(): ReturnType<typeof started>;
+    end(test: Awaited<ReturnType<typeof started>>): void;
+    ends: { trigger: CompactionTrigger; outcome: string }[];
+  }>([
+    {
+      given: 'a clear, whose old process reports its end too late',
+      arrange: () => startedAndHeld(),
+      end: (test) => test.chat.clear(ROW_ID),
+      ends: [{ trigger: 'app', outcome: 'interrupted' }],
+    },
+    {
+      given: 'a clear with no compaction running',
+      arrange: () => started(),
+      end: (test) => test.chat.clear(ROW_ID),
+      ends: [],
+    },
+    {
+      given: 'an exit the harness ended it before',
+      arrange: () => startedAndHeld(),
+      end: (test) => {
+        const { events } = test.process;
+        events.agentEvent(compactionEndedEvent('failed'));
+        events.agentEvent({ type: 'sessionEnded', at: 3000 });
+        events.ended({ code: 0, error: null });
+      },
+      ends: [{ trigger: 'app', outcome: 'failed' }],
+    },
+  ])(
+    'compaction_ProcessLetGo_AgentEventCarriesOneEnd: $given',
+    async ({ arrange, end, ends }) => {
+      const test = await arrange();
+
+      end(test);
+      await flush();
+
+      expect(
+        compactionEndsEmitted(test.emitted).map(({ event }) => ({
+          trigger: event.trigger,
+          outcome: event.outcome,
+        })),
+      ).toEqual(ends);
+    },
+  );
+
+  it('compaction_Clear_EmittedEndCarriesTheOldHostAndNoSizes', async () => {
+    const test = await startedAndHeld({ clockNow: 2000 });
+
+    test.chat.clear(ROW_ID);
+
+    expect(compactionEndsEmitted(test.emitted)).toEqual([
+      {
+        sessionId: ROW_ID,
+        profileDir: '~/.claude-personal',
+        hostSessionId: 'uuid-1',
+        replayed: false,
+        event: {
+          type: 'compactionEnded',
+          at: 2000,
+          trigger: 'app',
+          outcome: 'interrupted',
+          beforeTokens: null,
+          durationMs: null,
+        },
+      },
+    ]);
+  });
+
+  it('compaction_FailedAttach_AgentEventCarriesItsEnd', async () => {
+    const fake = createFakeAgentHarness(
+      { now: () => 1000 },
+      createMemoryFiles(),
+      FAKE_MICROTASK_TIMERS,
+    );
+    const test = setUp({
+      harnesses: [
+        {
+          ...fake,
+          attach: (_request, events) => {
+            events.agentEvent(compactionStartedEvent('harness'));
+            return Promise.resolve(null);
+          },
+        },
+      ],
+    });
+
+    restoreOne(test, hostedRecord(), [hostedP1()]);
+    await flush();
+
+    expect(test.chat.sessions()[0].compaction).toBeNull();
+    expect(
+      compactionEndsEmitted(test.emitted).map(({ event, replayed }) => [
+        event.trigger,
+        event.outcome,
+        replayed,
+      ]),
+    ).toEqual([['harness', 'interrupted', false]]);
+  });
+
+  it.each<{
+    given: string;
     skip(test: Awaited<ReturnType<typeof started>>): void;
   }>([
     {
@@ -5721,6 +5831,119 @@ describe('createChatSessions send gate and hold', () => {
     test.process.events.agentEvent(compactionEndedEvent('done'));
 
     expect(test.process.calls.at(-1)).toEqual(sendCall(LATER));
+  });
+
+  it.each<{
+    given: string;
+    act(test: Awaited<ReturnType<typeof started>>): Promise<void>;
+    alerts: number;
+  }>([
+    {
+      given: 'a pulled-back compaction, its stretch held no turn',
+      act: async (test) => {
+        test.chat.pullBack(ROW_ID, 'queued-1');
+        test.harness.releaseCompactions();
+        await flush();
+      },
+      alerts: 0,
+    },
+    {
+      given: 'an idle before the compaction ends, in the skip grace order',
+      act: async (test) => {
+        test.chat.interrupt(ROW_ID);
+        test.activity('idle');
+        expect(test.announced).toEqual([]);
+        await flush();
+      },
+      alerts: 1,
+    },
+    {
+      given: 'the held row written at the end, its own turn',
+      act: async (test) => {
+        test.harness.releaseCompactions();
+        await flush();
+      },
+      alerts: 1,
+    },
+    {
+      given: 'a later stretch after a pulled-back compaction',
+      act: async (test) => {
+        test.chat.pullBack(ROW_ID, 'queued-1');
+        test.harness.releaseCompactions();
+        await flush();
+        test.activity('working');
+        test.activity('idle');
+      },
+      alerts: 1,
+    },
+    {
+      given: 'a stretch of the fresh process after a clear',
+      act: async (test) => {
+        test.chat.clear(ROW_ID);
+        await flush();
+        const fresh = test.harness.processes[1];
+        fresh.events.activity('working');
+        fresh.events.activity('idle');
+      },
+      alerts: 1,
+    },
+  ])('hold_TurnFinishedAlert: $given', async ({ act, alerts }) => {
+    const test = await startedAndHeld();
+    test.setFocused(false);
+
+    await act(test);
+
+    expect(test.announced).toHaveLength(alerts);
+  });
+
+  it('hold_IdleAfterARowBehindWasSentNow_NoAlertWhileTheHoldIsUp', async () => {
+    const test = await startedAndHeld();
+    test.setFocused(false);
+    await test.chat.send(ROW_ID, LATER);
+    test.chat.sendNow(ROW_ID, 'queued-2');
+
+    test.activity('idle');
+
+    expect(test.announced).toEqual([]);
+  });
+
+  it('hold_IdleWithNoCompaction_WritesTheRowAndALaterEndReleasesNothing', async () => {
+    const fake = createFakeAgentHarness(
+      { now: () => 1000 },
+      createMemoryFiles(),
+      FAKE_MICROTASK_TIMERS,
+    );
+    const test = setUp({
+      harnesses: [
+        {
+          ...fake,
+          start: (request, events) => ({
+            ...fake.start(request, events),
+            compact: () => undefined,
+          }),
+        },
+      ],
+    });
+    test.chat.start({ projectDir: PROJECT_DIR, profile: 'personal' });
+    await flush();
+    const { calls, events } = fake.processes[0];
+    test.chat.addSendGate(answerA);
+    await test.chat.send(ROW_ID, IDLE_SEND);
+
+    events.activity('idle');
+    expect(calls).toEqual([]);
+    expect(test.chat.sessions()[0].queued).toHaveLength(1);
+
+    events.activity('working');
+    events.activity('idle');
+    expect(calls).toEqual([sendCall(IDLE_SEND)]);
+    expect(test.logged).toContain(
+      '[chat] held message queued-1 released in row-1: idle with no compaction',
+    );
+
+    events.agentEvent(compactionEndedEvent('failed'));
+    expect(calls).toEqual([sendCall(IDLE_SEND)]);
+    expect(test.logged).not.toContainEqual(expect.stringContaining('(failed)'));
   });
 
   it.each<{

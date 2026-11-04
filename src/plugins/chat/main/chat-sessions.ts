@@ -162,7 +162,8 @@ export interface ChatSessions {
   // message not sent now until none is left; a permission call left waiting
   // after the turn ended queues nothing. An idle send asks the send gates once
   // the process runs: a verdict queues the message as the held row and compacts,
-  // and the row is written when the compaction ends, whatever its outcome; a
+  // and the row is written when the compaction ends, whatever its outcome, or
+  // when the process's working stretch goes idle with no compaction running; a
   // `compact` that throws writes the message at once. A send at idle in a row
   // holding unsent queued messages queues behind them and writes the oldest. A
   // written message is held until its entry arrives, and returned when the
@@ -181,7 +182,8 @@ export interface ChatSessions {
   // Ends the session's process, interrupting a running turn first, and starts a
   // fresh one at once under a new host session id with the row's held mode and
   // the model and effort the user picked that a report confirmed. Waiting
-  // permission calls are cancelled, the running compaction is forgotten, and
+  // permission calls are cancelled, a running compaction's end goes out as an
+  // `interrupted` `agentEvent`, since the old process's own is dropped, and
   // messages written but not taken in and every queued message, the held row
   // included, returned in the order written; the old
   // process raises no exit notice and no turn-finished alert. The entries
@@ -325,9 +327,9 @@ interface HeldSession {
   // Control id → the value the user picked that the running process has not
   // reported yet.
   pendingPicks: Map<string, string>;
-  // The profile folder the row's last process started or attached under; null
-  // until the first.
-  profileDir: string | null;
+  // Since the last idle, the process ran a hold's compaction and no message was
+  // written to it, so that idle ends no turn.
+  isOnlyAHoldsCompaction: boolean;
   // The reason of the hold whose compaction is starting or running, until that
   // compaction ends.
   compactionReason: string | null;
@@ -703,7 +705,9 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   }
 
   // A replayed turn's end announces nothing, since it ended while the app was
-  // closed, and neither does one `stopAll` caused.
+  // closed, and neither does one `stopAll` caused, an idle with a hold up, whose
+  // row is still to go out, or the end of a stretch that ran only a hold's
+  // compaction.
   function updateActivity(session: HeldSession, isReplayed = false) {
     const previous = session.state.activity;
     const activity = shownActivity(session);
@@ -719,8 +723,18 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       !deps.window.isFocused() || sessions.selectedSessionId() !== sessionId;
     const workIsOver = session.backgroundIds.size === 0;
     const isTheTurnsOwnEnd = !isReplayed && !session.isStopRequested;
-    if (turnFinished && userIsElsewhere && workIsOver && isTheTurnsOwnEnd) {
+    const ranATurn = !isHoldUp(session) && !session.isOnlyAHoldsCompaction;
+    if (
+      turnFinished &&
+      userIsElsewhere &&
+      workIsOver &&
+      isTheTurnsOwnEnd &&
+      ranATurn
+    ) {
       announceTurnFinished(session);
+    }
+    if (turnFinished) {
+      session.isOnlyAHoldsCompaction = false;
     }
     if (turnFinished || turnStarted) {
       save();
@@ -882,11 +896,35 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
 
   // Forgets the session's compaction and any hold's reason; sends `compaction`
   // only when one ran.
-  function clearCompaction(session: HeldSession) {
+  function forgetCompaction(session: HeldSession) {
     session.compactionReason = null;
     if (session.state.compaction !== null) {
       setCompaction(session, null);
     }
+  }
+
+  // Forgets the compaction of a process chat is letting go of, whose own
+  // `compactionEnded` fails `isLive`, and emits its end in that one's place.
+  function clearCompaction(session: HeldSession, profileDir: string) {
+    const running = session.state.compaction;
+    forgetCompaction(session);
+    if (running === null) {
+      return;
+    }
+    deps.emit('agentEvent', {
+      sessionId: session.state.sessionId,
+      profileDir,
+      hostSessionId: session.hostId,
+      event: {
+        type: 'compactionEnded',
+        at: deps.clock.now(),
+        trigger: running.trigger,
+        outcome: 'interrupted',
+        beforeTokens: null,
+        durationMs: null,
+      },
+      replayed: false,
+    });
   }
 
   // Makes the held row an ordinary unsent row at its place; returns its id, or
@@ -924,7 +962,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     isReplaying: boolean,
   ) {
     const { sessionId } = session.state;
-    clearCompaction(session);
+    forgetCompaction(session);
     const releasedId = releaseHeldRow(session);
     if (releasedId !== null) {
       log(
@@ -939,6 +977,16 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     if (writesNext) {
       writeNextQueued(session);
     }
+  }
+
+  // A hold whose process goes idle with no compaction running has no end coming:
+  // its row becomes an ordinary one, and a later `compactionEnded` finds no hold.
+  function releaseHoldWithNoCompaction(session: HeldSession) {
+    const releasedId = releaseHeldRow(session);
+    log(
+      'chat',
+      `held message ${releasedId} released in ${session.state.sessionId}: idle with no compaction`,
+    );
   }
 
   // Interrupts the process so the running compaction ends and the held row and
@@ -1068,6 +1116,15 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           !replay.isReplaying &&
           !session.isStopRequested &&
           activity === 'idle';
+        // A fresh process's first idle can precede `compact`'s working stretch.
+        const isHoldStranded =
+          writesNext &&
+          session.harnessActivity !== 'idle' &&
+          isHoldUp(session) &&
+          session.state.compaction === null;
+        if (isHoldStranded) {
+          releaseHoldWithNoCompaction(session);
+        }
         if (writesNext && writeNextQueued(session)) {
           return;
         }
@@ -1141,9 +1198,10 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           log('chat', `session ${sessionId} failed: ${error}`);
         }
         // The row and its state stay, resting, until the user closes the row.
+        // The harness ended any running compaction before `sessionEnded`.
         session.state.running = false;
         session.process = null;
-        clearCompaction(session);
+        forgetCompaction(session);
         showPendingCancelled(session);
         cancelPending(session);
         // During a replay the queue holds only saved messages, which stay saved.
@@ -1251,7 +1309,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       processStarts: 0,
       userSetControls: new Set(opening.userSetControls),
       pendingPicks: new Map(),
-      profileDir: null,
+      isOnlyAHoldsCompaction: false,
       compactionReason: null,
       exit: null,
       branchReads: 0,
@@ -1355,13 +1413,14 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     };
   }
 
-  // Numbers the row's next process. A pick still pending, the background work and
-  // a stop request belong to the old process and are dropped.
+  // Numbers the row's next process. A pick still pending, the background work, a
+  // stop request and a hold's stretch belong to the old process and are dropped.
   function beginProcess(session: HeldSession) {
     session.processStarts += 1;
     session.pendingPicks.clear();
     clearBackground(session);
     session.isStopRequested = false;
+    session.isOnlyAHoldsCompaction = false;
   }
 
   // Starts the session's process with the held mode and the confirmed picks,
@@ -1377,7 +1436,6 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     beginProcess(session);
     const started: { process: AgentProcess | null } = { process: null };
     const profileDir = profileDirOf(profile);
-    session.profileDir = profileDir;
     session.processId = `${session.hostId}-${session.processStarts}-${deps.clock.now()}`;
     session.launchControls = controlValuesOf(
       session.state.controls,
@@ -1459,7 +1517,6 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     const started: { process: AgentProcess | null } = { process: null };
     const replay = { isReplaying: true };
     const profileDir = profileDirOf(profile);
-    session.profileDir = profileDir;
     const attaching = harness
       .attach(
         {
@@ -1567,7 +1624,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     session.state.running = false;
     session.process = null;
     session.historyBefore = null;
-    clearCompaction(session);
+    clearCompaction(session, profileDirOf(profile));
     clearBackground(session);
     showRestingIdle(session);
     send('sessionRested', { sessionId, error: null });
@@ -1900,8 +1957,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     message: UserMessage,
   ): string | null {
     const { sessionId } = session.state;
-    const { process, profileDir } = session;
-    if (process === null || profileDir === null) {
+    if (session.process === null) {
       return null;
     }
     for (const { gate } of sendGateRegistrations) {
@@ -1909,7 +1965,6 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         const verdict = gate({
           sessionId,
           hostSessionId: session.hostId,
-          profileDir,
           text: message.text,
           now: deps.clock.now(),
         });
@@ -1935,10 +1990,12 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
     sendQueued(session);
     log('chat', `send held in ${sessionId}: ${reason}`);
     session.compactionReason = reason;
+    session.isOnlyAHoldsCompaction = true;
     try {
       session.process?.compact();
     } catch (error) {
       session.compactionReason = null;
+      session.isOnlyAHoldsCompaction = false;
       log(
         'chat',
         `compaction not started in ${sessionId}: ${errorText(error)}`,
@@ -2041,6 +2098,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       );
     }
     const entryId = process.send(message);
+    session.isOnlyAHoldsCompaction = false;
     if (!session.sent) {
       session.sent = true;
       setFirstMessageTitle(session, message.text);
@@ -2614,7 +2672,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       session.unheldProcessId = null;
     }
     endForClear(session);
-    clearCompaction(session);
+    clearCompaction(session, profileDirOf(profile));
     cancelPending(session);
     returnAllHeld(session);
     const oldHostId = session.hostId;

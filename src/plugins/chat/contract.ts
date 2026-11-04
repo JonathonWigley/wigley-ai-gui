@@ -79,13 +79,11 @@ export interface SessionCompaction {
 }
 
 // What a send gate reads about a send to an idle session. `sessionId` is the
-// row's id, `hostSessionId` the id its `agentEvent`s carry now, `profileDir` the
-// one its running process started under, and `text` the message as the user
-// wrote it.
+// row's id, `hostSessionId` the id its `agentEvent`s carry now, and `text` the
+// message as the user wrote it.
 export interface SendGateInput {
   sessionId: string;
   hostSessionId: string;
-  profileDir: string;
   text: string;
   now: number;
 }
@@ -304,7 +302,9 @@ export interface ChatAgentEvent {
 
 // `agentEvent`: one agent event of a session chat owns, still sent after the
 // row closes for its process's `sessionEnded`; also a restored or resumed
-// row's saved usage, read from its transcript rather than sent by a process.
+// row's saved usage, read from its transcript rather than sent by a process,
+// and the `interrupted` `compactionEnded` chat makes for a compaction whose
+// process a clear or a failed attach let go.
 // `planUsage`: the plan rows one of those sessions saw. Both carry the
 // `profileDir` of the profile the row opened under: its `configDir` as the
 // `profiles` setting writes it, unexpanded; null is the harness default, which

@@ -1,8 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { AgentStart } from '../../../contracts/agent';
+import type { AgentHarness, AgentStart } from '../../../contracts/agent';
 import type { Timers } from '../../../contracts/ambient';
 import type { Files } from '../../../contracts/files';
 import type { HostedProcessInfo } from '../../../contracts/session-host';
+import {
+  createFakeAgentHarness,
+  FAKE_MICROTASK_TIMERS,
+} from '../../../shared/fake-agent-harness';
 import { fakeDriveHost } from '../../../shared/fake-drive-host';
 import { createFakeSessionHost } from '../../../shared/fake-session-host';
 import { createMemoryFiles } from '../../../shared/memory-files';
@@ -45,6 +49,7 @@ function fakeChat(running = true) {
 function chatDriveActions(
   chat: ReturnType<typeof fakeChat>,
   activate: (sessionId: string) => void = () => undefined,
+  harnesses: readonly AgentHarness[] = [],
 ) {
   const drive = fakeDriveHost();
   addDriveActions(drive.host, {
@@ -57,7 +62,7 @@ function chatDriveActions(
     profileNames: () => ['default'],
     chat,
     sessions: { activate },
-    harnesses: [],
+    harnesses,
   });
   return drive;
 }
@@ -147,6 +152,24 @@ describe('chat drive actions', () => {
     await expect(drive.run('releaseCompactions')).rejects.toThrow(
       'chat runs on no fake harness',
     );
+  });
+
+  it('holdCompactions and releaseCompactions reach the fake harness', async () => {
+    const fake = createFakeAgentHarness(
+      { now: () => 1000 },
+      createMemoryFiles(),
+      FAKE_MICROTASK_TIMERS,
+    );
+    const hold = vi.spyOn(fake, 'holdCompactions');
+    const release = vi.spyOn(fake, 'releaseCompactions');
+    const drive = chatDriveActions(fakeChat(), undefined, [fake]);
+
+    await drive.run('holdCompactions');
+    expect(hold).toHaveBeenCalledOnce();
+    expect(release).not.toHaveBeenCalled();
+
+    await drive.run('releaseCompactions');
+    expect(release).toHaveBeenCalledOnce();
   });
 });
 

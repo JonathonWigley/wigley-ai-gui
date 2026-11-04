@@ -10,7 +10,6 @@ import { autoCompactMainPart } from './start';
 const ASK = {
   sessionId: 's1',
   hostSessionId: 'h1',
-  profileDir: '~/.claude-work',
   text: 'hello',
   now: 1_000_000,
 };

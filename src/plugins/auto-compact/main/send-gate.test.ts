@@ -143,6 +143,25 @@ const ROWS: SendGateRow[] = [
     expected: HELD,
   },
   {
+    case: 'CompactionDoneThenLaterReplyRefills',
+    events: [
+      ['h1', cold(182_400)],
+      ['h1', compactionEnded('done')],
+      ['h1', cold(300_000, 960_000)],
+    ],
+    expected: { action: 'compact', reason: 'auto · cache cold · 300k' },
+  },
+  {
+    case: 'CompactionDoneNoUsageAfter_StaysEmpty',
+    events: [
+      ['h1', cold(182_400)],
+      ['h1', compactionEnded('done')],
+      ['h1', { type: 'turnEnded', at: 960_000 }],
+      ['h1', { type: 'sessionEnded', at: 970_000 }],
+    ],
+    expected: null,
+  },
+  {
     case: 'CompactionEndedFailedKeeps',
     events: [
       ['h1', cold(182_400)],
