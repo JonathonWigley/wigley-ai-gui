@@ -33,6 +33,10 @@ export interface UserMessage {
   images: ChatImage[];
 }
 
+// What started a compaction: `app`, the app called `AgentProcess.compact()`; `manual`, the user sent `/compact`;
+// `harness`, the harness compacted on its own.
+export type CompactionTrigger = 'app' | 'manual' | 'harness';
+
 // `id` is unique among one process's entries (one `start`): a resumed session's new process numbers its
 // entries afresh. An entry sent again with the same id replaces the earlier one.
 // `at` is when the entry first appeared, epoch milliseconds; a later version of the entry (same id) keeps its first
@@ -104,6 +108,19 @@ export type ChatEntry =
       tone: 'info' | 'error';
       raw: unknown[];
     }
+  // One per finished compaction (outcome `done`). `afterTokens` is null until the next main reply after the compaction;
+  // the adapter then sends the entry again with the same id and `afterTokens` set. A saved transcript's compaction reads
+  // back with trigger `manual` or `harness`, never `app`.
+  | {
+      kind: 'compaction';
+      id: string;
+      at: number;
+      trigger: CompactionTrigger;
+      beforeTokens: number | null;
+      afterTokens: number | null;
+      durationMs: number | null;
+      raw: unknown[];
+    }
   | { kind: 'raw'; id: string; at: number; raw: unknown[] };
 
 export type ChatEntryKind = ChatEntry['kind'];
@@ -117,6 +134,8 @@ export type ChatEntryKind = ChatEntry['kind'];
 // `instructions` is text the session's agent is told before its first message, in the order its registrations were
 // made; [] when none. Each adapter hands it to its harness in that harness's own way.
 // `processId` is the hosted process id chat chooses for this start.
+// `idleCompactMinTokens` is the context size above which the harness may compact an idle session on its own; null
+// leaves the harness's default.
 export interface AgentStart {
   processId: string;
   sessionId: string;
@@ -125,6 +144,7 @@ export interface AgentStart {
   profileDir: string | null;
   controls: Readonly<Record<string, string>>;
   instructions: readonly string[];
+  idleCompactMinTokens: number | null;
 }
 
 export type PlanSeverity = 'normal' | 'warning' | 'critical';
@@ -259,13 +279,19 @@ export type AgentEvent =
       toolUseId: string;
       ok: boolean;
     }
-  // `beforeTokens` is the context size when the compaction ran, `afterTokens` the context size after it; each null
-  // when the harness does not report it (Claude reports no after-size, so the next `usage` event carries it).
+  // A compaction started. Exactly one `compactionEnded` with the same trigger follows: on the harness's end line, on a
+  // failed compaction, on an interrupt (within the interrupt grace), and before `sessionEnded` when the process ends
+  // during it.
+  | { type: 'compactionStarted'; at: number; trigger: CompactionTrigger }
+  // `beforeTokens` is the context size when the compaction ran, null when the harness does not report it or the outcome
+  // is not `done`. `durationMs` is how long it ran, null when unknown.
   | {
-      type: 'compacted';
+      type: 'compactionEnded';
       at: number;
+      trigger: CompactionTrigger;
+      outcome: 'done' | 'failed' | 'interrupted';
       beforeTokens: number | null;
-      afterTokens: number | null;
+      durationMs: number | null;
     }
   | { type: 'userMessage'; at: number }
   // A skill or slash command started: the agent called its Skill tool, or the user's sent message began with `/`.
@@ -306,7 +332,7 @@ export interface AgentProcessEvents {
   ended(end: { code: number | null; error: string | null }): void;
 }
 
-// `send`, `interrupt` and `setControl` throw after `end`. `setControl` also
+// `send`, `interrupt`, `setControl` and `compact` throw after `end`. `setControl` also
 // throws for a control or choice the harness did not declare, or when the
 // harness cannot change that control now. `interrupt` always ends the running
 // turn: the adapter ends it within a grace period whatever the agent answers,
@@ -324,6 +350,8 @@ export interface AgentProcess {
   send(message: UserMessage): string;
   interrupt(): void;
   setControl(id: string, value: string): void;
+  // Starts a compaction with trigger `app`. It makes no user entry. It throws while the process is not idle.
+  compact(): void;
   // Resolves once the process has exited, after `ended` has fired.
   end(): Promise<void>;
   // Stops the process at once, mid-turn included, for a caller that cannot

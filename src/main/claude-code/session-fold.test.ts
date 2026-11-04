@@ -18,6 +18,7 @@ const request: AgentStart = {
   profileDir: null,
   controls: {},
   instructions: [],
+  idleCompactMinTokens: null,
 };
 
 const GRACE_NOTICE =
@@ -661,4 +662,66 @@ describe('session-fold', () => {
       );
     },
   );
+
+  it('replayPipeLog_AppCompact_KeepsItsTriggerAndEntry', () => {
+    const boundary = {
+      type: 'system',
+      subtype: 'compact_boundary',
+      compact_metadata: { pre_tokens: 37559, duration_ms: 8303 },
+    };
+    const state = createSessionFoldState(request);
+
+    const effects = replayPipeLog(
+      state,
+      [
+        inLine(send('/compact', '00000000-1'), 100),
+        outLine(lifecycle('00000000-1', 'started'), 110),
+        outLine(
+          { type: 'system', subtype: 'status', status: 'compacting' },
+          120,
+        ),
+        outLine(boundary, 130),
+        outLine(CACHE_READ_LINE, 140),
+      ],
+      150,
+      null,
+    );
+
+    expect(
+      effects.flatMap((effect) =>
+        effect.kind === 'agentEvent' &&
+        effect.event.type.startsWith('compaction')
+          ? [effect.event]
+          : [],
+      ),
+    ).toEqual([
+      { type: 'compactionStarted', at: 120, trigger: 'app' },
+      {
+        type: 'compactionEnded',
+        at: 130,
+        trigger: 'app',
+        outcome: 'done',
+        beforeTokens: 37559,
+        durationMs: 8303,
+      },
+    ]);
+    expect(
+      effects.flatMap((effect) =>
+        effect.kind === 'entry' && effect.entry.kind === 'compaction'
+          ? [effect.entry]
+          : [],
+      ),
+    ).toEqual([
+      {
+        kind: 'compaction',
+        id: 'compaction-1',
+        at: 130,
+        trigger: 'app',
+        beforeTokens: 37559,
+        afterTokens: 40123,
+        durationMs: 8303,
+        raw: [boundary],
+      },
+    ]);
+  });
 });

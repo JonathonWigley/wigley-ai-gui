@@ -817,6 +817,199 @@ describe('createStreamDecoder', () => {
     ]);
   });
 
+  const compactStatus = (fields: object) =>
+    line({ type: 'system', subtype: 'status', ...fields });
+
+  it.each<{
+    case: string;
+    text: string;
+    compaction: unknown;
+    entries: object[];
+  }>([
+    {
+      case: 'compacting status',
+      text: compactStatus({ status: 'compacting' }),
+      compaction: { phase: 'started', userMessageUuid: null },
+      entries: [{ kind: 'raw', id: 'turn-events-1' }],
+    },
+    {
+      case: 'compacting status with uuid',
+      text: compactStatus({ status: 'compacting', user_message_uuid: 'u1' }),
+      compaction: { phase: 'started', userMessageUuid: 'u1' },
+      entries: [{ kind: 'raw' }],
+    },
+    {
+      case: 'boundary',
+      text: compactBoundary({
+        pre_tokens: 37559,
+        post_tokens: 9023,
+        duration_ms: 8303,
+      }),
+      compaction: {
+        phase: 'done',
+        beforeTokens: 37559,
+        durationMs: 8303,
+        boundary: {
+          type: 'system',
+          subtype: 'compact_boundary',
+          compact_metadata: {
+            trigger: 'manual',
+            pre_tokens: 37559,
+            post_tokens: 9023,
+            duration_ms: 8303,
+          },
+        },
+      },
+      entries: [],
+    },
+    {
+      case: 'boundary without sizes',
+      text: compactBoundary({}),
+      compaction: {
+        phase: 'done',
+        beforeTokens: null,
+        durationMs: null,
+        boundary: expect.anything(),
+      },
+      entries: [],
+    },
+    {
+      case: 'success status',
+      text: compactStatus({ status: null, compact_result: 'success' }),
+      compaction: null,
+      entries: [{ kind: 'raw' }],
+    },
+    {
+      case: 'failed status',
+      text: compactStatus({
+        status: null,
+        compact_result: 'failed',
+        compact_error: 'Not enough messages to compact.',
+      }),
+      compaction: { phase: 'failed' },
+      entries: [
+        { kind: 'raw' },
+        {
+          kind: 'notice',
+          text: 'Compaction failed: Not enough messages to compact.',
+          tone: 'error',
+        },
+      ],
+    },
+    {
+      case: 'failed status without error',
+      text: compactStatus({ status: null, compact_result: 'failed' }),
+      compaction: { phase: 'failed' },
+      entries: [{ kind: 'raw' }],
+    },
+    {
+      case: 'failed status of a plain interrupt',
+      text: compactStatus({
+        status: null,
+        compact_result: 'failed',
+        compact_error: 'API Error: Request was aborted.',
+      }),
+      compaction: { phase: 'failed' },
+      entries: [{ kind: 'raw' }],
+    },
+    {
+      case: 'failed status of a routine automatic attempt',
+      text: compactStatus({
+        status: null,
+        compact_result: 'failed',
+        compact_error: 'too_few_groups',
+      }),
+      compaction: { phase: 'failed' },
+      entries: [{ kind: 'raw' }],
+    },
+    {
+      case: "a subagent's boundary",
+      text: line({
+        type: 'system',
+        subtype: 'compact_boundary',
+        compact_metadata: { pre_tokens: 1 },
+        parent_tool_use_id: 'a1',
+      }),
+      compaction: null,
+      entries: [{ kind: 'raw', id: 'raw-1' }],
+    },
+    {
+      case: "a subagent's failed status",
+      text: compactStatus({
+        status: null,
+        compact_result: 'failed',
+        compact_error: 'boom',
+        parent_tool_use_id: 'a1',
+      }),
+      compaction: null,
+      entries: [{ kind: 'raw' }],
+    },
+  ])(
+    'decode_CompactionLines_ReportCompaction ($case)',
+    ({ text, compaction, entries }) => {
+      const decoded = createStreamDecoder().decode(text);
+
+      expect(decoded.compaction).toEqual(compaction);
+      expect(decoded.entries).toMatchObject(entries);
+      expect(decoded.entries).toHaveLength(entries.length);
+    },
+  );
+
+  const COMPACTED_REPLAY = line({
+    type: 'user',
+    message: {
+      role: 'user',
+      content: '<local-command-stdout>Compacted </local-command-stdout>',
+    },
+    parent_tool_use_id: null,
+    isReplay: true,
+  });
+
+  it.each<{ case: string; lines: string[]; entries: object[] }>([
+    {
+      case: 'after a boundary',
+      lines: [compactBoundary({}), COMPACTED_REPLAY],
+      entries: [{ kind: 'raw' }],
+    },
+    {
+      case: "after the boundary turn's result",
+      lines: [
+        compactBoundary({}),
+        line({ type: 'result', subtype: 'success', is_error: false }),
+        COMPACTED_REPLAY,
+      ],
+      entries: [{ kind: 'notice', text: 'Compacted', tone: 'info' }],
+    },
+  ])(
+    'decode_LocalOutputAfterBoundary_GathersInsteadOfNotice ($case)',
+    ({ lines, entries }) => {
+      const decoder = createStreamDecoder();
+
+      const last = lines.map((text) => decoder.decode(text)).at(-1);
+
+      expect(last?.entries).toMatchObject(entries);
+      expect(last?.entries).toHaveLength(entries.length);
+    },
+  );
+
+  it('decode_AutomaticCompactSummary_JoinsTheEvents', () => {
+    const decoded = createStreamDecoder().decode(
+      line({
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [{ type: 'text', text: 'This session is being continued.' }],
+        },
+        parent_tool_use_id: null,
+        isSynthetic: true,
+      }),
+    );
+
+    expect(decoded.entries).toMatchObject([
+      { kind: 'raw', id: 'turn-events-1' },
+    ]);
+  });
+
   it('decode_SyntheticAssistant_AddsNotice', () => {
     const decoder = createStreamDecoder();
 
@@ -1166,16 +1359,6 @@ describe('createStreamDecoder', () => {
         }),
       ],
       expected: [spawned('a1')],
-    },
-    {
-      case: 'compaction',
-      lines: [compactBoundary({ pre_tokens: 37559, post_tokens: 9023 })],
-      expected: [{ type: 'compacted', beforeTokens: 37559, afterTokens: null }],
-    },
-    {
-      case: 'compaction without before size',
-      lines: [compactBoundary({ post_tokens: 9023 })],
-      expected: [{ type: 'compacted', beforeTokens: null, afterTokens: null }],
     },
     {
       case: 'background spawn',

@@ -53,6 +53,7 @@ const request: AgentStart = {
   profileDir: null,
   controls: {},
   instructions: [],
+  idleCompactMinTokens: null,
 };
 
 // Every event the process emits, as `[event name, payload]`, in emit order,

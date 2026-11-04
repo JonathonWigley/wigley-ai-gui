@@ -23,7 +23,7 @@ import type { DecodedLine } from './stream-decoder';
 // - `abandon` closes the turn and every uuid.
 
 export interface ControlCommand {
-  id: 'effort' | 'model';
+  id: 'effort' | 'model' | 'compact';
   value: string;
 }
 

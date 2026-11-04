@@ -69,7 +69,8 @@ not leak into § Effort and § Session id:
 and every `CLAUDE_CODE_*` (`CLAUDE_CODE_ENTRYPOINT`, `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`,
 `CLAUDE_CODE_MESSAGING_SOCKET`, `CLAUDE_CODE_MESSAGING_TOKEN`, `CLAUDE_CODE_EXECPATH`, `CLAUDE_CODE_SESSION_ID`,
 `CLAUDE_CODE_CHILD_SESSION`, `CLAUDE_CODE_SESSION_ATTENDED`). An app started from a Claude Code terminal inherits
-these variables, and `CLAUDE_EFFORT` in particular may set the child's effort.
+these variables, and `CLAUDE_EFFORT` in particular may set the child's effort. The app's launch strips the named ones
+and `CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS`, which it sets from its own setting; any other `CLAUDE_CODE_*` passes through.
 
 ## User message
 

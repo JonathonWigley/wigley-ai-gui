@@ -284,6 +284,135 @@ describe('transcriptEntries', () => {
     ]);
   });
 
+  describe('compaction', () => {
+    const boundary = (uuid: string, metadata: object, extra: object = {}) => ({
+      type: 'system',
+      subtype: 'compact_boundary',
+      uuid,
+      timestamp: '2026-11-04T00:54:57.884Z',
+      content: 'Conversation compacted',
+      parentUuid: null,
+      logicalParentUuid: 'parent',
+      isSidechain: false,
+      compactMetadata: metadata,
+      ...extra,
+    });
+    const SIZED = {
+      trigger: 'manual',
+      preTokens: 37559,
+      postTokens: 9023,
+      durationMs: 8303,
+    };
+    // Its context reads 38935 tokens.
+    const reply = (
+      uuid: string,
+      extra: object = {},
+      model = 'claude-opus-5-5',
+    ) => ({
+      type: 'assistant',
+      uuid,
+      isSidechain: false,
+      message: {
+        role: 'assistant',
+        model,
+        content: [],
+        usage: {
+          input_tokens: 2,
+          cache_creation_input_tokens: 909,
+          cache_read_input_tokens: 38019,
+          output_tokens: 5,
+        },
+      },
+      ...extra,
+    });
+    const compactionEntries = (lines: object[]) =>
+      transcriptEntries(jsonl(lines)).filter(
+        (entry) => entry.kind === 'compaction',
+      );
+    const at = Date.parse('2026-11-04T00:54:57.884Z');
+
+    it.each<{ name: string; lines: object[]; expected: object[] }>([
+      {
+        name: 'manual, a reply after',
+        lines: [boundary('b1', SIZED), reply('a1')],
+        expected: [
+          {
+            kind: 'compaction',
+            id: 'history:b1',
+            at,
+            trigger: 'manual',
+            beforeTokens: 37559,
+            afterTokens: 38935,
+            durationMs: 8303,
+            raw: [boundary('b1', SIZED)],
+          },
+        ],
+      },
+      {
+        name: 'auto',
+        lines: [boundary('b1', { ...SIZED, trigger: 'auto' })],
+        expected: [
+          expect.objectContaining({ trigger: 'harness', afterTokens: null }),
+        ],
+      },
+      {
+        name: 'a sidechain and a synthetic reply first',
+        lines: [
+          boundary('b1', SIZED),
+          {
+            ...reply('a1', { isSidechain: true }),
+            message: { usage: { input_tokens: 1 } },
+          },
+          {
+            ...reply('a2', {}, SYNTHETIC_MODEL),
+            message: { model: SYNTHETIC_MODEL, usage: { input_tokens: 2 } },
+          },
+          reply('a3'),
+        ],
+        expected: [expect.objectContaining({ afterTokens: 38935 })],
+      },
+      {
+        name: 'a second boundary first',
+        lines: [boundary('b1', SIZED), boundary('b2', SIZED), reply('a1')],
+        expected: [
+          expect.objectContaining({ id: 'history:b1', afterTokens: null }),
+          expect.objectContaining({ id: 'history:b2', afterTokens: 38935 }),
+        ],
+      },
+      {
+        name: 'no metadata sizes',
+        lines: [boundary('b1', { trigger: 'manual' })],
+        expected: [
+          expect.objectContaining({ beforeTokens: null, durationMs: null }),
+        ],
+      },
+      {
+        name: 'a sidechain boundary',
+        lines: [boundary('b1', SIZED, { isSidechain: true })],
+        expected: [],
+      },
+    ])(
+      'transcriptEntries_CompactBoundary_CompactionEntry ($name)',
+      ({ lines, expected }) => {
+        expect(compactionEntries(lines)).toEqual(expected);
+      },
+    );
+
+    it('transcriptEntries_CompactedUserLine_ReadsAsNothing', () => {
+      const lines = [
+        boundary('b1', SIZED),
+        userLine(
+          'u1',
+          '<local-command-stdout>Compacted </local-command-stdout>',
+        ),
+      ];
+
+      expect(
+        transcriptEntries(jsonl(lines)).map((entry) => entry.kind),
+      ).toEqual(['compaction']);
+    });
+  });
+
   it('transcriptEntries_LocalCommandWithoutUuid_TakesLineId', () => {
     const s1 = {
       type: 'system',

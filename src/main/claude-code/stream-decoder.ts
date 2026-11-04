@@ -37,6 +37,8 @@ import { SYNTHETIC_MODEL } from './transcripts';
 // init's `capabilities` strings, null on any other line; `lifecycle` is a
 // `command_lifecycle` line's `command_uuid` and `state`; `turnOpener` is a
 // `result`'s `user_message_uuid` and `turnMessages` its `user_message_uuids`.
+// `compaction` is what a main-conversation line says about a compaction, null on
+// every other line; the session fold owns the compaction's state and events.
 // `agentEvents` are the line's agent events other than
 // `usage`, not yet stamped with `at`, in the order the line gave them. The
 // usage side channels: `planRows` from a `rate_limit_event`, `replyUsage` from
@@ -64,7 +66,20 @@ export interface DecodedLine {
   planRows: PlanRowPatch[] | null;
   replyUsage: ReplyUsage | null;
   turnUsage: TurnUsage | null;
+  compaction: CompactionLine | null;
 }
+
+// `started` is every `compacting` status, repeats included. `boundary` is the
+// `compact_boundary` event, which gets no entry of its own.
+export type CompactionLine =
+  | { phase: 'started'; userMessageUuid: string | null }
+  | {
+      phase: 'done';
+      beforeTokens: number | null;
+      durationMs: number | null;
+      boundary: unknown;
+    }
+  | { phase: 'failed' };
 
 // An agent event as the decoder builds it, before it is stamped with its `at`.
 // `usage` is left out: the harness builds it from the usage side channels.
@@ -106,6 +121,14 @@ const UNREQUESTED_ORIGINS: ReadonlySet<string> = new Set([
   'task-notification',
 ]);
 
+// `compact_error`s that show no notice. A plain interrupt's: its synthetic
+// `Compaction canceled.` line says so. A routine automatic attempt's: the turn goes
+// on past it.
+const QUIET_COMPACT_ERRORS: ReadonlySet<string> = new Set([
+  'API Error: Request was aborted.',
+  'too_few_groups',
+]);
+
 // The names of the tool that starts a subagent: the `tool_use` carries
 // `Agent`, and init's tool list still names it `Task`.
 const SUBAGENT_TOOLS: ReadonlySet<string> = new Set(['Agent', 'Task']);
@@ -141,7 +164,36 @@ function emptyLine(): DecodedLine {
     planRows: null,
     replyUsage: null,
     turnUsage: null,
+    compaction: null,
   };
+}
+
+function compactionOf(event: Json): CompactionLine | null {
+  if (typeof event.parent_tool_use_id === 'string') {
+    return null;
+  }
+  if (event.subtype === 'compact_boundary') {
+    const metadata = asJson(event.compact_metadata);
+    return {
+      phase: 'done',
+      beforeTokens: numberOrNull(metadata.pre_tokens),
+      durationMs: numberOrNull(metadata.duration_ms),
+      boundary: event,
+    };
+  }
+  if (event.subtype !== 'status') {
+    return null;
+  }
+  if (event.status === 'compacting') {
+    return {
+      phase: 'started',
+      userMessageUuid:
+        typeof event.user_message_uuid === 'string'
+          ? event.user_message_uuid
+          : null,
+    };
+  }
+  return event.compact_result === 'failed' ? { phase: 'failed' } : null;
 }
 
 // A copy the decoder's later changes cannot reach.
@@ -260,6 +312,10 @@ export function createStreamDecoder(
   let turnEvents: RawEntry | null = null;
   // True from a result until the next turn's init.
   let betweenTurns = false;
+  // True from a compaction's boundary to the next result, while its
+  // `<local-command-stdout>` replay, which the compaction entry stands for, may
+  // come.
+  let isAfterBoundary = false;
   let noticeCount = 0;
   let resultCount = 0;
   // `total_cost_usd` is the process's cost so far.
@@ -579,14 +635,10 @@ export function createStreamDecoder(
       finishByNotification(event, out);
       finishTask(event, out);
     }
-    if (event.subtype === 'compact_boundary') {
-      // `post_tokens` counts the conversation messages only, not the system prompt and tools `pre_tokens` holds, so
-      // the after-size is left to the next usage event (claude-stream.md § Compaction).
-      out.agentEvents.push({
-        type: 'compacted',
-        beforeTokens: numberOrNull(asJson(event.compact_metadata).pre_tokens),
-        afterTokens: null,
-      });
+    out.compaction = compactionOf(event);
+    if (out.compaction?.phase === 'done') {
+      isAfterBoundary = true;
+      return;
     }
     if (event.subtype === 'init') {
       out.agentEvents.push({ type: 'turnStarted' });
@@ -615,6 +667,17 @@ export function createStreamDecoder(
         ? gathered(event, event.subtype === 'init')
         : rawEntry(event),
     );
+    const error = event.compact_error;
+    const isErrorShown =
+      out.compaction?.phase === 'failed' &&
+      typeof error === 'string' &&
+      error !== '' &&
+      !QUIET_COMPACT_ERRORS.has(error);
+    if (isErrorShown) {
+      out.entries.push(
+        noticeEntry(`Compaction failed: ${error}`, 'error', event),
+      );
+    }
   }
 
   function decodeStreamEvent(event: Json, out: DecodedLine) {
@@ -796,8 +859,9 @@ export function createStreamDecoder(
   }
 
   // Tool results pair with their tool entries. Local command output (the
-  // `set_model` replay) wrapped in `<local-command-stdout>` is a notice; any
-  // other text (the interrupt marker) joins the turn's events.
+  // `set_model` replay) wrapped in `<local-command-stdout>` is a notice, except
+  // after a compaction's boundary; any other text (the interrupt marker, a
+  // compaction's summary) joins the turn's events.
   function decodeUser(event: Json, out: DecodedLine) {
     const content = asJson(event.message).content;
     const toolResults = asArray(content)
@@ -817,7 +881,7 @@ export function createStreamDecoder(
       .replace(LOCAL_OUTPUT_CLOSE, '')
       .trim();
     out.entries.push(
-      isLocalOutput && output !== ''
+      isLocalOutput && output !== '' && !isAfterBoundary
         ? noticeEntry(output, 'info', event)
         : gathered(event),
     );
@@ -870,6 +934,7 @@ export function createStreamDecoder(
       raw: [event],
     });
     betweenTurns = true;
+    isAfterBoundary = false;
   }
 
   function decodeControlResponse(event: Json, out: DecodedLine) {
