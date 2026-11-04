@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  hostChildrenFile,
   hostLogFile,
   hostRecordFile,
   hostRecordProtocol,
+  isHostChildrenFile,
   pipeLogFile,
 } from './session-host-protocol';
 
@@ -35,5 +37,16 @@ describe('host files', () => {
     ['host-v.json', null],
   ])('hostFiles_Protocol_NamesAndParsesBack: %s', (fileName, expected) => {
     expect(hostRecordProtocol(fileName)).toBe(expected);
+  });
+
+  it.each([
+    [hostChildrenFile(1, 4242), true],
+    ['host-v12.7.children.json', true],
+    ['host-v1.4242.children.json.tmp', false],
+    ['host-v1.json', false],
+    ['host-v1.previous.log', false],
+    ['host-v1.children.json', false],
+  ])('isHostChildrenFile_Names: %s', (fileName, expected) => {
+    expect(isHostChildrenFile(fileName)).toBe(expected);
   });
 });

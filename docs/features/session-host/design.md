@@ -65,11 +65,13 @@ session under it.
   as not running and refuses an attach: its stdin is closed, so its row rests and the next message resumes the session.
 - The host outlives its logs: a pipe log that cannot be created fails only that spawn; one whose append fails stops
   appending, keeps delivering lines live, and refuses an attach, since it can no longer rebuild the state, so the
-  process runs on with its row unheld.
+  process runs on with its row unheld. That holds after a relaunch too: such a process cannot be re-attached, so its
+  row stays unheld until Stop all or the keep window ends it.
 - The host's folder is `session-host/` in the app instance's user data folder (the self-test's: in its temporary
-  home, deleted at its teardown): the pipe logs in `logs/`, the channel's record `host-v<protocol>.json`, the record of
-  its children `host-v<protocol>.children.json` and the host's own log `host-v<protocol>.log`, which the next host renames to `host-v<protocol>.previous.log`, so a crash
-  report outlives the restart that follows it. A pipe log is deleted when its process closes; a host that starts also deletes each log it holds no
+  home, deleted at its teardown): the pipe logs in `logs/`, the channel's record `host-v<protocol>.json`, each host's
+  own record of its children `host-v<protocol>.<pid>.children.json`, and the host's own log `host-v<protocol>.log`. When
+  a dead host wrote a line to that log, the next host renames it to `host-v<protocol>.previous.log`, so a crash report
+  outlives the restart that follows it. A pipe log is deleted when its process closes; a host that starts also deletes each log it holds no
   process for, unless a host of another protocol may be listening: one that answers, stays silent or denies the connect
   keeps them, and only a record whose connect proves no listener does not. Its channel is a Unix socket on macOS and a named pipe on Windows, through the same transport the relay
   channel uses, named with the protocol version so two protocol versions never share a channel.
@@ -79,20 +81,28 @@ session under it.
   its row rests, but a `claude` in the middle of a tool can finish the tool and write to its session, beside whatever
   resumes that session. What closes that:
   - A host that throws sends each child SIGTERM on its way down. A host killed outright sends nothing.
-  - Each host keeps its children's pids, start times and commands in the children record, replaced whole from a
-    child's spawn, once the OS has reported it, to its close. A new host, once it owns the channel, ends what the record
-    left: SIGTERM, then SIGKILL after 3 s, about 6 s at most, on macOS and Windows alike through the platform's kill
-    (on Windows either signal ends the process at once). Before each signal it compares the recorded start time with
-    what `ps` or PowerShell reports, since a pid with the same start time is the same process whatever its command has
-    become through an exec or a retitle; the recorded command is kept for the log. A pid it cannot confirm, an
-    unreadable record included, is left alone and logged. A process left alone this way can still write beside a resumed
-    one.
+  - Each host keeps its own pid and start time, and its children's pids, start times and commands, in its own children
+    record, replaced whole from a child's spawn, once the OS has reported it, to its close. Only its writer changes a
+    record while that writer may run, so no host can delete or overwrite another's.
+  - A new host, once it owns the channel, reads every protocol's children record, so a protocol bump leaves no orphan.
+    It compares each record's writer with what `ps` or PowerShell reports for that pid. A writer that still runs keeps
+    its children and its record, and the new host logs it: owning the channel proves nothing, since a socket file gone
+    or a check-then-listen race gives a new host the channel beside a live one, and an older host may be draining. A
+    new host that cannot ask the OS, or cannot read a record, leaves that record the same way, for a later host. A session
+    whose process runs under such a writer can run a second process beside it.
+  - Once a record's writer is gone, its pid unused or reused, the new host ends what the record left and removes it:
+    SIGTERM, then SIGKILL after 3 s, about 6 s at most, on macOS and Windows alike through the platform's kill (on
+    Windows either signal ends the process at once). Before each signal it compares the recorded start time with what
+    `ps` or PowerShell reports, since a pid with the same start time is the same process whatever its command has
+    become through an exec or a retitle; the recorded command is kept for the log. A pid it cannot confirm is left
+    alone and logged. A process left alone this way can still write beside a resumed one.
   - Until that ends the new host answers only `hello`, `list`, `subscribe` and `setKeepIdle`, each of which finds an
-    empty table. Every other message waits in order and so does the exit rule, so no `spawn` runs beside a leftover. A
-    resume always goes through a new host, and that host's start ends the leftovers even when no resume ever comes. The
-    leftovers' pipe logs go with that host's log sweep.
+    empty table. `list` so answers empty though a `spawn` may be held, so a relaunch inside the hold can rest a row beside
+    a process about to start. Every other message waits in order and so does the exit rule, so no `spawn` runs beside a
+    leftover. A resume always goes through a new host, and that host's start ends the leftovers even when no resume ever
+    comes. The leftovers' pipe logs go with that host's log sweep.
   - Children are not started `detached`, and the end reaches only the recorded process: a tool the orphan was running
-    can outlive it.
+    may outlive it.
 - A drive run and the self-test end their host's processes at teardown, since their runs are thrown away. A drive
   `restart` keeps them, so a drive run can check re-attach, and `drive quit --keep-sessions` keeps them with the run's
   home and user data, so `start --run <id>` brings the run back. Any other quit of a run ends them.
@@ -100,7 +110,8 @@ session under it.
 ## Protocol
 
 Newline-delimited JSON over the channel. `hello`, `list` and `drain` keep their shape in every protocol version, so
-any app can drain any older host. The pipe log format is frozen the same way.
+any app can drain any older host. The pipe log format is frozen the same way, and so are the children record's name and
+shape, so any host can end what any other left.
 
 - `hello` — the host's protocol version.
 - `list` — each hosted process: id, start time, running (false once it is ending) or its exit code and signal, its
@@ -130,7 +141,8 @@ lines past the last `seq` it read.
   attach failed, or its profile is missing from chat's profiles setting — is **unheld**: it refuses a send until that process ends, and before a send or a history read
   chat lists the host again and re-attaches when it can. `resume` lists the host first too: a process of the session
   running in the current host has the row open and attach to it, and one in another app version or a list that rejects
-  refuses the resume. So a session never runs two processes, past the one left alone in § The host.
+  refuses the resume. So a session never runs two processes, past those § The host names: a process left alone, a
+  live host's child beside a new host, and a relaunch inside a new host's hold, when `list` answers empty.
 - Events a replay emits are flagged `replayed`, so the agents log appends nothing twice and no alert fires for a
   turn that ended while the app was closed. What a process that exits during the attach fires for that exit, its
   `sessionEnded` included, is not: that exit is real, so the agents log closes. The row still shows the session's current state.

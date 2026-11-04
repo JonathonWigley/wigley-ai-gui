@@ -1,7 +1,15 @@
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
-import { readFileSync, rmSync } from 'node:fs';
+import { readdirSync, readFileSync, rmSync } from 'node:fs';
+import path from 'node:path';
 import type { Timers } from '../contracts/ambient';
-import { HOST_END_GRACE_MS } from '../contracts/session-host-protocol';
+import {
+  HOST_END_GRACE_MS,
+  type HostChildrenRecord,
+  hostChildrenFile,
+  isHostChildrenFile,
+  type RecordedHostChild,
+  SESSION_HOST_PROTOCOL,
+} from '../contracts/session-host-protocol';
 import type { OsProcesses, ProcessReport } from './os-processes';
 import type { HostSpawn } from './process-table';
 import { replaceFile } from './replace-file';
@@ -9,54 +17,92 @@ import { replaceFile } from './replace-file';
 const LEFTOVER_POLL_MS = 200;
 
 // A host's children, and what a host that died left of its own. A host that dies does not take its children with it,
-// so each child stays on a record file from spawn to close, for the next host to end.
+// so each child stays on its host's own record file from spawn to close, for a later host to end.
 export interface HostChildren {
   // Starts a child as the `spawn` dep does, and records it. The record gains it once the OS has reported it.
   spawn: HostSpawn;
-  // Ends each process the record names that is still the one recorded: SIGTERM, then SIGKILL after `HOST_END_GRACE_MS`.
-  // A process it cannot confirm is left alone and reported. Resolves once each is gone or its steps have run, with the
-  // record cleared. Never rejects. Call it once, while owning the channel, before the first `spawn`.
+  // Reads every protocol's record. One whose writer may still run stays as it is, its children untouched, and is
+  // reported, as is one it cannot read. Of each other, ends each process that is still the one recorded: SIGTERM, then
+  // SIGKILL after `HOST_END_GRACE_MS`. A process it cannot confirm is left alone and reported. Resolves once each is
+  // gone or its steps have run, with that record removed. Never rejects. Call it once, while owning the channel, before
+  // the first `spawn`.
   endLeftovers(): Promise<void>;
   // For a host on its way down: sends each running child SIGTERM, leaving the record for the next host.
   killAll(): void;
 }
 
 export interface HostChildrenDeps {
-  file: string;
+  folder: string;
+  // This host's own, naming its record and proving it the writer.
+  pid: number;
   spawn: HostSpawn;
   processes: OsProcesses;
   timers: Timers;
   report(message: string): void;
 }
 
-interface RecordedChild extends ProcessReport {
-  pid: number;
+type RecordWriter = HostChildrenRecord['writer'];
+
+function isOnePid(pid: unknown): boolean {
+  // Zero and negative pids signal whole process groups.
+  return Number.isSafeInteger(pid) && (pid as number) > 0;
 }
 
-function isRecordedChild(value: unknown): value is RecordedChild {
-  const { pid, startedAt, command } = (value ?? {}) as Partial<RecordedChild>;
-  // Zero and negative pids signal whole process groups.
-  const isOnePid = Number.isSafeInteger(pid) && (pid as number) > 0;
+function isRecordedChild(value: unknown): value is RecordedHostChild {
+  const { pid, startedAt, command } = (value ??
+    {}) as Partial<RecordedHostChild>;
   return (
-    isOnePid && typeof startedAt === 'string' && typeof command === 'string'
+    isOnePid(pid) &&
+    typeof startedAt === 'string' &&
+    typeof command === 'string'
+  );
+}
+
+function isChildrenRecord(value: unknown): value is HostChildrenRecord {
+  const { writer, children } = (value ?? {}) as Partial<HostChildrenRecord>;
+  return (
+    isOnePid(writer?.pid) &&
+    typeof writer?.startedAt === 'string' &&
+    Array.isArray(children) &&
+    children.every(isRecordedChild)
   );
 }
 
 export function createHostChildren(deps: HostChildrenDeps): HostChildren {
-  const { file, processes, timers, report } = deps;
+  const { folder, processes, timers, report } = deps;
+  const ownFile = path.join(
+    folder,
+    hostChildrenFile(SESSION_HOST_PROTOCOL, deps.pid),
+  );
   const running = new Set<ChildProcessWithoutNullStreams>();
-  const recorded = new Map<number, RecordedChild>();
+  const recorded = new Map<number, RecordedHostChild>();
+  let ownWriter: RecordWriter | null = null;
 
-  function saveRecord() {
+  function saveRecord(writer: RecordWriter) {
     try {
       if (recorded.size === 0) {
-        rmSync(file, { force: true });
+        rmSync(ownFile, { force: true });
       } else {
-        replaceFile(file, JSON.stringify([...recorded.values()]));
+        const record: HostChildrenRecord = {
+          writer,
+          children: [...recorded.values()],
+        };
+        replaceFile(ownFile, JSON.stringify(record));
       }
     } catch (error) {
       report(`children record: ${(error as Error).message}`);
     }
+  }
+
+  async function askOwnWriter(): Promise<RecordWriter> {
+    if (ownWriter === null) {
+      const own = await processes.report(deps.pid);
+      if (own === null) {
+        throw new Error(`the OS reports no pid ${deps.pid}`);
+      }
+      ownWriter = { pid: deps.pid, startedAt: own.startedAt };
+    }
+    return ownWriter;
   }
 
   async function recordChild(
@@ -64,17 +110,20 @@ export function createHostChildren(deps: HostChildrenDeps): HostChildren {
     pid: number,
   ) {
     try {
-      const reported = await processes.report(pid);
+      const [writer, reported] = await Promise.all([
+        askOwnWriter(),
+        processes.report(pid),
+      ]);
       if (reported !== null && running.has(child)) {
         recorded.set(pid, { pid, ...reported });
-        saveRecord();
+        saveRecord(writer);
       }
     } catch (error) {
       report(`child ${pid} not recorded: ${(error as Error).message}`);
     }
   }
 
-  function readLeftovers(): RecordedChild[] {
+  function readLeftRecord(file: string): HostChildrenRecord | null {
     let text: string;
     try {
       text = readFileSync(file, 'utf8');
@@ -82,23 +131,44 @@ export function createHostChildren(deps: HostChildrenDeps): HostChildren {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
         report(`children record: ${(error as Error).message}`);
       }
-      return [];
+      return null;
     }
     try {
       const parsed: unknown = JSON.parse(text);
-      if (Array.isArray(parsed) && parsed.every(isRecordedChild)) {
+      if (isChildrenRecord(parsed)) {
         return parsed;
       }
     } catch {
       // Reported below, as a record of the wrong shape is.
     }
-    report(`children record unreadable, nothing ended: ${text}`);
-    return [];
+    report(`children record unreadable, nothing ended: ${file}: ${text}`);
+    return null;
+  }
+
+  // A process with the writer's pid and start time is the writer, whatever the channel says.
+  async function isWriterGone(
+    file: string,
+    writer: RecordWriter,
+  ): Promise<boolean> {
+    let now: ProcessReport | null;
+    try {
+      now = await processes.report(writer.pid);
+    } catch (error) {
+      report(`${file} left alone: ${(error as Error).message}`);
+      return false;
+    }
+    if (now?.startedAt === writer.startedAt) {
+      report(`${file} left alone: its host, pid ${writer.pid}, still runs`);
+      return false;
+    }
+    return true;
   }
 
   // Whether `leftover`'s pid is still the process recorded: an exec or a retitle changes a process's command, never its
   // start time. Every signal to a leftover follows a true from this.
-  async function isStillRecorded(leftover: RecordedChild): Promise<boolean> {
+  async function isStillRecorded(
+    leftover: RecordedHostChild,
+  ): Promise<boolean> {
     const { pid, startedAt, command } = leftover;
     let now: ProcessReport | null;
     try {
@@ -119,7 +189,9 @@ export function createHostChildren(deps: HostChildrenDeps): HostChildren {
     return false;
   }
 
-  async function endsWithinGrace(leftover: RecordedChild): Promise<boolean> {
+  async function endsWithinGrace(
+    leftover: RecordedHostChild,
+  ): Promise<boolean> {
     let isGraceOver = false as boolean;
     const grace = timers.set(() => {
       isGraceOver = true;
@@ -136,7 +208,7 @@ export function createHostChildren(deps: HostChildrenDeps): HostChildren {
     return false;
   }
 
-  async function endLeftover(leftover: RecordedChild) {
+  async function endLeftover(leftover: RecordedHostChild) {
     if (!(await isStillRecorded(leftover))) {
       return;
     }
@@ -155,6 +227,19 @@ export function createHostChildren(deps: HostChildrenDeps): HostChildren {
     report(`pid ${leftover.pid} still runs after SIGKILL`);
   }
 
+  async function endWhatRecordLeft(file: string) {
+    const record = readLeftRecord(file);
+    if (record === null || !(await isWriterGone(file, record.writer))) {
+      return;
+    }
+    await Promise.all(record.children.map(endLeftover));
+    try {
+      rmSync(file, { force: true });
+    } catch (error) {
+      report(`children record: ${(error as Error).message}`);
+    }
+  }
+
   return {
     spawn(command, args, options) {
       const child = deps.spawn(command, args, options);
@@ -165,16 +250,22 @@ export function createHostChildren(deps: HostChildrenDeps): HostChildren {
       running.add(child);
       child.once('close', () => {
         running.delete(child);
-        if (recorded.delete(pid)) {
-          saveRecord();
+        if (ownWriter !== null && recorded.delete(pid)) {
+          saveRecord(ownWriter);
         }
       });
       void recordChild(child, pid);
       return child;
     },
     async endLeftovers() {
-      await Promise.all(readLeftovers().map(endLeftover));
-      saveRecord();
+      try {
+        const files = readdirSync(folder)
+          .filter(isHostChildrenFile)
+          .map((name) => path.join(folder, name));
+        await Promise.all(files.map(endWhatRecordLeft));
+      } catch (error) {
+        report(`children records: ${(error as Error).message}`);
+      }
     },
     killAll() {
       for (const child of running) {

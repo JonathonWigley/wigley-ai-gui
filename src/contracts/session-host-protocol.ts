@@ -154,6 +154,7 @@ export type HostMessage =
   | ClosedEvent;
 
 const HOST_RECORD_NAME = /^host-v(\d+)\.json$/;
+const HOST_CHILDREN_NAME = /^host-v\d+\.\d+\.children\.json$/;
 const PIPE_LOG_NAME_CHARACTER = /[a-z0-9._-]/;
 
 // Frozen: never change this name. The host folder's subfolder holding the pipe logs.
@@ -174,9 +175,29 @@ export function previousHostLogFile(protocol: number): string {
   return `host-v${protocol}.previous.log`;
 }
 
-// The file in the host folder where a host records its children, so the next host can end what it leaves.
-export function hostChildrenFile(protocol: number): string {
-  return `host-v${protocol}.children.json`;
+// Frozen: never change this shape. The file in the host folder where host `pid` records its children, for a later host
+// of any protocol to end what it leaves. Each host has its own, so none can overwrite another's.
+export function hostChildrenFile(protocol: number, pid: number): string {
+  return `host-v${protocol}.${pid}.children.json`;
+}
+
+// Frozen: never change this rule. Whether a file in the host folder is a `hostChildrenFile`.
+export function isHostChildrenFile(fileName: string): boolean {
+  return HOST_CHILDREN_NAME.test(fileName);
+}
+
+// One process on a `HostChildrenRecord`. Frozen with it.
+export interface RecordedHostChild {
+  pid: number;
+  // As `OsProcesses.report` gives it, and compared whole, so its format is frozen too.
+  startedAt: string;
+  command: string;
+}
+
+// Frozen: never change this shape. What a `hostChildrenFile` holds.
+export interface HostChildrenRecord {
+  writer: { pid: number; startedAt: string };
+  children: RecordedHostChild[];
 }
 
 // Frozen: never change this shape. The protocol a `hostRecordFile` name holds; null for any other name.

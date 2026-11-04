@@ -490,19 +490,35 @@ describe('host messages with bad fields', () => {
     await spawned(running, connection, 'a');
   });
 
-  it('spawn_NoIdleRule_SendsClosedToThatSubscriber', async () => {
-    const running = await runningHost();
-    const connection = await client(running.channel);
+  it.each([
+    { label: 'no rule at all', request: { id: 'a' } },
+    {
+      label: 'a rule with no value',
+      request: {
+        id: 'a',
+        idleRule: {
+          key: 'type',
+          busyStdoutValues: ['assistant'],
+          busyStdinValues: ['user'],
+        },
+      },
+    },
+  ])(
+    'spawn_NoIdleRule_SendsClosedToThatSubscriber: $label',
+    async ({ request }) => {
+      const running = await runningHost();
+      const connection = await client(running.channel);
 
-    connection.send({ type: 'spawn', request: { id: 'a' } });
-    await vi.waitFor(() =>
-      expect(connection.received.map(({ type }) => type)).toContain('closed'),
-    );
+      connection.send({ type: 'spawn', request });
+      await vi.waitFor(() =>
+        expect(connection.received.map(({ type }) => type)).toContain('closed'),
+      );
 
-    expect(running.spawned).toEqual([]);
-    const list = await replyTo(connection, { type: 'list', requestId: 1 });
-    expect(list).toEqual({ type: 'list', requestId: 1, processes: [] });
-  });
+      expect(running.spawned).toEqual([]);
+      const list = await replyTo(connection, { type: 'list', requestId: 1 });
+      expect(list).toEqual({ type: 'list', requestId: 1, processes: [] });
+    },
+  );
 });
 
 describe('host lifetime', () => {
@@ -829,7 +845,8 @@ describe('host start', () => {
       const live = liveListener(seeded.channel, replyProtocol);
       await live.listening;
 
-      const second = host(seeded);
+      const endLeftovers = vi.fn(() => Promise.resolve());
+      const second = host(seeded, endLeftovers);
       if (replyProtocol === null) {
         await vi.waitFor(() => expect(hostSockets.length).toBeGreaterThan(0));
         second.time.advanceTo(2000);
@@ -837,6 +854,7 @@ describe('host start', () => {
       await second.started;
 
       expect(second.exits).toEqual([0]);
+      expect(endLeftovers).not.toHaveBeenCalled();
       expect(existsSync(path.join(seeded.folder, 'host-v1.json'))).toBe(false);
       expect(readFileSync(liveLog, 'utf8')).toBe('live\n');
       expect(existsSync(path.join(seeded.folder, 'logs', 'old.jsonl'))).toBe(

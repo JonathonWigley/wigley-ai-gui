@@ -102,6 +102,7 @@ function isBusyValue(value: unknown, busyValues: readonly string[]): boolean {
 function requireIdleRule({ id, idleRule }: HostedSpawn) {
   const isWellFormed =
     typeof idleRule?.key === 'string' &&
+    typeof idleRule.value === 'string' &&
     Array.isArray(idleRule.busyStdoutValues) &&
     Array.isArray(idleRule.busyStdinValues);
   if (!isWellFormed) {

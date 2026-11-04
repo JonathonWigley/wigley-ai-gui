@@ -14,6 +14,11 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Timers } from '../contracts/ambient';
+import {
+  type HostChildrenRecord,
+  hostChildrenFile,
+  type RecordedHostChild,
+} from '../contracts/session-host-protocol';
 import { createHostChildren } from './host-children';
 import {
   createOsProcesses,
@@ -23,6 +28,18 @@ import {
 import { type FakeChild, fakeChild } from './session-host-test-doubles';
 
 const REPORT: ProcessReport = { startedAt: 'then', command: '/bin/agent' };
+const OWN_PID = 4242;
+const OWN_FILE = hostChildrenFile(1, OWN_PID);
+const LAST_HOST: HostChildrenRecord['writer'] = {
+  pid: 99,
+  startedAt: 'earlier',
+};
+const LAST_HOST_FILE = hostChildrenFile(1, LAST_HOST.pid);
+// The real `ps` gives this test's own process another start time, so its pid reads as reused.
+const REUSED_WRITER: HostChildrenRecord['writer'] = {
+  pid: process.pid,
+  startedAt: 'long ago',
+};
 const SECONDS_PER_REAL_SECOND = 30;
 const ENDS_ON_SIGTERM = 'echo ready; sleep 3';
 const IGNORES_SIGTERM = 'trap "" TERM; echo ready; sleep 3';
@@ -46,14 +63,19 @@ afterEach(() => {
   }
 });
 
-function setUp(processes: OsProcesses) {
+function tempFolder() {
   const folder = mkdtempSync(path.join(tmpdir(), 'host-children-'));
   folders.push(folder);
-  const file = path.join(folder, 'children.json');
+  return folder;
+}
+
+function setUp(processes: OsProcesses) {
+  const folder = tempFolder();
   const reports: string[] = [];
   const spawned: FakeChild[] = [];
   const children = createHostChildren({
-    file,
+    folder,
+    pid: OWN_PID,
     spawn: () => {
       const fake = fakeChild();
       spawned.push(fake);
@@ -63,7 +85,25 @@ function setUp(processes: OsProcesses) {
     timers: fastTimers,
     report: (message) => reports.push(message),
   });
-  return { children, file, reports, spawned };
+  return {
+    children,
+    folder,
+    ownFile: path.join(folder, OWN_FILE),
+    reports,
+    spawned,
+  };
+}
+
+function writeRecord(
+  folder: string,
+  name: string,
+  writer: HostChildrenRecord['writer'],
+  children: RecordedHostChild[],
+) {
+  const file = path.join(folder, name);
+  const record: HostChildrenRecord = { writer, children };
+  writeFileSync(file, JSON.stringify(record));
+  return file;
 }
 
 // Answers `answer` for every pid, and fails a test that signals anything.
@@ -93,6 +133,24 @@ function realProcesses() {
     },
   };
   return { processes, signals, real };
+}
+
+// A machine holding `running`, by pid, that takes each signal down in `signals` and then runs `afterSignal`.
+function fakeMachine(
+  running: Map<number, ProcessReport>,
+  afterSignal: (pid: number, signal: string) => void = (pid) => {
+    running.delete(pid);
+  },
+) {
+  const signals: string[] = [];
+  const processes: OsProcesses = {
+    report: (pid) => Promise.resolve(running.get(pid) ?? null),
+    signal(pid, signal) {
+      signals.push(`${pid} ${signal}`);
+      afterSignal(pid, signal);
+    },
+  };
+  return { processes, signals };
 }
 
 async function runningShell(script: string) {
@@ -126,16 +184,13 @@ describe.skipIf(process.platform === 'win32')('a real leftover', () => {
     'endLeftovers_SameStartTime_EndsIt: $label',
     async ({ script, recordedCommand, signals: expected }) => {
       const { processes, signals, real } = realProcesses();
-      const { children, file } = setUp(processes);
+      const { children, folder } = setUp(processes);
       const { child, pid } = await runningShell(script);
       const exited = once(child, 'exit');
       const report = (await real.report(pid)) as ProcessReport;
-      writeFileSync(
-        file,
-        JSON.stringify([
-          { pid, ...report, command: recordedCommand ?? report.command },
-        ]),
-      );
+      const file = writeRecord(folder, LAST_HOST_FILE, REUSED_WRITER, [
+        { pid, ...report, command: recordedCommand ?? report.command },
+      ]);
 
       await children.endLeftovers();
 
@@ -148,13 +203,12 @@ describe.skipIf(process.platform === 'win32')('a real leftover', () => {
 
   it('endLeftovers_AnotherStartTime_LeavesItAloneAndReports', async () => {
     const { processes, signals, real } = realProcesses();
-    const { children, file, reports } = setUp(processes);
+    const { children, folder, reports } = setUp(processes);
     const { child, pid } = await runningShell(ENDS_ON_SIGTERM);
     const report = (await real.report(pid)) as ProcessReport;
-    writeFileSync(
-      file,
-      JSON.stringify([{ pid, startedAt: 'long ago', command: report.command }]),
-    );
+    const file = writeRecord(folder, LAST_HOST_FILE, REUSED_WRITER, [
+      { pid, startedAt: 'long ago', command: report.command },
+    ]);
 
     await children.endLeftovers();
 
@@ -168,13 +222,15 @@ describe.skipIf(process.platform === 'win32')('a real leftover', () => {
 
   it('endLeftovers_PidGone_SignalsNothing', async () => {
     const { processes, signals, real } = realProcesses();
-    const { children, file, reports } = setUp(processes);
+    const { children, folder, reports } = setUp(processes);
     const { child, pid } = await runningShell(ENDS_ON_SIGTERM);
-    const report = await real.report(pid);
+    const report = (await real.report(pid)) as ProcessReport;
     const exited = once(child, 'exit');
     child.kill('SIGKILL');
     await exited;
-    writeFileSync(file, JSON.stringify([{ pid, ...report }]));
+    const file = writeRecord(folder, LAST_HOST_FILE, REUSED_WRITER, [
+      { pid, ...report },
+    ]);
 
     await children.endLeftovers();
 
@@ -185,11 +241,11 @@ describe.skipIf(process.platform === 'win32')('a real leftover', () => {
 
   it('killAll_RunningChildren_SendsEachSIGTERMAndKeepsTheRecord', async () => {
     const { processes, signals } = realProcesses();
-    const folder = mkdtempSync(path.join(tmpdir(), 'host-children-'));
-    folders.push(folder);
-    const file = path.join(folder, 'children.json');
+    const folder = tempFolder();
+    const file = path.join(folder, hostChildrenFile(1, process.pid));
     const children = createHostChildren({
-      file,
+      folder,
+      pid: process.pid,
       spawn: (command, args) => {
         const child = spawnChild(command, args);
         madeChildren.push(child);
@@ -209,9 +265,10 @@ describe.skipIf(process.platform === 'win32')('a real leftover', () => {
     });
     const exits = [once(first, 'exit'), once(second, 'exit')];
     await vi.waitFor(() => {
-      const pids = (
-        JSON.parse(readFileSync(file, 'utf8')) as { pid: number }[]
-      ).map(({ pid }) => pid);
+      const record = JSON.parse(
+        readFileSync(file, 'utf8'),
+      ) as HostChildrenRecord;
+      const pids = record.children.map(({ pid }) => pid);
       expect(new Set(pids)).toEqual(new Set([first.pid, second.pid]));
     });
 
@@ -230,19 +287,45 @@ describe.skipIf(process.platform === 'win32')('a real leftover', () => {
 
 describe('the children record', () => {
   it('spawn_ToClose_RecordHoldsTheChildOnlyWhileItRuns', async () => {
-    const { children, file, spawned } = setUp(
-      fakeProcesses(() => Promise.resolve(REPORT)),
+    const own = { startedAt: 'own start', command: '/bin/host' };
+    const { processes } = fakeMachine(
+      new Map([
+        [OWN_PID, own],
+        [1, REPORT],
+      ]),
     );
+    const { children, ownFile, spawned } = setUp(processes);
 
     children.spawn('/bin/agent', [], { cwd: '/work', env: {} });
-    await vi.waitFor(() => expect(existsSync(file)).toBe(true));
-    expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual([
-      { pid: 1, ...REPORT },
-    ]);
+    await vi.waitFor(() => expect(existsSync(ownFile)).toBe(true));
+    expect(JSON.parse(readFileSync(ownFile, 'utf8'))).toEqual({
+      writer: { pid: OWN_PID, startedAt: own.startedAt },
+      children: [{ pid: 1, ...REPORT }],
+    });
 
     spawned[0].close();
 
-    expect(existsSync(file)).toBe(false);
+    expect(existsSync(ownFile)).toBe(false);
+  });
+
+  it('spawn_ToClose_LeavesAnotherHostsRecord', async () => {
+    const { processes } = fakeMachine(
+      new Map([
+        [OWN_PID, REPORT],
+        [1, REPORT],
+      ]),
+    );
+    const { children, folder, ownFile, spawned } = setUp(processes);
+    const other = writeRecord(folder, LAST_HOST_FILE, LAST_HOST, [
+      { pid: 7, ...REPORT },
+    ]);
+    const otherText = readFileSync(other, 'utf8');
+
+    children.spawn('/bin/agent', [], { cwd: '/work', env: {} });
+    await vi.waitFor(() => expect(existsSync(ownFile)).toBe(true));
+    spawned[0].close();
+
+    expect(readFileSync(other, 'utf8')).toBe(otherText);
   });
 
   it('spawn_ClosesBeforeTheOSReports_RecordsNothing', async () => {
@@ -250,7 +333,7 @@ describe('the children record', () => {
     const reported = new Promise<ProcessReport>((resolve) => {
       answer = resolve;
     });
-    const { children, file, spawned } = setUp(fakeProcesses(() => reported));
+    const { children, ownFile, spawned } = setUp(fakeProcesses(() => reported));
 
     children.spawn('/bin/agent', [], { cwd: '/work', env: {} });
     spawned[0].close();
@@ -258,16 +341,15 @@ describe('the children record', () => {
     await reported;
     await new Promise((resolve) => setImmediate(resolve));
 
-    expect(existsSync(file)).toBe(false);
+    expect(existsSync(ownFile)).toBe(false);
   });
 
   it('spawn_NeverRan_RecordsNothing', () => {
     const failing = fakeChild(false);
     const report = vi.fn(() => Promise.resolve(REPORT));
-    const folder = mkdtempSync(path.join(tmpdir(), 'host-children-'));
-    folders.push(folder);
     const children = createHostChildren({
-      file: path.join(folder, 'children.json'),
+      folder: tempFolder(),
+      pid: OWN_PID,
       spawn: () => failing.child,
       processes: fakeProcesses(report),
       timers: fastTimers,
@@ -280,37 +362,55 @@ describe('the children record', () => {
   });
 
   it.each([
-    { label: 'no file', text: null },
-    { label: 'an empty list', text: '[]' },
-  ])('endLeftovers_EmptyRecord_EndsNothing: $label', async ({ text }) => {
-    const report = vi.fn(() => Promise.resolve(REPORT));
-    const { children, file, reports } = setUp(fakeProcesses(report));
-    if (text !== null) {
-      writeFileSync(file, text);
-    }
+    { label: 'no record', leftChildren: null },
+    { label: 'no children', leftChildren: [] },
+  ])(
+    'endLeftovers_EmptyRecord_EndsNothing: $label',
+    async ({ leftChildren }) => {
+      const { processes, signals } = fakeMachine(new Map());
+      const { children, folder, reports } = setUp(processes);
+      if (leftChildren !== null) {
+        writeRecord(folder, LAST_HOST_FILE, LAST_HOST, leftChildren);
+      }
 
-    await children.endLeftovers();
+      await children.endLeftovers();
 
-    expect(report).not.toHaveBeenCalled();
-    expect(reports).toEqual([]);
-    expect(existsSync(file)).toBe(false);
-  });
+      expect(signals).toEqual([]);
+      expect(reports).toEqual([]);
+      expect(existsSync(path.join(folder, LAST_HOST_FILE))).toBe(false);
+    },
+  );
 
   it.each([
     { label: 'not JSON', text: '[{"pid":1' },
-    { label: 'not a list', text: '{}' },
+    { label: 'no writer or children', text: '{}' },
+    { label: 'a bare list', text: '[{"pid":7,"startedAt":"a","command":"b"}]' },
     {
-      label: 'a negative pid',
-      text: '[{"pid":-1,"startedAt":"a","command":"b"}]',
+      label: 'a writer with no start time',
+      text: '{"writer":{"pid":9},"children":[]}',
     },
-    { label: 'pid zero', text: '[{"pid":0,"startedAt":"a","command":"b"}]' },
-    { label: 'no identity', text: '[{"pid":7}]' },
-    { label: 'a null entry', text: '[null]' },
+    {
+      label: 'a writer with pid zero',
+      text: '{"writer":{"pid":0,"startedAt":"a"},"children":[]}',
+    },
+    ...[
+      {
+        label: 'a negative pid',
+        child: '{"pid":-1,"startedAt":"a","command":"b"}',
+      },
+      { label: 'pid zero', child: '{"pid":0,"startedAt":"a","command":"b"}' },
+      { label: 'no identity', child: '{"pid":7}' },
+      { label: 'a null entry', child: 'null' },
+    ].map(({ label, child }) => ({
+      label,
+      text: `{"writer":{"pid":9,"startedAt":"a"},"children":[${child}]}`,
+    })),
   ])(
     'endLeftovers_UnreadableRecord_EndsNothingAndReports: $label',
     async ({ text }) => {
       const report = vi.fn(() => Promise.resolve(REPORT));
-      const { children, file, reports } = setUp(fakeProcesses(report));
+      const { children, folder, reports } = setUp(fakeProcesses(report));
+      const file = path.join(folder, LAST_HOST_FILE);
       writeFileSync(file, text);
 
       await children.endLeftovers();
@@ -318,18 +418,156 @@ describe('the children record', () => {
       expect(report).not.toHaveBeenCalled();
       expect(reports).toHaveLength(1);
       expect(reports[0]).toContain('children record unreadable');
-      expect(existsSync(file)).toBe(false);
+      expect(readFileSync(file, 'utf8')).toBe(text);
     },
   );
 
-  it('endLeftovers_OSCannotBeAsked_LeavesItAloneAndReports', async () => {
-    const { children, file, reports } = setUp(
+  const LEFT: RecordedHostChild[] = [
+    { pid: 7, startedAt: 'seven', command: '/bin/agent' },
+    { pid: 8, startedAt: 'eight', command: '/bin/agent' },
+  ];
+  const leftRunning = () =>
+    new Map<number, ProcessReport>(
+      LEFT.map(({ pid, startedAt, command }) => [pid, { startedAt, command }]),
+    );
+
+  it.each([
+    {
+      label: 'its pid is gone',
+      writerNow: null,
+      leavesIt: false,
+    },
+    {
+      label: 'its pid is another process now',
+      writerNow: { startedAt: 'later', command: '/bin/host' },
+      leavesIt: false,
+    },
+    {
+      label: 'it still runs',
+      writerNow: { startedAt: LAST_HOST.startedAt, command: '/bin/host' },
+      leavesIt: true,
+    },
+  ])(
+    'endLeftovers_RecordWriter_ReapsOnlyOnceItIsGone: $label',
+    async ({ writerNow, leavesIt }) => {
+      const running = leftRunning();
+      if (writerNow !== null) {
+        running.set(LAST_HOST.pid, writerNow);
+      }
+      const { processes, signals } = fakeMachine(running);
+      const { children, folder, reports } = setUp(processes);
+      const file = writeRecord(folder, LAST_HOST_FILE, LAST_HOST, LEFT);
+
+      await children.endLeftovers();
+
+      expect(new Set(signals)).toEqual(
+        new Set(leavesIt ? [] : ['7 SIGTERM', '8 SIGTERM']),
+      );
+      expect(existsSync(file)).toBe(leavesIt);
+      if (leavesIt) {
+        expect(reports).toEqual([
+          expect.stringContaining(`pid ${LAST_HOST.pid}, still runs`),
+        ]);
+      }
+    },
+  );
+
+  it('endLeftovers_OSCannotBeAsked_LeavesTheRecordAndReports', async () => {
+    const { children, folder, reports } = setUp(
       fakeProcesses(() => Promise.reject(new Error('no ps'))),
     );
-    writeFileSync(file, JSON.stringify([{ pid: 7, ...REPORT }]));
+    const file = writeRecord(folder, LAST_HOST_FILE, LAST_HOST, LEFT);
+
+    await children.endLeftovers();
+
+    expect(reports).toEqual([expect.stringContaining('left alone: no ps')]);
+    expect(existsSync(file)).toBe(true);
+  });
+
+  it('endLeftovers_OSFailsOnAChild_LeavesThatChildAndReports', async () => {
+    const processes: OsProcesses = {
+      report: (pid) =>
+        pid === 7 ? Promise.reject(new Error('no ps')) : Promise.resolve(null),
+      signal(pid) {
+        throw new Error(`a test signalled pid ${pid}`);
+      },
+    };
+    const { children, folder, reports } = setUp(processes);
+    writeRecord(folder, LAST_HOST_FILE, LAST_HOST, [LEFT[0]]);
 
     await children.endLeftovers();
 
     expect(reports).toEqual(['pid 7 left alone: no ps']);
   });
+
+  it('endLeftovers_EveryProtocolsRecord_EachByItsOwnWriter', async () => {
+    const draining = { pid: 98, startedAt: 'older' };
+    const running = leftRunning();
+    running.set(draining.pid, { startedAt: 'older', command: '/bin/host' });
+    running.set(9, { startedAt: 'nine', command: '/bin/agent' });
+    const { processes, signals } = fakeMachine(running);
+    const { children, folder } = setUp(processes);
+    const oldGone = writeRecord(folder, hostChildrenFile(0, 99), LAST_HOST, [
+      LEFT[0],
+    ]);
+    const oldDraining = writeRecord(folder, hostChildrenFile(0, 98), draining, [
+      LEFT[1],
+    ]);
+    const newerGone = writeRecord(
+      folder,
+      hostChildrenFile(2, 97),
+      { pid: 97, startedAt: 'newer' },
+      [{ pid: 9, startedAt: 'nine', command: '/bin/agent' }],
+    );
+
+    await children.endLeftovers();
+
+    expect(new Set(signals)).toEqual(new Set(['7 SIGTERM', '9 SIGTERM']));
+    expect(existsSync(oldGone)).toBe(false);
+    expect(existsSync(newerGone)).toBe(false);
+    expect(existsSync(oldDraining)).toBe(true);
+  });
+
+  it.each([
+    {
+      label: 'its start time changes after SIGTERM',
+      afterSignal: (running: Map<number, ProcessReport>) => {
+        running.set(7, { startedAt: 'a new process', command: '/bin/other' });
+      },
+      signalled: ['7 SIGTERM'],
+      reported: 'pid 7 left alone',
+    },
+    {
+      label: 'it outlives SIGKILL',
+      afterSignal: () => {},
+      signalled: ['7 SIGTERM', '7 SIGKILL'],
+      reported: 'pid 7 still runs after SIGKILL',
+    },
+    {
+      label: 'the signal throws',
+      afterSignal: () => {
+        throw new Error('EPERM');
+      },
+      signalled: ['7 SIGTERM'],
+      reported: 'pid 7 SIGTERM: EPERM',
+    },
+  ])(
+    'endLeftovers_AfterASignal_StopsOrReports: $label',
+    async ({ afterSignal, signalled, reported }) => {
+      const running = new Map<number, ProcessReport>([
+        [7, { startedAt: LEFT[0].startedAt, command: LEFT[0].command }],
+      ]);
+      const { processes, signals } = fakeMachine(running, () =>
+        afterSignal(running),
+      );
+      const { children, folder, reports } = setUp(processes);
+      const file = writeRecord(folder, LAST_HOST_FILE, LAST_HOST, [LEFT[0]]);
+
+      await children.endLeftovers();
+
+      expect(signals).toEqual(signalled);
+      expect(reports).toContainEqual(expect.stringContaining(reported));
+      expect(existsSync(file)).toBe(false);
+    },
+  );
 });

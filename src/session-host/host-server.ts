@@ -55,7 +55,8 @@ const NON_CLIENT_MESSAGE_TYPES: ReadonlySet<ClientMessage['type']> = new Set([
   'drain',
 ]);
 // Answered while a new host ends what the last one left. The rest wait, in order: each may act on a process whose
-// `spawn` is waiting, and a `drain` or `stopAll` must see it. The table is empty, so these answer truly.
+// `spawn` is waiting, and a `drain` or `stopAll` must see it. `list` answers empty even with a `spawn` waiting, so a
+// relaunch inside this hold can rest a row beside a process about to start.
 const SERVED_WHILE_ENDING_LEFTOVERS: ReadonlySet<ClientMessage['type']> =
   new Set(['hello', 'list', 'subscribe', 'setKeepIdle']);
 

@@ -1,10 +1,5 @@
 import { spawn } from 'node:child_process';
-import path from 'node:path';
 import type { Clock, Timers } from '../contracts/ambient';
-import {
-  hostChildrenFile,
-  SESSION_HOST_PROTOCOL,
-} from '../contracts/session-host-protocol';
 import { createDiagnosticLog } from './diagnostic-log';
 import { createHostChildren } from './host-children';
 import { startSessionHost } from './host-server';
@@ -21,7 +16,8 @@ const timers: Timers = {
 };
 const diagnostics = createDiagnosticLog(folder, clock);
 const children = createHostChildren({
-  file: path.join(folder, hostChildrenFile(SESSION_HOST_PROTOCOL)),
+  folder,
+  pid: process.pid,
   spawn: (command, args, options) =>
     spawn(command, args, { ...options, windowsHide: true }),
   processes: createOsProcesses(process.platform),
