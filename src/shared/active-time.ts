@@ -1,6 +1,5 @@
 /**
- * Time accumulated across spans that open and close, as a plain record that holds no clock: every
- * function takes the caller's `now`, in epoch ms.
+ * The functions over an `ActiveTime`. Every function takes the caller's `now`, in epoch ms.
  *
  * - `startActiveTime` opens a span. On a running time it returns the same object, so the first
  *   start wins.
@@ -9,12 +8,8 @@
  * - `activeMsAt` reads the total at `now`, the open span included.
  * - A `now` before `since` (a clock step back) counts the open span as 0, never as negative.
  */
-export interface ActiveTime {
-  /** The sum of the closed spans. */
-  totalMs: number;
-  /** The start of the open span; null while paused. */
-  since: number | null;
-}
+
+import type { ActiveTime } from '../contracts/active-time';
 
 export const NO_ACTIVE_TIME: ActiveTime = { totalMs: 0, since: null };
 

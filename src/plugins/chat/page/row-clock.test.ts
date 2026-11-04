@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ActiveTime } from '../../../contracts/active-time';
 import type { Timers } from '../../../contracts/ambient';
-import type { ActiveTime } from '../../../shared/active-time';
 import {
   recordingAnchors,
   withUser,

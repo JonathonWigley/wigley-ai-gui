@@ -1,3 +1,4 @@
+import type { ActiveTime } from '../../../contracts/active-time';
 import type { Clock, Timers } from '../../../contracts/ambient';
 import type { ChatEntry, SessionControl } from '../../../contracts/agent';
 import type { CommandId } from '../../../contracts/commands';
@@ -8,7 +9,6 @@ import type { ChatEntryKind } from '../../../contracts/agent';
 import type { Log } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import type { PageChannel, ToastTone } from '../../../contracts/plugin';
-import type { ActiveTime } from '../../../shared/active-time';
 import { errorText } from '../../../shared/error-text';
 import type { PartStore } from '../../../shared/page/contributed-parts';
 import { blurFocusedElement, element } from '../../../shared/page/dom';

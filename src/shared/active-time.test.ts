@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import type { ActiveTime } from '../contracts/active-time';
 import {
-  type ActiveTime,
   activeMsAt,
   NO_ACTIVE_TIME,
   startActiveTime,
@@ -93,7 +93,14 @@ describe('ActiveTime', () => {
     },
   ])(
     '$name',
-    ({ from, steps, readAt, expectedMs, expectedTime, lastStepKeepsObject }) => {
+    ({
+      from,
+      steps,
+      readAt,
+      expectedMs,
+      expectedTime,
+      lastStepKeepsObject,
+    }) => {
       let time = from;
       let beforeLastStep = from;
       for (const [step, now] of steps) {

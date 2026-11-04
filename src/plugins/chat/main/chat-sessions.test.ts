@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { ActiveTime } from '../../../contracts/active-time';
 import {
   type AgentEvent,
   type AgentProcessEvents,
@@ -9,7 +10,6 @@ import {
   type UserMessage,
 } from '../../../contracts/agent';
 import type { HostedProcessInfo } from '../../../contracts/session-host';
-import type { ActiveTime } from '../../../shared/active-time';
 import {
   createFakeAgentHarness,
   FAKE_MICROTASK_TIMERS,

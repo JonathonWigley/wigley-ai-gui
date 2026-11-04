@@ -1,3 +1,4 @@
+import type { ActiveTime } from '../../contracts/active-time';
 import type {
   AccountStatus,
   AgentEvent,
@@ -9,7 +10,6 @@ import type {
 } from '../../contracts/agent';
 import type { Disposable } from '../../contracts/disposable';
 import type { ChannelShape, EventShape } from '../../contracts/plugin';
-import type { ActiveTime } from '../../shared/active-time';
 
 // The `id` of the agent harness chat runs its sessions on: chat's profiles are
 // that harness's config folders.

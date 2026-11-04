@@ -1,6 +1,7 @@
+import type { ActiveTime } from '../../../contracts/active-time';
 import type { Clock, Timers } from '../../../contracts/ambient';
 import type { Log } from '../../../contracts/log';
-import { type ActiveTime, activeMsAt } from '../../../shared/active-time';
+import { activeMsAt } from '../../../shared/active-time';
 import { callEach } from '../../../shared/call-each';
 import type { DrawnPart } from '../../../shared/page/layout-host/draw-part';
 import type { SessionPart } from '../../sessions/contract';
