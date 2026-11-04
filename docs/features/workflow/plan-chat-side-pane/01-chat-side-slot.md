@@ -1,6 +1,6 @@
 # 01 — Chat side slot
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -35,3 +35,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 8a78aef6 · proof: diff read: every Produces present; typecheck: only the checking literal task 03 owns · concerns: width rule relies on layout.css loading after chat.css, and containment, composer placement and hidden holder are unproved until a live run; a rebuild drops a surviving part local state

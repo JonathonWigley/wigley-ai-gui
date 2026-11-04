@@ -1,6 +1,6 @@
 # 02 — Stage status and labels
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -45,3 +45,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 72ec4d6b · proof: diff read: every Produces present; typecheck: only the checking literal in workflow-view.test.ts, which task 03 owns · concerns: workflow-view.test.ts expects the old labels until task 03; runsTasks has no test until task 03 reads it

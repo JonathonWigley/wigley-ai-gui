@@ -130,8 +130,8 @@ export type MarkState = StageStatus | 'pending';
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Chat side slot](01-chat-side-slot.md)
-- [ ] [Stage status and labels](02-stage-status-and-labels.md)
+- [x] [Chat side slot](01-chat-side-slot.md)
+- [x] [Stage status and labels](02-stage-status-and-labels.md)
 
 ### Wave 2
 - [ ] [Workflow side pane part](03-workflow-side-pane-part.md) — after 02
@@ -147,10 +147,18 @@ export type MarkState = StageStatus | 'pending';
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 68948b9f7b94a2184562454202edd2584ea190ba
 
 ### Groups
+- 02 · 72ec4d6b · diff read: every Produces present; typecheck: only the checking literal in workflow-view.test.ts, which task 03 owns · concerns: workflow-view.test.ts expects the old labels until task 03; runsTasks has no test until task 03 reads it
+- 01 · 8a78aef6 · diff read: every Produces present; typecheck: only the checking literal task 03 owns · concerns: width rule relies on layout.css loading after chat.css, and containment, composer placement and hidden holder are unproved until a live run; a rebuild drops a surviving part local state
 ### Contract changes
+- ChatSidePart: extends ContributedPart → standalone id and build, the same fields · why: scripts/check-layers.mts lets chat contract.ts import only src/contracts · consumers: 03, 04 (still assignable to ContributedPart) · group 01
 ### Rulings
+- Task 05 checks only the lines this plan owns; the session hub lines from 68948b9f (hub sections, title and order on a side part, Space v s, agent-skills) stay as written, because they are docs ahead for a later plan — if wrong, a hub plan must still widen addSidePart · lead
+- The run is in worktree chat-side-pane on the user request, with node_modules symlinked as row-clock does; this project has no editor, so the test gate and self-test run in the worktree rather than waiting for the main tree — if wrong, re-run them after the merge · lead
+- docs/keymap.md failed oxfmt --check at the review base, before any of this work; task 05 formats it as a plain correctness fix, so task 04 reads that one lint failure as known — if wrong, one formatting commit · lead
+- statusText builds on detailLine, and each stage holds file-level label and status constants — the shared join and one status reference — a mechanical rewrite if wrong · group 02 · group 02
+- position: relative moved from .chat-tab to .chat-main, the composer being its only absolute child — that element would position against a further ancestor if wrong · group 01 · group 01
 ### Review rounds
 ### Test gate
