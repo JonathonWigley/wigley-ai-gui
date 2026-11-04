@@ -17,7 +17,7 @@ export interface SkillRowInput {
   isMain: boolean;
 }
 
-// The session's skills, in start order.
+// The session's skills, one entry per skill and agent, in start order.
 export interface SkillListInput {
   skills: readonly SkillRowInput[];
 }

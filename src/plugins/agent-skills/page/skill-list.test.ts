@@ -113,6 +113,24 @@ describe('skill list', () => {
     ]);
   });
 
+  it('build_SkillStartedBySeveralAgents_DrawsOneRowWithCountedOwnerTags', () => {
+    const { parent, summaries, build } = setUp([
+      MAIN_FOO,
+      { skill: 'foo', agentId: 'toolu_a', ownerName: 'reviewer' },
+      { skill: 'foo', agentId: 'toolu_b', ownerName: 'reviewer' },
+      REVIEWER_BAZ,
+    ]);
+
+    build();
+
+    const rows = findAll(parent, 'agent-skills-row');
+    const tagTexts = (row: FakeElement) =>
+      findAll(row, 'ui-tag').map((tag) => tag.textContent);
+    expect(namesIn(parent)).toEqual(['foo', 'baz']);
+    expect(rows.map(tagTexts)).toEqual([['main', 'reviewer ×2'], ['reviewer']]);
+    expect(summaries.at(-1)).toBe('2');
+  });
+
   it('rosterChanged_SkillAddedThenListEmptied_RedrawsAndLogsEachText', () => {
     const { parent, summaries, logged, build, changeSkills } = setUp([
       MAIN_FOO,
