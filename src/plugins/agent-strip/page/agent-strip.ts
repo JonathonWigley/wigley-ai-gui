@@ -132,7 +132,8 @@ const TOOL_STATUS: Record<RosterTool['outcome'], BoxStatus> = {
 // <name>: <count> (<running> running)`, every box running, when that text
 // differs from the last one logged for the session, which starts as the empty
 // strip's. Each selection first logs the head of the text the selected box
-// shows. Drawing an open box again keeps its tool list's scroll.
+// shows. Drawing an open box again keeps its tool list's scroll while the strip
+// shows; a draw in a hidden tab, or a rebuilt composer, starts the list at the top.
 export function createAgentStrip(deps: AgentStripDeps): AgentStrip {
   const { clock, timers, agents } = deps;
   const layoutParts = createLayoutParts<Layout, CompleteLayout>({

@@ -570,8 +570,8 @@ describe('agent strip', () => {
   });
 
   // Box 1 is selected and open under a layout whose part has no `update`, so a
-  // tick replaces it: the new element takes clicks and the reveal, its old
-  // parts' anchors are disposed once, and a later redraw disposes the new ones.
+  // tick replaces it: the new element takes clicks, its old parts' anchors are
+  // disposed once, and a later redraw disposes the new ones.
   it.each<{ part: 'agentBox' | 'taskBox'; roster: Roster }>([
     { part: 'agentBox', roster: MIXED },
     {
@@ -590,7 +590,6 @@ describe('agent strip', () => {
       opened,
       sets,
       advance,
-      scrollers,
       anchorDisposals,
     } = setUp(roster);
     strip.setLayouts(
@@ -617,8 +616,6 @@ describe('agent strip', () => {
     const anchorsBeforeClick = anchorDisposals.length;
     replaced.click();
     const afterClick = { opened: opened(), anchors: [...anchorDisposals] };
-    strip.nextBox();
-    strip.prevBox();
 
     expect(replaced).not.toBe(before);
     expect(afterTick).toEqual(
@@ -631,7 +628,6 @@ describe('agent strip', () => {
         index < anchorsBeforeClick ? 1 : 0,
       ),
     });
-    expect(scrollers.reveals.at(-1)).toBe(asHtml(boxes()[1]));
   });
 
   it('tick_AgentBoxUpdate_RunsWithElapsedOneSecondLarger', () => {

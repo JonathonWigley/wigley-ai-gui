@@ -65,6 +65,15 @@ const GROUPS: SelfTestGroup[] = [
         ],
         why: "The main agent's task reads Shell.",
       },
+      {
+        keys: ['l'],
+        expect: selectedLine(4),
+        alsoExpect: [
+          /^\[agent-strip\] box 4 of 4 in agent-strip-selftest shows: map-decoderShell(\d+m )?\d+s/,
+        ],
+        why: "The subagent's task names that subagent as its owner.",
+      },
+      { keys: ['h'], expect: selectedLine(3) },
       { keys: ['h'], expect: selectedLine(2) },
       { keys: ['h'], expect: selectedLine(1) },
       {
