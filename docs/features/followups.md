@@ -657,3 +657,36 @@ because the earlier items rewrite many of these tests anyway.
   `src/plugins/workflow/layouts/default/layout.test.ts:117`, `src/plugins/workflow/main/flow-store.test.ts:87` and
   `src/main/drive/drive-commands.test.ts:131` and `:152`. Fix as the note says: each row carries its whole name, and
   the title is `'$name'`. Source session: Claude Code 76f5a6f5-89a8-4d05-a525-af23402d29ad in wigley-ai-gui.
+- **Hosted process reads busy with no way out** — *needs a feature plan*: a process that reads busy leaves only on a
+  `result`. Reached by a background subagent's `assistant` line after `result`, then an interrupt that prints no
+  `result`, then a quit: the keep window never arms, a drain never finishes, and process and host run on. A crossing
+  `user` line also reads idle at the earlier `result` until the first `stream_event`, which matters only under a drain
+  or a window of 0. To decide: bound the busy state while no app is connected, weighed against long silent tools, after
+  measuring what Claude prints after an interrupt. Mechanism: turn state read from pipe lines
+  (`src/session-host/process-table.ts`, `CLAUDE_IDLE_RULE`), stacked on twice (`73bdb0c8` ignored lists, `540fb434` busy
+  lists, which the user chose as the step back). Source session: Claude Code 4c0ab18e-9221-4838-ba7b-ecfa6e43c345 in
+  wigley-ai-gui.
+- **One rule for returning a dropped message once** — *needs a feature plan*: `clear` silently loses a message a replay
+  left held, since the row has moved to a new process when the harness reports it at close (`chat-sessions.ts` `clear`,
+  `claude-code-harness.ts` close). A resume that attaches has no `returnedDrops`, so its replay returns placed messages
+  again, and `takeOverSkipped` discards a skipped record's list. A message whose process ended while the app was away is
+  still lost, since its attach is null. Mechanism: a per-process saved dedupe list, patched in `675e5b1c` and
+  `b66b3f02`; these want one rule, not a third patch. Source session: Claude Code 4c0ab18e-9221-4838-ba7b-ecfa6e43c345
+  in wigley-ai-gui.
+- **Drive quit should wait on the host's actual end** — *agent-ready*: the refusal of a plain `quit` on a kept run
+  checks once, before `stop`. A plain `quit` during a kept quit's hold, or one ended by SIGTERM, still deletes a run's
+  folders under a live host (`scripts/drive.mts`, `removeQuitEntries`). `removeIdleRuns` can also delete a kept run's
+  folder while its host runs, and `kept` means only that a home and `start.json` exist, so it covers a crashed run too.
+  A bounded wait for the host to go, then a refusal, is the likely shape. Source session: Claude Code
+  4c0ab18e-9221-4838-ba7b-ecfa6e43c345 in wigley-ai-gui.
+- **Codex tool timeout cannot fit a wait that restarts** — *needs a feature plan*: a re-sent call gets a fresh deadline
+  from the new app, so a round open before a drop costs its time plus up to 75 s plus 240 s, past `tool_timeout_sec`
+  330. Stated as a limit in the forms README. To decide: carry the time left through the relay, or accept it, since
+  `collect_last_round` recovers the round. Source session: Claude Code 4c0ab18e-9221-4838-ba7b-ecfa6e43c345 in
+  wigley-ai-gui.
+- **Two hosts on one channel** — *agent-ready*: the check-then-listen at
+  `src/shared/local-channel/local-channel.ts:91-102` lets two hosts listen, and a socket file gone lets a second start
+  beside a live one. Reaping is safe since `30af5c3e`, but the older host's `shutDown` can remove the newer one's socket
+  and record, and the newer one renames the older's log and sweeps its pipe logs. A lock around listening and acting
+  only on a record still its own are the likely shape. Stated as a limit in `docs/features/session-host/design.md`.
+  Source session: Claude Code 4c0ab18e-9221-4838-ba7b-ecfa6e43c345 in wigley-ai-gui.
