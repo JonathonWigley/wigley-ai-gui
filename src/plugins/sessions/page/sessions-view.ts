@@ -106,15 +106,17 @@ export interface SessionPanes {
 // click or `stepPreview` moves without activating anything; `false` draws the
 // real rows again. `setActivity` sets a source's activity for a session, as
 // `SessionsPageExports.setActivity` says, drawing the side bar again only when
-// the row's shown activity changed, and stamping the row's recency when it
-// turned to needs you; `render` drops the activities of the rows that left and
-// keeps recency to the rows main holds. `redrawRows` draws the side bar's rows
-// again, for a changed title length. `orderedRows` lists main's rows in the
-// order the side bar draws them, the preview's sample never among them.
+// the row's shown activity changed, and telling recency when its top activity
+// turned to or away from needs you; `render` drops the activities of the rows
+// that left and hands the rows' changes to recency. `redrawRows` draws the side
+// bar's rows again, for a changed title length. `orderedRows` lists main's rows
+// in the order the side bar draws them, the preview's sample never among them.
 // `toggleFavorite` and `moveFavorite` change the user's favorites, draw the
-// side bar again and log the outcome; a star's click and a drop do the same,
-// and do nothing while the preview shows. `parts` draws through the sessions
-// layout the view's `setLayouts` sets, for the mode's dialogs.
+// side bar again and log the outcome; a star's click and a drop do the same.
+// The preview never changes the favorites: while it shows, a star and a drop do
+// nothing, and the two methods log `projects ignored` and do nothing. `parts`
+// draws through the sessions layout the view's `setLayouts` sets, for the
+// mode's dialogs.
 export interface SessionsView {
   element: HTMLElement;
   sideBar: HTMLElement;
@@ -155,6 +157,15 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
     logLine(`${isFavorite ? 'favorited' : 'unfavorited'} ${project}`);
   };
 
+  // Whether the preview shows, logging that a project key did nothing.
+  const isKeyIgnoredByPreview = () => {
+    if (preview === null) {
+      return false;
+    }
+    logLine('projects ignored: the layout preview shows');
+    return true;
+  };
+
   const sidebar = mountSidebarView(
     {
       activate(sessionId) {
@@ -193,8 +204,10 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
   const assigned = new Map<string, string | null>();
   let paneCount = 1;
 
-  const realSections = () =>
-    sidebarSections(state?.rows ?? [], favorites.list(), recency.stamps());
+  const realSections = () => {
+    const rows = state?.rows ?? [];
+    return sidebarSections(rows, favorites.list(), recency.stampsOf(rows));
+  };
 
   const drawSidebar = () => {
     const titleMax = titleLimit(deps.titleMaxLength());
@@ -323,14 +336,11 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
     tabs,
     panes,
     render(next) {
-      const { added, removed } = rowChanges(state?.rows ?? [], next.rows);
-      for (const sessionId of removed) {
+      const before = state?.rows ?? null;
+      for (const sessionId of rowChanges(before ?? [], next.rows).removed) {
         activities.forget(sessionId);
       }
-      for (const row of added) {
-        recency.noteArrived(row.sessionId);
-      }
-      recency.keepOnly(next.rows.map((row) => row.sessionId));
+      recency.rowsChanged(before, next.rows);
       state = next;
       drawSidebar();
       tabs.render(next);
@@ -361,22 +371,30 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
       }
     },
     setActivity(sessionId, sourceId, activity) {
+      const wasNeedsYou = isNeedsYou(activities.top(sessionId));
       if (activities.set(sessionId, sourceId, activity)) {
-        const top = activities.top(sessionId);
-        const turnedToNeedsYou =
-          top?.word === NEEDS_YOU_ACTIVITY.word &&
-          top.tone === NEEDS_YOU_ACTIVITY.tone;
-        const hasRow = state?.rows.some((row) => row.sessionId === sessionId);
-        if (turnedToNeedsYou && hasRow) {
-          recency.noteNeedsYou(sessionId);
+        if (isNeedsYou(activities.top(sessionId))) {
+          const row = state?.rows.find((held) => held.sessionId === sessionId);
+          if (row !== undefined) {
+            recency.noteNeedsYou(row);
+          }
+        } else if (wasNeedsYou) {
+          recency.needsYouEnded(sessionId);
         }
         drawSidebar();
       }
     },
     redrawRows: () => drawSidebar(),
     orderedRows: () => drawnRows(realSections()),
-    toggleFavorite,
+    toggleFavorite(project) {
+      if (!isKeyIgnoredByPreview()) {
+        toggleFavorite(project);
+      }
+    },
     moveFavorite(project, by) {
+      if (isKeyIgnoredByPreview()) {
+        return;
+      }
       const direction = by === -1 ? 'up' : 'down';
       if (!favorites.isFavorite(project)) {
         logLine(`${project} is not a favorite`);
@@ -391,4 +409,11 @@ export function mountSessionsView(deps: SessionsViewDeps): SessionsView {
       logLine(`moved ${project} ${direction}`);
     },
   };
+}
+
+function isNeedsYou(activity: RowActivity | null): boolean {
+  return (
+    activity?.word === NEEDS_YOU_ACTIVITY.word &&
+    activity.tone === NEEDS_YOU_ACTIVITY.tone
+  );
 }

@@ -4,18 +4,25 @@ import {
   findAll,
   installFakeDom,
 } from '../../../shared/page/test-dom';
+import { withUser } from '../../../shared/page/layout-host/test-layouts';
 import { NEEDS_YOU_ACTIVITY, type SessionRow } from '../contract';
+import defaultLayout from '../layouts/default/layout.js';
+import type { Layout } from '../layouts/layout';
+import { fakeUiState } from './session-fakes';
 import {
   drawnRows,
-  fakeUiState,
   rowNamed,
   sessionRow,
   sessionsViewSetup,
 } from './sessions-view-fakes';
 
-// A row `id`, in `project`.
-function rowIn(id: string, project: string): SessionRow {
-  return { ...sessionRow(id), project };
+// A row `id`, in `project`, under host session id `hostSessionId`.
+function rowIn(
+  id: string,
+  project: string,
+  hostSessionId: string | null = null,
+): SessionRow {
+  return { ...sessionRow(id), project, hostSessionId };
 }
 
 function stateWith(rows: SessionRow[]) {
@@ -58,14 +65,18 @@ function fakeTransfer() {
   };
 }
 
-// Drags `project`'s header onto section `index`'s groups box, above every item.
-function drag(setup: Setup, project: string, index: 0 | 1) {
+// Drags `project`'s header onto section `index`'s groups box at `clientY`: the
+// fake rects' midpoint is 0, so the default lands above every item and 1 below.
+function drag(setup: Setup, project: string, index: 0 | 1, clientY = -1) {
   const dataTransfer = fakeTransfer();
   const header = headerOf(setup, project);
   header.fire('dragstart', { dataTransfer });
-  sectionGroups(setup, index).fire('drop', { dataTransfer, clientY: -1 });
+  sectionGroups(setup, index).fire('drop', { dataTransfer, clientY });
   header.fire('dragend', { dataTransfer });
 }
+
+const PREVIEW_IGNORED_LINE =
+  '[sessions] projects ignored: the layout preview shows';
 
 beforeEach(() => {
   installFakeDom(vi.stubGlobal);
@@ -134,9 +145,42 @@ describe('sessions view side bar', () => {
         clickStar(setup, 'new-games-prototypes');
         clickStar(setup, 'wigley-ai-gui');
         setup.view.showPreview(false);
+        expect(setup.logged).not.toContain(PREVIEW_IGNORED_LINE);
       },
       order: ['g1', 'a1'],
       saved: ['gamma'],
+    },
+    {
+      case: 'the project keys under the preview save nothing',
+      rows: [rowIn('a1', 'alpha'), rowIn('g1', 'gamma')],
+      favorites: ['gamma', 'alpha'],
+      act: (setup) => {
+        setup.view.showPreview(true);
+        setup.view.toggleFavorite('gamma');
+        setup.view.moveFavorite('gamma', 1);
+        setup.view.showPreview(false);
+      },
+      order: ['g1', 'a1'],
+      saved: ['gamma', 'alpha'],
+      line: PREVIEW_IGNORED_LINE,
+    },
+    {
+      case: 'moving a project that is no favorite saves nothing',
+      rows: [rowIn('a1', 'alpha'), rowIn('g1', 'gamma')],
+      favorites: ['gamma'],
+      act: ({ view }) => view.moveFavorite('alpha', 1),
+      order: ['g1', 'a1'],
+      saved: ['gamma'],
+      line: '[sessions] alpha is not a favorite',
+    },
+    {
+      case: 'moving a favorite down saves the new order',
+      rows: [rowIn('a1', 'alpha'), rowIn('g1', 'gamma')],
+      favorites: ['alpha', 'gamma'],
+      act: ({ view }) => view.moveFavorite('alpha', 1),
+      order: ['g1', 'a1'],
+      saved: ['gamma', 'alpha'],
+      line: '[sessions] moved alpha down',
     },
     {
       case: 'a preview drop saves nothing',
@@ -177,6 +221,15 @@ describe('sessions view side bar', () => {
       order: ['a1', 'b1', 'g1'],
       saved: ['alpha', 'beta'],
       line: '[sessions] moved alpha to favorites 0',
+    },
+    {
+      case: 'a drop below a favorite favorites after it',
+      rows: [rowIn('a1', 'alpha'), rowIn('b1', 'beta'), rowIn('g1', 'gamma')],
+      favorites: ['beta'],
+      act: (setup) => drag(setup, 'alpha', 0, 1),
+      order: ['b1', 'a1', 'g1'],
+      saved: ['beta', 'alpha'],
+      line: '[sessions] moved alpha to favorites 1',
     },
     {
       case: 'a drop of a favorite in Recent unfavorites it',
@@ -228,36 +281,149 @@ describe('sessions view side bar', () => {
     },
   );
 
-  it('sessionsView_PageReload_KeepsSavedRecency', () => {
-    const stamps = { a1: 9, b1: 5 };
-    const uiState = fakeUiState([['recency', stamps]]);
+  it.each<{
+    case: string;
+    stamps: Record<string, number>;
+    needsYou?: string[];
+    // Each state main sends the fresh view, in turn.
+    states: SessionRow[][];
+    act?: (setup: Setup) => void;
+    order: string[];
+    stampsAfter: Record<string, number>;
+  }>([
+    {
+      case: 'a page reload keeps the order',
+      stamps: { a1: 9, b1: 5 },
+      states: [[rowIn('b1', 'beta'), rowIn('a1', 'alpha')]],
+      order: ['a1', 'b1'],
+      stampsAfter: { a1: 9, b1: 5 },
+    },
+    {
+      case: 'a preview over a page reload saves nothing',
+      stamps: { a1: 9, b1: 5 },
+      states: [[rowIn('b1', 'beta'), rowIn('a1', 'alpha')]],
+      act: ({ view }) => {
+        view.showPreview(true);
+        view.showPreview(false);
+      },
+      order: ['a1', 'b1'],
+      stampsAfter: { a1: 9, b1: 5 },
+    },
+    {
+      case: 'needs you re-sent after a page reload moves no row',
+      stamps: { a1: 5, b1: 9 },
+      needsYou: ['a1'],
+      states: [[rowIn('a1', 'alpha'), rowIn('b1', 'beta')]],
+      act: ({ view }) => view.setActivity('a1', 'forms', NEEDS_YOU_ACTIVITY),
+      order: ['b1', 'a1'],
+      stampsAfter: { a1: 5, b1: 9 },
+    },
+    {
+      case: 'working re-sent ahead of needs you after a page reload moves no row',
+      stamps: { a1: 5, b1: 9 },
+      needsYou: ['a1'],
+      states: [[rowIn('a1', 'alpha'), rowIn('b1', 'beta')]],
+      act: ({ view }) => {
+        view.setActivity('a1', 'chat', {
+          word: 'working',
+          tone: 'running',
+          rank: 20,
+        });
+        view.setActivity('a1', 'forms', NEEDS_YOU_ACTIVITY);
+      },
+      order: ['b1', 'a1'],
+      stampsAfter: { a1: 5, b1: 9 },
+    },
+    {
+      case: 'needs you again after it ended moves the row',
+      stamps: { a1: 5, b1: 9 },
+      needsYou: ['a1'],
+      states: [[rowIn('a1', 'alpha'), rowIn('b1', 'beta')]],
+      act: ({ view }) => {
+        view.setActivity('a1', 'forms', NEEDS_YOU_ACTIVITY);
+        view.setActivity('a1', 'forms', null);
+        view.setActivity('a1', 'forms', NEEDS_YOU_ACTIVITY);
+      },
+      order: ['a1', 'b1'],
+      stampsAfter: { a1: 100, b1: 9 },
+    },
+    {
+      case: 'a relaunch keeps stamps under the rows host ids',
+      stamps: { h1: 5, h2: 9 },
+      states: [[rowIn('new1', 'alpha', 'h1'), rowIn('new2', 'beta', 'h2')]],
+      order: ['new2', 'new1'],
+      stampsAfter: { h1: 5, h2: 9 },
+    },
+    {
+      case: 'a first state missing a row keeps its stamp',
+      stamps: { h1: 5, h2: 9 },
+      states: [
+        [rowIn('new1', 'alpha', 'h1')],
+        [rowIn('new1', 'alpha', 'h1'), rowIn('new2', 'beta', 'h2')],
+      ],
+      order: ['new2', 'new1'],
+      stampsAfter: { h1: 5, h2: 9 },
+    },
+    {
+      case: 'a row that leaves drops its stamp',
+      stamps: { a1: 9, h2: 5 },
+      states: [
+        [rowIn('a1', 'alpha'), rowIn('b1', 'beta', 'h2')],
+        [rowIn('a1', 'alpha')],
+      ],
+      order: ['a1'],
+      stampsAfter: { a1: 9 },
+    },
+    {
+      case: 'a new host id takes the stamp along',
+      stamps: { a1: 9, h2: 5 },
+      states: [
+        [rowIn('a1', 'alpha'), rowIn('b1', 'beta', 'h2')],
+        [rowIn('a1', 'alpha', 'h1'), rowIn('b1', 'beta', 'h3')],
+      ],
+      order: ['a1', 'b1'],
+      stampsAfter: { h1: 9, h3: 5 },
+    },
+  ])(
+    'sessionsView_RecencyAcrossReloadAndRelaunch ($case)',
+    ({ stamps, needsYou = [], states, act, order, stampsAfter }) => {
+      const uiState = fakeUiState([['recency', { stamps, needsYou }]]);
+      const setup = sessionsViewSetup(undefined, undefined, undefined, {
+        uiState,
+        clock: { now: () => 100 },
+      });
+
+      for (const rows of states) {
+        setup.view.render(stateWith(rows));
+      }
+      act?.(setup);
+
+      expect(setup.view.orderedRows().map((row) => row.sessionId)).toEqual(
+        order,
+      );
+      expect(uiState.get('recency')).toMatchObject({ stamps: stampsAfter });
+    },
+  );
+
+  it('sessionsView_RowsOfOneState_KeepMainsOrderAcrossAClockTick', () => {
+    const clock = { time: 0, now: () => ++clock.time };
     const { view } = sessionsViewSetup(undefined, undefined, undefined, {
-      uiState,
-      clock: { now: () => 100 },
+      clock,
     });
 
-    expect(uiState.get('recency')).toEqual(stamps);
-    view.showPreview(true);
-    expect(uiState.get('recency')).toEqual(stamps);
-    view.showPreview(false);
-    view.render(stateWith([rowIn('b1', 'beta'), rowIn('a1', 'alpha')]));
+    view.render(
+      stateWith([
+        rowIn('a1', 'alpha'),
+        rowIn('b1', 'beta'),
+        rowIn('g1', 'gamma'),
+      ]),
+    );
 
     expect(view.orderedRows().map((row) => row.sessionId)).toEqual([
       'a1',
       'b1',
+      'g1',
     ]);
-    expect(uiState.get('recency')).toEqual(stamps);
-  });
-
-  it('sessionsView_RowLeaves_DropsItsSavedStamp', () => {
-    const uiState = fakeUiState([['recency', { a1: 9, b1: 5 }]]);
-    const { view } = sessionsViewSetup(undefined, undefined, undefined, {
-      uiState,
-    });
-
-    view.render(stateWith([rowIn('b1', 'beta')]));
-
-    expect(uiState.get('recency')).toEqual({ b1: 5 });
   });
 
   it('sessionsView_NeedsYouBeforeItsRow_StampsOnArrivalOnly', () => {
@@ -274,7 +440,10 @@ describe('sessions view side bar', () => {
 
     clock.time = 2;
     view.render(stateWith([rowIn('a1', 'alpha')]));
-    expect(uiState.get('recency')).toEqual({ a1: 2 });
+    expect(uiState.get('recency')).toEqual({
+      stamps: { a1: 2 },
+      needsYou: [],
+    });
   });
 
   it('sidebarDrag_HoldsRedrawsAndMarksReorderingOnTheNextTick', () => {
@@ -308,6 +477,32 @@ describe('sessions view side bar', () => {
     expect(list.classList.contains('is-reordering')).toBe(false);
     expect(drawnRows(sideBar)).toHaveLength(1);
     expect(drawnRows(sideBar)[0].title).toContain('label b1');
+  });
+
+  it('sidebarDrag_RedrawnBeforeTheTick_ClearsTheTimerAndTheMark', () => {
+    let tick: (() => void) | null = null;
+    const setup = sessionsViewSetup(undefined, undefined, undefined, {
+      timers: {
+        set(run) {
+          tick = run;
+          return 1;
+        },
+        clear() {
+          tick = null;
+        },
+      },
+    });
+    setup.view.render(stateWith([rowIn('a1', 'alpha')]));
+    const dataTransfer = fakeTransfer();
+
+    headerOf(setup, 'alpha').fire('dragstart', { dataTransfer });
+    expect(tick).not.toBeNull();
+    setup.view.setLayouts(withUser<Layout>(defaultLayout, {}));
+
+    expect(tick).toBeNull();
+    const [list] = findAll(setup.sideBar, 'session-sidebar');
+    expect(list.classList.contains('is-reordering')).toBe(false);
+    expect(drawnRows(setup.sideBar)).toHaveLength(1);
   });
 
   it('sidebarDrag_EndedBeforeTheTick_NeverMarksReordering', () => {

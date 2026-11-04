@@ -1,17 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { UiState } from '../../../contracts/ui-state';
 import {
   createProjectFavorites,
   type ProjectFavorites,
 } from './project-favorites';
-
-function uiStateHolding(favorites: string[]): UiState {
-  const values = new Map<string, unknown>([['favorites', favorites]]);
-  return {
-    get: (key) => values.get(key),
-    set: (key, value) => values.set(key, value),
-  };
-}
+import { fakeUiState } from './session-fakes';
 
 describe('createProjectFavorites', () => {
   it.each<{
@@ -153,7 +145,7 @@ describe('createProjectFavorites', () => {
   ])(
     'favorites_toggleMoveAndPlace: $case',
     ({ saved, act, returns, after }) => {
-      const state = uiStateHolding(saved);
+      const state = fakeUiState([['favorites', saved]]);
       const favorites = createProjectFavorites(state);
       expect(act(favorites)).toBe(returns);
       expect(favorites.list()).toEqual(after);

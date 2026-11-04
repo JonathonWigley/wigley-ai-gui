@@ -685,11 +685,11 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
     };
 
     // Asks which session the new pane `paneId` shows: the sessions no pane
-    // shows, then a new one when chat can start one. A cancel while the pane
-    // still shows nothing closes it.
+    // shows, in drawn order, then a new one when chat can start one. A cancel
+    // while the pane still shows nothing closes it.
     const openSplitPicker = (paneId: string) => {
       const choices: PickerChoice[] = pickerRows(
-        state.rows,
+        view.orderedRows(),
         view.panes.sessions(),
       ).map((row) => ({ kind: 'row', row }));
       if (api.keys.command('chat.newSession') !== undefined) {

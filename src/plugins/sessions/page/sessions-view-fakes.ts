@@ -6,25 +6,15 @@ import { recordingAnchors } from '../../../shared/page/layout-host/test-layouts'
 import { asFake, FakeElement, findAll } from '../../../shared/page/test-dom';
 import type { Clock, Timers } from '../../../contracts/ambient';
 import type { UiState } from '../../../contracts/ui-state';
-import type { SessionPart, SessionRow, SessionsState } from '../contract';
+import type { SessionPart, SessionsState } from '../contract';
 import { createSessionsParts } from './layout/sessions-parts';
 import { createProjectFavorites } from './project-favorites';
+import { fakeUiState, sessionRow } from './session-fakes';
 import { createSessionRecency } from './session-recency';
 import { mountSessionsView } from './sessions-view';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 
-export function sessionRow(sessionId: string): SessionRow {
-  return {
-    sessionId,
-    label: `label ${sessionId}`,
-    project: 'project',
-    harness: 'claude',
-    marked: false,
-    projectDir: null,
-    hostSessionId: null,
-    titles: { user: null, agent: null, firstMessage: null },
-  };
-}
+export { sessionRow };
 
 export function stateOf(
   sessionIds: string[],
@@ -67,15 +57,6 @@ export function sessionsPartsSetup() {
     barParts: createPartStore(),
   });
   return { parts, logged };
-}
-
-// A uiState over a map holding `entries`.
-export function fakeUiState(entries: [string, unknown][] = []): UiState {
-  const values = new Map(entries);
-  return {
-    get: (key) => values.get(key),
-    set: (key, value) => values.set(key, value),
-  };
 }
 
 // What `sessionsViewSetup` runs on beyond its stores: `uiState` holds the

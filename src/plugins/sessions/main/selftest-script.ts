@@ -104,6 +104,25 @@ const CANCEL_AND_CLOSE_STEPS: SelfTestStep[] = [
   { keys: ['<A-w>'], expect: '[sessions] pane closed' },
 ];
 
+// After the close, panes-b's pane sits left of panes-c's, focused, and panes-a is
+// in no pane. Favoriting panes-c then panes-b and closing panes-b's pane draws
+// panes-c, panes-b, panes-a, against main's panes-a, panes-b, panes-c, so each
+// `Alt+Shift+o` and the split picker's first row follow the drawn order. With
+// panes-c unfavorited, panes-b is the one favorite and the picker's first row.
+const DRAWN_ORDER_STEPS: SelfTestStep[] = [
+  { keys: [' ', 'p', 'f'], expect: '[sessions] favorited panes-c' },
+  { keys: ['<A-h>'], expect: '[sessions] pane focused panes-b' },
+  { keys: [' ', 'p', 'f'], expect: '[sessions] favorited panes-b' },
+  { keys: ['<A-w>'], expect: '[sessions] pane closed' },
+  { keys: ['<A-S-o>'], expect: '[sessions] activated panes-b' },
+  { keys: ['<A-S-o>'], expect: '[sessions] activated panes-a' },
+  { keys: ['<A-S-o>'], expect: '[sessions] activated panes-c' },
+  { keys: [' ', 'p', 'f'], expect: '[sessions] unfavorited panes-c' },
+  { keys: ['<A-;>'], expect: '[sessions] pane split right' },
+  { keys: ['Enter'], expect: '[sessions] pane loaded panes-b' },
+  { keys: [' ', 'p', 'f'], expect: '[sessions] unfavorited panes-b' },
+];
+
 // Each run ends the sessions the run before opened and opens three in project
 // dirs `panes-a`, `panes-b` and `panes-c`, unselected, in that row order, then
 // activates panes-a's row. The result check reads main's state: every pane
@@ -173,6 +192,11 @@ export function sessionsSelfTestScript(
         name: 'cancel and close',
         why: 'Esc undoes a split and Alt+w closes only the pane.',
         steps: CANCEL_AND_CLOSE_STEPS,
+      },
+      {
+        name: 'drawn order',
+        why: "The session step keys and the split picker follow the drawn order, not main's.",
+        steps: DRAWN_ORDER_STEPS,
       },
     ],
     problems: () => {
