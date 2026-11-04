@@ -279,8 +279,10 @@
   }
 }
 
+/* Shrinks far faster than the row's parts, so it ellipsizes before they give
+   up any width. */
 .session-row-status {
-  flex: 0 1 auto;
+  flex: 0 1000 auto;
   color: var(--wg-fg-secondary);
   font-size: var(--wg-text-12);
   min-width: 0;
