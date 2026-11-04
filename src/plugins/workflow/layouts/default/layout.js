@@ -3,10 +3,9 @@
 // The built-in workflow look: a one-line chip under the session row (the
 // stage and its status as an accent tag and the countdown), a strip above the
 // composer (the status mark and line, the stepper until a plan is read, the
-// countdown and the main action), the side pane beside the transcript (the
+// countdown and the main action), and the side pane beside the transcript (the
 // status mark and line, the detail, the stepper, the progress bar, the
-// checklist and every action), and the Flow tab (the stage's label, the
-// stepper, the detail, the checklist by wave and every action).
+// checklist and every action).
 
 /** @typedef {import('../layout').SideWaveInput} SideWaveInput */
 /** @typedef {import('../layout').SidePaneInput} SidePaneInput */
@@ -143,45 +142,6 @@ const layout = {
       }
     }
     return { element: pane };
-  },
-
-  flowTab(parent, input, kit) {
-    const flow = kit.el(parent, 'div', 'workflow-flow');
-    kit.sectionHeader(flow, input.label);
-    kit.stepper(flow, input.steps);
-    const status = kit.el(flow, 'p', 'workflow-flow-detail', input.detail);
-    if (input.countdown !== null) {
-      kit.countdown(status, input.countdown);
-    }
-    const hasPlan = input.planTitle !== null || input.waves.length > 0;
-    if (!hasPlan) {
-      kit.emptyState(flow, 'No plan yet');
-    }
-    for (const wave of input.waves) {
-      const header = kit.sectionHeader(flow, wave.title);
-      if (wave.current) {
-        header.classList.add('is-current');
-      }
-      const tasks = kit.el(flow, 'ul', 'workflow-flow-tasks');
-      for (const task of wave.tasks) {
-        const mark = kit.icon(
-          tasks,
-          task.done ? 'pass-filled' : 'circle-large',
-          'workflow-task-mark',
-        );
-        kit.row(tasks, {
-          density: 'list',
-          tag: 'li',
-          label: task.text,
-          leading: mark,
-        });
-      }
-    }
-    const actions = kit.el(flow, 'div', 'workflow-flow-actions');
-    for (const action of input.actions) {
-      kit.actionButton(actions, action);
-    }
-    return { element: flow };
   },
 };
 

@@ -1,5 +1,5 @@
 // The workflow layout contract: what a layout in `layouts/workflow/<name>/layout.js` draws each session's place in
-// the user's wigley workflow with. The app draws four parts for a session:
+// the user's wigley workflow with. The app draws three parts for a session:
 // - `chip`, under the session's row in the side bar, in the row part's wrapper: the stage's label and status as one
 //   tag, and the countdown. Its input also carries the detail and the main action. An idle session draws no chip.
 // - `strip`, above the Chat tab's composer, in the composer part's wrapper: the status mark, the status line, the
@@ -9,8 +9,6 @@
 //   stepper, a progress bar, the plan's checklist (finished waves folded, the current wave in full, a line per later
 //   wave) and every action of the stage. An idle session, a session with no plan read, and a hidden pane draw no pane.
 //   The app does not draw it again for the countdown, so a pane that shows the countdown updates on the next flow push.
-// - `flowTab`, in the session's Flow tab: the stage's label, the stepper, the stage's detail (the plan's title in it),
-//   the plan's checklist by wave (or, with no plan, a `No plan yet` empty state) and every action of the stage.
 // The app sets `data-layout-owner="workflow"` and `data-layout="<name>"` on the element each part returns, `<name>`
 // being the layout that drew it, so `[data-layout-owner="workflow"][data-layout="<name>"] …` in a layout's CSS
 // selects only its own parts.
@@ -20,10 +18,9 @@
 // - the workflow commands and their keys (`<Leader>w…`), and what each runs;
 // - the session each button runs for: a part's buttons run for the session it draws, whether or not that session is
 //   selected; only keys act on the selected session;
-// - the countdown's ticking and its text: while a chip, a strip or a Flow tab shows one, the app draws those parts
-//   again once a second;
-// - whether the side pane shows, each session's finished-waves fold, and the scroll of the list `kit.sideList` draws;
-// - the Flow tab's scrolling.
+// - the countdown's ticking and its text: while a chip or a strip shows one, the app draws those parts again once a
+//   second;
+// - whether the side pane shows, each session's finished-waves fold, and the scroll of the list `kit.sideList` draws.
 import type {
   BaseKit,
   ButtonVariant,
@@ -109,33 +106,6 @@ export interface SidePaneInput extends StripInput {
   laterWaves: readonly SideWaveInput[];
 }
 
-// One box of the plan's `## Tasks`: its text, and whether it is ticked.
-export interface PlanTaskInput {
-  text: string;
-  done: boolean;
-}
-
-// The boxes under one `### Wave N` (`Wave 2`), or those under no wave heading (`Tasks`), in file order; `current` is
-// the wave of the first open box under a wave heading.
-export interface PlanWaveInput {
-  title: string;
-  tasks: readonly PlanTaskInput[];
-  current: boolean;
-}
-
-// The stage's fields, the steps and the actions as StripInput has them, with the plan's title (null before a plan is
-// read, '' for a read plan with no title) and its checklist by wave, empty before a plan is read.
-export interface FlowTabInput {
-  stage: string;
-  label: string;
-  detail: string;
-  countdown: string | null;
-  planTitle: string | null;
-  steps: readonly StepInput[];
-  waves: readonly PlanWaveInput[];
-  actions: readonly ActionInput[];
-}
-
 // `anchor` false draws no key hint in the button; `variant` replaces the one the action picks.
 export interface ActionButtonOptions {
   anchor?: boolean;
@@ -191,11 +161,6 @@ export interface Layout {
   sidePane?(
     parent: HTMLElement,
     input: SidePaneInput,
-    kit: WorkflowKit,
-  ): WorkflowPart;
-  flowTab?(
-    parent: HTMLElement,
-    input: FlowTabInput,
     kit: WorkflowKit,
   ): WorkflowPart;
 }

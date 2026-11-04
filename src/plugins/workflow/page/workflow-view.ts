@@ -20,10 +20,8 @@ import {
 import type {
   ActionInput,
   ChipInput,
-  FlowTabInput,
   Layout,
   MarkState,
-  PlanWaveInput,
   SidePaneInput,
   SideWaveInput,
   StepInput,
@@ -46,8 +44,7 @@ export interface PageStages {
 // `flowOf` is the flow a session draws (the preview's sample while it shows,
 // else the pushed flow or a new idle one); `nameOf` names the session in the
 // log; `isPreview` is whether the session shows the preview, which runs
-// nothing. `stripBuilt` hears each strip build, before it draws. The rest run
-// the actions: `openDoc` the page one, `runAction` main's.
+// nothing. The rest run the actions: `openDoc` the page one, `runAction` main's.
 export interface WorkflowViewDeps {
   kit: OwnerKitServices;
   log: Log;
@@ -59,16 +56,14 @@ export interface WorkflowViewDeps {
   flowOf(sessionId: string): SessionFlow;
   nameOf(sessionId: string): string;
   isPreview(sessionId: string): boolean;
-  stripBuilt(sessionId: string): void;
   openDoc(path: string): void;
   runAction(request: WorkflowActionRequest): Promise<void>;
 }
 
 // `chipPart` draws a session's chip under its row, `stripPart` its strip
-// above its Chat composer, `sidePart` its side pane beside its transcript, and
-// `drawFlowTab` its Flow tab into `body` until the returned dispose. Every
-// held part draws again on `setFlow` for its session, on `setLayouts` and on
-// `redraw`, and each second while it shows a countdown, the side pane aside.
+// above its Chat composer, and `sidePart` its side pane beside its transcript.
+// Every held part draws again on `setFlow` for its session, on `setLayouts` and
+// on `redraw`, and each second while it shows a countdown, the side pane aside.
 // `setFlow` also logs the session's stage, progress and countdown when each
 // changes; `forget` drops what it logged for a session that left and its
 // finished waves' fold. `setSidePaneHidden` shows or hides the side pane in
@@ -80,7 +75,6 @@ export interface WorkflowView {
   chipPart: SessionPart;
   stripPart: ChatComposerPart;
   sidePart: ChatSidePart;
-  drawFlowTab(body: HTMLElement, sessionId: string): Disposable;
   setFlow(flow: SessionFlow): void;
   forget(sessionId: string): void;
   setLayouts(shown: ShownLayouts<Layout>): void;
@@ -91,7 +85,7 @@ export interface WorkflowView {
   runFor(sessionId: string, command: string): Promise<void>;
 }
 
-type PartKind = 'chip' | 'strip' | 'sidePane' | 'flowTab';
+type PartKind = 'chip' | 'strip' | 'sidePane';
 
 // One wrapper a part was built into, and what it drew there last.
 interface HeldPart {
@@ -100,6 +94,12 @@ interface HeldPart {
   wrapper: HTMLElement;
   drawn: Drawn | null;
   showsCountdown: boolean;
+}
+
+// The boxes of one wave of the plan, or of its `Tasks` group.
+interface PlanWave {
+  title: string;
+  tasks: readonly { text: string; done: boolean }[];
 }
 
 const TICK_MS = 1000;
@@ -223,15 +223,6 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
     };
   };
 
-  const flowTabInput = (flow: SessionFlow): FlowTabInput => {
-    const progress = flow.progress;
-    return {
-      ...stripInput(flow),
-      planTitle: progress === null ? null : progress.title,
-      waves: progress === null ? [] : waves(progress),
-    };
-  };
-
   const runCommand =
     (sessionId: string): RunCommand =>
     (command) =>
@@ -272,11 +263,6 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
         );
         // The default pane draws no countdown, so the tick leaves it.
         return false;
-      }
-      case 'flowTab': {
-        const input = flowTabInput(flow);
-        part.drawn = parts.flowTab(part.wrapper, input, run);
-        return input.countdown !== null;
       }
     }
   };
@@ -423,16 +409,12 @@ export function createWorkflowView(deps: WorkflowViewDeps): WorkflowView {
     },
     stripPart: {
       id: 'workflow.strip',
-      build(wrapper, sessionId) {
-        deps.stripBuilt(sessionId);
-        return hold('strip', wrapper, sessionId);
-      },
+      build: (wrapper, sessionId) => hold('strip', wrapper, sessionId),
     },
     sidePart: {
       id: 'workflow.sidePane',
       build: (wrapper, sessionId) => hold('sidePane', wrapper, sessionId),
     },
-    drawFlowTab: (body, sessionId) => hold('flowTab', body, sessionId),
     setFlow(flow) {
       try {
         logFlow(flow);
@@ -546,8 +528,8 @@ function progressText(progress: PlanProgress): string {
 
 // The plan's boxes grouped by the wave each sits under, in the order the
 // waves first appear; boxes under no wave heading are the `Tasks` group.
-function waves(progress: PlanProgress): PlanWaveInput[] {
-  const groups = new Map<number | null, PlanWaveInput['tasks'][number][]>();
+function waves(progress: PlanProgress): PlanWave[] {
+  const groups = new Map<number | null, PlanWave['tasks'][number][]>();
   for (const task of progress.tasks) {
     const group = groups.get(task.wave) ?? [];
     group.push({ text: task.text, done: task.done });
@@ -556,7 +538,6 @@ function waves(progress: PlanProgress): PlanWaveInput[] {
   return [...groups].map(([wave, tasks]) => ({
     title: wave === null ? TASKS_GROUP_TITLE : `Wave ${wave}`,
     tasks,
-    current: wave !== null && wave === progress.wave,
   }));
 }
 
@@ -568,8 +549,7 @@ function groupedWaves(
   openTaskState: MarkState,
 ): Pick<SidePaneInput, 'finishedWaves' | 'currentWave' | 'laterWaves'> {
   const groups = waves(progress);
-  const isFinished = (wave: PlanWaveInput) =>
-    wave.tasks.every((task) => task.done);
+  const isFinished = (wave: PlanWave) => wave.tasks.every((task) => task.done);
   const [current, ...later] = groups.filter((wave) => !isFinished(wave));
   return {
     finishedWaves: groups
@@ -581,10 +561,7 @@ function groupedWaves(
   };
 }
 
-function sideWave(
-  wave: PlanWaveInput,
-  openTaskState: MarkState,
-): SideWaveInput {
+function sideWave(wave: PlanWave, openTaskState: MarkState): SideWaveInput {
   return {
     title: wave.title,
     tasks: wave.tasks.map((task) => ({

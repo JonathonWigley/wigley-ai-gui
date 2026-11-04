@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import type {
   ActionInput,
   ChipInput,
-  FlowTabInput,
   SidePaneInput,
   SideWaveInput,
   StripInput,
@@ -14,7 +13,6 @@ import layout from './layout.js';
 // page's shared fake DOM.
 class FakeElement {
   children: FakeElement[] = [];
-  classList = { add: () => undefined };
 
   constructor(readonly part: string) {}
 
@@ -49,8 +47,6 @@ function fakeKit(): WorkflowKit {
     sectionHeader: (parent, text) => part(parent, `section:${text}`),
     stepper: (parent) => part(parent, 'stepper'),
     countdown: (parent, text) => part(parent, `countdown:${text}`),
-    emptyState: (parent, text) => part(parent, `empty:${text}`),
-    icon: (parent, name) => part(parent, `icon:${name}`),
     row: (parent, options) =>
       part(
         parent,
@@ -68,46 +64,6 @@ function fakeKit(): WorkflowKit {
       part(parent, `fold:${text}:${open}`) as HTMLButtonElement,
   };
   return kit as WorkflowKit;
-}
-
-// What the Flow tab drew besides its frame: its section headers and its
-// empty state.
-function drawnParts(element: FakeElement): string[] {
-  const shown: string[] = [];
-  for (const child of element.children) {
-    if (child.part.startsWith('section:')) {
-      shown.push(child.part);
-    }
-    if (child.part.startsWith('empty:')) {
-      shown.push(child.part);
-    }
-  }
-  return shown;
-}
-
-function flowTabInput(planTitle: string | null, boxes: number): FlowTabInput {
-  return {
-    stage: 'make',
-    label: 'Make',
-    detail: '',
-    countdown: null,
-    planTitle,
-    steps: [],
-    waves:
-      boxes === 0
-        ? []
-        : [
-            {
-              title: 'Wave 1',
-              current: true,
-              tasks: Array.from({ length: boxes }, (_, index) => ({
-                text: `Task ${index + 1}`,
-                done: false,
-              })),
-            },
-          ],
-    actions: [],
-  };
 }
 
 const MAIN_ACTION: ActionInput = {
@@ -334,52 +290,4 @@ describe('default layout sidePane', () => {
       'action:Open plan',
     ]);
   });
-});
-
-describe('default layout flowTab', () => {
-  it.each([
-    {
-      name: 'no plan read',
-      planTitle: null,
-      boxes: 0,
-      drawn: ['section:Make', 'empty:No plan yet'],
-    },
-    {
-      name: 'a read plan with no boxes',
-      planTitle: 'Fake flow',
-      boxes: 0,
-      drawn: ['section:Make'],
-    },
-    {
-      name: 'a read plan with no title',
-      planTitle: '',
-      boxes: 2,
-      drawn: ['section:Make', 'section:Wave 1'],
-    },
-    {
-      name: 'a read plan with no title and no boxes',
-      planTitle: '',
-      boxes: 0,
-      drawn: ['section:Make'],
-    },
-    {
-      name: 'a read plan with boxes',
-      planTitle: 'Fake flow',
-      boxes: 3,
-      drawn: ['section:Make', 'section:Wave 1'],
-    },
-  ])(
-    'flowTab_$name_HeadsWithTheStageAndShowsTheEmptyStateOnlyWithNoPlan',
-    ({ planTitle, boxes, drawn }) => {
-      const parent = new FakeElement('parent');
-
-      const { element } = layout.flowTab(
-        asHtml(parent),
-        flowTabInput(planTitle, boxes),
-        fakeKit(),
-      );
-
-      expect(drawnParts(element as unknown as FakeElement)).toEqual(drawn);
-    },
-  );
 });

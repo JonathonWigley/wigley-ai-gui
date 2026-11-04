@@ -25,7 +25,6 @@ export function newFlow(sessionId: string, projectDir: string): SessionFlow {
     turnRunning: false,
     runningSubagents: [],
     countdownEndsAt: null,
-    hasLeftIdle: false,
   };
 }
 
@@ -51,9 +50,6 @@ export function foldFlow(
   const next: SessionFlow = { ...flow };
   applyBookkeeping(next, signal);
   applyStageRules(next, signal, stages);
-  if (next.stage !== IDLE_STAGE) {
-    next.hasLeftIdle = true;
-  }
   return sameFlow(flow, next) ? flow : next;
 }
 
@@ -249,7 +245,6 @@ function sameFlow(a: SessionFlow, b: SessionFlow): boolean {
     a.reviewRoundsAtMake === b.reviewRoundsAtMake &&
     a.turnRunning === b.turnRunning &&
     sameIds(a.runningSubagents, b.runningSubagents) &&
-    a.countdownEndsAt === b.countdownEndsAt &&
-    a.hasLeftIdle === b.hasLeftIdle
+    a.countdownEndsAt === b.countdownEndsAt
   );
 }

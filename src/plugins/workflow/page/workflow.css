@@ -1,7 +1,6 @@
-/* The workflow parts the kit and the Flow tab draw: the stepper, its steps,
-   the status marks, the side pane's list and the fold over it, the countdown
-   and the Flow tab. The default layout's chip, strip, side pane and flow are in
-   its `layout.css`. */
+/* The workflow parts the kit draws: the stepper, its steps, the status marks,
+   the side pane's list and the fold over it, and the countdown. The default
+   layout's chip, strip and side pane are in its `layout.css`. */
 
 .workflow-stepper {
   display: flex;
@@ -96,11 +95,4 @@
 .workflow-countdown {
   font-variant-numeric: tabular-nums;
   color: var(--wg-status-warning);
-}
-
-.workflow-flow-tab {
-  height: 100%;
-  overflow-y: auto;
-  padding: var(--wg-space-4);
-  font-size: var(--wg-text-13);
 }

@@ -245,8 +245,7 @@ function isSessionFlow(value: unknown): value is SessionFlow {
       isNumberOrNull(value.reviewRoundsAtMake)) &&
     typeof value.turnRunning === 'boolean' &&
     isStringList(value.runningSubagents) &&
-    isNumberOrNull(value.countdownEndsAt) &&
-    typeof value.hasLeftIdle === 'boolean'
+    isNumberOrNull(value.countdownEndsAt)
   );
 }
 

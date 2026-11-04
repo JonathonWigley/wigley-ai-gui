@@ -7,7 +7,6 @@ const LAYOUT_PARTS: Record<keyof Layout, true> = {
   chip: true,
   strip: true,
   sidePane: true,
-  flowTab: true,
 };
 
 // The workflow layout a user's `layout.js` module exports as its default. A

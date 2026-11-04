@@ -29,9 +29,6 @@ export interface SessionFlow {
   runningSubagents: readonly string[];
   // Epoch ms; non-null only while the auto-start counts down.
   countdownEndsAt: number | null;
-  // True once the stage was ever other than idle; the Flow tab exists from
-  // then on.
-  hasLeftIdle: boolean;
 }
 
 export type WorkflowSignal =

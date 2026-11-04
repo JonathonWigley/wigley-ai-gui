@@ -13,14 +13,14 @@ describe('readWorkflowLayout', () => {
       module: { default: { strip: 'wide' } },
       error: 'strip is not a function',
     },
-    { module: { default: { flowTab: part, sidePane: part } }, error: null },
+    { module: { default: { chip: part, sidePane: part } }, error: null },
   ])(
     'readWorkflowLayout_Shapes_AcceptsOrNamesTheBadKey $error',
     ({ module, error }) => {
       const read = () => readWorkflowLayout(module, 'x');
 
       if (error === null) {
-        expect(read().flowTab).toBe(part);
+        expect(read().chip).toBe(part);
         expect(read().sidePane).toBe(part);
       } else {
         expect(read).toThrow(error);

@@ -271,7 +271,7 @@ async function savedFlowData(flow: Partial<SessionFlow>): Promise<MemoryFiles> {
         {
           hostSessionId: 'h1',
           savedAt: SAVED_AT,
-          flow: { ...newFlow('s-old', '/r'), hasLeftIdle: true, ...flow },
+          flow: { ...newFlow('s-old', '/r'), ...flow },
         },
       ],
     }),

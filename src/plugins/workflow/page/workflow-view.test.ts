@@ -17,7 +17,6 @@ import type {
 import { newFlow } from '../flow';
 import defaultLayout from '../layouts/default/layout.js';
 import type {
-  FlowTabInput,
   Layout,
   MarkState,
   SidePaneInput,
@@ -69,7 +68,6 @@ function flowIn(
   return {
     ...newFlow(sessionId, '/p/proj'),
     stage,
-    hasLeftIdle: !isIdle,
     planDir: isIdle ? null : PLAN_DIR,
     progress: isIdle ? null : progressOf(0, [3, 3, 1]),
     ...fields,
@@ -150,7 +148,6 @@ function setUp(previews: readonly string[] = []) {
     },
     nameOf: () => 'proj',
     isPreview: (sessionId) => previews.includes(sessionId),
-    stripBuilt: () => undefined,
     openDoc: () => undefined,
     runAction: async (request) => {
       invoked.push(request);
@@ -179,12 +176,10 @@ function setUp(previews: readonly string[] = []) {
   };
 }
 
-// A user layout whose strip, side pane and Flow tab record each input they
-// draw.
+// A user layout whose strip and side pane record each input they draw.
 function recordingLayout() {
   const strips: StripInput[] = [];
   const sidePanes: SidePaneInput[] = [];
-  const flowTabs: FlowTabInput[] = [];
   const layout: Layout = {
     strip(parent, input, kit) {
       strips.push(input);
@@ -194,12 +189,8 @@ function recordingLayout() {
       sidePanes.push(input);
       return { element: kit.el(parent, 'div') };
     },
-    flowTab(parent, input, kit) {
-      flowTabs.push(input);
-      return { element: kit.el(parent, 'div') };
-    },
   };
-  return { layout, strips, sidePanes, flowTabs };
+  return { layout, strips, sidePanes };
 }
 
 function stepTexts(input: { steps: StripInput['steps'] }): string[] {
@@ -485,15 +476,25 @@ describe('workflow view', () => {
     },
   );
 
-  it('steps_IdleFlow_LeavesEveryStepPending', () => {
-    const { view, put } = setUp();
+  it('steps_StageOutsideTheStepper_LeavesEveryStepPending', () => {
+    const { view, stages, put } = setUp();
     const recording = recordingLayout();
     view.setLayouts(withUser<Layout>(defaultLayout, recording.layout));
-    view.drawFlowTab(asHtml(new FakeElement('div')), 'a');
+    view.stripPart.build(asHtml(new FakeElement('div')), 'a');
+    stages.add({
+      id: 'aside',
+      label: 'Aside',
+      inStepper: false,
+      order: 35,
+      actions: [],
+      detail: () => '',
+      status: () => 'running',
+      statusLine: () => 'Aside',
+    });
 
-    put(flowIn('idle'));
+    put(flowIn('aside'));
 
-    expect(stepTexts(recording.flowTabs.at(-1)!)).toEqual([
+    expect(stepTexts(recording.strips.at(-1)!)).toEqual([
       'Feature:pending',
       'Make:pending',
       'Review:pending',
@@ -651,6 +652,32 @@ describe('workflow view', () => {
         ],
       },
       laterWaves: [],
+    },
+    {
+      name: 'groups in the order they first appear, split boxes joined',
+      stage: 'make',
+      busy: 'none',
+      plan: planOf([
+        [null, false],
+        [2, false],
+        [1, false],
+        [2, true],
+      ]),
+      finishedWaves: [],
+      currentWave: {
+        title: 'Tasks',
+        tasks: [{ text: 't.1', state: 'paused' }],
+      },
+      laterWaves: [
+        {
+          title: 'Wave 2',
+          tasks: [
+            { text: 'w2.1', state: 'pending' },
+            { text: 'w2.2', state: 'done' },
+          ],
+        },
+        { title: 'Wave 1', tasks: [{ text: 'w1.1', state: 'pending' }] },
+      ],
     },
     {
       name: 'every wave finished',
@@ -816,75 +843,6 @@ describe('workflow view', () => {
     expect(fold().attributes.get('aria-expanded')).toBe('true');
   });
 
-  it('waves_TasksAcrossWaves_GroupsInFileOrderAndMarksCurrent', () => {
-    const { view, put } = setUp();
-    const recording = recordingLayout();
-    view.setLayouts(withUser<Layout>(defaultLayout, recording.layout));
-    view.drawFlowTab(asHtml(new FakeElement('div')), 'a');
-    const progress: PlanProgress = {
-      checked: 2,
-      total: 4,
-      wave: 2,
-      reviewRounds: 0,
-      title: 'Plan x',
-      tasks: [
-        { wave: null, text: 'set up', done: true },
-        { wave: 2, text: 'second wave', done: false },
-        { wave: 1, text: 'first wave', done: true },
-        { wave: 2, text: 'second wave again', done: false },
-      ],
-    };
-
-    put(flowIn('make', { progress }));
-
-    expect(recording.flowTabs.at(-1)!.waves).toEqual([
-      {
-        title: 'Tasks',
-        tasks: [{ text: 'set up', done: true }],
-        current: false,
-      },
-      {
-        title: 'Wave 2',
-        tasks: [
-          { text: 'second wave', done: false },
-          { text: 'second wave again', done: false },
-        ],
-        current: true,
-      },
-      {
-        title: 'Wave 1',
-        tasks: [{ text: 'first wave', done: true }],
-        current: false,
-      },
-    ]);
-  });
-
-  it.each([
-    { name: 'NoPlanRead', progress: null, planTitle: null },
-    {
-      name: 'ReadPlanWithNoTitle',
-      progress: { ...progressOf(0, []), title: '' },
-      planTitle: '',
-    },
-    {
-      name: 'ReadPlanWithTitle',
-      progress: progressOf(0, [2]),
-      planTitle: 'Plan x',
-    },
-  ])(
-    'planTitle_$name_IsNullOnlyBeforeAPlanIsRead',
-    ({ progress, planTitle }) => {
-      const { view, put } = setUp();
-      const recording = recordingLayout();
-      view.setLayouts(withUser<Layout>(defaultLayout, recording.layout));
-      view.drawFlowTab(asHtml(new FakeElement('div')), 'a');
-
-      put(flowIn('make', { progress }));
-
-      expect(recording.flowTabs.at(-1)!.planTitle).toBe(planTitle);
-    },
-  );
-
   it('registry_StageAddedOutOfOrder_SortsOnOrder', () => {
     const { view, stages, put } = setUp();
     const recording = recordingLayout();
@@ -938,7 +896,7 @@ describe('workflow view', () => {
     put(flowIn('planReady'));
     breakFlowOf(true);
 
-    expect(() => view.drawFlowTab(asHtml(body), 'a')).toThrow('no flow');
+    expect(() => view.sidePart.build(asHtml(body), 'a')).toThrow('no flow');
     breakFlowOf(false);
     put(flowIn('make', { progress: progressOf(1, [3]) }));
 

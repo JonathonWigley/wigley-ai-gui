@@ -12,7 +12,6 @@ const SAVED_H1: SessionFlow = {
   turnRunning: true,
   runningSubagents: ['a1'],
   countdownEndsAt: 9_000,
-  hasLeftIdle: true,
 };
 
 const NOW = 50_000;
@@ -94,6 +93,10 @@ describe('createFlowStore', () => {
       name: 'reviewRoundsAtMake null',
       flow: { ...SAVED_H1, reviewRoundsAtMake: null },
     },
+    {
+      name: 'a field an older app saved',
+      flow: { ...SAVED_H1, hasLeftIdle: true } as SessionFlow,
+    },
   ])(
     'load_SavedFlowWith_$name_OpensAsSavedWithNoTurnSubagentOrCountdown',
     async ({ flow }) => {
@@ -120,7 +123,7 @@ describe('createFlowStore', () => {
       flowsFile([{ hostSessionId: 'h-x', flow: unopened }]),
     );
     const opened = store.open('s1', 'h1', '/r');
-    const made = { ...opened, stage: 'make', hasLeftIdle: true };
+    const made = { ...opened, stage: 'make' };
 
     store.put(made);
     expect((await saved()).flows).toEqual([

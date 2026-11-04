@@ -1,14 +1,11 @@
 import './workflow.css';
 import type { Disposable } from '../../../contracts/disposable';
-import type { ScrollStep } from '../../../contracts/editor';
 import type {
   PageApi,
   PagePart,
   QualifiedEvents,
 } from '../../../contracts/plugin';
-import { scrollContent, scrollText } from '../../../shared/content-scroll';
 import { errorText } from '../../../shared/error-text';
-import { textLineHeightPx } from '../../../shared/page/text-line';
 import {
   CHAT_PREVIEW_HOST_ID,
   type ChatPageExports,
@@ -32,7 +29,6 @@ import type { Layout } from '../layouts/layout';
 import { workflowManifest } from '../manifest';
 import { createStageList } from '../stage-list';
 import { BUILT_IN_PAGE_STAGES } from '../stages';
-import { createFlowTabs } from './flow-tab';
 import { readWorkflowLayout } from './layout/read-workflow-layout';
 import { createPreview } from './preview';
 import { createWorkflowView } from './workflow-view';
@@ -53,7 +49,10 @@ type SessionCommand =
   | 'resumeMake'
   | 'openPlan'
   | 'retro'
-  | 'dismiss';
+  | 'dismiss'
+  | 'toggleFinishedWaves';
+
+const SIDE_PANE_HIDDEN_KEY = 'sidePaneHidden';
 
 // A session the page heard of: its name in the log (its side bar label), its
 // project folder and its host session id.
@@ -64,11 +63,12 @@ interface HeardSession {
 }
 
 // Draws each session's flow as a chip under its row, a strip above its Chat
-// composer and, once it leaves idle, a Flow tab, through the
+// composer and a side pane beside its transcript, through the
 // `workflow.layout` layout. Holds every flow main pushes, filled in by one
 // `flows` read, and the page halves of the stages, which `addStage` extends.
 // Each workflow command runs on the selected session; each button on the
-// session it draws. `openPreview` steps chat's preview session through a
+// session it draws. `toggleSidePane` shows or hides the pane in every session,
+// kept in `uiState`. `openPreview` steps chat's preview session through a
 // sample of every stage (`createPreview`).
 export const workflowPagePart: PagePart<typeof workflowManifest> = {
   manifest: workflowManifest,
@@ -110,28 +110,11 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
       flowOf,
       nameOf,
       isPreview,
-      stripBuilt: (sessionId) => flowTabs.chatTabBuilt(sessionId),
       openDoc: (path) => docs.openDoc(path),
       runAction: (request) => api.channel.invoke('runAction', request),
     });
-    const flowTabs = createFlowTabs({
-      addTab: (sessionId, tab) => sessions.addTab(sessionId, tab),
-      timers: services.timers,
-      log: services.log,
-      flowOf,
-      nameOf,
-      draw: view.drawFlowTab,
-      shown() {
-        api.keys.setScope('flow');
-        api.panes.setResizeTarget(null);
-        api.panes.setFocusTarget(null);
-      },
-    });
-
-    const showFlow = (flow: SessionFlow) => {
-      view.setFlow(flow);
-      flowTabs.setFlow(flow);
-    };
+    let isSidePaneHidden = services.uiState.get(SIDE_PANE_HIDDEN_KEY) === true;
+    view.setSidePaneHidden(isSidePaneHidden);
 
     const preview = createPreview({
       openChatPreview: () => api.commands.run('chat.openPreview'),
@@ -139,11 +122,8 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
         [...heard].find(
           ([, session]) => session.hostSessionId === CHAT_PREVIEW_HOST_ID,
         )?.[0] ?? null,
-      showFlow,
-      closed(sessionId) {
-        flowTabs.removeTab(sessionId);
-        view.setFlow(flowOf(sessionId));
-      },
+      showFlow: view.setFlow,
+      closed: (sessionId) => view.setFlow(flowOf(sessionId)),
       clock: services.clock,
       autoStartSeconds: () => api.settings().autoStartSeconds,
       log: services.log,
@@ -165,6 +145,7 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
 
     sessions.addRowPart(view.chipPart);
     chat.addComposerPart(view.stripPart);
+    chat.addSidePart(view.sidePart);
 
     api.events.on(
       'sessions.sessionAdded',
@@ -190,7 +171,6 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
       preview.sessionRemoved(sessionId);
       heard.delete(sessionId);
       flows.delete(sessionId);
-      flowTabs.forget(sessionId);
       view.forget(sessionId);
     });
 
@@ -205,7 +185,7 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
         return;
       }
       try {
-        showFlow(flow);
+        view.setFlow(flow);
       } catch (error) {
         log(`flow of ${flow.sessionId} not drawn: ${errorText(error)}`);
       }
@@ -248,19 +228,11 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
       }
       void view.runFor(sessionId, command);
     };
-    const scrollFlowTab = (step: ScrollStep, direction: 1 | -1) => {
-      const body = flowTabs.visibleBody();
-      if (body === null) {
-        log('no Flow tab shows');
-        return;
-      }
-      const scroll = scrollContent(
-        body,
-        step,
-        direction,
-        textLineHeightPx(body),
-      );
-      log(scrollText('the Flow tab', step, direction, scroll));
+    const toggleSidePane = () => {
+      isSidePaneHidden = !isSidePaneHidden;
+      services.uiState.set(SIDE_PANE_HIDDEN_KEY, isSidePaneHidden);
+      view.setSidePaneHidden(isSidePaneHidden);
+      log(`side pane ${isSidePaneHidden ? 'hidden' : 'shown'}`);
     };
 
     const exports: WorkflowPageExports = { addStage };
@@ -274,10 +246,8 @@ export const workflowPagePart: PagePart<typeof workflowManifest> = {
         openPlan: runOnSelected('openPlan'),
         retro: runOnSelected('retro'),
         dismiss: runOnSelected('dismiss'),
-        lineDown: () => scrollFlowTab('line', 1),
-        lineUp: () => scrollFlowTab('line', -1),
-        halfPageDown: () => scrollFlowTab('halfPage', 1),
-        halfPageUp: () => scrollFlowTab('halfPage', -1),
+        toggleSidePane,
+        toggleFinishedWaves: runOnSelected('toggleFinishedWaves'),
         openPreview: () => preview.press(),
       },
       exports,

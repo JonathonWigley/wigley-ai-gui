@@ -224,17 +224,11 @@ export const defaultKeymap = {
     { keys: '<Leader>wo', scope: 'any', command: 'workflow.openPlan' },
     { keys: '<Leader>wt', scope: 'any', command: 'workflow.retro' },
     { keys: '<Leader>wd', scope: 'any', command: 'workflow.dismiss' },
-    { keys: '<C-j>', scope: 'workflow.flow', command: 'workflow.lineDown' },
-    { keys: '<C-k>', scope: 'workflow.flow', command: 'workflow.lineUp' },
+    { keys: '<Leader>ws', scope: 'any', command: 'workflow.toggleSidePane' },
     {
-      keys: '<C-S-j>',
-      scope: 'workflow.flow',
-      command: 'workflow.halfPageDown',
-    },
-    {
-      keys: '<C-S-k>',
-      scope: 'workflow.flow',
-      command: 'workflow.halfPageUp',
+      keys: '<Leader>wf',
+      scope: 'any',
+      command: 'workflow.toggleFinishedWaves',
     },
 
     // ── Panes ──────────────────────────────────────────────────────────────
