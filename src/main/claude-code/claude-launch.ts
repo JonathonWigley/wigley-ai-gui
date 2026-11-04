@@ -30,7 +30,8 @@ const NESTED_SESSION_ENV: readonly string[] = [
 
 const IDLE_COMPACT_ENV = 'CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS';
 // The app's settings, not a parent session's: a session launch sets them from its
-// request, and no other value reaches a `claude` run, the user's own included.
+// request, and no other value in the inherited environment reaches a `claude` run,
+// the user's own included. A profile's `settings.json` `env` still reaches the child.
 const APP_SETTING_ENV: readonly string[] = [IDLE_COMPACT_ENV];
 
 // The environment every `claude` run for `profileDir` gets: a copy of `env`

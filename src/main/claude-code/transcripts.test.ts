@@ -850,6 +850,31 @@ describe('mainReplies', () => {
         [3007, AT_TWO],
       ],
     },
+    {
+      name: 'MainBoundary_KeepsOnlyTheRepliesAfterIt',
+      lines: [
+        replyLine('a1', 1000, { timestamp: AT_ONE_TEXT }),
+        { type: 'system', subtype: 'compact_boundary', isSidechain: false },
+        replyLine('a2', 3000, { timestamp: AT_TWO_TEXT }),
+      ],
+      expected: [[3007, AT_TWO]],
+    },
+    {
+      name: 'MainBoundaryLast_Empty',
+      lines: [
+        replyLine('a1', 1000, { timestamp: AT_ONE_TEXT }),
+        { type: 'system', subtype: 'compact_boundary', isSidechain: false },
+      ],
+      expected: [],
+    },
+    {
+      name: 'SidechainBoundary_KeepsTheReplies',
+      lines: [
+        replyLine('a1', 1000, { timestamp: AT_ONE_TEXT }),
+        { type: 'system', subtype: 'compact_boundary', isSidechain: true },
+      ],
+      expected: [[1007, AT_ONE]],
+    },
   ])('mainReplies_$name', ({ lines, expected }) => {
     const replies = mainReplies(jsonl(lines));
 

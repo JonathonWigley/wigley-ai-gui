@@ -284,7 +284,9 @@ export type AgentEvent =
   // during it.
   | { type: 'compactionStarted'; at: number; trigger: CompactionTrigger }
   // `beforeTokens` is the context size when the compaction ran, null when the harness does not report it or the outcome
-  // is not `done`. `durationMs` is how long it ran, null when unknown.
+  // is not `done`. `durationMs` is how long it ran, null when unknown. After a compaction's boundary no main `usage`
+  // goes out until the next main reply: that reply's `usage` is the first to carry the after-size, and spend or window
+  // news from the gap waits for it.
   | {
       type: 'compactionEnded';
       at: number;
@@ -350,7 +352,8 @@ export interface AgentProcess {
   send(message: UserMessage): string;
   interrupt(): void;
   setControl(id: string, value: string): void;
-  // Starts a compaction with trigger `app`. It makes no user entry. It throws while the process is not idle.
+  // Starts a compaction with trigger `app`. It makes no user entry. It throws while the process is not idle. A
+  // `compact()` that returns is always followed by a `compactionStarted` and `compactionEnded` pair, even when none ran.
   compact(): void;
   // Resolves once the process has exited, after `ended` has fired.
   end(): Promise<void>;
@@ -428,9 +431,9 @@ export interface AgentHarness {
     profileDir: string | null,
     before: number | null,
   ): Promise<ChatEntry[]>;
-  // The main agent's `usage` event as the saved session's main replies left it: `at` is the last main reply's time;
-  // the window, both limits and spend are null. Null when the session has no main reply. Rejects naming the path when
-  // the transcript is missing.
+  // The main agent's `usage` event as the saved session's main replies since the last compaction left it: `at` is the
+  // last main reply's time; the window, both limits and spend are null. Null when the session has no main reply since
+  // the last compaction. Rejects naming the path when the transcript is missing.
   lastUsage(
     sessionId: string,
     projectDir: string,

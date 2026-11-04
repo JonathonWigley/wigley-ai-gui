@@ -52,6 +52,9 @@ export interface TurnTracker {
   abandon(): void;
   activity(): ProcessActivity;
   mode(): TurnMode;
+  isTurnOpen(): boolean;
+  // The first open uuid in write order; null when none is open.
+  oldestOpen(): string | null;
 }
 
 const LIFECYCLE_CAPABILITY = 'msg_lifecycle_v1';
@@ -129,6 +132,13 @@ export function createTurnTracker(): TurnTracker {
     },
     mode() {
       return mode;
+    },
+    isTurnOpen() {
+      return turnOpen;
+    },
+    oldestOpen() {
+      const oldest = open.keys().next();
+      return oldest.done === true ? null : oldest.value;
     },
   };
 }

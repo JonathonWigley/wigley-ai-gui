@@ -829,14 +829,8 @@ describe('createStreamDecoder', () => {
     {
       case: 'compacting status',
       text: compactStatus({ status: 'compacting' }),
-      compaction: { phase: 'started', userMessageUuid: null },
+      compaction: { phase: 'started' },
       entries: [{ kind: 'raw', id: 'turn-events-1' }],
-    },
-    {
-      case: 'compacting status with uuid',
-      text: compactStatus({ status: 'compacting', user_message_uuid: 'u1' }),
-      compaction: { phase: 'started', userMessageUuid: 'u1' },
-      entries: [{ kind: 'raw' }],
     },
     {
       case: 'boundary',
@@ -884,17 +878,27 @@ describe('createStreamDecoder', () => {
       text: compactStatus({
         status: null,
         compact_result: 'failed',
-        compact_error: 'Not enough messages to compact.',
+        compact_error: 'prompt_too_long',
       }),
       compaction: { phase: 'failed' },
       entries: [
         { kind: 'raw' },
         {
           kind: 'notice',
-          text: 'Compaction failed: Not enough messages to compact.',
+          text: 'Compaction failed: prompt_too_long',
           tone: 'error',
         },
       ],
+    },
+    {
+      case: 'failed status of a refused /compact',
+      text: compactStatus({
+        status: null,
+        compact_result: 'failed',
+        compact_error: 'Not enough messages to compact.',
+      }),
+      compaction: { phase: 'failed' },
+      entries: [{ kind: 'raw' }],
     },
     {
       case: 'failed status without error',

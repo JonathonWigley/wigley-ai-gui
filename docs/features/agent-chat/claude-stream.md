@@ -1127,7 +1127,8 @@ background subagent finished (the `task_*` lines of § Subagents arrived between
   started, 16.61) and 38,930 (the `ok` turn, 18.04: `{"input_tokens":2,"cache_creation_input_tokens":909,"cache_read_input_tokens":38019}`),
   about the size before the compaction. The context after a compaction therefore reads from the next `usage`, not from
   `post_tokens`; `post_tokens` counts the conversation messages, and the next call's input also holds the system prompt
-  and tools.
+  and tools. The adapter's context size (`replyUsageOf`) is that same sum plus `output_tokens`, so its after-size reads
+  a few tokens higher: with 5 output tokens, 38,930 reads 38,935.
 - The next call after the compaction rebuilt the cache: `"diagnostics":{"cache_miss_reason":{"type":"messages_changed","cache_missed_input_tokens":22479}}`
   and `"input_transformations":[{"type":"thinking_dropped",…}]` on the 16.61 `assistant`.
 
@@ -1327,8 +1328,14 @@ driver waits until a boundary prints or 65 minutes from spawn pass, then closes 
   `stop_reason: "refusal"`, `terminal_reason: "api_error"`, `is_error` true, lifecycle `cancelled`, text `Start a new
   session to continue`). That process had no idle wait.
 - From the binary's code, not measured: the timer fires at 90 % of the cache lifetime after the last activity (54
-  minutes), and a timer more than 60 s late, as after a machine sleep, gives the outcome `lapsed`.
+  minutes), and a timer more than 60 s late, as after a machine sleep, gives the outcome `lapsed`. The floor it reads
+  is `max(100000, CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS ?? 200000)`.
+- A user `settings.json` `env` beats the child's env. Measured with `get_context_usage`, which makes no model call, on
+  `CLAUDE_CODE_AUTO_COMPACT_WINDOW`: `settings.json` 200000 alone gave `autoCompactThreshold` 167000, the child's 300000
+  alone 267000, and both together 167000. So a user's `CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS` in `settings.json` would
+  beat what the app passes. `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` moved nothing on this model in either place: the threshold
+  stayed 967000, `autocompactSource` `model-default`.
 
 Not measured: an interrupt after the summary request has run for a while (the probe's interrupt came within 10 ms of
 `compacting`); an interrupt or a message during an automatic compaction; a `compacting` line repeating inside one attempt
-(`compact_output_chars` above 0); which of the child env and `settings.json` `env` wins for the same variable.
+(`compact_output_chars` above 0).

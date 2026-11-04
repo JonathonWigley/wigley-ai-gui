@@ -182,10 +182,10 @@ export function transcriptEntries(
   return entries;
 }
 
-// The main conversation's model replies, oldest first: every `assistant` line
-// that is not a sidechain's, whose model is not `SYNTHETIC_MODEL`, and that
-// carries `message.usage`. Each `at` follows `transcriptEntries`' rule; a line
-// that does not parse is skipped.
+// The main conversation's model replies since its last compaction, oldest first:
+// every `assistant` line that is not a sidechain's, whose model is not
+// `SYNTHETIC_MODEL`, and that carries `message.usage`. Each `at` follows
+// `transcriptEntries`' rule; a line that does not parse is skipped.
 export function mainReplies(text: string): SavedReply[] {
   const replies: SavedReply[] = [];
   let lastAt = 0;
@@ -196,6 +196,9 @@ export function mainReplies(text: string): SavedReply[] {
     }
     const line = asJson(json.value);
     lastAt = lineAt(line, lastAt);
+    if (isMainCompactBoundary(line)) {
+      replies.length = 0;
+    }
     const reply = mainReplyUsage(line);
     if (reply !== null) {
       replies.push({ reply, at: lastAt });

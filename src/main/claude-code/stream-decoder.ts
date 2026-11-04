@@ -72,7 +72,7 @@ export interface DecodedLine {
 // `started` is every `compacting` status, repeats included. `boundary` is the
 // `compact_boundary` event, which gets no entry of its own.
 export type CompactionLine =
-  | { phase: 'started'; userMessageUuid: string | null }
+  | { phase: 'started' }
   | {
       phase: 'done';
       beforeTokens: number | null;
@@ -122,10 +122,11 @@ const UNREQUESTED_ORIGINS: ReadonlySet<string> = new Set([
 ]);
 
 // `compact_error`s that show no notice. A plain interrupt's: its synthetic
-// `Compaction canceled.` line says so. A routine automatic attempt's: the turn goes
-// on past it.
+// `Compaction canceled.` line says so. A refused `/compact`'s: its synthetic line
+// gives the same reason. A routine automatic attempt's: the turn goes on past it.
 const QUIET_COMPACT_ERRORS: ReadonlySet<string> = new Set([
   'API Error: Request was aborted.',
+  'Not enough messages to compact.',
   'too_few_groups',
 ]);
 
@@ -185,13 +186,7 @@ function compactionOf(event: Json): CompactionLine | null {
     return null;
   }
   if (event.status === 'compacting') {
-    return {
-      phase: 'started',
-      userMessageUuid:
-        typeof event.user_message_uuid === 'string'
-          ? event.user_message_uuid
-          : null,
-    };
+    return { phase: 'started' };
   }
   return event.compact_result === 'failed' ? { phase: 'failed' } : null;
 }

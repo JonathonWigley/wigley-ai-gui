@@ -1870,12 +1870,6 @@ describe('createClaudeCodeHarness', () => {
         expected: 'harness',
       },
       {
-        name: 'status names the uuid',
-        act: (agent) => agent.compact(),
-        lines: [{ ...compactingStatus, user_message_uuid: APP_UUID }],
-        expected: 'app',
-      },
-      {
         name: 'fallback, the oldest armed command',
         act: (agent) => {
           agent.send({ text: '/compact', images: [] });
@@ -1995,6 +1989,56 @@ describe('createClaudeCodeHarness', () => {
           durationMs: 3000,
         },
         { type: 'sessionEnded', at: 4000 },
+      ]);
+    });
+
+    it.each<{
+      name: string;
+      isInterrupted: boolean;
+      outcome: string;
+    }>([
+      {
+        name: 'a command that never ran',
+        isInterrupted: false,
+        outcome: 'failed',
+      },
+      {
+        name: 'a command an interrupt caught',
+        isInterrupted: true,
+        outcome: 'interrupted',
+      },
+    ])(
+      'compaction_ProcessClosesBeforeAnyStatus_StillPairs ($name)',
+      async ({ isInterrupted, outcome }) => {
+        const run = await startedQuiet();
+        run.agent.compact();
+        if (isInterrupted) {
+          run.agent.interrupt();
+        }
+
+        run.emitter.emit('close', 0, null);
+        await settle();
+
+        expect(compactionEvents(run.agentEvents)).toEqual([
+          STARTED('app'),
+          NEVER_RAN('app', outcome),
+        ]);
+      },
+    );
+
+    it('compaction_AppCommandBehindAnAbandonedTurn_StillPairs', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      const run = await startedQuiet();
+      run.agent.compact();
+      await writeLines(run, [lifecycleInit]);
+
+      run.agent.interrupt();
+      vi.advanceTimersByTime(5000);
+      await settle();
+
+      expect(compactionEvents(run.agentEvents)).toEqual([
+        STARTED('app', 6000),
+        NEVER_RAN('app', 'failed', 6000),
       ]);
     });
 

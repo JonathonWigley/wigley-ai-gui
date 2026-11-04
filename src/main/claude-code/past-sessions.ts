@@ -101,8 +101,8 @@ export async function readHistory(
   );
 }
 
-// The main agent's `usage` event as the saved session's main replies left it,
-// at the last one's time; null when it has none. Rejects before any read for
+// The main agent's `usage` event as the saved session's main replies since its
+// last compaction left it, at the last one's time; null when it has none. Rejects before any read for
 // an id that is not a session id, as `readHistory` does.
 export async function readLastUsage(
   files: Files,
@@ -125,7 +125,7 @@ export async function readLastUsage(
   );
 }
 
-// The saved session's main replies, oldest first. Rejects before any read for
+// The saved session's main replies since its last compaction, oldest first. Rejects before any read for
 // an id that is not a session id, as `readHistory` does.
 export async function readSavedReplies(
   files: Files,
