@@ -279,9 +279,9 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       pendingEchoes.at(-1)?.sessionId ?? state.selectedSessionId;
 
     // Asks main to select `sessionId`, recording the echo its state will
-    // carry when that differs from the selection main will hold. Main sends
-    // that state before the invoke resolves, so an echo still pending then
-    // is one main never answers (an unknown session), and is dropped.
+    // carry when that differs from the selection main will hold. The invoke's
+    // reply can reach the page ahead of that state, so only a reply saying main
+    // sent none (an unknown session) drops the echo.
     const tellMain = (sessionId: string) => {
       const echo = sessionId === mainSelection() ? null : { sessionId };
       if (echo !== null) {
@@ -289,8 +289,10 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       }
       api.channel
         .invoke('activate', sessionId)
-        .then(() => {
-          pendingEchoes = pendingEchoes.filter((pending) => pending !== echo);
+        .then((sentState) => {
+          if (!sentState) {
+            pendingEchoes = pendingEchoes.filter((pending) => pending !== echo);
+          }
         })
         .catch((error) => {
           pendingEchoes = [];
@@ -364,9 +366,17 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
           tellMain(sessionId);
         }
       },
-      // The keys follow a press into its pane: the old pane's box lets go, and
-      // the new pane's takes them when its visible tab is a Chat tab.
-      panePressed() {
+      // The keys follow a release into its pane: the old pane's box lets go,
+      // and the new pane's takes them when its visible tab is a Chat tab. A
+      // selection begun in that pane stays, and so does the focus it came with.
+      panePressed(pane) {
+        const selection = window.getSelection();
+        const hasSelectionInPane =
+          selection?.isCollapsed === false &&
+          pane.contains(selection.anchorNode);
+        if (hasSelectionInPane) {
+          return;
+        }
         blurFocusedElement();
         const canFocusBox =
           view.panes.focusedSessionId() !== null &&

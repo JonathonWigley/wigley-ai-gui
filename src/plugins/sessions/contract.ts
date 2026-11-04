@@ -231,13 +231,15 @@ export interface SessionsState {
 // `closeSession` returns whether the session's row is closed: true when it
 // closed or was already closed, false when a close guard kept it or main knows
 // no such session; the session stays connected either way.
-// `activated` arrives before the `stateChanged` the activation causes.
+// `activate` returns whether it sent a `stateChanged`, which may reach the page
+// after that reply. `activated` arrives before the `stateChanged` the activation
+// causes.
 // `setUserTitle` sets the user title, a string that normalizes to empty or
 // null clearing it; it throws a title past `sessions.titleMaxLength`.
 export interface SessionsChannel extends ChannelShape {
   invoke: {
     state(): SessionsState;
-    activate(sessionId: string): void;
+    activate(sessionId: string): boolean;
     closeSession(sessionId: string): boolean;
     setUserTitle(sessionId: string, title: string | null): void;
   };

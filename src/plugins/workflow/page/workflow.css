@@ -85,9 +85,11 @@
   }
 }
 
+/* Two rows at least while the list holds that much, its own height below that,
+   so a short list leaves no blank under it. */
 .workflow-side-list {
   flex: 1;
-  min-height: calc(var(--wg-row-list) * 2);
+  min-height: calc-size(max-content, min(size, calc(var(--wg-row-list) * 2)));
   overflow-y: auto;
 }
 

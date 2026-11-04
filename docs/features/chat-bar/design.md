@@ -90,7 +90,8 @@ The sidebar's working line (shown while a session runs a subagent or task) and t
 - **Height:** Main agent always shows whole at its own height, which the dock bounds: about 60 px idle, about 155 px
   running. Plan, Skills and Session each take their content's height. When the column is too short they share what is
   left by their content's height, and each scrolls in its own body and keeps its whole head, down to the head alone.
-  Plan's action buttons stick to the section's bottom over a task list of at least two rows. With a long plan and three
+  Plan's action buttons stick to the section's bottom over a task list of at least two rows, or its own height when it
+  holds less, so a short list leaves no blank. With a long plan and three
   buttons in the 264 px hub, all three show down to a window about 390 px high, about 490 px during a running turn. Below
   that the section's scroll reaches them, while it has any body left: during a running turn at the 360 px minimum height
   it has none. A section whose part draws nothing hides.

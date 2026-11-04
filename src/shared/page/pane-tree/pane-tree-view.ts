@@ -36,10 +36,12 @@ const NUDGE_STEP = 24;
 // nested split boxes with a drag handle between each split's two sides.
 // `split`, `close`, `focus`, `swap`, a handle's drag and the outer panes'
 // focus and resize each call `changed` once when they change the tree, and a
-// focus change also calls `focused`; `restore` calls neither. A press that
-// moves focus then calls `pressFocused`. Each split is
-// drawn at its ratio clamped to the least pane sizes in the tree's box, drawn
-// again as the box resizes, while the tree keeps the ratio it was given.
+// focus change also calls `focused`; `restore` calls neither. The release of a
+// press that began in another pane focuses that pane, then calls
+// `pressFocused`; a press with no release in the window moves nothing. Each
+// split is drawn at its ratio clamped to the least pane sizes in the tree's
+// box, drawn again as the box resizes, while the tree keeps the ratio it was
+// given.
 export interface PaneTreeView {
   element: HTMLElement;
   tree(): PaneTree;
@@ -75,8 +77,8 @@ export interface PaneTreeViewOptions {
   timers: Timers;
   changed(tree: PaneTree): void;
   focused(id: string): void;
-  // Runs after a press on a slot moved focus to its pane, once `focused` ran,
-  // inside the press's capture so the press's own events still follow.
+  // Runs after a release moved focus to the pane its press began in, once
+  // `focused` ran, inside the release's capture, so its `click` still follows.
   pressFocused(id: string): void;
   // Runs with the ids of the leaves a close or `restore` drops while their
   // slots are still in the document, before they leave it.
@@ -110,12 +112,15 @@ interface Size {
 
 // The pane tree's view. Split boxes are kept by their place in the tree and
 // their axis, and slots by leaf id, so a draw moves only the elements whose
-// place changed. A press on a slot focuses its pane.
+// place changed. The release of a press on a slot focuses its pane.
 export function createPaneTreeView(options: PaneTreeViewOptions): PaneTreeView {
   const root = element('div', 'pane-tree');
   const slots = new Map<string, HTMLElement>();
   const boxes = new Map<string, SplitBox>();
   let current = singlePane(options.initialId);
+  // The pane the last press began in, until its release or cancel; null for a
+  // press outside every slot.
+  let pressedId: string | null = null;
 
   const slotFor = (id: string) => {
     let slot = slots.get(id);
@@ -328,19 +333,30 @@ export function createPaneTreeView(options: PaneTreeViewOptions): PaneTreeView {
     }
   };
 
-  const focusOnPress = (event: PointerEvent) => {
-    for (const [id, slot] of slots) {
-      if (slot.contains(event.target as Node)) {
-        const isOtherPane = id !== current.focusedId;
-        focus(id);
-        if (isOtherPane) {
-          options.pressFocused(id);
-        }
-        return;
-      }
+  const notePress = (event: PointerEvent) => {
+    const pressed = [...slots].find(([, slot]) =>
+      slot.contains(event.target as Node),
+    );
+    pressedId = pressed === undefined ? null : pressed[0];
+  };
+  const forgetPress = () => {
+    pressedId = null;
+  };
+  const focusOnRelease = () => {
+    const id = pressedId;
+    pressedId = null;
+    const isOtherLeaf =
+      id !== null && id !== current.focusedId && leafIds(current).includes(id);
+    if (isOtherLeaf) {
+      focus(id);
+      options.pressFocused(id);
     }
   };
-  root.addEventListener('pointerdown', focusOnPress, true);
+  // Every press is heard, so one whose release never came is forgotten by the
+  // next, wherever it lands.
+  window.addEventListener('pointerdown', notePress, true);
+  window.addEventListener('pointerup', focusOnRelease, true);
+  window.addEventListener('pointercancel', forgetPress, true);
   // A resize of the tree's box draws every split's ratio clamped again.
   const observer = new ResizeObserver(() => draw());
   observer.observe(root);
@@ -439,7 +455,9 @@ export function createPaneTreeView(options: PaneTreeViewOptions): PaneTreeView {
       resize: { nudge },
     },
     dispose() {
-      root.removeEventListener('pointerdown', focusOnPress, true);
+      window.removeEventListener('pointerdown', notePress, true);
+      window.removeEventListener('pointerup', focusOnRelease, true);
+      window.removeEventListener('pointercancel', forgetPress, true);
       observer.disconnect();
       for (const box of boxes.values()) {
         box.divider.dispose();

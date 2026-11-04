@@ -139,8 +139,8 @@ export interface TabBarPane extends SessionsPart {
 
 // `body` is the box the app fills with the pane's session or empty text; a child of `element`.
 // What `pane` returns: its root, appended to `parent`, its body, and an optional `update` the app runs with the pane's
-// new input in place of drawing the pane again, so a press that focuses the pane reaches what it landed on. Without
-// `update`, or when it throws (logged), the app draws the pane again and that press is lost.
+// new input in place of drawing the pane again, so the click of a release that focuses the pane reaches what it landed
+// on. Without `update`, or when it throws (logged), the app draws the pane again and that click is lost.
 export interface PanePart extends SessionsPart {
   body: HTMLElement;
   update?(input: PaneInput): void;

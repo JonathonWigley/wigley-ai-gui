@@ -99,7 +99,7 @@ export interface ComposerSurface {
   // Runs the composer's update with `input`, then draws the status line with
   // it in place of its last draw. A change to `isBoxFocused` alone moves only the
   // type hint, and an unchanged input draws nothing, so the elements under a
-  // press that focused the pane stay in the document for its click. Returns
+  // release that focused the pane stay in the document for its click. Returns
   // false, drawing no status line, when the update threw: the composer then
   // draws with `default` until the layouts change, and the caller draws it again.
   drawStatusLine(input: ComposerInput): boolean;

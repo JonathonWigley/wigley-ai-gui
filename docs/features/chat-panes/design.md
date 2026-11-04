@@ -44,7 +44,9 @@ so the same hands work in both tools.
   panes.
 - Tab keys (`Alt+o` / `Alt+i`), `Cmd+w` and `Space k n` act on the focused pane's session. A new
   session from `Space k n` loads into the focused pane.
-- A click inside a pane focuses it.
+- A click inside a pane focuses it when the press ends, so nothing moves under a press: the focused pane's edge insets
+  change its layout. A press and release in different panes focuses the pane the press began in; a cancelled press
+  focuses none.
 - A round for a session in an unfocused pane takes over that pane and leaves focus where it is.
   The row keeps its Needs you label until the user focuses that pane. Focus moving on its own would
   send the user's typing to the wrong session.

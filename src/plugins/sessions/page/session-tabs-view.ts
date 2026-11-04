@@ -291,7 +291,7 @@ export function mountSessionTabsView(deps: SessionTabsDeps): SessionTabsView {
   };
 
   // Updates `pane`'s part in place when `input` differs from the one it drew
-  // with, so the elements under a press that focused the pane stay in the
+  // with, so the elements under a release that focused the pane stay in the
   // document for its click. Draws the part again when it has no working
   // `update`, or when it was marked for a redraw: the new part draws beside the
   // old one, takes the old body's content by a connected move, then the old
