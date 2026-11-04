@@ -29,10 +29,12 @@ const NESTED_SESSION_ENV: readonly string[] = [
 ];
 
 const IDLE_COMPACT_ENV = 'CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS';
+// The row id `unity-pool` records as a claim's holder.
+const SESSION_ROW_ENV = 'WIGLEY_SESSION_ROW';
 // The app's settings, not a parent session's: a session launch sets them from its
 // request, and no other value in the inherited environment reaches a `claude` run,
 // the user's own included. A profile's `settings.json` `env` still reaches the child.
-const APP_SETTING_ENV: readonly string[] = [IDLE_COMPACT_ENV];
+const APP_SETTING_ENV: readonly string[] = [IDLE_COMPACT_ENV, SESSION_ROW_ENV];
 
 // The environment every `claude` run for `profileDir` gets: a copy of `env`
 // without the nested-session variables and the app's settings, with `CLAUDE_CONFIG_DIR` set to
@@ -73,7 +75,7 @@ function defaultConfigFolder(homeDir: string, paths: Paths): string {
 // `--model` and `--effort`, and the request's `instructions`, when there are
 // any, as one `--append-system-prompt` joined with a blank line, and
 // `claudeEnv`'s environment, plus the request's `idleCompactMinTokens` when it
-// is not null.
+// is not null and its `rowId` as `WIGLEY_SESSION_ROW`.
 export function claudeLaunch(
   request: AgentStart,
   permissionTool: string,
@@ -93,6 +95,7 @@ export function claudeLaunch(
   if (request.idleCompactMinTokens !== null) {
     launchEnv[IDLE_COMPACT_ENV] = String(request.idleCompactMinTokens);
   }
+  launchEnv[SESSION_ROW_ENV] = request.rowId;
   return {
     args: [
       '-p',

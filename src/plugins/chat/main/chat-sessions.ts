@@ -1519,6 +1519,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
         controls: session.launchControls,
         instructions: currentInstructions(),
         idleCompactMinTokens: currentIdleCompactMinTokens(sessionId),
+        rowId: sessionId,
       },
       processEvents(session, session.processStarts, started, profileDir, {
         isReplaying: false,
@@ -1595,6 +1596,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
           controls: session.launchControls,
           instructions: currentInstructions(),
           idleCompactMinTokens: null,
+          rowId: sessionId,
         },
         processEvents(
           session,

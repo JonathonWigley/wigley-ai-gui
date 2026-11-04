@@ -512,6 +512,7 @@ describe('createChatSessions', () => {
         controls: {},
         instructions: [],
         idleCompactMinTokens: null,
+        rowId: ROW_ID,
       },
     ]);
     expect(test.sent('sessionStarted')).toEqual([
@@ -725,6 +726,7 @@ describe('createChatSessions', () => {
       controls: {},
       instructions: [],
       idleCompactMinTokens: null,
+      rowId: ROW_ID,
     });
     expect(test.uuidCalls()).toBe(0);
     expect(JSON.parse(await test.data.read(RECENT_FOLDERS_FILE))).toEqual([
@@ -885,6 +887,9 @@ describe('createChatSessions', () => {
       expect(
         test.harness.attachCalls.map((request) => request.processId),
       ).toEqual(attaches);
+      expect(test.harness.attachCalls.map((request) => request.rowId)).toEqual(
+        attaches.map(() => ROW_ID),
+      );
       expect(
         test.harness.processes
           .filter((process) => !process.attached)
@@ -2760,6 +2765,7 @@ describe('createChatSessions saved sessions', () => {
           controls: {},
           instructions: [],
           idleCompactMinTokens: null,
+          rowId: ROW_ID,
         },
       ]);
       expect(test.sent('sessionRunning')).toEqual([{ sessionId: ROW_ID }]);
@@ -3569,8 +3575,10 @@ describe('createChatSessions clear', () => {
       entries: [CLEARED],
     });
     expect(old.request.sessionId).toBe('uuid-1');
+    expect(old.request.rowId).toBe(ROW_ID);
     expect(test.harness.processes[1].request).toMatchObject({
       sessionId: 'uuid-2',
+      rowId: ROW_ID,
       resume: false,
       controls: { model: 'fake-large' },
     });

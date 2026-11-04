@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { posixPaths } from '../../shared/paths/posix-paths';
 import { windowsPaths } from '../../shared/paths/windows-paths';
-import { claudeConfigFolder, claudeLaunch } from './claude-launch';
+import { claudeConfigFolder, claudeEnv, claudeLaunch } from './claude-launch';
 
 const TOOL = 'mcp__plugin_wigley_wigley-forms__permission_prompt';
 
@@ -17,6 +17,7 @@ describe('claudeLaunch', () => {
         controls: {},
         instructions: [],
         idleCompactMinTokens: null,
+        rowId: 'row-1',
       },
       TOOL,
       { HOME: '/h', CLAUDE_CONFIG_DIR: '/x' },
@@ -40,7 +41,11 @@ describe('claudeLaunch', () => {
       TOOL,
     ]);
     expect(launch.cwd).toBe('/proj');
-    expect(launch.env).toEqual({ HOME: '/h', CLAUDE_CONFIG_DIR: '/p' });
+    expect(launch.env).toEqual({
+      HOME: '/h',
+      CLAUDE_CONFIG_DIR: '/p',
+      WIGLEY_SESSION_ROW: 'row-1',
+    });
   });
 
   it('claudeLaunch_Resume_ResumeFlagAndInheritedConfigDir', () => {
@@ -56,6 +61,7 @@ describe('claudeLaunch', () => {
         controls: {},
         instructions: [],
         idleCompactMinTokens: null,
+        rowId: 'row-1',
       },
       TOOL,
       env,
@@ -119,6 +125,7 @@ describe('claudeLaunch', () => {
           controls,
           instructions: [],
           idleCompactMinTokens: null,
+          rowId: 'row-1',
         },
         TOOL,
         {},
@@ -159,6 +166,7 @@ describe('claudeLaunch', () => {
           controls: {},
           instructions,
           idleCompactMinTokens: null,
+          rowId: 'row-1',
         },
         TOOL,
         {},
@@ -188,6 +196,7 @@ describe('claudeLaunch', () => {
         controls: {},
         instructions: [],
         idleCompactMinTokens: null,
+        rowId: 'row-1',
       },
       TOOL,
       {
@@ -204,6 +213,7 @@ describe('claudeLaunch', () => {
       HOME: '/h',
       CLAUDE_CODE_USE_BEDROCK: '1',
       CLAUDE_CONFIG_DIR: '/p',
+      WIGLEY_SESSION_ROW: 'row-1',
     });
   });
 
@@ -227,6 +237,7 @@ describe('claudeLaunch', () => {
           controls: {},
           instructions: [],
           idleCompactMinTokens: minTokens,
+          rowId: 'row-1',
         },
         TOOL,
         { CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS: '300000' },
@@ -237,6 +248,34 @@ describe('claudeLaunch', () => {
       expect(launch.env.CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS).toBe(expected);
     },
   );
+
+  it.each<{ name: string; env: NodeJS.ProcessEnv }>([
+    { name: 'nothing inherited', env: {} },
+    {
+      name: 'the request replaces an inherited row',
+      env: { WIGLEY_SESSION_ROW: 'parent-row' },
+    },
+  ])('claudeLaunch_RowId_SetsWigleySessionRow ($name)', ({ env }) => {
+    const launch = claudeLaunch(
+      {
+        processId: 'p-1',
+        sessionId: 's-1',
+        resume: false,
+        projectDir: '/proj',
+        profileDir: null,
+        controls: {},
+        instructions: [],
+        idleCompactMinTokens: null,
+        rowId: 'row-7',
+      },
+      TOOL,
+      env,
+      '/h',
+      posixPaths,
+    );
+
+    expect(launch.env.WIGLEY_SESSION_ROW).toBe('row-7');
+  });
 
   it("expands a profile folder against the adapter's home", () => {
     const launch = claudeLaunch(
@@ -249,6 +288,7 @@ describe('claudeLaunch', () => {
         controls: {},
         instructions: [],
         idleCompactMinTokens: null,
+        rowId: 'row-1',
       },
       TOOL,
       { HOME: '/elsewhere' },
@@ -270,6 +310,7 @@ describe('claudeLaunch', () => {
         controls: {},
         instructions: [],
         idleCompactMinTokens: null,
+        rowId: 'row-1',
       },
       TOOL,
       {},
@@ -278,6 +319,19 @@ describe('claudeLaunch', () => {
     );
 
     expect(launch.env.CLAUDE_CONFIG_DIR).toBe('C:\\Users\\jo\\.claude-work');
+  });
+});
+
+describe('claudeEnv', () => {
+  it('claudeEnv_InheritedSessionRow_IsDropped', () => {
+    const env = claudeEnv(
+      { HOME: '/h', WIGLEY_SESSION_ROW: 'parent-row' },
+      '/p',
+      '/h',
+      posixPaths,
+    );
+
+    expect(env).not.toHaveProperty('WIGLEY_SESSION_ROW');
   });
 });
 

@@ -21,6 +21,7 @@ const request: AgentStart = {
   controls: {},
   instructions: [],
   idleCompactMinTokens: null,
+  rowId: 'row-1',
 };
 
 const GRACE_NOTICE =
