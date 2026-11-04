@@ -324,6 +324,8 @@ Review base: 7f956435
 - 12 · 73bdb0c8 · selftest 864 PASS, host exited; checks 2, 5, 6, 8 passed; check 1 passed but for the alert (user's check); check 4 failed, fixed in 73bdb0c8, re-run passed; check 3 failed on installed plugin 1.14.0, passed with the clone's relay (needs the marketplace push); check 7 passed as written with an orphan · concerns: host death leaves a mid-tool claude running, which wrote into the session beside the resumed process, against 'a session never runs two processes', and design.md's 'its pipes close and it exits'; a system line between turns (mode change, then quit) reads busy until the next result, so that process and host stay alive; _answer_alone's not_started payload is rejected by Claude as a permission reply; one drive restart took 37 s with a prompt waiting on the old relay, not reproduced; Mode/Effort/Model read unset in the log after a resume on a row set to Auto, not investigated; the older-host notice stays after the old process ends until the next send; closed during attach and a host that stops answering not exercised
 ### Contract changes
 - IdleRule (01, 05, 06, 08): { key, value } → { key, value, ignoredStdoutValues, ignoredStdinValues } · why: live check 4, Claude's bookkeeping lines read busy so no process ever rested idle; stdin needs its own list since the app writes get_context_usage after every result · consumers: 06, 08, landed in 73bdb0c8
+- IdleRule: {key,value,ignoredStdoutValues,ignoredStdinValues} → {key,value,busyStdoutValues,busyStdinValues} · finding 5, stepping back from 73bdb0c8
+- SessionHost.list and attach reject when a host could not be asked; close() removed; messageDropped carries its message; ChatSessionState gains returned · review round 1 fixes
 ### Rulings
 - Marketplace review base is cbd8a9e; git fetch fails in this session (SSH key unavailable), so origin was not checked; neither main showed behind at the last fetch and nothing is pushed — a stale origin would surface at push · lead
 - Cleanup deletes leftovers before older app-* folders, so a stale deleting-app-x cannot block a rename and print a false warning — only delete order differs if wrong · group 04 · group 04
@@ -363,7 +365,12 @@ Review base: 7f956435
 - snapshot() drops a skipped record for good once a held row holds its host id; a plain filter would revive a session the user closed · group 09
 - extra tests beyond the doc: unheldGuard_ClearedRow_LogsAndStartsFresh, restore_SkippedRecord_LeftOutOnceAHeldRowHoldsItsHostId, hold_AfterAWaitEnded_StartsANewWaitWithItsOwnBound · group 09
 - Check 4's fix went to a worker on the lead's ruling that the host stays harness-free and an unknown line reads busy · lead
+- Review round 1 decisions, from the user's note to take the recommendations this session: next host reaps a dead host's children; idle rule names what starts a turn; restored rows keep controls; relay denies a permission call it cannot deliver · lead
+- A returned message stays in the row's state and record until the page places it, since a replay races page load · lead
+- The dead-host guard compares start time alone, since a launcher or retitled process changes its command · lead
 ### Review rounds
 - Round 1 at 426be8f2: NEEDS FIXES, 51 findings, 7 lanes; prose and comment fixes applied by the lead; report /tmp/claude-session-host/review-426be8f2.md
+- Round 2, re-review at 540fb434: NEEDS FIXES, 23 findings, 3 lanes, live check found a quit crash; report /tmp/claude-session-host/review-540fb434.md
 ### Test gate
 - Whole gui suite: 394 files, 6583 tests passed at 73bdb0c8, tsc and lint clean; self-test 864 PASS at 14a6a1b5 (before the idle fix, which touched no self-test path); marketplace forms suite 63 passed, 2 Windows-only skipped. Picked whole suite since the change reaches main, chat, sessions and the harness
+- After review round 1's fixes, at 540fb434: whole gui suite 398 files, 6723 tests passed, tsc and lint clean; forms suite 71 passed, 2 Windows-only skipped. Whole suite since the fixes reach main, chat, host and harness

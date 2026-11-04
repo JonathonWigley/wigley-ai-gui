@@ -105,7 +105,8 @@ session under it.
     may outlive it.
 - A drive run and the self-test end their host's processes at teardown, since their runs are thrown away. A drive
   `restart` keeps them, so a drive run can check re-attach, and `drive quit --keep-sessions` keeps them with the run's
-  home and user data, so `start --run <id>` brings the run back. Any other quit of a run ends them.
+  home and user data, so `start --run <id>` brings the run back. Any other quit of a running app ends them. A plain
+  `quit` of a kept run, whose app is gone, refuses while its host may be listening: `start --run <id>` then `quit` ends it.
 
 ## Protocol
 
