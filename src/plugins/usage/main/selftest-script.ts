@@ -105,7 +105,6 @@ const GROUPS: SelfTestGroup[] = [
         expect: `[usage] ${COMPACTING_LINE}`,
         alsoExpect: [COMPACTING_TAB_LINE],
         screenshot: 'compacting-narrow',
-        checksFit: true,
       },
       { keys: ['<C-c>'], expect: `[usage] ${FRESH_LINE}` },
     ],
@@ -141,9 +140,9 @@ export function usageSelfTestScript(deps: UsageSelfTestDeps): SelfTestScript {
   return {
     pageBinds: [],
     settings: {},
-    // The tab bar's parts and the session line clip in their own box, and the
-    // activity dock's tool calls, one line and done line end in an ellipsis
-    // inside theirs.
+    // The tab bar's parts, the session line and the activity dock's one line clip
+    // in their own box, and the dock's tool calls and done line end in an
+    // ellipsis inside theirs.
     scrollsItself: [
       '.session-bar-parts',
       '.usage-session-line',

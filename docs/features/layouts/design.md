@@ -129,7 +129,7 @@ stays in themes.
 | `sessions` | `sessions.layout` | the side bar's Favorites and Recent sections, their project groups and the session rows in them, each session's tab strip, where other plugins' row and bar parts sit, the rename dialog |
 | `agent-lines` | `agent-lines.layout` | the working line under each session row while it runs a subagent or task |
 | `agent-strip` | `agent-strip.layout` | the agent strip above the Chat composer's box: subagent cards and task rows, a box opened in place |
-| `agent-skills` | `agent-skills.layout` | the session hub's Skills section: one row per skill and agent |
+| `agent-skills` | `agent-skills.layout` | the session hub's Skills section: one row per skill |
 | `gallery` | `gallery.layout` | each primitive's sample block |
 | `usage` | `usage.layout` | the status-bar line (plan rows), each session's context meter and cache mark on its row, each session's context line (context bar, cache countdown) above the Chat box and its spend in the Chat status line; its whole usage line in each tab bar, through the optional `usage-tab-line` plugin; the right-bar details |
 | `keys` | `keys.layout` | the help overlay, the which-key panel, the title bar's Keys button |

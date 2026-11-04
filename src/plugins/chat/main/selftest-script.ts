@@ -788,8 +788,8 @@ const GROUPS: SelfTestGroup[] = [
 ];
 
 // Raw JSON and tool output scroll in their own box, as code and tables do, a
-// row's status and the activity dock's tool calls, its one line and done line
-// end in an ellipsis, and the tab bar's parts clip in their own box.
+// row's status and the activity dock's tool calls and done line end in an
+// ellipsis, and the tab bar's parts and the dock's one line clip in their own box.
 const SCROLLS_ITSELF = [
   '.chat-json',
   '.chat-tool-result',

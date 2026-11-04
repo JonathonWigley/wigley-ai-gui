@@ -65,7 +65,7 @@ export const agentsMainPart: MainPart<typeof agentsManifest> = {
     });
     // Row id → host session id → that process's roster. A clear leaves the
     // old process ending under the same row, so its `sessionEnded` must end
-    // only its own subagents and tasks; its skills stay listed until the row ends.
+    // only its own subagents and tasks; its skills stay listed until the row ends or the app restarts.
     const rosters = new Map<string, Map<string, Roster>>();
 
     api.events.on(
