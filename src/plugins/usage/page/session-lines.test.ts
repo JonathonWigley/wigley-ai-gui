@@ -11,9 +11,12 @@ import type { UsageSnapshot } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import { createUsageParts } from './layout/usage-parts';
 import {
+  contextLineKind,
   createSessionLines,
   rowCacheKind,
+  type SessionLineKind,
   sessionLineKind,
+  spendLineKind,
 } from './session-lines';
 import { NO_FENCES } from '../../../shared/page/markdown-mount.test-support';
 
@@ -87,6 +90,23 @@ function setUp(
     shown = snapshot;
   };
   return { lines, logged, show };
+}
+
+// What `line` logs when a part over `snapshot` first draws `s1`.
+function logOnBuild<I>(
+  line: SessionLineKind<I>,
+  snapshot: UsageSnapshot,
+): string[] {
+  const logged: string[] = [];
+  const lines = createSessionLines({
+    id: 'usage.line',
+    line,
+    log: (text) => logged.push(text),
+    nameOf: () => NAME,
+    latest: () => ({ snapshot, now: NOW }),
+  });
+  lines.part.build(asHtml(new FakeElement('div')), SESSION);
+  return logged;
 }
 
 beforeEach(() => {
@@ -239,6 +259,32 @@ describe('session lines', () => {
       'session line in gamma 2: context 180k/300k, cache 42m, spend $1.23',
       'session line in gamma 2: context 180k/300k, cache 42m, spend $1.23',
     ]);
+  });
+
+  it.each([
+    {
+      case: 'ContextLine',
+      logged: (snapshot: UsageSnapshot) =>
+        logOnBuild(contextLineKind(defaultParts()), snapshot),
+      expected: 'context line in gamma 2: context 180k/300k, cache 42m',
+      usage: usageEvent(),
+    },
+    {
+      case: 'Spend',
+      logged: (snapshot: UsageSnapshot) =>
+        logOnBuild(spendLineKind(defaultParts()), snapshot),
+      expected: 'spend in gamma 2: $1.23',
+      usage: usageEvent(),
+    },
+    {
+      case: 'NullSpend',
+      logged: (snapshot: UsageSnapshot) =>
+        logOnBuild(spendLineKind(defaultParts()), snapshot),
+      expected: 'spend in gamma 2: none',
+      usage: usageEvent({ spendUsd: null }),
+    },
+  ])('build_LogsUnderItsLabel_$case', ({ logged, expected, usage }) => {
+    expect(logged(snapshotWith(usage))).toEqual([expected]);
   });
 
   it('rowCacheKind_NoExpiryThenWarmThenColdThenNoExpiry_DrawsTheMarkAndLogsEachState', () => {

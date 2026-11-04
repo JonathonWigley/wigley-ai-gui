@@ -1,9 +1,10 @@
 // The usage layout contract: the parts a usage layout draws for the status-bar plan line, each session's line, its
-// side-bar row's line and cache mark and the right-bar details, and the kit each part gets. The app keeps the
-// status-bar slot (always on, at the bar's end), the right-bar slot (there only while the details are open), each
-// session's line slot (in its Chat status line, and in its tab bar while the usage-tab-line plugin is on), each
-// session's row line slot and row cache slot (under its side-bar row), the open state, the shown session and every
-// redraw: on each snapshot, each change of the shown session, each layouts set and once a minute.
+// context line, its spend, its side-bar row's line and cache mark and the right-bar details, and the kit each part
+// gets. The app keeps the status-bar slot (always on, at the bar's end), the right-bar slot (there only while the
+// details are open), each session's line slot (in its tab bar while the usage-tab-line plugin is on), its context line
+// slot (above its Chat box), its spend slot (in its Chat status line), each session's row line slot and row cache slot
+// (under its side-bar row), the open state, the shown session and every redraw: on each snapshot, each change of the
+// shown session, each layouts set and once a minute.
 //
 // Every input is already worded for the screen: counts, percents, money and times arrive as text, and each meter's
 // fill and tone beside its text. The one number that is no reading is `compactingElapsedMs`, for timing an animation.
@@ -18,18 +19,22 @@ export interface MeterInput {
   percent: number;
   tone: UsageTone;
 }
-// One session's line: its context meter, its cache countdown (`cache 42m`, `cache cold`) and its spend (`$1.23`);
-// null cache or spend while the session has reported none. `compacting` is the chip naming the trigger while the
-// session compacts (`compacting · auto`, `compacting`, `compacting · autocompact`), null otherwise;
-// `compactingElapsedMs` is how long it has compacted at this draw, null with it, so an animation a redraw builds again
-// can start where the last one was.
-export interface SessionLineInput {
+// One session's context line: its context meter and its cache countdown (`cache 42m`, `cache cold`), null cache while
+// the session has reported none. `compacting` is the chip naming the trigger while the session compacts
+// (`compacting · auto`, `compacting`, `compacting · autocompact`), null otherwise; `compactingElapsedMs` is how long it
+// has compacted at this draw, null with it, so an animation a redraw builds again can start where the last one was.
+export interface ContextLineInput {
   context: MeterInput;
   cache: string | null;
-  spend: string | null;
   compacting: string | null;
   compactingElapsedMs: number | null;
 }
+// One session's spend (`$1.23`), null while the session has reported none.
+export interface SpendLineInput {
+  spend: string | null;
+}
+// One session's whole line: its context line and its spend.
+export interface SessionLineInput extends ContextLineInput, SpendLineInput {}
 // One session's line under its side-bar row: its context meter, whose text is the used tokens alone (`180k`), the zero
 // line (`0k`) while the session has no usage.
 export interface RowLineInput {
@@ -99,11 +104,13 @@ export interface UsageKit extends BaseKit {}
 // Each part comes from the first layout that defines it among the `usage.layout` setting and `default`; a part that
 // throws, returns no element appended to `parent`, or appends other nodes beside it is drawn by `default` instead.
 // Every part appends one element to `parent` and returns it. `statusLine` draws the status-bar plan line,
-// `sessionLine` one session's line into the slot its host gives it, a Chat status line or a tab bar while
-// usage-tab-line is on (a zero line, context `0k` and no cache or spend, while that session has no usage; while
-// `compacting` is set, the default layout draws the chip first and pulses the meter), `rowLine` one session's line
-// under its side-bar row (its context `0k` while that session has no usage), `rowCache` one session's cache mark on
-// that row (not drawn while the session has no cache expiry), and `details` the right-bar details.
+// `sessionLine` one session's line into the tab bar slot its host gives it while usage-tab-line is on (a zero line,
+// context `0k` and no cache or spend, while that session has no usage; while `compacting` is set, the default layout
+// draws the chip first and pulses the meter), `contextLine` its context and cache above its Chat box (the same zero
+// line, chip and pulse), `spendLine` its spend in its Chat status line (still one element while spend is null, which
+// the default layout hides), `rowLine` one session's line under its side-bar row (its context `0k` while that
+// session has no usage), `rowCache` one session's cache mark on that row (not drawn while the session has no cache
+// expiry), and `details` the right-bar details.
 export interface Layout {
   statusLine?(
     parent: HTMLElement,
@@ -113,6 +120,16 @@ export interface Layout {
   sessionLine?(
     parent: HTMLElement,
     input: SessionLineInput,
+    kit: UsageKit,
+  ): HTMLElement;
+  contextLine?(
+    parent: HTMLElement,
+    input: ContextLineInput,
+    kit: UsageKit,
+  ): HTMLElement;
+  spendLine?(
+    parent: HTMLElement,
+    input: SpendLineInput,
     kit: UsageKit,
   ): HTMLElement;
   rowLine?(

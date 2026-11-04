@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import type { SessionLineInput, UsageKit } from '../layout';
+import type { ContextLineInput, SessionLineInput, UsageKit } from '../layout';
 import layout from './layout.js';
 
-// The DOM surface the default session line uses. This layer may not import the
+// The DOM surface the default lines use. This layer may not import the
 // page's shared fake DOM.
 class FakeElement {
   className = '';
+  hidden = false;
   children: FakeElement[] = [];
   styleProperties = new Map<string, string>();
   style = {
@@ -29,6 +30,10 @@ class FakeElement {
 
 function asFake(element: HTMLElement): FakeElement {
   return element as unknown as FakeElement;
+}
+
+function asHtml(element: FakeElement): HTMLElement {
+  return element as unknown as HTMLElement;
 }
 
 // A fake kit part's element: named after the part and its arguments
@@ -70,7 +75,90 @@ function lineInput(
   };
 }
 
+function contextInput(overrides: Partial<ContextLineInput>): ContextLineInput {
+  return {
+    context: {
+      label: 'Context',
+      text: '180k/300k',
+      percent: 60,
+      tone: 'normal',
+    },
+    cache: 'cache 42m',
+    compacting: null,
+    compactingElapsedMs: null,
+    ...overrides,
+  };
+}
+
 describe('default usage layout', () => {
+  it.each([
+    {
+      case: 'Compacting_DrawsChipFirstAndSetsItsElapsedTime',
+      input: contextInput({
+        compacting: 'compacting · autocompact',
+        compactingElapsedMs: 7250,
+      }),
+      isCompacting: true,
+      parts: [
+        'tag:compacting · autocompact:accent',
+        'meter:60:normal',
+        'span:180k/300k',
+        'span:cache 42m',
+      ],
+      elapsedProperty: '7250ms',
+    },
+    {
+      case: 'NotCompacting_DrawsMeterAndTexts',
+      input: contextInput({}),
+      isCompacting: false,
+      parts: ['meter:60:normal', 'span:180k/300k', 'span:cache 42m'],
+      elapsedProperty: undefined,
+    },
+    {
+      case: 'NullCache_DrawsNoCacheText',
+      input: contextInput({ cache: null }),
+      isCompacting: false,
+      parts: ['meter:60:normal', 'span:180k/300k'],
+      elapsedProperty: undefined,
+    },
+  ])('contextLine_$case', ({ input, isCompacting, parts, elapsedProperty }) => {
+    const parent = new FakeElement('parent') as unknown as HTMLElement;
+
+    const line = asFake(layout.contextLine(parent, input, fakeKit));
+
+    expect(line.className.split(' ').includes('usage-context-line')).toBe(true);
+    expect(line.className.split(' ').includes('is-compacting')).toBe(
+      isCompacting,
+    );
+    expect(line.children.map((child) => child.part)).toEqual(parts);
+    expect(line.styleProperties.get('--usage-compacting-elapsed')).toBe(
+      elapsedProperty,
+    );
+  });
+
+  it.each([
+    {
+      case: 'Spend_ShowsIt',
+      spend: '$1.23',
+      part: 'span:$1.23',
+      hidden: false,
+    },
+    {
+      case: 'NullSpend_HidesAnEmptyText',
+      spend: null,
+      part: 'span:',
+      hidden: true,
+    },
+  ])('spendLine_$case', ({ spend, part: expectedPart, hidden }) => {
+    const parent = new FakeElement('parent');
+
+    const text = asFake(layout.spendLine(asHtml(parent), { spend }, fakeKit));
+
+    expect(parent.children).toEqual([text]);
+    expect(text.part).toBe(expectedPart);
+    expect(text.hidden).toBe(hidden);
+  });
+
   it.each([
     {
       case: 'Compacting_DrawsChipFirstAndSetsItsElapsedTime',

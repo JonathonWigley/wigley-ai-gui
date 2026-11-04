@@ -9,7 +9,7 @@ import type { UsageSnapshot } from '../contract';
 import { usageFixture } from './usage-fixture';
 
 // The self-test's project folder, made under the self-test's home. Its name
-// names the session in every session line.
+// names the session in every usage line.
 const SELFTEST_PROJECT_NAME = 'usage-selftest';
 
 // `sessionUsage` resolves once the store holds a `usage` event for the
@@ -41,10 +41,10 @@ interface UsageSelfTestResult {
 const TOGGLE = [' ', 'v', 'u'];
 const FRESH_DETAILS = '[usage] details shown: work fresh, personal fresh';
 const DETAILS_HIDDEN = '[usage] details hidden';
-// The fresh fixture's session line, as each surface logs it.
-const FRESH_LINE = `session line in ${SELFTEST_PROJECT_NAME}: context 180k/300k, cache 42m, spend $1.23`;
+// The fresh fixture's context line.
+const FRESH_LINE = `context line in ${SELFTEST_PROJECT_NAME}: context 180k/300k, cache 42m`;
 // The same line while the fake's own compaction runs.
-const COMPACTING_LINE = `session line in ${SELFTEST_PROJECT_NAME}: compacting · autocompact, context 180k/300k, cache 42m, spend $1.23`;
+const COMPACTING_LINE = `context line in ${SELFTEST_PROJECT_NAME}: compacting · autocompact, context 180k/300k, cache 42m`;
 const SEND_FAKE_COMPACT = ['i', ...FAKE_COMPACT_TEXT, 'Escape', 'Enter'];
 const COMPACTING_TAB_LINE =
   /^\[usage-tab-line\] session line in usage-selftest: compacting · autocompact, context 180k\/300k, cache 42m, spend \$1\.23$/;
@@ -70,7 +70,7 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'narrow',
-    why: "In a narrow window the status line keeps every profile stacked, the Chat status line's usage part drops whole items from its end, and the right bar lies over the content at its least width.",
+    why: 'In a narrow window the status line keeps every profile stacked, and the right bar lies over the content at its least width.',
     steps: [
       {
         width: 520,
@@ -88,7 +88,7 @@ const GROUPS: SelfTestGroup[] = [
   },
   {
     name: 'compacting',
-    why: "A compaction draws the trigger's chip at the start of the session line and drops it when the compaction ends; `compacting-narrow` is read by eye for the chip beside its meter at the window's least width.",
+    why: "A compaction draws the trigger's chip at the start of the context line and the tab bar's session line and drops it when the compaction ends; `compacting-narrow` is read by eye for the chip beside its meter at the window's least width.",
     steps: [
       {
         width: 'start',
@@ -113,8 +113,8 @@ const GROUPS: SelfTestGroup[] = [
 
 // Each run closes the sessions an earlier run left in the project folder, so
 // the new row's label stays the folder's name, launches a chat session there,
-// activates its row so that a pane shows its Chat tab, whose status line draws
-// the session line, whatever an earlier script left selected, waits for the
+// activates its row so that a pane shows its Chat tab, whose composer draws the
+// context line, whatever an earlier script left selected, waits for the
 // fake turn's own usage event, and only then seeds the fresh fixture on it, so
 // that event cannot overwrite the seed: the steps wait for exact lines, and the
 // start poll's line is logged before the run begins. The plans the start poll
@@ -179,11 +179,13 @@ export function usageSelfTestScript(deps: UsageSelfTestDeps): SelfTestScript {
           deps.compactions.release();
           throw error;
         });
-      // usage-tab-line starts in the self-test, so the seed also draws the
-      // line in the run's tab bar, logged under usage-tab-line's name.
+      // The seed also draws the spend, and usage-tab-line starts in the
+      // self-test, so the whole line in the run's tab bar, logged under
+      // usage-tab-line's name.
       return {
         shownLine: `[usage] ${FRESH_LINE}`,
         alsoShown: [
+          /^\[usage\] spend in usage-selftest: \$1\.23$/,
           /^\[usage-tab-line\] session line in usage-selftest: context 180k\/300k, cache 42m, spend \$1\.23$/,
         ],
         result,

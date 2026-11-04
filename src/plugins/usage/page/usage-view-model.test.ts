@@ -13,12 +13,16 @@ import type {
   StatusLineInput,
 } from '../layouts/layout';
 import {
+  contextLineInput,
+  contextLineText,
   detailsInput,
   detailsStatesText,
   rowCacheInput,
   rowLineInput,
   sessionLineInput,
   sessionLineText,
+  spendLineInput,
+  spendLineText,
   statusLineInput,
   statusLineText,
 } from './usage-view-model';
@@ -741,6 +745,65 @@ describe('log text', () => {
   ])('logText_SessionLine$case', ({ input, expected }) => {
     expect(sessionLineText(input)).toBe(expected);
   });
+
+  it.each<{
+    case: string;
+    usage: UsageAgentEvent | null;
+    compaction?: SessionUsage['compaction'];
+    context: string;
+    spend: string;
+  }>([
+    {
+      case: 'CacheAndSpend',
+      usage: usageEvent({
+        cacheExpiresAt: NOW + 42 * MINUTE,
+        spendUsd: 1.234,
+      }),
+      context: 'context 180k/300k, cache 42m',
+      spend: '$1.23',
+    },
+    {
+      case: 'NullCache',
+      usage: usageEvent({ spendUsd: 1.234 }),
+      context: 'context 180k/300k',
+      spend: '$1.23',
+    },
+    {
+      case: 'NullSpend',
+      usage: usageEvent({ cacheExpiresAt: NOW + 42 * MINUTE }),
+      context: 'context 180k/300k, cache 42m',
+      spend: 'none',
+    },
+    {
+      case: 'Compacting',
+      usage: usageEvent({
+        cacheExpiresAt: NOW + 42 * MINUTE,
+        spendUsd: 1.234,
+      }),
+      compaction: { trigger: 'harness', startedAt: NOW - MINUTE },
+      context: 'compacting · autocompact, context 180k/300k, cache 42m',
+      spend: '$1.23',
+    },
+    {
+      case: 'NoUsage',
+      usage: null,
+      context: 'context 0k',
+      spend: 'none',
+    },
+  ])(
+    'logText_ContextAndSpendLines$case',
+    ({ usage, compaction = null, context, spend }) => {
+      const snapshot: UsageSnapshot = {
+        plans: [],
+        sessions: [{ sessionId: 's1', profileDir: null, usage, compaction }],
+      };
+
+      expect(contextLineText(contextLineInput(snapshot, 's1', NOW))).toBe(
+        context,
+      );
+      expect(spendLineText(spendLineInput(snapshot, 's1', NOW))).toBe(spend);
+    },
+  );
 
   it.each([
     {

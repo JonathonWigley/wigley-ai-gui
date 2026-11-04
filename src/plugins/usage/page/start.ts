@@ -27,10 +27,13 @@ import { readUsageLayout } from './layout/read-usage-layout';
 import { createUsageParts, type Drawn } from './layout/usage-parts';
 import { createSessionLineParts } from './session-line-parts';
 import {
+  contextLineKind,
   createSessionLines,
   rowCacheKind,
   rowLineKind,
+  type SessionLineKind,
   sessionLineKind,
+  spendLineKind,
 } from './session-lines';
 import {
   detailsInput,
@@ -51,19 +54,20 @@ const DETAILS_OPEN_KEY = 'details-open';
 const REDRAW_MS = 60_000;
 
 // Draws the usage status-bar line at the status bar's end for the page's
-// life, each session's line in its Chat status line (a chat status part), its
-// context and its cache mark under its side-bar row (two sessions row parts), and
-// the usage details in the right bar while they are open (`toggleDetails`,
-// kept in `uiState`), all through the `usage.layout` layout. Exports
-// `sessionLinePart`, the same line as a part for another surface; every part
-// it made redraws with the page's own. Hears main's `changed` snapshots (after
+// life, each session's context line above its Chat box (a chat composer part),
+// its spend in its Chat status line (a chat status part), its context and its
+// cache mark under its side-bar row (two sessions row parts), and the usage
+// details in the right bar while they are open (`toggleDetails`, kept in
+// `uiState`), all through the `usage.layout` layout. Exports `sessionLinePart`,
+// the whole session line as a part for a tab bar; every part it made redraws
+// with the page's own. Hears main's `changed` snapshots (after
 // one `snapshot` read) and `sessions.activeChanged` for the shown session, and
 // redraws all on each, on each layouts set and once a minute for the
 // countdowns; hears `sessions.sessionAdded` for each session's name in the log
 // and `sessions.sessionRemoved` to forget a session's lines. Draws nothing
-// until the first snapshot lands. Logs the status line's and each session
-// line's text when it changes, and the details' states when they show, hide
-// or change.
+// until the first snapshot lands. Logs the status line's and each session's
+// lines' text when it changes, and the details' states when they show, hide or
+// change.
 export const usagePagePart: PagePart<typeof usageManifest> = {
   manifest: usageManifest,
   start(api: UsageApi) {
@@ -106,13 +110,15 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
     const nameOf = (sessionId: string) => names.get(sessionId) ?? sessionId;
     const latest = () =>
       snapshot === null ? null : { snapshot, now: services.clock.now() };
-    const sessionLinePart: UsagePageExports['sessionLinePart'] = (
-      id,
-      partLog,
+    // A part drawing `line`, which redraws and forgets with the page's own.
+    const linePart = <I>(
+      id: string,
+      line: SessionLineKind<I>,
+      partLog: (text: string) => void,
     ) => {
       const lines = createSessionLines({
         id,
-        line: sessionLineKind(parts),
+        line,
         log: partLog,
         nameOf,
         latest,
@@ -120,25 +126,24 @@ export const usagePagePart: PagePart<typeof usageManifest> = {
       lineParts.add(lines);
       return lines.part;
     };
-    chat.addStatusPart(sessionLinePart('usage.sessionLine', log));
-    const rowLines = createSessionLines({
-      id: 'usage.rowLine',
-      line: rowLineKind(parts),
-      log: (line) => log(`row ${line}`),
-      nameOf,
-      latest,
-    });
-    lineParts.add(rowLines);
-    sessions.addRowPart(rowLines.part);
-    const rowCaches = createSessionLines({
-      id: 'usage.rowCache',
-      line: rowCacheKind(parts),
-      log: (line) => log(`row cache ${line}`),
-      nameOf,
-      latest,
-    });
-    lineParts.add(rowCaches);
-    sessions.addRowPart(rowCaches.part);
+    const sessionLinePart: UsagePageExports['sessionLinePart'] = (
+      id,
+      partLog,
+    ) => linePart(id, sessionLineKind(parts), partLog);
+    chat.addComposerPart(
+      linePart('usage.contextLine', contextLineKind(parts), log),
+    );
+    chat.addStatusPart(linePart('usage.spend', spendLineKind(parts), log));
+    sessions.addRowPart(
+      linePart('usage.rowLine', rowLineKind(parts), (line) =>
+        log(`row ${line}`),
+      ),
+    );
+    sessions.addRowPart(
+      linePart('usage.rowCache', rowCacheKind(parts), (line) =>
+        log(`row cache ${line}`),
+      ),
+    );
 
     // Draws the line again, the last draw disposed first.
     const drawStatusLine = (current: UsageSnapshot) => {

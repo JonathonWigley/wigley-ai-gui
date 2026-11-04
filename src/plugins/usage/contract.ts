@@ -54,9 +54,9 @@ export interface UsageLinePart {
 }
 
 // The page part's exports. `sessionLinePart` returns a part with the given
-// `id` that draws a session's line through usage's layout into the wrapper its
-// host hands it, a zero line (context `0k`) while the session has no usage,
-// and logs through `log` `session line in <name>: <text>` when a session's
+// `id` that draws a session's whole line through usage's layout into the tab bar
+// wrapper its host hands it, a zero line (context `0k`) while the session has no
+// usage, and logs through `log` `session line in <name>: <text>` when a session's
 // text changes, the name its side-bar label. Usage redraws every such part for
 // the page's life.
 export interface UsagePageExports {

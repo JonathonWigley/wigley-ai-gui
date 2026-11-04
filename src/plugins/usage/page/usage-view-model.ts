@@ -6,6 +6,7 @@ import type {
 import { formatTokens } from '../../../shared/format-tokens';
 import type { ProfilePlan, SessionUsage, UsageSnapshot } from '../contract';
 import type {
+  ContextLineInput,
   DetailsInput,
   DetailsProfileInput,
   DetailsRowInput,
@@ -14,6 +15,7 @@ import type {
   RowCacheInput,
   RowLineInput,
   SessionLineInput,
+  SpendLineInput,
   StatusLineInput,
   StatusLinePlanInput,
   UsageTone,
@@ -82,6 +84,30 @@ export function sessionLineInput(
     };
   }
   return { ...sessionLine(usage, now), ...compacting };
+}
+
+// `sessionId`'s context line: its session line without the spend.
+export function contextLineInput(
+  snapshot: UsageSnapshot,
+  sessionId: string,
+  now: number,
+): ContextLineInput {
+  const { context, cache, compacting, compactingElapsedMs } = sessionLineInput(
+    snapshot,
+    sessionId,
+    now,
+  );
+  return { context, cache, compacting, compactingElapsedMs };
+}
+
+// `sessionId`'s spend, read from its session line.
+export function spendLineInput(
+  snapshot: UsageSnapshot,
+  sessionId: string,
+  now: number,
+): SpendLineInput {
+  const { spend } = sessionLineInput(snapshot, sessionId, now);
+  return { spend };
 }
 
 // `sessionId`'s side-bar row line: its context meter with the used tokens alone
@@ -164,11 +190,23 @@ export function statusLineText(input: StatusLineInput): string {
 // `compacting · auto, context 180k/300k, cache 42m, spend $1.23`, the chip only
 // while the session compacts.
 export function sessionLineText(input: SessionLineInput): string {
+  const spendPart = input.spend === null ? '' : `, spend ${input.spend}`;
+  return `${contextLineText(input)}${spendPart}`;
+}
+
+// A context line as the page log writes it:
+// `compacting · autocompact, context 180k/300k, cache 42m`, the chip only while
+// the session compacts.
+export function contextLineText(input: ContextLineInput): string {
   const compactingPart =
     input.compacting === null ? '' : `${input.compacting}, `;
   const cachePart = input.cache === null ? '' : `, ${input.cache}`;
-  const spendPart = input.spend === null ? '' : `, spend ${input.spend}`;
-  return `${compactingPart}context ${input.context.text}${cachePart}${spendPart}`;
+  return `${compactingPart}context ${input.context.text}${cachePart}`;
+}
+
+// A spend as the page log writes it: `$1.23`, or `none` with null spend.
+export function spendLineText(input: SpendLineInput): string {
+  return input.spend ?? 'none';
 }
 
 // Each profile's state as the page log writes it: `work fresh, personal stale`.

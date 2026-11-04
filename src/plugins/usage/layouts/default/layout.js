@@ -3,14 +3,17 @@
 // The built-in usage look: the status-bar line as every profile stacked, one
 // line each, its name before its meters, each meter in a column shared across
 // profiles; each session's line as one row (its compacting chip while it
-// compacts, its context, cache and spend) in its Chat status line or tab bar
-// that drops whole items from its end when narrow, its meter pulsing while it
-// compacts; each session's row line as its context meter and used tokens; each
-// session's row cache as a cache icon, its tooltip the time left; and the
-// details as one card per profile, its freshness beside its name. In the status
-// line and the details, the 5h and Week rows always show; any other row (a
-// model-scoped limit) shows only while used, and extra usage, the status line's
-// last column until the window narrows, only while on and spent.
+// compacts, its context, cache and spend) in its tab bar that drops whole items
+// from its end when narrow, its meter pulsing while it compacts; each session's
+// context line as one row above its Chat box (the same chip, then a meter taking
+// the room its texts leave, its context and cache), pulsing the same; its spend
+// as one text in its Chat status line; each session's row line as its context
+// meter and used tokens; each session's row cache as a cache icon, its tooltip
+// the time left; and the details as one card per profile, its freshness beside
+// its name. In the status line and the details, the 5h and Week rows always show;
+// any other row (a model-scoped limit) shows only while used, and extra usage,
+// the status line's last column until the window narrows, only while on and
+// spent.
 
 // Labels the adapter gives the session and weekly limits.
 const ALWAYS_SHOWN_ROWS = new Set(['5h', 'Week']);
@@ -88,6 +91,28 @@ const layout = {
       kit.el(line, 'span', 'usage-text', input.spend);
     }
     return line;
+  },
+  contextLine(parent, input, kit) {
+    const line = kit.el(parent, 'span', 'usage-context-line');
+    line.classList.toggle('is-compacting', input.compacting !== null);
+    if (input.compacting !== null) {
+      kit.tag(line, input.compacting, 'accent');
+      line.style.setProperty(
+        '--usage-compacting-elapsed',
+        `${input.compactingElapsedMs}ms`,
+      );
+    }
+    kit.meter(line, input.context.percent, input.context.tone);
+    kit.el(line, 'span', 'usage-text', input.context.text);
+    if (input.cache !== null) {
+      kit.el(line, 'span', 'usage-text', input.cache);
+    }
+    return line;
+  },
+  spendLine(parent, input, kit) {
+    const text = kit.el(parent, 'span', 'usage-text', input.spend ?? '');
+    text.hidden = input.spend === null;
+    return text;
   },
   rowLine(parent, input, kit) {
     const line = kit.el(parent, 'span', 'usage-row-line');

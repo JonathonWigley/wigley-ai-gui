@@ -107,7 +107,7 @@ describe('usageSelfTestScript', () => {
     releaseUsage();
 
     expect(shownLine).toBe(
-      '[usage] session line in usage-selftest: context 180k/300k, cache 42m, spend $1.23',
+      '[usage] context line in usage-selftest: context 180k/300k, cache 42m',
     );
     expect(callsBeforeUsage).toEqual([
       'hold compactions',

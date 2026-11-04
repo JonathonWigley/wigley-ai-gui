@@ -5,6 +5,8 @@ import type { Layout } from '../../layouts/layout';
 const LAYOUT_PARTS: Record<keyof Layout, true> = {
   statusLine: true,
   sessionLine: true,
+  contextLine: true,
+  spendLine: true,
   rowLine: true,
   rowCache: true,
   details: true,
