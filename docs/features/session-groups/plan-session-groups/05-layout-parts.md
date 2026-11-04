@@ -1,6 +1,6 @@
 # 05 — Section and group layout parts
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)

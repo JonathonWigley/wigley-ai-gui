@@ -1,6 +1,6 @@
 # 03 — DragReorder primitive
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)

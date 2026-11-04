@@ -96,6 +96,7 @@ const CLEAN_BLOBS: [string, string][] = [
 function cleanGit() {
   return {
     topLevel: vi.fn<Git['topLevel']>(async () => ROOT),
+    originRepoName: vi.fn<Git['originRepoName']>(async () => null),
     currentBranch: vi.fn<Git['currentBranch']>(async () => 'main'),
     isLinkedWorktree: vi.fn<Git['isLinkedWorktree']>(async () => false),
     hasUpstream: vi.fn<Git['hasUpstream']>(async () => true),

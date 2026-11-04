@@ -55,6 +55,47 @@ describe('createProcessGit', () => {
 
   it.each([
     {
+      case: 'scp-style with .git',
+      result: exited(
+        0,
+        'git@github-personal:JonathonWigley/wigley-ai-gui.git\n',
+      ),
+      name: 'wigley-ai-gui',
+    },
+    {
+      case: 'https without .git',
+      result: exited(0, 'https://github.com/peoplefun/new-games-prototypes\n'),
+      name: 'new-games-prototypes',
+    },
+    {
+      case: 'https with .git',
+      result: exited(0, 'https://github.com/peoplefun/Spacebreaker.git\n'),
+      name: 'Spacebreaker',
+    },
+    {
+      case: 'local path with trailing slash',
+      result: exited(0, '/Users/someone/repos/local-bare.git/\n'),
+      name: 'local-bare',
+    },
+    {
+      case: 'Windows path',
+      result: exited(0, 'C:\\repos\\tool.git\n'),
+      name: 'tool',
+    },
+    {
+      case: 'exits non-zero',
+      result: exited(2, '', 'error: No such remote'),
+      name: null,
+    },
+  ])('originRepoName_$case', async ({ result, name }) => {
+    const test = setUp();
+    test.processes.script('git', git('remote', 'get-url', 'origin'), result);
+
+    expect(await test.git.originRepoName(ROOT)).toBe(name);
+  });
+
+  it.each([
+    {
       case: 'on a branch',
       symbolicRef: exited(0, 'main\n'),
       revParse: null,

@@ -1,13 +1,16 @@
 // A clone's git state and the one write the app makes to it. `root` is a
 // clone's top folder, as `topLevel` returns it; paths in and out are relative
-// to it, `/`-separated. Every method but `topLevel`, `currentBranch`,
-// `hasUpstream`, `fetch` and `lastFetch` rejects
+// to it, `/`-separated. Every method but `topLevel`, `originRepoName`,
+// `currentBranch`, `hasUpstream`, `fetch` and `lastFetch` rejects
 // `git <name> exited <code>: <stderr>` on a failed run; every method but
 // `fetch` and `lastFetch` rejects when git cannot start.
 export interface Git {
   // The clone's top folder holding `folder`, a full path; null when `folder`
   // is in no clone.
   topLevel(folder: string): Promise<string | null>;
+  // The repo name the origin URL of the clone holding `folder` ends in, without
+  // `.git`; null when `folder` is in no clone or the clone has no origin.
+  originRepoName(folder: string): Promise<string | null>;
   // The branch checked out in the clone holding `folder`; the short commit on
   // a detached HEAD; null in no clone.
   currentBranch(folder: string): Promise<string | null>;
