@@ -28,7 +28,8 @@ or touches their data, so start one whenever a check needs it.
    a second run of the agent's, or a peer agent's — pass `--run <id>` on every command, since
    any newer `start` moves `.drive/current` to its own run. `--user-config` copies the user's
    `~/.config/wigley-ai-gui` into the temp home, so their theme and keys apply; `start` fails
-   when that folder is missing or empty.
+   when that folder is missing or empty. On a run that still holds a home it copies nothing, so
+   the home's config stays: `start` prints that it skipped the copy.
 2. Seed what the check needs: `npm run drive -- actions` lists every plugin's drive actions, and
    `npm run drive -- do <plugin>.<action> '<json>'` runs one (a session, a round, a chat, docs).
    `chat.start` uses the first profile in chat's `profiles` setting, and only a profile logged in

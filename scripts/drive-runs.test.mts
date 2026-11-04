@@ -78,6 +78,7 @@ describe('startPlanOf', () => {
     kept: StartOptions | null;
     options: StartOptions;
     copiesUserConfig: boolean;
+    skipsUserConfigCopy: boolean;
   }>([
     {
       name: 'a kept run naming no flag takes what it recorded, copying nothing',
@@ -85,13 +86,23 @@ describe('startPlanOf', () => {
       kept: RECORDED,
       options: RECORDED,
       copiesUserConfig: false,
+      skipsUserConfigCopy: false,
     },
     {
-      name: 'a kept run naming a flag takes its command line, copying nothing',
-      named: { ...NAMED, namesFlags: true },
+      name: 'a kept run naming another flag takes it and keeps its recorded config',
+      named: { ...DEFAULTS, namesFlags: true },
       kept: RECORDED,
-      options: NAMED,
+      options: { ...DEFAULTS, userConfig: true },
       copiesUserConfig: false,
+      skipsUserConfigCopy: false,
+    },
+    {
+      name: 'a kept run with no config naming --user-config skips the copy and records none',
+      named: { ...NAMED, namesFlags: true },
+      kept: { ...RECORDED, userConfig: false },
+      options: DEFAULTS,
+      copiesUserConfig: false,
+      skipsUserConfigCopy: true,
     },
     {
       name: 'a run with no kept home takes its command line and copies',
@@ -99,6 +110,7 @@ describe('startPlanOf', () => {
       kept: null,
       options: NAMED,
       copiesUserConfig: true,
+      skipsUserConfigCopy: false,
     },
     {
       name: 'a run with no kept home naming no flag takes the defaults',
@@ -106,10 +118,18 @@ describe('startPlanOf', () => {
       kept: null,
       options: DEFAULTS,
       copiesUserConfig: true,
+      skipsUserConfigCopy: false,
     },
-  ])('$name', ({ named, kept, options, copiesUserConfig }) => {
-    expect(startPlanOf(named, kept)).toEqual({ options, copiesUserConfig });
-  });
+  ])(
+    '$name',
+    ({ named, kept, options, copiesUserConfig, skipsUserConfigCopy }) => {
+      expect(startPlanOf(named, kept)).toEqual({
+        options,
+        copiesUserConfig,
+        skipsUserConfigCopy,
+      });
+    },
+  );
 });
 
 describe('startRefusal', () => {
@@ -207,6 +227,14 @@ describe('hostMayBeRunning', () => {
   it('GIVEN a record whose channel has no listener THEN no host runs', async () => {
     const runDir = newRunDir();
     writeRecord(runDir, 1, channelIn(runDir));
+
+    expect(await hostMayBeRunning(runDir)).toBe(false);
+  });
+
+  it('GIVEN a record that does not parse THEN no host runs', async () => {
+    const runDir = newRunDir();
+    const hostFolder = writeRecord(runDir, 1, channelIn(runDir));
+    writeFileSync(path.join(hostFolder, hostRecordFile(1)), '{"channel":');
 
     expect(await hostMayBeRunning(runDir)).toBe(false);
   });

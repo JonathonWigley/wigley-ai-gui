@@ -71,6 +71,11 @@ async function main(invocation: DriveInvocation): Promise<void> {
   if (invocation.kind === 'start') {
     const runId = invocation.run ?? newRunId();
     const plan = startPlanOf(invocation, keptStartOptions(runId));
+    if (plan.skipsUserConfigCopy) {
+      console.log(
+        `--user-config copy skipped: run ${runId} has a home, and its config stays as it is`,
+      );
+    }
     await start(runId, plan.options, plan.copiesUserConfig);
   } else if (invocation.kind === 'restart') {
     await restart(currentRun(invocation.run));
@@ -410,9 +415,11 @@ function keptStartOptions(runId: string): StartOptions | null {
 async function quit(runId: string, keepSessions: boolean): Promise<void> {
   if (!keepSessions) {
     const runDir = runDirOf(runId);
+    const appPids = liveAppPids(runDir);
     const refusal = quitRefusal(runId, {
-      liveAppPids: liveAppPids(runDir),
-      hostMayBeRunning: await hostMayBeRunning(runDir),
+      liveAppPids: appPids,
+      hostMayBeRunning:
+        appPids.length === 0 && (await hostMayBeRunning(runDir)),
     });
     if (refusal !== null) {
       throw new Error(refusal);

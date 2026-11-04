@@ -5,7 +5,7 @@
 - **Intent** — sessions keep running through a quit, a relaunch and `install-app`.
 - **Vocabulary** — session host, hosted process, pipe log, replay, drain.
 - **Flow** — start, quit, relaunch and re-attach, idle end.
-- **The host** — what it does, what it knows nothing about, its folder, channel and lifetime, what a host death leaves.
+- **The host** — what it does, what it knows nothing about, its folder, channel and lifetime, what a host death leaves, its known limits.
 - **Protocol** — the operations, which of them never change, and the pipe log format.
 - **Re-attach** — replay through the harness's pipe fold, the history cut, replayed events, queued messages.
 - **Older hosts** — drain after an update that changed the protocol.
@@ -70,8 +70,8 @@ session under it.
 - The host's folder is `session-host/` in the app instance's user data folder (the self-test's: in its temporary
   home, deleted at its teardown): the pipe logs in `logs/`, the channel's record `host-v<protocol>.json`, each host's
   own record of its children `host-v<protocol>.<pid>.children.json`, and the host's own log `host-v<protocol>.log`. When
-  a dead host wrote a line to that log, the next host renames it to `host-v<protocol>.previous.log`, so a crash report
-  outlives the restart that follows it. A pipe log is deleted when its process closes; a host that starts also deletes each log it holds no
+  an earlier host wrote a line to that log, the next host renames it to `host-v<protocol>.previous.log`, so a crash
+  report outlives the restart that follows it. A pipe log is deleted when its process closes; a host that starts also deletes each log it holds no
   process for, unless a host of another protocol may be listening: one that answers, stays silent or denies the connect
   keeps them, and only a record whose connect proves no listener does not. Its channel is a Unix socket on macOS and a named pipe on Windows, through the same transport the relay
   channel uses, named with the protocol version so two protocol versions never share a channel.
@@ -83,7 +83,7 @@ session under it.
   - A host that throws sends each child SIGTERM on its way down. A host killed outright sends nothing.
   - Each host keeps its own pid and start time, and its children's pids, start times and commands, in its own children
     record, replaced whole from a child's spawn, once the OS has reported it, to its close. Only its writer changes a
-    record while that writer may run, so no host can delete or overwrite another's.
+    children record while that writer may run, so no host can delete or overwrite another's.
   - A new host, once it owns the channel, reads every protocol's children record, so a protocol bump leaves no orphan.
     It compares each record's writer with what `ps` or PowerShell reports for that pid. A writer that still runs keeps
     its children and its record, and the new host logs it: owning the channel proves nothing, since a socket file gone
@@ -103,6 +103,13 @@ session under it.
     comes. The leftovers' pipe logs go with that host's log sweep.
   - Children are not started `detached`, and the end reaches only the recorded process: a tool the orphan was running
     may outlive it.
+- Two known limits come with a new host that owns the channel beside a live one, which only a socket file gone or a
+  check-then-listen race reaches:
+  - The new host renames the live host's log too. Both hosts then append to `host-v<protocol>.log`, so a line of the
+    live host can sit in either file.
+  - A host of the same protocol that exits still runs its `shutDown`, which removes the channel and the record by path,
+    and those are now the newer host's. The newer host keeps the clients it holds, and the next app finds no channel
+    and starts another host beside it.
 - A drive run and the self-test end their host's processes at teardown, since their runs are thrown away. A drive
   `restart` keeps them, so a drive run can check re-attach, and `drive quit --keep-sessions` keeps them with the run's
   home and user data, so `start --run <id>` brings the run back. Any other quit of a running app ends them. A plain

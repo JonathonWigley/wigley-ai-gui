@@ -36,7 +36,7 @@ function overlayDot(): NativeImage {
 function drawAttention(window: BrowserWindow) {
   if (process.platform === 'darwin') {
     app.dock?.bounce('informational');
-  } else if (process.platform === 'win32') {
+  } else if (process.platform === 'win32' && !window.isDestroyed()) {
     window.flashFrame(true);
   }
 }
@@ -78,7 +78,7 @@ export function createElectronAlerts(window: BrowserWindow, log: Log): Alerts {
       const total = openCounts.set(source, count);
       if (process.platform === 'darwin') {
         app.setBadgeCount(total);
-      } else if (process.platform === 'win32') {
+      } else if (process.platform === 'win32' && !window.isDestroyed()) {
         const description =
           total === 0
             ? ''

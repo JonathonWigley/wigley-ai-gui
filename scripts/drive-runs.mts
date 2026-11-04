@@ -50,16 +50,30 @@ export function idleRunIds(
 
 // What a `start` runs with. `kept` is what the run recorded when its folder
 // still holds its home, null otherwise: a command line naming no flag takes it,
-// and a kept home's config is never copied over.
+// and a kept home's config is never copied over, so `userConfig` stays what the
+// home holds and a named `--user-config` is a skipped copy.
 export function startPlanOf(
   named: StartOptions & { namesFlags: boolean },
   kept: StartOptions | null,
-): { options: StartOptions; copiesUserConfig: boolean } {
+): {
+  options: StartOptions;
+  copiesUserConfig: boolean;
+  skipsUserConfigCopy: boolean;
+} {
   const { packaged, harness, userConfig, namesFlags } = named;
+  if (kept === null) {
+    return {
+      options: { packaged, harness, userConfig },
+      copiesUserConfig: true,
+      skipsUserConfigCopy: false,
+    };
+  }
   return {
-    options:
-      kept !== null && !namesFlags ? kept : { packaged, harness, userConfig },
-    copiesUserConfig: kept === null,
+    options: namesFlags
+      ? { packaged, harness, userConfig: kept.userConfig }
+      : kept,
+    copiesUserConfig: false,
+    skipsUserConfigCopy: userConfig,
   };
 }
 
@@ -90,9 +104,9 @@ export function quitRefusal(
 }
 
 // Whether a session host of the run in `runDir`, of any protocol, may still be
-// listening: only a connect that proves no listener says it is not. A bare
-// connect is no client to the host, so it moves neither its idle window nor its
-// exit rule.
+// listening: only a connect that proves no listener says it is not, and a
+// record that cannot be read names no host. A bare connect is no client to the
+// host, so it moves neither its idle window nor its exit rule.
 export async function hostMayBeRunning(runDir: string): Promise<boolean> {
   const folder = path.join(runDir, 'user-data', 'session-host');
   if (!existsSync(folder)) {
@@ -102,12 +116,20 @@ export async function hostMayBeRunning(runDir: string): Promise<boolean> {
     readdirSync(folder)
       .filter((name) => HOST_RECORD_NAME.test(name))
       .map((name) => {
-        const record = readFileSync(path.join(folder, name), 'utf8');
-        const { channel } = JSON.parse(record) as { channel: string };
-        return channelMayHaveListener(channel);
+        const channel = recordedChannel(path.join(folder, name));
+        return channel === null ? false : channelMayHaveListener(channel);
       }),
   );
   return answers.includes(true);
+}
+
+function recordedChannel(file: string): string | null {
+  try {
+    return (JSON.parse(readFileSync(file, 'utf8')) as { channel: string })
+      .channel;
+  } catch {
+    return null;
+  }
 }
 
 function channelMayHaveListener(channel: string): Promise<boolean> {
