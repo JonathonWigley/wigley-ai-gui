@@ -68,7 +68,11 @@ export const FAKE_STEPS_TEXT = 'fake: steps';
 // open turn, this one or a later one, ends them (failed); the process's end
 // sends no `taskFinished`, since `sessionEnded` ends a roster's running items.
 // Real Claude may keep a background Bash past an interrupt; the fake ends it to
-// keep the self-test row's count exact.
+// keep the self-test row's count exact. Real Claude also keeps a launched
+// subagent running past an interrupt or a send, and fills its Agent entry's
+// result at the receipt; the fake's launched subagent ends with the other and
+// its entry keeps `result: null`, so a self-test here does not prove a background
+// box survives an interrupt.
 export const FAKE_AGENTS_TEXT = 'fake: agents';
 // A send of this text ends the process on its own, as a CLI that exits.
 export const FAKE_END_TEXT = 'fake: end';

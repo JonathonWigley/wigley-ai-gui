@@ -124,8 +124,8 @@ const WRITE_TOOL_PATHS: Readonly<Record<string, string>> = {
 // The context-size tag a `modelUsage` key can end in: `claude-opus-5-5[1m]`.
 const MODEL_KEY_SUFFIX = /\[[^\]]*\]$/;
 
-// What the decoder last knows of a running subagent. `sentWindow` is the
-// context window its last `agentReplied` carried.
+// What the decoder last knows of a subagent. `sentWindow` is the context window
+// its last `agentReplied` carried.
 interface SubagentFacts {
   model: string;
   contextTokens: number | null;
@@ -269,7 +269,8 @@ export function createStreamDecoder(
   // Each subagent's reply spends by message id, by its Agent call id: null for
   // a reply whose model has no list price.
   const replySpends = new Map<string, Map<string, number | null>>();
-  // Each subagent with a known model, by its Agent call id, until it ends.
+  // Each subagent with a known model, by its Agent call id, until it ends. A
+  // late reply may re-create an ended one's entry, which nothing reads again.
   const subagentFacts = new Map<string, SubagentFacts>();
   // The context windows results have named, by `modelUsage` key.
   const modelWindows = new Map<string, number>();
@@ -399,8 +400,10 @@ export function createStreamDecoder(
     return total;
   }
 
-  // Every window a result's `modelUsage` names. A `[…]` key with no plain key
-  // beside it replaces the plain key's window: the model's window has changed.
+  // Every window a result's `modelUsage` names. A result that names a `[…]` key
+  // and drops the plain key replaces the plain key's window. `modelUsage` is
+  // cumulative, so a model moved to `[…]` mid-process usually keeps both keys, and
+  // a subagent replying under the plain id keeps the plain window.
   function learnWindows(modelUsage: Json) {
     for (const [key, usage] of Object.entries(modelUsage)) {
       const window = asJson(usage).contextWindow;

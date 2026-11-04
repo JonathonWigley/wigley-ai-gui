@@ -3,10 +3,10 @@
 // The built-in agent-strip look: each box a card of fixed width. Every box
 // heads with its running dot, name, kind tag and runtime, then its description
 // cut to one line. A subagent box adds its model and effort, its latest tool
-// calls in mono, which an open box swaps for the list of every call, and a
-// footer of its context bar and cost. A task box adds its command in mono, one
-// line until open. The selected box takes the focus ring and the prompt of the
-// keys that type in the chat box.
+// calls in mono, which an open box drops, and a footer of its context bar and
+// cost. A task box adds its command in mono, one line until open. The selected
+// box takes the focus ring and the prompt of the keys that type in the chat box.
+// The app draws an open subagent box's list of every call after all of these.
 
 /** @typedef {import('../layout').AgentStripKit} AgentStripKit */
 /** @typedef {import('../layout').AgentBoxInput} AgentBoxInput */

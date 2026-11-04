@@ -19,7 +19,7 @@
 // `kit.duration` formats the elapsed time as chat's activity line does: `42s`, `3m 05s` or `1h 02m`.
 import type { BaseKit } from '../../../shared/page/layout-host/kit';
 
-// A tool call's dot: running, or how it ended.
+// A tool call's status: running, or how it ended.
 export type BoxStatus = 'running' | 'success' | 'error';
 
 // What an agent box is: a subagent, or one its launch receipt says runs in the background.

@@ -41,12 +41,9 @@ interface OpenPreview {
 
 // The sample session's two running subagents, spawned 42 s and 185 s before
 // `now`, the second in the background, and two running tasks, started 95 s and
-// 60 s before `now`: one the main agent's, one the 185 s subagent's, drawn
-// nested under it. The second subagent's and the second task's descriptions are
-// long enough to end in an ellipsis. The second subagent is the widest line the
-// agents self-test fits at the side bar's least width, so its elapsed time stays
-// past a minute and its count of `tools` past 9: eleven done and the twelfth
-// running.
+// 60 s before `now`: one the main agent's, one the 185 s subagent's. The second
+// subagent's and the second task's descriptions are long enough to end in an
+// ellipsis.
 function sampleRoster(now: number): Roster {
   const agents: RosterAgent[] = [
     {

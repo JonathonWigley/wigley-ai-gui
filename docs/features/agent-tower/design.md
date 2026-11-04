@@ -84,7 +84,7 @@ would emit the same events into `chat.agentEvent`'s payload shape.
 
 ## The agents plugin
 
-`src/plugins/agents/` depends on `sessions`, `chat` and `keys` (its layout kit's key prompts).
+`src/plugins/agents/` depends on `sessions` and `chat`.
 
 - **Main** hears `chat.agentEvent`, folds each event into the roster of its process's host session id under its row (a
   cleared row's old process ending drops only its own subagents and tasks) with a pure reducer, appends the event as one JSON line

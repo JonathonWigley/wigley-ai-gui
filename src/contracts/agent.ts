@@ -214,8 +214,8 @@ export type AgentEvent =
       agentId: string;
       outcome: 'done' | 'failed';
     }
-  // A subagent's model, spend and context, on each of its replies, on its launch receipt, and when a turn's end changes
-  // its model's context window. `model` is the model id Claude used (the reply's, or the receipt's resolved model);
+  // A subagent's model, spend and context, on each of its replies, on an Agent call's receipt that names its resolved
+  // model, and when a turn's end changes its model's context window. `model` is the model id Claude used (the reply's, or the receipt's resolved model);
   // `spendUsd` is the agent's estimated spend so far (cumulative, not the reply's share), null before its first reply or
   // when any reply's model has no list price; `contextTokens` is the input side of its latest reply, null before its
   // first reply; `contextWindow` is its model's context window, null until the harness reports it.
