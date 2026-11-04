@@ -168,5 +168,6 @@ Review base: 693cb8d04eb48c87e6cba0406a0e2d850f90db54
 - /clear saves through its existing finally save, not a second call at the reset — a save at the reset would write the old host id with the new total — a crash in the same tick keeps the stopped total · group 02 · group 02
 - the view keeps activeTimes in its own Map set before createTab — addTab draws side-bar rows before the tab is held — one redundant field if wrong · group 03 · group 03
 - onActiveTime runs only for a held session — matches the background handler — a listener misses a message arriving before the tab · group 03 · group 03
+- Lead: precondition met. session-groups merged to local main at 5b06f4e7, plan folder closed, reported by its run. main merged into row-clock; the UsageTone conflict kept both sides.
 ### Review rounds
 ### Test gate
