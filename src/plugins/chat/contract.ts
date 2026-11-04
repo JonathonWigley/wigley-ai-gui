@@ -382,10 +382,20 @@ export interface ChatStatusPart {
 // `focusedEntry` is the visible Chat tab's focused stop's slot element (an
 // entry, an activity line or a pending row); null with no visible Chat tab, no
 // focused stop, or while a composer part's stop holds the cursor.
+// `activeTime` is the session's clock as main last sent it, null for a session
+// the page does not hold; read the total at a moment with `activeMsAt`.
 export interface ChatPageExports {
   addSlashCommand(command: AppSlashCommand): Disposable;
   fillComposer(sessionId: string, text: string): void;
   addComposerPart(part: ChatComposerPart): Disposable;
   addStatusPart(part: ChatStatusPart): Disposable;
   focusedEntry(): HTMLElement | null;
+  activeTime(sessionId: string): ActiveTime | null;
+}
+
+// `activeTimeChanged` fires when main sends a session's clock: at each start
+// and stop and at a `/clear` reset. It does not fire for a session arriving
+// with its total, whose starting value `ChatPageExports.activeTime` reads.
+export interface ChatPageEvents extends EventShape {
+  activeTimeChanged: { sessionId: string; activeTime: ActiveTime };
 }

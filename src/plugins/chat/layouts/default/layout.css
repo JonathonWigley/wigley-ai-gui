@@ -1,6 +1,6 @@
 /* The default Chat layout's look: entry text, activity lines, the activity
    dock, queued messages, permission heads, the composer and its status line,
-   and the dialog and image viewer parts. */
+   the dialog and image viewer parts, and the run time under a session's row. */
 .chat-assistant {
   color: var(--wg-fg);
 }
@@ -260,4 +260,12 @@
 
 .chat-image-viewer-count[hidden] {
   display: none;
+}
+
+/* The run time under a session's row. */
+.chat-row-clock {
+  color: var(--wg-fg-secondary);
+  font-size: var(--wg-text-12);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }

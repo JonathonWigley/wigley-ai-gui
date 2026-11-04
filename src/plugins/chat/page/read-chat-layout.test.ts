@@ -13,6 +13,7 @@ describe('readChatLayout', () => {
     { layout: { working: builder } },
     { layout: { queuedMessage: builder } },
     { layout: { statusLine: builder } },
+    { layout: { rowClock: builder } },
     { layout: { activityInTranscript: true } },
     { layout: { activityInTranscript: false, working: builder } },
   ])(
@@ -45,6 +46,7 @@ describe('readChatLayout', () => {
       layout: { queuedMessage: 'row' },
       error: 'queuedMessage is not a function',
     },
+    { layout: { rowClock: 'time' }, error: 'rowClock is not a function' },
     {
       layout: { activityInTranscript: 'yes' },
       error: 'activityInTranscript is not a boolean',

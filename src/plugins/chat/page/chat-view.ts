@@ -8,6 +8,7 @@ import type { ChatEntryKind } from '../../../contracts/agent';
 import type { Log } from '../../../contracts/log';
 import type { Paths } from '../../../contracts/paths';
 import type { PageChannel, ToastTone } from '../../../contracts/plugin';
+import type { ActiveTime } from '../../../shared/active-time';
 import { errorText } from '../../../shared/error-text';
 import type { PartStore } from '../../../shared/page/contributed-parts';
 import { blurFocusedElement, element } from '../../../shared/page/dom';
@@ -69,6 +70,9 @@ export interface ChatView {
   // Chat tab, no focused stop, or while a composer part's stop holds the
   // cursor.
   focusedEntry(): HTMLElement | null;
+  // The session's clock as main last sent it, from the moment its tab starts
+  // being added; null for a session the view does not hold.
+  activeTime(sessionId: string): ActiveTime | null;
 }
 
 // A session as a log line and a call to main name it.
@@ -128,7 +132,8 @@ export type ChatTabScope = 'chat';
 // `onActiveChanged` the focused pane's session change and
 // `onSessionHostChanged` a row's host id change, `onScopeChanged` each change of
 // the scope keys fire in; `sessions` also takes each
-// row's activity and names the focused pane's session. `run` runs
+// row's activity and names the focused pane's session. `onActiveTime` runs on
+// each `activeTime` message for a held session, not on `sessionStarted`. `run` runs
 // a command, as the composer's chips and send button do; `keys` also anchors
 // the composer's key hints; `layouts` holds the chat layouts the entries and
 // the composer draw with; `paths` names each tab by its project folder.
@@ -151,6 +156,7 @@ export interface ChatViewDeps extends SurfaceKitDeps {
   onActiveChanged(listener: (sessionId: string | null) => void): void;
   onSessionHostChanged(listener: (sessionId: string) => void): void;
   onScopeChanged(listener: () => void): void;
+  onActiveTime(sessionId: string, activeTime: ActiveTime): void;
   editor: EditorHost;
   run(command: CommandId): void;
   layouts: ChatLayouts;
@@ -209,6 +215,9 @@ interface HeldTab {
 export function mountChatView(deps: ChatViewDeps): ChatTabs {
   const { log } = deps;
   const tabs = new Map<string, HeldTab>();
+  // Apart from `tabs`: `addTab` draws the side bar's rows, whose clocks read
+  // this, before the tab is in `tabs`.
+  const activeTimes = new Map<string, ActiveTime>();
   // The kinds whose failed draw has toasted since the layouts were shown.
   const toastedKinds = new Set<ChatEntryKind>();
   deps.layouts.onChange(() => {
@@ -245,6 +254,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
     if (tabs.has(state.sessionId)) {
       return;
     }
+    activeTimes.set(state.sessionId, state.activeTime);
     const tab = createTab(state, toastedKinds, deps, {
       isHeld: (heldTab) => tabs.get(heldTab.sessionId) === heldTab,
       // Chat keys act only on the visible Chat tab's session. Every Chat tab
@@ -340,6 +350,14 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       drawActivity(tab, deps);
     }
   });
+  channel.on('activeTime', ({ sessionId, activeTime }) => {
+    const tab = heldFor('activeTime', sessionId);
+    if (tab !== undefined) {
+      tab.state = { ...tab.state, activeTime };
+      activeTimes.set(sessionId, activeTime);
+      deps.onActiveTime(sessionId, activeTime);
+    }
+  });
   channel.on('branch', ({ sessionId, repo, branch }) => {
     const tab = tabs.get(sessionId);
     if (tab === undefined) {
@@ -415,6 +433,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
       return;
     }
     tabs.delete(sessionId);
+    activeTimes.delete(sessionId);
     tab.stop.leave();
     tab.dropTarget?.dispose();
     tab.box?.destroy();
@@ -477,6 +496,7 @@ export function mountChatView(deps: ChatViewDeps): ChatTabs {
         ? null
         : tab.entries.focusedElement();
     },
+    activeTime: (sessionId) => activeTimes.get(sessionId) ?? null,
     session: (sessionId) => asSession(tabs.get(sessionId)),
     sessionOfEditor: (editor) =>
       asSession([...tabs.values()].find((tab) => tab.box === editor)),

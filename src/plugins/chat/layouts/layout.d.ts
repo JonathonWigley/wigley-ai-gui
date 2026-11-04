@@ -157,6 +157,13 @@ export interface QueuedMessageInput {
   sent: boolean;
 }
 
+// A session's run time under its side-bar row: `text` is the time already formatted, and `isRunning` holds while its
+// clock runs.
+export interface RowClockInput {
+  text: string;
+  isRunning: boolean;
+}
+
 export interface EntryView<K extends EntryKind = EntryKind> {
   element: HTMLElement;
   // Runs with each later version of the entry (same id) while it shows. A view with no update is built again and its element replaced.
@@ -475,6 +482,14 @@ export interface ChatLayout {
     input: ImageViewerInput,
     kit: BaseKit,
   ): PartView<ImageViewerInput>;
+  // The run time, drawn into the session row's `chat.rowClock` wrapper; the app orders the wrapper among the row's
+  // parts. The app sends the input again on each change and once a second while the clock runs, and draws nothing for
+  // a session with no time yet.
+  rowClock?(
+    parent: HTMLElement,
+    input: RowClockInput,
+    kit: BaseKit,
+  ): PartView<RowClockInput>;
 }
 
 // The built-in layout: a builder for every entry kind and every part.

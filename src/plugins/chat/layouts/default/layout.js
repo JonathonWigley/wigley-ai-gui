@@ -2,7 +2,8 @@
 
 // The built-in chat look: the entries, the activity lines (each one summary
 // line, live or finished), the activity dock, the pending messages' rows, the
-// composer, the list rows, the dialogs' bodies and the image viewer. Every
+// composer, the list rows, the dialogs' bodies, the image viewer and the run
+// time under a session's row. Every
 // collapsible row's body is built on its first open and kept, so an update
 // refills it in place whether it is open or closed.
 
@@ -329,6 +330,15 @@ function showQueued(label, text, input) {
   text.textContent = input.text;
 }
 
+/**
+ * @param {HTMLElement} clock
+ * @param {import('../layout').RowClockInput} input
+ */
+function showRowClock(clock, input) {
+  clock.textContent = input.text;
+  clock.classList.toggle('is-running', input.isRunning);
+}
+
 const WAITING_TEXT = 'Waiting for the sign-in link…';
 
 /** @param {string | null} link */
@@ -547,6 +557,19 @@ const layout = {
       element: row,
       update(next) {
         showQueued(label, text, next);
+      },
+    };
+  },
+  // The dim run time; `is-running` draws the same as paused here, for a user
+  // layout's CSS to tell them apart.
+  rowClock(parent, input) {
+    const clock = el('span', 'chat-row-clock');
+    parent.append(clock);
+    showRowClock(clock, input);
+    return {
+      element: clock,
+      update(next) {
+        showRowClock(clock, next);
       },
     };
   },
