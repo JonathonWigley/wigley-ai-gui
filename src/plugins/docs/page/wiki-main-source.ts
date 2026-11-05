@@ -9,13 +9,17 @@ export interface WikiMainSourceDeps {
   channel: PageChannel<DocsChannel>;
   log: PluginLog;
   // Hears each read that found another text than the last one, the first
-  // settled read among them, present or absent.
+  // settled read among them, present, absent or rejected.
   changed(): void;
 }
 
-// The wiki's `Main.md` as shelves, read and watched through the channel. An
-// absent file, a failed read or no path from main is no `Main.md`. A watch or
-// path that failed is tried again at each `reread`.
+// What the newest settled read says of `Main.md`: `unreadable` is a rejected read
+// or no path from main, which says nothing of whether the file is there.
+export type MainFileState = 'exists' | 'absent' | 'unreadable';
+
+// The wiki's `Main.md` as shelves, read and watched through the channel. Only an
+// absent file drops the shelves: a rejection keeps those it has. A watch or path
+// that failed is tried again at each `reread`.
 export interface WikiMainSource {
   // Finds the path, watches it, then reads it. Resolves once the first read
   // settles and never rejects; a second call returns the same promise.
@@ -25,7 +29,8 @@ export interface WikiMainSource {
   shelves(): readonly WikiShelf[];
   // Whether a first read has settled, present or absent.
   isRead(): boolean;
-  exists(): boolean;
+  // Holds once `isRead` does.
+  fileState(): MainFileState;
   // Rereads on a change to this source's own watch id.
   diskChanged(change: DocChange): void;
   // Reads the file again, after `start` when it has not run or not settled;
@@ -35,14 +40,14 @@ export interface WikiMainSource {
   dispose(): void;
 }
 
-const ABSENT_REASON = 'the file is absent';
-
 export function createWikiMainSource(deps: WikiMainSourceDeps): WikiMainSource {
   const { channel, log } = deps;
   const watchId = `${deps.viewId}:main`;
   let mainPath: string | null = null;
-  // Undefined until the first read settles; null while the file is absent.
+  // Undefined until the first read settles; null with no text to show.
   let lastText: string | null | undefined;
+  // True from a rejection until a read answers.
+  let isUnreadable = false;
   let shelves: readonly WikiShelf[] = [];
   let isWatching = false;
   let isDisposed = false;
@@ -52,18 +57,40 @@ export function createWikiMainSource(deps: WikiMainSourceDeps): WikiMainSource {
   let startedReads = 0;
   let shownRead = 0;
 
-  const settleAbsent = (reason: string) => {
-    if (isDisposed || lastText === null) {
+  const settleAbsent = () => {
+    if (isDisposed) {
+      return;
+    }
+    isUnreadable = false;
+    if (lastText === null) {
       return;
     }
     lastText = null;
     shelves = [];
-    log(`no Main.md: ${reason}`);
+    log('no Main.md: the file is absent');
     deps.changed();
   };
 
+  // Only a first read has anything to tell `changed`: a later rejection changes no
+  // text.
+  const settleUnreadable = (reason: string) => {
+    if (isDisposed || isUnreadable) {
+      return;
+    }
+    isUnreadable = true;
+    log(`no Main.md: ${reason}`);
+    if (lastText === undefined) {
+      lastText = null;
+      deps.changed();
+    }
+  };
+
   const settleText = (text: string) => {
-    if (isDisposed || text === lastText) {
+    if (isDisposed) {
+      return;
+    }
+    isUnreadable = false;
+    if (text === lastText) {
       return;
     }
     lastText = text;
@@ -76,7 +103,7 @@ export function createWikiMainSource(deps: WikiMainSourceDeps): WikiMainSource {
     try {
       mainPath = await channel.invoke('wikiMainPath');
     } catch (error) {
-      settleAbsent(errorText(error));
+      settleUnreadable(errorText(error));
     }
   };
 
@@ -110,9 +137,8 @@ export function createWikiMainSource(deps: WikiMainSourceDeps): WikiMainSource {
   const read = async (path: string) => {
     const number = ++startedReads;
     const settle = await channel.invoke('readDocIfPresent', path).then(
-      (text) => () =>
-        text === null ? settleAbsent(ABSENT_REASON) : settleText(text),
-      (error: unknown) => () => settleAbsent(errorText(error)),
+      (text) => () => (text === null ? settleAbsent() : settleText(text)),
+      (error: unknown) => () => settleUnreadable(errorText(error)),
     );
     if (number >= shownRead) {
       shownRead = number;
@@ -135,7 +161,12 @@ export function createWikiMainSource(deps: WikiMainSourceDeps): WikiMainSource {
     path: () => mainPath,
     shelves: () => shelves,
     isRead: () => lastText !== undefined,
-    exists: () => typeof lastText === 'string',
+    fileState() {
+      if (isUnreadable) {
+        return 'unreadable';
+      }
+      return typeof lastText === 'string' ? 'exists' : 'absent';
+    },
     diskChanged(change) {
       if (change.viewId === watchId) {
         void source.reread();

@@ -44,6 +44,7 @@ const UNMATCHED_FILTER = 'zqzq'.repeat(10);
 
 const RELOADED_MAIN = /^\[docs\] reloaded Main\.md$/;
 const ONE_RECENT_COMMIT = /^\[docs\] recent changes: 1 commits$/;
+const DOC_FOCUSED = /^\[docs\] doc focused$/;
 
 // The section write's wait, and how often it reads the file.
 const SECTION_WRITE_TIMEOUT_MS = 120_000;
@@ -154,6 +155,7 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     {
       keys: ['Tab', 'Enter'],
       expect: '[docs] opened target.md',
+      alsoExpect: [DOC_FOCUSED],
       why: 'The backticks split the reference across a code element and a text node, so this fails if the DOM walk or the wrap fails.',
     },
     { keys: ['<C-o>'], expect: '[docs] opened guide.md' },
@@ -180,6 +182,7 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     {
       keys: ['Tab', 'Tab', 'Enter'],
       expect: '[docs] opened SKILL.md',
+      alsoExpect: [DOC_FOCUSED],
       why: "The page's second link is a wigley: link, which opens the skill's doc as its sidebar row does.",
     },
     { keys: ['<C-o>'], expect: '[docs] opened Main.md' },
@@ -194,6 +197,7 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     {
       keys: ['Tab', 'Enter'],
       expect: '[docs] listed Fixture guides: 2 docs',
+      alsoExpect: [DOC_FOCUSED],
       why: "Enter on a focused link is the link's click, and the page's first link is a wiki: list.",
     },
   ];
@@ -224,7 +228,7 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     {
       keys: ['G', 'Enter'],
       expect: '[docs] listed Vendor docs: 2 docs',
-      alsoExpect: [/^\[docs\] doc focused$/],
+      alsoExpect: [DOC_FOCUSED],
     },
     {
       keys: ['l'],
@@ -293,7 +297,7 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     {
       keys: ['g', 'h'],
       expect: '[docs] showed the empty Main page',
-      alsoExpect: [/^\[docs\] doc focused$/],
+      alsoExpect: [DOC_FOCUSED],
       checksFit: true,
       screenshot: 'main-empty',
       why: 'The doc pane showed guide.md, so the step also proves the empty page replaces a doc. It takes focus, so the screenshot shows the create it hint beside the ~ path and No pages in Main.md.',
@@ -335,6 +339,33 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     {
       keys: ['g', 'g', 'Enter', 'Enter', 'Enter'],
       expect: '[docs] selected Fixture main page',
+    },
+    { keys: ['d'], expect: '[docs] asked to move Main.md to the Trash' },
+    {
+      keys: ['y'],
+      expect: '[docs] showed the empty Main page',
+      alsoExpect: [
+        /^\[docs\] moved Main\.md to the Trash$/,
+        /^\[docs\] no Main\.md: the file is absent$/,
+      ],
+      why: "Main.md is the doc shown. Whichever of the trash and the read lands first, the read's change shows the empty page.",
+    },
+    {
+      writeFile: { path: WIKI_MAIN_FILE, text: WIKI_MAIN_TEXT },
+      keys: [],
+      expect: '[docs] opened the Main page',
+      alsoExpect: [/^\[docs\] read Main\.md: 2 shelves$/],
+      why: 'The file that appeared replaces the empty page.',
+    },
+    {
+      keys: ['R'],
+      expect: '[docs] machine index rebuilt: 19 entries',
+      why: "The stand-in lists the fixture's entry again, with its title.",
+    },
+    {
+      keys: ['g', 'g', 'Enter', 'Enter', 'Enter'],
+      expect: '[docs] selected Fixture main page',
+      why: 'The filter stays through the trash, and the collapses below start from the page.',
     },
     { keys: ['/', 'Escape'], expect: '[docs] cleared the filter' },
     {
@@ -632,7 +663,7 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     {
       keys: ['j', 'Enter'],
       expect: '[docs] opened CLAUDE.md',
-      alsoExpect: [/^\[docs\] doc focused$/],
+      alsoExpect: [DOC_FOCUSED],
       why: 'The row under the doc is its heading.',
     },
     {
@@ -1033,7 +1064,7 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     },
     {
       name: 'wiki with no Main.md',
-      why: 'With Main.md gone the sidebar empties and gh shows the empty Main page with focus on it, i creates the file from the starter text and edits it, and an outside write brings the shelves back. The group leaves All pages shown, with References and Third-party collapsed, for the groups after it.',
+      why: 'With Main.md gone the sidebar empties and gh shows the empty Main page with focus on it, i creates the file from the starter text and edits it, and an outside write brings the shelves back. Trashing Main.md while it shows ends on the empty page, and writing it back opens it. The group leaves All pages shown, with References and Third-party collapsed, for the groups after it.',
       steps: wikiWithNoMain,
     },
     {

@@ -6,6 +6,7 @@ import type { DocsChannel, IndexEntry, RecentChange } from '../contract';
 import type { RecentChangesInput } from '../layouts/layout';
 import { loadedAgo, loadedAt } from '../loaded-time';
 import type { TreeNode } from '../tree';
+import type { MainFileState } from './wiki-main-source';
 
 // The text a new `Main.md` starts with.
 export const MAIN_STARTER_TEXT =
@@ -15,30 +16,48 @@ export const MAIN_STARTER_TEXT =
 export interface MainPageState {
   isFileOpen: boolean;
   isEmptyPageShown: boolean;
-  fileExists: boolean;
+  // The pane emptied when the file was trashed from under it, and shows nothing
+  // since.
+  isFileTrashedFromPane: boolean;
+  file: MainFileState;
 }
 
 // What opening the Main page does: a Main page matching the file stays, since a
-// second open would close its editor.
+// second open would close its editor. A file that could not be read keeps either
+// page and, with neither shown, opens: only an absent file offers to be created.
 export function mainOpenStep({
   isFileOpen,
   isEmptyPageShown,
-  fileExists,
+  file,
 }: MainPageState): 'alreadyShows' | 'showEmptyPage' | 'openFile' {
-  if (fileExists) {
-    return isFileOpen ? 'alreadyShows' : 'openFile';
+  switch (file) {
+    case 'exists':
+      return isFileOpen ? 'alreadyShows' : 'openFile';
+    case 'absent':
+      return isEmptyPageShown ? 'alreadyShows' : 'showEmptyPage';
+    case 'unreadable':
+      return isFileOpen || isEmptyPageShown ? 'alreadyShows' : 'openFile';
   }
-  return isEmptyPageShown ? 'alreadyShows' : 'showEmptyPage';
 }
 
 // Whether a change to the file leaves the Main page shown out of step with it: a
-// file that appeared under the empty page, or went from under its own page.
+// file that appeared under the empty page, or went from under its own page,
+// whichever of the trash and the read landed first. A file that could not be read
+// leaves every page as it is.
 export function isMainPageStale({
   isFileOpen,
   isEmptyPageShown,
-  fileExists,
+  isFileTrashedFromPane,
+  file,
 }: MainPageState): boolean {
-  return fileExists ? isEmptyPageShown : isFileOpen;
+  switch (file) {
+    case 'exists':
+      return isEmptyPageShown;
+    case 'absent':
+      return isFileOpen || isFileTrashedFromPane;
+    case 'unreadable':
+      return false;
+  }
 }
 
 export interface LinkedPage {

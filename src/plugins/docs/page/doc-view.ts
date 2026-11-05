@@ -205,16 +205,18 @@ export interface DocView {
   // The open doc's file moved: the pane, its editor included, follows it to
   // `target`, watching the new path. The right column, the `edit` controls and
   // the header draw for it at once, and the body once it renders; a detail keeps
-  // its field table, and an open editor's body waits for it to close. An open
-  // editor's frame keeps the name and path it opened with, since the editor never
-  // moves while open.
+  // its field table, a doc moved to a detail target shows one with its file let
+  // go, and an open editor's body waits for it to close. An open editor's frame
+  // keeps the name and path it opened with, since the editor never moves while
+  // open. A detail's editor on another file than the target's stays on that file
+  // for its writes and watch, and the pane takes up the target's file as it closes.
   retarget(target: DocTarget): void;
   // Empties the pane, its editor dropped and its watch stopped; a page stays.
   clear(): void;
   refreshChips(): void;
   // Holds the index's entries and draws the right column again, the body when
   // the shown doc's section links changed and no editor is open, and the header
-  // when the index's title for the shown doc changed.
+  // when the index's title for the shown doc's file changed.
   setEntries(entries: readonly IndexEntry[]): void;
   diskChanged(path: string): void;
   // Opens the editor at `line`, else at the top visible line. On the empty Main
@@ -867,8 +869,9 @@ export function createDocView(deps: DocViewDeps): DocView {
     );
   };
 
-  // Takes the title the index now gives the shown target, which its entry names,
-  // else its file's entry; with neither it keeps its own.
+  // Takes the title the index now gives the shown target's file; a target naming
+  // an item inside a file keeps its own, since an item's id holds its line and a
+  // shifted file gives that id to another item.
   const refreshTitle = () => {
     const doc = shown;
     if (doc === null) {
@@ -878,7 +881,7 @@ export function createDocView(deps: DocViewDeps): DocView {
     const entry =
       entryId === null
         ? fileEntryAt(path)
-        : entries.find(({ id }) => id === entryId);
+        : entries.find(({ id, line }) => id === entryId && line === null);
     if (entry !== undefined && entry.title !== title) {
       doc.target = { ...doc.target, title: entry.title };
       drawHeader();
@@ -1105,6 +1108,21 @@ export function createDocView(deps: DocViewDeps): DocView {
       .catch((error) => deps.log(`not watching ${name}: ${errorText(error)}`));
   };
 
+  // Points `doc` at its target's file and watches it.
+  const followTargetFile = (doc: ShownDoc) => {
+    doc.filePath = doc.target.path;
+    doc.name = deps.paths.base(doc.target.path);
+    watchFile(doc.filePath, doc.name);
+  };
+
+  const rereadLogging = (doc: ShownDoc, after?: () => void) => {
+    reread(doc)
+      .then(after)
+      .catch((error) =>
+        deps.log(`not reloaded ${doc.name}: ${errorText(error)}`),
+      );
+  };
+
   // Shows the detail's field table, the file it edits let go.
   const showDetail = (doc: ShownDoc, detail: DocDetail) => {
     doc.filePath = doc.target.path;
@@ -1188,6 +1206,15 @@ export function createDocView(deps: DocViewDeps): DocView {
       showDetail(doc, doc.target.detail);
       pane.scrollTop = scrollTop;
       after?.();
+      return;
+    }
+    if (!deps.paths.samePath(doc.filePath, doc.target.path)) {
+      followTargetFile(doc);
+      rereadLogging(doc, () => {
+        if (!isDisposed && shown === doc && editor === null) {
+          after?.();
+        }
+      });
       return;
     }
     renderText(deps.markdown, doc.filePath, doc.text, deps.paths)
@@ -1797,25 +1824,35 @@ export function createDocView(deps: DocViewDeps): DocView {
         return;
       }
       const wasDetail = doc.target.detail !== null;
+      const isEditorOnTargetFile =
+        editor !== null && deps.paths.samePath(doc.filePath, doc.target.path);
       doc.target = target;
       deps.openChanged(target.path);
-      if (target.detail === null) {
-        doc.filePath = target.path;
-        doc.name = deps.paths.base(target.path);
-        watchFile(target.path, doc.name);
+      if (!wasDetail && target.detail !== null) {
+        isAwayFromCurrent = true;
+        showHistoryEdges();
       }
-      showBanner(false);
+      const followsFile =
+        editor === null ? target.detail === null : isEditorOnTargetFile;
+      if (followsFile) {
+        followTargetFile(doc);
+        showBanner(false);
+      }
       drawAside();
       drawSectionControls();
       drawHeader();
-      if (editor !== null || target.detail !== null) {
+      if (editor !== null) {
+        return;
+      }
+      if (target.detail !== null) {
+        if (!wasDetail) {
+          showDetail(doc, target.detail);
+        }
         return;
       }
       // A detail holds no text of the file to render.
       if (wasDetail) {
-        reread(doc).catch((error) =>
-          deps.log(`not reloaded ${doc.name}: ${errorText(error)}`),
-        );
+        rereadLogging(doc);
       } else {
         relinkLogging(doc);
       }
@@ -1855,9 +1892,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       if (!isWatching || doc.filePath !== changedPath) {
         return;
       }
-      reread(doc).catch((error) =>
-        deps.log(`not reloaded ${doc.name}: ${errorText(error)}`),
-      );
+      rereadLogging(doc);
     },
     edit(line) {
       if (page?.type === 'mainEmpty') {

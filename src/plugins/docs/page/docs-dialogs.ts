@@ -283,6 +283,7 @@ function createTextBox(deps: TextBoxDeps): TextBox {
 interface Confirm {
   element: HTMLElement;
   open(question: string, yes: () => void, no: () => void): void;
+  isOpen(): boolean;
   yes(): void;
   no(): void;
   // Closes the prompt without an answer.
@@ -379,6 +380,7 @@ function createConfirm(
       draw();
       dialog.show();
     },
+    isOpen: () => answers !== null,
     yes: () => answer('yes'),
     no: () => answer('no'),
     close() {
@@ -441,6 +443,8 @@ export interface DocsDialogs {
   rename(entry: IndexEntry): void;
   trash(entry: IndexEntry): void;
   isBoxOpen(): boolean;
+  // Whether the picker, the box or the confirm prompt shows.
+  isAnyOpen(): boolean;
   boxComplete(): void;
   boxAccept(): void;
   boxCancel(): void;
@@ -695,6 +699,7 @@ export function createDocsDialogs(deps: DocsDialogsDeps): DocsDialogs {
         .catch(failed);
     },
     isBoxOpen: () => box.isOpen(),
+    isAnyOpen: () => picker.isOpen() || box.isOpen() || confirm.isOpen(),
     boxComplete: () => box.complete(),
     boxAccept: () => box.accept(),
     boxCancel: () => box.cancel(),

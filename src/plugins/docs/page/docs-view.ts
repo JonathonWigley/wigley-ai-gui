@@ -80,7 +80,7 @@ import {
 } from './main-page';
 import type { StarredDocs } from './starred-docs';
 import { createTreeView, type LeafMarks } from './tree-view';
-import { createWikiMainSource } from './wiki-main-source';
+import { createWikiMainSource, type MainFileState } from './wiki-main-source';
 
 // The scopes a docs view pushes over its pane's scope.
 export type DocsPushedScope = 'conflict' | 'picker' | 'box' | 'confirm';
@@ -143,7 +143,8 @@ export interface DocsView {
   // it settles. The machine view's first call also starts reading `Main.md`,
   // and each index run that lands reads it again; once the first read of each
   // has settled it shows the Main page, unless an open was asked by then; the
-  // empty Main page takes focus, and a Main page with a file leaves it.
+  // empty Main page takes focus while this view is active with no filter box or
+  // dialog open, and a Main page with a file leaves it.
   showFirstTime(): void;
   // Rebuilds the source's index, then reads its statuses and reads them
   // again after a fetch, and reads `Main.md` again in the machine view: `R`.
@@ -361,6 +362,8 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   let isRedrawing = false;
   // True while a `createMain` runs, so a second `i` starts no second create.
   let isCreatingMain = false;
+  // Whether the doc pane's last emptying was `Main.md` trashed from under it.
+  let wasMainTrashedFromPane = false;
 
   // Each pane and the dialogs track their own drawn parts.
   const newParts = () =>
@@ -655,7 +658,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   // A link's open replaced the element holding focus, which fell to the body.
   const focusDocOnLanding = (opened: boolean) => {
     if (opened) {
-      doc.focus();
+      focusDocAndLog();
     }
   };
 
@@ -886,24 +889,33 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     }
   };
 
-  const mainPageState = (fileExists: boolean): MainPageState => ({
-    isFileOpen: isMainPath(doc.openPath()),
-    isEmptyPageShown: doc.shownPage()?.type === 'mainEmpty',
-    fileExists,
-  });
+  const mainPageState = (file: MainFileState): MainPageState => {
+    const isPaneEmpty = doc.openPath() === null && doc.shownPage() === null;
+    return {
+      isFileOpen: isMainPath(doc.openPath()),
+      isEmptyPageShown: doc.shownPage()?.type === 'mainEmpty',
+      isFileTrashedFromPane: isPaneEmpty && wasMainTrashedFromPane,
+      file,
+    };
+  };
 
   // The empty Main page's offer shows and takes its key only with focus on the
-  // doc. A first show leaves focus where the user has moved it since.
+  // doc. A first show takes focus only on the active view with no filter box or
+  // dialog open.
   const focusEmptyMain = (cause: MainShowCause) => {
     const isFirstShowFree =
-      cause === 'firstShow' && deps.isActive() && !tree.isFilterOpen();
+      cause === 'firstShow' &&
+      deps.isActive() &&
+      !tree.isFilterOpen() &&
+      !dialogs.isAnyOpen();
     if (cause === 'picked' || isFirstShowFree) {
       focusDocAndLog();
     }
   };
 
   // Shows `Main.md` as any doc, or the empty Main page with no file. A Main page
-  // matching the file stays.
+  // matching the file stays, and so does either page over a file that could not be
+  // read.
   const showMain = (cause: MainShowCause) => {
     const path = wikiMain?.path() ?? null;
     if (wikiMain === null || path === null) {
@@ -916,11 +928,11 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         deps.leafOpened();
       }
     };
-    switch (mainOpenStep(mainPageState(wikiMain.exists()))) {
+    switch (mainOpenStep(mainPageState(wikiMain.fileState()))) {
       case 'alreadyShows':
         log('Main page already shows');
         mainReady();
-        if (!wikiMain.exists()) {
+        if (doc.shownPage()?.type === 'mainEmpty') {
           focusEmptyMain(cause);
         }
         return;
@@ -984,11 +996,14 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   };
 
   // `Main.md` read another text: its links changed, a file that appeared replaces
-  // the empty Main page, and the empty page replaces a shown file that went,
-  // unless an editor holds unsaved edits on it.
+  // the empty Main page, and the empty page replaces a file that went from under
+  // the pane, unless an editor holds unsaved edits on it.
   const wikiMainChanged = () => {
+    if (wikiMain === null) {
+      return;
+    }
     showWikiTree();
-    const isStale = isMainPageStale(mainPageState(wikiMain?.exists() === true));
+    const isStale = isMainPageStale(mainPageState(wikiMain.fileState()));
     if (isStale && !doc.hasUnsavedEdits()) {
       showMain('fileChanged');
     }
@@ -1122,7 +1137,8 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       (entry) => deps.paths.samePath(entry.path, path) && entry.line === null,
     ) ?? null;
 
-  // The doc pane follows a move of its file and empties when it is trashed.
+  // The doc pane follows a move of its file and empties when it is trashed; the
+  // read that finds `Main.md` gone then shows the empty Main page.
   const followChange = (record: DocChangeRecord) => {
     const openPath = doc.openPath();
     if (openPath === null) {
@@ -1138,6 +1154,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       record.type === 'trashed' &&
       record.paths.some((path) => deps.paths.isInside(openPath, path))
     ) {
+      wasMainTrashedFromPane = isMainPath(openPath);
       doc.clear();
     }
   };

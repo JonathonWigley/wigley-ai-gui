@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fakeFuzzyMatcher } from '../../../shared/fake-fuzzy-matcher.test-support';
 import type { ShownLayouts } from '../../../contracts/plugin';
+import type { IndexEntry } from '../contract';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import {
   USER_LAYOUT,
@@ -14,7 +15,11 @@ import {
 } from '../../../shared/page/test-dom';
 import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
-import { createDocsDialogs, type DocsDialogsDeps } from './docs-dialogs';
+import {
+  createDocsDialogs,
+  type DocsDialogs,
+  type DocsDialogsDeps,
+} from './docs-dialogs';
 import { fakeDocsParts, fakePushedScope } from './docs-page-fakes';
 
 // A layout whose picker rows and box body are marked `marker`.
@@ -38,12 +43,20 @@ function markedLayout(marker: string): Layout {
   };
 }
 
-// The docs dialogs over a channel listing no folder, drawing with the
-// layouts `layouts` returns.
+const TRASHED_ENTRY = { path: '/home/a.md' } as IndexEntry;
+
+// Lets every settled promise's chain run.
+const settled = () => new Promise((resolve) => setTimeout(resolve));
+
+// The docs dialogs over a channel listing no folder and `TRASHED_ENTRY`'s path as
+// the one trash target, drawing with the layouts `layouts` returns.
 function dialogsOver(layouts: () => ShownLayouts<Layout>) {
   const { parts } = fakeDocsParts(layouts);
   const deps = {
-    channel: { invoke: async () => [] },
+    channel: {
+      invoke: async (name: string) =>
+        name === 'trashTargets' ? [TRASHED_ENTRY.path] : [],
+    },
     homeDir: '/home',
     paths: posixPaths,
     toast: () => undefined,
@@ -87,6 +100,30 @@ describe('createDocsDialogs', () => {
     expect(findAll(list, 'row-1')).toEqual([]);
     expect(findAll(list, 'row-2')).toHaveLength(before.length);
     expect(dialogs.picker.isOpen()).toBe(true);
+  });
+
+  it.each<{ dialog: string; open(dialogs: DocsDialogs): void }>([
+    { dialog: 'the picker', open: (dialogs) => dialogs.createByKind() },
+    { dialog: 'the box', open: (dialogs) => dialogs.createByPath(null) },
+    {
+      dialog: 'the confirm prompt',
+      open: (dialogs) => dialogs.trash(TRASHED_ENTRY),
+    },
+  ])('isAnyOpen_WhileShown: $dialog', async ({ open }) => {
+    const dialogs = dialogsOver(() =>
+      withUser(defaultLayout, markedLayout('dialog')),
+    );
+    expect(dialogs.isAnyOpen()).toBe(false);
+
+    open(dialogs);
+    await settled();
+    const whileOpen = dialogs.isAnyOpen();
+    dialogs.close();
+
+    expect({ whileOpen, afterClose: dialogs.isAnyOpen() }).toEqual({
+      whileOpen: true,
+      afterClose: false,
+    });
   });
 
   it('redraw_BoxOpenWithText_KeepsTheInputItsTextAndFocus', () => {

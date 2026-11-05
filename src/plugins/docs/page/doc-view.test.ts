@@ -248,6 +248,18 @@ const hookDetail: DocDetail = {
   editFile: async () => ({ path: '/home/hook.md', text: '# Hook', line: 1 }),
 };
 
+// A spy on the channel of a doc view's `deps`.
+function channelSpy(deps: DocViewDeps) {
+  return vi.spyOn(deps.channel, 'invoke');
+}
+
+// The paths each `watchDoc` call `invoke` heard asks to watch, null to stop.
+function watchedPaths(invoke: ReturnType<typeof channelSpy>): unknown[] {
+  return invoke.mock.calls
+    .filter(([name]) => name === 'watchDoc')
+    .map(([, , path]) => path);
+}
+
 // An own doc at `source`, whose link on `line` leads to `linkTarget`.
 function linkingEntry(
   source: string,
@@ -540,6 +552,9 @@ describe('createDocView', () => {
     isEditing: boolean;
     rendered: string[];
     isAsideHidden: boolean;
+    watches: (string | null)[];
+    fields: [string, string][];
+    back: string;
   }>([
     {
       name: 'an editor open, to not .md',
@@ -548,14 +563,31 @@ describe('createDocView', () => {
       isEditing: true,
       rendered: [],
       isAsideHidden: true,
+      watches: ['/home/moved.json'],
+      fields: [],
+      back: 'false',
     },
     {
-      name: 'a doc to a target with a detail',
+      name: 'an editor open, to a target with a detail',
+      from: target(null),
+      to: { ...target(null, '/home/moved.md'), detail: hookDetail },
+      isEditing: true,
+      rendered: [],
+      isAsideHidden: true,
+      watches: ['/home/moved.md'],
+      fields: [],
+      back: 'true',
+    },
+    {
+      name: 'a doc to a target with a detail shows its fields, its file let go',
       from: target(null),
       to: { ...target(null, '/home/moved.md'), detail: hookDetail },
       isEditing: false,
       rendered: [],
       isAsideHidden: true,
+      watches: [null],
+      fields: hookDetail.fields,
+      back: 'true',
     },
     {
       name: 'a target with a detail',
@@ -564,6 +596,9 @@ describe('createDocView', () => {
       isEditing: false,
       rendered: [],
       isAsideHidden: true,
+      watches: [],
+      fields: hookDetail.fields,
+      back: 'false',
     },
     {
       name: 'a detail with its editor open, to a target with a detail',
@@ -572,6 +607,9 @@ describe('createDocView', () => {
       isEditing: true,
       rendered: [],
       isAsideHidden: true,
+      watches: [],
+      fields: hookDetail.fields,
+      back: 'false',
     },
     {
       name: 'a detail to a target with none reads the file',
@@ -580,12 +618,33 @@ describe('createDocView', () => {
       isEditing: false,
       rendered: ['# Doc'],
       isAsideHidden: false,
+      watches: ['/home/moved.md'],
+      fields: [],
+      back: 'false',
     },
   ])(
     'retarget_NothingToRenderFromItsText $name',
-    async ({ from, to, isEditing, rendered, isAsideHidden }) => {
+    async ({
+      from,
+      to,
+      isEditing,
+      rendered,
+      isAsideHidden,
+      watches,
+      fields,
+      back,
+    }) => {
+      let drawnFields: [string, string][] = [];
+      const fieldsLayout: Layout = {
+        docBody(parent, input, kit) {
+          drawnFields = input.fields;
+          const root = kit.el(parent, 'div');
+          kit.body(root);
+          return { element: root };
+        },
+      };
       const { view, deps, editors } = docViewOver(() =>
-        withUser(defaultLayout, asideLayout()),
+        withUser(defaultLayout, { ...asideLayout(), ...fieldsLayout }),
       );
       await view.open(from);
       if (isEditing) {
@@ -593,6 +652,7 @@ describe('createDocView', () => {
         await settled();
       }
       const render = vi.spyOn(deps.markdown, 'document');
+      const invoke = channelSpy(deps);
 
       view.retarget(to);
       await settled();
@@ -602,9 +662,97 @@ describe('createDocView', () => {
         destroys: editors.flatMap(({ destroy }) => destroy.mock.calls),
         path: view.openPath(),
         isAsideHidden: asideOf(view).hidden,
-      }).toEqual({ rendered, destroys: [], path: to.path, isAsideHidden });
+        watches: watchedPaths(invoke),
+        fields: drawnFields,
+        back: view.element.dataset.historyBack,
+      }).toEqual({
+        rendered,
+        destroys: [],
+        path: to.path,
+        isAsideHidden,
+        watches,
+        fields,
+        back,
+      });
     },
   );
+
+  describe("a detail's editor retargeted to a target with no detail", () => {
+    // A detail whose `i` edits `editedPath`, its editor open, retargeted to
+    // `/home/moved.md`.
+    async function retargetedWhileEditing(editedPath: string) {
+      const test = docViewOver(() => withUser(defaultLayout, asideLayout()));
+      const detail: DocDetail = {
+        fields: [['Event', 'Stop']],
+        editFile: async () => ({ path: editedPath, text: '# Held', line: 1 }),
+      };
+      await test.view.open({ ...target(null), detail });
+      test.view.edit(1);
+      await settled();
+      const invoke = channelSpy(test.deps);
+      test.view.retarget(target(null, '/home/moved.md'));
+      await settled();
+      return { ...test, invoke };
+    }
+
+    const writtenPaths = (invoke: ReturnType<typeof channelSpy>) =>
+      invoke.mock.calls
+        .filter(([name]) => name === 'writeDoc')
+        .map(([, path]) => path);
+
+    it.each([
+      {
+        name: 'on another file, writes and watches that file',
+        editedPath: '/home/hook.json',
+        written: '/home/hook.json',
+        watches: [],
+      },
+      {
+        name: "on the target's own file, follows the move",
+        editedPath: '/home/notes.md',
+        written: '/home/moved.md',
+        watches: ['/home/moved.md'],
+      },
+    ])(
+      'retarget_DetailsEditorOpen_WriteGoesTo $name',
+      async ({ editedPath, written, watches }) => {
+        const { editors, invoke } = await retargetedWhileEditing(editedPath);
+
+        editors[0].events.write();
+        await settled();
+
+        expect({
+          written: writtenPaths(invoke),
+          watches: watchedPaths(invoke),
+          destroys: editors[0].destroy.mock.calls,
+        }).toEqual({ written: [written], watches, destroys: [] });
+      },
+    );
+
+    it("retarget_DetailsEditorThenCloses_ShowsAndWatchesTheTarget'sFile", async () => {
+      const { view, deps, editors, invoke, replies } =
+        await retargetedWhileEditing('/home/hook.json');
+      replies.readDoc = '# Moved';
+      const render = vi.spyOn(deps.markdown, 'document');
+
+      editors[0].events.quit(false);
+      await settled();
+      view.diskChanged('/home/hook.json');
+      await settled();
+
+      expect({
+        reads: invoke.mock.calls
+          .filter(([name]) => name === 'readDoc')
+          .map(([, path]) => path),
+        rendered: render.mock.calls.map(([text]) => text),
+        watches: watchedPaths(invoke),
+      }).toEqual({
+        reads: ['/home/moved.md'],
+        rendered: ['# Moved'],
+        watches: ['/home/moved.md'],
+      });
+    });
+  });
 
   it.each([
     {
@@ -620,7 +768,7 @@ describe('createDocView', () => {
       titles: ['notes', 'New'],
     },
     {
-      name: "a target with an item's entry, not its file's title",
+      name: "a target with an item's entry keeps its title, its id now on another item",
       entryId: `${DOC}#L5`,
       entries: () => [
         { ...linkingEntry(DOC, OTHER_DOC, 3), title: 'File' },
@@ -628,10 +776,10 @@ describe('createDocView', () => {
           ...linkingEntry(DOC, OTHER_DOC, 3),
           id: `${DOC}#L5`,
           line: 5,
-          title: 'Item',
+          title: 'Another item',
         },
       ],
-      titles: ['notes', 'Item'],
+      titles: ['notes'],
     },
     {
       name: 'the same title draws nothing',

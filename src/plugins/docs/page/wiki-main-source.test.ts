@@ -90,24 +90,29 @@ describe('createWikiMainSource', () => {
     {
       given: 'the file is absent',
       read: () => Promise.resolve(null),
+      fileState: 'absent',
       logged: 'no Main.md: the file is absent',
     },
     {
       given: 'the read rejects',
       read: () => Promise.reject(new Error('denied')),
+      fileState: 'unreadable',
       logged: 'no Main.md: denied',
     },
-  ])('start_$given_IsNoMainAndChangedRanOnce', async ({ read, logged }) => {
-    const test = setUp({ read });
+  ])(
+    'start_$given: IsNoMainAndChangedRanOnce',
+    async ({ read, fileState, logged }) => {
+      const test = setUp({ read });
 
-    await test.source.start();
+      await test.source.start();
 
-    expect(test.source.exists()).toBe(false);
-    expect(test.source.shelves()).toEqual([]);
-    expect(test.source.isRead()).toBe(true);
-    expect(test.changed).toHaveBeenCalledOnce();
-    expect(test.logs).toEqual([logged]);
-  });
+      expect(test.source.fileState()).toBe(fileState);
+      expect(test.source.shelves()).toEqual([]);
+      expect(test.source.isRead()).toBe(true);
+      expect(test.changed).toHaveBeenCalledOnce();
+      expect(test.logs).toEqual([logged]);
+    },
+  );
 
   it('reread_WatchRejectedAtStart_TriesAgainUntilOneResolves', async () => {
     let isFolderThere = false;
@@ -138,7 +143,7 @@ describe('createWikiMainSource', () => {
     await test.source.start();
     expect(test.source.path()).toBeNull();
     expect(test.source.isRead()).toBe(true);
-    expect(test.source.exists()).toBe(false);
+    expect(test.source.fileState()).toBe('unreadable');
     expect(test.changed).toHaveBeenCalledOnce();
     expect(test.watchDoc).not.toHaveBeenCalled();
     isPathKnown = true;
@@ -151,10 +156,10 @@ describe('createWikiMainSource', () => {
       'machine:main',
       MAIN_PATH,
     );
-    expect(test.source.exists()).toBe(true);
+    expect(test.source.fileState()).toBe('exists');
   });
 
-  it('reread_FileGoesAway_ChangedRunsOnceAndExistsIsFalse', async () => {
+  it('reread_FileGoesAway_ChangedRunsOnceAndTheFileIsAbsent', async () => {
     let isThere = true;
     const test = setUp({
       read: () => Promise.resolve(isThere ? ONE_SHELF : null),
@@ -167,8 +172,94 @@ describe('createWikiMainSource', () => {
     await test.source.reread();
 
     expect(test.changed).toHaveBeenCalledOnce();
-    expect(test.source.exists()).toBe(false);
+    expect(test.source.fileState()).toBe('absent');
     expect(test.source.shelves()).toEqual([]);
+  });
+
+  it.each([
+    {
+      given: 'the same text answers',
+      thirdRead: () => Promise.resolve(ONE_SHELF),
+      fileState: 'exists',
+      changes: 0,
+      shelves: ['Shelf one'],
+      logs: ['no Main.md: denied'],
+    },
+    {
+      given: 'another text answers',
+      thirdRead: () => Promise.resolve(TWO_SHELVES),
+      fileState: 'exists',
+      changes: 1,
+      shelves: ['Shelf one', 'Shelf two'],
+      logs: ['no Main.md: denied', 'read Main.md: 2 shelves'],
+    },
+    {
+      given: 'the file turns out absent',
+      thirdRead: () => Promise.resolve(null),
+      fileState: 'absent',
+      changes: 1,
+      shelves: [],
+      logs: ['no Main.md: denied', 'no Main.md: the file is absent'],
+    },
+    {
+      given: 'another rejection answers',
+      thirdRead: () => Promise.reject(new Error('still denied')),
+      fileState: 'unreadable',
+      changes: 0,
+      shelves: ['Shelf one'],
+      logs: ['no Main.md: denied'],
+    },
+  ])(
+    'reread_RejectedAfterAText_KeepsItsShelvesUntil: $given',
+    async ({ thirdRead, fileState, changes, shelves, logs }) => {
+      const answers = [
+        () => Promise.resolve<string | null>(ONE_SHELF),
+        () => Promise.reject(new Error('denied')),
+        thirdRead,
+      ];
+      const test = setUp({ read: () => answers.shift()!() });
+      await test.source.start();
+      test.changed.mockClear();
+      test.logs.length = 0;
+
+      await test.source.reread();
+      const whileRejected = {
+        fileState: test.source.fileState(),
+        changes: test.changed.mock.calls.length,
+        shelves: test.source.shelves().length,
+      };
+      await test.source.reread();
+
+      expect(whileRejected).toEqual({
+        fileState: 'unreadable',
+        changes: 0,
+        shelves: 1,
+      });
+      expect({
+        fileState: test.source.fileState(),
+        changes: test.changed.mock.calls.length,
+        shelves: test.source.shelves().map((shelf) => shelf.title),
+        logs: test.logs,
+      }).toEqual({ fileState, changes, shelves, logs });
+    },
+  );
+
+  it('reread_AbsentThenRejectedThenAbsent_StaysAbsentWithNoChange', async () => {
+    const answers = [
+      () => Promise.resolve<string | null>(null),
+      () => Promise.reject(new Error('denied')),
+      () => Promise.resolve<string | null>(null),
+    ];
+    const test = setUp({ read: () => answers.shift()!() });
+    await test.source.start();
+    test.changed.mockClear();
+
+    await test.source.reread();
+    expect(test.source.fileState()).toBe('unreadable');
+    await test.source.reread();
+
+    expect(test.source.fileState()).toBe('absent');
+    expect(test.changed).not.toHaveBeenCalled();
   });
 
   it('diskChanged_AnotherViewsId_StartsNoRead', async () => {
