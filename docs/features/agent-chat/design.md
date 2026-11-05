@@ -278,7 +278,7 @@ interview on 2026-10-23; this file is the record of both.
   (claude-stream.md § Queued messages), so chat holds it until the turn ends, unless the user sends it now (Send now
   below). A permission call left waiting after the turn ended
   queues nothing; a running turn waiting on a permission still queues. Chat main holds the message in the session's
-  queue (`ChatSessionState.queued`, oldest first, each with an id of its own; kept across a page reload, and saved
+  queue (the `chat.queued` slot, keyed by session, oldest first, each with an id of its own; kept across a page reload, and saved
   with the session's record so a relaunch that re-attaches the session shows and sends them,
   `docs/features/session-host/design.md` § Re-attach), and the Chat tab shows it as a pending row after the last entry, drawn by the layout's `queuedMessage` part:
   dim, with a `pending` label on its own line above the text (`pending · 2 images` when it carries images; `sending` in place of `pending` once sent now). The code names these **queued**
@@ -328,10 +328,10 @@ interview on 2026-10-23; this file is the record of both.
     returned for its process, so a replay of a drop already returned logs `dropped message <id> already returned` and
     returns nothing.
   - **Returned messages**: every return (a pull-back, an interrupt, a clear, a process end, a drop) stays with the row
-    until the page puts it in the box, because the `returned` message is lost when no page or tab hears it, as during
-    a re-attach's replay at startup. Main holds each message in `ChatSessionState.returned` (each with an id of its
-    own) and in the saved record. The page puts them in the box when the `returned` message arrives, or when the tab
-    mounts for those its state holds, then calls `returnedPlaced`, and main drops them from the state and the record.
+    until the page puts it in the box, since no page or tab may be there to take it, as during a re-attach's replay
+    at startup. Main holds each message in the `chat.returned` slot, keyed by session (each with an id of its own),
+    and in the saved record. The page puts those it has not placed in the box when `chat.returned` changes and when
+    the tab mounts, then calls `returnedPlaced`, and main drops them from the slot and the record.
     A quit before that keeps them: the relaunched row returns them to the box again.
   - **Pulling back**: a pending row is a cursor stop after the last entry, so `G` and a following focus land on the
     newest pending row when any exist. Three routes pull a message back: Enter on the focused row, a click on it, and
@@ -342,8 +342,8 @@ interview on 2026-10-23; this file is the record of both.
     caller logs its own line: `pulled back <n> message(s) in <session>`, or `put the refused message back in
     <session>` for a refused send. A pull-back for a message no longer queued (already written to the agent, returned,
     or pulled back) does nothing and logs `queued message <id> no longer queued`; one for a sent row, which the agent
-    already holds, does nothing and logs `queued message <id> already sent`. A `returned` for a session with no tab logs
-    `returned for unknown session <id> ignored`, and main holds it for the tab's mount. The key log lines are `focused pending message` for `j` / `k` onto a pending row and
+    already holds, does nothing and logs `queued message <id> already sent`. A `chat.returned` change for a session with no tab
+    changes nothing, and the tab reads the slot when it mounts. The key log lines are `focused pending message` for `j` / `k` onto a pending row and
     `following the latest entry` for `G`.
   - **Interrupt and exit**: Ctrl+C returns every unsent queued message, oldest first, then interrupts the running
     turn; the oldest ends at the top of the box. A sent row stays: Claude's interrupt cancels nothing it holds, so the
@@ -504,7 +504,7 @@ interview on 2026-10-23; this file is the record of both.
   draw through the same export: the description in a dim column after the name: most names fit one width, so their descriptions line up, a longer name pushes only its own, and each is cut to one line, to the width the name leaves, so a long name still shows as much description as fits (the `completionDescription` chat layout part), while the `completionDescriptions`
   setting is on (default on), else `false`.
 - **Active time**: chat's page exports `activeTime(sessionId)`, a session's clock as an `ActiveTime` (null for a session the
-  page does not hold), and fires `activeTimeChanged` when a session arrives and when main sends a clock; chat's `rowClock` layout part draws it on the
+  page does not hold), and runs its `activeTimeListeners` when a session arrives and when its clock changes in `chat.session`; chat's `rowClock` layout part draws it on the
   side-bar row (`docs/features/session-clock/design.md`).
 - **Resume and archive**: a plugin's resume section (`addResumeSection`, `docs/features/session-log/design.md`) lists above the folders and above the new-session line. After the folder and profile, the start prompt offers a new session or one of the folder's
   saved sessions (terminal and app alike, newest first, labelled by first message and time; one open in the app

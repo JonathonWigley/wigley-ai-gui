@@ -1,6 +1,6 @@
 # 11 — Sessions rows and selection as slots
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 10 · Depends on: 10
 Plan: [plan.md](plan.md)
@@ -219,3 +219,4 @@ The runtime checks collect in [Final verification](16-final-verification.md).
 
 ## Proof
 
+Commit 022d6de3 · proof: Report, contract and page-start diffs read; the slots and followRows present; typecheck and lint clean; the event grep is empty over src/plugins (task 05's core stateChanged channel stays outside it); hasQuitStarted gate count is 3, the third being the layouts service's, so the task's 2 was mismeasured. · concerns: A first apply builds a row part twice, not investigated; agent-strip keeps its page dependency for cutToTitleLimit, against 'use no page export'; readers' nameOf now returns the label from the first draw, so self-test lines may differ (task 16); forms and primer page tests lacked a picker fake, likely red since task 09; check-layers gains sessions/contract.ts in forms and primer page start.test sublayers.

@@ -1,6 +1,6 @@
 # 13 — Agents, usage, workflow and unity-pool as slots
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 11 · Depends on: 11
 Plan: [plan.md](plan.md)
@@ -171,3 +171,4 @@ The runtime checks collect in [Final verification](16-final-verification.md).
 
 ## Proof
 
+Commit 61c255a4 · proof: Diff read; the four slots present; 62 files 1001 tests pass per the worker; the tree compile proof waits for task 12, which runs beside it. · concerns: A stop and restart of agents main leaves stale rosters for live rows until the next event, unreachable until the live restart of Wave 4; usage and unity-pool setLayouts can now draw before pageReady, which may change first log lines (task 16 watches); the pageReady catch-up redraws parts once more; view.forget may leave a flow readable until store.drop; the unity-pool main test reaches the write through a rescan, watcher path not traced.

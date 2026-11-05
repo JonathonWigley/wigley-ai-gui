@@ -300,11 +300,11 @@ Part harness (`src/shared/plugin-part-harness.test-support.ts`): task 05 adds a 
 - [x] [Layouts read slots](10-kit-state.md) — after 09
 
 ### Wave 10
-- [ ] [Sessions rows and selection as slots](11-sessions-slots.md) — after 10
+- [x] [Sessions rows and selection as slots](11-sessions-slots.md) — after 10
 
 ### Wave 11
 - [ ] [Chat session state as slots](12-chat-slots.md) — after 11
-- [ ] [Agents, usage, workflow and unity-pool as slots](13-small-slots.md) — after 11
+- [x] [Agents, usage, workflow and unity-pool as slots](13-small-slots.md) — after 11
 
 ### Wave 12
 - [ ] [Events for every moment](14-events.md) — after 12, 13
@@ -330,6 +330,8 @@ Review base: 7001a175798c0ae437a1783e0b425dfe634be1ea
 - 08 · f3c93b48 · Diff stat and Produces read; new core modules present; typecheck and lint clean; all four Done-when greps as required. · concerns: renderer.ts wiring and the flash-free load with showHints off reach no test (task 16); deleting the chrome's redraw leaves a chrome keyHint on a command with no handler at its draw empty until the next draw; holdShown's rule is written twice, in key-anchors.ts and the harness fake; api.keys.where and onWhereChanged have no consumer; pushSettings tells listeners but does not change settings().
 - 09 · 50982631 · Diff stat and page-api diff read; ListPickerService, PageServices and Bridge members present; typecheck and lint clean; the three Done-when greps print nothing. · concerns: renderer.ts and main.ts wiring reach no test, so a real folder dialog and link go to task 16; the harness fake neither checks declared scopes nor closes on stop, so those rules sit only in page-api.test; docs shares one list and an inactive view's redraw reaches it, reasoned unreachable by keys; AGENTS.md does not yet name services.picker, chooseFolder or openExternal (task 15).
 - 10 · 265ca654 · Diff stat and kit diffs read; kit.state.read present; typecheck and lint clean; the recordAnchor? grep prints nothing. · concerns: The shell's layoutState wiring reaches no test (task 16); no single test runs a layout that subscribes, throws and then hears nothing; a layout calling on inside its own listener adds a subscription each time; AGENTS.md does not list the new fake (task 15).
+- 11 · 022d6de3 · Report, contract and page-start diffs read; the slots and followRows present; typecheck and lint clean; the event grep is empty over src/plugins (task 05's core stateChanged channel stays outside it); hasQuitStarted gate count is 3, the third being the layouts service's, so the task's 2 was mismeasured. · concerns: A first apply builds a row part twice, not investigated; agent-strip keeps its page dependency for cutToTitleLimit, against 'use no page export'; readers' nameOf now returns the label from the first draw, so self-test lines may differ (task 16); forms and primer page tests lacked a picker fake, likely red since task 09; check-layers gains sessions/contract.ts in forms and primer page start.test sublayers.
+- 13 · 61c255a4 · Diff read; the four slots present; 62 files 1001 tests pass per the worker; the tree compile proof waits for task 12, which runs beside it. · concerns: A stop and restart of agents main leaves stale rosters for live rows until the next event, unreachable until the live restart of Wave 4; usage and unity-pool setLayouts can now draw before pageReady, which may change first log lines (task 16 watches); the pageReady catch-up redraws parts once more; view.forget may leave a flow readable until store.drop; the unity-pool main test reaches the write through a rescan, watcher path not traced.
 ### Contract changes
 - 07 CommandRouter gains intercept(id, wrap, owner); KeyCommands<Context> is exported from shared/command-router.ts.
 - 07 new shared/runtime-commands.ts (createRuntimeCommands, RuntimeCommands, EMPTY_RUNTIME_CATALOG); createPageApi and createMainApi take commands: RuntimeCommands, and the page's run dep is gone.
@@ -342,6 +344,8 @@ Review base: 7001a175798c0ae437a1783e0b425dfe634be1ea
 - 09 fakeListPickerService takes fakes?: { place?, editor?, log?, pushScope? }; the return type is unchanged.
 - 09 StartPromptDeps gains chooseFolder(); DocViewDeps and DocsViewDeps gain openExternal(url); DialogScope, DocsPushedScope, BacklogPushedScope and settings' pushScope lose 'picker'; the harness gains notFakedCall(name).
 - 10 PrimerViewDeps and NotePopupDeps gain state: LayoutState; chat-view.ts passes state at its two kit literals.
+- 11 selectedSessionId is a top-level dep on ChatSessionsDeps; ChatViewDeps.selectedSessionId becomes activeSessionId(); SessionsPageEvents is empty, kept for task 14; notes' host-move log is 'session moved to <host|none>'.
+- 13 AgentStripDeps.agents becomes roster(sessionId), and AgentStrip gains rosterUpdated; rosterChanged on SkillList becomes rosterUpdated; AgentsChannel, WorkflowChannel and UnityPoolChannel messages are Record<never, never>.
 ### Rulings
 - session-log, landed after the plan was written, is covered by every task that changes each manifest or a chat or sessions event it hears — it is a plugin like the rest — a missed manifest fails the compile, a missed event a test · lead
 - Task 03: keymap.test's commandInfos takes {} for core commands, not coreCommands: the layer rule forbids the import and the bind's plugin comes from the manifest. · group 03
@@ -358,5 +362,10 @@ Review base: 7001a175798c0ae437a1783e0b425dfe634be1ea
 - Task 08: stale prose fixed beyond Files: AGENTS.md, DESIGN.md, key-hints/design.md and plugin-framework/design.md § Keys plugin. · group 08
 - Task 09: each create files a child store pushedScopes ahead of the close registration, since the store disposes in reverse and a scope tracked directly would throw out of the part's stop. · group 09
 - Task 09: notes reads services.picker from its services dep and gets no picker dep. · group 09
+- Task 11: placeSelection returns early when the selection is unchanged, and tabsChanged is guarded by !isApplying. · group 11
+- Task 11: notes keeps a hostChanged log, as the chat self-test's alsoExpect needs it. · group 11
+- Task 13: store.rekey goes through hold, so a clear can write the slot twice. · group 13
+- Task 13: usage's page part drops isDisposed with the reply it guarded; unity-pool keeps its own. · group 13
+- Task 13: stale prose fixed beyond Files: AGENTS.md's agents entry and agent-lines, agent-skills and agent-strip manifest comments. · group 13
 ### Review rounds
 ### Test gate

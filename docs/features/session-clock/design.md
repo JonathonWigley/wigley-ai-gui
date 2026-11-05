@@ -23,8 +23,8 @@ Built.
   (`background > 0`). It pauses while the session is idle and while a turn is `waiting` on a permission answer
   with no background work running.
 - Chat main owns each session's clock, since chat alone holds both the turn state and the background count. It
-  sends the clock in each session's state and on each change; the chat page offers it to other plugins through
-  `ChatPageExports.activeTime` and the `activeTimeChanged` event.
+  writes the clock to each session's key in the `chat.session` slot; the chat page offers it to other plugins through
+  `ChatPageExports.activeTime`.
 - The clock is an `ActiveTime` record (`src/contracts/active-time.ts`): the closed total and the moment the open span
   started, null while paused. Its functions are in `src/shared/active-time.ts`, and any clock that counts only while
   something runs builds on that module.

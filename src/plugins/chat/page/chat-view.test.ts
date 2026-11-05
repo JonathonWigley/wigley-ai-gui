@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ActiveTime } from '../../../contracts/active-time';
 import type { TextEditor } from '../../../contracts/editor';
-import type { ChatEntry } from '../../../contracts/agent';
+import type { AgentCommand, ChatEntry } from '../../../contracts/agent';
 import { NO_ACTIVE_TIME } from '../../../shared/active-time';
+import { createSlotStore } from '../../../shared/state/slot-store';
 import {
   asFake,
   type FakeElement,
@@ -13,17 +14,51 @@ import { createPartStore } from '../../../shared/page/contributed-parts';
 import { posixPaths } from '../../../shared/paths/posix-paths';
 import defaultLayout from '../layouts/default/layout.js';
 import type { ChatLayout } from '../layouts/layout';
-import type {
-  ChatChannel,
-  ChatComposerPart,
-  ChatSessionState,
-  ChatSidePart,
-  ReturnedMessage,
-  SessionCompaction,
+import {
+  chatCommandsSlot,
+  type ChatComposerPart,
+  chatControlsSlot,
+  chatEntriesSlot,
+  chatQueuedSlot,
+  chatReturnedSlot,
+  type ChatSessionInfo,
+  type ChatSessionState,
+  chatSessionSlot,
+  type ChatSidePart,
+  type QueuedMessage,
+  type ReturnedMessage,
+  type SessionCompaction,
 } from '../contract';
 import { createChatLayouts, type SurfaceKitDeps } from './chat-layouts';
 import { type ChatViewDeps, mountChatView } from './chat-view';
 import { createSideSections } from './side-sections';
+
+// Each call the view makes to a tab's entry list that draws it, by method name.
+const listCalls = vi.hoisted(() => [] as string[]);
+vi.mock('./entry-list', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./entry-list')>();
+  return {
+    ...actual,
+    createEntryList(...args: Parameters<typeof actual.createEntryList>) {
+      const list = actual.createEntryList(...args);
+      return {
+        ...list,
+        setWorking(...call: Parameters<typeof list.setWorking>) {
+          listCalls.push('setWorking');
+          list.setWorking(...call);
+        },
+        setQueued(...call: Parameters<typeof list.setQueued>) {
+          listCalls.push('setQueued');
+          list.setQueued(...call);
+        },
+        rebuild(...call: Parameters<typeof list.rebuild>) {
+          listCalls.push('rebuild');
+          list.rebuild(...call);
+        },
+      };
+    },
+  };
+});
 
 const NO_ENTRIES: ChatEntry[] = [];
 
@@ -62,44 +97,64 @@ const returnedTwo: ReturnedMessage = {
   images: [],
 };
 
-// A mounted view whose `sessions` call waits for `answerSessions`; `emit` sends
-// it a message from main, `box` is the one tab's box text, null before a tab
-// mounts, `tab` its element, `tabElements` each session's tab element, and
-// `invoked` holds each other call to main. `sideParts` and `composerParts` are
-// the view's part stores, `layouts` its chat layouts, and `removeSession` closes
-// a session's tab as the sessions plugin does.
+// A mounted view over a real slot store. `writers` writes chat's slots as main
+// does: `open` a session's lists and then its key, `setInfo` a new value at its
+// key. `pageLoad` writes sessions and then tells the view the page is ready; `open`
+// tells it first, so the session arrives on a live view. `rest` is the
+// `sessionRested` message. `box` is the one tab's box text, null before a tab
+// mounts, `tab` its element, `tabElements` each session's tab element, `invoked`
+// each call to main, `activities` each row activity word set, and `toasts` each
+// toast. `sideParts` and `composerParts` are the view's part stores, `layouts` its
+// chat layouts, and `removeSession` closes a session's tab as the sessions plugin
+// does.
 function mounted(
   firstActiveTimeListener: (
     sessionId: string,
     activeTime: ActiveTime,
   ) => void = () => undefined,
 ) {
+  listCalls.length = 0;
   const listeners = new Map<string, (data: unknown) => void>();
   const invoked: unknown[][] = [];
   const logs: string[] = [];
+  const toasts: [string, string][] = [];
+  const activities: (string | undefined)[] = [];
   const box = { text: null as string | null };
   const tab = { element: null as FakeElement | null };
   const tabElements = new Map<string, FakeElement>();
   const sideParts = createPartStore<ChatSidePart>();
   const composerParts = createPartStore<ChatComposerPart>();
-  let answerSessions: (states: ChatSessionState[]) => void = () => undefined;
   const channel = {
     on(message: string, listener: (data: unknown) => void) {
       listeners.set(message, listener);
       return { remove: () => undefined };
     },
     invoke(method: string, ...args: unknown[]) {
-      if (method === 'sessions') {
-        return new Promise((resolve) => {
-          answerSessions = resolve;
-        });
-      }
       invoked.push([method, ...args]);
       return Promise.resolve();
     },
   };
   const log = (line: string) => logs.push(line);
   const noEvent = () => undefined;
+  const store = createSlotStore((_owner, line) => logs.push(line));
+  const writers = {
+    session: store.publish(chatSessionSlot),
+    entries: store.publish(chatEntriesSlot),
+    controls: store.publish(chatControlsSlot),
+    commands: store.publish(chatCommandsSlot),
+    queued: store.publish(chatQueuedSlot),
+    returned: store.publish(chatReturnedSlot),
+  };
+  const writeSession = (state: ChatSessionState) => {
+    const { entries, controls, commands, queued, returned, ...info } = state;
+    writers.entries.replace(state.sessionId, entries);
+    writers.controls.set(state.sessionId, controls);
+    writers.commands.set(state.sessionId, commands);
+    writers.queued.set(state.sessionId, queued);
+    writers.returned.set(state.sessionId, returned);
+    writers.session.set(state.sessionId, info);
+  };
+  let pageReady: () => void = noEvent;
   const layouts = createChatLayouts(log);
   const kit = {
     markdown: {},
@@ -114,6 +169,17 @@ function mounted(
   let removeSession: (sessionId: string) => void = noEvent;
   const view = mountChatView({
     channel,
+    slots: {
+      session: store.read(chatSessionSlot, 'chat'),
+      entries: store.read(chatEntriesSlot, 'chat'),
+      controls: store.read(chatControlsSlot, 'chat'),
+      commands: store.read(chatCommandsSlot, 'chat'),
+      queued: store.read(chatQueuedSlot, 'chat'),
+      returned: store.read(chatReturnedSlot, 'chat'),
+    },
+    onPageReady: (listener: () => void) => {
+      pageReady = listener;
+    },
     paths: posixPaths,
     homeDir: '/w',
     sessions: {
@@ -131,7 +197,11 @@ function mounted(
       },
       activate: noEvent,
       closeSession: noEvent,
-      setActivity: noEvent,
+      setActivity: (
+        _sessionId: string,
+        _source: string,
+        activity: { word: string } | null,
+      ) => activities.push(activity?.word),
     },
     activeSessionId: () => null,
     onSessionRemoved: (listener: (sessionId: string) => void) => {
@@ -175,7 +245,13 @@ function mounted(
     clock: { now: () => 5000 },
     timers: { set: () => 0, clear: noEvent },
     drops: { addTarget: () => ({ dispose: noEvent }) },
+    toast: (text: string, tone: string) => toasts.push([text, tone]),
+    visibleSessionRested: noEvent,
   } as unknown as ChatViewDeps);
+  const ready = () => {
+    pageReady();
+    pageReady = noEvent;
+  };
   return {
     view,
     activeTimeCalls,
@@ -189,14 +265,24 @@ function mounted(
     composerParts,
     invoked,
     logs,
-    emit: <K extends keyof ChatChannel['messages']>(
-      message: K,
-      data: ChatChannel['messages'][K],
-    ) => listeners.get(message)?.(data),
-    answerSessions: async (states: ChatSessionState[]) => {
-      answerSessions(states);
-      await Promise.resolve();
+    toasts,
+    activities,
+    writers,
+    ready,
+    pageLoad(states: ChatSessionState[]) {
+      states.forEach(writeSession);
+      ready();
     },
+    open(state: ChatSessionState) {
+      ready();
+      writeSession(state);
+    },
+    setInfo(sessionId: string, change: Partial<ChatSessionInfo>) {
+      const info = writers.session.get(sessionId) as ChatSessionInfo;
+      writers.session.set(sessionId, { ...info, ...change });
+    },
+    rest: (sessionId: string, error: string | null) =>
+      listeners.get('sessionRested')?.({ sessionId, error }),
   };
 }
 
@@ -210,44 +296,38 @@ describe('mountChatView returned messages', () => {
     ['returnedPlaced', 'row-1', ['returned-1', 'returned-2']],
   ];
 
-  it('returned_HeldByMainAtMount_PlacedOnceAndReported', async () => {
+  it('returned_HeldByMainAtMount_PlacedOnceAndReported', () => {
     const view = mounted();
 
-    await view.answerSessions([stateOf([returnedOne, returnedTwo])]);
+    view.pageLoad([stateOf([returnedOne, returnedTwo])]);
 
     expect(view.box.text).toBe('one\ntwo');
     expect(view.invoked).toEqual(PLACED_BOTH);
   });
 
-  it('returned_ArrivingBeforeTheTab_LeftWithMainUntilTheMount', async () => {
+  it('returned_ArrivingForAMountedTab_PlacedOnceAndReported', () => {
     const view = mounted();
-
-    view.emit('returned', {
-      sessionId: 'row-1',
-      messages: [returnedOne, returnedTwo],
-    });
-
+    view.pageLoad([stateOf([])]);
     expect(view.invoked).toEqual([]);
-    expect(view.logs).toContain('returned for unknown session row-1 ignored');
 
-    await view.answerSessions([stateOf([returnedOne, returnedTwo])]);
+    view.writers.returned.set('row-1', [returnedOne, returnedTwo]);
 
     expect(view.box.text).toBe('one\ntwo');
     expect(view.invoked).toEqual(PLACED_BOTH);
   });
 
-  it('returned_ArrivingForAMountedTab_PlacedOnceAndReported', async () => {
+  it('chatView_ReturnedStillListed_PlacesOnce', () => {
     const view = mounted();
-    await view.answerSessions([stateOf([])]);
-    expect(view.invoked).toEqual([]);
+    view.pageLoad([stateOf([returnedOne])]);
 
-    view.emit('returned', {
-      sessionId: 'row-1',
-      messages: [returnedOne, returnedTwo],
-    });
+    view.writers.returned.set('row-1', [returnedOne, returnedTwo]);
+    view.writers.returned.set('row-1', [returnedOne, returnedTwo]);
 
-    expect(view.box.text).toBe('one\ntwo');
-    expect(view.invoked).toEqual(PLACED_BOTH);
+    expect(view.box.text).toBe('two\none');
+    expect(view.invoked).toEqual([
+      ['returnedPlaced', 'row-1', ['returned-1']],
+      ['returnedPlaced', 'row-1', ['returned-2']],
+    ]);
   });
 });
 
@@ -257,9 +337,9 @@ describe('mountChatView side parts', () => {
     vi.unstubAllGlobals();
   });
 
-  it('side parts build per tab, leave with their part, and dispose with their tab', async () => {
+  it('side parts build per tab, leave with their part, and dispose with their tab', () => {
     const view = mounted();
-    await view.answerSessions([stateOf([], { sessionId: 'row-1' })]);
+    view.pageLoad([stateOf([], { sessionId: 'row-1' })]);
     const built: string[] = [];
     const disposed: string[] = [];
     const partOf = (id: string): ChatSidePart => ({
@@ -282,7 +362,7 @@ describe('mountChatView side parts', () => {
       );
 
     const first = view.sideParts.add(partOf('first'));
-    view.emit('sessionStarted', stateOf([], { sessionId: 'row-2' }));
+    view.open(stateOf([], { sessionId: 'row-2' }));
 
     expect(tabChildren('row-1').map((child) => child.className)).toEqual([
       'chat-main',
@@ -347,9 +427,9 @@ describe('mountChatView side parts', () => {
     expect(wrapperTexts('row-2')).toEqual([]);
   });
 
-  it('a side part whose build throws stays unbuilt in its tab until it is added again', async () => {
+  it('a side part whose build throws stays unbuilt in its tab until it is added again', () => {
     const view = mounted();
-    await view.answerSessions([stateOf([], { sessionId: 'row-1' })]);
+    view.pageLoad([stateOf([], { sessionId: 'row-1' })]);
     let attempts = 0;
     const failing: ChatSidePart = {
       id: 'failing',
@@ -386,9 +466,9 @@ describe('mountChatView side parts', () => {
     expect(attempts).toBe(2);
   });
 
-  it('a chat layout change disposes a side part once and builds it again', async () => {
+  it('a chat layout change disposes a side part once and builds it again', () => {
     const view = mounted();
-    await view.answerSessions([stateOf([])]);
+    view.pageLoad([stateOf([])]);
     let builds = 0;
     let disposes = 0;
     view.sideParts.add({
@@ -436,7 +516,7 @@ describe('mountChatView session facts source', () => {
       user: COMPOSER_UPDATE_THROWS,
       composerRedrawn: true,
     },
-  ])('branchMessage_$case_ListenerRunsOnce', ({ user, composerRedrawn }) => {
+  ])('branchWrite_$case_ListenerRunsOnce', ({ user, composerRedrawn }) => {
     const mount = mounted();
     mount.layouts.set({
       user: 'mine',
@@ -445,7 +525,7 @@ describe('mountChatView session facts source', () => {
         ['default', defaultLayout],
       ]),
     });
-    mount.emit('sessionStarted', stateOf([]));
+    mount.open(stateOf([]));
     const source = mount.view.sessionFactsSource('row-1');
     const branchesHeard: (string | undefined)[] = [];
     source?.onChanged(() =>
@@ -454,11 +534,7 @@ describe('mountChatView session facts source', () => {
       ),
     );
 
-    mount.emit('branch', {
-      sessionId: 'row-1',
-      repo: 'app',
-      branch: 'feature',
-    });
+    mount.setInfo('row-1', { branch: 'feature' });
 
     expect(branchesHeard).toEqual(['feature']);
     expect(
@@ -468,7 +544,7 @@ describe('mountChatView session facts source', () => {
 
   it('source_SubscriptionDisposedOrSessionUnheld_HearsNothingAndIsNull', () => {
     const mount = mounted();
-    mount.emit('sessionStarted', stateOf([]));
+    mount.open(stateOf([]));
     const source = mount.view.sessionFactsSource('row-1');
     let heard = 0;
     source
@@ -477,7 +553,7 @@ describe('mountChatView session facts source', () => {
       })
       .dispose();
 
-    mount.emit('branch', { sessionId: 'row-1', repo: 'app', branch: 'b' });
+    mount.setInfo('row-1', { branch: 'b' });
     mount.removeSession('row-1');
 
     expect(heard).toBe(0);
@@ -500,51 +576,51 @@ describe('mountChatView active time', () => {
       readAtCall.push(mount.view.activeTime(sessionId));
     });
 
-    mount.emit('sessionStarted', { ...stateOf([]), activeTime: STARTED });
-    mount.emit('sessionStarted', { ...stateOf([]), activeTime: STARTED });
+    mount.open({ ...stateOf([]), activeTime: STARTED });
 
     expect(mount.readDuringAddTab).toEqual([STARTED]);
     expect(readAtCall).toEqual([STARTED]);
     expect(mount.activeTimeCalls).toEqual([['row-1', STARTED]]);
   });
 
-  it('activeTime_Message_KeepsTheRecordAndCallsOnce', () => {
+  it('activeTime_SessionWrite_KeepsTheRecordAndCallsOnce', () => {
     const mount = mounted();
-    mount.emit('sessionStarted', stateOf([]));
+    mount.open(stateOf([]));
     mount.activeTimeCalls.length = 0;
 
-    mount.emit('activeTime', { sessionId: 'row-1', activeTime: RUNNING });
+    mount.setInfo('row-1', { activeTime: RUNNING });
 
     expect(mount.view.activeTime('row-1')).toEqual(RUNNING);
     expect(mount.view.activeTime('row-2')).toBeNull();
     expect(mount.activeTimeCalls).toEqual([['row-1', RUNNING]]);
   });
 
-  it('activeTime_AListenerThrowsOnAMessage_TheNextStillRuns', () => {
+  it('activeTime_AListenerThrowsOnAWrite_TheNextStillRuns', () => {
     let isFailing = false;
     const mount = mounted(() => {
       if (isFailing) {
         throw new Error('listener failed');
       }
     });
-    mount.emit('sessionStarted', stateOf([]));
+    mount.open(stateOf([]));
     mount.activeTimeCalls.length = 0;
     isFailing = true;
 
-    expect(() =>
-      mount.emit('activeTime', { sessionId: 'row-1', activeTime: RUNNING }),
-    ).toThrow('listener failed');
+    mount.setInfo('row-1', { activeTime: RUNNING });
 
     expect(mount.activeTimeCalls).toEqual([['row-1', RUNNING]]);
     expect(mount.view.activeTime('row-1')).toEqual(RUNNING);
+    expect(mount.logs).toContain(
+      'chat.session listener failed: listener failed',
+    );
   });
 
-  it('activeTime_AListenerThrowsOnArrival_EverySessionStillArrives', async () => {
+  it('activeTime_AListenerThrowsOnArrival_EverySessionStillArrives', () => {
     const mount = mounted(() => {
       throw new Error('listener failed');
     });
 
-    await mount.answerSessions([
+    mount.pageLoad([
       { ...stateOf([]), sessionId: 'row-1', activeTime: STARTED },
       { ...stateOf([]), sessionId: 'row-2', activeTime: RUNNING },
     ]);
@@ -557,24 +633,6 @@ describe('mountChatView active time', () => {
     expect(mount.logs).toEqual([
       'chat session arrival failed: listener failed',
     ]);
-  });
-
-  it('activeTime_MessageForAnUnheldSession_IgnoredWithNoCall', () => {
-    const mount = mounted();
-
-    mount.emit('activeTime', { sessionId: 'row-1', activeTime: RUNNING });
-
-    expect(mount.view.activeTime('row-1')).toBeNull();
-    expect(mount.activeTimeCalls).toEqual([]);
-  });
-
-  it('activeTime_SessionRemoved_DropsTheRecord', () => {
-    const mount = mounted();
-    mount.emit('sessionStarted', stateOf([]));
-
-    mount.removeSession('row-1');
-
-    expect(mount.view.activeTime('row-1')).toBeNull();
   });
 });
 
@@ -593,7 +651,7 @@ describe('mountChatView compaction', () => {
   it.each<{
     case: string;
     mountedWith: SessionCompaction | null;
-    message?: SessionCompaction | null;
+    written?: SessionCompaction | null;
     dockState: string | null;
     dockTrigger: string | null;
     isIndicatorIdle: boolean;
@@ -606,37 +664,29 @@ describe('mountChatView compaction', () => {
       isIndicatorIdle: false,
     },
     {
-      case: 'Message_ShowsTheDock',
+      case: 'Write_ShowsTheDock',
       mountedWith: null,
-      message: COMPACTION,
+      written: COMPACTION,
       dockState: 'Compacting…',
       dockTrigger: '/compact',
       isIndicatorIdle: false,
     },
     {
-      case: 'NullMessage_ClearsToIdle',
+      case: 'NullWrite_ClearsToIdle',
       mountedWith: COMPACTION,
-      message: null,
+      written: null,
       dockState: null,
       dockTrigger: null,
       isIndicatorIdle: true,
     },
   ])(
     'compaction_$case',
-    async ({
-      mountedWith,
-      message,
-      dockState,
-      dockTrigger,
-      isIndicatorIdle,
-    }) => {
+    ({ mountedWith, written, dockState, dockTrigger, isIndicatorIdle }) => {
       const view = mounted();
-      await view.answerSessions([
-        stateOf([], { running: true, compaction: mountedWith }),
-      ]);
+      view.pageLoad([stateOf([], { running: true, compaction: mountedWith })]);
 
-      if (message !== undefined) {
-        view.emit('compaction', { sessionId: 'row-1', compaction: message });
+      if (written !== undefined) {
+        view.setInfo('row-1', { compaction: written });
       }
 
       const root = view.tab.element as FakeElement;
@@ -652,4 +702,224 @@ describe('mountChatView compaction', () => {
       ).toBe(isIndicatorIdle);
     },
   );
+});
+
+describe('mountChatView slots', () => {
+  beforeEach(() => installFakeDom((name, value) => vi.stubGlobal(name, value)));
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const NOTICE: ChatEntry = {
+    kind: 'notice',
+    id: 'n1',
+    at: 1000,
+    text: 'hello',
+    tone: 'info',
+    raw: [],
+  };
+  const QUEUED: QueuedMessage = {
+    id: 'queued-1',
+    text: 'later',
+    images: [],
+    sentEntryId: null,
+    holdReason: null,
+  };
+  const COMPACTION: SessionCompaction = {
+    trigger: 'manual',
+    reason: null,
+    startedAt: 4000,
+  };
+  const COMMAND = { name: 'compact' } as AgentCommand;
+  const FULL = stateOf([returnedOne], {
+    entries: [NOTICE],
+    queued: [QUEUED],
+    commands: [COMMAND],
+  });
+
+  it('chatView_PageLoad_DrawsEverySessionInMirror', () => {
+    const view = mounted();
+
+    view.pageLoad([
+      stateOf([], { sessionId: 'row-1' }),
+      stateOf([], { sessionId: 'row-2' }),
+    ]);
+
+    expect([...view.tabElements.keys()]).toEqual(['row-1', 'row-2']);
+    expect(view.invoked.map(([method]) => method)).not.toContain('sessions');
+  });
+
+  it('chatView_SessionKeyAfterLists_BuildsTabWithThem', () => {
+    const view = mounted();
+
+    view.open(FULL);
+
+    expect(view.view.session('row-1')?.state).toEqual(FULL);
+    expect(view.box.text).toBe('one');
+  });
+
+  it('chatView_ChangeWithNoTab_LosesNothing', () => {
+    const view = mounted();
+    view.ready();
+    const { entries, controls, commands, queued, returned, ...info } = FULL;
+
+    view.writers.entries.put('row-1', NOTICE);
+    view.writers.queued.set('row-1', queued);
+    view.writers.commands.set('row-1', commands);
+    view.writers.returned.set('row-1', returned);
+    expect(view.logs).toEqual([]);
+    expect(view.invoked).toEqual([]);
+    view.writers.controls.set('row-1', controls);
+    view.writers.session.set('row-1', info);
+
+    expect(view.view.session('row-1')?.state).toEqual({ ...FULL, entries });
+    expect(view.box.text).toBe('one');
+    expect(view.invoked).toEqual([['returnedPlaced', 'row-1', ['returned-1']]]);
+  });
+
+  it.each(
+    (
+      [
+        'session',
+        'entries',
+        'controls',
+        'commands',
+        'queued',
+        'returned',
+      ] as const
+    ).map((slot) => ({ slot })),
+  )('chatView_KeyDeleted_TabStaysAsDrawn: $slot', ({ slot }) => {
+    const view = mounted();
+    view.open(FULL);
+    const stateBefore = view.view.session('row-1')?.state;
+    const logsBefore = [...view.logs];
+    const invokedBefore = [...view.invoked];
+    listCalls.length = 0;
+
+    view.writers[slot].delete('row-1');
+
+    expect(view.logs).toEqual(logsBefore);
+    expect(view.invoked).toEqual(invokedBefore);
+    expect(listCalls).toEqual([]);
+    expect(view.view.session('row-1')?.state).toBe(stateBefore);
+  });
+
+  it.each<{
+    block: string;
+    opening?: Partial<ChatSessionState>;
+    change: Partial<ChatSessionInfo>;
+    lines: (string | RegExp)[];
+    workingDraws: number;
+    clockCalls: number;
+  }>([
+    {
+      block: 'activity',
+      change: { activity: 'working' },
+      lines: ['app is working'],
+      workingDraws: 1,
+      clockCalls: 0,
+    },
+    {
+      block: 'background',
+      change: { background: 2 },
+      lines: ['app has 2 running in the background'],
+      workingDraws: 0,
+      clockCalls: 0,
+    },
+    {
+      block: 'activeTime',
+      change: { activeTime: { totalMs: 7000, since: 4000 } },
+      lines: [],
+      workingDraws: 0,
+      clockCalls: 1,
+    },
+    {
+      block: 'compaction',
+      change: { compaction: COMPACTION },
+      lines: [/^app compacting: /],
+      workingDraws: 0,
+      clockCalls: 0,
+    },
+    {
+      block: 'running, to true',
+      change: { running: true },
+      lines: ['app running'],
+      workingDraws: 1,
+      clockCalls: 0,
+    },
+    {
+      block: 'running, to false',
+      opening: { running: true },
+      change: { running: false },
+      lines: [],
+      workingDraws: 1,
+      clockCalls: 0,
+    },
+    {
+      block: 'branch',
+      change: { branch: 'feature' },
+      lines: ['app is in app on feature'],
+      workingDraws: 0,
+      clockCalls: 0,
+    },
+  ])(
+    'chatView_SessionWrite_RunsOnlyChangedBlock: $block',
+    ({ opening, change, lines, workingDraws, clockCalls }) => {
+      const view = mounted();
+      view.open(stateOf([], opening));
+      view.logs.length = 0;
+      view.activeTimeCalls.length = 0;
+      listCalls.length = 0;
+
+      view.setInfo('row-1', change);
+      // The same values in a fresh object, as a write over the Bridge arrives.
+      const info = view.writers.session.get('row-1') as ChatSessionInfo;
+      view.writers.session.set('row-1', structuredClone(info));
+
+      const blockLines = view.logs.filter(
+        (line) => !line.startsWith('row activity'),
+      );
+      expect(blockLines).toEqual(
+        lines.map((line) =>
+          typeof line === 'string' ? line : expect.stringMatching(line),
+        ),
+      );
+      expect(listCalls.filter((call) => call === 'setWorking')).toHaveLength(
+        workingDraws,
+      );
+      expect(view.activeTimeCalls).toHaveLength(clockCalls);
+    },
+  );
+
+  it('chatView_ErrorRest_ToastsOnce', () => {
+    const view = mounted();
+    view.open(stateOf([], { running: true, activity: 'working' }));
+
+    view.setInfo('row-1', { running: false });
+    expect(view.toasts).toEqual([]);
+    view.rest('row-1', 'boom');
+
+    expect(view.view.session('row-1')?.running).toBe(false);
+    expect(view.toasts).toEqual([[expect.stringContaining('boom'), 'error']]);
+  });
+
+  it.each<{
+    case: string;
+    activity: ChatSessionState['activity'];
+    error: string | null;
+  }>([
+    { case: 'ActiveRow', activity: 'working', error: null },
+    { case: 'IdleRowWithError', activity: 'idle', error: 'boom' },
+  ])('chatView_Rest_DrawsUnseenOnly: $case', ({ activity, error }) => {
+    const view = mounted();
+    view.open(stateOf([], { running: true, activity }));
+    view.setInfo('row-1', { running: false });
+    listCalls.length = 0;
+
+    view.rest('row-1', error);
+    expect(listCalls).toEqual([]);
+    view.setInfo('row-1', { activity: 'idle' });
+
+    expect(view.activities.at(-1)).toBe('error');
+  });
 });

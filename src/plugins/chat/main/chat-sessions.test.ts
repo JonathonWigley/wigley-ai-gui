@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { ActiveTime } from '../../../contracts/active-time';
+import type { SlotChange } from '../../../contracts/state';
 import { NO_ACTIVE_TIME } from '../../../shared/active-time';
+import { createSlotStore } from '../../../shared/state/slot-store';
 import {
   type AgentCommand,
   type AgentEvent,
@@ -33,12 +35,22 @@ import type {
   TitleSource,
   ToolResult,
 } from '../../sessions/contract';
-import type {
-  ChatChannel,
-  ChatMainEvents,
-  ChatProfile,
-  SendGate,
-  SendGateInput,
+import {
+  chatCommandsSlot,
+  chatControlsSlot,
+  chatEntriesSlot,
+  type ChatMainEvents,
+  type ChatProfile,
+  chatQueuedSlot,
+  chatReturnedSlot,
+  type ChatSessionInfo,
+  type ChatSessionState,
+  chatSessionSlot,
+  type QueuedMessage,
+  type ReturnedMessage,
+  type SendGate,
+  type SendGateInput,
+  type SessionCompaction,
 } from '../contract';
 import { DEFAULT_PROFILES } from '../manifest';
 import {
@@ -58,13 +70,154 @@ import type {
 } from './open-sessions';
 import { CANCELLED_REASON } from './permission-tool';
 import { createRecentFolders, RECENT_FOLDERS_FILE } from './recent-folders';
+import { createChatSlots } from './chat-slots';
+
+// What one recorded slot change, or `sessionRested`, told the page: named by the
+// value it changed in the slot, each `chat.session` write by the fields that
+// differ from its last value, and a session's writes up to its key together as
+// `sessionStarted`. `returned` holds only the ids the list did not hold before.
+interface MessageData {
+  sessionStarted: ChatSessionState;
+  entry: { sessionId: string; entry: ChatEntry };
+  entries: { sessionId: string; entries: ChatEntry[] };
+  controls: { sessionId: string; controls: SessionControl[] };
+  commands: { sessionId: string; commands: AgentCommand[] };
+  queued: { sessionId: string; queued: QueuedMessage[] };
+  returned: { sessionId: string; messages: ReturnedMessage[] };
+  activity: { sessionId: string; activity: ProcessActivity };
+  background: { sessionId: string; background: number };
+  activeTime: { sessionId: string; activeTime: ActiveTime };
+  compaction: { sessionId: string; compaction: SessionCompaction | null };
+  branch: { sessionId: string; repo: string; branch: string | null };
+  sessionRunning: { sessionId: string };
+  sessionRested: { sessionId: string; error: string | null };
+}
 
 type Message = {
-  [K in keyof ChatChannel['messages']]: {
-    message: K;
-    data: ChatChannel['messages'][K];
-  };
-}[keyof ChatChannel['messages']];
+  [K in keyof MessageData]: { message: K; data: MessageData[K] };
+}[keyof MessageData];
+
+type TimelineItem = SlotChange | { rested: MessageData['sessionRested'] };
+
+// The messages a session's `chat.session` write comes to, against its last value.
+function infoMessages(
+  before: ChatSessionInfo,
+  next: ChatSessionInfo,
+): Message[] {
+  const { sessionId } = next;
+  const messages: Message[] = [];
+  if (next.activity !== before.activity) {
+    const { activity } = next;
+    messages.push({ message: 'activity', data: { sessionId, activity } });
+  }
+  if (next.background !== before.background) {
+    const { background } = next;
+    messages.push({ message: 'background', data: { sessionId, background } });
+  }
+  if (next.activeTime !== before.activeTime) {
+    const { activeTime } = next;
+    messages.push({ message: 'activeTime', data: { sessionId, activeTime } });
+  }
+  if (next.compaction !== before.compaction) {
+    const { compaction } = next;
+    messages.push({ message: 'compaction', data: { sessionId, compaction } });
+  }
+  if (next.repo !== before.repo || next.branch !== before.branch) {
+    const { repo, branch } = next;
+    messages.push({ message: 'branch', data: { sessionId, repo, branch } });
+  }
+  if (next.running && !before.running) {
+    messages.push({ message: 'sessionRunning', data: { sessionId } });
+  }
+  return messages;
+}
+
+function messagesFrom(timeline: readonly TimelineItem[]): Message[] {
+  const messages: Message[] = [];
+  const infos = new Map<string, ChatSessionInfo>();
+  const values = new Map<string, unknown>();
+  const valueOf = <V>(slot: string, key: string) =>
+    values.get(`${slot} ${key}`) as V;
+  for (const item of timeline) {
+    if ('rested' in item) {
+      messages.push({ message: 'sessionRested', data: item.rested });
+      continue;
+    }
+    if (item.kind === 'value') {
+      continue;
+    }
+    const { id, key: sessionId } = item;
+    const isOpen = infos.has(sessionId);
+    if (item.kind === 'list') {
+      const { change } = item;
+      if (change.kind === 'put') {
+        const entry = change.item as ChatEntry;
+        messages.push({ message: 'entry', data: { sessionId, entry } });
+      } else if (change.kind === 'replace') {
+        const entries = [...change.items] as ChatEntry[];
+        values.set(`${id} ${sessionId}`, entries);
+        if (isOpen) {
+          messages.push({ message: 'entries', data: { sessionId, entries } });
+        }
+      }
+      continue;
+    }
+    if (item.value === undefined) {
+      if (id === chatSessionSlot.id) {
+        infos.delete(sessionId);
+      }
+      continue;
+    }
+    if (id === chatSessionSlot.id) {
+      const next = item.value as ChatSessionInfo;
+      const before = infos.get(sessionId);
+      infos.set(sessionId, next);
+      if (before !== undefined) {
+        messages.push(...infoMessages(before, next));
+        continue;
+      }
+      messages.push({
+        message: 'sessionStarted',
+        data: {
+          ...next,
+          entries: valueOf(chatEntriesSlot.id, sessionId),
+          controls: valueOf(chatControlsSlot.id, sessionId),
+          commands: valueOf(chatCommandsSlot.id, sessionId),
+          queued: valueOf(chatQueuedSlot.id, sessionId),
+          returned: valueOf(chatReturnedSlot.id, sessionId),
+        },
+      });
+      continue;
+    }
+    const previous = valueOf<ReturnedMessage[] | undefined>(id, sessionId);
+    values.set(`${id} ${sessionId}`, item.value);
+    if (!isOpen) {
+      continue;
+    }
+    if (id === chatControlsSlot.id) {
+      const controls = item.value as SessionControl[];
+      messages.push({ message: 'controls', data: { sessionId, controls } });
+    } else if (id === chatCommandsSlot.id) {
+      const commands = item.value as AgentCommand[];
+      messages.push({ message: 'commands', data: { sessionId, commands } });
+    } else if (id === chatQueuedSlot.id) {
+      const queued = item.value as QueuedMessage[];
+      messages.push({ message: 'queued', data: { sessionId, queued } });
+    } else {
+      const held = previous ?? [];
+      const fresh = (item.value as ReturnedMessage[]).filter(
+        (message) => !held.some((placed) => placed.id === message.id),
+      );
+      if (fresh.length > 0) {
+        messages.push({
+          message: 'returned',
+          data: { sessionId, messages: fresh },
+        });
+      }
+    }
+  }
+  return messages;
+}
 
 type Emitted = {
   [K in keyof ChatMainEvents]: { event: K; data: ChatMainEvents[K] };
@@ -206,7 +359,10 @@ function setUp(
   const marked: string[] = [];
   const activated: string[] = [];
   const announced: Announced[] = [];
-  const messages: Message[] = [];
+  // Each slot change and `sessionRested`, in the order they left main.
+  const timeline: TimelineItem[] = [];
+  const store = createSlotStore(() => undefined);
+  store.onWrite((change) => timeline.push(change));
   const emitted: Emitted[] = [];
   let ownedEnds = 0;
   let windowShows = 0;
@@ -275,7 +431,19 @@ function setUp(
     }),
     archived,
     saved: saved.store,
-    send: (message, data) => messages.push({ message, data } as Message),
+    slots: createChatSlots({
+      session: store.publish(chatSessionSlot),
+      entries: store.publish(chatEntriesSlot),
+      controls: store.publish(chatControlsSlot),
+      commands: store.publish(chatCommandsSlot),
+      queued: store.publish(chatQueuedSlot),
+      returned: store.publish(chatReturnedSlot),
+    }),
+    send: (message, data) => {
+      if (message === 'sessionRested') {
+        timeline.push({ rested: data as MessageData['sessionRested'] });
+      }
+    },
     emit: (event, data) => emitted.push({ event, data } as Emitted),
     alerts: {
       announce: (title, body, onClick) =>
@@ -312,7 +480,9 @@ function setUp(
     marked,
     activated,
     announced,
-    messages,
+    store,
+    timeline,
+    messages: () => messagesFrom(timeline),
     emitted,
     agentSession,
     archived,
@@ -343,15 +513,15 @@ function setUp(
       profiles = next;
     },
     sent: <K extends Message['message']>(message: K) =>
-      messages
+      messagesFrom(timeline)
         .filter((sent) => sent.message === message)
-        .map((sent) => sent.data as ChatChannel['messages'][K]),
-    // Each `returned` sent, with its messages' ids left out.
+        .map((sent) => sent.data as MessageData[K]),
+    // Each `returned` change, with its messages' ids left out.
     sentReturned: () =>
-      messages
+      messagesFrom(timeline)
         .filter((sent) => sent.message === 'returned')
         .map((sent) => {
-          const data = sent.data as ChatChannel['messages']['returned'];
+          const data = sent.data as MessageData['returned'];
           return {
             sessionId: data.sessionId,
             messages: data.messages.map(({ text, images }) => ({
@@ -1649,13 +1819,13 @@ describe('createChatSessions', () => {
 
   it('closed_notOwned_doesNothing', async () => {
     const test = await started();
-    const sentBefore = test.messages.length;
+    const sentBefore = test.messages().length;
 
     test.chat.closed('row-x', 'user');
     await flush();
 
     expect(test.process.calls).toEqual([]);
-    expect(test.messages).toHaveLength(sentBefore);
+    expect(test.messages()).toHaveLength(sentBefore);
   });
 
   it.each([
@@ -1764,10 +1934,10 @@ describe('createChatSessions', () => {
     });
 
     test.activity('idle');
-    const sentBefore = test.messages.length;
+    const sentBefore = test.messages().length;
     test.chat.pullBack(ROW_ID, firstId);
 
-    expect(test.messages).toHaveLength(sentBefore);
+    expect(test.messages()).toHaveLength(sentBefore);
     expect(test.logged).toContain(`queued message ${firstId} no longer queued`);
   });
 
@@ -1805,7 +1975,7 @@ describe('createChatSessions', () => {
       expect(test.sentReturned()).toEqual([
         { sessionId: ROW_ID, messages: [first, second] },
       ]);
-      const kinds = test.messages.map((sent) => sent.message);
+      const kinds = test.messages().map((sent) => sent.message);
       expect(kinds.indexOf('returned')).toBeLessThan(
         kinds.indexOf('sessionRested'),
       );
@@ -1862,12 +2032,12 @@ describe('createChatSessions', () => {
     queueTwo(test);
     row.arrange(test);
     const callsBefore = test.process.calls.length;
-    const sentBefore = test.messages.length;
+    const sentBefore = test.messages().length;
 
     test.chat.sendNow(ROW_ID, row.queuedId);
 
     expect(test.process.calls).toHaveLength(callsBefore);
-    expect(test.messages).toHaveLength(sentBefore);
+    expect(test.messages()).toHaveLength(sentBefore);
     expect(test.logged).toContain(
       `queued message ${row.queuedId} ${row.reason}`,
     );
@@ -1988,11 +2158,11 @@ describe('createChatSessions', () => {
   ])('messageDropped_ReturnsTheMessage: $case', async (row) => {
     const test = await started();
     const { entryId, message, sends, log } = row.arrange(test);
-    const sentBefore = test.messages.length;
+    const sentBefore = test.messages().length;
 
     test.process.events.messageDropped(entryId, message);
 
-    expect(test.messages.slice(sentBefore)).toEqual(sends);
+    expect(test.messages().slice(sentBefore)).toEqual(sends);
     expect(test.logged).toContain(log);
   });
 
@@ -2000,11 +2170,11 @@ describe('createChatSessions', () => {
     const test = await started();
     queueTwo(test);
     test.chat.sendNow(ROW_ID, 'queued-1');
-    const sentBefore = test.messages.length;
+    const sentBefore = test.messages().length;
 
     test.chat.pullBack(ROW_ID, 'queued-1');
 
-    expect(test.messages).toHaveLength(sentBefore);
+    expect(test.messages()).toHaveLength(sentBefore);
     expect(test.logged).toContain('queued message queued-1 already sent');
   });
 
@@ -2112,7 +2282,7 @@ describe('createChatSessions', () => {
       box: true,
       written: ['box'],
       queuedRows: [],
-      queuedSends: 0,
+      changesQueue: false,
       log: null,
     },
     {
@@ -2126,7 +2296,7 @@ describe('createChatSessions', () => {
         ['second', true],
         ['box', true],
       ],
-      queuedSends: 1,
+      changesQueue: true,
       log: null,
     },
     {
@@ -2139,7 +2309,7 @@ describe('createChatSessions', () => {
         ['first', true],
         ['second', true],
       ],
-      queuedSends: 1,
+      changesQueue: true,
       log: null,
     },
     {
@@ -2149,7 +2319,7 @@ describe('createChatSessions', () => {
       box: false,
       written: [],
       queuedRows: [],
-      queuedSends: 0,
+      changesQueue: false,
       log: /nothing to send now in row-1/,
     },
     {
@@ -2163,7 +2333,7 @@ describe('createChatSessions', () => {
         [REFUSED_TEXT, false],
         ['box', false],
       ],
-      queuedSends: 1,
+      changesQueue: true,
       log: /queued message queued-2 not sent: write refused/,
     },
   ])('sendAllNow_WritesInTheOrderWritten: $case', async (row) => {
@@ -2189,7 +2359,7 @@ describe('createChatSessions', () => {
       .queued.map((queued) => [queued.text, queued.sentEntryId !== null]);
     expect(written).toEqual(row.written);
     expect(queuedRows).toEqual(row.queuedRows);
-    expect(test.sent('queued').length - queuedBefore).toBe(row.queuedSends);
+    expect(test.sent('queued').length > queuedBefore).toBe(row.changesQueue);
     if (row.log !== null) {
       expect(test.logged).toContainEqual(expect.stringMatching(row.log));
     }
@@ -2227,7 +2397,7 @@ describe('createChatSessions', () => {
 
   it('unknownSession_ignored', async () => {
     const test = await started();
-    const sentBefore = test.messages.length;
+    const sentBefore = test.messages().length;
 
     test.chat.send('row-x', { text: 'hi', images: [] });
     test.chat.notice('row-x', 'note', 'info');
@@ -2238,7 +2408,7 @@ describe('createChatSessions', () => {
     });
 
     expect(test.process.calls).toEqual([]);
-    expect(test.messages).toHaveLength(sentBefore);
+    expect(test.messages()).toHaveLength(sentBefore);
   });
 
   it('setControl_unknownSession_throwsAndSetsNothing', async () => {
@@ -2395,7 +2565,7 @@ describe('createChatSessions', () => {
       events.activity(harnessActivity);
       test.chat.detachAll();
       const savesBefore = test.saved.saves();
-      const messagesBefore = test.messages.length;
+      const messagesBefore = test.messages().length;
 
       controller.abort();
 
@@ -2404,7 +2574,7 @@ describe('createChatSessions', () => {
       );
       expect(test.saved.saves()).toBe(savesBefore);
       expect(test.saved.last()?.sessions[0].busy).toBe(true);
-      expect(test.messages).toHaveLength(messagesBefore);
+      expect(test.messages()).toHaveLength(messagesBefore);
       expect(test.announced).toEqual([]);
       expect(test.marked).toEqual([]);
     },
@@ -2968,7 +3138,7 @@ describe('createChatSessions saved sessions', () => {
     const { events } = test.harness.processes[0];
     events.activity('working');
     await test.chat.send(ROW_ID, { text: 'a', images: [] });
-    const messagesBefore = test.messages.length;
+    const messagesBefore = test.messages().length;
 
     test.chat.detachAll();
     const savesBefore = test.saved.saves();
@@ -2977,7 +3147,7 @@ describe('createChatSessions saved sessions', () => {
     await flush();
 
     expect(test.saved.saves()).toBe(savesBefore);
-    expect(test.messages.length).toBe(messagesBefore);
+    expect(test.messages().length).toBe(messagesBefore);
     expect(test.saved.last()?.sessions[0].busy).toBe(true);
     expect(test.saved.last()?.sessions[0].queued).toEqual([
       { text: 'a', images: [] },
@@ -7005,5 +7175,74 @@ describe('createChatSessions resume sections', () => {
       { title: 'slow', rows: [slow] },
       { title: 'quick', rows: [quick] },
     ]);
+  });
+});
+
+describe('createChatSessions queue order', () => {
+  it('sendNow_FreshRowObject_KeepsQueuePlace', async () => {
+    const test = await started();
+    const [first, second] = queueTwo(test);
+
+    test.chat.sendNow(ROW_ID, test.chat.sessions()[0].queued[1].id);
+    test.process.events.ended({ code: 0, error: null });
+
+    expect(test.sentReturned()).toEqual([
+      { sessionId: ROW_ID, messages: [first, second] },
+    ]);
+  });
+
+  it.each([
+    { case: 'WriteLands', firstText: 'first', stillQueued: ['second'] },
+    {
+      case: 'WriteThrows',
+      firstText: REFUSED_TEXT,
+      stillQueued: [REFUSED_TEXT, 'second'],
+    },
+  ])(
+    'writeNextQueued_RowLeavesQueue_KeepsOrderForWrite: $case',
+    async ({ firstText, stillQueued }) => {
+      const test = await startedRefusing();
+      const first = { text: firstText, images: [] };
+      const second = { text: 'second', images: [] };
+      test.activity('working');
+      void test.chat.send(ROW_ID, first);
+      void test.chat.send(ROW_ID, second);
+
+      test.activity('idle');
+
+      expect(test.chat.sessions()[0].queued.map((row) => row.text)).toEqual(
+        stillQueued,
+      );
+      test.process.events.ended({ code: 0, error: null });
+      expect(test.sentReturned()).toEqual([
+        { sessionId: ROW_ID, messages: [first, second] },
+      ]);
+    },
+  );
+});
+
+describe('createChatSessions restored entries', () => {
+  it('restore_ReplayThenHistory_LandInOrder', async () => {
+    const test = setUp();
+    test.harness.scriptAttach('p1', {
+      outcome: 'process',
+      turns: 0,
+      replay: (events) =>
+        events.entry(assistant('replayed', 'from the replay')),
+    });
+    restoreOne(
+      test,
+      record(PAST_ONE.sessionId, { sent: true, processId: 'p1' }),
+      [hostedP1({ startedAt: Number.MAX_SAFE_INTEGER })],
+    );
+    await flush();
+
+    await test.chat.loadHistory(ROW_ID);
+
+    const [replaced] = test.sent('entries');
+    expect(test.sent('entries')).toHaveLength(1);
+    expect(replaced.entries.length).toBeGreaterThan(1);
+    expect(replaced.entries.at(-1)?.id).toBe('replayed');
+    expect(test.chat.sessions()[0].entries).toEqual(replaced.entries);
   });
 });

@@ -3,6 +3,7 @@ import type { AgentHarness, AgentStart } from '../../../contracts/agent';
 import type { Timers } from '../../../contracts/ambient';
 import type { Files } from '../../../contracts/files';
 import type { HostedProcessInfo } from '../../../contracts/session-host';
+import type { KeyedSlotKey } from '../../../contracts/state';
 import {
   createFakeAgentHarness,
   FAKE_MICROTASK_TIMERS,
@@ -16,6 +17,7 @@ import {
   startMainPart,
 } from '../../../shared/plugin-part-harness.test-support';
 import { createRegistrations } from '../../../shared/registrations';
+import { createSlotStore } from '../../../shared/state/slot-store';
 import {
   type AgentSession,
   type SessionsMainExports,
@@ -27,11 +29,13 @@ import {
   type ToolResult,
   type ToolSession,
 } from '../../sessions/contract';
-import type {
-  ChatMainExports,
-  ChatSessionState,
-  SessionCloseReason,
-  SessionOrigin,
+import {
+  type ChatMainExports,
+  chatEntriesSlot,
+  type ChatSessionState,
+  chatSessionSlot,
+  type SessionCloseReason,
+  type SessionOrigin,
 } from '../contract';
 import { OPEN_SESSIONS_FILE } from './open-sessions';
 import { addDriveActions, chatMainPart } from './start';
@@ -222,6 +226,7 @@ function startChatPart(
   const processSends = vi.fn<(message: unknown) => void>();
   const processDetach = vi.fn<() => void>();
   const processKill = vi.fn<() => void>();
+  const store = createSlotStore(() => undefined);
   const sent: { message: string; data: unknown }[] = [];
   const emitted: { event: string; data: unknown }[] = [];
   const logged: string[] = [];
@@ -338,10 +343,8 @@ function startChatPart(
       emit: (event: string, data: unknown) => emitted.push({ event, data }),
     },
     state: {
-      read: () => ({
-        get: () => null,
-        on: () => ({ dispose: () => undefined }),
-      }),
+      read: (key: KeyedSlotKey<unknown>) => store.read(key, 'chat'),
+      publish: (key: KeyedSlotKey<unknown>) => store.publish(key),
     },
     settings: () => ({
       profiles: options.profiles ?? [{ name: 'work', configDir: '/work' }],
@@ -393,6 +396,11 @@ function startChatPart(
     cancelLogIn,
     processSends,
     sent,
+    sessionsInSlots: () => [
+      ...store.read(chatSessionSlot, 'test').all().values(),
+    ],
+    entriesInSlots: (sessionId: string) =>
+      store.read(chatEntriesSlot, 'test').get(sessionId),
     closeReasons: () =>
       emitted.flatMap(({ event, data }) =>
         event === 'sessionClosed'
@@ -467,21 +475,12 @@ describe('chat main part', () => {
     expect(chat.cancelLogIn).toHaveBeenCalledOnce();
   });
 
-  it('sessions_SignInRunning_LeavesItRunning', () => {
-    const chat = startChatPart();
-    chat.invoke('logIn', 1, 'work');
-
-    chat.invoke('sessions');
-
-    expect(chat.cancelLogIn).not.toHaveBeenCalled();
-  });
-
-  it('sessions_PreviewOpen_ListsItAfterChatSessions', () => {
+  it('slots_PreviewOpen_ListsItAfterChatSessions', () => {
     const chat = startChatPart();
     chat.invoke('start', { projectDir: '/p', profile: 'work' });
     chat.invoke('openPreview');
 
-    const listed = chat.invoke('sessions') as ChatSessionState[];
+    const listed = chat.sessionsInSlots();
 
     expect(listed.map((state) => state.sessionId)).toEqual(['row-1', 'row-2']);
   });
@@ -518,19 +517,13 @@ describe('chat main part', () => {
 
     chat.invoke('notice', 'row-1', 'Signed in.', 'info');
 
-    expect(chat.sent.filter((held) => held.message === 'entry')).toEqual([
-      {
-        message: 'entry',
-        data: {
-          sessionId: 'row-1',
-          entry: expect.objectContaining({
-            kind: 'notice',
-            at: 5000,
-            text: 'Signed in.',
-          }),
-        },
-      },
-    ]);
+    expect(chat.entriesInSlots('row-1').at(-1)).toEqual(
+      expect.objectContaining({
+        kind: 'notice',
+        at: 5000,
+        text: 'Signed in.',
+      }),
+    );
   });
 
   it.each([
@@ -733,7 +726,7 @@ describe('chat main part', () => {
     releaseEnds();
     await closing;
     expect(chat.ended).toEqual(['row-3', 'row-1']);
-    const listed = chat.invoke('sessions') as ChatSessionState[];
+    const listed = chat.sessionsInSlots();
     expect(listed.map((state) => state.sessionId)).toEqual(['row-2']);
   });
 
@@ -861,11 +854,11 @@ describe('chat main part', () => {
     const chat = startChatPart({ data: await dataWithSavedRow() });
 
     expect(chat.heldConnects).toHaveLength(1);
-    expect(chat.invoke('sessions')).toEqual([]);
+    expect(chat.sessionsInSlots()).toEqual([]);
 
     await chat.heldConnects[0];
 
-    const listed = chat.invoke('sessions') as ChatSessionState[];
+    const listed = chat.sessionsInSlots();
     expect(listed.map((state) => state.sessionId)).toEqual(['row-1']);
   });
 
@@ -894,7 +887,7 @@ describe('chat main part', () => {
       await settle();
 
       expect(chat.logged).toContain(logged);
-      const listed = chat.invoke('sessions') as ChatSessionState[];
+      const listed = chat.sessionsInSlots();
       expect(listed.map((state) => state.running)).toEqual([false]);
       expect(chat.harnessAttaches).toEqual([]);
     },

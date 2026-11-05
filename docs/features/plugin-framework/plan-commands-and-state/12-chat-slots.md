@@ -1,6 +1,6 @@
 # 12 — Chat session state as slots
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 11 · Depends on: 11
 Plan: [plan.md](plan.md)

@@ -14,7 +14,16 @@ import {
   type SessionsPageExports,
   sessionsPageKey,
 } from '../../sessions/contract';
-import type { ChatPageExports, ChatSessionState } from '../contract';
+import {
+  chatCommandsSlot,
+  chatControlsSlot,
+  chatEntriesSlot,
+  type ChatPageExports,
+  chatQueuedSlot,
+  chatReturnedSlot,
+  type ChatSessionState,
+  chatSessionSlot,
+} from '../contract';
 import { chatPagePart } from './start';
 import { fakeListPickerService } from '../../../shared/page/fake-list-picker-service.test-support';
 
@@ -37,16 +46,14 @@ const SESSION: ChatSessionState = {
 };
 
 // Chat's page part on the part harness, over sessions and keys fakes that file
-// each tab and anchor with `consumer.track`, as their views do. `invoke`
-// answers the part's `channel.invoke`, and `destroyEditor` is each editor's
-// `destroy`.
+// each tab and anchor with `consumer.track`, as their views do. `destroyEditor` is
+// each editor's `destroy`.
 function startChatPage(
-  invoke: (method: string) => Promise<unknown>,
   destroyEditor: () => void = () => undefined,
   isTabVisible: () => boolean = () => false,
 ) {
   return startPagePart(chatPagePart, {
-    invoke,
+    invoke: () => Promise.resolve(),
     services: {
       picker: fakeListPickerService(),
       editor: {
@@ -79,9 +86,29 @@ function startChatPage(
   });
 }
 
-// What the part hears when main holds no session.
-const noSessions = (method: string) =>
-  Promise.resolve(method === 'sessions' ? [] : undefined);
+// Writes `states` to chat's slots as main holds them, then tells the part the page
+// is ready, so it draws a tab for each.
+function loadSessions(
+  harness: ReturnType<typeof startChatPage>,
+  states: ChatSessionState[],
+) {
+  const session = harness.state.publish(chatSessionSlot);
+  const entriesSlot = harness.state.publish(chatEntriesSlot);
+  const controlsSlot = harness.state.publish(chatControlsSlot);
+  const commandsSlot = harness.state.publish(chatCommandsSlot);
+  const queuedSlot = harness.state.publish(chatQueuedSlot);
+  const returnedSlot = harness.state.publish(chatReturnedSlot);
+  for (const state of states) {
+    const { entries, controls, commands, queued, returned, ...info } = state;
+    entriesSlot.replace(state.sessionId, entries);
+    controlsSlot.set(state.sessionId, controls);
+    commandsSlot.set(state.sessionId, commands);
+    queuedSlot.set(state.sessionId, queued);
+    returnedSlot.set(state.sessionId, returned);
+    session.set(state.sessionId, info);
+  }
+  harness.emit('core.pageReady', null);
+}
 
 beforeEach(() => {
   installFakeDom(vi.stubGlobal);
@@ -95,9 +122,9 @@ describe('chat page part', () => {
   it.each(['fresh start', 'one tab held'])(
     'stop_LeavesNoLiveRegistration: %s',
     async (row) => {
-      const harness = startChatPage(noSessions);
+      const harness = startChatPage();
       if (row === 'one tab held') {
-        harness.send('sessionStarted', SESSION);
+        loadSessions(harness, [SESSION]);
         expect(harness.counts().observers).toBeGreaterThan(0);
       }
 
@@ -107,31 +134,13 @@ describe('chat page part', () => {
     },
   );
 
-  it('stop_LeavesNoLiveRegistration: sessions reply after the stop', async () => {
-    let replySessions = (_states: ChatSessionState[]) => {};
-    const reply = new Promise<ChatSessionState[]>((resolve) => {
-      replySessions = resolve;
-    });
-    const harness = startChatPage((method) =>
-      method === 'sessions' ? reply : Promise.resolve(),
-    );
-
-    await harness.stop();
-    replySessions([SESSION]);
-    await reply;
-    await Promise.resolve();
-
-    expect(harness.counts()).toEqual(noCounts);
-  });
-
   it('stop_OneTabsDestroyThrows_TearsDownEveryTab', async () => {
     const destroyEditor = vi.fn<() => void>();
     destroyEditor.mockImplementationOnce(() => {
       throw new Error('box gone');
     });
-    const harness = startChatPage(noSessions, destroyEditor);
-    harness.send('sessionStarted', SESSION);
-    harness.send('sessionStarted', { ...SESSION, sessionId: 's2' });
+    const harness = startChatPage(destroyEditor);
+    loadSessions(harness, [SESSION, { ...SESSION, sessionId: 's2' }]);
     expect(harness.counts().observers).toBeGreaterThan(0);
 
     await expect(harness.stop()).rejects.toThrow('box gone');
@@ -141,8 +150,8 @@ describe('chat page part', () => {
 
   it('sessionRemoved_HeldTab_DestroysItsBoxOnce', async () => {
     const destroyEditor = vi.fn<() => void>();
-    const harness = startChatPage(noSessions, destroyEditor);
-    harness.send('sessionStarted', SESSION);
+    const harness = startChatPage(destroyEditor);
+    loadSessions(harness, [SESSION]);
 
     const rows = harness.state.publish(sessionsRowsSlot);
     rows.set(SESSION.sessionId, {
@@ -164,7 +173,6 @@ describe('chat page part', () => {
   it('start_ScopeSlotChanges_TellsTabStops', async () => {
     let isTabVisible = true;
     const harness = startChatPage(
-      noSessions,
       () => undefined,
       () => isTabVisible,
     );
@@ -177,7 +185,7 @@ describe('chat page part', () => {
       build: () => ({}),
       stop: { enter: () => true, leave },
     });
-    harness.send('sessionStarted', SESSION);
+    loadSessions(harness, [SESSION]);
     harness.started().commands.nextEntry({ arg: undefined });
     const scope = harness.state.publish(coreScopeSlot);
 
@@ -191,7 +199,7 @@ describe('chat page part', () => {
   });
 
   it('stopThenStart_StartsAgain', async () => {
-    const harness = startChatPage(noSessions);
+    const harness = startChatPage();
 
     await harness.restart();
 
@@ -215,7 +223,7 @@ describe('chat page part', () => {
         view.addStatusPart({ id: 'same', build: () => ({}) }),
     },
   ])('exports_ConsumerDisposed_FreesTheName: $member', ({ add }) => {
-    const harness = startChatPage(noSessions);
+    const harness = startChatPage();
     const viewOf = (consumer: ReturnType<typeof createRegistrations>) =>
       harness.started().exports?.(consumer) as ChatPageExports;
     const first = createRegistrations();

@@ -1,8 +1,12 @@
 import '../../../shared/page/markdown.css';
 import './chat.css';
-import { coreScopeSlot } from '../../../contracts/core-state';
+import { type CoreEvents, coreScopeSlot } from '../../../contracts/core-state';
 import type { Registrations } from '../../../contracts/disposable';
-import type { PageApi, PagePart } from '../../../contracts/plugin';
+import type {
+  PageApi,
+  PagePart,
+  QualifiedEvents,
+} from '../../../contracts/plugin';
 import { errorText } from '../../../shared/error-text';
 import { createPartStore } from '../../../shared/page/contributed-parts';
 import {
@@ -11,13 +15,18 @@ import {
   sessionsPageKey,
   sessionsRowsSlot,
 } from '../../sessions/contract';
-import type {
-  ChatChannel,
-  ChatComposerPart,
-  ChatPageEvents,
-  ChatPageExports,
-  ChatSidePart,
-  ChatStatusPart,
+import {
+  type ChatChannel,
+  chatCommandsSlot,
+  type ChatComposerPart,
+  chatControlsSlot,
+  chatEntriesSlot,
+  type ChatPageExports,
+  chatQueuedSlot,
+  chatReturnedSlot,
+  chatSessionSlot,
+  type ChatSidePart,
+  type ChatStatusPart,
 } from '../contract';
 import defaultLayout from '../layouts/default/layout.js';
 import defaultStylesheet from '../layouts/default/layout.css?url';
@@ -46,7 +55,12 @@ import { createSignInDialog } from './sign-in-dialog';
 import { createSlashCommands } from './slash-commands';
 import { createStartPrompt } from './start-prompt';
 
-type ChatApi = PageApi<typeof chatManifest, ChatChannel, ChatPageEvents>;
+type ChatApi = PageApi<
+  typeof chatManifest,
+  ChatChannel,
+  Record<never, never>,
+  QualifiedEvents<'core', CoreEvents>
+>;
 
 // Shows each chat session main holds in its session's Chat tab: the entries
 // under a floating composer holding the message box, the controls as chips
@@ -75,8 +89,8 @@ type ChatApi = PageApi<typeof chatManifest, ChatChannel, ChatPageEvents>;
 // control picker and the image viewer, and leaves the sign-in dialog and the
 // start prompt open. A resting session's Chat tab keys as a running one's
 // does; its control chips are disabled until a message starts its process.
-// Each session's row shows its run time, and the exports and `activeTimeChanged`
-// offer its clock to other plugins.
+// Each session's row shows its run time, and the exports and the `chat.session`
+// slot offer its clock to other plugins.
 export const chatPagePart: PagePart<typeof chatManifest> = {
   manifest: chatManifest,
   start(api: ChatApi) {
@@ -177,6 +191,16 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
     });
     const view = mountChatView({
       channel: api.channel,
+      slots: {
+        session: api.state.read(chatSessionSlot),
+        entries: api.state.read(chatEntriesSlot),
+        controls: api.state.read(chatControlsSlot),
+        commands: api.state.read(chatCommandsSlot),
+        queued: api.state.read(chatQueuedSlot),
+        returned: api.state.read(chatReturnedSlot),
+      },
+      onPageReady: (listener) =>
+        void api.events.on('core.pageReady', () => listener()),
       paths: services.paths,
       homeDir: services.homeDir,
       sessions,
@@ -190,11 +214,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
         }),
       onScopeChanged: (listener) =>
         api.state.read(coreScopeSlot).on(() => listener()),
-      activeTimeListeners: [
-        (sessionId, activeTime) =>
-          api.events.emit('activeTimeChanged', { sessionId, activeTime }),
-        (sessionId) => rowClock.changed(sessionId),
-      ],
+      activeTimeListeners: [(sessionId) => rowClock.changed(sessionId)],
       editor: services.editor,
       markdown: services.markdown,
       keys: api.keys,
