@@ -63,8 +63,7 @@ export function agentSkillsSelfTestScript(
     // A skill's name ends in an ellipsis in its row, as its CSS says. So do
     // a project group's name, and the activity dock's
     // tool calls and its done line; the tab bar's parts and the dock's one line clip
-    // in their own box. The side bar's handle holds its resize prompt, hidden until
-    // hovered, past its box.
+    // in their own box.
     scrollsItself: [
       '.agent-skills-name',
       '.session-group-name',
@@ -72,7 +71,6 @@ export function agentSkillsSelfTestScript(
       '.chat-working-action',
       '.chat-working-line',
       '.chat-working-done',
-      '.shell-side-bar-handle',
     ],
     open() {
       made ??= makeProject().catch((error: unknown) => {

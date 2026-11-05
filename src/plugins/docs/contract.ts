@@ -58,7 +58,7 @@ export interface IndexHeading {
 
 export interface IndexLink {
   form: 'markdown' | 'section';
-  // The exact source text of the reference.
+  // The source text of the reference, a line break in it reading as `\n`.
   raw: string;
   // The real path of the target file.
   target: string;
@@ -322,6 +322,8 @@ export interface DocsChannel extends ChannelShape {
     // Runs the source's `rebuild`, or its `load` when it has none.
     rebuildIndex(sourceId: string): Promise<SourceRead>;
     readDoc(path: string): Promise<string>;
+    // `readDoc`, null when nothing is at `path`; any other failure rejects.
+    readDocIfPresent(path: string): Promise<string | null>;
     // The wiki's `Main.md` with every link resolved, whether or not it exists.
     wikiMainPath(): Promise<string>;
     // `expectedText` null overwrites whatever is on disk.

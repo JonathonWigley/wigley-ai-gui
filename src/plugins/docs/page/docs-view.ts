@@ -28,7 +28,7 @@ import {
 import { metaString } from '../index-document';
 import defaultLayout from '../layouts/default/layout.js';
 import type { Layout } from '../layouts/layout';
-import { loadedAgo, loadedAt, loadedLine } from '../loaded-time';
+import { loadedLine, loadedMark } from '../loaded-time';
 import { isIndexedPath } from '../path-guard';
 import {
   buildTree,
@@ -72,8 +72,11 @@ import {
 } from './list-page';
 import {
   createRecentReader,
+  isMainPageStale,
   linkedPages,
   MAIN_STARTER_TEXT,
+  mainOpenStep,
+  type MainPageState,
 } from './main-page';
 import type { StarredDocs } from './starred-docs';
 import { createTreeView, type LeafMarks } from './tree-view';
@@ -139,7 +142,8 @@ export interface DocsView {
   // can; later calls do nothing. Every rebuild reads the statuses again once
   // it settles. The machine view's first call also starts reading `Main.md`,
   // and each index run that lands reads it again; once the first read of each
-  // has settled it shows the Main page, unless an open was asked by then.
+  // has settled it shows the Main page, unless an open was asked by then; the
+  // empty Main page takes focus, and a Main page with a file leaves it.
   showFirstTime(): void;
   // Rebuilds the source's index, then reads its statuses and reads them
   // again after a fetch, and reads `Main.md` again in the machine view: `R`.
@@ -159,7 +163,8 @@ export interface DocsView {
   // the index still does not list it.
   openDoc(path: string, line: number | null): void;
   // Once the first index read and `Main.md`'s have settled, shows the Main page,
-  // unless a newer open was asked; nothing in a view with no wiki.
+  // unless a newer open was asked, the empty Main page taking focus; nothing in a
+  // view with no wiki.
   openMain(): void;
   // Closes the filter box, the dialogs and the changed-on-disk prompt, each
   // scope they pushed popped, without moving focus: another docs view is
@@ -253,6 +258,9 @@ const SESSION_SWITCH_TEXT = "A session's Docs tab keeps its own tree";
 
 type IndexRun = 'loadIndex' | 'rebuildIndex';
 
+// Why the Main page is asked for: `gh` or the first show, or its file changing.
+type MainShowCause = 'picked' | 'firstShow' | 'fileChanged';
+
 const BUSY_TEXT: Record<IndexRun, string> = {
   loadIndex: 'Reading the docs index…',
   rebuildIndex: 'Rebuilding the docs index…',
@@ -332,8 +340,8 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   let firstShowRuns: Promise<unknown> | null = null;
   // The newest rebuild started, until it settles.
   let runningRebuild: Promise<unknown> | null = null;
-  // Each `openDoc` ask's number; one that waited on a rebuild opens only if
-  // it is still the newest.
+  // Each `openDoc` or `openMain` ask's number; one that waited opens only if it
+  // is still the newest.
   let askedOpens = 0;
   // Each list place's title, set by each `openList`; every history place of a
   // list came from one.
@@ -351,6 +359,8 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   // True while a layout reload redraws the panes: focus moves it makes
   // change nothing.
   let isRedrawing = false;
+  // True while a `createMain` runs, so a second `i` starts no second create.
+  let isCreatingMain = false;
 
   // Each pane and the dialogs track their own drawn parts.
   const newParts = () =>
@@ -535,13 +545,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     leafMarks: (leaf: TreeLeaf): LeafMarks => {
       const lastLoaded = entriesById.get(leaf.entryId)?.lastLoaded ?? null;
       return {
-        time:
-          lastLoaded === null
-            ? null
-            : {
-                text: loadedAgo(lastLoaded, deps.now()),
-                title: `Last loaded ${loadedAt(lastLoaded)}`,
-              },
+        time: loadedMark(lastLoaded, deps.now()),
         isStarred: deps.starred.has(leaf.entryId),
       };
     },
@@ -585,16 +589,18 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       const lastLoaded = entriesById.get(entryId)?.lastLoaded ?? null;
       return lastLoaded === null ? null : loadedLine(lastLoaded, deps.now());
     },
-    followFile: (path, line, fragment) => followFile(path, line, fragment),
+    followFile: (path, line, fragment) => {
+      void openListed(path, line, fragment).then(focusDocOnLanding);
+    },
     followPlace: (path, line) => {
       const listTarget = listTargetOfPlace(path);
       if (listTarget === null) {
-        openListed(path, line, null, { isHistoryMove: true });
+        void openListed(path, line, null, { isHistoryMove: true });
       } else {
         openList(listTarget, listTitles.get(path)!, { isHistoryMove: true });
       }
     },
-    openListEntry: (entryId) => openListEntry(entryId),
+    openListEntry: (entryId) => void openListEntry(entryId),
     createMain: () => void createMain(),
     followWikiLink: (href, title) => followWikiLink(href, title),
     pushConflictScope: () => deps.pushScope('conflict'),
@@ -621,35 +627,37 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     document !== null && isIndexedPath(path, document.entries, deps.paths);
 
   // Opens `path` when the index lists it, selecting its entry's row; else
-  // toasts that it does not.
-  const openListed = (
+  // toasts that it does not. Resolves to whether it opened.
+  const openListed = async (
     path: string,
     line: number | null,
     fragment: string | null,
     options?: { isHistoryMove?: boolean },
-  ) => {
+  ): Promise<boolean> => {
     if (!isListed(path)) {
       toast(`Not an indexed doc: ${path}`, 'error');
-      return;
+      return false;
     }
     const entry =
       document?.entries.find((candidate) =>
         deps.paths.samePath(candidate.path, path),
       ) ?? null;
-    void doc
-      .open(targetFor(path, entry, line, fragment), options)
-      .then((opened) => {
-        if (opened && entry !== null) {
-          tree.selectEntry(entry.id);
-        }
-      });
+    const opened = await doc.open(
+      targetFor(path, entry, line, fragment),
+      options,
+    );
+    if (opened && entry !== null) {
+      tree.selectEntry(entry.id);
+    }
+    return opened;
   };
 
-  const followFile = (
-    path: string,
-    line: number | null,
-    fragment: string | null,
-  ) => openListed(path, line, fragment);
+  // A link's open replaced the element holding focus, which fell to the body.
+  const focusDocOnLanding = (opened: boolean) => {
+    if (opened) {
+      doc.focus();
+    }
+  };
 
   const restoreFocus = () => {
     if (focused === 'doc') {
@@ -834,18 +842,19 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     }
   };
 
-  const openListEntry = (entryId: string) => {
+  // Resolves to whether it opened.
+  const openListEntry = async (entryId: string): Promise<boolean> => {
     const entry = entriesById.get(entryId);
     if (entry === undefined) {
-      return;
+      return false;
     }
-    void doc
-      .open(targetFor(entry.path, entry, entry.line, null))
-      .then((opened) => {
-        if (opened) {
-          tree.selectEntry(entry.id);
-        }
-      });
+    const opened = await doc.open(
+      targetFor(entry.path, entry, entry.line, null),
+    );
+    if (opened) {
+      tree.selectEntry(entry.id);
+    }
+    return opened;
   };
 
   // A `wiki:` or `wigley:` link in a rendered body acts as its sidebar row does.
@@ -860,13 +869,13 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
         if (entry === null) {
           refuseMissingPage(title);
         } else {
-          openListEntry(entry.id);
+          void openListEntry(entry.id).then(focusDocOnLanding);
         }
         return true;
       }
       case 'kind':
       case 'owner':
-        openList(target, title);
+        focusDocOnLanding(openList(target, title));
         return true;
       case 'all':
         deps.revealTree();
@@ -877,9 +886,25 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     }
   };
 
-  // Shows `Main.md` as any doc, or the empty Main page with no file. A shown
-  // Main page stays, since a second open would close its editor.
-  const showMain = (isPicked: boolean) => {
+  const mainPageState = (fileExists: boolean): MainPageState => ({
+    isFileOpen: isMainPath(doc.openPath()),
+    isEmptyPageShown: doc.shownPage()?.type === 'mainEmpty',
+    fileExists,
+  });
+
+  // The empty Main page's offer shows and takes its key only with focus on the
+  // doc. A first show leaves focus where the user has moved it since.
+  const focusEmptyMain = (cause: MainShowCause) => {
+    const isFirstShowFree =
+      cause === 'firstShow' && deps.isActive() && !tree.isFilterOpen();
+    if (cause === 'picked' || isFirstShowFree) {
+      focusDocAndLog();
+    }
+  };
+
+  // Shows `Main.md` as any doc, or the empty Main page with no file. A Main page
+  // matching the file stays.
+  const showMain = (cause: MainShowCause) => {
     const path = wikiMain?.path() ?? null;
     if (wikiMain === null || path === null) {
       log('no Main page path');
@@ -887,41 +912,48 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     }
     const mainReady = () => {
       log('Main page ready');
-      if (isPicked) {
+      if (cause === 'picked') {
         deps.leafOpened();
       }
     };
-    const isEmptyMainShown =
-      doc.shownPage()?.type === 'mainEmpty' && !wikiMain.exists();
-    if (isMainPath(doc.openPath()) || isEmptyMainShown) {
-      log('Main page already shows');
-      mainReady();
-      return;
-    }
-    if (!wikiMain.exists()) {
-      const emptyPage = {
-        type: 'mainEmpty',
-        path: deps.paths.tilde(path, deps.homeDir),
-      } as const;
-      if (doc.showPage(emptyPage)) {
-        log('showed the empty Main page');
+    switch (mainOpenStep(mainPageState(wikiMain.exists()))) {
+      case 'alreadyShows':
+        log('Main page already shows');
         mainReady();
-      }
-      return;
+        if (!wikiMain.exists()) {
+          focusEmptyMain(cause);
+        }
+        return;
+      case 'showEmptyPage':
+        if (
+          doc.showPage({
+            type: 'mainEmpty',
+            path: deps.paths.tilde(path, deps.homeDir),
+          })
+        ) {
+          log('showed the empty Main page');
+          mainReady();
+          focusEmptyMain(cause);
+        }
+        return;
+      case 'openFile':
+        void doc
+          .open(targetFor(path, entryAt(path), null, null))
+          .then((opened) => {
+            if (opened) {
+              log('opened the Main page');
+              mainReady();
+            }
+          });
     }
-    void doc.open(targetFor(path, entryAt(path), null, null)).then((opened) => {
-      if (opened) {
-        log('opened the Main page');
-        mainReady();
-      }
-    });
   };
 
   const createMain = async () => {
     const path = wikiMain?.path() ?? null;
-    if (wikiMain === null || path === null) {
+    if (wikiMain === null || path === null || isCreatingMain) {
       return;
     }
+    isCreatingMain = true;
     try {
       const created = await deps.channel.invoke('createDoc', {
         type: 'path',
@@ -946,15 +978,19 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
     } catch (error) {
       toast(errorText(error), 'error');
       log(`Main.md not created: ${errorText(error)}`);
+    } finally {
+      isCreatingMain = false;
     }
   };
 
-  // `Main.md` read another text: its links changed, and a file that appeared
-  // replaces the empty Main page.
+  // `Main.md` read another text: its links changed, a file that appeared replaces
+  // the empty Main page, and the empty page replaces a shown file that went,
+  // unless an editor holds unsaved edits on it.
   const wikiMainChanged = () => {
     showWikiTree();
-    if (doc.shownPage()?.type === 'mainEmpty' && wikiMain?.exists() === true) {
-      showMain(false);
+    const isStale = isMainPageStale(mainPageState(wikiMain?.exists() === true));
+    if (isStale && !doc.hasUnsavedEdits()) {
+      showMain('fileChanged');
     }
     refreshRecentOnMain();
   };
@@ -962,6 +998,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
   const toggleWikiView = () => {
     if (!isMachine) {
       toast(SESSION_SWITCH_TEXT, 'info');
+      log('a session tab keeps its own tree');
       return;
     }
     deps.revealTree();
@@ -1316,7 +1353,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       isStarredLeafId(before.id) &&
       tree.selectedIn('all') === null;
     if (isStarredRowDropped) {
-      tree.selectEntry(before.entryId);
+      tree.selectEntryIn('all', before.entryId);
     }
   });
 
@@ -1347,7 +1384,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       if (wikiMain !== null) {
         void Promise.all([wikiMain.start(), firstRead.promise]).then(() => {
           if (askedOpens === 0 && doc.isBlank()) {
-            showMain(false);
+            showMain('firstShow');
           }
         });
       }
@@ -1382,7 +1419,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
             return;
           }
         }
-        followFile(path, line, null);
+        await openListed(path, line, null);
       })();
     },
     openMain() {
@@ -1392,7 +1429,7 @@ export function createDocsView(deps: DocsViewDeps): DocsView {
       const number = ++askedOpens;
       void Promise.all([wikiMain.start(), firstRead.promise]).then(() => {
         if (number === askedOpens) {
-          showMain(true);
+          showMain('picked');
         }
       });
     },

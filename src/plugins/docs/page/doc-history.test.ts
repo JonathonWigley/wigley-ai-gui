@@ -6,7 +6,7 @@ import {
   type DocPlace,
 } from './doc-history';
 
-type Call = 'back' | 'forward' | DocPlace;
+type Call = 'back' | 'forward' | 'current' | DocPlace;
 
 const a: DocPlace = { path: 'a', line: null };
 const b: DocPlace = { path: 'b', line: null };
@@ -18,6 +18,9 @@ function apply(history: DocHistory, call: Call): DocPlace | null {
   }
   if (call === 'forward') {
     return history.forward();
+  }
+  if (call === 'current') {
+    return history.current();
   }
   history.push(call);
   return null;
@@ -81,6 +84,22 @@ describe('createDocHistory', () => {
       given: 'a failed back does not move',
       calls: [a, b, 'back', 'back', 'forward'],
       expected: b,
+    },
+    { given: 'new history, current', calls: ['current'], expected: null },
+    {
+      given: 'current is the last push',
+      calls: [a, b, 'current'],
+      expected: b,
+    },
+    {
+      given: 'current follows a back',
+      calls: [a, b, 'back', 'current'],
+      expected: a,
+    },
+    {
+      given: 'current does not move',
+      calls: [a, b, 'current', 'back'],
+      expected: a,
     },
   ])('docHistory_Moves: $given', ({ calls, expected }) => {
     const history = createDocHistory();

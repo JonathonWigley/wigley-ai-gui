@@ -469,6 +469,13 @@ describe('createProcessGit', () => {
     ]);
   });
 
+  it('log_ExitsZeroWithNoOutput_NoCommits', async () => {
+    const test = setUp();
+    test.processes.script('git', logArgs(5, 'a.md'), exited(0));
+
+    expect(await test.git.log(ROOT, ['a.md'], 5)).toEqual([]);
+  });
+
   it('log_NoPaths_RunsNothing', async () => {
     const test = setUp();
 

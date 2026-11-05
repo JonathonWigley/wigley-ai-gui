@@ -180,7 +180,10 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
     main: { layers: HEAVY_SUBLAYERS, packages: ['node:'] },
     page: { layers: HEAVY_SUBLAYERS },
     sublayers: {
-      'src/plugins/workflow-heavy/plan-reader.ts': { layers: [], packages: [] },
+      'src/plugins/workflow-heavy/plan-reader.ts': {
+        layers: ['src/shared'],
+        packages: [],
+      },
       'src/plugins/workflow-heavy/stages': {
         layers: [
           'src/contracts',
@@ -361,7 +364,7 @@ const CORE_LAYERS: Record<string, LayerRule> = {
   'src/config': { layers: ['src/contracts'], packages: [] },
   'src/shared': { layers: ['src/contracts', 'src/shared/paths'], packages: [] },
   'src/shared/paths': { layers: ['src/contracts'], packages: [] },
-  'src/shared/followups': { layers: [], packages: [] },
+  'src/shared/followups': { layers: ['src/shared'], packages: [] },
   // The local channel transport the relay and the session host share.
   'src/shared/local-channel': {
     layers: ['src/contracts'],

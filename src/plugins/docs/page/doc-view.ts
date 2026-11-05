@@ -174,7 +174,8 @@ export interface DocViewDeps {
 // index lists draw as links, and the pane keeps one history of the places shown:
 // each open but a detail's, and each move by a link or an On this page row,
 // records, a `Ctrl+h` or `Ctrl+l` move does not, and `historyBack` and
-// `historyForward` move through them. A page with no file (a generated list page,
+// `historyForward` move through them, a back from a detail or the empty Main page
+// landing on the place they were opened over. A page with no file (a generated list page,
 // or the empty Main page) draws in the same frame in place of a doc: `openPath`
 // is null while one shows, and a list page is a history place. Recent changes
 // draws under the rendered body whenever its input is set, and hides with the
@@ -229,7 +230,8 @@ export interface DocView {
   // edits; nothing while no editor is open.
   quitEditor(): void;
   // Move to the earlier or later history place, closing a clean editor and
-  // refusing while it holds unsaved edits, the history's position unmoved.
+  // refusing while it holds unsaved edits, the history's position unmoved. A back
+  // while a detail or the empty Main page shows returns to the current place.
   historyBack(): void;
   historyForward(): void;
   // Scrolls the pane a line, logging nothing; moves the cursor on a list page.
@@ -536,6 +538,9 @@ export function createDocView(deps: DocViewDeps): DocView {
   let writingText: string | null = null;
   let openCount = 0;
   let isDisposed = false;
+  // True from a detail or the empty Main page showing, neither a place, until a
+  // history move leaves it: the current place is then one back.
+  let isAwayFromCurrent = false;
 
   const drawPane = () => {
     drawnPane?.dispose();
@@ -592,7 +597,8 @@ export function createDocView(deps: DocViewDeps): DocView {
 
   // Whether the history can move each way, on the element `data-doc` is on.
   const showHistoryEdges = () => {
-    root.dataset.historyBack = String(history.canBack());
+    const canReturn = isAwayFromCurrent && history.current() !== null;
+    root.dataset.historyBack = String(history.canBack() || canReturn);
     root.dataset.historyForward = String(history.canForward());
   };
 
@@ -1613,21 +1619,31 @@ export function createDocView(deps: DocViewDeps): DocView {
   };
 
   // Moves one place through the history, and leaves the position unmoved while
-  // unsaved edits refuse. Another file's place opens through `followPlace`, whose
-  // `view.open` closes a clean editor as any open does; a gone doc toasts there
-  // with the position on it, so the next press moves past it.
+  // unsaved edits refuse. A back away from the current place returns to it. A
+  // place the pane does not show opens through `followPlace`, whose `view.open`
+  // closes a clean editor as any open does; a gone doc toasts there with the
+  // position on it, so the next press moves past it.
   const moveInHistory = (step: 1 | -1) => {
     if (view.refuseWithUnsavedEdits()) {
       return;
     }
-    const place = step === -1 ? history.back() : history.forward();
+    const placeBack = () =>
+      isAwayFromCurrent ? history.current() : history.back();
+    const place = step === -1 ? placeBack() : history.forward();
+    if (place !== null) {
+      isAwayFromCurrent = false;
+    }
     showHistoryEdges();
     if (place === null) {
       deps.log(step === -1 ? 'no earlier place' : 'no later place');
       return;
     }
     const doc = shown;
-    if (doc === null || !deps.paths.samePath(doc.target.path, place.path)) {
+    const isScrollable =
+      doc !== null &&
+      doc.target.detail === null &&
+      deps.paths.samePath(doc.target.path, place.path);
+    if (!isScrollable) {
       deps.followPlace(place.path, place.line);
       return;
     }
@@ -1709,6 +1725,7 @@ export function createDocView(deps: DocViewDeps): DocView {
       if (isRecorded) {
         recordPlaceInSight();
       }
+      isAwayFromCurrent = isRecorded && target.detail !== null;
       showHistoryEdges();
       return true;
     },
@@ -1742,6 +1759,8 @@ export function createDocView(deps: DocViewDeps): DocView {
       if (next.type === 'list' && isRecorded) {
         recordPlace({ path: next.content.place, line: null });
       }
+      isAwayFromCurrent = isRecorded && next.type === 'mainEmpty';
+      showHistoryEdges();
       return true;
     },
     updateList(content) {

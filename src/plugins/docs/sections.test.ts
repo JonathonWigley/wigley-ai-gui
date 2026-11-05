@@ -113,6 +113,28 @@ describe('sectionsOf', () => {
       expected: [['A', 2, 1, 1]],
     },
     {
+      given: 'a # with no space before it stays in the title',
+      text: ['## C#', '## D #', '## E# ##'].join('\n'),
+      expected: [
+        ['C#', 2, 1, 1],
+        ['D', 2, 2, 2],
+        ['E#', 2, 3, 3],
+      ],
+    },
+    {
+      given: 'frontmatter fences with trailing spaces and a \\r',
+      text: ['---  ', 'name: x', '--- \r', '# T'].join('\n'),
+      expected: [['T', 1, 4, 4]],
+    },
+    {
+      given: '--- with a trailing tab is no frontmatter',
+      text: ['---\t', '# x', '---', '# y'].join('\n'),
+      expected: [
+        ['x', 1, 2, 3],
+        ['y', 1, 4, 4],
+      ],
+    },
+    {
       given: '--- with a leading space is no frontmatter',
       text: [' ---', '# x', '---', '# y'].join('\n'),
       expected: [

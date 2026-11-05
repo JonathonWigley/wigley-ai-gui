@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loadedAgo, loadedLine } from './loaded-time';
+import { loadedAgo, loadedLine, loadedMark } from './loaded-time';
 
 // Noon UTC, so every local date below is the same day from UTC−11 to UTC+11.
 const NOW = Date.parse('2026-06-01T12:00:00Z');
@@ -31,6 +31,19 @@ describe('loadedAgo', () => {
   it('loadedAgo_EightWeeks_Date', () => {
     expect(ago(56 * DAY)).toBe('2026-04-06T12:00:00.000Z');
     expect(loadedAgo(ago(56 * DAY), NOW)).toBe('Apr 6');
+  });
+});
+
+describe('loadedMark', () => {
+  it('loadedMark_NeverLoaded_Null', () => {
+    expect(loadedMark(null, NOW)).toBeNull();
+  });
+
+  it('loadedMark_Loaded_ShortTextAndFullTitle', () => {
+    const mark = loadedMark(ago(3 * 3_600_000), NOW);
+
+    expect(mark?.text).toBe('3h');
+    expect(mark?.title).toContain('2026');
   });
 });
 

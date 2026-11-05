@@ -381,6 +381,31 @@ describe('createTreeView', () => {
     expect(titles()).toEqual(['One', 'Two', 'b']);
   });
 
+  it('setWikiTree_EmptyTreeThenBack_TheCollapsedGroupStaysCollapsed', () => {
+    const { tree, titles } = wikiSetUp();
+    const shelves = [shelf('One', [page('a')])];
+    tree.setWikiTree(shelves, [], true);
+    tree.close();
+
+    tree.setWikiTree([], [], true);
+    tree.setWikiTree(shelves, [], true);
+
+    expect(titles()).toEqual(['One']);
+  });
+
+  it('click_LabelRowWithFocusInThePane_DrawsTheNewSelection', () => {
+    const { tree, root, selected } = wikiSetUp();
+    tree.setWikiTree([shelf('One', [WIKI_LABEL, page('a')])], [], true);
+    tree.focus();
+    const label = findAll(root, 'test-row').find(
+      (row) => row.textContent === 'Label',
+    );
+
+    label?.click();
+
+    expect(selected()).toEqual(['Label']);
+  });
+
   it.each<{
     name: string;
     node: TreeNode;
@@ -471,6 +496,26 @@ describe('createTreeView', () => {
 
     expect(selected()).toEqual(['One']);
     expect(tree.selectedIn('all')).toEqual(page('alone'));
+  });
+
+  it('selectEntryIn_All_LeavesTheWikiSelection', () => {
+    const { tree, selected } = wikiSetUp();
+    tree.setWikiTree(
+      [shelf('One', [page('other')]), shelf('Two', [page('both')])],
+      [],
+      true,
+    );
+    tree.setTree(
+      [shelf('Mine', [page('other'), page('both')])],
+      NOTHING,
+      NO_HEADINGS,
+      true,
+    );
+
+    tree.selectEntryIn('all', 'e:both');
+
+    expect(selected()).toEqual(['One']);
+    expect(tree.selectedIn('all')).toEqual(page('both'));
   });
 
   it('sessionTree_NoWiki_DrawsNoSwitchAndShowsItsTree', () => {

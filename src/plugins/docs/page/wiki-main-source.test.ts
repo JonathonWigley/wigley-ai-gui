@@ -15,15 +15,15 @@ const settled = () => new Promise((resolve) => setTimeout(resolve));
 function setUp(
   answers: {
     holdsReads?: boolean;
-    read?: () => Promise<string>;
+    read?: () => Promise<string | null>;
     watch?: () => Promise<void>;
     path?: () => Promise<string>;
   } = {},
 ) {
-  const reads: PromiseWithResolvers<string>[] = [];
+  const reads: PromiseWithResolvers<string | null>[] = [];
   const readDoc = vi.fn(() => {
     if (answers.holdsReads === true) {
-      const read = Promise.withResolvers<string>();
+      const read = Promise.withResolvers<string | null>();
       reads.push(read);
       return read.promise;
     }
@@ -37,7 +37,7 @@ function setUp(
     () => answers.path?.() ?? Promise.resolve(MAIN_PATH),
   );
   const invoke = (method: string, ...args: unknown[]): unknown => {
-    if (method === 'readDoc') {
+    if (method === 'readDocIfPresent') {
       return readDoc();
     }
     if (method === 'wikiMainPath') {
@@ -86,8 +86,19 @@ describe('createWikiMainSource', () => {
     expect(test.changed).toHaveBeenCalledOnce();
   });
 
-  it('start_ReadRejects_IsNoMainAndChangedRanOnce', async () => {
-    const test = setUp({ read: () => Promise.reject(new Error('gone')) });
+  it.each([
+    {
+      given: 'the file is absent',
+      read: () => Promise.resolve(null),
+      logged: 'no Main.md: the file is absent',
+    },
+    {
+      given: 'the read rejects',
+      read: () => Promise.reject(new Error('denied')),
+      logged: 'no Main.md: denied',
+    },
+  ])('start_$given_IsNoMainAndChangedRanOnce', async ({ read, logged }) => {
+    const test = setUp({ read });
 
     await test.source.start();
 
@@ -95,7 +106,7 @@ describe('createWikiMainSource', () => {
     expect(test.source.shelves()).toEqual([]);
     expect(test.source.isRead()).toBe(true);
     expect(test.changed).toHaveBeenCalledOnce();
-    expect(test.logs).toEqual(['no Main.md: gone']);
+    expect(test.logs).toEqual([logged]);
   });
 
   it('reread_WatchRejectedAtStart_TriesAgainUntilOneResolves', async () => {
@@ -146,10 +157,7 @@ describe('createWikiMainSource', () => {
   it('reread_FileGoesAway_ChangedRunsOnceAndExistsIsFalse', async () => {
     let isThere = true;
     const test = setUp({
-      read: () =>
-        isThere
-          ? Promise.resolve(ONE_SHELF)
-          : Promise.reject(new Error('gone')),
+      read: () => Promise.resolve(isThere ? ONE_SHELF : null),
     });
     await test.source.start();
     test.changed.mockClear();

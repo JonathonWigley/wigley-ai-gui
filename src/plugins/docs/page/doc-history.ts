@@ -14,6 +14,8 @@ export interface DocHistory {
   back(): DocPlace | null;
   // Moves one entry forward and returns it; null, with no move, at the last.
   forward(): DocPlace | null;
+  // The entry at the position, with no move; null with no places.
+  current(): DocPlace | null;
   canBack(): boolean;
   canForward(): boolean;
 }
@@ -54,6 +56,7 @@ export function createDocHistory(): DocHistory {
       position++;
       return places[position];
     },
+    current: () => places.at(position) ?? null,
     canBack,
     canForward,
   };

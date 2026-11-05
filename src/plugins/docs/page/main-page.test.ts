@@ -7,8 +7,10 @@ import type { TreeNode } from '../tree';
 import { parseWikiMain } from '../wiki-main';
 import {
   createRecentReader,
+  isMainPageStale,
   linkedPages,
   MAIN_STARTER_TEXT,
+  mainOpenStep,
   recentRows,
 } from './main-page';
 
@@ -21,6 +23,62 @@ function change(paths: string[], sha = 'abc'): RecentChange {
 
 // Lets every settled promise's chain run.
 const settled = () => new Promise((resolve) => setTimeout(resolve));
+
+describe('the Main page against its file', () => {
+  it.each([
+    {
+      given: 'the file open and on disk',
+      isFileOpen: true,
+      isEmptyPageShown: false,
+      fileExists: true,
+      step: 'alreadyShows',
+      isStale: false,
+    },
+    {
+      given: 'the file open and gone from disk',
+      isFileOpen: true,
+      isEmptyPageShown: false,
+      fileExists: false,
+      step: 'showEmptyPage',
+      isStale: true,
+    },
+    {
+      given: 'the empty page over no file',
+      isFileOpen: false,
+      isEmptyPageShown: true,
+      fileExists: false,
+      step: 'alreadyShows',
+      isStale: false,
+    },
+    {
+      given: 'the empty page over a file that appeared',
+      isFileOpen: false,
+      isEmptyPageShown: true,
+      fileExists: true,
+      step: 'openFile',
+      isStale: true,
+    },
+    {
+      given: 'another doc, with the file on disk',
+      isFileOpen: false,
+      isEmptyPageShown: false,
+      fileExists: true,
+      step: 'openFile',
+      isStale: false,
+    },
+    {
+      given: 'another doc, with no file',
+      isFileOpen: false,
+      isEmptyPageShown: false,
+      fileExists: false,
+      step: 'showEmptyPage',
+      isStale: false,
+    },
+  ])('$given → $step', ({ step, isStale, ...state }) => {
+    expect(mainOpenStep(state)).toBe(step);
+    expect(isMainPageStale(state)).toBe(isStale);
+  });
+});
 
 describe('linkedPages', () => {
   it('linkedPages_WalksLeavesOnly', () => {

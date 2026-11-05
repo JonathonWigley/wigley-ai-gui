@@ -1,3 +1,4 @@
+import { fenceAfterLine } from '../../shared/markdown-fence';
 import { splitFrontmatter } from './frontmatter';
 
 // Lines are 1-based and inclusive, and count from the file's first line,
@@ -24,18 +25,15 @@ interface LineSpan {
   end: number;
 }
 
-const FRONTMATTER_MARKER = '---';
-
 // `s`: JavaScript's `.` stops at a lone `\r`, which is line text here.
-const HEADING = /^(#{1,6})\s+(.+?)\s*#*\s*$/s;
+const HEADING = /^(#{1,6})\s+(.+?)(?:\s+#+)?\s*$/s;
 const FENCE_RUN = /^(`{3,}|~{3,})(.*)$/s;
 
 // One entry per line of the file. Lines break on `\n`, a `\r` before it
 // belongs to the line ending, and the last line ending adds no line.
 export function scanLines(text: string): ScannedLine[] {
   const lines = lineSpans(text).map((span) => text.slice(span.start, span.end));
-  const firstBodyLine =
-    lines[0] === FRONTMATTER_MARKER ? splitFrontmatter(text).bodyStartLine : 1;
+  const firstBodyLine = splitFrontmatter(text).bodyStartLine;
   let fence: string | null = null;
   return lines.map((line, index) => {
     const number = index + 1;
@@ -43,7 +41,7 @@ export function scanLines(text: string): ScannedLine[] {
       return { number, text: line, heading: null, isProse: false };
     }
     const fenceBefore: string | null = fence;
-    fence = fenceAfterLine(line, fence);
+    fence = fenceAfterLine(line, fence, FENCE_RUN);
     const isProse = fenceBefore === null && fence === null;
     return {
       number,
@@ -134,30 +132,6 @@ function lineSpans(text: string): LineSpan[] {
 function fileLineEnding(text: string): string {
   const firstLineFeed = text.indexOf('\n');
   return firstLineFeed > 0 && text[firstLineFeed - 1] === '\r' ? '\r\n' : '\n';
-}
-
-// The open fence's run after this line, null when none is open. Any indent
-// counts, so a fence inside a list item counts.
-function fenceAfterLine(line: string, fence: string | null): string | null {
-  const run = FENCE_RUN.exec(line.trimStart());
-  if (run === null) {
-    return fence;
-  }
-  if (fence === null) {
-    return isInlineCode(run) ? null : run[1];
-  }
-  return closesFence(run, fence) ? null : fence;
-}
-
-// A backtick fence's info string holds no backtick.
-function isInlineCode(run: RegExpExecArray): boolean {
-  return run[1][0] === '`' && run[2].includes('`');
-}
-
-function closesFence(run: RegExpExecArray, fence: string): boolean {
-  const isSameCharacter = run[1][0] === fence[0];
-  const isLongEnough = run[1].length >= fence.length;
-  return isSameCharacter && isLongEnough && run[2].trim() === '';
 }
 
 function headingOf(line: string): ScannedLine['heading'] {

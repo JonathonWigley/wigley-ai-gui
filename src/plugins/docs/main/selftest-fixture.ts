@@ -10,7 +10,8 @@ import { installedPluginsFile, WIGLEY_PLUGIN_KEY } from './script-locator';
 import { MACHINE_INDEX_FILE } from './index-sources';
 
 const FIXTURE_PLUGIN_KEY = 'selftest-plugin@selftest-market';
-const VENDOR_PLUGIN_KEY = 'vendor-plugin@vendor-market';
+// Starts `wigley@`, so the `wigley:vendored` link finds the plugin's skill.
+const VENDOR_PLUGIN_KEY = 'wigley@vendor-market';
 // Makes CLAUDE.md several pages long, rendered and in the editor, so a
 // half-page scroll moves it.
 const LONG_SECTION = `\n## Long section\n\n${Array.from(
@@ -30,7 +31,7 @@ const LOAD_STATE_DOCS: readonly LoadStateRecord[] = [
 // The wiki's `Main.md`, relative to the temp home, and its text: the links on
 // the first line sit before the first shelf, so they draw no sidebar rows.
 export const WIKI_MAIN_FILE = 'wigley-agents/wiki/Main.md';
-export const WIKI_MAIN_TEXT = `Start at [Fixture guides](wiki:kind/feature-doc) or [Every page](wiki:all).
+export const WIKI_MAIN_TEXT = `Start at [Fixture guides](wiki:kind/feature-doc), [The vendored skill](wigley:vendored) or [Every page](wiki:all).
 
 ## Shelf one
 
@@ -48,7 +49,8 @@ export const WIKI_MAIN_TEXT = `Start at [Fixture guides](wiki:kind/feature-doc) 
 `;
 
 // A doc with no `#` heading, relative to the temp home, whose first line holds
-// a `§` link with backticks and a bare one.
+// a `§` link with backticks and a bare one, and taller than the pane so a link
+// to its last section scrolls.
 export const WIKI_GUIDE_FILE =
   'wigley-features/selftest-repo/wiki-fixture/guide.md';
 export const WIKI_GUIDE_TEXT = `Read \`target.md\` § Target part for the target, and § Closing notes for the end.
@@ -64,7 +66,8 @@ Middle text.
 ## Closing notes
 
 Closing text.
-`;
+
+${'More closing text.\n\n'.repeat(40)}`;
 
 const WIKI_TARGET_FILE = 'wigley-features/selftest-repo/wiki-fixture/target.md';
 const WIKI_TARGET_TEXT =
@@ -399,6 +402,7 @@ function indexDocument(
       path: fixture.claudeMd,
       title: 'Self-test instructions',
       meta: { imports: [] },
+      headings: [{ level: 2, text: 'Long section', line: 9 }],
     }),
     entry({
       kind: 'rule',

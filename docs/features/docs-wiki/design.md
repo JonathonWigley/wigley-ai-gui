@@ -47,7 +47,8 @@ pipeline, no stages, and no fixed shelf names. Every shelf comes from a file the
   pages, since the Main page is the curated list.
 - Only the machine view, Docs mode, holds the wiki. `s` on a wiki row toasts `Stars stay in All pages`.
 - Docs mode opens on the Main page at each app start. Leaving and returning keeps the page shown, as
-  every mode does. With no `Main.md`, the page shows an empty state that offers to create it.
+  every mode does. With no `Main.md`, the page shows an empty state that offers to create it, with
+  focus on the doc pane, where the offer and its `i` work.
 
 ## Page
 

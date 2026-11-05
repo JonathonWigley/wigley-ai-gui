@@ -1,4 +1,5 @@
 import type { Paths } from '../../contracts/paths';
+import { codeUnitOrder } from './code-unit-order';
 import type { DocKind, IndexEntry } from './contract';
 import {
   DOC_KINDS,
@@ -101,7 +102,7 @@ export const KIND_TITLES: Record<DocKind, string> = {
 export function compareTitles(a: string, b: string): number {
   return (
     a.localeCompare(b, undefined, { sensitivity: 'base' }) ||
-    (a < b ? -1 : a > b ? 1 : 0)
+    codeUnitOrder(a, b)
   );
 }
 
@@ -326,9 +327,7 @@ function groupedBy(
 type EntryOrder = (a: IndexEntry, b: IndexEntry) => number;
 
 function byTitleThenId(a: IndexEntry, b: IndexEntry): number {
-  return (
-    compareTitles(a.title, b.title) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
-  );
+  return compareTitles(a.title, b.title) || codeUnitOrder(a.id, b.id);
 }
 
 // Entries with a time first, newest first, then those with none; equal times
@@ -787,7 +786,7 @@ function preferredEntry(candidates: readonly IndexEntry[]): IndexEntry | null {
   const rankOf = (entry: IndexEntry) =>
     (entry.owner === 'mine' ? 0 : 2) + (entry.source === 'repo' ? 0 : 1);
   const [first] = [...candidates].sort(
-    (a, b) => rankOf(a) - rankOf(b) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+    (a, b) => rankOf(a) - rankOf(b) || codeUnitOrder(a.id, b.id),
   );
   return first ?? null;
 }

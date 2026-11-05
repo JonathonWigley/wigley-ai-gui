@@ -12,6 +12,7 @@ import type { FuzzyMatcher } from '../../../contracts/fuzzy';
 import type { PaneDirection } from '../../../contracts/panes';
 import type { Paths } from '../../../contracts/paths';
 import { matchesSubstring } from '../../../shared/matches-substring';
+import { codeUnitOrder } from '../code-unit-order';
 import type {
   CloneStatus,
   DocKind,
@@ -85,9 +86,10 @@ export function defaultExpandedIds(tree: readonly TreeNode[]): Set<string> {
   return expanded;
 }
 
-// `expanded` plus the Starred root when `next` shows it and `previous` did
-// not, so a Starred group that first shows in a later tree starts expanded;
-// else `expanded` unchanged.
+// `expanded` plus the Starred root when `next` shows it and a `previous` with
+// rows did not, so a Starred group that first shows in a later tree starts
+// expanded, and one back after an empty tree keeps its state; else `expanded`
+// unchanged.
 export function expandNewStarred(
   previous: readonly TreeNode[],
   next: readonly TreeNode[],
@@ -95,12 +97,13 @@ export function expandNewStarred(
 ): ReadonlySet<string> {
   const hasStarred = (tree: readonly TreeNode[]) =>
     tree.some((root) => root.id === STARRED_ROOT_ID);
-  const isStarredNew = hasStarred(next) && !hasStarred(previous);
+  const isStarredNew =
+    previous.length > 0 && hasStarred(next) && !hasStarred(previous);
   return isStarredNew ? new Set([...expanded, STARRED_ROOT_ID]) : expanded;
 }
 
 // The id of every group in `tree`, at any depth.
-function groupIds(tree: readonly TreeNode[]): Set<string> {
+export function groupIds(tree: readonly TreeNode[]): Set<string> {
   const ids = new Set<string>();
   const pending = [...tree];
   for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
@@ -112,17 +115,17 @@ function groupIds(tree: readonly TreeNode[]): Set<string> {
   return ids;
 }
 
-// `expanded` plus each group of `next` that `previous` does not hold, so a
-// collapsed group stays collapsed and a new one starts expanded.
+// `expanded` plus each group of `next` not in `seen`, the ids every earlier tree
+// held, so a collapsed group stays collapsed, through a tree that dropped it too,
+// and a new one starts expanded.
 export function expandNewGroups(
-  previous: readonly TreeNode[],
+  seen: ReadonlySet<string>,
   next: readonly TreeNode[],
   expanded: ReadonlySet<string>,
 ): Set<string> {
-  const previousIds = groupIds(previous);
   const result = new Set(expanded);
   for (const id of groupIds(next)) {
-    if (!previousIds.has(id)) {
+    if (!seen.has(id)) {
       result.add(id);
     }
   }
@@ -405,7 +408,7 @@ export function contextChoices(
   const home = document.contexts.filter(isHome);
   const rest = document.contexts
     .filter((context) => !isHome(context))
-    .sort((a, b) => (a.folder < b.folder ? -1 : a.folder > b.folder ? 1 : 0));
+    .sort((a, b) => codeUnitOrder(a.folder, b.folder));
   return [...home, ...rest];
 }
 
@@ -709,19 +712,19 @@ export function treeLine(state: TreeLineState): TreeLine | null {
   if (!state.hasTree) {
     return null;
   }
-  if (state.isIndexEmpty) {
-    return {
-      placement: 'empty',
-      text: state.isWikiView ? 'No pages in Main.md' : 'No docs in this index',
-      hint: { command: 'rescan', words: 'to rescan' },
-    };
-  }
   const isFiltered = state.filter.trim() !== '';
   if (isFiltered && state.rowCount === 0) {
     return {
       placement: 'empty',
       text: `No docs match "${state.filter}"`,
       hint: { command: 'filter', words: 'to change it' },
+    };
+  }
+  if (state.isIndexEmpty) {
+    return {
+      placement: 'empty',
+      text: state.isWikiView ? 'No pages in Main.md' : 'No docs in this index',
+      hint: { command: 'rescan', words: 'to rescan' },
     };
   }
   if (isFiltered && !state.isFilterOpen) {

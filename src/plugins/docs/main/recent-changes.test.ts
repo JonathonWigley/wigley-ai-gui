@@ -100,6 +100,17 @@ describe('readRecentChanges', () => {
     },
   );
 
+  it('readRecentChanges_TwoLinksToOneRealPath_AskGitOnce', async () => {
+    const deps = setUp({
+      realPaths: { '/h/a.md': '/d/wa/a.md', '/h/link/a.md': '/d/wa/a.md' },
+      roots: { '/d/wa': '/d/wa' },
+    });
+
+    await readRecentChanges(['/h/a.md', '/h/link/a.md'], 5, deps);
+
+    expect(deps.git.log.mock.calls).toEqual([['/d/wa', ['a.md'], 5]]);
+  });
+
   it.each([
     {
       given: 'missing file',

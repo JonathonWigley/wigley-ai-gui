@@ -11,6 +11,36 @@ import type { TreeNode } from '../tree';
 export const MAIN_STARTER_TEXT =
   '# Main page\n\nEach `##` heading is a sidebar shelf, each `###` heading is a label inside it, and each link is a page. Edit this file to change the sidebar.\n';
 
+// What shows in the doc pane against `Main.md`, as a Main page open reads it.
+export interface MainPageState {
+  isFileOpen: boolean;
+  isEmptyPageShown: boolean;
+  fileExists: boolean;
+}
+
+// What opening the Main page does: a Main page matching the file stays, since a
+// second open would close its editor.
+export function mainOpenStep({
+  isFileOpen,
+  isEmptyPageShown,
+  fileExists,
+}: MainPageState): 'alreadyShows' | 'showEmptyPage' | 'openFile' {
+  if (fileExists) {
+    return isFileOpen ? 'alreadyShows' : 'openFile';
+  }
+  return isEmptyPageShown ? 'alreadyShows' : 'showEmptyPage';
+}
+
+// Whether a change to the file leaves the Main page shown out of step with it: a
+// file that appeared under the empty page, or went from under its own page.
+export function isMainPageStale({
+  isFileOpen,
+  isEmptyPageShown,
+  fileExists,
+}: MainPageState): boolean {
+  return fileExists ? isEmptyPageShown : isFileOpen;
+}
+
 export interface LinkedPage {
   title: string;
   path: string;

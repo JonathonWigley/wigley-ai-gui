@@ -301,6 +301,9 @@ export const docsMainPart: MainPart<typeof docsManifest> = {
       return read;
     });
     channel.handle('readDoc', readDoc);
+    channel.handle('readDocIfPresent', async (path) =>
+      (await docs).docFiles.readIfPresent(path),
+    );
     channel.handle('wikiMainPath', async () =>
       (await docs).docFiles.wikiMainPath(),
     );

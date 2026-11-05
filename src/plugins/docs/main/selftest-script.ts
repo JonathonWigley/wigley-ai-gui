@@ -178,9 +178,23 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     },
     { keys: ['<A-h>', '<A-l>'], expect: '[docs] doc focused' },
     {
+      keys: ['Tab', 'Tab', 'Enter'],
+      expect: '[docs] opened SKILL.md',
+      why: "The page's second link is a wigley: link, which opens the skill's doc as its sidebar row does.",
+    },
+    { keys: ['<C-o>'], expect: '[docs] opened Main.md' },
+    { keys: ['<A-h>', '<A-l>'], expect: '[docs] doc focused' },
+    {
+      keys: ['Tab', 'Tab', 'Tab', 'Enter'],
+      expect: '[docs] sidebar shows All pages',
+      why: "The page's third link is wiki:all, which switches the sidebar and leaves the page shown.",
+    },
+    { keys: [' ', 'v', 'w'], expect: '[docs] sidebar shows the wiki' },
+    { keys: ['<A-h>', '<A-l>'], expect: '[docs] doc focused' },
+    {
       keys: ['Tab', 'Enter'],
       expect: '[docs] listed Fixture guides: 2 docs',
-      why: "Enter on a focused link is the link's click.",
+      why: "Enter on a focused link is the link's click, and the page's first link is a wiki: list.",
     },
   ];
   const wikiListPages: SelfTestStep[] = [
@@ -224,6 +238,10 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
   ];
   const wikiFromSessionTab: SelfTestStep[] = [
     { keys: [' ', 'k', 's'], expect: '[docs] Docs tab shown' },
+    {
+      keys: [' ', 'v', 'w'],
+      expect: '[docs] a session tab keeps its own tree',
+    },
     {
       keys: ['g', 'h'],
       expect: '[docs] opened the Main page',
@@ -275,11 +293,16 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     {
       keys: ['g', 'h'],
       expect: '[docs] showed the empty Main page',
+      alsoExpect: [/^\[docs\] doc focused$/],
       checksFit: true,
       screenshot: 'main-empty',
-      why: 'The doc pane showed guide.md, so the step also proves the empty page replaces a doc. The screenshot shows the ~ path and No pages in Main.md.',
+      why: 'The doc pane showed guide.md, so the step also proves the empty page replaces a doc. It takes focus, so the screenshot shows the create it hint beside the ~ path and No pages in Main.md.',
     },
-    { keys: ['<A-l>'], expect: '[docs] doc focused' },
+    {
+      keys: ['<A-l>'],
+      expect: '[page] no pane right',
+      why: 'gh moved focus to the doc pane, the rightmost.',
+    },
     {
       keys: ['i'],
       expect: '[docs] created Main.md',
@@ -318,6 +341,11 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
       keys: ['h', 'h'],
       expect: '[docs] collapsed References',
       why: "The filter's end expanded References. The later groups count rows with it collapsed, as tree filter's end does for Rules.",
+    },
+    {
+      keys: ['G', 'h', 'h', 'h', 'h'],
+      expect: '[docs] collapsed wigley@vendor-market',
+      why: "The wigley: link selected its skill, which expanded the plugin's groups. h steps up from the skill and collapses Skills and the plugin, so the row above the last row is the synced skill again.",
     },
     {
       keys: ['G', 'k', ...Array<string>(6).fill('h')],
@@ -591,6 +619,29 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     { keys: ['R'], expect: '[docs] machine index rebuilt: 20 entries' },
   ];
   const treeFilter: SelfTestStep[] = [
+    {
+      keys: ['/', ...'Long section', 'Enter'],
+      expect: '[docs] filtered the tree: Long section',
+    },
+    { keys: ['g', 'g'], expect: '[docs] selected Mine' },
+    {
+      keys: ['Enter', 'Enter', 'Enter'],
+      expect: '[docs] selected Self-test instructions',
+      why: 'Under the filter Enter steps from Mine to Global, Instructions, then the doc holding the heading.',
+    },
+    {
+      keys: ['j', 'Enter'],
+      expect: '[docs] opened CLAUDE.md',
+      alsoExpect: [/^\[docs\] doc focused$/],
+      why: 'The row under the doc is its heading.',
+    },
+    {
+      keys: ['<C-h>'],
+      expect: '[docs] section Second heading',
+      why: "The section before the one in sight, so the row opened the doc at Long section's line and not at its top.",
+    },
+    { keys: ['<A-h>'], expect: '[docs] tree focused' },
+    { keys: ['/', 'Escape'], expect: '[docs] cleared the filter' },
     {
       keys: ['/', ...NEAT_RULE_FILTER, 'Enter'],
       expect: `[docs] filtered the tree: ${NEAT_RULE_FILTER}`,
@@ -947,7 +998,7 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
   return [
     {
       name: 'wiki start',
-      why: "gh leaves Main.md shown whichever of the first show and gh opened it, and the sidebar's shelves come from the file and follow an outside change to it. The first show's own proof is task 11's live run, since a log line it makes can come before this script's mark in a whole run.",
+      why: "gh leaves Main.md shown whichever of the first show and gh opened it, and the sidebar's shelves come from the file and follow an outside change to it. No step expects the first show's own lines, since one it logs can come before this script's mark in a whole run.",
       steps: wikiStart,
     },
     {
@@ -962,7 +1013,7 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     },
     {
       name: 'wiki links and history',
-      why: "A § link with backticks and a bare § link each draw as one link in the mounted body, which only this group's steps reach; one opens its target, the other moves in the doc; Ctrl+o and Ctrl+i go back and forward; gh from the doc opens Main with Recent changes; and a wiki: link in the body opens its list.",
+      why: "A § link with backticks and a bare § link each draw as one link in the mounted body, which only this group's steps reach; one opens its target, the other moves in the doc; Ctrl+o and Ctrl+i go back and forward; gh from the doc opens Main with Recent changes; and in the body a wigley: link opens its skill, wiki:all switches the sidebar and a wiki: link opens its list.",
       steps: wikiLinksAndHistory,
     },
     {
@@ -972,7 +1023,7 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     },
     {
       name: 'wiki from a session tab',
-      why: "gh on a session's Docs tab shows Docs mode and opens Main there, and leaves the session's tab as it was.",
+      why: "Space v w on a session's Docs tab says it keeps its own tree, and gh there shows Docs mode and opens Main.",
       steps: wikiFromSessionTab,
     },
     {
@@ -982,7 +1033,7 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     },
     {
       name: 'wiki with no Main.md',
-      why: 'With Main.md gone the sidebar empties and gh shows the empty Main page, i creates the file from the starter text and edits it, and an outside write brings the shelves back. The group leaves All pages shown, with References and Third-party collapsed, for the groups after it.',
+      why: 'With Main.md gone the sidebar empties and gh shows the empty Main page with focus on it, i creates the file from the starter text and edits it, and an outside write brings the shelves back. The group leaves All pages shown, with References and Third-party collapsed, for the groups after it.',
       steps: wikiWithNoMain,
     },
     {
@@ -1007,7 +1058,7 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
     },
     {
       name: 'tree filter',
-      why: '/ filters the tree and Enter keeps the filter: Enter steps into the first child it shows, a trash asked on a match is kept by n or Esc, a filter matching nothing says so, and / Esc clear it; h goes up and collapses.',
+      why: '/ filters the tree and Enter keeps the filter: a heading row opens its doc at the heading, Enter steps into the first child it shows, a trash asked on a match is kept by n or Esc, a filter matching nothing says so, and / Esc clear it; h goes up and collapses.',
       steps: treeFilter,
     },
     {
@@ -1069,15 +1120,13 @@ function docsGroups(paths: Paths, homeDir: string): SelfTestGroup[] {
 }
 
 // Paths, the status line and the filtered line end in an ellipsis; the field
-// table's box and the editor scroll themselves. The side bar's handle holds its
-// resize prompt, hidden until hovered, past its box.
+// table's box and the editor scroll themselves.
 const SCROLLS_ITSELF = [
   '.docs-path',
   '.docs-status',
   '.docs-filtered',
   '.docs-frontmatter-box',
   '.docs-editor',
-  '.shell-side-bar-handle',
 ];
 
 // Rewrites the fixture under `homeDir` with `options` and opens a session in

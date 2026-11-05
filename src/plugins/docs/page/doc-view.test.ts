@@ -2189,6 +2189,140 @@ describe('createDocView', () => {
       expect(followPlace.mock.calls).toEqual([[DOC, null]]);
     });
 
+    const NO_PLACE_SHOWS: {
+      name: string;
+      show(view: DocView): Promise<unknown> | boolean;
+    }[] = [
+      {
+        name: 'the empty Main page',
+        show: (view) => view.showPage({ type: 'mainEmpty', path: '~/Main.md' }),
+      },
+      {
+        name: 'a detail',
+        show: (view) =>
+          view.open({ ...target(null, '/home/hook.md'), detail: hookDetail }),
+      },
+    ];
+
+    describe.each(NO_PLACE_SHOWS)('from $name', ({ show }) => {
+      it.each<{
+        given: string;
+        places: string[];
+        presses: ('historyBack' | 'historyForward')[];
+        followed: [string, null][];
+        said: string[];
+        canBack: string;
+      }>([
+        {
+          given: 'back lands on the current place, then moves on',
+          places: [DOC, OTHER_DOC],
+          presses: ['historyBack', 'historyBack'],
+          followed: [
+            [OTHER_DOC, null],
+            [DOC, null],
+          ],
+          said: [],
+          canBack: 'false',
+        },
+        {
+          given: 'back lands on the only place',
+          places: [DOC],
+          presses: ['historyBack'],
+          followed: [[DOC, null]],
+          said: [],
+          canBack: 'false',
+        },
+        {
+          given: 'back with no place stays',
+          places: [],
+          presses: ['historyBack'],
+          followed: [],
+          said: ['no earlier place'],
+          canBack: 'false',
+        },
+        {
+          given: 'forward with no later place stays, and back can return',
+          places: [DOC],
+          presses: ['historyForward'],
+          followed: [],
+          said: ['no later place'],
+          canBack: 'true',
+        },
+      ])(
+        'history_NoPlaceShown $given',
+        async ({ places, presses, followed, said, canBack }) => {
+          const { view, deps, followPlace } = pageView();
+          const logs: string[] = [];
+          deps.log = (line) => logs.push(line);
+          followPlace.mockImplementation((path: string) => {
+            void view.open(target(null, path), { isHistoryMove: true });
+          });
+          for (const path of places) {
+            await view.open(target(null, path));
+          }
+          await show(view);
+
+          for (const press of presses) {
+            view[press]();
+            await settled();
+          }
+
+          expect({
+            followed: followPlace.mock.calls,
+            said: logs.filter((line) =>
+              /^no (earlier|later) place$/.test(line),
+            ),
+            canBack: view.element.dataset.historyBack,
+          }).toEqual({ followed, said, canBack });
+        },
+      );
+    });
+
+    it('history_ForwardFromADetail_MovesAsUsual', async () => {
+      const { view, followPlace } = pageView();
+      followPlace.mockImplementation((path) => {
+        void view.open(target(null, path), { isHistoryMove: true });
+      });
+      await view.open(target(null, DOC));
+      await view.open(target(null, OTHER_DOC));
+      view.historyBack();
+      await settled();
+      await view.open({ ...target(null, '/home/hook.md'), detail: hookDetail });
+
+      view.historyForward();
+      await settled();
+
+      expect(followPlace.mock.calls).toEqual([
+        [DOC, null],
+        [OTHER_DOC, null],
+      ]);
+    });
+
+    it('history_ReturnToAPlaceThatFails_TheNextBackMovesPastIt', async () => {
+      const { view, followPlace } = pageView();
+      await view.open(target(null, DOC));
+      await view.open(target(null, OTHER_DOC));
+      await view.open({ ...target(null, '/home/hook.md'), detail: hookDetail });
+
+      view.historyBack();
+      view.historyBack();
+
+      expect(followPlace.mock.calls).toEqual([
+        [OTHER_DOC, null],
+        [DOC, null],
+      ]);
+    });
+
+    it('history_DetailOnThePlacesOwnPath_ReopensThePlace', async () => {
+      const { view, followPlace } = pageView();
+      await view.open(target(null, DOC));
+      await view.open({ ...target(null, DOC), detail: hookDetail });
+
+      view.historyBack();
+
+      expect(followPlace.mock.calls).toEqual([[DOC, null]]);
+    });
+
     it('scroll_ListShown_MovesTheCursorAndNotThePane', () => {
       const { view } = pageView();
       view.showPage(list(['a', 'b']));

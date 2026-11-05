@@ -1,3 +1,4 @@
+import { codeUnitOrder } from './code-unit-order';
 import type { IndexEntry, IndexLink } from './contract';
 import { compareTitles } from './tree';
 
@@ -51,8 +52,7 @@ export function linkedFrom(
     }))
     .sort(
       (a, b) =>
-        compareTitles(a.title, b.title) ||
-        (a.path < b.path ? -1 : a.path > b.path ? 1 : 0),
+        compareTitles(a.title, b.title) || codeUnitOrder(a.path, b.path),
     );
 }
 

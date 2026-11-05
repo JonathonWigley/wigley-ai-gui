@@ -46,6 +46,8 @@ export interface DocFilesDeps {
 // links, stays. A trash also takes every link the index walked to what goes.
 export interface DocFiles {
   read(path: string): Promise<string>;
+  // `read`, null when nothing is at `path`; any other failure rejects.
+  readIfPresent(path: string): Promise<string | null>;
   // The wiki's `Main.md` with every link resolved, whether or not it exists.
   wikiMainPath(): Promise<string>;
   // `expectedText` non-null: writes only while the disk (missing reads as
@@ -329,6 +331,7 @@ export function createDocFiles(deps: DocFilesDeps): DocFiles {
 
   return {
     read: async (path) => files.read(absolute(path)),
+    readIfPresent: async (path) => readIfPresent(files, absolute(path)),
     wikiMainPath: () =>
       realTarget(
         files,

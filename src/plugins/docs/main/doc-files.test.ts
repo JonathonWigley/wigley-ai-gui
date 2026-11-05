@@ -859,6 +859,33 @@ describe('trash', () => {
   });
 });
 
+describe('readIfPresent', () => {
+  it('readIfPresent_NothingThere_Null', async () => {
+    const { docFiles } = setUp();
+
+    expect(await docFiles.readIfPresent(`${HOME}/gone.md`)).toBeNull();
+  });
+
+  it('readIfPresent_FileThere_ItsText', async () => {
+    const test = setUp();
+    await test.files.write(`${HOME}/there.md`, 'text');
+
+    expect(await test.docFiles.readIfPresent(`${HOME}/there.md`)).toBe('text');
+  });
+
+  it('readIfPresent_OtherFailure_Rejects', async () => {
+    const test = setUp();
+    const failing = {
+      ...test.files,
+      read: () => Promise.reject(new Error('denied')),
+    };
+
+    await expect(
+      setUp({ files: failing }).docFiles.readIfPresent(`${HOME}/x.md`),
+    ).rejects.toThrow('denied');
+  });
+});
+
 describe('wikiMainPath', () => {
   const CLONE = '/Users/u/src/wa';
 

@@ -1,7 +1,7 @@
 import type { Paths } from '../../../contracts/paths';
 import type { IndexEntry } from '../contract';
 import type { ListPageInput, ListRowInput } from '../layouts/layout';
-import { loadedAgo, loadedAt } from '../loaded-time';
+import { loadedMark } from '../loaded-time';
 import { compareTitles, newestLoadedFirst, wikiListEntries } from '../tree';
 import { parseWikiTarget, type WikiTarget } from '../wiki-main';
 
@@ -47,13 +47,7 @@ function listRow(
   return {
     title: entry.title,
     path: entry.line === null ? path : `${path}:${entry.line}`,
-    time:
-      entry.lastLoaded === null
-        ? null
-        : {
-            text: loadedAgo(entry.lastLoaded, now),
-            title: `Last loaded ${loadedAt(entry.lastLoaded)}`,
-          },
+    time: loadedMark(entry.lastLoaded, now),
   };
 }
 

@@ -1,4 +1,5 @@
 import type { Paths } from '../../contracts/paths';
+import { codeUnitOrder } from './code-unit-order';
 
 // The most completions the path box shows.
 export const COMPLETION_LIMIT = 12;
@@ -88,10 +89,6 @@ function typedFolderPart(typed: string, paths: Paths): string {
     typed.lastIndexOf(paths.separator),
   );
   return typed.slice(0, lastSeparator + 1);
-}
-
-function codeUnitOrder(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 function commonPrefix(names: readonly string[]): string {

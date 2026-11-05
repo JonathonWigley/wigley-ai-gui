@@ -1,3 +1,5 @@
+import { fenceAfterLine } from '../markdown-fence';
+
 // The follow-up file shape (triage.md § The project's follow-ups in
 // wigley-ai-marketplace): reads a features home's follow-ups file into items,
 // as `docs_index.py` reads it, and turns one item edit into the file's new
@@ -274,31 +276,15 @@ function lastNonBlank(lines: string[], start: number, bound: number): number {
   return end;
 }
 
-// The indexes of the lines outside fenced code, the fence lines left out. A
-// fence closes only on a run of its own character at least as long, with
-// nothing after it, as CommonMark has it.
+// The indexes of the lines outside fenced code, the fence lines left out.
 function linesOutsideFences(lines: string[]): number[] {
   const outside: number[] = [];
   let fence: string | null = null;
   lines.forEach((line, index) => {
-    const match = FENCE.exec(line.trimStart());
-    if (fence === null) {
-      const isInlineCode =
-        match !== null && match[1][0] === '`' && match[2].includes('`');
-      if (match !== null && !isInlineCode) {
-        fence = match[1];
-        return;
-      }
+    const fenceBefore: string | null = fence;
+    fence = fenceAfterLine(line, fence, FENCE);
+    if (fenceBefore === null && fence === null) {
       outside.push(index);
-      return;
-    }
-    const closesFence =
-      match !== null &&
-      match[1][0] === fence[0] &&
-      match[1].length >= fence.length &&
-      match[2].trim() === '';
-    if (closesFence) {
-      fence = null;
     }
   });
   return outside;

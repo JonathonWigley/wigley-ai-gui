@@ -1,3 +1,5 @@
+import { fenceAfterLine } from '../../shared/markdown-fence';
+
 // One counted box under `## Tasks`: the `### Wave N` it sits under (null
 // before any wave heading), its text with links reduced to their text and
 // `~~` removed, and whether it is ticked or struck.
@@ -82,32 +84,13 @@ function linesOutsideFences(text: string): string[] {
   let fence: string | null = null;
   for (const rawLine of text.split('\n')) {
     const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine;
-    const match = FENCE.exec(line.trimStart());
-    if (fence === null) {
-      if (match && !isInlineCode(match)) {
-        fence = match[1];
-        continue;
-      }
+    const fenceBefore: string | null = fence;
+    fence = fenceAfterLine(line, fence, FENCE);
+    if (fenceBefore === null && fence === null) {
       outside.push(line);
-    } else if (match && closesFence(match, fence)) {
-      fence = null;
     }
   }
   return outside;
-}
-
-// A backtick fence's info string holds no backtick, so a run followed by one
-// is a code span.
-function isInlineCode(match: RegExpExecArray): boolean {
-  return match[1][0] === '`' && match[2].includes('`');
-}
-
-function closesFence(match: RegExpExecArray, fence: string): boolean {
-  const run = match[1];
-  const isSameCharacter = run[0] === fence[0];
-  const isLongEnough = run.length >= fence.length;
-  const hasNothingAfter = match[2].trim() === '';
-  return isSameCharacter && isLongEnough && hasNothingAfter;
 }
 
 function headingLevel(line: string): number | null {

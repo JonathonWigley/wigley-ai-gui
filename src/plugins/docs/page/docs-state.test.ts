@@ -670,6 +670,12 @@ describe('expandNewStarred', () => {
     expect([...expanded]).toEqual(['owner:mine']);
   });
 
+  it('expandNewStarred_BackAfterAnEmptyTree_Unchanged', () => {
+    const before = new Set(['owner:mine']);
+
+    expect(expandNewStarred([], [starred, mine], before)).toBe(before);
+  });
+
   it('expandNewStarred_NoStarred_Unchanged', () => {
     const before = new Set(['owner:mine']);
 
@@ -687,36 +693,40 @@ describe('expandNewGroups', () => {
 
   it.each<{
     name: string;
-    previous: TreeNode[];
+    seen: string[];
     next: TreeNode[];
     expected: string[];
   }>([
     {
       name: 'NewGroup_ExpandedAndCollapsedStays',
-      previous: [kept, collapsed],
+      seen: ['shelf:Kept', 'shelf:Shut'],
       next: [kept, collapsed, added],
       expected: ['shelf:Kept', 'shelf:New'],
     },
     {
       name: 'NestedNewGroup_BothExpanded',
-      previous: [kept],
+      seen: ['shelf:Kept'],
       next: [kept, nestedAdded],
       expected: ['shelf:Inner', 'shelf:Kept', 'shelf:Outer'],
     },
     {
       name: 'GroupGone_KeepsTheIds',
-      previous: [kept, collapsed],
+      seen: ['shelf:Kept', 'shelf:Shut'],
       next: [collapsed],
       expected: ['shelf:Kept'],
     },
     {
       name: 'NewLeaf_AddsNothing',
-      previous: [kept],
+      seen: ['shelf:Kept'],
       next: [kept, leaf('page', 'Page', 'e:page')],
       expected: ['shelf:Kept'],
     },
-  ])('expandNewGroups_$name', ({ previous, next, expected }) => {
-    const expanded = expandNewGroups(previous, next, new Set(['shelf:Kept']));
+  ])('expandNewGroups_$name', ({ seen, next, expected }) => {
+    const expanded = expandNewGroups(
+      new Set(seen),
+      next,
+      new Set(['shelf:Kept']),
+    );
 
     expect([...expanded].sort()).toEqual(expected);
   });
@@ -1511,8 +1521,23 @@ describe('treeLine', () => {
       },
       expected: {
         placement: 'empty',
-        hint: { command: 'rescan', words: 'to rescan' },
-        mentions: '',
+        hint: { command: 'filter', words: 'to change it' },
+        mentions: 'neat',
+      },
+    },
+    {
+      lineState: {
+        hasTree: true,
+        isIndexEmpty: true,
+        filter: 'neat',
+        rowCount: 0,
+        isFilterOpen: false,
+        isWikiView: true,
+      },
+      expected: {
+        placement: 'empty',
+        hint: { command: 'filter', words: 'to change it' },
+        mentions: 'neat',
       },
     },
     {

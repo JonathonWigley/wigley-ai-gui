@@ -238,8 +238,10 @@ export function readStartFailure(window: DrivenWindow): Promise<string | null> {
   return window.run(`document.body.dataset.startFailed ?? null`);
 }
 
-// The core shell's elements that clip their own text with an ellipsis.
-const CORE_SCROLLS_ITSELF = ['.title-bar-context'];
+// The core shell's elements the fit check leaves alone in every script: one that
+// clips its own text with an ellipsis, and the side bar's handle, which holds its
+// resize prompt past its box.
+const CORE_SCROLLS_ITSELF = ['.title-bar-context', '.shell-side-bar-handle'];
 
 // The design primitives' parts that clip their text with an ellipsis or scroll
 // their content on purpose, which the fit check lets clip in every script.

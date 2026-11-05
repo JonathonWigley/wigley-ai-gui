@@ -28,6 +28,20 @@ export function loadedAt(iso: string): string {
   });
 }
 
+// A row's time for a doc last loaded at `lastLoaded`: short, with the full date
+// and time as its `title`; null when it was never loaded.
+export function loadedMark(
+  lastLoaded: string | null,
+  now: number,
+): { text: string; title: string } | null {
+  return lastLoaded === null
+    ? null
+    : {
+        text: loadedAgo(lastLoaded, now),
+        title: `Last loaded ${loadedAt(lastLoaded)}`,
+      };
+}
+
 // The doc view's sentence: `Loaded just now`, `Loaded 3h ago`, `Loaded Mar 3`.
 export function loadedLine(iso: string, now: number): string {
   const age = loadedAge(iso, now);

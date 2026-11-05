@@ -23,6 +23,7 @@ import {
   edgeSelection,
   expandNewGroups,
   expandNewStarred,
+  groupIds,
   parentId,
   stepSelection,
   type TreeLine,
@@ -151,8 +152,11 @@ export interface TreeView {
   // selected.
   selectedIn(view: SidebarView): TreeNode | null;
   // In each view on its own, selects the entry's leaf, expanding the groups
-  // above it; nothing in a view whose rows hold no such leaf.
+  // above it; nothing in a view whose tree, the filter's while a filter is on,
+  // holds no such leaf.
   selectEntry(entryId: string): void;
+  // `selectEntry` in `view` alone.
+  selectEntryIn(view: SidebarView, entryId: string): void;
   focus(): void;
   isFilterOpen(): boolean;
   openFilter(): void;
@@ -218,6 +222,8 @@ interface ViewSlot {
   state: TreeState;
   hasRows: boolean;
   hasTree: boolean;
+  // Every group id a tree of this view has held.
+  seenGroups: ReadonlySet<string>;
 }
 
 function emptySlot(): ViewSlot {
@@ -227,6 +233,7 @@ function emptySlot(): ViewSlot {
     state: { expanded: new Set(), selectedId: null, filter: '' },
     hasRows: false,
     hasTree: false,
+    seenGroups: new Set(),
   };
 }
 
@@ -237,7 +244,7 @@ function rowTree(slot: ViewSlot): TreeNode[] {
 }
 
 // Selects the leaf `leafId` in `slot`, expanding the groups above it; nothing
-// when its rows hold no such leaf.
+// when the tree its rows read holds no such leaf.
 function selectLeafIn(slot: ViewSlot, leafId: string): void {
   const tree = rowTree(slot);
   const expanded = new Set(slot.state.expanded);
@@ -504,6 +511,8 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
       slot.state = { ...slot.state, selectedId: action.id };
       draw();
       deps.log(`selected ${selectedRow()?.node.title}`);
+    } else {
+      draw();
     }
   };
 
@@ -577,7 +586,6 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
     },
     setWikiTree(next, filterTree, hasIndex) {
       const slot = slots.wiki;
-      const previous = slot.tree;
       slot.tree = next;
       slot.filterTree = filterTree;
       slot.hasTree = hasIndex;
@@ -585,9 +593,14 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
       if (isFirstTree) {
         openFirstTree(slot);
       } else {
-        const expanded = expandNewGroups(previous, next, slot.state.expanded);
+        const expanded = expandNewGroups(
+          slot.seenGroups,
+          next,
+          slot.state.expanded,
+        );
         slot.state = { ...slot.state, expanded };
       }
+      slot.seenGroups = new Set([...slot.seenGroups, ...groupIds(next)]);
       if (shownView === 'wiki') {
         draw();
       }
@@ -620,6 +633,10 @@ export function createTreeView(deps: TreeViewDeps): TreeView {
       const leafId = `entry:${entryId}`;
       selectLeafIn(slots.all, leafId);
       selectLeafIn(slots.wiki, leafId);
+      draw();
+    },
+    selectEntryIn(shown, entryId) {
+      selectLeafIn(slots[shown], `entry:${entryId}`);
       draw();
     },
     focus() {

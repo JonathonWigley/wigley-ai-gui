@@ -13,9 +13,9 @@ export interface WikiMainSourceDeps {
   changed(): void;
 }
 
-// The wiki's `Main.md` as shelves, read and watched through the channel. A
-// failed read, or no path from main, is no `Main.md`. A watch or path that
-// failed is tried again at each `reread`.
+// The wiki's `Main.md` as shelves, read and watched through the channel. An
+// absent file, a failed read or no path from main is no `Main.md`. A watch or
+// path that failed is tried again at each `reread`.
 export interface WikiMainSource {
   // Finds the path, watches it, then reads it. Resolves once the first read
   // settles and never rejects; a second call returns the same promise.
@@ -35,6 +35,8 @@ export interface WikiMainSource {
   dispose(): void;
 }
 
+const ABSENT_REASON = 'the file is absent';
+
 export function createWikiMainSource(deps: WikiMainSourceDeps): WikiMainSource {
   const { channel, log } = deps;
   const watchId = `${deps.viewId}:main`;
@@ -50,13 +52,13 @@ export function createWikiMainSource(deps: WikiMainSourceDeps): WikiMainSource {
   let startedReads = 0;
   let shownRead = 0;
 
-  const settleAbsent = (error: unknown) => {
+  const settleAbsent = (reason: string) => {
     if (isDisposed || lastText === null) {
       return;
     }
     lastText = null;
     shelves = [];
-    log(`no Main.md: ${errorText(error)}`);
+    log(`no Main.md: ${reason}`);
     deps.changed();
   };
 
@@ -74,7 +76,7 @@ export function createWikiMainSource(deps: WikiMainSourceDeps): WikiMainSource {
     try {
       mainPath = await channel.invoke('wikiMainPath');
     } catch (error) {
-      settleAbsent(error);
+      settleAbsent(errorText(error));
     }
   };
 
@@ -107,9 +109,10 @@ export function createWikiMainSource(deps: WikiMainSourceDeps): WikiMainSource {
 
   const read = async (path: string) => {
     const number = ++startedReads;
-    const settle = await channel.invoke('readDoc', path).then(
-      (text) => () => settleText(text),
-      (error: unknown) => () => settleAbsent(error),
+    const settle = await channel.invoke('readDocIfPresent', path).then(
+      (text) => () =>
+        text === null ? settleAbsent(ABSENT_REASON) : settleText(text),
+      (error: unknown) => () => settleAbsent(errorText(error)),
     );
     if (number >= shownRead) {
       shownRead = number;
