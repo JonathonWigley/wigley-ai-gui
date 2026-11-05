@@ -121,7 +121,7 @@ so that the compiler finds every place that builds a user entry.
 > task document in the same change. The run is done when every box is ticked.
 
 ### Wave 1
-- [ ] [Delivery state in the fold](01-delivery-in-fold.md)
+- [x] [Delivery state in the fold](01-delivery-in-fold.md)
 
 ### Wave 2
 - [ ] [Draw the delivery state](02-draw-delivery.md) — after 01
@@ -131,10 +131,13 @@ so that the compiler finds every place that builds a user entry.
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 37c3020e57be67f8aa41edfbb3e771c5eacebfee
 
 ### Groups
+- 01 · d5951325 · diff read: every Produces item present; tsc clean · concerns: started before init with an unadvertised lifecycle would leave sent outside fallback; a reply with no message_start ends notReceived; saved records hold no delivery at runtime
 ### Contract changes
 ### Rulings
+- Three test files outside the task's list took delivery: null or a new close assertion, since literal toEqual fixtures turned red — the compiler does not name them — a wider diff · group 01 · group 01
+- attach_ClosedDuringAttach now expects a notReceived entry before sessionEnded, since its log has started and no requesting line — follows the rule as written — the test pins that state · group 01 · group 01
 ### Review rounds
 ### Test gate

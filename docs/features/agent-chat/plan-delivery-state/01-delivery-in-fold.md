@@ -1,6 +1,6 @@
 # 01 — Delivery state in the fold
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -51,3 +51,4 @@ Commit:    one commit for the group. Stage by pathspec: peers hold other uncommi
 
 ## Proof
 
+Commit d5951325 · proof: diff read: every Produces item present; tsc clean · concerns: started before init with an unadvertised lifecycle would leave sent outside fallback; a reply with no message_start ends notReceived; saved records hold no delivery at runtime
