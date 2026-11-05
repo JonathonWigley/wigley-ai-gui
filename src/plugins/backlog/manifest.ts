@@ -7,6 +7,7 @@ import { definePlugin } from '../../shared/define-plugin';
 export const backlogManifest = definePlugin({
   id: 'backlog',
   dependsOn: { main: ['docs'], page: ['docs', 'keys'] },
+  reads: { main: [], page: [] },
   commands: {
     showMode: {
       label: 'backlog (again: toggle the side bar)',

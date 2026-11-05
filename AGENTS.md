@@ -347,8 +347,8 @@ round; primer: an open primer), since main, not the page, decides.
   events it hears there. A plugin reads a dependency with `api.dependency(key)`, where the key is the typed
   `DependencyKey` the provider's `contract.ts` exports for that process (`sessionsMainKey`, `keysPageKey`). The
   compiler rejects a key for the other process or for a plugin missing from that process's list. A plugin imports
-  only `src/contracts`, `src/shared`, its own folder, and the `contract.ts` of a plugin its manifest depends on,
-  which types that plugin's exports, keys and events.
+  only `src/contracts`, `src/shared`, its own folder, and the `contract.ts` of a plugin its manifest depends on or
+  reads, which types that plugin's exports, keys and events.
 - **A slot** (landing with `docs/features/plugin-framework/plan-commands-and-state/`; until its doc re-read drops this tag, this entry describes the plan, not the tree) is a value a late reader wants, typed by a `SlotKey` in the owner's `contract.ts`: one value, keyed
   values, or keyed lists whose items are added or replaced by id. `api.state.publish(key)` gives the owner the only
   writer, and `api.state.read(key)` gives any plugin `get` and a disposable `on`; a layout reads through
@@ -735,8 +735,8 @@ round; primer: an open primer), since main, not the page, decides.
     `page/forms-events.ts`), each logged as `[forms] event <name> …`.
 - `npm run lint` runs `scripts/check-layers.mts`, which fails on an import crossing a boundary its rules do not
   allow. A plugin's rules are derived in `scripts/layer-rules.mts` from the folder convention and its manifest's
-  per-process `dependsOn`: its `main/` may import the `contract.ts` of each plugin in `dependsOn.main`, and its
-  `page/` those in `dependsOn.page`. Each plugin's `contract.ts` is a layer of its own, with `src/contracts` and the
+  per-process `dependsOn` and `reads`: its `main/` may import the `contract.ts` of each plugin in `dependsOn.main` or
+  `reads.main`, and its `page/` those in `dependsOn.page` or `reads.page`. Each plugin's `contract.ts` is a layer of its own, with `src/contracts` and the
   contracts of the plugin's dependencies. `src/shared/paths` and `src/shared/followups` are allowed in every
   plugin root, `main/` and `page/`, and the four page kits (`src/shared/page` and its `ui`, `layout-host` and `file-drop`
   folders) in every `page/`. A plugin needing more, such as a `node:` package or an extra sublayer, gets an entry in the

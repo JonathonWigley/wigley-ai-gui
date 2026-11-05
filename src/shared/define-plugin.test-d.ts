@@ -14,6 +14,7 @@ import { definePlugin } from './define-plugin';
 const manifest = definePlugin({
   id: 'p',
   dependsOn: { main: [], page: [] },
+  reads: { main: [], page: [] },
   commands: {
     go: { label: 'Go', group: 'Moves', runsIn: 'page' },
     quit: { label: 'Quit', group: 'App', runsIn: 'main' },
@@ -103,11 +104,25 @@ describe('definePlugin', () => {
     >({ 'window.width': info, 'fonts.ui': info, list: info });
   });
 
+  it('requires reads, as dependsOn', () => {
+    // @ts-expect-error -- `reads` is missing
+    definePlugin({
+      id: 'r',
+      dependsOn: { main: [], page: [] },
+      commands: {},
+      scopes: {},
+      settings: {},
+      settingInfo: {},
+      themeTokens: {},
+    });
+  });
+
   it('types dependency keys so a wrong process or an undeclared id fails to compile', () => {
     const q = definePlugin({
       ...manifest,
       id: 'q',
       dependsOn: { main: [], page: ['a'] },
+      reads: { main: [], page: [] },
     });
     const pageApi = {} as PageApi<typeof q, ChannelShape>;
     const mainApi = {} as MainApi<typeof q, ChannelShape>;

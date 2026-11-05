@@ -59,6 +59,7 @@ import { startedPluginsConfig } from './started-config';
 import { createThemeApplier } from './theme';
 import { createToasts } from './toasts';
 import { overrideTransparency } from './transparency-override';
+import { createPageState } from './state/page-state';
 import { createPageUiState } from './ui-state';
 import { createVisualFrames } from './visual-frames/visual-frames';
 
@@ -109,6 +110,7 @@ async function start() {
   const uiState = createPageUiState(await bridge.uiState(), (key, value) =>
     bridge.setUiState(key, value),
   );
+  const state = await createPageState(bridge, log);
   const live = createLiveConfig(config, log);
   const { settings, keymap } = config;
   const visualFrames = createVisualFrames({
@@ -291,6 +293,7 @@ async function start() {
           layouts,
           paneTargets,
           drops,
+          state,
         }),
       );
       const handlers: Record<string, (context: PageCommandContext) => void> =

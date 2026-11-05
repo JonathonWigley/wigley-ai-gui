@@ -10,6 +10,7 @@ export const agentStripManifest = definePlugin({
     main: ['chat', 'sessions'],
     page: ['agents', 'chat', 'sessions', 'keys'],
   },
+  reads: { main: [], page: [] },
   commands: {
     prevBox: { label: 'previous box', group: 'agent strip', runsIn: 'page' },
     nextBox: { label: 'next box', group: 'agent strip', runsIn: 'page' },

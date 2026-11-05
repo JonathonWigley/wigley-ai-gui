@@ -6,6 +6,7 @@ import { definePlugin } from '../../shared/define-plugin';
 export const autoCompactManifest = definePlugin({
   id: 'auto-compact',
   dependsOn: { main: ['chat'], page: [] },
+  reads: { main: [], page: [] },
   commands: {},
   scopes: {},
   settings: { minTokens: 150000 },

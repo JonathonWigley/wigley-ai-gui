@@ -30,7 +30,8 @@ type NullKindsDeclared<T> = [NullDefaultSettings<T>] extends [never]
 // setting defaulting to null whose kind `optionalSettings` leaves out, and a
 // `settingInfo` missing a leaf setting's path or naming a path that is no
 // leaf; a dependency key for a plugin missing from that process's list fails to
-// compile. Throws when the id holds anything but lowercase letters, digits and `-`.
+// compile, and so does a slot key read from a plugin in neither its `dependsOn`
+// nor its `reads` there. Throws when the id holds anything but lowercase letters, digits and `-`.
 export function definePlugin<
   const Id extends string,
   const Cmds extends Record<string, CommandDecl>,
@@ -38,10 +39,13 @@ export function definePlugin<
   T extends object,
   const DM extends string = never,
   const DP extends string = never,
+  const RM extends string = never,
+  const RP extends string = never,
 >(
   manifest: {
     id: Id;
     dependsOn: { main: readonly DM[]; page: readonly DP[] };
+    reads: { main: readonly RM[]; page: readonly RP[] };
     commands: Cmds;
     scopes: Readonly<Record<S, string>>;
     keys?: PluginKeys<

@@ -27,6 +27,19 @@ import type { Paths } from './paths';
 import type { Platform } from './platform';
 import type { ProcessRunner } from './processes';
 import type { SessionHost } from './session-host';
+import type {
+  JsonSlot,
+  KeyedSlotKey,
+  KeyedSlotReader,
+  KeyedSlotWriter,
+  LayoutState,
+  ListSlotKey,
+  ListSlotReader,
+  ListSlotWriter,
+  SlotKey,
+  SlotReader,
+  SlotWriter,
+} from './state';
 import type { TokenDecl } from './theme';
 import type { UiState } from './ui-state';
 import type { UserConfig } from './user-config';
@@ -126,7 +139,10 @@ export type SettingInfos<T> = [SettingPath<T>] extends [never]
 // declares the plugin's own theme tokens by their unqualified names
 // (`origin-caused`), each with its kind and default; each `dependsOn` list names
 // the plugins whose exports that process reads or whose events it hears there;
-// they start before this plugin's part in that process.
+// they start before this plugin's part in that process; each `reads` list names
+// the plugins whose slots that process reads or whose events it hears with no
+// start order, so a disabled or unlisted plugin there is no problem and reads
+// `undefined`.
 export interface PluginManifest<
   C extends string = string,
   S extends string = string,
@@ -139,6 +155,7 @@ export interface PluginManifest<
     readonly main: readonly string[];
     readonly page: readonly string[];
   };
+  reads: { readonly main: readonly string[]; readonly page: readonly string[] };
   commands: Record<C, CommandDecl>;
   scopes: Readonly<Record<S, string>>;
   keys?: PluginKeys<C, C, S>;
@@ -146,6 +163,38 @@ export interface PluginManifest<
   optionalSettings?: Readonly<Record<string, SettingKind>>;
   settingInfo: Readonly<Record<string, SettingInfo>>;
   themeTokens: Readonly<Record<string, TokenDecl>>;
+}
+
+// The plugins whose slots `M`'s part in process `P` may read: itself, its
+// `dependsOn` and `reads` there, and the core, which every part reads.
+export type ReadableOwner<M extends PluginManifest, P extends ProcessName> =
+  | M['id']
+  | M['dependsOn'][P][number]
+  | M['reads'][P][number]
+  | 'core';
+
+// One part's slots. `publish` takes a key of this plugin and process whose value is
+// JSON and returns its writer; it throws `Slot "<id>" is held by a live part` while
+// another writer holds the key, and at a key another plugin or process owns. The
+// writer and every reader `on` are filed in the part's registrations. A slot's value
+// outlives its owner's stop: the next start publishes the key again and reads the
+// last value through `writer.get()`. Owners read through the writer and keep no
+// second copy. A slot no owner has written reads `undefined`, or `[]` for a list.
+export interface PluginState<M extends PluginManifest, P extends ProcessName> {
+  publish<V>(key: SlotKey<V, P, M['id']> & JsonSlot<V>): SlotWriter<V>;
+  publish<V>(
+    key: KeyedSlotKey<V, P, M['id']> & JsonSlot<V>,
+  ): KeyedSlotWriter<V>;
+  publish<V extends { readonly id: string }>(
+    key: ListSlotKey<V, P, M['id']> & JsonSlot<V>,
+  ): ListSlotWriter<V>;
+  read<V>(key: SlotKey<V, ProcessName, ReadableOwner<M, P>>): SlotReader<V>;
+  read<V>(
+    key: KeyedSlotKey<V, ProcessName, ReadableOwner<M, P>>,
+  ): KeyedSlotReader<V>;
+  read<V extends { readonly id: string }>(
+    key: ListSlotKey<V, ProcessName, ReadableOwner<M, P>>,
+  ): ListSlotReader<V>;
 }
 
 // The short ids of the commands in `Cmds` that run in process `P`.
@@ -516,7 +565,8 @@ export interface PageTransparency {
 // fresh. `layouts.show` shows the plugin's own layouts, loading each set main
 // announces for the plugin and handing `options.setLayouts` the result, and
 // refreshes the show on each change of the plugin's settings until the
-// show's `dispose`.
+// show's `dispose`. `state` is as `PluginState` says, and `state.forLayouts` reads
+// any slot by its id, for a layout's kit.
 export interface PageApi<
   M extends PluginManifest,
   Ch extends ChannelShape,
@@ -559,6 +609,7 @@ export interface PageApi<
   ): E;
   dataUrl(path: string, revision: number): string;
   layouts: { show<L>(options: ShowLayoutOptions<L>): LayoutShow };
+  state: PluginState<M, 'page'> & { forLayouts: LayoutState };
 }
 
 export interface PageStart<M extends PluginManifest> {
@@ -755,7 +806,8 @@ export interface MainServices {
 // `src/plugins/<id>/layouts/default` in the repo clone, until the returned
 // `Disposable`'s `dispose`; it throws for a second registration.
 // `layouts.names` lists the plugin's layouts, `default` first; only `default`
-// before the folder has been listed or while unregistered.
+// before the folder has been listed or while unregistered. `state` is as
+// `PluginState` says.
 export interface MainApi<
   M extends PluginManifest,
   Ch extends ChannelShape,
@@ -776,6 +828,7 @@ export interface MainApi<
     register(options: { layoutTypes: string }): Disposable;
     names(): string[];
   };
+  state: PluginState<M, 'main'>;
 }
 
 export interface MainStart<M extends PluginManifest> {

@@ -1,7 +1,7 @@
 // Fails when a source file (`.ts` or `.js`) imports across a layer boundary its
 // rules do not allow. The rules are CORE_LAYERS, written here, and each plugin's
 // entries, derived in `layer-rules.mts` from the plugin folders and each
-// manifest's `dependsOn`, with PLUGIN_EXTRAS added. A file belongs to the layer
+// manifest's `dependsOn` and `reads`, with PLUGIN_EXTRAS added. A file belongs to the layer
 // with the longest matching path; imports inside a file's own layer are always
 // allowed, and a test file (`.test.ts`, a `.test-d.ts` type test or a
 // `.test-support.ts` module of shared test cases) may also import the test
@@ -16,6 +16,7 @@ import {
   compositionFailures,
   pluginLayers,
   readDependsOn,
+  readReads,
   type LayerRule,
   type PluginExtra,
   type PluginFolder,
@@ -539,13 +540,15 @@ function readPluginFolder(id: string): PluginFolder | undefined {
     return undefined;
   }
   try {
+    const source = readFileSync(manifest, 'utf8');
     return {
       id,
       hasContract: existsSync(`${root}/contract.ts`),
       hasMain: existsSync(`${root}/main/start.ts`),
       hasPage: existsSync(`${root}/page/start.ts`),
       hasLayouts: existsSync(`${root}/layouts`),
-      dependsOn: readDependsOn(manifest, readFileSync(manifest, 'utf8')),
+      dependsOn: readDependsOn(manifest, source),
+      reads: readReads(manifest, source),
     };
   } catch (error) {
     printFailure(thrownText(error));

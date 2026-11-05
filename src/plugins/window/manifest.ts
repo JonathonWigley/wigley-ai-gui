@@ -5,6 +5,7 @@ import { definePlugin } from '../../shared/define-plugin';
 export const windowManifest = definePlugin({
   id: 'window',
   dependsOn: { main: [], page: [] },
+  reads: { main: [], page: [] },
   commands: {
     summon: { label: 'show the app', group: 'window', runsIn: 'main' },
   },

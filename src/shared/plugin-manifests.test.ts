@@ -26,6 +26,7 @@ function manifest(
   return {
     id,
     dependsOn: { main: [], page: [] },
+    reads: { main: [], page: [] },
     commands: {},
     scopes: {},
     settings: {},
@@ -143,6 +144,7 @@ describe('mergeKeymap', () => {
     const binding = (id: string, main: string[]) =>
       manifest(id, {
         dependsOn: { main, page: [] },
+        reads: { main: [], page: [] },
         commands: { go: { label: 'Go', group: 'Moves', runsIn: 'page' } },
         keys: { binds: [{ keys: 'x', scope: 'any', command: 'go' }] },
       });
@@ -648,6 +650,15 @@ describe('dependencyOrder', () => {
 
     expect(ordered.map((each) => each.id)).toEqual(['b', 'c', 'a']);
   });
+
+  it('takes no order and no cycle from a mutual reads', () => {
+    const ordered = dependencyOrder([
+      manifest('a', { reads: { main: ['b'], page: [] } }),
+      manifest('b', { reads: { main: ['a'], page: [] } }),
+    ]);
+
+    expect(ordered.map((each) => each.id)).toEqual(['a', 'b']);
+  });
 });
 
 describe('disabledDependencyProblem', () => {
@@ -672,6 +683,15 @@ describe('disabledDependencyProblem', () => {
     { disabled: ['zzz'], expected: null },
   ])('disabled $disabled → $expected', ({ disabled, expected }) => {
     expect(disabledDependencyProblem(disabled, chain)).toBe(expected);
+  });
+
+  it('is no problem for a disabled plugin named only in reads', () => {
+    const readers = [
+      manifest('a', { reads: { main: [], page: ['b'] } }),
+      manifest('b'),
+    ];
+
+    expect(disabledDependencyProblem(['b'], readers)).toBe(null);
   });
 });
 

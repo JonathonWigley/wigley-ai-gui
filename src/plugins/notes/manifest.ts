@@ -9,6 +9,7 @@ export const notesManifest = definePlugin({
     main: ['sessions', 'chat', 'backlog'],
     page: ['sessions', 'keys'],
   },
+  reads: { main: [], page: [] },
   commands: {
     open: {
       label: 'open or close the note popup',

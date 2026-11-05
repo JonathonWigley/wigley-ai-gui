@@ -2,6 +2,7 @@ import type { Disposable } from './disposable';
 import type { LayoutOwner, LayoutSet } from './layouts';
 import type { Log } from './log';
 import type { AppConfig } from './settings';
+import type { SlotChange, StateSnapshot } from './state';
 
 export const BRIDGE_CHANNELS = {
   config: 'bridge:config',
@@ -13,6 +14,9 @@ export const BRIDGE_CHANNELS = {
   pluginMessage: 'plugin:message',
   savePasted: 'bridge:save-pasted',
   serveVisual: 'bridge:serve-visual',
+  stateChanged: 'bridge:state-changed',
+  stateSnapshot: 'bridge:state-snapshot',
+  stateWrite: 'bridge:state-write',
   uiStateRead: 'bridge:ui-state-read',
   uiStateWrite: 'bridge:ui-state-write',
 } as const;
@@ -39,6 +43,16 @@ export interface Bridge {
   // Saves one qualified ui-state key; `undefined` deletes it. Throws at the
   // caller for a value IPC cannot clone.
   setUiState(key: string, value: unknown): void;
+  // Every slot main holds and the `seq` of the last change it applied.
+  stateSnapshot(): Promise<StateSnapshot>;
+  // Sends one page writer's change to main. Throws at the caller for a value IPC
+  // cannot clone.
+  stateWrite(change: SlotChange): void;
+  // Calls `listener` with each main writer's change and its `seq`, until the
+  // returned handle's `dispose`.
+  onStateChange(
+    listener: (seq: number, change: SlotChange) => void,
+  ): Disposable;
   // Calls `method` on the main part of plugin `pluginId`; rejects with main's
   // own error text when the handler throws.
   invoke(pluginId: string, method: string, args: unknown[]): Promise<unknown>;

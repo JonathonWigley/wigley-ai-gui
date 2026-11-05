@@ -7,6 +7,7 @@ import { definePlugin } from '../../shared/define-plugin';
 export const docsManifest = definePlugin({
   id: 'docs',
   dependsOn: { main: ['sessions'], page: ['sessions', 'keys'] },
+  reads: { main: [], page: [] },
   commands: {
     showMode: {
       label: 'docs (again: toggle the tree)',

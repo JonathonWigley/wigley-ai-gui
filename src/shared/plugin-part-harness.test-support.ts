@@ -32,6 +32,7 @@ import type {
   PageServices,
   PageStart,
   PluginManifest,
+  PluginState,
   ProcessName,
   PushedScope,
   ShownLayouts,
@@ -62,6 +63,12 @@ import {
   trackedUserConfig,
 } from './plugin-service-views';
 import { scopedFiles } from './scoped-files';
+import {
+  createSlotStore,
+  layoutState,
+  pluginState,
+  type SlotStore,
+} from './state/slot-store';
 import { trackedTimers } from './tracked-timers';
 
 // A provider the part under test depends on, faked: `exports` gets a consumer
@@ -103,7 +110,12 @@ export const noCounts: Readonly<PartCounts> = {
 // a leaky `dispose` left stays counted. `advance` runs the due timers in due
 // order, the clock reading each one's due time, and ends `ms` later. `emitted`
 // holds what any started part emitted, in order, under its qualified name; it
-// outlives the stop, so a test reads there what a late read emitted.
+// outlives the stop, so a test reads there what a late read emitted. `state` is
+// the store every part of the harness shares, across stops and restarts. A test
+// writes a slot through `state.publish(key).set(value)`: that claim is held until
+// the writer's `dispose` and `counts` does not hold it, so a test publishes each
+// key once and disposes the writer of a key the part under test publishes before
+// that part starts.
 export interface PartHarness<Started> {
   started(): Started;
   counts(): PartCounts;
@@ -111,6 +123,7 @@ export interface PartHarness<Started> {
   emit(qualifiedEvent: string, data: unknown): void;
   readonly logs: readonly { source: string; message: string }[];
   readonly emitted: readonly HarnessEvent[];
+  readonly state: SlotStore;
   stop(): Promise<void>;
   restart(): Promise<void>;
 }
@@ -145,19 +158,21 @@ export interface PagePartHarness<M extends PluginManifest> extends PartHarness<
 // nothing. A replaced `files`, `processes`, `alerts` or `userConfig` still runs
 // through its per-plugin view, as `createMainApi` does. `parts` holds real
 // providers, started before the part in listed order and stopped after it.
+// `state` replaces the harness's own slot store, to seed a slot before the start.
 export interface MainPartHarnessOptions<M extends PluginManifest> {
   dependencies?: readonly FakeDependency<'main'>[];
   settings?: M['settings'];
   services?: Partial<Omit<MainServices, 'timers' | 'log'>>;
   drive?: boolean;
   parts?: readonly MainPart[];
+  state?: SlotStore;
 }
 
 // `invoke` answers the `channel.invoke` of the part under test, which otherwise
 // never settles. A replaced `editor` or `markdown` still runs through its
 // per-plugin view, as `createPageApi` does. `firstModeTaken` holds the first mode
 // the app's own first part would add, so no mode the part adds shows as it is
-// added. `parts` is as on main.
+// added. `parts` and `state` are as on main.
 export interface PagePartHarnessOptions<M extends PluginManifest> {
   dependencies?: readonly FakeDependency<'page'>[];
   settings?: M['settings'];
@@ -165,6 +180,7 @@ export interface PagePartHarnessOptions<M extends PluginManifest> {
   invoke?(method: string, ...args: unknown[]): Promise<unknown>;
   firstModeTaken?: boolean;
   parts?: readonly PagePart[];
+  state?: SlotStore;
 }
 
 export interface HarnessEvent {
@@ -183,6 +199,7 @@ interface HarnessWorld {
   bus: EventBus;
   logs: HarnessLogLine[];
   emitted: HarnessEvent[];
+  state: SlotStore;
 }
 
 interface Scheduler {
@@ -228,6 +245,7 @@ interface CommonApi {
   log: MainServices['log'];
   timers: Timers;
   clock: { now(): number };
+  state: PluginState<PluginManifest, ProcessName>;
 }
 
 function zeroCounts(): PartCounts {
@@ -309,12 +327,18 @@ function countingTimers(scheduler: Scheduler, counts: PartCounts): Timers {
   };
 }
 
-function createWorld(): HarnessWorld {
+function createWorld(state: SlotStore | undefined): HarnessWorld {
+  const logs: HarnessLogLine[] = [];
   return {
     scheduler: createScheduler(),
     bus: createEventBus(),
-    logs: [],
+    logs,
     emitted: [],
+    state:
+      state ??
+      createSlotStore((source, message) => {
+        logs.push({ source, message });
+      }),
   };
 }
 
@@ -324,6 +348,7 @@ function commonApi(
   world: HarnessWorld,
   counts: PartCounts,
   settings: object,
+  process: ProcessName,
 ): CommonApi {
   const register = <T extends Disposable>(handle: T): T =>
     context.registrations.track(countedHandle(handle, counts));
@@ -360,6 +385,7 @@ function commonApi(
       context.registrations,
     ),
     clock: { now: world.scheduler.now },
+    state: pluginState(world.state, manifest.id, process, register),
   };
 }
 
@@ -413,6 +439,7 @@ function providerManifest(id: string): PluginManifest {
   return {
     id,
     dependsOn: { main: [], page: [] },
+    reads: { main: [], page: [] },
     commands: {},
     scopes: {},
     settings: {},
@@ -526,6 +553,7 @@ function baseHarness<Started>(
     emit: world.bus.emit,
     logs: world.logs,
     emitted: world.emitted,
+    state: world.state,
     stop: lifecycle.stop,
     restart: lifecycle.restart,
   };
@@ -584,8 +612,9 @@ function countingWatches(files: Files, counts: PartCounts): Files {
 function createMainWorld(
   drive: boolean,
   replaced: MainWorld['replaced'],
+  state: SlotStore | undefined,
 ): MainWorld {
-  const world = createWorld();
+  const world = createWorld(state);
   let hexes = 0;
   let uuids = 0;
   return {
@@ -638,7 +667,14 @@ function fakeMainApi(
   record: MainRecord,
   settings: object,
 ): MainApi<PluginManifest, any, any, any> {
-  const common = commonApi(manifest, context, world, record.counts, settings);
+  const common = commonApi(
+    manifest,
+    context,
+    world,
+    record.counts,
+    settings,
+    'main',
+  );
   const { register } = common;
   const { handlers, sent, counts } = record;
   const { replaced } = world;
@@ -680,6 +716,7 @@ function fakeMainApi(
       register: () => fakeLayoutsRegister(manifest, record, register),
       names: () => ['default'],
     },
+    state: common.state,
     services: {
       clock: common.clock,
       randomHex: world.randomHex,
@@ -735,7 +772,11 @@ export function startMainPart<M extends PluginManifest>(
   const realParts = options.parts ?? [];
   requireFakesListed(part.manifest, 'main', dependencies);
   requireNoFakeIsReal(dependencies, realParts);
-  const world = createMainWorld(options.drive === true, options.services ?? {});
+  const world = createMainWorld(
+    options.drive === true,
+    options.services ?? {},
+    options.state,
+  );
   const record = newMainRecord();
   const beginOn = (
     each: { manifest: PluginManifest; start(api: never): HostedStart },
@@ -819,9 +860,10 @@ interface PageWorld extends HarnessWorld {
 function createPageWorld(
   replaced: PageWorld['replaced'],
   firstModeTaken: boolean,
+  state: SlotStore | undefined,
 ): PageWorld {
   return {
-    ...createWorld(),
+    ...createWorld(state),
     replaced,
     keymapListeners: createListeners(),
     keymap: {
@@ -978,7 +1020,14 @@ function fakePageApi(
   record: PageRecord,
   settings: object,
 ): PageApi<PluginManifest, any, any, any> {
-  const common = commonApi(manifest, context, world, record.counts, settings);
+  const common = commonApi(
+    manifest,
+    context,
+    world,
+    record.counts,
+    settings,
+    'page',
+  );
   const { register, liveHandle } = common;
   const { replaced } = world;
   const area = {
@@ -1051,6 +1100,10 @@ function fakePageApi(
     layouts: {
       show: (options) =>
         fakeLayoutShow(record.shows, options.setLayouts, register),
+    },
+    state: {
+      ...common.state,
+      forLayouts: layoutState(world.state, manifest.id, register),
     },
     services: {
       fuzzy: notFaked<FuzzyMatcher>('fuzzy'),
@@ -1236,6 +1289,7 @@ export function startPagePart<M extends PluginManifest>(
   const world = createPageWorld(
     options.services ?? {},
     options.firstModeTaken === true,
+    options.state,
   );
   const record = newPageRecord(zeroCounts(), options.invoke);
   const fireWindowListeners = stubPageGlobals(record.counts);

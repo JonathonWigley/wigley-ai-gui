@@ -2,7 +2,9 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import { type Bridge, BRIDGE_CHANNELS } from '../contracts/bridge';
 import type { LayoutSet } from '../contracts/layouts';
 import type { AppConfig } from '../contracts/settings';
+import type { SlotChange } from '../contracts/state';
 import { errorText } from '../shared/error-text';
+import { createListeners } from '../shared/listeners';
 import { createPluginMessageSubscribe } from './plugin-message-subscribe';
 
 // Electron prefixes a handler's error with the channel and the error's name.
@@ -12,6 +14,13 @@ const REMOTE_ERROR_PREFIX =
 function mainErrorText(error: unknown): string {
   return errorText(error).replace(REMOTE_ERROR_PREFIX, '');
 }
+
+const stateChanges = createListeners<{ seq: number; change: SlotChange }>();
+ipcRenderer.on(
+  BRIDGE_CHANNELS.stateChanged,
+  (_event, seq: number, change: SlotChange) =>
+    stateChanges.tell({ seq, change }),
+);
 
 const bridge: Bridge = {
   config: () => ipcRenderer.invoke(BRIDGE_CHANNELS.config),
@@ -39,6 +48,12 @@ const bridge: Bridge = {
   setUiState: (key, value) => {
     ipcRenderer.send(BRIDGE_CHANNELS.uiStateWrite, key, value);
   },
+  stateSnapshot: () => ipcRenderer.invoke(BRIDGE_CHANNELS.stateSnapshot),
+  stateWrite: (change) => {
+    ipcRenderer.send(BRIDGE_CHANNELS.stateWrite, change);
+  },
+  onStateChange: (listener) =>
+    stateChanges.add(({ seq, change }) => listener(seq, change)),
   invoke: async (pluginId, method, args) => {
     try {
       return await ipcRenderer.invoke(

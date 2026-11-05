@@ -37,6 +37,7 @@ const DEFAULT_KEYMAP: DefaultKeymap = {
 const listPlugin = definePlugin({
   id: 'p',
   dependsOn: { main: [], page: [] },
+  reads: { main: [], page: [] },
   commands: {
     down: { label: 'Down', group: 'Moves', runsIn: 'page' },
     up: { label: 'Up', group: 'Moves', runsIn: 'page' },
@@ -57,6 +58,7 @@ const listPlugin = definePlugin({
 const quietPlugin = definePlugin({
   id: 'quiet',
   dependsOn: { main: [], page: [] },
+  reads: { main: [], page: [] },
   commands: {},
   scopes: {},
   settings: {},
@@ -67,6 +69,7 @@ const quietPlugin = definePlugin({
 const dependentPlugin = definePlugin({
   id: 'q',
   dependsOn: { main: ['p'], page: [] },
+  reads: { main: [], page: [] },
   commands: {},
   scopes: {},
   settings: {},
@@ -573,6 +576,7 @@ describe('createUserConfig', () => {
     const flagPlugin = definePlugin({
       id: 'f',
       dependsOn: { main: [], page: [] },
+      reads: { main: [], page: [] },
       commands: {},
       scopes: {},
       settings: { wrap: true, strict: null as boolean | null },
@@ -644,6 +648,7 @@ describe('createUserConfig', () => {
     const overPlugin = definePlugin({
       id: 'over',
       dependsOn: { main: [], page: [] },
+      reads: { main: [], page: [] },
       commands: { quit: { label: 'Quit', group: 'App', runsIn: 'main' } },
       scopes: {},
       keys: { app: [{ accelerator: 'CmdOrCtrl+Q', command: 'quit' }] },

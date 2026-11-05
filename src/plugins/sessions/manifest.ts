@@ -9,6 +9,7 @@ import { definePlugin } from '../../shared/define-plugin';
 export const sessionsManifest = definePlugin({
   id: 'sessions',
   dependsOn: { main: [], page: ['keys'] },
+  reads: { main: [], page: [] },
   commands: {
     showMode: {
       label: 'Sessions mode · toggle the sidebar',

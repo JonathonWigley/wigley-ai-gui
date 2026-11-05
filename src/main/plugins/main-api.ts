@@ -19,6 +19,7 @@ import {
   trackedUserConfig,
 } from '../../shared/plugin-service-views';
 import { scopedFiles } from '../../shared/scoped-files';
+import { pluginState, type SlotStore } from '../../shared/state/slot-store';
 import { trackedTimers } from '../../shared/tracked-timers';
 import type { LayoutService } from '../layouts/layout-service';
 import type { PluginChannels } from './plugin-channel';
@@ -38,7 +39,7 @@ export type MainApiServices = Omit<MainServices, 'selfTest' | 'log'> & {
 // store, which the host disposes when the part stops; `bus` is shared by every
 // main part; `dataRoot` is the absolute folder that holds a folder per plugin,
 // named by its id; `layouts` is the core layouts service, which each plugin
-// reaches under its id.
+// reaches under its id; `state` is the store of main's slot holder.
 export interface MainApiDeps {
   channels: PluginChannels;
   pluginSettings(): Record<string, object>;
@@ -53,6 +54,7 @@ export interface MainApiDeps {
   bus: EventBus;
   dataRoot: string;
   layouts: LayoutService;
+  state: SlotStore;
 }
 
 // One plugin's main API. `services.log` is scoped to its id. Every registration
@@ -125,6 +127,9 @@ export function createMainApi(
         ),
       names: () => deps.layouts.names(manifest.id),
     },
+    state: pluginState(deps.state, manifest.id, 'main', (handle) =>
+      registrations.track(handle),
+    ),
   };
 }
 

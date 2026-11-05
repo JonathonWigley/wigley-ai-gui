@@ -42,6 +42,7 @@ import type { Paths } from '../contracts/paths';
 import type { OsName, Platform } from '../contracts/platform';
 import type { SessionHost } from '../contracts/session-host';
 import type { AppConfig } from '../contracts/settings';
+import type { SlotChange } from '../contracts/state';
 import type { UserConfig } from '../contracts/user-config';
 import type {
   MainServices,
@@ -68,6 +69,7 @@ import {
 import { posixPaths } from '../shared/paths/posix-paths';
 import { windowsPaths } from '../shared/paths/windows-paths';
 import { scopedFiles } from '../shared/scoped-files';
+import type { SlotStore } from '../shared/state/slot-store';
 import kitTypes from '../shared/page/layout-host/kit.d.ts?raw';
 import shellLayoutTypes from '../renderer/shell/layouts/layout.d.ts?raw';
 import { createPlainAlerts } from './alerts/electron-alerts';
@@ -106,6 +108,7 @@ import {
   type LayoutService,
 } from './layouts/layout-service';
 import { resolveCloneDir } from './resolve-clone-dir';
+import { createSlotHolder } from './state/slot-holder';
 import { createSessionHostClient } from './session-host/session-host-client';
 import { sessionHostChannel } from './session-host/session-host-channel';
 import { createMainApi, type MainApiServices } from './plugins/main-api';
@@ -668,6 +671,20 @@ function serveUiState(filePath: string, log: Log) {
   onSelfTestExit('the ui-state file', async () => (await load()).close());
 }
 
+// The slots of the app run, held in main and served to the window's page. With no
+// page to send to, `seq` still moves and the next snapshot holds the change.
+function serveSlots(window: BrowserWindow, log: Log): SlotStore {
+  const holder = createSlotHolder(log, (seq, change) => {
+    const page = hasQuitStarted ? null : livePage(window);
+    page?.send(BRIDGE_CHANNELS.stateChanged, seq, change);
+  });
+  ipcMain.handle(BRIDGE_CHANNELS.stateSnapshot, () => holder.snapshot());
+  ipcMain.on(BRIDGE_CHANNELS.stateWrite, (_event, change: SlotChange) =>
+    holder.applyPageWrite(change),
+  );
+  return holder.store;
+}
+
 // The core layouts service over the layouts folder in `homeDir` and each
 // owner's default folder in `repoDir`, sending each owner's set to the
 // window's page and answering the page's reads; held in `layoutService` for
@@ -722,6 +739,7 @@ function startMainParts(
   driveRun: DriveRun | null,
   disabled: readonly string[],
   commands: MainCommands,
+  state: SlotStore,
 ): PluginHost<MainStart<PluginManifest>> {
   // The stops a quit runs end the rows the next start restores, and a page told
   // of it would save them as gone: panes, recency.
@@ -747,6 +765,7 @@ function startMainParts(
           bus,
           dataRoot,
           layouts,
+          state,
         }),
       );
       for (const [short, handler] of Object.entries<(chord: string) => void>(
@@ -908,6 +927,7 @@ function createWindow(
     driveRun,
     startList,
     commands,
+    serveSlots(window, log),
   );
   // The layouts service closes after every part's registrations, even when a
   // part's stop rejects.

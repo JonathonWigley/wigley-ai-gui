@@ -9,6 +9,7 @@ import type {
   MainPart,
   PagePart,
 } from '../contracts/plugin';
+import type { SlotKey } from '../contracts/state';
 import { definePlugin } from './define-plugin';
 import {
   countingEditors,
@@ -17,6 +18,13 @@ import {
   startMainPart,
   startPagePart,
 } from './plugin-part-harness.test-support';
+import { createSlotStore } from './state/slot-store';
+
+const sampleSlot: SlotKey<number, 'main', 'sample'> = {
+  id: 'sample.v',
+  process: 'main',
+  kind: 'value',
+};
 
 const depMainKey: DependencyKey<{ add(): Disposable }, 'main', 'dep'> = {
   id: 'dep',
@@ -30,6 +38,7 @@ const otherKey: DependencyKey<{ ping(): string }, 'main', 'other'> = {
 const mainManifest = definePlugin({
   id: 'sample',
   dependsOn: { main: ['dep', 'other'], page: [] },
+  reads: { main: [], page: [] },
   commands: { run: { label: 'Run', group: 'Sample', runsIn: 'main' } },
   scopes: {},
   settings: {},
@@ -40,6 +49,7 @@ const mainManifest = definePlugin({
 const pageManifest = definePlugin({
   id: 'sample',
   dependsOn: { main: [], page: [] },
+  reads: { main: [], page: [] },
   commands: { run: { label: 'Run', group: 'Sample', runsIn: 'page' } },
   scopes: {},
   settings: {},
@@ -50,6 +60,7 @@ const pageManifest = definePlugin({
 const depManifest = definePlugin({
   id: 'dep',
   dependsOn: { main: [], page: [] },
+  reads: { main: [], page: [] },
   commands: {},
   scopes: {},
   settings: {},
@@ -638,6 +649,65 @@ describe('plugin part harness', () => {
       { event: 'sample.saved', data: 2 },
       { event: 'sample.saved', data: 4 },
     ]);
+  });
+
+  it('harness_Restart_KeepsSlotValueAndReleasesClaim', async () => {
+    const lastRead: (number | undefined)[] = [];
+    const harness = startMainPart(
+      mainPart((api) => {
+        const writer = api.state.publish(sampleSlot);
+        lastRead.push(writer.get());
+        api.channel.handle('save', (value: number) => writer.set(value));
+        return { commands: { run() {} } };
+      }),
+    );
+
+    harness.invoke('save', 7);
+    await harness.restart();
+
+    expect(lastRead).toEqual([undefined, 7]);
+  });
+
+  it('counts a writer and an on until stop', async () => {
+    const harness = startMainPart(
+      mainPart((api) => {
+        api.state.publish(sampleSlot);
+        api.state.read(sampleSlot).on(() => {});
+        return { commands: { run() {} } };
+      }),
+    );
+
+    // The part's command, its writer and its listener.
+    expect(harness.counts().registrations).toBe(3);
+
+    await harness.stop();
+
+    expect(harness.counts()).toEqual(noCounts);
+  });
+
+  it('shows the part a store it was given, and the test a write through it', () => {
+    const state = createSlotStore(() => {});
+    const seeding = state.publish(sampleSlot);
+    seeding.set(3);
+    seeding.dispose();
+    const heard: (number | undefined)[] = [];
+    const otherSlot: SlotKey<number, 'main', 'other'> = {
+      id: 'other.v',
+      process: 'main',
+      kind: 'value',
+    };
+    const harness = startMainPart(
+      mainPart((api) => {
+        heard.push(api.state.publish(sampleSlot).get());
+        api.state.read(otherSlot).on((value) => heard.push(value));
+        return { commands: { run() {} } };
+      }),
+      { state },
+    );
+
+    harness.state.publish(otherSlot).set(4);
+
+    expect(heard).toEqual([3, 4]);
   });
 
   it("keeps a real provider's own handles out of the counts", () => {

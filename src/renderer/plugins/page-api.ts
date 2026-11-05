@@ -36,6 +36,11 @@ import {
   trackedEditor,
   trackedMarkdown,
 } from '../../shared/plugin-service-views';
+import {
+  layoutState,
+  pluginState,
+  type SlotStore,
+} from '../../shared/state/slot-store';
 import { trackedTimers } from '../../shared/tracked-timers';
 import type { ScopeStack } from '../key-scope';
 import type { LiveConfig } from '../live-config';
@@ -61,7 +66,7 @@ export type PageApiServices = Omit<PageServices, 'uiState' | 'log'> & {
 // layouts. `paneTargets` takes the resize and focus targets and the outer panes
 // a plugin hands the pane commands, and releases them. `drops` is the page's one
 // drop registry. `registrations` is the part's own store, which the host
-// disposes when the part stops.
+// disposes when the part stops. `state` is the page load's slot store.
 export interface PageApiDeps {
   areas: Record<AreaName, Area>;
   modes: Modes;
@@ -83,6 +88,7 @@ export interface PageApiDeps {
     'setResizeTarget' | 'setFocusTarget' | 'setOuterPanes' | 'release'
   >;
   drops: PageDrops;
+  state: SlotStore;
 }
 
 // One plugin's page API: its channel and its events run under the manifest's
@@ -105,6 +111,8 @@ export function createPageApi(
   const settingsOf = (served: AppConfig) => served.pluginSettings[manifest.id];
   const channel = pageChannel(manifest.id, deps.bridge);
   const events = pluginEvents(deps.bus, manifest.id, deps.services.log);
+  const track = <T extends Disposable>(handle: T) =>
+    registrations.track(handle);
   return {
     areas: pluginAreas(deps.areas, registrations),
     channel: {
@@ -179,6 +187,10 @@ export function createPageApi(
     layouts: {
       show: (options) =>
         registrations.track(deps.layouts.show(manifest.id, options)),
+    },
+    state: {
+      ...pluginState(deps.state, manifest.id, 'page', track),
+      forLayouts: layoutState(deps.state, manifest.id, track),
     },
   };
 }

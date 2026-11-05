@@ -3,6 +3,7 @@ import {
   compositionFailures,
   pluginLayers,
   readDependsOn,
+  readReads,
   type PluginExtra,
   type PluginFolder,
 } from './layer-rules.mts';
@@ -14,6 +15,7 @@ const NOTES: PluginFolder = {
   hasPage: true,
   hasLayouts: true,
   dependsOn: { main: ['chat', 'keys'], page: ['keys'] },
+  reads: { main: [], page: [] },
 };
 const CHAT: PluginFolder = {
   id: 'chat',
@@ -22,6 +24,7 @@ const CHAT: PluginFolder = {
   hasPage: true,
   hasLayouts: false,
   dependsOn: { main: [], page: [] },
+  reads: { main: [], page: [] },
 };
 const KEYS: PluginFolder = {
   id: 'keys',
@@ -30,6 +33,7 @@ const KEYS: PluginFolder = {
   hasPage: true,
   hasLayouts: false,
   dependsOn: { main: [], page: [] },
+  reads: { main: [], page: [] },
 };
 const FOLDERS = [NOTES, CHAT, KEYS];
 const MAIN_ONLY: PluginFolder = {
@@ -39,6 +43,7 @@ const MAIN_ONLY: PluginFolder = {
   hasPage: false,
   hasLayouts: false,
   dependsOn: { main: [], page: [] },
+  reads: { main: [], page: [] },
 };
 
 const SHARED = [
@@ -198,6 +203,12 @@ describe('pluginLayers', () => {
       extras: {},
       message: 'notes: dependsOn names ghost, which is no plugin folder',
     },
+    {
+      case: 'reads',
+      folders: [{ ...NOTES, reads: { main: [], page: ['ghost'] } }, CHAT, KEYS],
+      extras: {},
+      message: 'notes: reads names ghost, which is no plugin folder',
+    },
   ])(
     'pluginLayers_NamesNoFolder_Throws: $case',
     ({ folders, extras, message }) => {
@@ -225,6 +236,67 @@ describe('pluginLayers', () => {
       ).toThrow(`PLUGIN_EXTRAS adds to ${id}'s ${part}, which it lacks`);
     },
   );
+});
+
+describe('pluginLayers reads', () => {
+  const ROOT = 'src/plugins/reader';
+  const OWNER: PluginFolder = {
+    id: 'owner',
+    hasContract: true,
+    hasMain: true,
+    hasPage: true,
+    hasLayouts: false,
+    dependsOn: { main: [], page: [] },
+    reads: { main: [], page: [] },
+  };
+  const OWNER_CONTRACT = 'src/plugins/owner/contract.ts';
+
+  it.each([
+    { member: 'main', has: 'main', hasNot: 'page' },
+    { member: 'page', has: 'page', hasNot: 'main' },
+  ] as const)(
+    'pluginLayers_Reads_GivesThatLayerTheContractOnly: $member',
+    ({ member, has, hasNot }) => {
+      const reader: PluginFolder = {
+        ...OWNER,
+        id: 'reader',
+        reads: { main: [], page: [], [member]: ['owner'] },
+      };
+
+      const entries = pluginLayers([reader, OWNER], {});
+
+      expect(entries[`${ROOT}/${has}`].layers).toContain(OWNER_CONTRACT);
+      expect(entries[`${ROOT}/${hasNot}`].layers).not.toContain(OWNER_CONTRACT);
+      expect(entries[ROOT].layers).toContain(OWNER_CONTRACT);
+      expect(entries[`${ROOT}/contract.ts`].layers).toContain(OWNER_CONTRACT);
+    },
+  );
+});
+
+describe('readReads', () => {
+  const FILE = 'src/plugins/notes/manifest.ts';
+  const manifest = (reads: string): string =>
+    `export const m = definePlugin({ id: 'notes', ${reads}, commands: {} });`;
+
+  it.each([
+    { case: 'Literal', value: "reads: { main: ['chat'], page: [] }" },
+    { case: 'AsConst', value: "reads: { main: ['chat'], page: [] } as const" },
+  ])('readReads_$case', ({ value }) => {
+    expect(readReads(FILE, manifest(value))).toEqual({
+      main: ['chat'],
+      page: [],
+    });
+  });
+
+  it.each([
+    { case: 'Identifier', value: 'reads: LISTS' },
+    { case: 'NoPage', value: "reads: { main: ['chat'] }" },
+    { case: 'Absent', value: "label: 'notes'" },
+  ])('readReads_$case', ({ value }) => {
+    expect(() => readReads(FILE, manifest(value))).toThrow(
+      `${FILE}: reads must be an object literal with main and page arrays of string literals`,
+    );
+  });
 });
 
 describe('readDependsOn', () => {

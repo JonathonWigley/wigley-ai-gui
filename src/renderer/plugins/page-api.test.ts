@@ -31,10 +31,12 @@ import type {
   ShellLayout,
 } from '../../contracts/plugin';
 import type { AppConfig } from '../../contracts/settings';
+import type { SlotKey } from '../../contracts/state';
 import type { PageLayouts } from '../../shared/page/layout-host/show-layouts';
 import { createEventBus, type EventBus } from '../../shared/event-bus';
 import { fakePlatform } from '../../shared/platform.test-support';
 import { createRegistrations } from '../../shared/registrations';
+import { createSlotStore, type SlotStore } from '../../shared/state/slot-store';
 import { createScopeStack, type ScopeStack } from '../key-scope';
 import { createLiveConfig } from '../live-config';
 import { createPageUiState } from '../ui-state';
@@ -47,6 +49,7 @@ import {
 const manifest: PluginManifest = {
   id: 'p',
   dependsOn: { main: [], page: [] },
+  reads: { main: [], page: [] },
   commands: {},
   scopes: { review: 'In review' },
   settings: {},
@@ -61,6 +64,12 @@ interface TestChannel {
 
 // A Bridge recording the plugin calls it receives, whose `send` delivers a
 // message as main would; the rest is unused here.
+const ownSlot: SlotKey<number, 'page', 'p'> = {
+  id: 'p.v',
+  process: 'page',
+  kind: 'value',
+};
+
 function fakeBridge() {
   const invoked: [string, string, unknown[]][] = [];
   const listeners: [string, string, (data: unknown) => void][] = [];
@@ -149,6 +158,7 @@ function deps(overrides: Partial<PageApiDeps>): PageApiDeps {
       addTarget: () => ({ dispose: () => {} }),
       savePasted: async () => '',
     },
+    state: createSlotStore(() => {}),
     ...overrides,
   };
 }
@@ -546,6 +556,13 @@ const RECORDED_ROWS: RecordedRow[] = [
     register: (api) => api.modes.onChanged(() => {}),
   },
   {
+    member: 'state.publish',
+    dep: (handle) => ({
+      state: { publish: () => handle } as unknown as SlotStore,
+    }),
+    register: (api) => api.state.publish(ownSlot),
+  },
+  {
     member: 'keys.onPending',
     dep: (handle) => ({
       pendingKeys: {
@@ -584,6 +601,7 @@ type HearingWorld = {
   bus: EventBus;
   scopeStack: ScopeStack;
   config: ReturnType<typeof liveConfig>;
+  state: SlotStore;
 };
 
 const HEARING_ROWS: {
@@ -605,6 +623,19 @@ const HEARING_ROWS: {
     member: 'keys.onScopeChanged',
     listen: ({ api }, heard) => api.keys.onScopeChanged(heard),
     speak: ({ scopeStack }) => scopeStack.setBase('q.view'),
+  },
+  {
+    member: 'state.read().on',
+    listen: ({ api }, heard) => api.state.read(ownSlot).on(heard),
+    speak: ({ state }) =>
+      state.applyRemote({ id: 'p.v', kind: 'value', value: 1 }),
+  },
+  {
+    member: 'state.forLayouts.read().on',
+    listen: ({ api }, heard) =>
+      api.state.forLayouts.read('p.v').on((value) => heard(value)),
+    speak: ({ state }) =>
+      state.applyRemote({ id: 'p.v', kind: 'value', value: 1 }),
   },
   {
     member: 'keys.onKeymapChanged',
@@ -684,11 +715,12 @@ describe('createPageApi recording', () => {
       const scopeStack = createScopeStack('any');
       const config = liveConfig();
       const registrations = createRegistrations();
+      const state = createSlotStore(() => {});
       const api = createPageApi(
         manifest,
-        deps({ bridge, bus, scopeStack, config, registrations }),
+        deps({ bridge, bus, scopeStack, config, registrations, state }),
       );
-      const world = { api, send, bus, scopeStack, config };
+      const world = { api, send, bus, scopeStack, config, state };
       const heard: unknown[] = [];
       listen(world, (data) => heard.push(data));
 

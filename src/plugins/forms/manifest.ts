@@ -20,6 +20,7 @@ const choiceCommands = Object.fromEntries(
 export const formsManifest = definePlugin({
   id: 'forms',
   dependsOn: { main: ['sessions', 'chat'], page: ['sessions', 'keys'] },
+  reads: { main: [], page: [] },
   commands: {
     nextItem: { label: 'next item', group: 'items', runsIn: 'page' },
     prevItem: { label: 'previous item', group: 'items', runsIn: 'page' },

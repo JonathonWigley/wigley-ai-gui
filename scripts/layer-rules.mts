@@ -1,6 +1,6 @@
 // The plugin layer rules `check-layers.mts` enforces: each plugin's entries,
-// derived from the plugin folder convention and its manifest's `dependsOn`, and
-// the check of the composition roots. Pure functions over folder facts and
+// derived from the plugin folder convention and its manifest's `dependsOn` and
+// `reads`, and the check of the composition roots. Pure functions over folder facts and
 // source text, so the rules are tested without walking `src/`.
 import ts from 'typescript';
 
@@ -18,6 +18,7 @@ export interface PluginFolder {
   hasPage: boolean;
   hasLayouts: boolean;
   dependsOn: { main: readonly string[]; page: readonly string[] };
+  reads: { main: readonly string[]; page: readonly string[] };
 }
 
 // What the convention cannot show. Each part is appended to the derived entry
@@ -102,7 +103,7 @@ function stringLiterals(expression: ts.Expression): string[] | undefined {
   return strings;
 }
 
-function dependsOnLists(
+function processLists(
   value: ts.Expression | undefined,
 ): { main: string[]; page: string[] } | undefined {
   const literal = value && unwrapped(value);
@@ -120,11 +121,12 @@ function dependsOnLists(
   return main && page ? { main, page } : undefined;
 }
 
-// The `dependsOn` literal of the definePlugin call in `source`; throws when it
-// is not one.
-export function readDependsOn(
+// The per-process lists under `member` in the definePlugin call in `source`;
+// throws when they are not an object literal of string-literal arrays.
+function readManifestLists(
   file: string,
   source: string,
+  member: 'dependsOn' | 'reads',
 ): { main: string[]; page: string[] } {
   const sourceFile = ts.createSourceFile(
     file,
@@ -136,13 +138,27 @@ export function readDependsOn(
   if (!manifest || !ts.isObjectLiteralExpression(manifest)) {
     throw new Error(`${file}: no definePlugin({ … }) call`);
   }
-  const dependsOn = dependsOnLists(propertyValue(manifest, 'dependsOn'));
-  if (!dependsOn) {
+  const lists = processLists(propertyValue(manifest, member));
+  if (!lists) {
     throw new Error(
-      `${file}: dependsOn must be an object literal with main and page arrays of string literals`,
+      `${file}: ${member} must be an object literal with main and page arrays of string literals`,
     );
   }
-  return dependsOn;
+  return lists;
+}
+
+export function readDependsOn(
+  file: string,
+  source: string,
+): { main: string[]; page: string[] } {
+  return readManifestLists(file, source, 'dependsOn');
+}
+
+export function readReads(
+  file: string,
+  source: string,
+): { main: string[]; page: string[] } {
+  return readManifestLists(file, source, 'reads');
 }
 
 function requireKnownNames(
@@ -155,12 +171,17 @@ function requireKnownNames(
       throw new Error(`PLUGIN_EXTRAS names ${key}, which is no plugin folder`);
     }
   }
-  for (const { id, dependsOn } of folders) {
-    for (const other of [...dependsOn.main, ...dependsOn.page]) {
-      if (!ids.has(other)) {
-        throw new Error(
-          `${id}: dependsOn names ${other}, which is no plugin folder`,
-        );
+  for (const { id, dependsOn, reads } of folders) {
+    for (const [member, lists] of [
+      ['dependsOn', dependsOn],
+      ['reads', reads],
+    ] as const) {
+      for (const other of [...lists.main, ...lists.page]) {
+        if (!ids.has(other)) {
+          throw new Error(
+            `${id}: ${member} names ${other}, which is no plugin folder`,
+          );
+        }
       }
     }
   }
@@ -199,7 +220,8 @@ function folderEntries(
 ): Record<string, LayerRule> {
   requireExtraPartsExist(folder, extra);
   const root = `src/plugins/${folder.id}`;
-  const { main, page } = folder.dependsOn;
+  const main = [...folder.dependsOn.main, ...folder.reads.main];
+  const page = [...folder.dependsOn.page, ...folder.reads.page];
   const everyDependency = contractsOf([...new Set([...main, ...page])]);
   const ownContract = contractsOf([folder.id]);
   const ownLayers = [

@@ -9,6 +9,7 @@ export const agentLinesManifest = definePlugin({
     main: ['chat', 'sessions'],
     page: ['agents', 'sessions', 'keys'],
   },
+  reads: { main: [], page: [] },
   commands: {},
   scopes: {},
   settings: { layout: 'default' },

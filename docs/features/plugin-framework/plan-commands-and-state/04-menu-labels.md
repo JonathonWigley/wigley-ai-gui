@@ -1,6 +1,6 @@
 # 04 — Menu labels by label
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 03
 Plan: [plan.md](plan.md)
@@ -58,3 +58,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit 0d2a93f4 · proof: Diff read; installWindowKeybindings signature present; typecheck and lint clean; the id-label grep prints nothing. · concerns: main.ts's id fallback runs only in the app; task 16 carries the runtime check.

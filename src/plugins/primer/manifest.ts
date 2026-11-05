@@ -4,6 +4,7 @@ import { definePlugin } from '../../shared/define-plugin';
 export const primerManifest = definePlugin({
   id: 'primer',
   dependsOn: { main: ['sessions', 'chat'], page: ['sessions', 'keys'] },
+  reads: { main: [], page: [] },
   commands: {
     nextRow: { label: 'next row', group: 'rows', runsIn: 'page' },
     prevRow: { label: 'previous row', group: 'rows', runsIn: 'page' },

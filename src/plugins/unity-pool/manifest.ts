@@ -7,6 +7,7 @@ import { definePlugin } from '../../shared/define-plugin';
 export const unityPoolManifest = definePlugin({
   id: 'unity-pool',
   dependsOn: { main: ['sessions', 'chat'], page: ['sessions', 'keys'] },
+  reads: { main: [], page: [] },
   commands: {},
   scopes: {},
   settings: { scriptPath: '', pythonCommand: 'python3', layout: 'default' },

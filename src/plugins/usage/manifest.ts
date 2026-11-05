@@ -11,6 +11,7 @@ import { definePlugin } from '../../shared/define-plugin';
 export const usageManifest = definePlugin({
   id: 'usage',
   dependsOn: { main: ['chat', 'sessions'], page: ['chat', 'sessions', 'keys'] },
+  reads: { main: [], page: [] },
   commands: {
     toggleDetails: {
       label: 'hide or show usage details',

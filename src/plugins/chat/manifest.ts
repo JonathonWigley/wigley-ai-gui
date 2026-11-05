@@ -11,6 +11,7 @@ export const DEFAULT_PROFILES: ChatProfile[] = [
 export const chatManifest = definePlugin({
   id: 'chat',
   dependsOn: { main: ['sessions'], page: ['sessions', 'keys'] },
+  reads: { main: [], page: [] },
   commands: {
     newSession: { label: 'new session', group: 'sessions', runsIn: 'page' },
     startNewSession: {

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { type Bridge, BRIDGE_CHANNELS } from '../contracts/bridge';
+import type { SlotChange } from '../contracts/state';
 import './preload';
 
 const electron = vi.hoisted(() => {
@@ -32,6 +33,41 @@ function sendFromMain(toPlugin: string, message: string, data: unknown) {
     }
   }
 }
+
+function pushFromMain(seq: number, change: SlotChange) {
+  for (const [channel, listener] of electron.onCalls) {
+    if (channel === BRIDGE_CHANNELS.stateChanged) {
+      listener({}, seq, change);
+    }
+  }
+}
+
+describe('preload onStateChange', () => {
+  it('delivers each push on one ipcRenderer listener until dispose', () => {
+    const change: SlotChange = { id: 'p.v', kind: 'value', value: 1 };
+    const first: [number, SlotChange][] = [];
+    const second: [number, SlotChange][] = [];
+    const firstHandle = bridge.onStateChange((seq, pushed) =>
+      first.push([seq, pushed]),
+    );
+    bridge.onStateChange((seq, pushed) => second.push([seq, pushed]));
+
+    pushFromMain(3, change);
+    firstHandle.dispose();
+    pushFromMain(5, change);
+
+    expect(first).toEqual([[3, change]]);
+    expect(second).toEqual([
+      [3, change],
+      [5, change],
+    ]);
+    expect(
+      electron.onCalls.filter(
+        ([channel]) => channel === BRIDGE_CHANNELS.stateChanged,
+      ),
+    ).toHaveLength(1);
+  });
+});
 
 describe('preload onMessage', () => {
   it('hands a message only to its plugin and message name, in registration order', () => {

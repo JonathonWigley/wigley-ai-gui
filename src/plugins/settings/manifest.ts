@@ -7,6 +7,7 @@ import { definePlugin } from '../../shared/define-plugin';
 export const settingsManifest = definePlugin({
   id: 'settings',
   dependsOn: { main: [], page: ['keys'] },
+  reads: { main: [], page: [] },
   commands: {
     show: { label: 'settings', group: 'modes', runsIn: 'main' },
     showMode: {

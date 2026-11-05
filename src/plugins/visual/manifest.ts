@@ -11,6 +11,7 @@ import { definePlugin } from '../../shared/define-plugin';
 export const visualManifest = definePlugin({
   id: 'visual',
   dependsOn: { main: ['chat'], page: ['chat', 'keys'] },
+  reads: { main: [], page: [] },
   commands: {
     openVisuals: {
       label: "open the focused entry's visuals",

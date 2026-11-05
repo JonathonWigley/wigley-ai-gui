@@ -6,6 +6,7 @@ import { definePlugin } from '../../shared/define-plugin';
 export const agentsManifest = definePlugin({
   id: 'agents',
   dependsOn: { main: ['sessions', 'chat'], page: ['sessions'] },
+  reads: { main: [], page: [] },
   commands: {
     openPreview: {
       label: 'open the agents sample session',

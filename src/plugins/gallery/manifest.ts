@@ -7,6 +7,7 @@ import { definePlugin } from '../../shared/define-plugin';
 export const galleryManifest = definePlugin({
   id: 'gallery',
   dependsOn: { main: [], page: ['keys'] },
+  reads: { main: [], page: [] },
   commands: {
     showMode: { label: 'gallery', group: 'modes', runsIn: 'page' },
     toggleTransparency: {

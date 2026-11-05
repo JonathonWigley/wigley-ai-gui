@@ -12,6 +12,7 @@ import { definePlugin } from '../../shared/define-plugin';
 export const keysManifest = definePlugin({
   id: 'keys',
   dependsOn: { main: [], page: [] },
+  reads: { main: [], page: [] },
   commands: {
     toggleHelp: { label: 'help', group: 'help', runsIn: 'page' },
     closeHelp: { label: 'close help', group: 'help', runsIn: 'page' },

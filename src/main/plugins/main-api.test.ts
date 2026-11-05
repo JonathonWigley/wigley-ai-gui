@@ -10,12 +10,14 @@ import type {
   PluginManifest,
   SelfTestHost,
 } from '../../contracts/plugin';
+import type { SlotKey } from '../../contracts/state';
 import type { UserConfig } from '../../contracts/user-config';
 import { createEventBus, type EventBus } from '../../shared/event-bus';
 import { FakeProcesses } from '../../shared/fake-processes';
 import { createMemoryFiles } from '../../shared/memory-files';
 import { posixPaths } from '../../shared/paths/posix-paths';
 import { createRegistrations } from '../../shared/registrations';
+import { createSlotStore, type SlotStore } from '../../shared/state/slot-store';
 import type { LayoutService } from '../layouts/layout-service';
 import {
   createMainApi,
@@ -26,11 +28,18 @@ import {
 const manifest: PluginManifest = {
   id: 'p',
   dependsOn: { main: [], page: [] },
+  reads: { main: [], page: [] },
   commands: {},
   scopes: {},
   settings: {},
   settingInfo: {},
   themeTokens: {},
+};
+
+const ownSlot: SlotKey<number, 'main', 'p'> = {
+  id: 'p.v',
+  process: 'main',
+  kind: 'value',
 };
 
 const fixedSettings = {
@@ -79,6 +88,7 @@ function apiOver(
     bus: createEventBus(),
     dataRoot: '/d',
     layouts,
+    state: createSlotStore(() => {}),
     ...overrides,
   };
   return { api: createMainApi(manifest, deps), registrations };
@@ -198,6 +208,13 @@ const RETURNED_HANDLE_ROWS: {
     }),
     register: (api) => api.services.userConfig.onChanged(() => undefined),
   },
+  {
+    member: 'state.publish',
+    deps: (handle) => ({
+      state: { publish: () => handle } as unknown as SlotStore,
+    }),
+    register: (api) => api.state.publish(ownSlot),
+  },
 ];
 
 // One listener registered through `api`, and what makes the source speak: the
@@ -206,6 +223,7 @@ type HearingWorld = {
   api: TestApi;
   bus: EventBus;
   settings: ReturnType<typeof liveSettings>;
+  state: SlotStore;
 };
 
 const HEARING_ROWS: {
@@ -222,6 +240,12 @@ const HEARING_ROWS: {
     member: 'onSettingsChanged',
     listen: ({ api }, heard) => api.onSettingsChanged(heard),
     speak: ({ settings }) => settings.change({ p: { a: 2 } }),
+  },
+  {
+    member: 'state.read().on',
+    listen: ({ api }, heard) => api.state.read(ownSlot).on(heard),
+    speak: ({ state }) =>
+      state.applyRemote({ id: 'p.v', kind: 'value', value: 1 }),
   },
 ];
 
@@ -324,6 +348,7 @@ describe('createMainApi', () => {
       bus,
       dataRoot: '/d',
       layouts: {} as LayoutService,
+      state: createSlotStore(() => {}),
     });
 
     api.events.emit('x', 3);
@@ -346,6 +371,7 @@ describe('createMainApi', () => {
         bus: createEventBus(),
         dataRoot: '/d',
         layouts: {} as LayoutService,
+        state: createSlotStore(() => {}),
       },
     );
 
@@ -377,6 +403,7 @@ describe('createMainApi', () => {
         bus: createEventBus(),
         dataRoot: '/d',
         layouts: {} as LayoutService,
+        state: createSlotStore(() => {}),
       },
     );
 
@@ -414,6 +441,7 @@ describe('createMainApi', () => {
         bus: createEventBus(),
         dataRoot: '/d',
         layouts: {} as LayoutService,
+        state: createSlotStore(() => {}),
       },
     );
 
@@ -497,10 +525,12 @@ describe('createMainApi recording', () => {
     ({ listen, speak }) => {
       const bus = createEventBus();
       const settings = liveSettings({ p: { a: 1 } });
+      const state = createSlotStore(() => {});
       const { api, registrations } = apiOver(settings, undefined, undefined, {
         bus,
+        state,
       });
-      const world = { api, bus, settings };
+      const world = { api, bus, settings, state };
       const heard: unknown[] = [];
       listen(world, (data) => heard.push(data));
 

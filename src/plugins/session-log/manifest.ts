@@ -6,6 +6,7 @@ import { definePlugin } from '../../shared/define-plugin';
 export const sessionLogManifest = definePlugin({
   id: 'session-log',
   dependsOn: { main: ['chat', 'sessions'], page: [] },
+  reads: { main: [], page: [] },
   commands: {},
   scopes: {},
   settings: { recentlyClosedCount: 10 },

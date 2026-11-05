@@ -15,6 +15,7 @@ export const workflowManifest = definePlugin({
     main: ['chat', 'sessions'],
     page: ['chat', 'sessions', 'docs', 'keys'],
   },
+  reads: { main: [], page: [] },
   commands: {
     ...WORKFLOW_COMMANDS,
     toggleSidePane: {
