@@ -100,5 +100,6 @@ Review base: b05f0e7fa4316350df34560fcfcebfa982326d2e
 - No test owned foldControlValues, so the same-value row is a new table foldPipeLine_ControlCommandResult_ReportsControls in session-fold.test.ts — the fold owns the rule — the row moves file if wrong · group 01 · group 01
 - No chat-sessions test added: restart_StartCarriesHeldModeAndConfirmedPicks (ReportedOnly1mModelAndEffort) already fails if a report joins userSetControls — one row missing if wrong · group 01 · group 01
 ### Review rounds
+- 1 · 1047872c · NEEDS FIXES
 ### Test gate
 - claude-controls, session-fold, claude-code-harness tests (edited with the change); chat-sessions.test.ts (confirmPicks and the reported-value restart row read the controls report) · 569 passed

@@ -3424,17 +3424,44 @@ describe('createClaudeCodeHarness on the session host', () => {
       written: [settingsRequest('wigley-1')],
       controls: { mode: null, effort: null, model: null },
     },
+    {
+      case: 'a log holding the request with its reply still to come',
+      goesOn: [
+        { dir: 'in', line: contextUsageRequest('wigley-1') },
+        { dir: 'in', line: settingsRequest('wigley-2') },
+      ],
+      written: [],
+      controls: { mode: null, effort: null, model: null },
+      live: {
+        reply: settingsReply('wigley-2', {
+          model: 'claude-sonnet-5-5',
+          effort: 'low',
+        }),
+        controls: { mode: null, effort: 'low', model: 'sonnet' },
+      },
+    },
   ] as {
     case: string;
     goesOn: { dir: PipeDirection; line: object }[];
     written: object[];
     controls: Record<string, string | null>;
+    live?: { reply: object; controls: Record<string, string | null> };
   }[])(
     'attach_SettingsRequest_RebuiltOrWritten ($case)',
-    async ({ goesOn, written, controls }) => {
+    async ({ goesOn, written, controls, live }) => {
       const host = createFakeSessionHost(clock);
       const record = host.addRunning(running(logOf(goesOn)));
-      const { heard, events } = recordingEvents();
+      const { heard, timeline, events } = recordingEvents();
+      const heardControls = () => {
+        const replayed = heard
+          .filter(([name]) => name === 'controls')
+          .at(-1)?.[1];
+        return Object.fromEntries(
+          (replayed as { id: string; value: string | null }[]).map(
+            ({ id, value }) => [id, value],
+          ),
+        );
+      };
 
       await hostHarness(host, clock).attach(request, events);
       await settle();
@@ -3442,16 +3469,13 @@ describe('createClaudeCodeHarness on the session host', () => {
       expect(record.writes).toEqual(
         written.map((line) => JSON.stringify(line)),
       );
-      const replayed = heard
-        .filter(([name]) => name === 'controls')
-        .at(-1)?.[1];
-      expect(
-        Object.fromEntries(
-          (replayed as { id: string; value: string | null }[]).map(
-            ({ id, value }) => [id, value],
-          ),
-        ),
-      ).toEqual(controls);
+      expect(heardControls()).toEqual(controls);
+      if (live !== undefined) {
+        host.output('p-1', 'out', asText(live.reply));
+        await settle();
+        expect(heardControls()).toEqual(live.controls);
+      }
+      expect(entriesOf(timeline)).toEqual([]);
     },
   );
 

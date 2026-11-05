@@ -428,12 +428,12 @@ describe('session-fold', () => {
     },
     {
       case: 'a model with no effort support clears the effort',
-      held: { model: 'opus', effort: 'high' },
+      held: { model: 'haiku', effort: 'high' },
       reply: settingsReply({
-        applied: { model: 'claude-opus-5-5', effort: null },
+        applied: { model: 'claude-haiku-4-5', effort: null },
       }),
       kinds: ['controls'],
-      controls: { model: 'opus', effort: null },
+      controls: { model: 'haiku', effort: null },
     },
     {
       case: 'only the model changed',
