@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Disposable } from '../../../contracts/disposable';
 import type { ViewScope } from '../../../contracts/keymap';
 import type { KeyedSlotKey, SlotKey } from '../../../contracts/state';
+import { commandTarget } from '../../command-args';
 import { createSlotStore, layoutState } from '../../state/slot-store';
 import { asFake, asHtml, FakeElement, installFakeDom } from '../test-dom';
 import {
@@ -34,11 +35,12 @@ const keyedSlot: KeyedSlotKey<number, 'page', 'p'> = {
 const BOUND: Record<string, string> = {
   'docs.open': 'Mod+O',
   'panes.focusLeft': 'Alt+H',
+  'docs.pick 2': 'Mod+2',
 };
 
-// A kit for owner `docs` whose only commands are `open` and `close`, with
-// `Mod+O` bound to `docs.open` and `Alt+H` to `panes.focusLeft` in
-// `docs.tree` alone, recording each anchor
+// A kit for owner `docs` whose only commands are `open`, `close` and `pick`,
+// with `Mod+O` bound to `docs.open`, `Alt+H` to `panes.focusLeft` and `Mod+2` to
+// `docs.pick` with the argument 2 in `docs.tree` alone, recording each anchor
 // and each keys read.
 function kitOver(scope: ViewScope | null) {
   const anchors: unknown[][] = [];
@@ -55,21 +57,24 @@ function kitOver(scope: ViewScope | null) {
         anchors.push([asFake(element), command, options]);
         return { dispose: () => undefined };
       },
-      keysFor(command, readScope) {
+      keysFor(command, readScope, _where, arg) {
         reads.push([command, readScope]);
         return readScope === 'docs.tree' || readScope === undefined
-          ? (BOUND[command] ?? null)
+          ? (BOUND[commandTarget(command, arg)] ?? null)
           : null;
       },
     },
     commands: {
       exists: (id) =>
-        ['docs.open', 'docs.close', 'panes.focusLeft'].includes(id),
+        ['docs.open', 'docs.close', 'docs.pick', 'panes.focusLeft'].includes(
+          id,
+        ),
+      argShape: () => undefined,
       run: () => undefined,
     },
     scope,
     commandNamed: (short) =>
-      short === 'open' || short === 'close' ? `docs.${short}` : null,
+      ['open', 'close', 'pick'].includes(short) ? `docs.${short}` : null,
     platform: 'macos',
     state: noLayoutState,
     recordAnchor: () => undefined,
@@ -98,16 +103,18 @@ describe('createBaseKit', () => {
     expect(kitOver(null).kit.duration(ms)).toBe(text);
   });
 
-  it('commandRunner_UnknownId_ThrowsAtCreationAndRunsOnlyOnCall', () => {
+  it('commandRunner_UnknownIdOrArgNeeded_ThrowsAtCreationAndRunsOnlyOnCall', () => {
     const ran: string[] = [];
     const commands: KitCommands = {
-      exists: (id) => id === 'docs.open',
+      exists: (id) => id === 'docs.open' || id === 'docs.pick',
+      argShape: (id) => (id === 'docs.pick' ? 'number' : undefined),
       run: (id) => ran.push(id),
     };
 
     expect(() => commandRunner('docs.nope', commands)).toThrow(
       'no command docs.nope',
     );
+    expect(() => commandRunner('docs.pick', commands)).toThrow('docs.pick');
     const run = commandRunner('docs.open', commands);
     expect(ran).toEqual([]);
     run();
@@ -149,12 +156,20 @@ describe('createBaseKit', () => {
       anchored: [['panes.focusLeft', { scope: 'docs.tree' }]],
     },
     {
-      row: 'unregistered qualified id',
+      row: 'qualified id no plugin registers yet',
       scope: 'docs.tree',
       command: 'docs.missing',
       options: undefined,
       className: '',
-      anchored: [],
+      anchored: [['docs.missing', { scope: 'docs.tree' }]],
+    },
+    {
+      row: 'an arg',
+      scope: 'docs.tree',
+      command: 'pick',
+      options: { arg: 2 },
+      className: '',
+      anchored: [['docs.pick', { scope: 'docs.tree', arg: 2 }]],
     },
     {
       row: 'no scope',
@@ -194,15 +209,35 @@ describe('createBaseKit', () => {
     { row: 'unbound', scope: 'docs.tree', command: 'close', keys: null },
     { row: 'unknown name', scope: 'docs.tree', command: 'nope', keys: null },
     {
+      row: 'unregistered qualified id',
+      scope: 'docs.tree',
+      command: 'docs.missing',
+      keys: null,
+    },
+    {
       row: 'qualified id',
       scope: 'docs.tree',
       command: 'panes.focusLeft',
       keys: 'Alt+H',
     },
-  ])('keys_ReadsInScope: $row', ({ scope, command, keys }) => {
+    {
+      row: "an arg's bind",
+      scope: 'docs.tree',
+      command: 'pick',
+      arg: 2,
+      keys: 'Mod+2',
+    },
+    {
+      row: 'an arg no bind carries',
+      scope: 'docs.tree',
+      command: 'pick',
+      arg: 3,
+      keys: null,
+    },
+  ])('keys_ReadsInScope: $row', ({ scope, command, arg, keys }) => {
     const { kit, reads } = kitOver(scope);
 
-    expect(kit.keys(command)).toBe(keys);
+    expect(kit.keys(command, arg)).toBe(keys);
     expect(kit.keysFor('docs.open')).toBe(
       scope === 'docs.view' ? null : 'Mod+O',
     );
@@ -229,7 +264,11 @@ describe('createBaseKit', () => {
           {
             markdown: kitOver(null).deps.markdown,
             keys,
-            commands: { exists: () => true, run: () => undefined },
+            commands: {
+              exists: () => true,
+              argShape: () => undefined,
+              run: () => undefined,
+            },
             platform: 'macos',
             state: noLayoutState,
           },
@@ -419,7 +458,11 @@ describe('createBaseKit', () => {
         {
           markdown: fence.markdown,
           keys: kitOver(null).deps.keys,
-          commands: { exists: () => true, run: () => undefined },
+          commands: {
+            exists: () => true,
+            argShape: () => undefined,
+            run: () => undefined,
+          },
           platform: 'macos',
           state: noLayoutState,
         },

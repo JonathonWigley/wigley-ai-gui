@@ -41,6 +41,7 @@ export const galleryPagePart: PagePart<typeof galleryManifest> = {
         keys: api.keys,
         commands: {
           exists: (id) => api.keys.command(id) !== undefined,
+          argShape: (id) => api.keys.command(id)?.arg,
           run: (id) => api.commands.run(id),
         },
         log,

@@ -128,7 +128,11 @@ function roundViewSetup(
       dispatch: vi.fn(),
       getState: () => state,
       run: vi.fn(),
-      commands: { exists: () => false, run: vi.fn() },
+      commands: {
+        exists: () => false,
+        argShape: () => undefined,
+        run: vi.fn(),
+      },
       contributions: createFormsContributions(),
       platform: 'macos',
       state: noLayoutState,

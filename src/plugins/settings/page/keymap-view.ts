@@ -4,6 +4,7 @@ import type { CommandInfo } from '../../../contracts/plugin';
 import { commandTarget } from '../../../shared/command-args';
 import { capitalised } from '../../../shared/capitalised';
 import { element } from '../../../shared/page/dom';
+import { commandLabel } from '../../../shared/plugin-manifests';
 import { kbd } from '../../../shared/page/ui/kbd';
 import {
   chordName,
@@ -55,10 +56,6 @@ function scopeTitle(ctx: RowContext, scope: ViewScope): string {
   return ctx.schema.scopes.find((info) => info.id === scope)?.title ?? scope;
 }
 
-function commandLabel(ctx: RowContext, command: CommandId): string {
-  return ctx.schema.commands[command]?.label ?? command;
-}
-
 function leader(ctx: RowContext): string {
   return keymapLeader(ctx.schema, ctx.keymapLayer());
 }
@@ -83,7 +80,8 @@ function bindLine(ctx: RowContext, line: BindLine): KeyLineInput {
   if (line.origin === 'user') {
     tags.push('Set');
   }
-  const label = (command: CommandId) => commandLabel(ctx, command);
+  const label = (command: CommandId) =>
+    commandLabel(ctx.schema.commands, command);
   tags.push(...coverTexts(line, label));
   return {
     kind: 'bind',
@@ -106,7 +104,9 @@ function acceleratorLine(ctx: RowContext, line: AcceleratorLine): KeyLineInput {
     tags.push('Removed');
   }
   if (line.state === 'replaced' && line.replacedBy !== null) {
-    tags.push(`Replaced by ${commandLabel(ctx, line.replacedBy)}`);
+    tags.push(
+      `Replaced by ${commandLabel(ctx.schema.commands, line.replacedBy)}`,
+    );
   }
   return { kind: 'accelerator', keys, tags, isStruck: line.state !== 'active' };
 }

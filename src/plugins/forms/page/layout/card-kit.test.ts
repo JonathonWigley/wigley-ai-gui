@@ -176,7 +176,11 @@ function fakeCardDeps(contributions: FormsContributions) {
     platform: 'macos',
     state: noLayoutState,
     log,
-    commands: { exists: (id) => id === 'demo.run', run },
+    commands: {
+      exists: (id) => id === 'demo.run',
+      argShape: () => undefined,
+      run,
+    },
     contributions,
     recordAnchor: () => {},
     recordMount: () => {},
@@ -184,7 +188,6 @@ function fakeCardDeps(contributions: FormsContributions) {
   return { deps, keysFor, anchor, run, log };
 }
 
-// The commands `anchor` was called with, in call order.
 function findingKit(deps: CardDeps, overrides: Partial<DefectFinding> = {}) {
   const round = findingRound(overrides);
   const input = findingFormat.cardInput(round.round, 1);
@@ -403,7 +406,45 @@ describe('card kit', () => {
 
     expect(bound).toBe('g d');
     expect(unbound).toBeNull();
-    expect(keysFor).toHaveBeenCalledWith('demo.run', 'forms.forms');
+    expect(keysFor).toHaveBeenCalledWith(
+      'demo.run',
+      'forms.forms',
+      undefined,
+      undefined,
+    );
+  });
+
+  it('kitChoose_Arg_ReachesTheKeysAndTheAnchor', () => {
+    const { deps, keysFor, anchor } = fakeCardDeps(createFormsContributions());
+    const { kit } = findingKit(deps);
+
+    kit.keys('choose', 2);
+    const span = kit.keyHint(asHtml(new FakeElement('div')), 'choose', {
+      arg: 2,
+    });
+
+    expect(keysFor).toHaveBeenCalledWith(
+      'forms.choose',
+      'forms.forms',
+      undefined,
+      2,
+    );
+    expect(anchor).toHaveBeenCalledWith(span, 'forms.choose', {
+      scope: 'forms.forms',
+      arg: 2,
+    });
+  });
+
+  it('kitCommand_ChooseNeedsAnArg_ThrowsWhileThePartBuilds', () => {
+    const { deps } = fakeCardDeps(createFormsContributions());
+    deps.commands = {
+      exists: () => true,
+      argShape: () => 'number',
+      run: deps.commands.run,
+    };
+    const { kit } = findingKit(deps);
+
+    expect(() => kit.command('forms.choose')).toThrow('forms.choose');
   });
 
   it('kitKeyHint_NamedCommand_AnchorsInTheCardScope', () => {

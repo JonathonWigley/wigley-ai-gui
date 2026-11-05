@@ -364,7 +364,11 @@ async function openPopup(draft: NoteDraft = DRAFT): Promise<Harness> {
         return { dispose: () => undefined };
       },
     },
-    commands: { exists: () => true, run: () => undefined },
+    commands: {
+      exists: () => true,
+      argShape: () => undefined,
+      run: () => undefined,
+    },
     platform: 'macos',
     state: noLayoutState,
     pushScope: pushed,

@@ -63,7 +63,7 @@ function pickerSetup() {
     log: NOOP,
     keys: recordingAnchors().keys,
     markdown: {} as never,
-    commands: { exists: () => true, run: NOOP },
+    commands: { exists: () => true, argShape: () => undefined, run: NOOP },
     platform: 'macos',
     state: noLayoutState,
   });

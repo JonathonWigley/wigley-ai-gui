@@ -51,6 +51,7 @@ export const keysPagePart: PagePart<typeof keysManifest> = {
         state: api.state.forLayouts,
         commands: {
           exists: (id) => keys.command(id) !== undefined,
+          argShape: (id) => keys.command(id)?.arg,
           run: (id) => api.commands.run(id),
         },
         platform,

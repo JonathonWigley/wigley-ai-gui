@@ -28,11 +28,18 @@ export type DotStatus =
   | 'attention'
   | 'error';
 
+// What a command with an argument takes: a command's own declared shape says which.
+export type KitCommandArg =
+  | number
+  | string
+  | { readonly [field: string]: number | string };
+
 // `className` is added to the hint's span; `label` draws the command's label after the keys, or the given text in
-// its place.
+// its place; `arg` shows the keys of the bind that runs the command with that argument.
 export interface KeyHintOptions {
   className?: string;
   label?: boolean | string;
+  arg?: KitCommandArg;
 }
 
 // A list or tree row: leading, label, detail and trailing on one line. `depth` indents a tree row; `onClick` makes
@@ -66,7 +73,8 @@ export interface KitEdgeOptions {
 // `change` is `{ kind: 'put', item }`, `{ kind: 'replace', items }` or `{ kind: 'delete' }`. An id with no slot reads
 // `undefined`, and its listener hears the first write's arguments. A slot owned by a plugin that has stopped keeps its
 // last value. `core.mode` reads `''` while no mode shows. `on` calls `listener` on each change and redraws
-// nothing; the subscription ends with the draw that made it, when the part is disposed or its attempt fails.
+// nothing; the subscription ends with the draw that made it, when the part is disposed or its attempt fails. Call `on`
+// once per draw, while the part builds and outside the listener: each call adds a subscription.
 export interface KitSlotReader {
   get(key?: string): unknown;
   on(listener: (...args: unknown[]) => void): void;
@@ -100,14 +108,16 @@ export interface BaseKit {
   section(parent: HTMLElement, label: string, text: string): HTMLElement | null;
   // The keys bound to the owner's command (its short name, as `nextItem`), or to a name holding a `.` read as a
   // qualified id (as `panes.focusLeft`), in the scope of the part drawing, as `keysFor` reads it; null when unbound or
-  // for a name no command has. It reads the keymap once, when called, so text a part draws from
-  // it keeps the keys of the part's build after a rebind; draw a hint with `keyHint` for one that follows the keymap.
-  keys(command: string): string | null;
+  // for a name no command has. `arg` reads the bind that runs the command with that argument. It reads the keymap once,
+  // when called, so text a part draws from it keeps the keys of the part's build after a rebind; draw a hint with
+  // `keyHint` for one that follows the keymap.
+  keys(command: string, arg?: KitCommandArg): string | null;
   // `span` (with `options.className`): an anchor for the owner's command `command` in the scope of the part drawing;
   // a name holding a `.` names any plugin's command by its qualified id (as `panes.focusLeft`). It shows while that
   // scope is in force and the hints setting is on, and follows keymap changes. `options.label` draws the command's
-  // label after the keys, or the given text. Empty while unbound, for a short name no command of the owner has, or for
-  // a qualified id no plugin registers.
+  // label after the keys, or the given text; `options.arg` shows the bind that runs it with that argument. Empty while
+  // unbound or for a short name no command of the owner has. A qualified id no plugin registers yet is empty until one
+  // does and binds it.
   keyHint(
     parent: HTMLElement,
     command: string,
@@ -115,11 +125,13 @@ export interface BaseKit {
   ): HTMLElement;
   // A runner for any plugin's command by its qualified id (as `docs.openDoc`): each call runs the command, and getting
   // it runs nothing. It checks the id when called, so call it while the part builds: an id no plugin registers throws
-  // `no command <id>`, and the part falls back to `default` like any that throws.
+  // `no command <id>`, a command that needs an argument throws too, as a runner passes none, and the part falls back to
+  // `default` like any that throws.
   command(qualifiedId: string): () => void;
   // The keys bound to any plugin's command by its qualified id, in the scope of the part drawing; null when unbound.
-  // `keys` and `keyHint` read the same scope. It reads the keymap once, when called, as `keys` does.
-  keysFor(qualifiedId: string): string | null;
+  // `keys` and `keyHint` read the same scope, and `arg` reads as it does in `keys`. It reads the keymap once, when
+  // called, as `keys` does.
+  keysFor(qualifiedId: string, arg?: KitCommandArg): string | null;
   // `div.ui-card` with `className` added.
   card(parent: HTMLElement, className?: string): HTMLElement;
   // `span.ui-tag`; tone `neutral` when left out.

@@ -204,7 +204,11 @@ function primerTabSetup(
       keysFor: () => null,
     },
     run: () => undefined,
-    commands: { exists: () => true, run: () => undefined },
+    commands: {
+      exists: () => true,
+      argShape: () => undefined,
+      run: () => undefined,
+    },
     platform: 'macos',
     state: noLayoutState,
     uiState: {

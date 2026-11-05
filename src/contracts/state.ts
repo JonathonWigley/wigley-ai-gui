@@ -72,8 +72,9 @@ export interface ListSlotWriter<V> extends Disposable {
   delete(key: string): void;
 }
 
-// A slot no owner has written reads `undefined`, or `[]` for a list. `on` hears only
-// later changes, a delete of an absent key being none, and a listener's throw is
+// A slot no owner has written reads `undefined`, or `[]` for a list. `on` hears
+// changes told after it is added, a delete of an absent key being none, so a listener
+// added inside another listener hears a change still queued; and a listener's throw is
 // logged under the listening plugin as `<id> listener failed: <error>`. `all`
 // returns a new map in first-set order, and `get` of a list an array no later write
 // changes.

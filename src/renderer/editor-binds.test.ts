@@ -42,12 +42,15 @@ describe('editorBindInForce', () => {
 describe('runEditorBind', () => {
   const fired = {} as TextEditor;
 
-  function run(binds: EditorBind[], scope: string) {
+  function run(binds: EditorBind[], scope: string, hasHandler = true) {
     const ran: [EditorBind, TextEditor][] = [];
     const logs: string[] = [];
     const result = runEditorBind(binds, fired, {
       scope: () => scope,
-      run: (each, editor) => void ran.push([each, editor]),
+      run(each, editor) {
+        ran.push([each, editor]);
+        return hasHandler;
+      },
       log: (source, message) => void logs.push(`${source}: ${message}`),
     });
     return { result, ran, logs };
@@ -64,6 +67,17 @@ describe('runEditorBind', () => {
     expect(result).toBe(true);
     expect(ran).toEqual([[close, fired]]);
     expect(logs).toEqual([]);
+  });
+
+  it.each([
+    { row: 'normal mode', mode: undefined },
+    { row: 'insert mode', mode: 'insert' as const },
+  ])('runEditorBind_RunFindsNoHandler_ReturnsFalse: $row', ({ mode }) => {
+    const stale = { ...bind('<CR>', 'a.one', 'a.gone'), mode };
+
+    const { result } = run([stale], 'a.one', false);
+
+    expect(result).toBe(false);
   });
 
   it('runEditorBind_NormalModeMiss_LogsAndReturnsFalse', () => {

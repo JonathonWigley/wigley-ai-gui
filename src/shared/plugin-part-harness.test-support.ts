@@ -64,7 +64,12 @@ import { commandTarget } from './command-args';
 import { keysFor } from './keys-for';
 import { type PartContext, type PluginHost, startPlugins } from './plugin-host';
 import { pluginLog } from './plugin-log';
-import { commandInfos, qualify } from './plugin-manifests';
+import { createLatestHold } from './latest-hold';
+import {
+  commandInfos,
+  qualify,
+  requireDeclaredScope,
+} from './plugin-manifests';
 import {
   abortableProcesses,
   trackedAlerts,
@@ -120,6 +125,11 @@ export const noCounts: Readonly<PartCounts> = {
   frames: 0,
 };
 
+export interface HarnessCommandRun {
+  id: CommandId;
+  arg: unknown;
+}
+
 // `started` throws while the part is stopped. `restart` stops a started part and
 // starts it again on a new host with the same fakes and the same counts, so what
 // a leaky `dispose` left stays counted. `advance` runs the due timers in due
@@ -132,11 +142,6 @@ export const noCounts: Readonly<PartCounts> = {
 // key once and disposes the writer of a key the part under test publishes before
 // that part starts. `commandRuns` holds each run sent to the other process, in
 // order, under its qualified id.
-export interface HarnessCommandRun {
-  id: CommandId;
-  arg: unknown;
-}
-
 export interface PartHarness<Started> {
   started(): Started;
   counts(): PartCounts;
@@ -162,6 +167,12 @@ export interface MainPartHarness<M extends PluginManifest> extends PartHarness<
   readonly sent: readonly { message: string; data: unknown }[];
 }
 
+export interface HarnessAnchor {
+  element: HTMLElement;
+  command: CommandId;
+  options: AnchorOptions;
+}
+
 // `send` tells the channel listeners of the part under test. `fireWindow` calls
 // each live `window` listener of `type` in added order, with `{ type }` when
 // `event` is left out. `fences` holds the fences live through the default
@@ -170,12 +181,6 @@ export interface MainPartHarness<M extends PluginManifest> extends PartHarness<
 // tells `keys.onWhereChanged`; `hintsShown` reads what `keys.setHintsShown` left.
 // `pushSettings` replaces what `settings()` reads for the part under test and tells
 // its `onSettingsChanged` listeners.
-export interface HarnessAnchor {
-  element: HTMLElement;
-  command: CommandId;
-  options: AnchorOptions;
-}
-
 export interface PagePartHarness<M extends PluginManifest> extends PartHarness<
   PageStart<M>
 > {
@@ -473,6 +478,31 @@ function commonApi(
     ),
     clock: { now: world.scheduler.now },
     state: pluginState(world.state, manifest.id, process, register),
+  };
+}
+
+// `picker` checking each scope against `manifest` as the page service does: at
+// the `create` for a string or a function's first value, at the push for a
+// function's later value.
+function scopeCheckedPicker(
+  manifest: PluginManifest,
+  picker: ListPickerService,
+): ListPickerService {
+  return {
+    ...picker,
+    create(options = {}) {
+      const { scope = 'picker' } = options;
+      const scopeName = typeof scope === 'string' ? () => scope : scope;
+      requireDeclaredScope(manifest, scopeName());
+      return picker.create({
+        ...options,
+        scope: () => {
+          const name = scopeName();
+          requireDeclaredScope(manifest, name);
+          return name;
+        },
+      });
+    },
   };
 }
 
@@ -961,14 +991,14 @@ interface PageWorld extends HarnessWorld {
   keymap: Keymap;
   scope: string;
   transparency: 'full' | 'reduced' | null;
-  // The qualified ids of the live modes, in add order; the first one shows.
+  // The qualified ids of the live modes, the shown one first.
   liveModes: string[];
   fences: FenceContribution[];
   anchors: HarnessAnchor[];
   where: HintWhere;
   whereListeners: Listeners<HintWhere>;
   hintsShown: boolean;
-  latestHintsHandle: Disposable | null;
+  hintsHold: { hold(shown: boolean): Disposable };
   anchorDispose?(): void;
 }
 
@@ -978,7 +1008,7 @@ function createPageWorld(
   state: SlotStore | undefined,
   manifests: readonly PluginManifest[],
 ): PageWorld {
-  return {
+  const world: PageWorld = {
     ...createWorld(state, 'page', manifests),
     replaced,
     keymapListeners: createListeners(),
@@ -998,8 +1028,11 @@ function createPageWorld(
     where: 'page',
     whereListeners: createListeners(),
     hintsShown: true,
-    latestHintsHandle: null,
+    hintsHold: createLatestHold<boolean>(true, (shown) => {
+      world.hintsShown = shown;
+    }),
   };
+  return world;
 }
 
 function fakePushedScope(
@@ -1037,6 +1070,12 @@ function fakeModes(
       liveModes.push(id);
       const handle: ModeHandle = common.register({
         show() {
+          const isDisposed = !liveModes.includes(id);
+          if (isDisposed || liveModes[0] === id) {
+            return;
+          }
+          liveModes.splice(liveModes.indexOf(id), 1);
+          liveModes.unshift(id);
           mode.shown();
         },
         isShown: () => liveModes[0] === id,
@@ -1204,19 +1243,7 @@ function fakePageApi(
       where: () => world.where,
       onWhereChanged: (listener) =>
         register(world.whereListeners.add(listener)),
-      setHintsShown(shown) {
-        world.hintsShown = shown;
-        const handle = register<Disposable>({
-          dispose() {
-            if (world.latestHintsHandle === handle) {
-              world.latestHintsHandle = null;
-              world.hintsShown = true;
-            }
-          },
-        });
-        world.latestHintsHandle = handle;
-        return handle;
-      },
+      setHintsShown: (shown) => register(world.hintsHold.hold(shown)),
       placedIn: (scope) =>
         new Set(
           world.anchors
@@ -1260,7 +1287,6 @@ function fakePageApi(
     },
     services: {
       fuzzy: notFaked<FuzzyMatcher>('fuzzy'),
-      picker: notFaked<ListPickerService>('picker'),
       chooseFolder: notFakedCall('chooseFolder'),
       openExternal: notFakedCall('openExternal'),
       markup: notFaked<MarkupEditor>('markup'),
@@ -1286,6 +1312,10 @@ function fakePageApi(
         },
       },
       ...replaced,
+      picker:
+        replaced.picker === undefined
+          ? notFaked<ListPickerService>('picker')
+          : scopeCheckedPicker(manifest, replaced.picker),
       editor:
         replaced.editor === undefined
           ? notFaked<EditorHost>('editor')

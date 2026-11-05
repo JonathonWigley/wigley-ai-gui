@@ -4,8 +4,9 @@ import type {
   CommandRunContext,
 } from '../contracts/commands';
 import type { Disposable } from '../contracts/disposable';
+import type { Log } from '../contracts/log';
 import type { CommandInfo, ProcessName } from '../contracts/plugin';
-import { checkCommandArg } from './command-args';
+import { checkCommandArg, commandTarget } from './command-args';
 import type { CommandRegistry } from './command-registry';
 
 // `infoOf` reads the freshest catalog the process has. `remote` sends a run to the
@@ -44,6 +45,36 @@ export interface KeyCommands<Context extends { arg: unknown }> {
   run: CommandRouter<Context>['run'];
   has(id: CommandId): boolean;
   requireRegistered(ids: Iterable<CommandId>): void;
+}
+
+// The key press firing a bind: its keys, and the log source its lines go under.
+// `logsRun` also logs each run it starts.
+export interface FiredKeys {
+  keys: string;
+  source: string;
+  log: Log;
+  logsRun?: boolean;
+}
+
+// Runs `bind` and returns true. A runtime command disposed since the last keymap
+// has no handler until the next, so its key logs that, runs nothing and returns
+// false.
+export function runBound<Context extends { arg: unknown }>(
+  commands: Pick<KeyCommands<Context>, 'run' | 'has'>,
+  bind: { command: CommandId; arg?: unknown },
+  fired: FiredKeys,
+  extras: Omit<Context, 'arg'>,
+): boolean {
+  const { keys, source, log } = fired;
+  if (!commands.has(bind.command)) {
+    log(source, `${keys} names no command ${bind.command}`);
+    return false;
+  }
+  if (fired.logsRun === true) {
+    log(source, `${keys} ran ${commandTarget(bind.command, bind.arg)}`);
+  }
+  void commands.run(bind.command, bind.arg, extras);
+  return true;
 }
 
 export function createCommandRouter<Context extends { arg: unknown }>(

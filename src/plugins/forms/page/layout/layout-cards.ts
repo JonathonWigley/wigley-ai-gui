@@ -100,8 +100,8 @@ export function buildLayoutCard(
 }
 
 // What a layout's card or pane mounts its text boxes and anchors its keys
-// through, and where it records each slot subscription and markdown mount it
-// makes.
+// through, and where it records each anchor the kit names and each slot
+// subscription and markdown mount it makes.
 interface MountingDeps {
   mountBox(parent: HTMLElement, target: TextTarget, text: string): void;
   destroyBox(target: TextTarget): void;
@@ -110,8 +110,9 @@ interface MountingDeps {
   recordMount(mount: MarkdownMount): void;
 }
 
-// `deps` with each box it mounts, each anchor it names, and each slot
-// subscription and markdown mount it records also recorded in `rollback`.
+// `deps` with each box it mounts, each anchor it names, and each anchor the
+// kit names and each slot subscription and markdown mount it records also
+// recorded in `rollback`.
 export function recordingDeps<D extends MountingDeps>(
   deps: D,
   rollback: RollbackDeps,

@@ -4,8 +4,7 @@ import type { EditorHost } from '../contracts/editor';
 import type { PageBind, ViewScope } from '../contracts/keymap';
 import type { Log } from '../contracts/log';
 import type { PageCommandContext } from '../contracts/plugin';
-import { commandTarget } from '../shared/command-args';
-import type { KeyCommands } from '../shared/command-router';
+import { type KeyCommands, runBound } from '../shared/command-router';
 import { createListeners } from '../shared/listeners';
 import type { BoxFocus } from './box-focus';
 import {
@@ -194,13 +193,7 @@ export function installPageKeys(
   let timeout = createPendingTimeout(matcher, timers, timeoutMs, reportKeys);
   const runBind = (bind: PageBind) => {
     const keys = bind.keys.join('');
-    // A runtime command disposed since the last push has no handler until the next.
-    if (!commands.has(bind.command)) {
-      log('page', `${keys} names no command ${bind.command}`);
-      return;
-    }
-    log('page', `${keys} ran ${commandTarget(bind.command, bind.arg)}`);
-    void commands.run(bind.command, bind.arg, {});
+    runBound(commands, bind, { keys, source: 'page', log, logsRun: true }, {});
   };
   const dropPending = () => {
     dropPendingKeys(matcher, reportKeys);

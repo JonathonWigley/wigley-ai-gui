@@ -177,14 +177,14 @@ describe('createAnchors', () => {
     expect(isHidden(node)).toBe(false);
   });
 
-  it('setShown_False_HidesEveryAnchor', () => {
+  it('holdShown_False_HidesEveryAnchor', () => {
     const { anchors } = anchorsSetup();
     const scoped = anchorElement();
     const unscoped = anchorElement();
     anchors.anchor(asHtml(scoped), 'a.trash', { scope: 'a.list' });
     anchors.anchor(asHtml(unscoped), 'a.trash');
 
-    anchors.setShown(false);
+    anchors.holdShown(false);
     const anchoredWhileOff = anchorElement();
     anchors.anchor(asHtml(anchoredWhileOff), 'a.trash');
 
@@ -193,15 +193,14 @@ describe('createAnchors', () => {
     expect(nodes.map((node) => node.children.length)).toEqual([0, 0, 0]);
   });
 
-  it('setShown_True_ShowsAnchorsInScopeOnly', () => {
+  it('holdShown_Disposed_ShowsAnchorsInScopeOnly', () => {
     const { anchors } = anchorsSetup();
     const inScope = anchorElement();
     const otherScope = anchorElement();
     anchors.anchor(asHtml(inScope), 'a.trash', { scope: 'a.list' });
     anchors.anchor(asHtml(otherScope), 'a.trash', { scope: 'a.other' });
 
-    anchors.setShown(false);
-    anchors.setShown(true);
+    anchors.holdShown(false).dispose();
 
     expect(isHidden(inScope)).toBe(false);
     expect(isHidden(otherScope)).toBe(true);
@@ -223,12 +222,12 @@ describe('createAnchors', () => {
     expect(isHidden(node)).toBe(false);
   });
 
-  it('reveal_ShownFalse_StaysHidden', () => {
+  it('reveal_HeldHidden_StaysHidden', () => {
     const anchors = unrevealedAnchors();
     const node = anchorElement();
     anchors.anchor(asHtml(node), 'a.trash');
 
-    anchors.setShown(false);
+    anchors.holdShown(false);
     anchors.reveal();
 
     expect(isHidden(node)).toBe(true);

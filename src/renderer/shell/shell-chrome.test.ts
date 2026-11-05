@@ -96,7 +96,11 @@ function mountChrome(keys: KeyHints = recordingAnchors().keys) {
         ...NO_FENCES,
       },
       keys,
-      commands: { exists: (id) => id === REGISTERED, run: () => undefined },
+      commands: {
+        exists: (id) => id === REGISTERED,
+        argShape: () => undefined,
+        run: () => undefined,
+      },
       platform: 'macos',
       state: noLayoutState,
     },
@@ -194,9 +198,16 @@ describe('mountShellChrome', () => {
         [REGISTERED, undefined, false],
       ],
     },
-    { row: 'an unregistered command', hinted: 'docs.missing', anchors: [] },
+    {
+      row: 'a command no plugin registers yet',
+      hinted: 'docs.missing',
+      anchors: [
+        ['docs.missing', undefined, true],
+        ['docs.missing', undefined, false],
+      ],
+    },
   ])(
-    'setLayouts_UserItemHint_AnchorsOnlyARegisteredCommandAndDisposesTheLastDraw: $row',
+    'setLayouts_UserItemHint_AnchorsTheCommandAndDisposesTheLastDraw: $row',
     ({ hinted, anchors }) => {
       const recorded = recordingAnchors();
       const { chrome } = mountChrome(recorded.keys);

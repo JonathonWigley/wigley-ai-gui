@@ -168,6 +168,7 @@ export const primerPagePart: PagePart<typeof primerManifest> = {
       run: (command) => api.commands.run(command),
       commands: {
         exists: (command) => api.keys.command(command) !== undefined,
+        argShape: (command) => api.keys.command(command)?.arg,
         run: (command) => api.commands.run(command),
       },
       platform: api.platform.os,

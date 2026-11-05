@@ -120,7 +120,11 @@ async function shownView(
       ...NO_FENCES,
     },
     keys,
-    commands: { exists: () => true, run: () => undefined },
+    commands: {
+      exists: () => true,
+      argShape: () => undefined,
+      run: () => undefined,
+    },
     log: () => undefined,
     toast: () => undefined,
     setScope: (scope) => handed.push(scope),

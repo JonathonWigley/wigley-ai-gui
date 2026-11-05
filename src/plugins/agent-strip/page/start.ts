@@ -46,6 +46,7 @@ export const agentStripPagePart: PagePart<typeof agentStripManifest> = {
         keys: api.keys,
         commands: {
           exists: (id) => api.keys.command(id) !== undefined,
+          argShape: (id) => api.keys.command(id)?.arg,
           run: (id) => api.commands.run(id),
         },
         platform: api.platform.os,

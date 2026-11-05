@@ -368,7 +368,11 @@ function setUpList(shown: ShownLayouts<ChatLayout>) {
         keysFor: (command) =>
           command === chatCommand('interrupt') ? '⌃C' : null,
       },
-      commands: { exists: () => true, run: () => undefined },
+      commands: {
+        exists: () => true,
+        argShape: () => undefined,
+        run: () => undefined,
+      },
       platform: 'macos',
       state: noLayoutState,
       allow: () => undefined,

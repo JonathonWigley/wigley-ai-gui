@@ -114,7 +114,9 @@ type DeclaredArg<
 // other process or the id is taken. `intercept` wraps every run of a command in the
 // process that runs its handler: the last registered is outermost, `next` runs the
 // next wrap and then the handler, and a wrap that does not call `next` stops the
-// run; it throws for a command the catalog knows as the other process's. `onDidRun`
+// run; a wrap calling `next` after its own promise settles still runs the handler,
+// but `run` has resolved and `onDidRun` hears nothing; it throws for a command the
+// catalog knows as the other process's. `onDidRun`
 // hears each run that ended with no failure, in the process that ran the handler,
 // once the handler has settled. Each handle is filed in the part's registrations.
 export interface PluginCommands {

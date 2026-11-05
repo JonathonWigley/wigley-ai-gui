@@ -45,6 +45,24 @@ export function qualify(pluginId: string, short: string): string {
   return `${pluginId}.${short}`;
 }
 
+// The label of the command `id`, or `id` for a command the catalog lacks.
+export function commandLabel(
+  commands: Readonly<Record<CommandId, Pick<CommandInfo, 'label'>>>,
+  id: CommandId,
+): string {
+  return commands[id]?.label ?? id;
+}
+
+// Throws when the plugin of `manifest` declares no scope named `scope`.
+export function requireDeclaredScope(
+  manifest: Pick<PluginManifest, 'id' | 'scopes'>,
+  scope: string,
+) {
+  if (!Object.hasOwn(manifest.scopes, scope)) {
+    throw new Error(`Plugin "${manifest.id}" declares no scope "${scope}"`);
+  }
+}
+
 // The ids in either of the manifest's `dependsOn` lists: its `main` list, then
 // its `page` list, each id once.
 function dependencyIds(manifest: PluginManifest): string[] {

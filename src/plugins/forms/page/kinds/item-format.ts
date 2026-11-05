@@ -22,9 +22,9 @@ export interface ItemCard {
 // scope and the anchors that show them (a card reads and anchors in the forms
 // view's), the platform key hints are drawn for, the log, the registered
 // commands `kit.command` checks and runs, the card parts other plugins
-// added, the slots `kit.state` reads, where each slot subscription the card
-// makes is recorded, and where each markdown mount it makes is recorded for
-// disposal.
+// added, the slots `kit.state` reads, where each anchor the kit names and each
+// slot subscription the card makes is recorded, and where each markdown mount
+// it makes is recorded for disposal.
 export interface CardDeps {
   markdown: MarkdownRenderer;
   mountBox(parent: HTMLElement, target: TextTarget, text: string): void;

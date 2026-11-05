@@ -107,6 +107,7 @@ const PLUGIN_EXTRAS: Record<string, PluginExtra> = {
   // Its relay's socket and its MCP adapter's SDK sit in sublayers of main; the
   // relay and its channel path use the shared local channel transport.
   sessions: {
+    contract: { layers: ['src/shared'] },
     main: {
       layers: [
         'src/plugins/sessions/main/relay',

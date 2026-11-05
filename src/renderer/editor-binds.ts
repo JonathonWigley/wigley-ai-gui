@@ -22,7 +22,8 @@ export function editorBindInForce(
   return { kind: 'none', message: `${binds[0].keys} has no bind in ${scope}` };
 }
 
-// Runs the bind in force and returns true. A miss returns false and logs only
+// Runs the bind in force and returns whether `run` ran it: a key whose command
+// has no handler types as it would unbound. A miss returns false and logs only
 // for a normal-mode bind: an insert-mode key with no bind in force types as it
 // would unbound.
 export function runEditorBind(
@@ -30,14 +31,13 @@ export function runEditorBind(
   fired: TextEditor,
   deps: {
     scope(): ViewScope;
-    run(bind: EditorBind, fired: TextEditor): void;
+    run(bind: EditorBind, fired: TextEditor): boolean;
     log: Log;
   },
 ): boolean {
   const choice = editorBindInForce(binds, deps.scope());
   if (choice.kind === 'run') {
-    deps.run(choice.bind, fired);
-    return true;
+    return deps.run(choice.bind, fired);
   }
   if (editorBindMode(binds[0]) === 'normal') {
     deps.log('page', choice.message);

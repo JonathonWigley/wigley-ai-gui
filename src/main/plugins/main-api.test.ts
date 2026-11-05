@@ -94,7 +94,6 @@ function mainCommandsOver(
     served: () => ({}),
     leader: () => '<Space>',
     remote,
-    log: () => {},
   });
 }
 

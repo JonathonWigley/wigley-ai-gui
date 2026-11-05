@@ -299,9 +299,7 @@ describe('docs page part lifecycle', () => {
     }
 
     rows.set('s1', { ...projectRow('s1'), hostSessionId: 'moved' });
-    await vi.waitFor(() =>
-      expect(rebuilt).toEqual([sessionSourceId('s1')]),
-    );
+    await vi.waitFor(() => expect(rebuilt).toEqual([sessionSourceId('s1')]));
 
     rows.delete('s1');
     expect([...liveTabs.keys()]).toEqual(['s2']);

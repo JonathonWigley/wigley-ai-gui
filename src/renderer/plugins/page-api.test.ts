@@ -14,7 +14,7 @@ import type {
   FenceContribution,
   MarkdownRenderer,
 } from '../../contracts/markdown';
-import type { Keymap } from '../../contracts/keymap';
+import type { HintWhere, Keymap } from '../../contracts/keymap';
 import type {
   FocusTarget,
   OuterPanes,
@@ -42,6 +42,7 @@ import type { PageLayouts } from '../../shared/page/layout-host/show-layouts';
 import { CommandRegistry } from '../../shared/command-registry';
 import { createEventBus, type EventBus } from '../../shared/event-bus';
 import { fakeFuzzyMatcher } from '../../shared/fake-fuzzy-matcher.test-support';
+import { createListeners } from '../../shared/listeners';
 import {
   asFake,
   asHtml,
@@ -161,7 +162,6 @@ function pageCommandsOver(
     served: () => served,
     leader: () => '<Space>',
     remote,
-    log: () => {},
   });
 }
 
@@ -247,6 +247,27 @@ describe('createPageApi', () => {
 
     second.dispose();
     expect(isHidden()).toBe(false);
+  });
+
+  it('onWhereChanged_PartStops_HearsNothing', () => {
+    const moved = createListeners<HintWhere>();
+    const registrations = createRegistrations();
+    const api = createPageApi(
+      manifest,
+      deps({
+        registrations,
+        boxFocus: { where: () => 'box', onChanged: moved.add },
+      }),
+    );
+    const heard: HintWhere[] = [];
+    api.keys.onWhereChanged((where) => heard.push(where));
+
+    moved.tell('page');
+    registrations.dispose();
+    moved.tell('box');
+
+    expect(api.keys.where()).toBe('box');
+    expect(heard).toEqual(['page']);
   });
 
   it('qualifies the scope a plugin sets', () => {

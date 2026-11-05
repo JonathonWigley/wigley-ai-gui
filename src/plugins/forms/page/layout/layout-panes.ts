@@ -77,9 +77,9 @@ import type { LayoutPick } from './layout-resolver';
 // anchors that show them, the forms state and its actions, a forms command,
 // the round's text boxes, the forms view now, which decides what a rail click
 // does, the registered commands `kit.command` checks and runs, the review
-// columns other plugins added, the slots `kit.state` reads, where each slot
-// subscription a pane makes is recorded, and where each markdown mount it
-// makes is recorded for disposal.
+// columns other plugins added, the slots `kit.state` reads, where each anchor
+// the kit names and each slot subscription a pane makes is recorded, and where
+// each markdown mount it makes is recorded for disposal.
 export interface PaneDeps {
   markdown: MarkdownRenderer;
   platform: OsName;

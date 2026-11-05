@@ -366,7 +366,8 @@ export const NEEDS_YOU_ACTIVITY: RowActivity = {
 
 // `addTab` attaches the tab's element before returning and selects the tab
 // when it is the session's first; it throws on a tab id the session already
-// holds. A tab added before its session's row waits for the row. A session's
+// holds. Docs and Chat lead the strip; other tabs follow in add order. A tab
+// added before its session's row waits for the row. A session's
 // tabs drop when its row leaves, and `sessionsRowsSlot`'s notice says so.
 // `addRowPart` adds a part under every session
 // row, `addBarPart` one in every session's tab bar. Each throws on a part id

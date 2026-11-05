@@ -17,7 +17,11 @@ export function notesPartsDeps() {
       ...NO_FENCES,
     },
     keys,
-    commands: { exists: () => true, run: (id) => ran.push(id) },
+    commands: {
+      exists: () => true,
+      argShape: () => undefined,
+      run: (id) => ran.push(id),
+    },
     platform: 'macos',
     state: noLayoutState,
     log: (message: string) => logged.push(message),

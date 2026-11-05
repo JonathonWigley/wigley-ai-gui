@@ -174,7 +174,11 @@ async function backlogSetup() {
     keys,
     platform: 'macos',
     state: noLayoutState,
-    commands: { exists: () => true, run: () => undefined },
+    commands: {
+      exists: () => true,
+      argShape: () => undefined,
+      run: () => undefined,
+    },
     tags: () => ['agent-ready', 'later'],
     openDoc: () => undefined,
     setScope: (scope) => calls.push(['setScope', scope]),

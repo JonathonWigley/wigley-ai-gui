@@ -159,7 +159,7 @@ function mounted(
   const kit = {
     markdown: {},
     keys: { anchor: () => ({ dispose: noEvent }), keysFor: () => null },
-    commands: { exists: () => true, run: noEvent },
+    commands: { exists: () => true, argShape: () => undefined, run: noEvent },
     platform: 'macos',
     log,
   } as unknown as SurfaceKitDeps;

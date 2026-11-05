@@ -44,7 +44,11 @@ function fakeKitServices() {
     },
     platform: 'macos' as const,
     state: noLayoutState,
-    commands: { exists: () => true, run: () => undefined },
+    commands: {
+      exists: () => true,
+      argShape: () => undefined,
+      run: () => undefined,
+    },
     log: (message: string) => {
       logged.push(message);
     },

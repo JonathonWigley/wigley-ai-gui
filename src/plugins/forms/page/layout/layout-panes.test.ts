@@ -52,7 +52,7 @@ function fakePaneDeps(contributions: FormsContributions, state: FormsState) {
     mountBox: vi.fn(),
     destroyBox: vi.fn(),
     shownView: () => 'review',
-    commands: { exists: () => false, run: vi.fn() },
+    commands: { exists: () => false, argShape: () => undefined, run: vi.fn() },
     contributions,
     recordAnchor: () => {},
     recordMount: () => {},
@@ -159,7 +159,12 @@ describe('review pane', () => {
     );
 
     expect(read).toBeNull();
-    expect(keysFor).toHaveBeenCalledWith('demo.run', 'forms.review');
+    expect(keysFor).toHaveBeenCalledWith(
+      'demo.run',
+      'forms.review',
+      undefined,
+      undefined,
+    );
   });
 
   it('reviewKit_KeyHint_AnchorsInTheReviewScope', () => {

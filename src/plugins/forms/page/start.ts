@@ -164,6 +164,7 @@ export const formsPagePart: PagePart<typeof formsManifest> = {
       run: (command) => api.commands.run(command),
       commands: {
         exists: (command) => api.keys.command(command) !== undefined,
+        argShape: (command) => api.keys.command(command)?.arg,
         run: (command) => api.commands.run(command),
       },
       contributions,

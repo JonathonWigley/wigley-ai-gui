@@ -66,7 +66,7 @@ export function hasOtherTab(
   return stepTab(tabIds, selectedTabId, 1) !== null;
 }
 
-// A session's tab ids in add order, the selected one's id, and how many times
+// A session's tab ids in strip order, the selected one's id, and how many times
 // `tabsAfterSelect` changed the selection: a take over and its release select
 // without counting, so a release can tell whether a tab was selected since.
 export interface TabsState {
@@ -175,7 +175,7 @@ export function tabsAfterRelease(
 }
 
 // A sidebar row's second line: the last non-empty status among its session's
-// tabs, in tab-add order, or null.
+// tabs, in strip order, or null.
 export function rowStatus(statuses: readonly string[]): string | null {
   return statuses.findLast((status) => status !== '') ?? null;
 }

@@ -35,7 +35,8 @@ import { icon } from '../shared/page/ui/icon';
 import { startPlugins } from '../shared/plugin-host';
 import { posixPaths } from '../shared/paths/posix-paths';
 import { windowsPaths } from '../shared/paths/windows-paths';
-import { qualify } from '../shared/plugin-manifests';
+import { runBound } from '../shared/command-router';
+import { commandLabel, qualify } from '../shared/plugin-manifests';
 import { createRegistrations } from '../shared/registrations';
 import {
   createRuntimeCommands,
@@ -179,7 +180,7 @@ async function start() {
       const { keymap, platform } = live.current();
       return promptKeysFor(keymap, command, scope, platform.os, where, arg);
     },
-    label: (id) => live.current().commands[id]?.label ?? id,
+    label: (id) => commandLabel(live.current().commands, id),
     scope: () => scopeStack.current(),
     platform: live.current().platform.os,
   });
@@ -208,6 +209,7 @@ async function start() {
       platform: config.platform.os,
       commands: {
         exists: hasHandler,
+        argShape: (id) => live.current().commands[id]?.arg,
         run: (id) => commands.router.run(id, undefined),
       },
       state: layoutState(state, 'shell', (handle) => handle),
@@ -281,14 +283,13 @@ async function start() {
     (binds, fired) =>
       runEditorBind(binds, fired, {
         scope: () => scopeStack.current(),
-        run({ command, arg, keys }, editorFired) {
-          // A runtime command disposed since the last push has no handler until the next.
-          if (hasHandler(command)) {
-            void commands.router.run(command, arg, { editor: editorFired });
-          } else {
-            log('page', `${keys} names no command ${command}`);
-          }
-        },
+        run: (bind, editorFired) =>
+          runBound(
+            commands.keyCommands,
+            bind,
+            { keys: bind.keys, source: 'page', log },
+            { editor: editorFired },
+          ),
         log,
       }),
     log,
@@ -314,8 +315,8 @@ async function start() {
     chooseFolder: () => bridge.chooseFolder(),
     openExternal: (url) => bridge.openExternal(url),
   };
-  // Listens from here with no binds: a key pressed while the parts start matches
-  // nothing and reaches nothing.
+  // Starts with no binds, since `createPendingKeys` needs it first and binds wait
+  // for the parts: a key pressed while they start matches nothing.
   const pageKeys = installPageKeys(
     settings.keySequenceTimeoutMs,
     () => scopeStack.current(),

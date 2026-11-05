@@ -14,25 +14,20 @@ import type {
 import type { Log } from '../contracts/log';
 import type { MainCommandContext } from '../contracts/plugin';
 import { interceptChordText } from '../shared/accelerator';
-import type { KeyCommands } from '../shared/command-router';
+import { type KeyCommands, runBound } from '../shared/command-router';
 import { errorText } from '../shared/error-text';
 
 // Main-process commands receive the chord that fired them, e.g. `Control+Tab`.
 export type MainCommands = KeyCommands<MainCommandContext<any>>;
 
-// Runs `bind` for `chord`. A runtime command disposed since the last keymap has no
-// handler until the next one, so its key runs nothing.
+// Runs `bind` for `chord`.
 function runChord(
   bind: { command: CommandId; arg?: unknown },
   chord: string,
   commands: MainCommands,
   log: Log,
 ) {
-  if (!commands.has(bind.command)) {
-    log('keys', `${chord} names no command ${bind.command}`);
-    return;
-  }
-  void commands.run(bind.command, bind.arg, { chord });
+  runBound(commands, bind, { keys: chord, source: 'keys', log }, { chord });
 }
 
 function buildMenu(

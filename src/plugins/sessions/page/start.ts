@@ -446,6 +446,7 @@ export const sessionsPagePart: PagePart<typeof sessionsManifest> = {
       state: api.state.forLayouts,
       commands: {
         exists: (id) => api.keys.command(id) !== undefined,
+        argShape: (id) => api.keys.command(id)?.arg,
         run: (id) => api.commands.run(id),
       },
       log,

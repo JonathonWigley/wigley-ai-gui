@@ -112,6 +112,7 @@ export const chatPagePart: PagePart<typeof chatManifest> = {
       keys: api.keys,
       commands: {
         exists: (id: string) => api.keys.command(id) !== undefined,
+        argShape: (id: string) => api.keys.command(id)?.arg,
         run: (id: string) => api.commands.run(id),
       },
       platform: api.platform.os,

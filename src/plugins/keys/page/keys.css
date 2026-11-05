@@ -1,7 +1,7 @@
 /* Which-key: a floating panel docked above the status bar while it shows, and
    at the window's bottom edge otherwise, over the content and over an open
-   dialog's scrim. Display only: the overlay layer gives its children the
-   pointer, and this panel takes none. Compounded with
+   dialog's scrim, help's included. Display only: the overlay layer gives its
+   children the pointer, and this panel takes none. Compounded with
    `ui-floating` so its placement wins over the panel's own layer. */
 .ui-floating.which-key {
   bottom: calc(var(--wg-status-bar-height) + var(--wg-sheet-gutter));
@@ -11,6 +11,12 @@
   pointer-events: none !important;
   position: fixed;
   right: var(--wg-sheet-gutter);
+  z-index: calc(var(--wg-z-dialog) + 2);
+}
+
+/* Help opens from any scope, so it sits over every other dialog; the `keys`
+   part starts first, and a later dialog at the same layer would cover it. */
+.ui-scrim.keys-help-scrim {
   z-index: calc(var(--wg-z-dialog) + 1);
 }
 

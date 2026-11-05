@@ -8,6 +8,7 @@ import type {
   DependencyKey,
   LayoutShow,
   MainPart,
+  ModeHandle,
   PagePart,
 } from '../contracts/plugin';
 import type { SlotKey } from '../contracts/state';
@@ -553,6 +554,52 @@ describe('plugin part harness', () => {
     );
     await expect(harness.restart()).resolves.toBeUndefined();
   });
+
+  it('ModeHandle_Show_MovesAHiddenModeFirstAndTellsItOnce', () => {
+    const shown = vi.fn();
+    let first!: ModeHandle;
+    let second!: ModeHandle;
+    startPagePart(
+      pagePart((api) => {
+        first = api.modes.add(browseMode);
+        second = api.modes.add({ ...browseMode, id: 'other', shown });
+        return { commands: { run() {} } };
+      }),
+    );
+
+    second.show();
+    second.show();
+    expect(shown).toHaveBeenCalledTimes(1);
+    expect([first.isShown(), second.isShown()]).toEqual([false, true]);
+
+    second.dispose();
+    second.show();
+    expect(shown).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    { row: 'a string', scope: 'nope' },
+    { row: "a function's first value", scope: () => 'nope' },
+    { row: 'the default', scope: undefined },
+  ])(
+    'services.picker_ScopeTheManifestLacks_ThrowsAtCreate: $row',
+    ({ scope }) => {
+      let thrown: unknown;
+      startPagePart(
+        pagePart((api) => {
+          try {
+            api.services.picker.create({ scope });
+          } catch (error) {
+            thrown = error;
+          }
+          return { commands: { run() {} } };
+        }),
+        { services: { picker: { create: vi.fn() } } },
+      );
+
+      expect(String(thrown)).toContain('declares no scope');
+    },
+  );
 
   it.each([
     { firstModeTaken: false, shownCalls: 1 },

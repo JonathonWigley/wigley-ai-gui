@@ -42,9 +42,8 @@ export interface ShellChrome {
   setLayouts(shown: ShownLayouts<Layout>): void;
 }
 
-// The shell kit of one drawing attempt. The shell owns no command, so a
-// command name is any plugin's qualified id, null while no plugin registers
-// it; anchors take no scope.
+// The shell kit of one drawing attempt. The shell owns no command, so only a
+// plugin's qualified id names one; anchors take no scope.
 function createShellKit(
   services: OwnerKitServices,
   rollback: Pick<RollbackDeps, 'recordAnchor'>,
@@ -52,7 +51,7 @@ function createShellKit(
   return createBaseKit({
     ...services,
     scope: null,
-    commandNamed: (name) => (services.commands.exists(name) ? name : null),
+    commandNamed: () => null,
     recordAnchor: (anchor) => rollback.recordAnchor(anchor),
     recordMount: (mount) => rollback.recordAnchor(mount),
   });

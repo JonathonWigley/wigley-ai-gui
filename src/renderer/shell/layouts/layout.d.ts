@@ -25,8 +25,7 @@ export interface ActivityItemInput {
 }
 
 // The shell's kit. The shell owns no command, so `keys`, `keyHint` and `edge` take any plugin's command by its
-// qualified id (as `docs.openDoc`), and a hint anchors in every scope. A hint shows once the plugins have started, and a
-// command no plugin has registered yet reads as unbound until the part next draws.
+// qualified id (as `docs.openDoc`), and a hint anchors in every scope. A hint shows once the plugins have started.
 // `command` runs any registered page command.
 export interface ShellKit extends BaseKit {}
 

@@ -36,7 +36,11 @@ import { keysFor } from '../../shared/keys-for';
 import { createListPicker } from '../../shared/page/list-picker';
 import type { PageLayouts } from '../../shared/page/layout-host/show-layouts';
 import { pluginLog } from '../../shared/plugin-log';
-import { qualify } from '../../shared/plugin-manifests';
+import {
+  commandLabel,
+  qualify,
+  requireDeclaredScope,
+} from '../../shared/plugin-manifests';
 import {
   trackedEditor,
   trackedMarkdown,
@@ -174,7 +178,7 @@ export function createPageApi(
         registrations.track(
           onChangedPart(config, (served) => served.keymap, listener),
         ),
-      label: (id) => config.current().commands[id]?.label ?? id,
+      label: (id) => commandLabel(config.current().commands, id),
       command: (id) => config.current().commands[id],
       get scopes() {
         return config.current().scopes;
@@ -254,12 +258,6 @@ function trackedPushedScope(
     dispose: () => pushed.dispose(),
   };
   return registrations.track(view);
-}
-
-function requireDeclaredScope(manifest: PluginManifest, scope: string) {
-  if (!Object.hasOwn(manifest.scopes, scope)) {
-    throw new Error(`Plugin "${manifest.id}" declares no scope "${scope}"`);
-  }
 }
 
 // One plugin's list pickers. `pushedScopes` is filed ahead of each list's close,

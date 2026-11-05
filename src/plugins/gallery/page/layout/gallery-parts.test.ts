@@ -35,7 +35,7 @@ function fakeDeps(
       ...NO_FENCES,
     },
     keys,
-    commands: { exists: () => true, run: vi.fn() },
+    commands: { exists: () => true, argShape: () => undefined, run: vi.fn() },
     platform: 'macos',
     state: noLayoutState,
     log: vi.fn(),

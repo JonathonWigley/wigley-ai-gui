@@ -96,6 +96,7 @@ export const unityPoolPagePart: PagePart<typeof unityPoolManifest> = {
       keys: api.keys,
       commands: {
         exists: (id) => api.keys.command(id) !== undefined,
+        argShape: (id) => api.keys.command(id)?.arg,
         run: (id) => api.commands.run(id),
       },
       platform: api.platform.os,

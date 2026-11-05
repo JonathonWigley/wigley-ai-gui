@@ -55,7 +55,7 @@ function fakeCardDeps(contributions: FormsContributions): CardDeps {
     platform: 'macos',
     state: noLayoutState,
     log: vi.fn(),
-    commands: { exists: () => false, run: vi.fn() },
+    commands: { exists: () => false, argShape: () => undefined, run: vi.fn() },
     contributions,
     recordAnchor: () => {},
     recordMount: () => {},

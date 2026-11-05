@@ -68,6 +68,7 @@ import { osPlatform } from '../shared/os-platform';
 import { platformFor } from '../shared/platform';
 import { type PluginHost, startPlugins } from '../shared/plugin-host';
 import {
+  commandLabel,
   pluginThemeTokens,
   qualify,
   requireListed,
@@ -1054,7 +1055,7 @@ function createWindow(
     window,
     runtime.handledKeymap(startServed.keymap),
     commands.keyCommands,
-    (id) => served().commands[id]?.label ?? id,
+    (id) => commandLabel(served().commands, id),
     log,
   );
   window.on('closed', () => {

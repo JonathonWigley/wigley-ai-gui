@@ -92,7 +92,10 @@ describe('notes page part', () => {
 });
 
 describe('noteSessions', () => {
-  const row = (sessionId: string, hostSessionId: string | null): SessionRow => ({
+  const row = (
+    sessionId: string,
+    hostSessionId: string | null,
+  ): SessionRow => ({
     sessionId,
     label: sessionId,
     project: 'project',

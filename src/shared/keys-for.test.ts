@@ -88,6 +88,17 @@ describe('keysFor', () => {
     expect(keysFor(map, 'a.prev', 'a.s', 'macos')).toBeNull();
     expect(keysFor(map, 'a.next', 'a.other', 'macos')).toBeNull();
   });
+
+  it('keysFor_Arg_PicksThatArgsBind', () => {
+    const map = keymap([
+      { keys: ['1'], scope: 'a.s', command: 'a.pick', arg: 1 },
+      { keys: ['2'], scope: 'a.s', command: 'a.pick', arg: 2 },
+    ]);
+
+    expect(keysFor(map, 'a.pick', 'a.s', 'macos', 'page', 2)).toBe('2');
+    expect(keysFor(map, 'a.pick', 'a.s', 'macos', 'page', 3)).toBeNull();
+    expect(keysFor(map, 'a.pick', 'a.s', 'macos')).toBe('1');
+  });
 });
 
 describe('promptKeysFor', () => {
@@ -146,14 +157,13 @@ describe('promptKeysFor', () => {
     expect(promptKeysFor(map, 'a.next', 'a.s', 'macos', 'page')).toBeNull();
   });
 
-  it('keysFor_Arg_PicksThatArgsBind', () => {
+  it('promptKeysFor_Arg_PicksThatArgsBind', () => {
     const map = keymap([
-      { keys: ['1'], scope: 'a.s', command: 'a.pick', arg: 1 },
-      { keys: ['2'], scope: 'a.s', command: 'a.pick', arg: 2 },
+      { keys: ['j'], scope: 'a.s', command: 'a.pick', arg: 1 },
+      { keys: ['x'], scope: 'a.s', command: 'a.pick', arg: 2 },
     ]);
 
-    expect(keysFor(map, 'a.pick', 'a.s', 'macos', 'page', 2)).toBe('2');
-    expect(keysFor(map, 'a.pick', 'a.s', 'macos', 'page', 3)).toBeNull();
-    expect(keysFor(map, 'a.pick', 'a.s', 'macos')).toBe('1');
+    expect(promptKeysFor(map, 'a.pick', 'a.s', 'macos', 'page', 2)).toBe('x');
+    expect(promptKeysFor(map, 'a.pick', 'a.s', 'macos', 'page', 3)).toBeNull();
   });
 });
