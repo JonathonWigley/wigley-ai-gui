@@ -232,7 +232,8 @@ function agentOf(event: Json): string {
     : MAIN_AGENT_ID;
 }
 
-// The text of a message's text content, a string or text blocks.
+// Whether a line with `message` is a main-conversation reply from a real model:
+// neither a subagent's nor a synthetic one.
 function isMainModelReply(event: Json, message: Json): boolean {
   return (
     typeof event.parent_tool_use_id !== 'string' &&
@@ -240,6 +241,7 @@ function isMainModelReply(event: Json, message: Json): boolean {
   );
 }
 
+// The text of a message's text content, a string or text blocks.
 function messageText(content: unknown): string {
   if (typeof content === 'string') {
     return content;
