@@ -347,6 +347,19 @@ round; primer: an open primer), since main, not the page, decides.
   compiler rejects a key for the other process or for a plugin missing from that process's list. A plugin imports
   only `src/contracts`, `src/shared`, its own folder, and the `contract.ts` of a plugin its manifest depends on,
   which types that plugin's exports, keys and events.
+- **A slot** (landing with `docs/features/plugin-framework/plan-commands-and-state/`; until its doc re-read drops this tag, this entry describes the plan, not the tree) is a value a late reader wants, typed by a `SlotKey` in the owner's `contract.ts`: one value, keyed
+  values, or keyed lists whose items are added or replaced by id. `api.state.publish(key)` gives the owner the only
+  writer, and `api.state.read(key)` gives any plugin `get` and a disposable `on`; a layout reads through
+  `kit.state.read(id)`. The core holds every slot in main's memory and mirrors it to the page, page-owned slots
+  included, so the value outlives an owner's stop and a page reload, not an app restart. A new start publishes the
+  same key and reads the last value. Slot values are JSON; what is not stays in the owner's closure. A plugin that only
+  reads a slot or hears an event lists its owner in the manifest's `reads`, which carries no start order. A value
+  belongs in a slot and a moment in an event (`docs/features/plugin-framework/design.md` § Commands and state).
+- **A command** (landing with `docs/features/plugin-framework/plan-commands-and-state/`; until its doc re-read drops this tag, this entry describes the plan, not the tree) takes at most one argument, declared in the manifest as a number, a string or a small record;
+  a handler reads it as `context.arg`. `api.commands.run` works from either process, and the core routes it to the
+  process the command runs in. `commands.register` and `keys.bind` add commands and binds at runtime as a layer under
+  the user's `keymap.json`; `commands.intercept` wraps a command and `commands.onDidRun` hears it. A bind carries the
+  argument as `arg`, checked at load.
 - **An event** is published with `api.events.emit` under the publishing plugin's id (`activeChanged` in plugin
   `sessions` is `sessions.activeChanged`) and heard with `api.events.on` by any plugin; its payload type lives in
   the publisher's `contract.ts`. Each process has its own bus, and nothing crosses processes on it: a plugin's own

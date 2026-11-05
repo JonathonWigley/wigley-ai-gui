@@ -95,8 +95,8 @@ Core seams that most items below assume.
 - **keysFor and box focus in the core keys API** — *agent-ready*: `keysFor` moves from the keys plugin
   (`src/plugins/keys/contract.ts`) into the core keys API, so a plugin reads a command's keys without depending on
   `keys`; it returns unformatted hints (page and editor) with a keymap-changed subscription, so drawn buttons follow
-  a rebind. Box focus (`page` or `editor`) becomes a core `keys.onWhereChanged`, replacing keys' own
-  `document.activeElement` reading. With it, the renderer root builds the pending-keys hub without the nullable
+  a rebind. Box focus (`page` or `editor`), decided today in `src/renderer/page-keys.ts` and the pending-keys hub, becomes a core
+  `keys.onWhereChanged`. With it, the renderer root builds the pending-keys hub without the nullable
   `pageKeys` (`src/renderer/renderer.ts`), and the editor-bind miss policy moves into `editor-binds.ts`. `anchor`
   moves with `keysFor`: the renderer reads the keys plugin's exports by `KEYS_PLUGIN_ID` to hand the shell chrome its
   anchors, a reach a plugin from a user folder would not have, and the chrome's hints vanish with `keys` disabled.
@@ -460,9 +460,9 @@ Closed lists that become registrations, so a plugin adds what is hardcoded today
 - **Sessions queries and row decorations** — *needs a feature plan*: `activeChanged` landed; still missing are
   `rows()` (page) and `sessions()` (main) queries so a late plugin sees live sessions (slots in the plugin state
   registry, Foundations, rather than hand-written queries), a page `tabShown` event,
-  `SessionTabView.hidden()` beside `shown()`, row decorations a tab contributes (`handle.setBadge(key, text)`) or a
-  sidebar row layout, since tabs' `setStatus` lines overwrite each other, and one close mechanism (`beforeClose` on
-  the page and `addCloseGuard` in main both carry forms' "open round" today). With it, two tabs' take-overs released
+  `SessionTabView.hidden()` beside `shown()`, `setStatus` replaced by a row part (row parts landed and are the row
+  decoration seam; `setStatus` lines overwrite each other), and one job per close seam (`beforeClose` on the page and
+  `addCloseGuard` in main both carry forms' "open round" today; `plugin-framework/design.md` § Commands and state). With it, two tabs' take-overs released
   out of order must stop giving the session back to the first taker's tab after its take-over ended (pinned by
   `sessions/page/tabs.test.ts`; only forms takes over today).
 - **Sessions stops knowing forms** — *agent-ready*: `mark(sessionId, { text })` lets the marking plugin word the toast

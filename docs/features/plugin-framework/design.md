@@ -9,6 +9,7 @@
 - **Keymap (plan A2)** — the user's new keys, from the keymap rounds.
 - **Keys plugin (plan B)** — the `keys` plugin, all page but a main part that registers its layouts: which-key, help on `Space ?`, the scope stack, titled scopes, the key hints that replaced the bar.
 - **Foundation sweeps (Wave 1)** — stopping a plugin, who undoes each registration, typed dependency keys, scoped logs, tool contributions in live sessions, derived layer rules.
+- **Commands and state (Waves 2 and 3)** — command arguments and routing, slots and where they live, slots versus events, what clicks and page reloads do.
 
 The decisions the user settled in the 2026-10-18 interview rounds, kept so plans A2 and B are written from them once
 the plan before has landed. Each plan reads this file and the code as it then stands; a decision here stands unless
@@ -158,3 +159,51 @@ Settled in the 2026-11-03 interview for Wave 1 of `docs/features/intent-alignmen
   `notifications/tools/list_changed`, which Claude Code honours (code.claude.com/docs/en/mcp, Dynamic tool updates).
   The relay in wigley-ai-marketplace advertises `listChanged` when it answers `initialize` for an absent app, since its
   replayed handshake drops the app's own answer.
+
+## Commands and state (Waves 2 and 3)
+
+Settled in the 2026-11-04 interview for Waves 0, 2 and 3 of `docs/features/intent-alignment/master-plan.md`. Plan
+folders `plan-commands-and-state/` (Waves 0 and 2) and `plan-command-consumers/` (Wave 3).
+
+- **One argument per command.** A manifest declares it as a number, a string or a small record of those. Plugin code
+  runs an argument command through a typed `CommandKey` from `contract.ts`, and a `keymap.json` bind carries an `arg`
+  checked at load. A free-form argument was rejected because every handler would cast. Strings only was rejected
+  because the session-and-box sites would pack two values into one string.
+- **Commands run from either process.** The core routes a run to the process that declares the command, so a click and
+  a palette entry have one path. Each plugin's channel bridge for this goes. `intercept` and `onDidRun` work in the
+  process that runs the handler. A handler returns nothing or a promise: a command acts, and a query reads a slot.
+- **The command catalog is a slot.** Runtime commands and binds sit in core slots, one per process, and main merges them
+  into the served config. The binds form a layer under the user's `keymap.json`, so the user's binds still win. This
+  is why the registry lands before the command API.
+- **A slot holds a value a late reader wants.** Its change notice replaces any matching event. An event marks a moment
+  (turn finished, doc saved). Publishing both for every change was rejected: two paths carry one change.
+- **All slots live in main's memory, page-owned ones included.** The page takes a snapshot before its parts start and a
+  sequence number orders every later change, which replaces twelve hand-written race rules. Each process-held store was
+  rejected because Wave 3 would then need a second store for reloads. Writing every slot to disk was rejected because
+  chat entries would duplicate the transcript. Durable data stays in plugin data and `uiState`.
+- **Slot values are JSON.** Processes, resolvers, timers and watches stay in the owner's closure, and the owner rebuilds
+  them on start.
+- **Chat entries stay whole.** A keyed list slot adds or replaces one entry by id, so the wire traffic is what it was
+  before the registry. Text deltas were rejected for now: they add an operation type and replay rules against a cost
+  nobody has measured, and they can come later behind the same slot.
+- **A slot outlives its owner's stop.** The next start publishes the same key, reads the last value and rebuilds from it.
+  A key another live part holds throws, and a page load releases the previous page's claims. A disabled or never-started
+  owner reads undefined. Clearing a slot for a plugin switched off live falls to Wave 4.
+- **Soft reads.** A manifest's `reads` list allows a slot read, or hearing an event, with the contract import and no
+  start order. `dependsOn` stays for exports and for needing the other plugin started first.
+- **Forms' and primer's rounds stay on their channels.** Their owners' state is mostly live `ask_round` calls, so a slot
+  would hold a partial copy.
+- **Every click that changes anything runs a command.** Cursor moves and section collapses count; drags and focus
+  guards do not. A partial sweep would make the standing rule false from the day it lands.
+- **`kit.button` takes a command and an optional argument.** A layout wanting something else writes its own listener by
+  hand, knowingly. No layout in the user config folder relied on a closure when this was settled.
+- **A command that needs an argument lists only when a key binds it.** Settings, help and the palette show one row per
+  bound argument, because a row id means nothing in a list. `keymap.json` can still bind any of them.
+- **A page reload keeps the user's work and place in every plugin:** chat, forms, primer, docs with its unsaved edits,
+  notes, backlog and settings. Page slots write on each change. The 400 ms autosaves that go to main flush on `pagehide`.
+- **The two close seams each have one job.** Main's `addCloseGuard` refuses and returns the reason sessions shows as a
+  toast, and it alone holds forms' and primer's open round. A tab's `beforeClose` stays for what the page knows or must
+  ask (chat's confirm, docs' unsaved edits). One seam only was rejected: a guard in main cannot wait on a dialog, and a
+  guard only on the page would break the rule that main decides.
+- **Row decoration is the row part.** Row parts and activities landed after the follow-up asked for `setBadge`, so
+  `setStatus` gives way to a row part and `setBadge` is not added.

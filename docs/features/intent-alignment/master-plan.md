@@ -28,13 +28,17 @@ item per feature session.
 
 When an item lands, tick its box here and remove it from `followups.md`, in the same commit.
 
+Plans: `docs/features/plugin-framework/plan-commands-and-state/` holds Waves 0 and 2, and
+`plan-command-consumers/` beside it holds Wave 3. The settled design is `plugin-framework/design.md` § Commands and
+state.
+
 ## Order
 
 ```
  W1  Disposables ─► Typed dep keys ─► Derived layer rules
         │              └─ ∥ Disposable tool contributions · Plugin-scoped logs
         ▼
- W2  Runtime command API  ∥  State registry (plan) ─► Events for every state change
+ W2  State registry ─► Runtime command API ∥ keysFor ∥ picker ─► Events for every state change
         │                        │
  W3  Every click (plan) · Workflow actions · Sessions queries · Page state survives reload
         ▼
@@ -73,15 +77,13 @@ Gate: every registration returns a handle, and every dependency is typed.
 
 ## Wave 2: commands, state, events
 
-1. All ∥:
-   - [ ] Runtime command API [ready]. Give commands a target (row, index, href) here; Wave 3 needs it.
-   - [ ] Plugin state registry [plan]. Reuse the typed-key pattern from Wave 1. The plan settles: which state
-     changes are slots and which are events, deltas or whole values for chat entries, and how a reloaded owner
-     re-attaches to its slot.
-   - [ ] keysFor and box focus in the core keys API [ready]
-   - [ ] Core picker and folder services [ready]
-2. [ ] Events for every state change [ready]. Start it after the registry lands, so backlog, workflow, agents and
-   usage are converted once. Its AGENTS.md rule step moves to the Wave 3 checkpoint.
+1. [ ] Plugin state registry [plan]. It lands first: the runtime command catalog is a core slot.
+2. All ∥:
+   - [ ] Runtime command API [plan]. It gives commands an argument (row, index, href); Wave 3 needs it.
+   - [ ] keysFor and box focus in the core keys API [plan]
+   - [ ] Core picker and folder services [plan]
+3. [ ] Events for every state change [plan], after the registry, so backlog, workflow, agents and usage are converted
+   once. Its AGENTS.md rule step moves to the Wave 3 checkpoint.
 
 ## Wave 3: consumers
 
@@ -108,7 +110,8 @@ Checkpoint, after the items above:
 
 ## Lane H: harness seams
 
-Start after Wave 1 step 2: both edit the same dependency call sites.
+Start after Wave 1 step 2: both edit the same dependency call sites. The chat pass edits chat files that Wave 2's
+conversion of chat to slots and its chat events also edit: run the pass before or after that task, not during it.
 
 1. [ ] AgentHarnessRegistry [ready]
 2. [ ] AgentHarness grows what a second harness needs [ready]
@@ -124,7 +127,8 @@ Start after Wave 1 step 2: both edit the same dependency call sites.
 
 ## Lane P: platform
 
-All ∥, any time:
+All ∥, any time, except Per-platform chord matching and Per-platform program lookup, which wait for the Platform
+record (Wave 0) because they read it:
 
 - [ ] Per-platform program lookup and spawning [ready]
 - [ ] Round store through Files [ready]
@@ -134,7 +138,8 @@ All ∥, any time:
 ## Lane L: layouts everywhere
 
 All ∥, any time. Keep this lane apart from Forms item kinds (Lane E) and Every click runs a command (Wave 3): they
-rewrite the same forms files.
+rewrite the same forms files. Wave 3 also changes `kit.button`, so a layout item running beside it draws no new
+closure button.
 
 - [ ] Toasts through the shell layout, with Shell layout swap failure tests (the same contract)
 - [ ] Dialog frames and confirms through the opener's layout, then [ ] Forms and primer column chrome through their
