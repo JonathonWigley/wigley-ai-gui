@@ -123,7 +123,7 @@ wigley-ai-gui, git:
 - [x] [Wiki tree and search rows](06-wiki-tree.md) — after 02, 03
 
 ### Wave 3
-- [ ] [Layout parts](05-layout-parts.md) — after 02, 04, 06
+- [x] [Layout parts](05-layout-parts.md) — after 02, 04, 06
 
 ### Wave 4
 - [ ] [Article page and right column](07-article-page.md) — after 03, 05
@@ -157,6 +157,7 @@ Review base: 89f67d088a3297567805dfe5fa9c84afa7d9f72f
 - 01 · 15fbf5c · diff read, every Produces present, py compile clean, check_pointers and check_manifests pass, in wigley-ai-marketplace · concerns: MARKDOWN_LINK text can cross a blank line; raw of a wrapped reference in a CRLF file holds LF, for task 10's search; pointer errors now report in offset order; extra test rows beyond the task
 - 04 · ed07573b · diff read; every Produces present by search (GitCommit, Git.log, RecentChange, recentChanges, readRecentChanges, RecentChangesDeps, recentChangesLimit); compile checked with task 06's partial edits in the tree · concerns: a negative recentChangesLimit gives all commits minus the last row (configurer's, per plan); docs-browser design.md not checked for a settings list
 - 06 · 47c67279 · diff read, every Produces present, buildTree unchanged, tsc clean · concerns: preferredEntry compares ids inline as byTitleThenId does; a skill's SKILL.md leaf can show its lead heading as a heading row; visibleRows re-tests every heading per draw under a filter, unmeasured; docs-view openHeading has no unit test, left to task 14
+- 05 · f2d0ccb5 · diff read; ten parts in layout.d.ts, PART_SCOPES, LAYOUT_PARTS, default builders, token, container and DESIGN.md entries present; tsc clean; oxfmt on docs/keymap.md committed as 883116bf (lead tooling) for the lint gate · concerns: eight of ten default builders run in no test until tasks 07, 08 and 11; container docs-doc / size is live in every docs view and needs its live check at 07, stacked session tab included; sectionEditControl passes kit.openSection unbound, so task 09's kit must not use this
 ### Contract changes
 ### Rulings
 - Moved 05 to a wave of its own and every later group one wave on — 04 and 05 share manifest.ts, 05 and 06 share layout.d.ts — none if wrong · lead
@@ -173,5 +174,10 @@ Review base: 89f67d088a3297567805dfe5fa9c84afa7d9f72f
 - a shelf titled S#2 after two shelves titled S gets shelf:S#2#2, so ids stay unique · group 06
 - three extra buildWikiTree_PageTarget rows: empty path dangling, walked tie order, owner before source · group 06
 - openedFromTree shared by openLeaf and openHeading in docs-view.ts · group 06
+- read-layout.ts beyond plan.md's File Structure: LAYOUT_PARTS is Record<keyof Layout, true> · group 05
+- docs/features/layouts/design.md's docs row names the new surfaces, beyond Files · group 05
+- layout.d.ts top comment: an app part left out is appended at the end unless its comment places it elsewhere · group 05
+- draw_NewPart_FiresInItsScope uses a stub user layout, since fakeDocsParts keeps baseKit private · group 05
+- Task 07's live run waits until task 08 lands, as both build in one tree and 08's partial edits can break the drive's build; a driving worker runs it then, with 09's Linked from check still at 09 · lead
 ### Review rounds
 ### Test gate

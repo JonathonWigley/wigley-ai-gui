@@ -1,6 +1,6 @@
 # 05 — Layout parts
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 02, 04, 06
 Plan: [plan.md](plan.md)
@@ -188,3 +188,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit f2d0ccb5 · proof: diff read; ten parts in layout.d.ts, PART_SCOPES, LAYOUT_PARTS, default builders, token, container and DESIGN.md entries present; tsc clean; oxfmt on docs/keymap.md committed as 883116bf (lead tooling) for the lint gate · concerns: eight of ten default builders run in no test until tasks 07, 08 and 11; container docs-doc / size is live in every docs view and needs its live check at 07, stacked session tab included; sectionEditControl passes kit.openSection unbound, so task 09's kit must not use this

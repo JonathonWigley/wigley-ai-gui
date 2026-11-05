@@ -1,6 +1,6 @@
 # 08 — Docs mode's sidebar shows the wiki tree or All pages
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 4 · Depends on: 03, 04, 05, 06
 Plan: [plan.md](plan.md)
