@@ -1,6 +1,6 @@
 # 03 — Main parser, sections, history
 
-Status: not started
+Status: done
 Type: Batch
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -261,3 +261,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit b83f527a · proof: diff read, every Produces present, tsc clean · concerns: a file ending in a lone CR keeps it in ScannedLine.text; [a](<>) gives an empty path, for 06 to show dangling

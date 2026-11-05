@@ -115,8 +115,8 @@ wigley-ai-gui, git:
 
 ### Wave 1
 - [ ] [Index schema 5](01-index-schema-5.md)
-- [ ] [Entry fields and Linked from](02-entry-fields-linked-from.md)
-- [ ] [Main parser, sections, history](03-pure-modules.md)
+- [x] [Entry fields and Linked from](02-entry-fields-linked-from.md)
+- [x] [Main parser, sections, history](03-pure-modules.md)
 
 ### Wave 2
 - [ ] [Git log and Recent changes call](04-git-log.md) — after 02
@@ -149,10 +149,17 @@ wigley-ai-gui, git:
 
 ## Run log
 
-Review base: <sha, written by wigley:make at preflight>
+Review base: 89f67d088a3297567805dfe5fa9c84afa7d9f72f
 
 ### Groups
+- 02 · 1c38d74c · diff read, every Produces present, tsc clean · concerns: codeUnitOrder stays private in path-completion.ts; docs-browser design says schema 4 of lastLoaded's origin, left true; cloneKey uses plain startsWith
+- 03 · b83f527a · diff read, every Produces present, tsc clean · concerns: a file ending in a lone CR keeps it in ScannedLine.text; [a](<>) gives an empty path, for 06 to show dangling
 ### Contract changes
 ### Rulings
+- Moved 05 to a wave of its own and every later group one wave on — 04 and 05 share manifest.ts, 05 and 06 share layout.d.ts — none if wrong · lead
+- Nested roots both holding the target: the lower root wins — order-independent — only which clone row shows · group 02 · group 02
+- Added a valid-element row to index-document.test.ts — no planned row rejected a good form — one row to delete · group 02 · group 02
+- HEADING and FENCE_RUN carry the s flag, so '# T\ra' titles T\ra as the index does rather than the plan's T — line pairing with the index is the Decisions aim — one flag and one row if wrong · group 03 · group 03
+- An empty text gives zero lines — the plan named only a\n — none for later tasks · group 03 · group 03
 ### Review rounds
 ### Test gate

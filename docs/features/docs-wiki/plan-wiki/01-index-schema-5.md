@@ -1,6 +1,6 @@
 # 01 — Index schema 5: headings, links and the wiki walk
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)

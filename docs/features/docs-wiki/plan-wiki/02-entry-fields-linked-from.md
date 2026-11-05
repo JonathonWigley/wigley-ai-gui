@@ -1,6 +1,6 @@
 # 02 — Entry fields and Linked from
 
-Status: not started
+Status: done
 Type: Task
 Wave: 1 · Depends on: none
 Plan: [plan.md](plan.md)
@@ -161,3 +161,4 @@ Commit: one commit for the group. The commit message names schema 5 and states t
 
 ## Proof
 
+Commit 1c38d74c · proof: diff read, every Produces present, tsc clean · concerns: codeUnitOrder stays private in path-completion.ts; docs-browser design says schema 4 of lastLoaded's origin, left true; cloneKey uses plain startsWith
