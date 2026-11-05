@@ -135,9 +135,16 @@ interview on 2026-10-23; this file is the record of both.
   calls, so Claude's undocumented transcript format stays in the adapter. A line it cannot read becomes a raw entry.
 - Slash commands typed in the chat run as in the terminal (`/model`, `/compact`, `/wigley:feature …`), except the
   app slash commands, which the app runs itself (§ Chat plugin).
-- **Commands**: `AgentProcessEvents.commands` reports the session's commands and skills as names without a leading `/`. The Claude adapter
-  reports them from each `init` event's `slash_commands` and `skills`, so the list waits for the first message. Each
-  later `init` replaces the list.
+- **Commands**: `AgentProcessEvents.commands` reports the session's commands and skills as the whole list of
+  `AgentCommand` records each time: `name` and `aliases` without a leading `/`, and `description` and `argumentHint`
+  (`''` when none). The Claude adapter writes an `initialize` control request as the first stdin line of a started
+  process, because `init` waits for the first message (`claude-stream.md` § Initialize), and reads the answer's
+  `commands` as the records. Each `init` then replaces the list: an `init` name that matches a held record's name or
+  alias keeps that record, once; a name that matches none becomes a record with empty text; a record no name matches
+  drops. An `init` with no names leaves the list. The session fold owns the records, so a failed `initialize` answer
+  only logs and leaves the list to `init`, the answer stays out of the chat entries, and a re-attach rebuilds the
+  records from the pipe log and writes no `initialize`. A process that started before the request existed has no such
+  line in its log, so its list comes from `init`.
 - **Messages carry images**: `AgentProcess.send` takes `{ text, images }`, each image `{ mediaType, data }` (base64,
   no `data:` prefix), and the `user` chat entry carries the same `images`. Claude sends them as `image` content blocks
   before the text block (`claude-stream.md` § Images); a resumed transcript's image blocks come back as the user
@@ -468,7 +475,7 @@ interview on 2026-10-23; this file is the record of both.
   gets the row's command (name, description, argument hint, aliases, and whether it is the app's or the agent's)
   and the row's element, which holds the drawn name, and returns `true` when it drew. The most recently added draw
   goes first, and the first to return `true` ends the row; a row no draw takes shows the name alone. Chat adds its own
-  draw through the same export: the description in a dim column cut to one line, while the `completionDescriptions`
+  draw through the same export: the description after the name in a dim box cut to one line (the `completionDescription` chat layout part), while the `completionDescriptions`
   setting is on (default on), else `false`.
 - **Active time**: chat's page exports `activeTime(sessionId)`, a session's clock as an `ActiveTime` (null for a session the
   page does not hold), and fires `activeTimeChanged` when a session arrives and when main sends a clock; chat's `rowClock` layout part draws it on the
