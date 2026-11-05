@@ -55,6 +55,8 @@ import {
   type QueuedMessage,
   type ResumeRequest,
   type ReturnedMessage,
+  type ResumeSection,
+  type ResumeSectionRows,
   type SendGate,
   type SessionCloseReason,
   type SessionCompaction,
@@ -151,6 +153,12 @@ export interface ChatSessions {
   // archived-sessions file cannot be read, every row lists as not archived
   // and the failure is logged; the file is left as it is.
   pastSessions(projectDir: string, profile: string): Promise<PastSessionRow[]>;
+  // Each resume section's rows, in registration order, never rejecting for a
+  // section's failure: one that fails is logged and left out, as is one with no
+  // rows. A section whose `rows` never settles holds the answer. When the
+  // archived-sessions file cannot be read, no session counts as archived and the
+  // failure is logged.
+  resumeSections(): Promise<ResumeSectionRows[]>;
   // Writes the archived flag, then fires `sessionArchived`; a rejected write
   // fires nothing.
   setArchived(hostSessionId: string, archived: boolean): Promise<void>;
@@ -289,6 +297,10 @@ export interface ChatSessions {
   // throws, which is logged. Its handle removes only this registration; a second
   // `dispose` does nothing.
   addIdleCompactThreshold(read: () => number | null): Disposable;
+  // Adds `section` at the end of the sections `resumeSections` asks. Each call is
+  // its own registration, and its handle removes only it; a second `dispose` does
+  // nothing.
+  addResumeSection(section: ResumeSection): Disposable;
 }
 
 type PermissionEntry = Extract<ChatEntry, { kind: 'permission' }>;
@@ -597,6 +609,8 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
   const sendGateRegistrations = new Set<{ gate: SendGate }>();
   // One object per `addIdleCompactThreshold` call, in registration order.
   const idleCompactRegistrations = new Set<{ read: () => number | null }>();
+  // One object per `addResumeSection` call, in registration order.
+  const resumeSectionRegistrations = new Set<{ section: ResumeSection }>();
 
   function snapshot(): SavedSessions {
     const now = deps.clock.now();
@@ -2620,6 +2634,28 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       }));
   }
 
+  async function resumeSections(): Promise<ResumeSectionRows[]> {
+    const archivedIds = await archivedIdsOrNone();
+    const isResumable = (hostSessionId: string) =>
+      !archivedIds.has(hostSessionId) &&
+      holding(hostSessionId) === undefined &&
+      !isOpenOnOtherRow(hostSessionId);
+    const answers = await Promise.all(
+      [...resumeSectionRegistrations].map(async ({ section }) => {
+        try {
+          return {
+            title: section.title,
+            rows: await section.rows(isResumable),
+          };
+        } catch (error) {
+          log(`resume section ${section.title} not read: ${errorText(error)}`);
+          return { title: section.title, rows: [] };
+        }
+      }),
+    );
+    return answers.filter((answer) => answer.rows.length > 0);
+  }
+
   async function resume(request: ResumeRequest): Promise<string> {
     const profile = profileNamed(request.profile);
     const harness = requireHarness();
@@ -2894,6 +2930,7 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       save();
     },
     pastSessions,
+    resumeSections,
     async setArchived(hostSessionId, archived) {
       await deps.archived.set(hostSessionId, archived);
       deps.emit('sessionArchived', { hostSessionId, archived });
@@ -3073,6 +3110,15 @@ export function createChatSessions(deps: ChatSessionsDeps): ChatSessions {
       return {
         dispose() {
           sendGateRegistrations.delete(registration);
+        },
+      };
+    },
+    addResumeSection(section) {
+      const registration = { section };
+      resumeSectionRegistrations.add(registration);
+      return {
+        dispose() {
+          resumeSectionRegistrations.delete(registration);
         },
       };
     },

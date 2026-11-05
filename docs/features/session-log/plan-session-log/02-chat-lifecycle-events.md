@@ -1,6 +1,6 @@
 # 02 — Chat lifecycle events
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 2 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -48,3 +48,4 @@ Commit:    one commit for the group
 
 ## Proof
 
+Commit 8233a622 · proof: diff read; typecheck and lint pass · concerns: a restored row with a missing profile fires sessionClosed with no sessionOpened, so task 07 must not assume they pair; the isLive guard means a closed or cleared row's old process and a failed attach fire no processEnded, as specified; stop_HeldRows_FiresNoSessionClosed does not exercise the plugin host's stop order; docs/features/usage/design.md:90 draws sessionOpened with its old fields

@@ -131,7 +131,7 @@ Boundary rules:
 - [x] [List picker headings](04-list-picker-headings.md)
 
 ### Wave 2
-- [ ] [Chat lifecycle events](02-chat-lifecycle-events.md) — after 01
+- [x] [Chat lifecycle events](02-chat-lifecycle-events.md) — after 01
 - [x] [Chat heading part and section row input](05-chat-heading-part.md) — after 04
 
 ### Wave 3
@@ -158,6 +158,7 @@ Review base: c185a42b7f2b01809184af8d5e2e5748ee0077f2
 - 01 · 2ca6ca8b · diff read; typecheck and lint pass · concerns: Files line named primer, forms and sessions start.test.ts as connected emitters, but they emit none and stayed unedited; connected payload is now a shallow copy, its listeners read only id and info; connected_ConnectAndOpen_SayIfOwned overlaps three existing connected assertions
 - 04 · e6b8a22f · diff read; typecheck and lint pass · concerns: scrollToCursor scrolls to the row only, so moving up to a section's first row in a scrolled list can leave its heading just out of view; check in the drive run
 - 05 · 27b4edd7 · diff read; scoped typecheck clean; layout and layout-contract tests pass · concerns: picker wiring of section and drawHeading has no test, by the task's decision, so drive check 1 of task 10 proves it; the h3 inside the heading li has not been seen on screen; the comment on PickerItemInput rests on task 06's plan text
+- 02 · 8233a622 · diff read; typecheck and lint pass · concerns: a restored row with a missing profile fires sessionClosed with no sessionOpened, so task 07 must not assume they pair; the isLive guard means a closed or cleared row's old process and a failed attach fire no processEnded, as specified; stop_HeldRows_FiresNoSessionClosed does not exercise the plugin host's stop order; docs/features/usage/design.md:90 draws sessionOpened with its old fields
 ### Contract changes
 - pickerHeading input: inline { title: string } → named PickerHeadingInput, with PickerHeadingKit = BaseKit · why: the file names each part's input · consumers: none need a change · group 05
 ### Rulings
@@ -166,5 +167,7 @@ Review base: c185a42b7f2b01809184af8d5e2e5748ee0077f2
 - Heading height is --wg-row-tree with section header type and .ui-row inline padding — the plan named no size — a one-line CSS change if wrong · group 04 · group 04
 - Added section headings to chat's surface list in docs/features/layouts/design.md, outside the Files line — the row lists every chat surface — one phrase to revert · group 05 · group 05
 - The new-row GIVEN adds no test — pickerRow_Default_PlacesCursorEnd already asserts that row's options — undefined detail is not told apart from missing, which row treats the same · group 05 · group 05
+- closeEarlierSessions in chat's self-test passes project-closed — it clears a self-test project and no user closed anything — one word if wrong · group 02 · group 02
+- processEnded fires last in the ended callback, after save — the row's state is settled for a listener — no consumer reads the row during it · group 02 · group 02
 ### Review rounds
 ### Test gate

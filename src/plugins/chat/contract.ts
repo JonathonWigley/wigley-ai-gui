@@ -106,6 +106,31 @@ export interface SendGateVerdict {
 // the write go on.
 export type SendGate = (input: SendGateInput) => SendGateVerdict | null;
 
+// A saved session a resume section lists.
+export interface ResumeSectionRow {
+  hostSessionId: string;
+  projectDir: string;
+  profile: string;
+  title: string;
+  at: number;
+}
+
+// One section's answer; `rows` is never empty.
+export interface ResumeSectionRows {
+  title: string;
+  rows: ResumeSectionRow[];
+}
+
+// A titled list of saved sessions at the top of the start prompt. `rows` is in
+// list order: the last row sits next to the cursor. `isResumable` is false for
+// a session chat holds, one open in the app on another row, and an archived one.
+export interface ResumeSection {
+  title: string;
+  rows(
+    isResumable: (hostSessionId: string) => boolean,
+  ): Promise<ResumeSectionRow[]>;
+}
+
 // A message on its way back into its session's box; `id` is unique within the
 // session.
 export interface ReturnedMessage extends UserMessage {
@@ -179,6 +204,9 @@ export interface ChatChannel extends ChannelShape {
       projectDir: string,
       profile: string,
     ): Promise<PastSessionRow[]>;
+    // Each resume section's rows, in registration order; a section with none,
+    // or whose read failed (logged), is left out.
+    resumeSections(): Promise<ResumeSectionRows[]>;
     setArchived(hostSessionId: string, archived: boolean): Promise<void>;
     // Resolves to the new row's sessionId; a session with a chat row selects
     // that row and resolves to its sessionId, and one open in the app on any
@@ -422,6 +450,10 @@ export interface ChatMainExports {
   // running process keeps what it started with. Disposing the handle removes the
   // reader.
   addIdleCompactThreshold(read: () => number | null): Disposable;
+  // Sections show at the top of the start prompt in registration order. One
+  // whose `rows` fails is logged and left out. Disposing the handle removes the
+  // section.
+  addResumeSection(section: ResumeSection): Disposable;
 }
 
 export const chatMainKey: DependencyKey<ChatMainExports, 'main', 'chat'> = {

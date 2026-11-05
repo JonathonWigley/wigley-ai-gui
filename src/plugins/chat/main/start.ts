@@ -326,6 +326,7 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
     api.channel.handle('pastSessions', (projectDir, profile) =>
       chat.pastSessions(projectDir, profile),
     );
+    api.channel.handle('resumeSections', () => chat.resumeSections());
     api.channel.handle('setArchived', (hostSessionId, archived) =>
       chat.setArchived(hostSessionId, archived),
     );
@@ -512,6 +513,8 @@ export const chatMainPart: MainPart<typeof chatManifest> = {
       addSendGate: (gate) => consumer.track(chat.addSendGate(gate)),
       addIdleCompactThreshold: (read) =>
         consumer.track(chat.addIdleCompactThreshold(read)),
+      addResumeSection: (section) =>
+        consumer.track(chat.addResumeSection(section)),
     });
     return {
       commands: {},

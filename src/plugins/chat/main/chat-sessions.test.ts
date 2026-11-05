@@ -6801,3 +6801,143 @@ describe('createChatSessions lifecycle events', () => {
     },
   );
 });
+
+describe('createChatSessions resume sections', () => {
+  const START = { projectDir: PROJECT_DIR, profile: 'personal' };
+
+  function rowFor(hostSessionId: string) {
+    return {
+      hostSessionId,
+      projectDir: PROJECT_DIR,
+      profile: 'personal',
+      title: `title of ${hostSessionId}`,
+      at: 1000,
+    };
+  }
+
+  // The ids among `hostSessionIds` a section's `isResumable` answers true for.
+  async function resumableAmong(
+    test: ReturnType<typeof setUp>,
+    hostSessionIds: string[],
+  ) {
+    const section = test.chat.addResumeSection({
+      title: 'probe',
+      rows: (isResumable) =>
+        Promise.resolve(hostSessionIds.filter(isResumable).map(rowFor)),
+    });
+    const answers = await test.chat.resumeSections();
+    section.dispose();
+    return answers.flatMap((answer) =>
+      answer.rows.map((row) => row.hostSessionId),
+    );
+  }
+
+  it.each([
+    {
+      given: 'one held, one archived and one free session',
+      arrange: async (test: ReturnType<typeof setUp>) => {
+        test.chat.start(START);
+        await test.archived.set('host-archived', true);
+      },
+      ids: ['uuid-1', 'host-archived', 'host-free'],
+      resumable: ['host-free'],
+    },
+    {
+      given: 'a session open on a row chat does not hold',
+      arrange: (test: ReturnType<typeof setUp>) => {
+        test.chat.sessionConnected(connected('row-9', 'host-relay'));
+      },
+      ids: ['host-relay', 'host-free'],
+      resumable: ['host-free'],
+    },
+    {
+      given: 'a row /clear moved to a new host id',
+      arrange: async (test: ReturnType<typeof setUp>) => {
+        test.chat.start(START);
+        await flush();
+        test.chat.sessionConnected(connected(ROW_ID, 'uuid-1'));
+        test.chat.clear(ROW_ID);
+        await flush();
+      },
+      ids: ['uuid-1', 'uuid-2'],
+      resumable: ['uuid-1'],
+    },
+  ])(
+    'resumeSections_IsResumable_FollowsHeldArchivedAndOpen given $given',
+    async ({ arrange, ids, resumable }) => {
+      const test = setUp();
+      await arrange(test);
+
+      expect(await resumableAmong(test, ids)).toEqual(resumable);
+    },
+  );
+
+  it.each([
+    {
+      failure: 'rejects',
+      rows: () => Promise.reject(new Error('boom')),
+    },
+    {
+      failure: 'throws at the call',
+      rows: () => {
+        throw new Error('boom');
+      },
+    },
+  ])(
+    'resumeSections_SectionFails_KeepsTheOthers when rows $failure',
+    async ({ rows }) => {
+      const test = setUp();
+      const row = rowFor('host-a');
+      test.chat.addResumeSection({ title: 'broken', rows });
+      test.chat.addResumeSection({
+        title: 'whole',
+        rows: () => Promise.resolve([row]),
+      });
+
+      expect(await test.chat.resumeSections()).toEqual([
+        { title: 'whole', rows: [row] },
+      ]);
+      expect(test.logged).toContainEqual(expect.stringMatching(/broken.*boom/));
+    },
+  );
+
+  it('isResumable_JustClosedRowEnding_IsFalseUntilEnded', async () => {
+    const test = setUp();
+    test.chat.start(START);
+    await flush();
+    test.chat.sessionConnected(connected(ROW_ID, 'uuid-1'));
+    test.harness.holdEnd();
+
+    test.chat.closed(ROW_ID, 'user');
+    expect(await resumableAmong(test, ['uuid-1'])).toEqual([]);
+
+    test.chat.sessionEnded(ROW_ID);
+    expect(await resumableAmong(test, ['uuid-1'])).toEqual(['uuid-1']);
+  });
+
+  it('resumeSections_NoRows_LeavesSectionOut', async () => {
+    const test = setUp();
+    const slow = rowFor('host-slow');
+    const quick = rowFor('host-quick');
+    test.chat.addResumeSection({
+      title: 'slow',
+      rows: async () => {
+        await flush();
+        return [slow];
+      },
+    });
+    test.chat.addResumeSection({
+      title: 'empty',
+      rows: () => Promise.resolve([]),
+    });
+    test.chat.addResumeSection({
+      title: 'quick',
+      rows: () => Promise.resolve([quick]),
+    });
+
+    expect(await test.chat.resumeSections()).toEqual([
+      { title: 'slow', rows: [slow] },
+      { title: 'quick', rows: [quick] },
+    ]);
+  });
+});

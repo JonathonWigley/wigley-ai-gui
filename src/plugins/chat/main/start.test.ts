@@ -923,6 +923,30 @@ describe('chat main part', () => {
       expect.stringContaining('set_session_title'),
     ]);
   });
+
+  it('exports_AddResumeSection_ConsumerDisposed_DropsSection', async () => {
+    const chat = startChatPart();
+    const consumer = createRegistrations();
+    const view = chat.part.exports?.(consumer) as ChatMainExports;
+    const row = {
+      hostSessionId: 'host-a',
+      projectDir: '/p',
+      profile: 'work',
+      title: 'a session',
+      at: 1000,
+    };
+    view.addResumeSection({
+      title: 'a section',
+      rows: () => Promise.resolve([row]),
+    });
+    expect(await chat.invoke('resumeSections')).toEqual([
+      { title: 'a section', rows: [row] },
+    ]);
+
+    consumer.dispose();
+
+    expect(await chat.invoke('resumeSections')).toEqual([]);
+  });
 });
 
 // Chat's main part on the part harness, over a sessions fake that files each
