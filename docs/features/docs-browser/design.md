@@ -14,7 +14,8 @@
 
 The decisions the user settled in the 2026-10-19 interview (five rounds), and plan C's in the 2026-10-24 interview,
 and plan D's in the 2026-10-26 interview, kept so each plan is written from them. A decision here stands unless
-the user changes it.
+the user changes it. `../docs-wiki/design.md` extends this doc: Docs mode opens on a wiki, and this doc's tree is
+its All pages view.
 
 ## Plans
 

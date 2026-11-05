@@ -228,11 +228,13 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  the review pane), layouts/ (the primer Layout contract and the built-in `default` layout)
   docs/          manifest.ts, contract.ts, main/ (the index source registry, docs index runs, file changes inside
                  the indexed folders only and never to a third-party doc, watching the open file, the git statuses
-                 of marketplace clone plugin files), page/ (one docs view per source — tree under Starred, Mine and
-                 Third-party roots by the index's `owner`, rendered doc with its status chips, document editor (takes dropped and pasted files as relative links) —
-                 shown as Docs mode over the machine's index, its tree in the side
-                 bar, and as a split of tree and doc in each view `addView` hands out, each session's Docs tab
-                 among them), layouts/ (the docs Layout contract and the built-in `default` layout)
+                 of marketplace clone plugin files, the log behind Recent changes), page/ (one docs view per source — the wiki sidebar built
+                 from `~/wigley-agents/wiki/Main.md` and the tree under Starred, Mine and
+                 Third-party roots by the index's `owner`, rendered page with its status chips, right column and section editing, document editor (takes dropped and pasted files as relative links) —
+                 shown as Docs mode over the machine's index, its sidebar in the side
+                 bar, and as a split of tree and page in each view `addView` hands out, each session's Docs tab
+                 among them), layouts/ (the docs Layout contract and the built-in `default` layout);
+                 `docs/features/docs-browser/design.md`, `docs/features/docs-wiki/design.md`
   backlog/       manifest.ts, contract.ts, main/ (the follow-up files, plans and features of every features home,
                  read through docs' index and written through its guard, file watching, each in-repo home's
                  uncommitted state and its Commit, each item's images under the home's `followups-images/`, the
