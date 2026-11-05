@@ -79,23 +79,50 @@ export type SessionLogEntry =
 
 // The append-only log file. Appends run in call order, each after the last
 // settles; `append` never rejects, a failed one logged and the next still run.
+// A crash or a failed write can leave the last line cut with no newline, so a
+// log's first write, and the next after a failed one, leads with a newline: the
+// new line would otherwise join the cut one and neither would parse.
 // `entries` waits for the last append and returns the file's whole, known lines,
-// logging each other line it skips: `[]` for a missing file, and a rejection for
-// any other read failure. `settled` resolves when the last append has settled.
+// logging each other non-blank line it skips: `[]` for a missing file, and a
+// rejection for any other read failure. `settled` resolves when the last append
+// has settled.
 export interface SessionEventLog {
   append(entry: SessionLogEntry): Promise<void>;
   entries(): Promise<SessionLogEntry[]>;
   settled(): Promise<void>;
 }
 
-const KNOWN_EVENTS: Record<SessionLogEntry['event'], true> = {
-  opened: true,
-  closed: true,
-  cleared: true,
-  processEnded: true,
-  archived: true,
-  terminalConnected: true,
-  terminalEnded: true,
+type EventFields = {
+  [Event in SessionLogEntry['event']]: readonly Exclude<
+    keyof Extract<SessionLogEntry, { event: Event }>,
+    'at' | 'event'
+  >[];
+};
+
+const EVENT_FIELDS: EventFields = {
+  opened: ['sessionId', 'hostSessionId', 'projectDir', 'profile', 'origin'],
+  closed: [
+    'sessionId',
+    'hostSessionId',
+    'projectDir',
+    'profile',
+    'titles',
+    'sent',
+    'reason',
+  ],
+  cleared: [
+    'sessionId',
+    'oldHostSessionId',
+    'newHostSessionId',
+    'projectDir',
+    'profile',
+    'titles',
+    'sent',
+  ],
+  processEnded: ['sessionId', 'hostSessionId', 'reason', 'code', 'error'],
+  archived: ['hostSessionId', 'archived'],
+  terminalConnected: ['sessionId', 'hostSessionId', 'projectDir', 'harness'],
+  terminalEnded: ['sessionId', 'hostSessionId', 'projectDir'],
 };
 
 function isSessionLogEntry(value: unknown): value is SessionLogEntry {
@@ -103,7 +130,12 @@ function isSessionLogEntry(value: unknown): value is SessionLogEntry {
     return false;
   }
   const { event } = value as { event?: unknown };
-  return typeof event === 'string' && Object.hasOwn(KNOWN_EVENTS, event);
+  if (typeof event !== 'string' || !Object.hasOwn(EVENT_FIELDS, event)) {
+    return false;
+  }
+  const fields: readonly string[] =
+    EVENT_FIELDS[event as SessionLogEntry['event']];
+  return ['at', ...fields].every((field) => Object.hasOwn(value, field));
 }
 
 function parsedEntry(line: string): SessionLogEntry | null {
@@ -124,7 +156,9 @@ function parsedEntries(text: string, log: PluginLog): SessionLogEntry[] {
     }
     const entry = parsedEntry(line);
     if (entry === null) {
-      log(`${SESSION_EVENTS_FILE} line ${index + 1} skipped: not an event`);
+      log(
+        `${SESSION_EVENTS_FILE} line ${index + 1} skipped: not a whole, known event`,
+      );
     } else {
       entries.push(entry);
     }
@@ -137,12 +171,20 @@ export function createSessionEventLog(deps: {
   log: PluginLog;
 }): SessionEventLog {
   let lastAppend: Promise<void> = Promise.resolve();
+  let tailMayBeCut = true;
   return {
     append(entry) {
       const line = JSON.stringify(entry) + '\n';
       lastAppend = lastAppend
-        .then(() => deps.files.append(SESSION_EVENTS_FILE, line))
+        .then(async () => {
+          await deps.files.append(
+            SESSION_EVENTS_FILE,
+            tailMayBeCut ? '\n' + line : line,
+          );
+          tailMayBeCut = false;
+        })
         .catch((error: unknown) => {
+          tailMayBeCut = true;
           deps.log(`event not logged: ${errorText(error)}`);
         });
       return lastAppend;

@@ -61,7 +61,7 @@ async function stopAndReadLines(
   return text === null
     ? []
     : text
-        .trimEnd()
+        .trim()
         .split('\n')
         .map((line) => JSON.parse(line) as unknown);
 }
