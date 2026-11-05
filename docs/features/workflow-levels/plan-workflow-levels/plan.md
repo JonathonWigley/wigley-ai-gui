@@ -213,7 +213,7 @@ wigley-agents: `tools/workflow-gate/workflow-gate`, `tools/workflow-gate/README.
 - [x] [Engine: workflows on the page](02-engine-page.md) — after 01
 
 ### Wave 3
-- [ ] [Checklist tool, scoped step tool, session note](03-workflow-tools.md) — after 01
+- [x] [Checklist tool, scoped step tool, session note](03-workflow-tools.md) — after 01
 
 ### Wave 4
 - [ ] [Run log](04-run-log.md) — after 03
@@ -244,6 +244,7 @@ Review base: 52a66bfab67b0c27b09dee28ff4ecfb97ef320ce
 - 09 · wigley-agents 70a4e4e · diff read against the spec; Produces all present (hook, install, level_skill_started, LEVEL_SKILLS, README); 14 unittest tests pass · concerns: argparse exits 2 on a hand-mistyped wired command; write_settings near-copies unity-pool's; /resume unchecked; Windows stop untested; tests go past the spec's tables
 - 01 · a5b319c0 · diff read against the spec; every Produces present; typecheck and lint clean · concerns: TurnWork.worked survives cleared, so a sessionEnded right after a clear on a null workflow re-marks missedLevel; private isRecord copies in heavy-contract; check-layers still allows contract to import plan-reader; step-tool enum may repeat a value until task 03; a self-test hello turn sets missedLevel until the skill claims
 - 02 · e20d8bbd · diff read against the spec; every Produces present; the spec's grep prints nothing; typecheck and lint clean · concerns: No workflow tag draws outside any layout (spec's decision) and will show on the self-test's hello session; --wg-workflow-badge has no DESIGN.md entry; AGENTS.md still names addStage until task 10; logFlow does not re-run on addWorkflow; no-page once-sets never clear; start.ts SessionCommand still names Heavy's commands
+- 03 · f205596a · diff read against the spec; every Produces present, parseChecklistItems included; typecheck and lint clean · concerns: checklist dispose line has no failing test; reportStep scoping has no start-level test that fails on a union lookup; merged table lost the ignored-step no-push assertion; StepTool_NotInTheUnion_ListsIt pins Heavy's step order, so task 05 reaches it; whitespace-only text accepted
 ### Contract changes
 - heavy-contract.ts members: as planned → adds heavyStateIn(state: unknown): HeavyState, with heavyStateOf calling it · why: sameHeavyState takes bare states · consumers: 05 · group 01
 ### Rulings
@@ -259,5 +260,7 @@ Review base: 52a66bfab67b0c27b09dee28ff4ecfb97ef320ce
 - Heavy's api.layouts.show runs at addWorkflow time, ahead of the channel wiring — the draw must exist before the add — a layout delivered during show redraws with no flows held, harmless · group 02 · group 02
 - A preview press with no samples closes at once, logging workflow preview closed — the spec names only the fifth-press close — Space z l w with no samples shows nothing · group 02 · group 02
 - page/layout/workflow-parts.ts is deleted — nothing remained, which the spec allowed — a later task must import workflow-draw.ts · group 02 · group 02
+- parseChecklistItems reuses flow-store's isChecklistItem, exported — widen rather than copy, though flow-store was not in the Files — a change to the saved-flow check moves the tool's check · group 03 · group 03
+- stepTool_ReportIsIgnored merged into StepTool_ScopedToTheFlowsWorkflow — its rows repeated the new table's — a report that pushed anyway would not be caught there · group 03 · group 03
 ### Review rounds
 ### Test gate

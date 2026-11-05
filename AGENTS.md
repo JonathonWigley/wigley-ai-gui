@@ -246,7 +246,7 @@ src/plugins/     every plugin, one folder each; manifests.ts lists every built-i
                  the start prompt with its folder, profile, sign-in and session steps), layouts/ (the chat Layout contract
                  and the built-in `default` chat layout); `image-rules.ts` at the root holds the attach rules both
                  parts share; main exports `launch` (a background session with a first message) and
-                 `defaultProfile` to notes, `send` and `profileOf` to forms and the primer (the form wake), `send`, `clear`, `launch` and `profileOf` to workflow, `profiles` to usage, `addInstructions` (text every session chat starts carries to its harness)
+                 `defaultProfile` to notes, `send` and `profileOf` to forms and the primer (the form wake), `send`, `clear`, `launch`, `profileOf` and `activeTime` (a session's clock) to workflow, `profiles` to usage, `addInstructions` (text every session chat starts carries to its harness)
                  to visual, `addSendGate` and `addIdleCompactThreshold` to auto-compact, `addResumeSection` (a titled list of saved sessions at the top of the start prompt) to session-log, and `launch` and `closeSessionsIn` to self-test scripts; page exports `focusedEntry` (the focused entry's element) and `focusedBlock` (the cursor's block element) to visual, `addCompletionRow` (a draw for the `/` completion's rows) and `activeTime` (a session's clock)
                  with the `activeTimeChanged` event; its page also draws each session's run time under its row, through
                  sessions' `addRowPart` and a `rowClock` layout part; main keeps each session's clock, `docs/features/session-clock/design.md`

@@ -45,6 +45,11 @@ export function foldHeavyState(
   return sameHeavyState(before, next) ? flow.state : next;
 }
 
+// The review rounds the plan records, the number the fix stage shows as its cycle.
+export function heavyFixCycles(flow: SessionFlow): number {
+  return heavyStateOf(flow).progress?.reviewRounds ?? 0;
+}
+
 // `progress` compares by reference: the fold keeps the current object whenever
 // the incoming one is equal.
 export function sameHeavyState(a: unknown, b: unknown): boolean {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentEvent } from '../../../contracts/agent';
+import type { ActiveTime } from '../../../contracts/active-time';
+import type { AgentEvent, UsageAgentEvent } from '../../../contracts/agent';
 import { type Files, readIfPresent } from '../../../contracts/files';
 import type { QualifiedEvents } from '../../../contracts/plugin';
 import {
@@ -43,11 +44,13 @@ import type { workflowManifest } from '../manifest';
 import { readPlanProgress } from '../plan-reader';
 import {
   HEAVY_WORKFLOW_ID,
+  heavySignal,
   type HeavyState,
   heavyStateOf,
 } from '../stages/heavy-contract';
 import { SET_WORKFLOW_CHECKLIST_TOOL } from './checklist-tool';
 import { FLOWS_FILE } from './flow-store';
+import { RUNS_FILE, type RunLogLine } from './run-log';
 import { SESSION_NOTE } from './session-note';
 import { workflowMainPart } from './start';
 import { SET_WORKFLOW_STEP_TOOL } from './step-tool';
@@ -145,6 +148,7 @@ function session(id: string, hostSessionId: string): AgentSession {
 // `sessionLabel` is the side-bar label sessions gives s1 (none by default);
 // `data` is workflow's data folder as the last run left it; `selfTest` starts the
 // part with the self-test on, its script never run, so its hooks are exported.
+// `setActiveTime` sets the clock chat's fake reports for every session.
 function startWorkflowPart(
   settings: WorkflowTestSettings,
   options: {
@@ -168,10 +172,12 @@ function startWorkflowPart(
       : project;
   const time = handTime();
   const instructions: string[] = [];
+  let activeTime: ActiveTime | null = null;
   const chat: Pick<
     ChatMainExports,
-    'send' | 'clear' | 'launch' | 'profileOf' | 'addInstructions'
+    'send' | 'clear' | 'launch' | 'profileOf' | 'activeTime' | 'addInstructions'
   > = {
+    activeTime: () => activeTime,
     send: async (sessionId, message) => {
       chatCalls.push(['send', sessionId, message.text]);
     },
@@ -327,6 +333,9 @@ function startWorkflowPart(
     data,
     project,
     time,
+    setActiveTime: (next: ActiveTime) => {
+      activeTime = next;
+    },
     sent,
     logs,
     chatCalls,
@@ -365,6 +374,7 @@ const FAKE_CHAT = fakeDependency(
   (consumer) =>
     ({
       addInstructions: () => consumer.track({ dispose: () => undefined }),
+      activeTime: () => null,
     }) as unknown as ChatMainExports,
 );
 
@@ -485,16 +495,77 @@ function startLightAndMedium(options: { data?: MemoryFiles } = {}) {
 }
 
 // The main agent's `usage`: it went out for a reply.
-const USAGE: AgentEvent = {
+const USAGE: UsageAgentEvent = {
   type: 'usage',
   at: 1,
   agentId: 'main',
   contextTokens: 10,
   contextWindow: null,
-  autocompact: { warnAt: null, compactAt: null },
+  autocompact: { configured: null, reported: null },
   cacheExpiresAt: null,
   spendUsd: null,
-} as unknown as AgentEvent;
+};
+
+// The main agent's `usage` reporting the process's spend so far.
+const spent = (spendUsd: number): UsageAgentEvent => ({ ...USAGE, spendUsd });
+
+const activeFor = (totalMs: number): ActiveTime => ({ totalMs, since: null });
+
+const PLAN_WITH_TWO_ROUNDS = `${PLAN}\n## Run log\n\n### Review rounds\n- one\n- two\n`;
+
+const FINISH: WorkflowSignal = { type: 'stepReported', step: 'done' };
+
+// A workflow that claims `x:stub` and finishes on `FINISH`, or on a turn's end.
+function finishingWorkflow(fields: Partial<MainWorkflow> = {}): MainWorkflow {
+  return stubWorkflow({
+    stages: [
+      {
+        id: 'done',
+        order: 0,
+        finishes: true,
+        enter: (_flow, signal) =>
+          signal.type === 'turnEnded' ||
+          (signal.type === 'stepReported' && signal.step === 'done')
+            ? 'done'
+            : null,
+      },
+    ],
+    ...fields,
+  });
+}
+
+// The lines `runs.jsonl` holds once its appends settle.
+async function runLines(
+  workflow: ReturnType<typeof startWorkflowPart>,
+): Promise<string[]> {
+  await settled();
+  const text = await readIfPresent(workflow.data, RUNS_FILE);
+  return text === null ? [] : text.trimEnd().split('\n');
+}
+
+async function runLogLines(
+  workflow: ReturnType<typeof startWorkflowPart>,
+): Promise<RunLogLine[]> {
+  const lines = await runLines(workflow);
+  return lines.map((line) => JSON.parse(line) as RunLogLine);
+}
+
+// The two ways a session's flow goes.
+const FLOW_ENDS: {
+  name: string;
+  end: (workflow: ReturnType<typeof startWorkflowPart>) => Promise<void>;
+}[] = [
+  {
+    name: 'sessions.ended',
+    end: (workflow) => workflow.emit('sessions.ended', { sessionId: 's1' }),
+  },
+  {
+    name: 'forgetFlows',
+    end: async (workflow) => {
+      workflow.exported().selfTestHooks?.forgetFlows('/r');
+    },
+  },
+];
 
 // Opens s1 and runs a wigley:feature turn that writes the plan and ends, its
 // events flagged `replayed` as given.
@@ -1332,21 +1403,7 @@ describe('workflowMainPart', () => {
     },
   );
 
-  it.each<{
-    name: string;
-    end: (workflow: ReturnType<typeof startWorkflowPart>) => Promise<void>;
-  }>([
-    {
-      name: 'sessions.ended',
-      end: (workflow) => workflow.emit('sessions.ended', { sessionId: 's1' }),
-    },
-    {
-      name: 'forgetFlows',
-      end: async (workflow) => {
-        workflow.exported().selfTestHooks?.forgetFlows('/r');
-      },
-    },
-  ])('TurnWork_ForgottenOnEnd ($name)', async ({ end }) => {
+  it.each(FLOW_ENDS)('TurnWork_ForgottenOnEnd ($name)', async ({ end }) => {
     const workflow = startWorkflowPart(SETTINGS, { selfTest: true });
     await workflow.openS1();
     await workflow.agentEvent({ type: 'turnStarted', at: 1 });
@@ -1583,5 +1640,198 @@ describe('workflowMainPart', () => {
       stage: 'scope',
       movedUpFrom: HEAVY_WORKFLOW_ID,
     });
+  });
+
+  it('RunLog_HeavyClosed', async () => {
+    const workflow = startWorkflowPart(SETTINGS);
+    await workflow.project.write(PLAN_FILE, PLAN_WITH_TWO_ROUNDS);
+    await workflow.openS1();
+    await workflow.agentEvent(skill('wigley:make', PLAN_DIR));
+    workflow.setActiveTime(activeFor(4000));
+    await workflow.agentEvent(spent(1.25));
+    workflow.setActiveTime(activeFor(0));
+    await workflow.emit('sessions.hostSessionChanged', session('s1', 'h2'));
+    workflow.setActiveTime(activeFor(1500));
+    await workflow.agentEvent(spent(2.5), 'h2');
+    workflow.time.advance(90_000);
+
+    workflow.project.remove(PLAN_DIR);
+    await settled();
+
+    expect(workflow.lastFlow()?.stage).toBe('closed');
+    expect(await runLines(workflow)).toEqual([
+      `{"at":${String(START + 90_000)},"sessionId":"s1","projectDir":"/r","workflow":"workflow-heavy","movedUpFrom":null,"activeMs":5500,"costUsd":3.75,"fixCycles":2}`,
+    ]);
+  });
+
+  it('RunLog_MovedUp', async () => {
+    const workflow = startLightAndMedium();
+    await workflow.project.write(PLAN_FILE, PLAN);
+    await workflow.openS1();
+    await workflow.agentEvent(skill('x:light', ''));
+    await workflow.agentEvent(skill('wigley:feature', ''));
+    await workflow.agentEvent(skill('wigley:make', PLAN_DIR));
+
+    workflow.project.remove(PLAN_DIR);
+    await settled();
+
+    expect(await runLogLines(workflow)).toMatchObject([
+      { workflow: HEAVY_WORKFLOW_ID, movedUpFrom: 'light' },
+    ]);
+  });
+
+  it('RunLog_OnlyOnEntry', async () => {
+    const workflow = startWorkflowPart(SETTINGS);
+    await workflow.project.write(PLAN_FILE, PLAN);
+    await workflow.openS1();
+    await workflow.agentEvent(skill('wigley:make', PLAN_DIR));
+    workflow.project.remove(PLAN_DIR);
+    await settled();
+    expect(workflow.lastFlow()?.stage).toBe('closed');
+
+    workflow.exported().signal('s1', heavySignal({ type: 'planGone' }), 'live');
+
+    expect(await runLines(workflow)).toHaveLength(1);
+  });
+
+  it('RunLog_SpendAfterTheStep', async () => {
+    const workflow = startWorkflowPart(SETTINGS);
+    workflow.exported().addWorkflow(finishingWorkflow());
+    await workflow.openS1();
+    await workflow.agentEvent(skill('x:stub', ''));
+    await workflow.agentEvent(spent(1));
+
+    workflow.exported().signal('s1', FINISH, 'live');
+    await workflow.agentEvent(spent(2));
+
+    expect(await runLogLines(workflow)).toMatchObject([{ costUsd: 1 }]);
+  });
+
+  it('RunMeter_BaselineAtClaim', async () => {
+    const workflow = startLightAndMedium();
+    workflow.exported().addWorkflow(
+      finishingWorkflow({
+        order: 30,
+        claims: (signal) => startsSkill(signal, 'x:medium-up'),
+      }),
+    );
+    await workflow.openS1();
+    workflow.setActiveTime(activeFor(3000));
+    await workflow.agentEvent(spent(1));
+    await workflow.agentEvent(skill('x:light', ''));
+    workflow.setActiveTime(activeFor(4000));
+    await workflow.agentEvent(skill('x:medium-up', ''));
+    workflow.setActiveTime(activeFor(5000));
+    await workflow.agentEvent(spent(2));
+
+    workflow.exported().signal('s1', FINISH, 'live');
+
+    expect(await runLogLines(workflow)).toMatchObject([
+      { activeMs: 2000, costUsd: 1, movedUpFrom: 'light' },
+    ]);
+  });
+
+  it('RunMeter_NoteKeepsTheLargest', async () => {
+    const workflow = startWorkflowPart(SETTINGS);
+    workflow.exported().addWorkflow(finishingWorkflow());
+    await workflow.openS1();
+    await workflow.agentEvent(skill('x:stub', ''));
+    workflow.setActiveTime(activeFor(4000));
+    await workflow.agentEvent(spent(1));
+    workflow.setActiveTime(activeFor(0));
+    await workflow.agentEvent({ type: 'turnStarted', at: 1 });
+    await workflow.emit('sessions.hostSessionChanged', session('s1', 'h2'));
+    workflow.setActiveTime(activeFor(1500));
+    await workflow.agentEvent(spent(1), 'h2');
+
+    workflow.exported().signal('s1', FINISH, 'live');
+
+    expect(await runLogLines(workflow)).toMatchObject([{ activeMs: 5500 }]);
+  });
+
+  it('RunLog_StubWorkflowWithNoFixCycles', async () => {
+    const workflow = startWorkflowPart(SETTINGS);
+    workflow.exported().addWorkflow(finishingWorkflow());
+    await workflow.openS1();
+    await workflow.agentEvent(skill('x:stub', ''));
+
+    workflow.exported().signal('s1', FINISH, 'live');
+
+    expect(await runLogLines(workflow)).toEqual([
+      {
+        at: START,
+        sessionId: 's1',
+        projectDir: '/r',
+        workflow: 'stub',
+        movedUpFrom: null,
+        activeMs: 0,
+        costUsd: null,
+        fixCycles: 0,
+      },
+    ]);
+  });
+
+  it('RunLog_NoFinishesStage_NoLine', async () => {
+    const workflow = startWorkflowPart(SETTINGS);
+    await workflow.project.write(PLAN_FILE, PLAN);
+    await workflow.openS1();
+
+    await workflow.agentEvent(skill('wigley:make', PLAN_DIR));
+
+    expect(workflow.lastFlow()?.stage).toBe('make');
+    expect(await runLines(workflow)).toEqual([]);
+  });
+
+  it('RunLog_OpenSpan_CountsUpToTheClock', async () => {
+    const workflow = startWorkflowPart(SETTINGS);
+    workflow.exported().addWorkflow(finishingWorkflow());
+    await workflow.openS1();
+    await workflow.agentEvent(skill('x:stub', ''));
+    workflow.setActiveTime({ totalMs: 1000, since: START });
+    workflow.time.advance(500);
+
+    workflow.exported().signal('s1', FINISH, 'live');
+
+    expect(await runLogLines(workflow)).toMatchObject([{ activeMs: 1500 }]);
+  });
+
+  it.each([
+    { name: 'past the save', at: AFTER_SAVE, lines: 1 },
+    { name: 'at the save', at: SAVED_AT, lines: 0 },
+  ])('RunLog_Replay_WritesOnlyPastTheSave ($name)', async ({ at, lines }) => {
+    const data = await savedFlowData({ workflow: 'stub', stage: 'scope' });
+    const workflow = startWorkflowPart(SETTINGS, { data });
+    workflow.exported().addWorkflow(finishingWorkflow());
+    await workflow.openS1();
+
+    await workflow.replayBurst([{ type: 'turnEnded', at }]);
+
+    expect(await runLines(workflow)).toHaveLength(lines);
+  });
+
+  it('RunMeter_ReplayedSpend_Counts', async () => {
+    const workflow = startWorkflowPart(SETTINGS);
+    workflow.exported().addWorkflow(finishingWorkflow());
+    await workflow.openS1();
+    await workflow.agentEvent(skill('x:stub', ''));
+    await workflow.agentEvent(spent(1), 'h1', true);
+
+    workflow.exported().signal('s1', FINISH, 'live');
+
+    expect(await runLogLines(workflow)).toMatchObject([{ costUsd: 1 }]);
+  });
+
+  it.each(FLOW_ENDS)('RunMeter_ForgottenOnEnd ($name)', async ({ end }) => {
+    const workflow = startWorkflowPart(SETTINGS, { selfTest: true });
+    workflow.exported().addWorkflow(finishingWorkflow());
+    await workflow.openS1();
+    await workflow.agentEvent(spent(1));
+
+    await end(workflow);
+    await workflow.openS1();
+    await workflow.agentEvent(skill('x:stub', ''));
+    workflow.exported().signal('s1', FINISH, 'live');
+
+    expect(await runLogLines(workflow)).toMatchObject([{ costUsd: null }]);
   });
 });

@@ -7,6 +7,7 @@ import { heavyEventOf, heavyStateOf } from '../heavy-contract';
 export const closedMainStage: MainStage = {
   id: 'closed',
   order: 60,
+  finishes: true,
   enter(flow, signal) {
     const inRun = ['make', 'review', 'fix'].includes(flow.stage);
     const planWasRead = heavyStateOf(flow).progress !== null;

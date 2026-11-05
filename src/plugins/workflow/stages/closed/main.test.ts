@@ -8,6 +8,7 @@ import {
   withHeavyState,
 } from '../heavy-contract';
 import { heavyMainWorkflow } from '../heavy-workflow';
+import { closedMainStage } from './main';
 
 const PROGRESS: PlanProgress = {
   checked: 2,
@@ -46,6 +47,10 @@ function foldAll(
 }
 
 describe('closedMainStage', () => {
+  it('finishes the run', () => {
+    expect(closedMainStage.finishes).toBe(true);
+  });
+
   it.each<{
     name: string;
     from: string;

@@ -1,6 +1,6 @@
 # 03 — Checklist tool, scoped step tool, session note
 
-Status: in progress
+Status: done
 Type: Task
 Wave: 3 · Depends on: 01
 Plan: [plan.md](plan.md)
@@ -123,3 +123,4 @@ Commit: one commit for the group.
 
 ## Proof
 
+Commit f205596a · proof: diff read against the spec; every Produces present, parseChecklistItems included; typecheck and lint clean · concerns: checklist dispose line has no failing test; reportStep scoping has no start-level test that fails on a union lookup; merged table lost the ignored-step no-push assertion; StepTool_NotInTheUnion_ListsIt pins Heavy's step order, so task 05 reaches it; whitespace-only text accepted

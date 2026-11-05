@@ -4,6 +4,7 @@ import type {
   MainPart,
   QualifiedEvents,
 } from '../../../contracts/plugin';
+import { activeMsAt } from '../../../shared/active-time';
 import { callEach } from '../../../shared/call-each';
 import { errorText } from '../../../shared/error-text';
 import layoutTypes from '../layouts/layout.d.ts?raw';
@@ -32,6 +33,8 @@ import { signalOf } from './agent-signals';
 import { checklistToolDefinition, startChecklistTool } from './checklist-tool';
 import { createFlowStore } from './flow-store';
 import { startHeavyRuntime } from './heavy-runtime';
+import { createRunLog } from './run-log';
+import { createRunMeter } from './run-meter';
 import { workflowSelfTestScript } from './selftest-script';
 import { SESSION_NOTE } from './session-note';
 import {
@@ -56,8 +59,9 @@ type WorkflowApi = MainApi<
 // observer every fold, open, close and replay, contributes `set_workflow_step`,
 // which lists every workflow's stages' `reportedAs` and moves a flow only by its own
 // workflow's, and `set_workflow_checklist`, hands chat the session note naming both,
-// and sends every flow to the page on each change. Exports `addWorkflow`, `signal`,
-// `setState` and `observe`.
+// meters each session's active time and spend and appends a line to `runs.jsonl`
+// when a fold enters a stage that finishes its workflow, and sends every flow to
+// the page on each change. Exports `addWorkflow`, `signal`, `setState` and `observe`.
 export const workflowMainPart: MainPart<typeof workflowManifest> = {
   manifest: workflowManifest,
   start(api: WorkflowApi) {
@@ -84,6 +88,13 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     >();
     const turnEndedListeners = new Set<(sessionId: string) => void>();
     const turnWork = createTurnWork();
+    const runLog = createRunLog({ files: api.data, log });
+    const runMeter = createRunMeter({
+      activeMsOf: (sessionId) => {
+        const time = chat.activeTime(sessionId);
+        return time === null ? 0 : activeMsAt(time, clock.now());
+      },
+    });
     const observers: WorkflowObserver[] = [];
 
     const sendFlows = () => channel.send('flows', store.all());
@@ -103,6 +114,32 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
     const tellFolded = (event: FoldEvent) =>
       tellObservers((observer) => observer.folded(event));
 
+    // Writes the run's line when the fold entered a stage that finishes its
+    // workflow, and starts the meter's next run.
+    const logFinishedRun = (before: SessionFlow, after: SessionFlow) => {
+      const workflow = workflows
+        .all()
+        .find((held) => held.id === after.workflow);
+      const stage = workflow?.stages.find((held) => held.id === after.stage);
+      const entered = after.stage !== before.stage;
+      if (workflow === undefined || !entered || stage?.finishes !== true) {
+        return;
+      }
+      const { sessionId, projectDir, movedUpFrom } = after;
+      const { activeMs, costUsd } = runMeter.read(sessionId);
+      runLog.append({
+        at: clock.now(),
+        sessionId,
+        projectDir,
+        workflow: workflow.id,
+        movedUpFrom,
+        activeMs,
+        costUsd,
+        fixCycles: workflow.fixCycles?.(after) ?? 0,
+      });
+      runMeter.finished(sessionId);
+    };
+
     // The one change path every full fold takes.
     function apply(
       sessionId: string,
@@ -116,6 +153,10 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       const after = foldFlow(before, signal, workflows.all());
       if (after !== before) {
         putFlow(after, origin);
+        if (before.workflow === null && after.workflow !== null) {
+          runMeter.claimed(sessionId);
+        }
+        logFinishedRun(before, after);
       }
       tellFolded({ sessionId, before, after, signal, origin, whole: true });
     }
@@ -302,6 +343,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
         if (hostSessionId !== null) {
           store.rekey(id, hostSessionId);
         }
+        runMeter.cleared(id);
         apply(id, { type: 'cleared' }, 'live');
       });
     });
@@ -309,6 +351,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       void ready.then(() => {
         connected.delete(sessionId);
         turnWork.forget(sessionId);
+        runMeter.forget(sessionId);
         tellObservers((observer) => observer.closed(sessionId));
         store.drop(sessionId);
         sendFlows();
@@ -318,6 +361,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       'chat.agentEvent',
       ({ sessionId, hostSessionId, event, replayed }) => {
         void ready.then(() => {
+          runMeter.note(sessionId, event);
           const flow = store.get(sessionId);
           if (flow === null) {
             return;
@@ -374,6 +418,7 @@ export const workflowMainPart: MainPart<typeof workflowManifest> = {
       forgetFlows(projectDir) {
         for (const sessionId of store.forgetFlows(projectDir)) {
           turnWork.forget(sessionId);
+          runMeter.forget(sessionId);
           tellObservers((observer) => observer.closed(sessionId));
         }
         sendFlows();

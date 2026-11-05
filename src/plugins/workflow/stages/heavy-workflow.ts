@@ -4,7 +4,7 @@ import {
   type WorkflowSignal,
 } from '../contract';
 import { HEAVY_WORKFLOW_ID } from './heavy-contract';
-import { foldHeavyState, sameHeavyState } from './heavy-state';
+import { foldHeavyState, heavyFixCycles, sameHeavyState } from './heavy-state';
 import { BUILT_IN_MAIN_STAGES } from './index';
 
 const CLAIMED_SKILLS = [
@@ -22,4 +22,5 @@ export const heavyMainWorkflow: MainWorkflow = {
   stages: BUILT_IN_MAIN_STAGES,
   foldState: foldHeavyState,
   sameState: sameHeavyState,
+  fixCycles: heavyFixCycles,
 };

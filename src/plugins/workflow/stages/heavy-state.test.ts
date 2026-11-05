@@ -11,7 +11,12 @@ import {
   heavyStateOf,
   withHeavyState,
 } from './heavy-contract';
-import { foldHeavyState, isPlanFile, sameHeavyState } from './heavy-state';
+import {
+  foldHeavyState,
+  heavyFixCycles,
+  isPlanFile,
+  sameHeavyState,
+} from './heavy-state';
 import { heavyMainWorkflow } from './heavy-workflow';
 
 type FlowFields = Partial<SessionFlow & HeavyState>;
@@ -493,6 +498,41 @@ describe('sameHeavyState', () => {
     },
   ])('$name → $same', ({ a, b, same }) => {
     expect(sameHeavyState(a, b)).toBe(same);
+  });
+});
+
+describe('heavyFixCycles', () => {
+  const progress: PlanProgress = {
+    checked: 2,
+    total: 5,
+    wave: 1,
+    reviewRounds: 2,
+    title: 'F',
+    tasks: [],
+  };
+
+  it.each<{ name: string; flow: SessionFlow; cycles: number }>([
+    {
+      name: 'no progress',
+      flow: flowWith({ stage: 'make' }),
+      cycles: 0,
+    },
+    {
+      name: 'two rounds',
+      flow: flowWith({ stage: 'make', progress }),
+      cycles: 2,
+    },
+    {
+      name: 'two rounds after planGone',
+      flow: foldFlow(
+        flowWith({ stage: 'make', progress }),
+        heavySignal({ type: 'planGone' }),
+        [heavyMainWorkflow],
+      ),
+      cycles: 2,
+    },
+  ])('heavyFixCycles_ReadsTheRounds ($name)', ({ flow, cycles }) => {
+    expect(heavyFixCycles(flow)).toBe(cycles);
   });
 });
 
