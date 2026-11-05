@@ -1,6 +1,6 @@
 # 09 — Section editing
 
-Status: not started
+Status: in progress
 Type: Task
 Wave: 5 · Depends on: 03, 07, 08
 Plan: [plan.md](plan.md)

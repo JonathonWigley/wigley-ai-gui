@@ -190,5 +190,8 @@ Review base: 89f67d088a3297567805dfe5fa9c84afa7d9f72f
 - selectEntry always draws once · group 08
 - openWikiLink takes only the link until task 11 · group 08
 - permitted extra: page/layout/docs-parts.test.ts · group 08
+- Task 07's live run (/tmp/claude-502/-Users-jonathonwigley-Documents-ai-dev/667dda66-db61-4226-a883-9de5428c1db2/scratchpad/reports/07-live.md): steps 1, 3, 4 pass; step 2 failed at 920px, so the breakpoint is 950px (1e87a69e), the plan's width plus 264 plus the 15px scrollbar, and the article no longer shrinks by the sum; not re-measured · lead
+- A selected dangling or label row draws fg rather than fg-tertiary, because the cursor's .is-selected rules outrank them; left as is, the cursor reads the same on every row; goes to the review · lead
+- Space v w inside the filter box types into it, as a leader sequence does in a box, so the worker's focus concern arose only by a click on the switch, fixed in 1e87a69e · lead
 ### Review rounds
 ### Test gate
