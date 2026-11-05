@@ -7,10 +7,9 @@ import type {
 import type { CommandInfo } from './plugin';
 import type { SlotKey } from './state';
 
-// The shown mode's qualified id, written at each change of the shown mode. `''`
-// means no change has been told yet: `modes.shown()` throws while no mode shows, so
-// no real id is available as the page starts, and adding the first mode tells no
-// change. `modes.shown()` reads the mode showing now.
+// The shown mode's qualified id, written at each change of the shown mode, the
+// first mode's `add` included. `''` means no mode shows: the page has added none
+// yet, or every mode is disposed.
 export const coreModeSlot: SlotKey<string, 'page', 'core'> = {
   id: 'core.mode',
   process: 'page',

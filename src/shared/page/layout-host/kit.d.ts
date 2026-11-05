@@ -65,7 +65,7 @@ export interface KitEdgeOptions {
 //
 // `change` is `{ kind: 'put', item }`, `{ kind: 'replace', items }` or `{ kind: 'delete' }`. An id with no slot reads
 // `undefined`, and its listener hears the first write's arguments. A slot owned by a plugin that has stopped keeps its
-// last value. `core.mode` reads `''` until the first mode switch. `on` calls `listener` on each change and redraws
+// last value. `core.mode` reads `''` while no mode shows. `on` calls `listener` on each change and redraws
 // nothing; the subscription ends with the draw that made it, when the part is disposed or its attempt fails.
 export interface KitSlotReader {
   get(key?: string): unknown;

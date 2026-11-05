@@ -377,5 +377,6 @@ Review base: 7001a175798c0ae437a1783e0b425dfe634be1ea
 - Task 14: noteFiled and noteSent fire after store.clear(), so a clear that rejects fires nothing though the note landed. · group 14
 - Task 14: updateActivity's settlePermission and askPermission callers do not pass the replay flag, since no replay reaches them. · group 14
 - Task 15: new follow-up 'Visual reads chat's focused entry through a slot' carries what the registry item named and no task landed; design.md's 'twelve race rules' now names the six plugins. · group 15
+- Task 16 first run found the app did not start: plugin id window collides with the core window setting. Fix: the check applies only to a manifest declaring settings, core wins a shared key. The id stays since keymaps name window.summon.
 ### Review rounds
 ### Test gate

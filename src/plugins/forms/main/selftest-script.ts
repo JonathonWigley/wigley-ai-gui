@@ -40,6 +40,12 @@ function userKeymap(command: string): string {
   });
 }
 
+// A user keymap binding `Q` to a known command with an arg it refuses, which
+// refuses the whole file.
+const BAD_ARG_KEYMAP = JSON.stringify({
+  binds: [{ keys: 'Q', scope: 'any', command: 'forms.choose', arg: 'one' }],
+});
+
 // A user keymap moving the text box's not-applicable toggle in the form from
 // <Leader>x to <Leader>q, which nothing else binds.
 const MOVED_NOT_APPLICABLE_KEYMAP = JSON.stringify({
@@ -548,6 +554,18 @@ const USER_KEYMAP_STEPS: SelfTestStep[] = [
   { keys: ['Q'], expect: '[page] Q ran keys.toggleHelp' },
   { keys: ['Escape'], expect: '[page] Escape ran keys.closeHelp' },
   {
+    writeFile: { path: USER_KEYMAP_FILE, text: BAD_ARG_KEYMAP },
+    keys: [],
+    expect:
+      '[config] keymap.json: "binds[0].arg": command "forms.choose" needs a number.',
+  },
+  {
+    keys: ['Q'],
+    expect: '[page] Q ran keys.toggleHelp',
+    why: 'A keymap.json refused whole keeps the last good keys.',
+  },
+  { keys: ['Escape'], expect: '[page] Escape ran keys.closeHelp' },
+  {
     writeFile: {
       path: USER_KEYMAP_FILE,
       text: userKeymap('keys.noSuchCommand'),
@@ -557,11 +575,11 @@ const USER_KEYMAP_STEPS: SelfTestStep[] = [
       '[config] keymap.json: "binds[0].command" names no command "keys.noSuchCommand".',
   },
   {
-    keys: ['Q'],
-    expect: '[page] Q ran keys.toggleHelp',
-    why: 'The broken keymap.json kept the last good keys.',
+    keys: ['Q', 'x'],
+    expect: '[forms] applicable again on question 2',
+    why: 'An unknown command drops only its bind, so Q opens no help and x still reaches the form.',
   },
-  { keys: ['Escape'], expect: '[page] Escape ran keys.closeHelp' },
+  { keys: ['x'], expect: '[forms] not applicable on question 2' },
   {
     writeFile: { path: USER_KEYMAP_FILE, text: '{}' },
     keys: [],
@@ -1286,7 +1304,7 @@ export function formsSelfTestScript(
       },
       {
         name: 'user keymap',
-        why: "The user's keymap.json applies live and a broken one keeps the last good keys; it can move a box bind and change the leader, and {} restores both.",
+        why: "The user's keymap.json applies live; one refused whole keeps the last good keys and an unknown command drops its bind alone; it can move a box bind and change the leader, and {} restores both.",
         steps: USER_KEYMAP_STEPS,
       },
       {

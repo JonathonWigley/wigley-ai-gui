@@ -59,6 +59,18 @@ describe('createModes', () => {
     ]);
   });
 
+  it('tells listeners the first mode added once it shows, and no later add', () => {
+    const { calls, add } = setup();
+
+    add('a.one', 'One');
+    add('b.two', 'Two');
+
+    expect(calls.filter((call) => /^(shown|changed) /.test(call))).toEqual([
+      'shown a.one',
+      'changed a.one',
+    ]);
+  });
+
   it('hides the shown mode and shows another, telling each mode, then listeners', () => {
     const { modes, logs, calls, add } = setup();
     const one = add('a.one', 'One');
@@ -351,14 +363,19 @@ describe('disposing a mode', () => {
     expect(modes.shown()).toBe('a');
   });
 
-  it('disposing the only mode leaves none shown, and its id adds again', () => {
+  it("disposing the only mode leaves none shown, tells listeners '', and its id adds again", () => {
     const { modes, calls, add } = setup();
     const a = add('a', 'A');
     calls.length = 0;
 
     a.handle.dispose();
 
-    expect(calls).toEqual(['unplace a', 'side bar hidden', 'context null']);
+    expect(calls).toEqual([
+      'unplace a',
+      'side bar hidden',
+      'context null',
+      'changed ',
+    ]);
     expect(() => modes.shown()).toThrow('No mode is added yet');
 
     add('a', 'A');

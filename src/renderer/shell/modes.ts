@@ -151,6 +151,7 @@ export function createModes(deps: ModesDeps): CoreModes {
     if (first === undefined) {
       deps.layOutSideBar('hidden');
       deps.showContext(null);
+      listeners.tell('');
       return;
     }
     reveal(first);
@@ -226,6 +227,7 @@ export function createModes(deps: ModesDeps): CoreModes {
       const placement = deps.place(mode, handle);
       if (shownMode === null) {
         reveal(entry);
+        listeners.tell(mode.id);
       } else {
         setHidden(mode, true);
       }

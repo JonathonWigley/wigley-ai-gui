@@ -444,7 +444,8 @@ export interface Mode {
 // over the content. `dispose` takes the mode's element, side bar and activity
 // item out of the window, without calling its `hidden`, and frees its id; a
 // disposed shown mode gives way to the first remaining mode in add order, as
-// `show` would show it, and `onChanged` listeners hear its id. Once disposed,
+// `show` would show it, and `onChanged` listeners hear its id, or `''` when no
+// mode remains. Once disposed,
 // every member does nothing, and `isShown` and `sideBarShown` return false.
 export interface ModeHandle extends Disposable {
   show(): void;
@@ -458,7 +459,8 @@ export interface ModeHandle extends Disposable {
 // The first mode added shows and every later one is added hidden; a hidden
 // mode keeps its DOM and state. `add` throws on an id already added, and calls
 // the first mode's `shown`, and its side bar callback, before it returns, so
-// that neither can read the handle. `shown` is the shown mode's id and throws
+// that neither can read the handle; `onChanged` listeners then hear that mode's
+// id. `shown` is the shown mode's id and throws
 // before any `add` and once every mode is disposed. A `show`
 // that changes the shown mode hides the old mode's element and side bar, calls
 // the old mode's `hidden`, unhides the new mode's element and side bar, marks
